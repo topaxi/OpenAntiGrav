@@ -121,6 +121,19 @@ chased.
 All four `WO_SHURIKEN_*` files are in `docs/formats/pob.md`'s 35-name list, so
 nothing here needs an asset this project cannot reach.
 
+**2026-09-23: wired.** `Cue::ShurikenTravel` and `Cue::ShurikenHit` are in
+`crates/game/src/audio/sfx/cue.rs`, both placed on the **firing craft's** own
+emitter rather than the blade's. `craft->emitter` being handed to
+`Shuriken_Init` directly, above, is read at this page's own confidence 88 -
+what is not read is either play call's own emitter argument, so the
+placement itself is **chosen, not measured, no confidence score**: the
+absence of a bolt-owned `SoundEmitter_Init` the way `Rocket_Init`/
+`Missile_Init` each get one is what rules a blade-owned emitter out, not a
+read of `~SHURIKENTRAVEL`'s or `SHURIKENHIT`'s own call site. The one-shot
+launch cue at `0x08a7cd38` stays unwired: its own name is still not
+verified, and the bank's plain `SHURIKEN` cue is a name-matched guess this
+port does not trust.
+
 ## `Shuriken_Bounce` (`0x088778ac`) is a mirror, with no energy lost
 
 Called from `Shuriken_Update`'s travel-segment test, `case 0` - the branch that

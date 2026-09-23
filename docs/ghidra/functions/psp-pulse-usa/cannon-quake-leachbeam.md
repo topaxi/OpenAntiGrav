@@ -459,6 +459,21 @@ cannot be measured: treating it as non-zero for every AI craft is **chosen, not
 measured, and carries no confidence score**. The mechanism is recovered; the
 value it terminates in is not a fact about the disc.
 
+**2026-09-23: `CANNON`, `CANNONEXPLWALL` and `CANNONEXPLSHIP` wired.**
+`Cue::Cannon`, `Cue::CannonHitWall` and `Cue::CannonHitShip` are in
+`crates/game/src/audio/sfx/cue.rs`. `Cue::Cannon` fires from
+`advance_one_cannon` only when a round actually spawns, on a **chosen**
+emitter - `CANNON`'s own call site names no argument. The wall/craft split
+reads `Impact::struck`, the same field the Rocket's own pair already routes
+on; a round that outlives its own flight time is silent by construction, the
+same reasoning `rocket-visuals.md`'s "Audio, in passing" note gives for the
+Rocket's timeout. **`CANNONEXPLSHIP` itself is a child reference, not an
+empty cue**: read against a real disc, its one command is opcode `0x05`
+indexing `CANNONEXPLWALL` directly - see
+`crates/formats/src/sblk/child.rs`'s `cue_tree_sounds` doc comment - so a
+craft hit plays the wall cue's own nine waveforms rather than a set of its
+own.
+
 ### What draws a Cannon round: two textures and three quads, and not a particle effect at all
 
 **Read 2026-09-08, confidence 85, and it refutes the premise the visuals thread
@@ -1001,6 +1016,18 @@ DAT literal was tracked down to a real cue name this pass; both are read as
 > one *is* "this sound plays here" now, at confidence 85. The travelling wave's
 > own cue in `Quake_Update` is still only "a sound plays here"; the two were
 > never the same literal.
+>
+> **2026-09-23: wired.** `Cue::QuakeHit` is in
+> `crates/game/src/audio/sfx/cue.rs`, fired on the rising edge of
+> `oag_gameplay::projectile::quake::Wave::hit`, snapshotted before
+> `Race::advance_quake`'s own `apply_hits` call and compared after - and
+> placed on the **struck** craft, settling this section's own naming
+> ambiguity (`owner_craft_cue_slot`) in favour of the victim, the same craft
+> every pending-damage field around it belongs to. `QUAKELAUNCH` and
+> `~QUAKETRAVEL` stay unwired: the first is named only in passing on
+> `missile.md`, no address, and the second's own cue-name literal is the one
+> just above this note - explicitly never resolved to a disc string, twice
+> over - so a same-named cue existing in the bank is not trusted as it.
 
 ### The three remaining helpers, read - and one correction
 
@@ -2095,6 +2122,22 @@ Two authored effects, both spawned through the ordinary `Psys_Spawn_q` shape:
 weapon ids `1` and `10` and no others** - the Missile and the LeachBeam - which
 is independent confirmation of "victim selection is the Missile's own lock-on,
 reused whole" above.
+
+**2026-09-23: `LEACH` and `~LEACHATTACH` wired; `LEACHENERGY` still is not.**
+`Cue::Leach` and `Cue::LeachAttach` are in `crates/game/src/audio/sfx/cue.rs`.
+`Cue::Leach` fires from both places a beam can be fired locked -
+`Race::spend_pickup`'s own LeachBeam arm and `Race::fire_opponent_leach_beam`
+- since this section names `LeachBeam_InitLocked` alone, not the unlocked
+fizzle case. `Cue::LeachAttach` is held for as long as a **locked** `Beam`
+instance exists, through its own disconnect linger, matching "carried by the
+beam itself" above rather than `Beam::connected`'s narrower window; its
+position (the owner/target midpoint) is chosen, since this section does not
+say what the beam's own scene node tracks. `LEACHENERGY` is still open: it
+needs the ribbon's own scroll-cursor wrap, which
+`oag_render::beam::Ribbon::advance` (see the 2026-09-23 ribbon re-read just
+below) now returns as its own `bool` - the edge exists - but that return is
+read and discarded inside `crates/game/src/race/weapons/visuals.rs` rather
+than surfaced anywhere `oag_game::audio` can reach it.
 
 ### 2026-09-17: the LeachBeam ribbon's own texture, and the draw call that proves it
 

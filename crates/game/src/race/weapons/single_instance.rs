@@ -56,6 +56,10 @@ impl Race {
         }
         let rules = oag_gameplay::damage_rules(self.sim.world.mode());
         let mut absorbed = [false; MAX_SHIPS];
+        // Snapshotted before `apply_hits` runs, for `Cue::QuakeHit`'s own
+        // rising edge below - the same before/after shape `Race::tick`'s own
+        // `bounces_before` already takes for the Missile's bounce cue.
+        let hit_before = wave.hit;
         wave.apply_hits(
             &mut self.sim.world.ships,
             self.sim.world.ship_count,
@@ -66,6 +70,18 @@ impl Race {
         for (slot, hit) in absorbed.iter().enumerate() {
             if *hit {
                 self.view.shield[slot].hit();
+            }
+        }
+        // `QUAKEHIT` (confidence 85), on the rising edge of the wave's own
+        // per-craft latch - see `Cue::QuakeHit`'s own doc comment. Placed on
+        // the **struck** craft, which is what `CueEvent::new(cue, slot)`'s
+        // slot means for a `Placement::Craft` cue.
+        for (slot, &now) in wave.hit.iter().enumerate() {
+            if now && !hit_before[slot] {
+                self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                    crate::audio::sfx::Cue::QuakeHit,
+                    slot,
+                ));
             }
         }
         // **A wave passing under a laid mine sets it off, quietly.**

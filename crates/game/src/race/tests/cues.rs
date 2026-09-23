@@ -123,16 +123,22 @@ fn every_cue_has_something_that_raises_it() {
     // simulation's output. `the_reticle_says_seeking_then_locked` in
     // `race::tests::weapons` is what stops it going unraised.
     //
-    // `PlasmaTravel` joins this for the same reason: it is read directly off
-    // the world's own projectile array every tick in `Audio::race_tick`,
-    // never pushed as a `CueEvent` - see its own doc comment and
-    // `SfxVoices::plasma_travel`.
-    const BY_LEVEL: [Cue; 5] = [
+    // `PlasmaTravel`, `RocketTravel`, `MissileTravel` and `ShurikenTravel`
+    // join this for the same reason: each is read directly off the world's
+    // own projectile array every tick in `Audio::race_tick`, never pushed as
+    // a `CueEvent` - see `TravelVoices`. `LeachAttach` is the same shape
+    // again, read directly off `race.sim.world.leach_beam` instead of a
+    // projectile slot - see `SfxVoices::leach_attach`.
+    const BY_LEVEL: [Cue; 9] = [
         Cue::Engine,
         Cue::Shield,
         Cue::Blowup,
         Cue::LockOn,
         Cue::PlasmaTravel,
+        Cue::RocketTravel,
+        Cue::MissileTravel,
+        Cue::LeachAttach,
+        Cue::ShurikenTravel,
     ];
 
     // A pad the whole grid stands on *and* a wall to scrape, so one run
@@ -147,7 +153,7 @@ fn every_cue_has_something_that_raises_it() {
     );
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
-    setup.weapons = Some(mine_and_plasma_table());
+    setup.weapons = Some(wall_fixture_weapons_table());
     let mut race = Race::start(setup);
 
     let mut buttons = Buttons::new();
@@ -192,6 +198,26 @@ fn every_cue_has_something_that_raises_it() {
                 .pickup
                 .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
         }
+        // A Rocket and a Missile, each pressed once after the Plasma's own
+        // wind-up has released - one bolt in the air at a time is enough,
+        // and each is re-aimed at the same wall by the position reset just
+        // below. `Cue::RocketHitWall` follows the Rocket immediately (no
+        // bounce budget, the same probe-branch shortcut the Plasma's own
+        // ending takes); `Cue::MissileHitWall` follows the Missile on its
+        // first bounce, not its final ending - see that cue's own doc
+        // comment. **Not the Cannon or the Shuriken**: `Missile_Init`'s own
+        // launch direction is the *craft's velocity*, which this fixture
+        // already points at the wall below, but `Shuriken_Init`'s and the
+        // Cannon's own launch read the craft's *forward* instead, which this
+        // fixture never rotates - `cannon_hits_a_wall` and
+        // `shuriken_bounces_off_a_wall` stage those two independently, aimed
+        // rather than dropped.
+        if tick == 210 {
+            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+        }
+        if tick == 212 {
+            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+        }
         // Re-aimed at the wall every tick, so each one sees a fresh inbound
         // contact rather than the ship bouncing away after the first.
         let body = &mut race.sim.world.ships[0].physics.body;
@@ -199,7 +225,7 @@ fn every_cue_has_something_that_raises_it() {
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
         let snapshot = match tick {
             40 => buttons.tick(CIRCLE),
-            130 => buttons.tick(SQUARE),
+            130 | 210 | 212 => buttons.tick(SQUARE),
             _ => buttons.tick(0),
         };
         saw_impact |= race.tick(&PlayerInputs::single(snapshot)).wall.impact;
@@ -209,11 +235,27 @@ fn every_cue_has_something_that_raises_it() {
         saw_impact,
         "the fixture never reached the wall - not what this test means to check"
     );
-    // `Cue::PlasmaHitShip` needs a struck craft, which this fixture's own
-    // Plasma never meets - it is re-aimed at the wall every tick, and the
-    // wall is the only thing in this fixture's world. `plasma_hits_a_craft`
-    // stages that ending independently; see its own doc comment.
+    // Each needs a struck craft, which this fixture's own bolts never meet -
+    // every one of them is re-aimed at the wall every tick, and the wall is
+    // the only thing in this fixture's world. The four helpers below each
+    // stage their own craft-hit ending independently; see their own doc
+    // comments.
     raised.extend(plasma_hits_a_craft());
+    raised.extend(rocket_hits_a_craft());
+    raised.extend(cannon_hits_a_craft());
+    // Neither the Cannon's nor the Shuriken's own launch reads the firing
+    // craft's velocity - both read its forward instead, which this fixture
+    // never rotates - so neither ever crosses the floor-shaped wall above;
+    // see `cannon_hits_a_wall`'s own doc comment.
+    raised.extend(cannon_hits_a_wall());
+    raised.extend(shuriken_bounces_off_a_wall());
+    // Neither the Quake nor the LeachBeam ever meets this fixture's wall at
+    // all - a travelling wave and a locked link are progress-along-the-course
+    // and along-track-window questions, not raycasts against geometry - so
+    // both are staged by their own two-craft helpers rather than by anything
+    // in the loop above.
+    raised.extend(quake_hits_a_craft());
+    raised.extend(leach_fires_locked());
 
     for cue in Cue::ALL {
         assert!(
@@ -234,6 +276,16 @@ fn every_cue_has_something_that_raises_it() {
         Cue::Plasma,
         Cue::PlasmaHitWall,
         Cue::PlasmaHitShip,
+        Cue::RocketHitWall,
+        Cue::RocketHitShip,
+        Cue::Missile,
+        Cue::MissileHitWall,
+        Cue::Cannon,
+        Cue::CannonHitWall,
+        Cue::CannonHitShip,
+        Cue::QuakeHit,
+        Cue::Leach,
+        Cue::ShurikenHit,
     ] {
         assert!(raised.contains(&cue), "{} was never raised", cue.name());
     }
@@ -301,6 +353,216 @@ fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     raised
 }
 
+/// A Rocket meeting a second, stationary craft - the same two-craft shape
+/// [`plasma_hits_a_craft`] takes and for the same reason:
+/// `every_cue_has_something_that_raises_it`'s own wall fixture only ever
+/// meets the wall it is re-aimed at every tick. `oag_gameplay::projectile::flight`
+/// gives the Rocket the Plasma's own two endings - see `Cue::RocketHitShip`'s
+/// own doc comment - so this is the same fixture with the weapon and its
+/// table swapped, and no charge/wind-up delay to wait out.
+fn rocket_hits_a_craft() -> std::collections::BTreeSet<Cue> {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_rocket_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+
+    let mut buttons = Buttons::new();
+    let mut raised = std::collections::BTreeSet::new();
+    for tick in 0..60 {
+        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        race.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
+        race.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+
+        let snapshot = if tick == 0 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        race.tick(&PlayerInputs::single(snapshot));
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+    }
+    raised
+}
+
+/// A Cannon round meeting a second, stationary craft - the same shape
+/// [`rocket_hits_a_craft`] takes, held rather than pressed:
+/// `Race::spend_pickup`'s own Cannon arm is a no-op, and `Race::advance_cannons`
+/// reads the **held** state of the button every tick instead - see
+/// `Cue::Cannon`'s own doc comment. The craft stays put, since a round's own
+/// muzzle speed is the firing craft's current speed plus a fixed
+/// `CannonStats::rate`-independent base, and zero is a speed like any other.
+fn cannon_hits_a_craft() -> std::collections::BTreeSet<Cue> {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_cannon_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
+
+    let mut buttons = Buttons::new();
+    let mut raised = std::collections::BTreeSet::new();
+    for _ in 0..60 {
+        // Pinned at the origin, the same reason `plasma_hits_a_craft` pins
+        // its own shooter: `forward * 15.0` is a *relative* offset, and
+        // reading it against a shooter left to drift would place the target
+        // somewhere that was never actually down the nose.
+        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        race.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+
+        // Held the whole run: `Cannon_UpdateReload` reads the held bit, not
+        // the press edge.
+        let snapshot = buttons.tick(SQUARE);
+        race.tick(&PlayerInputs::single(snapshot));
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+    }
+    raised
+}
+
+/// A Cannon round meeting a wall dead ahead - a **vertical** one, at `x =
+/// 15.0` (`setup`'s own synthetic track runs along `+x`, and `Race::start`
+/// spawns the craft facing its own tangent, so this is the direction its nose
+/// already points), rather than [`every_cue_has_something_that_raises_it`]'s
+/// own floor-shaped one: `Weapon_FireCannon`'s round reads the firing craft's
+/// own *forward* for its heading, not its velocity, so a wall reached only by
+/// falling (that fixture's own shape) is a wall this weapon's round never
+/// crosses - it just skims parallel to it forever. A wall the craft's own
+/// nose already points at needs no such trick.
+fn cannon_hits_a_wall() -> std::collections::BTreeSet<Cue> {
+    let mut setup = setup_with(
+        hulled_handling(),
+        vec![plane(0, 15.0, oag_physics::Surface::Wall, 0)],
+    );
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_cannon_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
+
+    let mut buttons = Buttons::new();
+    let mut raised = std::collections::BTreeSet::new();
+    for _ in 0..60 {
+        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        // Held the whole run, the same reason `cannon_hits_a_craft` holds it.
+        let snapshot = buttons.tick(SQUARE);
+        race.tick(&PlayerInputs::single(snapshot));
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+    }
+    raised
+}
+
+/// A Shuriken glancing off the same shape of wall - see `cannon_hits_a_wall`'s
+/// own doc comment for why a vertical wall dead ahead and not a floor-shaped
+/// one: `Shuriken_Init` reads the craft's own forward too, twenty degrees off
+/// one side or the other, and both fixed angles still meet a wall this wide
+/// well inside its first few flight ticks.
+fn shuriken_bounces_off_a_wall() -> std::collections::BTreeSet<Cue> {
+    let mut setup = setup_with(
+        hulled_handling(),
+        vec![plane(0, 15.0, oag_physics::Surface::Wall, 0)],
+    );
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_shuriken_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
+
+    let mut buttons = Buttons::new();
+    let mut raised = std::collections::BTreeSet::new();
+    for tick in 0..60 {
+        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let snapshot = if tick == 0 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        race.tick(&PlayerInputs::single(snapshot));
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+    }
+    raised
+}
+
+/// The Quake's own travelling wave reaching a second craft.
+///
+/// **The radius is wide on purpose.** [`one_quake_table`]'s own `200`-unit
+/// radius is bigger than [`setup`]'s whole synthetic course (a ~136.6-unit
+/// ring - see that function's own doc comment), so the wave reaches every
+/// craft on it the instant it launches: this is about `Cue::QuakeHit`'s own
+/// edge, not the wave's travel time, and neither craft needs to be placed
+/// anywhere in particular for it.
+///
+/// Fired on the second tick rather than the first: `Race::spend_pickup` runs
+/// before `Race::update_standings` inside `Race::tick`, so a press on the
+/// very first tick would still read the pre-race `None`
+/// [`oag_race::Standing::progress`] starts at, and the Quake's own fire arm
+/// declines rather than launches with nowhere on the course to start from.
+fn quake_hits_a_craft() -> std::collections::BTreeSet<Cue> {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_quake_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
+
+    let mut buttons = Buttons::new();
+    let mut raised = std::collections::BTreeSet::new();
+    for tick in 0..30 {
+        let snapshot = if tick == 1 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        race.tick(&PlayerInputs::single(snapshot));
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+    }
+    raised
+}
+
+/// The LeachBeam fired with a lock - the same nose-parked placement
+/// [`crate::race::tests::weapons::holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold`]
+/// uses, since `Ship_AcquireLock` is one function serving both weapons. No
+/// hold to wait out here, unlike that test's own player-facing reticle gate:
+/// `Race::spend_pickup`'s own LeachBeam arm reads `Race::sight_target`
+/// directly, with no `Sight::locked` requirement layered on top of it - see
+/// `Cue::Leach`'s own doc comment.
+fn leach_fires_locked() -> std::collections::BTreeSet<Cue> {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_leach_beam_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    race.sim.world.ships[1].physics.body.position =
+        race.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+
+    let mut buttons = Buttons::new();
+    let mut raised = std::collections::BTreeSet::new();
+    for tick in 0..10 {
+        let snapshot = if tick == 1 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        race.tick(&PlayerInputs::single(snapshot));
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+    }
+    raised
+}
+
 /// `Plasma_SweepCraftHit` plays `PLASMAHITSHIP` on a craft hit and clears the
 /// bolt's own emitter before `Plasmas_Update`'s teardown would otherwise play
 /// `PLASMAHITWALL` unconditionally - so the original plays exactly one of the
@@ -320,6 +582,79 @@ fn a_plasma_that_hits_a_craft_raises_plasmahitship_and_not_plasmahitwall() {
         "PLASMAHITWALL fired on a craft hit too - the original clears the \
          bolt's own emitter before that branch can run, so this is a double \
          sound the disc never plays: {raised:?}"
+    );
+}
+
+/// The same split as the Plasma's, on `oag_gameplay::projectile::Impact::struck` -
+/// see `Cue::RocketHitShip`'s own doc comment.
+#[test]
+fn a_rocket_that_hits_a_craft_raises_rockethitship_and_not_rockethitwall() {
+    let raised = rocket_hits_a_craft();
+    assert!(
+        raised.contains(&Cue::RocketHitShip),
+        "ROCKEXPLSHIP never fired on a craft hit: {raised:?}"
+    );
+    assert!(
+        !raised.contains(&Cue::RocketHitWall),
+        "ROCKEXPLWALL fired on a craft hit too: {raised:?}"
+    );
+}
+
+/// The same split again, for the Cannon - see `Cue::CannonHitShip`'s own
+/// doc comment for why the cue still has to be *raised* here even though
+/// `CANNONEXPLSHIP` plays `CANNONEXPLWALL`'s own waveforms rather than any
+/// of its own: which waveforms come out the other end is `Banks::pick`'s
+/// question, not this one's.
+#[test]
+fn a_cannon_round_that_hits_a_craft_raises_cannonhitship_and_not_cannonhitwall() {
+    let raised = cannon_hits_a_craft();
+    assert!(
+        raised.contains(&Cue::CannonHitShip),
+        "CANNONEXPLSHIP never fired on a craft hit: {raised:?}"
+    );
+    assert!(
+        !raised.contains(&Cue::CannonHitWall),
+        "CANNONEXPLWALL fired on a craft hit too: {raised:?}"
+    );
+}
+
+#[test]
+fn a_cannon_round_that_hits_a_wall_raises_cannonhitwall() {
+    let raised = cannon_hits_a_wall();
+    assert!(
+        raised.contains(&Cue::CannonHitWall),
+        "CANNONEXPLWALL never fired on a wall hit: {raised:?}"
+    );
+    assert!(
+        !raised.contains(&Cue::CannonHitShip),
+        "CANNONEXPLSHIP fired on a wall hit too: {raised:?}"
+    );
+}
+
+#[test]
+fn a_shuriken_bouncing_off_a_wall_raises_shurikenhit() {
+    let raised = shuriken_bounces_off_a_wall();
+    assert!(
+        raised.contains(&Cue::ShurikenHit),
+        "SHURIKENHIT never fired on a bounce: {raised:?}"
+    );
+}
+
+#[test]
+fn a_quake_wave_raises_quakehit_on_the_craft_it_reaches() {
+    let raised = quake_hits_a_craft();
+    assert!(
+        raised.contains(&Cue::QuakeHit),
+        "QUAKEHIT never fired: {raised:?}"
+    );
+}
+
+#[test]
+fn a_locked_leachbeam_raises_leach() {
+    let raised = leach_fires_locked();
+    assert!(
+        raised.contains(&Cue::Leach),
+        "LEACH never fired on a locked shot: {raised:?}"
     );
 }
 
