@@ -912,12 +912,17 @@ mod tests {
 
         // One class raced (a real time), one never touched (a dash) - both
         // outcomes `class_table` produces, so a regression that lost either
-        // path fails here.
+        // path fails here. The key is built from the **literal** reversed
+        // path, not from `track.entry_name()` again - computing both sides
+        // through the same call would still pass if `entry_name` ignored
+        // `reversed` entirely, since the key and the lookup would agree by
+        // construction either way. Spelling it out is what actually pins
+        // the `Reversed="True"` branch this track exists to exercise.
         let mut store = crate::records::Store::default();
         store.record(
             crate::records::Key::new(
                 oag_pulse::TITLE.name,
-                Some(&track.entry_name()),
+                Some(r"Data\Environments\01_Track\track_reversed.vex"),
                 "single_race",
                 "venom",
             ),

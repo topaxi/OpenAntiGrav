@@ -210,7 +210,7 @@ fn medal_label(medal: records::Medal) -> &'static str {
 }
 
 /// The RECORDS page's own `TIME` column, one call per class row - see
-/// `crate::records_page::table_for`, the only caller. `show_total` picks
+/// [`class_table`], the only caller. `show_total` picks
 /// [`records::Record::best_total_ticks`] over
 /// [`records::Record::best_lap_ticks`] for a mode that finishes; a row with
 /// nothing recorded yet, or whose recorded field is the wrong one for this
