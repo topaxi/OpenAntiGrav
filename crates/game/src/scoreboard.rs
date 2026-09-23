@@ -40,6 +40,7 @@
 use crate::hud::{Precision, format_lap_time};
 use crate::records;
 use oag_ui::frontend::{Align, Draw};
+use oag_ui::menu;
 
 #[cfg(test)]
 mod tests;
@@ -209,7 +210,7 @@ fn medal_label(medal: records::Medal) -> &'static str {
 }
 
 /// The RECORDS page's own `TIME` column, one call per class row - see
-/// `crate::records_page::table_for`, the only caller. `show_total` picks
+/// [`class_table`], the only caller. `show_total` picks
 /// [`records::Record::best_total_ticks`] over
 /// [`records::Record::best_lap_ticks`] for a mode that finishes; a row with
 /// nothing recorded yet, or whose recorded field is the wrong one for this
@@ -227,6 +228,145 @@ pub fn record_table_value(record: Option<&records::Record>, show_total: bool) ->
         Some(ticks) => format_lap_time(ticks, Precision::Hundredths),
         None => "-".to_string(),
     }
+}
+
+/// The page id [`records_table`] answers for - checked explicitly rather
+/// than inferred from which rows are on screen, since the RACE page also
+/// carries `race.mode`/`race.track` rows and a value-based search would draw
+/// this table there too.
+const RECORDS_PAGE_ID: &str = "records";
+
+/// Whether `mode` produces a *finished* time worth showing over a lap one.
+///
+/// [`records::Record::best_total_ticks`] is only ever set when
+/// [`records::Observation::finished`] was true, and that field's own module
+/// doc names Speed Lap and Zone as the two modes whose race never finishes at
+/// all - `oag_race::Mode::laps_target` is `None` for both, so a total column
+/// would be permanently empty there. Every other mode does finish, so its
+/// total is the more useful number to show than a fastest single lap.
+#[must_use]
+pub fn show_total(mode: oag_race::Mode) -> bool {
+    !matches!(mode, oag_race::Mode::SpeedLap | oag_race::Mode::Zone)
+}
+
+/// The RECORDS page's own per-class table: one `(label, time)` pair per
+/// entry in `classes`, given an already-resolved title, `.vex` entry name and
+/// mode.
+///
+/// Moved here, alongside [`show_total`] and [`records_table`], from what used
+/// to be the `main` binary's own `records_page` module: that module is
+/// reachable only from the binary, and `crate::capture::menu_page` - the
+/// `--menu-page records` still - needed the identical resolution to avoid
+/// silently disagreeing with the live RECORDS page about which classes
+/// exist or which column a mode draws. `crates/game/src/main/records_page.rs`
+/// is now a thin wrapper over [`records_table`] that supplies the live
+/// session's own `Shell::tracks_for`-based track lookup.
+#[must_use]
+pub fn class_table(
+    title_name: &str,
+    entry_name: &str,
+    mode: oag_race::Mode,
+    classes: &[menu::Choice],
+    store: &records::Store,
+) -> Vec<(String, String)> {
+    let want_total = show_total(mode);
+    classes
+        .iter()
+        .map(|choice| {
+            let key = records::Key::new(title_name, Some(entry_name), mode.name(), &choice.value);
+            let value = record_table_value(store.get(&key), want_total);
+            (choice.label.clone(), value)
+        })
+        .collect()
+}
+
+/// The speed classes one title offers, in the shape [`menu::Menu::supply`]
+/// wants.
+///
+/// **The value is lowercase and the label is the disc's own spelling.** The
+/// value is what a settings file already holds (`race.class` defaults to
+/// `"venom"`) and what `oag_physics::SpeedClass::from_name` parses
+/// case-insensitively, so lowercasing keeps every existing settings file
+/// working; the label is the `<Class name="...">` the title actually
+/// authors, so what a reviewer reads on screen is what the file says.
+///
+/// A title whose ladder is unread (`speed_classes: None`, Wipeout 2048 today)
+/// falls back to `oag_physics::SpeedClass::ALL`, which is this build's own
+/// list rather than some other title's measurement.
+///
+/// **Confined to `oag_title::SpeedClasses::is_offered_outside_remix`, not
+/// `selectable()` alone.** A Pure boot's own ladder carries `VECTOR`, and
+/// this build can race it - but only RACE REMIX offers it, by a 2026-09-05
+/// maintainer decision. See that function's doc comment and
+/// `docs/architecture/menus.md` for why offering it here too would diverge
+/// wider than asked, even though it is what Pure's own front end does.
+///
+/// Moved here from `crate::main::session::menus` - which re-exports it under
+/// its own name, so every existing call site there keeps working unchanged -
+/// for the same reason [`class_table`] moved: [`records_table`] needs the
+/// identical list, and a `--menu-page records` capture has no `Session` to
+/// read it off.
+#[must_use]
+pub fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
+    let named: Vec<&'static str> = match title.race.speed_classes {
+        Some(ladder) => ladder
+            .selectable()
+            .filter(|name| oag_title::SpeedClasses::is_offered_outside_remix(name))
+            .collect(),
+        None => oag_physics::SpeedClass::ALL
+            .iter()
+            .map(|class| class.as_str())
+            .collect(),
+    };
+    named
+        .into_iter()
+        .map(|name| menu::Choice::labelled(name.to_lowercase(), name))
+        .collect()
+}
+
+/// What a `choice` row named `setting` currently holds, as plain text - the
+/// row's *value*, not its display label.
+fn held_text(model: &menu::Menu, setting: &str) -> Option<String> {
+    model
+        .page()
+        .entries
+        .iter()
+        .find(|entry| entry.setting() == Some(setting))
+        .and_then(menu::Entry::chosen)
+        .and_then(|value| match value {
+            menu::Value::Text(text) => Some(text),
+            menu::Value::Flag(_) => None,
+        })
+}
+
+/// The RECORDS page's own live per-class table, resolved off `model`'s
+/// current MODE/TRACK rows - `None` off any page but RECORDS, or while
+/// `track_entry` cannot resolve the held track at all.
+///
+/// `track_entry` is the one place a live session and a `--menu-page` capture
+/// differ, and the only reason this takes a closure rather than a track list
+/// directly: the live session asks `Shell::tracks_for(mode)`, which carries a
+/// distinct Zone list, where a capture has only the ordinary list its own
+/// boot survey read. A capture whose seeded `race.mode` is `zone` therefore
+/// resolves no track and this returns `None` - drawing nothing rather than a
+/// table looked up against the wrong list, per `CLAUDE.md`'s
+/// do-not-invent rule: an absent table is an honest gap, a table built from
+/// the wrong track would not be.
+#[must_use]
+pub fn records_table(
+    model: &menu::Menu,
+    title: &'static oag_title::Title,
+    store: &records::Store,
+    track_entry: impl Fn(oag_race::Mode, &str) -> Option<String>,
+) -> Option<Vec<(String, String)>> {
+    if model.page().id != RECORDS_PAGE_ID {
+        return None;
+    }
+    let mode = oag_race::Mode::from_name(&held_text(model, "race.mode")?)?;
+    let track_id = held_text(model, "race.track")?;
+    let entry_name = track_entry(mode, &track_id)?;
+    let classes = speed_class_choices(title);
+    Some(class_table(title.name, &entry_name, mode, &classes, store))
 }
 
 /// How many extra footer lines [`draw_list`] owes [`PersonalBest`] - zero,

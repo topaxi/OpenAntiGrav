@@ -270,13 +270,13 @@ pub struct Observation {
     /// campaign cell at all, and when the cell's own law says the value
     /// scored met no medal.
     ///
-    /// **Always `None` at the only call site that builds an `Observation`
-    /// today** (`RaceStage::observation`,
-    /// `crates/game/src/main/race_stage.rs`), because no campaign cell is
-    /// selected for any race yet: this field is wired end to end but not
-    /// yet fed by a real race. See the module doc's "where a career system
-    /// attaches" section and the `campaign` handover thread for what
-    /// selecting one still needs.
+    /// **Fed by a real race since 2026-09-14.** `RaceStage::observation`
+    /// (`crates/game/src/main/race_stage.rs`) calls `RaceStage::campaign_medal`,
+    /// which evaluates a real `oag_tables::race_campaign::Cell` once one is
+    /// selected - see that method's own doc for the per-mode law. Still
+    /// `None` for a race launched any other way (the ordinary RACE page,
+    /// RACE REMIX, `--race`), since none of those set `RaceStage::campaign_cell`
+    /// at all. See the module doc's "where a career system attaches" section.
     pub campaign_medal: Option<Medal>,
 }
 

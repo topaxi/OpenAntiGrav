@@ -30,6 +30,11 @@ pub(super) fn menu_page(
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
+    // The RECORDS page's own store, read the same read-only way
+    // `race::CaptureOptions::previous_best` is - see the call site in
+    // `capture.rs`. Taken rather than loaded in here so this function stays
+    // testable on a hand-built `Store` with no real `<config dir>` involved.
+    records: &crate::records::Store,
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
     // The width of a string in the face the entries are drawn in, which a
@@ -295,6 +300,7 @@ pub(super) fn menu_page(
         if let Some(text) = &axis_preview {
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
+        list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(prompt_draws(kind, &name, strings, skin)?);
         return Ok(list);
     }
@@ -303,13 +309,14 @@ pub(super) fn menu_page(
         if let Some(text) = &axis_preview {
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
+        list.extend(records_draws(&model, skin, title, tracks, records));
         return Ok(list);
     };
     // The same arithmetic the live stage runs, through the same easing, so what
     // this draws is a frame of the real transition rather than a picture of one.
-    // No axis-preview line here, matching `MenuStage::render`'s own gate:
-    // the row list is a zoomed, mid-tween picture at this point, and the
-    // preview's position is computed against the still one.
+    // No axis-preview line and no records table here, matching
+    // `MenuStage::render`'s own gate: the row list is a zoomed, mid-tween
+    // picture at this point, and both are positioned against the still one.
     let shape = oag_ui::menu::Transition::default();
     let mut tween = oag_ui::anim::Tween::new(1.0);
     tween.advance(phase.clamp(0.0, 1.0));
@@ -317,6 +324,41 @@ pub(super) fn menu_page(
     Ok(layers
         .zoomed(shape.origin, shape.in_scale + (1.0 - shape.in_scale) * t, t)
         .flatten())
+}
+
+/// The RECORDS page's own live per-class table, as draws - empty off any
+/// page but RECORDS, or while `model`'s own MODE/TRACK rows have not
+/// resolved a track this capture's `tracks` list carries.
+///
+/// `crate::scoreboard::records_table` is the one function the live session
+/// draws this same table through - see its own doc for why the track lookup
+/// here (this capture's own boot-survey `tracks`, with no distinct Zone
+/// list) can differ from `Shell::tracks_for(mode)` without the two pages
+/// ever disagreeing about anything they both can answer. `oag_ui::prompt::
+/// record_row_draw` is the same drawing half `crate::menu_stage::MenuStage::
+/// render` calls for the live session, so a row's position here matches a
+/// live one for the same `model` state (`Menu::visible_rows`, `Menu::scroll`).
+fn records_draws(
+    model: &oag_ui::menu::Menu,
+    skin: &oag_ui::menu::Skin,
+    title: &'static oag_title::Title,
+    tracks: &[crate::catalogue::Track],
+    records: &crate::records::Store,
+) -> Vec<oag_ui::frontend::Draw> {
+    let Some(rows) = crate::scoreboard::records_table(model, title, records, |_mode, track_id| {
+        tracks
+            .iter()
+            .find(|track| track.id == track_id)
+            .map(crate::catalogue::Track::entry_name)
+    }) else {
+        return Vec::new();
+    };
+    rows.iter()
+        .enumerate()
+        .flat_map(|(index, (label, value))| {
+            oag_ui::prompt::record_row_draw(model, skin, index, label, value)
+        })
+        .collect()
 }
 
 /// One prompt's draws, for `--menu-prompt`.
@@ -763,57 +805,14 @@ pub(super) fn fury_picture(
     )))
 }
 
+// A plain `mod tests;`, not `#[path]`ed: this file has no `#[path]` of its
+// own (it is a normal child of `capture.rs`'s `mod menu_page;`), so this
+// resolves to `menu_page/tests.rs` beside it, the same move
+// `crates/physics/src/airbrake.rs` made when a `#[cfg(test)] mod` crossed
+// its own 200-line cap. This module was still under that cap on its own,
+// but adding `records_draws`'s own test and its `layers_text_y` fixture put
+// the *file* - code plus inline tests together - one line over
+// `scripts/check-file-size.py`'s separate 1,000-line cap on the file
+// itself, and moving the tests out is the same fix either cap asks for.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Every other closed vocabulary in this crate is checked at load -
-    /// `menu::Action::parse` against `Action::all()`, `ValueSource::parse`,
-    /// `Definition::check`. This one is a runtime string match, so it gets the
-    /// equivalent here rather than being the one that can only be found by
-    /// running the flag and reading the error.
-    #[test]
-    fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
-        let skin = oag_ui::menu::Skin::new(
-            oag_pulse::FRONT_END.menu.unwrap(),
-            oag_display::space::Space::PSP,
-            22.0,
-        );
-        let strings = oag_ui::language::StringTable::default();
-        for kind in [
-            "rename",
-            "rename-note",
-            "delete",
-            "delete-built-in",
-            "binding",
-        ] {
-            let list = prompt_draws(kind, "winston", &strings, &skin)
-                .unwrap_or_else(|e| panic!("{kind:?} is named by the flag's own help: {e:#}"));
-            assert!(!list.is_empty(), "{kind:?} drew nothing");
-            // `name` reaches every one of them, which is the whole reason the
-            // substitution exists - a prompt that asked about `%s` would be
-            // worse than one that asked about nothing. The test passes
-            // `"winston"` for `binding` too, standing in for a button name
-            // here the same way it stands in for a pilot's elsewhere: this
-            // checks the substitution mechanism, not what `menu_page`'s own
-            // caller derives it from.
-            assert!(
-                list.iter().any(
-                    |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
-                        if text.contains("winston"))
-                ),
-                "{kind:?} does not substitute name"
-            );
-            assert!(
-                !list.iter().any(
-                    |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
-                        if text.contains("%s"))
-                ),
-                "{kind:?} left a %s unsubstituted"
-            );
-        }
-        let error = prompt_draws("qwerty", "winston", &strings, &skin)
-            .expect_err("an unknown prompt has to be an error, not an empty picture");
-        assert!(format!("{error:#}").contains("qwerty"));
-    }
-}
+mod tests;
