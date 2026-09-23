@@ -35,6 +35,7 @@ pub mod recovery;
 pub mod sight;
 pub mod standing;
 pub mod state;
+pub mod tournament;
 pub mod zone;
 
 #[cfg(test)]

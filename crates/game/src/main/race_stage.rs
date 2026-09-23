@@ -75,6 +75,21 @@ pub(crate) struct RaceStage {
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// The final standings rank this leg earns against
+    /// [`Session::tournament`], or `None` on every leg but a Tournament
+    /// cell's own last one - see that field's own doc.
+    ///
+    /// **Read by [`RaceStage::campaign_medal`] alone**, and drained from
+    /// `Session::tournament` at the same finish-transition
+    /// (`Session::frame`'s `result_saved` guard) that
+    /// `RaceStage::observation` is next built from - the mirror of
+    /// [`Self::campaign_cell`]'s own "drained once, read once" shape, except
+    /// this is written *after* the stage already exists rather than at
+    /// build time, because the rank is not known until the leg itself
+    /// finishes.
+    ///
+    /// [`Session::tournament`]: crate::main::session::Session::tournament
+    pub(crate) tournament_final_rank: Option<u8>,
     /// The Wipeout 2048 campaign event this race was launched against, or
     /// `None` for every other title and for an ordinary `--race`/menu
     /// launch on 2048 itself. Resolved by `race::load_event` onto
@@ -290,10 +305,17 @@ impl RaceStage {
     /// - `Elimination` - the player's own kill count, gated on nothing, for
     ///   the same "only ever grows" reason as `Zone`.
     ///
-    /// Everything else - `Tournament`, `Head2Head`, `Custom Grid`,
-    /// `AI Race` - is `None`: `Self::campaign_cell` never carries one of
-    /// those, since `oag_game::campaign::race_mode_for_cell` refuses to map
-    /// them onto a launch in the first place.
+    /// - `Tournament` - [`Self::tournament_final_rank`], which is `Some`
+    ///   only on the cell's own last leg, once that leg has finished -
+    ///   exactly `tournament.md`'s "the medal-eligible value is the final
+    ///   standings rank... only on the tournament's last leg" law. `None` on
+    ///   every earlier leg, which this method reads as "no medal yet" the
+    ///   same way an unfinished `Race` does.
+    ///
+    /// Everything else - `Head2Head`, `Custom Grid`, `AI Race` - is `None`:
+    /// `Self::campaign_cell` never carries one of those, since
+    /// `oag_game::campaign::race_mode_for_cell` refuses to map them onto a
+    /// launch in the first place.
     fn campaign_medal(
         &self,
         finished: bool,
@@ -317,8 +339,8 @@ impl RaceStage {
             }
             CampaignMode::Zone => Some(i64::from(self.race.sim.world.primary_race().zone)),
             CampaignMode::Elimination => Some(i64::from(self.race.player_standing().kills)),
-            CampaignMode::Tournament
-            | CampaignMode::Head2Head
+            CampaignMode::Tournament => self.tournament_final_rank.map(i64::from),
+            CampaignMode::Head2Head
             | CampaignMode::CustomGrid
             | CampaignMode::AiRace
             | CampaignMode::Other(_) => None,

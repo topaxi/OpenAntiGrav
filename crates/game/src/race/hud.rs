@@ -34,7 +34,12 @@ pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'stati
         Mode::TimeTrial => title.hud.time_trial,
         Mode::SpeedLap => title.hud.speed_lap,
         Mode::Zone => title.hud.zone,
-        Mode::SingleRace => title.hud.arcade,
+        // Measured, not assumed: `docs/formats/race-setup.md`'s own reading
+        // of `docs/ui/hud.md`'s five-layout census finds no
+        // `Tournament_HUD.xml` at all, and cites `Arcade_HUD.xml` as "the
+        // single-race and tournament layout" - see `Mode::Tournament`'s own
+        // doc comment.
+        Mode::SingleRace | Mode::Tournament => title.hud.arcade,
         Mode::Eliminator => title.hud.elimination,
     }
 }

@@ -58,15 +58,49 @@ pub enum Mode {
     /// weapon damage, and a kill-count ending. See
     /// `docs/gameplay/race-modes.md#eliminator`.
     Eliminator,
+    /// One leg of a series of single races, scored as one event - see
+    /// [`crate::tournament`] for the points law and
+    /// `docs/gameplay/race-modes.md#tournament` for the full picture.
+    ///
+    /// **Every per-leg racing rule mirrors [`Self::SingleRace`], and that is
+    /// measured rather than assumed.** `docs/formats/race-setup.md`'s own
+    /// reading of `docs/ui/hud.md`'s five-layout census finds no
+    /// `Tournament_HUD.xml` at all - `Arcade_HUD.xml`, single race's own
+    /// layout, is read there as "the single-race and tournament layout" - and
+    /// `MSC_EVENT_TOURN` itself calls a tournament "a series of single
+    /// races". So [`Self::has_opponents`], [`Self::weapons_enabled`],
+    /// [`Self::pickups_absorb`] and [`Self::laps_target`] all answer exactly
+    /// as [`Self::SingleRace`] does for this variant - a leg is not a new set
+    /// of in-race rules, only the campaign bookkeeping around it is new.
+    ///
+    /// **Deliberately absent from [`Self::ALL`].** Every other variant there
+    /// is something the RACE page's own `values_from = "race_modes"` row
+    /// (`oag_ui::menu::mode_choices`) can launch by picking one track and
+    /// pressing go; a tournament cannot, because the original's own
+    /// `Tournament C` (`Racebox`'s redirect target for `Mode == Tournament`,
+    /// `docs/formats/race-setup.md`) is a twelve-slot leg picker this engine
+    /// does not read yet. Exposing this variant there would offer a
+    /// one-track "tournament" the disc never shows a player - a stand-in this
+    /// project's own rule against inventing presentation forbids - so a
+    /// tournament is reachable only through a campaign cell's own
+    /// `tournament_tracks`, which already names every leg
+    /// (`Session::launch_campaign_cell`).
+    Tournament,
 }
 
 impl Mode {
-    /// Every mode, as a fixed-size array.
+    /// Every mode a plain "pick a track, press go" launch can run, as a
+    /// fixed-size array.
     ///
-    /// Fixed-size so that adding a mode is a compile error at every caller that
-    /// enumerates them, rather than a silently short list. The same reason
-    /// `menu::Action::all` and `perf::FrameLimit::OFFERED` are arrays in the
-    /// composition root.
+    /// Fixed-size so that adding one of *these* modes is a compile error at
+    /// every caller that enumerates them, rather than a silently short list.
+    /// The same reason `menu::Action::all` and `perf::FrameLimit::OFFERED`
+    /// are arrays in the composition root.
+    ///
+    /// **[`Self::Tournament`] is not here** - see its own doc comment for
+    /// why a tournament needs a leg list rather than a single track and
+    /// cannot be reached from this array's own consumer, the RACE page's
+    /// mode row.
     pub const ALL: [Self; 5] = [
         Self::TimeTrial,
         Self::SpeedLap,
@@ -188,6 +222,7 @@ impl Mode {
             Self::Zone => "zone",
             Self::SingleRace => "single_race",
             Self::Eliminator => "eliminator",
+            Self::Tournament => "tournament",
         }
     }
 
@@ -196,6 +231,12 @@ impl Mode {
     /// `None` rather than a default, so a settings file carrying a mode this
     /// build does not have is visible to the caller instead of silently becoming
     /// a time trial.
+    ///
+    /// **Never resolves `"tournament"`**, because it only searches
+    /// [`Self::ALL`] - see [`Self::Tournament`]'s own doc for why it is
+    /// excluded there. A settings file or a `--mode` flag naming it falls
+    /// back the same way an unknown token always has; only
+    /// `Session::launch_campaign_cell` ever constructs this variant.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|mode| mode.name() == name)
@@ -260,7 +301,13 @@ impl Mode {
     pub const fn laps_target(self, class: SpeedClass) -> Option<u32> {
         match self {
             Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS_BY_CLASS[class as usize]),
-            Self::SingleRace => Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class as usize]),
+            // A tournament leg races the same table `Single Race` does - see
+            // `Self::Tournament`'s own doc. The census `race-setup.md` reads
+            // (3/4/4/5, no exception across all 236 `PI_Cell` records) covers
+            // every mode's cells, `Tournament`'s 27 included.
+            Self::SingleRace | Self::Tournament => {
+                Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class as usize])
+            }
             Self::SpeedLap | Self::Zone | Self::Eliminator => None,
         }
     }
@@ -286,6 +333,7 @@ impl Mode {
             Self::Zone => "MSC_EVENT_ZONE",
             Self::SingleRace => "MSC_EVENT_SR",
             Self::Eliminator => "MSC_EVENT_ELIM",
+            Self::Tournament => "MSC_EVENT_TOURN",
         }
     }
 
@@ -302,6 +350,7 @@ impl Mode {
             Self::Zone => "ZONE",
             Self::SingleRace => "SINGLE RACE",
             Self::Eliminator => "ELIMINATOR",
+            Self::Tournament => "TOURNAMENT",
         }
     }
 
@@ -342,9 +391,13 @@ impl Mode {
     /// honest about it**: `MSC_EVENT_ELIM` promises *"a full grid of trigger
     /// happy contenders"*, stronger wording than a single race's "optional"
     /// opponents.
+    ///
+    /// **`true` for Tournament, mirroring [`Self::SingleRace`]** - see
+    /// [`Self::Tournament`]'s own doc for the evidence that a leg is raced
+    /// exactly like an ordinary single race.
     #[must_use]
     pub const fn has_opponents(self) -> bool {
-        matches!(self, Self::SingleRace | Self::Eliminator)
+        matches!(self, Self::SingleRace | Self::Eliminator | Self::Tournament)
     }
 
     /// Whether the original arms `Weapon Pad`s for this mode.
@@ -381,9 +434,12 @@ impl Mode {
     /// *"a weapons-heavy environment"*, and `Race_ReadSetupOptions`' own
     /// weapons-off set (modes `5`/`10`, time trial and speed lap) does not
     /// include it.
+    ///
+    /// **`true` for Tournament, mirroring [`Self::SingleRace`]** - see
+    /// [`Self::Tournament`]'s own doc.
     #[must_use]
     pub const fn weapons_enabled(self) -> bool {
-        matches!(self, Self::SingleRace | Self::Eliminator)
+        matches!(self, Self::SingleRace | Self::Eliminator | Self::Tournament)
     }
 
     /// Whether the mode lets a hit pickup pad refill the shield pool.
@@ -397,6 +453,10 @@ impl Mode {
     /// which this crate cannot see (`oag-race`'s `Cargo.toml` says why); it is
     /// `oag_game::race::Race::tick`'s to apply, on the same `lap_completed`
     /// edge the free Time Trial/Speed Lap turbo already reads.
+    ///
+    /// **`true` for Tournament too, mirroring [`Self::SingleRace`]** - see
+    /// [`Self::Tournament`]'s own doc; nothing in `MSC_EVENT_TOURN`'s text
+    /// says otherwise.
     ///
     /// [`ShipState::shield`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/physics/src/lib.rs
     #[must_use]
@@ -414,6 +474,30 @@ mod tests {
         for mode in Mode::ALL {
             assert_eq!(Mode::from_name(mode.name()), Some(mode));
         }
+    }
+
+    /// See [`Mode::ALL`]'s own doc for why: a one-track launch cannot run
+    /// what the disc's own `Tournament C` needs, a leg list.
+    #[test]
+    fn tournament_is_not_in_all() {
+        assert!(!Mode::ALL.contains(&Mode::Tournament));
+    }
+
+    /// A leg races exactly like a single race - see [`Mode::Tournament`]'s
+    /// own doc for the evidence.
+    #[test]
+    fn tournament_mirrors_single_race() {
+        for class in SpeedClass::ALL {
+            assert_eq!(
+                Mode::Tournament.laps_target(class),
+                Mode::SingleRace.laps_target(class),
+                "{class} disagrees with single race"
+            );
+        }
+        assert!(Mode::Tournament.has_opponents());
+        assert!(Mode::Tournament.weapons_enabled());
+        assert!(Mode::Tournament.pickups_absorb());
+        assert_eq!(Mode::Tournament.string_id(), "MSC_EVENT_TOURN");
     }
 
     #[test]

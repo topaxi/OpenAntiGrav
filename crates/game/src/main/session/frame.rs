@@ -650,6 +650,14 @@ impl Session {
             {
                 stage.result_saved = true;
                 let key = stage.result_key.clone();
+                // Before `stage.observation()` below reads
+                // `RaceStage::tournament_final_rank` for the medal: a
+                // Tournament cell's own rank is not known until the leg
+                // that just finished is folded into the running standings.
+                // See `super::tournament::record_finished_leg`'s own doc
+                // for why this is a plain function taking `stage` rather
+                // than a `Session` method.
+                super::tournament::record_finished_leg(&mut self.tournament, stage);
                 let observation = stage.observation();
                 // Read before `self.records.record` below folds `observation`
                 // into the row: `PersonalBest::compare` wants the row as it

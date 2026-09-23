@@ -54,6 +54,8 @@ mod placeholder;
 mod pointer;
 #[path = "session/timing.rs"]
 mod timing;
+#[path = "session/tournament.rs"]
+mod tournament;
 // Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
 // unaliased throughout `session::menus`, and a sibling module of the same
 // name would shadow it at every one of those call sites.
@@ -513,6 +515,23 @@ pub(crate) struct Session {
     /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// A Tournament cell's own leg list and running standings, from the
+    /// moment `Session::launch_campaign_cell` starts one to the moment its
+    /// last leg's `EndRace Menu` is left (`RETURN TO GRID`/`RETURN TO MENU`).
+    /// See `crate::main::session::tournament` and
+    /// `race::tournament::Progress`'s own doc.
+    ///
+    /// **Unlike [`Self::campaign_cell`], this survives across a leg's own
+    /// relaunch rather than draining into the race stage** - every mode
+    /// this engine ran before Tournament reset its state fresh per race,
+    /// because every one of them ended there; a tournament's own points
+    /// total is the first fact that has to outlive one. `None` outside a
+    /// Tournament cell, and cleared the moment its `EndRace Menu` is left by
+    /// any option, finished or abandoned - this engine implements no
+    /// save/resume (`Tournament_SaveProgress`/`_LoadProgress`), so leaving
+    /// mid-tournament loses progress rather than parking it. **Chosen, not
+    /// measured.**
+    pub(crate) tournament: Option<race::tournament::Progress>,
     /// A CONTROLS binding row a player just confirmed, waiting for the key
     /// that will replace it.
     ///

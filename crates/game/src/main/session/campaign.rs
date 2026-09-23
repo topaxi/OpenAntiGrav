@@ -258,6 +258,14 @@ impl Session {
     /// does not offer, logs why and leaves `Cell Selection` on screen -
     /// never substitutes an implemented mode or a different circuit for an
     /// unimplemented or missing one.
+    ///
+    /// **A Tournament cell names its legs through
+    /// [`oag_tables::race_campaign::Cell::tournament_tracks`] rather than
+    /// [`oag_tables::race_campaign::Cell::track`]** - see that field's own
+    /// doc. Every leg's own track is resolved up front here, before
+    /// anything launches: a tournament that started on a shorter leg list
+    /// than the cell authors, because a later leg's own track turned out
+    /// missing, would be a silent truncation rather than an honest refusal.
     fn launch_campaign_cell(&mut self, cell: oag_tables::race_campaign::Cell) {
         let Some(mode) = oag_game::campaign::race_mode_for_cell(cell.mode.clone()) else {
             warn!(
@@ -266,23 +274,34 @@ impl Session {
             );
             return;
         };
-        let Some(track_id) = cell.track.as_deref() else {
-            warn!("{} names no track - cannot launch", cell.name);
-            return;
+        let is_tournament = mode == oag_race::Mode::Tournament;
+        let track_ids: Vec<String> = if is_tournament {
+            cell.tournament_tracks.clone()
+        } else {
+            cell.track.clone().into_iter().collect()
         };
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
-        let Some(entry) = shell
-            .track(mode, track_id)
-            .map(oag_game::catalogue::Track::entry_name)
-        else {
-            warn!(
-                "this source does not offer {track_id:?} - {} cannot launch",
-                cell.name
-            );
+        if track_ids.is_empty() {
+            warn!("{} names no track - cannot launch", cell.name);
             return;
-        };
+        }
+        let mut leg_entries = Vec::with_capacity(track_ids.len());
+        for track_id in &track_ids {
+            let Some(entry) = shell
+                .track(mode, track_id)
+                .map(oag_game::catalogue::Track::entry_name)
+            else {
+                warn!(
+                    "this source does not offer {track_id:?} - {} cannot launch",
+                    cell.name
+                );
+                return;
+            };
+            leg_entries.push(entry);
+        }
+        let entry = leg_entries[0].clone();
         // A `Zone` cell's own `class` is the literal string `"Zone"`, not a
         // speed class - see `oag_tables::race_campaign::Cell::speed_class`'s
         // own doc. Nothing in this engine resolves a Zone handling block of
@@ -316,16 +335,26 @@ impl Session {
         race_options.eliminator_kill_target = (mode == oag_race::Mode::Eliminator)
             .then(|| u32::try_from(cell.gold).ok())
             .flatten();
-        // Only for the two modes whose own `Mode::laps_target` already
-        // returns `Some` - see `race::Options::laps_override`'s own doc for
-        // why `SpeedLap`/`Zone` must never take their own `laps` attribute
-        // this way.
-        race_options.laps_override =
-            matches!(mode, oag_race::Mode::TimeTrial | oag_race::Mode::SingleRace)
-                .then_some(cell.laps)
-                .flatten();
+        // Only for the modes whose own `Mode::laps_target` already returns
+        // `Some` - see `race::Options::laps_override`'s own doc for why
+        // `SpeedLap`/`Zone` must never take their own `laps` attribute this
+        // way. Tournament included: its own cell carries the identical
+        // 3/4/4/5 census every leg races under - see `Mode::Tournament`'s
+        // own doc comment.
+        race_options.laps_override = matches!(
+            mode,
+            oag_race::Mode::TimeTrial | oag_race::Mode::SingleRace | oag_race::Mode::Tournament
+        )
+        .then_some(cell.laps)
+        .flatten();
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
+        // `None` for every ordinary cell, clearing whatever a previous
+        // tournament (finished or abandoned) left behind - see
+        // `Self::tournament`'s own doc for why nothing else has to clear it
+        // on this path.
+        self.tournament =
+            is_tournament.then(|| crate::race::tournament::Progress::new(leg_entries));
         if let Stage::Menu(stage) = &mut self.stage {
             stage.campaign = None;
         }
