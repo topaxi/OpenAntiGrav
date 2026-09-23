@@ -937,17 +937,17 @@ change how this list should be read:
       times across the 44 `.vex` files checked (twelve `track.vex`, twelve
       `start_grid.vex`, twenty ship files), so whatever starts these is not a
       sibling node. A bounded negative, not a survey of the disc's ~340 files
-- [x] `LodGroup` `0x2ee` - the static read (`docs/formats/vex.md`,
-      "`LodGroup`: authored, but never switched at runtime") found no code
-      that selects a tier, but PPSSPP frames of a hull and a `16_Track`
-      grandstand show the original drawing **only tier 0** up close (same
-      page, "the running original does not draw tier 1 up close", confidence
-      80). `oag_render::mesh::Lod` therefore defaults to `single`, with no
-      settings-file key since 2026-09-23; `--lod both` stays as a diagnostic.
-      Whether the original swaps to tier 1 beyond the switch distance is not
-      read.
-      A genuine live switch needs the same per-frame camera mechanism as
-      frustum culling below, and is not built
+- [x] `LodGroup` `0x2ee` - **switched per frame, as the original does.**
+      `LodGroup_SelectChild` (`0x0890be68`, confidence 85) picks a child from
+      the group's FOV-scaled view depth against the authored distances, and
+      `oag_render::mesh::LodGroups` does the same for the circuit and every
+      craft each frame - opponents past 30 units draw their `lodShape`, the
+      player's hull never passes it in either chase view. A per-title
+      `model_detail` setting scales the distances (`original` measured,
+      `high`/`maximum` chosen); `--lod both` stays as a diagnostic. PS2,
+      Pure and HD reuse the rule unread; HD's and 2048's groups hold no
+      second tier. See [`vex.md`](../formats/vex.md), "implemented - the
+      switch runs every frame"
 - [x] **PVS culling** off the track's own `section` `0x3c9` payload. The
       payload is now [decoded](../formats/track.md) (`oag_vex::pvs`,
       validated against every track file on both discs) and drawn with:

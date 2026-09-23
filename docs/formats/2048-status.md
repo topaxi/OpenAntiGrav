@@ -27,7 +27,7 @@ copies of 2,284 shared textures).
 | Layer | Reads? | Notes |
 | --- | --- | --- |
 | [PSARC](psarc.md) container | **yes** | Version 1.4, flags 1, 18,430 entries in `PSP2/data.psarc`. HD's PS3 archives are version 1.3, flags 3; nothing asserts either. |
-| [`.vex`](vex.md) class table | **yes** | Version 6, little-endian, the same class IDs HD's version 6 carries. |
+| [`.vex`](vex.md) class table | **yes** | Version 6, little-endian, the same class IDs HD's version 6 carries. `LodGroup` is authored in one file of the 1,059 (`DLC1/environments/Moa_Therma/track_reversed.vex`, 16 groups, every one childless), so the per-frame level-of-detail switch has nothing to do here - see [`vex.md`](vex.md), "implemented - the switch runs every frame". |
 | [Handling stats](handling-stats.md) | **yes** | Both the HD-derived roster's per-team files and the shared `<Global>` block at `Data\XML\handlingstats.xml`. The native roster's five teams parse too, `SUPERPHANTOM` class included. |
 | [`WO Track`](track.md) spline | **yes, after a version gate** | See below. |
 | [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |

@@ -107,7 +107,7 @@ from the exporter's own class-name ordering instead - see
 | `Reset Collision` | `0x3cd` | `0x37f` | Table index. The facing statistic could **not** settle this one - see [below](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table) | 94 |
 | `Mag Floor`, `Cage` | `0x3e6`, `0x3e7` | absent | Pure authors neither on any circuit | 90 |
 | `Airbrake` | `0x3c5` | `0x377` | Table index, plus every one of 6 reachable ships names its pair `Airbrake_Left`/`Airbrake_Right`, each with one `Mesh` child - the shape `mesh.rs` already assumes | 90 |
-| `LodGroup` | `0x2ee` | `0x2de` | Not in the run - a generic Maya class, like `Mesh`/`Transform`. Every one of 6 reachable ships names one node `lodGroup1` with exactly two `Transform` children | 88 |
+| `LodGroup` | `0x2ee` | `0x2de` | Not in the run - a generic Maya class, like `Mesh`/`Transform`. Every one of 6 reachable ships names one node `lodGroup1` with exactly two `Transform` children, switching at 50.0 units - switched per frame by Pulse's rule, chosen rather than read here (`vex.md`, "implemented - the switch runs every frame") | 88 |
 | `fogCube` | `0x3d3` | `0x385` | Not in the run either. 10 instances across 7/16 circuits, all 128 bytes (`fog::PAYLOAD_LEN` exact) and all `edge == 500.0` - the same figure Pulse's own shipped tracks carry | 94 |
 | `Anim Transform` | `0x3c0` | `0x372` | Table index; 332 nodes across all 16 circuits, **332/332** parse under `anim_transform`'s own bounds-checked decoder | 94 |
 

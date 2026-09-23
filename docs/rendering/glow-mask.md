@@ -143,4 +143,6 @@ What is not reproduced:
   original does" does not hold for the player's hull near the camera.
   Measured 2026-09-23: the original draws tier 0 only up close, on the hull
   and on a track `LodGroup` - see `docs/formats/vex.md`, "the running
-  original does not draw tier 1 up close".
+  original does not draw tier 1 up close". The same day the tiers became a
+  per-frame switch, which keeps the player's hull on tier 0 at every chase
+  distance - "implemented - the switch runs every frame", same page.
