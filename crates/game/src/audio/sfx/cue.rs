@@ -348,11 +348,179 @@ pub enum Cue {
     /// craft's, so this rides [`Placement::Point`] and
     /// [`super::CueEvent::at_point`] identically.
     PlasmaHitShip,
+    /// The Rocket bolt's own travel loop, from launch to whatever ends it.
+    ///
+    /// `Rocket_Init` (`0x0885cdb8`) allocates a `0x70`-byte emitter, writes
+    /// `+0x38 = 0x44160000` (`600.0f`, a rolloff distance - **not**
+    /// [`oag_audio::Emitter::CRAFT_RADIUS`]) and starts a looping
+    /// `~ROCKETTVL` on it at volume `1.0`. Confidence 85; see
+    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s "Audio, in
+    /// passing" section. Held per **projectile** slot, the same shape
+    /// [`Self::PlasmaTravel`] established - see
+    /// [`super::travel::TravelVoices`].
+    RocketTravel,
+    /// A Rocket bolt ending on a wall or track.
+    ///
+    /// `RocketPool_Update`'s teardown pass plays `ROCKEXPLWALL` (flag `0x10`)
+    /// on the same bolt emitter [`Self::RocketTravel`] plays from - never
+    /// reallocated - for a wall/track hit; confidence 90. **The 5.0 s
+    /// pool-reap timeout is not this edge**: `crates/gameplay/src/projectile/flight.rs`'s
+    /// own Rocket-timeout branch (`kind == Weapon::Rocket && age >
+    /// rocket::LIFETIME_SECONDS`) resets the slot and `continue`s *without*
+    /// writing an `Impact` at all, so no `struck: None` from a timeout ever
+    /// reaches this port's own impacts loop - every one it sees there is a
+    /// real wall hit. Placed at the impact point
+    /// ([`super::Placement::Point`]), same reasoning as [`Self::PlasmaHitWall`].
+    RocketHitWall,
+    /// A Rocket bolt ending on a struck craft.
+    ///
+    /// The same teardown pass plays `ROCKEXPLSHIP` (flag `0x20`) instead, on
+    /// a craft hit; confidence 90. This port's own split reads
+    /// `oag_gameplay::projectile::Impact::struck`, the same field
+    /// [`Self::PlasmaHitShip`] already routes on.
+    RocketHitShip,
+    /// The Missile leaving the rail, both the player's own press and an
+    /// opponent's - `Race::fire_missile` serves both paths.
+    ///
+    /// `Missile_Init` (`0x0885a160`, confidence 90) plays `MISSILE` and
+    /// `~MISSILETVL` in the same breath - `missile.md`'s "Three independent
+    /// things say bit `0x40` is the Missile" cites both cues by name - but
+    /// does not name either call's emitter argument. **Placed on the firing
+    /// craft: chosen, not measured.**
+    Missile,
+    /// The Missile's own travel loop, from launch to whatever ends it.
+    ///
+    /// `~MISSILETVL` (the bank spells it with `~`; `missile.md`'s own prose
+    /// calls it `_MISSILETVL`, trust the bank) is confirmed alongside
+    /// [`Self::Missile`] above at the same confidence, but neither the
+    /// emitter nor its radius is stated. **Chosen, not measured: placed at
+    /// the bolt's own position, reusing [`Self::RocketTravel`]'s measured
+    /// `600.0` radius** rather than [`oag_audio::Emitter::CRAFT_RADIUS`],
+    /// on the strength of the two weapons' shared `<WEAPON>TVL` naming and
+    /// shared launch shape - not a reading of `Missile_Init` itself.
+    MissileTravel,
+    /// A Missile glancing off a wall - **every bounce, not the final
+    /// ending.**
+    ///
+    /// `missile.md` (around line 391) reads `Missile_Update`'s bounce branch
+    /// as playing `WO_MISSILE_BOUNCE` and the `MISSILEEXPWALL` cue together,
+    /// on the same edge the already-built bounce visual fires on - see
+    /// `crate::race::weapons::visuals::bounced_this_tick`, which this cue
+    /// shares the `bounces_before`/after comparison with. **Not the
+    /// projectile's final ending**: a missile that exhausts its bounce
+    /// budget and finally detonates plays neither this nor any cue this
+    /// port fires - see `Impact::blast`'s own doc comment on `blast: false`
+    /// for that ending, and the by-catch `missile.md` records reading its
+    /// own literal as `SHURIKENEXPL` there (confidence 60, likely a
+    /// copy-paste bug in the original) - left unwired rather than wired
+    /// under a name this port does not trust. Placed at the bolt's own
+    /// position, the same chosen `600.0` radius as [`Self::MissileTravel`].
+    ///
+    /// **`MISSILEEXPSHIP` is deliberately not a variant here.** The bank
+    /// binds it (2 waveforms), but no call site was found on `missile.md` -
+    /// an effect whose trigger is not recovered stays unwired.
+    MissileHitWall,
+    /// The Cannon's own round leaving the barrel.
+    ///
+    /// Played "at the end of `Cannon_Init`" (`0x088648ec`, confidence 80) -
+    /// see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+    /// around lines 460-474. The emitter argument is not stated.
+    /// **Placed on the firing craft: chosen, not measured.**
+    Cannon,
+    /// A Cannon round ending on a wall or the track.
+    ///
+    /// `CannonPool_Update`'s despawn pass (`0x088582b0`, confidence 88)
+    /// splits `CANNONEXPLWALL`/`CANNONEXPLSHIP` on the round's own `0x10`
+    /// (wall) / `0x20` (craft) flags, set by `Cannon_UpdateRound`'s
+    /// world-hit branch and `Cannon_MarkCraftHit` respectively -
+    /// `oag_gameplay::projectile::cannon`'s own module doc already mirrors
+    /// this exact split. **The same timeout reasoning as
+    /// [`Self::RocketHitWall`] applies**: `flight.rs`'s shared
+    /// `MAX_FLIGHT_SECONDS` reap (the branch every weapon but Rocket,
+    /// Missile and Plasma falls into) resets the slot with no `Impact`
+    /// written, so a Cannon round that outlives its flight time is silent
+    /// here too, never a false `struck: None`. Placed at the impact point;
+    /// no emitter override is stated, so this keeps
+    /// [`oag_audio::Emitter::CRAFT_RADIUS`].
+    CannonHitWall,
+    /// A Cannon round ending on a struck craft.
+    ///
+    /// The same despawn pass's `0x20` branch. **`CANNONEXPLSHIP` binds zero
+    /// waveforms in `Data.wad`'s weapon bank** - wiring this is still
+    /// correct, it is simply inaudible until a bank supplies one.
+    CannonHitShip,
+    /// The Quake's travelling wave reaching a craft, once.
+    ///
+    /// `QUAKEHIT` (confirmed string) plays inside the per-craft update on
+    /// the rising edge of the "wave reached me" latch (`entity+0x860 &
+    /// 0x40`), confidence 85 -
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+    /// around lines 930-1001. This port's own edge is
+    /// [`oag_gameplay::projectile::quake::Wave::hit`]'s own rising edge,
+    /// snapshotted before `Race::advance_quake` and compared after.
+    /// **Placed on the struck craft**: the doc's own pseudocode names the
+    /// argument `owner_craft_cue_slot`, but the surrounding block's
+    /// shield-gate and every pending-damage field it touches are the
+    /// *victim's* - the page's own naming is internally inconsistent, and
+    /// this port sides with the victim rather than the shooter.
+    QuakeHit,
+    /// The LeachBeam firing, locked onto somebody.
+    ///
+    /// `LeachBeam_InitLocked` (`0x08873d3c`, confidence 82) plays `LEACH`
+    /// once on the shooter's own emitter - see
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+    /// around lines 2058-2080. **The unlocked/fizzle case is not this
+    /// variant**: only `LeachBeam_InitLocked` is cited, and the page does
+    /// not confirm the same cue for `LeachBeam_InitUnlocked`'s no-lock
+    /// case - which is why this fires from the `Kind::Locked` arm alone, at
+    /// both the places a beam can be locked and fired: `Race::spend_pickup`'s
+    /// own LeachBeam arm and `Race::fire_opponent_leach_beam`.
+    Leach,
+    /// The LeachBeam's own body, held for as long as a **locked** beam
+    /// instance exists - through its disconnect linger, not only while it
+    /// is [`connected`](oag_gameplay::projectile::leach_beam::Beam::connected).
+    ///
+    /// `LeachBeam_InitLocked` allocates a dedicated `SoundEmitter_Init`
+    /// emitter at the instance's own `+0x4c`, `600.0`-unit falloff, and the
+    /// page states outright that it is "carried by the beam itself" - so
+    /// its lifetime is the `Instance`'s own, the same span
+    /// `crate::race::weapons::advance_leach_beam_ribbon` already reads for
+    /// the visual ribbon (`Kind::Locked`, whether or not the link is still
+    /// connected). Bank spells it `~LEACHATTACH`; `missile.md`-style prose
+    /// elsewhere calls it `_LEACHATTACH` - trust the bank, the same
+    /// underscore/tilde trap [`Self::MissileTravel`] and [`Self::RocketTravel`]
+    /// already carry warnings about. **The position it is heard from -
+    /// chosen as the midpoint between the two craft - is not stated**; the
+    /// page never resolves what the beam's own scene node tracks.
+    LeachAttach,
+    /// A Shuriken glancing off a wall.
+    ///
+    /// `Shuriken_Bounce` (`0x088778ac`, confidence 88) plays `SHURIKENHIT`
+    /// through the blade's own `travel_voice` handle - the same one
+    /// [`Self::ShurikenTravel`] opened - on every bounce, matching the
+    /// already-built `WO_SHURIKEN_BOUNCE` visual's edge; see
+    /// `crate::race::weapons::visuals::bounced_this_tick`, which already
+    /// accepts `Weapon::Shuriken`. **Placed on the firing craft**, the same
+    /// reading as [`Self::ShurikenTravel`] below.
+    ShurikenHit,
+    /// The Shuriken's own travel loop, from throw to whatever ends it.
+    ///
+    /// `Shuriken_Init` (`0x08877280`, confidence 88) is handed
+    /// `craft->emitter` directly - the same emitter
+    /// [`super::Placement::Craft`] already reads for `.COLLISIONS`,
+    /// `ABSORB`, `~SHIELD` and `MINELAUNCH` - rather than allocating a
+    /// bolt-owned one the way `Rocket_Init`/`Missile_Init` do. **So this
+    /// rides the firing craft, not the blade**, at confidence 88 rather
+    /// than as a chosen placement: a blade thrown by a craft that has since
+    /// gone inactive is heard from nowhere, the same silent drop
+    /// [`super::place`] already gives any craft-placed cue on an empty
+    /// slot.
+    ShurikenTravel,
 }
 
 impl Cue {
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 28] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -367,6 +535,20 @@ impl Cue {
         Self::PlasmaTravel,
         Self::PlasmaHitWall,
         Self::PlasmaHitShip,
+        Self::RocketTravel,
+        Self::RocketHitWall,
+        Self::RocketHitShip,
+        Self::Missile,
+        Self::MissileTravel,
+        Self::MissileHitWall,
+        Self::Cannon,
+        Self::CannonHitWall,
+        Self::CannonHitShip,
+        Self::QuakeHit,
+        Self::Leach,
+        Self::LeachAttach,
+        Self::ShurikenHit,
+        Self::ShurikenTravel,
     ];
 
     /// The bank the cue is looked up in.
@@ -381,7 +563,21 @@ impl Cue {
             | Self::Plasma
             | Self::PlasmaTravel
             | Self::PlasmaHitWall
-            | Self::PlasmaHitShip => BankName::Weapons,
+            | Self::PlasmaHitShip
+            | Self::RocketTravel
+            | Self::RocketHitWall
+            | Self::RocketHitShip
+            | Self::Missile
+            | Self::MissileTravel
+            | Self::MissileHitWall
+            | Self::Cannon
+            | Self::CannonHitWall
+            | Self::CannonHitShip
+            | Self::QuakeHit
+            | Self::Leach
+            | Self::LeachAttach
+            | Self::ShurikenHit
+            | Self::ShurikenTravel => BankName::Weapons,
             Self::ShieldActive | Self::Disengaging => BankName::Speech,
         }
     }
@@ -449,6 +645,20 @@ impl Cue {
             Self::PlasmaTravel => "~PLASMATVL",
             Self::PlasmaHitWall => "PLASMAHITWALL",
             Self::PlasmaHitShip => "PLASMAHITSHIP",
+            Self::RocketTravel => "~ROCKETTVL",
+            Self::RocketHitWall => "ROCKEXPLWALL",
+            Self::RocketHitShip => "ROCKEXPLSHIP",
+            Self::Missile => "MISSILE",
+            Self::MissileTravel => "~MISSILETVL",
+            Self::MissileHitWall => "MISSILEEXPWALL",
+            Self::Cannon => "CANNON",
+            Self::CannonHitWall => "CANNONEXPLWALL",
+            Self::CannonHitShip => "CANNONEXPLSHIP",
+            Self::QuakeHit => "QUAKEHIT",
+            Self::Leach => "LEACH",
+            Self::LeachAttach => "~LEACHATTACH",
+            Self::ShurikenHit => "SHURIKENHIT",
+            Self::ShurikenTravel => "~SHURIKENTRAVEL",
         }
     }
 
@@ -462,16 +672,59 @@ impl Cue {
     /// one-shots the caller can cancel, so a held cue is one whose *holder* is
     /// written here.
     ///
-    /// [`Self::PlasmaTravel`] joins this list held **per projectile slot**
-    /// rather than per grid slot or as a single race-wide handle - see
-    /// [`super::SfxVoices::plasma_travel`]. It is still never pushed through the cue
-    /// queue, so this only guards against a stray push being mis-played.
+    /// [`Self::PlasmaTravel`], [`Self::RocketTravel`], [`Self::MissileTravel`]
+    /// and [`Self::ShurikenTravel`] all join this list held **per projectile
+    /// slot** rather than per grid slot or as a single race-wide handle - see
+    /// [`super::travel::TravelVoices`]. [`Self::LeachAttach`] is held once for
+    /// the whole race, on [`super::SfxVoices::leach_attach`], since the
+    /// LeachBeam is a world-wide single instance rather than a projectile
+    /// slot. None of the five is ever pushed through the cue queue, so this
+    /// only guards against a stray push being mis-played.
     #[must_use]
     pub fn held(self) -> bool {
         matches!(
             self,
-            Self::Engine | Self::Shield | Self::Blowup | Self::PlasmaTravel
+            Self::Engine
+                | Self::Shield
+                | Self::Blowup
+                | Self::PlasmaTravel
+                | Self::RocketTravel
+                | Self::MissileTravel
+                | Self::LeachAttach
+                | Self::ShurikenTravel
         )
+    }
+
+    /// How far this cue's voice can be heard, for a cue that carries its own
+    /// emitter rather than riding a craft's.
+    ///
+    /// Only read by [`super::place`]'s [`Placement::Point`] arm and by the
+    /// bespoke held-voice trackers ([`super::travel::TravelVoices`],
+    /// [`super::SfxVoices::leach_attach`]) - every [`Placement::Craft`] cue
+    /// keeps [`oag_audio::Emitter::CRAFT_RADIUS`] unconditionally, by
+    /// construction, so this only matters for the handful of cues with a
+    /// bolt- or beam-owned emitter.
+    ///
+    /// Defaults to [`oag_audio::Emitter::CRAFT_RADIUS`] - `SoundEmitter_Init`'s
+    /// own default, which is what every cue here keeps unless its own call
+    /// site is read overriding it. **Measured at `600.0` for the Rocket**
+    /// (`Rocket_Init` writes `+0x38` directly) and **for the LeachBeam's own
+    /// body** (`LeachBeam_InitLocked`'s `+0x4c` emitter). **Chosen at `600.0`
+    /// for the Missile**, reusing the Rocket's measured figure rather than
+    /// [`oag_audio::Emitter::CRAFT_RADIUS`] - see [`Self::MissileTravel`]'s
+    /// own doc comment for why. The Cannon's own hit cues keep the default:
+    /// no override is stated for them.
+    #[must_use]
+    pub fn radius(self) -> f32 {
+        match self {
+            Self::RocketTravel
+            | Self::RocketHitWall
+            | Self::RocketHitShip
+            | Self::MissileTravel
+            | Self::MissileHitWall
+            | Self::LeachAttach => 600.0,
+            _ => oag_audio::Emitter::CRAFT_RADIUS,
+        }
     }
 
     /// Which emitter the original plays this cue on.
@@ -535,6 +788,30 @@ impl Cue {
             // [`Self::PlasmaHitWall`]/[`Self::PlasmaHitShip`] each carry their
             // own point on the [`CueEvent`] rather than a grid slot.
             Self::PlasmaTravel | Self::PlasmaHitWall | Self::PlasmaHitShip => Placement::Point,
+            // Same shape as the Plasma's three, on the Rocket's own
+            // `600.0`-radius emitter - see each variant's own doc comment and
+            // [`Self::radius`].
+            Self::RocketTravel | Self::RocketHitWall | Self::RocketHitShip => Placement::Point,
+            // Chosen, not measured - see each variant's own doc comment.
+            Self::Missile | Self::Cannon => Placement::Craft,
+            Self::MissileTravel | Self::MissileHitWall => Placement::Point,
+            Self::CannonHitWall | Self::CannonHitShip => Placement::Point,
+            // Settled by cross-reading the surrounding block's shield gate
+            // and pending-damage fields, all the struck craft's own - see
+            // this variant's own doc comment.
+            Self::QuakeHit => Placement::Craft,
+            // `LeachBeam_InitLocked` plays `LEACH` on the shooter's own
+            // emitter - see this variant's own doc comment.
+            Self::Leach => Placement::Craft,
+            // A bespoke per-tick tracker on the beam's own `600.0`-radius
+            // emitter, the same shape [`Self::PlasmaTravel`] takes for a
+            // projectile slot - see [`super::SfxVoices::leach_attach`] and
+            // [`Self::radius`].
+            Self::LeachAttach => Placement::Point,
+            // `Shuriken_Init` is handed `craft->emitter` directly, so both
+            // ride the firing craft rather than the blade - see
+            // [`Self::ShurikenTravel`]'s own doc comment.
+            Self::ShurikenHit | Self::ShurikenTravel => Placement::Craft,
         }
     }
 }

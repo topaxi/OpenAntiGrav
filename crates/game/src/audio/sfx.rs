@@ -96,12 +96,14 @@ mod banks;
 mod cue;
 mod engine;
 mod track;
+mod travel;
 pub use announcer::{Announcer, ClassAnnouncer};
 use banks::load_named_cue;
 pub use banks::{Banks, Loaded};
 pub use cue::{BankName, Cue};
 pub use engine::Engine;
 pub use track::TrackEmitters;
+use travel::TravelVoices;
 
 /// The seed the effects generator starts from.
 ///
@@ -160,11 +162,33 @@ pub(super) struct SfxVoices {
     /// Read and written directly off `race.sim.world.projectiles.slots` every
     /// tick in [`Audio::race_tick`], the same way [`Engine`] reads craft
     /// position directly rather than through a queued [`CueEvent`] - a moving
-    /// held voice needs *this* tick's position, not a queued one. `None` at
-    /// every index a bolt is not occupying; [`oag_gameplay::projectile::MAX_PROJECTILES`]
-    /// entries because a slot index is the only stable handle a `Copy` world
-    /// snapshot gives a projectile.
-    plasma_travel: [Option<VoiceId>; oag_gameplay::projectile::MAX_PROJECTILES],
+    /// held voice needs *this* tick's position, not a queued one. See
+    /// [`TravelVoices`] for the shape every field below shares with this one.
+    plasma_travel: TravelVoices,
+    /// `~ROCKETTVL`'s held voice, the same shape as [`Self::plasma_travel`].
+    /// See [`Cue::RocketTravel`].
+    rocket_travel: TravelVoices,
+    /// `~MISSILETVL`'s held voice, the same shape again. See
+    /// [`Cue::MissileTravel`].
+    missile_travel: TravelVoices,
+    /// `~SHURIKENTRAVEL`'s held voice - still one per **projectile** slot,
+    /// even though [`Cue::ShurikenTravel`] rides the firing craft's own
+    /// emitter rather than the blade's: more than one Shuriken can be in
+    /// flight from different craft at once, and a slot index is still the
+    /// only stable handle each one has. See [`Cue::ShurikenTravel`]'s own
+    /// doc comment for why the emitter is the craft's.
+    shuriken_travel: TravelVoices,
+    /// `~LEACHATTACH`'s held voice, while a **locked** beam instance exists -
+    /// see [`Cue::LeachAttach`]. `Option<VoiceId>` rather than a
+    /// [`TravelVoices`]: the LeachBeam is `crate::race::Race`'s own single
+    /// world-wide instance, the same shape [`Self::shield`] and
+    /// [`Self::blowup`] already take for one activation at a time, not a
+    /// slot in [`oag_gameplay::projectile::Projectiles`] - see
+    /// `oag_gameplay::projectile::leach_beam`'s own module doc. Read and
+    /// written directly off `race.sim.world.leach_beam` every tick, the same
+    /// reason [`Self::plasma_travel`] reads the projectile array directly:
+    /// a moving held voice needs this tick's own position.
+    leach_attach: Option<VoiceId>,
     rng: Rng,
 }
 
@@ -212,7 +236,11 @@ impl Audio {
                 blowup: None,
                 blowup_open: false,
                 ambience: track::Ambience::default(),
-                plasma_travel: [None; oag_gameplay::projectile::MAX_PROJECTILES],
+                plasma_travel: TravelVoices::new(),
+                rocket_travel: TravelVoices::new(),
+                missile_travel: TravelVoices::new(),
+                shuriken_travel: TravelVoices::new(),
+                leach_attach: None,
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -415,68 +443,120 @@ impl Audio {
                 _ => {}
             }
 
-            // The Plasma's own travel loop, `~PLASMATVL`, keyed by
-            // *projectile* slot - see [`Cue::PlasmaTravel`] and
-            // [`SfxVoices::plasma_travel`]'s own doc comments for why this
-            // cannot be the shield/blowup shape above. Read directly off this
-            // tick's own projectile array rather than off a queued
+            // Every held travel voice, one call per weapon - see
+            // [`TravelVoices`] for the shape shared here and
+            // [`SfxVoices::plasma_travel`]'s own doc comment for why this
+            // cannot be the shield/blowup shape above. Each reads directly
+            // off this tick's own projectile array rather than off a queued
             // `CueEvent`, for the reason the craft's own engines below are.
-            for (slot, projectile) in projectiles.iter().enumerate() {
-                let flying = projectile.kind == Some(oag_tables::weapons::Weapon::Plasma)
-                    && projectile.charge <= 0.0;
-                match (flying, voices.plasma_travel[slot]) {
-                    // The rising edge: charge just reached zero this tick -
-                    // see `Projectiles::advance`'s charging branch, which is
-                    // the one place this port's own release edge lives.
-                    (true, None) => {
-                        if let Some((sound, looping)) =
-                            banks.pick(Cue::PlasmaTravel, &mut voices.rng)
-                            && looping
-                        {
-                            let placed = oag_audio::Emitter::craft(projectile.position.to_array())
-                                .place(&listener, 1.0);
-                            let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
-                            voices.plasma_travel[slot] = mixer.play(Play {
-                                gain,
-                                pan,
-                                ..Play::looping(sound, Cue::PlasmaTravel.bus())
-                            });
+            //
+            // The one-shot endings - `*HITWALL`/`*HITSHIP` for a wall/timeout
+            // or a struck craft, never both - are separate `CueEvent`s
+            // carrying their own impact point, pushed from
+            // `crates/game/src/race/tick.rs`.
+            voices.plasma_travel.tick(
+                mixer,
+                banks,
+                &mut voices.rng,
+                &listener,
+                &projectiles,
+                Cue::PlasmaTravel,
+                Cue::PlasmaTravel.radius(),
+                // The rising edge: charge just reached zero this tick - see
+                // `Projectiles::advance`'s charging branch, which is the one
+                // place this port's own release edge lives.
+                |p| p.kind == Some(oag_tables::weapons::Weapon::Plasma) && p.charge <= 0.0,
+                |p| Some(p.position),
+            );
+            voices.rocket_travel.tick(
+                mixer,
+                banks,
+                &mut voices.rng,
+                &listener,
+                &projectiles,
+                Cue::RocketTravel,
+                Cue::RocketTravel.radius(),
+                |p| p.kind == Some(oag_tables::weapons::Weapon::Rocket),
+                |p| Some(p.position),
+            );
+            voices.missile_travel.tick(
+                mixer,
+                banks,
+                &mut voices.rng,
+                &listener,
+                &projectiles,
+                Cue::MissileTravel,
+                Cue::MissileTravel.radius(),
+                |p| p.kind == Some(oag_tables::weapons::Weapon::Missile),
+                |p| Some(p.position),
+            );
+            // Rides the *firing craft's* own emitter rather than the blade's
+            // - see [`Cue::ShurikenTravel`]'s own doc comment - so `position`
+            // reads `craft[p.owner]` instead of `p.position`. `None` when
+            // that craft has gone (an empty slot, or past `craft`'s own
+            // length), which stops the voice the same way an ended bolt does.
+            voices.shuriken_travel.tick(
+                mixer,
+                banks,
+                &mut voices.rng,
+                &listener,
+                &projectiles,
+                Cue::ShurikenTravel,
+                Cue::ShurikenTravel.radius(),
+                |p| p.kind == Some(oag_tables::weapons::Weapon::Shuriken),
+                |p| craft.get(usize::from(p.owner)).copied().flatten().map(|(pos, _)| pos),
+            );
+
+            // `~LEACHATTACH`, held for as long as a **locked** beam instance
+            // exists - see [`Cue::LeachAttach`]'s own doc comment for why
+            // that outlives `Beam::connected` through the disconnect linger.
+            // Position is the chosen midpoint between the two craft, updated
+            // every tick like the Plasma's own bolt above rather than fixed
+            // at launch.
+            let leach_locked = race
+                .sim
+                .world
+                .leach_beam
+                .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked);
+            match (leach_locked, voices.leach_attach) {
+                (Some(beam), None) => {
+                    if let Some((sound, looping)) = banks.pick(Cue::LeachAttach, &mut voices.rng)
+                        && looping
+                        && let Some(at) = leach_attach_point(&craft, beam)
+                    {
+                        let placed = oag_audio::Emitter {
+                            position: at.to_array(),
+                            radius: Cue::LeachAttach.radius(),
+                            cone: None,
                         }
-                        // Else either nothing loaded or the bank says this
-                        // waveform is not a loop - the same guard
-                        // `Engine::tick` carries for `~ENGINE`. `~PLASMATVL`
-                        // reads looping in every corpus checked so far
-                        // (`oag-wad sounds`), so the second case is
-                        // defensive rather than expected to fire.
+                        .place(&listener, 1.0);
+                        let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+                        voices.leach_attach = mixer.play(Play {
+                            gain,
+                            pan,
+                            ..Play::looping(sound, Cue::LeachAttach.bus())
+                        });
                     }
-                    // Still flying and still held: follow the bolt.
-                    (true, Some(id)) if mixer.is_playing(id) => {
-                        let placed = oag_audio::Emitter::craft(projectile.position.to_array())
-                            .place(&listener, 1.0);
+                }
+                (Some(beam), Some(id)) if mixer.is_playing(id) => {
+                    if let Some(at) = leach_attach_point(&craft, beam) {
+                        let placed = oag_audio::Emitter {
+                            position: at.to_array(),
+                            radius: Cue::LeachAttach.radius(),
+                            cone: None,
+                        }
+                        .place(&listener, 1.0);
                         let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
                         mixer.set_gain(id, gain);
                         mixer.set_pan(id, pan);
                     }
-                    // The pool reclaimed the voice before the bolt itself
-                    // ended - starved, not stopped. Forget the stale handle so
-                    // a later tick does not stop whatever slot the pool gave
-                    // it to next.
-                    (true, Some(_)) => voices.plasma_travel[slot] = None,
-                    // The falling edge: the bolt is no longer flying, whether
-                    // because it just ended (`Projectile::default()` already
-                    // reset `kind`) or - unreachably today, since nothing
-                    // re-charges a flying bolt - because it started charging
-                    // again. Either way the loop stops here; the one-shot
-                    // `PLASMAHITWALL` or `PLASMAHITSHIP` for an actual ending
-                    // - a wall/timeout or a struck craft, never both - is a
-                    // separate `CueEvent` carrying its own impact point,
-                    // pushed from `crates/game/src/race/tick.rs`.
-                    (false, Some(id)) => {
-                        mixer.stop(id);
-                        voices.plasma_travel[slot] = None;
-                    }
-                    (false, None) => {}
                 }
+                (Some(_), Some(_)) => voices.leach_attach = None,
+                (None, Some(id)) => {
+                    mixer.stop(id);
+                    voices.leach_attach = None;
+                }
+                (None, None) => {}
             }
 
             // Every craft's engine, each off its own emitter. A craft with no
@@ -555,10 +635,12 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
-                for voice in &mut voices.plasma_travel {
-                    if let Some(id) = voice.take() {
-                        mixer.stop(id);
-                    }
+                voices.plasma_travel.stop_all(mixer);
+                voices.rocket_travel.stop_all(mixer);
+                voices.missile_travel.stop_all(mixer);
+                voices.shuriken_travel.stop_all(mixer);
+                if let Some(id) = voices.leach_attach.take() {
+                    mixer.stop(id);
                 }
                 voices.ambience.stop(mixer);
             });
@@ -605,6 +687,24 @@ fn craft_positions(race: &crate::race::Race) -> [Option<(Vec3, f32)>; oag_gamepl
     })
 }
 
+/// [`Cue::LeachAttach`]'s own chosen position: the midpoint between the
+/// shooter and the target, or [`None`] if either has gone from the grid.
+///
+/// **Chosen, not measured** - see that variant's own doc comment: the page
+/// says the emitter is "carried by the beam itself" but never states what its
+/// scene node tracks, and a beam's own two endpoints are the only positions
+/// this port has to offer. The same two positions
+/// `crate::race::weapons::leach_beam_ribbon_vertices` already draws the
+/// ribbon between.
+fn leach_attach_point(
+    craft: &[Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS],
+    beam: oag_gameplay::projectile::leach_beam::Beam,
+) -> Option<Vec3> {
+    let (owner, _) = (*craft.get(usize::from(beam.owner))?)?;
+    let (target, _) = (*craft.get(usize::from(beam.target))?)?;
+    Some((owner + target) * 0.5)
+}
+
 /// Where one cue is heard from, or [`None`] if it is out of range entirely.
 ///
 /// The `Option<f32>` inside is the mixer's own "no position" - see
@@ -626,7 +726,15 @@ fn place(
         // is out of range; that refusal still comes from `place` below,
         // exactly as it does for a craft.
         let point = event.point?;
-        let placed = oag_audio::Emitter::craft(point.to_array()).place(listener, 1.0)?;
+        // Not `Emitter::craft`, which is [`oag_audio::Emitter::CRAFT_RADIUS`]
+        // unconditionally - a handful of these cues carry their own bolt- or
+        // beam-owned emitter with its own measured radius. See [`Cue::radius`].
+        let placed = oag_audio::Emitter {
+            position: point.to_array(),
+            radius: event.cue.radius(),
+            cone: None,
+        }
+        .place(listener, 1.0)?;
         return Some(Placed {
             gain: placed.gain,
             pan: Some(placed.pan),
