@@ -338,3 +338,134 @@ understood. The load report now says so explicitly on an HD source: "HD
 plasma explosion models loaded, not drawn: the recovered scale ease
 produces a screen-filling sphere - see plasma.md's 2026-09-17 'the picture
 is oversized' section."
+
+## 2026-09-23: the scale reading holds; the three models are simply that big
+
+The open question above - "a base-scale mismatch between `cur` as a literal
+uniform scale and what the original composes it against" - was put to the
+models and to `WeaponExplosions_Draw` directly. **Nothing composes against
+`cur`: it is a uniform scale on an orthonormal basis, onto a model whose
+authored radius is several metres.** Read on the `ps3-hdfury-eu` database
+the bridge serves as `/hdfury/EBOOT-ps3-hdfury-eu.elf` (language
+`PowerPC:BE:64:A2ALT-32addr`, 26,100 functions - the pre-`lvlx` import, so
+every vector sequence below was checked against `llvm-objdump
+--triple=powerpc64` rather than taken from the decompile).
+
+### The models' own extents
+
+Measured by `crates/render/examples/hd_weapon_extents.rs`, which builds each
+`.vex`/`.rcsmodel` pair through `mesh::rcs::build` - the exact path
+`oag_game`'s weapon loader takes - and walks the `.vex` node tree with
+`oag_vex::vex::world_transforms_at` at eight times from 0 to 3 s:
+
+| model | shape | model-space radius | node transforms | material, authored blend | texture |
+| --- | --- | ---: | --- | --- | --- |
+| `HD_plasma_ring` | flat disc in XY, `z = 0.0156` | 8.82 | identity at every sampled time | `hd_plasmaring_glow`, `SrcAlpha, One` (additive) | `plasma_ring.gtf` 256x256, mean RGB 8.9 of 255 |
+| `HD_plasma_sphere` | sphere | 4.06 | identity at every sampled time | `plasmasphere_glow`, `SrcAlpha, OneMinusSrcAlpha`, second sampler `noise.gtf` | `plasma_1024x1024.gtf` |
+| `HD_plasma_halo` | flat disc in XY | 8.98 | identity at every sampled time | `hd_plasmahalo_glow`, `SrcAlpha, One` (additive) | `plasma_halo.gtf` 256x512, mean RGB 25.6 |
+
+**The ring is not ~14x smaller than the other two**, which is what a
+composition error behind the `100.0` would have needed; its radius is the
+halo's to within 2%. And no node in any of the three carries a scale, static
+or keyed, so there is no authored factor for `cur` to multiply against
+either. Confidence **95** on the extents (a direct parse, the same builder
+the race draws with).
+
+### What `cur` feeds: a uniform scale, by the select mask
+
+`WeaponExplosions_Draw` (`0x001270b8`), per model: splat `cur` to all four
+lanes, `vmaddfp` it into the basis' three rows, then `vsel` each scaled row
+against the unscaled one under the 16-byte mask `*PTR_DAT_008aa280` =
+`*0x00769cd0` = `{0, 0, 0, 0xffffffff}` - so X, Y and Z of every row take the
+scaled value and only W keeps the original. The translation row (`+0x30`) is
+copied unscaled. The result goes to `_opd_FUN_00327500(node, &matrix, 0)`,
+which is a plain 64-byte copy into `node + 0x80` plus a dirty-bit update on
+`node + 0x34` and its children - no normalisation, no second factor. Then
+`_opd_FUN_002c1b30(age, node)`, which walks the node tree calling a virtual
+(slot `+0x40`) on the three `Anim Transform`-family classes
+(`PTR_PTR_008b3984`/`88`/`8c`) - an anim-time set, which the static identity
+transforms above make a no-op for the geometry. **Confidence 90** that the
+world scale of each model is exactly `cur` times its authored geometry.
+
+`cur` starts at `0`: `WeaponExplosions_Reset` (`0x00126dc0`) seeds it from
+`0x00994070`, which is `.bss` and has no static writer (its only other
+reference, from `0x00433090`, is a read).
+
+### The basis: a billboard for the two discs, the track for the sphere
+
+`WeaponExplosions_Start` (`0x00127cd0`), past the `FUN_000a97f0` call the
+decompiler cuts off at (Ghidra marks it non-returning; the disassembly from
+`0x00128028` on continues): per viewport it copies the track-fitted basis
+into `+0xd0 + v * 0x40`, then **replaces its third row with the negated,
+normalised per-viewport vector** it pulled out of that viewport's camera
+matrix (`PTR_DAT_008aa2bc + v * 0x40`) at the top of the function, removes
+that direction from the second row and renormalises it (Gram-Schmidt), and
+rebuilds the first as their cross product (`0x001280a0`..`0x001281ec`). So
+the ring and halo, which `Draw` places with the per-viewport basis, lie in
+the plane facing that viewport's camera, "up" kept as close to the track's
+up as that allows. The sphere uses the shared, unmodified track basis at
+`+0x90`. Confidence **80** on the camera vector being the view direction
+rather than the eye-to-blast direction: which column of the camera matrix
+the first loop extracts was not traced element by element.
+
+### What that composes to, on screen
+
+`1` world unit is one metre (`oag_game::race::spline`'s own note, from the
+HUD's `speed * 3.6` km/h factor). At a 60 Hz `Draw` rate - **assumed, not
+read**: `Draw` is called from `0x00127468`, which is slot 5 of the
+explosion's vtable `0x00863ef8`, and what schedules slot 5 was not followed -
+`cur = target * (1 - (1 - rate)^n)` gives:
+
+| age | ring radius | sphere radius | halo radius |
+| ---: | ---: | ---: | ---: |
+| 0.1 s | 52 m | 25 m | 46 m |
+| 0.5 s | 230 m | 29 m | 63 m |
+| 1.3 s (hidden) | 479 m | 29 m | 63 m |
+
+These are large, and they are what the disc authors: the sphere is a
+29-metre bubble the chase camera can easily be inside, and both discs are
+screen-facing additive layers whose size mostly decides how far across the
+screen their texture is spread. **The same disc authors the Missile's
+explosion at a comparable size with no code involved** -
+`HD_missile_explosion.vex`'s `Anim Transform` keys scale its three main mesh
+nodes from 1 to 18 over its first second (radius 6.4 -> 116 m), and its
+fourth, pre-scaled `0.0977`, to 44 - so a 100-metre-class detonation is the
+title's own authoring convention, not an arithmetic slip in one reading.
+
+**So the 2026-09-17 "oversized" picture is not a scale error**, and the
+reading that `cur` might compose against a base scale is retired. What the
+engine got wrong is below.
+
+### Why the engine's picture read as a grey screen
+
+1. **The ring's texture is almost black** (mean RGB 8.9) and it is additive:
+   drawn right, a 479 m ring adds almost nothing on its own. It is not the
+   grey fill.
+2. **The sphere is alpha-blended, not additive**, and its texture's lower
+   half is grey noise at mid alpha (`plasma_1024x1024.gtf`: 40% of all texels at
+   alpha 64..127, 36% at 128..191). Drawn with static UVs from inside a
+   29-metre sphere, that half covers the frame in translucent grey - the
+   picture the gate was put in for. The original scrolls UVs on this model
+   (`FUN_002c1b30` on `age`, plus whatever `plasmasphere_glow`'s shader does
+   with its `noise.gtf` second sampler); neither is played by this engine,
+   where `mesh::rcs`'s report says the second texture is "loaded but not
+   drawn (role unread)".
+3. The engine places the sphere on the camera billboard rather than the
+   track basis, which rotates its UV seam relative to the original - minor
+   next to (2).
+
+The gate on the draw therefore stays, **re-attributed**: not "the scale is
+unexplained", but "the sphere's material (UV scroll and its `noise.gtf`
+second sampler) is not played, and without it the correctly-sized sphere
+fills the frame with its unscrolled grey half".
+
+### How to falsify this
+
+A live `Z0` breakpoint (interpreter only, see
+[rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)) on
+`Draw`'s three `bl 0x327500` sites - `0x0012722c`, `0x00127310`,
+`0x001273f4` - reading `+0x50` (age), `+0x60`/`+0x6c`/`+0x78` (`cur`) and the
+row lengths of the matrix at `r4`. The prediction is row length = `cur` =
+`target * (1 - (1 - rate)^n)` with `n` the number of `Draw` calls since
+`Start`; a live row length that differs from `cur`, or a `cur` that grows at
+half this rate (a 30 Hz slot 5), would overturn the table above.
