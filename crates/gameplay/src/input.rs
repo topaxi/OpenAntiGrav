@@ -243,6 +243,31 @@ impl Input {
         }
     }
 
+    /// All four masks, in the original's offset order: held, held last
+    /// frame, released, pressed.
+    ///
+    /// **What a replay stores**, and it stores all four rather than rebuilding
+    /// the edges from `held` on playback: [`Self::consume_press`] can clear a
+    /// pressed bit before the snapshot reaches the tick, so the edges the
+    /// simulation saw are not always the ones `held` alone would derive. See
+    /// `docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md`.
+    #[must_use]
+    pub const fn masks(&self) -> [u32; 4] {
+        [self.held, self.held_last, self.released, self.pressed]
+    }
+
+    /// The inverse of [`Self::masks`]: a state rebuilt from its four masks,
+    /// exactly as stored.
+    #[must_use]
+    pub const fn from_masks(masks: [u32; 4]) -> Self {
+        Self {
+            held: masks[0],
+            held_last: masks[1],
+            released: masks[2],
+            pressed: masks[3],
+        }
+    }
+
     /// The raw held mask, for tests.
     #[must_use]
     pub fn held_mask(&self) -> u32 {

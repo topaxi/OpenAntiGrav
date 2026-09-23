@@ -2195,6 +2195,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-replay"
+version = "0.1.0"
+dependencies = [
+ "oag-core",
+ "oag-gameplay",
+ "serde",
+ "thiserror 2.0.19",
+ "toml",
+]
+
+[[package]]
 name = "oag-tables"
 version = "0.1.0"
 dependencies = [
