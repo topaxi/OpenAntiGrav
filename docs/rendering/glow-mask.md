@@ -127,10 +127,18 @@ What is not reproduced:
 - **The HUD writes alpha into our target**, where the original's mask reads
   `4` under it. The race draws the bloom before it composites the HUD, and a
   crop of the countdown widget shows no halo with the bloom on.
-- **The absorb overlay's mask is patchy where the original's is solid.**
-  Read out of EDRAM 0.42 s into a live absorb, the original stamps `255`
-  over the whole overlaid hull, with holes only at the canopy and the rear,
-  and its colour at that moment is still almost the plain hull: the white
-  blob a player sees is the bloom of that mask. Ours leaves whole hull
-  triangles unstamped. Drawing the overlay two-sided did not change it, so
-  it is not culling; which triangles they are, and why, is open.
+- **The absorb overlay's mask is patchy under `lod = "both"`, and solid under
+  `"single"`.** Read out of EDRAM 0.42 s into a live absorb, the original
+  stamps `255` over the whole overlaid hull, with holes only at the canopy
+  and the rear, and its colour at that moment is still almost the plain
+  hull: the white blob a player sees is the bloom of that mask. Under
+  `Lod::Both`, the default, ours also draws the hull's `lodShape`, which the
+  overlay leaves out - the likely mechanism, not measured, is its coarser
+  triangles sitting in front of `shipShape`, failing the overlay's
+  `LessEqual` and leaving whole triangles unstamped - and it draws the dark
+  ring round our rear hull that the original has no trace of. Under `Lod::Single` the mask comes out solid,
+  the ring goes, and the peak is a white blob like the original's
+  (`~/.cache/oag/drive/reports/pulse-bloom/lod-both-vs-single-absorb.png`,
+  `compare-absorb-bloom-lod-single.png`). So `Lod::Both`'s "exactly as the
+  original does" does not hold for the player's hull near the camera.
+  Which LOD the original draws there, and when, is not read.

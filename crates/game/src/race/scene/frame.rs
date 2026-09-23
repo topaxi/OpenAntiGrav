@@ -934,8 +934,8 @@ impl Scene {
             );
             stats.hd_bloom_encoded = true;
         } else if let Some(bloom) = &self.bloom {
-            // The recovered post-process, reading the alpha channel the ribbon
-            // and the flare stamped and adding a blurred copy of the masked
+            // The recovered post-process, reading the alpha channel the scene
+            // stamped (`GlowMask::Stamped`) and adding a blurred copy of the masked
             // colour back over the frame. `view` is the resolved image in both
             // the MSAA and the single-sample case, which is why this runs on
             // it rather than on `attachment_view`. See `oag_render::post::bloom` -

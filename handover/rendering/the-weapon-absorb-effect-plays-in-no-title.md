@@ -80,16 +80,17 @@ Screenshots from the 2026-09-23 lane are in
     (`GlowMask::Stamped`), which also takes the plume out of it;
   - the `_GLOW` decals draw at all (`GEQUAL` on the `0x10` cutouts).
   Frames: `~/.cache/oag/drive/reports/pulse-bloom/compare-absorb-bloom.png`
-  (original above, ours below). **What is left**: at the peak the original is
-  a white blob and ours whitens the upper hull and the wings. An EDRAM read
-  0.42 s into a live absorb shows why: the original's overlay stamps `255`
-  over the **whole** overlaid hull and its colour there is still nearly the
-  plain hull, so the blob is the bloom; ours leaves whole hull triangles
-  unstamped (`vram-absorb-*.png`, `absorb-mask-t730.png` in the same
-  directory). Not culling - a two-sided overlay changed nothing. Next
-  suspects: which of our hull triangles carry colour `0` in
-  `hull_overlay::overlaid_meshes` (the vertex-count mesh match), and the
-  dark ring our rear hull draws that the original's does not.
+  (original above, ours below). **What is left is the LOD setting.** Under
+  `lod = "both"` (the default, and the user's) the peak whitens only the
+  upper hull; under `lod = "single"` it is a white blob like the original's
+  (`compare-absorb-bloom-lod-single.png`). An EDRAM read 0.42 s into a live
+  absorb shows the original's overlay stamping `255` over the whole hull;
+  ours, under `Both`, leaves whole triangles unstamped - most likely where
+  the hull's `lodShape` (which the overlay leaves out) sits in front of
+  `shipShape`, not measured - and `Both` also draws a dark ring round our
+  rear hull the original does not have (`lod-both-vs-single-absorb.png`). So `Lod::Both`'s "exactly as
+  the original does" is wrong for the player's hull near the camera. See
+  [glow-mask.md](../../docs/rendering/glow-mask.md), "What is not reproduced".
 - **Pulse overlay residuals, labelled in the module:**
   - `LessEqual` stands in for `EQUAL`;
   - the colour test runs on the texel rather than the modulated fragment;
@@ -133,13 +134,12 @@ Screenshots from the 2026-09-23 lane are in
    `just play hd --race --give mine --input-script <absorb.inputs>`. The
    method (private `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, own GDB port, the
    craft array at `0x0098d7c0`) is in absorb-feedback.md, "Live on RPCS3".
-2. Pulse absorb peak: find the hull triangles the overlay leaves unstamped
-   (`OAG_DUMP_GLOW_MASK=<png>` on a `--screenshot` at the peak; compare
-   against `vram-absorb-fb0-alpha.png`, the original's, in
-   `~/.cache/oag/drive/reports/pulse-bloom/`). The absorb inputs are
-   `absorb-post-go.inputs` in the same directory, beside the probe scripts:
-   700 ticks of nothing, then circle - the absorb after GO, as the
-   reference frames were taken.
+2. Pulse hull LOD: read which of `LodGroup`'s children the original draws
+   for the player's hull, and when (the switch distance is authored). Under
+   `Lod::Both` the coarse `lodShape` darkens our rear hull and breaks the
+   absorb overlay's mask; `Lod::Single` matches the original at the grid.
+   Frames and the absorb inputs (`absorb-post-go.inputs`, 700 ticks of
+   nothing then circle) are in `~/.cache/oag/drive/reports/pulse-bloom/`.
 3. Pulse HUD: the energy bar's absorb flash (`Hud_UpdateEnergyBar`,
    `+0xf4 = 0xff`, 8 Hz blink off `+0x1dc`). About an hour, with the
    original's frames as the reference.

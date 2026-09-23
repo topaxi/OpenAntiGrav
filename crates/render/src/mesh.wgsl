@@ -352,7 +352,7 @@ struct VertexInput {
     @location(7) xform: u32,
     // HD's sun-occlusion mask - see `oag_render::mesh::GpuVertex::sun_mask`.
     // Not carried by `colour.a`, which is already the boost plume's baked
-    // falloff on other titles and the bloom glow mask on this one.
+    // falloff on other titles and part of a `Written` model's glow mask.
     @location(8) sun_mask: f32,
     // Which texture this surface's colour and coverage come from - see
     // `oag_render::mesh::slots`, whose bit layout this file decodes and which

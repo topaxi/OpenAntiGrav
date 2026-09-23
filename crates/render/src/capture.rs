@@ -20,11 +20,11 @@ use crate::mesh_render::{
 ///
 /// **The alpha channel of a rendered frame is not coverage; it is the bloom
 /// mask.** `mesh_render::GlowMask::Protected` binds `ColorWrites::COLOR`, so
-/// scene geometry does not write alpha at all and the channel keeps whatever
-/// the pass cleared it to - zero - while the handful of models bound
-/// `GlowMask::Written` mark themselves for `post::bloom`, whose `fs_bright`
-/// reads exactly that (`texel.rgb * texel.a`). The window never presents the
-/// channel, so nothing on screen depends on it.
+/// such geometry leaves the channel at the pass's clear - zero - while a
+/// `Stamped` model (every `.vex` model of a Pulse PSP race) writes its batch's
+/// stamp, `4` under an ordinary surface, and a `Written` one its own alpha.
+/// `post::bloom`'s `fs_bright` reads exactly that (`texel.rgb * texel.a`). The
+/// window never presents the channel, so nothing on screen depends on it.
 ///
 /// A PNG does present it. Encoding a race frame straight from the readback
 /// buffer therefore writes a **fully transparent image**: correct bytes, and
