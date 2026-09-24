@@ -52,18 +52,27 @@ Matched original frames live in `data/scratch/fx-brightness/` (gitignored):
   - streak classes still use the procedural profile (`DrawStreak`'s UVs are unread);
   - billboard roll;
   - extents for shapes 2, 3, 6 and 8.
-- **PS2 Pulse still blows out white.** Its `.pob`s embed no sprite, and where
-  its sprites live is unknown. The new extent code spreads its Quake fire
-  across the road, as on PSP.
+- **The extent law is Pulse-PSP-only, by the lead's choice (2026-09-24).** It
+  is read off Pulse's PSP `BOOT.BIN` alone, so every other source (PS2 Pulse,
+  HD, and Pure, which is a different executable) keeps main's behaviour:
+  `psys::Effect::without_extents` at load puts every emitter back at its
+  anchor, and the Quake feeds its `/ 50` in as severity again. Checked
+  against main (a84003c7): PS2 Quake t305/t312 and HD Quake, and PS2/HD
+  engine flares at t240, all pixel-identical
+  (`data/scratch/fx-brightness/ps2-hd-gated-vs-main.png`, `after2/`). So
+  PS2's Quake still blows out white exactly as on main - its `.pob`s embed
+  no sprite. Sprite sampling and the resource-base offsets are format facts
+  and stay on everywhere they apply.
+  **To lift the gate, read the same four places in the other executables**:
+  the shape dispatch `ParticleSystem_SpawnBurst` (`0x088f56c4` on PSP), the
+  line emitter `ParticleSystem_EmitLine` (`0x088fcfec`), the sphere emitter
+  `ParticleSystem_EmitSphere` (`0x088fd340`), and where `Quake_Update`
+  (`0x0891d268`) stores its `/ 50` via `ParticleSystem_SetScaleParams`
+  (`0x088f44d8`) into what `ParticleSystem_DeriveScaledParams`
+  (`0x088f4910`) reads. Their PS2 ELF and HD `EBOOT.elf` counterparts are
+  not located; find them from the `Data\Psys\%s.POB` load string and the
+  `WO_QUAKE` string's xrefs.
 - **HD's `.gtf` sprites are not loaded**, so HD keeps the procedural profile.
-  Its Quake fire now spreads edge to edge too.
-- **The extent law is the PSP executable's, applied to PS2 and HD
-  unverified.** Neither interpreter was read. Visible effects of it, no weapon
-  fired (`data/scratch/fx-brightness/noweapon-crops.png`): PS2 and HD engine
-  flares spawn on their authored sphere radius, so the glow round each nozzle
-  is wider (under 0.4% of pixels); PSP collision sparks differ only by
-  reshuffled random draws. Gating extents to PSP sources is a one-line choice
-  if a PS2 or HD capture disagrees.
 - `Quake_Update`'s basis second row reads the struct handed to
   `AiTrack_LocatePosition`; which field is unread, so the frame's Y is world up
   (chosen).

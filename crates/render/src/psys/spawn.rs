@@ -27,6 +27,11 @@
 //! `FUN_088f44d8` writes back - instance `+0x2c`, which
 //! `ParticleSystem_DeriveScaledParams` multiplies into the three extent
 //! fields and nothing else. Size and speed are left as authored.
+//!
+//! **Applied to Pulse on the PSP only** - the law is read off that
+//! executable alone; other sources call
+//! [`super::Effect::without_extents`] at load, by choice, until their own
+//! executables are read.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;

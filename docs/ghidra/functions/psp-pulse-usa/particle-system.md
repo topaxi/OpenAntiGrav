@@ -456,6 +456,22 @@ leaves every fireball its authored size. Also read on the way:
 direction, as its first row (`0x0891da08`) - the frame's `X`, along which
 the line lies.
 
+### Applied to Pulse on the PSP only, by choice
+
+Everything in the two sections above is read off this binary. The port
+applies the extent law - line and sphere placement, and the Quake's `/ 50`
+as the extent co-factor - **only to Pulse off a PSP disc**; every other
+source keeps spawning at the anchor with the `/ 50` as severity
+(`oag_render::psys::Effect::without_extents`). That is a choice made
+2026-09-24, not a finding: the PS2 ELF and HD's `EBOOT.elf` have not been
+read, and a law unmeasured there should not change what they draw. A future
+read starts from the PS2/HD counterparts of `ParticleSystem_SpawnBurst`
+(`0x088f56c4`), `ParticleSystem_EmitLine` (`0x088fcfec`),
+`ParticleSystem_EmitSphere` (`0x088fd340`), `Quake_Update` (`0x0891d268`)
+and `ParticleSystem_SetScaleParams` (`0x088f44d8`). The sprite sampling is
+not gated: the texture offsets are a format fact, and only PSP `.pob`s embed
+sprites at all.
+
 ### `ScreenFlash_Start` (`0x088f00c0`) - the wash that is not a particle
 
 Confidence **72**. Called with a kind and a world position by every weapon

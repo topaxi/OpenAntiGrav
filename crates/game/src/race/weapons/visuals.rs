@@ -204,7 +204,9 @@ impl Race {
     /// spread their fire edge to edge while each fireball keeps its authored
     /// size - see `oag_render::psys::spawn`. Until then this fed the value
     /// in as severity, which made every fireball `width / 50` too big and
-    /// stacked all of them on the midpoint. **The frame's `X` is measured**,
+    /// stacked all of them on the midpoint. **Pulse on the PSP only**: every
+    /// other source still feeds it in as severity, by choice, until its own
+    /// executable is read (`oag_render::psys::Effect::without_extents`). **The frame's `X` is measured**,
     /// `normalize(B - A)`; its `Y` stays world up, which is **chosen, not
     /// measured** - the row `Quake_Update` builds from its
     /// `AiTrack_LocatePosition` struct is not read.
@@ -242,24 +244,29 @@ impl Race {
         // 2026-09-24).
         let across = right - left;
 
-        let playing = match (
-            self.view.effects.get(QUAKE_EFFECT).cloned(),
-            self.view.quake_effect,
-        ) {
-            (Some(effect), None) => {
-                // Severity stays `1.0`: the `/ 50` lands on the instance's
-                // extent co-factor, not on its size or speed - see
-                // `oag_render::psys::spawn`.
-                self.view.quake_effect = self.view.stage.attach(&effect, midpoint, 1.0);
+        let Some(effect) = self.view.effects.get(QUAKE_EFFECT).cloned() else {
+            return;
+        };
+        // Where the extent law is on (Pulse on the PSP), severity stays
+        // `1.0` and the `/ 50` lands on the instance's extent co-factor, not
+        // on size or speed - see `oag_render::psys::spawn`. Everywhere else
+        // the effect keeps what it did before that law was read: the `/ 50`
+        // as severity, by the lead's choice until those executables are read
+        // (`psys::Effect::without_extents`).
+        let stretches = effect.has_extents();
+        let severity = if stretches { 1.0 } else { scale };
+        let playing = match self.view.quake_effect {
+            None => {
+                self.view.quake_effect = self.view.stage.attach(&effect, midpoint, severity);
                 self.view.quake_effect
             }
-            (Some(_), Some(playing)) => {
+            Some(playing) => {
                 self.view.stage.follow(playing, midpoint);
+                self.view.stage.rescale(playing, severity);
                 Some(playing)
             }
-            (None, _) => None,
         };
-        if let Some(playing) = playing {
+        if let (true, Some(playing)) = (stretches, playing) {
             self.view.stage.stretch(playing, scale, across);
         }
     }
