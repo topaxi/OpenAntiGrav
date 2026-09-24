@@ -58,14 +58,22 @@ The executable's own load-path strings name every model above
   RPCS3 check that would falsify the scale reading (Z0 on `Draw`'s three
   `bl 0x327500` sites) was **not run**: getting a Plasma detonation in front
   of the player on the emulator needs the held-weapon slot, which is unread.
-- **Every other weapon model is placed with a reflection.**
-  `Race::projectile_model_matrices` (`crates/game/src/race/weapons/visuals.rs`)
-  builds `side = forward x reference`, `up = side x forward`, determinant
-  `-1`, and so does `blast_models::billboard_matrix` (Pulse's blast). The
-  Rocket, Mine, Bomb and bolt head therefore draw mirrored, and cannot take
-  their materials' own back-face cull (the Rocket, Bomb and ball set state
-  bit 4) until that is a rotation. Found, not fixed - it moves every
-  weapon's picture on both titles.
+- ~~**Every other weapon model is placed with a reflection.**~~ **Fixed
+  2026-09-24.** `Race::projectile_model_matrices` and
+  `blast_models::billboard_matrix` now build `side = reference x forward`,
+  a rotation - the original's own `Rocket_Update` basis, measured live on
+  PPSSPP (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`,
+  2026-09-24 section). Correction to this bullet as first written: the laid
+  Mine and Bomb were never mirrored (they take the quaternion branch); only
+  the Rocket, the Cannon round, the Plasma head and Pulse's blast shells
+  were. Every HD body now asks `cull_as_authored`: the Rocket and the Bomb
+  cull (the log says "back faces culled"), the Mine and the Cannon round
+  stay two-sided (mixed materials). Visible on HD: the red wash that filled
+  the frame's right half when the chase camera sat inside the Bomb's
+  see-through shell is gone. **HD's own placements are still unread** - the
+  Rocket's is Pulse's measured basis on HD's model, the Mine's and Bomb's
+  the frozen craft pose; all three chosen, not measured, until
+  `/hdfury/EBOOT-ps3-hdfury-eu.elf`'s own per-tick updates are read.
 - **LeachBeam's ball: placement read 2026-09-23, not wired.**
   `LeachBall_Advance` (`0x00114c78`) carries `hd_leachbeam_ball_bloomring`
   along the beam, one trip per drain, spawning `WO_LEACHBEAM_ABSORB` at each
@@ -118,7 +126,7 @@ The executable's own load-path strings name every model above
    `noise.gtf` role. Compare against a real RPCS3 capture of one detonation
    when the held-weapon slot is known - no capture of the original's blast
    exists yet.
-5. Make `Race::projectile_model_matrices` a rotation (`side = up x forward`
-   or equivalent) and then honour state bit 4 for every HD weapon model via
-   `load::weapon_models::cull_as_authored`'s `cull` flag - check the Rocket
-   and Bomb pictures before and after.
+5. ~~Make `Race::projectile_model_matrices` a rotation and honour state bit
+   4 for every HD weapon model~~ **Done 2026-09-24.** Next on it: read HD's
+   own Rocket/Mine/Bomb per-tick placement (the `Rocket` vtable off
+   `Rocket_Construct` `0x001254c8`) so the HD poses stop borrowing Pulse's.

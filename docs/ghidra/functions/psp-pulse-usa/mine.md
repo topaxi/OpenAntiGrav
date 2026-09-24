@@ -35,6 +35,10 @@ because they are one weapon in two sizes. See
 | `0x088640c8` | `Bomb_Detonate` | 88 (new 2026-09-15) |
 | `0x08872078` | `BombBlast_Construct` | 90 (new 2026-09-15) |
 | `0x0887250c` | `BombBlast_Update` | 85 (new 2026-09-23) |
+| `0x08859ce4` | `Mine_PoseNode` | 92 (new 2026-09-24) |
+| `0x08859ecc` | `Mine_Update` | 75 (new 2026-09-24) |
+| `0x08862fc0` | `Bomb_Construct` | 85 (new 2026-09-24) |
+| `0x08863188` | `Bomb_Init` | 88 (new 2026-09-24) |
 
 **The addresses on this page are real, not image-relative.** Ghidra renders this
 program's `jal` targets and `lui`/`addiu` operands in the `0x0886xxxx` region as
@@ -407,7 +411,10 @@ entity->drift = normalise(vec3(rand(-1,1), rand(-1,1), rand(-1,1)));
   and the Cannon's block authors no such attribute at any offset.
 - **Three `rand(-1, 1)` calls normalised into a unit vector.** A cluster that
   scatters. A cannon bolt does not need a random direction, and no other
-  projectile constructor read in this tree has one.
+  projectile constructor read in this tree has one. **Corrected 2026-09-24:
+  it is not a drift, it is the mine's own spin axis** (`entity+0xc0`), which
+  `Mine_PoseNode` turns the model about every tick - measured live, see
+  [2026-09-24: a laid mine spins](#2026-09-24-a-laid-mine-spins-and-the-bomb-sits-square-to-the-world).
 
 The `+10.0` branch has no caller among the drop path (the handler passes `0`),
 so what a ten-second-longer fuse is for is **unread**.
@@ -469,7 +476,8 @@ second page would be nine tenths this one.
   *was* read spends `blastradius` for both damage and impulse. Left undecoded
   and named, rather than decoded on a guess about which half it governs.
 - **Whether a bomb moves.** `Weapon_FireBomb` stages the craft's forward row
-  **negated** and hands it to a spawn helper at `0x0885f188` that
+  **negated** (**corrected 2026-09-24**: the vector is the craft's `+0xb10`
+  row, and live it reads as the craft's *up* - see the 2026-09-24 section) and hands it to a spawn helper at `0x0885f188` that
   [contact-response.md](contact-response.md) could not resolve statically - two
   callers jump past its prologue. So the direction is recovered and any *speed*
   is not. **This engine lays it static**, which is the same conservative reading
@@ -1053,3 +1061,90 @@ the wave's footprint.
 
 `FUN_08859f04` (the firer-arming test, 60) and `FUN_08862d4c` (targetable,
 shared with `Rocket_HitCraft`'s shield check, 60) stay unnamed.
+
+## 2026-09-24: a laid mine spins, and the Bomb sits square to the world
+
+Read on the bridge, then measured live on PPSSPP (`pulse-psp-usa.chd`,
+Single Race, the player's own weapon record) by setting the fire bit inside
+`Weapons_DispatchFire` and breaking on the node hand-off. Raw samples are in
+`data/scratch/weapon-pose/psp/` (not committed).
+
+### The Mine: `0.6 x Rot(axis, -4 x fuse)`, rebuilt every tick
+
+`Mine_Init` does copy the craft's rear anchor into `entity+0x60..+0x9c`, as
+this page said - measured, that anchor is the craft's display matrix, rows
+`(up x f, up, f)` scaled by `g_craft_scale` `0.75`. **But nothing draws it.**
+`Mine_Init` then calls `Mine_PoseNode` (`0x08859ce4`), which
+`Mine_Update` (`0x08859ecc`, called per live mine from `MinePool_Update`) calls
+again every tick, and it overwrites the whole 3x3:
+
+```c
+angle = entity->fuse * 4.0;                       // +0x48, counts down
+wrap angle into (-pi, pi];
+Math_BuildAxisAngleMatrix(angle, &entity->matrix,  // +0x60, the 4x4
+                          &entity->axis);          // +0xc0, Mine_Init's random unit vector
+entity->matrix.row3 = saved position;             // +0x90 survives
+entity->matrix.rows0..2 *= entity->scale;         // +0xd0
+Node_SetMatrix(entity->node, &entity->matrix);    // +0xb4, 0x08945284
+```
+
+`entity->scale` is the code literal `0x3f19999a` = **`0.6`**, written by
+`Mine_Construct` at `0x08859a30`. `Mine_Update` itself only adds `dt` to
+`+0xd4` (an age) and runs the owner-gone check at `0x0885eca4` before posing.
+
+**Measured.** Forty `Mine_PoseNode` hand-offs across the cluster: every
+row has length `0.600`, the position never moves, and each mine's matrix
+equals `0.6 x` the right-handed rotation by **`-4 x fuse`** about its own
+`+0xc0` axis to four decimal places in every element (the `+4 x fuse` reading
+misses by 0.4 to 1.1). The fuse starts at `7.0` (`<Mine> timetodie`) and falls
+at one per second, so a laid mine **turns at 4 rad/s about its own random axis
+for its whole life**. Confidence **92**.
+
+So the Mine is not drawn in the craft's pose at all, and it is drawn at
+three-fifths of its authored size. This engine drew it static, in the firing
+craft's body orientation, at full size - see `mine::frozen_pose`, which was
+chosen, not measured.
+
+### The Bomb: up from the craft, yaw from the world
+
+`Bomb_Construct` (`0x08862fc0`) loads `Data\Weapons\Pulse_Bomb.vex` and sets
+`+0x80..+0xbc` to the identity. `Bomb_Init` (`0x08863188`, called from
+`Weapon_FireBomb`) then:
+
+1. raycasts ten units down from the drop point;
+2. writes `+0x90` (row 1) = the normalised vector `Weapon_FireBomb` staged
+   (`-craft[+0xb10]`);
+3. orthogonalises whatever `+0xa0` (row 2) already holds against it and
+   normalises - `(0, 0, 1)` from `Bomb_Construct` on a fresh entity, the
+   previous drop's row 2 on a pooled one;
+4. writes `+0x80` (row 0) = row 1 x row 2 (`vcrsp.t`), and hands `+0x80` to the
+   node (`0x08863390`).
+
+**Measured**: the matrix handed over at the drop was rows `(1.0, -0.0002, 0)`,
+`(0.0002, 0.9998, -0.0206)`, `(0, 0.0206, 0.9998)` - a rotation, determinant
+`+1`, **scale 1** - and the node held exactly that matrix `0.5 s` and `1.5 s`
+later, so the Bomb is posed once and never again. The craft was heading `+X`
+at the time, so this measurement cannot by itself tell world `+Z` from the
+craft's right; the static read can, and it says row 2 is the pooled entity's
+own previous row 2 starting from `(0, 0, 1)`, never the craft's. A second drop
+on the same pooled entity read `+0xa0 = (-0.033, 0.077, 0.997)` before the
+orthogonalisation, which is that residue. And row 1 on a flat straight cannot
+separate the craft's up from world up; the read says it is the craft's
+`+0xb10` row, negated. Confidence **88**.
+
+`Weapon_FireBomb`'s vector was recorded on this page as "the craft's forward
+row, negated". It is `-craft[+0xb10]`, and live it is `(0.0002, 0.9998,
+-0.0206)` - an up vector, not a forward one.
+
+### What this engine now does
+
+- **Pulse's Mine** draws `0.6 x Rot(axis, -4 x fuse)` at its position. The
+  mechanism, the rate, the sign and the scale are measured; **the per-mine axis
+  is not the original's** - it is drawn from a render-side seeded roll (the
+  same shape, a normalised `U(-1, 1)^3`) because the simulation's own RNG must
+  not advance for a picture. Chosen, not measured.
+- **Pulse's Bomb** draws `(up x Z', up, Z')` with `up` the frozen pose's own
+  `Y` and `Z'` world `+Z` orthogonalised against it - `Bomb_Init`'s shape,
+  without the pooled entity's residue.
+- **HD's Mine and Bomb** keep the frozen craft pose: HD is a different
+  binary and neither of its poses was read. Chosen, not measured.

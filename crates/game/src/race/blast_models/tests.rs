@@ -89,12 +89,16 @@ fn the_billboard_basis_is_orthonormal_and_handles_straight_up() {
     assert!(right.dot(forward).abs() < 1e-5);
     assert!(up.dot(forward).abs() < 1e-5);
     assert_eq!(matrix.w_axis.truncate(), position);
+    // A rotation: until 2026-09-24 this basis was a reflection, which every
+    // assertion above passes and which draws the shells mirrored.
+    assert!((matrix.determinant() - 1.0).abs() < 1e-5);
 
     // Camera directly above the blast: the `Vec3::Y` reference degenerates
     // and the fallback must still produce a finite, orthonormal basis.
     let overhead = billboard_matrix(Vec3::ZERO, Vec3::new(0.0, 10.0, 0.0));
     assert!(overhead.x_axis.truncate().is_finite());
     assert!((overhead.x_axis.truncate().length() - 1.0).abs() < 1e-5);
+    assert!((overhead.determinant() - 1.0).abs() < 1e-5);
 }
 
 /// HD's disc basis points `Z` away from the viewer, keeps the billboard's own

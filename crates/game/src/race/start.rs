@@ -58,6 +58,7 @@ impl Race {
             hd_trail,
             shield_palette,
             hd_plasma_blast,
+            pulse_laid_pose,
             absorb_burst,
             absorb_anchors,
             ..
@@ -425,6 +426,7 @@ impl Race {
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],
                 hd_plasma_blast,
+                pulse_laid_pose,
                 absorb_burst,
                 absorb_anchors,
                 absorb_bursts: Vec::new(),

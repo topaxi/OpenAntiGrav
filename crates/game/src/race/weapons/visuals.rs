@@ -8,6 +8,7 @@
 //! rest of the weapon-visuals coverage.
 
 mod flares;
+mod laid;
 pub(in crate::race) use flares::*;
 
 use super::*;
@@ -562,6 +563,16 @@ impl Race {
                 scale,
                 &mut self.view.projectile_flare[slot],
             );
+            // The Rocket's flare frame is its own basis turned `-pi/2` about
+            // row 0, so the emitter's `+Y` is the velocity - measured live,
+            // `rocket-visuals.md`'s 2026-09-24 section. Every other rider
+            // keeps world up: none of their frames was read.
+            if let (Some(oag_tables::weapons::Weapon::Rocket), Some(instance)) =
+                (projectile.kind, self.view.projectile_flare[slot])
+            {
+                let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
+                self.view.stage.orient(instance, up);
+            }
             // The Missile's second, orbiting anchor - see `missile_flare_anchors`.
             // `orbiting` is `None` for every other kind, so this rides nothing
             // and only ever tears down a leftover instance from a slot that
@@ -628,19 +639,23 @@ impl Race {
 
     /// Where each live rocket is and how it is oriented, for the model draw.
     ///
-    /// **Forward alignment is recovered; the quarter-turn is not.**
-    /// `Rocket_Update` (`0x0885d2a8`) rebuilds a basis every tick from the
-    /// rocket's normalised velocity and the surface normal under it, hands it to
-    /// the model's scene node, and rotates it by a further `-pi/2` about an axis
-    /// this project has not resolved - the call is an unresolved import stub.
-    /// So this aligns the model along its velocity, which is the evidenced part,
-    /// and does **not** invent the extra rotation. See
-    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    /// **The basis is recovered, and the quarter-turn is not the model's.**
+    /// `Rocket_Update` (`0x0885d2a8`) rebuilds a basis every tick at
+    /// `rocket+0x60`: row 0 `n x f`, row 1 the surface normal `n`
+    /// re-orthogonalised against `f`, row 2 the normalised velocity `f`, row 3
+    /// the position - a rotation, determinant `+1`. That matrix is what it
+    /// copies into the model's scene node (`0x08945284`). Only *after* that
+    /// does it copy the basis to `rocket+0xa0` and turn the copy `-pi/2`
+    /// about its own row 0 (`Math_RotateByAxisAngle`, `0x08a6b6b4`) - and
+    /// `+0xa0` is the frame `Rocket_Init` handed `WO_ROCKET_FLARE` by pointer,
+    /// so the quarter-turn orients the flare, never the dart. Confidence 85;
+    /// see `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s
+    /// 2026-09-24 section.
     ///
-    /// The original's second basis vector is the *track* normal, which this
-    /// engine does not carry on a projectile (its rockets fly straight and never
-    /// consult the surface - the same page records that gap). World up stands in,
-    /// which only decides the model's roll about its own length.
+    /// The original's second basis vector is the surface normal the rocket
+    /// rides (`rocket+0x100`), which this engine carries as
+    /// `Projectile::surface` - so that is what the side axis is built from,
+    /// with world up only as the fallback when the rocket flies along it.
     ///
     /// One entry per live rocket, in slot order, so the caller can zip it
     /// against its drawables.
@@ -857,6 +872,17 @@ impl Race {
     /// nose/tail does. Left open is only whether that axis itself agrees with
     /// [`Body::orientation`]'s convention, a coarser question a single static
     /// mesh view cannot settle; `Pulse_Bomb.vex` was not separately viewed.
+    ///
+    /// **Both branches are rotations (determinant `+1`) since 2026-09-24.**
+    /// The velocity branch used to build `side = forward x reference`, `up =
+    /// side x forward` - a reflection - so every Rocket, Cannon round and HD
+    /// Plasma head drew mirrored, and none could take its material's own
+    /// back-face cull (`load::weapon_models::cull_as_authored`). It now builds
+    /// `side = reference x forward`, `up = forward x side`, which is the
+    /// original's own `Rocket_Update` basis, measured live, with
+    /// `Projectile::surface` as its `n`. The `orientation` branch (the laid
+    /// Mine and Bomb) was always a rotation; on Pulse it is now the
+    /// executable's own measured pose instead - see `laid`.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
         self.sim
@@ -864,29 +890,34 @@ impl Race {
             .projectiles
             .slots
             .iter()
-            .filter(|projectile| projectile.kind == Some(kind))
-            .map(|projectile| {
+            .enumerate()
+            .filter(|(_, projectile)| projectile.kind == Some(kind))
+            .map(|(slot, projectile)| {
                 let forward = projectile.velocity.normalize_or_zero();
                 if forward == Vec3::ZERO {
                     // Every weapon that reaches this branch lays rather than
-                    // flies (`oag_gameplay::projectile::mine::at_rest`), so
-                    // `orientation` is the frozen pose it landed with, not the
-                    // identity default a flying projectile carries here.
-                    return Mat4::from_rotation_translation(
-                        projectile.orientation,
-                        projectile.position,
-                    );
+                    // flies (`oag_gameplay::projectile::mine::at_rest`). On
+                    // Pulse the pose is the executable's own, measured - see
+                    // `laid`; elsewhere `orientation` is the frozen pose it
+                    // landed with, chosen, not measured.
+                    return laid::matrix(slot, projectile, self.view.pulse_laid_pose);
                 }
-                // `Vec3::Y` is a poor reference exactly when the rocket is flying
-                // straight up or down; `any_orthonormal_vector` is the fallback
-                // rather than a silently degenerate basis.
-                let reference = if forward.dot(Vec3::Y).abs() > 0.999 {
-                    forward.any_orthonormal_vector()
-                } else {
-                    Vec3::Y
-                };
-                let side = forward.cross(reference).normalize_or_zero();
-                let up = side.cross(forward);
+                // `surface` is the normal the projectile rides - the
+                // original's own `n` (`rocket+0x100`), seeded to world up at
+                // spawn. It, then world up, then any perpendicular, so a
+                // projectile flying along one of them still gets a basis.
+                let reference = [projectile.surface, Vec3::Y]
+                    .into_iter()
+                    .find(|axis| forward.dot(*axis).abs() < 0.999)
+                    .unwrap_or_else(|| forward.any_orthonormal_vector());
+                // `reference x forward`, then `forward x side`: a rotation
+                // (determinant `+1`), mapping the model's own `+X` onto
+                // `up x forward` - `Rocket_Update`'s own row 0 (`n x f`,
+                // `vcrsp.t` at `0x0885d988`). The other order is a
+                // reflection, and drew every one of these mirrored until
+                // 2026-09-24.
+                let side = reference.cross(forward).normalize_or_zero();
+                let up = forward.cross(side);
                 Mat4::from_cols(
                     side.extend(0.0),
                     up.extend(0.0),

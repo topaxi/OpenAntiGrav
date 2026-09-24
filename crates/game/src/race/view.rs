@@ -102,6 +102,8 @@ pub struct RaceView {
     /// ease rather than Pulse's baked anim-time scrub. See
     /// `options::Setup::hd_plasma_blast`.
     pub(super) hd_plasma_blast: bool,
+    /// See `options::Setup::pulse_laid_pose`.
+    pub(super) pulse_laid_pose: bool,
     /// See `Setup::absorb_burst`.
     pub(super) absorb_burst: Option<super::absorb::AbsorbBurst>,
     /// See `Setup::absorb_anchors`.

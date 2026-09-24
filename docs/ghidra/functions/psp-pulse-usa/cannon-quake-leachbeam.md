@@ -2979,3 +2979,31 @@ This page supersedes the three addresses `weapons-eight-of-thirteen-the-plasma-a
 2026-09-07 entry named as unread: `0x088537ac` (refuted, see above),
 `0x0886c600` and `0x08866658` (both now read in full). See that thread for the
 narrower, single-session account of how this pass came about.
+
+### 2026-09-24: the round's own matrix, measured live
+
+One round fired from the player's own record on PPSSPP (`pulse-psp-usa.chd`,
+Single Race, fire word bit `0x4000` - **not** `0x2000`, which no handler
+consumed; `mine.md`'s id table lists the Cannon under `0x2000`, and this
+session's live run says the handler this page names clears `0x4000`).
+`Cannon_Init` (`0x088648ec`) copies the muzzle anchor into `round+0x50..+0x8c`
+and sets the velocity to row 2 times the speed. `0.05 s` and `0.10 s` later:
+
+```text
+round+0x50  row0 (-0.0617,  0.0,    -0.9981)   up x f
+            row1 (-0.0116,  0.9999,  0.0007)   up
+            row2 ( 0.9980,  0.0116, -0.0617)   f = velocity / |velocity|
+            det  +1, unscaled
+velocity    (696.2, 8.1, -43.0)
+```
+
+So the round's own per-tick basis is `(up x f, up, f)`, a rotation - the
+shape `Race::projectile_model_matrices` builds, and the Rocket's own. **What
+this does not settle is the draw**: the scene node at `round+0xc0` held a
+stale, non-orthonormal matrix at a position the round had already left, and
+the node hand-off inside `Cannon_UpdateRound` (`0x088661bc`) never fired in
+forty seconds of flight. The round's model is therefore drawn from something
+other than that node - most likely the per-round draw `FUN_0886545c` using
+`round+0x50` directly - which is **unread**. The orientation this engine
+draws is the measured round basis; that the original draws the model with
+it is an inference, confidence 70.

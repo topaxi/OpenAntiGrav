@@ -235,3 +235,35 @@ fn a_riding_burst_plays_on_a_stage_too_busy_to_attach() {
     stage.detach(riding);
     assert!(!stage.is_playing(riding));
 }
+
+/// An attached instance emits about the `up` [`Stage::orient`] gave it,
+/// not world `+Y` - the Rocket's flare, whose frame's `+Y` is the flight
+/// path. A zero-width cone at unit speed puts every particle on that axis.
+#[test]
+fn an_oriented_instance_emits_along_its_own_up() {
+    let mut rng = Rng::new(4);
+    let mut spec = (*effect("aimed", true, 10.0)).clone();
+    spec.emitters[0].speed_per_tick = (1.0, 0.0);
+    let aimed = std::sync::Arc::new(spec);
+    let mut stage = Stage::new();
+    let handle = stage.attach(&aimed, Vec3::ZERO, 1.0).expect("attach");
+    stage.orient(handle, Vec3::X);
+    for _ in 0..8 {
+        stage.advance(DT, &mut rng);
+    }
+    let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
+    assert!(!additive.is_empty(), "nothing was emitted");
+    let n = additive.len() as f32;
+    let centre = additive
+        .iter()
+        .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+        / n;
+    assert!(
+        centre.x > 1.0,
+        "particles did not travel along +X: {centre:?}"
+    );
+    assert!(
+        centre.y.abs() < 0.5,
+        "particles drifted along world up: {centre:?}"
+    );
+}

@@ -1238,6 +1238,8 @@ struct Instance {
     attached: bool,
     /// Bumped every time the slot is claimed.
     generation: u32,
+    /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
+    up: Vec3,
 }
 
 impl Instance {
@@ -1247,6 +1249,7 @@ impl Instance {
         anchor: Vec3::ZERO,
         attached: false,
         generation: 0,
+        up: Vec3::Y,
     };
 
     fn busy(&self) -> bool {
@@ -1355,6 +1358,15 @@ impl Stage {
         }
     }
 
+    /// Points an attached instance's emitter-frame `+Y` along `up` - the
+    /// Rocket's flare frame is quarter-turned so its `+Y` is the direction of
+    /// travel (`rocket-visuals.md`, 2026-09-24). A no-op on a stale handle.
+    pub fn orient(&mut self, playing: Playing, up: Vec3) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.up = up;
+        }
+    }
+
     /// Changes an attached instance's own severity - see [`System::rescale`].
     ///
     /// A no-op on a stale handle, the same shape [`Self::follow`] takes.
@@ -1378,10 +1390,10 @@ impl Stage {
 
     /// Advances every playing instance by `dt` seconds.
     ///
-    /// Always world up - no [`Stage`]-driven effect (a rocket's flare, a
-    /// detonation) is parented to a locator whose live attitude matters the
-    /// way the collision sparks' is; see [`System::advance`]'s own `up`
-    /// parameter for the caller that does pass a live one.
+    /// Each instance's own `up` - world `+Y` unless [`Stage::orient`] set one,
+    /// which the Rocket's flare does: its frame is the rocket's, turned so
+    /// `+Y` runs down the flight path. See [`System::advance`]'s own `up`
+    /// parameter for what it steers.
     pub fn advance(&mut self, dt: f32, rng: &mut Rng) {
         for instance in &mut self.instances {
             let Some(effect) = instance.effect.as_deref() else {
@@ -1392,7 +1404,7 @@ impl Stage {
             }
             instance
                 .system
-                .advance(effect, dt, instance.anchor, Vec3::Y, rng);
+                .advance(effect, dt, instance.anchor, instance.up, rng);
         }
     }
 
@@ -1469,6 +1481,7 @@ impl Stage {
         instance.system = System::new();
         instance.anchor = point;
         instance.attached = attached;
+        instance.up = Vec3::Y;
         instance.system.ignite(effect, point, scale);
         Playing {
             index: index as u16,
