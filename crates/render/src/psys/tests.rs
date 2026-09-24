@@ -258,6 +258,12 @@ fn an_oriented_instance_emits_along_its_own_up() {
         .iter()
         .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
         / n;
-    assert!(centre.x > 1.0, "particles did not travel along +X: {centre:?}");
-    assert!(centre.y.abs() < 0.5, "particles drifted along world up: {centre:?}");
+    assert!(
+        centre.x > 1.0,
+        "particles did not travel along +X: {centre:?}"
+    );
+    assert!(
+        centre.y.abs() < 0.5,
+        "particles drifted along world up: {centre:?}"
+    );
 }

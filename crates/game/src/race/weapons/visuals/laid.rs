@@ -43,10 +43,9 @@ pub(super) fn matrix(slot: usize, projectile: &oag_gameplay::Projectile, pulse: 
     use oag_tables::weapons::Weapon;
     match (pulse, projectile.kind) {
         (true, Some(Weapon::Mine)) => pulse_mine(slot, projectile.position, projectile.lifetime),
-        (true, Some(Weapon::Bomb)) => bomb_blast::bomb_blast_basis(
-            projectile.position,
-            projectile.orientation * Vec3::Y,
-        ),
+        (true, Some(Weapon::Bomb)) => {
+            bomb_blast::bomb_blast_basis(projectile.position, projectile.orientation * Vec3::Y)
+        }
         _ => Mat4::from_rotation_translation(projectile.orientation, projectile.position),
     }
 }
@@ -77,7 +76,11 @@ pub(in crate::race) fn spin_axis(slot: usize, position: Vec3) -> Vec3 {
         ^ position.x.to_bits().wrapping_mul(0x85eb_ca6b)
         ^ position.y.to_bits().wrapping_mul(0xc2b2_ae35)
         ^ position.z.to_bits().wrapping_mul(0x27d4_eb2f);
-    let axis = Vec3::new(signed_unit(seed), signed_unit(seed ^ 1), signed_unit(seed ^ 2));
+    let axis = Vec3::new(
+        signed_unit(seed),
+        signed_unit(seed ^ 1),
+        signed_unit(seed ^ 2),
+    );
     axis.try_normalize().unwrap_or(Vec3::Y)
 }
 
