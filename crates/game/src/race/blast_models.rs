@@ -397,8 +397,12 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
     } else {
         Vec3::Y
     };
-    let right = forward.cross(reference).normalize_or_zero();
-    let up = right.cross(forward);
+    // `reference x forward`, then `forward x right`: a rotation. The other
+    // order (this function's own until 2026-09-24) is a reflection, which
+    // drew Pulse's blast shells mirrored - see
+    // `Race::projectile_model_matrices`'s own doc comment for the same fix.
+    let right = reference.cross(forward).normalize_or_zero();
+    let up = forward.cross(right);
     Mat4::from_cols(
         right.extend(0.0),
         up.extend(0.0),
@@ -409,11 +413,11 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
 
 /// `billboard_matrix`'s basis rebuilt the way Wipeout HD builds its own for
 /// the two discs: `Z` pointing **away** from the camera, the billboard's up
-/// kept, and `X = Y x Z` - a rotation, where `billboard_matrix` itself is a
-/// reflection (its `right = forward x up`, `up = right x forward` gives a
-/// determinant of `-1`). The handedness matters once back faces are culled:
-/// a reflection reverses every triangle's winding on screen, so the cull
-/// would hide exactly the faces the original draws.
+/// kept, and `X = Y x Z` - a rotation, as `billboard_matrix` itself now is
+/// too (it was a reflection until 2026-09-24; fixing it negated `X` alone,
+/// so this function's output did not move). The handedness matters once back
+/// faces are culled: a reflection reverses every triangle's winding on
+/// screen, so the cull would hide exactly the faces the original draws.
 ///
 /// The cross product is the original's too: `Start` rebuilds the first row
 /// from the other two (`0x001281b4`..`0x001281cc`, a `vperm`/`vmaddfp`/

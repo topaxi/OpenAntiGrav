@@ -628,14 +628,18 @@ impl Race {
 
     /// Where each live rocket is and how it is oriented, for the model draw.
     ///
-    /// **Forward alignment is recovered; the quarter-turn is not.**
-    /// `Rocket_Update` (`0x0885d2a8`) rebuilds a basis every tick from the
-    /// rocket's normalised velocity and the surface normal under it, hands it to
-    /// the model's scene node, and rotates it by a further `-pi/2` about an axis
-    /// this project has not resolved - the call is an unresolved import stub.
-    /// So this aligns the model along its velocity, which is the evidenced part,
-    /// and does **not** invent the extra rotation. See
-    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    /// **The basis is recovered, and the quarter-turn is not the model's.**
+    /// `Rocket_Update` (`0x0885d2a8`) rebuilds a basis every tick at
+    /// `rocket+0x60`: row 0 `n x f`, row 1 the surface normal `n`
+    /// re-orthogonalised against `f`, row 2 the normalised velocity `f`, row 3
+    /// the position - a rotation, determinant `+1`. That matrix is what it
+    /// copies into the model's scene node (`0x08945284`). Only *after* that
+    /// does it copy the basis to `rocket+0xa0` and turn the copy `-pi/2`
+    /// about its own row 0 (`Math_RotateByAxisAngle`, `0x08a6b6b4`) - and
+    /// `+0xa0` is the frame `Rocket_Init` handed `WO_ROCKET_FLARE` by pointer,
+    /// so the quarter-turn orients the flare, never the dart. Confidence 85;
+    /// see `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s
+    /// 2026-09-24 section.
     ///
     /// The original's second basis vector is the *track* normal, which this
     /// engine does not carry on a projectile (its rockets fly straight and never
@@ -857,6 +861,16 @@ impl Race {
     /// nose/tail does. Left open is only whether that axis itself agrees with
     /// [`Body::orientation`]'s convention, a coarser question a single static
     /// mesh view cannot settle; `Pulse_Bomb.vex` was not separately viewed.
+    ///
+    /// **Both branches are rotations (determinant `+1`) since 2026-09-24.**
+    /// The velocity branch used to build `side = forward x reference`, `up =
+    /// side x forward` - a reflection - so every Rocket, Cannon round and HD
+    /// Plasma head drew mirrored, and none could take its material's own
+    /// back-face cull (`load::weapon_models::cull_as_authored`). It now builds
+    /// `side = reference x forward`, `up = forward x side`, which is the
+    /// original's own `Rocket_Update` basis with world up standing in for the
+    /// track normal. The `orientation` branch (the laid Mine and Bomb) was
+    /// always a rotation; it did not change.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
         self.sim
@@ -885,8 +899,14 @@ impl Race {
                 } else {
                     Vec3::Y
                 };
-                let side = forward.cross(reference).normalize_or_zero();
-                let up = side.cross(forward);
+                // `reference x forward`, then `forward x side`: a rotation
+                // (determinant `+1`), mapping the model's own `+X` onto
+                // `up x forward` - `Rocket_Update`'s own row 0 (`n x f`,
+                // `vcrsp.t` at `0x0885d988`). The other order is a
+                // reflection, and drew every one of these mirrored until
+                // 2026-09-24.
+                let side = reference.cross(forward).normalize_or_zero();
+                let up = forward.cross(side);
                 Mat4::from_cols(
                     side.extend(0.0),
                     up.extend(0.0),

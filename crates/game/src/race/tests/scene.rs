@@ -325,6 +325,19 @@ fn a_modelled_rocket_points_where_it_is_going() {
         );
     }
     assert!(x.dot(y).abs() < 1e-5 && x.dot(z).abs() < 1e-5 && y.dot(z).abs() < 1e-5);
+    // A rotation, not a reflection, and the original's own row 0: side is
+    // `up x forward` (`Rocket_Update`'s `vcrsp.t` at `0x0885d988`, with world
+    // up standing in for the track normal). The reflection this used to be
+    // passed every assertion above and drew the dart mirrored.
+    assert!(
+        (matrix.determinant() - 1.0).abs() < 1e-5,
+        "the placement must be a rotation, got determinant {}",
+        matrix.determinant()
+    );
+    assert!(
+        x.abs_diff_eq(Vec3::Y.cross(heading).normalize(), 1e-5),
+        "side must be up x forward, got {x:?}"
+    );
 }
 
 /// A rocket and a missile in flight at once do not share a model slot.
@@ -432,6 +445,11 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
         y.length()
     );
     assert!(x.dot(z).abs() < 1e-5 && y.dot(z).abs() < 1e-5);
+    assert!(
+        (matrix.determinant() - 1.0).abs() < 1e-5,
+        "the fallback basis must still be a rotation, got determinant {}",
+        matrix.determinant()
+    );
 }
 
 /// A hull hit and a track hit are different blasts, in different places.

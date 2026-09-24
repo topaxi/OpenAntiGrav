@@ -118,12 +118,16 @@ pub(super) fn load(
 /// weapon models: the Plasma's ring, sphere, halo and ball, the Rocket and
 /// the Bomb qualify; the Mine and the Cannon round do not.
 ///
-/// **Only the Plasma's explosion asks for it.** Culling is only right under a
-/// placement matrix that is a rotation, and `Race::projectile_model_matrices`,
-/// which places the Rocket, the Mine, the Bomb and the bolt's head, builds
-/// `side = forward x reference`, `up = side x forward`, a reflection
-/// (determinant `-1`): culled, those models would show their inside. That
-/// reflection is its own finding, not fixed here.
+/// **Every HD weapon model asks for it since 2026-09-24.** Culling is only
+/// right under a placement matrix that is a rotation - a reflection reverses
+/// every triangle's winding on screen, and the cull then hides exactly the
+/// faces the original shows. Until that date
+/// `Race::projectile_model_matrices`, which places the Rocket, the Cannon
+/// round and the bolt's head, built a reflection, so only the Plasma
+/// explosion (placed by `blast_models::facing_away`, a rotation) could ask.
+/// Both are rotations now. The Mine and the Cannon round still draw both
+/// faces: their materials disagree on the bit, and this function refuses a
+/// mixed model rather than half-applying it.
 ///
 /// This matters for the Plasma's own explosion in particular: its sphere
 /// and ring are each authored as **two** shells, one wound outward and one
@@ -263,7 +267,9 @@ pub(super) fn load_bodies(
     models: &oag_title::weapons::WeaponModels,
     report: &mut Vec<String>,
 ) -> WeaponBodies {
-    // `cull` is `true` for HD's explosion trio alone - see `cull_as_authored`.
+    // `cull` is `true` for every model a rotation places - every HD body and
+    // the HD explosion trio - and only takes effect on a PS3 model whose
+    // materials all ask for it; see `cull_as_authored`.
     let mut one = |entry, fallback, cull| load_optional(archives, entry, fallback, cull, report);
     // **Pulse's halo/hemisphere2/hemisphere1 trio and HD's ring/sphere/halo
     // trio share one container by load-order position, not by name.**
@@ -295,7 +301,7 @@ pub(super) fn load_bodies(
     };
     // The bolt's own head, HD only - see `PlasmaBlastModels::ball`'s own doc
     // comment for why it rides in this container.
-    let ball = one(models.plasma_ball, "a plasma bolt", false);
+    let ball = one(models.plasma_ball, "a plasma bolt", true);
     // Pulse-only, `None` on every other title's own table - see
     // `WeaponModels::bomb_blast_pulse`'s own doc comment.
     let bomb_blast =
@@ -308,10 +314,10 @@ pub(super) fn load_bodies(
                 }
             });
     let bodies = (
-        one(models.rocket, "a rocket", false),
-        one(models.mine, "a laid mine", false),
-        one(models.bomb, "a laid bomb", false),
-        one(models.cannon, "a cannon round", false),
+        one(models.rocket, "a rocket", true),
+        one(models.mine, "a laid mine", true),
+        one(models.bomb, "a laid bomb", true),
+        one(models.cannon, "a cannon round", true),
         blast_models::PlasmaBlastModels {
             ball,
             ..plasma_blast
