@@ -386,11 +386,11 @@ resource in a live PPSSPP session:
 | `+0x4cc` | f32 | playback-rate base (1.0) |
 | `+0x4d0` | f32 | child velocity-inherit scale (1.0) |
 | `+0x4d4` | f32 | child spawn probability (0.1) |
-| `+0x4d8`,`+0x5b8`,`+0x698`,`+0x858` | block | channel blocks: size, alpha, rotation speed, emission scale - each `{period f32, mode u32 (0 keyframed / 2 constant / 3 random), key count i32, lo f32, hi f32, (time,value) f32 pairs}` |
+| `+0x4d8`,`+0x5b8`,`+0x698`,`+0x778`,`+0x858` | block | channel blocks: size, alpha, rotation speed, atlas frame rate (added 2026-09-24, see below), emission scale - each `{period f32, mode u32 (0 keyframed / 2 constant / 3 random), key count i32, lo f32, hi f32, (time,value) f32 pairs}` |
 | `+0x93c`,`+0x940` | i32, ptr | animated-attribute array (count, records of 0xec bytes) - re-derives the severity-scaled params per tick when present (0, null) |
 | `+0x944`,`+0x948`,`+0x94c` | ptr | on-death child system, per-particle child system, **next sibling emitter** (0, 0, `base+0xd20`) |
 | `+0x9a0` | u16,u16 | sprite-atlas grid (1, 1) |
-| `+0x9ac` | i32 | atlas frame count (1) |
+| `+0x9ac` | i32 | **not** the atlas frame count (corrected 2026-09-24): `ParticleSystem_InitParticle` ORs `Psys_RandIntRange(1, n) << 4` into a per-particle flag byte when it is above 1; its reader is untraced. The frame count is the `+0x9a0` grid's product |
 | `+0x9b4` | ptr | modifier list; node = `{f32 params, type u32 at +0x24, next ptr at +0x30}`, type 3 = per-axis exponential drag per tick (→ `(0.98, 0.98, 0.98)`) |
 | `+0x9f0`, `+0xa70`, `+0xc70` | scratch | zero in the file; the loader bakes the channel blocks into them (keyframe times, per-segment rates, spawn values) - confirmed by a live read of the loaded resource |
 
@@ -1250,3 +1250,25 @@ above, and these two fields are in its table.
   1/2/8, modifier types other than 3, and the billboard draw itself.
 - **Whether `WO_SHIP_COLL_SPARK`, `_TRAIL` and `_TRAIL_SMOKE` exist on PS2**
   outside `WADS2.WAD`.
+
+### The fourth per-particle channel is the atlas frame rate - 2026-09-24
+
+A fifth channel block sits at `+0x778`, `0xe0` after the roll block and
+`0xe0` before the emission scale, with the same layout. It was unparsed.
+`ParticleSystem_PrepareResource_q` (`0x088f3b68`) hands it to
+`ParticleSystem_BakeChannels` (`0x088f9024`) as the fourth of the
+per-particle channels, after alpha, size and roll. Its `hi` (`+0x788`)
+switches the atlas animation on in `ParticleSystem_CacheModeFlags`.
+`ParticleSystem_UpdateParticles` reads its value as frames per tick. Read
+and confidence in
+[particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md#the-atlas-frame-advances).
+`oag_vex::pob::Emitter::frame_rate` parses it.
+
+On the PSP disc every emitter authors the block, and every one parses. The
+ones that animate - `hi > 0` and a grid of more than one frame - are:
+
+- the 4x4 smoke and fire of the Rocket, ship and fx-node explosions;
+- the 2x2 Shuriken head, trail and rings;
+- `WO_PLASMA_HEAD`.
+
+The PS2 and HD corpora parse unchanged (`pob_ground_truth.rs`).

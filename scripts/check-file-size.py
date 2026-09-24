@@ -137,8 +137,9 @@ BASELINE = {
     "crates/ui/src/menu.rs": 1201,
     # Ratcheted down from 1,956 to 1,782 when the draw pipeline moved out into
     # `psys/pipeline.rs`, making room for the sprite sheet and the emitter
-    # extent, which live in `psys/sprite.rs` and `psys/spawn.rs`.
-    "crates/render/src/psys.rs": 1782,
+    # extent, which live in `psys/sprite.rs` and `psys/spawn.rs`; to 1,781
+    # when the streak strips moved into `psys/streak.rs`.
+    "crates/render/src/psys.rs": 1781,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1543,
     # Ratcheted down from 1,506 when `FlareTexture` moved out into

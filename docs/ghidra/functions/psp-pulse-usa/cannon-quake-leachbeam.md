@@ -1558,9 +1558,10 @@ second, while the road just ahead starts to lift; then one smooth, full-width
 hump that rolls **forward only**, 50 to 90 units ahead, the kerbs and barriers
 bending up with it, fire and dark debris (`WO_QUAKE`) on its crest, tall
 enough near its peak to hide the road behind it. By a second it has passed the
-start gantry and shrinks with distance; the tint has gone. The screen tint's
-source is not identified - `Quake_Update`'s kind-4 dispatch
-(`func_0x000ec0c0`, above) is the candidate.
+start gantry and shrinks with distance; the tint has gone. The screen tint is
+`Quake_Update`'s kind-4 `ScreenFlash_Start`, re-started every frame the wave
+runs - identified 2026-09-24, see
+[particle-system.md](particle-system.md#the-screen-flashs-consumer-read-and-measured-2026-09-24).
 
 Profile confidence **95** (instruction-level read and a zero-error live
 match). The per-span one-frame skew the Python port predicted is still
@@ -1599,7 +1600,8 @@ the merge by the table's links, since the course has no distance for a branch
 it does not walk; and the original's update-order phase skew between spans is
 not reproduced.
 
-Not drawn: the screen tint.
+The screen tint is drawn since 2026-09-24 on Pulse's PSP source
+(`oag_render::flash`).
 
 ### 2026-09-08: the LeachBeam's texture, located - and it is not the ribbon's
 

@@ -1101,5 +1101,13 @@
 0x08928b10	function	Texture_BindEmbedded	85	particle-system.md
 0x088fcfec	function	ParticleSystem_EmitLine	85	particle-system.md
 0x088f44d8	function	ParticleSystem_SetScaleParams	80	particle-system.md
-0x088f00c0	function	ScreenFlash_Start	72	particle-system.md
+0x088f00c0	function	ScreenFlash_Start	88	particle-system.md
 0x088eeaf8	function	CockpitHitFx_Arm	60	shield.md
+0x088ef234	function	ScreenFlash_Construct	80	particle-system.md
+0x088ef334	function	ScreenFlash_Destroy	80	particle-system.md
+0x088ef3a4	function	ScreenFlash_Update	88	particle-system.md
+0x088efb1c	function	ScreenFlash_Draw	88	particle-system.md
+0x088effb8	function	ScreenFlash_DistanceFalloff	88	particle-system.md
+0x088f9024	function	ParticleSystem_BakeChannels	82	particle-system.md
+0x088f8ec0	function	ParticleSystem_EvalChannel	85	particle-system.md
+0x088f3b68	function	ParticleSystem_PrepareResource	65	particle-system.md
