@@ -737,6 +737,14 @@
 0x0898c64c	function	Audio_EnqueuePannedOutput	78	audio-levels.md
 0x0891c7e0	function	Quake_ProximityToCraft	60	cannon-quake-leachbeam.md
 0x0891c82c	function	Quake_SpanIntensityAt	55	cannon-quake-leachbeam.md
+0x0891b600	function	Quake_SpanAmplitude	90	cannon-quake-leachbeam.md
+0x0891b654	function	Quake_SpanHalfWidth	90	cannon-quake-leachbeam.md
+0x0891beac	function	QuakeNode_Load	85	cannon-quake-leachbeam.md
+0x0891b67c	function	Quake_FixupSpan	88	cannon-quake-leachbeam.md
+0x0891bda8	function	QuakeNode_Create	75	cannon-quake-leachbeam.md
+0x08b33040	data	g_quake_span_table	90	cannon-quake-leachbeam.md
+0x08a88540	data	g_quake_peak_amplitude	88	cannon-quake-leachbeam.md
+0x08a7ccac	data	g_quake_launch_lead	80	cannon-quake-leachbeam.md
 0x0898d614	function	Scream_SetSoundVolume	88	positional-audio.md
 0x08944544	function	Vex_UpdateNodeWorldMatrix	85	../../../formats/vex.md
 0x088ee9f8	function	TrackSelection_Construct	75	race-box-screens.md

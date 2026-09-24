@@ -1228,6 +1228,258 @@ emitters. `Quake_Destruct` has no direct caller (`get_xrefs_to` returns none),
 so it is reached through the vtable: object teardown at race end, not wave
 expiry.
 
+### 2026-09-24: the ripple itself, read at instruction level - a raised-cosine bump along the road's up axis
+
+This closes the open half of the 2026-09-08 correction above: *what*
+`Quake_UpdateSpan` (`0x0891cab8`) writes into the road, *which* vertices it
+owns, and whether the craft rides it. Read with the Allegrex module, whose
+VFPU prefix decode (`vpfxs [X,Y,X,Y]`, `vpfxs [-2,-2,-2,-2]`) is what makes
+the profile legible; the decompiler's text renders the same block as
+`vpfxs(5,5,5,5)` and is no help. Full disassembly and the scripts behind every
+number below are scratch, not committed.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0891b600` | `Quake_SpanAmplitude` | 90 |
+| `0x0891b654` | `Quake_SpanHalfWidth` | 90 |
+| `0x0891beac` | `QuakeNode_Load` | 85 |
+| `0x0891b67c` | `Quake_FixupSpan` | 88 |
+| `0x0891bda8` | `QuakeNode_Create` | 75 |
+| `0x08b33040` | `g_quake_span_table` (data) | 90 |
+| `0x08a88540` | `g_quake_peak_amplitude` (data) | 88 |
+| `0x08a7ccac` | `g_quake_launch_lead` (data) | 80 |
+
+#### The span table is a `.vex` node: class `0x3c7`, `Quake`
+
+`g_quake_span_table` is written in exactly one place, `QuakeNode_Load`
+(`0x0891beac`, the only function with a `WRITE` xref to it). That function
+is slot 6 of the vtable at `0x08ad1960` (`psp-relocate.py xrefs 0x0891beac`
+finds the one word, at `0x08ad1988`), beside `Quake_Destruct` and the factory
+`QuakeNode_Create` (`0x0891bda8`, which allocates the `0x50`-byte object,
+attaches it to its parent node and calls `Quake_Construct`). It takes a
+loader cursor and a node, points the global at the cursor, advances the
+cursor by the node's own data size, and runs `Quake_FixupSpan` over every
+record. So the table is not built at runtime from anything - **it is the
+payload of the track file's own `Quake` node** (`.vex` class `0x3c7`, already
+in [vex.md](../../../formats/vex.md)'s effects row), one per circuit, and it
+can be read straight off the disc:
+
+```text
+payload +0x00  u32  record count           (318 on 01_Track)
+        +0x04  u32  live count, runtime    (0 on disc)
+        +0x08  u32  1 on disc
+        +0x0c  u32  record base, runtime   (0 on disc; fixed up to +0x10)
+        +0x10  records, 0x80 bytes each
+
+record  +0x00  f32[4]  A: the span's "down" axis at its start, mesh-local
+        +0x10  f32[4]  B: the same at its end
+        +0x20  f32[2]  forward neighbours' origins, in this span's distance
+        +0x28  f32[2]  backward neighbours' gaps (see below)
+        +0x30  u16[2]  forward neighbour indices, 0xffff = none
+        +0x34  u16[2]  backward neighbour indices
+        +0x38  u16     fixed-up flag, 0 on disc
+        +0x3a  u16     vertex stride
+        +0x3c  u16     parameter stride (4 on every record measured)
+        +0x3e  u16     this record's own index
+        +0x40  f32     length, world units
+        +0x44  i32     vertex positions, self-relative -> pointer at load
+        +0x48  i32     per-vertex parameters, self-relative -> pointer
+        +0x4c  i32     the GE batch header, self-relative -> pointer
+        +0x50  u16     vertex count
+        +0x52  i16     segment: the AiTrack path index
+        +0x54  f32     t_start, normalised along that path
+        +0x58  f32     t_end
+        +0x5c..+0x7f   runtime state, zero on disc (fields as 2026-09-08)
+```
+
+`Quake_FixupSpan` (`0x0891b67c`) is the whole of the load-time work: guarded
+by `+0x38`, it turns the three self-relative offsets into pointers
+(`*(p) += p`) and replaces every per-vertex parameter whose bit pattern is
+`0xffffffff` with `1.0e8` (`lui 0x4cbe; ori 0xbc20`) - a sentinel that clamps
+that vertex out of every bump, so it never moves.
+
+**Measured across every Pulse circuit file on the disc** (the twelve
+`track.vex` and twelve `track_reversed.vex`, 9,226 records, 1,306,295
+vertices):
+
+- **Every record is exactly one whole GE batch.** `+0x4c` lands on a batch
+  header, `+0x44` on the position field of that batch's first vertex (offset
+  8 at stride 14, offset 14 at stride 20 - the GE's position-last order), and
+  `+0x50` equals the batch's own vertex count, on 9,226 of 9,226.
+- **Every batch is render geometry.** 9,148 sit in `Mesh` (`0x125`) node
+  payloads; the other 78, all on `16_Track`/`16_Track` reversed, sit in
+  `Speedup Pad` (`0x3bd`) and `Weapon Pad` (`0x3be`) payloads, which
+  [pads.md](../../../formats/pads.md) already shows *are* mesh payloads. None
+  lands in any collision node.
+- **`len / (t_end - t_start)` is one constant per segment**, to 0.001 in
+  2,500: the path's own length. 01_Track's two paths read 2581.8 and 1583.3.
+- **The neighbour links are distance-exact.** A forward neighbour's origin is
+  at `+0x20[k]` in this span's own distance; a backward neighbour ends at
+  `len + +0x28[k]`. Checked against `t_start * path length` on every
+  same-path link: worst residual 0.01 units, on all 24 files.
+- **One connected graph per file**, with a single forward and backward link
+  per record except the one pair at each split on 05, 07 and 14.
+- 106,877 of the 1,306,295 vertex parameters are the `-1` sentinel.
+
+Confidence **92** for the layout (a file walk and a loader read agree on every
+field that has both), **95** for "one record, one batch".
+
+#### What `Quake_UpdateSpan` writes
+
+Past the ageing already read on 2026-09-08, the first half is scalar:
+
+```text
+prev_pos = pos;  prev_amp = amp;  prev_w = w          // +0x60, +0x68, +0x70
+age += dt
+pos += dir * dt / len                                  // +0x5c, span fraction
+amp  = Quake_SpanAmplitude(age + dt)                   // +0x64
+w    = Quake_SpanHalfWidth(age + dt)                   // +0x6c
+if retiring:   amp = 0
+if first frame: prev_amp = 0
+```
+
+The two helpers are leaf functions, read whole:
+
+```text
+Quake_SpanAmplitude(t):  peak = *(0x08a88540) = 12.0
+    t < 0.3  ->  peak * t / 0.3                        // rise
+    else     ->  peak - peak * (t - 0.3) / (5.0 - 0.3) // linear fall, 0 at 5.0
+Quake_SpanHalfWidth(t):  t * 50.0 / 5.0 + 25.0         // 25 -> 75 over the life
+```
+
+`0x08a88540` is confirmed by relocation, not by reading the `lui`/`lwc1`
+pair at face value: `psp-relocate.py resolve 0x0891b60c 0x0891b61c` gives
+`0x08a88540` for both. The four bytes there are `0x41400000`, `12.0f`, and the
+next twelve spell `~QUAKETRAVEL` - the travelling cue's own name, which this
+page twice failed to find from `Quake_Update`'s side.
+
+Then the vertex block (`0x0891cddc`-`0x0891d1f4`), which runs only while the
+bump overlaps the span (`-m < pos < m + 1` for either the new or the previous
+position, `m` the larger half-width as a span fraction). The setup:
+
+```text
+C700 = A                                   lv.q  0x00(s1)
+C710 = B - A                               lv.q  0x10(s1); vsub.q
+C600 = [pos, prev_pos, pos, prev_pos]      vpfxs [X,Y,X,Y]
+C610 = 2 * [len/w, len/prev_w, ...]        vpfxs [X,Y,X,Y]; vadd.q C610,C610,C610
+C620 = [amp, prev_amp, ...] * 0.5 * 32767 / batch_scale
+C630 = [1, 1, 1, 1]                        vpfxs [1,1,1,1]
+C720 = [-2, ...],  C730 = [2, ...]         vpfxs [-2,...], vpfxs [2,...]
+```
+
+and per vertex (unrolled by four when the parameter stride is 4):
+
+```text
+p      = the vertex's parameter                         lv.s; vpfxs [X,X,Y,Y]
+x      = clamp((p - [pos, prev_pos]) * C610, -2, 2)     vsub/vmul/vmax/vmin
+h      = (cos(x * pi/2) + 1) * C620                     vcos.q; vadd.q; vmul.q
+dir    = A + (B - A) * p                                vpfxt [X]; vmul; vadd
+vertex = vertex - round(dir * h_new) + round(dir * h_prev)   vf2in/vi2f; vsub; vadd
+```
+
+`vcos` is the VFPU's quarter-turn cosine, `cos(x * pi/2)`, so over
+`x in [-2, 2]` the factor `(cos + 1) / 2` runs 0 -> 1 -> 0. Put back into
+world units, **the height a vertex is moved by is**
+
+```text
+H(d) = amp(age) * (1 + cos(pi * d / w(age))) / 2   for |d| < w(age), else 0
+d    = p * len - pos * len    (distance along the span from the bump's centre)
+```
+
+**a raised-cosine (Hann) bump, peak 12.0 units at 0.3 s, full width `2w`
+growing from 50 to 150 units, centred on the wave and moving with it at
+270 units a second.** The displacement is along `-lerp(A, B, p)`: A and B are
+the track's own "down" axis at the span's two ends (exactly `(0, -1, 0)` on
+level road, and [track.md](../../../formats/track.md) pins `+y` as up), so the
+road rises, along its own surface normal where it banks. On the ten `02_Track`
+and `16_Track` spans whose local "down" is `+y` the local frame is flipped by
+the node's transform; the direction is taken in the batch's own space and only
+means "up" after that transform.
+
+The write is **incremental and exact**: each frame subtracts last frame's
+displacement and adds this frame's, each rounded to whole `short` units before
+the subtraction, so the two cancel bit for bit. A vertex therefore always sits
+at its authored position plus this frame's bump, and returns exactly to its
+authored position when the span retires (amplitude forced to 0). The
+coordinate conversion `32767 / batch_scale` is the inverse of the decoder's
+`s16 / 32768 * scale`; the one-part-in-32768 difference is the original's.
+
+Confidence **88** for the profile (every constant is an immediate or a
+relocated load, every VFPU prefix decoded by the module, and the arithmetic
+closes: the new and old terms are computed by identical instructions, which is
+what makes the incremental write exact). Confidence **85** that A/B are the
+span-end "down" axes: that reading is the data's (level spans hold
+`(0, -1, 0)`), not a consumer's.
+
+**`age + dt`, not `age`.** Both helpers are handed the age *after* this
+frame's increment plus one more `dt` - a one-frame lead. Negligible at 60 Hz
+(0.4 units of amplitude at the steepest point), recorded because it is what
+the code does.
+
+#### How a bump reaches the neighbours: `Quake_Init`'s arm and the two propagators
+
+`Quake_Init` locates the firing craft's path-normalised position
+(`(progress - first.progress) / (last.progress - first.progress)`, read off
+the path's own control points), takes the **first** record in table order
+whose segment matches and whose window contains it, and arms it with
+`pos = (t - t_start) / (t_end - t_start) +/- 15.0 / len` -
+`g_quake_launch_lead` (`0x08a7ccac`, `0x41700000`, the literal this page's
+older reading called "a fixed epoch") is a 15-unit lead in the direction of
+travel. `0x08a7cca8` beside it is the `270.0` already recorded.
+
+`Quake_PropagateForward` arms a forward neighbour once the bump's leading
+edge (`pos * len > +0x20[k] - w`) reaches the neighbour's origin, and hands it
+`pos = (pos * len - +0x20[k]) / neighbour.len`; `Quake_PropagateBackward`
+does the same toward a backward neighbour's end, with
+`pos = (pos * len - len - +0x28[k] + neighbour.len) / neighbour.len`. Both
+use `Quake_SpanHalfWidth(age)`, and both set the neighbour's skip byte `+0x7f`
+when its index is higher than the parent's and the wave is past its first
+frame, so the update loop does not advance it twice in one frame. Confidence
+**85**, all instruction-level.
+
+Because every link is distance-exact (above), the whole machine is, to first
+order, **one bump at one distance along the track, drawn into every span it
+overlaps.** A Python port of the four functions, run against the disc's own
+tables (01_Track and 16_Track, several launch points, both directions),
+agrees with that stateless reading in which spans ripple, and differs only by
+a per-span phase skew of whole frames: a span advanced once too often or
+once too few by the update order lands 4.5 units (one frame at 270/s) ahead
+or behind, occasionally 9-22 units on 16_Track. **Whether the original shows
+that skew as a visible step between road batches is unmeasured** - the port
+is of the reading, not of a capture.
+
+#### The craft does not ride it
+
+Nothing the floor query reads is touched:
+
+1. `Quake_UpdateSpan` stores only to its own record and to the `short3`
+   positions behind `+0x44` (`sh` at `0x0891d09c`-`0x0891d0d8` and
+   `0x0891d1c4`-`0x0891d1d0`; there is no other store in the function).
+2. Every `+0x44` on the disc, 9,226 of them, lands inside a `Mesh` or pad
+   payload's GE batch - render geometry. None lands in a `Floor Collision`
+   (`0x3b9`), `Wall Collision` (`0x3ba`), `Mag Floor Collision` (`0x3e6`) or
+   `Reset Collision` (`0x3cd`) payload.
+3. The collision the hover probes cast against is a separate indexed soup of
+   `f32` positions, parsed by `CollisionNode_ParseChunks` from those nodes'
+   own payloads ([collision.md](collision.md): "not the render mesh"). A
+   routine that writes `s16` into a GE batch cannot reach it.
+4. The one piece of gameplay built from a rippling batch, a pad's trigger
+   volume, is the pad mesh's bounding box copied **at bind**
+   ([pads.md](../../../formats/pads.md)), not re-read from its vertices, so a
+   Quake rolling over a `16_Track` pad does not move its trigger.
+
+**Render-only, confidence 85.** What would lower it: a second consumer of the
+batch vertices that this page has not found. What would raise it: a PPSSPP
+read of a craft's floor height while the bump passes under it.
+
+The damage path is unchanged by any of this and still does not read geometry
+- but it is worth knowing that `Quake_SpanIntensityAt_q` reads the same
+`+0x5c`/`+0x64`/`+0x6c` this section names (position, amplitude, half-width),
+so the original's hit test is very probably "how high is the bump under this
+craft", compared against `0.1` after smoothing. This project's hit uses the
+authored `radius` instead; matching the original there would move the golden
+hashes and is left as its own change.
+
 ### 2026-09-08: the LeachBeam's texture, located - and it is not the ribbon's
 
 `Data\Tex\Weapons\leachbeam_surface.mip` (string at `0x08a8839c`), loaded by
