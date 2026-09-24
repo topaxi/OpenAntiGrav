@@ -323,6 +323,7 @@ pub fn capture(
         cannon_quad_textures,
         clouds,
         ghost_static,
+        ripples,
         ..
     } = loaded;
     let mode = setup.mode;
@@ -455,6 +456,7 @@ pub fn capture(
         shadows,
         shadow_hulls,
     )?;
+    scene.attach_ripples(ripples);
     scene.prepare_ghost(
         &device,
         &queue,

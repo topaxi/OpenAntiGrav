@@ -195,6 +195,10 @@ pub struct SplinePoint {
     pub down: [f32; 3],
     /// Unit vector across the path.
     pub lateral: [f32; 3],
+    /// The authored normalised arc position round the circuit, `0.0..1.0`, at
+    /// `+0x40` - the lap counter's parameter, and what a Quake road span's
+    /// `t` window is measured in (`crate::quake`). See `docs/formats/track.md`.
+    pub progress: f32,
     /// Track half-width to the left of the centre line.
     pub half_width_left: f32,
     /// Track half-width to the right.
@@ -744,6 +748,7 @@ fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> Spline
         tangent: vec3_at(order, payload, at + 0x10),
         down: vec3_at(order, payload, at + 0x20),
         lateral: vec3_at(order, payload, at + 0x30),
+        progress: f32_at(order, payload, at + 0x40),
         half_width_left: f32_at(order, payload, at + 0x44),
         half_width_right: f32_at(order, payload, at + 0x48),
         ai_bound_left: f32_at(order, payload, at + 0x4c),

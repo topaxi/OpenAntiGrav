@@ -1,7 +1,8 @@
 //! What Pulse on the PSP draws differently from every other source, measured
 //! live on PPSSPP: the hull's GE lights and the bloom's stencil-stamped glow
 //! mask. Neither has been measured on the PS2 port, Pure or any later title,
-//! so both stay behind [`is_pulse_psp`].
+//! so both stay behind [`is_pulse_psp`]. The Quake's road ripple joins them:
+//! it is read off the PSP executable and moves PSP-shaped GE batches.
 //!
 //! See `docs/ghidra/functions/psp-pulse-usa/scene-light.md` and
 //! `docs/rendering/glow-mask.md`.
@@ -36,6 +37,18 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
             .report
             .push("hull lights: the circuit authors none; hulls keep the stand-in rig".into()),
     }
+
+    loaded.ripples = super::ripple::build(
+        track_blob,
+        &loaded.setup.ai,
+        loaded.setup.course.as_ref(),
+        [
+            Some(&loaded.track_model),
+            loaded.pad_model.as_ref(),
+            loaded.weapon_pad_model.as_ref(),
+        ],
+        &mut loaded.report,
+    );
 
     let stamp = |model: &mut Model| model.stamps_glow = true;
     stamp(&mut loaded.track_model);

@@ -17,6 +17,7 @@ mod geometry;
 mod global;
 mod pads;
 mod pulse_psp;
+pub(super) mod ripple;
 mod roster;
 mod surfaces;
 mod variant;
@@ -982,6 +983,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         // Overwritten by `load_event` on the one path that has an event
         // name to carry - see `Loaded::campaign_2048_event`'s own doc.
         campaign_2048_event: None,
+        ripples: ripple::Ripples::default(),
         report,
     };
     pulse_psp::finish(&mut loaded, pulse_psp, &track_blob);

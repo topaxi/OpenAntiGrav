@@ -74,6 +74,9 @@ pub(super) struct Drawable {
     /// Starts on every group's finest child, which a drawable nobody
     /// switches keeps.
     lod: oag_render::mesh::LodSwitch,
+    /// The road spans a Quake ripples through this model - see
+    /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
+    ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -199,6 +202,7 @@ impl Drawable {
             node_anims: node_anim_buffer,
             zone_vis: zone_vis_texture,
             zone_rebind,
+            ripple: std::cell::RefCell::new(None),
         })
     }
 
@@ -548,6 +552,9 @@ impl Drawable {
         tinted: &mut Vec<mesh::GpuVertex>,
     ) {
         let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
+        // A Quake's bump rolling over a pad has to survive the pad's own
+        // rewrite from the authored vertices - see `Ripple::displace`.
+        let ripple = self.ripple.borrow();
         for (range, colour) in self.model.node_vertex_ranges.iter().zip(colours) {
             let span = range.start as usize..range.end as usize;
             let Some(base) = self.model.vertices.get(span) else {
@@ -557,9 +564,12 @@ impl Drawable {
             // there is a pad's worth of them on every lap of every circuit
             // every frame. See `Scene::scratch`.
             tinted.clear();
-            tinted.extend(base.iter().map(|v| {
+            tinted.extend(base.iter().zip(range.start..).map(|(v, index)| {
                 let mut out = *v;
                 out.colour = [colour[0], colour[1], colour[2], out.colour[3]];
+                if let Some(ripple) = ripple.as_ref() {
+                    ripple.displace(index, &mut out);
+                }
                 out
             }));
             queue.write_buffer(
@@ -976,3 +986,4 @@ mod tests {
 
 mod occlusion;
 mod overlay;
+mod ripple;

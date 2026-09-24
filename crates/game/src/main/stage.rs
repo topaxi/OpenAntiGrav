@@ -427,6 +427,7 @@ impl Stage {
             shadow_hulls,
             campaign_2048_event,
             ghost_static,
+            ripples,
             ..
         } = loaded;
         // Read before `setup` moves into `race::Race::start` below - `mode`
@@ -493,6 +494,7 @@ impl Stage {
             shadows,
             shadow_hulls,
         )?;
+        scene.attach_ripples(ripples);
         // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.
         scene.prepare_ghost(
             &gpu.device,

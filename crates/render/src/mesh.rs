@@ -338,6 +338,9 @@ pub use external::geometry_is_external;
 mod flap;
 pub use flap::Flap;
 
+mod batch_placement;
+pub use batch_placement::{BatchPlacement, batch_placements};
+
 pub mod rcs;
 pub mod ship_skin;
 pub mod sky_cube;
