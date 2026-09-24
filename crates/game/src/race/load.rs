@@ -760,15 +760,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // One loop for all of them, and one report line each: adding an effect
     // is adding its name to `RACE_EFFECTS` and a trigger, never a loader.
     let mut effects = psys::Library::new();
-    // The emitter-extent law is read off Pulse's PSP executable only; every
-    // other source spawns at the anchor until its own is read - see
-    // `psys::Effect::without_extents`.
+    // Read off Pulse's PSP executable only - see `psys::Effect::without_extents`
+    // and `without_pulse_psp_draw` for what every other source keeps.
     let extents = pulse_psp::is_pulse_psp(title, &archives);
     for name in RACE_EFFECTS {
         match particle_effect(&mut archives, name) {
             Ok((mut effect, note)) => {
                 if !extents {
                     effect.without_extents();
+                    effect.without_pulse_psp_draw();
                 }
                 report.push(note);
                 effects.insert(name, effect);

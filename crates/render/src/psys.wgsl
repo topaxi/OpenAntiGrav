@@ -12,8 +12,14 @@
 //   `GU_TCC_RGBA`, set once by `Gfx_Init` and never changed on the particle
 //   path - texel times particle colour, alpha included. See
 //   `psys/sprite.rs`'s module doc.
+// - **A class-7 capped streak's sprite** (`normal.x == 2`), one quad whose
+//   `texcoord.y` is the along-coordinate `0..1`; the fragment folds it into
+//   `ParticleSystem_DrawCappedStreak`'s `v` - `0 -> 0.5` over the first cap,
+//   `0.5` along the body, `0.5 -> 1` over the last - and into the cell's
+//   `v` range, carried in `normal.yz`. `lit` is each cap's share of the
+//   length. See `psys/streak.rs`.
 // - **The procedural profile** (`normal.x == 0`), for every emitter with no
-//   sprite to sample (a PS2 or HD source, a streak). It models the one
+//   sprite to sample (a PS2 or HD source, a non-Pulse streak). It models the one
 //   sprite measured before the pixels were located, the collision spark's
 //   `orange_glow2.tga`: the original stretches a single row of that radial
 //   glow along the streak's body, with the sprite's halves forming the two
@@ -50,6 +56,7 @@ struct VertexOutput {
     @location(1) texcoord: vec2<f32>,
     @location(2) cap: f32,
     @location(3) sampled: f32,
+    @location(4) cell_v: vec2<f32>,
 };
 
 @vertex
@@ -60,6 +67,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.texcoord = in.texcoord;
     out.cap = in.lit;
     out.sampled = in.normal.x;
+    out.cell_v = in.normal.yz;
     return out;
 }
 
@@ -111,7 +119,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let procedural = vec4<f32>(in.colour.rgb * shape, pow(shape, 1.2) * in.colour.a);
     // Sampled unconditionally - a texture sample must sit in uniform control
     // flow - and selected afterwards.
-    let texel = textureSample(sheet, sheet_sampler, in.texcoord);
+    // Each cap covers `in.cap` of the length (at most half), so the two
+    // ramps never overlap and the body between them sits at 0.5.
+    let s = in.texcoord.y;
+    let f = max(in.cap, 1e-4);
+    let capped_v = 0.5 * clamp(s / f, 0.0, 1.0) + 0.5 * clamp((s - (1.0 - f)) / f, 0.0, 1.0);
+    let folded = vec2<f32>(in.texcoord.x, mix(in.cell_v.x, in.cell_v.y, capped_v));
+    let uv = select(in.texcoord, folded, in.sampled > 1.5);
+    let texel = textureSample(sheet, sheet_sampler, uv);
     let sprite = in.colour * texel;
     let picked = select(procedural, sprite, in.sampled > 0.5);
     let rgb = picked.rgb;

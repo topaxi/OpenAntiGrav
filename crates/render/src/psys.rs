@@ -33,13 +33,11 @@
 //! Each of these is authored in files this module already parses, and each
 //! would be a visible difference on some effect:
 //!
-//! - **Sprites off anything but a PSP disc, and on streaks.** A PSP
-//!   `.pob`'s own embedded sprite is sampled for every billboard since
-//!   2026-09-24, atlas cell and all - see [`sprite`]. A PS2 `.pob` embeds
-//!   none and Wipeout HD's `.gtf` sprites are not loaded yet, so those draw
-//!   the procedural radial falloff in `psys.wgsl`; so does every streak
-//!   class, whose texture coordinates `ParticleSystem_DrawStreak` writes are
-//!   not read.
+//! - **Sprites off anything but a PSP disc.** A PSP `.pob`'s own sprite is
+//!   sampled since 2026-09-24, atlas cell and all - see [`sprite`], and
+//!   [`streak`] for the two-point classes, which Pulse's alone builds as
+//!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
+//!   so those draw the procedural radial falloff in `psys.wgsl`.
 //! - **The atlas frame advancing over a particle's life.** The frame-rate
 //!   channel is not parsed; a particle keeps the frame it spawned with.
 //! - **Billboard roll.** The rotation-speed channel is parsed and unused;
@@ -58,9 +56,11 @@ use crate::mesh::GpuVertex;
 
 pub mod spawn;
 pub mod sprite;
+pub mod streak;
 
 use spawn::Spawn;
 use sprite::{Atlas, Sheet, Sprite};
+use streak::StreakDraw;
 
 /// The original's fixed simulation rate, ticks per second.
 ///
@@ -284,6 +284,8 @@ pub struct EmitterSpec {
     pub colour_mode: ColourMode,
     /// Geometry class.
     pub render: Render,
+    /// Which strip a [`Render::Streak`] builds - see [`streak`].
+    pub streak: StreakDraw,
     /// Blend class.
     pub blend: Blend,
     /// A system attached to each particle this emitter spawns, as an index
@@ -565,6 +567,7 @@ impl EmitterSpec {
                 ColourMode::OverLife
             },
             render,
+            streak: StreakDraw::of(record.draw_class()),
             blend,
             particle_child: record.particle_child,
             death_child: record.death_child,
@@ -1132,7 +1135,6 @@ impl System {
         right: Vec3,
         up: Vec3,
     ) {
-        let forward = right.cross(up);
         for particle in &self.particles {
             if !particle.alive() {
                 continue;
@@ -1152,40 +1154,23 @@ impl System {
                 Blend::Additive => additive,
                 Blend::AlphaOver => alpha_over,
             };
-            let (centre, axis_a, axis_b, cap) = match spec.render {
-                // `cap = 0.5` collapses the shader's cap/cross profile to
-                // the plain radial falloff a round sprite wants - see
-                // `sparks.wgsl`.
-                Render::Billboard => (particle.position, right * half, up * half, 0.5),
-                Render::Streak { .. } => {
-                    let centre = (particle.position + particle.origin) * 0.5;
-                    let along = particle.position - particle.origin;
-                    let length = along.length();
-                    let dir = if length > 1e-6 { along / length } else { up };
-                    // Perpendicular to the streak in the camera plane - the
-                    // view-space `(dir.y, -dir.x)` of the original, done in
-                    // world space. Degenerate when the streak points at the
-                    // camera; fall back to `right`.
-                    let perp = dir.cross(forward).try_normalize().unwrap_or(right);
-                    // Half the span plus a size-sized cap at each end, the
-                    // way `ParticleSystem_DrawStreak` extends the quad past
-                    // both points - its stretch factor is a hard-coded
-                    // `1.0`, so this is the recovered geometry and not an
-                    // approximation. A zero-length streak still draws a
-                    // `half`-sized glow, the same degenerate case.
-                    let half_span = length * 0.5 + half;
-                    (centre, dir * half_span, perp * half, half / half_span)
-                }
-            };
-            let mut corners = quad(
-                centre,
-                axis_a,
-                axis_b,
-                cap,
-                [colour[0], colour[1], colour[2]],
-                alpha,
-            );
-            if let (Render::Billboard, Some(rect)) = (spec.render, spec.sheet_rect) {
+            let rgb = [colour[0], colour[1], colour[2]];
+            if let Render::Streak { .. } = spec.render {
+                streak::extend(
+                    out,
+                    spec,
+                    particle,
+                    half,
+                    [rgb[0], rgb[1], rgb[2], alpha],
+                    right,
+                    up,
+                );
+                continue;
+            }
+            // `cap = 0.5` collapses the shader's cap/cross profile to the
+            // plain radial falloff a round sprite wants.
+            let mut corners = quad(particle.position, right * half, up * half, 0.5, rgb, alpha);
+            if let Some(rect) = spec.sheet_rect {
                 sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
             }
             out.extend_from_slice(&corners);
@@ -1234,7 +1219,9 @@ impl Library {
     /// first; one that does not fit keeps the procedural profile.
     pub fn insert(&mut self, name: &str, mut effect: Effect) {
         for spec in &mut effect.emitters {
-            if let (Render::Billboard, Some(sprite)) = (spec.render, &spec.sprite) {
+            // A streak samples only where its strip is read - see [`streak`].
+            let sampled = spec.render == Render::Billboard || spec.streak != StreakDraw::Procedural;
+            if let (true, Some(sprite)) = (sampled, &spec.sprite) {
                 spec.sheet_rect = self.sheet.place(sprite);
             }
         }
