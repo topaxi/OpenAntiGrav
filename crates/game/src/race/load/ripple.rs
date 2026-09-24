@@ -21,11 +21,15 @@
 //!   its own two ends instead left steps of up to 26 units at seams inside long
 //!   curved spans.
 //! - **On a path the lap does not drive** - the other branch of a split on
-//!   05, 07 and 14 - through the span table's own links from spans already
-//!   placed, linearly in the span's own length. The course has no distance of
-//!   its own for a branch it does not walk, so this is the only placement the
-//!   data offers. **Chosen, not measured**: whether both branches ripple
-//!   together in play is unobserved.
+//!   05, 07 and 14 - by the same rule, one function of `t` for the whole path,
+//!   `anchor + t * length`, pinned at both ends by the table's own links to
+//!   the fork and the merge. The course has no distance of its own for a
+//!   branch it does not walk, so the links are the only placement the data
+//!   offers. Placing each branch span linearly from whichever neighbour reached
+//!   it first - the per-span trap again - left 38-unit steps inside
+//!   `07_Track`'s branch, and anchoring the fork alone left 18 at `05_Track`'s
+//!   merge. **Chosen, not measured**: whether both branches ripple together in
+//!   play is unobserved.
 //!
 //! `quake_ripple_ground_truth.rs` holds the result against where each vertex
 //! actually is on the course, and against every seam in the table.
@@ -65,8 +69,14 @@ enum Place {
         t_start: f32,
         t_end: f32,
     },
-    /// Off the ring, placed through a link: linear in world units.
-    Linked { origin: f32, length: f32 },
+    /// On a branch the lap does not drive: `anchor + t * path_length`, one
+    /// anchor for the whole path.
+    Branch {
+        anchor: f32,
+        path_length: f32,
+        t_start: f32,
+        t_end: f32,
+    },
 }
 
 impl SpanPlaces {
@@ -119,40 +129,94 @@ impl SpanPlaces {
         out
     }
 
-    /// The branch the lap does not drive, through the links, until nothing new
-    /// is placed. Ascending order and first placement wins, so the result
-    /// depends on nothing but the table.
+    /// Each branch the lap does not drive, pinned at both ends to the driven
+    /// paths it leaves and rejoins.
+    ///
+    /// Every link between a branch span and a driven one names one point both
+    /// share: a `t` on the branch and a course distance on the driven side. The
+    /// lowest-`t` and highest-`t` of those - the fork and the merge - fix
+    /// `anchor + t * length` for the whole branch, so it meets the ring without
+    /// a step at either end. A branch with one such point takes its own
+    /// authored length instead. Links between two branch spans are exact in
+    /// `t` already and need nothing.
     fn place_through_links(&mut self, spans: &[Span]) {
-        loop {
-            let mut placed_any = false;
+        let real = |s: &Span| s.t_end > s.t_start && s.length > 0.0;
+        // Where along its own span a link lands, as a fraction of that span.
+        let at_fraction = |s: &Span, at: f32| at / s.length;
+        let t_of = |s: &Span, fraction: f32| s.t_start + fraction * (s.t_end - s.t_start);
+        let mut branches: Vec<i16> = spans
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.places[*i].is_none())
+            .map(|(_, s)| s.path)
+            .collect();
+        branches.sort_unstable();
+        branches.dedup();
+        for path in branches {
+            // (t on the branch, course distance) at every fork or merge seam.
+            let mut shared: Vec<(f32, f32)> = Vec::new();
             for (i, span) in spans.iter().enumerate() {
-                if self.places[i].is_none() || span.length <= 0.0 {
+                if !real(span) {
                     continue;
                 }
-                let forward = span.forward.iter().flatten().map(|&(n, at)| (n, at));
-                let backward = span.backward.iter().flatten().map(|&(n, gap)| {
-                    (
-                        n,
-                        span.length + gap - spans.get(usize::from(n)).map_or(0.0, |s| s.length),
-                    )
-                });
-                for (neighbour, at) in forward.chain(backward).collect::<Vec<_>>() {
-                    let n = usize::from(neighbour);
-                    if n >= spans.len() || self.places[n].is_some() {
-                        continue;
-                    }
-                    let Some(origin) = self.distance(i, at / span.length) else {
+                let links = span
+                    .forward
+                    .iter()
+                    .flatten()
+                    .map(|&(n, at)| (n, at, 0.0))
+                    .chain(
+                        span.backward
+                            .iter()
+                            .flatten()
+                            .map(|&(n, gap)| (n, span.length + gap, 1.0)),
+                    );
+                for (n, at, seam) in links {
+                    let Some(other) = spans.get(usize::from(n)) else {
                         continue;
                     };
-                    self.places[n] = Some(Place::Linked {
-                        origin,
-                        length: spans[n].length,
-                    });
-                    placed_any = true;
+                    if !real(other) {
+                        continue;
+                    }
+                    let n = usize::from(n);
+                    let here = at_fraction(span, at);
+                    // A link leaving the branch for a placed span, or one
+                    // arriving on it from one.
+                    let point = if span.path == path && other.path != path {
+                        self.distance(n, seam).map(|d| (t_of(span, here), d))
+                    } else if other.path == path && span.path != path {
+                        self.distance(i, here).map(|d| (t_of(other, seam), d))
+                    } else {
+                        None
+                    };
+                    shared.extend(point);
                 }
             }
-            if !placed_any {
-                break;
+            let Some(own) = spans
+                .iter()
+                .find(|s| s.path == path && real(s))
+                .map(|s| s.length / (s.t_end - s.t_start))
+            else {
+                continue;
+            };
+            shared.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let (Some(&(t0, d0)), Some(&(t1, d1))) = (shared.first(), shared.last()) else {
+                continue;
+            };
+            let path_length = if t1 - t0 > 0.5 {
+                (d1 - d0).rem_euclid(self.ring) / (t1 - t0)
+            } else {
+                own
+            };
+            let anchor = d0 - t0 * path_length;
+            for (k, span) in spans.iter().enumerate() {
+                if span.path == path && self.places[k].is_none() {
+                    self.places[k] = Some(Place::Branch {
+                        anchor,
+                        path_length,
+                        t_start: span.t_start,
+                        t_end: span.t_end,
+                    });
+                }
             }
         }
     }
@@ -170,7 +234,12 @@ impl SpanPlaces {
                 let profile = &self.profiles[profile];
                 profile.start + profile.distance(t_start + p * (t_end - t_start))
             }
-            Place::Linked { origin, length } => origin + p * length,
+            Place::Branch {
+                anchor,
+                path_length,
+                t_start,
+                t_end,
+            } => anchor + (t_start + p * (t_end - t_start)) * path_length,
         };
         Some(at.rem_euclid(self.ring))
     }

@@ -1566,16 +1566,20 @@ renderer exists:
   `oag_vex::track::SplinePoint::progress` - so that neighbouring spans meet
   without a step. `crates/game/tests/quake_ripple_ground_truth.rs` holds every
   road vertex to a median 0.37 and p99 under 5.1 units of where it really is
-  on the course, on all 24 files, and every same-path seam to 0.00 at p99.
+  on the course, on all 24 files, and every seam in the table - driven paths
+  and split branches alike - to 0.00 at p99 and 2.34 units at worst (at a
+  path junction). The table's zero-length spans (`t_start == t_end`) carry
+  link offsets against nothing and are left out of the seam check.
 - The bump follows the simulation's own `Wave`: its `progress` plus the
   original's 15-unit launch lead, its `age` one tick late, as both helpers are
   handed. Nothing hashed changed; `race_ground_truth`'s lone-craft run is
   identical before and after.
 
 Chosen, not measured, and labelled so in the code: the branch path of a split
-(05, 07, 14) is placed through the table's links in world units, since the
-course has no distance for a branch it does not walk; and the original's
-update-order phase skew between spans is not reproduced.
+(05, 07, 14) is placed as one function of its own `t`, pinned to the fork and
+the merge by the table's links, since the course has no distance for a branch
+it does not walk; and the original's update-order phase skew between spans is
+not reproduced.
 
 Not drawn: the screen tint.
 

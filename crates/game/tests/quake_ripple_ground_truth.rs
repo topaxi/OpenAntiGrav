@@ -128,13 +128,28 @@ fn residuals(c: &Circuit) -> Vec<f32> {
     out
 }
 
+/// One seam's step, in course units, whether both sides lie on a path the lap
+/// drives, and which link it is.
+struct Seam {
+    step: f32,
+    driven: bool,
+    which: String,
+}
+
 /// For every link in the span table, how far apart the two spans' places put
-/// the neighbour's start, in course units - the step a seam would show.
-fn seams(c: &Circuit) -> Vec<(f32, String)> {
+/// the point they share, in course units - the step a seam would show.
+///
+/// Skips the table's zero-length spans (`t_start == t_end`, `length` 0), whose
+/// links carry an offset against nothing: a parameter along a span with no
+/// length has no meaning to compare.
+fn seams(c: &Circuit) -> Vec<Seam> {
     let ring = c.course.length();
+    let driven = c.course.path_order();
+    let on_ring = |span: &Span| driven.iter().any(|&p| i32::from(p) == i32::from(span.path));
+    let real = |span: &Span| span.t_end > span.t_start && span.length > 0.0;
     let mut out = Vec::new();
     for (i, span) in c.spans.iter().enumerate() {
-        if span.length <= 0.0 {
+        if !real(span) {
             continue;
         }
         // Each link compared at the seam itself: a forward neighbour's start,
@@ -148,30 +163,24 @@ fn seams(c: &Circuit) -> Vec<(f32, String)> {
             .flatten()
             .map(|&(n, gap)| (n, span.length + gap, 1.0));
         for (n, at, seam) in forward.chain(backward) {
+            let other = &c.spans[usize::from(n)];
+            if !real(other) {
+                continue;
+            }
             let (Some(from), Some(to)) = (
                 c.places.distance(i, at / span.length),
                 c.places.distance(usize::from(n), seam),
             ) else {
                 continue;
             };
-            let error = ((to - from + ring * 0.5).rem_euclid(ring) - ring * 0.5).abs();
-            out.push((
-                error,
-                format!(
-                    "span {i} (path {} t {:.4}..{:.4} len {:.1}) at {at:.1} -> {n} (path {} t {:.4}..{:.4} len {:.1})",
-                    span.path,
-                    span.t_start,
-                    span.t_end,
-                    span.length,
-                    c.spans[usize::from(n)].path,
-                    c.spans[usize::from(n)].t_start,
-                    c.spans[usize::from(n)].t_end,
-                    c.spans[usize::from(n)].length
-                ),
-            ));
+            out.push(Seam {
+                step: ((to - from + ring * 0.5).rem_euclid(ring) - ring * 0.5).abs(),
+                driven: on_ring(span) && on_ring(other),
+                which: format!("span {i} (path {}) -> {n} (path {})", span.path, other.path),
+            });
         }
     }
-    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    out.sort_by(|a, b| a.step.total_cmp(&b.step));
     out
 }
 
@@ -219,21 +228,30 @@ fn every_road_vertex_sits_where_its_span_places_it() {
 }
 
 /// Neighbouring spans put the bump at the same distance either side of their
-/// seam, to within a unit or two, so the road does not step.
+/// seam, so the road does not step - on the paths the lap drives and on the
+/// branch of a split alike, each measured and bounded on its own.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn neighbouring_spans_agree_across_every_seam() {
     each_circuit(|name, c| {
-        let s = seams(c);
-        let at = |q: f32| s[((s.len() - 1) as f32 * q) as usize].0;
-        let (worst, which) = s.last().expect("links");
-        println!(
-            "{name}: {} seams, median {:.2}, p99 {:.2}, worst {worst:.2} at {which}",
-            s.len(),
-            at(0.5),
-            at(0.99)
-        );
-        assert!(at(0.99) < 3.0, "{name}: p99 seam step {}", at(0.99));
+        let all = seams(c);
+        for (kind, driven) in [("driven", true), ("branch", false)] {
+            let s: Vec<&Seam> = all.iter().filter(|seam| seam.driven == driven).collect();
+            let Some(worst) = s.last() else { continue };
+            let p99 = s[((s.len() - 1) as f32 * 0.99) as usize].step;
+            println!(
+                "{name}: {} {kind} seams, p99 {p99:.2}, worst {:.2} at {}",
+                s.len(),
+                worst.step,
+                worst.which
+            );
+            assert!(
+                worst.step < 3.0,
+                "{name}: a {kind} seam steps {:.2} at {}",
+                worst.step,
+                worst.which
+            );
+        }
     });
 }
 

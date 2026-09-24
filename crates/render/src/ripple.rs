@@ -15,9 +15,12 @@
 //! where `d` is its distance along the track from the wave's centre - a
 //! raised-cosine bump, [`PEAK_AMPLITUDE`] tall at [`RISE_SECONDS`], fading to
 //! nothing at [`LIFETIME_SECONDS`], [`half_width`] growing from 25 to 75
-//! units. Confidence 88. **The craft does not ride it**: the floor the hover
-//! probes cast against is a separate collision soup nothing here touches
-//! (confidence 85, same page) - so this is drawing, and lives in the renderer.
+//! units. Confidence 95: the static read, then matched live on PPSSPP to the
+//! short on every vertex of every armed span. **The craft does not ride it**:
+//! the floor the hover probes cast against is a separate collision soup
+//! nothing here touches, and a stationary craft stayed put while the road
+//! under it rose 10.8 units (confidence 92, same page) - so this is drawing,
+//! and lives in the renderer.
 //!
 //! # What this draws, and what is chosen
 //!

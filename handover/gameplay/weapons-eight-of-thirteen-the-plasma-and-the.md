@@ -389,10 +389,17 @@ which is the whole point of the weapon.
   not drawn** - a strong orange-white flash for the first eighth of a second
   in every PPSSPP frame; `Quake_Update`'s kind-4 dispatch (`func_0x000ec0c0`)
   is the candidate, unread. (4) **The branch of a split (05, 07, 14)** is
-  placed through the span table's links in world units, chosen - whether both
-  branches ripple together in play is unobserved. (5) **Draw-call bounds are
-  not grown by the bump**, so a batch lifted 12 units near the edge of the view
-  can be frustum-culled a frame early; not seen, not checked.
+  placed as one function of its own `t` pinned to the fork and the merge by
+  the span table's links, chosen - whether both branches ripple together in
+  play is unobserved. (5) **Draw-call bounds are not grown by the bump**, so a
+  batch lifted 12 units near the edge of the view can be frustum-culled a frame
+  early; not seen, not checked. (6) **The live wave ended before 5.0 s**: in
+  the one PPSSPP run, the last armed frame was at age 4.788 and
+  `Quake_UpdateSpans` was never called again (`live == 0`), while
+  `oag_gameplay::projectile::quake::LIFETIME_SECONDS` is the static read's 5.0
+  and gates refire. One run is not enough to move a recovered constant; it is
+  a measured discrepancy with no explanation yet (the amplitude is 0.5 units
+  there, so perhaps every span had already run off its far end).
 - ~~**`<Plasma charge_time>` is authored and nothing read spends it, and play
   says something should.**~~ ~~**A trap that will cost somebody an hour.**~~
   ~~**The Plasma draws no detonation.**~~ **All three closed 2026-09-09** -
@@ -1928,14 +1935,19 @@ own `t`, now `SplinePoint::progress`), and a `Scene::write_road` step before
 the weapon pads' tint, which adds the displacement back. Ground truth:
 `crates/vex/tests/quake_ground_truth.rs` and
 `crates/game/tests/quake_ripple_ground_truth.rs` (vertices median 0.37 units
-from where the course locates them, same-path seams 0.00 at p99).
+from where the course locates them; every seam, driven and branch, 0.00 at
+p99 and 2.34 units at worst).
 
 **The trap worth writing down**: mapping each span linearly between its own
 two ends looked right on residuals (median 0.5) and left **26-unit steps at
 seams** inside long curved spans - the bump would have torn at every one. The
 fix is to send every vertex through the same function of its path's `t`,
 which makes two spans meeting at one `t` meet at one distance. A seam check is
-the test that catches this; a residual check is not.
+the test that catches this; a residual check is not. The same trap came back
+on the split branches (38-unit steps on `07_Track` when each branch span was
+placed from whichever neighbour reached it first, 18 at `05_Track`'s merge
+when only the fork anchored it) and the same fix closed it: one `t` function
+per branch, pinned at both ends.
 
 **A second trap, in `scripts/psp-fire-weapon.py`**: `--index 0` is not the
 player in a single race (record 7 of a full grid, measured). Its help text
