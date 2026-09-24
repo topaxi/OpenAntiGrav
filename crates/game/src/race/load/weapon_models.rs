@@ -19,7 +19,7 @@
 //!
 //! **Both geometry layouts, on one path.** A PSP `.vex` carries its own
 //! geometry; a PS3 `.vex` is a header whose vertices live in the
-//! `.rcsmodel` beside it, the same branch `crate::livery::shield_model`
+//! `.rcsmodel` beside it, the same branch `crate::livery::shield::shield_model`
 //! already takes for the shield - [`load`] takes it too, rather than each
 //! caller re-deciding which loader a weapon needs.
 

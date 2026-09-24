@@ -797,7 +797,7 @@ impl Drawable {
     ///
     /// The PS2 shield shell has the same class-less batches and reaches the
     /// same layer through the same constructor, but it does not come through
-    /// here. `livery::blend_additively` reclassifies its draws at load
+    /// here. `livery::shield::blend_additively` reclassifies its draws at load
     /// instead, so the shell's ordinary [`Self::draw`] routes them, with no
     /// PS2 check needed in the frame loop.
     ///

@@ -12,9 +12,9 @@
 //! Reported from play on 2026-09-17: on the PS2 source the Shield pickup's
 //! shell "renders solid and not animated". Two causes, both on the PS2 path
 //! alone. The shell's one `Texture` node carries no pixels on PS2, so it bound
-//! the white 1x1 until `livery::shield_model` learned the plume's external
+//! the white 1x1 until `livery::shield::shield_model` learned the plume's external
 //! texture set; and its batches carry no `0x0700` blend class, so they drew
-//! opaque until `livery::blend_additively` put them on the additive class the
+//! opaque until `livery::shield::blend_additively` put them on the additive class the
 //! PSP shell's own batches name. See that function for the evidence and its
 //! confidence.
 

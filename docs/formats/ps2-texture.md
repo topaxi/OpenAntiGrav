@@ -639,7 +639,7 @@ plume could not simply borrow the PSP path's single embedded texture.
 85). Each PS2 `Data\Ships\<Team>\shipshield.vex` read so far, and
 `Data\Weapons\vr_shield_cockpit.vex`, declares one `Texture` node, embeds
 nothing, and is preceded by a set that decodes exactly one entry.
-`oag_game::livery::shield_model` now calls `ps2_skin` on the same
+`oag_game::livery::shield::shield_model` now calls `ps2_skin` on the same
 all-slots-empty gate. Before that, both models bound the white 1x1, which is
 half of why the PS2 shell drew as a flat pale dome.
 `crates/game/tests/ps2_shield_ground_truth.rs` asserts every slot decodes.
