@@ -1102,3 +1102,4 @@
 0x088fcfec	function	ParticleSystem_EmitLine	85	particle-system.md
 0x088f44d8	function	ParticleSystem_SetScaleParams	80	particle-system.md
 0x088f00c0	function	ScreenFlash_Start	72	particle-system.md
+0x088eeaf8	function	CockpitHitFx_Arm	60	shield.md

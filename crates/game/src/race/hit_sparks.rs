@@ -28,9 +28,12 @@
 //! player's pending-damage channel stops at `ShipCollisionFx_Trigger` with
 //! `ra = 0x08844050` (inside `Ship_Damage`), kind 0, damaged 1, intensity 1.0,
 //! on one of the player's six locators, and the next `Psys_Spawn_q` is
-//! `WO_SHIP_COLL_SPARK_DAMAGE`. A `kind 7` hit spawns the LeachBeam variant. Real
-//! Rockets and Cannon rounds fired into the grid reach the same call on the AI
-//! craft. See `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+//! `WO_SHIP_COLL_SPARK_DAMAGE`. A `kind 7` hit spawns the LeachBeam variant. And real
+//! weapons in a live race reach the same call on AI craft: 29 stops at that
+//! `ra` while the player fired Rockets into the grid across GO, 7 while it
+//! fired the Cannon. The AI were firing too, and the weapon behind each stop
+//! was not recorded, so none is attributed to one weapon. See
+//! `docs/ghidra/functions/psp-pulse-usa/shield.md`.
 //!
 //! **The smoke is per hit, not a state.** The smoke puffs are the damage
 //! file's own root emitter; a craft left at 8 energy for three seconds with no

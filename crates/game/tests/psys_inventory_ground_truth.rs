@@ -75,16 +75,6 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
         "WO_SHIP_FXNODE_EXPLO",
         "plays at a hull `Fx` locator; which node and on what event is unread.",
     ),
-    (
-        "WO_SHIP_SPARK_DAMAGE_LEACHBEAM",
-        "the LeachBeam is built (2026-09-08) and its own two effects are wired, \
-         but this third one is not: it is a *damage* spark on the drained \
-         craft, and no call site for it was found in LeachBeam_Drain \
-         (0x08866804) or in Ship_ApplyPendingWeaponDamage (0x0883f13c), the \
-         two functions that actually spend the beam's damage. Checked rather \
-         than assumed, the Mine_Init standard - see \
-         docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md.",
-    ),
     // **Not `WO_CANNON_SPARKS`** - that one is wired, off `Cannon_UpdateRound`
     // (`0x0886593c`), on the wall/track hit path only. The Cannon landed
     // 2026-09-08 (round + model), the sparks 2026-09-09.
@@ -207,9 +197,12 @@ const PSP_WIRED: &[&str] = &[
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
     "WO_WEAPON_ABSORB",
+    // `Ship_Damage`'s weapon branch on a LeachBeam drain (`craft+0x138 == 7`);
+    // see `oag_game::race::hit_sparks`.
+    "WO_SHIP_SPARK_DAMAGE_LEACHBEAM",
 ];
 
-/// The PS2 carries all nine of the PSP's plus its own engine flare.
+/// The PS2 carries all ten of the PSP's plus its own engine flare.
 const PS2_WIRED: &[&str] = &[
     "WO_SHIP_COLL_SPARK_DAMAGE",
     "WO_ROCKET_FLARE",
@@ -220,6 +213,7 @@ const PS2_WIRED: &[&str] = &[
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
     "WO_WEAPON_ABSORB",
+    "WO_SHIP_SPARK_DAMAGE_LEACHBEAM",
     "WO_SHIP_ENGINEFLARE",
 ];
 
