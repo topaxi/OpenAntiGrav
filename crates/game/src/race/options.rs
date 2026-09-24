@@ -411,6 +411,10 @@ pub struct Setup {
     /// `craft_title.name == oag_pulse::TITLE.name`. See
     /// `weapons::visuals::laid`.
     pub pulse_laid_pose: bool,
+    /// Whether weapon detonations start `ScreenFlash_Start`'s full-screen
+    /// wash - Pulse off a PSP disc only, the one executable its consumer is
+    /// read off. See `oag_render::flash`.
+    pub screen_flash: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
     pub absorb_burst: Option<super::absorb::AbsorbBurst>,
