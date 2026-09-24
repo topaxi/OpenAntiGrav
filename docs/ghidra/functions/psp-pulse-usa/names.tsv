@@ -1092,3 +1092,9 @@
 0x08947cc8	function	Savedata_StartGhostLoad	65	ghost.md
 0x0894983c	function	Savedata_HashGhostKey	75	ghost.md
 0x0890be68	function	LodGroup_SelectChild	85	../../../formats/vex.md
+0x08a6b820	function	Math_BuildAxisAngleMatrix	92	rocket-visuals.md
+0x08a6b6b4	function	Math_RotateByAxisAngle	90	rocket-visuals.md
+0x08859ce4	function	Mine_PoseNode	92	mine.md
+0x08859ecc	function	Mine_Update	75	mine.md
+0x08862fc0	function	Bomb_Construct	85	mine.md
+0x08863188	function	Bomb_Init	88	mine.md

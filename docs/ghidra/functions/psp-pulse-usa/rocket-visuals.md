@@ -28,6 +28,8 @@ emulator exercised sit above the decompilation-only ceiling of 84.
 | `0x0886e7ac` | `Rocket_SweepCraftHit` | 88 |
 | `0x0886ee88` | `Rocket_ApplyBlastForce` | 90 |
 | `0x0886f154` | `Rocket_SweepProjectiles` | 78 |
+| `0x08a6b820` | `Math_BuildAxisAngleMatrix` | 92 |
+| `0x08a6b6b4` | `Math_RotateByAxisAngle` | 90 |
 
 `Rocket_HitCraft` lost its `_q` on 2026-09-16, when its credit and its
 caller were read in full - see "What a rocket hit spends" below.
@@ -115,16 +117,14 @@ func_0x002676b4(0xbfc90fdb, m, m);          // 0xbfc90fdb = -1.5707964f = -pi/2
 func_0x00141284(*(self + 0x110), m, 0);     // hand it to the node
 ```
 
-So the model is aligned to **where it is going and what it is flying over**, with
-a fixed quarter-turn correction.
+So the model is aligned to **where it is going and what it is flying over**.
 
-**The axis of that quarter-turn is not resolved here.** `func_0x002676b4`
-resolves to `0x08a6b6b4`, which is outside the band the other resolved calls on
-this page land in and just below the string table - it has the shape of an import
-stub, and `scripts/resolve-psp-imports.py` is the tool for it. Until it is
-resolved, the quarter-turn is recorded and **not** reproduced: forward alignment
-is fully evidenced, the extra rotation is a model-space convention we cannot yet
-name.
+~~**The axis of that quarter-turn is not resolved here.**~~ **Resolved
+2026-09-24, and the quarter-turn is not the model's at all** - it orients the
+`WO_ROCKET_FLARE` emitter. `0x08a6b6b4` is not an import stub; it is
+`Math_RotateByAxisAngle`, and the table above was reading the call's argument
+order wrong. See
+[2026-09-24: the quarter-turn belongs to the flare](#2026-09-24-the-quarter-turn-belongs-to-the-flare-and-the-basis-is-measured).
 
 ## Three particle systems, and which fires when
 
@@ -460,9 +460,87 @@ identically in `time_trial`, where no rocket can exist. The lesson is the cheap
 control that settles it - render the same tick with weapons off and diff, rather
 than identify an effect by its shape.
 
+## 2026-09-24: the quarter-turn belongs to the flare, and the basis is measured
+
+Read on the bridge (`/pulse/BOOT-psp-pulse-usa.BIN`) and then measured live on
+PPSSPP (`pulse-psp-usa.chd`, Single Race, the player's own record, index 7 of
+the grid), with a breakpoint at `0x0885da00` - the instruction after the
+rotation call returns.
+
+**The two helpers.** `0x08a6b820` builds a 4x4 from an axis and an angle:
+the angle in `$f12` (a float argument, so Ghidra's shown signature drops it),
+the axis at `a1`, the result at `a0`. It wraps the angle to one turn with the
+`(x * 2^25/2pi) << 7 >> 7` fixed-point trick, takes `vcos`/`vsin` (VFPU
+angles are quarter-turns, hence the `2/PI` constant), and writes the Rodrigues
+rows `(t x^2 + c, t x y - s z, t x z + s y)`, ... and `(0, 0, 0, 1)`.
+`0x08a6b6b4` copies its `a1` vector to the stack, builds that matrix from it,
+and `vmmul.t`s it into the 3x3 block at `a0`, keeping `a0`'s own `w` column.
+`contact-response.md` and the PS2's `collision-shake.md` had already met the
+same pair in the camera shake and read it the same way; neither had named it.
+
+**The call site, instruction by instruction** (`Rocket_Update`,
+`0x0885d8b4`..`0x0885d9fc`):
+
+| Offset | Written | From |
+| --- | --- | --- |
+| `+0x80` row 2 | `f` | `+0xe0` (velocity) normalised |
+| `+0x70` row 1 | `n` | `+0x100` (surface normal) minus its `f` component, normalised |
+| `+0x60` row 0 | `n x f` | `vcrsp.t C230, C220, C200` at `0x0885d988` |
+| `+0x90` row 3 | position | the stack, `w = 1.0` at `+0x9c` |
+
+Then, in this order:
+
+1. `jal 0x08945284` with `a1 = +0x60` - the model's scene node takes the
+   matrix **before** anything rotates it. `0x08945284` copies all sixteen
+   words into the node's own transform (`*(node + 0x3c) + 0x40`).
+2. `+0x60..+0x9c` is copied to `+0xa0..+0xdc`.
+3. `jal 0x08a6b6b4` with `$f12 = 0xbfc90fdb` (`-pi/2`) and **`a0 = a1 =
+   +0xa0`** (the delay slot's `move a1, a0`): the copy is turned about **its
+   own row 0**, in place.
+
+And `+0xa0` is what `Rocket_Init` (`0x0885cfd0`) passed `Psys_Spawn_q` as
+its frame, with flag `1` (`t0`). `PsysNode_Start` (`0x08916200`) stores a
+flag-1 frame **as a pointer** (`node + 0x50 = frame`) instead of copying
+it, so `WO_ROCKET_FLARE` reads `rocket+0xa0` live every frame - the
+quarter-turned basis. The model never sees the quarter-turn.
+
+**Measured**, twelve consecutive `Rocket_Update` calls across the three
+rockets of one volley (`data/scratch/weapon-pose/psp/rocket-basis.json`,
+not committed), every one agreeing to four places:
+
+```text
+node  (+0x60)  row0 ( 0.1672,  0.1428, -0.9755)   n x f
+               row1 ( 0.0007,  0.9894,  0.1450)   n
+               row2 ( 0.9859, -0.0249,  0.1653)   f = velocity / |velocity|
+               det  +1.0000
+flare (+0xa0)  row0 = node row0
+               row1 = node row2      (the flare's +Y is the direction of travel)
+               row2 = -node row1     (the flare's +Z points into the track)
+               det  +1.0000
+```
+
+So the model is placed with a **rotation**, model `+X` onto `n x f`, `+Y` onto
+the normal, `+Z` down the velocity - which is what
+`Race::projectile_model_matrices` has built since this date, with
+`Projectile::surface` (this engine's own analogue of `+0x100`) as `n`.
+Before, that function built `forward x up` for the side axis, a reflection, and
+drew every rocket mirrored. Confidence **92** on the node basis (read, and
+measured to the element) and **90** on the flare frame (measured; which way
+`vmmul.t` composes was not decoded, the live rows settle it).
+
+**And the flare now rides that frame.** Until this date `WO_ROCKET_FLARE`
+took a position only and `psys::Stage::advance` gave every riding effect world
+`+Y` as its emitter up - so ours streaked straight up from each dart, where
+the original's is a long orange glow stretched along the flight path.
+`psys::Stage::orient` now carries a per-instance up, and the Rocket's flare
+takes its velocity. Only `+Y` is carried: the psys port builds the other two
+axes from `up` alone (`horizontal_basis`), so an emitter whose azimuth matters
+would still differ from the original's `n x f`/`-n` pair.
+
 ## What is not verified
 
-- **The quarter-turn's axis**, blocked on resolving `0x08a6b6b4` - see above.
+- ~~**The quarter-turn's axis**, blocked on resolving `0x08a6b6b4`~~ -
+  resolved and measured, see the 2026-09-24 section above.
 - **`WO_ROCKET_FLARE`'s parameters**, blocked on the `.pob` payload layout.
 - **`func_0x0003a37c`**, the test that gates the craft-hit explosion.
 - **What class `0x3e9` is called.** The id is read off the constructor; the
@@ -472,6 +550,7 @@ than identify an effect by its shape.
 
 ## History
 
+
 - **2026-08-11.** Written while answering "make the rockets look like the
   original's". Found `weapon-fire.md`'s spawn address wrong by the same
   relative-address trap that page warns about - a reminder that the trap catches
@@ -479,3 +558,6 @@ than identify an effect by its shape.
   and changed one thing: it is what turned "the rocket probably follows the
   surface" into a picture of two rockets skimming the track a body-length off
   the racing line.
+- **2026-09-24.** The quarter-turn resolved and measured live: it is the
+  flare's frame, the model's basis is a rotation, and ours was a reflection.
+  `0x08a6b820`/`0x08a6b6b4` named.
