@@ -17,7 +17,7 @@ dome hiding the craft. `oag-view ... --mesh 'Data\Ships\Feisar\shipshield.vex'
 1. **No texture.** The PS2 shell and `vr_shield_cockpit.vex` each declare one
    `Texture` node and embed nothing, so both bound the white 1x1.
    `livery::shield::shield_model` now takes the plume's `ps2_skin` on the same gate;
-   every shell and the sphere report `1 of 1` decoded. See
+   all twelve teams' shells and the sphere decode `1 of 1`. See
    [ps2-texture.md](../../docs/formats/ps2-texture.md).
 2. **No blend class.** The PS2 shell's batches (`0x1031`, `0x18b1`, `0x10b2`)
    carry no `0x0700` bit where the PSP shell's (`0x1232`) carry `0x200`, so

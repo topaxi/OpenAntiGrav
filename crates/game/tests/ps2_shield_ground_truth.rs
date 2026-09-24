@@ -21,6 +21,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_render::mesh;
 use oag_vex::vex::BlendClass;
 
 fn image() -> Option<PathBuf> {
@@ -104,4 +105,67 @@ fn the_ps2_cockpit_sphere_is_textured() {
             .iter()
             .all(|draw| draw.blend == Some(BlendClass::Additive))
     );
+}
+
+/// All twelve teams the PS2 disc ships, not only the eight a race fields -
+/// the other four are reachable from the team picker, and a shell that missed
+/// the preceding-entry rule would draw as a white additive wash. The same
+/// roster `boost_plume_ground_truth.rs` walks.
+const PS2_TEAMS: [&str; 12] = [
+    "AG_Systems",
+    "Assegai",
+    "Auricom",
+    "EGX",
+    "Feisar",
+    "Goteki",
+    "Harimau",
+    "Icaras",
+    "Mantis",
+    "Piranha",
+    "Qirex",
+    "Triakis",
+];
+
+/// Every PS2 shell, and the cockpit sphere, is skinned by the entry directly
+/// before it: the empty-block signature holds, the set there decodes as many
+/// entries as the model declares slots, and rebuilding leaves none empty.
+#[test]
+#[ignore = "needs a disc image"]
+fn every_ps2_shield_model_is_skinned_by_the_entry_before_it() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives =
+        oag_pulse::open(&image.display().to_string()).expect("opening the PS2 archives");
+    let names = PS2_TEAMS
+        .iter()
+        .map(|team| format!(r"Data\Ships\{team}\shipshield.vex"))
+        .chain([oag_pulse::race::COCKPIT_SHIELD.to_string()]);
+    for name in names {
+        let blob = archives
+            .read_name(&name)
+            .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+        let bare = mesh::build_with_textures(&name, &blob, None)
+            .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
+        assert!(
+            !bare.textures.is_empty() && bare.textures.iter().all(Option::is_none),
+            "{name}: not the empty-block PS2 signature the shield's re-skin gates on"
+        );
+        let preceding = archives
+            .read_preceding(&name)
+            .unwrap_or_else(|e| panic!("{name}: reading the entry before it: {e}"));
+        let set = mesh::Ps2TextureSet::parse(&preceding)
+            .unwrap_or_else(|e| panic!("{name}: the entry before it is not a texture set ({e})"));
+        assert_eq!(
+            set.entry_count(),
+            bare.textures.len(),
+            "{name}: preceding set and declared slots disagree"
+        );
+        let skinned = mesh::build_with_textures(&name, &blob, Some(&set))
+            .unwrap_or_else(|e| panic!("re-skinning {name}: {e}"));
+        assert!(
+            skinned.textures.iter().all(Option::is_some),
+            "{name}: a slot is still empty after re-skinning"
+        );
+    }
 }

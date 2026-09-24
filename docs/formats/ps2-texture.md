@@ -636,16 +636,17 @@ fact about the two authorings, not about the lookup rule, but it is why the
 plume could not simply borrow the PSP path's single embedded texture.
 
 **A fourth: the shield shell and the cockpit sphere** (2026-09-24, confidence
-85). Each PS2 `Data\Ships\<Team>\shipshield.vex` read so far, and
-`Data\Weapons\vr_shield_cockpit.vex`, declares one `Texture` node, embeds
-nothing, and is preceded by a set that decodes exactly one entry.
+90). All twelve teams' PS2 `Data\Ships\<Team>\shipshield.vex` and
+`Data\Weapons\vr_shield_cockpit.vex` each declare one `Texture` node, embed
+nothing, and are preceded by a set that decodes exactly one entry. That is 13
+of 13 exact.
 `oag_game::livery::shield::shield_model` now calls `ps2_skin` on the same
 all-slots-empty gate. Before that, both models bound the white 1x1, which is
 half of why the PS2 shell drew as a flat pale dome.
-`crates/game/tests/ps2_shield_ground_truth.rs` asserts every slot decodes.
-Unlike the plume check, this one covers only the eight teams a single race
-fields, not every team on the disc. The other half of that report was the
-shell's blend, not its texture. See
+`crates/game/tests/ps2_shield_ground_truth.rs` walks all thirteen the way the
+plume check walks its 24, and also asserts the eight shells a race fields
+come out of the load skinned. The other half of that report was the shell's
+blend, not its texture. See
 [batch-draw-state.md](../ghidra/functions/ps2-pulse-eu/batch-draw-state.md#the-shield-shell-reaches-the-same-unfollowed-draw-2026-09-24).
 
 ## A standalone texture is under its declared name with the extension rewritten
