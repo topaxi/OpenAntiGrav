@@ -700,9 +700,23 @@ fn shield_model(
         .read_name(name)
         .map_err(|_| format!("{name}: not in the archive set"))?;
     if !mesh::geometry_is_external(&blob) {
-        let model = mesh::build_with_textures(name, &blob, None)
+        let mut model = mesh::build_with_textures(name, &blob, None)
             .map_err(|error| format!("{name}: {} bytes, does not parse ({error})", blob.len()))?;
-        let note = format!("{} triangle(s)", model.indices.len() / 3);
+        let mut note = format!("{} triangle(s)", model.indices.len() / 3);
+        // The PS2 signature [`plume`] takes, on the same gate: every `Texture`
+        // node present and none decoded. Both PS2 shield models - the per-team
+        // shell and `vr_shield_cockpit.vex` - declare one `Texture` node and
+        // carry no pixels, so without this they bind the white 1x1 and the
+        // shell's `_ADD` texture never reaches the picture. A PSP shield has its
+        // texture embedded and never enters the branch.
+        if !model.textures.is_empty() && model.textures.iter().all(Option::is_none) {
+            let mut skin = Vec::new();
+            ps2_skin(archives, name, &blob, &mut model, &mut skin);
+            for line in skin {
+                note.push_str("; ");
+                note.push_str(line.strip_prefix(&format!("{name}: ")).unwrap_or(&line));
+            }
+        }
         return Ok((model, note));
     }
     let sibling = mesh::rcs::sibling_name(name);
@@ -883,11 +897,11 @@ fn plume(
 
 /// Re-skins a PS2 model from the texture set in the archive entry before it.
 ///
-/// Split out of [`plume`] rather than inlined the way [`one`]'s is, because a
-/// missing plume is a reported absence and not an error: every branch here
+/// Split out rather than inlined the way [`one`]'s is, because a missing
+/// plume or shield is a reported absence and not an error: every branch here
 /// leaves `model` drawable and says in the report which one it took. A
-/// silently untextured plume and a correctly skinned one look the same in a
-/// log that only counts triangles.
+/// silently untextured model and a correctly skinned one look the same in a
+/// log that only counts triangles. [`plume`] and [`shield_model`] both call it.
 ///
 /// **The lookup is the same directory-position rule the hull and the track
 /// already use** - see `ps2_texture_set` and `docs/formats/ps2-texture.md`.
@@ -906,7 +920,7 @@ fn ps2_skin(
     let Some(external) = ps2_texture_set(archives, name) else {
         report.push(format!(
             "{name}: {slots} empty texture slot(s) and the preceding archive entry is \
-             not a texture set - the plume draws untextured"
+             not a texture set - it draws untextured"
         ));
         return;
     };
@@ -922,7 +936,7 @@ fn ps2_skin(
         }
         Err(error) => report.push(format!(
             "{name}: the preceding archive entry holds {found} texture(s) but re-skinning \
-             failed ({error}) - the plume draws untextured"
+             failed ({error}) - it draws untextured"
         )),
     }
 }
