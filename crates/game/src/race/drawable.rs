@@ -795,6 +795,12 @@ impl Drawable {
     /// followed yet. See
     /// `docs/ghidra/functions/ps2-pulse-eu/batch-draw-state.md`.
     ///
+    /// The PS2 shield shell has the same class-less batches and reaches the
+    /// same layer through the same constructor, but it does not come through
+    /// here. `livery::blend_additively` reclassifies its draws at load
+    /// instead, so the shell's ordinary [`Self::draw`] routes them, with no
+    /// PS2 check needed in the frame loop.
+    ///
     /// The equation is not invented either: `mesh_render::ADDITIVE_BLEND` is
     /// the `0x200` class's own recovered equation, byte-identical to
     /// [`oag_render::exhaust::BLEND`], and it is what the **PSP** plume
