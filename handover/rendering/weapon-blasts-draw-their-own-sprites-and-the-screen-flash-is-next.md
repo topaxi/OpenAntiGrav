@@ -57,6 +57,13 @@ Matched original frames live in `data/scratch/fx-brightness/` (gitignored):
   across the road, as on PSP.
 - **HD's `.gtf` sprites are not loaded**, so HD keeps the procedural profile.
   Its Quake fire now spreads edge to edge too.
+- **The extent law is the PSP executable's, applied to PS2 and HD
+  unverified.** Neither interpreter was read. Visible effects of it, no weapon
+  fired (`data/scratch/fx-brightness/noweapon-crops.png`): PS2 and HD engine
+  flares spawn on their authored sphere radius, so the glow round each nozzle
+  is wider (under 0.4% of pixels); PSP collision sparks differ only by
+  reshuffled random draws. Gating extents to PSP sources is a one-line choice
+  if a PS2 or HD capture disagrees.
 - `Quake_Update`'s basis second row reads the struct handed to
   `AiTrack_LocatePosition`; which field is unread, so the frame's Y is world up
   (chosen).

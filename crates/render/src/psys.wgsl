@@ -96,10 +96,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // whatever quad it lands on - so on a rocket explosion's 30-to-100-unit
     // billboards the same fraction manufactured a 15-unit disc of pure
     // white. Held against the original in PPSSPP (`data/reference/`, taken
-    // with `scripts/psp-fire-weapon.py`), that is plainly wrong: the real
-    // fireball stays amber to its hottest point and the scene behind reads
-    // through it. The emitter's 256-entry table is the colour authority, so
-    // inventing a white here was overriding the asset.
+    // with `scripts/psp-fire-weapon.py`), that is plainly wrong: that
+    // track-hit fireball stays amber to its hottest point and the scene
+    // behind reads through it. The emitter's 256-entry table is the colour
+    // authority, so inventing a white here was overriding the asset.
+    //
+    // **A white core is not always wrong, though.** A craft-hit Rocket at 51
+    // units does peak white-hot for a few frames (measured 2026-09-24, see
+    // `rocket-visuals.md`), and that white comes out of the asset: a
+    // near-white colour table times the emitter's own soft white sprite.
+    // Judge a white against a matched capture, not against this comment.
     // Removing it barely moves the sparks - `bits` is white in its own
     // palette either way.
     let procedural = vec4<f32>(in.colour.rgb * shape, pow(shape, 1.2) * in.colour.a);
