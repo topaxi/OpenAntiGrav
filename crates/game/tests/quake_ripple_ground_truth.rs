@@ -242,6 +242,9 @@ fn neighbouring_spans_agree_across_every_seam() {
 /// range in the built model, end to end, and reach the model's last vertex.
 /// The load path refuses a model whose total disagrees; this is the stronger,
 /// per-node statement, on the road and both pad models of two circuits.
+type Build = fn(&str, &[u8]) -> oag_render::mesh::Model;
+type Pick = fn(vex::classes::Classes) -> Option<u32>;
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn batch_placements_tile_each_node() {
@@ -250,11 +253,7 @@ fn batch_placements_tile_each_node() {
     for dir in ["01_Track", "16_Track"] {
         let name = format!("Data\\Environments\\{dir}\\track.vex");
         let blob = archives.read_name(&name).expect("the circuit");
-        let builds: [(
-            &str,
-            fn(&str, &[u8]) -> oag_render::mesh::Model,
-            fn(vex::classes::Classes) -> Option<u32>,
-        ); 3] = [
+        let builds: [(&str, Build, Pick); 3] = [
             (
                 "road",
                 |n, b| oag_render::mesh::build_with_textures(n, b, None).expect("road"),
