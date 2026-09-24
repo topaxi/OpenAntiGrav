@@ -38,8 +38,6 @@
 //!   [`streak`] for the two-point classes, which Pulse's alone builds as
 //!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
 //!   so those draw the procedural radial falloff in `psys.wgsl`.
-//! - **The atlas frame advancing over a particle's life.** The frame-rate
-//!   channel is not parsed; a particle keeps the frame it spawned with.
 //! - **Billboard roll.** The rotation-speed channel is parsed and unused;
 //!   quads here are axis-aligned to the camera.
 //! - **The emitter extent of shapes 2, 3, 6 and 8.** Shapes 1 (a line), 4
@@ -54,10 +52,12 @@ use oag_vex::pob::{self, Channel, ChannelMode, ParticleSystem};
 
 use crate::mesh::GpuVertex;
 
+pub mod frames;
 pub mod spawn;
 pub mod sprite;
 pub mod streak;
 
+use frames::FrameAdvance;
 use spawn::Spawn;
 use sprite::{Atlas, Sheet, Sprite};
 use streak::StreakDraw;
@@ -307,6 +307,8 @@ pub struct EmitterSpec {
     pub sprite: Option<Sprite>,
     /// How [`EmitterSpec::sprite`] divides into frames.
     pub atlas: Atlas,
+    /// How a particle walks those frames - see [`frames`].
+    pub frames: FrameAdvance,
     /// Where [`EmitterSpec::sprite`] sits on its [`Library`]'s [`Sheet`],
     /// `[u0, v0, u1, v1]`; `None` until a library places it, and for every
     /// emitter drawn with the procedural profile.
@@ -577,6 +579,7 @@ impl EmitterSpec {
             emission_scale: record.emission_scale.clone(),
             sprite,
             atlas: Atlas::of(record),
+            frames: FrameAdvance::of(record, Atlas::of(record).frames()),
             sheet_rect: None,
         })
     }
@@ -607,6 +610,8 @@ struct Particle {
     scale: f32,
     /// Which cell of the emitter's [`Atlas`] it draws - see [`sprite`].
     frame: u16,
+    /// [`Particle::frame`] before its floor, as [`frames`] advances it.
+    frame_at: f32,
 }
 
 impl Particle {
@@ -622,6 +627,7 @@ impl Particle {
         alpha_sample: 0.0,
         scale: 0.0,
         frame: 0,
+        frame_at: 0.0,
     };
 
     fn alive(self) -> bool {
@@ -910,7 +916,11 @@ impl System {
             particle.velocity *= drag;
             particle.velocity.y += spec.gravity_per_tick2 * TICK_HZ * TICK_HZ * dt;
             particle.position += particle.velocity * dt;
+            let before = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
             particle.life -= dt;
+            let after = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
+            let frames = spec.atlas.frames();
+            spec.frames.step(particle, before, after, dt_ticks, frames);
             if particle.life <= 0.0 {
                 let (position, velocity) = (particle.position, particle.velocity);
                 *particle = Particle::DEAD;
@@ -964,7 +974,7 @@ impl System {
             (spec.lifetime_ticks.0 + spec.lifetime_ticks.1 * signed_unit(rng)).max(1.0);
         let life = life_ticks / TICK_HZ;
 
-        let particle = Particle {
+        let mut particle = Particle {
             position: anchor,
             velocity: direction * speed + inherited,
             origin: anchor,
@@ -979,7 +989,9 @@ impl System {
             // flag, drawn only when a sprite on the sheet shows it, so the
             // procedural profile (every PS2 and HD effect) draws what it did.
             frame: spec.random_frame(rng),
+            frame_at: 0.0,
         };
+        particle.frame_at = f32::from(particle.frame);
         let slot = expendable_slot(&self.particles);
         self.particles[slot] = particle;
 

@@ -51,9 +51,10 @@ use super::{Effect, EmitterSpec, Particle, quad, sprite};
 use crate::mesh::GpuVertex;
 
 impl Effect {
-    /// Draws every streak with the procedural profile again, the way every
-    /// source did before Pulse's own strips were read - see [this
-    /// module](self).
+    /// Draws every streak with the procedural profile again and keeps every
+    /// particle on its spawn frame, the way every source did before Pulse's
+    /// own strips ([this module](self)) and frame advance
+    /// ([`super::frames`]) were read.
     ///
     /// **For every source but Pulse on the PSP, by choice (2026-09-24)**,
     /// the same line [`Self::without_extents`] draws: the strips are read
@@ -62,6 +63,7 @@ impl Effect {
     pub fn without_pulse_psp_draw(&mut self) {
         for spec in &mut self.emitters {
             spec.streak = StreakDraw::Procedural;
+            spec.frames = super::FrameAdvance::Still;
         }
     }
 }

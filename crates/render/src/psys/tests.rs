@@ -53,6 +53,7 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             emission_scale: constant(1.0),
             sprite: None,
             atlas: Atlas::SINGLE,
+            frames: FrameAdvance::Still,
             sheet_rect: None,
         }],
         roots: vec![0],
@@ -343,4 +344,34 @@ fn a_procedural_streak_ignores_a_placed_sprite() {
     let bytes = |v: &[GpuVertex]| bytemuck::cast_slice::<_, u8>(v).to_vec();
     assert_eq!(bytes(&sampled), bytes(&plain));
     assert!(sampled.iter().all(|v| v.normal[0] == 0.0));
+}
+
+/// `ParticleSystem_UpdateParticles` grows the frame by the rate times the
+/// tick, wraps once at `frames - 0.01`, and draws the floor.
+#[test]
+fn a_rated_frame_walks_the_atlas_and_wraps() {
+    let advance = FrameAdvance::Rate(constant(0.5));
+    let mut particle = Particle::DEAD;
+    let mut drawn = Vec::new();
+    for _ in 0..9 {
+        advance.step(&mut particle, 0.0, 0.0, 1.0, 4);
+        drawn.push(particle.frame);
+    }
+    // 0.5, 1.0, ... 3.5, then 4.0 - 3.99 = 0.01, then 0.51.
+    assert_eq!(drawn, [0, 1, 1, 2, 2, 3, 3, 0, 0]);
+}
+
+/// Under flag `0x40` the frame is the particle's age times `frames - 0.02`,
+/// whatever it was before.
+#[test]
+fn an_over_life_frame_follows_the_age() {
+    let mut particle = Particle {
+        frame_at: 3.0,
+        ..Particle::DEAD
+    };
+    FrameAdvance::OverLife.step(&mut particle, 0.0, 0.5, 1.0, 16);
+    assert_eq!(particle.frame, 7);
+    assert!((particle.frame_at - 7.99).abs() < 1e-5);
+    FrameAdvance::Still.step(&mut particle, 0.5, 0.9, 1.0, 16);
+    assert_eq!(particle.frame, 7, "a still frame never moves");
 }
