@@ -213,8 +213,8 @@ impl Wave {
     /// original's own shield branch (`entity+0x1b8 & 0x10`) clearing the bit
     /// rather than holding it.
     ///
-    /// `absorbed[slot]` is set (never cleared) when a hit landed on a
-    /// shielded craft's shell - the same out-parameter shape
+    /// `hits[slot]` records each hit as absorbed or landed - see
+    /// [`super::WeaponHit`] - the same out-parameter shape
     /// [`super::blast::blast`] and [`super::cannon::direct_hit`] both take,
     /// for the same reason: a swallowed hit is the only thing that makes the
     /// shell visibly react.
@@ -224,7 +224,7 @@ impl Wave {
         ship_count: u8,
         length: f32,
         rules: oag_physics::DamageRules,
-        absorbed: &mut [bool],
+        hits: &mut [super::WeaponHit],
     ) {
         for (slot, ship) in ships.iter_mut().enumerate().take(ship_count as usize) {
             if slot as u8 == self.owner {
@@ -249,9 +249,7 @@ impl Wave {
                         self.damage,
                         rules,
                     );
-                    if let Some(flag) = absorbed.get_mut(slot) {
-                        *flag |= report.absorbed;
-                    }
+                    super::hit::record(hits, slot, &report);
                 }
                 self.hit[slot] = true;
             } else {

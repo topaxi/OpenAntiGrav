@@ -387,7 +387,7 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
 /// table, and a single record at the resource base carrying the smallest set
 /// of fields `oag_render::psys::Effect::parse` needs to accept it. Field
 /// offsets are the ones `oag_vex::pob::Emitter` documents.
-fn one_emitter_pob(name: &str, flags: u32) -> Vec<u8> {
+pub(super) fn one_emitter_pob(name: &str, flags: u32) -> Vec<u8> {
     use oag_vex::pob::{EMITTER_LEN, HEADER_LEN, MAGIC, NAME_LEN};
 
     let mut record = vec![0u8; EMITTER_LEN];

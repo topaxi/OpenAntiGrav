@@ -876,7 +876,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
             Some(&table),
             "VENOM",
             oag_physics::DamageRules::default(),
-            &mut [false; 2],
+            &mut [crate::projectile::WeaponHit::default(); 2],
         );
         if let Some(impact) = impacts.into_iter().flatten().next() {
             assert!(!impact.blast, "the timer spent a blast");

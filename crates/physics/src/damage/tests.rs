@@ -344,6 +344,24 @@ fn a_running_shield_refuses_a_weapon_hit_too() {
     );
 }
 
+/// `landed` is `Ship_Damage`'s weapon branch running, which is what throws
+/// the struck hull's sparks: the killing hit lands, a shielded or wrecked
+/// craft does not. See `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+#[test]
+fn a_hit_lands_through_the_gate_and_the_killing_one_lands_too() {
+    let d = dimensions(100.0);
+    let mut s = state(5.0);
+    let killing = apply_weapon(&mut s, &d, 30.0, DamageRules::default());
+    assert!(killing.depleted && killing.landed());
+
+    let mut shielded = state(100.0);
+    shielded.shield_pickup_timer = 0.5;
+    assert!(!apply_weapon(&mut shielded, &d, 30.0, DamageRules::default()).landed());
+
+    // Destroyed by the hit above, so the next one is refused outright.
+    assert!(!apply_weapon(&mut s, &d, 30.0, DamageRules::default()).landed());
+}
+
 /// The weapons-off halving is `Ship_Damage`'s and applies to every amount,
 /// not only to a wall's. Unreachable today and reproduced anyway.
 #[test]

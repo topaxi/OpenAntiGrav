@@ -138,7 +138,7 @@ fn a_craft_inside_radius_takes_the_hit_exactly_once() {
     ships[1] = ship_at(5.0);
     ships[1].physics.shield = 50.0;
     ships[1].handling.dimensions.shield = 100.0;
-    let mut absorbed = [false; crate::world::MAX_SHIPS];
+    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::world::MAX_SHIPS];
 
     wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
     assert!(wave.hit[1]);
@@ -158,7 +158,7 @@ fn a_craft_leaving_radius_clears_the_latch_so_a_second_pass_hits_again() {
     let mut ships = [Ship::default(); crate::world::MAX_SHIPS];
     ships[1] = ship_at(5.0);
     ships[1].handling.dimensions.shield = 100.0;
-    let mut absorbed = [false; crate::world::MAX_SHIPS];
+    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::world::MAX_SHIPS];
     wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
     assert!(wave.hit[1]);
 
@@ -180,7 +180,7 @@ fn the_firing_craft_is_excluded_outright() {
     let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
     let mut ships = [Ship::default(); crate::world::MAX_SHIPS];
     ships[0] = ship_at(0.0);
-    let mut absorbed = [false; crate::world::MAX_SHIPS];
+    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::world::MAX_SHIPS];
     wave.apply_hits(&mut ships, 1, 1000.0, DamageRules::default(), &mut absorbed);
     assert!(!wave.hit[0]);
     assert_eq!(ships[0].pending_slowdown, 0.0);
@@ -192,11 +192,11 @@ fn a_shielded_craft_takes_no_hit_and_absorbed_is_not_set() {
     let mut ships = [Ship::default(); crate::world::MAX_SHIPS];
     ships[1] = ship_at(5.0);
     ships[1].physics.shield_pickup_timer = 1.0;
-    let mut absorbed = [false; crate::world::MAX_SHIPS];
+    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::world::MAX_SHIPS];
     wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
     assert!(!wave.hit[1]);
     assert_eq!(ships[1].pending_slowdown, 0.0);
-    assert!(!absorbed[1]);
+    assert!(!absorbed[1].absorbed);
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn an_inactive_or_unlocated_ship_is_skipped() {
     // Slot 2: located but inactive.
     ships[2] = ship_at(5.0);
     ships[2].active = false;
-    let mut absorbed = [false; crate::world::MAX_SHIPS];
+    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::world::MAX_SHIPS];
     wave.apply_hits(&mut ships, 3, 1000.0, DamageRules::default(), &mut absorbed);
     assert!(!wave.hit[1]);
     assert!(!wave.hit[2]);

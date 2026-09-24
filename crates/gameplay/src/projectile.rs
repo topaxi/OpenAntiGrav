@@ -79,6 +79,7 @@ pub mod cannon;
 pub mod disruptor;
 mod flight;
 mod geometry;
+mod hit;
 pub mod leach_beam;
 pub mod mine;
 pub mod missile;
@@ -89,6 +90,7 @@ pub mod shuriken;
 
 pub use geometry::hull_radius;
 use geometry::{SweepHit, nearest_hit};
+pub use hit::WeaponHit;
 
 pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
@@ -654,8 +656,8 @@ impl Projectiles {
 /// owns neither. Returns the impacts so a caller can put a spark where each one
 /// landed, which is the only thing left for it to do.
 ///
-/// `absorbed` is [`blast`]'s out-parameter, passed straight through: one flag
-/// per ship slot for a craft whose fired Shield swallowed a blast this call.
+/// `hits` is [`blast`]'s out-parameter, passed straight through: one
+/// [`WeaponHit`] per ship slot, absorbed or landed.
 /// See [`blast`] for why it is a parameter and not a second return value.
 ///
 /// `weapons` is `None` for a race whose weapon table did not load, in which case
@@ -686,7 +688,7 @@ pub fn step<R: Raycaster + ?Sized>(
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
     rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
+    hits: &mut [WeaponHit],
 ) -> [Option<Impact>; MAX_PROJECTILES] {
     let count = world.ship_count as usize;
     let missile_stats = weapons.and_then(oag_tables::weapons::WeaponStats::missile);
@@ -703,13 +705,7 @@ pub fn step<R: Raycaster + ?Sized>(
         class,
     );
 
-    blast::apply_impacts(
-        &mut world.ships[..count],
-        weapons,
-        &impacts,
-        rules,
-        absorbed,
-    );
+    blast::apply_impacts(&mut world.ships[..count], weapons, &impacts, rules, hits);
 
     impacts
 }

@@ -555,6 +555,13 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
 /// would be exactly the kind of plausible-looking invention `CLAUDE.md`
 /// forbids - see `oag_gameplay::projectile::cannon`'s module doc for the
 /// full read.
+///
+/// **The struck craft still sparks, from its own side.** `Ship_Damage`
+/// (`0x088439ac`) throws `WO_SHIP_COLL_SPARK_DAMAGE` from the victim's hull
+/// locators for every weapon hit that gets through, the Cannon's included -
+/// measured on PPSSPP 2026-09-24. That is `race::hit_sparks`, a separate
+/// trigger this test does not cover; what it pins is that the *weapon* spawns
+/// nothing of its own on a craft.
 #[test]
 fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
     use oag_tables::weapons::Weapon;

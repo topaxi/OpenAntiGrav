@@ -178,6 +178,11 @@ pub struct Report {
     /// shape [`super::blast::blast`] and [`super::quake::Wave::apply_hits`]
     /// take, narrowed to one craft because a beam has exactly one victim.
     pub absorbed: bool,
+    /// A drain got through to the target this tick - see
+    /// [`super::WeaponHit::landed`]. The LeachBeam is `craft+0x138 == 7`, the
+    /// one weapon whose landed hit throws `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`
+    /// rather than `WO_SHIP_COLL_SPARK_DAMAGE`.
+    pub landed: bool,
 }
 
 impl Beam {
@@ -259,7 +264,9 @@ impl Beam {
             return report;
         }
 
-        report.absorbed = self.drain(ships, rules);
+        let hit = self.drain(ships, rules);
+        report.absorbed = hit.absorbed;
+        report.landed = hit.landed();
         report.drained = true;
         report
     }
@@ -294,18 +301,22 @@ impl Beam {
         separation.length() > self.range
     }
 
-    /// One tick of the transfer. Returns whether the victim's shield swallowed
-    /// it.
+    /// One tick of the transfer. Returns what `Ship_Damage` did to the victim,
+    /// which is nothing at all when the shooter.s own shield is up.
     ///
     /// **The shooter's own Shield pickup suppresses both halves**, matching
     /// `LeachBeam_Drain`'s first line - a craft that fires a beam and then
     /// raises a shield stops leaching, which reads as a bug and is what the
     /// instruction stream does.
-    fn drain(&mut self, ships: &mut [Ship; MAX_SHIPS], rules: oag_physics::DamageRules) -> bool {
+    fn drain(
+        &mut self,
+        ships: &mut [Ship; MAX_SHIPS],
+        rules: oag_physics::DamageRules,
+    ) -> oag_physics::damage::Shield {
         let owner_index = self.owner as usize;
         let target_index = self.target as usize;
         if ships[owner_index].physics.shield_pickup_timer > 0.0 {
-            return false;
+            return oag_physics::damage::Shield::default();
         }
 
         let taken = take_once(&mut self.first_drain, self.damage, self.energy_multiplier);
@@ -328,7 +339,7 @@ impl Beam {
         let dimensions = owner.handling.dimensions;
         oag_physics::damage::add(&mut owner.physics, &dimensions, given);
 
-        hit.absorbed
+        hit
     }
 }
 

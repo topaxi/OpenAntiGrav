@@ -24,6 +24,7 @@ mod hash;
 mod hd_sprite;
 mod headless;
 mod held_buttons;
+mod hit_sparks;
 mod leach_beam;
 mod load;
 mod mode_override;
@@ -156,6 +157,7 @@ fn setup(handling: Handling) -> Setup {
         pulse_laid_pose: false,
         absorb_burst: None,
         absorb_anchors: Vec::new(),
+        hit_spark_anchors: Vec::new(),
         trail_sparks: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),

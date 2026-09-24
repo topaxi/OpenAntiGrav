@@ -55,7 +55,7 @@ impl Race {
             return;
         }
         let rules = oag_gameplay::damage_rules(self.sim.world.mode());
-        let mut absorbed = [false; MAX_SHIPS];
+        let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
         // Snapshotted before `apply_hits` runs, for `Cue::QuakeHit`'s own
         // rising edge below - the same before/after shape `Race::tick`'s own
         // `bounces_before` already takes for the Missile's bounce cue.
@@ -65,10 +65,10 @@ impl Race {
             self.sim.world.ship_count,
             length,
             rules,
-            &mut absorbed,
+            &mut hits,
         );
-        for (slot, hit) in absorbed.iter().enumerate() {
-            if *hit {
+        for (slot, hit) in hits.iter().enumerate() {
+            if hit.absorbed {
                 self.view.shield[slot].hit();
             }
         }
@@ -121,6 +121,9 @@ impl Race {
                 Quat::IDENTITY,
             );
         }
+        // The wave's landed hits spark the struck hulls - see
+        // `race::hit_sparks`. Last, once `course`'s borrow has ended.
+        self.throw_hit_sparks(&hits, false);
         self.sim.world.quake = Some(wave);
     }
 
@@ -155,6 +158,16 @@ impl Race {
             && let Some(shell) = self.view.shield.get_mut(beam.target as usize)
         {
             shell.hit();
+        }
+        // A drain that got through sparks the target's hull with the
+        // LeachBeam's own variant, once per locator per 0.8 s like every
+        // other hit - see `race::hit_sparks`.
+        if report.landed {
+            let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
+            if let Some(hit) = hits.get_mut(beam.target as usize) {
+                hit.landed = true;
+            }
+            self.throw_hit_sparks(&hits, true);
         }
         self.sim.world.leach_beam = if report.retired { None } else { Some(beam) };
     }

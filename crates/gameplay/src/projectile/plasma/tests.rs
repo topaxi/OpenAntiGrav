@@ -270,7 +270,7 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
             Some(&table),
             "VENOM",
             oag_physics::DamageRules::default(),
-            &mut [false; 2],
+            &mut [crate::projectile::WeaponHit::default(); 2],
         );
         if let Some(impact) = impacts.into_iter().flatten().next() {
             assert!(!impact.blast, "the timer spent a blast");
@@ -379,7 +379,7 @@ fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
             Some(&table),
             "VENOM",
             oag_physics::DamageRules::default(),
-            &mut [false; 2],
+            &mut [crate::projectile::WeaponHit::default(); 2],
         );
         if impacts.iter().flatten().count() > 0 {
             hit = true;
@@ -427,7 +427,7 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
             Some(&table),
             "VENOM",
             oag_physics::DamageRules::default(),
-            &mut [false; 3],
+            &mut [crate::projectile::WeaponHit::default(); 3],
         );
         if impacts.iter().flatten().count() > 0 {
             hit = true;
