@@ -46,6 +46,12 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
     `orange_glow2` sprite. So the long yellow rays became orange heads with
     faint tails. That is dimmer and shorter than both main and the
     original's long orange rays.
+  - **Wall scrapes changed too**: every Pulse PSP collision spark is the
+    same effect. `data/scratch/psys-draw/scrape-main-vs-final.png` and
+    `scrape-zoom.png` show main's small white glints becoming small orange
+    embers. They are no spikier than before. No original scrape capture
+    exists to judge against, so whether the wedge stays on by default is
+    the lead's call. The read itself is at instruction level.
   - None of the four emitters authors an atlas grid, so the frame advance
     changes nothing here.
   - The original's white-to-orange bloom hugging the hull is still not

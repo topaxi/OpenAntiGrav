@@ -981,7 +981,7 @@ fireball, against the pre-flash frame:
 | 25 | 32 | 7 | 0 | 0.21-0.22 | 0.79 | 32 |
 
 `t` steps by 0.031-0.035 a frame, which is `(1/60) / 0.5`: a 60 Hz `dt`
-against the 0.5 s duration. Red follows `153 (1 - t)` to within 9 at every
+against the 0.5 s duration. Red follows `153 (1 - t)` to within 10 at every
 frame; the frames around the fireball's peak (`k` 8-16) run a few high,
 which is its own light. Blue never moves. That confirms the additive blend, the lerp, the
 `0.6` alpha and the timebase together.
