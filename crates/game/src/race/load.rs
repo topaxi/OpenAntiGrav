@@ -757,18 +757,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let absorb_burst = super::absorb::absorb_burst_for(craft_title);
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
 
-    // One loop for all of them, and one report line each: adding an effect
-    // is adding its name to `RACE_EFFECTS` and a trigger, never a loader.
+    // One loop, one report line each: an effect is a `RACE_EFFECTS` name and a
+    // trigger. Pulse's PSP laws only - see `psys::Effect::without_extents`,
+    // `without_pulse_psp_draw` and `oag_render::flash` for what others keep.
     let mut effects = psys::Library::new();
-    // The emitter-extent law is read off Pulse's PSP executable only; every
-    // other source spawns at the anchor until its own is read - see
-    // `psys::Effect::without_extents`.
     let extents = pulse_psp::is_pulse_psp(title, &archives);
     for name in RACE_EFFECTS {
         match particle_effect(&mut archives, name) {
             Ok((mut effect, note)) => {
                 if !extents {
                     effect.without_extents();
+                    effect.without_pulse_psp_draw();
                 }
                 report.push(note);
                 effects.insert(name, effect);
@@ -922,6 +921,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             },
             hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
             pulse_laid_pose: craft_title.name == oag_pulse::TITLE.name,
+            screen_flash: extents,
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),

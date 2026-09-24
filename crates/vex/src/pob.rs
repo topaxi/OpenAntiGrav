@@ -659,6 +659,11 @@ pub struct Emitter {
     pub alpha: Channel,
     /// `+0x698`: billboard roll speed, radians per tick.
     pub rotation_speed: Channel,
+    /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
+    /// The fourth channel the load-time baker `FUN_088f9024` merges, after
+    /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
+    /// channel".
+    pub frame_rate: Channel,
     /// `+0x858`: a multiplier on the emitter extent, over the *emitter's*
     /// age rather than a particle's.
     pub emission_scale: Channel,
@@ -675,9 +680,10 @@ pub struct Emitter {
     pub animated_attributes: i32,
     /// `+0x9a0`: sprite-atlas grid, columns and rows.
     pub atlas_grid: (u16, u16),
-    /// `+0x9ac`: frames the atlas animation walks; `1` with a larger grid
-    /// means a random still frame per particle (see
-    /// [`flags::RANDOM_ATLAS_FRAME`]).
+    /// `+0x9ac`. **Not the frame count**: `ParticleSystem_InitParticle`
+    /// draws `Psys_RandIntRange(1, n)` into bits 4-7 of a per-particle flag
+    /// byte when it is above 1, a consumer that is unread. The frame count
+    /// is [`Emitter::atlas_grid`]'s product (see `docs/formats/pob.md`).
     pub atlas_frames: i32,
     /// `+0x9b4`'s list, in order.
     pub modifiers: Vec<Modifier>,
@@ -805,6 +811,7 @@ fn emitter_placeholder() -> Emitter {
         size: channel(),
         alpha: channel(),
         rotation_speed: channel(),
+        frame_rate: channel(),
         emission_scale: channel(),
         playback_rate: 0.0,
         child_velocity_inherit: 0.0,
@@ -881,6 +888,7 @@ fn parse_emitter(
         size: parse_channel(record, order, 0x4d8)?,
         alpha: parse_channel(record, order, 0x5b8)?,
         rotation_speed: parse_channel(record, order, 0x698)?,
+        frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),
         child_velocity_inherit: float(0x4d0),

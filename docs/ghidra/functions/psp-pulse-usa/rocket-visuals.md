@@ -451,10 +451,10 @@ by 80. So the original's peak is white at the core: a white disc at that
 moment is not by itself the bug. What was wrong in ours was everything
 around it - no textured fire, because particles drew a procedural disc
 instead of their own sprite. The wash is not a particle at all but
-`ScreenFlash_Start` kind `0`, `(1, 1, 0, 0.6)` over 0.5 s, which this
-engine does not draw yet. See [particle-system.md](particle-system.md),
-"A particle is its sprite times its colour, and the Quake stretches its
-emitter". The frames stay outside the repository.
+`ScreenFlash_Start` kind `0`, `(1, 1, 0, 0.6)` over 0.5 s. Its consumer
+was read the same day and matches these frames' added colour frame by frame;
+`oag_render::flash` draws it on Pulse's PSP source. See
+[particle-system.md](particle-system.md#the-screen-flashs-consumer-read-and-measured-2026-09-24). The frames stay outside the repository.
 
 ## What our own renderer has and has not been shown to do
 

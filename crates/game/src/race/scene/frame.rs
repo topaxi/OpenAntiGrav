@@ -915,6 +915,7 @@ impl Scene {
         self.clouds.borrow().draw(&mut pass);
         self.weapon_quads.borrow().draw(&mut pass);
         self.draw_ghost(race, lod_eye, &mut pass, &mut stats);
+        self.sparks.borrow().draw_flash(&mut pass);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);

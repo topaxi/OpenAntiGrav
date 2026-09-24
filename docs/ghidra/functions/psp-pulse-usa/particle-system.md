@@ -174,7 +174,9 @@ Confidence **85**. Runs once per new particle:
   trail-per-spark effects are authored. (`WO_SHIP_COLL_SPARK_DAMAGE` has
   none.)
 - Random initial billboard roll under flag `0x4`; random sprite-atlas frame
-  from `res+0x9ac` under flag `0x4000000`; world-transform of spawn offset
+  under flag `0x4000000`, drawn from the instance's grid count `+0x164`
+  (corrected 2026-09-24: `res+0x9ac` feeds a different per-particle field -
+  see "The atlas frame advances"); world-transform of spawn offset
   and velocity through the node matrix at `instance+0xf0` unless flag
   `0x2` (emit-in-world-space) is set.
 
@@ -211,7 +213,8 @@ Confidence **85**. Per live particle, per tick:
   (the baked values match the blocks exactly; the baking *site* -
   presumably `FUN_088f58a4` - was not stepped through).
 - Billboard roll advances by the rotation-speed channel; sprite-atlas frame
-  advances by the frame-rate channel modulo `res+0x9ac`.
+  advances by the frame-rate channel, wrapping at the grid's frame count
+  (read in full in "The atlas frame advances").
 - Lifetime decrements in seconds; at zero `ParticleSystem_OnParticleDeath`
   (`0x088f4994`, confidence **75**) may spawn the `res+0x944` death-child
   system (`"DEAT"`/`"DEAS"` fourccs) before the slot is freed.
@@ -264,7 +267,9 @@ last-tick motion streaks.
 
 ### `ParticleSystem_DrawStreak` (`0x08916820`)
 
-Confidence **80**. Both view-space points are first scaled onto the nearer
+Confidence **80**. **Corrected 2026-09-24**: the strip is a wedge, not a
+quad, and the common depth is the farther endpoint's - see "The streak
+strips' texture coordinates" below. Both view-space points are first scaled onto the nearer
 of the two depths (keeping the quad screen-parallel), then a triangle-strip
 quad is built along the 2D direction between them: half-width
 `size` perpendicular, and the ends extended along the axis by
@@ -426,8 +431,8 @@ the grid's two halves (instance `+0xa0`/`+0xa2`), stores their product at
 `Psys_RandIntRange(0, count - 1)` under flag `0x4000000` and `0` otherwise.
 `ParticleSystem_DrawParticle` then applies `Gu_TexScale` by the reciprocals
 and `Gu_TexOffset` by `frame % columns`, `frame / columns`. Not read: how
-the frame advances over life (the frame-rate channel), so a particle keeps
-its spawn frame in `oag_render::psys`.
+the frame advances over life (the frame-rate channel) - read since, in "The
+atlas frame advances" below.
 
 ### `ParticleSystem_EmitLine` (`0x088fcfec`) - shape 1
 
@@ -474,7 +479,9 @@ sprites at all.
 
 ### `ScreenFlash_Start` (`0x088f00c0`) - the wash that is not a particle
 
-Confidence **72**. Called with a kind and a world position by every weapon
+Confidence **88** (was 72; the consumer is read and measured in
+"The screen flash's consumer, read and measured" below). Called with a kind
+and a world position by every weapon
 detonation (`Rocket_SpawnCraftExplosion_q` passes kind `0`, `Quake_Update`
 kind `4`, and eleven more callers). It arms a state block on
 `DAT_08ab2200` - `+0x1a0 = 1`, the position at `+0x60` - and fills it from a
@@ -491,9 +498,9 @@ The kind-0 key is the **full-screen yellow wash** the 2026-09-24 PPSSPP
 capture of a craft-hit Rocket shows for its first frames (screen mean
 `(89, 96, 84)` -> `(223, 225, 85)`: red and green up, blue untouched), and
 kind 4 is the orange tint the Quake capture opens with. That match is why
-the name clears 70; it stops short of more because the per-frame consumer
-of the block - the blend, how the two distances attenuate, how the keys are
-interpolated - is not read, and `oag_render` draws no flash.
+the name clears 70. The per-frame consumer - the blend, the distance
+falloff, the key interpolation - is read below, and `oag_render::flash`
+draws kinds 0 and 4 on Pulse's PSP source.
 
 ## Open, deliberately
 
@@ -505,7 +512,8 @@ interpolated - is not read, and `oag_render` draws no flash.
   `FUN_08916610` (the mode-3 rotating billboard) are dispatched with known
   arguments but unread internally, and the exact stretch factor
   `ParticleSystem_DrawStreak` receives is not traced back to a resource
-  field.
+  field. (All three closed since: see "The two unread draw modes, read" and
+  "Streaks, atlas advance and the screen flash".)
 - Modifier types other than 3 and the
   emitter-local frame of the aimed cones.
 
@@ -787,3 +795,226 @@ to for `|x| > pi/4` - rather than by reading its body.
   `position.xy ± particle+0x30` with no aspect term, confirming this page's
   reading that the size channel is a view-space half-extent, and confirming that
   those two modes are square by construction.
+
+## Streaks, atlas advance and the screen flash (2026-09-24)
+
+Three draw-side reads, taken because a Rocket's craft hit and a struck
+craft's hull sparks both read far weaker in `oag_render` than in the
+original. All three are static reads of this binary; the screen flash is
+also measured against an existing PPSSPP capture. All three are applied to
+Pulse off a PSP disc only, the same line the extent law draws.
+
+### The streak strips' texture coordinates
+
+`ParticleSystem_DrawParticle` calls both strip builders as
+`(half, stretch, &second_point, &position, colour)`: at `0x08918b2c` the
+first pointer is `sp+0x50`, loaded at `0x089187ec` from the particle's
+`+0x10` (the spawn or last-tick point), and the second is `sp+0x40` from its
+`+0x00` (the position), set at `0x08918ad8`. Both endpoints are view space.
+
+**`ParticleSystem_DrawStreak` (`0x08916820`), class 6, is a wedge, not a
+rectangle.** Confidence **88**, read at instruction level. With `s0` the
+second point and `s1` the position, `dir = normalize(s0 - s1)` (`(0, 1, 0)`
+when zero), `perp = (dir.y, -dir.x, 0) * half` and `cap = dir * stretch *
+half`. Four strip vertices, `Gu_DrawArray(4, 0x19f, 4, ...)`:
+
+| # | position | `u` | `v` | written at |
+| --- | --- | --- | --- | --- |
+| 0 | `position - cap - perp` | 1 | 0 | `0x08916aec` |
+| 1 | `position - cap + perp` | 0 | 0 | `0x08916b80` |
+| 2 | `position + cap - perp` | 1 | 1 | `0x08916c14` |
+| 3 | `second + cap + perp` | 0 | 1 | `0x08916ca8` |
+
+Vertex 2 loads `lv.q C200, 0x0(s1)` at `0x08916ba0`: the **position**, not
+the second point, where vertex 3 loads `s0` at `0x08916c34`. So the strip is
+a sprite-sized head at the particle and a sliver out to the second point,
+and the sliver samples the half of the sprite on the `u < v` side of its
+diagonal. A zero-length streak is a plain square.
+
+**A correction to the section above**: both points are scaled onto
+`min(z)` (`c.lt.s` at `0x08916880` picks the smaller of the two view `z`),
+and since a visible point has `z < -1`, that is the **farther** endpoint,
+not the nearer one. `ParticleSystem_DrawCappedStreak` uses the mean.
+
+`ParticleSystem_DrawCappedStreak` (`0x08916d00`, class 7) was re-read and
+matches the table in "The two unread draw modes, read" exactly, with
+`a` the position and `b` the second point.
+
+**Implemented** as `oag_render::psys::streak`. Class 7's eight vertices are
+drawn as one quad whose along-coordinate `psys.wgsl` folds back into the
+`0 / 0.5 / 0.5 / 1` `v`, which is exact because `v` is linear along each of
+the three spans. **Chosen, not measured**: the strip is built in world
+space with `perp = dir x (right x up)`, which equals the view-space
+`(dir.y, -dir.x)` for a streak in the screen plane, and each end keeps its
+own depth instead of the common one.
+
+### The atlas frame advances
+
+Confidence **85**.
+
+- **The switch.** `ParticleSystem_CacheModeFlags` (`0x088f4dcc`) sets
+  `DAT_08b6206e` when `res+0x788 > 0` and the instance's frame count
+  (`+0x164`, columns times rows) is not 1. `+0x788` is `+0x10`, the `hi`, of
+  a channel block at `+0x778`: the fourth of the per-particle blocks
+  (`+0x4d8` size, `+0x5b8` alpha, `+0x698` roll, `+0x778` frame rate, all
+  `0xe0` apart).
+- **The step.** `ParticleSystem_UpdateParticles` (`0x088f635c`), under that
+  flag, keeps a float frame at particle `+0x98`:
+  - under resource flag `0x40`, `age * (frames - 0.01 - 0.01)`;
+  - otherwise `+= channel[3] * DAT_08b62080`, where
+    `ParticleSystem_Update` stores `DAT_08b62080` as the instance's tick
+    count times its playback rate at `0x088f5cb8`.
+  - Once it reaches `frames - 0.01` it loses that amount, once. The drawn
+    frame at `+0x78` is its floor.
+- **The seed.** `ParticleSystem_InitParticle` seeds `+0x98` with the random
+  start frame, or 0.
+- **The bake.** `channel[3]` comes from the load-time bake: `FUN_088f3b68`
+  calls `FUN_088f9024(res+0x9f0, alpha, size, roll, frame_rate)`.
+  - `FUN_088f9024` merges the four blocks' key times into one sorted,
+    de-duplicated timeline at `+0x9f0`.
+  - It evaluates each channel there through `FUN_088f8ec0` and writes the
+    segment rates at `+0xa70` and the start vector at `+0xc70`.
+  - It zeroes a random-mode channel, which is why a random frame rate never
+    moves: nothing at spawn samples it either.
+  - It gives up on every channel of the emitter when any keyframed one
+    has a period.
+- **What authors it.** On the PSP disc: every 4x4 smoke and fire emitter of
+  `WO_ROCKET_EXPLO`, `_EXPLO_TRACK`, `WO_SHIP_EXPLOSION` and
+  `WO_SHIP_FXNODE_EXPLO`, plus the 2x2 Shuriken head, trail and rings and
+  `WO_PLASMA_HEAD`. None of the hull-spark emitters authors a grid.
+
+**`+0x9ac` is not the frame count.** `ParticleSystem_InitParticle` ORs
+`Psys_RandIntRange(1, +0x9ac) << 4` into a per-particle flag byte when it
+is above 1. What reads those bits is not traced.
+
+**Implemented** as `oag_render::psys::frames`, and the channel is parsed as
+`oag_vex::pob::Emitter::frame_rate`.
+
+### The screen flash's consumer, read and measured (2026-09-24)
+
+`DAT_08ab2200` points at a `0x1b0`-byte scene node. `InGame_Update` allocates
+it and zeroes it at `0x08813d6c`/`0x08813d80`, then calls
+`ScreenFlash_Construct` (`0x088ef234`), which installs the vtable
+`0x08ad0df4` and sets the key count at `+0xd0` (and its copy at `+0x170`)
+to 4. Three of the vtable's slots are its own:
+
+- `0x088ef398`, a two-instruction store of the frame's `dt` into `+0x180`.
+  It is not a Ghidra function, so it is not named here.
+- `ScreenFlash_Update` (`0x088ef3a4`).
+- `ScreenFlash_Draw` (`0x088efb1c`).
+
+`ScreenFlash_Destroy` (`0x088ef334`) clears `DAT_08ab2200`.
+
+**`ScreenFlash_Start` fills a pending block; `ScreenFlash_Update` decides.**
+Confidence **88** for all three functions, each read in full:
+
+1. **The pending check.** If `+0x1a0` is set, Update clears it, evaluates the
+   pending keys at `t = 0`, and weighs them by the distance falloff. It then
+   compares `(alpha * falloff)^2 * |rgb|^2` with the same product of the
+   colour it last drew (`+0x190..+0x19c`, stale when nothing runs). Only a
+   stronger one is copied over the running block (`+0x40..+0xdc` to
+   `+0xe0..+0x17c`); that restarts the clock at `+0x184` and raises `+0x1a1`.
+   A weaker flash is dropped.
+2. **The running flash.** `+0x184 += dt` unless `DAT_08ab0628` (pause) is set,
+   then `t = elapsed / duration`. At `t >= 1` it stops. Otherwise:
+   - the keys are interpolated linearly over the times at `+0x150`. Every
+     kind but 7 authors times 0 and 1, so this is one lerp;
+   - the alpha is multiplied by the falloff, re-measured this frame;
+   - the node is queued at layer `0x4f000000` unless `g_display+0x5dec` is
+     set.
+3. **`ScreenFlash_DistanceFalloff` (`0x088effb8`).** It returns 1 when `far`
+   (`+0x50`) is not above zero; otherwise
+   `clamp(1 - (d - near) / (far - near), 0, 1)`. `d` is the distance from
+   `-(camera + 0x70)`, the eye as [camera.md](camera.md) reads it, to the
+   flash's position.
+4. **`ScreenFlash_Draw`.** Identity projection, view and model matrices. The
+   glow mask is protected (`Bloom_SetGlowMaskWritable(g_bloom, 0)`). Depth
+   test, texturing, culling and lighting are disabled, and blending enabled.
+   `BlendFunc(ADD, SRC_ALPHA, FIX 0xffffff)`, additive, when `+0xe9`, the
+   running copy of `+0x49`, is set; alpha-over otherwise. `Gu_Color` takes
+   the colour times 255, truncated to bytes, and one untextured triangle
+   strip covers the screen. The strip is `DAT_08ab2210`: `(+-1, +-1, -0)`,
+   vertex type `0x180`.
+
+**The full kind table**, read off `ScreenFlash_Start`. Distances are in world
+units. `+0x48` is copied but never read by Update or Draw.
+
+| kind | duration | near, far | key at 0 | key at 1 | blend |
+| ---: | ---: | --- | --- | --- | --- |
+| 0 | 0.5 | 75, 200 | (1, 1, 0, 0.6) | (1, 0, 0, 0) | additive |
+| 1 | 1.25 | 100, 300 | (0.7, 0.1, 1, 0.7) | (0, 0, 1, 0) | additive |
+| 2 | 0.4 | 100, 300 | (0, 0.2, 1, 0.5) | (0, 0.2, 1, 0) | additive |
+| 3 | 0.75 | 100, 300 | (1, 0.5, 0, 0.7) | (1, 0, 0, 0) | additive |
+| 4 | 0.4 | 0, 300 | (1, 0.2, 0, 0.5) | (1, 0.2, 0, 0) | additive |
+| 5 | 0.4 | none | (1, 0.7, 0, 0.5) | (0.3, 0, 0, 0) | additive |
+| 6 | 1.0 | none | (1, 1, 1, 1) | (0, 0, 0, 0) | additive |
+| 7 | 2.0 | none | (1, 1, 1, 1) | (1, 1, 0, 0.8) at 0.1, (1, 0, 0, 0) at 1 | additive |
+| 8 | 0.4 | 50, 200 | (1, 1, 0, 0.4) | (0, 0, 0, 0) | additive |
+| 9 | 2.0 | none | (1, 1, 1, 1) | (0, 0, 0, 0) | additive |
+| 10 | 0.7 | none | (1, 1, 1, 1) | (0, 0, 0, 0) | additive |
+| 11 | 0.5 | none | (0.8, 0.8, 0.8, 1) | (0.01, 0.01, 0.01, 0.01) | alpha-over |
+
+Only kinds 0 and 4 have a caller read here: the craft-hit Rocket and the
+Quake. The Quake calls `ScreenFlash_Start(4, A)` **every frame** its wave's
+instance exists (`0x0891dc7c`, inside the per-span loop). `A` is the first
+of `Quake_SampleSpan`'s two edge points, which makes the replacement rule
+what keeps the tint up.
+
+**Measured.** The PPSSPP capture of a craft-hit Rocket 51 units from the eye
+is `data/scratch/fx-brightness/ppsspp-rocket/scenarioB`, gitignored. Kind 0
+predicts:
+
+- nothing added to blue;
+- `153 (1 - t)` added to red and `153 (1 - t)^2` to green, since the
+  falloff is 1 inside 75 units;
+- so green over red is `1 - t`.
+
+Measured over dark pixels (below 120) in two track regions away from the
+fireball, against the pre-flash frame:
+
+| frame `k` | R added | G added | B added | G/R | `t` from G/R | `153 (1 - t)` |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 147-150 | 145-146 | 0 | 0.98 | 0.02 | 150 |
+| 6 | 134-136 | 118 | 0 | 0.87-0.88 | 0.13 | 134 |
+| 12 | 100-102 | 64-66 | 0 | 0.64 | 0.36 | 98 |
+| 20 | 63-66 | 25-27 | 0-1 | 0.40 | 0.60 | 61 |
+| 25 | 32 | 7 | 0 | 0.21-0.22 | 0.79 | 32 |
+
+`t` steps by 0.031-0.035 a frame, which is `(1/60) / 0.5`: a 60 Hz `dt`
+against the 0.5 s duration. Red follows `153 (1 - t)` to within 10 at every
+frame; the frames around the fireball's peak (`k` 8-16) run a few high,
+which is its own light. Blue never moves. That confirms the additive blend, the lerp, the
+`0.6` alpha and the timebase together.
+
+The HUD's cyan bar gains only 16 red under the full wash, against 150 on the
+track. So the HUD draws over the flash, as `oag_game` composites it.
+
+**Implemented** as `oag_render::flash`. It is drawn last in the scene pass,
+before the bloom, colour-only. Our own run of the same shot adds
+`141 -> 24` red over ticks 18 to 42 with the same green-over-red slope, `t`
+stepping 1/30 a tick.
+
+### Applied names
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x088ef234` | `ScreenFlash_Construct` | 80 |
+| `0x088ef334` | `ScreenFlash_Destroy` | 80 |
+| `0x088ef3a4` | `ScreenFlash_Update` | 88 |
+| `0x088efb1c` | `ScreenFlash_Draw` | 88 |
+| `0x088effb8` | `ScreenFlash_DistanceFalloff` | 88 |
+| `0x088f9024` | `ParticleSystem_BakeChannels` | 82 |
+| `0x088f8ec0` | `ParticleSystem_EvalChannel` | 85 |
+| `0x088f3b68` | `ParticleSystem_PrepareResource_q` | 65 |
+
+`ScreenFlash_Start` (`0x088f00c0`) moves from 72 to **88**: its consumer is
+read and the kind-0 prediction matches the capture frame by frame.
+`ScreenFlash_Construct` and `_Destroy` stay at 80 because they are named from
+the vtable they install and the global they set and clear, not from a
+behaviour checked against anything. `ParticleSystem_BakeChannels` is 82: the
+merge, the evaluation and the rate division are read, and the baked values
+match the live read of `+0x9f0`/`+0xc70` in "The three live captures", but
+the segment walk was not stepped. `ParticleSystem_PrepareResource_q` bakes the
+channels, prepares the textures, registers the atlas grid in a global list
+and recurses into the child, death and sibling records; the list's reader is
+not traced, hence the `_q`.

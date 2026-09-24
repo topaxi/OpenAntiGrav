@@ -269,6 +269,12 @@ impl Race {
         if let (true, Some(playing)) = (stretches, playing) {
             self.view.stage.stretch(playing, scale, across);
         }
+        // Every frame the wave's instance lives, at the span's first edge
+        // point - `left` here, the same reading `across` makes (chosen: which
+        // of `Quake_SampleSpan`'s two points is `A` is not read).
+        if let (Some(_), Some(flash)) = (playing, &mut self.view.screen_flash) {
+            flash.start(oag_render::flash::QUAKE, left);
+        }
     }
     /// Plays the explosion a weapon that just went off authored - its own,
     /// not another weapon's.
@@ -324,6 +330,12 @@ impl Race {
         // render-side pool, the same shape as the Plasma's own three above.
         if kind == oag_tables::weapons::Weapon::Bomb {
             self.spawn_bomb_blast_model(at, orientation);
+        }
+        // `Rocket_SpawnCraftExplosion_q` starts the yellow wash at the blast's
+        // own position, whether or not its effect loaded - see
+        // `oag_render::flash`.
+        if let (CRAFT_BLAST_EFFECT, Some(flash)) = (name, &mut self.view.screen_flash) {
+            flash.start(oag_render::flash::ROCKET_CRAFT_HIT, at);
         }
         let Some(effect) = self.view.effects.get(name).cloned() else {
             return;

@@ -31,8 +31,8 @@
 //! otherwise starts it at frame 0. `ParticleSystem_DrawParticle` then picks
 //! the cell with `Gu_TexScale(1/columns, 1/rows)` and
 //! `Gu_TexOffset(column, row)` from `frame % columns` and `frame / columns`.
-//! **Not implemented**: the frame advancing over life by the frame-rate
-//! channel, which is not parsed; every particle keeps its spawn frame.
+//! The frame then advances over the particle's life on Pulse's PSP source -
+//! see [`super::frames`].
 //!
 //! # The sheet
 //!

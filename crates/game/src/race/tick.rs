@@ -583,6 +583,11 @@ impl Race {
         self.view
             .camera
             .advance(target, &self.view.chase_params, self.sim.dt);
+        // After the camera, so the flash's falloff measures from this tick's eye.
+        let eye = self.camera_position();
+        if let Some(flash) = &mut self.view.screen_flash {
+            flash.advance(self.sim.dt, eye);
+        }
 
         // Advanced here, on the fixed tick, and not in the frame loop. That is
         // what makes the headless `capture` path - which calls only `tick` -

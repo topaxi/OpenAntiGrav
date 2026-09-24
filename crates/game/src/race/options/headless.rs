@@ -71,6 +71,7 @@ impl Setup {
             // see `shield_palette` above for the same reasoning.
             hd_plasma_blast: false,
             pulse_laid_pose: false,
+            screen_flash: false,
             absorb_burst: None,
             absorb_anchors: Vec::new(),
             hit_spark_anchors: Vec::new(),

@@ -41,6 +41,7 @@ pub mod capture;
 pub mod cloud;
 pub mod collision;
 pub mod exhaust;
+pub mod flash;
 pub mod gantry;
 pub mod ghost;
 pub mod hull_overlay;

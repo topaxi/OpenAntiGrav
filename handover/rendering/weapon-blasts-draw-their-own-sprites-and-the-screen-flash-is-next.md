@@ -1,4 +1,4 @@
-# Weapon blasts draw their own sprites; the screen flash is next
+# Weapon blasts draw their own sprites and wash the screen; the other flash kinds are next
 
 2026-09-24. The Quake's crest and a close Rocket blast drew as white
 blowouts where the original draws orange fire. Measured, not re-tinted:
@@ -35,23 +35,67 @@ Matched original frames live in `data/scratch/fx-brightness/` (gitignored):
 
 **The original's Rocket peak is white at its core.** A white disc at k=8-12 is correct; the textured orange fireball that follows it was what was missing.
 
+**2026-09-24, second pass (psys-draw lane): all three draw-side pieces
+landed, Pulse PSP only.** Evidence:
+[particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
+"Streaks, atlas advance and the screen flash".
+
+- **`ScreenFlash_Start`'s consumer, `ScreenFlash_Update` (`0x088ef3a4`), is
+  read and drawn** (`oag_render::flash`, confidence 88).
+  - It is additive, a linear lerp of the two keys, and alpha times
+    `clamp(1 - (d - near) / (far - near))` from the eye, re-measured every
+    frame. A pending flash replaces the running one only when stronger.
+  - The PPSSPP Rocket frames match it frame by frame: red `153 (1 - t)`,
+    green over red `1 - t`, blue untouched, `t` stepping `(1/60) / 0.5`.
+  - Kind 0 fires on a craft-hit Rocket, and kind 4 every tick a Quake runs.
+- **Streaks sample their own sprite** (`oag_render::psys::streak`, 88). Class
+  6 is a wedge: `DrawStreak`'s third vertex sits by the particle,
+  `0x08916ba0`. Class 7 is the capped bar, as read before.
+- **The atlas frame advances** (`oag_render::psys::frames`, 85). The frame
+  rate is the unparsed `+0x778` channel, now
+  `oag_vex::pob::Emitter::frame_rate`.
+
+Frames are in `data/scratch/psys-draw/` (gitignored):
+
+- `rocket-main-vs-flash.png`: original, then main, then this lane.
+- `rocket-main-vs-frames.png`: the frame advance alone.
+- `quake-main-vs-flash.png`: the Quake tint.
+- `struck-main-vs-streak.png`: the streaks.
+- `ps2-hd-pure-final.png`: PS2, HD and Pure. Each is pixel-identical to main
+  at t305/t312.
+
 ## Open
 
-- **`ScreenFlash_Start` (`0x088f00c0`) is not drawn.** It is the full-screen
-  yellow wash of a craft-hit Rocket (kind 0) and the Quake's orange tint
-  (kind 4). The per-kind parameters are read: duration, two distances, two
-  RGBA keys. The per-frame consumer is not read: its blend, the distance
-  falloff and the key interpolation. The capture's blue channel does not move
-  under the yellow wash, which points at an additive blend. That is an
-  inference; the blend itself is unread.
-- **Remaining visual gap on the Rocket**: ours is a few frames early and its
-  fireball smaller than the original's 85x110 PSP px at k=25; no matched
-  per-frame particle count was taken.
+- **The Rocket wash now reads as the original's** (`rocket-main-vs-flash.png`).
+  What is left on the Rocket:
+  - Ours detonates a few ticks early against the capture's frame count.
+  - The fireball is a little smaller than the original's 85x110 PSP px at
+    k=25.
+  - No matched per-frame particle count was taken.
+- **The frame advance changes the fireball only subtly.** At t42 the Rocket
+  fire shows more of its 4x4 texture and reads redder
+  (`rocket-main-vs-frames.png`). It also animates the Shuriken, Plasma head
+  and ship explosions, none of which were re-shot.
+- **The other ten flash kinds are not wired.** The table is read (see the
+  doc page). Their callers are the next read; each passes its kind in `a1`:
+  - `Mine_SpawnExplosion`, `Missile_SpawnExplosion`, `BombBlast_Construct`
+    and `PlasmaBlast_Construct`;
+  - `Ship_SetState` and `Ship_UpdateRespawn`;
+  - `Race_CreateModeObject`;
+  - `FUN_08829e6c`, `FUN_0883e064`, `FUN_088407b0`, `FUN_08870c78` and
+    `FUN_08876300`.
+- **Flash details not reproduced:**
+  - the `g_display+0x5dec` gate on the draw is unread;
+  - the Quake's `A` edge is taken as `left`. That is chosen: which of
+    `Quake_SampleSpan`'s points is `A` is not read.
+- **Streaks are built in world space.** The original pushes both ends to one
+  view depth: the farther for class 6, the mean for class 7. Chosen, not
+  measured. The 1-unit near-plane cull of either end is not applied either.
 - **Unimplemented on the particle side**:
-  - the atlas frame advancing over life (the frame-rate channel is unparsed);
-  - streak classes still use the procedural profile (`DrawStreak`'s UVs are unread);
   - billboard roll;
-  - extents for shapes 2, 3, 6 and 8.
+  - extents for shapes 2, 3, 6 and 8;
+  - whatever `+0x9ac`'s random flag bits feed. It is not the frame count,
+    as `pob.rs` had it.
 - **The extent law is Pulse-PSP-only, by the lead's choice (2026-09-24).** It
   is read off Pulse's PSP `BOOT.BIN` alone, so every other source (PS2 Pulse,
   HD, and Pure, which is a different executable) keeps main's behaviour:
@@ -63,7 +107,9 @@ Matched original frames live in `data/scratch/fx-brightness/` (gitignored):
   PS2's Quake still blows out white exactly as on main - its `.pob`s embed
   no sprite. Sprite sampling and the resource-base offsets are format facts
   and stay on everywhere they apply.
-  **To lift the gate, read the same four places in the other executables**:
+  **To lift the gate, read the same four places in the other executables**
+  (and, for this lane's pieces, `ParticleSystem_DrawStreak`,
+  `ParticleSystem_UpdateParticles`' frame step and `ScreenFlash_Update`):
   the shape dispatch `ParticleSystem_SpawnBurst` (`0x088f56c4` on PSP), the
   line emitter `ParticleSystem_EmitLine` (`0x088fcfec`), the sphere emitter
   `ParticleSystem_EmitSphere` (`0x088fd340`), and where `Quake_Update`
@@ -79,8 +125,8 @@ Matched original frames live in `data/scratch/fx-brightness/` (gitignored):
 
 ## Next Steps
 
-- Read the consumer of `DAT_08ab2200`'s flash block: who reads `+0x1a0` and
-  `+0x60` each frame. Then draw kind 0 and kind 4. Check against
-  `data/scratch/fx-brightness/ppsspp-rocket/scenarioB/det-003..008`.
+- Read the flash kinds' remaining callers, starting with the Mine, Missile,
+  Bomb and Plasma detonations: the same `ScreenFlash_Start` call and the same
+  `oag_render::flash` consumer, one `Kind` constant each.
 - Capture a close track hit (`WO_ROCKET_EXPLO_TRACK`) in PPSSPP. None was
-  captured at player size (scenario A detonated 402 units away).
+  captured at player size: scenario A detonated 402 units away.

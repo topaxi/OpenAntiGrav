@@ -43,6 +43,7 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             palette: Box::new([[1.0; 4]; 256]),
             colour_mode: ColourMode::RandomEntry,
             render: Render::Billboard,
+            streak: StreakDraw::Procedural,
             blend: Blend::Additive,
             particle_child: None,
             death_child: None,
@@ -52,6 +53,7 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             emission_scale: constant(1.0),
             sprite: None,
             atlas: Atlas::SINGLE,
+            frames: FrameAdvance::Still,
             sheet_rect: None,
         }],
         roots: vec![0],
@@ -271,4 +273,105 @@ fn an_oriented_instance_emits_along_its_own_up() {
         centre.y.abs() < 0.5,
         "particles drifted along world up: {centre:?}"
     );
+}
+
+/// One live streak particle, head at `position` and tail at `origin`.
+fn streak_particle(position: Vec3, origin: Vec3) -> Particle {
+    Particle {
+        position,
+        origin,
+        life: 1.0,
+        max_life: 1.0,
+        ..Particle::DEAD
+    }
+}
+
+/// A streak spec drawn as `draw` off a sprite placed at `rect`.
+fn streak_spec(draw: StreakDraw, rect: Option<[f32; 4]>) -> EmitterSpec {
+    let mut spec = effect("streak", false, 10.0).emitters[0].clone();
+    spec.render = Render::Streak { from_spawn: false };
+    spec.streak = draw;
+    spec.sheet_rect = rect;
+    spec
+}
+
+fn streak_vertices(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
+    let mut out = Vec::new();
+    streak::extend(&mut out, spec, particle, 1.0, [1.0; 4], Vec3::X, Vec3::Y);
+    out
+}
+
+/// `ParticleSystem_DrawStreak`'s third vertex sits by the particle, not
+/// its tail (`0x08916ba0`), so class 6 is a wedge: a head at the particle
+/// and one vertex out past the tail.
+#[test]
+fn a_class_6_streak_is_a_wedge_off_its_own_sprite() {
+    let spec = streak_spec(StreakDraw::Wedge, Some([0.0, 0.0, 1.0, 1.0]));
+    let out = streak_vertices(&spec, &streak_particle(Vec3::ZERO, Vec3::X * 10.0));
+    assert_eq!(out.len(), 6);
+    let xs: Vec<f32> = out.iter().map(|v| v.position[0]).collect();
+    // The head's `position -+ cap` at x = -1 and 1; the last vertex at the
+    // tail plus a cap, x = 11. Nothing sits at the tail itself.
+    assert!(xs.iter().all(|x| [-1.0, 1.0, 11.0].contains(x)), "{xs:?}");
+    assert_eq!(xs.iter().filter(|&&x| x == 11.0).count(), 1);
+    assert!(out.iter().all(|v| v.normal[0] == 1.0), "samples the sheet");
+}
+
+/// `ParticleSystem_DrawCappedStreak` is a bar from one cap to the other;
+/// it rides one quad whose along-coordinate the shader folds into `v`.
+#[test]
+fn a_class_7_streak_is_one_bar_with_its_cap_share() {
+    let spec = streak_spec(StreakDraw::Capped, Some([0.0, 0.0, 1.0, 1.0]));
+    let out = streak_vertices(&spec, &streak_particle(Vec3::ZERO, Vec3::X * 8.0));
+    assert_eq!(out.len(), 6);
+    for vertex in &out {
+        assert_eq!(vertex.normal[0], 2.0);
+        // Each cap is `half` of `length + 2 * half`: 1 of 10.
+        assert!((vertex.lit - 0.1).abs() < 1e-6);
+        let (x, s) = (vertex.position[0], vertex.texcoord[1]);
+        assert!((x == -1.0 && s == 0.0) || (x == 9.0 && s == 1.0), "{x} {s}");
+    }
+}
+
+/// Every source but Pulse on the PSP keeps the procedural rectangle, byte
+/// for byte, sprite or not.
+#[test]
+fn a_procedural_streak_ignores_a_placed_sprite() {
+    let particle = streak_particle(Vec3::ZERO, Vec3::X * 4.0);
+    let rect = Some([0.0, 0.0, 1.0, 1.0]);
+    let sampled = streak_vertices(&streak_spec(StreakDraw::Procedural, rect), &particle);
+    let plain = streak_vertices(&streak_spec(StreakDraw::Wedge, None), &particle);
+    let bytes = |v: &[GpuVertex]| bytemuck::cast_slice::<_, u8>(v).to_vec();
+    assert_eq!(bytes(&sampled), bytes(&plain));
+    assert!(sampled.iter().all(|v| v.normal[0] == 0.0));
+}
+
+/// `ParticleSystem_UpdateParticles` grows the frame by the rate times the
+/// tick, wraps once at `frames - 0.01`, and draws the floor.
+#[test]
+fn a_rated_frame_walks_the_atlas_and_wraps() {
+    let advance = FrameAdvance::Rate(constant(0.5));
+    let mut particle = Particle::DEAD;
+    let mut drawn = Vec::new();
+    for _ in 0..9 {
+        advance.step(&mut particle, 0.0, 0.0, 1.0, 4);
+        drawn.push(particle.frame);
+    }
+    // 0.5, 1.0, ... 3.5, then 4.0 - 3.99 = 0.01, then 0.51.
+    assert_eq!(drawn, [0, 1, 1, 2, 2, 3, 3, 0, 0]);
+}
+
+/// Under flag `0x40` the frame is the particle's age times `frames - 0.02`,
+/// whatever it was before.
+#[test]
+fn an_over_life_frame_follows_the_age() {
+    let mut particle = Particle {
+        frame_at: 3.0,
+        ..Particle::DEAD
+    };
+    FrameAdvance::OverLife.step(&mut particle, 0.0, 0.5, 1.0, 16);
+    assert_eq!(particle.frame, 7);
+    assert!((particle.frame_at - 7.99).abs() < 1e-5);
+    FrameAdvance::Still.step(&mut particle, 0.5, 0.9, 1.0, 16);
+    assert_eq!(particle.frame, 7, "a still frame never moves");
 }

@@ -31,5 +31,7 @@ impl super::super::Scene {
         // The effects' own sprites - a no-op after the first frame of a race.
         pipeline.sync_sheet(queue, race.view.effects.sheet());
         pipeline.upload(queue, vp, additive, alpha);
+        let flash = race.view.screen_flash.as_ref().and_then(|f| f.colour());
+        pipeline.upload_flash(queue, flash);
     }
 }

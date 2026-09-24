@@ -77,6 +77,9 @@ pub struct Pipeline {
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
     additive_count: u32,
     alpha_count: u32,
+    /// The screen flash, which shares this pass's targets - see
+    /// [`crate::flash`].
+    flash: crate::flash::Pipeline,
 }
 
 impl Pipeline {
@@ -264,6 +267,7 @@ impl Pipeline {
         let alpha_vertices = buffer("psys alpha-over vertices");
 
         Self {
+            flash: crate::flash::Pipeline::new(device, format, sample_count, velocity),
             additive,
             alpha_over,
             uniforms,
@@ -352,6 +356,17 @@ impl Pipeline {
             bytemuck::cast_slice(&alpha_over[..n]),
         );
         self.alpha_count = n as u32;
+    }
+
+    /// This frame's screen flash, [`crate::flash::ScreenFlash::colour`].
+    pub fn upload_flash(&mut self, queue: &wgpu::Queue, colour: Option<[f32; 4]>) {
+        self.flash.upload(queue, colour);
+    }
+
+    /// Draws the screen flash, if one runs - **last** in the scene pass, so
+    /// it washes over everything the pass drew and nothing the HUD does.
+    pub fn draw_flash(&self, pass: &mut wgpu::RenderPass<'_>) {
+        self.flash.draw(pass);
     }
 
     /// Draws into a pass the caller already opened.

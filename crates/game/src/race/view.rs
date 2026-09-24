@@ -104,6 +104,9 @@ pub struct RaceView {
     pub(super) hd_plasma_blast: bool,
     /// See `options::Setup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
+    /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
+    /// source alone - see `options::Setup::screen_flash`.
+    pub(super) screen_flash: Option<oag_render::flash::ScreenFlash>,
     /// See `Setup::absorb_burst`.
     pub(super) absorb_burst: Option<super::absorb::AbsorbBurst>,
     /// See `Setup::absorb_anchors`.
