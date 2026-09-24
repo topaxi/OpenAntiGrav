@@ -373,6 +373,26 @@ which is the whole point of the weapon.
 
 ## Open
 
+- **The Quake's road ripple is drawn (2026-09-24); five things around it are
+  not.** See the section at the bottom of this file and
+  [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)'s
+  "measured live" section. (1) **The hit is still ours**: the original's
+  `Quake_SpanIntensityAt_q` reads the same span position, amplitude and
+  half-width the ripple does, so its hit is very probably "how high is the bump
+  under this craft" against `0.1` after smoothing; this engine's is the
+  authored `radius` round the wave's `progress`. Matching it moves the golden
+  hashes - its own change, with its own regenerate commit. (2) **The sim's wave
+  sits 15 units behind the drawn bump**: `Quake_Init` arms the launch span
+  `g_quake_launch_lead` (15.0) ahead of the craft, and the render adds that
+  lead; the sim's `Wave::launch` does not, so the hit is measured from a point
+  15 units short of where the bump is drawn. (3) **The launch screen tint is
+  not drawn** - a strong orange-white flash for the first eighth of a second
+  in every PPSSPP frame; `Quake_Update`'s kind-4 dispatch (`func_0x000ec0c0`)
+  is the candidate, unread. (4) **The branch of a split (05, 07, 14)** is
+  placed through the span table's links in world units, chosen - whether both
+  branches ripple together in play is unobserved. (5) **Draw-call bounds are
+  not grown by the bump**, so a batch lifted 12 units near the edge of the view
+  can be frustum-culled a frame early; not seen, not checked.
 - ~~**`<Plasma charge_time>` is authored and nothing read spends it, and play
   says something should.**~~ ~~**A trap that will cost somebody an hour.**~~
   ~~**The Plasma draws no detonation.**~~ **All three closed 2026-09-09** -
@@ -1883,3 +1903,43 @@ re-run against the same seed after `git worktree add` off post-merge `main`
 byte-identical to the ribbon lane's own baseline: all twelve clean,
 `01_Track` one respawn at `[794]`, `07_Track` one respawn at `[687]`,
 nothing else moved.
+
+## 2026-09-24: the Quake ripples the road - read, measured live, drawn
+
+`Quake_UpdateSpan`'s vertex block read at instruction level (the Allegrex
+module's VFPU prefix decode is what makes it legible): a raised-cosine bump,
+`H = amp * (1 + cos(pi d / w)) / 2`, peak 12.0 at 0.3 s falling linearly to 0
+at 5.0 s (`Quake_SpanAmplitude`), half-width `25 + 10 age`
+(`Quake_SpanHalfWidth`), along `-lerp(A, B, p)` - the span's authored "down"
+axes, so up on level road. The span table is the track file's own `Quake`
+node (`0x3c7`), loaded whole by `QuakeNode_Load`; every record is one whole GE
+batch of a `Mesh` or pad node, on all 24 circuit files. Eight names landed.
+
+A PPSSPP fork measured it: every vertex of every armed span matched to 0
+shorts over 290 frames, **once shared batches were summed** - at a path
+junction one batch belongs to two or three records, and they add. And a
+stationary craft sat on a vertex that rose 10.8 units without its body
+rising: **render-only, measured**, confidence 92.
+
+Built: `oag_vex::quake` (the table), `oag_render::mesh::batch_placements` (batch
+header to model vertices), `oag_render::ripple` (the bump, summing owners),
+`oag_game::race::SpanPlaces` (every vertex onto the course through its path's
+own `t`, now `SplinePoint::progress`), and a `Scene::write_road` step before
+the weapon pads' tint, which adds the displacement back. Ground truth:
+`crates/vex/tests/quake_ground_truth.rs` and
+`crates/game/tests/quake_ripple_ground_truth.rs` (vertices median 0.37 units
+from where the course locates them, same-path seams 0.00 at p99).
+
+**The trap worth writing down**: mapping each span linearly between its own
+two ends looked right on residuals (median 0.5) and left **26-unit steps at
+seams** inside long curved spans - the bump would have torn at every one. The
+fix is to send every vertex through the same function of its path's `t`,
+which makes two spans meeting at one `t` meet at one distance. A seam check is
+the test that catches this; a residual check is not.
+
+**A second trap, in `scripts/psp-fire-weapon.py`**: `--index 0` is not the
+player in a single race (record 7 of a full grid, measured). Its help text
+said otherwise; it no longer does.
+
+Regression check, before and after, byte-identical: all twelve circuits
+clean, `01_Track` one respawn at `[794]` of 2836, `07_Track` one at `[687]`.

@@ -506,14 +506,15 @@ weapons the *pool* would hand out and the authored *odds* never do.
   located.~~ **Built 2026-09-07**, the same day the latch was found inside a
   function this page already had part of the reading of - the "wave has
   reached me" test (`entity+0x860 & 0x40`) sits a dozen lines above the
-  damage branch `cannon-quake-leachbeam.md` had already quoted. **This engine
-  draws no track deformation** - and note the reason changed on 2026-09-08:
-  the original *does* deform the road (`Quake_UpdateSpan`, `0x0891cab8`,
-  rewrites the road mesh's own packed vertex positions under a `vcos_q`
-  profile), but the deformation is decorative and the damage path needs none
-  of it. The earlier "the Quake is not a track deformation" reading was drawn
-  from the three functions that pass it by; see that page's own 2026-09-08
-  correction. A single travelling instance
+  damage branch `cannon-quake-leachbeam.md` had already quoted. **The road
+  ripples, since 2026-09-24**, render-only: `Quake_UpdateSpan` (`0x0891cab8`)
+  lifts the road's own vertices into a raised-cosine bump - 12 units at 0.3 s,
+  gone at 5 s, 50 to 150 units wide, rolling at 270 units a second - read at
+  instruction level, matched to the short live on PPSSPP, and drawn by
+  `oag_render::ripple` from the track file's own `Quake` span table. The craft
+  does not ride it, measured: the road rose 10.8 units under a stationary
+  craft whose body did not. So the damage path still needs none of it. See
+  that page's "the ripple itself" and "measured live" sections. A single travelling instance
   (`oag_gameplay::projectile::quake::Wave`) advances at a fixed, unauthored
   `270.0` units a second along the course, tracked as a plain distance-along
   rather than the original's segment-plus-parametric-`t` pair, and its hit on

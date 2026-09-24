@@ -1214,6 +1214,8 @@ damage and slowdown are a scalar impulse through the shared pending-hit
 channel, with no geometry involved**, and nothing in the damage path needs the
 deformation. What changes is that "does the Quake deform the track" is now
 answered **yes**, at confidence 85, and this engine draws none of it.
+(Superseded 2026-09-24: read in full, measured live and drawn - see "the
+ripple itself" below.)
 
 #### The object's own two ends
 
@@ -1350,8 +1352,10 @@ Quake_SpanHalfWidth(t):  t * 50.0 / 5.0 + 25.0         // 25 -> 75 over the life
 `0x08a88540` is confirmed by relocation, not by reading the `lui`/`lwc1`
 pair at face value: `psp-relocate.py resolve 0x0891b60c 0x0891b61c` gives
 `0x08a88540` for both. The four bytes there are `0x41400000`, `12.0f`, and the
-next twelve spell `~QUAKETRAVEL` - the travelling cue's own name, which this
-page twice failed to find from `Quake_Update`'s side.
+next twelve spell `~QUAKETRAVEL`. That string sitting beside the constant is
+a lead on the travelling cue this page twice failed to resolve from
+`Quake_Update`'s side, **not** a resolution of it: whether `Quake_Update`'s
+own cue argument points here was not checked.
 
 Then the vertex block (`0x0891cddc`-`0x0891d1f4`), which runs only while the
 bump overlaps the span (`-m < pos < m + 1` for either the new or the previous
@@ -1391,10 +1395,15 @@ growing from 50 to 150 units, centred on the wave and moving with it at
 270 units a second.** The displacement is along `-lerp(A, B, p)`: A and B are
 the track's own "down" axis at the span's two ends (exactly `(0, -1, 0)` on
 level road, and [track.md](../../../formats/track.md) pins `+y` as up), so the
-road rises, along its own surface normal where it banks. On the ten `02_Track`
-and `16_Track` spans whose local "down" is `+y` the local frame is flipped by
-the node's transform; the direction is taken in the batch's own space and only
-means "up" after that transform.
+road rises, along its own surface normal where it banks. **Not every span is
+road.** Barrier and bank spans author a "down" that is nearly horizontal -
+`(0.43, 0.13, -0.89)` on `01_Track` - and a handful on `02_Track` and
+`16_Track` author one pointing up, so the original moves those sideways or
+down exactly as their data says; the direction is always taken in the batch's
+own space, before its node's transform. (An earlier draft of this paragraph
+guessed the node transform flips those; `level_road_rises_in_world_space` in
+`crates/game/tests/quake_ripple_ground_truth.rs` shows it does not - only
+spans authored level are held to rising.)
 
 The write is **incremental and exact**: each frame subtracts last frame's
 displacement and adds this frame's, each rounded to whole `short` units before
@@ -1479,6 +1488,96 @@ so the original's hit test is very probably "how high is the bump under this
 craft", compared against `0.1` after smoothing. This project's hit uses the
 authored `radius` instead; matching the original there would move the golden
 hashes and is left as its own change.
+
+#### Measured live on PPSSPP, 2026-09-24
+
+Everything above was then measured against the running game. PPSSPP v1.20.4,
+UCUS98712, a private silent instance; single race, Venom, Talon's Junction
+(`16_Track`). The Quake was fired from the player's own weapon record by
+setting bit `0x8` of `+0x1b8` while stepping (`scripts/psp-fire-weapon.py
+quake`, which gained the entry in this pass). A breakpoint on
+`Quake_UpdateSpans` read the whole table at `*(g_quake_span_table)` every
+frame for 290 frames, and compared every armed record's batch against the
+disc's own shorts.
+
+| Quantity | Read statically | Measured |
+| --- | --- | --- |
+| every vertex of every armed span, every frame | `v0 - sum round(-lerp(A,B,p) * H * 32767/scale)` | **0 shorts of error** |
+| amplitude `+0x64` | `12 t/0.3`, then `12 (1 - (t - 0.3)/4.7)`, `t = age + dt` | max error 0.00000 over 4,523 samples |
+| half-width `+0x6c` | `25 + 10 t` | max error 0.00000 |
+| advance of `+0x5c` | 270 units a second | 269.996 to 270.004 |
+| peak rise in world `+y` | the amplitude | 11.941 against 11.956, 10.251 against 10.296 |
+| lifetime | 5.0 s | last armed frame at age 4.788; `Quake_UpdateSpans` stops being called once `live == 0` |
+
+Two things the static read did not say:
+
+- **A batch can belong to two or three span records, and they add.** At a
+  path junction one GE batch is owned by one record per path - on `16_Track`
+  records 223/224, 228/229, 230/231, 349/350, 351/352 and 354/355; 18 such
+  batches on `01_Track`, 42 on `05_Track`, 54 on `07_Track`. Every owner
+  writes its own incremental displacement into the same vertices, so the live
+  vertex is its authored position less the **sum** over its armed owners.
+  Comparing per record gave 220-short "errors" on exactly those records;
+  summing gives zero.
+- **`Quake_Init` arms about 20 records before the first update**, all at age
+  0 and amplitude 0: the launch span's own `Quake_ArmSpan` call updates it
+  with `dt = 0`, which propagates, recursively, to everything the launch-width
+  bump already overlaps. 115 records were armed over the wave's life; the live
+  count ran 10 to 41 a frame.
+
+**The craft does not ride it, measured.** With the player settled on the grid,
+an AI's Quake was fired from 250 units behind it. The road vertex 0.31 units
+under the craft rose to **+10.80** at the wave's peak; the craft's body did
+not rise at all, and dipped by up to 1.24 units only from the frame the hit
+landed (energy 100 % to 88 %), which is the hit, not a floor. At its peak the
+drawn road stood about 7 units above the craft's own body, and the frame shows
+the road sheet passing *through* the craft. Confidence **92** for render-only:
+the static argument above and a live read agree.
+
+**What a player sees** (the run's own frames, at the size a player sees them):
+a strong orange-white tint over the whole screen for the first eighth of a
+second, while the road just ahead starts to lift; then one smooth, full-width
+hump that rolls **forward only**, 50 to 90 units ahead, the kerbs and barriers
+bending up with it, fire and dark debris (`WO_QUAKE`) on its crest, tall
+enough near its peak to hide the road behind it. By a second it has passed the
+start gantry and shrinks with distance; the tint has gone. The screen tint's
+source is not identified - `Quake_Update`'s kind-4 dispatch
+(`func_0x000ec0c0`, above) is the candidate.
+
+Profile confidence **95** (instruction-level read and a zero-error live
+match). The per-span one-frame skew the Python port predicted is still
+unexamined: the live comparison used each record's own position, which would
+absorb it.
+
+#### What this project draws, 2026-09-24
+
+The ripple is drawn, render-only, and the simulation still never learns a
+renderer exists:
+
+- `oag_vex::quake` decodes the `Quake` node's table, and
+  `crates/vex/tests/quake_ground_truth.rs` holds all 9,226 records of the 24
+  circuit files to "one record, one whole batch" and to distance-exact links.
+- `oag_render::mesh::batch_placements` says which vertices of a built model
+  each batch became; `oag_render::ripple` draws the bump into them, **summing
+  the owners of a shared batch** as measured above, and restoring a batch to
+  its authored vertices the frame the bump leaves it.
+- `oag_game::race::SpanPlaces` maps every vertex onto the course through its
+  path's own `t` - the control points' authored `progress`, now read into
+  `oag_vex::track::SplinePoint::progress` - so that neighbouring spans meet
+  without a step. `crates/game/tests/quake_ripple_ground_truth.rs` holds every
+  road vertex to a median 0.37 and p99 under 5.1 units of where it really is
+  on the course, on all 24 files, and every same-path seam to 0.00 at p99.
+- The bump follows the simulation's own `Wave`: its `progress` plus the
+  original's 15-unit launch lead, its `age` one tick late, as both helpers are
+  handed. Nothing hashed changed; `race_ground_truth`'s lone-craft run is
+  identical before and after.
+
+Chosen, not measured, and labelled so in the code: the branch path of a split
+(05, 07, 14) is placed through the table's links in world units, since the
+course has no distance for a branch it does not walk; and the original's
+update-order phase skew between spans is not reproduced.
+
+Not drawn: the screen tint.
 
 ### 2026-09-08: the LeachBeam's texture, located - and it is not the ribbon's
 
