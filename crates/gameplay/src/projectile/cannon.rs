@@ -33,8 +33,11 @@
 //! already recorded a hit, calls `FUN_08857e90` - the damage handler [`direct_hit`]
 //! is now confirmed against. **Neither of those three functions calls
 //! `Psys_Spawn_q`.** So on the PSP, a round that hits a craft plays a sound
-//! and applies damage but throws no spark; only a round that hits the track
-//! does. See `oag_game::race::CANNON_SPARKS_EFFECT` for where this is wired
+//! and applies damage but the *round* throws no spark; only a round that
+//! hits the track does. The struck hull sparks from its own side: the damage
+//! this posts reaches `Ship_Damage`, whose weapon branch throws
+//! `WO_SHIP_COLL_SPARK_DAMAGE` off the victim's locators - see
+//! [`super::WeaponHit::landed`]. See `oag_game::race::CANNON_SPARKS_EFFECT` for where this is wired
 //! and `crates/game/tests/psys_inventory_ground_truth.rs`'s
 //! `WO_CANNON_HIT_SHIP` entry for the PS2-only asset this does not settle.
 
@@ -119,15 +122,15 @@ pub fn launch(state: &ShipState, dimensions: &Dimensions, left: bool) -> (Vec3, 
 /// hit spends - a second path that bypassed it would be a real bug, not a
 /// shortcut. `slowdown_time` is credited exactly as [`super::blast`] credits
 /// it: unconditionally, with the shield gate living at the drain rather than
-/// here. `absorbed` is threaded through for the same reason `blast` takes
-/// it - a shielded craft's shell still has to bulge for the hit to read as
-/// having landed at all.
+/// here. `hits` is threaded through for the same reason `blast` takes it: a
+/// shielded craft's shell still has to bulge, and an unshielded one throws
+/// its hull's damage sparks - see [`super::WeaponHit`].
 pub fn direct_hit(
     ships: &mut [crate::world::Ship],
     slot: usize,
     stats: &CannonStats,
     rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
+    hits: &mut [super::WeaponHit],
 ) {
     let Some(ship) = ships.get_mut(slot).filter(|s| s.active) else {
         return;
@@ -140,9 +143,7 @@ pub fn direct_hit(
         stats.damage_per_bullet,
         rules,
     );
-    if let Some(flag) = absorbed.get_mut(slot) {
-        *flag |= report.absorbed;
-    }
+    super::hit::record(hits, slot, &report);
 }
 
 /// What one Cannon round's impact does, called from
@@ -158,7 +159,7 @@ pub fn apply_impact(
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     impact: &super::Impact,
     rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
+    hits: &mut [super::WeaponHit],
 ) {
     let Some(struck) = impact.struck else {
         return;
@@ -166,5 +167,5 @@ pub fn apply_impact(
     let Some(cannon) = weapons.and_then(oag_tables::weapons::WeaponStats::cannon) else {
         return;
     };
-    direct_hit(ships, struck as usize, &cannon, rules, absorbed);
+    direct_hit(ships, struck as usize, &cannon, rules, hits);
 }

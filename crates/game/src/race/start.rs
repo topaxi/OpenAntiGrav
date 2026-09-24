@@ -61,6 +61,7 @@ impl Race {
             pulse_laid_pose,
             absorb_burst,
             absorb_anchors,
+            hit_spark_anchors,
             ..
         } = setup;
 
@@ -431,6 +432,7 @@ impl Race {
                 absorb_anchors,
                 absorb_bursts: Vec::new(),
                 absorb_started: 0,
+                hit_sparks: super::hit_sparks::HitSparks::new(hit_spark_anchors),
                 absorb_overlay: [None; MAX_SHIPS],
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),

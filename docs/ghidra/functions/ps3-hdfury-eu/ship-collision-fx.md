@@ -143,7 +143,37 @@ than this compiler does - `ps4-omega-eu/ships-effects.md`'s own
 this one calls out to separately. Either way it doesn't change the kind
 0-3 mapping both binaries agree on above.
 
-### The dispatch-table entry, `0x0010f730` - not renamed
+### The dispatch-table entry, `0x0010f730` - `Cannon_ApplyCraftHit`, confidence 72
+
+**2026-09-24: it is the Cannon's craft-hit handler.** The earlier read
+stopped at the spark call. The block above it, re-read for the Pulse
+hit-spark question, writes the struck craft's pending-hit channel exactly
+as Pulse's `Cannon_MarkCraftHit`/`Cannon_ApplyCraftDamage` do
+([`psp-pulse-usa/cannon-quake-leachbeam.md`](../psp-pulse-usa/cannon-quake-leachbeam.md)):
+
+```c
+if (round->flags /* +0x40 */ & 1) {                       // after `|= 0x24`
+    victim->attacker /* +0x13c */ = shooter;
+    victim->by_rival /* +0x124 */ = FUN_0012d7e0(...);
+    victim->kind     /* +0x138 */ = 3;                   // the Cannon's own tag
+    victim->pending  /* +0x120 */ += stats->0x90;        // damage per bullet, by position
+    victim->slowdown /* +0x130 */ += stats->0x94;        // slowdown time, by position
+}
+Ship_DispatchCollisionFx(victim_entity->0xf0, contact, 1); // WO_SHIP_SPARK_DAMAGE_WEAPON
+```
+
+So **on HD the Cannon throws its own spark on a craft hit, from the weapon's
+side**: `WO_SHIP_SPARK_DAMAGE_WEAPON` on the locator nearest the contact.
+On Pulse the Cannon spawns nothing on a craft, and the struck hull sparks
+from `Ship_Damage` instead
+([`psp-pulse-usa/shield.md`](../psp-pulse-usa/shield.md), "`Ship_Damage`'s
+weapon branch throws the hit sparks"). The spark call is not inside the
+`& 1` gate. `Ship_DispatchCollisionFx` has no other direct caller.
+Confidence **72**: the tag literal `3` and the three field offsets match
+Pulse's Cannon field for field. Two things are not read: which stats fields
+`+0x90`/`+0x94` are, and whether HD's own `Ship_Damage` also sparks.
+
+What follows is the 2026-08-31 reading, kept as written:
 
 **Confidence below 50, per `CLAUDE.md`'s own rule - left as `FUN_0010f730`.**
 
@@ -228,6 +258,15 @@ the single-TOC-slot pattern the rest of this chain used. That is why
   narrower, that would favour the "PS4 inlines more aggressively" reading
   over "PS4 combines HD+2048 logic" - see `ps4-omega-eu/ship-collision-fx.md`'s
   own open pair of hypotheses, neither resolved yet.
+- **HD may have a shield-state damage smoke that Pulse lacks.** The EBOOT
+  names `WO_DAMAGE_MILD`, `WO_DAMAGE_MODERATE` and `WO_DAMAGE_CRITICAL`
+  (`0x0079be40`..`0x0079be68`, path strings at `0x007a1a20`..`0x007a1a68`).
+  Pulse has no such names, and a Pulse craft at low shield draws nothing.
+  Their consumer is unread: the only xref is a data pointer at `0x008b2fa0`,
+  so the TOC-displacement search above is the way in. Also unread: whether
+  HD's `Ship_Damage` throws hull sparks the way Pulse's does.
+- **Index 11 is now identified as the Cannon's craft hit** (2026-09-24,
+  above); the table's key is still unread.
 - **What `0x00875800`'s reaction table is keyed by, and what index 11
   represents**, is undetermined - the table itself is reached through at
   least one hop this pass's literal-address search technique could not close
@@ -244,6 +283,8 @@ the single-TOC-slot pattern the rest of this chain used. That is why
 
 ## History
 
+- 2026-09-24: `FUN_0010f730` renamed `Cannon_ApplyCraftHit` (72): it writes the
+  Cannon's pending-hit channel, tag `3`, before its spark call.
 - 2026-08-31: `Ship_DispatchCollisionFx_q` 68, `ShipCollisionFx_Trigger_q`
   65 - entirely structural, single binary, `_q` suffixed per the rubric.
 - 2026-09-15: raised to 78 and 76 respectively, `_q` dropped - an

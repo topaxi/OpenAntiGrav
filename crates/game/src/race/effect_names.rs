@@ -317,7 +317,8 @@ pub const LEACHBEAM_ENERGY_EFFECT: &str = "WO_LEACHBEAM_ENERGY";
 /// `0x08a7c890` on USA, `0x08a7c0e0` on EU, both confirmed by a direct memory
 /// read rather than inferred.
 ///
-/// **A craft hit does not reach this call at all.** See
+/// **A craft hit does not reach this call at all** - the struck hull throws
+/// its own damage sparks instead, from `Ship_Damage` (`race::hit_sparks`). See
 /// `oag_gameplay::projectile::cannon`'s own module doc, "The wall hit spawns
 /// a spark effect; the craft hit does not", for the separate cylinder-test
 /// path that applies damage and a sound cue but never calls `Psys_Spawn_q`.

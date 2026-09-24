@@ -427,3 +427,4 @@
 0x000db6f8	function	ShipAbsorbShell_Show	75	absorb-feedback.md
 0x000cef50	function	ShipAbsorbShell_Step	80	absorb-feedback.md
 0x000db990	function	ShipAbsorbShell_Update	65	absorb-feedback.md
+0x0010f730	function	Cannon_ApplyCraftHit	72	ship-collision-fx.md

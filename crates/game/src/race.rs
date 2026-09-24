@@ -134,6 +134,7 @@ mod field;
 pub mod gantry;
 mod hash;
 mod held_buttons;
+mod hit_sparks;
 mod hud;
 mod load;
 mod models;

@@ -924,6 +924,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             pulse_laid_pose: craft_title.name == oag_pulse::TITLE.name,
             absorb_burst,
             absorb_anchors,
+            hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
             collision,
             handling,
             airbrake_graphics,

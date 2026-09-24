@@ -608,11 +608,16 @@ of which these six fields describe only the root.
 The two non-spark callers below are recorded for completeness, not chased
 further:
 
-- **`FUN_088439ac`** (hull damage, documented above) also calls
-  `ShipCollisionFx_Trigger(1.0, ..., shieldFlag, 1)` with a **hardcoded**
-  intensity of `1.0`, but only on the branch where shield/energy has just
-  reached zero - a death/destruction burst, not a per-hit spark, and not
-  scaled by damage magnitude.
+- **`Ship_Damage` (`0x088439ac`)** calls
+  `ShipCollisionFx_Trigger(1.0, locator, kind == 7, 1)` with a **hardcoded**
+  intensity of `1.0`, on one or two random locators, for **every weapon hit
+  that gets through**, the killing one included. It is not scaled by damage
+  magnitude. **Corrected 2026-09-24**: this line said "only on the branch where
+  shield/energy has just reached zero". The spawn block follows the destroyed
+  test rather than sitting inside it, and PPSSPP stops at it (`ra 0x08844050`)
+  on hits that leave the pool well above zero. See
+  [shield.md](shield.md), "`Ship_Damage`'s weapon branch throws the hit
+  sparks".
 - **`FUN_08840640`** (named `Ship_PlayAbsorbFeedback` on
   [shield.md](shield.md) as of 2026-09-16) is the shield-absorb ability's own
   effect: it plays an `"ABSORB"` sound once, then calls

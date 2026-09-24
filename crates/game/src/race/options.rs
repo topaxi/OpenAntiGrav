@@ -418,6 +418,10 @@ pub struct Setup {
     /// the original collects them: the `Ship Collision Fx` set on Pulse and
     /// Pure, the `absorb` set on HD.
     pub absorb_anchors: Vec<Vec<Vec3>>,
+    /// Each slot's `Ship Collision Fx` locators for the hit sparks a landed
+    /// weapon hit throws, or none on a title whose path is unread. See
+    /// `race::hit_sparks`.
+    pub hit_spark_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.

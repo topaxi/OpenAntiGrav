@@ -274,6 +274,20 @@ pub struct Shield {
     pub absorbed: bool,
 }
 
+impl Shield {
+    /// Whether the hit got through `Ship_Damage`'s gate and was subtracted: the
+    /// craft was racing, no fired Shield swallowed it, and the amount was
+    /// positive.
+    ///
+    /// `lost` is the amount *asked for*, not the clamped delta, so the killing
+    /// hit on a nearly empty pool still reads as landed. Every refusal returns
+    /// a zero `lost`, the absorbed one included.
+    #[must_use]
+    pub fn landed(&self) -> bool {
+        self.lost > 0.0
+    }
+}
+
 /// Advance the destroyed sequence, `0x088404c8`.
 ///
 /// Separate from [`apply_contact`] because it runs on every tick rather than on

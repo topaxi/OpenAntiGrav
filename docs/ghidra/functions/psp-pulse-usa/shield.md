@@ -152,8 +152,10 @@ The order of operations, with the branches that matter:
 6. `Ship_SetShield(new, entity)`.
 7. **Destroy at zero or below**: `if (new <= 0.0) Ship_SetState(entity, 4)`,
    plus the placement and elimination bookkeeping that follows from it.
-8. Spawn one or two absorb sparks through `ShipCollisionFx_Trigger`, for
-   `source == 2` only.
+8. Throw the struck hull's **damage** sparks through `ShipCollisionFx_Trigger`
+   on one or two random `Ship Collision Fx` locators, for `source == 2` only.
+   These are not absorb sparks, which this line called them until 2026-09-24;
+   see "`Ship_Damage`'s weapon branch throws the hit sparks" below.
 
 `source` is a damage category, read off the buckets it selects rather than
 guessed: **0** is track/wall contact, **1** is another craft, **2** is a
@@ -187,6 +189,105 @@ which is why that page calls this the gameplay-facing twin.
 
 **This is the number a runtime leg would settle**, and none exists yet. See
 "What is not verified" below.
+
+### `Ship_Damage`'s weapon branch throws the hit sparks
+
+Read 2026-09-24, because a player sees sparks and smoke on a craft the Cannon
+is hitting and nothing in the Cannon's own path spawns a particle
+([cannon-quake-leachbeam.md](cannon-quake-leachbeam.md)). The spawn is on the
+**victim's** side, in `Ship_Damage` itself, after the subtraction and after the
+`<= 0.0` destroyed block has closed:
+
+```c
+// 0x08844000..0x08844074, inside `if (+0x368 == 0 || +0x368 == 2)`
+if (FUN_0883e37c(entity) && source == 2 && entity->fx_count /* +0xca8 */ != 0) {
+    leach = entity->craft /* +0x4c */ ->kind /* +0x138 */ == 7;
+    i = Psys_RandIntRange(0, entity->fx_count - 1);
+    j = Psys_RandIntRange(0, entity->fx_count - 1);
+    ShipCollisionFx_Trigger(1.0, entity->fx[i] /* +0xc80 */, leach, 1);   // jal 0x08844048
+    if (i != j)
+        ShipCollisionFx_Trigger(1.0, entity->fx[j], leach, 1);            // jal 0x0884406c
+}
+```
+
+- **Every weapon hit that gets through, the killing one included.** The block
+  follows the destroyed test rather than sitting inside it, which corrects
+  [contact-response.md](contact-response.md)'s older "only on the branch where
+  shield has just reached zero". A shielded craft never gets here:
+  `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`) takes its `ShipShield_Hit`
+  branch instead of calling `Ship_Damage` at all.
+- **The effect.** `ShipCollisionFx_Trigger`'s own switch
+  ([contact-response.md](contact-response.md)): kind 0 with `damaged` set is
+  `WO_SHIP_COLL_SPARK_DAMAGE`, the same four-emitter tree a damaging wall
+  contact throws - smoke puffs, a spark fountain, `bits` and embers
+  ([pob.md](../../../formats/pob.md)). Kind 1 is
+  `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`, chosen when the pending hit's kind
+  (`craft+0x138`) is `7`, the LeachBeam's own id.
+- **Severity 2.4, always.** Intensity is the literal `1.0`, so the trigger's
+  `intensity * 2.0 + 0.4` is fixed.
+- **At most once per locator per 0.8 s.** The trigger's `instance + 100`
+  cooldown applies to kinds 0 and 1, so a Cannon's stream of small hits
+  sparks each of Assegai's six locators at most every 0.8 s.
+- `FUN_0883e37c` is a display-mask test (see "Which ten nodes" below) and is
+  not read further.
+
+Confidence **88**: a clean decompile, both call sites read, and measured.
+
+**Ported** as `oag_game::race::hit_sparks`, Pulse only. `oag_gameplay::projectile::WeaponHit::landed`
+reports each hit that got through `Ship_Damage`'s gate as a per-tick output.
+Three choices are not measured. The cooldown is per locator but not shared
+with wall contacts. The display-mask gate is not modelled. The locator picks
+come from a view-side generator.
+
+**Measured on PPSSPP**, USA `BOOT.BIN`, a Single Race on Talon's Junction,
+2026-09-24. A synthetic hit was posted into the player's pending-damage
+channel at a `Weapons_DispatchFire` stop: `craft+0x120 = 2.0`, `+0x138 = 3`
+(the Cannon's own tag), `+0x124 = 0`. Then breakpoints went one at a time on
+`ShipCollisionFx_Trigger` and on `Psys_Spawn_q` (`0x08915484`):
+
+| Posted kind | Trigger `ra` | Trigger `a1`, `a2`, `f12` | Next `Psys_Spawn_q` | Shield |
+| --- | --- | --- | --- | --- |
+| 3, four hits | `0x08844050` | 0, 1, 1.0 | `WO_SHIP_COLL_SPARK_DAMAGE`, `ra 0x089249b4` | -2.0 each |
+| 7, two hits | `0x08844050` | 1, 1, 1.0 | `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`, `ra 0x08924900` | -2.0 each |
+
+Every `a0` was one of the player's six `+0xc80` locators, a different one on
+most hits. In a live race the same `ra` was reached on AI craft: 29 stops
+while the player fired Rockets into the grid across GO, 7 while it fired the
+Cannon. The AI were firing too, and the weapon behind each stop was not
+recorded, so none is attributed to one weapon. A wall contact reaches the
+same trigger from `0x0883df68` (`Ship_DispatchCollisionFx`) and was seen
+alongside.
+
+**The smoke is per hit, not a shield state.** The player's pool was set to
+`8.0` with no hit and photographed over three seconds: nothing drew on the
+craft. Statically, the only ship-owned `Psys_Spawn_q` callers are this
+trigger, the destruction spawners `FUN_0883e064` (`WO_SHIP_FXNODE_EXPLO`,
+`WO_SHIP_DEATH_SPARKS`) and `FUN_088407b0` (`WO_SHIP_EXPLOSION`), and
+`FUN_0883f540` (`WO_LEACHBEAM_CHARGING`). The complete caller list is 24
+functions. None of them reads the shield level.
+
+The frames are in `data/scratch/hit-sparks/` (gitignored): `cap-cannon/`
+(a hit every 6 frames for 60 frames), `cap-lowshield/`, and
+`cannon-orig-vs-ours.png`.
+
+#### The player-only call beside it: `CockpitHitFx_Arm_q` (`0x088eeaf8`)
+
+On a `source == 2` hit to the human craft (`+0x368 == 0`) outside game modes
+2 and 12, `Ship_Damage` also calls
+`CockpitHitFx_Arm_q(1.5, 1.5, 0.6, 1.0, DAT_08ab2120)` beside `Camera_ArmShake`.
+`DAT_08ab2120` is a `0x68`-byte node that `InGame_Update` builds with
+`FUN_088eea44`, right after the screen-flash node (`DAT_08ab2200`). The arm
+does nothing while the node is already running (`+0x58`). Otherwise it stores
+`alpha = 1.0 * 255`, `rate = 1 / 0.6`, and two amplitudes
+`1.5 * DAT_08a84a30`.
+
+Its update (`0x088eeb54`, vtable `0x08ad0d84`) decays both amplitudes
+linearly to zero over the 0.6 s. Each frame it draws two fresh offsets in
+eighths (`Psys_RandIntRange(0, 7) * 0.125`). Its enqueue (`0x088eec20`) only
+queues a draw while the player craft's `+0x6d` is set: the internal
+(cockpit) camera flag, per [camera.md](camera.md). **So it is not in any
+chase-camera frame.** What it draws is unread. Confidence **60** for the name:
+the arm, the decay and the cockpit gate are read, the picture is not.
 
 ## The two race options that reach the pool
 
@@ -849,6 +950,9 @@ HD's is a different mechanism on a different node class; see
 
 ## History
 
+- 2026-09-24: **`Ship_Damage`'s weapon branch read and measured**: it throws the
+  struck hull's damage sparks, not absorb sparks, on every landed weapon hit.
+  `CockpitHitFx_Arm_q` named. Ported as `oag_game::race::hit_sparks`.
 - 2026-09-23: **the absorb burst's node list and delay read**:
   `Ship_GatherCollisionFxNodes`, `Vex_CollectNodesOfType`, `PsysNode_Start_q`
   and `PsysNode_Update` are named. The burst is drawn.

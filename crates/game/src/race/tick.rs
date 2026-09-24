@@ -256,12 +256,11 @@ impl Race {
         // The whole table rather than the Rocket's block: a blast is looked up by
         // the weapon that made it now that more than one weapon can make one.
         let damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
-        // One flag per slot for a craft whose shield swallowed a blast. The
-        // *only* thing that makes a shell visibly react is an absorbed hit -
-        // see `oag_render::shield::ShipShield::hit` - so a blast that a shield
-        // ate has to come back out of the step rather than being invisible on
-        // both sides.
-        let mut absorbed = [false; MAX_SHIPS];
+        // One report per slot: a hit a shield swallowed (the *only* thing that
+        // makes a shell visibly react - see `oag_render::shield::ShipShield::hit`)
+        // or one that got through (the hull's own sparks). Both have to come
+        // back out of the step rather than being invisible on both sides.
+        let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
         // Read before the step, for `ignite_missile_bounces` below: a bounce
         // never stops a projectile, so it never reaches `impacts` and the
         // only way to see one is to compare this counter before and after.
@@ -283,13 +282,16 @@ impl Race {
             self.sim.weapons.as_ref(),
             &self.sim.class,
             damage_rules,
-            &mut absorbed,
+            &mut hits,
         );
-        for (slot, hit) in absorbed.iter().enumerate() {
-            if *hit {
+        for (slot, hit) in hits.iter().enumerate() {
+            if hit.absorbed {
                 self.view.shield[slot].hit();
             }
         }
+        // A hit that got through throws the struck hull's own sparks - the
+        // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
+        self.throw_hit_sparks(&hits, false);
         // After `projectile::step`, so a flare rides where its rocket
         // actually ended the tick rather than a tick behind it.
         self.advance_projectile_flares();
@@ -401,6 +403,7 @@ impl Race {
         // rather than the last one's.
         self.advance_engine_flares();
         self.advance_absorb_bursts();
+        self.advance_hit_sparks();
         self.view
             .stage
             .advance(self.sim.dt, &mut self.view.stage_rng);

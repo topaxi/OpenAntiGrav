@@ -121,26 +121,21 @@ pub(super) fn blast_stats(
 /// blast did something" wants and what a test asserting "and nothing outside the
 /// radius" needs the other half of.
 ///
-/// # `absorbed`
+/// # `hits`
 ///
-/// One flag per ship slot, **set and never cleared**, marking a craft whose
-/// fired Shield swallowed this blast. The original's weapon-damage drain
-/// (`Ship_ApplyPendingWeaponDamage`, `0x0883f13c`) takes a shield branch that
-/// discards the amount and calls `ShipShield_Hit` instead, so a swallowed hit is
-/// the *only* thing that makes the shell visibly react - see
-/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+/// One [`super::WeaponHit`] per ship slot, **set and never cleared**: whether a
+/// fired Shield swallowed this blast, and whether it landed. See that type for
+/// what each drives.
 ///
 /// An out-parameter rather than a second return value, because the caller that
 /// wants it is two layers up and the intermediate ([`step`]) already returns the
-/// thing every other caller asks for. A caller with nothing to draw passes a
-/// scratch array; a short slice is written as far as it goes rather than
-/// panicking, so `&mut []` is a legal "do not tell me".
+/// thing every other caller asks for.
 pub fn blast(
     ships: &mut [crate::world::Ship],
     point: Vec3,
     stats: &BlastStats,
     rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
+    hits: &mut [super::WeaponHit],
 ) -> usize {
     let radius = stats.radius;
     let mut reached = 0;
@@ -173,11 +168,7 @@ pub fn blast(
         let dimensions = ship.handling.dimensions;
         let report =
             oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, stats.damage, rules);
-        // `|=` rather than `=`: two blasts in one tick against one shielded
-        // craft are two absorbs, and the second must not clear the first.
-        if let Some(flag) = absorbed.get_mut(slot) {
-            *flag |= report.absorbed;
-        }
+        super::hit::record(hits, slot, &report);
 
         // A craft exactly on the blast centre has no direction to be pushed in.
         // World up rather than a zero push or a normalised NaN: something has to
@@ -227,7 +218,7 @@ pub(super) fn blast_mine_trip(
     stats: &BlastStats,
     struck: u8,
     rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
+    hits: &mut [super::WeaponHit],
 ) {
     let Some(ship) = ships.get_mut(struck as usize).filter(|s| s.active) else {
         return;
@@ -242,9 +233,7 @@ pub(super) fn blast_mine_trip(
     let dimensions = ship.handling.dimensions;
     let report =
         oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, stats.damage, rules);
-    if let Some(flag) = absorbed.get_mut(struck as usize) {
-        *flag |= report.absorbed;
-    }
+    super::hit::record(hits, struck as usize, &report);
     let direction = if distance > 1e-4 {
         offset.normalize()
     } else {
@@ -301,16 +290,14 @@ pub(super) fn blast_direct_hit(
     struck: u8,
     owner: u8,
     rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
+    hits: &mut [super::WeaponHit],
 ) {
     if let Some(ship) = ships.get_mut(struck as usize).filter(|s| s.active) {
         ship.pending_slowdown += stats.slowdown_time;
         let dimensions = ship.handling.dimensions;
         let report =
             oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, stats.damage, rules);
-        if let Some(flag) = absorbed.get_mut(struck as usize) {
-            *flag |= report.absorbed;
-        }
+        super::hit::record(hits, struck as usize, &report);
     }
 
     let radius = stats.radius;
@@ -349,7 +336,7 @@ pub(super) fn apply_impacts(
     weapons: Option<&WeaponStats>,
     impacts: &[Option<super::Impact>],
     rules: oag_physics::DamageRules,
-    absorbed: &mut [bool],
+    hits: &mut [super::WeaponHit],
 ) {
     for impact in impacts.iter().flatten() {
         // A detonation that only shows an explosion - see [`super::Impact::blast`].
@@ -357,7 +344,7 @@ pub(super) fn apply_impacts(
             continue;
         }
         if impact.kind == Weapon::Cannon {
-            cannon::apply_impact(ships, weapons, impact, rules, absorbed);
+            cannon::apply_impact(ships, weapons, impact, rules, hits);
             continue;
         }
         // **A Disruptor has no blast to look up**, and `blast_stats` below
@@ -398,7 +385,7 @@ pub(super) fn apply_impacts(
         if impact.kind == Weapon::Mine
             && let Some(struck) = impact.struck
         {
-            blast_mine_trip(ships, impact.point, &stats, struck, rules, absorbed);
+            blast_mine_trip(ships, impact.point, &stats, struck, rules, hits);
             continue;
         }
         if matches!(impact.kind, Weapon::Plasma | Weapon::Rocket)
@@ -411,11 +398,11 @@ pub(super) fn apply_impacts(
                 struck,
                 impact.owner,
                 rules,
-                absorbed,
+                hits,
             );
             continue;
         }
-        blast(ships, impact.point, &stats, rules, absorbed);
+        blast(ships, impact.point, &stats, rules, hits);
     }
 }
 
