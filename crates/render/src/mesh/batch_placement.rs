@@ -8,8 +8,9 @@
 //! (`oag_vex::quake::Span::batch`), needs that walk's answer: which vertices of
 //! the buffer are that batch's, and which matrix moved them there. This is the
 //! same walk, reporting instead of building.
-//! `batch_placements_tile_each_node` in `tests/quake_ripple_ground_truth.rs`
-//! holds it to `build_class`'s own per-node ranges on every Pulse circuit.
+//! `batch_placements_tile_each_node` in
+//! `crates/game/tests/quake_ripple_ground_truth.rs` holds it to
+//! `build_class`'s own per-node ranges.
 
 use anyhow::{Context, Result};
 use oag_vex::{quake, vex};

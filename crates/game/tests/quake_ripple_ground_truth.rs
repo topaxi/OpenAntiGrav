@@ -236,3 +236,116 @@ fn neighbouring_spans_agree_across_every_seam() {
         assert!(at(0.99) < 3.0, "{name}: p99 seam step {}", at(0.99));
     });
 }
+
+/// `oag_render::mesh::batch_placements` walks the batches in exactly the order
+/// the model builder lays their vertices down: its ranges tile each node's own
+/// range in the built model, end to end, and reach the model's last vertex.
+/// The load path refuses a model whose total disagrees; this is the stronger,
+/// per-node statement, on the road and both pad models of two circuits.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn batch_placements_tile_each_node() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    for dir in ["01_Track", "16_Track"] {
+        let name = format!("Data\\Environments\\{dir}\\track.vex");
+        let blob = archives.read_name(&name).expect("the circuit");
+        let builds: [(
+            &str,
+            fn(&str, &[u8]) -> oag_render::mesh::Model,
+            fn(vex::classes::Classes) -> Option<u32>,
+        ); 3] = [
+            (
+                "road",
+                |n, b| oag_render::mesh::build_with_textures(n, b, None).expect("road"),
+                |c| c.mesh,
+            ),
+            (
+                "speedup pads",
+                |n, b| oag_render::mesh::build_pads(n, b, None).expect("pads"),
+                |c| c.speedup_pad,
+            ),
+            (
+                "weapon pads",
+                |n, b| oag_render::mesh::build_weapon_pads(n, b, None).expect("pads"),
+                |c| c.weapon_pad,
+            ),
+        ];
+        for (what, build, pick) in builds {
+            let model = build(&name, &blob);
+            let placements = oag_render::mesh::batch_placements(&blob, pick).expect("placements");
+            let mut next = placements.iter().peekable();
+            for node in &model.node_vertex_ranges {
+                let mut at = node.start;
+                while let Some(p) = next.next_if(|p| p.vertices.start < node.end) {
+                    assert_eq!(p.vertices.start, at, "{dir} {what}: a gap inside a node");
+                    at = p.vertices.end;
+                }
+                assert_eq!(
+                    at, node.end,
+                    "{dir} {what}: the batches stop short of the node's end"
+                );
+            }
+            assert!(
+                next.next().is_none(),
+                "{dir} {what}: batches past the last node"
+            );
+            assert_eq!(
+                placements.last().map_or(0, |p| p.vertices.end as usize),
+                model.vertices.len(),
+                "{dir} {what}"
+            );
+        }
+    }
+}
+
+/// Level road rises in world space. A span whose authored "down" axis is
+/// `(0, -1, 0)` at both ends, pushed through its batch's own matrix, has to
+/// point into world `+y` - PPSSPP measured the original's road moving upward
+/// on every span a whole Quake armed on Talon's Junction. A level span here
+/// moving any other way would be this port applying the matrix wrongly.
+///
+/// **Not every span is level, and the others are not asserted.** Barrier and
+/// bank spans author a "down" that is nearly horizontal - `(0.43, 0.13,
+/// -0.89)` on `01_Track` - so the original bends them sideways, and a few
+/// author one pointing up. Those move the way their data says; the count is
+/// printed.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn level_road_rises_in_world_space() {
+    each_circuit(|name, c| {
+        let (mut level, mut other) = (0usize, 0usize);
+        for pick in [
+            (|c| c.mesh) as fn(vex::classes::Classes) -> Option<u32>,
+            |c| c.speedup_pad,
+            |c| c.weapon_pad,
+        ] {
+            let placed = oag_render::mesh::batch_placements(&c.blob, pick).expect("placements");
+            for span in &c.spans {
+                let Some(batch) = placed.iter().find(|p| p.header == span.batch) else {
+                    continue;
+                };
+                if span.down_start[1] > -0.99 || span.down_end[1] > -0.99 {
+                    other += 1;
+                    continue;
+                }
+                let m = &batch.to_world;
+                for p in span.parameters.iter().flatten() {
+                    let local = [0, 1, 2].map(|k| {
+                        -(span.down_start[k] + (span.down_end[k] - span.down_start[k]) * p)
+                    });
+                    let y = local[0] * m[1] + local[1] * m[5] + local[2] * m[9];
+                    // Not "close to 1": a batch under a tilted node carries
+                    // its local up with it - 0.60 on one 14_Track reversed
+                    // mesh, as the original's own local-space write does.
+                    assert!(y > 0.0, "{name}: a level span's vertex sinks, world y {y}");
+                }
+                level += 1;
+            }
+        }
+        println!(
+            "{name}: {level} level span(s) rise; {other} bank or barrier span(s) move as authored"
+        );
+        assert!(level > 30, "{name}: only {level} level spans checked");
+    });
+}
