@@ -59,7 +59,11 @@ use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 mod absorb;
 pub(crate) mod engine_light;
 mod flare;
+mod shield;
 pub(crate) mod ship_skin;
+
+pub(crate) use shield::cockpit_shield;
+use shield::shell;
 
 /// Everything a single grid slot draws that belongs to its team.
 #[derive(Debug)]
@@ -666,144 +670,6 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<SparkAnchor> {
 /// `One`/`One` on linearised texels crushes the halo's mid-tones by ~30% of
 /// encoded brightness - which is why the fix moved to the upload rather than
 /// being dropped.
-/// The shell a fired Shield pickup raises, from the first of
-/// [`crate::race::shield_entry_names`] the source actually carries.
-///
-/// **Absence is reported rather than fatal**, exactly as [`plume`]'s is: a
-/// source without either model is a source without a shield visual, which is a
-/// missing feature and not a broken load. The report names which of the two
-/// names answered, because they mean different things - the per-team one is what
-/// `ShipShield_Construct` (`0x0885db38`) assembles, the shared one is this
-/// project's reading of what a Pure source must mean by the same effect.
-///
-/// **No texture-transform track and no vertex rework**, unlike the plume: the
-/// model is one mesh with one `_ADD` texture, and the animation is entirely in
-/// the transform and the vertex colour that
-/// [`oag_render::shield::ShipShield`] computes. Anything done to the mesh here
-/// would be a second, invisible place for the look to come from.
-/// One `.vex` by name, from whichever of the two geometry layouts the source
-/// uses, or a sentence saying why not.
-///
-/// **The two layouts are a per-title fact, not a per-model one.** A PSP `.vex`
-/// carries its own geometry; a PS3 one is a header whose vertices live in the
-/// `.rcsmodel` beside it, which is why [`one`] already branches this way for the
-/// hull. Every shield model this file loads needs the same branch, so it is here
-/// once rather than copied per caller.
-///
-/// `Ok` carries a description of what was built, for the loader report; `Err`
-/// carries the line to report instead.
-fn shield_model(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> Result<(Model, String), String> {
-    let blob = archives
-        .read_name(name)
-        .map_err(|_| format!("{name}: not in the archive set"))?;
-    if !mesh::geometry_is_external(&blob) {
-        let model = mesh::build_with_textures(name, &blob, None)
-            .map_err(|error| format!("{name}: {} bytes, does not parse ({error})", blob.len()))?;
-        let note = format!("{} triangle(s)", model.indices.len() / 3);
-        return Ok((model, note));
-    }
-    let sibling = mesh::rcs::sibling_name(name);
-    let geometry = sibling
-        .as_deref()
-        .and_then(|s| archives.read_name(s).ok())
-        .ok_or_else(|| format!("{name}: a PS3 .vex with no .rcsmodel beside it"))?;
-    let (model, built) = mesh::rcs::build(
-        name,
-        &blob,
-        &geometry,
-        &mut |path| archives.read_name(path).ok(),
-        |c| c.mesh,
-    )
-    .map_err(|error| format!("{name}: its .rcsmodel does not build ({error})"))?;
-    // **Said out loud because the picture does not say it.** A shield model
-    // draws additively and `mesh::rcs` resolves no material - HD authors one per
-    // team (`/data/materials/ships/<team>_shield.rcsmaterial`) and nothing here
-    // reads it. So the geometry is the disc's and the *brightness* is not: an
-    // untextured additive surface at full white washes the hull out, where the
-    // PSP shell's own vertices carry a blue-violet at half alpha. Drawing it is
-    // still right - it is real decoded geometry, and the substitute is for the
-    // missing material alone - but a reviewer looking at an HD capture has to be
-    // told which half is recovered.
-    Ok((
-        model,
-        format!(
-            "{}, and no material - HD's own .rcsmaterial is not read, so it is \
-             brighter and flatter than the disc's",
-            built.describe()
-        ),
-    ))
-}
-
-/// The shell a fired Shield pickup raises, from the first of
-/// [`crate::race::shield_entry_names`] the source actually carries.
-///
-/// **Absence is reported rather than fatal**, exactly as [`plume`]'s is: a
-/// source without either model is a source without a shield visual, which is a
-/// missing feature and not a broken load. The report names which of the two
-/// names answered, because they mean different things - the per-team one is what
-/// `ShipShield_Construct` (`0x0885db38`) assembles, the shared one is this
-/// project's reading of what a Pure source must mean by the same effect.
-fn shell(
-    archives: &mut oag_assets::Archives,
-    team: &str,
-    ship_dir: &str,
-    report: &mut Vec<String>,
-) -> Option<Model> {
-    let names = crate::race::shield_entry_names(ship_dir, team);
-    for (index, name) in names.iter().enumerate() {
-        let provenance = if index == 0 {
-            "the team's own"
-        } else {
-            "shared - this source carries no per-team shell"
-        };
-        match shield_model(archives, name) {
-            Ok((model, note)) => {
-                report.push(format!("{name}: {note} - the shield shell, {provenance}"));
-                return Some(model);
-            }
-            Err(line) => report.push(line),
-        }
-    }
-    report.push(format!(
-        "{}: no shield shell for this team",
-        names.join(" nor ")
-    ));
-    None
-}
-
-/// The sphere the original draws **instead of** the shell when the camera is
-/// inside the craft, `Data\Weapons\vr_shield_cockpit.vex`.
-///
-/// Not per team and not per track - one entry serves every craft, which is why
-/// it loads once beside the rocket's model rather than per [`Livery`]. On the
-/// disc for all three titles: Pulse and Pure carry it whole, HD as the usual
-/// `.vex`/`.rcsmodel` pair.
-///
-/// **`ShipShield_Update` chooses between the two on `craft+0x6d`**, the same
-/// byte `oag_display::display::CameraView::draws_own_ship` reads - see that function,
-/// whose confidence-70 note this is a second consumer for.
-pub(crate) fn cockpit_shield(
-    archives: &mut oag_assets::Archives,
-    report: &mut Vec<String>,
-) -> Option<Model> {
-    let name = oag_pulse::race::COCKPIT_SHIELD;
-    match shield_model(archives, name) {
-        Ok((model, note)) => {
-            report.push(format!(
-                "{name}: {note} - the shield seen from inside the cockpit"
-            ));
-            Some(model)
-        }
-        Err(line) => {
-            report.push(format!("{line} - no cockpit shield"));
-            None
-        }
-    }
-}
-
 fn plume(
     archives: &mut oag_assets::Archives,
     team: &str,
@@ -883,11 +749,11 @@ fn plume(
 
 /// Re-skins a PS2 model from the texture set in the archive entry before it.
 ///
-/// Split out of [`plume`] rather than inlined the way [`one`]'s is, because a
-/// missing plume is a reported absence and not an error: every branch here
+/// Split out rather than inlined the way [`one`]'s is, because a missing
+/// plume or shield is a reported absence and not an error: every branch here
 /// leaves `model` drawable and says in the report which one it took. A
-/// silently untextured plume and a correctly skinned one look the same in a
-/// log that only counts triangles.
+/// silently untextured model and a correctly skinned one look the same in a
+/// log that only counts triangles. [`plume`] and [`shield_model`] both call it.
 ///
 /// **The lookup is the same directory-position rule the hull and the track
 /// already use** - see `ps2_texture_set` and `docs/formats/ps2-texture.md`.
@@ -906,7 +772,7 @@ fn ps2_skin(
     let Some(external) = ps2_texture_set(archives, name) else {
         report.push(format!(
             "{name}: {slots} empty texture slot(s) and the preceding archive entry is \
-             not a texture set - the plume draws untextured"
+             not a texture set - it draws untextured"
         ));
         return;
     };
@@ -922,7 +788,7 @@ fn ps2_skin(
         }
         Err(error) => report.push(format!(
             "{name}: the preceding archive entry holds {found} texture(s) but re-skinning \
-             failed ({error}) - the plume draws untextured"
+             failed ({error}) - it draws untextured"
         )),
     }
 }

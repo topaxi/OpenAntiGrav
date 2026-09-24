@@ -151,6 +151,47 @@ second-base thunks (`obj+0x38` chained via a `+0x70`/`+0x78` offset pair) and
 **that chain has not been followed**. Following it is what would turn
 `oag_game::race::Drawable::draw_additive`'s model-scoped override into a decode.
 
+### The shield shell reaches the same unfollowed draw (2026-09-24)
+
+`ShipShield_Construct` (`0x00169168`, confidence 85) is the PS2 counterpart of
+the PSP's `ShipShield_Construct` (`0x0885db38`,
+[shield-pickup.md](../psp-pulse-usa/shield-pickup.md)). It formats the same two
+names, `%s\vr_shield_cockpit.vex` (string `0x002a78f0`) and
+`%s\%sshield.vex` (`0x002a7928`, its only xref), fills the team prefix from
+the same `+0x400 -> +0x98` chain, and stores the two model instances at
+`+0x100` and `+0x104`. `ShipShield_Hit` (`0x00169af8`,
+[collision-shake.md](collision-shake.md)) sits in the same object's code a few
+functions on. The name rests on that structural match. Nothing here was read
+at instruction level beyond the decompile.
+
+Both models are built by the generic model constructor `FUN_001debe8`, and
+its call sites were scanned for their arguments. It takes a name, a sort word,
+two words it copies into every mesh node's `+0x134`/`+0x138`, and a flag
+word:
+
+| Sort word | Call sites | What they load |
+| --- | ---: | --- |
+| `0x75000000` | 17 | the ordinary case |
+| `0x7d000000` | 6 | `shipboost.vex` (`FUN_001d4310`), both shield models (`0x00169168`), `MagEffect1/2.vex` (`FUN_00165688`), `pulse_repulsorwave.vex` (`FUN_001795f8`) |
+| other | 3 | `0x20100000` once, `0x96000000` once, and a register once |
+
+`0xfdb2`/`0x3e9` are passed by 25 of the 26 calls, so they are a default and
+say nothing about blending. What separates the six is the sort word, and all
+six are glow effects. The PS2 shell's batches carry `pass_mask` `0x1031`,
+`0x18b1` and `0x10b2`, with no `0x0700` class, which is the same situation as
+the plume. The PSP shell's two carry `0x1232` (`0x200`, additive). On PS2 the
+cockpit sphere (`0x1232`), the repulsor wave and `MagEffect1` (`0x12b2`) carry
+`0x200` themselves. So the plume and the shell are the two layer-`0x7d0`
+models whose own batches do not say they blend.
+
+**Confidence 70 that the original blends the PS2 shell**, as it blends the
+plume: same constructor, same sort word, same arguments, and a capture that
+settled it for the plume. No capture of the PS2 shield has been compared.
+`oag_game::livery` acts on it as a PS2-gated load-time reclassification
+(`blend_additively`) rather than through `Drawable::draw_additive`. The
+override is still model-scoped, not a decode. Following `0x0029a3a0`'s draw
+chain would now settle two models instead of one.
+
 The end branch is a separate, still-standing result: `0x10b2 & 0xc0` is non-zero
 (`0x80` is set), so the batch takes the stencil branch that stamps `0xff`
 through `KEEP, KEEP, REPLACE` - the same alpha-channel stamp

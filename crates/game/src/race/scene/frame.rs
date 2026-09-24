@@ -380,7 +380,7 @@ impl Scene {
         // race.
         for (slot, shell) in self.shield.iter().enumerate().take(drawn) {
             // `None` is a slot whose source ships no shell under either name -
-            // a reported absence, not a hidden one. See `livery::shell`.
+            // a reported absence, not a hidden one. See `livery::shield::shell`.
             let Some(shell) = shell else {
                 continue;
             };
