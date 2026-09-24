@@ -11,8 +11,9 @@
 //! [`collision`] is the triangle soup, [`track`] the AI spline graph, [`pads`]
 //! the speedup and weapon trigger volumes, [`pvs`] the authored visible set,
 //! [`fog`] the fog volume, [`lighting`] the light rig, [`sound_emitters`] the
-//! positional sound nodes, [`shadow_occluder`] the convex hulls and [`cloud`]
-//! the `cloudCube`/`cloudGroup` sky puffs. Each is a `vex::Node` payload, not a
+//! positional sound nodes, [`shadow_occluder`] the convex hulls, [`cloud`]
+//! the `cloudCube`/`cloudGroup` sky puffs and [`quake`] the road spans a Quake
+//! ripples. Each is a `vex::Node` payload, not a
 //! neighbouring format, and splitting them out would cut a tree into chunks.
 //!
 //! Three are standalone files rather than nodes, kept here because the same
@@ -33,6 +34,7 @@ pub mod pads;
 pub mod pob;
 pub mod pob_coverage;
 pub mod pvs;
+pub mod quake;
 pub mod shadow_occluder;
 pub mod sound_emitters;
 pub mod track;

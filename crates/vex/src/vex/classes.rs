@@ -121,6 +121,8 @@ pub struct Classes {
     /// The locator Wipeout HD plays its weapon-absorb burst at - see
     /// [`CLASS_ABSORB`].
     pub absorb: Option<u32>,
+    /// The road-span table a Quake ripples - see [`crate::quake`].
+    pub quake: Option<u32>,
 }
 
 /// The table used by every file Pulse ships except one.
@@ -159,6 +161,7 @@ pub const V6: Classes = Classes {
     // Version 6 for the same reason `track_wall_collision` is: HD's own
     // registration, not a Pulse table entry, and no Pulse file authors one.
     absorb: Some(CLASS_ABSORB),
+    quake: Some(crate::quake::CLASS_QUAKE),
 };
 
 /// The table Pure's 156 version-4 files use, and Pulse's one legacy
@@ -331,6 +334,7 @@ pub const V4: Classes = Classes {
     engine_flare: Some(0x371),
     ship_collision_fx: Some(0x382),
     absorb: None,
+    quake: None,
 };
 
 /// The table Pure's 15 version-3 files use.
@@ -365,6 +369,7 @@ pub const V3: Classes = Classes {
     engine_flare: None,
     ship_collision_fx: None,
     absorb: None,
+    quake: None,
 };
 
 /// The class table for a file's version word, or `None` for a version this
