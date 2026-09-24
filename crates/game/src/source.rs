@@ -36,6 +36,17 @@
 //! because nothing yet plays 2048 past its placeholder menu (see
 //! `crate::main::session::placeholder`).
 //!
+//! Wipeout: Omega Collection's own extract is a directory too, but shaped
+//! differently from 2048's: one PS4 copy is a base package and a mandatory
+//! day-one patch, two fixed-name sibling directories (`omega-eu` and
+//! `omega-eu-patch`) under one parent, rather than one self-contained
+//! directory a player may name however they like. So [`ps4_search_path`] does
+//! not repeat [`package_directories_in`]'s "each child is a copy" scan - the
+//! parent itself is the one candidate, checked by the same shape `just play
+//! omega` already checks: does `omega-eu-patch/uroot/data09.psarc` exist
+//! under it. [`oag_omega::open`]'s own doc names that same parent as its
+//! template source.
+//!
 //! # The first three are a decision; the last three are a guess
 //!
 //! Steps 1 to 3 are a player *stating* which source they want, and [`explicit`]
@@ -241,14 +252,15 @@ fn stated(
 /// alphabetically - the same order [`first_image`] picks from, so the first row
 /// of a chooser is the image a boot with nothing named would have opened.
 ///
-/// [`package_directories`] is appended last, once per root on
-/// [`package_search_path`], rather than folded into the per-directory loop
-/// above: an extracted package is found by its own shape
-/// ([`package_directories_in`]), not by name the way `images_in` matches
-/// [`IMAGE_NAMES`], so it needs its own scan rather than a branch inside
-/// `images_in`. Appending it after every image candidate keeps `first_image`
-/// (and so a no-argument boot) picking the same source it always did on a
-/// machine that also has a `.chd` or `.iso`.
+/// [`package_directories`] and [`ps4_package_directories`] are appended last,
+/// once per root on [`package_search_path`] and [`ps4_search_path`]
+/// respectively, rather than folded into the per-directory loop above: an
+/// extracted package is found by its own shape ([`package_directories_in`],
+/// [`ps4_package_directories`]), not by name the way `images_in` matches
+/// [`IMAGE_NAMES`], so each needs its own scan rather than a branch inside
+/// `images_in`. Appending them after every image candidate keeps
+/// `first_image` (and so a no-argument boot) picking the same source it
+/// always did on a machine that also has a `.chd` or `.iso`.
 ///
 /// Empty is an ordinary answer: it means this machine has no image anywhere the
 /// engine looks, and [`resolve`] is what turns that into the message about it.
@@ -275,6 +287,7 @@ pub fn candidates() -> Vec<PathBuf> {
     }
 
     found.extend(package_directories());
+    found.extend(ps4_package_directories());
     found
 }
 
@@ -362,6 +375,73 @@ fn package_directories_in(root: &Path) -> Vec<PathBuf> {
         .collect();
     found.sort();
     found
+}
+
+/// Where Wipeout: Omega Collection's own PS4 extract lives, unlike 2048's
+/// **the parent of two fixed-name siblings** rather than a directory a player
+/// names for themselves - see the module doc's "shaped differently" note.
+/// `just play omega` reads the same location.
+const PS4_PACKAGE_ROOT: &str = "data/extracted/ps4";
+
+/// Every root [`ps4_package_directories`] scans, in order.
+///
+/// The same three roots [`search_path`] and [`package_search_path`] use, with
+/// `extracted/ps4` standing in for `images`/`extracted/vita` - the portable
+/// "beside the AppImage" case this mirrors is the same bug 2048's own
+/// `package_search_path` doc names: a Steam Deck running the AppImage from a
+/// folder with no `data/` in it must still find a PS4 extract dropped beside
+/// it.
+#[must_use]
+pub fn ps4_search_path() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut push = |path: PathBuf| {
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    };
+
+    push(PathBuf::from(PS4_PACKAGE_ROOT));
+
+    if let Some(appimage) = std::env::var_os("APPIMAGE")
+        && let Some(directory) = Path::new(&appimage).parent()
+    {
+        push(directory.join("extracted").join("ps4"));
+    }
+
+    if let Some(data) = dirs::data_dir() {
+        push(data.join("oag").join("extracted").join("ps4"));
+    }
+
+    paths
+}
+
+/// Every playable Wipeout: Omega Collection root on [`ps4_search_path`].
+fn ps4_package_directories() -> Vec<PathBuf> {
+    ps4_package_directories_in(&ps4_search_path())
+}
+
+/// [`ps4_package_directories`], with the roots handed in rather than found -
+/// the split that makes it testable without touching the filesystem
+/// [`ps4_search_path`] actually reads.
+///
+/// **Not [`package_directories_in`]'s "each child is a copy" shape** - a root
+/// itself is the one candidate, present only when its `omega-eu-patch`
+/// sibling carries [`oag_omega::archives::DATA09`], the one archive
+/// `oag_omega::open` hard-requires (see that constant's own doc). A base-only
+/// extract, with no patch, is not offered - the same "partial extract must
+/// not be offered as if it opens" rule [`package_directories_in`] documents,
+/// here because the base package alone has no `skin.xml` to boot rather than
+/// because it is incomplete.
+fn ps4_package_directories_in(roots: &[PathBuf]) -> Vec<PathBuf> {
+    roots
+        .iter()
+        .filter(|root| {
+            root.join("omega-eu-patch")
+                .join(oag_omega::archives::DATA09)
+                .is_file()
+        })
+        .cloned()
+        .collect()
 }
 
 /// The not-found message, which for a packaged build is the entire interface.

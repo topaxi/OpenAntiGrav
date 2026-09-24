@@ -222,6 +222,46 @@ fn every_line_fits_on_screen() {
     }
 }
 
+/// **The check that caught Omega's title column overlapping the platform
+/// column next to it.** `every_line_fits_on_screen` only catches a line
+/// running off the *screen's* right edge; a row's title is free to run into
+/// its own neighbour column and that test would not see it, which is
+/// exactly what `oag_omega::TITLE.name` did against a `TITLE_COLUMN` sized
+/// for `oag_hd::TITLE.name`'s ten characters. This measures every row
+/// against the columns [`draw_list`] actually places them in.
+#[test]
+fn title_and_provenance_columns_do_not_overlap_their_neighbour() {
+    let launcher = Launcher::new(vec![
+        Candidate {
+            source: "data/extracted/ps4".to_string(),
+            name: "ps4".to_string(),
+            platform: Platform::Unknown,
+            serial: None,
+            state: State::Playable(oag_omega::TITLE),
+        },
+        playable("hdfury-ps3-eu-dec.iso"),
+    ]);
+    let atlas = oag_ui::font::Atlas::build();
+
+    for row in launcher.rows() {
+        let title_width = oag_ui::font::measure(&atlas, row.title());
+        assert!(
+            MARGIN + title_width <= TITLE_COLUMN,
+            "{:?} ends at {}, past the provenance column at {TITLE_COLUMN}",
+            row.title(),
+            MARGIN + title_width
+        );
+
+        let provenance = row.provenance();
+        let provenance_width = oag_ui::font::measure(&atlas, &provenance);
+        assert!(
+            TITLE_COLUMN + provenance_width <= NAME_COLUMN,
+            "{provenance:?} ends at {}, past the name column at {NAME_COLUMN}",
+            TITLE_COLUMN + provenance_width
+        );
+    }
+}
+
 /// Rows and their notes must not overlap, whatever the list holds.
 #[test]
 fn the_notes_sit_below_the_last_row() {

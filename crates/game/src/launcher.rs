@@ -453,8 +453,14 @@ const MARGIN: f32 = 16.0;
 const FIRST_ROW: f32 = 64.0;
 const ROW: f32 = 14.0;
 /// Where the platform-and-serial column starts, and the file name after it.
-const TITLE_COLUMN: f32 = 130.0;
-const NAME_COLUMN: f32 = 250.0;
+///
+/// **Wide enough for `oag_omega::TITLE.name`**, the longest of the five at 25
+/// characters (150 units in the engine's own 5x7 face) against Wipeout HD's
+/// 10 - `title_and_provenance_columns_do_not_overlap_their_neighbour` in this
+/// module's tests is what caught the overlap a narrower column left when
+/// Omega's row first landed here, and what would catch it again.
+const TITLE_COLUMN: f32 = 176.0;
+const NAME_COLUMN: f32 = 280.0;
 
 const BACKDROP: [f32; 4] = [0.02, 0.03, 0.06, 1.0];
 const HIGHLIGHT: [f32; 4] = [0.16, 0.36, 0.62, 1.0];

@@ -397,6 +397,63 @@ fn package_directories_are_appended_after_every_image_not_folded_in() {
     std::fs::remove_dir_all(&root).unwrap();
 }
 
+/// Unlike a 2048 copy, the PS4 root itself is the candidate - see
+/// [`ps4_package_directories`]'s own doc for why the shapes differ.
+#[test]
+fn a_ps4_root_is_found_by_its_patchs_own_shape() {
+    let root = temp_dir("ps4-found");
+    std::fs::create_dir_all(root.join("omega-eu-patch/uroot")).unwrap();
+    std::fs::write(root.join("omega-eu-patch/uroot/data09.psarc"), b"").unwrap();
+
+    assert_eq!(
+        ps4_package_directories_in(std::slice::from_ref(&root)),
+        std::slice::from_ref(&root)
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// A base-only extract, with no patch, is not offered - it has no
+/// `skin.xml` to boot, the same reason `just play omega` refuses it.
+#[test]
+fn a_base_only_ps4_extract_is_not_offered() {
+    let root = temp_dir("ps4-base-only");
+    std::fs::create_dir_all(root.join("omega-eu/uroot")).unwrap();
+    std::fs::write(root.join("omega-eu/uroot/data00.psarc"), b"").unwrap();
+
+    assert!(ps4_package_directories_in(std::slice::from_ref(&root)).is_empty());
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_missing_ps4_root_contributes_nothing_rather_than_failing() {
+    assert!(ps4_package_directories_in(&[PathBuf::from("/nonexistent/oag/ps4")]).is_empty());
+}
+
+/// The same portable-deploy ground [`the_package_search_path_covers_the_same_ground_as_the_image_search_path`]
+/// covers for 2048, for Omega's own PS4 extract.
+#[test]
+fn the_ps4_search_path_covers_the_same_ground_as_the_image_search_path() {
+    assert_eq!(
+        ps4_search_path().first().unwrap(),
+        Path::new("data/extracted/ps4"),
+        "the checkout's own directory is searched first, same as search_path"
+    );
+}
+
+/// Never the mounted AppImage itself, for the same reason `search_path`
+/// excludes it.
+#[test]
+fn the_mounted_appimage_is_not_searched_for_a_ps4_root_either() {
+    for path in ps4_search_path() {
+        let text = path.to_string_lossy().to_lowercase();
+        assert!(
+            !text.contains("/tmp/.mount_") && !text.contains("appdir"),
+            "the package itself is on the search path: {}",
+            path.display()
+        );
+    }
+}
+
 /// A directory of this test's own, so the tests do not depend on - or
 /// disturb - whatever the developer has in `data/images`.
 fn temp_dir(name: &str) -> PathBuf {

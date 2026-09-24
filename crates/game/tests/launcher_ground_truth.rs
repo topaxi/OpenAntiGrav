@@ -80,6 +80,28 @@ fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {
     }
 }
 
+/// The PS4 extract is a directory rather than a disc image, so
+/// `oag_game::source::candidates` needs its own scan for it - see
+/// `oag_game::source::ps4_search_path` and its own doc for why that shape
+/// differs from 2048's. This is the ground truth for that scan: a real
+/// extract under `data/extracted/ps4` (the checkout's own, not a substitute)
+/// both appears in `candidates()` and surveys as Omega.
+#[test]
+#[ignore = "needs an Omega Collection PS4 extract under data/extracted/ps4"]
+fn the_ps4_extract_is_a_candidate_and_surveys_as_omega() {
+    let Some(root) = oag_game::source::candidates()
+        .into_iter()
+        .find(|path| path.ends_with("ps4"))
+    else {
+        return;
+    };
+
+    let rows = launcher::survey(&[root]);
+    let row = rows.first().expect("one path in, one row out");
+    assert_eq!(row.title(), "Wipeout: Omega Collection");
+    assert!(row.is_playable(), "{row:?} should open");
+}
+
 /// The chooser only ever appears because the search path holds more than one
 /// image, so this is the state the whole feature is for.
 ///
