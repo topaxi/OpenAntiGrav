@@ -70,6 +70,7 @@ impl Setup {
             // Nothing draws on this constructor, Pulse's mechanism included -
             // see `shield_palette` above for the same reasoning.
             hd_plasma_blast: false,
+            pulse_laid_pose: false,
             absorb_burst: None,
             absorb_anchors: Vec::new(),
             collision: CollisionWorld::new(),

@@ -405,6 +405,12 @@ pub struct Setup {
     /// branch on rather than re-deriving which title is live from anywhere
     /// else.
     pub hd_plasma_blast: bool,
+    /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
+    /// Mine spun and scaled by `Mine_PoseNode`, the Bomb squared to the world
+    /// by `Bomb_Init` - rather than the frozen craft pose. A title fact:
+    /// `craft_title.name == oag_pulse::TITLE.name`. See
+    /// `weapons::visuals::laid`.
+    pub pulse_laid_pose: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
     pub absorb_burst: Option<super::absorb::AbsorbBurst>,

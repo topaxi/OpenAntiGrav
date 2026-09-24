@@ -314,7 +314,7 @@ impl Race {
 /// with the executable's own without a swap, so the literal constant is
 /// usable as `Vec3::Z` as-is. See this module's own doc comment for what is
 /// chosen instead: which real-world direction `dir` substitutes for.
-fn bomb_blast_basis(position: Vec3, dir: Vec3) -> Mat4 {
+pub(in crate::race) fn bomb_blast_basis(position: Vec3, dir: Vec3) -> Mat4 {
     let world_reference = Vec3::Z;
     let reference = if dir.dot(world_reference).abs() > 0.999 {
         dir.any_orthonormal_vector()
