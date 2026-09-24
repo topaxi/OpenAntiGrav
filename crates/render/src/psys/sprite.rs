@@ -144,6 +144,20 @@ impl Atlas {
     }
 }
 
+impl super::EmitterSpec {
+    /// A new particle's atlas frame: `Psys_RandIntRange(0, frames - 1)`
+    /// under the random-frame flag, frame 0 otherwise - and no draw at all
+    /// unless a sprite is placed, so an effect drawing the procedural
+    /// profile consumes the generator exactly as it did before sprites.
+    pub(super) fn random_frame(&self, rng: &mut oag_core::Rng) -> u16 {
+        if self.sheet_rect.is_some() && self.atlas.random_frame && self.atlas.frames() > 1 {
+            super::random_range(rng, (0, u32::from(self.atlas.frames()) - 1)) as u16
+        } else {
+            0
+        }
+    }
+}
+
 /// Points a quad's `0..=1` texture coordinates at `cell` on the sheet and
 /// marks it as sampled.
 ///

@@ -443,29 +443,6 @@ impl Effect {
     pub fn roots(&self) -> &[usize] {
         &self.roots
     }
-
-    /// Spawns every emitter's particles at its anchor again, the way every
-    /// source did before the extent law was read - see [`spawn`].
-    ///
-    /// **For every source but Pulse on the PSP, by the lead's choice
-    /// (2026-09-24).** The law is read off Pulse's PSP `BOOT.BIN`
-    /// (`ParticleSystem_EmitLine` `0x088fcfec`, `ParticleSystem_EmitSphere`
-    /// `0x088fd340`, `ParticleSystem_DeriveScaledParams` `0x088f4910`); the
-    /// PS2 ELF and HD's `EBOOT` have not been read, so their effects keep
-    /// placing particles as they did until they are.
-    pub fn without_extents(&mut self) {
-        for spec in &mut self.emitters {
-            spec.spawn = Spawn::Point;
-        }
-    }
-
-    /// Whether any emitter places its particles by the extent law - `false`
-    /// after [`Self::without_extents`], and for an effect made only of
-    /// point emitters.
-    #[must_use]
-    pub fn has_extents(&self) -> bool {
-        self.emitters.iter().any(|spec| spec.spawn != Spawn::Point)
-    }
 }
 
 impl EmitterSpec {
@@ -996,17 +973,9 @@ impl System {
             alpha_sample: rng.next_f32(),
             scale: self.scale,
             // `Psys_RandIntRange(0, frames - 1)` under the random-frame
-            // flag, frame 0 otherwise - drawn only when a sprite is on the
-            // sheet to show it, so an effect drawing the procedural profile
-            // (every PS2 and HD one) consumes what it always did.
-            frame: if spec.sheet_rect.is_some()
-                && spec.atlas.random_frame
-                && spec.atlas.frames() > 1
-            {
-                random_range(rng, (0, u32::from(spec.atlas.frames()) - 1)) as u16
-            } else {
-                0
-            },
+            // flag, drawn only when a sprite on the sheet shows it, so the
+            // procedural profile (every PS2 and HD effect) draws what it did.
+            frame: spec.random_frame(rng),
         };
         let slot = expendable_slot(&self.particles);
         self.particles[slot] = particle;

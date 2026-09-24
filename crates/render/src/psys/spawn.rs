@@ -37,6 +37,33 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_vex::pob;
 
+use super::Effect;
+
+impl Effect {
+    /// Spawns every emitter's particles at its anchor again, the way every
+    /// source did before the extent law was read - see [this module](self).
+    ///
+    /// **For every source but Pulse on the PSP, by the lead's choice
+    /// (2026-09-24).** The law is read off Pulse's PSP `BOOT.BIN`
+    /// (`ParticleSystem_EmitLine` `0x088fcfec`, `ParticleSystem_EmitSphere`
+    /// `0x088fd340`, `ParticleSystem_DeriveScaledParams` `0x088f4910`); the
+    /// PS2 ELF and HD's `EBOOT` have not been read, so their effects keep
+    /// placing particles as they did until they are.
+    pub fn without_extents(&mut self) {
+        for spec in &mut self.emitters {
+            spec.spawn = Spawn::Point;
+        }
+    }
+
+    /// Whether any emitter places its particles by the extent law - `false`
+    /// after [`Self::without_extents`], and for an effect made only of
+    /// point emitters.
+    #[must_use]
+    pub fn has_extents(&self) -> bool {
+        self.emitters.iter().any(|spec| spec.spawn != Spawn::Point)
+    }
+}
+
 /// How an emitter places a new particle's spawn offset.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Spawn {
