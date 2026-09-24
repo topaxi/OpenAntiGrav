@@ -197,12 +197,19 @@ impl Race {
     /// [`Spline`]'s own sample at the ring point nearest the wave's own
     /// progress - `pos`/`lateral`/`half_width_left`/`half_width_right`, the
     /// same fields [`oag_render::track::build_model`] already draws the
-    /// ribbon's own edges from. **Orientation is not established by anything
-    /// read** - the original's own basis build never consumes its
-    /// `AiTrack_LocatePosition` call, confirmed independently this pass by
-    /// re-deriving `Quake_Update` rather than only quoting the earlier read -
-    /// so this draws the effect axis-aligned at the recovered position and
-    /// scale alone, which is **chosen, not measured; no confidence score**.
+    /// ribbon's own edges from.
+    ///
+    /// **What the `/ 50` scales, read 2026-09-24:** the instance's extent
+    /// co-factor (`+0x2c`) and nothing else, so `WO_QUAKE`'s line emitters
+    /// spread their fire edge to edge while each fireball keeps its authored
+    /// size - see `oag_render::psys::spawn`. Until then this fed the value
+    /// in as severity, which made every fireball `width / 50` too big and
+    /// stacked all of them on the midpoint. **Pulse on the PSP only**: every
+    /// other source still feeds it in as severity, by choice, until its own
+    /// executable is read (`oag_render::psys::Effect::without_extents`). **The frame's `X` is measured**,
+    /// `normalize(B - A)`; its `Y` stays world up, which is **chosen, not
+    /// measured** - the row `Quake_Update` builds from its
+    /// `AiTrack_LocatePosition` struct is not read.
     ///
     /// Detaches the instance the tick the wave goes away (`self.sim.world.quake`
     /// becomes `None`), the same "hand the slot back, let the particles fade"
@@ -232,19 +239,35 @@ impl Race {
         let right = centre + lateral * sample.half_width_right;
         let midpoint = (left + right) * 0.5;
         let scale = (right - left).length() / 50.0;
+        // The frame's `X` runs edge to edge: `Quake_Update`'s basis starts
+        // from `normalize(B - A)` as its first row (`0x0891da08`, read
+        // 2026-09-24).
+        let across = right - left;
 
-        match (
-            self.view.effects.get(QUAKE_EFFECT).cloned(),
-            self.view.quake_effect,
-        ) {
-            (Some(effect), None) => {
-                self.view.quake_effect = self.view.stage.attach(&effect, midpoint, scale);
+        let Some(effect) = self.view.effects.get(QUAKE_EFFECT).cloned() else {
+            return;
+        };
+        // Where the extent law is on (Pulse on the PSP), severity stays
+        // `1.0` and the `/ 50` lands on the instance's extent co-factor, not
+        // on size or speed - see `oag_render::psys::spawn`. Everywhere else
+        // the effect keeps what it did before that law was read: the `/ 50`
+        // as severity, by the lead's choice until those executables are read
+        // (`psys::Effect::without_extents`).
+        let stretches = effect.has_extents();
+        let severity = if stretches { 1.0 } else { scale };
+        let playing = match self.view.quake_effect {
+            None => {
+                self.view.quake_effect = self.view.stage.attach(&effect, midpoint, severity);
+                self.view.quake_effect
             }
-            (Some(_), Some(playing)) => {
+            Some(playing) => {
                 self.view.stage.follow(playing, midpoint);
-                self.view.stage.rescale(playing, scale);
+                self.view.stage.rescale(playing, severity);
+                Some(playing)
             }
-            (None, _) => {}
+        };
+        if let (true, Some(playing)) = (stretches, playing) {
+            self.view.stage.stretch(playing, scale, across);
         }
     }
     /// Plays the explosion a weapon that just went off authored - its own,

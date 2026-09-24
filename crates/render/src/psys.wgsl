@@ -2,18 +2,25 @@
 //
 // Structurally a smaller copy of exhaust.wgsl - see that file's own header
 // for why the model matrix in the shared uniform block is unused (the
-// vertices already arrive in world space). The one real difference is that
-// this pipeline samples no texture: the authored sprite
-// (`Data\Psys\Tex\orange_glow2.tga`, named inside the .pob) has no
-// locatable WAD entry yet, so its shape is modelled instead. The original
-// stretches a single row of that radial glow along the streak's body, with
-// the sprite's halves forming the two end caps - so the body keeps a
-// constant-width bright core however long the streak grows, instead of
-// smearing one radial blob over the whole quad (which is what an earlier
-// revision did, and what made every spark a fat soft wedge). The vertex
-// stream's `lit` slot carries the caps' share of the half-length; `0.5`
-// collapses the profile to the plain radial falloff a round billboard
-// wants.
+// vertices already arrive in world space).
+//
+// Two ways to shape a particle, chosen per vertex by `normal.x`:
+//
+// - **The emitter's own sprite** (`normal.x == 1`), sampled off the sheet
+//   `psys::sprite` packs every PSP `.pob`'s embedded sprites into, and
+//   modulated the way the GE modulates it: `GU_TFX_MODULATE` with
+//   `GU_TCC_RGBA`, set once by `Gfx_Init` and never changed on the particle
+//   path - texel times particle colour, alpha included. See
+//   `psys/sprite.rs`'s module doc.
+// - **The procedural profile** (`normal.x == 0`), for every emitter with no
+//   sprite to sample (a PS2 or HD source, a streak). It models the one
+//   sprite measured before the pixels were located, the collision spark's
+//   `orange_glow2.tga`: the original stretches a single row of that radial
+//   glow along the streak's body, with the sprite's halves forming the two
+//   end caps - so the body keeps a constant-width bright core however long
+//   the streak grows. The vertex stream's `lit` slot carries the caps'
+//   share of the half-length; `0.5` collapses the profile to the plain
+//   radial falloff a round billboard wants.
 
 struct Uniforms {
     view_projection: mat4x4<f32>,
@@ -26,6 +33,8 @@ struct Uniforms {
 override linear_out: f32 = 0.0;
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(0) @binding(1) var sheet: texture_2d<f32>;
+@group(0) @binding(2) var sheet_sampler: sampler;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -40,6 +49,7 @@ struct VertexOutput {
     @location(0) colour: vec4<f32>,
     @location(1) texcoord: vec2<f32>,
     @location(2) cap: f32,
+    @location(3) sampled: f32,
 };
 
 @vertex
@@ -49,6 +59,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.colour = in.colour;
     out.texcoord = in.texcoord;
     out.cap = in.lit;
+    out.sampled = in.normal.x;
     return out;
 }
 
@@ -85,16 +96,28 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // whatever quad it lands on - so on a rocket explosion's 30-to-100-unit
     // billboards the same fraction manufactured a 15-unit disc of pure
     // white. Held against the original in PPSSPP (`data/reference/`, taken
-    // with `scripts/psp-fire-weapon.py`), that is plainly wrong: the real
-    // fireball stays amber to its hottest point and the scene behind reads
-    // through it. The emitter's 256-entry table is the colour authority and
-    // it authors no white, so inventing one here was overriding the asset.
+    // with `scripts/psp-fire-weapon.py`), that is plainly wrong: that
+    // track-hit fireball stays amber to its hottest point and the scene
+    // behind reads through it. The emitter's 256-entry table is the colour
+    // authority, so inventing a white here was overriding the asset.
+    //
+    // **A white core is not always wrong, though.** A craft-hit Rocket at 51
+    // units does peak white-hot for a few frames (measured 2026-09-24, see
+    // `rocket-visuals.md`), and that white comes out of the asset: a
+    // near-white colour table times the emitter's own soft white sprite.
+    // Judge a white against a matched capture, not against this comment.
     // Removing it barely moves the sparks - `bits` is white in its own
     // palette either way.
-    let rgb = in.colour.rgb * shape;
+    let procedural = vec4<f32>(in.colour.rgb * shape, pow(shape, 1.2) * in.colour.a);
+    // Sampled unconditionally - a texture sample must sit in uniform control
+    // flow - and selected afterwards.
+    let texel = textureSample(sheet, sheet_sampler, in.texcoord);
+    let sprite = in.colour * texel;
+    let picked = select(procedural, sprite, in.sampled > 0.5);
+    let rgb = picked.rgb;
     // On the linear float target the palette's gamma-authored colour is
     // decoded so the blend and the encode after it round-trip; on a gamma
     // target this is the identity. See `mesh_render::is_linear_target`.
     let out_rgb = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
-    return vec4<f32>(out_rgb, pow(shape, 1.2) * in.colour.a);
+    return vec4<f32>(out_rgb, picked.a);
 }

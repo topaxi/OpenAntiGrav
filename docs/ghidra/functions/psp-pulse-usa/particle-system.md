@@ -384,6 +384,117 @@ positional-addressing rule; `docs/formats/pob.md`'s "The sprite pixels are
 on the disc after all" section has the corpus-wide evidence. This was the
 "unlocated texture-reference gap" `pob.md` used to record - it is located.
 
+## A particle is its sprite times its colour, and the Quake stretches its emitter (2026-09-24)
+
+Chased because the Quake's crest and a close Rocket blast drew as white
+blowouts where the original draws orange fire. Bloom (off: 1.9% of pixels
+move, the blowout stays) and the blend space (the Pulse target is already
+8-bit `Rgba8Unorm` in gamma space, ADR-0020) were ruled out first; what was
+left is how the effect itself is played. Four reads, all static, the first
+checked against the disc's own bytes:
+
+### `Texture_BindEmbedded` (`0x08928b10`) - the sprite a particle draws with
+
+Confidence **85**. `ParticleSystem_DrawParticle` calls it on the emitter's
+texture block before every quad (two other callers, `FUN_08918bf8` and
+`FUN_0891ee98`, are not particle code, hence the generic name). It returns
+without binding when either pointer word (`+0x10` pixels, `+0x14` palette)
+is zero; otherwise it enables texturing, sets the texture mode from the
+depth byte (`8` bpp -> `T8`) with **bit 0 of `+0x06` as the swizzle
+argument**, walks the mip chain into `Gu_TexImage` level by level, and loads
+a 256-entry `8888` CLUT from the palette pointer. Both pointer words are
+fixup sites in the `.pob`'s own slot table on all 64 PSP sprites (`pob.md`,
+"Correction: the two texture offsets are from the resource base"), which is
+what makes them pointers at draw time.
+
+Nothing on the particle path sets a texture function, and the whole binary
+has only two `TexFunc` emitters, both accounted for in
+[mesh-draw.md](mesh-draw.md): the frame runs under `GU_TFX_MODULATE`,
+`GU_TCC_RGBA`, colour doubling off. **So a particle's fragment is its sprite
+texel times its colour, alpha included.** `WO_QUAKE`'s `fireballs` walk a
+colour table from `(255, 250, 252)` to orange over their life, and their
+sprite is an orange fire ring: the product is orange from birth. Drawn
+over a white procedural disc - what `oag_render::psys` did before this
+pass - the same table is white.
+
+### The atlas frame: `FUN_088f58a4` and `ParticleSystem_InitParticle`
+
+Confidence **85**. The instance init `FUN_088f58a4` splits `+0x9a0` into
+the grid's two halves (instance `+0xa0`/`+0xa2`), stores their product at
+`+0x164` as the frame count and the reciprocals at `+0xa4`/`+0xa8`.
+`ParticleSystem_InitParticle` draws the particle's frame as
+`Psys_RandIntRange(0, count - 1)` under flag `0x4000000` and `0` otherwise.
+`ParticleSystem_DrawParticle` then applies `Gu_TexScale` by the reciprocals
+and `Gu_TexOffset` by `frame % columns`, `frame / columns`. Not read: how
+the frame advances over life (the frame-rate channel), so a particle keeps
+its spawn frame in `oag_render::psys`.
+
+### `ParticleSystem_EmitLine` (`0x088fcfec`) - shape 1
+
+Confidence **85**, read at instruction level. The emit function
+`ParticleSystem_SpawnBurst` dispatches for shape 1. While `+0x3c` is `0..=2`
+it writes the spawn offset `(U(-e, e), 0, U(-z, z), 1)`: `e` is the scaled
+extent global `DAT_08ab2290` (`0x088fd15c`), `z` the resource's **unscaled**
+`+0x40` (`0x088fd174`). Velocity then follows `+0x44` as for the other
+shapes (`1` aimed, `0`/`2` cone). All three `WO_QUAKE` emitters are shape 1
+with extent `50` and `+0x40 = 0`: a line.
+
+### `ParticleSystem_SetScaleParams` (`0x088f44d8`) - what the Quake scales
+
+Confidence **80**. Writes seven words from its argument into instance
+`+0x28..+0x40`, re-runs `ParticleSystem_DeriveScaledParams`, sets bit
+`0x10000` of `+0x160`, and recurses into the sibling and child instances at
+`+0x1a8`/`+0x1a4`. Its partner at `0x088f443c` (not a Ghidra function; it
+falls between two, so it is not named here) copies the same seven words
+out. `Quake_Update` calls the pair around one store: `edge_distance / 50.0`
+into slot 1 of the buffer (`sp+0x1a4`, `0x0891dc60`), which is instance
+**`+0x2c`**. `ParticleSystem_DeriveScaledParams` multiplies `+0x2c` into the
+three extent fields and nothing else - size and speed take `+0x28` and
+`+0x34`. So the Quake stretches its line emitter to the road's width and
+leaves every fireball its authored size. Also read on the way:
+`Quake_Update`'s basis starts from `normalize(B - A)`, the edge-to-edge
+direction, as its first row (`0x0891da08`) - the frame's `X`, along which
+the line lies.
+
+### Applied to Pulse on the PSP only, by choice
+
+Everything in the two sections above is read off this binary. The port
+applies the extent law - line and sphere placement, and the Quake's `/ 50`
+as the extent co-factor - **only to Pulse off a PSP disc**; every other
+source keeps spawning at the anchor with the `/ 50` as severity
+(`oag_render::psys::Effect::without_extents`). That is a choice made
+2026-09-24, not a finding: the PS2 ELF and HD's `EBOOT.elf` have not been
+read, and a law unmeasured there should not change what they draw. A future
+read starts from the PS2/HD counterparts of `ParticleSystem_SpawnBurst`
+(`0x088f56c4`), `ParticleSystem_EmitLine` (`0x088fcfec`),
+`ParticleSystem_EmitSphere` (`0x088fd340`), `Quake_Update` (`0x0891d268`)
+and `ParticleSystem_SetScaleParams` (`0x088f44d8`). The sprite sampling is
+not gated: the texture offsets are a format fact, and only PSP `.pob`s embed
+sprites at all.
+
+### `ScreenFlash_Start` (`0x088f00c0`) - the wash that is not a particle
+
+Confidence **72**. Called with a kind and a world position by every weapon
+detonation (`Rocket_SpawnCraftExplosion_q` passes kind `0`, `Quake_Update`
+kind `4`, and eleven more callers). It arms a state block on
+`DAT_08ab2200` - `+0x1a0 = 1`, the position at `+0x60` - and fills it from a
+per-kind table: a duration at `+0x44`, two distances at `+0x4c`/`+0x50`,
+and two RGBA keys at `+0x70` and `+0x80` for times `+0xb0 = 0` and
+`+0xb4 = 1`:
+
+| kind | caller | duration | distances | key at 0 | key at 1 |
+| ---: | --- | ---: | --- | --- | --- |
+| 0 | Rocket, craft hit | 0.5 s | 75, 200 | (1, 1, 0, 0.6) | (1, 0, 0, 0) |
+| 4 | Quake | 0.4 s | 0, 300 | (1, 0.2, 0, 0.5) | (1, 0.2, 0, 0) |
+
+The kind-0 key is the **full-screen yellow wash** the 2026-09-24 PPSSPP
+capture of a craft-hit Rocket shows for its first frames (screen mean
+`(89, 96, 84)` -> `(223, 225, 85)`: red and green up, blue untouched), and
+kind 4 is the orange tint the Quake capture opens with. That match is why
+the name clears 70; it stops short of more because the per-frame consumer
+of the block - the blend, how the two distances attenuate, how the keys are
+interpolated - is not read, and `oag_render` draws no flash.
+
 ## Open, deliberately
 
 - `FUN_088fc634` (shape 3, cone *placement*) and shapes 1/2/8 are unread;
@@ -395,7 +506,7 @@ on the disc after all" section has the corpus-wide evidence. This was the
   arguments but unread internally, and the exact stretch factor
   `ParticleSystem_DrawStreak` receives is not traced back to a resource
   field.
-- Modifier types other than 3, the `+0x9c8`/`+0x9cc` slot targets, and the
+- Modifier types other than 3 and the
   emitter-local frame of the aimed cones.
 
 ## The two unread draw modes, read (2026-08-09)

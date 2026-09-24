@@ -48,6 +48,11 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             death_child: None,
             spawn_probability: 1.0,
             velocity_inherit: 0.0,
+            spawn: Spawn::Point,
+            emission_scale: constant(1.0),
+            sprite: None,
+            atlas: Atlas::SINGLE,
+            sheet_rect: None,
         }],
         roots: vec![0],
     })

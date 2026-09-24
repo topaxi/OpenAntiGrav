@@ -2,8 +2,15 @@ use super::*;
 
 /// Builds a minimal blob with one valid header at `header_at`, its palette
 /// and pixel data placed right after it - a hand-authored fixture, not
-/// extracted game bytes, per ADR-0006.
+/// extracted game bytes, per ADR-0006. The two stored offsets are from
+/// resource base `0`; [`fixture_based`] stores them from another base.
 fn fixture(header_at: usize, width: u16, height: u16, levels: u8) -> Vec<u8> {
+    fixture_based(0, header_at, width, height, levels)
+}
+
+/// [`fixture`], with the header's two offsets stored relative to `base` the
+/// way the loader's fixup table expects them.
+fn fixture_based(base: usize, header_at: usize, width: u16, height: u16, levels: u8) -> Vec<u8> {
     let palette_bytes = 1024u32;
     let pixel_bytes = u32::from(width) * u32::from(height);
     let palette_offset = header_at + TEXTURE_HEADER_LEN;
@@ -16,8 +23,10 @@ fn fixture(header_at: usize, width: u16, height: u16, levels: u8) -> Vec<u8> {
     data[header_at + 5] = levels;
     data[header_at + 8..header_at + 12].copy_from_slice(&palette_bytes.to_le_bytes());
     data[header_at + 12..header_at + 16].copy_from_slice(&pixel_bytes.to_le_bytes());
-    data[header_at + 16..header_at + 20].copy_from_slice(&(pixel_offset as u32).to_le_bytes());
-    data[header_at + 20..header_at + 24].copy_from_slice(&(palette_offset as u32).to_le_bytes());
+    data[header_at + 16..header_at + 20]
+        .copy_from_slice(&((pixel_offset - base) as u32).to_le_bytes());
+    data[header_at + 20..header_at + 24]
+        .copy_from_slice(&((palette_offset - base) as u32).to_le_bytes());
 
     // A recognisable palette and pixel pattern so a caller can tell the
     // slices landed in the right place, not just the right length.
@@ -47,11 +56,49 @@ fn a_valid_header_parses_at_its_own_offset() {
 
 #[test]
 fn base_plus_offset_addresses_the_header_not_offset_alone() {
-    let data = fixture(0x180, 32, 32, 3);
+    let data = fixture_based(0x80, 0x180, 32, 32, 3);
     // The header sits at base(0x80) + offset(0x100) = 0x180.
     let texture = parse_at(&data, ByteOrder::Little, 0x80, 0x100).expect("valid header");
     assert_eq!(texture.width, 32);
     assert_eq!(texture.height, 32);
+}
+
+#[test]
+fn the_palette_and_pixel_offsets_are_from_the_resource_base() {
+    // Stored relative to base 0x80, as the loader's fixup table has them:
+    // read from the blob's start instead, both would land 0x80 bytes early.
+    let data = fixture_based(0x80, 0x180, 32, 32, 3);
+    let texture = parse_at(&data, ByteOrder::Little, 0x80, 0x100).expect("valid header");
+    assert_eq!(texture.palette_offset, 0x180 + TEXTURE_HEADER_LEN);
+    assert_eq!(texture.pixel_offset, texture.palette_offset + 1024);
+    assert_eq!(texture.palette[..8], [0, 0, 0, 255, 1, 0, 0, 255]);
+    assert_eq!(texture.indices[..3], [0, 1, 2]);
+}
+
+#[test]
+fn rgba8_looks_every_index_up_in_the_palette() {
+    let data = fixture(0, 16, 8, 1);
+    let texture = parse_at(&data, ByteOrder::Little, 0, 0).expect("valid header");
+    assert!(!texture.swizzled());
+    let rgba = texture.rgba8();
+    assert_eq!(rgba.len(), 16 * 8 * 4);
+    // Pixel i holds index i, and palette entry i is `[i, 0, 0, 255]`.
+    assert_eq!(rgba[..8], [0, 0, 0, 255, 1, 0, 0, 255]);
+    assert_eq!(rgba[127 * 4..], [127, 0, 0, 255]);
+}
+
+#[test]
+fn rgba8_unswizzles_when_the_flag_bit_is_set() {
+    // 32 bytes wide, 8 rows: two 16x8 swizzle blocks. Stored swizzled, the
+    // second 16 bytes of the stream are block 0's second row, so linear
+    // pixel 16 (row 0, second block) comes from stream byte 128.
+    let mut data = fixture(0, 32, 8, 1);
+    data[6] = 1;
+    let texture = parse_at(&data, ByteOrder::Little, 0, 0).expect("valid header");
+    assert!(texture.swizzled());
+    let rgba = texture.rgba8();
+    assert_eq!(rgba[16 * 4], 128);
+    assert_eq!(rgba[32 * 4], 16);
 }
 
 #[test]

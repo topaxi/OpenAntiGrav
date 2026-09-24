@@ -1164,6 +1164,43 @@ particle-system.md's "sits in main RAM with no WAD entry answering any
 hashable `Data\Psys\Tex\...` name" note is superseded outright - see that
 page's own correction.
 
+### Correction: the two texture offsets are from the resource base - 2026-09-24
+
+The section above read the header's `pixel_offset` (`+0x10`) and
+`palette_offset` (`+0x14`) as plain offsets into the blob. **Both are
+pointer-fixup sites**, so the loader's `*(resource_base + slot) +=
+resource_base` turns each into a live pointer at `resource_base + value`:
+
+- On **every** PSP emitter that carries a header (64 of them over the 35
+  files), the header's `+0x10` and `+0x14`, taken relative to the resource
+  base, are entries of that file's own slot table -
+  `crates/assets/tests/pob_ground_truth.rs`,
+  `every_psp_texture_pointer_is_a_fixup_site`. Relative to the emitter record
+  they are `+0x9c8` and `+0x9cc`: the two slot targets the bullet below and
+  [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md)
+  listed as unexplained. They are the sprite's pixels and palette.
+- The runtime bind `FUN_08928b10`, called from `ParticleSystem_DrawParticle`
+  on the emitter's texture block, returns without binding when either word
+  is zero, passes `+0x10` to `Gu_TexImage` level by level and `+0x14` to the
+  CLUT load (`ClutMode(8888)`, 256 entries), and hands bit 0 of `+0x06` to
+  the texture mode as its swizzle argument. So byte `+0x06` is a flag byte
+  (bit 0 swizzle, bits 3-4 the level-mode selector), not unknown.
+- Read at the old offsets every sprite came out wrong in a way that still
+  looked like *a* texture: the rows started half a row early with palette
+  bytes as pixels, and the palette was shifted by the 96-byte resource base
+  of `WO_QUAKE`, so its index 0 - most of the sprite - read as an opaque navy
+  `(11, 30, 53, 88)`. Read from the base, every sprite of `WO_QUAKE`,
+  `WO_ROCKET_EXPLO`, `WO_ROCKET_EXPLO_TRACK` and
+  `WO_SHIP_COLL_SPARK_DAMAGE` is a clean, centred picture: index 0 black on
+  all 51 additive emitters' sprites. The 2026-09-17 identifications survive
+  the correction - the collision root still decodes to a soft grey puff and
+  the three bright siblings' shared pool to an orange glow with a white core.
+
+Coverage re-measured with the corrected regions: **56.89%** of the PSP
+corpus's 781,104 bytes (was 56.76% on the misplaced regions). Confidence
+**92** for the base-relative reading: the fixup mechanism is confirmed live
+above, and these two fields are in its table.
+
 ## Not determined
 
 - **The field layout inside a *slot-resolved* record.** A string-bearing
@@ -1172,8 +1209,9 @@ page's own correction.
   used to head this list is decoded ("The emitter record layout is
   decoded" above) and parsed into `oag_render::psys` with
   confirmed units - what remains undecoded is the slot-table targets'
-  own internals (beyond "site `0x4c4` resolves the texture path") and the
-  scratch regions the loader bakes into (`+0x9c8`/`+0x9cc` targets).
+  own internals (beyond "site `0x4c4` resolves the texture path"). The
+  `+0x9c8`/`+0x9cc` targets once listed here are the embedded sprite's
+  pixels and palette - see the 2026-09-24 correction above.
 
   **Measured rather than left as a bare statement**: `oag_vex::pob_coverage`
   claims everything else this page already decodes (header, slot table, name,

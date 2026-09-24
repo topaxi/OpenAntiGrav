@@ -506,3 +506,73 @@ fn every_hd_effect_translates_or_is_refused_by_name() {
     );
     assert_eq!(played, HD_SYSTEMS - 1);
 }
+
+/// Every PSP effect's billboard sprites fit one [`oag_render::psys::Library`]
+/// sheet together, and the sprite the Quake's fire draws with is the
+/// orange the whole 2026-09-24 fix rests on.
+///
+/// `fireballs`' colour table starts near white (`(255, 250, 252)`) and
+/// only turns orange over the second half of a particle's life; under
+/// `GU_TFX_MODULATE` the sprite is what carries the hue. If this sprite
+/// ever decoded grey or white again - a wrong offset, a wrong palette - the
+/// crest would go back to the white blowout it was.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_psp_sprite_fits_one_sheet_and_the_quake_fire_is_orange() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let count = archive.directory().entries.len();
+    let mut library = oag_render::psys::Library::new();
+    for index in 0..count {
+        let Ok(head) = archive.peek(index, 4) else {
+            continue;
+        };
+        if !pob::looks_like_particle_system(&head) {
+            continue;
+        }
+        let blob = archive.read(index).expect("read");
+        let effect = Effect::parse(&blob, ColourScale::Full).expect("parse");
+        let name = effect.name.clone();
+        library.insert(&name, effect);
+    }
+    assert_eq!(library.len(), SYSTEMS);
+
+    let (mut sampled, mut unplaced) = (0, Vec::new());
+    for name in library.names() {
+        let effect = library.get(name).expect("loaded");
+        for spec in &effect.emitters {
+            match (spec.render, &spec.sprite, spec.sheet_rect) {
+                (Render::Billboard, Some(_), Some(_)) => sampled += 1,
+                (Render::Billboard, Some(_), None) => unplaced.push(spec.name.clone()),
+                _ => {}
+            }
+        }
+    }
+    assert!(
+        unplaced.is_empty(),
+        "sprites that did not fit: {unplaced:?}"
+    );
+    println!(
+        "psp: {sampled} billboard emitter(s) sampled, {} distinct sprite(s) on the sheet",
+        library.sheet().len()
+    );
+
+    let quake = library.get("WO_QUAKE").expect("WO_QUAKE");
+    let fire = quake
+        .emitters
+        .iter()
+        .find(|spec| spec.name == "fireballs")
+        .expect("fireballs");
+    let sprite = fire.sprite.as_ref().expect("the fire has a sprite");
+    let (mut r, mut g, mut b) = (0u64, 0u64, 0u64);
+    for texel in sprite.rgba.chunks(4) {
+        r += u64::from(texel[0]);
+        g += u64::from(texel[1]);
+        b += u64::from(texel[2]);
+    }
+    assert!(
+        r > g && g > 2 * b,
+        "fireballs' sprite should be orange, summed rgb ({r}, {g}, {b})"
+    );
+}
