@@ -2,7 +2,7 @@
 categories: [gameplay]
 ---
 
-# A struck craft throws its own hull sparks; they read weaker than the original's
+# A struck craft throws its own hull sparks; they still read weaker than the original's
 
 2026-09-24. The user saw it in the original: a craft taking Cannon rounds
 shows sparks and smoke. Ours showed nothing on the struck craft.
@@ -34,22 +34,34 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Open
 
-- **Ours reads much weaker than the original.** The original draws a large
-  white-to-orange bloom hugging the hull for about 20 frames. Ours draws thin
-  yellow rays and small embers.
+- **Ours still reads much weaker than the original, and the draw-side
+  pieces did not close it.** The fx-brightness thread's streak UVs and atlas
+  advance landed on 2026-09-24 (psys-draw lane,
+  [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
+  "Streaks, atlas advance and the screen flash"). Re-shot with the same
+  hook and ticks: `data/scratch/psys-draw/struck-main-vs-streak.png` shows
+  the original, then main, then the streaks.
+  - `DrawStreak` (class 6) is a **wedge**. It has a sprite-sized head at
+    the particle and a sliver back to its spawn point, sampling the peaky
+    `orange_glow2` sprite. So the long yellow rays became orange heads with
+    faint tails. That is dimmer and shorter than both main and the
+    original's long orange rays.
+  - None of the four emitters authors an atlas grid, so the frame advance
+    changes nothing here.
+  - The original's white-to-orange bloom hugging the hull is still not
+    reproduced. Candidates, none read:
+    - the original's view-space build (a common depth, not ours);
+    - the light strip behind the craft in the original's shot;
+    - `FUN_0883e37c`'s gate;
+    - `CockpitHitFx_Arm_q`'s overlay.
+  - **The next step is a matched capture, not a tune.** Put the original
+    craft on the grid (not over the light strip) and take a struck/unstruck
+    diff at the same spot, so the background stops confounding the
+    comparison.
   - The smoke is emitted and matches the file. A dump at tick 310 shows 8
     alpha-over puffs 3-9 units across. They are grey to brown
     (`0.22`-`0.49`), alpha up to `0.78`, so they read as dark smoke over the
     dark start grid.
-  - So the gap is on the draw side, not the trigger. The bright emitters'
-    streak classes still use the procedural profile (`DrawStreak`'s UVs are
-    unread), and the atlas frame does not advance.
-  - Both are open items in the fx-brightness thread
-    ([weapon-blasts-draw-their-own-sprites-and-the-screen-flash-is-next.md](weapon-blasts-draw-their-own-sprites-and-the-screen-flash-is-next.md)).
-    Nothing in `psys` was touched here.
-  - The backgrounds differ too: the original craft sat over a bright light
-    strip, ours over the dark grid. A struck/unstruck diff at a matched spot
-    was not taken.
 - **Wall sparks and hit sparks keep separate cooldowns.** The original's
   0.8 s gate lives on the locator's `ShipCollisionFx` instance, so the two
   share it. Ours keeps two separate gates, and wall sparks remain the
@@ -74,9 +86,9 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Next Steps
 
-- Once the fx-brightness thread lands streak UVs and atlas advance,
-  re-shoot `cannon-orig-vs-ours.png` with the same method and compare the
-  bloom at k=8-16.
+- Capture the original's struck craft on the start grid, off the light
+  strip, struck and unstruck at the same spot. Compare against
+  `data/scratch/psys-draw/streak/struck/` at k=8-16.
 - Find HD's `Ship_Damage` (the `uWeaponDamageReceived` telemetry string is
   a lead) and read whether it sparks the hull. Then read the `WO_DAMAGE_*`
   consumer through the TOC-displacement search.
