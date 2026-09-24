@@ -15,6 +15,7 @@ fn point(section_id: u8) -> SplinePoint {
         tangent: [0.0, 0.0, 1.0],
         down: [0.0, -1.0, 0.0],
         lateral: [1.0, 0.0, 0.0],
+        progress: 0.0,
         half_width_left: 1.0,
         half_width_right: 1.0,
         ai_bound_left: 1.0,

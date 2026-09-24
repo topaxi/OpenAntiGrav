@@ -791,6 +791,10 @@ pub struct Loaded {
     ///
     /// [`Session`]: crate::main::session::Session
     pub campaign_2048_event: Option<Campaign2048Progress>,
+    /// The road spans a Quake ripples, placed on the course - see
+    /// `oag_render::ripple`. Empty everywhere but Pulse off a PSP disc, the one
+    /// source the ripple was read from.
+    pub ripples: super::Ripples,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }

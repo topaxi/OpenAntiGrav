@@ -14,6 +14,7 @@ pub fn point(pos: [f32; 3]) -> SplinePoint {
         tangent: [1.0, 0.0, 0.0],
         down: [0.0, -1.0, 0.0],
         lateral: [0.0, 0.0, 1.0],
+        progress: 0.0,
         half_width_left: 2.0,
         half_width_right: 2.0,
         ai_bound_left: 2.0,

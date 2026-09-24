@@ -558,23 +558,16 @@ impl Scene {
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, prev_vp);
         }
-        for pads in [self.pads.as_ref(), self.weapon_pads.as_ref()]
-            .into_iter()
-            .flatten()
-        {
-            pads.write(queue, view_projection, Mat4::IDENTITY, prev_vp);
-        }
-        // Ready-to-collect vs cooling down - see `Drawable::tint_weapon_pads`
-        // and `oag_render::weapon_pad` for the recovered mechanism this
-        // reproduces. Gameplay state, driven off `seconds` like the scenery.
-        if let Some(weapon_pads) = &self.weapon_pads {
-            pads_ready.extend(
-                race.weapon_pad_refresh_left()
-                    .iter()
-                    .map(|&left| left <= 0.0),
-            );
-            weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
-        }
+        // The Quake's ripple, then the pads' uniforms and the weapon pads'
+        // tint, in that order - see `Scene::write_road`.
+        self.write_road(
+            queue,
+            race,
+            seconds,
+            (view_projection, prev_vp),
+            pads_ready,
+            recoloured,
+        );
         // **A speed pad is not recoloured at all, on any title.** Its class'
         // own `update` slot, `Pad_UpdateRefreshTimer` (`0x089265f0`,
         // `docs/ghidra/functions/psp-pulse-usa/pads.md`), decrements a timer
@@ -996,5 +989,6 @@ mod attachments;
 mod beam;
 mod lod;
 mod particles;
+mod road;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};

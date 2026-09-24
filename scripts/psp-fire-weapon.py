@@ -95,6 +95,10 @@ WEAPONS = {
     "burst": (0x0002, "Weapon_DropMines 0x088675cc - mines, per mine.md", 90),
     "backward": (0x0100, "FUN_08863a20 - fires backwards, reads as a Bomb or Mine", 60),
     "turbo": (0x0200, "timed pickup, the engine gate's half", 65),
+    # plasma.md's full sixteen-bit dispatch table; 88 is `Weapon_FireQuake`'s own
+    # confidence in names.tsv. One wave at a time: the handler returns early
+    # while the previous Quake's road spans are still rippling.
+    "quake": (0x0008, "Weapon_FireQuake 0x0886c600 - the travelling road ripple", 88),
 }
 
 # `leachbeam` (bit 0x8000, Weapon_FireLeachBeam 0x08866658) is deliberately not
@@ -218,7 +222,12 @@ def main():
     parser.add_argument("--port", type=int, default=47800)
     parser.add_argument("--probe-dispatch", action="store_true")
     parser.add_argument(
-        "--index", type=int, default=0, help="which craft fires; 0 is the player"
+        "--index",
+        type=int,
+        default=0,
+        help="which world craft record fires. NOT the player in a single race: "
+        "measured 2026-09-24, the player was record 7 of a full grid. The "
+        "player's weapon record is *(*(*(0x08b317b4)+0x2c0)+0x4c)",
     )
     parser.add_argument(
         "--accelerate",

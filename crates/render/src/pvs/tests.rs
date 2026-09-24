@@ -213,6 +213,7 @@ fn padding_draws_the_neighbours_but_not_what_they_see() {
         tangent: [0.0, 0.0, 1.0],
         down: [0.0, -1.0, 0.0],
         lateral: [1.0, 0.0, 0.0],
+        progress: 0.0,
         half_width_left: 1.0,
         half_width_right: 1.0,
         ai_bound_left: 1.0,
