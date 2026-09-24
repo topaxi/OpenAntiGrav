@@ -33,25 +33,20 @@
 //! Each of these is authored in files this module already parses, and each
 //! would be a visible difference on some effect:
 //!
-//! - **Sprite atlases and textures.** Emitters name a developer `.tga` path
-//!   through their slot table and index a grid of frames
-//!   ([`oag_vex::pob::Emitter::atlas_grid`]); this module draws a
-//!   procedural radial falloff instead. **The pixels themselves are decoded**
-//!   as of 2026-09-17 - `oag_vex::pob::texture` reads an emitter's own
-//!   positionally-embedded sprite (PSP only; PS2 has none, HD ships separate
-//!   `.gtf` files instead) straight off the disc, RGBA8-ready via its
-//!   `palette`/`indices` fields - but this module does not yet sample from
-//!   it: the `wgpu` upload, the per-emitter texture binding and the
-//!   atlas-frame selection are still open. Until then this stays the
-//!   documented fallback, not a stand-in that has quietly become the
-//!   picture - see `docs/formats/pob.md`'s "The sprite pixels are on the
-//!   disc after all".
+//! - **Sprites off anything but a PSP disc, and on streaks.** A PSP
+//!   `.pob`'s own embedded sprite is sampled for every billboard since
+//!   2026-09-24, atlas cell and all - see [`sprite`]. A PS2 `.pob` embeds
+//!   none and Wipeout HD's `.gtf` sprites are not loaded yet, so those draw
+//!   the procedural radial falloff in `psys.wgsl`; so does every streak
+//!   class, whose texture coordinates `ParticleSystem_DrawStreak` writes are
+//!   not read.
+//! - **The atlas frame advancing over a particle's life.** The frame-rate
+//!   channel is not parsed; a particle keeps the frame it spawned with.
 //! - **Billboard roll.** The rotation-speed channel is parsed and unused;
 //!   quads here are axis-aligned to the camera.
-//! - **The emitter extent.** Particles spawn at the anchor point rather than
-//!   scattered over the emitter's radius (`0.006` to `2.45` units across the
-//!   corpus, severity-scaled). Sub-visible on the collision sparks, not on
-//!   an explosion's smoke ring.
+//! - **The emitter extent of shapes 2, 3, 6 and 8.** Shapes 1 (a line), 4
+//!   and 7 (a sphere) place their particles as read - see [`spawn`]; the
+//!   unread shapes still spawn at the anchor.
 //! - **The emission-scale channel** and the animated-attribute array, both
 //!   of which re-derive parameters over an emitter's life.
 
@@ -60,6 +55,12 @@ use oag_core::math::Vec3;
 use oag_vex::pob::{self, Channel, ChannelMode, ParticleSystem};
 
 use crate::mesh::GpuVertex;
+
+pub mod spawn;
+pub mod sprite;
+
+use spawn::Spawn;
+use sprite::{Atlas, Sheet, Sprite};
 
 /// The original's fixed simulation rate, ticks per second.
 ///
@@ -296,6 +297,18 @@ pub struct EmitterSpec {
     /// How much of the parent particle's velocity this emitter's own
     /// particles inherit, if it is a child.
     pub velocity_inherit: f32,
+    /// Where in the emitter a particle is born - see [`spawn`].
+    pub spawn: Spawn,
+    /// `+0x858`, over the emitter's own run: a multiplier on the extent.
+    pub emission_scale: Channel,
+    /// The emitter's own sprite, decoded off a PSP disc - see [`sprite`].
+    pub sprite: Option<Sprite>,
+    /// How [`EmitterSpec::sprite`] divides into frames.
+    pub atlas: Atlas,
+    /// Where [`EmitterSpec::sprite`] sits on its [`Library`]'s [`Sheet`],
+    /// `[u0, v0, u1, v1]`; `None` until a library places it, and for every
+    /// emitter drawn with the procedural profile.
+    pub sheet_rect: Option<[f32; 4]>,
 }
 
 /// A parsed `.pob` ready to play: the root emitter first, then the tree
@@ -398,7 +411,10 @@ impl Effect {
 
         let emitters = records
             .iter()
-            .map(|record| EmitterSpec::from_record(record, scale))
+            .map(|record| {
+                let sprite = Sprite::from_pob(&system, data, record);
+                EmitterSpec::from_record(record, scale, sprite)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         // Everything reachable as a child starts with its parent's
@@ -443,7 +459,11 @@ impl EmitterSpec {
     }
 
     /// Translates one parsed record.
-    fn from_record(record: &pob::Emitter, scale: ColourScale) -> Result<Self, Error> {
+    fn from_record(
+        record: &pob::Emitter,
+        scale: ColourScale,
+        sprite: Option<Sprite>,
+    ) -> Result<Self, Error> {
         let emitter = || record.name.clone();
 
         let render = match record.draw_class() {
@@ -550,6 +570,11 @@ impl EmitterSpec {
             death_child: record.death_child,
             spawn_probability: record.child_spawn_probability.clamp(0.0, 1.0),
             velocity_inherit: record.child_velocity_inherit,
+            spawn: Spawn::of(record),
+            emission_scale: record.emission_scale.clone(),
+            sprite,
+            atlas: Atlas::of(record),
+            sheet_rect: None,
         })
     }
 }
@@ -577,6 +602,8 @@ struct Particle {
     /// The system's scale at spawn - the original's severity, which
     /// multiplies both speed and drawn size.
     scale: f32,
+    /// Which cell of the emitter's [`Atlas`] it draws - see [`sprite`].
+    frame: u16,
 }
 
 impl Particle {
@@ -591,6 +618,7 @@ impl Particle {
         size_sample: 0.0,
         alpha_sample: 0.0,
         scale: 0.0,
+        frame: 0,
     };
 
     fn alive(self) -> bool {
@@ -654,6 +682,13 @@ pub struct System {
     /// The original's severity: multiplies ejection speed and drawn size,
     /// never particle counts.
     scale: f32,
+    /// The instance's extent co-factor, `+0x2c` - `1.0` unless a caller
+    /// stretches it, which only the Quake does. See [`spawn`].
+    extent_scale: f32,
+    /// World-space direction the emitter frame's `X` points along - what a
+    /// [`Spawn::Line`] spreads its particles over. Unit length and
+    /// perpendicular to `up` once [`System::advance`] has run.
+    across: Vec3,
     anchor: Vec3,
     /// World-space direction the emitter frame's authored `+Y` currently
     /// maps to - see [`System::advance`]'s own `up` parameter. Always a unit
@@ -676,6 +711,8 @@ impl System {
             particles: [Particle::DEAD; MAX_PARTICLES],
             emitters: [EmitterState::IDLE; MAX_EMITTER_STATES],
             scale: 1.0,
+            extent_scale: 1.0,
+            across: Vec3::X,
             anchor: Vec3::ZERO,
             up: Vec3::Y,
             ignitions: 0,
@@ -717,6 +754,14 @@ impl System {
         self.scale = scale;
     }
 
+    /// Sets the extent co-factor and the frame's `X` - what the Quake does
+    /// to its `WO_QUAKE` every tick, and nothing else. See [`spawn`]: only
+    /// where particles are born changes, never their size or speed.
+    pub fn stretch(&mut self, extent_scale: f32, across: Vec3) {
+        self.extent_scale = extent_scale;
+        self.across = across;
+    }
+
     /// Stops every emitter without touching the live particles.
     ///
     /// What the owner of an attached effect calls when it goes away: a
@@ -756,6 +801,7 @@ impl System {
         let moved = anchor - self.anchor;
         self.anchor = anchor;
         self.up = up.try_normalize().unwrap_or(Vec3::Y);
+        self.across = spawn::frame_x(self.across, self.up);
 
         self.emit(effect, dt_ticks, moved, rng);
         self.integrate(effect, dt, dt_ticks, rng);
@@ -794,6 +840,14 @@ impl System {
                 (state.spec, state.anchor, state.inherited)
             };
             let spec = &effect.emitters[usize::from(spec_index)];
+            // The emission-scale channel runs over the emitter's own life.
+            let run = spec.run_ticks();
+            let emitter_age = if run.is_finite() && run > 0.0 {
+                (1.0 - self.emitters[index].ticks_left / run).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let extent = channel_sample(&spec.emission_scale, emitter_age, 0.5);
             loop {
                 let state = &mut self.emitters[index];
                 if state.until_next > 0.0 || state.ticks_left <= 0.0 {
@@ -811,7 +865,7 @@ impl System {
                     continue;
                 }
                 for _ in 0..count {
-                    children.extend(self.spawn(effect, spec_index, anchor, inherited, rng));
+                    children.extend(self.spawn(effect, spec_index, anchor, inherited, extent, rng));
                 }
             }
             let state = &mut self.emitters[index];
@@ -878,10 +932,26 @@ impl System {
         spec_index: u16,
         anchor: Vec3,
         inherited: Vec3,
+        emission_scale: f32,
         rng: &mut Rng,
     ) -> Option<(usize, Vec3, Vec3)> {
         let spec = &effect.emitters[usize::from(spec_index)];
         let direction = direction_for(spec.direction, self.up, rng);
+        // A sphere places the particle along its own flight direction, which
+        // is only the sphere's direction under the radial law; a tangent
+        // particle stays at the anchor rather than borrowing its tangent.
+        let placement = match (spec.spawn, spec.direction) {
+            (Spawn::Sphere { .. }, Direction::Tangent { .. }) => Spawn::Point,
+            (spawn, _) => spawn,
+        };
+        let anchor = anchor
+            + placement.offset(
+                self.scale * self.extent_scale * emission_scale,
+                direction,
+                self.across,
+                self.up,
+                rng,
+            );
         // `centre + spread * U(-1, 1)`, the original's `Psys_RandSpread`,
         // units per tick converted to per second once.
         let speed = (spec.speed_per_tick.0 + spec.speed_per_tick.1 * signed_unit(rng))
@@ -902,6 +972,14 @@ impl System {
             size_sample: rng.next_f32(),
             alpha_sample: rng.next_f32(),
             scale: self.scale,
+            // `Psys_RandIntRange(0, frames - 1)` under the random-frame
+            // flag, frame 0 otherwise - drawn only when it can matter, so an
+            // effect with no atlas consumes what it always did.
+            frame: if spec.atlas.random_frame && spec.atlas.frames() > 1 {
+                random_range(rng, (0, u32::from(spec.atlas.frames()) - 1)) as u16
+            } else {
+                0
+            },
         };
         let slot = expendable_slot(&self.particles);
         self.particles[slot] = particle;
@@ -1103,14 +1181,18 @@ impl System {
                     (centre, dir * half_span, perp * half, half / half_span)
                 }
             };
-            out.extend_from_slice(&quad(
+            let mut corners = quad(
                 centre,
                 axis_a,
                 axis_b,
                 cap,
                 [colour[0], colour[1], colour[2]],
                 alpha,
-            ));
+            );
+            if let (Render::Billboard, Some(rect)) = (spec.render, spec.sheet_rect) {
+                sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
+            }
+            out.extend_from_slice(&corners);
         }
     }
 }
@@ -1139,6 +1221,8 @@ pub fn effect_path(name: &str) -> String {
 #[derive(Debug, Clone, Default)]
 pub struct Library {
     effects: Vec<(String, std::sync::Arc<Effect>)>,
+    /// Every loaded billboard's sprite, packed - see [`sprite`].
+    sheet: Sheet,
 }
 
 impl Library {
@@ -1149,7 +1233,15 @@ impl Library {
     }
 
     /// Adds `effect` under `name`, replacing any effect already there.
-    pub fn insert(&mut self, name: &str, effect: Effect) {
+    ///
+    /// Places each billboard emitter's sprite on the library's [`Sheet`]
+    /// first; one that does not fit keeps the procedural profile.
+    pub fn insert(&mut self, name: &str, mut effect: Effect) {
+        for spec in &mut effect.emitters {
+            if let (Render::Billboard, Some(sprite)) = (spec.render, &spec.sprite) {
+                spec.sheet_rect = self.sheet.place(sprite);
+            }
+        }
         let effect = std::sync::Arc::new(effect);
         match self.effects.iter_mut().find(|(key, _)| key == name) {
             Some(slot) => slot.1 = effect,
@@ -1184,6 +1276,13 @@ impl Library {
     /// Their names, in load order.
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.effects.iter().map(|(name, _)| name.as_str())
+    }
+
+    /// The sprites every loaded effect draws with, for
+    /// [`Pipeline::sync_sheet`].
+    #[must_use]
+    pub fn sheet(&self) -> &Sheet {
+        &self.sheet
     }
 }
 
@@ -1373,6 +1472,14 @@ impl Stage {
     pub fn rescale(&mut self, playing: Playing, scale: f32) {
         if let Some(instance) = self.get_mut(playing) {
             instance.system.rescale(scale);
+        }
+    }
+
+    /// Sets an attached instance's extent co-factor and frame `X` - see
+    /// [`System::stretch`].
+    pub fn stretch(&mut self, playing: Playing, extent_scale: f32, across: Vec3) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.system.stretch(extent_scale, across);
         }
     }
 
@@ -1670,284 +1777,8 @@ fn quad(
     [bl, br, tl, br, tr, tl]
 }
 
-/// The additive blend - the original's blend class 2, `BlendFunc(ADD,
-/// SRC_ALPHA, FIX 0xffffff)`, used by the three bright emitters. The same
-/// shape [`crate::exhaust::BLEND`] uses, and for the same reason: additive
-/// keeps overlapping sparks reading as *brighter* rather than as one
-/// occluding another.
-pub const BLEND: wgpu::BlendState = wgpu::BlendState {
-    color: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::SrcAlpha,
-        dst_factor: wgpu::BlendFactor::One,
-        operation: wgpu::BlendOperation::Add,
-    },
-    alpha: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::SrcAlpha,
-        dst_factor: wgpu::BlendFactor::One,
-        operation: wgpu::BlendOperation::Add,
-    },
-};
-
-/// The over blend - the original's blend class 3, `BlendFunc(ADD, SRC_ALPHA,
-/// ONE_MINUS_SRC_ALPHA)`, used by the smoke. This is what lets a *dark*
-/// smoke colour darken the scene behind it; drawn additively it would be
-/// nearly invisible, which is exactly how the missing smoke bug looked.
-pub const BLEND_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
-    color: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::SrcAlpha,
-        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-        operation: wgpu::BlendOperation::Add,
-    },
-    alpha: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::SrcAlpha,
-        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-        operation: wgpu::BlendOperation::Add,
-    },
-};
-
-/// The maximum vertices [`Pipeline`]'s buffer holds: one quad for every
-/// particle a full [`Stage`] can hold.
-///
-/// Derived rather than picked. A buffer sized for one [`System`] would
-/// silently drop whole effects off a busy grid - the truncation in
-/// [`Pipeline::upload`] cuts at a vertex, so an over-long frame loses the
-/// tail of the last quads and reads as an explosion that never happened.
-pub const MAX_VERTICES: usize = MAX_INSTANCES * MAX_PARTICLES * 6;
-
-/// The particle draw pipeline - two of them, one per blend class, sharing
-/// the shader and layout.
-///
-/// Simpler than [`crate::exhaust::Pipeline`] in one respect: there is no
-/// texture to bind - the shape is a procedural radial falloff computed
-/// in the fragment shader standing in for the asset's own soft-puff
-/// texture (see [`quad`]). Otherwise it matches `mesh_render`'s pipeline
-/// the same way the exhaust does: same target format, same
-/// [`crate::mesh_render::DEPTH_FORMAT`], depth-tested but not
-/// depth-writing, for the same transparency-ordering reason
-/// `exhaust::Pipeline` documents.
-#[derive(Debug)]
-pub struct Pipeline {
-    additive: wgpu::RenderPipeline,
-    alpha_over: wgpu::RenderPipeline,
-    uniforms: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    additive_vertices: wgpu::Buffer,
-    alpha_vertices: wgpu::Buffer,
-    /// Vertices actually uploaded by the last [`Pipeline::upload`].
-    additive_count: u32,
-    alpha_count: u32,
-}
-
-impl Pipeline {
-    /// Builds the pipeline pair.
-    ///
-    /// `format` must be the target the caller's render pass writes, and
-    /// `sample_count` must match its multisample state - see
-    /// `mesh_render::build`.
-    #[must_use]
-    pub fn new(
-        device: &wgpu::Device,
-        format: wgpu::TextureFormat,
-        sample_count: u32,
-        velocity: crate::mesh_render::Velocity,
-    ) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("psys"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("psys.wgsl").into()),
-        });
-
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("psys uniforms"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("psys"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-
-        let build = |label: &str, blend: wgpu::BlendState| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[Some(wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![
-                            0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                            4 => Float32
-                        ],
-                    })],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some("fs_main"),
-                    // The velocity target, when the race adds one, rides
-                    // along **write-masked empty** for the reason the
-                    // exhaust's does: a particle quad is rebuilt from scratch
-                    // every draw and writes no depth, so the velocity at its
-                    // pixels stays the surface's behind it. See
-                    // `mesh_render::Velocity`.
-                    targets: &{
-                        let mut targets = vec![Some(wgpu::ColorTargetState {
-                            format,
-                            blend: Some(blend),
-                            // Colour only - the original's particle draw path
-                            // (`FUN_08915fd0`) calls `Bloom_SetPixelMask(g_bloom, 0)`,
-                            // protecting the glow mask. See `crate::post::bloom`.
-                            write_mask: wgpu::ColorWrites::COLOR,
-                        })];
-                        targets.extend(velocity.target(true));
-                        targets
-                    },
-                    compilation_options: crate::mesh_render::fragment_options(format),
-                }),
-                primitive: wgpu::PrimitiveState {
-                    // A camera-facing quad has no meaningful winding: the
-                    // basis it is built from flips as the camera orbits.
-                    cull_mode: None,
-                    ..Default::default()
-                },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: crate::mesh_render::DEPTH_FORMAT,
-                    depth_write_enabled: Some(false),
-                    depth_compare: Some(wgpu::CompareFunction::Less),
-                    stencil: Default::default(),
-                    bias: Default::default(),
-                }),
-                multisample: wgpu::MultisampleState {
-                    count: sample_count,
-                    ..Default::default()
-                },
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let additive = build("psys additive", BLEND);
-        let alpha_over = build("psys alpha-over", BLEND_ALPHA_OVER);
-
-        let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("psys uniforms"),
-            size: crate::mesh_render::UNIFORMS_SIZE,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("psys uniforms"),
-            layout: &layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniforms.as_entire_binding(),
-            }],
-        });
-
-        let buffer = |label: &str| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: (MAX_VERTICES * std::mem::size_of::<GpuVertex>()) as u64,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            })
-        };
-        let additive_vertices = buffer("psys additive vertices");
-        let alpha_vertices = buffer("psys alpha-over vertices");
-
-        Self {
-            additive,
-            alpha_over,
-            uniforms,
-            bind_group,
-            additive_vertices,
-            alpha_vertices,
-            additive_count: 0,
-            alpha_count: 0,
-        }
-    }
-
-    /// Uploads this frame's camera matrix and both blend classes' geometry,
-    /// as [`System::vertices`] returns them.
-    ///
-    /// Takes `&mut self` only for the vertex counts; the writes go through
-    /// `queue`, the same split [`crate::exhaust::Pipeline::upload`] uses.
-    pub fn upload(
-        &mut self,
-        queue: &wgpu::Queue,
-        view_projection: &[[f32; 4]; 4],
-        additive: &[GpuVertex],
-        alpha_over: &[GpuVertex],
-    ) {
-        let mut block = [[0.0f32; 4]; 8];
-        block[..4].copy_from_slice(view_projection);
-        block[4] = [1.0, 0.0, 0.0, 0.0];
-        block[5] = [0.0, 1.0, 0.0, 0.0];
-        block[6] = [0.0, 0.0, 1.0, 0.0];
-        block[7] = [0.0, 0.0, 0.0, 1.0];
-        queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
-
-        // A `Stage` cannot produce more than this, so an overflow means the
-        // buffer and the pool have drifted apart rather than that the scene
-        // is busy - worth failing on in a debug build instead of quietly
-        // losing the tail.
-        debug_assert!(
-            additive.len() <= MAX_VERTICES && alpha_over.len() <= MAX_VERTICES,
-            "particle vertices past the buffer: {} additive, {} alpha, cap {MAX_VERTICES}",
-            additive.len(),
-            alpha_over.len(),
-        );
-        let n = additive.len().min(MAX_VERTICES);
-        queue.write_buffer(
-            &self.additive_vertices,
-            0,
-            bytemuck::cast_slice(&additive[..n]),
-        );
-        self.additive_count = n as u32;
-
-        let n = alpha_over.len().min(MAX_VERTICES);
-        queue.write_buffer(
-            &self.alpha_vertices,
-            0,
-            bytemuck::cast_slice(&alpha_over[..n]),
-        );
-        self.alpha_count = n as u32;
-    }
-
-    /// Draws into a pass the caller already opened.
-    ///
-    /// Must be issued **after** the opaque geometry, for the same
-    /// depth-write-off reason as [`crate::exhaust::Pipeline::draw`]. The
-    /// alpha-over smoke draws first, then the additive sparks on top -
-    /// the original interleaves them in particle order, which two batched
-    /// draws cannot reproduce exactly; additive-last is the closer
-    /// approximation since adding light commutes.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if self.alpha_count > 0 {
-            pass.set_pipeline(&self.alpha_over);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_vertex_buffer(0, self.alpha_vertices.slice(..));
-            pass.draw(0..self.alpha_count, 0..1);
-        }
-        if self.additive_count > 0 {
-            pass.set_pipeline(&self.additive);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_vertex_buffer(0, self.additive_vertices.slice(..));
-            pass.draw(0..self.additive_count, 0..1);
-        }
-    }
-}
+mod pipeline;
+pub use pipeline::{BLEND, BLEND_ALPHA_OVER, MAX_VERTICES, Pipeline};
 
 mod riding;
 

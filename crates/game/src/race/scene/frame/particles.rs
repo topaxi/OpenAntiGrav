@@ -27,6 +27,9 @@ impl super::super::Scene {
     ) {
         race.extend_spark_vertices(additive, alpha, right, up);
         race.extend_stage_vertices(additive, alpha, right, up);
-        self.sparks.borrow_mut().upload(queue, vp, additive, alpha);
+        let mut pipeline = self.sparks.borrow_mut();
+        // The effects' own sprites - a no-op after the first frame of a race.
+        pipeline.sync_sheet(queue, race.view.effects.sheet());
+        pipeline.upload(queue, vp, additive, alpha);
     }
 }
