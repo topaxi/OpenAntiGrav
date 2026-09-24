@@ -945,6 +945,24 @@ put a position-keyed displacement in, which is a hardware constraint against
 that shape existing at all on this platform, independent of what this page
 did or didn't find in software.
 
+**2026-09-24: what the `/ 50` scales, and what `WO_QUAKE.POB` draws.** The
+scale goes into slot 1 of the seven-word block `0x088f443c` reads and
+`ParticleSystem_SetScaleParams` (`0x088f44d8`) writes back - instance
+`+0x2c`, the **emitter-extent co-factor**, not the severity that scales size
+and speed. All three `WO_QUAKE` emitters are shape 1, a line emitter
+(`ParticleSystem_EmitLine`, `0x088fcfec`) of extent `50` along the frame's
+`X`, and the basis's first row is `normalize(B - A)` (`0x0891da08`), edge to
+edge. So the fire spreads across the road at its authored size, which is
+what the PPSSPP crest shows. One correction to the paragraph above: the
+basis's second row is built from `sp+0xd0`, a word of the struct passed to
+`AiTrack_LocatePosition` as `a1` - so the call's output *is* consumed if it
+writes that struct; which of its fields lands there is not read, and our
+renderer keeps world up for that row (chosen, not measured). The same branch's
+`func_0x000ec0c0` is `ScreenFlash_Start` with kind `4`, an orange tint of
+0.4 s. Evidence for all of it: [particle-system.md](particle-system.md),
+"A particle is its sprite times its colour, and the Quake stretches its
+emitter".
+
 ### The latch setter, found 2026-09-07: it was inside the already-cited function all along
 
 **`entity+0x860 & 0x40`'s setter is not a separate, unlocated function - it sits

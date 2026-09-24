@@ -437,6 +437,25 @@ uv run --with websocket-client scripts/psp-fire-weapon.py --port 47810 --shots /
     --freeze-at 0x0885d2a8 --freeze-hits 24 rocket
 ```
 
+## The craft-hit blast against the original, measured 2026-09-24
+
+A PPSSPP capture of the player's own Rocket hitting the craft ahead on
+Talon's Junction's grid (51 units from the camera, `WO_ROCKET_EXPLO` via
+`Rocket_SpawnCraftExplosion_q`) settles what the blast looks like at player
+size, frame by frame after the spawn: a **full-screen yellow wash** for its
+first frames (screen mean `(89, 96, 84)` to `(223, 225, 85)`), a
+**white-hot core** about a quarter of the screen wide at its peak (8-12
+frames), then a saturated orange, textured fireball with black debris
+(16-25), a brown-then-black smoke mushroom (30-60) and a faint grey column
+by 80. So the original's peak is white at the core: a white disc at that
+moment is not by itself the bug. What was wrong in ours was everything
+around it - no textured fire, because particles drew a procedural disc
+instead of their own sprite. The wash is not a particle at all but
+`ScreenFlash_Start` kind `0`, `(1, 1, 0, 0.6)` over 0.5 s, which this
+engine does not draw yet. See [particle-system.md](particle-system.md),
+"A particle is its sprite times its colour, and the Quake stretches its
+emitter". The frames stay outside the repository.
+
 ## What our own renderer has and has not been shown to do
 
 The change that accompanies this page draws the model. Separating what was

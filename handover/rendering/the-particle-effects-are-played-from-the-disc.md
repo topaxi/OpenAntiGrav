@@ -5,7 +5,7 @@
 ## Open
 
 - Most of the 35 disc particle systems have a parsed asset but no recovered trigger, so they stay deliberately unwired.
-- ~~The interpreter does not yet implement sprite atlases/textures~~ - the pixels decode now (`oag_vex::pob::texture`, PSP positional embedding, 29 of 35 root emitters, 2026-09-17); wiring the decoded texture into the `wgpu` draw path (upload, per-emitter binding, atlas-frame selection) is still open. Still not implemented: billboard roll, emitter extent, the emission-scale channel, or the animated-attribute array.
+- ~~The interpreter does not yet implement sprite atlases/textures~~ - PSP billboards sample their own sprite and atlas cell since 2026-09-24, and shape 1/4/7 extents are placed as read (see the weapon-blasts thread in `handover/rendering/`). Still not implemented: HD's `.gtf` sprites, sprites on streaks, the atlas frame over life, billboard roll, the other shapes' extents, or the animated-attribute array.
 - The two instance-level scales (`instance[+0x40]` alpha, `instance[+0x34]` size) are read but unmodelled; the alpha factor is not fed by anything here.
 - **The environmental four are narrower than they looked, and the class is now
   confirmed live rather than dead code - only the effect *selection* is still
@@ -52,5 +52,5 @@
 
 - Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the constructor's call chain is confirmed live; `param_3`/`+0x4c` is ruled out as the effect selector (shared with the parent, a generic default). The record format (`FUN_08908f98`'s per-node class id) is now known; what's missing is isolating `weatherPos`'s own `0x3da` record among the noise of every other class spawning through the same call - a free-running capture that filters on the resolved id rather than trying to interleave menu input with the breakpoint is the likely way in, per `psp-pulse-usa/weatherpos.md`'s Open section.
 - Re-check `pob.md`'s `ParticleSystem` "dead end" claim against the class-identity-tag mechanism `weatherpos.md` found, before relying on it.
-- ~~Implement the missing interpreter features (atlases/textures, ...)~~ - atlas/texture *decoding* is done (`oag_vex::pob::texture`); wire it into `oag_render::psys`'s draw path (`wgpu` upload, per-emitter binding, atlas-frame selection), then HD's separate `.gtf` sprites the same way. Remaining: billboard roll, emitter extent, emission-scale channel, animated-attribute array.
+- ~~Implement the missing interpreter features (atlases/textures, ...)~~ - PSP sprites are sampled (2026-09-24); next is HD's separate `.gtf` sprites onto the same sheet. Remaining: billboard roll, extents of shapes 2/3/6/8, the frame-rate channel, animated-attribute array.
 - Do not fire any effect on a guess - follow the do-not-invent rule in `CLAUDE.md`.
