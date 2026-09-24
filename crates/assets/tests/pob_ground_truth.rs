@@ -376,6 +376,65 @@ fn every_psp_root_emitter_texture_is_where_the_layout_says() {
     );
 }
 
+/// Every embedded texture's two pointer words (`+0x10` pixels, `+0x14`
+/// palette) are entries of the file's own pointer-fixup table - the
+/// structural proof that both are offsets from the resource base, which the
+/// loader turns into pointers, rather than offsets from the blob's start.
+/// See `oag_vex::pob::texture`'s "from the resource base" section.
+///
+/// Also checks what the corrected reading draws: palette entry 0 is black
+/// on every additive (blend class 2) emitter's sprite. An additive sprite's
+/// field adds nothing only if its background index is black, and the old,
+/// unbased reading put a navy `(11, 30, 53)` there.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_psp_texture_pointer_is_a_fixup_site() {
+    let Some(image) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archive =
+        Archive::open(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display())).expect("open");
+    let blobs = particle_systems(&mut archive);
+    assert_eq!(blobs.len(), PSP_SYSTEMS);
+
+    let (mut textures, mut additive) = (0, 0);
+    for (_, blob) in &blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        let sites: Vec<usize> = system.slots.iter().flatten().map(|&s| s as usize).collect();
+        for emitter in system.emitters(blob).expect("emitters") {
+            let Some(texture) = system.embedded_texture(blob, &emitter) else {
+                continue;
+            };
+            textures += 1;
+            // Relative to the resource base, the header sits at
+            // `emitter.offset + EMITTER_LEN`.
+            let header = emitter.offset + pob::EMITTER_LEN;
+            for (field, what) in [(0x10, "pixels"), (0x14, "palette")] {
+                assert!(
+                    sites.contains(&(header + field)),
+                    "{} / {}: the {what} word at +{field:#x} is not a fixup site",
+                    system.name,
+                    emitter.name
+                );
+            }
+            if emitter.blend_class == 2 {
+                additive += 1;
+                assert_eq!(
+                    texture.palette[..3],
+                    [0, 0, 0],
+                    "{} / {}: an additive sprite's index 0 is not black",
+                    system.name,
+                    emitter.name
+                );
+            }
+        }
+    }
+    println!(
+        "psp: {textures} embedded texture(s), {additive} on additive emitters, every pointer a fixup site"
+    );
+    assert!(textures >= 29, "at least the 29 root textures");
+}
+
 // The negative control `docs/formats/pob.md` draws on - PS2's `.pob`s embed
 // nothing at all, at any emitter's positional offset - is folded into
 // `every_ps2_particle_system_walks_the_same_way` above (`assert_no_texture`)

@@ -395,7 +395,7 @@ on the disc after all" section has the corpus-wide evidence. This was the
   arguments but unread internally, and the exact stretch factor
   `ParticleSystem_DrawStreak` receives is not traced back to a resource
   field.
-- Modifier types other than 3, the `+0x9c8`/`+0x9cc` slot targets, and the
+- Modifier types other than 3 and the
   emitter-local frame of the aimed cones.
 
 ## The two unread draw modes, read (2026-08-09)

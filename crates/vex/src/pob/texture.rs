@@ -45,16 +45,15 @@
 //! +0x02  u16  height
 //! +0x04  u8   bits per pixel (8 on every real header)
 //! +0x05  u8   mip levels (3 or 4 on every real header)
-//! +0x06  u8   unknown - zero on most headers, 224 on one (WO_SHIP_COLL_SPARK_DAMAGE's
-//!             `+0x1758`) whose payload is otherwise byte-identical to three
-//!             zero-valued siblings pointing at the same pool, so this is read
-//!             as unexplained per-instance noise rather than a flag, for now
+//! +0x06  u8   flags - bit 0 is the GE swizzle bit, bits 3-4 select the
+//!             level mode (see "What the runtime bind reads" below). Zero on
+//!             most headers, 224 on one (WO_SHIP_COLL_SPARK_DAMAGE's `+0x1758`),
+//!             which sets neither of the bits the bind reads
 //! +0x07  u8   unknown - zero on every header seen
 //! +0x08  u32  palette_bytes (1024 on every real header: 256 RGBA8888 entries)
 //! +0x0c  u32  pixel_bytes, the whole mip chain
-//! +0x10  u32  pixel_offset, a plain absolute offset into the whole blob -
-//!             not from the resource base, and not from this header either
-//! +0x14  u32  palette_offset, same
+//! +0x10  u32  pixel offset, **from the resource base** - a fixup site
+//! +0x14  u32  palette offset, the same
 //! ```
 //!
 //! 32 bytes total. Only level 0 is exposed here, the same choice
@@ -66,10 +65,42 @@
 //! Confidence **85** for the header layout and the positional-addressing
 //! rule (four independent corpus-wide checks agree: the root-emitter hit
 //! rate, the sibling-tree hit rate, the quakesmoke/orange_glow2 size and
-//! sharing match, and the PS2 zero-hit control); **40** for the two
-//! remaining unknown bytes and for what, if anything, distinguishes the six
-//! root emitters with no positional texture from the twenty-nine that have
-//! one.
+//! sharing match, and the PS2 zero-hit control); **40** for what, if
+//! anything, distinguishes the six root emitters with no positional texture
+//! from the twenty-nine that have one.
+//!
+//! # The two offsets are from the resource base, not the blob - 2026-09-24
+//!
+//! This module used to read `+0x10`/`+0x14` as plain offsets into the whole
+//! blob. **They are not: both fields are pointer-fixup sites**, and the
+//! loader's `*(resource_base + slot) += resource_base` (`FUN_088f8e38`, see
+//! `docs/formats/pob.md`'s "The slot table is a pointer-fixup table") turns
+//! each into a live pointer at `resource_base + value`. Three legs:
+//!
+//! - **The slot table names them.** On every PSP emitter carrying a header,
+//!   the header's `+0x10` and `+0x14`, taken relative to the resource base,
+//!   are both entries of the file's own slot table
+//!   (`crates/assets/tests/pob_ground_truth.rs`,
+//!   `every_psp_texture_pointer_is_a_fixup_site`). Relative to the emitter
+//!   record those are `+0x9c8` and `+0x9cc` - the two slot targets
+//!   `docs/ghidra/functions/psp-pulse-usa/particle-system.md` had listed as
+//!   unexplained.
+//! - **The runtime bind dereferences them as pointers.** `FUN_08928b10`,
+//!   called from `ParticleSystem_DrawParticle` on the emitter's texture
+//!   block, returns without binding when either word is zero, hands `+0x10`
+//!   to `Gu_TexImage` and `+0x14` to the CLUT load, and reads `+0x06`'s
+//!   bit 0 into the texture mode's swizzle argument.
+//! - **The pixels only read as pictures this way.** Read at the old,
+//!   unbased offset, `WO_QUAKE`'s `fireballs` sprite came out half a row
+//!   shifted with its first bytes taken from the palette, and palette entry
+//!   0 - the index covering most of the sprite - read as an opaque navy
+//!   `(11, 30, 53, 88)`: 96 bytes (the resource base) before the real
+//!   table, whose entry 0 is black. Read from the base, every sprite in
+//!   `WO_QUAKE`, `WO_ROCKET_EXPLO` and `WO_ROCKET_EXPLO_TRACK` is a clean,
+//!   centred picture on a black or transparent field.
+//!
+//! Confidence **92** for the base-relative reading: the fixup mechanism is
+//! itself confirmed live (`pob.md`), and these two fields are in its table.
 //!
 //! # A positional texture is not proven to be the one a slot names
 //!
@@ -122,8 +153,11 @@ pub struct EmbeddedTexture<'a> {
     /// `+0x05`, mip levels in the chain `pixel_bytes` covers. Only level 0
     /// is exposed as [`EmbeddedTexture::indices`].
     pub levels: u8,
-    /// `+0x06` and `+0x07`, kept raw. See the module documentation.
-    pub unknown: [u8; 2],
+    /// `+0x06`: bit 0 is the GE swizzle flag ([`EmbeddedTexture::swizzled`]),
+    /// bits 3-4 the runtime bind's level-mode selector.
+    pub flags: u8,
+    /// `+0x07`, zero on every header seen.
+    pub unknown: u8,
     /// `+0x08..+0x0c` bytes of [`EmbeddedTexture::palette`].
     pub palette_bytes: u32,
     /// Raw palette bytes, `palette_bytes` long: 256 RGBA8888 entries on
@@ -131,10 +165,10 @@ pub struct EmbeddedTexture<'a> {
     /// that wants entries can `.as_chunks::<4>()` - kept raw rather than
     /// parsed so this module stays free of a colour type of its own.
     pub palette: &'a [u8],
-    /// Where [`EmbeddedTexture::palette`] starts, a plain absolute offset
-    /// into the blob [`parse_at`] was given - see the module documentation.
-    /// Exists so a caller (`pob_coverage`) can claim the span without
-    /// recovering it from the slice's own address.
+    /// Where [`EmbeddedTexture::palette`] starts in the blob [`parse_at`] was
+    /// given: the stored `+0x14` value plus the resource base - see the
+    /// module documentation. Exists so a caller (`pob_coverage`) can claim
+    /// the span without recovering it from the slice's own address.
     pub palette_offset: usize,
     /// Level 0's palette indices, exactly `width * height` bytes - one byte
     /// per pixel, since every real header is 8 bits per pixel.
@@ -142,6 +176,40 @@ pub struct EmbeddedTexture<'a> {
     /// Where [`EmbeddedTexture::indices`] starts. See
     /// [`EmbeddedTexture::palette_offset`].
     pub pixel_offset: usize,
+}
+
+impl EmbeddedTexture<'_> {
+    /// Whether `+0x06`'s bit 0 asks the GE for its block swizzle - the bit
+    /// the runtime bind passes to the texture mode.
+    #[must_use]
+    pub fn swizzled(&self) -> bool {
+        self.flags & 1 != 0
+    }
+
+    /// Level 0 as straight RGBA8888, `width * height * 4` bytes, row-major
+    /// from the top: every index looked up in the palette, unswizzled first
+    /// when [`Self::swizzled`] says so. A palette shorter than an index
+    /// reaches reads as transparent black rather than panicking.
+    #[must_use]
+    pub fn rgba8(&self) -> Vec<u8> {
+        let (width, height) = (usize::from(self.width), usize::from(self.height));
+        let linear;
+        let indices = if self.swizzled() {
+            linear = oag_formats::swizzle::unswizzle(self.indices, width, height);
+            &linear[..]
+        } else {
+            self.indices
+        };
+        let mut out = Vec::with_capacity(width * height * 4);
+        for &index in indices {
+            let at = usize::from(index) * 4;
+            match self.palette.get(at..at + 4) {
+                Some(entry) => out.extend_from_slice(entry),
+                None => out.extend_from_slice(&[0, 0, 0, 0]),
+            }
+        }
+        out
+    }
 }
 
 /// Reads the texture positioned at `base + offset`, the way
@@ -170,11 +238,14 @@ pub fn parse_at(
     let height = order.u16(data, start + 2);
     let bits_per_pixel = data[start + 4];
     let levels = data[start + 5];
-    let unknown = [data[start + 6], data[start + 7]];
+    let flags = data[start + 6];
+    let unknown = data[start + 7];
     let palette_bytes = order.u32(data, start + 8);
     let pixel_bytes = order.u32(data, start + 0x0c);
-    let pixel_offset = order.u32(data, start + 0x10) as usize;
-    let palette_offset = order.u32(data, start + 0x14) as usize;
+    // Both are fixup sites the loader adds the resource base to - see the
+    // module documentation's 2026-09-24 section.
+    let pixel_offset = base.checked_add(order.u32(data, start + 0x10) as usize)?;
+    let palette_offset = base.checked_add(order.u32(data, start + 0x14) as usize)?;
 
     if !width.is_power_of_two() || !(8..=256).contains(&width) {
         return None;
@@ -189,9 +260,6 @@ pub fn parse_at(
         return None;
     }
 
-    // Both offsets are plain absolute positions in `data` - not relative to
-    // `base`, unlike every other offset this crate resolves. See the module
-    // documentation.
     let palette_end = palette_offset.checked_add(palette_bytes as usize)?;
     let level0_len = usize::from(width) * usize::from(height);
     let pixel_end = pixel_offset.checked_add(pixel_bytes as usize)?;
@@ -204,6 +272,7 @@ pub fn parse_at(
         height,
         bits_per_pixel,
         levels,
+        flags,
         unknown,
         palette_bytes,
         palette: &data[palette_offset..palette_end],
