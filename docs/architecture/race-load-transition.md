@@ -124,13 +124,107 @@ that the first poll did not return the build and that no poll took longer
 than 50 ms - a bound chosen loose enough to survive `just test-data`'s
 contention, against the 8 s the old path cost.
 
+## The shader module and pipeline cache
+
+**The build was 7.2-8.1 s and is now 195-372 ms - a 20-38x cut, on the same
+desktop, same release build, same `--measure-race-load 2`.** `mesh_render::build`
+runs once per drawable - once per craft, per plume, per shield, per weapon
+model, some seventy calls in one race scene - and every one of them called
+`device.create_shader_module` on `mesh.wgsl` from scratch and then built its
+own eight-to-thirteen render pipelines, each asking wgpu to translate the
+already-identical shader a second, third, eighth time with the same override
+constants a sibling drawable had already asked for. The cache below counts
+every one of those asks whether or not it hits, so its own "calls" total is
+exactly what the unfixed code ran every single time it built a Pulse PSP
+scene: 1,197 calls asking for the shader module and 9,859 asking for a render
+pipeline, against 53 *distinct* pipelines the scene actually needs - every one
+of the rest was the same descriptor a call before it had already built.
+
+`oag_render::mesh_render::pipeline_cache` (`crates/render/src/mesh_render/pipeline_cache.rs`)
+fixes both: a thread-local cache, opened for one thread by a `BuildCacheScope`
+and cleared on drop. Inside an open scope, `build()` asks for the shared
+`mesh.wgsl` module instead of parsing its own, and asks for a pipeline by a
+key covering everything that can make one descriptor differ from another -
+entry points, targets (format, blend, write mask, the velocity target),
+`PrimitiveState`, `DepthStencilState`, `MultisampleState`, and the override
+constants (`f64::to_bits`, since `f64` has no `Hash`) - reusing the
+`wgpu::RenderPipeline` handle (`Clone`, proxy-`Eq` on the same underlying
+handle - `crate::cmp::impl_eq_ord_hash_proxy!` in wgpu itself) whenever a call
+matches one already built. The four bind group layouts a `build()` call
+creates fresh every time (`layout`, `texture_layout`, `fog_layout`,
+`anim_layout`) are **not** part of the key and do not need to be: they come
+from fixed descriptors with no model-dependent shape, and wgpu already
+deduplicates a `BindGroupLayout` - and the `PipelineLayout` built from it - by
+its descriptor's own content, the fact `material_bind_group_layout`'s own doc
+comment already relied on for the sun occlusion pass. A pipeline cached from
+one `build()` call's layouts is exactly as valid against a later call's bind
+groups as one built fresh for it would have been.
+
+`Stage::build_race_stage` (`crates/game/src/main/stage.rs`) opens the scope
+around the one `race::Scene::new` call and logs what it did:
+
+```
+race scene build cache: shader 1196/1197 reused, pipeline 9806/9859 reused (53 distinct built)
+```
+
+Outside an open scope - the asset viewer, every pre-existing render test -
+`build()` keeps exactly its old behaviour: a fresh module and fresh pipelines
+every call, checked by
+`mesh_render::pipeline_cache::tests::with_no_scope_open_every_build_creates_its_own_shader_and_pipelines`.
+Two more tests in that module build the same model twice inside one scope
+against a real (adapter-gated) device and assert the second call's pipeline
+and shader module compare equal to the first's - `wgpu::RenderPipeline` and
+`wgpu::ShaderModule` both compare by handle, not content, so a stale-cache bug
+that handed back the wrong pipeline would fail these, not just look plausible.
+
+**Pixels checked unchanged, not just assumed:** `--race --screenshot ...
+--ticks 90 --hold cross --no-audio` on Pulse PSP, Pulse PS2 and Wipeout HD
+Fury, once against this commit and once against its parent (the tree
+immediately before the cache), produced byte-identical PNGs on all three -
+`cmp` reported no difference, all six files exactly 4,701,399 bytes. Redo it
+with the images this project does not ship:
+
+```sh
+cargo build --release -p oag-game
+git stash push -u -m "baseline"
+cargo build --release -p oag-game
+./target/release/oag-game data/images/pulse-psp-eu.chd --race \
+    --screenshot /tmp/before.png --ticks 90 --hold cross --no-audio
+git stash pop
+cargo build --release -p oag-game
+./target/release/oag-game data/images/pulse-psp-eu.chd --race \
+    --screenshot /tmp/after.png --ticks 90 --hold cross --no-audio
+cmp /tmp/before.png /tmp/after.png && echo identical
+```
+
+### Measurements
+
+Same machine, same release build, same `--measure-race-load 2` as the table
+above; "build" and "warm up" are the `race-build` thread's own two spans.
+
+| Source | Run | Build | Warm up | Shader reuse | Pipeline reuse |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pulse PSP | 1/2 | 372 ms | 5.0 ms | 1196/1197 | 9806/9859 (53 distinct) |
+| Pulse PS2 | 1 | 224 ms | 3.1 ms | 1180/1181 | 9554/9587 (33 distinct) |
+| Pulse PS2 | 2 | 195 ms | 2.8 ms | 1180/1181 | 9554/9587 (33 distinct) |
+| Wipeout HD Fury | 1 | 323 ms | 6.4 ms | 939/940 | 9098/9168 (70 distinct) |
+| Wipeout HD Fury | 2 | 303 ms | 6.4 ms | 939/940 | 9098/9168 (70 distinct) |
+
+HD Fury shares fewer calls but builds more distinct pipelines than Pulse - its
+materials author more of the per-model knobs the key covers (flame shading,
+the absorb shell, authored blend equations), so fewer of its seventy-odd
+drawables end up wanting the exact same one. It is still a 23-24x cut on the
+same shape of win: almost nothing is asked for that was not already built.
+
+**What is not yet won:** the shader module and pipeline count are now a
+one-time cost of the scene's own shape, not of drawable count - a track with
+more circuits-worth of distinct materials would grow the "distinct built"
+column, not the reuse ratio. Nothing here changes `warm_up`'s own cost or the
+`Shadows::Blob`/`MotionBlur::Off`-only warmup below, and nothing here touches
+`mesh.wgsl` itself or what it draws.
+
 ## Still open
 
-- **The build takes 7 to 8 s on a desktop.** It no longer freezes anything,
-  but it is still the whole of the wait, and on a Deck it will be longer. Most
-  of it is naga re-parsing `mesh.wgsl` and re-translating it per pipeline,
-  once per model; sharing one shader module per source and caching pipelines
-  by their key would shorten the load itself.
 - **`warm_up` warms `Shadows::Blob` and `MotionBlur::Off` only.** A player on
   shadow maps or motion blur still compiles those pipelines on the first frame
   that uses them. No first-race-frame spike showed at the default settings.
