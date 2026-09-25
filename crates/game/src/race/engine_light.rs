@@ -45,7 +45,7 @@
 //!   unread, so it stays unwired rather than fired on a guess. A capture
 //!   showed it once, on a different boot.
 //!
-//! # Who receives it, and why the floor is not it (the hull binding is measured)
+//! # Who receives it, and why the floor is not it (the hull binding is chosen, not measured)
 //!
 //! [`Race::hd_engine_lights`] is bound into the `Scene` uniform of the track
 //! chunks **and of the craft**. Bound to the track alone it changed zero
@@ -74,25 +74,22 @@
 //! capture shows, and boosted (`1 + 10 * blend`, a 440-unit light a hand's
 //! breadth from the housing) the whole rear of the hull washes warm.
 //!
-//! **The runtime half is now read too (2026-09-25).** `Ship_DrawModels`
-//! (`0x003ea368` in `ps3-hdfury-eu`, confidence 80 -
-//! `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The hull binding is
-//! settled") performs the identical per-object `Enable_spu_vertex_light`
-//! gate this project already read on the track's own Zone-Stage compilers:
-//! `SpuLight_AnyVisibleLightTouchesSphere` against the ship's own bounding
-//! sphere, `Shader_GetVariantHash(... | 0x800)` on a hit. The original does
-//! draw the hull with the `SVC1` twin, conditionally on that per-ship touch
-//! test - which the craft's own engine light, anchored at or inside its own
-//! nozzle, trivially passes. **The hull binding is measured, not chosen**:
-//! do not remove it. What is *not* yet measured is the wash's own shape - a
-//! crop comparison (`data/scratch/hd-engine-light/crops/`) shows the
-//! original's tint confined to the housing/fin geometry against this
-//! project's wider wash across flat underside panels, consistent with (but
-//! not confirmed as) a tessellation/vertex-density difference near the
-//! housing rather than a binding, formula or record error - see the
-//! handover thread's "Open" section for the untested next step. The track
-//! floor and walls light up only when a craft is within `D` of them:
-//! landings, wall scrapes and banked sections.
+//! **The runtime half is narrowed, not closed (2026-09-25).**
+//! `Ship_DrawModels` (`0x003ea368` in `ps3-hdfury-eu`, confidence 80 for the
+//! gate's shape - `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, the
+//! `Ship_DrawModels` section) carries the identical per-object
+//! `Enable_spu_vertex_light` gate this project already read on the track's
+//! own Zone-Stage compilers: `SpuLight_AnyVisibleLightTouchesSphere`
+//! against the ship's own bounding sphere, `Shader_GetVariantHash(...
+//! | 0x800)` on a hit - but the gate's own leading condition,
+//! `record+0xe4 & 0x800`, is a per-ship flag whose writer this project has
+//! not yet found, statically or live. So the *mechanism* to select `SVC1`
+//! on a hull exists and has the right shape; whether it is ever actually
+//! armed on a real ship is unread. **The hull binding stays chosen, not
+//! measured** until that bit is read one way or the other - do not treat
+//! either direction (keep it, or `SpuLights::none()` the craft) as settled
+//! from this alone. The track floor and walls light up only when a craft is
+//! within `D` of them: landings, wall scrapes and banked sections.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;

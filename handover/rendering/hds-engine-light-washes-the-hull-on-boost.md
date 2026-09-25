@@ -1,4 +1,4 @@
-# HD's engine light washes the hull white on boost and blooms off it; the original's stays copper - the binding is measured correct now, the wash's shape is the open suspect
+# HD's engine light washes the hull white on boost and blooms off it; the original's stays copper - the hull binding is the suspect, not the bloom
 
 2026-09-20. Reported from play by the user the same evening the light landed
 (`421b14c9`): "the light work looks amazing, but it exaggerates the bloom".
@@ -39,17 +39,6 @@ and is not repeated here.
   `ambient + sun * N.L (+ lightmap)` *before* the albedo multiply (confidence
   80 / 88). `crates/render/src/mesh.wgsl::spu_light_sum` is that, with the
   `256/255`.
-- **The hull binding is measured, not chosen, as of 2026-09-25.**
-  `Ship_DrawModels` (`0x003ea368`) and its one-entity twin (`0x003eb890`)
-  perform the identical per-object `Enable_spu_vertex_light` gate this
-  project already read on the track's Zone-Stage compilers -
-  `SpuLight_AnyVisibleLightTouchesSphere` against the ship's own bounding
-  sphere, `Shader_GetVariantHash(... | 0x800)` on a hit - so the original
-  does draw the hull with the `SVC1` twin, conditionally, during a race.
-  Confidence 80, renderer.md "The hull binding is settled". **Do not remove
-  the binding or gate it off** - that would recreate a state the original
-  never produces. See "Open" below for what is still unmeasured (the wash's
-  own shape, not whether it happens at all).
 - **At ride height the light never reaches the track.** Measured on both
   sides (`crates/game/examples/hd_engine_light_reach_probe.rs`): all 40 of
   the original's captured positions sit 2.98-4.41 units from the nearest
@@ -84,38 +73,51 @@ the light than ours.
 
 ## Open
 
-- **Settled 2026-09-25: yes, the original does light the hull, conditionally.**
-  `Ship_DrawModels` (`0x003ea368`, already named on
+- **Narrowed, not settled, 2026-09-25: a real per-ship `SVC1` gate exists
+  in the ship draw path, but whether it ever actually fires on a hull is
+  still unread.** `Ship_DrawModels` (`0x003ea368`, already named on
   [ship-sun-occlusion.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md))
   and its one-entity twin `0x003eb890` - the functions that actually walk
   the ship table (`PTR_DAT_008b7da0`, count `+0x933c4`, `0x1b0`-byte records)
-  and issue each ship's own `Render_RunCompiledOps_q` draw - perform the
-  identical per-object `Enable_spu_vertex_light` gate this page already read
-  on the two track Zone-Stage compilers: `SpuLight_GetVisibleCount`,
-  `SpuLight_AnyVisibleLightTouchesSphere`, `SpuLight_GetVisibleSlotAddress`,
-  `Shader_GetVariantHash(... | 0x800)`, staged into the same `ctx+0x14c`/
-  `+0x150` fields the opcode-`0x2d` handler already proved is read
-  regardless of which family wrote it. Full read:
-  [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
-  "The hull binding is settled", confidence 80. **This falsifies the top
-  candidate** - the hull is a real, conditionally-gated `SVC1` receiver in
-  the original, not a structurally-dead one, and `SpuLights::none()` for the
-  craft would be wrong, not merely untested. `frame.rs`'s binding is
-  therefore correct as implemented; it is relabelled below rather than
-  reverted.
-- **What is still open: the wash's own shape.** A crop comparison this
-  session (`data/scratch/hd-engine-light/crops/{orig,ours}-crop.png`, off
-  `race.png` and `talons-t487.png` - camera angles differ too much for a
-  pixel measurement) shows the original's copper tint confined to the
-  housing/fin geometry while this project's render washes flat underside
-  panels well beyond it. Candidate, **not measured**: sparser tessellation
-  near the housing on this project's `ship.vex` reading would let one or two
-  nearby vertices' ~440-magnitude term interpolate across a much larger
-  screen area than the same falloff produces on a more subdivided original
-  mesh - the same light, the same formula, a coarser receiver. Untested:
-  comparing vertex density at the housing between this project's mesh and
-  the original's own geometry; no ground-truth vertex count from the PS3
-  side exists yet to compare against.
+  and issue each ship's own `Render_RunCompiledOps_q` draw - carry the same
+  gate shape this page already read on the two track Zone-Stage compilers:
+  `SpuLight_GetVisibleCount`, `SpuLight_AnyVisibleLightTouchesSphere`,
+  `SpuLight_GetVisibleSlotAddress`, `Shader_GetVariantHash(... | 0x800)`,
+  staged into the same `ctx+0x14c`/`+0x150` fields the opcode-`0x2d` handler
+  already proved is read regardless of which family wrote it - gated first
+  on `record+0xe4 & 0x800`, a per-ship flag word whose own writer was **not**
+  found this session (a scoped brute-force instruction search did not
+  converge; see renderer.md for what was and was not tried). Full read:
+  [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), the
+  `Ship_DrawModels` section, confidence 80 for the gate's shape, **no score**
+  for whether it ever actually selects `SVC1` on a real hull. This is the
+  same evidentiary position the 74 `SVC1`-twin-compiled materials were
+  already in ("available, not proven picked") - one gate closer to an
+  answer, not the answer. **Does not falsify the top candidate.**
+  `SpuLights::none()` for the craft remains a live option; `frame.rs`'s
+  binding is unchanged either way pending one of the two reads below.
+- **What would close this**: (1) find `record+0xe4`'s own writer statically
+  - the one function already touching a neighbouring bit
+  (`Ship_AddToRenderList`, `0x003e4cc8`) does not touch `0x800`, and a wider
+  search did not converge this session; or (2) a live RPCS3 read, pausing
+  via the GDB stub with no breakpoints (the shape `absorb-feedback.md`'s own
+  "Live on RPCS3" section already used successfully on this exact record
+  table) - read the count/index at `PTR_DAT_008b7da0+0x933c4`/`+0x933c8`,
+  then the u32 at the player's own record `+0xe4` mid-race, and test bit
+  `0x800` directly. Either closes it at confidence ~90.
+- **A crop comparison this session** (`data/scratch/hd-engine-light/crops/
+  {orig,ours}-crop.png`, off `race.png` and `talons-t487.png`) shows the
+  original's copper tint confined to the housing/fin geometry while this
+  project's render washes flat underside panels well beyond it - but the two
+  frames are not the matched team/camera/multi-frame comparison this task
+  asked for (different angle, unverified team against the capture, one
+  frame each), so this is a qualitative prompt only, not evidence. A
+  tessellation-density mismatch near the housing is one candidate reading of
+  that shape difference, but since both sides draw the same disc mesh with
+  the same formula and the same light record, it would only produce a
+  different result if this project's mesh is coarser there (a different LOD
+  or chunk selection) than the original's - unconfirmed, and not worth
+  chasing before the `0x800` bit above is settled either way.
 - **If it does, is our light closer to the housing than the original's?**
   Second candidate, geometric: the anchor `pos - z * Distance` carries the
   locator's Z axis through the craft's world matrix
@@ -132,30 +134,52 @@ the light than ours.
 
 ## Next Steps
 
-1. **Done, 2026-09-25, statically**: the hull binding is settled - see
-   "Open" above and renderer.md's "The hull binding is settled". No
-   `SpuLights::none()` change; the binding stays as implemented.
-2. **Measure vertex density at the housing**, `ship.vex` against whatever
-   ground truth for the original's own geometry can be found (a decoded
-   `.rcsmodel` chunk count near the `Engine Flare` locator, or a live
-   RPCS3 vertex-buffer read) - the live candidate for the wash's different
-   *shape*, per "Open" above. If this project's housing mesh is coarser
-   (fewer, larger triangles near the nozzle) than the original's, that is
-   the fix: subdivide or re-check the LOD/chunk selection feeding the
-   housing at player-camera distance, not the light or the binding.
-3. Measure our anchor-to-housing distance against the original's
-   record-to-hull distance anyway (`hd_engine_light_reach_probe.rs` already
-   loads the records; add the hull's vertices from `ship.vex`) - a cheap
-   independent check that rules geometry *placement* in or out before
-   chasing tessellation. Our anchor's world position already matches the
-   original's captured records exactly (engine_light.rs's own 40/40 finding),
-   so this is likely to come back negative, but it has not been measured.
-4. Capture a Turbo boost away from any speed pad on the original, to have a
-   reference free of the pad's own flash - useful once a same-angle
-   comparison is possible, not blocking the tessellation check above.
+1. **Settle `record+0xe4`'s `0x800` bit - this is now the single
+   discriminating question, narrowed down from "does any selection
+   mechanism reach a ship at all" (2026-09-25's own finding: one does, its
+   shape is read, whether it ever fires is not).** Two routes, cheaper
+   first:
+   - Static: find the bit's own writer. `Ship_AddToRenderList`
+     (`0x003e4cc8`) touches a neighbouring bit (`0x100`, a dedup guard) but
+     not `0x800`; a broad `search_instructions` sweep on `stw ..., 0xe4(rN)`
+     does not converge (hundreds of unrelated stack-frame-save hits across
+     the whole image). Narrow it: check functions that also touch this
+     record's other fields `Ship_DrawModels` itself reads alongside `+0xe4`
+     (`+0xe0`, `+0xe8`, `+0xec`, `+0x100`, `+0x130`) - a material/capability
+     resolve function that sets several of these at once is the likely
+     shape, by analogy with the shadow/sun-occlusion bits' own writers on
+     this page.
+   - Live: pause via the GDB stub with no breakpoints, the shape
+     `absorb-feedback.md`'s own "Live on RPCS3" section already used
+     successfully on this exact record table - read the count/index at
+     `PTR_DAT_008b7da0+0x933c4`/`+0x933c8`, then the u32 at the player's own
+     record `+0xe4` mid-race, test bit `0x800`.
 
-What would falsify the tessellation candidate: this project's housing mesh
-carrying the same or higher vertex density near the `Engine Flare` locator
-as the original's. What would falsify the geometric-placement candidate:
-our light-to-housing distance matching the original's within the `±0.1`
-jitter.
+   If the bit is set (always, or whenever the ship's resolved material has
+   the `SVC1` twin): the gate genuinely fires, the top candidate is
+   falsified, relabel the binding measured, and go to step 2. If never set
+   in play: `SpuLights::none()` for the craft in `frame.rs`, relabel the
+   binding measured (the negative direction), and re-take `talons-t487.png`.
+2. Only once step 1 answers *yes*: measure our anchor-to-housing distance
+   against the original's record-to-hull distance
+   (`hd_engine_light_reach_probe.rs` already loads the records; add the
+   hull's vertices from `ship.vex`). Our anchor's world position already
+   matches the original's captured records exactly (`engine_light.rs`'s own
+   40/40 finding), so this is likely to come back negative, but it has not
+   been measured.
+3. Also only once step 1 answers *yes*: re-take a matched comparison - same
+   team as the capture (verify which team `race.png` is; this session's own
+   crops did not check), same circuit, player size, more than one frame,
+   ideally away from a speed pad (the reference frame's white wash next to
+   the ship is a pad effect, not confirmed separated from the engine light
+   yet). Only then is a tessellation-density hypothesis (this session's own
+   qualitative read of the crop shapes, not a measurement) worth chasing -
+   both sides draw the same disc mesh with the same formula and the same
+   light record, so it would only diverge if this project selects a
+   coarser LOD or chunk set than the original at the same camera distance,
+   which is itself unconfirmed.
+
+What would falsify the gate candidate entirely: `record+0xe4`'s `0x800` bit
+observed never set on a real ship, live or via its writer. What would
+falsify the geometric-placement candidate (once reachable): our
+light-to-housing distance matching the original's within the `±0.1` jitter.
