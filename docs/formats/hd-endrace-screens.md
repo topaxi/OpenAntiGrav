@@ -127,7 +127,7 @@ and the executable's strings without a decompile (2026-09-25):
    `EndRace Menu`/`EndRaceMenu_Screen.cpp`,
    `EndRace Podium`/`EndRacePodium_Screen.cpp`,
    `EndRace Photo`/`EndRacePhoto_Screen.cpp` - and **zero** strings matching
-   `reward` in any case, ASCII or UTF-16. None of the Rewards widget names
+   `reward` in any case, ASCII, UTF-16LE or UTF-16BE. None of the Rewards widget names
    (`RewardLine1`, `BigPos`, `MedalImg`, `loyaltybar`) appear either, while
    Results' own `loyalty1.1`/`loyalty1.2`/`loyalty2` sit in the
    `EndRaceResults_Screen.cpp` string cluster (`0x7845b0`), beside
