@@ -646,7 +646,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The barrel roll has a drawing job, and the original's own recipe for it](handover/rendering/the-barrel-roll-has-a-drawing-job.md) - drawn and on screen since 2026-09-06: a symmetric quadratic ease on `ShipState::roll_phase`, then `eased * 6.28` radians about the craft's **nose** on its display matrix.
 - [Sideshift has no runtime leg](handover/gameplay/sideshift-has-no-runtime-leg.md)
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/rendering/task-31-residual-the-unguarded-slice-in-the.md)
-- [Menus: no pause overlay while a race is suspended](handover/frontend/menus-no-pause-overlay-while-suspended.md) - the CONTROLS page's key-capture prompt landed (2026-09-07) and stays landed; the pause overlay itself did not actually show on a live run.
 - [MONITOR has only ever run on a one-screen machine](handover/tooling/monitor-has-only-ever-run-on-a-one.md)
 - [Where Pulse's language picker belongs is unevidenced](handover/frontend/where-pulses-language-picker-belongs-is-unevidenced.md)
 - [Pure's `Title Screen` logo wordmark is found; `FE Screen`'s own backdrop is not](handover/frontend/pures-title-screen-is-missing-its-own-logo.md)

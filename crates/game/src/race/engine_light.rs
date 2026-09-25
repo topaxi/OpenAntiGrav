@@ -72,14 +72,24 @@
 //! carrying the `(255, 128)` decode and the `0x868f8229` attribute). The
 //! picture agrees: the Fury housings take the warm tint the reference
 //! capture shows, and boosted (`1 + 10 * blend`, a 440-unit light a hand's
-//! breadth from the housing) the whole rear of the hull washes warm. What is
-//! still not measured is the runtime half - whether `LightCulling` sets a
-//! hull chunk's `SVC1` bit, and whether the original's hull washes like that
-//! on boost - and that is the one RPCS3 read that would settle it. **The
-//! hull binding is chosen, not measured**, on the static evidence above, and
-//! carries no confidence score. The track floor and
-//! walls light up only when a craft is within `D` of them: landings, wall
-//! scrapes and banked sections.
+//! breadth from the housing) the whole rear of the hull washes warm.
+//!
+//! **The runtime half is narrowed, not closed (2026-09-25).**
+//! `Ship_DrawModels` (`0x003ea368` in `ps3-hdfury-eu`, confidence 80 for the
+//! gate's shape - `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, the
+//! `Ship_DrawModels` section) carries the identical per-object
+//! `Enable_spu_vertex_light` gate this project already read on the track's
+//! own Zone-Stage compilers: `SpuLight_AnyVisibleLightTouchesSphere`
+//! against the ship's own bounding sphere, `Shader_GetVariantHash(...
+//! | 0x800)` on a hit - but the gate's own leading condition,
+//! `record+0xe4 & 0x800`, is a per-ship flag whose writer this project has
+//! not yet found, statically or live. So the *mechanism* to select `SVC1`
+//! on a hull exists and has the right shape; whether it is ever actually
+//! armed on a real ship is unread. **The hull binding stays chosen, not
+//! measured** until that bit is read one way or the other - do not treat
+//! either direction (keep it, or `SpuLights::none()` the craft) as settled
+//! from this alone. The track floor and walls light up only when a craft is
+//! within `D` of them: landings, wall scrapes and banked sections.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
