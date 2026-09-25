@@ -229,12 +229,12 @@ impl Instruction {
             // fragment block on this disc (`hd_litex2_census.rs`, 0 of
             // 76,358) - named for completeness, not because it's needed.
             0x3c => "LIT_EX2_NV40",
-            // `0x3b`/`0x3d` occur in shipped programs, genuinely absent from
-            // Mesa's `nvfx_shader.h`. `0x3d` has no hypothesis; `0x3b` reads
-            // as `NRM` at confidence ~70 (renderer.md), deliberately not
-            // applied - below this project's rename line, and a second usage
-            // shape (2026-09-03) shows the semantics aren't uniform even
-            // under that hypothesis. Reference decoder: both stay unnamed.
+            // `RSX_FP_OPCODE_DIVSQ` (`a / sqrt(b)`), RPCS3's `FPOpcodes.h`
+            // (GPLv2); confidence 84, see `docs/formats/rcsmaterial.md`.
+            0x3b => "DIVSQ",
+            // `RSX_FP_OPCODE_FENCT`; writes no real destination on this disc
+            // (confidence 90) - same source and evidence page as `DIVSQ`.
+            0x3d => "FENCT",
             _ => return None,
         })
     }

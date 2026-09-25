@@ -62,15 +62,16 @@ fn arity_follows_the_mnemonic() {
     assert!(!insn(0x04).is_texture());
 }
 
-/// The two opcodes shipped programs use that nouveau's table does not name -
-/// `0x3c` moved out of this set 2026-09-03, confirmed present in Mesa's own
-/// `nvfx_shader.h` as `LITEX2_NV40`, see [`opcode_0x3c_is_named_lit_ex2`].
-///
-/// The remaining two stay unnamed rather than guessed, and fall back to two
-/// sources - the reference decoder's own behaviour.
+/// Opcodes this project has never named at all - not in Mesa's
+/// `nvfx_shader.h`, not in RPCS3's `FPOpcodes.h` either (`0x2b`, never
+/// checked against shipped code), or below this project's own naming line
+/// (`0x3e`, the one opcode `docs/formats/rcsmaterial.md` still records as
+/// genuinely unnamed after `0x3b`/`0x3d` were named 2026-09-25 - see
+/// [`opcode_0x3b_is_named_divsq`]/[`opcode_0x3d_is_named_fenct`]). Both fall
+/// back to two sources - the reference decoder's own behaviour.
 #[test]
 fn an_opcode_outside_the_table_stays_unnamed() {
-    for opcode in [0x3b, 0x3d, 0x2b] {
+    for opcode in [0x3e, 0x2b] {
         assert_eq!(insn(opcode).name(), None, "{opcode:#04x}");
         assert_eq!(insn(opcode).arity(), 2);
         assert!(!insn(opcode).is_texture());
@@ -87,6 +88,32 @@ fn opcode_0x3c_is_named_lit_ex2() {
     assert_eq!(insn(0x3c).name(), Some("LIT_EX2_NV40"));
     assert_eq!(insn(0x3c).arity(), 1);
     assert!(!insn(0x3c).is_texture());
+}
+
+/// `RSX_FP_OPCODE_DIVSQ` (`rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.h`,
+/// GPLv2), `a / sqrt(b)` - confirmed 2026-09-25 against disc-wide use
+/// (`hd_op3b_op3d_census.rs`: 183,623 uses, splitting into the
+/// `DP3`-then-`op3B` normalize shape and the same-register `op3B(x,x) =
+/// sqrt(x)` shape `renderer.md`'s prior `NRM` hypothesis could not explain).
+/// Confidence 84. Two source operands, the reference decoder's default.
+#[test]
+fn opcode_0x3b_is_named_divsq() {
+    assert_eq!(insn(0x3b).name(), Some("DIVSQ"));
+    assert_eq!(insn(0x3b).arity(), 2);
+    assert!(!insn(0x3b).is_texture());
+}
+
+/// `RSX_FP_OPCODE_FENCT` (same source), "Fence T?" - RPCS3's own hedge on the
+/// exact meaning. What is confirmed, disc-wide: every one of 59,256 uses
+/// writes destination register 63 (the 6-bit field's all-ones value,
+/// matching `nvfx_shader.h`'s own `NV40_FP_OP_OUT_NONE` bit, independently
+/// checked set on a hand sample) - zero counterexamples. Confidence 90 on
+/// "writes no real destination", not on "fence" specifically.
+#[test]
+fn opcode_0x3d_is_named_fenct() {
+    assert_eq!(insn(0x3d).name(), Some("FENCT"));
+    assert_eq!(insn(0x3d).arity(), 2);
+    assert!(!insn(0x3d).is_texture());
 }
 
 /// A synthetic block: header, empty declaration tables, program sub-header, and

@@ -135,7 +135,9 @@ fn main() -> anyhow::Result<()> {
         );
         for (i, insn) in program.instructions.iter().enumerate() {
             let slot = i; // this instruction's own 16-byte-slot ordinal is not tracked directly; report by stream index instead
-            let name = insn.name().unwrap_or("???");
+            let name = insn
+                .name()
+                .unwrap_or_else(|| Box::leak(format!("op{:#04x}", insn.opcode).into_boxed_str()));
             let dst = format!("{}{}", if insn.dst_half { "H" } else { "R" }, insn.dst);
             let is_tex = insn.is_texture();
             let mut line = format!(
