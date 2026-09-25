@@ -52,9 +52,22 @@ The executable's own load-path strings name every model above
   frame purple, culled or not. See plasma.md's 2026-09-23 section. Not played yet: (1) the `UV_offset`
   binding `WeaponExplosions_Construct` makes to `node + 0xc0` of each model's
   first `PTR_PTR_008b3988`-class node, driven by `age` through
-  `_opd_FUN_002c1b30` - what that field holds is unread; (2) the sphere's
-  `noise.gtf` second sampler; (3) the sphere's track-fitted basis
-  (`FUN_000a97f0`), for which the camera-facing one stands in. The live
+  `_opd_FUN_002c1b30` - **2026-09-25: the bind mechanism is read (by
+  pointer, not by value - `Material_BindInstanceParamPointer`), and
+  confirmed as the same helper pair Missile's own `UV_offset`/
+  `Shockwave_scalar` bindings use on `MissileManager_Construct`, both
+  aliasing the same `node + 0xc0`. What law drives that field's value is
+  still unread - it needs the Anim Transform track's own keys parsed out of
+  each `.vex`, not another code read; see plasma.md's 2026-09-25 section**;
+  (2) the sphere's `noise.gtf` second sampler, still unread; (3) the
+  sphere's track-fitted basis (`FUN_000a97f0`) - **2026-09-25: confirmed at
+  the control-flow level that `WeaponExplosions_Start` branches on this
+  call's found/not-found return, and only the found branch does the extra
+  Gram-Schmidt pass that makes the shared basis track-fitted rather than
+  the seeded identity; what feeds that construction (`r1+0x140`) was not
+  traced to its source, confidence 60, below this project's rename
+  threshold - see plasma.md's 2026-09-25 section**. The camera-facing basis
+  still stands in for the engine's own draw. The live
   RPCS3 check that would falsify the scale reading (Z0 on `Draw`'s three
   `bl 0x327500` sites) was **not run**: getting a Plasma detonation in front
   of the player on the emulator needs the held-weapon slot, which is unread.
@@ -204,12 +217,25 @@ The executable's own load-path strings name every model above
 3. Rocket/Missile/Mine/Bomb **bodies** are wired; their own further
    detonation models (Missile's pair, the Bomb's five) and effects remain,
    by the same per-title path, only as their triggers are read.
-4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**, the gate
-   is gone. Next on it: read what `node + 0xc0` is on the
-   `PTR_PTR_008b3988` node class (the `UV_offset` source), then the sphere's
-   `noise.gtf` role. Compare against a real RPCS3 capture of one detonation
-   when the held-weapon slot is known - no capture of the original's blast
-   exists yet.
+4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**. ~~Read what
+   `node + 0xc0` is on the `PTR_PTR_008b3988` node class~~ **Done
+   2026-09-25 at the mechanism level**: it is a generic Anim-Transform
+   node's own live output, bound to the shader's `UV_offset` constant *by
+   pointer* (`Material_BindInstanceParamPointer`), the same two-helper
+   pattern Missile's own `UV_offset`/`Shockwave_scalar` bindings use on a
+   different node - see plasma.md's 2026-09-25 section. **Still open**:
+   the field's actual law (its authored keys, one per model) is a data
+   read, not a code one - parse the Anim Transform track at that node in
+   each of `hd_plasma_ring`/`_sphere`/`_halo`'s own `.vex`, the same way
+   `HD_missile_explosion`'s scale keys were read directly off its file.
+   ~~The sphere's track-fitted basis~~ **2026-09-25: the found/not-found
+   branch structure in `WeaponExplosions_Start` is read (confidence 60,
+   see plasma.md); what actually seeds the found branch's construction
+   (`r1+0x140`, presumably from the `RaceManager+0xbc` track/spatial
+   query `FUN_000a97f0` calls) is not traced to its source.** The sphere's
+   `noise.gtf` sampler role remains unread. Compare against a real RPCS3
+   capture of one detonation when the held-weapon slot is known - no
+   capture of the original's blast exists yet.
 5. ~~Make `Race::projectile_model_matrices` a rotation and honour state bit
    4 for every HD weapon model~~ **Done 2026-09-24.** Next on it: read HD's
    own Rocket/Mine/Bomb per-tick placement (the `Rocket` vtable off

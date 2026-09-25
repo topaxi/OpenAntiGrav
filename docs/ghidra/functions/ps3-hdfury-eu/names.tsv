@@ -442,3 +442,6 @@
 0x003eeb08	function	ModelRecord_Load	65	renderer.md
 0x0040d220	function	SpuLight_AttachVertexStream	72	renderer.md
 0x002c0890	function	SceneModel_RegisterRenderRecord	65	renderer.md
+0x002c11c8	function	AnimNode_FindTransformValueField	80	plasma.md
+0x002c1b30	function	AnimNode_UpdateTransformTree	82	plasma.md
+0x00677018	function	Material_BindInstanceParamPointer	85	plasma.md
