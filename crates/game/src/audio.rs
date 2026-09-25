@@ -249,7 +249,18 @@ pub struct MusicDiscs {
     /// one release, so this is only ever the disc the game booted from and
     /// [`MusicDiscs::both`] is false whenever it is set.
     ps3: Option<String>,
-    /// Which release the game booted from, when it is one of the three.
+    /// The booted title's Vita source, if one was found.
+    ///
+    /// On the same terms as [`Self::ps3`]: 2048 has one release, so this is
+    /// only ever the source the game booted from. Added 2026-09-25 alongside
+    /// [`oag_title::Music::front_end`] being wired for 2048 -
+    /// `oag_2048::TITLE.music` going from `None` to `Some` did not reach the
+    /// menus by itself, because [`MusicDiscs::survey`] used to fold
+    /// `Platform::Vita` into the same early return `Platform::Unknown` takes,
+    /// with nowhere for a Vita source to land even once it had music to
+    /// offer.
+    vita: Option<String>,
+    /// Which release the game booted from, when it is one of the four.
     booted: Option<Platform>,
 }
 
@@ -287,12 +298,17 @@ impl MusicDiscs {
                 discs.ps3 = Some(booted.to_string());
                 return discs;
             }
-            // **The same "recorded and then done with" as PS3's, one step
-            // earlier**: Wipeout 2048's and Omega's music are both unlocated
-            // (`oag_2048::TITLE`/`oag_omega::TITLE` both carry `music: None`),
-            // so there is not even a soundtrack to pair, and there is no second
-            // release of either to pair against.
-            Platform::Vita | Platform::Ps4 | Platform::Unknown => return discs,
+            // **The same "recorded and then done with" as PS3's.** 2048 has
+            // one release and no counterpart to pair against, the same as
+            // Wipeout HD.
+            Platform::Vita => {
+                discs.vita = Some(booted.to_string());
+                return discs;
+            }
+            // Omega's music is still unlocated (`oag_omega::TITLE` carries
+            // `music: None`), so there is not even a soundtrack to pair, and
+            // there is no second release of it to pair against either.
+            Platform::Ps4 | Platform::Unknown => return discs,
         }
 
         // The booted disc's own soundtrack is what a candidate has to match,
@@ -332,12 +348,13 @@ impl MusicDiscs {
     /// One line for a load report: what was found, and where.
     #[must_use]
     pub fn describe(&self) -> String {
-        match (&self.psp, &self.ps2, &self.ps3) {
-            (Some(psp), Some(ps2), _) => format!("PSP {psp} and PS2 {ps2}"),
-            (Some(psp), None, _) => format!("PSP {psp} only"),
-            (None, Some(ps2), _) => format!("PS2 {ps2} only"),
-            (None, None, Some(ps3)) => format!("PS3 {ps3} only"),
-            (None, None, None) => "neither release".to_string(),
+        match (&self.psp, &self.ps2, &self.ps3, &self.vita) {
+            (Some(psp), Some(ps2), _, _) => format!("PSP {psp} and PS2 {ps2}"),
+            (Some(psp), None, _, _) => format!("PSP {psp} only"),
+            (None, Some(ps2), _, _) => format!("PS2 {ps2} only"),
+            (None, None, Some(ps3), _) => format!("PS3 {ps3} only"),
+            (None, None, None, Some(vita)) => format!("Vita {vita} only"),
+            (None, None, None, None) => "neither release".to_string(),
         }
     }
 
@@ -356,7 +373,8 @@ impl MusicDiscs {
             Platform::Psp => self.psp.as_deref().map(|at| (at, Platform::Psp)),
             Platform::Ps2 => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
             Platform::Ps3 => self.ps3.as_deref().map(|at| (at, Platform::Ps3)),
-            Platform::Vita | Platform::Ps4 | Platform::Unknown => None,
+            Platform::Vita => self.vita.as_deref().map(|at| (at, Platform::Vita)),
+            Platform::Ps4 | Platform::Unknown => None,
         })
     }
 }

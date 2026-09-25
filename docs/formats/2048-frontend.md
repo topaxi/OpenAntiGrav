@@ -469,11 +469,30 @@ Textual corroboration only, no addresses, no names recovered or proposed:
   executable and not only by the XML that names them.
 - `"frontend.bnk"` exists as a real archive entry
   (`data/audio/sound/frontend.bnk`), matching `SoundManager_Construct`'s own
-  decompiled bank-path list in `game-boot.md`. Its cues are unread this
-  pass - `oag-wad sounds` reads a WAD-hosted bank, and 2048's is PSARC-hosted;
-  extracting it first was judged out of scope here. This is why
-  `oag_title::Music::front_end` (which needs a *cue* name, not a bank
-  filename) stays unfilled.
+  decompiled bank-path list in `game-boot.md`. **Resolved 2026-09-25: its
+  cues are unread because there are none to read** -
+  `oag_formats::sblk::Bank::sound_names()` on the extracted bank returns
+  empty, `HAS_NAME_TABLE` clear, so nothing in it can be addressed by name
+  the way a cue-based track is. `oag_title::Music::front_end` is filled from
+  a standalone file instead: `data/audio/music/FEMusic/frontend_stereo.at9`,
+  RIFF-wrapped ATRAC9 (the Vita's own codec - the new `oag_game::at9`
+  decoder this needed), 48000 Hz stereo, a 302-second `fact` chunk. Beside
+  it sits a second, distinctly-named
+  `data/audio/music/FEDemoMusic/frontend_stereo.at9` for the attract-mode
+  demo. The `FEMusic` folder and `frontend` stem are exactly the shape
+  Pulse's `Data\Music\FEMusic\frontend1.at3` and HD's
+  `Data\Music\FEMusic\frontend1_stereo.mp3` already use - **confidence 70**:
+  unambiguous by placement and naming across three titles, not confirmed
+  against a decompiled construction site the way Pulse's own template
+  expansion is. `oag_2048::TITLE.music` is `Some` now; see
+  `oag_2048::names::FRONT_END_MUSIC`'s own doc and
+  `crates/game/tests/vita_2048_music_ground_truth.rs`, which loads it
+  through `Audio::start_music`'s own path and renders it through a real
+  `Mixer` to a WAV to confirm it is not silence. Wiring this also needed
+  `Platform::Vita` added to `oag_game::audio::MusicDiscs::survey`/`pick` -
+  every match there previously folded Vita in with `Unknown`, so
+  `oag_2048::TITLE.music` going from `None` to `Some` was not by itself
+  enough to reach the menus.
 
 The 2026-09-17 pass proposed no new `names.tsv` rows - the addresses
 `game-boot.md` already carried were all it cited. The 2026-09-18 decompile

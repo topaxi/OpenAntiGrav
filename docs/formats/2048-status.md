@@ -116,10 +116,16 @@ the start line and runs the simulation. What it does **not** do, and why:
   `--screenshot` with no `--race` goes through) now refuses by a narrower,
   more accurate name - "draws no MenuSkin-shaped menu ... race on it with
   `--race` instead" - where it used to refuse for "no front end at all."
-  `loading` and `music` stay `None` on the narrower gaps this page already
-  named: a real percentage-bar loading screen with no located plugin XML,
-  and a located `frontend.bnk` whose cues are unread. See
-  [2048-frontend.md](2048-frontend.md).
+  `loading` stays `None` on the narrower gap this page already named: a
+  real percentage-bar loading screen with no located plugin XML.
+  **`music` is `Some` since 2026-09-25**: `frontend.bnk` turned out to
+  carry no name table at all, so what fills `Music::front_end` instead is
+  a standalone RIFF-wrapped ATRAC9 file, `FEMusic/frontend_stereo.at9`,
+  named the same way Pulse's and HD's own front-end tracks are - see
+  [2048-frontend.md](2048-frontend.md)'s "frontend.bnk" bullet for the
+  full account, including the new `oag_game::at9` decoder and the
+  `MusicDiscs::survey`/`pick` fix that was also needed for a Vita boot to
+  reach it at all.
 - **Zone's announcer is wired, off a bank path that is read rather than
   measured.** The executable's own track-construction function decompiles to
   a real dispatch between two live Zone speech banks, gated on the selected
