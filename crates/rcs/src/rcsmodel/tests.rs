@@ -751,3 +751,44 @@ fn a_render_block_past_the_end_of_the_file_is_an_error() {
         })
     );
 }
+
+/// Two stride-18 vertices at `packed`'s buffer offset, with `early` at
+/// `+0x0a` and `tail` in the last four bytes.
+fn inline_eighteen(early: [u8; 4], tail: [u8; 4]) -> (Mesh, Vec<u8>) {
+    let mesh = packed(&[2], 18);
+    let mut data = vec![0u8; 0x1000 + 2 * 18];
+    for k in 0..2 {
+        let at = 0x1000 + k * 18;
+        data[at + 10..at + 14].copy_from_slice(&early);
+        data[at + 14..at + 18].copy_from_slice(&tail);
+    }
+    (mesh, data)
+}
+
+/// The LeachBall sphere's shape: a colour `ff ff ff cc` in the tail reads as
+/// two `NaN` halves, so the coordinate is the four bytes after the normal.
+#[test]
+fn an_inline_eighteen_byte_vertex_with_a_colour_tail_reads_its_uv_after_the_normal() {
+    let (mesh, data) = inline_eighteen([0x38, 0x00, 0x3c, 0x00], [0xff, 0xff, 0xff, 0xcc]);
+    let uv = mesh
+        .texcoords(&data, &mesh.submeshes[0], 18)
+        .expect("coords");
+    assert_eq!(uv, vec![[0.5, 1.0]; 2]);
+}
+
+/// A finite tail is still the coordinate, as it was for every inline chunk
+/// before - and a tail and an early field both non-finite keep the tail.
+#[test]
+fn an_inline_eighteen_byte_vertex_keeps_its_tail_unless_the_tail_cannot_be_one() {
+    let (mesh, data) = inline_eighteen([0x38, 0x00, 0x3c, 0x00], [0x34, 0x00, 0x34, 0x00]);
+    let uv = mesh
+        .texcoords(&data, &mesh.submeshes[0], 18)
+        .expect("coords");
+    assert_eq!(uv, vec![[0.25, 0.25]; 2]);
+
+    let (mesh, data) = inline_eighteen([0xff, 0xff, 0xff, 0xff], [0xff, 0xff, 0xff, 0xcc]);
+    let uv = mesh
+        .texcoords(&data, &mesh.submeshes[0], 18)
+        .expect("coords");
+    assert!(uv.iter().all(|c| c[0].is_nan()));
+}

@@ -177,6 +177,13 @@ const POSITION_LEN: usize = 6;
 /// across all three strides - see [`Mesh::texcoords`].
 const TEXCOORD_LEN: usize = 4;
 
+/// The one inline stride whose tail may be a colour rather than a coordinate
+/// - see [`Mesh::texcoords`].
+const INLINE_UV_BEFORE_COLOUR_STRIDE: usize = 18;
+
+/// Where `Uv1` sits when it does: right after the packed normal.
+const INLINE_UV_BEFORE_COLOUR_OFFSET: usize = NORMAL_OFFSET + 4;
+
 /// A chunk whose submeshes are a table of `0x80`-byte descriptors at `+0x60`.
 ///
 /// **Byte `+0x06` of a chunk.** The `u32` it sits in reads `00 nn LL kk`: `LL`
@@ -809,7 +816,53 @@ impl Mesh {
             }
             None => (stride.saturating_sub(TEXCOORD_LEN), TexcoordFormat::Half),
         };
-        self.coords_at(data, submesh, stride, offset, format)
+        let coords = self.coords_at(data, submesh, stride, offset, format)?;
+        if self.decl.is_none() && stride == INLINE_UV_BEFORE_COLOUR_STRIDE {
+            return Ok(self.inline_uv_before_colour(data, submesh, stride, coords));
+        }
+        Ok(coords)
+    }
+
+    /// An inline stride-18 chunk whose last four bytes are **not** two halves
+    /// - `ff ff ff cc` on the LeachBall's sphere, which is `NaN` twice - reads
+    /// its `Uv1` from `+0x0a` instead, right after the normal.
+    ///
+    /// **Why `+0x0a`, and why only then.** Declared stride-18 chunks carry
+    /// `Uv1` and a four-byte `VertexColour1` in **both** orders (834 put
+    /// `Uv1` at `+0x0a`, 554 at `+0x0e`; neither the material's own
+    /// attribute slots nor anything else in the chunk predicts which), so an
+    /// inline chunk's layout cannot be looked up. What the data can settle is
+    /// which four bytes are *not* a coordinate: a vertex whose tail reads
+    /// non-finite is carrying a colour there, and the one other four-byte
+    /// field of an 18-byte vertex is the coordinate. Measured disc-wide with
+    /// `crates/render/examples/hd_unlit_probe.rs --undeclared`: 62 inline
+    /// stride-18 chunks read a non-finite tail on some vertex *and* a finite
+    /// `+0x0a` on every vertex (the Plasma ball's and halo's shells, the
+    /// LeachBall's sphere, `frontendscene_hd_atg`'s 43 chunks among them);
+    /// 12 more read non-finite in both places and keep the tail read, and
+    /// the 118 whose tail is finite everywhere are untouched. See
+    /// `docs/rendering/hd-unlit-programs.md`.
+    fn inline_uv_before_colour(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+        tail: Vec<[f32; 2]>,
+    ) -> Vec<[f32; 2]> {
+        let finite = |c: &[f32; 2]| c[0].is_finite() && c[1].is_finite();
+        if tail.iter().all(finite) {
+            return tail;
+        }
+        match self.coords_at(
+            data,
+            submesh,
+            stride,
+            INLINE_UV_BEFORE_COLOUR_OFFSET,
+            TexcoordFormat::Half,
+        ) {
+            Ok(early) if early.iter().all(finite) => early,
+            _ => tail,
+        }
     }
 
     /// The coordinates a **lightmap** is sampled through, one pair per vertex.
