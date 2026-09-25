@@ -442,8 +442,18 @@ Up/down moves the selection with a `DECLINE`/`UPDOWN` sound, then on a change:
 | `Title` | the grid's own name (`+0x74`), else `MSC_NONE` | - |
 | `Medals` | `Grid_CountMedalsAtLeast(grid, 0)` / `Grid_CellCount(grid)` | `"%d/%d"` |
 | `Points` | `Grid_PointsEarned(grid)` / `Grid_PointsPossible(grid)` | `"%03d/%03d"` |
-| `Required` | `grid->RequiredPoints`, or `FE_NA` when it is 0 | `"%d"` |
+| `Required` | `grid->RequiredPoints`, or `FE_NA` when it is 0 | `"%03d"` |
 | `honey` | `index*4+1`, `index*4+4`, `max*4+4` | `"%d-%d / %d"` |
+
+**Corrected 2026-09-25**: this row previously read `"%d"`, unpadded - a
+misreading of the decompile's generic `FUN_08972550(buf, fmt, value)` call
+shape, which does not show the format string's own literal contents inline.
+`read_memory` on the format string address actually referenced
+(`&DAT_08a83568`, the third argument at `0x088dec24`'s own `Required`
+branch) reads `"%03d\0"` byte for byte - confirmed against
+`grid-selection-page1-grid0-unlocked.png`, whose `Required` row reads
+`"012"` for `grid->RequiredPoints == 12`, not `"12"`. Confidence 95 (a raw
+memory read of the literal, not a decompile inference).
 
 So the `Medals "00/16"` placeholder in `CellMode_Definition.xml` is **gold
 medals over cell count** - the `16` is the cell count of a full grid, and the
@@ -1072,6 +1082,106 @@ is real, player-visible unlock-*display* logic, decompiled in full and
 correct at confidence **85**. What is **not** settled, and is a genuinely
 separate question from the display rule above, is whether this predicate (or
 any part of it) also gates whether the cell can be *played* - see below.
+
+### The runtime tint layer: literal colours behind `GridController_SetTileColor`'s own callers
+
+Traced 2026-09-25, closing `docs/ui/campaign-screens.md`'s "no new gap"
+finding - it had only re-read the screen's *text*, not its colour. All three
+findings below read a literal ARGB directly out of a decompiled call site
+(`inspect_memory_content`/`decompile_function`), not out of the XML - `Grid
+Selection`'s hex/lock/arrow widgets and `Cell Selection`'s `Selector` all
+author only a multiply-neutral `i="0xffffffff"` default (or nothing at all),
+so every colour below is applied by native code the disc's own XML never
+states.
+
+**`GridSelection_PopulateTiles` (`0x088de630`, already named) tints every
+tier's own base hex unconditionally**, locked or not, selected or not:
+
+```
+GridController_SetTileColor(widget, /*layer=*/1, tile, 0, alpha<<24 | 0x34acc2)
+  where alpha = (int)(param_2 * 0.5 * 255.0)   # 127 at the settled param_2 == 1.0
+```
+
+The lock glyph (layer 4) gets a *separate* call, white RGB at roughly double
+that alpha (`param_2 * 255.0`, ~255 settled) - so a locked tier's own hex
+outline and its padlock are never the same brightness, by design: the
+outline is deliberately dimmer than what will draw over it. Layer 2 (the
+medal swatch) reuses the same three literals `crate::campaign::draw::medal_argb`
+already carries (`0xfffaeb38`/`0xffdae3e4`/`0xffdf942f`), picked by a
+points-vs-threshold comparison this pass read but did not carry into this
+project's own `medal_tint` (still `medal_argb(Gold)` always - see that
+function's own "chosen, not measured" doc, now itself only half right: which
+colour is still chosen, but *whether* it varies by tier is now known and
+this build does not yet implement it). Confidence **90** (decompile literal,
+consistent with `grid-selection-page1-grid0-unlocked.png`'s own dim
+cyan-teal outline and bright padlock).
+
+**`CellSelection_PopulateGrid` (`0x088d5de4`, already named), read again in
+full this pass, never calls `GridController_SetTileColor` on layer 1 at
+all** - only `SetTileFlags` (visibility) and, conditionally,
+`SetLockTint`/layer-2 medal colour. So `Cell Selection`'s own hex outlines
+are **not** tinted by this function, unlike `Grid Selection`'s. This is a
+real asymmetry, not a gap in this pass's reading: `Cell Selection`'s
+`Outline_x_y` widgets author `i="FEGlobals->CM_HEX_Outline"` in
+`CellMode_Definition.xml` instead (confirmed, `just wad cat` on
+`Data\Plugins\PI001\GUI\CellMode_Definition.xml`) - a `FEGlobals->` live
+binding (`docs/formats/fexml.md`) this project has not resolved (`CM_HEX_Outline`
+is not one of the two confirmed names, `FE_TeamModel`/`FE_ModelSkin`).
+`cell-selection-grid0-default-cell.png` shows the same dim cyan-teal outline
+`Grid Selection` gets from its own literal, which is suggestive - the same
+`0x34acc2` is also what `Medals Title`/`Points Title`/`Required Title` author
+directly (`i="0xff34ACC2"`, full alpha) on the very same file - but this pass
+did not read the `FEGlobals` registry itself, so `Cell Selection`'s own
+outline tint is named as an open question rather than implemented on the
+strength of that inference. Confidence **80** for "the asymmetry is real",
+no confidence assigned to `CM_HEX_Outline`'s own value.
+
+**`GridController_UpdateSelectorPulse` (`0x088a5700`, renamed this pass,
+confidence 85)** is the actual source of the selected tile's own glow -
+reached generically (not a PI001 screen method) whenever a `GridController`
+widget's own `+0x2c` flags word has bit `0x200` set, the same
+"cursor-highlight" bit `GridSelection_Update`'s own page-flip logic already
+toggles. It looks up two child widgets by name on the currently-highlighted
+tile - `"Selector"` and `"SelectorGlow"` (the two string xrefs that led here,
+`0x08a7f130`/`0x08a7f178`) - and drives each one's own colour off a shared
+phase `tile+0x9c`, advanced `elapsed*2.0` per frame and wrapped at `2.0`
+(`FUN_088cd2b8` is a plain ARGB `lerp(t, from, to)`):
+
+```
+phase = (tile.phase + elapsed*2.0) mod 2.0
+Selector:     phase > 1.0 ? lerp(phase-1.0, white, 0xff33a6b9) : lerp(phase, 0xff33a6b9, white)
+SelectorGlow: phase > 1.0 ? lerp(phase-1.0, white, transparent) : lerp(phase, transparent, white)
+```
+
+So `Selector` is a continuous ~1s triangle wave between white and
+`0xff33a6b9` (cyan), and `SelectorGlow` is a same-phase alpha pulse of a
+second, separate widget - **not authored anywhere in `CellMode_Definition.xml`**
+(only `Selector` itself is; `SelectorGlow` is created procedurally, the same
+way the generic `GridController` widget class itself is never authored as
+XML content either). `crate::campaign::draw` implements the colour half of
+this (`SELECTOR_TINT = 0xff33a6b9`, a static draw of one endpoint rather than
+the animation - the draw-list builder has no clock) and does not implement
+`SelectorGlow` at all, since this pass did not locate its own geometry/texture
+- drawing a halo shape this build never measured would be exactly the
+"plausible-looking stand-in" this project's CLAUDE.md warns against.
+`docs/ui/campaign-screens.md`'s own comparison names the gap.
+
+**`GridSelection_UpdatePageTransition` (`0x088de9bc`, renamed this pass,
+confidence 85)**, called at the end of every `GridSelection_Update`, is
+mostly the `Grid`/`Grid1` crossfade easing (`fVar4 = 1.0 - elapsed/0.3`,
+feeding back into `GridSelection_PopulateTiles`'s own `alpha`/`offset`
+parameters as a page turn animates) - but it also tints the two page-arrow
+widgets every frame, unconditionally, off the current page bounds alone:
+
+```
+up arrow:   page == 0                ? 0xff505050 : 0xffffffff
+down arrow: page == maxPage (+0xec)  ? 0xff505050 : 0xffffffff
+```
+
+`CellMode_Definition.xml` authors both arrows at a fixed white
+(`i="0xffffffff"`), so - like the hex tiles and the selector - this build's
+previous plain-white draw was the XML's own untinted default with no runtime
+gate applied. Fixed (`ARROW_DISABLED_TINT`), `oag_ui::campaign::draw::grid_draw_list`.
 `g_anCellNeighbourOffsets`'s two-parity table and
 `Grid_FindCellAtCoordinate` never write `cell->Locked`, `PI_Grid.Locked`,
 `Status`, or call any `Unlock_*` predicate - only the glyph's visibility and

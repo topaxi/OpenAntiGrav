@@ -101,7 +101,12 @@ pub fn grid_draw_list(
         };
         if image.name.as_deref() == Some("Selector") {
             if let Some(hex) = hex_rect(screen, slot, 0, sprites) {
-                out.push(centred_selector_draw(image, placed, hex));
+                out.push(centred_selector_tinted_draw(
+                    image,
+                    placed,
+                    hex,
+                    SELECTOR_TINT,
+                ));
             }
             continue;
         }
@@ -111,6 +116,39 @@ pub fn grid_draw_list(
             .is_some_and(|n| n.starts_with("Medal_"))
         {
             out.push(tinted_medal_draw(image, placed, medal_tint(0)));
+            continue;
+        }
+        if image
+            .name
+            .as_deref()
+            .is_some_and(|n| n.starts_with("Outline_"))
+        {
+            out.push(sprite_draw(
+                image,
+                placed,
+                image.x,
+                image.y,
+                TIER_OUTLINE_TINT,
+            ));
+            continue;
+        }
+        if image.name.as_deref() == Some("up arrow") {
+            let argb = if page == 0 {
+                ARROW_DISABLED_TINT
+            } else {
+                0xffff_ffff
+            };
+            out.push(sprite_draw(image, placed, image.x, image.y, argb));
+            continue;
+        }
+        if image.name.as_deref() == Some("down arrow") {
+            let last_page = model.grids().len().saturating_sub(1) / GRIDS_PER_PAGE;
+            let argb = if page >= last_page {
+                ARROW_DISABLED_TINT
+            } else {
+                0xffff_ffff
+            };
+            out.push(sprite_draw(image, placed, image.x, image.y, argb));
             continue;
         }
         out.push(image_draw(image, placed));
@@ -124,10 +162,7 @@ pub fn grid_draw_list(
         let content = match name {
             "honey" => Some(model.counter()),
             "Title" => Some(grid_title(&selected.name, strings)),
-            "Medals" => Some(format!(
-                "{:02}/{:02}",
-                selected.gold_medals, selected.cell_count
-            )),
+            "Medals" => Some(format!("{}/{}", selected.gold_medals, selected.cell_count)),
             "Points" => Some(format!(
                 "{:03}/{:03}",
                 selected.points_earned, selected.max_points
@@ -135,7 +170,7 @@ pub fn grid_draw_list(
             "Required" => Some(if selected.required_points == 0 {
                 strings.get_or_id("FE_NA").to_string()
             } else {
-                selected.required_points.to_string()
+                format!("{:03}", selected.required_points)
             }),
             _ => text.string.clone(),
         };
@@ -236,7 +271,12 @@ pub fn cell_draw_list(
             && let Some((sx, sy)) = selected_coords
             && let Some(hex) = hex_rect(screen, sx as usize, sy as usize, sprites)
         {
-            out.push(centred_selector_draw(image, placed, hex));
+            out.push(centred_selector_tinted_draw(
+                image,
+                placed,
+                hex,
+                SELECTOR_TINT,
+            ));
             continue;
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
@@ -593,6 +633,62 @@ pub(super) fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]
     let y = hex[1] + (hex[3] - height) * 0.5;
     sprite_draw(image, placed, x, y, image.color)
 }
+
+/// [`centred_selector_draw`], but with the tint overridden rather than taken
+/// from `image.color` - `Pulse`'s own `grid_draw_list`/`cell_draw_list` want
+/// [`SELECTOR_TINT`] here, but [`super::hd::hd_grid_draw_list`] still calls
+/// [`centred_selector_draw`] itself unchanged, so that function's own
+/// signature (and HD's own, unmeasured, selected-tile look) is left alone
+/// rather than threading a tint parameter through a call this crate does not
+/// own the other end of.
+pub(super) fn centred_selector_tinted_draw(
+    image: &Image,
+    placed: Placed,
+    hex: [f32; 4],
+    argb: u32,
+) -> Draw {
+    let width = image.width.unwrap_or(placed.width as f32);
+    let height = image.height.unwrap_or(placed.height as f32);
+    let x = hex[0] + (hex[2] - width) * 0.5;
+    let y = hex[1] + (hex[3] - height) * 0.5;
+    sprite_draw(image, placed, x, y, argb)
+}
+
+/// `Selector`'s own runtime colour, one of two endpoints a shared,
+/// non-PI001 widget routine (`FUN_088a5700`, xref'd off the `Selector`/
+/// `SelectorGlow` widget-name strings at `0x08a7f130`/`0x08a7f178`) pulses
+/// the selected tile's outline between on a continuous ~1s triangle wave:
+/// `lerp(t, 0xff33a6b9, 0xffffffff)` one half of the cycle and the reverse
+/// the other half - `CellMode_Definition.xml` itself only authors `Selector`
+/// at a fixed `i="0xffffffff"` (multiply-neutral), so the pulse is entirely
+/// this routine's doing. Measured (the colour constant is a literal
+/// decompiled off `0x088a5700`, confidence 85), but the animation itself is
+/// **not implemented** - `grid_draw_list`/`cell_draw_list` build a draw list
+/// with no clock, so this always draws the cyan endpoint rather than
+/// oscillating. Picked over the white endpoint because it is what
+/// `data/reference/psp-campaign-screens/grid-selection-page1-grid0-unlocked.png`
+/// (this build's own comparison frame) happens to show; a capture taken at a
+/// different phase would show closer to white instead. See
+/// `docs/ui/campaign-screens.md`.
+const SELECTOR_TINT: u32 = 0xff33_a6b9;
+
+/// `Outline_x_y`'s own runtime tint on `Grid Selection` - **not** on `Cell
+/// Selection`, whose own `CellSelection_PopulateGrid` never calls
+/// `GridController_SetTileColor` on layer 1 at all, leaving that screen's
+/// hex outlines at the XML's own multiply-neutral default. `grid_draw_list`
+/// only, then: `GridSelection_PopulateTiles` (`0x088de6f4`) sets every
+/// tier's own base hex - locked or not, selected or not, the tint is
+/// unconditional - to `param_2 * 0.5 * 255` alpha over literal RGB
+/// `0x34acc2`; steady state (`param_2` settled at `1.0` once its own
+/// entrance fade finishes) gives `(int)(0.5 * 255.0)` truncated to `127`.
+/// Measured, confidence 85 (decompile literal, not runtime-verified).
+const TIER_OUTLINE_TINT: u32 = 0x7f34_acc2;
+
+/// `up arrow`/`down arrow`'s own disabled tint - `FUN_088de9bc`, called at
+/// the end of every `GridSelection_Update`: dark grey `0xff505050` opaque
+/// when the current page is already the first (`up arrow`) or the last
+/// (`down arrow`), full white otherwise. Measured, confidence 85.
+const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
 
 /// An image widget's draw, with its position and colour overridden - what
 /// [`centred_selector_draw`]/[`tinted_medal_draw`] feed.
