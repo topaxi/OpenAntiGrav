@@ -245,6 +245,7 @@
 0x001148c0	function	LeachBeam_SpawnHitTargetEffect	82	weapons.md
 0x00114708	function	LeachBeam_SpawnBreakEffect	78	weapons.md
 0x00114c78	function	LeachBall_Advance	70	weapons.md
+0x00114a00	function	LeachBeam_SpawnAbsorbEffect	82	weapons.md
 0x00113288	function	EMPManager_Construct	85	weapons.md
 0x00118dc0	function	LightBarrierManager_Construct	85	weapons.md
 0x0025a8b0	function	TrackSelectionScreen_RegisterType	82	track-selection-screen.md

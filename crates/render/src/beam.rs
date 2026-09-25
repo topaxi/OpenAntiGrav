@@ -331,5 +331,95 @@ fn rib_vertex(p: Vec3, colour: [f32; 4], texcoord: [f32; 2]) -> GpuVertex {
 pub mod pipeline;
 pub use pipeline::Pipeline;
 
+/// Wipeout HD's own LeachBall: the model `LeachBall_Advance` (`0x00114c78`)
+/// carries along the beam, one trip per drain - a different mechanism from
+/// the ribbon above and HD-only. Read in
+/// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`'s "2026-09-25: the
+/// LeachBall's period, its trigger search, and the ball wired" section.
+///
+/// **The position law alone, not a mesh draw.** The model itself
+/// (`hd_leachbeam_ball_bloomring.vex`) is loaded but not drawn here -
+/// `race/scene.rs` and `race/load.rs` both sit at `scripts/check-file-size.py`'s
+/// 1,000-line ceiling with no headroom for a new drawable pool, and folding
+/// this weapon into the unrelated `blast_models::PlasmaBlastModels` container
+/// the way Plasma's own bolt head already does felt like compounding that
+/// workaround rather than reusing it cleanly - left unwired with the reason
+/// recorded rather than forced in. What this module gives the caller is
+/// enough to place `WO_LEACHBEAM_ABSORB` correctly, and to draw the mesh once
+/// either constraint above is gone.
+pub mod hd_ball {
+    use super::Vec3;
+
+    /// Beam length at/under which a drain trip takes its shortest period -
+    /// `DAT_008a9c88` = `20.0`, read directly. Confidence 85 for the constant
+    /// and the clamp; **that the clamped input is the beam's own length is
+    /// not confirmed** - `LeachBall_Advance`'s `param_4[4]` traces to
+    /// `strip+0x10`, and what writes that field was not read this pass.
+    /// Chosen, not measured, for what the input represents - only the
+    /// arithmetic on it is recovered.
+    pub const PERIOD_MIN_LENGTH: f32 = 20.0;
+    /// Beam length at/over which a drain trip takes its longest period -
+    /// `DAT_008a9c8c` = `100.0`. See [`PERIOD_MIN_LENGTH`].
+    pub const PERIOD_MAX_LENGTH: f32 = 100.0;
+    /// The period at [`PERIOD_MIN_LENGTH`] - `DAT_008a9c80` = `0.3` seconds,
+    /// read directly. Confidence 85.
+    pub const PERIOD_MIN_SECONDS: f32 = 0.3;
+    /// The period at [`PERIOD_MAX_LENGTH`] - `DAT_008a9c90` = `1.0` second,
+    /// read directly. Confidence 85.
+    pub const PERIOD_MAX_SECONDS: f32 = 1.0;
+
+    /// `LeachBall_Advance`'s own remap: `clamp(length, MIN_LENGTH,
+    /// MAX_LENGTH)` mapped linearly onto `[MIN_SECONDS, MAX_SECONDS]` - a
+    /// direct decompile of the `_opd_FUN_002a3718` call site. Confidence 85
+    /// for the arithmetic; see [`PERIOD_MIN_LENGTH`] for what is chosen about
+    /// the input.
+    #[must_use]
+    pub fn period(length: f32) -> f32 {
+        let t = ((length.abs() - PERIOD_MIN_LENGTH) / (PERIOD_MAX_LENGTH - PERIOD_MIN_LENGTH))
+            .clamp(0.0, 1.0);
+        PERIOD_MIN_SECONDS + t * (PERIOD_MAX_SECONDS - PERIOD_MIN_SECONDS)
+    }
+
+    /// One tick of the render-side accumulator: advances `elapsed` by `dt`
+    /// and wraps it against [`period`] - the drain trip `LeachBall_Advance`
+    /// runs inline every time its own accumulator passes the period,
+    /// spawning `WO_LEACHBEAM_ABSORB` at the wrap. Returns whether this tick
+    /// wrapped.
+    ///
+    /// **Assumes `dt` never exceeds one period**, true at this engine's fixed
+    /// 60 Hz for [`PERIOD_MIN_SECONDS`] (18 ticks) - the same simplification
+    /// [`super::Ribbon::advance`]'s own modulo-based cursor already takes
+    /// over the original's unbounded-timestep `while` loop.
+    pub fn advance(elapsed: &mut f32, dt: f32, length: f32) -> bool {
+        *elapsed += dt;
+        let period = period(length);
+        if *elapsed >= period {
+            *elapsed -= period;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Where the ball sits along the beam this tick: `target` at fraction
+    /// `0.0` (the trip's start), `owner` at fraction `1.0` (the wrap) - a
+    /// straight lerp, not the strip's own displaced chain.
+    ///
+    /// **Both halves of this are chosen, not measured.** The original's own
+    /// fraction-to-point lookup (`_opd_FUN_00116308`) walks the strip's
+    /// authored chain rather than a straight line, and flips which end is
+    /// fraction `0` on a condition this pass did not resolve
+    /// (`param_2[2] == *param_2`); the target-to-owner direction taken here
+    /// is inferred only from where the wrap's own `WO_LEACHBEAM_ABSORB`
+    /// lands (read as the shooter's own matrix, by analogy with Pulse's
+    /// `WO_LEACHBEAM_ENERGY`, which arrives at the shooter the same way -
+    /// see [`super::Ribbon::energy_point`]) and is not itself confirmed.
+    #[must_use]
+    pub fn position(elapsed: f32, length: f32, owner: Vec3, target: Vec3) -> Vec3 {
+        let fraction = (elapsed / period(length)).clamp(0.0, 1.0);
+        target + (owner - target) * fraction
+    }
+}
+
 #[cfg(test)]
 mod tests;

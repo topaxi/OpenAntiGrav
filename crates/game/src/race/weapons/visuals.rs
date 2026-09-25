@@ -75,6 +75,7 @@ impl Race {
             .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked);
         let Some(beam) = locked else {
             self.view.leach_beam_ribbon = None;
+            self.view.leach_ball_elapsed = 0.0;
             if let Some(playing) = self.view.leach_beam_effect.take() {
                 self.view.stage.detach(playing);
             }
@@ -125,6 +126,37 @@ impl Race {
             }
             (_, Some(playing), Some(at)) => self.view.stage.follow(playing, at),
             _ => {}
+        }
+
+        self.advance_leach_ball_hd(owner, target, dt);
+    }
+
+    /// Wipeout HD's own LeachBall drain trip - `LeachBall_Advance`'s
+    /// recovered law ([`oag_render::beam::hd_ball`]), run alongside Pulse's
+    /// ribbon above rather than instead of it: both are driven from the same
+    /// `beam`, and a title with no `WO_LEACHBEAM_ABSORB` asset mounted simply
+    /// never resolves the effect below, the same "an absent name costs one
+    /// report line" rule [`RACE_EFFECTS`]'s own doc comment states.
+    ///
+    /// **Fires the burst; does not place the model.** The ball itself
+    /// (`hd_leachbeam_ball_bloomring.vex`) is loaded
+    /// (`oag_title::weapons::WeaponModels::leachbeam_ball`) but not drawn -
+    /// see [`oag_render::beam::hd_ball`]'s own module doc comment for why.
+    fn advance_leach_ball_hd(&mut self, owner: Vec3, target: Vec3, dt: f32) {
+        let length = (target - owner).length();
+        let wrapped =
+            oag_render::beam::hd_ball::advance(&mut self.view.leach_ball_elapsed, dt, length);
+        if !wrapped {
+            return;
+        }
+        let at = oag_render::beam::hd_ball::position(
+            self.view.leach_ball_elapsed,
+            length,
+            owner,
+            target,
+        );
+        if let Some(effect) = self.view.effects.get(LEACHBEAM_ABSORB_EFFECT) {
+            self.view.stage.play(effect, at, 1.0);
         }
     }
 

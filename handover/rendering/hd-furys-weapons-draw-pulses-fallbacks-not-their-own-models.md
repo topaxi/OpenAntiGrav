@@ -33,7 +33,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 | ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
 | ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; `HD_Mine_halo`, `HD_bomb_*` (halo, sphere, sphere_white, sphere_bloomring, shockwaves), `bomb_shockwave` still open | `WO_BOMB_RAYS`, `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` |
 | ~~Cannon~~ **done 2026-09-25** | `hd_muzzleflash` **is a muzzle flash, not a round body**: drawn at the craft's `cannon_flash` locator for the round's first 0.1 s; HD's own `.gtf` bolt/flash quads drawn; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`: **no trigger exists** (named by nothing but their own files); `WO_CANNON_SPARKS_DETONATOR` Detonator-only |
-| LeachBeam | `hd_leachbeam_ball_bloomring` **entry named** (`oag_title::weapons::WeaponModels::leachbeam_ball`), not drawn - see Next Steps | `WO_LEACHBEAM_LAUNCH`/`_EMIT`/`_ABSORB`/`_BREAK`/`_HIT_TARGET`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` |
+| LeachBeam | `hd_leachbeam_ball_bloomring` **entry named**, position law recovered and wired 2026-09-25, **the mesh itself still not drawn** - see Next Steps | `WO_LEACHBEAM_ABSORB` **wired 2026-09-25** (fires each drain trip); `_LAUNCH`/`_BREAK`/`_HIT_TARGET` confirmed to have no discoverable trigger in the retail EBOOT (same shape as the Cannon's two); `_EMIT`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` still unread |
 
 The executable's own load-path strings name every model above
 (`strings -a data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf | grep
@@ -74,17 +74,44 @@ The executable's own load-path strings name every model above
   Rocket's is Pulse's measured basis on HD's model, the Mine's and Bomb's
   the frozen craft pose; all three chosen, not measured, until
   `/hdfury/EBOOT-ps3-hdfury-eu.elf`'s own per-tick updates are read.
-- **LeachBeam's ball: placement read 2026-09-23, not wired.**
-  `LeachBall_Advance` (`0x00114c78`) carries `hd_leachbeam_ball_bloomring`
-  along the beam, one trip per drain, spawning `WO_LEACHBEAM_ABSORB` at each
-  arrival. `LAUNCH`/`HIT_TARGET`/`BREAK` each have a named spawner. None of
-  the three spawners has a caller found, so their triggers are open. See
-  `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "2026-09-23: the
-  LeachBeam's own HD pieces". Next: find the spawners' callers through the
-  vtable at `0x00864af8` (entries are OPD addresses), then read
-  `_opd_FUN_00116308` (a point along the beam at a fraction) and the two strip
-  objects. After that, wire the ball on `oag_render::mesh::rcs` the way the
-  Plasma ball is.
+- **LeachBeam's ball: period law recovered and wired 2026-09-25; the model
+  itself still isn't drawn.** `LeachBall_Advance` (`0x00114c78`) remaps the
+  strip's own length (`param_4[4]`, plausibly but not confirmed to be the
+  beam's own length), clamped `[20, 100]`, onto a `[0.3, 1.0]`-second period
+  per drain trip; `oag_render::beam::hd_ball` carries that law and
+  `Race::advance_leach_beam_ribbon` drives a render-side accumulator off it,
+  firing `WO_LEACHBEAM_ABSORB` (a real trigger, confirmed: it is inlined into
+  `LeachBall_Advance`'s own wrap, not only in the standalone, uncalled
+  `LeachBeam_SpawnAbsorbEffect` at `0x00114a00`) as a one-shot burst at the
+  wrap point. **`LAUNCH`/`HIT_TARGET`/`BREAK` have no discoverable caller** -
+  confirmed three independent ways this pass (the OPD block they sit in is
+  ordinary `.opd` layout, not a vtable; the one real vtable `LeachBeam`
+  installs resolves to generic render-node functions only; a raw byte/fourcc
+  scan of the whole `EBOOT.elf` finds no reference to any of their OPD
+  addresses anywhere, validated against a byte pattern known to exist) - the
+  same shape `WO_CANNON_MUZZLEFLASH`/`_HOTSPOT` already have on cannon.md.
+  **The mesh (`hd_leachbeam_ball_bloomring.vex`) is not drawn**: `race/scene.rs`
+  and `race/load.rs` both sit at the 1,000-line file-size ceiling with no
+  room for a new drawable pool, and folding this weapon into the unrelated
+  `blast_models::PlasmaBlastModels` container a second time (Plasma's own
+  bolt head already bends it once) was rejected as compounding rather than
+  reusing that workaround - plus it may hit the same additive-material wall
+  `HD_plasma_ball` did (untested; this ball's own material is shared with the
+  Missile head's, not confirmed to be Plasma's family). See
+  `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "2026-09-25: the
+  LeachBall's period, its trigger search, and the ball wired" - which also
+  records a related finding: `WO_LEACHBEAM_ENERGY` has no string anywhere in
+  HD's `EBOOT.elf`, so this engine's existing Pulse-ribbon code likely fires
+  an effect the retail HD executable never names, unfixed this pass.
+  **Not verified live**: extensive `--race`/`--autopilot --give leachbeam`
+  attempts (up to 4,200 ticks) never got the player's own lock cone onto an
+  opponent, so no screenshot of a fired beam/ball/burst was taken - the code
+  path is covered by `oag_render::beam::beam::tests::hd_ball`'s unit tests
+  and the `psys_inventory_ground_truth::hd::every_wired_effect_is_on_the_disc`
+  ground-truth test (confirms `WO_LEACHBEAM_ABSORB` resolves on the disc)
+  instead. A follow-up with more time budget for the capture, or a debug
+  affordance to force `World::leach_beam` the way `--give` forces a pickup,
+  would close this.
 - **Cannon: done 2026-09-25**, see
   [ps3-hdfury-eu/cannon.md](../../docs/ghidra/functions/ps3-hdfury-eu/cannon.md).
   The earlier "round body wired" was wrong: `CannonBullet_Update` shows
@@ -124,10 +151,17 @@ The executable's own load-path strings name every model above
    trigger.~~ **Landed 2026-09-17** - see plasma.md's own dated section for
    what the implementation pass itself found (the Collapse/Draw split, the
    oversized picture).
-2. ~~Cannon~~ **done 2026-09-25** (see the Open bullet). LeachBeam next:
-   its ball placement is read, its three spawners' callers are not - start
-   at the vtable `0x00864af8`. A live RPCS3 look at one Cannon shot would
-   settle the Cannon's own open points (side sense, spawn point, blend).
+2. ~~Cannon~~ **done 2026-09-25** (see the Open bullet). ~~LeachBeam~~
+   **its period law and `WO_LEACHBEAM_ABSORB`'s trigger done 2026-09-25**
+   (see the Open bullet); `LAUNCH`/`HIT_TARGET`/`BREAK` confirmed to have no
+   trigger. Left for whoever picks this up next: draw the ball's own mesh,
+   which needs either room in `race/scene.rs`/`race/load.rs` (both at the
+   1,000-line ceiling) or a deliberate new small container rather than
+   folding into `blast_models`; and get a live capture of a fired beam
+   (headless `--autopilot --give leachbeam` did not get a lock in 4,200
+   ticks - a forced-lock debug affordance would settle it fast). A live
+   RPCS3 look at one Cannon shot would settle the Cannon's own open points
+   (side sense, spawn point, blend).
 3. Rocket/Missile/Mine/Bomb **bodies** are wired; their own further
    detonation models (Missile's pair, the Bomb's five) and effects remain,
    by the same per-title path, only as their triggers are read.

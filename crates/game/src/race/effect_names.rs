@@ -339,3 +339,24 @@ pub const CANNON_SPARKS_EFFECT: &str = "WO_CANNON_SPARKS";
 /// either stops being true. Nothing about the cadence is chosen here: it is up
 /// exactly while the pickup is held.
 pub const LEACHBEAM_CHARGING_EFFECT: &str = "WO_LEACHBEAM_CHARGING";
+
+/// Wipeout HD's own drain-trip burst: what `LeachBall_Advance`'s inlined
+/// spawn (and its out-of-line, uncalled twin `LeachBeam_SpawnAbsorbEffect`,
+/// `0x00114a00`) fires every time the render-side accumulator
+/// [`oag_render::beam::hd_ball`] tracks wraps - once a drain trip.
+///
+/// **The disc's own, with a recovered trigger, confidence 82** - the fourcc
+/// `0x4541424c` and the spawn call are both a direct decompile of
+/// `LeachBall_Advance` (`0x00114c78`); read
+/// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`'s "2026-09-25" section.
+/// **Not on the PSP or PS2 disc** - HD-only, absent from `PSP_WIRED` and
+/// `PS2_WIRED` in `crates/game/tests/psys_inventory_ground_truth.rs`, the
+/// same footing [`PLASMA_LIGHTNING_EXPAND_EFFECT`] already has.
+///
+/// **Played as a one-shot burst, not attached and followed.** The original
+/// allocates a fresh instance at every wrap rather than reusing one, the same
+/// shape [`Race::ignite_blast`]'s detonation bursts already take - chosen
+/// over [`LEACHBEAM_ENERGY_EFFECT`]'s attach-and-follow because nothing reads
+/// a "the same instance kept alive" requirement out of the decompile the way
+/// that effect's own re-spawn-on-pulse behaviour did.
+pub const LEACHBEAM_ABSORB_EFFECT: &str = "WO_LEACHBEAM_ABSORB";
