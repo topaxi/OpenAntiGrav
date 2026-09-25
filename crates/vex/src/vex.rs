@@ -69,7 +69,7 @@ pub const MAGIC_BE: &[u8; 4] = b"XXEV";
 
 pub mod class_names;
 pub mod classes;
-mod matrix;
+pub mod matrix;
 
 pub use matrix::{
     Anchored, IDENTITY, anchor_world, anim_anchors, class_world_transforms, multiply, transform,

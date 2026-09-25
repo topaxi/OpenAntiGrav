@@ -755,15 +755,17 @@ pub struct Loaded {
     /// says so - it is not a silent substitution.
     pub flare: Option<FlareTexture>,
     /// The Cannon round's bolt streak and muzzle flash textures off the
-    /// disc, when each decodes: `Data\Weapons\Textures\Cannon_bolt.mip` and
-    /// `Cannon_muzzle_flash.mip`, see `crate::race::CANNON_BOLT_TEXTURE_ENTRY`.
-    /// One tuple field rather than two for the same reason
-    /// `weapon_models::load_cannon_quad_textures` returns them unnamed - see
-    /// that function's own doc. `None` falls back to
+    /// disc, when each decodes - `Data\Weapons\Textures\Cannon_bolt.mip` and
+    /// `Cannon_muzzle_flash.mip` on Pulse (see
+    /// `crate::race::CANNON_BOLT_TEXTURE_ENTRY`), the title's own
+    /// `oag_title::weapons::CannonLook` entries elsewhere - and that look
+    /// itself. One tuple field rather than three for the same reason
+    /// `weapon_models::cannon_quads` returns them unnamed - see that
+    /// function's own doc. A `None` texture falls back to
     /// [`FlareTexture::placeholder`] in `Scene::new`, and the load report
-    /// says so; both entries resolve on a real disc, so a `None` here is a
+    /// says so; every entry resolves on a real disc, so a `None` here is a
     /// decode failure or a missing archive set, not an unauthored asset.
-    pub cannon_quad_textures: (Option<FlareTexture>, Option<FlareTexture>),
+    pub cannon_quad_textures: crate::race::CannonAssets,
     /// The ghost ship's static, `oag_render::ghost::STATIC_TEXTURE_ENTRY`,
     /// when it decodes. `None` draws the ghost without its third pass, and
     /// the load report says why.

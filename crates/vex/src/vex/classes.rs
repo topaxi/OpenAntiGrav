@@ -74,6 +74,17 @@ pub const CLASS_TRACK_WALL_COLLISION: u32 = 0x3ed;
 /// `docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`.
 pub const CLASS_ABSORB: u32 = 0x3ee;
 
+/// Class ID of a `cannon_flash` node: the two locators Wipeout HD hangs its
+/// Cannon's muzzle flash on, `cannon_flash_left` and `cannon_flash_right` in
+/// every HD `Locators.vex`.
+///
+/// **From HD's executable.** `ShipCannonFlash_Importer` registers this class,
+/// and its attach step `FUN_002d8ec0` stores the node on the owning craft at
+/// `+0x5f38` when its lowercased name contains `left`, `+0x5f3c` otherwise -
+/// the two muzzles `CannonManager` alternates between. Confidence 85; see
+/// `docs/ghidra/functions/ps3-hdfury-eu/cannon.md`.
+pub const CLASS_CANNON_FLASH: u32 = 0x3eb;
+
 /// One format version's class-ID assignments.
 ///
 /// `None` means the ID has not been recovered for that version. A decoder

@@ -151,7 +151,7 @@ impl super::Scene {
         let plasma_ball_matrices = race.plasma_ball_model_matrices();
         let mine_matrices = race.mine_model_matrices();
         let bomb_matrices = race.bomb_model_matrices();
-        let cannon_matrices = race.cannon_model_matrices();
+        let cannon_matrices = race.cannon_model_matrices(&self.weapon_quads.draw);
         write_one_kind(
             &self.rockets,
             &rocket_matrices,

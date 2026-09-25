@@ -80,6 +80,10 @@ Two structural facts to expect, both different from every other binary here:
   corridor, `WeaponStats_ParsePlasma`'s eleven attributes with `charge_time`
   unread, and the explosion's 1.7/1.3/1.3 s ramps - the PS3 half of the
   Pulse/HD/Omega comparison.
+- [cannon.md](cannon.md) - `CannonBullet`: `hd_muzzleflash` flashed at the
+  craft's `cannon_flash` locators for the round's first `0.1` s rather than
+  riding the round, the 0.25-wide full-segment bolt, and the negative search
+  that leaves `WO_CANNON_MUZZLEFLASH`/`WO_CANNON_HOTSPOT` with no trigger.
 - [collision.md](collision.md) - `Collision.cpp`: the arena, the class, and the
   MeshAABB narrowphase.
 - [race-hud.md](race-hud.md) - the per-mode HUD definitions, their three retro

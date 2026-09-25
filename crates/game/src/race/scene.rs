@@ -190,7 +190,7 @@ pub struct Scene {
     /// that `queue` already accepts through a shared reference. The borrow is
     /// taken and released inside `render` with nothing re-entrant in between.
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
-    weapon_quads: std::cell::RefCell<oag_render::weapon_quads::Pipeline>,
+    weapon_quads: weapon_quads::Cannon,
     clouds: std::cell::RefCell<clouds::Clouds>,
     /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
     beam: Option<std::cell::RefCell<oag_render::beam::Pipeline>>,
@@ -370,7 +370,7 @@ impl Scene {
         noise: Option<FlareTexture>,
         trail_blend: Option<wgpu::BlendState>,
         trail_shape: Option<FlareTexture>,
-        cannon_quad_textures: (Option<FlareTexture>, Option<FlareTexture>),
+        cannon: crate::race::CannonAssets,
         cloud_layer: Option<(oag_render::cloud::Layer, FlareTexture)>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
@@ -891,7 +891,7 @@ impl Scene {
             mesh_render::Velocity::Write,
         ));
         let weapon_quads =
-            weapon_quads::build(device, queue, format, cannon_quad_textures, sample_count);
+            weapon_quads::build(device, queue, format, cannon, liveries, sample_count);
         let beam = beam::build(
             device,
             queue,

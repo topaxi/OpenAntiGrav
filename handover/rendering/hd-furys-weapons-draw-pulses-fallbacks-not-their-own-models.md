@@ -32,7 +32,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 | ~~Plasma~~ **bolt done; blast drawn** | `HD_plasma_ball` (the **bolt head**, loaded, not drawn - `HD_PLASMA_BALL_DRAWN`), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **drawn since 2026-09-23, culled as authored and on HD's own right-handed basis; the scale was right all along**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
 | ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
 | ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; `HD_Mine_halo`, `HD_bomb_*` (halo, sphere, sphere_white, sphere_bloomring, shockwaves), `bomb_shockwave` still open | `WO_BOMB_RAYS`, `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` |
-| Cannon | `hd_muzzleflash` **round body wired**, own to `cannon-quads`; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`, `WO_CANNON_SPARKS_DETONATOR` - `cannon-quads`'s lane |
+| ~~Cannon~~ **done 2026-09-25** | `hd_muzzleflash` **is a muzzle flash, not a round body**: drawn at the craft's `cannon_flash` locator for the round's first 0.1 s; HD's own `.gtf` bolt/flash quads drawn; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`: **no trigger exists** (named by nothing but their own files); `WO_CANNON_SPARKS_DETONATOR` Detonator-only |
 | LeachBeam | `hd_leachbeam_ball_bloomring` **entry named** (`oag_title::weapons::WeaponModels::leachbeam_ball`), not drawn - see Next Steps | `WO_LEACHBEAM_LAUNCH`/`_EMIT`/`_ABSORB`/`_BREAK`/`_HIT_TARGET`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` |
 
 The executable's own load-path strings name every model above
@@ -85,10 +85,22 @@ The executable's own load-path strings name every model above
   `_opd_FUN_00116308` (a point along the beam at a fraction) and the two strip
   objects. After that, wire the ball on `oag_render::mesh::rcs` the way the
   Plasma ball is.
-- **Cannon's own round body model is wired** (`hd_muzzleflash.vex`, shared
-  spelling with Pulse's own naming quirk); the two hand-drawn quad textures
-  and the three Cannon effects are `cannon-quads`'s own lane, not touched
-  here.
+- **Cannon: done 2026-09-25**, see
+  [ps3-hdfury-eu/cannon.md](../../docs/ghidra/functions/ps3-hdfury-eu/cannon.md).
+  The earlier "round body wired" was wrong: `CannonBullet_Update` shows
+  `hd_muzzleflash` only while the round is under 0.1 s old, at the firing
+  craft's `cannon_flash_left`/`_right` locator (re-rolled scale 0.25..1.0,
+  Z stretch 0.7..1.3), then hides it. It now draws that way
+  (`oag_hd::race::CANNON_LOOK`, `race/weapons/visuals/cannon.rs`,
+  `livery::cannon_flash`), with HD's own `Cannon_bolt.gtf`/`Cannon_muzzle_flash.gtf`,
+  the 0.25 half-width and the full-segment streak. Still open on it:
+  (1) the sim spawns the round a quarter-hull off the nose, where HD fires
+  it from the locator itself (moving it moves the hashes); (2) which parity
+  bit maps to `left` is chosen, not measured; (3) the quads' blend/depth
+  state on HD (`0x002c4ad0`) is unread, Pulse's pipeline stands in;
+  (4) `FUN_001310e8`'s `0x006778c8` call looks like a per-round point
+  light, unread; (5) what sets `ship+0x5f42` (the `Ship Muzzle` fallback
+  branch) is unread.
 - **Missile (2026-09-23, read, not wired):** `HD_missile_ball_bloomring` is
   the flying missile's head (`Missile.cpp` constructor `0x0011ccc8`), not an
   explosion model; `HD_missile_explosion` loads in `0x00154cf0` (from
@@ -112,11 +124,10 @@ The executable's own load-path strings name every model above
    trigger.~~ **Landed 2026-09-17** - see plasma.md's own dated section for
    what the implementation pass itself found (the Collapse/Draw split, the
    oversized picture).
-2. Cannon (`hd_muzzleflash` + the two muzzle effects) and LeachBeam next -
-   read the triggers on `/ps3-hdfury-eu/EBOOT.elf` before wiring any. The
-   round's own body model is wired; the quads and the three particle
-   effects are `cannon-quads`'s lane. LeachBeam's ball placement is
-   unread - start there.
+2. ~~Cannon~~ **done 2026-09-25** (see the Open bullet). LeachBeam next:
+   its ball placement is read, its three spawners' callers are not - start
+   at the vtable `0x00864af8`. A live RPCS3 look at one Cannon shot would
+   settle the Cannon's own open points (side sense, spawn point, blend).
 3. Rocket/Missile/Mine/Bomb **bodies** are wired; their own further
    detonation models (Missile's pair, the Bomb's five) and effects remain,
    by the same per-title path, only as their triggers are read.

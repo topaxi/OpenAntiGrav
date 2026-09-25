@@ -494,9 +494,9 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     rocket: Some(r"Data\Weapons\hd_Rocket.vex"),
     mine: Some(r"Data\Weapons\HD_Mine.vex"),
     bomb: Some(r"Data\Weapons\HD_Bomb.vex"),
-    // Named `muzzleflash` on both titles that author a Cannon round model -
-    // see `oag_pulse::race::WEAPON_MODELS`'s own field for the same quirk on
-    // Pulse's file.
+    // **On HD the name is the truth**: a flash at the craft's `cannon_flash`
+    // locator for the round's first 0.1 s, not a body riding the round the
+    // way Pulse's same-named file is - see `CANNON_LOOK` below.
     cannon: Some(r"Data\Weapons\hd_muzzleflash.vex"),
     // `PlasmaManager_Update` places this every tick the bolt is live or
     // charging - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
@@ -517,6 +517,40 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     // Named, not wired - see `oag_game::race::load::weapon_models`'s own doc
     // comment for what placing this would need and where reading it stopped.
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
+    cannon_look: Some(CANNON_LOOK),
+};
+
+/// How HD draws a Cannon round, off `CannonBullet`'s own constructor, update
+/// and draw - see `docs/ghidra/functions/ps3-hdfury-eu/cannon.md`.
+///
+/// - **Textures**: the constructor (`0x001322c8`) loads
+///   `Data\Weapons\Textures\Cannon_bolt` and `..\Cannon_muzzle_flash`
+///   (strings at `0x00784478`/`0x007844a0`, no extension - the PS3 texture
+///   loader's own `.gtf`), which resolve on `DATA02` as
+///   `/data/weapons/textures/cannon_bolt.gtf`/`cannon_muzzle_flash.gtf`.
+///   Confidence 85.
+/// - **Bolt**: half-width `0.25` (`0x008aa700`, read at the draw site,
+///   `0x00132bac`) against Pulse's `0.35`, and the streak runs the **whole**
+///   previous-to-current segment - the draw adds the full difference back
+///   with no fraction, where Pulse leaves the near fifth uncovered.
+///   Confidence 80.
+/// - **Flash**: half-size rolled from `(0.25, 1.0)` every tick of the
+///   `0.1` s window (`0x00132210`, bounds `0x008aa700` and a `lis 0x3f80`),
+///   against Pulse's `(0.65, 1.3)`. Confidence 80.
+/// - **Body**: `hd_muzzleflash` is not a round body on HD. The update
+///   (`0x00131478`) re-places it at the craft's `cannon_flash` locator
+///   while the round is under `0.1` s old, scaled by the same roll as the
+///   flash quad and stretched along Z by a second roll from `(0.7, 1.3)`
+///   (`0x008aa670`/`0x008aa6e0`), and hides it after. Confidence 80.
+pub const CANNON_LOOK: oag_title::weapons::CannonLook = oag_title::weapons::CannonLook {
+    bolt_texture: r"Data\Weapons\Textures\Cannon_bolt.gtf",
+    flash_texture: r"Data\Weapons\Textures\Cannon_muzzle_flash.gtf",
+    bolt_half_width: 0.25,
+    bolt_near_fraction: 0.0,
+    flash_size_range: (0.25, 1.0),
+    body: oag_title::weapons::CannonBody::Muzzle {
+        stretch_range: (0.7, 1.3),
+    },
 };
 
 #[cfg(test)]

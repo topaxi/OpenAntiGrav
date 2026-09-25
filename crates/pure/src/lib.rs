@@ -99,6 +99,8 @@ pub const TITLE: &Title = &Title {
         // see `oag_tables::weapons::BombStats::timetodie`.
         bomb_blast_pulse: None,
         leachbeam_ball: None,
+        // Pure's own Cannon draw is unread; it keeps Pulse's terms.
+        cannon_look: None,
     },
 };
 

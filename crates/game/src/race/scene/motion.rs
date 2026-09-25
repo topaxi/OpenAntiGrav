@@ -46,7 +46,7 @@ pub(super) struct Snapshot {
 }
 
 impl Snapshot {
-    fn take(race: &Race, view_projection: Mat4, drawn: usize) -> Self {
+    fn take(race: &Race, cannon: &CannonDraw, view_projection: Mat4, drawn: usize) -> Self {
         Self {
             view_projection,
             camera_translation: Mat4::from_translation(race.camera_position()),
@@ -57,7 +57,7 @@ impl Snapshot {
             plasma_balls: race.plasma_ball_model_matrices(),
             mines: race.mine_model_matrices(),
             bombs: race.bomb_model_matrices(),
-            cannon_rounds: race.cannon_model_matrices(),
+            cannon_rounds: race.cannon_model_matrices(cannon),
         }
     }
 
@@ -77,6 +77,7 @@ impl MotionState {
     pub(super) fn advance(
         cell: &std::cell::RefCell<Option<Self>>,
         race: &Race,
+        cannon: &CannonDraw,
         view_projection: Mat4,
         drawn: usize,
     ) -> Snapshot {
@@ -85,7 +86,7 @@ impl MotionState {
             // A scene's first frame measures against itself: zero velocity,
             // not a smear from an uninitialised matrix.
             None => {
-                let now = Snapshot::take(race, view_projection, drawn);
+                let now = Snapshot::take(race, cannon, view_projection, drawn);
                 *state = Some(Self {
                     tick: race.sim.world.tick,
                     prev: now.clone(),
@@ -94,7 +95,7 @@ impl MotionState {
                 now
             }
             Some(state) if state.tick != race.sim.world.tick => {
-                let now = Snapshot::take(race, view_projection, drawn);
+                let now = Snapshot::take(race, cannon, view_projection, drawn);
                 state.prev = std::mem::replace(&mut state.cur, now);
                 state.tick = race.sim.world.tick;
                 state.prev.clone()

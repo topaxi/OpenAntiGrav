@@ -156,6 +156,7 @@ pub mod tournament;
 mod view;
 mod visibility;
 mod weapons;
+pub(crate) use weapons::{CannonAssets, CannonDraw};
 mod worker;
 pub mod zone_grade;
 

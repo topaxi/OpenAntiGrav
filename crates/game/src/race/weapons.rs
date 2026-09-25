@@ -15,6 +15,7 @@ mod disruptor;
 mod reticle;
 mod single_instance;
 mod visuals;
+pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `bounced_this_tick` reaches beyond this module now: `crate::race::tick`'s
 // own sibling loop needs it too, for `Cue::MissileHitWall` and
 // `Cue::ShurikenHit`, the same `bounces_before`/after edge

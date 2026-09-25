@@ -25,6 +25,20 @@ use super::{Node, byte_order, classes_of};
 /// defaulted to the identity: a locator at the origin and a locator that failed
 /// to decode should not look the same to a caller.
 pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec<[f32; 16]> {
+    named_class_world_transforms(data, nodes, class_id)
+        .into_iter()
+        .map(|(_, matrix)| matrix)
+        .collect()
+}
+
+/// [`class_world_transforms`], each matrix beside its node's own name - for a
+/// class whose nodes the original tells apart by name, as Wipeout HD does its
+/// two `cannon_flash` locators.
+pub fn named_class_world_transforms<'a>(
+    data: &[u8],
+    nodes: &'a [Node],
+    class_id: u32,
+) -> Vec<(Option<&'a str>, [f32; 16])> {
     let chain = world_transforms(data, nodes);
     nodes
         .iter()
@@ -35,7 +49,7 @@ pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec
                 .parent
                 .and_then(|p| chain.get(p).copied())
                 .unwrap_or(IDENTITY);
-            Some(multiply(&local, &parent))
+            Some((node.name.as_deref(), multiply(&local, &parent)))
         })
         .collect()
 }

@@ -57,6 +57,7 @@ use oag_vex::vex;
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
 mod absorb;
+mod cannon_flash;
 pub(crate) mod engine_light;
 mod flare;
 mod shield;
@@ -128,6 +129,9 @@ pub struct Livery {
     /// locator's axis, or `None` on every title that authors neither. See
     /// [`engine_light::load`].
     pub engine_light: Option<engine_light::EngineLight>,
+    /// Wipeout HD's `cannon_flash` locators, model space, `[left, right]` -
+    /// both `None` on every source that authors none. See [`cannon_flash`].
+    pub cannon_flash: [Option<oag_core::math::Mat4>; 2],
 }
 
 /// One `Ship Collision Fx` locator, in its hull's own model space: where a
@@ -254,6 +258,7 @@ pub fn load(
                 flare: source.flare.clone(),
                 shield: source.shield.clone(),
                 engine_light: source.engine_light,
+                cannon_flash: source.cannon_flash,
             };
             report.push(format!(
                 "slot {slot}: {team}, the same livery as slot {first} - the source declares \
@@ -295,6 +300,7 @@ pub fn load(
                     flare: player.flare.clone(),
                     shield: player.shield.clone(),
                     engine_light: player.engine_light,
+                    cannon_flash: player.cannon_flash,
                 });
             }
         }
@@ -373,6 +379,7 @@ fn one(
                     flare: None,
                     shield: None,
                     engine_light: None,
+                    cannon_flash: [None, None],
                 });
             }
         };
@@ -389,6 +396,7 @@ fn one(
         }
         let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
         let absorb = absorb::locators(archives, &hull_name, &blob, report);
+        let cannon_flash = cannon_flash::locators(archives, &hull_name, &blob, report);
         let engine_light =
             engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
         // **The plume comes from here too on this title.** HD ships no
@@ -415,6 +423,7 @@ fn one(
             // just took. See `crate::race::shield_entry_names`.
             shield: shell(archives, team, ships.dir, report),
             engine_light,
+            cannon_flash,
         });
     }
     let mut hull = mesh::build_with_textures(&hull_name, &blob, None)?;
@@ -467,6 +476,7 @@ fn one(
         flare: lit.always,
         shield,
         engine_light,
+        cannon_flash: [None, None],
     })
 }
 
