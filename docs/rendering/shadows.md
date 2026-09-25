@@ -688,9 +688,10 @@ Each step is a landing that can be reviewed on its own.
    `reconstruction.rs` and `motion_blur.rs` were split out; tests in
    `display/tests.rs` naming `original` and `mapped` as values that must
    *not* parse, so whoever lands one deletes their line beside a new variant.
-   The key lives in `[render_profiles.<title>]` rather than flat in
-   `[graphics]`, for both of that table's reasons: a quad per craft on a grid
-   of eight is render cost, and what a value *means* is per title. The
+   The key lives in `[render_profiles.<title> (<platform>)]` rather than flat
+   in `[graphics]`, for both of that table's reasons: a quad per craft on a
+   grid of eight is render cost, and what a value *means* is per (title,
+   platform). The
    GRAPHICS row landed with step 3 rather than with this step - a row for
    infrastructure that is not there is worse than no row (ADR-0013) - and
    `--shadows` was the override in between.

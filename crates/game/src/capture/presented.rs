@@ -34,12 +34,20 @@ impl Presented {
     /// # Errors
     ///
     /// A blit pipeline that will not build, which is a build-time mistake.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "title and platform are two halves of one settings key \
+                  (`crate::settings::profile_key`) rather than a single \
+                  parameter a struct would clarify; every other parameter \
+                  here is already a separate thing this needs"
+    )]
     pub(super) fn new(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         settings: &Settings,
-        title: &str,
+        title: &oag_title::Title,
+        platform: oag_disc::Platform,
         space: oag_display::space::Space,
         presented: bool,
     ) -> Result<Option<Self>> {
@@ -48,7 +56,7 @@ impl Presented {
         }
         let profile = settings
             .render_profiles
-            .get(title)
+            .get(&crate::settings::profile_key(title, platform))
             .cloned()
             .unwrap_or_default();
         let mut framebuffer =

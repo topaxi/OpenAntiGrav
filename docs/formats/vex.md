@@ -453,7 +453,7 @@ weapon models, `oag-view` (it has no race camera), a `mesh::merge`.
 
 **What this project chose rather than measured:**
 
-- The player's `[render_profiles.<title>] model_detail` multiplies every
+- The player's `[render_profiles.<title> (<platform>)] model_detail` multiplies every
   authored distance: `original` x1 (the measured rule, the default), `high`
   x2, `maximum` never switches. `oag-game --lod` takes the same three, for
   one run.

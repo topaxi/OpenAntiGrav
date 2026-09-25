@@ -66,13 +66,9 @@ impl Session {
     /// falls back on: a graphics row can only be touched with menus open, so
     /// this never actually returns `None` from a live keypress.
     fn render_profile_mut(&mut self) -> Option<&mut settings::RenderProfile> {
-        let title = self.shell.as_ref()?.title.name;
-        Some(
-            self.settings
-                .render_profiles
-                .entry(title.to_string())
-                .or_default(),
-        )
+        let shell = self.shell.as_ref()?;
+        let key = settings::profile_key(shell.title, shell.platform);
+        Some(self.settings.render_profiles.entry(key).or_default())
     }
 
     /// [`Self::render_profile_mut`]'s read-only sibling, for the frame loop
@@ -86,13 +82,17 @@ impl Session {
     pub(crate) fn render_profile(&self) -> settings::RenderProfile {
         self.shell
             .as_ref()
-            .map(|shell| shell.title.name)
+            .map(|shell| (shell.title, shell.platform))
             // **The `--race` route, which has no shell and is not profile-less.**
             // Falling straight to the default here meant that route drew with
             // `render_scale` 100 and no reconstruction whatever the file or the
             // CLI said - see `App::race_title`.
-            .or(self.race_title)
-            .and_then(|title| self.settings.render_profiles.get(title))
+            .or(self.race_title.zip(self.race_platform))
+            .and_then(|(title, platform)| {
+                self.settings
+                    .render_profiles
+                    .get(&settings::profile_key(title, platform))
+            })
             .cloned()
             .unwrap_or_default()
     }

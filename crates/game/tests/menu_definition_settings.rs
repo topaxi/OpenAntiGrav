@@ -335,7 +335,8 @@ fn the_mode_row_is_seeded_by_the_settings_module() {
     let seeds = oag_game::settings::menu_seeds(
         &settings,
         oag_render::mesh_render::Anisotropy::default(),
-        oag_pulse::TITLE.name,
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
     );
     assert!(
         seeds.iter().any(|(key, _)| *key == "race.mode"),
@@ -363,7 +364,8 @@ fn every_controls_row_is_seeded_by_the_settings_module() {
     let seeds = oag_game::settings::menu_seeds(
         &oag_game::settings::Settings::default(),
         oag_render::mesh_render::Anisotropy::default(),
-        oag_pulse::TITLE.name,
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
     );
 
     for entry in &page.entries {
@@ -687,7 +689,8 @@ fn every_settings_row_is_one_the_game_seeds() {
     let seeded: Vec<&str> = oag_game::settings::menu_seeds(
         &settings,
         oag_render::mesh_render::Anisotropy::default(),
-        oag_pulse::TITLE.name,
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
     )
     .into_iter()
     .map(|(setting, _)| setting)

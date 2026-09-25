@@ -7,7 +7,7 @@
 //! module may hold. See `scripts/check-file-size.py`, which is the rule as a
 //! gate.
 
-use super::render_profile::{KNOWN_TITLES, MOVED_TO_RENDER_PROFILES, PROFILE_KEYS};
+use super::render_profile::{MOVED_TO_RENDER_PROFILES, PROFILE_KEYS, known_profiles};
 use super::*;
 
 /// The default circuit has to be the one every capture was taken on, or a
@@ -101,6 +101,7 @@ fn read(text: &str) -> Settings {
     // mirroring it: a migration added to `load` and not to here is one every
     // test below silently stops covering.
     migrate_reconstruction_keys(&mut table);
+    migrate_platform_split(&mut table);
     let mut settings: Settings = table.try_into().expect("deserialise");
     ensure_known_titles(&mut settings);
     settings
@@ -141,14 +142,16 @@ perf_overlay = \"fps\"
     // rest.
     assert_eq!(settings.graphics.anisotropy, Anisotropy::X4);
     assert_eq!(settings.graphics.perf_overlay, crate::perf::Overlay::Fps);
-    // Moved a second time, out of `[graphics]` into every known title's own
-    // render profile - see `a_file_written_before_the_render_profile_split_
-    // seeds_every_known_title` for that migration on its own.
-    for title in KNOWN_TITLES {
+    // Moved a second time, out of `[graphics]` into every known
+    // (title, platform) pair's own render profile - see
+    // `a_file_written_before_the_render_profile_split_seeds_every_known_title`
+    // for that migration on its own.
+    for (title, platform) in known_profiles() {
+        let key = profile_key(title, platform);
         assert_eq!(
-            settings.render_profiles[*title].render_scale.percent(),
+            settings.render_profiles[&key].render_scale.percent(),
             75,
-            "{title}"
+            "{key}"
         );
     }
     // Added, so they come out as their defaults rather than as an error.
@@ -249,7 +252,12 @@ fn every_menu_seed_names_a_key_the_settings_file_has() {
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let table: toml::Table = written.parse().expect("parse");
 
-    for (setting, _) in menu_seeds(&settings, Anisotropy::default(), oag_pulse::TITLE.name) {
+    for (setting, _) in menu_seeds(
+        &settings,
+        Anisotropy::default(),
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
+    ) {
         let Some((section, key)) = setting.split_once('.') else {
             // `language` is a bare key, and only present once picked.
             assert_eq!(setting, "language");
@@ -260,14 +268,17 @@ fn every_menu_seed_names_a_key_the_settings_file_has() {
                 .get("render_profiles")
                 .and_then(toml::Value::as_table)
                 .unwrap_or_else(|| panic!("no [render_profiles] table for {setting}"));
-            for title in KNOWN_TITLES {
+            for (title, platform) in known_profiles() {
+                let profile_key = profile_key(title, platform);
                 let profile = profiles
-                    .get(*title)
+                    .get(&profile_key)
                     .and_then(toml::Value::as_table)
-                    .unwrap_or_else(|| panic!("no [render_profiles.{title}] table for {setting}"));
+                    .unwrap_or_else(|| {
+                        panic!("no [render_profiles.{profile_key}] table for {setting}")
+                    });
                 assert!(
                     profile.contains_key(key),
-                    "[render_profiles.{title}] has no {key}"
+                    "[render_profiles.{profile_key}] has no {key}"
                 );
             }
             continue;
@@ -301,10 +312,12 @@ motion_blur = \"medium\"
     // split.
     assert_eq!(settings.graphics.anisotropy, Anisotropy::X4);
 
-    // Moved, and identically, into every known title - not just one.
-    for title in KNOWN_TITLES {
-        let profile = &settings.render_profiles[*title];
-        assert_eq!(profile.render_scale.percent(), 50, "{title}");
+    // Moved, and identically, into every known (title, platform) row - not
+    // just one, and not just one platform of a title that ships two.
+    for (title, platform) in known_profiles() {
+        let key = profile_key(title, platform);
+        let profile = &settings.render_profiles[&key];
+        assert_eq!(profile.render_scale.percent(), 50, "{key}");
         // **Folded onto one axis by `migrate_reconstruction`**, which is the
         // lossy half of the ADR-0041 migration: the old file asked for `smaa`
         // *and* `fsr1`, a pairing the new row cannot express and one the menus
@@ -313,13 +326,13 @@ motion_blur = \"medium\"
         assert_eq!(
             profile.reconstruction,
             oag_display::display::Reconstruction::Fsr1,
-            "{title}"
+            "{key}"
         );
-        assert_eq!(profile.msaa, oag_display::display::Msaa::Off, "{title}");
+        assert_eq!(profile.msaa, oag_display::display::Msaa::Off, "{key}");
         assert_eq!(
             profile.motion_blur,
             oag_display::display::MotionBlur::Medium,
-            "{title}"
+            "{key}"
         );
     }
 
@@ -327,11 +340,12 @@ motion_blur = \"medium\"
     // `[graphics]` to be migrated a second time.
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let round_tripped = read(&written);
-    for title in KNOWN_TITLES {
+    for (title, platform) in known_profiles() {
+        let key = profile_key(title, platform);
         assert_eq!(
-            round_tripped.render_profiles[*title].render_scale.percent(),
+            round_tripped.render_profiles[&key].render_scale.percent(),
             50,
-            "{title}"
+            "{key}"
         );
     }
 }
@@ -346,25 +360,140 @@ fn menu_seeds_resolves_the_render_profile_by_title() {
     ensure_known_titles(&mut settings);
     settings
         .render_profiles
-        .get_mut(oag_pulse::TITLE.name)
+        .get_mut(&profile_key(oag_pulse::TITLE, oag_disc::Platform::Psp))
         .expect("seeded above")
         .render_scale = "50".parse().expect("valid scale");
     settings
         .render_profiles
-        .get_mut(oag_hd::TITLE.name)
+        .get_mut(&profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3))
         .expect("seeded above")
         .render_scale = "100".parse().expect("valid scale");
 
-    let value_for = |title: &str| -> String {
-        menu_seeds(&settings, Anisotropy::default(), title)
+    let value_for = |title: &oag_title::Title, platform: oag_disc::Platform| -> String {
+        menu_seeds(&settings, Anisotropy::default(), title, platform)
             .into_iter()
             .find(|(key, _)| *key == "graphics.render_scale")
             .map(|(_, value)| value.to_string())
             .expect("graphics.render_scale is always seeded")
     };
 
-    assert_eq!(value_for(oag_pulse::TITLE.name), "50");
-    assert_eq!(value_for(oag_hd::TITLE.name), "100");
+    assert_eq!(value_for(oag_pulse::TITLE, oag_disc::Platform::Psp), "50");
+    assert_eq!(value_for(oag_hd::TITLE, oag_disc::Platform::Ps3), "100");
+}
+
+/// The other half of the same property: the **same title**, opened off its
+/// two different platforms, also reads back two different rows rather than
+/// one shared one - the split this whole thread exists for.
+#[test]
+fn menu_seeds_resolves_pulse_psp_and_pulse_ps2_separately() {
+    let mut settings = Settings::default();
+    ensure_known_titles(&mut settings);
+    settings
+        .render_profiles
+        .get_mut(&profile_key(oag_pulse::TITLE, oag_disc::Platform::Psp))
+        .expect("seeded above")
+        .render_scale = "50".parse().expect("valid scale");
+    settings
+        .render_profiles
+        .get_mut(&profile_key(oag_pulse::TITLE, oag_disc::Platform::Ps2))
+        .expect("seeded above")
+        .render_scale = "100".parse().expect("valid scale");
+
+    let value_for = |platform: oag_disc::Platform| -> String {
+        menu_seeds(&settings, Anisotropy::default(), oag_pulse::TITLE, platform)
+            .into_iter()
+            .find(|(key, _)| *key == "graphics.render_scale")
+            .map(|(_, value)| value.to_string())
+            .expect("graphics.render_scale is always seeded")
+    };
+
+    assert_eq!(value_for(oag_disc::Platform::Psp), "50");
+    assert_eq!(value_for(oag_disc::Platform::Ps2), "100");
+}
+
+/// The migration this whole split exists for: a file that still has a bare
+/// `[render_profiles."Wipeout Pulse"]` table, tuned before Pulse's PSP and
+/// PS2 rows were split apart, has no way to say which platform the value was
+/// tuned against - so both of Pulse's rows come back seeded with it, on the
+/// "absence is not evidence of wrong" rule `migrate_platform_split`'s own doc
+/// names, and the bare key itself is gone once split.
+#[test]
+fn a_bare_title_key_seeds_both_platform_rows_and_is_removed() {
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout Pulse\"]
+render_scale = 60
+",
+    );
+    let psp_key = profile_key(oag_pulse::TITLE, oag_disc::Platform::Psp);
+    let ps2_key = profile_key(oag_pulse::TITLE, oag_disc::Platform::Ps2);
+    assert_eq!(
+        settings.render_profiles[&psp_key].render_scale.percent(),
+        60
+    );
+    assert_eq!(
+        settings.render_profiles[&ps2_key].render_scale.percent(),
+        60
+    );
+
+    // Gone, not left beside the two rows it seeded - see
+    // `migrate_platform_split`'s own doc for why a leftover would round-trip
+    // forever as a row nothing reads.
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert!(
+        !written.contains("[render_profiles.\"Wipeout Pulse\"]\n"),
+        "the bare key survived the split:\n{written}"
+    );
+}
+
+/// A platform row a player already tuned must not be clobbered by the bare
+/// key's value sitting beside it - the same "new spelling wins" rule
+/// `a_display_table_wins_over_a_leftover_graphics_key` proves for `[display]`.
+#[test]
+fn a_platform_row_already_present_wins_over_the_bare_key() {
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout Pulse\"]
+render_scale = 60
+
+[render_profiles.\"Wipeout Pulse (PS2)\"]
+render_scale = 100
+",
+    );
+    assert_eq!(
+        settings.render_profiles[&profile_key(oag_pulse::TITLE, oag_disc::Platform::Ps2)]
+            .render_scale
+            .percent(),
+        100,
+        "the tuned PS2 row must survive, not the bare key's value"
+    );
+    assert_eq!(
+        settings.render_profiles[&profile_key(oag_pulse::TITLE, oag_disc::Platform::Psp)]
+            .render_scale
+            .percent(),
+        60,
+        "the PSP row had nothing of its own, so it takes the bare key's value"
+    );
+}
+
+/// [`load`]'s own contract: a file already in the canonical shape reads and
+/// writes back byte-identical, so a player who never changes a setting never
+/// sees a diff on disk. Proven across the platform-split migration
+/// specifically, since that is the one [`read`] (this file's helper) has to
+/// keep in step with `load` for - see its own doc comment.
+#[test]
+fn a_settings_file_is_stable_across_a_second_load() {
+    // `read("")` is what a fresh install's first load produces - every table
+    // filled in, `render_profiles` included via `ensure_known_titles` - which
+    // is the canonical shape a second load has to reproduce exactly. A bare
+    // `Settings::default()` is not that: it skips `ensure_known_titles`
+    // entirely, the way `load` never does once a file exists.
+    let once = toml::to_string_pretty(&read("")).expect("serialise");
+    let twice = toml::to_string_pretty(&read(&once)).expect("serialise");
+    assert_eq!(
+        once, twice,
+        "a canonical file must not move on a second load"
+    );
 }
 
 /// Every migratable key either is a profile key or is consumed on the way in.
@@ -416,7 +545,7 @@ anti_aliasing = \"msaa4x\"
 motion_blur = \"high\"
 ",
     );
-    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    let profile = &settings.render_profiles[&profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3)];
     // The lossless case: the two really were orthogonal, so both survive.
     assert_eq!(
         profile.reconstruction,
@@ -440,7 +569,7 @@ upscaler = \"fsr1\"
 anti_aliasing = \"fxaa\"
 ",
     );
-    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    let profile = &settings.render_profiles[&profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3)];
     assert_eq!(
         profile.reconstruction,
         oag_display::display::Reconstruction::Fsr1
@@ -455,7 +584,7 @@ anti_aliasing = \"fxaa\"
 anti_aliasing = \"smaa\"
 ",
     );
-    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    let profile = &settings.render_profiles[&profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3)];
     assert_eq!(
         profile.reconstruction,
         oag_display::display::Reconstruction::Smaa
@@ -472,7 +601,7 @@ reconstruction = \"fsr3\"
 msaa = \"4x\"
 ",
     );
-    let profile = &settings.render_profiles[oag_hd::TITLE.name];
+    let profile = &settings.render_profiles[&profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3)];
     assert_eq!(
         profile.reconstruction,
         oag_display::display::Reconstruction::Fsr3

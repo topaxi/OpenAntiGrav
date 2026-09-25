@@ -25,6 +25,8 @@ pub struct Boot {
     /// rather than re-derived. `--menu-page` reads its `name` to resolve
     /// `crate::settings::menu_seeds`' five per-title render-profile rows.
     pub title: &'static oag_title::Title,
+    /// Which console this source is for, carried from [`Shell::platform`].
+    pub platform: oag_disc::Platform,
     /// The sequence itself.
     pub frontend: Frontend,
     /// The intro movie, whether or not it has a picture.
@@ -133,68 +135,7 @@ impl std::fmt::Debug for Boot {
     }
 }
 
-/// What to load and how much of the movie to convert.
-#[derive(Debug, Clone)]
-pub struct Options {
-    /// A disc image, or a directory extracted with `oag-unpack`.
-    pub source: String,
-    /// Directories to look in for [downloadable content](crate::dlc), mounted
-    /// behind `source`'s own archives and independent of which release it is.
-    pub dlc: Vec<std::path::PathBuf>,
-    /// Which movie leg the sequence boots into.
-    pub leg: oag_ui::frontend::Leg,
-    /// The language to load the string table for, by the XML's own English
-    /// name, when one has been chosen on an earlier run.
-    ///
-    /// `None` falls back to English and then to whatever the source lists
-    /// first, which is what a first run gets. A name this source does not carry
-    /// falls back the same way rather than failing.
-    pub language: Option<String>,
-    /// Which `Data.wad` entry that leg plays, as a name or a name hash.
-    ///
-    /// Three of the disc's movies have no recovered name, and one of them is
-    /// the reel `Intro Screen->IntroMovie1`'s frame counters describe, so a name
-    /// is not enough to address every candidate. See [`EntryRef`].
-    ///
-    /// `None` is not "no movie" - it means "this leg's own default", resolved
-    /// in [`load`] once the source's title is known (`screens` is parsed by
-    /// then). Before this existed the default was baked into `Options` at
-    /// construction, in `main.rs`, which is exactly where the title is *not*
-    /// yet known - that was fine while every source was Pulse and wrong the
-    /// moment Pure could open at all, since Pulse's default names an entry
-    /// Pure does not have. `Some(name)` is a request, same as always, and is
-    /// used verbatim regardless of title.
-    pub movie: Option<String>,
-    /// Where converted frames are cached.
-    pub cache: std::path::PathBuf,
-    /// Where decoded PCM is cached - see [`default_audio_cache_dir`].
-    ///
-    /// A second directory rather than the one above, and deliberately: the two
-    /// hold different things with different lifetimes, and a player clearing
-    /// one should not lose the other.
-    pub audio_cache: std::path::PathBuf,
-    /// How much of the movie to convert.
-    pub extent: Extent,
-    /// Skip conversion entirely.
-    pub no_video: bool,
-    /// Convert every movie again even when the cache already holds it, and
-    /// overwrite what is there. See [`crate::movie::Decode::refresh`].
-    pub refresh_video: bool,
-    /// Take the AV1 cache path even where a platform decoder is available. See
-    /// [`crate::movie::Decode::prefer_cache`].
-    pub prefer_av1_cache: bool,
-}
-
-impl Options {
-    /// How the movie loaders should open a picture, from these options.
-    fn decode(&self) -> crate::movie::Decode {
-        crate::movie::Decode {
-            no_video: self.no_video,
-            refresh: self.refresh_video,
-            prefer_cache: self.prefer_av1_cache,
-        }
-    }
-}
+pub use options::Options;
 
 /// Loads everything and builds the sequence.
 ///
@@ -237,6 +178,8 @@ pub struct Shell {
     /// [`assemble`] does not have to be handed a third, easy-to-mismatch
     /// argument for a value this struct was already built from.
     pub title: &'static oag_title::Title,
+    /// Which console this source is for - see `crate::settings::profile_key`.
+    pub platform: oag_disc::Platform,
     /// The front-end XML. Cloned for the media worker, moved into
     /// [`Frontend::booting`] by [`assemble`].
     pub screens: Screens,
@@ -760,6 +703,7 @@ pub fn load_shell(
     Ok((
         Shell {
             title,
+            platform: archives.layout.platform,
             screens,
             entries: chosen_language(&languages, options.language.as_deref())
                 .and_then(|language| language.entries.clone()),
@@ -1060,6 +1004,7 @@ impl MediaWorker {
 pub fn assemble(shell: Shell, media: Media) -> Boot {
     let Shell {
         title,
+        platform,
         screens,
         entries,
         loading: _,
@@ -1274,6 +1219,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
 
     Boot {
         title,
+        platform,
         entries,
         menu_skin,
         frame,
@@ -1640,6 +1586,7 @@ pub mod fury;
 mod images;
 mod includes;
 mod movies;
+mod options;
 mod progress;
 mod provenance;
 pub(crate) mod roster;

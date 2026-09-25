@@ -2,7 +2,7 @@
 //!
 //! Three pieces:
 //!
-//! - [`ModelDetail`] is the player's `[render_profiles.<title>] model_detail`
+//! - [`ModelDetail`] is the player's `[render_profiles.<title> (<platform>)] model_detail`
 //!   setting: one multiplier on the authored switch distances.
 //! - [`LodGroups`] is what a built [`super::Model`] carries: each group's
 //!   model-space position and switch distances, and which group and child
@@ -46,7 +46,7 @@ const DISTANCES_AT: usize = 0x60;
 
 /// How far away a model switches to its coarser authored tiers - one
 /// multiplier on the switch distances the disc authors, so the recovered
-/// rule stays the only rule. `[render_profiles.<title>] model_detail`.
+/// rule stays the only rule. `[render_profiles.<title> (<platform>)] model_detail`.
 ///
 /// [`Self::Original`] is the measured behaviour; [`Self::High`] and
 /// [`Self::Maximum`] are this project's own, for a machine that can afford

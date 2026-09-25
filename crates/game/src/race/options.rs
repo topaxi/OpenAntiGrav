@@ -598,6 +598,12 @@ pub struct Loaded {
     /// The track's title rather than `craft_title`: a render profile is about
     /// how expensive the *scene* is, and the circuit is the scene.
     pub title: &'static oag_title::Title,
+    /// Which console the track's own source is for, carried out of [`load`]
+    /// the same way `title` is and for the same reason: `--race` has no
+    /// other way to know it, and `crate::settings::profile_key` needs both
+    /// halves - the track's, not `craft_title`'s, on the same reasoning
+    /// `title`'s own doc gives.
+    pub platform: oag_disc::Platform,
     /// The HUD's layout, atlas, fonts and strings.
     pub hud: crate::hud::Assets,
     /// What to draw for the track.

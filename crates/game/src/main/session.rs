@@ -400,7 +400,9 @@ pub(crate) struct Session {
     pub(crate) missing_screen_filter: Option<String>,
     /// The title `--race` opened - see `App::race_title`. Read only when
     /// `shell` is `None`, which is exactly the `--race` route.
-    pub(crate) race_title: Option<&'static str>,
+    pub(crate) race_title: Option<&'static oag_title::Title>,
+    /// The platform that same source is for - see `App::race_platform`.
+    pub(crate) race_platform: Option<oag_disc::Platform>,
     /// Every title this machine can currently open a source for, one row per
     /// distinct title - what the RACE REMIX page's TRACK TITLE and CRAFT
     /// TITLE rows offer, and how `Action::LaunchRemix` turns a picked title's
@@ -645,6 +647,12 @@ pub(crate) struct Shell {
     /// `race.team` names, the same question RACE REMIX's craft-side VARIANT
     /// row asks of a *picked* title instead of the booted one.
     pub(crate) title: &'static oag_title::Title,
+    /// Which console this source is for, carried the same way `title` is -
+    /// from `boot::Shell::platform`, not re-derived. See
+    /// `settings::profile_key`, which is why this is carried at all: a
+    /// PS2-sourced Pulse race and a PSP-sourced one now read and write
+    /// different `[render_profiles.<key>]` rows.
+    pub(crate) platform: oag_disc::Platform,
     /// The grid that skin's numbers are in, and the one the rows are drawn in.
     ///
     /// Carried beside the skin for the reason the skin is carried at all: it is
