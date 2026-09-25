@@ -648,7 +648,50 @@ the order a player sees it, with what each part rests on:
 | `TitleScreen` | its own six button redirects, all to `GameModeChoice` | `Title_Screen.gtf` centred, `BOOT_PRESS_ANY` pulsing after its `delay="1.0"`, the EU legal footer through the `DirectEmbed` include, in `NEOSANS_BOLD` at its own 22-unit line height against `NEOSANS_BOLD_LARGE`'s 37 | authored, 92; the font-role ratio is read off the two `.fnt` headers |
 | `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the `Orange2048` cursor ring is **chosen** |
 | `Home` | the same | its five `<TouchButton>`s; each destination now draws - see [Wired: `Home`'s five destinations draw](#wired-homes-five-destinations-draw-2026-09-21) | authored, 92 |
-| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own 1920x1088 `<TouchScroll>` canvas, plus a panel naming the selected event | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored) |
+| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own scrollable canvas, plus a panel naming the selected event | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored); **2026-09-25: the grid's own scale is now measured, not the DLC-tier projection** - see below |
+
+**2026-09-25: the campaign map's canvas/pitch/marker scale is measured off
+frames `12`/`13`, correcting a wrong reading of the shell's own XML.** The
+`<TouchScroll>`'s declared `MaxScrollX="960" maxscrolly="544"` was read as
+the whole canvas (view + scroll = 1920x1088); the two live frames' own
+scrollbar thumbs measure a canvas roughly 5.3x-5.4x the view instead (the
+vertical thumb spans 103 of 544 px, the horizontal thumb 177 of 960 px and
+moves between the two frames the way a real scrollbar would), putting the
+real canvas near 5207x2873 - about 2.7x bigger on each axis than this build
+assumed. `oag_ui::frontend::campaign_map`'s `CANVAS`/`PITCH`/`ORIGIN` are
+rescaled by that factor and `MARKER` is set directly off a second, independent
+measurement - a flood-filled bounding box around one clean hex tile in frame
+`13` (122x117 px) - rather than derived from the old, wrong canvas. The grid
+is still a square standing in for the real hexagon, so this stays **chosen,
+not measured, no confidence score** as a whole, but the scale itself is now a
+pixel measurement of the disc's own screen rather than a wrong reading of an
+XML attribute; node size and spacing now visibly match the reference frames'
+own density (previously about a third of the correct size and spacing).
+**Still unmeasured**: the per-event `M_X`/`M_Y` -> pixel formula itself (the
+square grid still places events by cell index alone, not by whatever
+compiled-in projection the DLC tiers' own `+0x15c`/`+0x160` reads), the hex
+tile art and its per-kind icon (chequered flag / stopwatch), the light
+triangle-pattern background, the persistent header (home button, top-right
+badge cluster) and the season title card / per-node trophy badges
+`FE3DCanvas`'s `<CanvasLabel>`s carry. **A negative finding worth recording
+so it is not re-attempted**: a linear least-squares fit of the 47
+`linkedevent`-carrying `<CanvasLabel>`s' own `x`/`y` against their linked
+event's `M_X`/`M_Y` looks promising at first (errors under 15 px on a fit
+with `y` almost exact) - but the same file's twenty `MPSeason01`-`MPSeason20`
+labels, which carry **no** `linkedevent` at all and have no relationship to
+`SP.xml`'s grid whatsoever, occupy the *identical* small coordinate range
+(`x` 55-196, `y` 25-87). That is conclusive: the apparent fit is a spurious
+correlation between two independently monotonic small-number ranges, not a
+real projection, and the existing "one small corner, not hotspots spread
+across the map" reading (below) stands. A full survey of every plausible
+asset name for the hex tile, the season card and the per-node badges
+(`hex_filled.gxt`, `hex_outline.gxt`, `hex_select.gxt`, `Hexagon_HD*.gxt`,
+`Cup2048.gxt`/`Cup2049.gxt`/`Cup2050.gxt`, every `trophy/*.gxt`, every
+`medals/Icon_*.gxt`, every `TinyCallout_*.gxt`) against every `.xml` entry in
+the base package, with `cargo run -p oag-tools --example psarc_grep`,
+matches zero of them: the real tile art and its per-event placement are
+native-code-driven, out of reach without a Ghidra pass, the same conclusion
+`frontend-campaign-map.md` already reached for the DLC tiers' own hotspots.
 | `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
 
 **How the screens are found.** `NEWGUI/Skin.xml` declares no screen; the
@@ -694,11 +737,15 @@ does the same on a fixture with no disc.
 (`lane/2048-intro-mp4`); the `BootFlowCanvas` art; the campaign map's real
 per-event pixel anchor (2026-09-21: `M_X`/`M_Y` are real `GameModeBase`
 fields, but what copies them into the position the DLC tiers' own hotspots
-actually read - `+0x15c`/`+0x160`, a different offset - is still unfound)
+actually read - `+0x15c`/`+0x160`, a different offset - is still unfound;
+2026-09-25: the grid's overall *scale* is now measured off the reference
+captures, but not this per-event formula - see the campaign-map row above)
 and the season title card's own asset (`A·G·R·C 2048`/`2049`/`2050`, seen
-live on Vita3K, not located in either package) - there is no 3D city
-backdrop to find, confirmed from the live capture too; the network modes.
-`Home`'s five destinations are resolved below.
+live on Vita3K, not located in either package - 2026-09-25: confirmed absent
+from every `.xml` in the base package by name too, so it stays native-code
+driven) - there is no 3D city backdrop to find, confirmed from the live
+capture too; the network modes. `Home`'s five destinations are resolved
+below.
 
 **Resolved 2026-09-21: the unlock graph.** Every event was offered
 regardless of the disc's own `M_PNEXTEVENT`/`M_PBRANCHEVENT`/
