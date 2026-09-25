@@ -524,6 +524,16 @@ pub(super) fn roles(
         {
             packed |= slots::FACING_RAMP_SHEEN;
         }
+        // **The two rim-shaded weapon glows**, off a fingerprint of the
+        // resolved program itself - see `rim_glow`.
+        if let Some((d, p)) = declared.as_ref().zip(program.as_ref()) {
+            let alpha = material
+                .parameters
+                .iter()
+                .find(|p| p.hash == super::rim_glow::RIM_EDGE_ALPHA)
+                .map(|p| p.value[0]);
+            packed |= super::rim_glow::classify(d, p, alpha);
+        }
         let (first_unit, second_unit) = units(
             declared.as_ref(),
             material,

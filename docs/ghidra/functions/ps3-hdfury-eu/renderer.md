@@ -1201,6 +1201,15 @@ carrying no preimage at all. A ninth check comes from the flame:
 `~crc32("globalAlphaScaler")` is `0x4c13d3af`, the `float2` engine-flare.md
 listed as unresolved, and it sits at slot 76.
 
+**Its value, read 2026-09-25: `(0, 1)`, the identity** - `alpha * .y + .x` in
+every fogged fragment block that declares it. `Scene_PrepareFrame` publishes
+`block + 0x7c50` into slot 76 (`stw r4, 0x998(r11)` at `0x003ab590`), and
+`Scene_InitRenderBlock` fills that vec4 from stack words it writes as
+`(0.0, 1.0, 0.0, 0.0)` (`lvx` of `r1 - 0x10` at `0x003aa7c0`, `stvx` at
+`0x003aa7e0`). `Ship_DrawModels` and `FUN_003eb890` point the entry elsewhere
+for craft draws; nothing on the weapon path was found to. Confidence 80. See
+[hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md).
+
 **Confidence 92.** The table is read out of its own initialiser rather than
 guessed; the framing closes on `0xa20 / 0x20`; and the slot order is confirmed
 from a different subsystem by eight offset-and-shape agreements plus two

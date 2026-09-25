@@ -95,6 +95,7 @@
 use oag_formats::ByteOrder;
 
 mod coverage;
+mod inline_uv;
 pub mod material;
 pub mod psp2;
 mod render_block;
@@ -809,7 +810,11 @@ impl Mesh {
             }
             None => (stride.saturating_sub(TEXCOORD_LEN), TexcoordFormat::Half),
         };
-        self.coords_at(data, submesh, stride, offset, format)
+        let coords = self.coords_at(data, submesh, stride, offset, format)?;
+        if self.decl.is_none() && stride == inline_uv::STRIDE {
+            return Ok(self.inline_uv_before_colour(data, submesh, stride, coords));
+        }
+        Ok(coords)
     }
 
     /// The coordinates a **lightmap** is sampled through, one pair per vertex.

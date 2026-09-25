@@ -85,23 +85,27 @@ pub(super) const HD_BLAST_LIFETIME_SECONDS: f32 = 3.5;
 /// show for it.
 pub(super) const HD_BLAST_HIDE_AT_SECONDS: f32 = 1.3;
 
-/// **`false`: the bolt's head has no shader path yet.** `HD_plasma_ball`
-/// loads and reports a real triangle count and a resolved material, but
-/// that material resolves through `mesh::rcs`'s one shared lit shader path
-/// (`mesh.wgsl`) - already documented (`docs/formats/rcsmaterial.md`) as
-/// missing a Lambert diffuse for most HD material families, a "missing
-/// material, not a missing light". A bolt head is very likely an
-/// additive/glow material on the disc, and
-/// this engine has no additive shader path for `mesh::rcs` geometry at all
-/// (every weapon body, this one included, draws through the same
-/// opaque-painted [`mesh_render::TRANSPARENT_BLEND`] pipeline the Rocket's
-/// hull does - see `scene::weapon_models::build`) - so what a player sees is
-/// an opaque black wedge on the craft's nose, not a glowing bolt. Building
-/// that shader path is the general fix this thread already tracks and is
-/// out of this lane's own evidence; until then this stays `false` and the
-/// bolt's own existing glow (`WO_PLASMA_HEAD`, a `Data\Psys` effect every
-/// source already rides) carries the visual alone, as it did before this
-/// session.
+/// **`false`: the bolt's head has its shader now, but this engine culls its
+/// two shells the wrong way round.** `HD_plasma_ball`'s material
+/// (`plasmasphere_subtractive_glow`) is routed to its own program since
+/// 2026-09-25 - `mesh::rcs::rim_glow`'s `RIM_EDGE`, `1000 rim^5` times a
+/// noise-displaced tap, alpha 1 under `SrcAlpha`/`OneMinusSrcAlpha` - so
+/// the missing shading mode this constant used to wait on is gone. What
+/// keeps it off is a separate, pre-existing defect, measured rather than
+/// supposed: the model is two coincident spheres, one wound outward and one
+/// inward (`crates/render/examples/hd_unlit_probe.rs`: 760 of 760 triangles
+/// counter-clockwise about their own normal in both, 760 and 0 normals
+/// outward), and its material culls back faces. Under this renderer every
+/// fragment that survives the cull is `front_facing` with its normal
+/// pointing **away** from the eye - with the placement replaced by a bare
+/// translation too, so no reflection in the placement is doing it. A face
+/// that turns away from the eye has `rim = 1`, so the program's `1000 rim^5`
+/// paints the whole disc white where the original paints a dark core inside
+/// a blown-out rim. Every other culled HD weapon (`cull_as_authored`) shares
+/// that cull, so the fix is not this model's to make; until it lands this
+/// stays `false` and the bolt's own glow (`WO_PLASMA_HEAD`, a `Data\Psys`
+/// effect every source already rides) carries the visual alone. See
+/// docs/rendering/hd-unlit-programs.md.
 pub(super) const HD_PLASMA_BALL_DRAWN: bool = false;
 
 /// The three models' own `(target, rate)` ease pair, in

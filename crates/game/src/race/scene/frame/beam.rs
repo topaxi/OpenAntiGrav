@@ -41,9 +41,7 @@ impl super::super::Scene {
     /// Writes this tick's transform onto the LeachBall's own model, or
     /// leaves it unwritten - and reports so, for the bounded draw below -
     /// when [`super::super::Scene::leach_ball`] is `None` (the model did not
-    /// load, or `load::weapon_models::LEACH_BALL_DRAWN` is `false` - see
-    /// its own doc comment, which is the current case on every real race)
-    /// or [`Race::leach_ball_model_matrix`] is `None` (no beam locked).
+    /// load) or [`Race::leach_ball_model_matrix`] is `None` (no beam locked).
     ///
     /// **No previous-frame matrix tracked**, the same choice
     /// [`super::super::Scene::write_plasma_blasts`] already makes for its

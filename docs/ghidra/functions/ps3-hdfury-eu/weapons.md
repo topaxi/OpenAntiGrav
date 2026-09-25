@@ -631,6 +631,17 @@ loads and reports what it found (see that constant's own doc comment for
 the load report line); nothing is drawn. Screenshots and the `--draws`
 capture above are `data/scratch/` (gitignored), not committed.
 
+**Superseded the same day (third pass): the ball draws.** The grey sphere had
+two causes, neither of them the black vertex colour, which no program here
+reads. The sphere is an inline stride-18 chunk whose last four bytes are a
+colour, so its `Uv1` was read as two `NaN` halves (fixed in
+`oag_rcs::rcsmodel::Mesh::texcoords`); and its material's program -
+`(0.9 (1 - rim^5))^5` fading a noise-displaced, clock-scrolled tap expanded by
+`c / (1 - c)` - had no shading path. Both are read and closed on
+[hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md), and
+`load::weapon_models::LEACH_BALL_DRAWN` is deleted rather than flipped. The
+bloomring's program is one texture tap and already drew as `slots::EMISSIVE`.
+
 ### A related finding: `WO_LEACHBEAM_ENERGY` has no string in this EBOOT
 
 `strings -a EBOOT.elf | grep -i LEACHBEAM_ENERGY` returns nothing, though

@@ -207,6 +207,9 @@
 0x005c207c	function	Rsx_SetBlendFuncSeparate	92	material-state.md
 0x005c1ec0	function	Rsx_SetAlphaFunc	92	material-state.md
 0x005c1d0c	function	Rsx_SetMethod	88	material-state.md
+0x005c2130	function	Rsx_SetBlendEquation	90	material-state.md
+0x005c35b0	function	Rsx_SetCullFace	88	material-state.md
+0x005c362c	function	Rsx_SetFrontFace	88	material-state.md
 0x00304530	function	SoundSystem_GetBandLevel	85	zone-visualiser.md
 0x0067a7b8	function	SoundSystem_GetBandLevel_Stub	85	zone-visualiser.md
 0x00b6cc90	data	g_sound_system	80	zone-visualiser.md

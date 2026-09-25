@@ -1,0 +1,111 @@
+//! Wipeout HD's two rim-shaded weapon glows, routed off their own programs.
+//!
+//! **`#[ignore]`d and never run in CI.** It needs game content, which this
+//! project does not ship. See
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
+//!     -E 'binary(hd_rim_glow_ground_truth)'
+//! ```
+//!
+//! What `docs/rendering/hd-unlit-programs.md` claims of the disc, pinned:
+//! the LeachBall's glow material earns `slots::RIM_GLOW`, the Plasma head's
+//! earns `slots::RIM_EDGE`, the bloomring stays on the plain emissive path,
+//! and the inline sphere these three share now reads a real, varying `Uv1`
+//! rather than the colour bytes behind it.
+
+use std::path::{Path, PathBuf};
+
+use oag_render::mesh::{self, slots};
+
+const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
+
+fn image() -> Option<PathBuf> {
+    oag_testdata::image(PS3_IMAGE)
+}
+
+/// Builds a weapon model with its materials and textures read through the
+/// race's own `oag_assets::Archives` for Wipeout HD - the same precedence
+/// `race::load` gets, which decides which of the LeachBall glow material's
+/// two differing copies (`DATA00`'s, `DATA02`'s) is the one drawn.
+fn build(image: &Path, path: &str) -> mesh::Model {
+    let mut archives = oag_assets::Archives::open(&image.to_string_lossy(), oag_hd::TITLE)
+        .expect("the archives open");
+    let data = archives.read_name(path).expect("the .vex reads");
+    let sibling = mesh::rcs::sibling_name(path).expect("a PS3 .vex names its .rcsmodel");
+    let geometry = archives
+        .read_name(&sibling)
+        .expect("an .rcsmodel beside it");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archives.read_name(name).ok()
+    })
+    .expect("the scene builds");
+    model
+}
+
+/// The copy the race serves is `DATA00`'s - the one whose program bakes the
+/// `0.9` `rim_glow` matches. Its length alone tells the two apart.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_race_serves_the_data00_copy_of_the_leachball_glow_material() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_assets::Archives::open(&image.to_string_lossy(), oag_hd::TITLE)
+        .expect("the archives open");
+    let blob = archives
+        .read_name("/data/weapons/materials/hd_leachbeam_ball_glow.rcsmaterial")
+        .expect("the material reads");
+    assert_eq!(
+        blob.len(),
+        28_368,
+        "DATA00's copy is 28,368 bytes, DATA02's 29,984"
+    );
+}
+
+fn roles(model: &mesh::Model) -> Vec<u32> {
+    model
+        .transparent_draws
+        .iter()
+        .chain(&model.draws)
+        .map(|draw| model.vertices[model.indices[draw.range.start as usize] as usize].slots)
+        .collect()
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_leachball_glows_through_its_own_program_and_its_ring_stays_emissive() {
+    let Some(image) = image() else { return };
+    let model = build(&image, "/data/weapons/hd_leachbeam_ball_bloomring.vex");
+    let roles = roles(&model);
+    assert_eq!(roles.len(), 2, "the sphere and the ring");
+    let glowing = roles.iter().filter(|r| *r & slots::RIM_GLOW != 0).count();
+    assert_eq!(glowing, 1, "exactly the sphere: {roles:x?}");
+    for r in &roles {
+        assert_eq!(r & slots::RIM_EDGE, 0, "{r:#x}");
+        if r & slots::RIM_GLOW == 0 {
+            assert_eq!(r & slots::EMISSIVE, slots::EMISSIVE, "the ring: {r:#x}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_plasma_head_earns_rim_edge_and_its_inline_sphere_reads_a_real_uv() {
+    let Some(image) = image() else { return };
+    let model = build(&image, "/data/weapons/hd_plasma_ball.vex");
+    let roles = roles(&model);
+    assert!(!roles.is_empty());
+    for r in &roles {
+        assert_eq!(r & slots::RIM_EDGE, slots::RIM_EDGE, "{r:#x}");
+        assert_eq!(r & slots::RIM_GLOW, 0, "{r:#x}");
+    }
+    // The stride-18 inline chunk's tail is `ff ff ff cc`; before the fix
+    // every coordinate was that read as two NaN halves, zeroed on emit.
+    let (lo, hi) = model
+        .vertices
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(lo, hi), v| {
+            (lo.min(v.texcoord[0]), hi.max(v.texcoord[0]))
+        });
+    assert!(hi - lo > 0.9, "u spans {lo}..{hi}");
+}
