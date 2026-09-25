@@ -136,46 +136,74 @@ measured rect is enough to wire the destination without resolving the mechanism.
 
 ## `Hud_UpdateEnergyBar` - `0x811957a2`
 
-**Confidence: 85. Not this page's own subject** (see
-[2048-hud.md](../../../formats/2048-hud.md#energybar-is-wired-a-vertical-crop-from-the-bottom-2026-09-20)
-for the shield fill itself) **but found and named in the same pass**, as the
-dirty-flag dispatcher's bit-`0x2` sibling of `Hud_UpdatePickupIcon`. Confirms
-the vertical-crop implementation independently of the frame comparison that
-pass already ran: `EnergyBar`'s height is set to `orig_height * fraction` and
-its position (a vtable setter, not a raw field) to
-`orig_y + orig_height * (1 - fraction) * 0.5` - which is a bottom-anchored crop
-*if* the position setter takes a rect centre rather than a corner, since a
-centre shifted down by half the removed height leaves the bottom edge fixed and
+**Confidence: 85.** Found as the dirty-flag dispatcher's bit-`0x2` sibling of
+`Hud_UpdatePickupIcon`, and originally read only for its "confirms the crop"
+summary; **re-read in full on 2026-09-25** to wire the two corrections below
+rather than leave them recorded and unwired
+(`docs/formats/2048-hud.md#energybg-tints-energybardelay-is-wired-and-text_for-gets-2048s-arms-2026-09-25`).
+Fixed-point throughout: every fraction is a `0..100` percentage read as
+`SceLibm_6BBFEC89(shield * 100.0 / max)`, clamped to `0.0` on a negative or
+`NaN` result, then scaled by `0.01` where the crop needs `0..1` - `fVar11` is
+that percentage, `fVar12` its `0..1` form, in the variable names below.
+
+**The crop, confirmed independently of the frame comparison the original
+pass ran.** `EnergyBar`'s (`hud+0x24`) height is set to `orig_height *
+fVar12` and its position (a vtable setter at `vtable+100`, not a raw field)
+to `orig_y + orig_height * (1 - fVar12) * 0.5` - a bottom-anchored crop *if*
+the position setter takes a rect centre rather than a corner, since a centre
+shifted down by half the removed height leaves the bottom edge fixed and
 moves the top down by the full removed height, matching
-`oag_game::hud::draw::crop_vertically`'s own formula exactly. The identical pair
-of computations (`height = orig * fraction`, `origin = orig + orig*(1-fraction)`)
-is applied a second time to two raw fields (`+0xcc`, `+0xd4`) most likely the
-source UV's `V`/height, mirroring the destination-rect transform - the same dual
-application (`rect` and `uv` both cropped by the same formula)
+`oag_game::hud::draw::crop_vertically`'s own formula exactly. The identical
+pair of computations (`height = orig * fraction`, `origin = orig +
+orig*(1-fraction)`) is applied a second time to `EnergyBar`'s own two raw UV
+fields (`+0xcc`, `+0xd4`), mirroring the destination-rect transform - the
+same dual application (`rect` and `uv` both cropped by the same formula)
 `crop_vertically` already implements.
 
-Two findings this function gives that `2048-hud.md`'s existing "what is not
-done" list does not yet have:
+**`EnergyBarDelay` (`hud+0x28`) gets the identical rect-plus-uv crop a second
+time, fed a *lagging* fraction instead of `fVar12` directly** - read off the
+same shared `orig_height`/`orig_y`/`orig_uv` fields `EnergyBar` used, so the
+two widgets share one rect and source rectangle and differ only in which
+fraction crops them. The lagging fraction (`hud+0x1ec`) is
+`lagging = lagging + (target - lagging) * 0.1` every tick, unconditionally -
+**not** gated on the shield falling, correcting this page's own first
+reading. `target` (`hud+0x1e8`) is what makes that read plausible from a
+summary alone: a branch sets `target = fVar12` outright the instant the
+percentage *rises* versus the previous tick (`hud+0x25c`), and a second,
+unconditional branch lowers `target` to `fVar12` whenever `fVar12 < target` -
+which together mean `target` equals the current fraction on every tick,
+rise, fall or flat, with no lag of its own. So the widget itself lags -
+`lagging` chases whatever `target` last became - but the *target* never
+does; the rate is symmetric in both directions, not falling-only. A `hud+0x30`
+flag bit on `EnergyBar`'s own struct is set the tick `target` snaps up and
+cleared once `lagging` closes to within 1% of `target`
+(`fVar5 * 0.99 <= lagging`) - plausibly a "still catching up" flag some other,
+undecompiled draw call reads, not chased further here.
 
-- **`EnergyBarDelay` is not a flash.** It receives the *same* crop, fed an
-  exponentially-smoothed fraction (`lagging += (target - lagging) * 0.1` per
-  frame, only smoothing toward the target while shield is *falling*) - a
-  trailing "recent damage" edge, the same idiom a health bar with a delayed
-  white/grey trail implements elsewhere. Nothing here makes it red.
-- **`EnergyBg` is the one that turns red**, not `EnergyBar`/`EnergyBarDelay`:
-  `FUN_8109cfae(energyBg, 0xffa7a5a7, 0)` (opaque light grey) normally, or
-  `0xffff0000` (opaque red) whenever the shield fraction is at or under 20%
-  (matching this project's own `oag_physics::damage::CRITICAL_PERCENT`) or a
-  flash timer is running. `docs/formats/2048-hud.md` and
-  `oag_2048::hud::ALWAYS_ON`'s own doc comment currently read `EnergyBg` as a
-  fixed translucent constant with "nothing tints" - both need a correction,
-  which this page's own finding is the evidence for; the open thread's own
-  `## Open` list carries the follow-up.
+**`EnergyBg` (`hud+0x20`), not `EnergyBar`/`EnergyBarDelay`, is what turns
+red.** `FUN_8109cfae(energyBg, 0xffa7a5a7, 0)` (opaque light grey) normally,
+or `0xffff0000` (opaque red) whenever `fVar11 <= 20.0` (matching this
+project's own `oag_physics::damage::CRITICAL_PERCENT`) **or** a second,
+independent timer (`hud+0x260`) is still running. That timer arms when the
+*truncated* percentage (`(int)fVar11 < (int)fVar9`, `fVar9` last tick's own
+`fVar11`) drops versus the previous tick, counts up by the tick's own `dt`,
+and resets to `0` past `1.0` - structurally
+`crate::hud::Readout::shield_flashing`'s own ~1s arm-on-drop shape (Pulse's
+`hud+0x11c`, `docs/ghidra/functions/psp-pulse-usa/shield.md`), differing
+only in comparing truncated ints rather than raw floats. Wired by reusing
+that existing field rather than porting a second, near-identical timer.
+Inside the red branch, a *third*, separate timer (`hud+0x1c4`) advances and
+its `floor(t * 8.0)` parity clears a `hud+0x30` flag bit on a widget at
+`hud+8` - not `EnergyBg`, `EnergyBar` or `EnergyBarDelay` - an 8 Hz blink on
+some fourth widget this pass did not identify past the offset, so it is not
+reproduced. `docs/formats/2048-hud.md` and `oag_2048::hud::ALWAYS_ON`'s own
+doc comment used to read `EnergyBg` as a fixed translucent constant with
+"nothing tints" - both corrected in the same change that wired this.
 
-Neither of these two correct the still-open question of what makes `EnergyBar`
-itself read as white at runtime rather than its authored green-at-half-alpha -
-no color write to `EnergyBar` (as opposed to `EnergyBg`) was found in this
-function, so that gap in `2048-hud.md` stands as recorded.
+**Still open: what makes `EnergyBar`/`EnergyBarDelay` themselves read white
+at runtime**, rather than their authored green-at-half-alpha and opaque
+white respectively - no colour write to either was found in this function,
+so that gap in `2048-hud.md` stands as recorded.
 
 ## See also
 

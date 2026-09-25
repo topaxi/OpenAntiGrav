@@ -103,6 +103,7 @@ fn the_zone_ladder_counts_up_from_the_current_zone() {
                     true,
                     None,
                     true,
+                    false,
                 )
             })
             .collect()

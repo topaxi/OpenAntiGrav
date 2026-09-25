@@ -63,25 +63,11 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
     out
 }
 
-/// Whether a widget is a bar fill whose *height* tracks a value, cropped
-/// vertically from the bottom - [`bar_fraction`]'s counterpart for the one
-/// dialect that fills this way instead.
-///
-/// Just 2048's `EnergyBar` so far: `36-w-5.png` (95% shield) and
-/// `68-zone-5.png` (27%) both show the fill's *top* edge tracking the
-/// percentage with the bottom edge fixed to the silhouette's foot, unlike
-/// Pulse/HD's `ShieldBar`, which [`bar_fraction`] already crops from the
-/// left. See [`crop_vertically`].
-pub(super) fn vertical_bar_fraction(name: &str, readout: &Readout) -> Option<f32> {
-    match name {
-        "EnergyBar" => Some(readout.shield_fraction()),
-        _ => None,
-    }
-}
-
 /// Crops a sprite vertically to `fraction` of its height, anchored at the
 /// bottom - [`crop_horizontally`]'s counterpart for a fill that grows upward
-/// rather than rightward.
+/// rather than rightward. [`super::dialect_2048::vertical_bar_fraction`] is
+/// the one caller, for `EnergyBar` and `EnergyBarDelay` - see its own doc
+/// comment for which widget gets which fraction.
 ///
 /// **Confidence 80, the same terms `crop_horizontally`'s own doc comment
 /// gives.** `rect` and `uv` share one top-left, y-down convention -
@@ -90,9 +76,7 @@ pub(super) fn vertical_bar_fraction(name: &str, readout: &Readout) -> Option<f32
 /// against each other - so shrinking from the top is a shared shift of both
 /// `y` origins by the cropped-away height, plus a matching scale of both
 /// heights. Not established: that the crop is linear in the value (assumed,
-/// on `crop_horizontally`'s own precedent) or that `EnergyBarDelay`'s red
-/// flash crops the same way - unread, see `oag_2048::hud::ALWAYS_ON`'s doc
-/// comment.
+/// on `crop_horizontally`'s own precedent).
 pub(super) fn crop_vertically(sprite: &Sprite, fraction: f32) -> Sprite {
     let mut out = sprite.clone();
     let cropped_rect_height = sprite.rect[3] * (1.0 - fraction);
@@ -114,13 +98,16 @@ pub(super) fn crop_vertically(sprite: &Sprite, fraction: f32) -> Sprite {
 /// wired up".
 ///
 /// `place_shown` is the one decision this function cannot make from its own
-/// arguments: whether *this layout* is drawing a place at all, which decides who
-/// owns the top-right anchor. See [`place_owns_the_anchor`]. `speed_unit` is the
-/// second, and [`SPEED_UNIT_WIDGET`] is why. `classes` is the third: what this
-/// title calls each rung of its Zone ladder, which is
-/// [`oag_title::HudArt::zone_speed_classes`] and `None` on a title whose ladder
-/// has not been read. `shield_percent` is the fourth -
-/// [`oag_title::HudArt::shield_percent`], a title fact rather than a layout one.
+/// arguments: whether *this layout* yields the top-right anchor to the place -
+/// see [`place_owns_the_anchor`]. `speed_unit` is the second, and
+/// [`SPEED_UNIT_WIDGET`] is why. `classes` is the third: what this title
+/// calls each rung of its Zone ladder
+/// ([`oag_title::HudArt::zone_speed_classes`], `None` unread). `shield_percent`
+/// is the fourth ([`oag_title::HudArt::shield_percent`]). `position_combined`
+/// is the fifth, `speed_unit`'s own pattern applied to `Position`: `true`
+/// when the layout authors no `Position Outof` companion - 2048's shape, one
+/// widget carrying the whole `8/8`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn text_for(
     label: &Label,
     readout: &Readout,
@@ -129,6 +116,7 @@ pub(super) fn text_for(
     speed_unit: bool,
     classes: Option<&oag_title::ZoneSpeedClasses>,
     shield_percent: bool,
+    position_combined: bool,
 ) -> Option<String> {
     // A literal in the XML wins for the widgets that have one: `LapOf`'s "/" is
     // the separator between lap and total, and it is authored rather than
@@ -148,7 +136,12 @@ pub(super) fn text_for(
         // (`talons-matched/{00,01,03}.png`) all read a bare number instead -
         // `100`, `100`, `98` - so [`oag_title::HudArt::shield_percent`] carries
         // which, and HD's executable truncates rather than rounds.
-        "ShieldBarText" => Some(match shield_percent {
+        //
+        // `EnergyText` is 2048's own name for the same widget, under the
+        // shield silhouette rather than beside a horizontal bar; every
+        // Vita3K frame with a shield reads a `%` there too, so no separate
+        // arm is needed - only the name differs.
+        "ShieldBarText" | "EnergyText" => Some(match shield_percent {
             true => format!("{:.0}%", readout.shield_fraction() * 100.0),
             false => super::runtime::shield_digits(readout),
         }),
@@ -183,7 +176,14 @@ pub(super) fn text_for(
         "PositionTxt2" => None,
         "Lap" => (readout.lap > 0).then(|| readout.lap.to_string()),
         "Lap Outof" => (readout.laps > 0).then(|| readout.laps.to_string()),
-        "Position" => (readout.place > 0).then(|| readout.place.to_string()),
+        // 2048's own name and own shape: one widget for the whole `1/3`
+        // rather than Pulse/HD's `Lap`/`LapOf`/`Lap Outof` triple. See
+        // [`super::dialect_2048::laps_text`].
+        "Laps" => super::dialect_2048::laps_text(readout),
+        // `position_combined` tells 2048's one-widget `8/8` apart from
+        // Pulse/HD's split `Position`/`PositionOf`/`Position Outof` - see
+        // [`super::dialect_2048::position_text`].
+        "Position" => super::dialect_2048::position_text(readout, position_combined),
         // Both halves of the place are gated on the *place*, not on the field
         // size. The field size is known from the moment a race is set up, so
         // gating this half on `ships` alone drew the caption and a bare `8` with
@@ -194,18 +194,21 @@ pub(super) fn text_for(
         }
         // Running clocks: tenths. See [`Precision`].
         "CurrentTime" => Some(format_lap_time(readout.lap_ticks, Precision::Tenths)),
-        // The total time and its caption yield the top-right anchor to the place.
-        // See [`place_owns_the_anchor`].
+        // The total time and its caption yield the top-right anchor to the
+        // place only when the two actually coincide - see
+        // [`place_owns_the_anchor`], `false` throughout on 2048.
         "TotalTime" => {
             (!place_shown).then(|| format_lap_time(readout.race_ticks, Precision::Tenths))
         }
         "TotalTimeTxt" => (!place_shown).then(|| caption(label, strings)).flatten(),
-        // The one caption gated on its own value, because the widget beside it is a
-        // *different group's* caption rather than blank space: a `POS` with nothing
-        // under it, three pixels from a `TOTAL` with a time under it, reads as a
-        // rendering fault. The reachable case is a single race on a track with no
-        // authored `Start Position`, which grids one craft and so has no place.
-        "PositionTxt" => place_shown.then(|| caption(label, strings)).flatten(),
+        // **Its own value, not `place_shown`**, which now answers "does the
+        // place win a *shared* anchor" - a question about `TotalTime`, not
+        // about whether `POS` itself has anything to show. A `POS` with
+        // nothing under it reads as a rendering fault; the reachable empty
+        // case is a single race on a track with no authored `Start Position`.
+        "PositionTxt" => (readout.place > 0)
+            .then(|| caption(label, strings))
+            .flatten(),
         // A time that has been set: hundredths. With none set the original shows
         // zeros rather than a dash placeholder - `best 0.00.00` on the reference
         // frame - so an absent best formats as zero rather than as its own string.
@@ -453,8 +456,32 @@ pub(super) fn caption(label: &Label, strings: &oag_ui::language::StringTable) ->
 /// The choice is per *layout*, not per readout: `Elimination_HUD.xml` has a
 /// `TotalTime` and no `Position`, so a race with a field still shows its clock
 /// there - which is why this asks the layout and not only the readout.
+///
+/// **Checks the coincidence itself, not merely that both widgets exist.**
+/// 2048's `Arcade_HUD.xml` authors `TotalTime` at `(145, 70)` and `Position`
+/// at `(945, 30)` - nowhere near each other - and a Vita3K frame of the
+/// running original (`11-load-8.png`, `docs/formats/2048-hud.md`) shows
+/// `TOTAL 0.29.76` and `POS 8/8` **at once**. The presence-only version read
+/// this as Pulse's own coincident-anchor rule and hid `TotalTime` on every
+/// 2048 race with a field, which no frame shows. `PositionTxt`'s own
+/// visibility is [`readout.place`] alone, not this function - see its arm in
+/// [`text_for`].
 pub(super) fn place_owns_the_anchor(layout: &Layout, readout: &Readout) -> bool {
-    readout.place > 0 && layout.label("Position").is_some()
+    let Some(position) = layout.label("Position") else {
+        return false;
+    };
+    let Some(total_time) = layout.label("TotalTime") else {
+        return false;
+    };
+    /// A few authoring pixels of slack for float aggregation across nested
+    /// `<Item>` offsets - the two anchors this function looks for are either
+    /// authored identically (Pulse/HD) or nowhere near each other (2048), so
+    /// this is not a tolerance doing real work, just insurance against
+    /// `f32` rounding in the composed sum.
+    const ANCHOR_EPSILON: f32 = 0.5;
+    readout.place > 0
+        && (position.x - total_time.x).abs() < ANCHOR_EPSILON
+        && (position.y - total_time.y).abs() < ANCHOR_EPSILON
 }
 
 /// The widget that draws the speed's unit when the layout has one of its own.
@@ -516,7 +543,7 @@ pub(super) fn pickup_sprites(
     art: &oag_title::HudArt,
 ) -> Vec<Sprite> {
     if let Some(uv_table) = art.pickup_icon_uv {
-        return pickup_sprites_uv_rewrite(layout, weapon, uv_table);
+        return super::dialect_2048::pickup_sprites_uv_rewrite(layout, weapon, uv_table);
     }
     let icon = pickup_icon_name(weapon);
     let backdrop = (!art.always_on.contains(&PICKUP_BACKGROUND)).then_some(PICKUP_BACKGROUND);
@@ -553,64 +580,6 @@ pub(super) fn pickup_sprites(
             sprite
         })
         .collect()
-}
-
-/// The name of 2048's one pickup-icon widget, rewritten per weapon rather
-/// than selected by name. See [`oag_title::HudArt::pickup_icon_uv`].
-pub(super) const PICKUP_ICON_2048: &str = "PickupIcon";
-
-/// The backdrop the held pickup's icon sits inside, on 2048's dialect.
-///
-/// Not [`PICKUP_BACKGROUND`]: `HUD_pickups.xml`'s `PickupBackground` authors
-/// no `<Values>` at all on this title (see `oag_2048::hud::ART`'s own doc
-/// comment), and the visible arc round the icon is a different, separately
-/// named widget instead.
-pub(super) const PICKUP_BG_FRAME_2048: &str = "PickupBgFrame";
-
-/// [`pickup_sprites`]'s branch for 2048's dialect: one `PickupIcon` widget,
-/// UV rewritten per weapon from `art.pickup_icon_uv`, drawn centred inside
-/// [`PICKUP_BG_FRAME_2048`]'s own authored rect.
-///
-/// **The held state only.** The frames show the icon at a *second*,
-/// top-centre position once, with a caption, the instant a pickup is
-/// granted (`docs/formats/2048-hud.md`'s "The pickup slot") - that
-/// announcement has no state to key off yet (`Readout` carries no
-/// time-since-grant), so this draws only the steady held state, which is
-/// what a race shows the rest of the time a pickup is carried.
-///
-/// **The destination rect is measured, not decompiled.** `Hud_UpdatePickupIcon`
-/// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`) never
-/// writes `PickupIcon`'s own `x`/`y`, only its UV; the held icon's on-screen
-/// position was found by scanning a captured frame's pixels for the icon's own
-/// tint and matches "native 85x86 size, centred inside `PickupBgFrame`'s own
-/// authored rect" to within 2-3 px on every edge - confidence 80, one frame,
-/// one weapon.
-fn pickup_sprites_uv_rewrite(
-    layout: &Layout,
-    weapon: oag_tables::weapons::Weapon,
-    uv_table: [Option<[u16; 4]>; 14],
-) -> Vec<Sprite> {
-    let frame = layout.sprite(PICKUP_BG_FRAME_2048);
-
-    let mut sprites = Vec::new();
-    // The backdrop draws whenever a weapon is held, whether or not this title
-    // has an icon for it - the same "backdrop alone, rather than nothing or a
-    // panic" rule `pickup_sprites`' Pulse/HD branch already keeps for a name
-    // the layout does not author.
-    if let Some(frame) = frame {
-        sprites.push(frame.clone());
-    }
-
-    if let (Some(uv), Some(icon)) = (uv_table[weapon as usize], layout.sprite(PICKUP_ICON_2048)) {
-        let mut icon = icon.clone();
-        icon.uv = uv.map(f32::from);
-        if let Some(frame) = frame {
-            icon.rect[0] = frame.rect[0] + (frame.rect[2] - icon.rect[2]) * 0.5;
-            icon.rect[1] = frame.rect[1] + (frame.rect[3] - icon.rect[3]) * 0.5;
-        }
-        sprites.push(icon);
-    }
-    sprites
 }
 
 /// [`pickup_sprites`]'s counterpart for Pure's dialect: the held pickup's
@@ -824,7 +793,12 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             continue;
         }
         drawn_once.push(sprite.name.as_str());
-        let tinted = super::runtime::tinted(cx, readout, sprite);
+        // `EnergyBg`'s critical-threshold tint, 2048 only - see
+        // `dialect_2048::energy_bg_tint`. Tried after HD's own runtime
+        // mechanism so a title with both never has one silently mask the
+        // other; only one of the two ever answers `Some` for a given name.
+        let tinted = super::runtime::tinted(cx, readout, sprite)
+            .or_else(|| super::dialect_2048::energy_bg_tint(sprite, readout));
         let fill = super::runtime::shield_fill(cx, readout, sprite);
         let sprite = tinted.as_ref().unwrap_or(sprite);
         // `ShieldBar`'s absorb flash, painted *under* the bar - see
@@ -845,13 +819,13 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 }
                 sprite_draw(&cropped, cx.sheet)
             }
-            // `EnergyBar` alone, so far - see [`vertical_bar_fraction`]. Drawn
-            // in its authored colour (green at half alpha): the frames show a
-            // white fill and a red post-hit flash the runtime is not known to
-            // produce from this same widget, so this crops without tinting
-            // rather than guessing a colour from memory. See
-            // `oag_2048::hud::ALWAYS_ON`'s doc comment for the gap.
-            None => match vertical_bar_fraction(&sprite.name, readout) {
+            // `EnergyBar`/`EnergyBarDelay`, 2048 only - see
+            // `dialect_2048::vertical_bar_fraction`. Both crop without
+            // tinting: the frames show `EnergyBar` live as white rather than
+            // its authored green-at-half-alpha, and nothing decompiled here
+            // writes a colour onto either widget, so that gap stays open -
+            // see `oag_2048::hud::ALWAYS_ON`'s doc comment.
+            None => match super::dialect_2048::vertical_bar_fraction(&sprite.name, readout) {
                 Some(fraction) if fraction <= 0.0 => None,
                 Some(fraction) => sprite_draw(&crop_vertically(sprite, fraction), cx.sheet),
                 None => sprite_draw(sprite, cx.sheet),
@@ -905,6 +879,10 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     let place_shown = place_owns_the_anchor(cx.layout, readout);
     // Likewise a fact about the layout rather than about one widget.
     let speed_unit = cx.layout.label(SPEED_UNIT_WIDGET).is_none();
+    // `speed_unit`'s own pattern: `Position` carries the whole `8/8` only
+    // where the layout authors no separate `Position Outof` to put the field
+    // size in - see `text_for`'s own doc comment.
+    let position_combined = cx.layout.label("Position Outof").is_none();
 
     for label in &cx.layout.labels {
         if !is_screen_positioned(&label.name) {
@@ -918,6 +896,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             speed_unit,
             cx.art.zone_speed_classes,
             cx.art.shield_percent,
+            position_combined,
         ) else {
             continue;
         };
