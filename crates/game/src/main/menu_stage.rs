@@ -524,6 +524,12 @@ impl MenuStage {
             let mut ticker_draw: Option<Draw> = None;
             // Wipeout HD/Fury draws a completely different screen behind the
             // same two names - see `oag_ui::campaign::hd`'s own module doc.
+            // `default_measure` is the footer legend's own fit-to-gap
+            // measurement, shared by all three HD screens below - see
+            // `docs/ui/campaign-screens.md`'s "`--menu-page` stills match a
+            // real screen state..." section for why all three, not just
+            // `Cell`, draw it now.
+            let default_measure = |text: &str| font::measure(&self.default_atlas, text);
             let layers = if campaign.is_hd() {
                 match &campaign.screen {
                     // **HD only** - `Campaign Selection` ahead of `Grid
@@ -537,14 +543,6 @@ impl MenuStage {
                         match campaign.selection_layout() {
                             Some(layout) => {
                                 let (fury_gold, hd_gold) = campaign.campaign_gold_medals();
-                                // The footer legend - see
-                                // `oag_ui::campaign::hd::hd_cell_draw_list`'s
-                                // own doc; this screen's own frame
-                                // (`rpcs3-campaign-selection/01-right-tap.png`)
-                                // shows the identical row. No ticker, same
-                                // reason the `Cell` arm below has none.
-                                let default_measure =
-                                    |text: &str| font::measure(&self.default_atlas, text);
                                 let footer_overlay =
                                     campaign.nav_legend_draw(&layout.faces, &default_measure);
                                 oag_ui::campaign::selection::draw_list(
@@ -565,11 +563,6 @@ impl MenuStage {
                         }
                     }
                     crate::campaign_stage::Screen::Grid(model) => {
-                        // The footer legend - see the `Selection` arm above,
-                        // whose own RPCS3 evidence is `Grid Selection
-                        // Fury`'s frame (`rpcs3-grid0-3-2/00-default.png`),
-                        // showing the same row plus `CHANGE DIFFICULTY`.
-                        let default_measure = |text: &str| font::measure(&self.default_atlas, text);
                         let footer_overlay = campaign
                             .nav_legend_draw(&campaign.grid_layout().faces, &default_measure);
                         oag_ui::campaign::hd::hd_grid_draw_list(
@@ -601,13 +594,10 @@ impl MenuStage {
                                     },
                                 )
                             });
-                        // The footer legend - see `oag_ui::campaign::hd::
-                        // hd_cell_draw_list`'s own doc. No ticker on this
-                        // branch: HD's shared `Skin.xml` authors no
-                        // `TextInfoIsAlwaysLast` viewport at all, so
-                        // `campaign.ticker_draw` is always `None` here and
-                        // there is nothing for it to add.
-                        let default_measure = |text: &str| font::measure(&self.default_atlas, text);
+                        // No ticker on any of the three HD screens: HD's
+                        // shared `Skin.xml` authors no `TextInfoIsAlwaysLast`
+                        // viewport at all, so `campaign.ticker_draw` is
+                        // always `None` here and there is nothing to add.
                         let footer_overlay = campaign
                             .nav_legend_draw(&campaign.cell_layout().faces, &default_measure);
                         oag_ui::campaign::hd::hd_cell_draw_list(
