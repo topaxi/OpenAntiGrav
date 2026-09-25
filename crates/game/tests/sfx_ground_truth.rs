@@ -793,7 +793,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
 ///
 /// `~SHIELD` is driven by a *level* rather than by an edge - the audio layer
 /// reads `Race::shield_is_up` - so it is the one held voice with no queue entry
-/// to inspect, and the only way to see it is to watch the pool.
+/// to inspect, and the only way to see it is to watch the pool. The
+/// Autopilot's own pair (`~AUTOPILOT`/`autopilot_eng`) is the same shape,
+/// off `Race::autopilot_is_active` - its own test is in
+/// `sfx_weapon_ground_truth.rs`, moved there under the 1,000-line rule.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
@@ -891,86 +894,6 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
 /// already proves for the shield: `Cue::Autopilot` is a level
 /// (`Race::autopilot_is_active`), not a queued edge, so watching the pool is
 /// the only way to see it open and close on the right tick.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
-    let Some(path) = image("pulse-psp-usa.chd") else {
-        return;
-    };
-    let loaded = race::load(&race::Options {
-        source: path.display().to_string(),
-        ..race::Options::default()
-    })
-    .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
-        Some(std::path::PathBuf::from("/dev/null")),
-        None,
-        oag_audio::MIN_BUFFER,
-        false,
-    );
-    let voices =
-        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
-
-    // Settle first, so the engine's own voice is already open and the counts
-    // below are differences rather than absolutes.
-    for _ in 0..60 {
-        race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
-        audio.tick();
-    }
-    let idle = voices(&audio);
-    assert!(idle >= 1, "the engine never opened");
-
-    // Set directly, the same reason `shield_pickup_timer` is above: this is
-    // the field `Race::autopilot_is_active` reads, and granting a real
-    // pickup would be testing the pad table instead. Long enough to clear
-    // both the `autopilot_eng` one-shot below and the wait for it to end.
-    race.sim.world.ships[0].autopilot_timer = 10.0;
-    race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
-    assert!(
-        voices(&audio) > idle,
-        "the autopilot activated and opened no voice"
-    );
-
-    // Held across ticks rather than re-triggered - `~AUTOPILOT` is held, but
-    // the same tick also fires `autopilot_eng`, a one-shot, so the pool is
-    // walked until that has ended and only the loop is left over idle.
-    let held = voices(&audio);
-    let mut settled = None;
-    for tick in 0..180 {
-        race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
-        audio.tick();
-        assert!(
-            voices(&audio) <= held,
-            "the autopilot loop is being re-triggered every tick"
-        );
-        if voices(&audio) == idle + 1 {
-            settled = Some(tick);
-            break;
-        }
-    }
-    let settled =
-        settled.expect("the autopilot's one-shot line never ended, or the loop is not one voice");
-    println!("autopilot held with only its loop open after {settled} ticks");
-
-    // Expiry, not the one-second `disengaging` warning: `Autopilot_Update`'s
-    // own `<= 0.0f` arm is where the held handle is released, per
-    // `autopilot.md`'s "`Autopilot_Update` counts it down" section - the
-    // warning fires a tick earlier and changes nothing about the loop.
-    race.sim.world.ships[0].autopilot_timer = 0.0;
-    race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
-    assert_eq!(
-        voices(&audio),
-        idle,
-        "the autopilot expired and its voice kept sounding"
-    );
-}
-
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_loaded_race_reports_what_its_banks_did() {
