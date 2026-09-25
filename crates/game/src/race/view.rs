@@ -262,6 +262,13 @@ pub struct RaceView {
     /// The LeachBeam ribbon's own generator, deliberately **not** `world.rng` -
     /// see [`Self::exhaust_rng`].
     pub(super) leach_beam_rng: Rng,
+    /// Wipeout HD's own LeachBall drain-trip accumulator - render-side state
+    /// for [`oag_render::beam::hd_ball`], which [`oag_gameplay::World`]
+    /// deliberately does not carry for the same reason
+    /// [`Self::leach_beam_ribbon`] does not. Reset to `0.0` whenever no beam
+    /// is locked, the same way [`Self::leach_beam_ribbon`] is torn down -
+    /// see [`weapons::visuals::advance_leach_beam_ribbon`].
+    pub(super) leach_ball_elapsed: f32,
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and

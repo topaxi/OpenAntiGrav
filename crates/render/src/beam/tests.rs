@@ -283,3 +283,62 @@ fn a_beam_fired_along_the_shooters_own_axes_still_builds_finite_geometry() {
         assert!(vertices.iter().flat_map(|v| v.position).all(f32::is_finite));
     }
 }
+
+mod hd_ball {
+    use oag_core::math::Vec3;
+
+    use crate::beam::hd_ball::{
+        PERIOD_MAX_LENGTH, PERIOD_MAX_SECONDS, PERIOD_MIN_LENGTH, PERIOD_MIN_SECONDS, advance,
+        period, position,
+    };
+
+    const DT: f32 = 1.0 / 60.0;
+
+    #[test]
+    fn period_is_clamped_at_both_ends_of_the_recovered_range() {
+        assert_eq!(period(0.0), PERIOD_MIN_SECONDS);
+        assert_eq!(period(PERIOD_MIN_LENGTH), PERIOD_MIN_SECONDS);
+        assert_eq!(period(PERIOD_MAX_LENGTH), PERIOD_MAX_SECONDS);
+        assert_eq!(period(10_000.0), PERIOD_MAX_SECONDS);
+        // Halfway between the two lengths is halfway between the two
+        // periods - the remap is linear, not eased.
+        let midpoint = (PERIOD_MIN_LENGTH + PERIOD_MAX_LENGTH) / 2.0;
+        let expected = (PERIOD_MIN_SECONDS + PERIOD_MAX_SECONDS) / 2.0;
+        assert!((period(midpoint) - expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_negative_length_reads_the_same_as_its_magnitude() {
+        // `LeachBall_Advance` takes `ABS(param_4[4])` before the clamp.
+        assert_eq!(period(-50.0), period(50.0));
+    }
+
+    #[test]
+    fn advance_wraps_exactly_once_a_period_and_resets_the_remainder() {
+        let mut elapsed = 0.0;
+        let length = PERIOD_MIN_LENGTH; // period == PERIOD_MIN_SECONDS == 0.3s
+        let ticks_per_period = (PERIOD_MIN_SECONDS / DT).round() as u32;
+        let mut wraps = 0;
+        for tick in 0..ticks_per_period * 3 {
+            if advance(&mut elapsed, DT, length) {
+                wraps += 1;
+                // The remainder never grows past one tick's worth of
+                // overshoot - the wrap subtracts a whole period, not
+                // resetting to zero.
+                assert!(elapsed < DT + 1e-6, "tick {tick}: elapsed {elapsed}");
+            }
+        }
+        assert_eq!(wraps, 3);
+    }
+
+    #[test]
+    fn position_reaches_the_owner_only_at_the_wrap_and_the_target_at_the_start() {
+        let owner = Vec3::new(10.0, 0.0, 0.0);
+        let target = Vec3::ZERO;
+        let length = (owner - target).length();
+        assert_eq!(position(0.0, length, owner, target), target);
+        assert_eq!(position(period(length), length, owner, target), owner);
+        let halfway = position(period(length) / 2.0, length, owner, target);
+        assert!((halfway - (owner + target) / 2.0).length() < 1e-4);
+    }
+}

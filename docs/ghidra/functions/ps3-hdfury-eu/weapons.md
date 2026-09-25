@@ -433,3 +433,170 @@ have no string in the executable, so nothing in the code names them. None
 of the three spawners above had a caller found by `bl` or `get_xrefs_to`,
 so they are reached through a function pointer. Their triggers are **not
 recovered**, and that is why nothing here is wired.
+
+## 2026-09-25: the LeachBall's period, its trigger search, and the ball wired
+
+Picking up the "LeachBeam next" item this page's own 2026-09-23 section left
+open: find `LAUNCH`/`HIT_TARGET`/`BREAK`'s callers, read `LeachBall_Advance`'s
+period and placement, and wire what is recovered. Read headless against
+`EBOOT.elf`, TOC `0x008ad4d8` throughout.
+
+### The three spawners' trigger search, extended and still empty
+
+The 2026-09-23 pass found no `bl`/`get_xrefs_to` caller and hypothesised a
+function-pointer table. This pass tested that hypothesis three ways rather
+than leaving it a hypothesis:
+
+1. **The OPD block at `0x00875a60` is not a vtable.** It is the
+   `LeachBeam.cpp` translation unit's own `.opd` section, laid out in the same
+   order as the functions themselves (`LeachBall_LoadModel`,
+   `LeachBeam_SpawnBreakEffect`, `LeachBeam_SpawnHitTargetEffect`,
+   `LeachBeam_SpawnLaunchEffect`, `LeachBall_Advance`, ...) - confirmed by
+   decompiling the neighbours: `_opd_FUN_001145b0` (the OPD slot right before
+   `SpawnBreakEffect`) calls `LeachBall_LoadModel` **directly, four times**,
+   which a vtable slot never would. `get_xrefs_to` on each spawner's own OPD
+   *entry address* (`0x00875a78`/`80`/`90`, not the function) returns nothing
+   either.
+2. **The one real vtable this class installs doesn't reach them.**
+   `LeachBeam_Construct` (and four sibling constructor-shaped functions -
+   `0x001540c8`/`0x001541b0`/`0x00154288`/`0x00153e98` - the usual GCC
+   duplication this directory already documents) all install the same
+   vtable, `0x00864af8`. Its 14 slots were read directly
+   (`inspect_memory_content`): all resolve to the generic render-node OPD
+   family (`0x00323510`-`0x00323550`, `0x00327040`-`0x00327228`) this
+   directory already reads as ordinary scene-node plumbing (see cannon.md's
+   `0x00327500`/plasma.md's `0x00327050`), none to a LeachBeam-specific
+   function. This vtable is the beam's own generic node interface, not the
+   dispatch for its three effects.
+3. **No literal 4-byte reference to any of the three spawners' OPD addresses
+   exists anywhere in the file**, checked two ways: `search_byte_patterns`
+   over the whole program (validated first against a byte pattern **known**
+   to exist - `00 88 5A 80`, a slot of the vtable above, which returned 259
+   hits - so the tool itself is not the reason for a negative), and a raw
+   `python3` scan of `EBOOT.elf` on disk for the big-endian words
+   `0x00875a78`/`80`/`90`/`98`/`a0` (the three spawners' and
+   `LeachBall_Advance`'s own OPD entries), independent of Ghidra's memory
+   map. Zero occurrences of all five, where the control (`0x00864af8`) found
+   its one known occurrence. A `search_instructions` sweep for
+   `ori rX,rX,0x424c` (the low halfword every LeachBeam fourcc shares, since
+   all four end `..424c`) finds exactly the four spawns already known
+   (`SpawnBreakEffect`, `SpawnHitTargetEffect`, `SpawnLaunchEffect`, and the
+   inlined `ABSORB` copy in `LeachBall_Advance` - see below) and nothing
+   else, so none of the three is inlined a second time elsewhere either.
+
+**Conclusion: `LAUNCH`/`HIT_TARGET`/`BREAK` have no discoverable caller in
+this retail build**, the same shape `WO_CANNON_MUZZLEFLASH`/`_HOTSPOT`
+already have on cannon.md at confidence 80. Confidence **78** here (one
+notch under Cannon's, since Cannon's page adds a `.pob`-corpus grep this
+pass did not repeat) that the retail `EBOOT.elf` never plays these three.
+They stay unwired.
+
+### `LeachBall_Advance`'s inlined `ABSORB` is the live path
+
+`LeachBeam_SpawnAbsorbEffect` (`0x00114a00`, confidence 82 - same shape as
+its three named siblings: `_opd_FUN_002c9108(node, texture_slot, 0x4541424c,
+matrix + 0x1d0, 1, 0)`, matching `WO_LEACHBEAM_ABSORB`'s own file name on
+disc, `/data/psys/wo_leachbeam_absorb.pob`) exists **standalone and
+uncalled** - `get_xrefs_to` finds only its own `[DATA]` OPD self-reference,
+same as the other three. But `LeachBall_Advance` (`0x00114c78`) carries an
+**identical, inlined copy of the same body** at its own wrap point (same
+`0x180`-byte allocation, same `-0x3860` texture slot, same fourcc, same
+`+0x1d0` offset), executed directly, every time the accumulator wraps. So
+the retail EBOOT does play `WO_LEACHBEAM_ABSORB` - through the inlined copy,
+not the named function - once per drain trip, for as long as the beam holds.
+`LeachBeam_SpawnAbsorbEffect` itself is dead code (GCC's usual habit of
+generating both the shared helper and an inlined callsite; see this page's
+"Not named" section for the same pattern elsewhere in this file), but its
+existence is what let this pass name and rate the inlined copy's own
+mechanics with confidence.
+
+### The drain-trip period, read off `LeachBall_Advance`'s own constants
+
+`LeachBall_Advance` remaps `|param_4[4]|`, clamped to `[20.0, 100.0]`
+(`_DAT_008a9c88`/`DAT_008a9c8c`, read directly), linearly onto
+`[0.3, 1.0]` seconds (`_DAT_008a9c80`/`DAT_008a9c90`, read directly) through
+`_opd_FUN_002a3718` - a remap-with-clamp call, the same shape this directory
+already reads elsewhere. Confidence **85** for the arithmetic (a direct
+decompile plus a direct memory read of all four constants).
+
+**What `param_4[4]` itself is is not confirmed.** `param_4` is the strip
+object `LeachBeam_Construct` builds (`_opd_FUN_00115770`, at beam `+0x50`
+and `+0x6420`); `_opd_FUN_00116308` (the fraction-to-point lookup, below)
+reads `param_4[5]` as the strip's own point count and `param_4[0x1778..]`
+as its cumulative arc lengths, so `param_4[4]` is field `strip+0x10` -
+plausibly the strip's own total length (the beam's length, in effect,
+since the strip runs shooter to target), but nothing pins what writes it.
+**Chosen, not measured**: this build reads `param_4[4]` as the straight-line
+beam length (`|target - owner|`), which gives the sensible "short beam
+drains fast, long beam drains slow" shape the constants themselves suggest,
+but the strip could in principle hold something else.
+
+### The ball's own placement, read and not fully resolved
+
+At each wrap, `LeachBall_Advance` calls `_opd_FUN_00116308(fraction, strip)`
+for a point along the strip's own chain (not a straight line - it walks the
+strip's per-point cumulative-length table and interpolates between the two
+points bracketing the fraction, `_opd_FUN_002a3bf0`), then
+`_opd_FUN_001141d8` places the ball's model node with it through the same
+generic per-tick placement call `0x00327500` cannon.md's `Draw` and this
+page's own generic-vtable slots already use, gated on the model node's flag
+bit `2`. Confidence 70 for `_opd_FUN_001141d8`'s role (a direct decompile,
+heavily AltiVec-shuffled, of what reads as "orthonormalise/place a matrix
+onto the node"); left unrenamed per the confidence rubric rather than
+carrying a guess about exactly what beyond placement it might also do.
+
+**Which end of the strip is fraction `0` is not resolved.**
+`_opd_FUN_00116308` flips its own fraction (`dVar11 = dVar9 - dVar11`) when
+`param_2[2] == *param_2` - a condition this pass did not chase to a
+concrete craft identity. This engine's own implementation
+(`oag_render::beam::hd_ball::position`) picks target-at-`0`,
+owner-at-`1` (the wrap = arrival at the shooter) by analogy with Pulse's own
+`WO_LEACHBEAM_ENERGY`, which the ribbon's `Ribbon::energy_point` already
+recovers as arriving at the shooter the same way - not itself a measurement
+of `_opd_FUN_00116308`'s own flip condition. **Chosen, not measured**, and
+recorded as such in `hd_ball::position`'s own doc comment.
+
+### What the engine now does with this
+
+`oag_render::beam::hd_ball` (`crates/render/src/beam.rs`) carries the period
+law and the chosen straight-line placement law above, and
+`Race::advance_leach_beam_ribbon` (`crates/game/src/race/weapons/visuals.rs`)
+drives a render-side accumulator (`RaceView::leach_ball_elapsed`) off it
+alongside Pulse's ribbon, firing `WO_LEACHBEAM_ABSORB` as a one-shot burst
+(`stage.play`, not attach-and-follow - the original allocates a fresh
+instance at every wrap rather than reusing one) at the wrap point. Verified
+present on the HD disc: `/data/psys/wo_leachbeam_absorb.pob` (`DATA02`,
+`scripts/psarc.py list`).
+
+**The ball's own model (`hd_leachbeam_ball_bloomring.vex`) is not drawn.**
+Two independent reasons, either alone sufficient: (1) `race/scene.rs` and
+`race/load.rs` both sit at `scripts/check-file-size.py`'s 1,000-line
+ceiling with zero headroom for a new drawable pool - folding this weapon
+into the unrelated `blast_models::PlasmaBlastModels`/`PlasmaBlastDrawables`
+container the way Plasma's own bolt head already does (see that module's
+own doc comment) was considered and rejected: it already bends that
+container's name once for the Plasma bolt, and bending it a second time for
+an unrelated weapon reads as compounding the workaround rather than reusing
+it. (2) Even if wired, the model may hit the same wall `HD_plasma_ball` did
+(`blast_models.rs`'s own `HD_PLASMA_BALL_DRAWN` doc comment): this engine's
+`mesh::rcs` pipeline has no additive/glow shader path, only the opaque
+`TRANSPARENT_BLEND` one every other weapon body draws through, and this
+ball shares its material (`hd_leachbeam_ball_glow`/`hd_leachbeam_bloomring`)
+with the Missile head's own glow material (see this page's 2026-09-23
+Missile section) - not confirmed identical to Plasma's own material family,
+so not confirmed to hit the same black-shard failure, but not ruled out
+either. Neither reason was tested against a live capture this pass, because
+(1) already blocks wiring the draw at all.
+
+### A related finding: `WO_LEACHBEAM_ENERGY` has no string in this EBOOT
+
+`strings -a EBOOT.elf | grep -i LEACHBEAM_ENERGY` returns nothing, though
+the asset ships (`/data/psys/wo_leachbeam_energy.pob`, `DATA02`). This
+engine's own `Race::advance_leach_beam_ribbon` currently plays
+`LEACHBEAM_ENERGY_EFFECT` (Pulse's own recovered trigger) unconditionally
+on every title, HD included - so on HD this build likely fires an effect
+the retail executable's own code never names, alongside the ball/`ABSORB`
+wiring landing here. Not fixed this pass (out of this lane's own scope -
+gating the whole ribbon-and-energy mechanism to Pulse/PS2 and drawing HD's
+own ball+`ABSORB` instead is a larger, separate change); recorded here so
+the next LeachBeam pass on HD does not have to re-derive it.
