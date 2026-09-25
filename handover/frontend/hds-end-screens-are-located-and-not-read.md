@@ -1,4 +1,4 @@
-# HD's end screens: read and drawn (Results/Menu); Rewards/Podium still open
+# HD's end screens: read and drawn (Results/Menu/Rewards); Podium still open
 
 2026-09-18: located, not read. **2026-09-21: `EndRace Results`/`EndRace Menu`
 read widget by widget and drawn.** Full write-up in
@@ -31,11 +31,19 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
 
 ## Open
 
-- **`EndRace Rewards` is read (present on `DATA02`-`05`) but not drawn.** Out
-  of this pass's own scope. HD draws its own loyalty total directly on
-  `Results` (a block Pulse has no equivalent for), which is not how Pulse's
-  Results->Rewards->Menu flow works at all - untangling the relationship
-  between that block and the separate `Rewards` screen is unresolved.
+- ~~`EndRace Rewards` is read but not drawn.~~ **2026-09-25: settled as
+  never entered by the original** (no redirect in any XML of any archive
+  names it; the EBOOT has no `EndRace Rewards` type string, no
+  `EndRaceRewards_Screen.cpp` and zero `reward` strings - confidence 85,
+  `docs/formats/hd-endrace-screens.md`). Drawn off its own widgets by
+  `oag_ui::endrace::hd::hd_rewards_draw_list`, reachable only by
+  `--menu-page endrace-rewards`; the live flow stays Results -> Menu.
+  **Still open under it**: `DFENGINE.SPRX` (encrypted) was not grepped; a
+  live RPCS3 end-of-race walk is what would lift 85. The loyalty row draws
+  nothing (HD's loyalty law is unrecovered), and so does the `Results`
+  loyalty block, which is where HD actually shows loyalty - recovering that
+  law from `EndRaceResults_Screen.cpp`'s code (strings at `0x7845b0`) is the
+  next useful step for either screen.
 - **`EndRace Podium` (`DATA05`/`DATA06` only) is inventoried, not modelled.**
   Its three `pod_head.{1,2,3}` widgets all carry the identical idstring
   `IG_HUD_1ST`, which reads as an authoring placeholder rather than something
@@ -69,6 +77,16 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   and every `Grid{col}.{row}` cell at `x="0" y="0"`, so this build divides
   the grid's own measured frame by `oag_gameplay::MAX_SHIPS` (eight) rather
   than ten. See `oag_ui::endrace::hd::row_y`'s own doc.
+
+## Next Steps
+
+1. Recover HD's loyalty law from `EndRaceResults_Screen.cpp`'s code (the
+   `loyalty1.1`/`loyalty1.2`/`loyalty2`/`ER_POINTS` strings at `0x7845b0` in
+   `EBOOT.elf`; use `scripts/ps3-toc.py` for xrefs). That fills the `Results`
+   loyalty block, the screen HD actually shows it on.
+2. A live RPCS3 walk to a finished race would confirm Results -> Race End
+   Save -> Menu with no Rewards in between, and settle which `skin.xml`/
+   `EndRace_Definition.xml` copy is served.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

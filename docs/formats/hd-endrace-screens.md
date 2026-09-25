@@ -1,7 +1,7 @@
 # Wipeout HD/Fury's own EndRace screens: `Results`, `Menu`, `Rewards`, `Podium`
 
 **Status: `DATA02`'s copy read widget by widget; `DATA03`/`DATA04`/`DATA05`/`DATA06`
-diffed against it.** `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` - a
+diffed against it. `Rewards` settled as never entered (2026-09-25).** `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` - a
 named plugin, plain UTF-8, **not** `oag_tables::fexml`-shortened, the same
 divergence [`hd-frontend.md`](hd-frontend.md) already records for
 `skin.xml`/`CellMode_Definition.xml` - in five of HD's seven archives, no two
@@ -106,21 +106,64 @@ idstrings (`ER_RACE_AGAIN`, `ER_RETURN_GRID`, etc.) are verbatim identical to
 Pulse's, which is the corroboration that this is shared engine vocabulary
 rather than a Pulse-only table.
 
-## `EndRace Rewards`: present, not drawn this pass
+## `EndRace Rewards`: authored, never entered
 
 `DATA02`/`03`/`04`/`05` all carry an `EndRace Rewards` screen; `DATA06` does
-not. Its shape is close kin to Pulse's own Rewards screen - `MedalImg`/
-`LoyaltyImg` icons, `RewardLine1` (`ER_MEDAL_AWARD`), `RewardLine2`/
-`RewardLoyaltyPoints`/`RewardLoyaltyActive` placeholder text, a `loyaltybar`
-`<Slider>` (`idstring="ER_TOT_LOY"`, `minSlide="0" maxSlide="100000"`, the
-same two bounds Pulse's own carries) - plus `BigPos` (a bare finishing-place
-figure Pulse's screen has no counterpart for). **Not read past this
-inventory, and not drawn**: this pass's own scope is Results and Menu: HD
-already draws its own loyalty total directly on the `Results` screen (the
-loyalty block above), which is not how Pulse's flow works at all, and
-untangling whether HD's `Rewards` screen is ever entered, and under what
-condition, versus `Results`' own loyalty block, is unresolved and out of
-scope here.
+not. **The original never enters it** - confidence 85, settled from the data
+and the executable's strings without a decompile (2026-09-25):
+
+1. **No redirect names it.** Every `goto=` in every `.xml` of all seven
+   archives (`DATA00`-`06`, extracted with `scripts/psarc.py extract ... .xml`)
+   was grepped for `EndRace Rewards`: zero hits. The only references are the
+   screen's own `<Screen name=...>` lines. HD's `EndRace Results` authors one
+   exit, `EndRaceMenuRedirect` -> `Race End Save`; `Race End Save`
+   (`ingame_definition.xml`, `SkipTarget="EndRace Menu"`) goes to `EndRace
+   Menu`. Rewards' own `EndRaceRewardsMenuRedirect` also goes to `Race End
+   Save` - an exit with no entrance.
+2. **The executable registers no screen class for it.** The decrypted
+   `EBOOT.elf` (`data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/`) has a type
+   string and a source file for each end screen it can build -
+   `EndRace Results`/`EndRaceResults_Screen.cpp`,
+   `EndRace Menu`/`EndRaceMenu_Screen.cpp`,
+   `EndRace Podium`/`EndRacePodium_Screen.cpp`,
+   `EndRace Photo`/`EndRacePhoto_Screen.cpp` - and **zero** strings matching
+   `reward` in any case, ASCII or UTF-16. None of the Rewards widget names
+   (`RewardLine1`, `BigPos`, `MedalImg`, `loyaltybar`) appear either, while
+   Results' own `loyalty1.1`/`loyalty1.2`/`loyalty2` sit in the
+   `EndRaceResults_Screen.cpp` string cluster (`0x7845b0`), beside
+   `ER_POINTS`. HD moved the loyalty readout onto `Results`; `ER_TOT_LOY` is
+   referenced from the `ShowUnlocks_Screen.cpp` cluster (`0x788e88`), not
+   from any end screen.
+3. **The redirects are data-driven.** Neither `EndRaceMenuRedirect` nor
+   `EndRaceRewardsMenuRedirect` is a string in the executable, so no code
+   picks between them by name.
+
+Not checked: `DFENGINE.SPRX` beside the EBOOT is SCE-encrypted and was not
+grepped. It would have to build the screen from a type string it holds
+itself, with no redirect naming the screen - which is why this is 85, not
+higher. A live RPCS3 end-of-race walk would settle it.
+
+Widgets, off `DATA02`'s copy (confidence 90, direct read):
+
+| Widget | Authored as | Drawn by this build |
+| --- | --- | --- |
+| (unnamed backdrop) | `<Image>`, `x="-288" y="-200" width="2496" height="1480" color="0xc0000000"` | yes |
+| (unnamed title) | `idstring="ER_REWARD"` (`"REWARDS"`), `font="Title"`, `x="480" y="240"` | yes |
+| three dividers | `<Image>`s at `y` 292/465/690, `width="960" height="4"`, white | yes |
+| `MedalImg` / `LoyaltyImg` | `<Image>`, `32x32` at `600,360` / `600,530`, `Color="0xff8AC0CA"`, **no `src`** | no - a src-less icon the original would assign at run time |
+| `BigPos` | `<Text>`, `string="1"`, `align="centre"`, `x="610" y="370"` - centred inside `MedalImg`'s square | the player's finishing place (chosen) |
+| `RewardLine1` | `idstring="ER_MEDAL_AWARD"` (`"MEDAL AWARDED:"`), `x="670" y="360"` | the medal tier on a campaign race (chosen) |
+| `RewardLine2` / `RewardLoyaltyPoints` / `RewardLoyaltyActive` | placeholders `"test"` / `"points!"` / `"line 2"` | no - HD's loyalty law is not recovered |
+| `loyaltybar` | `<Slider>`, `idstring="ER_TOT_LOY"`, `minSlide="0" maxSlide="100000"` | no - `oag_ui::screen` does not collect a `<Slider>` |
+| `ControlTextConfirmButton` / `ControlTextConfirm` | inside a `<NavigationController>` | no - that container is not walked, the same on Results and Menu |
+| `EndRaceCountDown` | `string=""` | no |
+
+`oag_game::endrace::load_hd` reads the layout when the served copy has it
+and leaves `EndRaceScreens::rewards` `None` otherwise, so `DATA06`'s copy
+still loads Results and Menu. The drawing rules, and which of them are
+chosen, are `oag_ui::endrace::hd::hd_rewards_draw_list`'s own doc; the
+picture half is [`docs/ui/endrace-screens.md`](../ui/endrace-screens.md)'s HD
+section.
 
 ## `EndRace Menu`: one `<Block>` per option, not a populated list
 
@@ -194,8 +237,8 @@ data were unambiguous - it is not.
   file). Pure/2048/Omega are `None` - not checked, not measured absent.
 - [`oag_game::endrace::load`](../../crates/game/src/endrace.rs) dispatches on
   `title.name` exactly the way `crate::campaign::load`/`load_hd` already
-  does, and its own `load_hd` reads `EndRace Results`/`EndRace Menu` only,
-  leaving `EndRaceScreens::rewards` `None` on this title.
+  does, and its own `load_hd` reads `EndRace Results`/`EndRace Menu`, plus
+  `EndRace Rewards` when the served copy authors it.
 - [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs) is the drawing
   half - what draws, what does not, and the exact chosen-vs-measured split
   for the row/column geometry this page's own tables leave open, in its own
