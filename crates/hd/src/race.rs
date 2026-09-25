@@ -494,9 +494,9 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     rocket: Some(r"Data\Weapons\hd_Rocket.vex"),
     mine: Some(r"Data\Weapons\HD_Mine.vex"),
     bomb: Some(r"Data\Weapons\HD_Bomb.vex"),
-    // Named `muzzleflash` on both titles that author a Cannon round model -
-    // see `oag_pulse::race::WEAPON_MODELS`'s own field for the same quirk on
-    // Pulse's file.
+    // **On HD the name is the truth**: a flash at the craft's `cannon_flash`
+    // locator for the round's first 0.1 s, not a body riding the round the
+    // way Pulse's same-named file is - see `CANNON_LOOK` below.
     cannon: Some(r"Data\Weapons\hd_muzzleflash.vex"),
     // `PlasmaManager_Update` places this every tick the bolt is live or
     // charging - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.

@@ -428,3 +428,12 @@
 0x000cef50	function	ShipAbsorbShell_Step	80	absorb-feedback.md
 0x000db990	function	ShipAbsorbShell_Update	65	absorb-feedback.md
 0x0010f730	function	Cannon_ApplyCraftHit	72	ship-collision-fx.md
+0x0010fbd0	function	CannonManager_FireRound	75	cannon.md
+0x0012fb60	function	CannonBullet_SetMuzzles	80	cannon.md
+0x00130b50	function	CannonBullet_GetMuzzleMatrix	80	cannon.md
+0x00130ef8	function	CannonBullet_Fire	75	cannon.md
+0x00131478	function	CannonBullet_Update	75	cannon.md
+0x001322c8	function	CannonBullet_Construct	85	cannon.md
+0x001329e8	function	CannonBullet_DrawQuads	80	cannon.md
+0x002d8ec0	function	ShipCannonFlash_AttachToShip	85	cannon.md
+0x002dae70	function	ShipMuzzle_AttachToShip	80	cannon.md

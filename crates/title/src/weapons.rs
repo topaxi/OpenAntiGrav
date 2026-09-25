@@ -56,9 +56,10 @@ pub struct WeaponModels {
     pub mine: Option<&'static str>,
     /// The Bomb's own body - the Mine's, one size up.
     pub bomb: Option<&'static str>,
-    /// The Cannon round's own body. Named `muzzleflash` on both titles that
-    /// author one, which is the file's own name and not a description - see
-    /// `oag_game::race::CANNON_MODEL_ENTRY`.
+    /// The Cannon's own model, named `muzzleflash` on both titles that author
+    /// one. On Pulse it is the round's body for its whole flight (see
+    /// `oag_game::race::CANNON_MODEL_ENTRY`); on Wipeout HD it is what the
+    /// name says, a flash at the muzzle - [`Self::cannon_look`] says which.
     pub cannon: Option<&'static str>,
     /// The Plasma bolt's own head, ridden from charge through flight.
     ///
