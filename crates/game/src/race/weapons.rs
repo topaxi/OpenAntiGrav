@@ -208,6 +208,15 @@ impl Race {
                         // No authored rocket, so nothing to put in the air.
                         return;
                     };
+                    // `ROCKET`, on the press itself - see `Cue::Rocket`'s own
+                    // doc comment for why this sits ahead of the spawn below:
+                    // `Ship_FireHeldWeapon`'s own switch plays it
+                    // unconditionally on a held-id-0 press, with no test of
+                    // whether the volley actually gets anywhere.
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                        crate::audio::sfx::Cue::Rocket,
+                        slot,
+                    ));
                     let ship = &self.sim.world.ships[slot];
                     // **Three, together, fanned by `<Rocket spread>`** - see
                     // `oag_gameplay::projectile::launch` and
@@ -453,7 +462,17 @@ impl Race {
                         // Plasma's arms follow for a missing table.
                         return;
                     };
-                    // **The busy check, first - matching `Weapon_FireQuake`'s
+                    // `QUAKELAUNCH`, on the press itself - see
+                    // `Cue::QuakeLaunch`'s own doc comment for why this sits
+                    // ahead of the busy check below: `Ship_FireHeldWeapon`'s
+                    // own switch plays it unconditionally on a held-id-2
+                    // press, with no test of whether a wave is already
+                    // travelling.
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                        crate::audio::sfx::Cue::QuakeLaunch,
+                        slot,
+                    ));
+                    // **The busy check - matching `Weapon_FireQuake`'s
                     // own `if (q->active != 0) return;`, which runs before
                     // the original ever clears the held slot.** Only one
                     // wave can be in flight in the whole race at once, so a

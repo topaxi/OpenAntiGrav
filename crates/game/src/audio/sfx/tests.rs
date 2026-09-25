@@ -160,13 +160,16 @@ fn every_cue_names_a_bank_and_a_string() {
     // as a single race-wide handle - see `TravelVoices`'s own doc comment.
     // `LeachAttach` is held once for the whole race, on
     // `SfxVoices::leach_attach`, since the LeachBeam is a world-wide single
-    // instance rather than a projectile slot.
+    // instance rather than a projectile slot. `Autopilot` joins `Blowup`'s
+    // shape: a level-driven handle at `SfxVoices::autopilot`, not a
+    // projectile slot.
     let held: Vec<Cue> = Cue::ALL.into_iter().filter(|c| c.held()).collect();
     assert_eq!(
         held,
         vec![
             Cue::Engine,
             Cue::Shield,
+            Cue::Autopilot,
             Cue::Blowup,
             Cue::PlasmaTravel,
             Cue::RocketTravel,
@@ -228,14 +231,18 @@ fn every_cue_states_where_it_is_heard_from() {
     // The point is that no cue is *unstated*. `Unplaced` is a legitimate answer
     // and it means "the call site has not been read", so it must be reached
     // deliberately rather than by a match arm nobody revisited.
-    // Four are `Unplaced` and each for its own reason: `ShieldActive`'s call
+    // Six are `Unplaced` and each for its own reason: `ShieldActive`'s call
     // site is recorded as a full-volume pan-zero play, and `Disengaging`'s is
     // *read* as the no-emitter path - both announcer lines. `Blowup` is the
     // player's own craft through the same no-emitter path, and `LockOn` is a
     // HUD sound about the player's own reticle, opened at `0x400` with no
-    // emitter argument at all.
-    const DRY: [Cue; 4] = [
+    // emitter argument at all. `Autopilot` and `Engaging` are the same
+    // no-emitter path's other two callers, both inside `Ship_FireHeldWeapon`'s
+    // case for held id 6.
+    const DRY: [Cue; 6] = [
         Cue::ShieldActive,
+        Cue::Autopilot,
+        Cue::Engaging,
         Cue::Disengaging,
         Cue::Blowup,
         Cue::LockOn,

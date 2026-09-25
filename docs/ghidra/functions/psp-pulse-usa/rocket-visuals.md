@@ -377,6 +377,15 @@ timeout branch resets the slot without writing an `Impact` at all, so the
 port's own impacts loop never sees a `struck: None` from that path - only
 from a real wall hit.
 
+**2026-09-25: `ROCKET` itself (the launch, not the travel loop) wired too.**
+This page's own text used to leave it "named only in passing" with no
+address; `Ship_FireHeldWeapon` (`0x08844ae8`), decompiled whole for the
+missile.md/autopilot.md conflict it settled, plays it - `Sound_Play(1.0,
+*(param_1+0x50), weapons.bnk, 0, "ROCKET", 0)`, positional, on a held-id-0
+press, local player only. See `autopilot.md`'s own "`Ship_FireHeldWeapon`
+opens both cues" section for the switch body and cross-checks; `Cue::Rocket`
+in `crates/game/src/audio/sfx/cue.rs`.
+
 ## Runtime verification
 
 Done with `scripts/psp-fire-weapon.py`, written for this page, against PPSSPP

@@ -94,12 +94,13 @@ fn render(sound: std::sync::Arc<oag_audio::Sound>) -> (f32, f32) {
 /// was read with `oag-wad sounds` and carries no `CANNON*`, `LEACH*` or
 /// `SHURIKEN*` entry of any kind; Pure's own weapon in their place is the
 /// Disruptor.
-const NOT_ON_PURE: [Cue; 7] = [
+const NOT_ON_PURE: [Cue; 8] = [
     Cue::Cannon,
     Cue::CannonHitWall,
     Cue::CannonHitShip,
     Cue::Leach,
     Cue::LeachAttach,
+    Cue::LeachEnergy,
     Cue::ShurikenHit,
     Cue::ShurikenTravel,
 ];
@@ -266,7 +267,11 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
     // the first five did, and `~ROCKLOCK` newly resolves because its
     // waveforms are all in the second codec and none decoded before. `~ENGINE`
     // is still the one miss - HD's ship audio is a per-event `c_*` set - see
-    // `oag_title::SoundBanks`.
+    // `oag_title::SoundBanks`. **`LEACHENERGY`, `~AUTOPILOT`, `autopilot_eng`,
+    // `ROCKET` and `QUAKELAUNCH` all joined the loaded set the same day this
+    // port wired them** (2026-09-25) - all five were already present in HD's
+    // own `weapons.bnk`/`speech.bnk`, this test just never asked for any of
+    // them until then.
     //
     // **This test is `#[ignore]`d, so `just` stayed green while it was stale.**
     // `disengaging` was added a commit earlier and this list was not updated
@@ -281,6 +286,8 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
             "ABSORB",
             "~SHIELD",
             "shieldactive",
+            "~AUTOPILOT",
+            "autopilot_eng",
             "disengaging",
             "~BLOWUP",
             "~ROCKLOCK",
@@ -289,6 +296,7 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
             "~PLASMATVL",
             "PLASMAHITWALL",
             "PLASMAHITSHIP",
+            "ROCKET",
             "~ROCKETTVL",
             "ROCKEXPLWALL",
             "ROCKEXPLSHIP",
@@ -298,9 +306,11 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
             "CANNON",
             "CANNONEXPLWALL",
             "CANNONEXPLSHIP",
+            "QUAKELAUNCH",
             "QUAKEHIT",
             "LEACH",
             "~LEACHATTACH",
+            "LEACHENERGY",
             "SHURIKENHIT",
             "~SHURIKENTRAVEL",
         ],
@@ -783,7 +793,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
 ///
 /// `~SHIELD` is driven by a *level* rather than by an edge - the audio layer
 /// reads `Race::shield_is_up` - so it is the one held voice with no queue entry
-/// to inspect, and the only way to see it is to watch the pool.
+/// to inspect, and the only way to see it is to watch the pool. The
+/// Autopilot's own pair (`~AUTOPILOT`/`autopilot_eng`) is the same shape,
+/// off `Race::autopilot_is_active` - its own test is in
+/// `sfx_weapon_ground_truth.rs`, moved there under the 1,000-line rule.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
@@ -876,6 +889,11 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     );
 }
 
+/// `~AUTOPILOT` and `autopilot_eng` through the whole path, the same shape
+/// [`the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires`]
+/// already proves for the shield: `Cue::Autopilot` is a level
+/// (`Race::autopilot_is_active`), not a queued edge, so watching the pool is
+/// the only way to see it open and close on the right tick.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_loaded_race_reports_what_its_banks_did() {

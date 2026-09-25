@@ -149,6 +149,13 @@ pub(super) struct SfxVoices {
     /// Whether this explosion has already been responded to, for the same
     /// reason [`Self::shield_open`] exists: the level must arm the voice once.
     blowup_open: bool,
+    /// `~AUTOPILOT`'s held voice, while the player's own Autopilot pickup is
+    /// active. See [`Cue::Autopilot`].
+    autopilot: Option<VoiceId>,
+    /// Whether this activation has already opened [`Self::autopilot`] (and,
+    /// on the same edge, played [`Cue::Engaging`]) - the same latch shape
+    /// [`Self::blowup_open`] carries, for the same reason.
+    autopilot_open: bool,
     /// The circuit's own ambience: one held voice per authored emitter that is
     /// currently in range. See [`TrackEmitters`].
     ambience: track::Ambience,
@@ -235,6 +242,8 @@ impl Audio {
                 shield_open: false,
                 blowup: None,
                 blowup_open: false,
+                autopilot: None,
+                autopilot_open: false,
                 ambience: track::Ambience::default(),
                 plasma_travel: TravelVoices::new(),
                 rocket_travel: TravelVoices::new(),
@@ -268,6 +277,7 @@ impl Audio {
         let running = !race.finished();
         let shielded = race.shield_is_up();
         let exploding = race.craft_is_exploding();
+        let autopilot_active = race.autopilot_is_active();
         self.output.with_mixer(|mixer| {
             for event in cues {
                 // A held cue is not a one-shot and must not be fired as one -
@@ -437,6 +447,41 @@ impl Audio {
                 (false, true) => {
                     voices.blowup_open = false;
                     if let Some(id) = voices.blowup.take() {
+                        mixer.stop(id);
+                    }
+                }
+                _ => {}
+            }
+
+            // The Autopilot, the same level-and-latch shape as the explosion
+            // above and for the same reason: `Ship_FireHeldWeapon`'s case 6
+            // opens a *handle* on `~AUTOPILOT`, so this is a voice's lifetime,
+            // and plays `autopilot_eng` once on the same rising edge - see
+            // [`Cue::Autopilot`] and [`Cue::Engaging`]. Both dry, like the
+            // explosion above.
+            match (autopilot_active, voices.autopilot_open) {
+                (true, false) => {
+                    voices.autopilot_open = true;
+                    if let Some((sound, looping)) = banks.pick(Cue::Autopilot, &mut voices.rng) {
+                        voices.autopilot = if looping {
+                            mixer.play(Play::looping(sound, Cue::Autopilot.bus()))
+                        } else {
+                            let _ = mixer.play(Play::once(sound, Cue::Autopilot.bus()));
+                            None
+                        };
+                    }
+                    if let Some((sound, looping)) = banks.pick(Cue::Engaging, &mut voices.rng) {
+                        let play = if looping {
+                            Play::looping(sound, Cue::Engaging.bus())
+                        } else {
+                            Play::once(sound, Cue::Engaging.bus())
+                        };
+                        let _ = mixer.play(play);
+                    }
+                }
+                (false, true) => {
+                    voices.autopilot_open = false;
+                    if let Some(id) = voices.autopilot.take() {
                         mixer.stop(id);
                     }
                 }
@@ -641,6 +686,10 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
+                if let Some(id) = voices.autopilot.take() {
+                    mixer.stop(id);
+                }
+                voices.autopilot_open = false;
                 voices.plasma_travel.stop_all(mixer);
                 voices.rocket_travel.stop_all(mixer);
                 voices.missile_travel.stop_all(mixer);
