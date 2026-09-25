@@ -88,7 +88,18 @@ needed.
   `TouchCampaignHD_Item`/`TouchCampaignFury_Item`) and does not apply here -
   see `2048-campaign.md`'s own section on this. If the projection exists at
   all, it is compiled into the executable, not authored in any XML this
-  pass opened.
+  pass opened. **2026-09-25: still true, but the map's own *scale* (not this
+  per-event formula) is now measured off the reference captures rather than
+  chosen** - see
+  [2048s-front-end-is-read-and-not-wired.md](2048s-front-end-is-read-and-not-wired.md)'s
+  own 2026-09-25 note and `docs/formats/2048-frontend.md`'s campaign-map
+  row. That pass also ruled out one plausible shortcut: fitting the 47
+  `linkedevent`-carrying `<CanvasLabel>`s' own `x`/`y` against this file's
+  `M_X`/`M_Y` looks like it could be the projection, but the same label set's
+  twenty `MPSeason01`-`20` entries carry no `linkedevent` and no relation to
+  `SP.xml` at all, yet sit in the identical small coordinate range - so the
+  fit is spurious, not a real one, and is not worth re-attempting without a
+  decompile.
 - **`Data\xml\MP.xml`'s own 230-instance season/level schema
   (`1114956821`/`425681076`) is unread beyond its field census.** Not
   `SP.xml`'s shape at all - see `2048-campaign.md`'s own section.

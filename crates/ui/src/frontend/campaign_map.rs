@@ -35,16 +35,43 @@
 //! plausible icon selector, `M_CANVASTWEAK_X`/`_Y` a plausible small pixel
 //! nudge, neither confirmed - no consuming function found for either), so
 //! this build still lays cells out on an even grid - [`PITCH`] units per
-//! cell from [`ORIGIN`], sized so the file's own `x` 1-34 and `y` 1-25 fill
-//! the authored 1920x1088 canvas - and draws each event as a plain
-//! [`MARKER`]-sized square, coloured by its own progress (see this module's
-//! "Progression" section below) rather than a hexagon shape nothing here has
-//! a decoded source for. The city behind the real map does not
-//! exist as a 3D backdrop either way: the Vita3K capture's own tiles sit on
-//! a flat light triangle-outline background, corroborating
-//! `2048-frontend.md`'s "not a real 3D scene" finding from the opposite
-//! direction. The panel under the map naming the selected event is this
-//! build's own chrome, in the skin's own colours.
+//! cell from [`ORIGIN`] - and draws each event as a plain [`MARKER`]-sized
+//! square, coloured by its own progress (see this module's "Progression"
+//! section below) rather than a hexagon shape nothing here has a decoded
+//! source for. The city behind the real map does not exist as a 3D backdrop
+//! either way: the Vita3K capture's own tiles sit on a flat light
+//! triangle-outline background, corroborating `2048-frontend.md`'s "not a
+//! real 3D scene" finding from the opposite direction. The panel under the
+//! map naming the selected event is this build's own chrome, in the skin's
+//! own colours.
+//!
+//! **2026-09-25: [`CANVAS`]/[`PITCH`]/[`ORIGIN`]/[`MARKER`] are now scaled
+//! against a direct pixel measurement of frames `12`/`13`, not the raw
+//! `MaxScrollX="960" maxscrolly="544"` reading.** That reading treats the
+//! `<TouchScroll>`'s declared scroll range as the *whole* canvas
+//! (view + scroll = 1920x1088), which is what the shell's own XML states -
+//! but the two live frames' own scrollbar thumbs measure far smaller than a
+//! 2x-view canvas would draw: the vertical thumb spans `y` 41-143 of a
+//! 544-tall view (103 px, a 5.28x canvas/view ratio) and the horizontal
+//! thumb spans `x` 84-260 in frame `12` versus `142`-`318` in frame `13`
+//! (177 px of a 960-wide view, a 5.42x ratio, and the two frames' thumb
+//! positions moving together with the scroll a tapped event caused is
+//! itself corroboration this is a scrollbar and not another widget). That
+//! puts the *real* canvas at roughly 5207x2873 - 2.71x/2.64x bigger than the
+//! 1920x1088 this build assumed - so [`CANVAS`], [`ORIGIN`] and [`PITCH`]
+//! are scaled up by the same factor, keeping the file's own `x` 1-34/`y`
+//! 1-25 cells filling the corrected canvas the same way the old, smaller
+//! numbers filled the wrong one. [`MARKER`] is not scaled by that same
+//! factor - it is set directly off a second, independent measurement: a
+//! flood-filled bounding box around one clean, unclipped green hex tile in
+//! frame `13` (`x` 352-474, `y` 127-244 - 122x117 px), landing this build's
+//! square between that figure and the canvas-derived scale-up of the old
+//! 36 px marker (36 * 2.71 ≈ 97.6). Both measurements are pixel counts off
+//! the committed reference frames, not a decompile, so this is real
+//! evidence rather than a tuned-to-look-right guess - but the grid itself
+//! is still a square standing in for a hexagon nothing here draws, so the
+//! whole scheme stays **chosen, not measured**, now with a better-fitted
+//! scale rather than a wrong one.
 //!
 //! # Progression: locked, open, passed, elite
 //!
@@ -82,14 +109,21 @@ use super::touch::{LABEL_SCALE, Launch, PEN_ABOVE_CAPS};
 use super::*;
 use oag_2048::frontend::states as w2048;
 
-/// The authored scroll range plus the view: the shell's `<TouchScroll>`.
-const CANVAS: (f32, f32) = (1920.0, 1088.0);
-/// Units per map cell, chosen so the file's cells fill the canvas.
-const PITCH: (f32, f32) = (54.0, 42.0);
-/// Where cell `(1, 1)` lands. Chosen.
-const ORIGIN: (f32, f32) = (24.0, 24.0);
-/// A marker's side. Chosen.
-const MARKER: f32 = 36.0;
+/// The real scrollable canvas - not the shell's own declared
+/// `MaxScrollX="960" maxscrolly="544"` (view + that = 1920x1088), but that
+/// figure scaled by the two live frames' own scrollbar-thumb measurement
+/// (~5.3x-5.4x the view, not 2x) - see this module's own doc comment for
+/// the pixel ranges.
+const CANVAS: (f32, f32) = (5207.0, 2873.0);
+/// Units per map cell, scaled off [`CANVAS`]'s own correction so the file's
+/// cells still fill the canvas the way the old, smaller numbers did.
+const PITCH: (f32, f32) = (146.0, 111.0);
+/// Where cell `(1, 1)` lands, scaled the same way as [`PITCH`].
+const ORIGIN: (f32, f32) = (65.0, 63.0);
+/// A marker's side - not scaled with the rest, but set directly off a real
+/// hex tile's own measured bounding box in frame `13`. See this module's own
+/// doc comment.
+const MARKER: f32 = 108.0;
 /// The detail panel's rect, in the view. Chosen.
 const PANEL: [f32; 4] = [16.0, 448.0, 928.0, 80.0];
 

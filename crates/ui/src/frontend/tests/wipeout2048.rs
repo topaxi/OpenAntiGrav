@@ -511,13 +511,13 @@ fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     // The markers of the first two events are in view: cell (3, 5) is at
-    // 24 + 2 * 54 = 132, 24 + 4 * 42 = 192, before scrolling. The view
+    // 65 + 2 * 146 = 357, 63 + 4 * 111 = 507, before scrolling. The view
     // follows the selection, so read the marker's rect off the draw list.
     let marker_of = |frontend: &Frontend, at: usize| {
         let list = frontend.draw_list();
         list.iter()
             .filter_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 36.0 && color[3] == 1.0 => Some(*rect),
+                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
                 _ => None,
             })
             .nth(at)
@@ -525,7 +525,7 @@ fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
     };
     let second = marker_of(&frontend, 0);
     let click = |rect: [f32; 4]| Pointer {
-        at: Some((rect[0] + 18.0, rect[1] + 18.0)),
+        at: Some((rect[0] + 54.0, rect[1] + 54.0)),
         moved: true,
         clicked: true,
         ..Pointer::default()

@@ -92,7 +92,7 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   its `AutoRedirect` at the end, or leaves on any of its six buttons.
 - **The campaign map's cell-to-pixel mapping is chosen, not measured.** An
   even grid (`oag_ui::frontend::campaign_map::PITCH`/`ORIGIN`) over the
-  shell's authored 1920x1088 `<TouchScroll>` canvas, plain `Blue2048`
+  shell's own `<TouchScroll>` canvas, plain `Blue2048`
   markers, a panel naming the selected event. **Narrowed 2026-09-21**: `M_X`/
   `M_Y` *are* real `GameModeBase` fields the executable deserialises
   (`0x2c4`/`0x2c8`, an earlier reading of this pass's own decompile missed
@@ -108,6 +108,28 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   (`frontend-campaign-map.md`) but nothing calls its constructor statically,
   the same open item the DLC tier pair already had. The unlock graph is not
   walked: every event is offered, there being no save.
+  **2026-09-25: the grid's own scale, not the per-event formula, is now
+  measured.** The 1920x1088 canvas above was a wrong reading of the shell's
+  declared `MaxScrollX="960" maxscrolly="544"` as the whole canvas; frames
+  `12`/`13`'s own scrollbar thumbs measure a canvas roughly 5.3x-5.4x the
+  view instead (~5207x2873), and `CANVAS`/`PITCH`/`ORIGIN` are rescaled by
+  that factor, with `MARKER` set directly off a real hex tile's own
+  measured bounding box (122x117 px, frame `13`). See
+  `docs/formats/2048-frontend.md`'s campaign-map row for the full pixel
+  evidence. Still unmeasured: the per-event `M_X`/`M_Y` formula itself, the
+  hex tile art, the background, the header and the season card - a full
+  archive-wide `.xml` grep for every plausible asset name
+  (`hex_filled.gxt`, `Hexagon_HD*.gxt`, `Cup2048.gxt`, `TinyCallout_*.gxt`,
+  every `medals/`/`trophy/` icon) found none of them referenced anywhere,
+  so this is still native-code-driven and needs a Ghidra pass, not another
+  data sweep. **A dead end worth recording**: correlating the 47
+  `linkedevent`-carrying `<CanvasLabel>`s' own `x`/`y` against their event's
+  `M_X`/`M_Y` looks like a projection at first (a least-squares fit lands
+  `y` almost exactly), but the file's own `MPSeason01`-`20` labels - no
+  `linkedevent`, no relation to `SP.xml` at all - occupy the identical small
+  coordinate range, so the fit is spurious: the whole `<CanvasLabel>` set is
+  a small corner widget, not hotspots correlated to the map grid, confirming
+  `2048-frontend.md`'s existing reading rather than overturning it.
 - **Resolved 2026-09-21: `Home`'s five destinations draw.** See the top of
   this file and `2048-frontend.md`'s own "Wired" section for the full
   account. `team`'s own team/craft-slot picker feeds `settings.race.team`/
