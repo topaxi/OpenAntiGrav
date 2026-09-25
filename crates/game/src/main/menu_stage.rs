@@ -524,11 +524,7 @@ impl MenuStage {
             let mut ticker_draw: Option<Draw> = None;
             // Wipeout HD/Fury draws a completely different screen behind the
             // same two names - see `oag_ui::campaign::hd`'s own module doc.
-            // `default_measure` is the footer legend's own fit-to-gap
-            // measurement, shared by all three HD screens below - see
-            // `docs/ui/campaign-screens.md`'s "`--menu-page` stills match a
-            // real screen state..." section for why all three, not just
-            // `Cell`, draw it now.
+            // `default_measure` is the footer legend's fit-to-gap measure.
             let default_measure = |text: &str| font::measure(&self.default_atlas, text);
             let layers = if campaign.is_hd() {
                 match &campaign.screen {
@@ -594,10 +590,7 @@ impl MenuStage {
                                     },
                                 )
                             });
-                        // No ticker on any of the three HD screens: HD's
-                        // shared `Skin.xml` authors no `TextInfoIsAlwaysLast`
-                        // viewport at all, so `campaign.ticker_draw` is
-                        // always `None` here and there is nothing to add.
+                        // No ticker: HD's shared `Skin.xml` has no `TextInfoIsAlwaysLast` viewport.
                         let footer_overlay = campaign
                             .nav_legend_draw(&campaign.cell_layout().faces, &default_measure);
                         oag_ui::campaign::hd::hd_cell_draw_list(
