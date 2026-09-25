@@ -301,6 +301,7 @@ impl Pending {
             // The disc's own chrome, read by the boot itself - which is where
             // the parsed XML, the sheet and the grid were all in hand.
             frame: boot_shell.frame.clone(),
+            nav_legend: boot_shell.nav_legend.clone(),
             fury_backdrop: boot_shell.fury_backdrop.clone(),
             track_select: boot_shell.track_select.clone(),
             ship_select: boot_shell.ship_select.clone(),

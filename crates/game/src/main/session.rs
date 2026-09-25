@@ -684,6 +684,13 @@ pub(crate) struct Shell {
     /// is unread, which draws the menus exactly as they were drawn before this
     /// existed. See `oag_ui::menu::read_frame`.
     pub(crate) frame: menu::Frame,
+    /// The front-end root's own `Confirm`/`Back` legend, carried from
+    /// `boot::Shell::nav_legend` for the same reason [`Self::frame`] is - a
+    /// property of the source, read once while the archives were open.
+    /// `None` for a source whose root authors no `NavigationController`
+    /// with either half [`oag_ui::campaign::footer::NavigationLegend::read`]
+    /// reads.
+    pub(crate) nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
     /// The Fury menu backdrop's settings, clouds and tints, read at boot -
     /// see `oag_game::boot::fury`. `None` on every source but a Fury-style
     /// HD, and then the menus sit on the movie or the page's clear.

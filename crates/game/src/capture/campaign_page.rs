@@ -236,6 +236,7 @@ pub(super) fn campaign_page(
                     backdrop,
                     false,
                     &|src| sprites.get(src),
+                    &footer_overlay,
                 )
             }
         }
