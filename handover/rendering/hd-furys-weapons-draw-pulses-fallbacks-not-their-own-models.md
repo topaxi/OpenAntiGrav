@@ -74,61 +74,77 @@ The executable's own load-path strings name every model above
   Rocket's is Pulse's measured basis on HD's model, the Mine's and Bomb's
   the frozen craft pose; all three chosen, not measured, until
   `/hdfury/EBOOT-ps3-hdfury-eu.elf`'s own per-tick updates are read.
-- **LeachBeam's ball: period law recovered and wired 2026-09-25; the model
-  itself drawn too, same day, second pass.** `LeachBall_Advance` (`0x00114c78`) remaps the
-  strip's own length (`param_4[4]`, plausibly but not confirmed to be the
-  beam's own length), clamped `[20, 100]`, onto a `[0.3, 1.0]`-second period
-  per drain trip; `oag_render::beam::hd_ball` carries that law and
-  `Race::advance_leach_beam_ribbon` drives a render-side accumulator off it,
-  firing `WO_LEACHBEAM_ABSORB` (a real trigger, confirmed: it is inlined into
-  `LeachBall_Advance`'s own wrap, not only in the standalone, uncalled
-  `LeachBeam_SpawnAbsorbEffect` at `0x00114a00`) as a one-shot burst at the
-  wrap point. **`LAUNCH`/`HIT_TARGET`/`BREAK` have no discoverable caller** -
-  confirmed three independent ways this pass (the OPD block they sit in is
-  ordinary `.opd` layout, not a vtable; the one real vtable `LeachBeam`
-  installs resolves to generic render-node functions only; a raw byte/fourcc
-  scan of the whole `EBOOT.elf` finds no reference to any of their OPD
-  addresses anywhere, validated against a byte pattern known to exist) - the
-  same shape `WO_CANNON_MUZZLEFLASH`/`_HOTSPOT` already have on cannon.md.
-  **The mesh (`hd_leachbeam_ball_bloomring.vex`) is drawn as of 2026-09-25
-  (second pass)**, after `race/scene.rs` and `race/load.rs` were each split
-  once to buy the headroom the 1,000-line ceiling had none of -
-  `race/scene/boost_flare.rs` (the boost plume/engine flare per-slot build)
-  and `race/load/gantry_visibility.rs` (the start gantry placement and the
-  track's visibility partition), both a pure move, no behaviour change,
-  checked with `cargo nextest list -p oag-game` before and after (1,072
-  tests either way). `Scene` carries one `leach_ball: Option<Drawable>` -
-  a single drawable, not a `MAX_PROJECTILES` pool, since only one beam is
-  ever live - written each frame a beam is `Kind::Locked`
-  (`Race::leach_ball_model_matrix`, `race/weapons/visuals.rs`) at
-  `oag_render::beam::hd_ball::position` on a translation-only matrix
-  (identity rotation/scale, chosen not measured - `_opd_FUN_001141d8` never
-  resolved past confidence 70). It draws through the same opaque
-  `TRANSPARENT_BLEND`/`GlowMask::Protected` pipeline every other HD weapon
-  body does, culled as authored (a rotation, so `cull_as_authored` applies
-  safely). See `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "2026-09-25:
-  the LeachBall's period, its trigger search, and the ball wired" - which
-  also records a related finding: `WO_LEACHBEAM_ENERGY` has no string
-  anywhere in HD's `EBOOT.elf`, so this engine's existing Pulse-ribbon code
-  likely fires an effect the retail HD executable never names, unfixed this
-  pass.
-  **Verified live, second pass.** The first pass's `--race`/`--autopilot
-  --give leachbeam` attempts (up to 4,200 ticks) never got a lock; the
-  second pass found why with a throwaway probe (not committed) that ran the
-  same `lock_window` math `Race::sight_target` runs, off the real disc's own
-  weapon table (`lock_min_dist=10`, `lock_max_dist=200`, same as Pulse's) -
-  a lock is available from **tick 0** on `--mode single_race`'s own grid
-  (VENOM class, Talon's Junction). `--give leachbeam --hold cross --press
-  square --ticks 15 --screenshot` shows a plain light-grey/off-white sphere
-  between the player's craft and the reticle - drawn, and not the opaque
-  black shard `HD_plasma_ball` hits. The unit coverage
-  (`race/tests/leach_ball_draw.rs`: the matrix's translation against
-  `hd_ball::position` directly, `None` with no beam and with an unlocked
-  one, and that only Wipeout HD's own `WeaponModels` authors a
-  `leachbeam_ball` entry at all) and the existing
+- **LeachBeam's ball: period law recovered and wired 2026-09-25; the
+  placement and draw path built the same day, second pass - but the model
+  still does not draw, now for a confirmed reason.** `LeachBall_Advance`
+  (`0x00114c78`) remaps the strip's own length (`param_4[4]`, plausibly but
+  not confirmed to be the beam's own length), clamped `[20, 100]`, onto a
+  `[0.3, 1.0]`-second period per drain trip; `oag_render::beam::hd_ball`
+  carries that law and `Race::advance_leach_beam_ribbon` drives a
+  render-side accumulator off it, firing `WO_LEACHBEAM_ABSORB` (a real
+  trigger, confirmed: it is inlined into `LeachBall_Advance`'s own wrap, not
+  only in the standalone, uncalled `LeachBeam_SpawnAbsorbEffect` at
+  `0x00114a00`) as a one-shot burst at the wrap point.
+  **`LAUNCH`/`HIT_TARGET`/`BREAK` have no discoverable caller** - confirmed
+  three independent ways this pass (the OPD block they sit in is ordinary
+  `.opd` layout, not a vtable; the one real vtable `LeachBeam` installs
+  resolves to generic render-node functions only; a raw byte/fourcc scan of
+  the whole `EBOOT.elf` finds no reference to any of their OPD addresses
+  anywhere, validated against a byte pattern known to exist) - the same
+  shape `WO_CANNON_MUZZLEFLASH`/`_HOTSPOT` already have on cannon.md.
+
+  **The mesh (`hd_leachbeam_ball_bloomring.vex`) loads and places correctly
+  as of 2026-09-25 (second pass), but does not draw.** `race/scene.rs` and
+  `race/load.rs` were each split once first to buy the headroom the
+  1,000-line ceiling had none of - `race/scene/boost_flare.rs` (the boost
+  plume/engine flare per-slot build) and `race/load/gantry_visibility.rs`
+  (the start gantry placement and the track's visibility partition), both a
+  pure move, no behaviour change, checked with `cargo nextest list -p
+  oag-game` before and after (1,072 tests either way). `Scene` carries one
+  `leach_ball: Option<Drawable>` - a single drawable, not a
+  `MAX_PROJECTILES` pool, since only one beam is ever live - written each
+  frame a beam is `Kind::Locked` (`Race::leach_ball_model_matrix`,
+  `race/weapons/visuals.rs`) at `oag_render::beam::hd_ball::position` on a
+  translation-only matrix (identity rotation/scale, chosen not measured -
+  `_opd_FUN_001141d8` never resolved past confidence 70), through the same
+  opaque `TRANSPARENT_BLEND`/`GlowMask::Protected` pipeline every other HD
+  weapon body draws through, culled as authored. **All of that is built and
+  unit-tested, and none of it is wired to a live drawable** -
+  `load::weapon_models::LEACH_BALL_DRAWN` stays `false`, so `Scene` always
+  receives `None` for the model no matter what loaded.
+
+  **Why, checked with `oag-view --draws`, not assumed**: both of the
+  model's draws resolve real, bound textures and their own material's
+  authored blend factor pair - not `HD_plasma_ball`'s "missing shader
+  variant reads as no texture" symptom - but both carry `rgba
+  0.00,0.00,0.00,1.00` (black) vertex colour on all 800 triangles, an
+  authoring pattern that only makes sense under an unlit/emissive shader.
+  This engine's one shared `mesh::rcs` shader has no such mode - the same
+  gap `blast_models::HD_PLASMA_BALL_DRAWN` already documents for
+  `HD_plasma_ball`, confirmed here to be the same failure family rather
+  than assumed. Forced on and measured live (a lock is available from
+  **tick 0** on `--mode single_race`'s own grid, `--give leachbeam --hold
+  cross --press square --ticks 15 --screenshot`): a flat, opaque,
+  uniformly-lit grey sphere, not a bloom and not `HD_plasma_ball`'s black
+  shard either - exactly the plausible-looking stand-in `CLAUDE.md` forbids
+  drawing, so it stays off. See `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`'s
+  2026-09-25 sections for the full `--draws` capture and the load report
+  line, and this project's own `WO_LEACHBEAM_ENERGY` finding there too:
+  it has no string anywhere in HD's `EBOOT.elf`, so this engine's existing
+  Pulse-ribbon code likely fires an effect the retail HD executable never
+  names, unfixed this pass.
+
+  The unit coverage (`race/tests/leach_ball_draw.rs`: the matrix's
+  translation against `hd_ball::position` directly, `None` with no beam and
+  with an unlocked one, and that only Wipeout HD's own `WeaponModels`
+  authors a `leachbeam_ball` entry at all) and the existing
   `oag_render::beam::tests::hd_ball` law tests and
-  `psys_inventory_ground_truth::hd::every_wired_effect_is_on_the_disc` stand
-  alongside the live capture, not instead of it, this time.
+  `psys_inventory_ground_truth::hd::every_wired_effect_is_on_the_disc` all
+  still hold - they test the law and the title axis, neither of which this
+  finding touches. Closing this needs an unlit/emissive shader path for
+  `mesh::rcs` geometry in general (the same blocker `HD_plasma_ball` has
+  carried since 2026-09-17); once that exists, flipping `LEACH_BALL_DRAWN`
+  to `true` is the whole of what is left.
 - **Cannon: done 2026-09-25**, see
   [ps3-hdfury-eu/cannon.md](../../docs/ghidra/functions/ps3-hdfury-eu/cannon.md).
   The earlier "round body wired" was wrong: `CannonBullet_Update` shows
@@ -169,10 +185,17 @@ The executable's own load-path strings name every model above
    what the implementation pass itself found (the Collapse/Draw split, the
    oversized picture).
 2. ~~Cannon~~ **done 2026-09-25** (see the Open bullet). ~~LeachBeam~~
-   **its period law, `WO_LEACHBEAM_ABSORB`'s trigger and the ball's own mesh
-   all done 2026-09-25** (see the Open bullet); `LAUNCH`/`HIT_TARGET`/`BREAK`
-   confirmed to have no trigger. Left open: the ball's own orientation and
-   scale are chosen, not measured (`_opd_FUN_001141d8` unresolved past
+   **its period law, `WO_LEACHBEAM_ABSORB`'s trigger, and the ball's own
+   placement/draw path done 2026-09-25** (see the Open bullet);
+   `LAUNCH`/`HIT_TARGET`/`BREAK` confirmed to have no trigger. **Still not
+   drawn**: `oag-view --draws` confirms the ball's own material is authored
+   for an unlit/emissive shader (black vertex colour, real bound textures)
+   this engine has no path for - the same gap `HD_plasma_ball` has, now
+   confirmed rather than suspected for this asset too. Left open: an
+   unlit/emissive shader path for `mesh::rcs` geometry (closes both this
+   and `HD_plasma_ball` at once - see `blast_models::HD_PLASMA_BALL_DRAWN`
+   and `load::weapon_models::LEACH_BALL_DRAWN`); the ball's own orientation
+   and scale are chosen, not measured (`_opd_FUN_001141d8` unresolved past
    confidence 70); whether `param_4[4]` really is the beam's own length is
    still not confirmed; and `WO_LEACHBEAM_ENERGY` playing on HD when the
    retail executable never names it is still unfixed. A live RPCS3 look at
