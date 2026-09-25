@@ -502,6 +502,39 @@ fn absorbing_pays_the_pool_and_never_past_its_maximum() {
     );
 }
 
+/// The HUD readout's own absorb flag - `Readout::shield_absorbing` - mirrors
+/// [`Race::absorb_window_active`] the same tick the pickup is spent and
+/// clears once [`oag_render::hull_overlay::WINDOW`] has passed. See
+/// `crates/game/src/hud/shield_tests.rs` for what the readout draws once
+/// this is set.
+#[test]
+fn readout_flags_the_absorb_window_the_same_tick_it_opens() {
+    let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+    race.tick(&PlayerInputs::none());
+    assert!(
+        !race.readout().shield_absorbing,
+        "granted, not yet absorbed"
+    );
+
+    let mut buttons = Buttons::new();
+    buttons.tick(0);
+    race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
+    assert!(
+        race.readout().shield_absorbing,
+        "the tick that spends the pickup must open the window"
+    );
+
+    // A second and a bit of ticks at the sim's fixed 60 Hz - comfortably past
+    // `hull_overlay::WINDOW`'s one second.
+    for _ in 0..70 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(
+        !race.readout().shield_absorbing,
+        "a second later the window has closed"
+    );
+}
+
 /// Every weapon a pad can hand out has a fire arm on **both** paths.
 ///
 /// # Why this is a tripwire rather than a real assertion

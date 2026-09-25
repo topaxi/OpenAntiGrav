@@ -827,6 +827,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         let tinted = super::runtime::tinted(cx, readout, sprite);
         let fill = super::runtime::shield_fill(cx, readout, sprite);
         let sprite = tinted.as_ref().unwrap_or(sprite);
+        // `ShieldBar`'s absorb flash, painted *under* the bar - see
+        // `shield_bar::tint`. `None` outside the absorb window.
+        let mut flash = None;
         let drawn = match bar_fraction(&sprite.name, readout) {
             // A bar at zero is not drawn at all: a zero-width quad is a
             // degenerate triangle pair, and asking the rasteriser to do nothing
@@ -834,16 +837,11 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             Some(fraction) if fraction <= 0.0 => None,
             Some(fraction) => {
                 let mut cropped = crop_horizontally(sprite, fraction);
-                // `ShieldBar` alone: `Hud_UpdateEnergyBar` tints only the
-                // shield fill, never the speed bar that shares this same
-                // crop-and-draw path - confirmed against the digits this
-                // function formats, `"%"` and not `"kmh"`. RGB only, the
-                // alpha byte stays the widget's own: the original modulates
-                // it for a separate low-shield icon blink
-                // (`hud+0x1dc`, scaled by `8.0`) that is not implemented
-                // here. See [`Readout::shield_forced_red`].
-                if sprite.name == "ShieldBar" && readout.shield_forced_red() {
-                    cropped.color = [1.0, 0.0, 0.0, cropped.color[3]];
+                // `ShieldBar` alone: confirmed against the digits this
+                // function formats, `"%"` and not `"kmh"`. See
+                // `shield_bar::tint` for the three rules it applies.
+                if sprite.name == "ShieldBar" {
+                    flash = super::shield_bar::tint(&mut cropped, readout, cx.sheet);
                 }
                 sprite_draw(&cropped, cx.sheet)
             }
@@ -859,6 +857,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 None => sprite_draw(sprite, cx.sheet),
             },
         };
+        frame.sprites.extend(flash);
         frame.sprites.extend(drawn);
         frame.sprites.extend(fill);
     }

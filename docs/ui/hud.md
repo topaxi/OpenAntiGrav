@@ -564,12 +564,20 @@ This is one widget pair of the 26 code-only keys; the other 25 are not read.
   computes the rule from a shield percentage plus a one-tick-memory flash flag
   the readout carries (`Readout::shield_flashing`), and
   [`crate::hud::draw::draw_list`](../../crates/game/src/hud/draw.rs) applies
-  it to `ShieldBar` alone, leaving the alpha byte untouched. **Not
-  reproduced**: the low-shield icon's own separate blink cycle
-  (`hud+0x1dc`, scaled by `8.0`) that would otherwise modulate that alpha
-  byte, and `iVar1`, the external override flag that can suppress the
-  forced-red branch entirely - both stay open on shield.md, neither guessed
-  at here.
+  it to `ShieldBar` alone. ~~leaving the alpha byte untouched. **Not
+  reproduced**: the low-shield icon's own separate blink cycle (`hud+0x1dc`,
+  scaled by `8.0`) ... and `iVar1`, the external override flag ...~~ -
+  **both closed 2026-09-25**: `iVar1` is
+  `HullOverlay_AbsorbWindowActive(player)` -
+  [`Readout::shield_absorbing`](../../crates/game/src/hud.rs) - and it
+  *suppresses* the forced-red branch rather than being an unread override,
+  and `hud+0x1dc`'s blink is now applied to `ShieldBar`'s own alpha through
+  [`Readout::shield_blinking`]/[`Readout::shield_blink_phase_on`], driven off
+  the pool, the post-hit flash, and absorbing together - see
+  [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25).
+  The low-shield **icon** itself (a separate widget from `ShieldBar`,
+  `Hud_SetEnergyBar`'s own two-tier blink) is a different gap and still not
+  reproduced.
 - **The outline colour is approximate.** The default is the layout's own
   `HudBGColour`, `0x40000000` - 25 % black - because that is what every widget that
   *does* name a border points at, which makes it data rather than invention. The

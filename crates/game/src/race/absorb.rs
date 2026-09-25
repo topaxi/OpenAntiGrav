@@ -275,6 +275,29 @@ impl Race {
             .and_then(oag_render::hull_overlay::pulse)
     }
 
+    /// Whether `slot` is inside its one-second absorb window this tick -
+    /// `HullOverlay_AbsorbWindowActive(craft)`, `0.0 <= elapsed <= 1.0` on the
+    /// same clock the hull overlay reads.
+    ///
+    /// Reuses [`Self::absorb_overlay_pulse`]'s own state
+    /// (`self.view.absorb_overlay`) rather than a second timer: that `Vec`
+    /// already holds `Some(elapsed)` exactly while `0.0 <= elapsed <= WINDOW`
+    /// ([`advance_absorb_bursts`](Self::advance_absorb_bursts) filters it),
+    /// and `HullOverlay_AbsorbFade`/`HullOverlay_AbsorbWindowActive` were
+    /// read as the same window test in a float and a bool shape - see
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+    /// "Absorb". `Hud_UpdateEnergyBar` calls the bool form on the player's
+    /// own craft every frame; this is that call.
+    #[must_use]
+    pub fn absorb_window_active(&self, slot: usize) -> bool {
+        self.view
+            .absorb_overlay
+            .get(slot)
+            .copied()
+            .flatten()
+            .is_some()
+    }
+
     /// HD's absorb shell fade on `slot` this tick - the `ShieldColour` its
     /// material reads - or `None` while the original hides the shell. See
     /// [`oag_render::absorb_shell::AbsorbShell::fader`].
