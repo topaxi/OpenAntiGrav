@@ -690,3 +690,46 @@ buffer might be threaded through a call this pass didn't follow into
 proposed, on this call site instead. **Left exactly as it was**: this
 engine's sphere keeps the camera-facing basis, chosen not measured, and nothing
 above changes that gate.
+
+## 2026-09-25: the sphere's `noise.gtf` is read, and it rides `UV_offset`
+
+`plasmasphere_glow.rcsmaterial` (`HD_plasma_sphere`'s own), the lit race
+pass's variant `@0x2690` (`scripts/ps3-microcode.py fp-file`), declares three
+samplers: `Texture1` (`0x3bdc0403`, `plasma_1024x1024.gtf`) on unit 1,
+`0x4bb6f08c` (`noise.gtf`) on **unit 2**, and `paraboloidReflectionTex`
+(`0x9edd3243`, engine-bound, no `.gtf` in the model) on unit 0. Its seven
+parameters are the sun's direction and colour, `fogColour`,
+`globalAlphaScaler`, `constantAmbientColour`, `0x7480de6d` (a `float4`, no
+preimage, not authored by the model) and **`UV_offset`** - `0x8f2fe704` is
+`~crc32("UV_offset")`, and the model authors `0.52704` for it, which the
+engine then overwrites by pointer (the 2026-09-25 section above).
+
+The noise tap, instruction by instruction:
+
+```text
+@0x0e  MOV R1.z, TC0.w                      u
+@0x11  MOV R0.z, TC1.w                      v
+@0x16  MOV R2.x, {UV_offset}
+@0x30  MUL R1.w, R0.z, 15                   15 v
+@0x34  MAD R1.zw, R2.x, 10, R1              (u + 10 UV_offset, 15 v + 10 UV_offset)
+@0x36  TEX H3.xyz, R1.zwzz unit2            noise.rgb
+@0x5d  MUL R3.w, R1.x, R3                   a sun term: pow(N.H-like, 32) * saturate(N.L)
+@0x5f  MUL H6.xyz, R3.w, {sunColour}
+@0x65  MUL H3.xyz, H3, H6
+@0x66  MUL H2.xyz, H3, 20                   20 * noise * sun * spec
+@0x6c  MAD H1.xyz, H1, (1.93, 1.2, 8), H2   added into the colour, then the fog lerp
+```
+
+So the noise is sampled at a coordinate that **is** `UV_offset` scrolled
+across a 1 x 15 tiling, and it modulates a specular sun highlight twenty-fold
+before that is added to the sphere's colour; the same `UV_offset` also shifts
+the unit-1 plasma texture's first tap (`@0x1a`, `v + 0.01 UV_offset`) and
+scales the alpha (`@0x68`). Confidence 85 for the listing.
+
+**Left unwired, on purpose.** Even with `UV_offset` fed from the node's own
+Anim Transform track at `age`, the program still needs the sun's direction
+and colour, the constant ambient, `0x7480de6d` (which nothing in the model
+authors and whose engine source is unread) and a paraboloid reflection probe
+this renderer does not have - it is a lit, reflective program, not an unlit
+one, so the path `docs/rendering/hd-unlit-programs.md` added does not cover it
+and drawing the noise alone would be an invention of its combine.

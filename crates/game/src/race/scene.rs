@@ -170,15 +170,11 @@ pub struct Scene {
     /// The Bomb's own - a hemisphere and a shockwave; see [`bomb_blast::BombBlastDrawables`].
     bomb_blast: bomb_blast::BombBlastDrawables,
     /// The LeachBeam's own ball, HD only - `None` when
-    /// `Data\Weapons\hd_leachbeam_ball_bloomring.vex` did not load, **or
-    /// while `load::weapon_models::LEACH_BALL_DRAWN` stays `false`**: the
-    /// model's own vertex colour is authored black, which this engine's one
-    /// shared `mesh::rcs` shader has no unlit/emissive mode to show as a
-    /// glow rather than a flat grey sphere - see that constant's own doc
-    /// comment. The write/draw path is in place and tested regardless, so
-    /// flipping the flag is the whole of what closes this. Would draw at
-    /// [`oag_render::beam::hd_ball::position`] each tick a beam is locked -
-    /// see [`Race::leach_ball_model_matrix`] and `scene/frame/beam.rs`.
+    /// `Data\Weapons\hd_leachbeam_ball_bloomring.vex` did not load. Drawn
+    /// at [`oag_render::beam::hd_ball::position`] each tick a beam is locked
+    /// (see [`Race::leach_ball_model_matrix`] and `scene/frame/beam.rs`),
+    /// through its own material's program, `mesh::rcs::rim_glow`'s
+    /// `RIM_GLOW` (docs/rendering/hd-unlit-programs.md).
     leach_ball: Option<Drawable>,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
@@ -688,11 +684,7 @@ impl Scene {
         // `weapon_models::build`'s per-slot one. Same transparent blend and
         // protected glow mask every other weapon body above takes - see
         // `oag_render::beam::hd_ball`'s own doc comment for what is measured
-        // about this model's placement and what is chosen. `leach_ball_model`
-        // is `None` in practice today - see
-        // `load::weapon_models::LEACH_BALL_DRAWN`'s own doc comment - but the
-        // build stays generic on this caller's own `Option` rather than
-        // special-cased, so nothing here has to change once that flips.
+        // about this model's placement and what is chosen.
         let leach_ball = match leach_ball_model.filter(|model| !model.indices.is_empty()) {
             Some(model) => Some(Drawable::new(
                 device,

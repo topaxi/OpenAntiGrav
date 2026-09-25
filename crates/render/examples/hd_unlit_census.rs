@@ -30,8 +30,12 @@ const ARCHIVES: &[&str] = &[
 /// `@0x18d0`'s opening mnemonics, long enough to tell the two skeletons from
 /// anything else: a program that opens this way and is refused is a near
 /// miss worth listing.
-const LEACH_OPENING: &[&str] = &["MOV", "MOV", "MOV", "MOV", "MAD", "MOV", "TEX", "MOV", "DP3"];
-const PLASMA_OPENING: &[&str] = &["MOV", "MOV", "DP3", "DP3", "MOV", "DP3", "MUL", "DIVSQ", "MOV"];
+const LEACH_OPENING: &[&str] = &[
+    "MOV", "MOV", "MOV", "MOV", "MAD", "MOV", "TEX", "MOV", "DP3",
+];
+const PLASMA_OPENING: &[&str] = &[
+    "MOV", "MOV", "DP3", "DP3", "MOV", "DP3", "MUL", "DIVSQ", "MOV",
+];
 
 /// `hd_leachbeam_bloomring` `@0x16a0`: one fogged texture tap.
 const TEXTURE_ONLY: &[&str] = &[
@@ -84,12 +88,18 @@ fn main() {
                 let name = format!("/{}", material.name);
                 let blob = materials
                     .entry(name.clone())
-                    .or_insert_with(|| handles.iter_mut().find_map(|(_, a)| a.read_path(&name).ok()))
+                    .or_insert_with(|| {
+                        handles
+                            .iter_mut()
+                            .find_map(|(_, a)| a.read_path(&name).ok())
+                    })
                     .clone();
                 let resolved = blob.as_deref().and_then(|blob| {
                     let parsed = rcsmaterial::RcsMaterial::parse(blob).ok()?;
                     let key = Features::from_pass_word(Features::chunk_word(LIT_RACE_PASS, decl));
-                    let variant = Class::ALL.into_iter().find_map(|c| parsed.variant(c, key))?;
+                    let variant = Class::ALL
+                        .into_iter()
+                        .find_map(|c| parsed.variant(c, key))?;
                     Some((
                         Declared::parse(blob, variant.fragment.offset)?,
                         Program::parse(blob, variant.fragment.offset)?,
@@ -122,7 +132,19 @@ fn main() {
                     continue;
                 };
                 let row = rows
-                    .entry((category, format!("{} [{}{}]", material.name, handles[h].0, if bit != 0 { format!(" {path}") } else { String::new() })))
+                    .entry((
+                        category,
+                        format!(
+                            "{} [{}{}]",
+                            material.name,
+                            handles[h].0,
+                            if bit != 0 {
+                                format!(" {path}")
+                            } else {
+                                String::new()
+                            }
+                        ),
+                    ))
                     .or_default();
                 row.0 += 1;
                 row.1 += count;
@@ -130,7 +152,9 @@ fn main() {
         }
     }
 
-    println!("{slots_seen} drawn material slot(s), {unresolved} with no resolvable lit-race program");
+    println!(
+        "{slots_seen} drawn material slot(s), {unresolved} with no resolvable lit-race program"
+    );
     let mut last = "";
     for ((category, name), (models, chunks)) in &rows {
         if *category != last {

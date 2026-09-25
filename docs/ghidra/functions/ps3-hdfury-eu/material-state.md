@@ -119,6 +119,38 @@ for `nr_crowd_bustle` is that same hash bound to `crowd_avatars_22x4.gtf` -
 the alpha test really does run on the texture the earlier reading measured,
 with no combination or inversion in between.
 
+## `Rsx_SetBlendEquation`, and the front face (2026-09-25)
+
+`0x005c2130` writes method header `0x40320` - `NV4097_SET_BLEND_EQUATION`,
+one register - with `param_2 << 16 | param_2` as its value, the colour and
+alpha equations packed together, after the same `GcmContext_Callback` room
+check `Rsx_SetAlphaFunc` makes. **Every caller passes `0x8006`,
+`GL_FUNC_ADD`**: thirteen direct call sites (`FUN_003b22a0`, `FUN_003b41d0`,
+`FUN_003b4690`'s four, `FUN_003bbd40`, `FUN_003c8820`, `FUN_003df130`'s two,
+`FUN_003e3268`'s two, `FUN_003f6770`, `FUN_0040e318`, `FUN_00639590`,
+`Shadow_CompileAmbientShadowTrackRedraw`, `Shadow_CompileShadowedTrackRedraw`)
+and the six callers of the thunk at `0x00678238`, each `li r4, 0` / `ori r4,
+r4, 0x8006` immediately before the branch. `Material_ApplyRenderState` never
+calls it. So no material on the disc blends with anything but `ADD`, whatever
+its name says - `plasmasphere_subtractive_glow` included. **Confidence 90**
+for the name: the header math and the call sites agree, the same evidence
+class as the two blend-func helpers above. Four more `ori ..., 0x320` sites
+(`FUN_005bd930`, `FUN_005bd958`, `FUN_0063e5a8`, `FUN_0064a1a8`) have no
+callers the database resolves and were not read.
+
+Two neighbours read the same way, for the cull question
+[hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md) leaves open:
+`0x005c35b0` writes `0x41830`, `NV4097_SET_CULL_FACE` - `0x405` (`GL_BACK`)
+from `Shadow_RenderShipSunOcclusionMaps`, `0x404` (`GL_FRONT`) from
+`Shadow_RenderModelShadowMaps` and `FUN_0040ffe0` - and `0x005c362c` writes
+`0x41834`, `NV4097_SET_FRONT_FACE`, `0x901` (`GL_CCW`) at all three of its
+call sites, `Gcm_InitDevice` among them. The original therefore culls
+clockwise-in-window-space triangles; whether its viewport flips `y` between
+clip space and window space, which decides what that means for a triangle's
+winding in clip space, was not read. The two setters are named
+`Rsx_SetCullFace` and `Rsx_SetFrontFace` on the same evidence as
+`Rsx_SetBlendEquation`, a one-register header each, confidence 88.
+
 ## What is still open
 
 - `oag_render` does not implement fixed-function alpha test at all, and

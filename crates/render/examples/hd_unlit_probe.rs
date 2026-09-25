@@ -48,6 +48,48 @@ fn main() -> anyhow::Result<()> {
         println!("samplers: {:08x?}", declared.samplers);
         return Ok(());
     }
+    if std::env::args().nth(1).as_deref() == Some("--built") {
+        // The same winding question asked of what `mesh::rcs` hands the GPU,
+        // after every node transform: a reflection anywhere in the chain
+        // shows up here as triangles wound clockwise about their normal.
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        let data = mesh::read_blob(&args[0], &args[1])?;
+        let (model, _) = mesh::rcs::scene_from(&args[0], &args[1], &data)?
+            .ok_or_else(|| anyhow::anyhow!("not a PS3 model"))?;
+        for draw in model.transparent_draws.iter().chain(&model.draws) {
+            let (mut ccw, mut tris) = (0, 0);
+            for t in model.indices[draw.range.start as usize..draw.range.end as usize]
+                .as_chunks::<3>()
+                .0
+            {
+                let [a, b, c] = [t[0], t[1], t[2]].map(|i| model.vertices[i as usize]);
+                let e1 = [
+                    b.position[0] - a.position[0],
+                    b.position[1] - a.position[1],
+                    b.position[2] - a.position[2],
+                ];
+                let e2 = [
+                    c.position[0] - a.position[0],
+                    c.position[1] - a.position[1],
+                    c.position[2] - a.position[2],
+                ];
+                let g = [
+                    e1[1] * e2[2] - e1[2] * e2[1],
+                    e1[2] * e2[0] - e1[0] * e2[2],
+                    e1[0] * e2[1] - e1[1] * e2[0],
+                ];
+                tris += 1;
+                if g[0] * a.normal[0] + g[1] * a.normal[1] + g[2] * a.normal[2] > 0.0 {
+                    ccw += 1;
+                }
+            }
+            println!(
+                "draw node {:?} culled {}: {ccw} of {tris} counter-clockwise about the normal",
+                draw.node, draw.culled
+            );
+        }
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("--undeclared") {
         undeclared("data/images/hdfury-ps3-eu-dec.iso");
         return Ok(());
@@ -105,6 +147,51 @@ fn main() -> anyhow::Result<()> {
             .or_else(|| mesh.solve_stride_by_layout())
             .or_else(|| mesh.solve_stride_by_normals(&geometry))
             .unwrap_or(0);
+        // Winding against the authored normal: how many triangles turn
+        // counter-clockwise about the way their own vertex normals point,
+        // and how many of those normals point away from the mesh's centre.
+        for sub in &mesh.submeshes {
+            let (Ok(p), Ok(n), Ok(idx)) = (
+                mesh.positions(&geometry, sub, stride),
+                mesh.normals(&geometry, sub, stride),
+                mesh.indices(&geometry, sub),
+            ) else {
+                continue;
+            };
+            let centre = p
+                .iter()
+                .fold([0.0f32; 3], |a, v| [a[0] + v[0], a[1] + v[1], a[2] + v[2]]);
+            let centre = centre.map(|c| c / p.len().max(1) as f32);
+            let (mut ccw, mut outward, mut tris) = (0, 0, 0);
+            for t in idx.as_chunks::<3>().0 {
+                let [a, b, c] = [t[0], t[1], t[2]].map(usize::from);
+                let (e1, e2) = (
+                    [p[b][0] - p[a][0], p[b][1] - p[a][1], p[b][2] - p[a][2]],
+                    [p[c][0] - p[a][0], p[c][1] - p[a][1], p[c][2] - p[a][2]],
+                );
+                let g = [
+                    e1[1] * e2[2] - e1[2] * e2[1],
+                    e1[2] * e2[0] - e1[0] * e2[2],
+                    e1[0] * e2[1] - e1[1] * e2[0],
+                ];
+                let nn = n[a];
+                tris += 1;
+                if g[0] * nn[0] + g[1] * nn[1] + g[2] * nn[2] > 0.0 {
+                    ccw += 1;
+                }
+                let r = [
+                    p[a][0] - centre[0],
+                    p[a][1] - centre[1],
+                    p[a][2] - centre[2],
+                ];
+                if r[0] * nn[0] + r[1] * nn[1] + r[2] * nn[2] > 0.0 {
+                    outward += 1;
+                }
+            }
+            println!(
+                "  winding: {ccw} of {tris} triangle(s) counter-clockwise about their normal, {outward} normal(s) outward"
+            );
+        }
         println!(
             "  stride {stride} (declared {:?}, layout {:?}, normals {:?})",
             mesh.declared_stride(),
