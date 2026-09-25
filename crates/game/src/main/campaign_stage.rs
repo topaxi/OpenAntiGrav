@@ -360,24 +360,42 @@ impl CampaignStage {
         }
     }
 
-    /// Each campaign's own earned-gold-medal count, for `Campaign
+    /// Each campaign's own `(earned, total)` gold-medal pair, for `Campaign
     /// Selection`'s own `NumMedalsTextFury`/`NumMedalsTextHD` -
-    /// `(fury, hd)`. `0` on a fresh profile, the same "player-progress
-    /// source is optional" reading [`Self::grid_summary`] already gives
-    /// every other number on these screens.
+    /// `(fury, hd)`. `earned` is `0` on a fresh profile, the same
+    /// "player-progress source is optional" reading [`Self::grid_summary`]
+    /// already gives every other number on these screens. `total` is the
+    /// denominator RPCS3's own `Campaign Selection` shows next to it -
+    /// `"0 / 87"` for `Wipeout HD`, `"0 / 80"` for `Fury`
+    /// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`/
+    /// `01-left-tap.png`) - derived, not guessed: a cell on either campaign
+    /// always carries exactly one `<Gold>` target of its own (`PI_Cell`'s
+    /// own `<Gold Target=...>` child, present on every cell in every grid
+    /// measured), so the total gold medals a campaign can ever earn is
+    /// exactly its own cell count, `grid.cells.len()` summed across the
+    /// campaign's own eight grids: `87` for `DATA02`'s own `grid_00`..`grid_07`
+    /// (`6+8+10+10+10+12+14+17`), `80` for `DATA00`'s own `grid_08`..`grid_15`,
+    /// both matching RPCS3 exactly. See `docs/ui/campaign-screens.md`'s
+    /// "Wipeout HD/Fury: the footer's button glyphs, and the `GOLD MEDALS`
+    /// denominator" section for the full count and the `grid_04.xml` defect
+    /// closing it also surfaced and fixed.
     #[must_use]
-    pub(crate) fn campaign_gold_medals(&self) -> (u32, u32) {
-        let sum = |range: std::ops::Range<usize>| {
-            self.grids
-                .get(range)
-                .unwrap_or(&[])
+    pub(crate) fn campaign_gold_medals(&self) -> ((u32, u32), (u32, u32)) {
+        let pair = |range: std::ops::Range<usize>| -> (u32, u32) {
+            let grids = self.grids.get(range).unwrap_or(&[]);
+            let earned = grids
                 .iter()
                 .map(|grid| Self::grid_summary(grid, &self.title, &self.records).gold_medals)
-                .sum()
+                .sum();
+            let total = grids
+                .iter()
+                .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
+                .sum();
+            (earned, total)
         };
         (
-            sum(oag_hd::campaign::FURY_GRID_RANGE),
-            sum(oag_hd::campaign::HD_GRID_RANGE),
+            pair(oag_hd::campaign::FURY_GRID_RANGE),
+            pair(oag_hd::campaign::HD_GRID_RANGE),
         )
     }
 

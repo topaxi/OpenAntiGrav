@@ -81,6 +81,45 @@ DIFFICULTY` prompt, the 3-D flyer model), in
 `docs/ui/campaign-screens.md`'s "`--menu-page` stills match a real screen
 state, and the footer draws on all three, 2026-09-25" section.
 
+**Update, 2026-09-25 (second pass), the footer's own button glyphs and the
+`GOLD MEDALS` denominator, both closed.** `ControlTextConfirmButton`/
+`BackButton`/`DifficultyButtonIcon` (`font="buttons"`) now draw through a
+genuine third face atlas (`oag_ui::language::roles::BUTTONS`,
+`render::Renderer::set_buttons_atlas`) rather than being excluded - verified
+against the disc first with a new scratch tool,
+`cargo run -p oag-tools --example hd_buttons_font_probe`. The
+`Grid Selection` "third prompt" the previous pass on this thread named as
+open turned out not to exist: the RPCS3 capture it cited
+(`rpcs3-grid0-3-2/00-default.png`) is `Cell Selection`, not `Grid Selection
+Fury` - every clean frame in the same directory reads unambiguously as
+`Cell Selection`, and neither archive's own `CellMode_Definition.xml`
+authors a `DifficultyButton` on `Grid Selection` at all. `Campaign
+Selection`'s own `GOLD MEDALS` denominator is now `{earned}/{total}` instead
+of a bare numerator - `87` for `Wipeout HD`, `80` for `Fury`, both exactly a
+campaign's own total cell count, matching RPCS3 on both sides. Closing that
+surfaced and fixed a real, separate bug an earlier pass had found and
+deliberately left alone: `grid_04.xml`'s own `<Values>` tag is missing a `>`
+on the disc (all three copies), and `oag_tables::fexml::parse` used to drop
+the whole grid because of it - RPCS3's own `"0 / 87"` is first-party
+evidence the original tolerates the same break, so `fexml::tag_end` now
+does too. Full detail, evidence and confidence in
+`docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: the footer's button
+glyphs, and the `GOLD MEDALS` denominator, 2026-09-25" section - **read that
+before this file's own `## Open` below**, since it supersedes the "button
+glyphs themselves" and "`CHANGE DIFFICULTY` prompt" lines the previous
+paragraph left open.
+
+Still open, not touched this pass: the `DIFFICULTY (<rung>)` runtime
+template (`Cell Selection` still shows the disc's own authored `"Change
+Difficulty"`) and this build's own difficulty default reading `SKILLED`
+where RPCS3's fresh-profile default reads `NOVICE` - two mismatches on the
+same widget, named together in the docs section above; `oag_ui::endrace::hd`'s
+own screens (`Results`/`Rewards`/`Menu`) still draw no button glyph at all,
+since that module's own `text_draw` has no `face_role` check the campaign
+screens' does; and whether Omega's own language plugins declare the same
+`Buttons` slot is unverified (`omega-ps4-eu.pkg` is a raw PS4 package, not
+directly openable the way the decrypted PS3 ISO is).
+
 Milestone: **M7 - Shell and polish**.
 
 Read first: [`docs/ui/campaign-screens.md`](../../docs/ui/campaign-screens.md)
