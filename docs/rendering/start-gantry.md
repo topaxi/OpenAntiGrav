@@ -8,39 +8,48 @@ checked), and this page covers the physical gantry, which arrives through
 `TrackStartup.xml`'s **billboard slot 8** ([`formats/README.md`](../formats/README.md)'s
 Track startup row).
 
-**Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`), Wipeout Pure
-(`pure-psp-usa.chd`, `UCUS-98612`), Wipeout HD/Fury (`hdfury-ps3-eu-dec.iso`)
-and Wipeout 2048 (`data/extracted/vita/PCSF00007`, the decrypted EU Vita
-package).** The closing section says what looks title-wide across all four and
-what is per-title. Pure ships no track-side gantry at all; HD ships four
+**Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`; and
+`pulse-ps2-eu.chd`, `SCES-54748`), Wipeout Pure (`pure-psp-usa.chd`,
+`UCUS-98612`), Wipeout HD/Fury (`hdfury-ps3-eu-dec.iso`) and Wipeout 2048
+(`data/extracted/vita/PCSF00007`, the decrypted EU Vita package).** The
+closing section says what looks title-wide across all four and what is
+per-title. Pure ships no track-side gantry at all; PS2 Pulse ships the
+identical asset PSP does, under an external skin (below); HD ships four
 files, and its own section is where the packaging question the Pulse pass
 left open gets an answer; 2048 ships those same four plus four of its own
 (three real glyph files and one empty stub), and turns out to author a third
 countdown mechanism entirely - a manifest reaches only two of the eight.
 
-> **The gantry is placed, and it is drawn - on both titles that ship a slot 8
-> now.** This page used to open by saying nothing on it placed the gantry.
-> That changed in two steps on 2026-09-06: HD/Fury's equivalent code path was
-> read end to end and provably reads no position either - it reaches the
-> world only by binding to geometry the **track model** authors, keyed by the
-> name `billboard<num>` - and Pulse's own track files turned out to author
-> the identical surface, at coordinates this project's parser reads straight
-> off the disc. `oag_render::gantry` measures that surface per circuit and
-> `oag_game::race::gantry` stands `321Go_StartFinish.vex` on it, so a race
-> now plays the `3`, `2`, `1`, `GO` on the object over the start line rather
-> than as a screen overlay - on Pulse, and, since 2026-09-13, on HD/Fury too,
-> once the same texture match was widened to HD's own full-path label shape
-> and the PS3 model's own sibling-`.rcsmodel` load path was wired in. HD's
-> own board plays the same authored 6.000 s teleport Pulse's does, confirmed
-> through this project's pipeline, and, since 2026-09-17, its own glyph
-> *reveal* plays too: one Edge Animation curve, on the digit board's own
-> material, walking across a shared texture the same way Pulse's own shared
-> offset does - wired generically (`oag_render::mesh::rcs::curve_track`) and
-> confirmed by direct capture to read `3`, `2`, `1`, `GO` in order. See [the
-> placement section
+> **The gantry is placed, and it is drawn - on every platform that ships a
+> slot 8 now.** This page used to open by saying nothing on it placed the
+> gantry. That changed in two steps on 2026-09-06: HD/Fury's equivalent code
+> path was read end to end and provably reads no position either - it
+> reaches the world only by binding to geometry the **track model** authors,
+> keyed by the name `billboard<num>` - and Pulse's own track files turned out
+> to author the identical surface, at coordinates this project's parser
+> reads straight off the disc. `oag_render::gantry` measures that surface
+> per circuit and `oag_game::race::gantry` stands `321Go_StartFinish.vex` on
+> it, so a race now plays the `3`, `2`, `1`, `GO` on the object over the
+> start line rather than as a screen overlay - on Pulse, and, since
+> 2026-09-13, on HD/Fury too, once the same texture match was widened to
+> HD's own full-path label shape and the PS3 model's own sibling-`.rcsmodel`
+> load path was wired in. HD's own board plays the same authored 6.000 s
+> teleport Pulse's does, confirmed through this project's pipeline, and,
+> since 2026-09-17, its own glyph *reveal* plays too: one Edge Animation
+> curve, on the digit board's own material, walking across a shared texture
+> the same way Pulse's own shared offset does - wired generically
+> (`oag_render::mesh::rcs::curve_track`) and confirmed by direct capture to
+> read `3`, `2`, `1`, `GO` in order. **PS2 Pulse joined them on 2026-09-25**:
+> reported from play as entirely absent, it was in fact placed and animated
+> correctly and only the palette texture was missing - the PS2 disc's
+> `Texture` nodes carry no pixels by design, the same directory-position gap
+> already fixed for the hull, the plume and the shield models - and skinning
+> it the same way makes it read pixel-for-pixel identical to PSP's own
+> countdown at every phase checked. See [the placement section
 > below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse),
 > [what it took to draw it](#what-it-took-to-actually-draw-it),
 > [the HD implementation](#implemented-on-hd-the-same-mechanism-on-a-mount-that-is-not-flat),
+> [the PS2 implementation](#implemented-on-ps2-the-identical-asset-under-an-external-skin),
 > and
 > [`ghidra/functions/ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md).
 
@@ -1649,6 +1658,109 @@ than between a thread and the code.
   instruction to implement the plain race first - see
   ["Which model a mode selects"](#which-model-a-mode-selects-a-substitution-site-exists-at-slot-7---not-slot-8)
   above.
+
+## Implemented on PS2: the identical asset, under an external skin
+
+**Reported from play by the user, 2026-09-17**: "the gantry is not
+implemented/rendered/animated" on PS2 Pulse, while PSP Pulse and HD/Fury have
+it. Read on `pulse-ps2-eu.chd` (`SCES-54748`), against `pulse-psp-eu.chd` at
+the same ticks with the same team, this session (2026-09-25).
+
+### Authored identically: same name, same manifest slot, same mount
+
+**Confidence 92.** `oag-wad cat` against `WADS2.WAD` finds
+`Data\Environments\321_Go\321Go_StartFinish.vex` at the same path PSP uses -
+74,944 bytes, against PSP's 54,032, a different file rather than a missing
+one - and `TrackStartup.xml` for `16_Track` (Talon's Junction) authors the
+identical `<Billboard num="8">` line naming it, byte-for-byte the same
+manifest schema. `oag_render::gantry::mount` finds the identical
+`321backplate.tga`/`billboard8.tga` surface `crate::race::gantry` already
+measures for PSP - node 76 on this disc against PSP's node 74 (the node
+numbering shifts because the PS2 track file's own node list differs
+elsewhere; the surface itself is the same shape, measured the same way).
+**Nothing about placement is PS2-specific**, so `oag_game::race::gantry`
+already stood the model on its mount correctly, before any fix in this
+section - confirmed with `--dry-run`, which reported `start gantry ... on
+node Some(76)` and no `no start gantry` line even on the unmodified tree.
+
+### What was actually missing: the palette, not the placement
+
+**Confidence 95, measured directly.** A `--race --ticks 170 --screenshot`
+capture on the unmodified tree shows the gantry board present, correctly
+placed, correctly clipped to its panel - and blank: a near-uniform pale cream
+slab with, at most, a faint double-exposure ghost of the glyph geometry
+underneath it, at every tick checked. That is the same picture a PS2
+`.vex`'s empty texture block always produces when nothing resolves it - see
+`docs/formats/ps2-texture.md` and the identical symptom already fixed once
+for the hull (`livery::one`), the plume (`livery::plume`) and the shield
+(`livery::shield_model`) - and `crate::race::gantry::build` was the one
+loader in this family that had not taken the same branch: it built with
+`mesh::build_with_textures(name, blob, None)` unconditionally, so
+`321Go_StartFinish.vex`'s six `Texture` nodes always bound nothing.
+
+The fix is the same directory-position rule applied a fourth time:
+`crate::race::gantry::ps2_skin`, called when every texture slot the file
+declares comes back `None` (the PS2 signature; a PSP or HD gantry has its
+textures embedded or `.rcsmodel`-resolved and never enters the branch),
+resolves `mesh::Ps2TextureSet::parse(&archives.read_preceding(candidate))`
+and rebuilds with it. The load report now reads `6 of 6 texture(s) from the
+preceding archive entry, into 6 slot(s)` - every one of the model's declared
+textures, not a partial match.
+
+### The countdown reads pixel-identical to PSP's, phase for phase
+
+**Confidence 90.** `--race --track Data\Environments\16_Track\track.vex
+--team Assegai --ticks N --no-audio --screenshot`, both discs, `N` in `{30,
+66, 111, 156, 260}` (before `3` lights; on `3`; on `2`; on `1`; mid-`GO`).
+Every pair is the same picture: the same glyph lit white against the same
+dark-red neighbours at the same tick, the same green `GO` banner at tick 260.
+Nothing was tuned to make this true - the fix only supplies the pixels the
+file already authors; the timing was never in question, since the asset's
+own `TEXOFFSET` track is read once by `oag_render::TexAnims` regardless of
+where its texture came from. `ps2_start_gantry_ground_truth.rs` pins the
+three digit phases (1.10 s / 1.85 s / 2.60 s) directly against the decoded
+external palette, the same assertions
+`start_gantry_ground_truth.rs::one_glyph_is_lit_at_each_phase_in_order` makes
+against PSP's embedded one.
+
+### A real content difference from PSP, found while writing the test
+
+**Confidence 90, off `oag-view --nodes` on both discs directly.** PSP's
+glyph node, `Jons321go:Jons321go:start_light_321goShape`, is one `Mesh`
+carrying all four UV cells this page's own mechanism section documents. **The
+PS2 disc splits that one node into two**: `start_light_321Shape` (three UV
+cells, `3`/`2`/`1` only) and a separate `Anim Transform`/`Mesh` pair named
+`Go`/`GoShape` (8,000 bytes) - ten `Mesh` nodes on this disc against PSP's
+nine. Both still bind the same six-texture material set, and the `GO`
+capture above shows the split node plays correctly: the renderer walks every
+node's own authored `Anim Transform` and texture-transform track generically
+(`oag_render`'s `TexAnims`/node-anim tables), so a second node carrying its
+own track is not a special case - it is what the generic path was already
+built for. `GoShape`'s own track is not separately pinned by the ground-truth
+test, which is scoped to the three-digit node; the matched screenshot pair at
+tick 260 is the evidence for the word itself.
+
+**Also different: the palette's own resolution.** PSP's `321go_NOMIP.tga` is
+16x32; the PS2 disc's copy (same path,
+`Data\Environments\GenericTrackTextures\startlights\321go_NOMIP.tga`) is
+32x32 - the same three-row staircase, re-authored at double the column width
+(four texture columns per digit instead of two), not a scaled copy of the
+same bitmap. Read with `examples/ps2_gantry_palette_probe.rs`, kept in the
+tree for the next texture that needs eyeballing rather than asserting on
+faith. Neither the shader nor `oag_render::TexAnims` cares about a texture's
+absolute size - sampling wraps against whatever `width`/`height` the decoded
+texture reports - so this needed recording rather than fixing.
+
+### What is still open
+
+- **Only Talon's Junction is checked.** The mount, the manifest and the skin
+  are all measured off one circuit; the placement mechanism is shared with
+  PSP's own eleven-circuit path so a per-circuit regression is unlikely, but
+  no PS2 circuit past `16_Track` has had its own screenshot taken.
+- **`GoShape`'s own UV cell and track are not asserted**, only observed to
+  render correctly in a capture - see above.
+- **Modes other than the plain race are untouched**, per the standing
+  instruction the HD section above already states for its own mode variants.
 
 ## The board's background is black on the original and transparent here
 
