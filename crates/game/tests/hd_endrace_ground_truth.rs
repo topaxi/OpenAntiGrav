@@ -197,6 +197,78 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
     }
 }
 
+/// Regression for `oag_tables::fexml`'s malformed-tag recovery
+/// (`docs/formats/fexml.md`, `docs/formats/hd-endrace-screens.md`).
+/// `DATA02`'s own `EndRace_Definition.xml` authors
+/// `<Values Src="..." ... RotY="-0.5"</Values>` three times inside `EndRace
+/// Results`' loyalty-block trophy widgets - a start tag missing its own `>`.
+/// Before the fix, `fexml::parse`'s `tag_end` ran on into that literal
+/// `</Values>` text and swallowed everything the screen authors afterwards
+/// (`NavigationController` included) as a descendant of the wrongly-open
+/// `Values` node, so `EndRace Results` never collected `ControlTextConfirm`
+/// and drew no Confirm prompt at all - unlike `EndRace Menu`/`EndRace
+/// Rewards`, which do not carry the malformed shape. This proves the real
+/// disc file now reads through to its own `NavigationController` and draws
+/// `CONFIRM`.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives = open_hd_archives(&image.display().to_string());
+    let strings = english(&mut archives);
+    let screens = oag_game::endrace::load(
+        &mut archives,
+        &strings,
+        oag_ui::picker::FaceScales::default(),
+        oag_hd::endrace::AUTHORED_GRID,
+        &oag_game::sprite::Sheet::default(),
+        &[],
+        oag_hd::TITLE,
+    )
+    .expect("HD's own EndRace screens read off the real disc");
+
+    let skin = oag_ui::menu::Skin::new(
+        oag_hd::frontend::FRONT_END
+            .menu
+            .expect("HD authors a MenuSkin"),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let model = oag_ui::endrace::FieldResults {
+        headline: oag_ui::endrace::Headline::Position(1),
+        rows: vec![oag_ui::endrace::FieldRow {
+            place: 1,
+            time_ticks: Some(1000),
+            player: true,
+        }],
+    };
+    let layers = oag_ui::endrace::hd::hd_results_draw_list(
+        &model,
+        &screens.results,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    );
+    let texts: Vec<String> = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.iter().any(|t| t.eq_ignore_ascii_case("Confirm")),
+        "EndRace Results should draw its own Confirm prompt once the \
+         malformed-tag recovery reaches NavigationController: {texts:?}"
+    );
+}
+
 /// HD's own English table, off the same disc - so the test sees the
 /// strings a live session would, not bare idstrings.
 fn english(archives: &mut oag_assets::Archives) -> oag_ui::language::StringTable {

@@ -70,7 +70,7 @@ by ten columns" the inventory pass guessed before this one read the file.
 | Loyalty block (`Item OffsetX="1180" OffsetY="368"`) | `ER_LOYSTAT` caption, two `<Block>`s (`ER_LOY`/`IG_HUD_TOTAL`), `loyalty1.1`/`loyalty1.2`/`loyalty2` placeholder text (`"834 POINTS"`/`"3745"`) | 85 - **on `Results`, not a separate `Rewards` screen the way Pulse keeps it** |
 | `DelayPostMsg` | `idstring="ONL_MSG_DELAYPOST"` | 95 - online-only |
 | `RecordsCycleButton`/`RecordsCycle` | `δ` glyph / `idstring="ER_GLOB_REC"` | 95 - online leaderboard cycling, no binding possible offline |
-| `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 - direct idstrings, same convention as Pulse, but see "A malformed tag upstream" below for why this screen alone does not draw either one |
+| `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 - direct idstrings, same convention as Pulse; see "A malformed tag upstream" below for the parser bug that used to keep this screen alone from drawing either one, fixed 2026-09-25 |
 | `EndRaceMenuRedirect` | `<Default goto="Race End Save">` | 90 - confirm always goes through this intermediate save-transition screen, not straight to `Rewards`/`Menu` |
 
 ### The grid is four columns, not eight rows - and only two of the four are real
@@ -106,16 +106,15 @@ idstrings (`ER_RACE_AGAIN`, `ER_RETURN_GRID`, etc.) are verbatim identical to
 Pulse's, which is the corroboration that this is shared engine vocabulary
 rather than a Pulse-only table.
 
-### A malformed tag upstream swallows `NavigationController` on this screen alone
+### A malformed tag upstream swallowed `NavigationController` on this screen alone - fixed 2026-09-25
 
-**2026-09-25.** `crate::screen::Screens::collect_widgets` now walks a
-`NavigationController` the same as any other container - see
-[campaign-screens.md](../ui/campaign-screens.md)'s 2026-09-25 entry for the
-mechanism - and confirmed live on `EndRace Menu`/`EndRace Rewards` - both
-now draw `CONFIRM` at the authored position. **`EndRace Results` alone does
-not, and it is not this reading's own bug**: `DATA02`'s own copy of the
-screen authors `MedalModelGold`/`Silver`/`Bronze` (the loyalty-block trophy
-widgets, `x="1180" y="532"` `Item`) as
+`crate::screen::Screens::collect_widgets` walks a `NavigationController` the
+same as any other container - see [campaign-screens.md](../ui/campaign-screens.md)'s
+2026-09-25 entry for the mechanism - and this drew `CONFIRM` at the authored
+position on `EndRace Menu`/`EndRace Rewards` immediately. **`EndRace
+Results` alone did not, and it was not that reading's own bug**: `DATA02`'s
+own copy of the screen authors `MedalModelGold`/`Silver`/`Bronze` (the
+loyalty-block trophy widgets, `x="1180" y="532"` `Item`) as
 
 ```xml
 <ImageModel name="MedalModelGold" ...>
@@ -125,31 +124,39 @@ widgets, `x="1180" y="532"` `Item`) as
 
 three times, one per medal - every `<Values>` here is missing the `>` that
 should close its own opening tag before `</Values>` appears. `oag_tables::fexml::parse`'s
-own `tag_end` (`crates/tables/src/fexml.rs`) tracks quoted `>` correctly but
-has no recovery for a missing one: with no unquoted `>` anywhere in the
-malformed `<Values ...>`, the scan runs on into the *literal text*
-`</Values>` and treats **its** `>` as the one that closes the opening tag -
-so the `Values` node is pushed onto the parse stack still open, and
+own `tag_end` (`crates/tables/src/fexml.rs`) tracked quoted `>` correctly but
+had no recovery for a missing one: with no unquoted `>` anywhere in the
+malformed `<Values ...>`, the scan ran on into the *literal text*
+`</Values>` and treated **its** `>` as the one that closes the opening tag -
+so the `Values` node was pushed onto the parse stack still open, and
 everything the file authors afterwards (`MedalModelSilver`/`Bronze`,
 `RecordNotifyBlock`, `DelayPostMsg`, the divider `<Image>`, and
-`NavigationController` itself) becomes a *descendant* of that wrongly-open
+`NavigationController` itself) became a *descendant* of that wrongly-open
 node instead of a sibling of `EndRace Results`. Confirmed directly:
 extracting just the `NavigationController` fragment into its own
-well-formed file parses and resolves both `Confirm` widgets correctly in
-isolation; extracting the whole screen (malformed tags included) finds
+well-formed file parsed and resolved both `Confirm` widgets correctly in
+isolation; extracting the whole screen (malformed tags included) found
 none of `screen.texts` named `ControlText*` at all, out of 69 collected.
-This is a pre-existing gap in `fexml::tag_end`'s own recovery, not
+This was a pre-existing gap in `fexml::tag_end`'s own recovery, not
 specific to `NavigationController` - `MedalModelGold`/`Silver`/`Bronze`
-were already uncollected before this pass (no `"imagemodel"` arm in
-`collect_widgets`, per the table above), so nothing that used to draw
-stopped drawing, but nothing downstream of the first malformed tag in
-this one screen ever reaches `screen.texts` either, and no one had reason
-to notice until something that *should* draw did not. Left open rather than fixed here:
-a general recovery (treating an unquoted `<` encountered mid-tag as proof
-the tag was never closed) touches a parser every front-end screen in this
-project reads through, and deserves its own pass and its own tests rather
-than a rushed patch inside this lane's own scope. See `docs/formats/fexml.md`'s
-own module doc.
+were already uncollected before the 2026-09-25 prompts pass (no `"imagemodel"`
+arm in `collect_widgets`, per the table above), so nothing that used to draw
+stopped drawing, but nothing downstream of the first malformed tag in this
+one screen ever reached `screen.texts` either.
+
+**Fixed the same day, in `oag_tables::fexml` directly**: `tag_end` now
+treats an unquoted `<` met mid-tag as proof the previous tag was never
+closed, recovering the missing `>` in place - see
+[fexml.md](fexml.md#recovering-a-start-tag-missing-its-own--2026-09-25) for
+the rule, its evidence, and a census proving it changes nothing on every
+other fexml file this project reads except a small, named set of *other*
+instances of the identical authoring bug (also fixed by the same change).
+`EndRace Results` now collects `NavigationController` and draws `CONFIRM`
+the same as `EndRace Menu`/`EndRace Rewards` - confirmed live
+(`--menu-page endrace-results`, 1280x720) and by
+`crates/game/tests/hd_endrace_ground_truth.rs`'s
+`hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag`
+against the real disc.
 
 ## `EndRace Rewards`: authored, never entered
 

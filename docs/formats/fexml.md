@@ -210,21 +210,116 @@ accept the indirection is not enumerated** - only `Color` on a text widget's
   shortening: the PS2 reader parses `<code>` exactly as described above. Whether
   the *element* vocabulary matches is still open.
 - How layout and anchoring are expressed.
-- **This project's own reader (`oag_tables::fexml::parse`, not the original's)
-  has no recovery for a `<Tag ...attr="value"</Tag>` shape - an opening tag
-  missing the `>` that should close it before the matching close tag's own
-  text appears.** `tag_end`'s quote-tracking scan finds no unquoted `>`
-  inside the malformed attribute list, so it keeps scanning into the
-  following `</Tag>` and treats *that* `>` as the opening tag's own
-  terminator - leaving the node open on the parse stack and reparenting
-  everything the file authors afterwards underneath it instead of beside
-  it. Confirmed on real shipped data: Wipeout HD/Fury's own
-  `EndRace_Definition.xml` authors `<Values Src="..." ... RotY="-0.5"</Values>`
-  three times (`MedalModelGold`/`Silver`/`Bronze`, `EndRace Results`'
-  own trophy widgets) - see
-  [hd-endrace-screens.md](hd-endrace-screens.md#a-malformed-tag-upstream-swallows-navigationcontroller-on-this-screen-alone)
-  for what it silently swallows as a result. Not attempted here: a general
-  fix touches every front-end screen this project reads.
+
+## Recovering a start tag missing its own `>` (2026-09-25)
+
+**Fixed.** `tag_end` (`crates/tables/src/fexml.rs`) used to have no recovery
+for a `<Tag ...attr="value"</Tag>` shape - an opening tag missing the `>`
+that should close it before the matching close tag's own text appears. Its
+quote-tracking scan found no unquoted `>` inside the malformed attribute
+list, so it kept scanning into the following `</Tag>` and treated *that* `>`
+as the opening tag's own terminator - leaving the node open on the parse
+stack and reparenting everything the file authors afterwards underneath it
+instead of beside it. First found on Wipeout HD/Fury's own
+`EndRace_Definition.xml`, which authors `<Values Src="..." ... RotY="-0.5"</Values>`
+three times (`MedalModelGold`/`Silver`/`Bronze`, `EndRace Results`' own
+trophy widgets) - see
+[hd-endrace-screens.md](hd-endrace-screens.md#a-malformed-tag-upstream-swallowed-navigationcontroller-on-this-screen-alone---fixed-2026-09-25)
+for what it silently swallowed as a result before the fix.
+
+**The rule: an unquoted `<` met while still scanning a tag proves the
+previous tag was never closed.** `tag_end` now returns as soon as it meets
+one, treating the character just before it as the (missing) `>` - so
+scanning resumes exactly on that `<`, which is then read as the next tag
+(here, the real `</Values>`) rather than consumed as the malformed tag's own
+content. This format escapes nothing and authors no raw `<` inside a value
+anywhere this project has found, so a `<` met before the previous tag's own
+`>` cannot be genuine content; treating it as the missing terminator only
+ever recovers structure a naive scan was dropping, never invents structure
+that was not authored - see the census below for why that is not merely
+asserted.
+
+**This is a chosen recovery for this project's own reader, not a
+reproduction of a measured original behaviour - say so plainly.** The
+original's own `Xml_NextElement` ([ps2-pulse-eu/xml-reader.md](../ghidra/functions/ps2-pulse-eu/xml-reader.md))
+"scans forward for a `<` that is not `<?` or `<!`, reads the name, and then
+scans to the tag's `>` - skipping a `>` preceded by `-`, which is how it
+avoids stopping inside `-->`". Nothing in that read describes what happens
+if a bare `<` turns up before that scan finds its `>`, and no RPCS3 capture
+of `EndRace Results` specifically (or of `grid_04`'s own headrush cell,
+still 2048/Omega's own campaign schema) exists to settle it by observation
+either - `hd-endrace-screens.md`'s own record is explicit that "a live
+RPCS3 end-of-race walk would settle it" and has not happened. So it is
+equally possible that the shipped PS3/PS4/Vita game hits the identical bug
+on these exact widgets and simply never showed a working `Confirm` on
+`EndRace Results` or a headrush cell on `grid_04` either - a real,
+if obscure, shipped defect, not something this project's reader introduced
+by *not* recovering. What is not in question is the file's own authorial
+intent: `grid_04.xml`'s raw bytes carry ten well-formed
+`<PI_Cell name="...">...</PI_Cell>` pairs (matched open/close counts,
+confirmed by direct grep on the extracted file), and `EndRace_Definition.xml`
+carries a complete, well-formed `<NavigationController>` right after the
+broken `<Values>` - both are things *a human authored* and a scanning
+parser lost only because of a missing `>`, not because they are absent from
+the disc. Recovering them is this project's own forgiving-parser
+philosophy (`fexml::parse`'s own doc: "the goal is to read whatever the
+shipped files contain, not to validate them") applied consistently, not
+a claim about what a PS3 or Vita actually drew.
+
+**Not a no-op, and that is itself the finding.** A scratch census
+(`cargo run -p oag-game --example fexml_recovery_noop_census`, not
+committed as a test - it needs every disc image and every decrypted
+`data/extracted/` tree this project has) parses every fexml-candidate entry
+across all eight sources this project reads (Pulse PSP EU/USA, Pulse PS2 EU,
+Pure PSP EU/USA, HD, Omega, 2048/Vita) with the old pipeline (`tag_end_old`,
+and - for a shortened blob - `expand_old`/`dictionary_old`, all copied
+verbatim rather than reusing the crate's own now-fixed `expand`, since that
+would silently run the fix on both sides of the comparison) against the
+fixed one, and diffs the trees. Of **2,966 entries checked, 23 differ** -
+the same authoring bug (a start tag missing its own `>`) shipped in more
+places than the one screen this recovery was written for:
+
+| File | Where | What the old tree lost |
+| --- | --- | --- |
+| `EndRace_Definition.xml` | HD, all 5 served copies; Omega, 1 | `NavigationController` and everything after it on `EndRace Results` (see hd-endrace-screens.md) |
+| `stats_definition.xml` | HD (4 copies), Omega (1) | `MiniText`, `ScrollBar`, `Item`, `Redirect`, and two entire sibling `Screen`s |
+| `grid_04.xml` | HD (3 copies), Omega, 2048/Vita | Ten real `PI_Cell` campaign-grid cells, reparented under the malformed `Values` instead of `PI_Grid`'s own children |
+| `HUD_objectives.xml` | 2048/Vita | An `Image` widget's own `Values` attribute carrier |
+| `SP.xml` | Omega | 2048's campaign schema (read through [`mjolnir`](../../crates/tables/src/mjolnir.rs), which builds on this same tree) |
+| Pulse's "stats holder" screen | PSP EU, PSP USA, PS2 EU (`fe.wad`, 2 entries) - four entries total, all three platforms | `LeftLayer`, misnaming the first child `Text` instead |
+
+One further instance, `Data/environments2048/tower/track.pvsxml` (Omega),
+is not fexml this project actually reads at all -
+[`docs/formats/README.md`](README.md)'s own census marks `.pvsxml` "not
+opened or compared against" anything, so whatever the recovery does there
+has no live consequence.
+
+In every instance above (dumped and read individually, not just diffed),
+the old tree lost real, named elements as descendants of the
+wrongly-left-open tag; the new tree recovers them as the tree's own
+authored siblings, never the other way round - the recovery only ever
+*adds back* structure the old parser was dropping. **`grid_04.xml` is the
+one with a live downstream reader**: `oag_tables::race_campaign` walks
+`PI_Grid`'s own children looking for `PI_Cell`, so the old parser's
+misparse silently under-populated a campaign grid on three titles wherever
+this exact shape shipped. `crates/hd/tests/campaign_grids_ground_truth.rs`
+had pinned the old, wrong zero-cell count for this exact grid as its own
+ground truth, with a comment naming this precise scenario ("a future fix to
+the XML reader that started tolerating the break would have to notice this
+assertion") - updated in the same change as this recovery, since a red gate
+here blocks every lane's own merge; see that file's own history for the
+corrected counts.
+
+Regression coverage: `crates/tables/src/fexml/tests.rs`'s
+`recovers_a_start_tag_missing_its_closing_bracket`/
+`expand_recovers_the_same_missing_bracket` (the exact `RotY="-0.5"` shape,
+both through `parse` directly and through `expand`) and
+`a_doubled_opening_bracket_does_not_panic` (a `<<` right at a tag's own
+start has no content before the second `<` to recover into - guarded by
+`tag_end`'s own `index > 1`, not `> 0`, for exactly this reason), plus
+`crates/game/tests/hd_endrace_ground_truth.rs`'s
+`hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag`
+against the real disc.
 
 ## Parser behaviour worth knowing
 
