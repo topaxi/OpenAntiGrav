@@ -143,6 +143,7 @@ measurement even reads the reference as slightly *larger*, the opposite
 direction from what would justify shrinking this build's own title. Full
 detail, every crop path and the exact pixel measurements:
 `docs/ui/campaign-screens.md`'s 2026-09-25 bullet under `## Open`.
+
 **Update, 2026-09-25 (second pass), the footer's own button glyphs and the
 `GOLD MEDALS` denominator, both closed.** `ControlTextConfirmButton`/
 `BackButton`/`DifficultyButtonIcon` (`font="buttons"`) now draw through a
