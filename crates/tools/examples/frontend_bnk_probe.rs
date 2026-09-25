@@ -1,8 +1,9 @@
-//! Scratch probe (not wired into any doc yet): locate `frontend.bnk` inside
-//! 2048's `data.psarc`, extract it, and list every cue `oag_formats::sblk::Bank`
-//! decodes out of it - the evidence
-//! `handover/frontend/2048s-front-end-is-read-and-not-wired.md`'s Next Step 3
-//! asks for, to name `oag_title::Music::front_end` for 2048.
+//! Scratch probe: locate `frontend.bnk` inside 2048's `data.psarc`, extract
+//! it, and list every cue `oag_formats::sblk::Bank` decodes out of it - the
+//! evidence for naming `oag_title::Music::front_end` on 2048. See
+//! `docs/formats/2048-frontend.md`'s "frontend.bnk" bullet for what this
+//! found: an empty name table, so `front_end` names a standalone file
+//! instead.
 //!
 //! `cargo run -p oag-tools --example frontend_bnk_probe -- <base data.psarc> [out.bnk]`
 

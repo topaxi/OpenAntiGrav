@@ -18,12 +18,11 @@
 //! 2048 ships `data/audio/music/FEMusic/frontend_stereo.at9` inside its base
 //! `PSP2/data.psarc`, RIFF-wrapped exactly like the PSP titles' soundtrack -
 //! 48000 Hz stereo, a 302-second `fact` chunk. See
-//! `handover/frontend/2048s-front-end-is-read-and-not-wired.md` and
 //! `docs/formats/2048-frontend.md` for how that path was found and why it is
 //! named [`oag_title::Music::front_end`] rather than a cue out of
-//! `frontend.bnk` (the file this thread's own Next Step originally pointed
-//! at - it turned out to carry no name table at all, so it cannot be what
-//! addresses a track by name).
+//! `frontend.bnk`, which carries no name table at all
+//! (`oag_formats::sblk::Bank::sound_names` returns empty for it), so it
+//! cannot be what addresses a track by name.
 
 use std::path::Path;
 

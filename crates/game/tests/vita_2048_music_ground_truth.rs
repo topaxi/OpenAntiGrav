@@ -11,9 +11,8 @@
 //!
 //! # What this is for
 //!
-//! `handover/frontend/2048s-front-end-is-read-and-not-wired.md`'s Next Step 3
-//! asked for `frontend.bnk`'s cue table so `oag_title::Music::front_end`
-//! could name a cue. That bank turned out to carry no name table at all
+//! `frontend.bnk`, the bank `docs/formats/2048-frontend.md` first pointed
+//! at for a front-end music cue, turned out to carry no name table at all
 //! (`the_banks_cue_table_is_empty` below), so what names `front_end` instead
 //! is a standalone RIFF-wrapped ATRAC9 file the base package ships beside it,
 //! `data/audio/music/FEMusic/frontend_stereo.at9` - the same `FEMusic`
