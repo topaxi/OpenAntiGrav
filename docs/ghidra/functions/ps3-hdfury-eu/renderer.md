@@ -7104,3 +7104,49 @@ So the gap is in the term's inputs or its evaluation, not in whether it applies.
 3. **The boost blend at the frame compared.** Ours at tick 295 is near the snap (`x11`). The original frame's visible boosted light was about `x6`.
 
 Names: `ModelRecord_Create` (`0x003f0348`, 80), `ModelRecord_Load` (`0x003eeb08`, 65), `SpuLight_AttachVertexStream` (`0x0040d220`, 72) and `SceneModel_RegisterRenderRecord` (`0x002c0890`, 65) are in `names.tsv` against this page.
+
+### Candidate 1 (boost blend at the compared frames) is closed, candidate 3's vertex-output register is noted but not measured, and candidate 2 (anchor-to-panel distance) gets a disc-verified, per-ship mechanism that predicts which hulls wash (2026-09-25, later still, confidence 85 for the per-ship correlation, unscored for whether it is the original's own behaviour too)
+
+**Candidate 1 does not survive: the snap-and-decay law is already measured identical on both sides.** `EngineFlare_Update`'s own decompile (this file, "The boost gate is a timer, a snap and an exponential decay" via `engine-flare.md`) is `*(this+0x144) = 1.0f` under the boost-timer gate and `*= (1 - Thrust Chase Rate)` per 120 Hz substep otherwise - a direct read, not an inference - and `crates/game/src/race/engine_light.rs`'s `Flame::advance` is the same two branches. There is no ramp-vs-snap discrepancy to find. What still varies is *which tick* a screenshot lands on relative to the snap, and the two reference frames this thread has been comparing against turn out to differ in more than that (next paragraph).
+
+**The `x11`-vs-`x6` framing in the "What this falsifies" section above compares two different ships**, not two blend states of the same ship. `bp-081.png`'s player is on the **Piranha** planform (this file's own "Live, RPCS3" entry above: "The player's livery on this boot is dark with yellow stripes, on the Piranha planform"). The `rear-ab.png`/`tick 295` wash this thread has been chasing is on `Assegai_n1`. `Piranha` and `Assegai` are not the same hull, and `EngineLightData.xml` (below) says they are not even close.
+
+**A same-command, same-tick, same-circuit A/B across three ships, this session, settles which hulls wash in this engine and which do not:**
+
+```sh
+oag-game data/images/hdfury-ps3-eu-dec.iso --no-audio --race \
+  --track 'Data\Environments\talons_junction\track.vex' --team <TEAM> \
+  --mode single_race --hold cross --give Turbo --press square \
+  --ticks 220 --screenshot <out>.png
+```
+
+`--press square` toggles every tick, so `--give Turbo` keeps re-arming the pickup and the boost blend oscillates between the snap (`x11`) and one tick of decay (`x7.4`) for the whole run - the frame at tick 220 is a valid "near-snap" sample, the same blend regime the `rear-ab.png` comparison used.
+
+- `--team piranha`: `data/scratch/hd-light-boost/piranha-snap.png`. No wash - livery intact, glow at the nozzle only. Matches `bp-081.png`'s picture qualitatively (different skin, same planform and same `EngineLightData.xml`).
+- `--team assegai_n1`: `data/scratch/hd-light-boost/assegai_n1-snap.png`. Washes, same shape `rear-ab.png` already showed.
+- `--team harimau`: `data/scratch/hd-light-boost/harimau-snap.png`. Also washes, at the belly/nozzle - a third ship, confirming this is not `Assegai_n1`-specific.
+
+**`EngineLightData.xml` (`scripts/psarc.py cat`, all twelve teams' base directories) explains the split.** `Distance` sets how far *back along the flare's own Z axis* the anchor sits from the locator - `0.0` puts the anchor exactly at the node, a positive value pulls it back into open air behind the nozzle:
+
+| Team | Distance | Radius | Washes here |
+| --- | ---: | ---: | --- |
+| `ag_systems` | 0.0 | 1.0 | not captured this session |
+| `assegai` | 0.0 | 1.0 | yes (`assegai_n1`) |
+| `harimau` | 0.0 | 1.0 | yes |
+| `triakis` | 0.0 | 1.0 | not captured this session |
+| `qirex` | 0.1 | 0.7 | not captured this session |
+| `goteki` | 0.3 | 1.0 | not captured this session |
+| `auricom` | 1.0 | 1.0 | not captured this session |
+| `feisar` | 0.8 | 1.0 | not captured this session |
+| `icaras` | 0.8 | 1.0 | not captured this session |
+| `mirage` | 0.8 | 1.0 | not captured this session |
+| `egx` | 1.2 | 2.0 | not captured this session |
+| `piranha` | 0.4 | 2.0 | no |
+
+A `_c1`/`_n1` variant carries the same `Distance`/`Radius` as its base team (`piranha`/`piranha_c1`/`piranha_n1` all `0.4`/`2.0`; `assegai`/`assegai_c1` both `0.0`/`1.0`) - the split is per team, not per skin. Every team this session captured with `Distance = 0.0` washes; the one team with `Distance = 0.4` does not. That is two data points on one side and one on the other, not a proof, but it is the disc's own authored data drawing the same line the screenshots do: a `Distance = 0.0` anchor sits exactly at the flare locator, which on these hulls is close enough to the surrounding panels that `Radius = 1.0` already reaches them at rest, and every panel already inside `D` gets the full `1 + 10 * blend` multiply at boost. A `Distance` of several tenths, on a hull whose nozzle recesses similarly, is enough to put the same panels outside `D` even at `Radius = 2.0`.
+
+**What this does and does not settle.** It gives candidate 2 a concrete, disc-verified mechanism, and it explains why this thread's two reference frames (`bp-081.png` Piranha, `rear-ab.png`/`talons-t487.png` Assegai_n1) disagree without needing a code bug: they are different ships with different authored `Distance`. It does **not** show the original's own `Distance = 0.0` ships behave the same way at boost - no live capture of `assegai`, `harimau`, `ag_systems` or `triakis` boosted exists yet, on either side (`bp-081.png` is Piranha). Until one lands, "our `Distance = 0.0` ships wash and it is correct" and "our `Distance = 0.0` ships wash and the original's do not" are both still open - what is closed is that the wash is not explained by a mismatched boost blend or a wrong snap/decay law, and it correlates with authored per-ship data rather than one craft's own bug.
+
+**Candidate 3's other reading, not measured.** The `SVC1` vertex program's decode writes `o[TC0]` (this page, "The `SVC1` combine is read": `14  MUL o[TC0].xyz, v[4].xyzx, R3.wwww`), a texture-coordinate output slot, not `o[COL0]`/`o[COL1]`. RSX-class hardware is documented to clamp colour-interpolator outputs to `[0, 1]` and not texcoord-shaped ones, which would rule out a per-vertex hardware clamp as a cause of the wash (an unclamped `TC0` interpolant would already match `mesh.wgsl`'s own unclamped `spu_light: vec3<f32>` varying) - but that hardware behaviour was not tested here, only read off which output slot the microcode targets, so it is a plausible reading and not a measurement.
+
+**Next step, if this is picked back up:** a live RPCS3 capture of a `Distance = 0.0` team (`assegai`, `harimau`, `ag_systems` or `triakis`) boosted at player size, the same way `bp-081.png` caught Piranha - `data/scratch/hd-svc1-bit/drive.py` already reads the player's hull record and the visible SPU light list at the same breakpoint a screenshot is taken on (`hits.jsonl`, `"lights"` field on `BP_TAKEN_PASS` hits), so the same script run gets both halves of the comparison at once. If that hull washes too, the "gap" reported from play is this engine correctly reproducing a boost effect the original also has on those ships, and the thread closes with no code change. If it does not, candidates 1 and 3 are closed, which leaves the vertex-side geometry itself (the hull's own panel-to-anchor distances against `D`, `hd_engine_light_reach_probe.rs`'s approach applied to the hull mesh instead of the track) as what is left to measure.
