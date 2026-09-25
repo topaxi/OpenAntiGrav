@@ -451,6 +451,53 @@ usage shape found while tracing the specular exponent's disputed values,
 and why it does not move `op3B`/`NRM` past the same confidence-70 line this
 page's own account of it already sits at.
 
+**`0x3b` and `0x3d` cross that line 2026-09-25, off a different primary
+source than `0x3c`'s.** Absent from Mesa's `nvfx_shader.h` as recorded above,
+both are present in RPCS3's own `rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.h`
+(GPLv2, independently reverse-engineered against real hardware and shipping
+games): `RSX_FP_OPCODE_DIVSQ = 0x3B` ("Divide by Square Root", `a / sqrt(b)`)
+and `RSX_FP_OPCODE_FENCT = 0x3D` ("Fence T?" - RPCS3's own hedge on the exact
+meaning). Both were checked disc-wide with a new census
+(`crates/render/examples/hd_op3b_op3d_census.rs`, all seven archives, 1,632
+`.rcsmaterial` files, 76,358 fragment blocks - the same corpus size
+`rcsmaterial_ground_truth.rs` already establishes):
+
+- **`0x3d`: 59,256 uses, every single one writing destination register 63** -
+  the 6-bit destination field's all-ones value, and, independently checked by
+  hand on a sample, with `nvfx_shader.h`'s own `NV40_FP_OP_OUT_NONE` bit (bit
+  30 of the instruction's first dword) set. Zero counterexamples across the
+  full sweep - an exact, disc-wide structural invariant, not a sampled rate.
+  Whatever `0x3d`'s precise hardware semantics, it writes no real destination
+  on this disc, which is what "fence" would predict and what a real
+  arithmetic contributor to a shading result would not do. **Confidence 90**
+  on "no data effect"; the rubric's top structural band, held just below
+  "Established" because nothing here traces an actual synchronisation effect
+  on real hardware or in RPCS3 itself, whose own name for the opcode is
+  hedged.
+- **`0x3b`: 183,623 uses, splitting into exactly the two shapes `renderer.md`'s
+  "op3B" section already found irreconcilable under a dedicated-`NRM`
+  reading** - `DP3(v, v) -> d; op3B(v, d)` (105,800 uses, different source
+  registers - `v * rsqrt(d)`, i.e. normalize) and `op3B(x, x)` (38,284 uses,
+  identical source register both operands, no preceding self-`DP3` - `x /
+  sqrt(x) = sqrt(x)`, the standard single-instruction square-root idiom on
+  hardware with no native `SQRT`). A generic two-operand `DIVSQ(a, b) = a /
+  sqrt(b)` produces both from one formula; a dedicated `NRM` cannot produce
+  the second at all, which is exactly the contradiction that kept `op3B`
+  below the rename line. The remaining 39,539 uses take an `Input` or
+  `Constant` operand rather than two plain registers - additional argument
+  variety a generic arithmetic primitive is expected to have, not a
+  counter-example to the shape above. **Confidence 84**: matches the primary
+  source unhedged and is structurally uniform disc-wide across both shapes,
+  capped below the 85+ band because nothing traces an actual computed value
+  against a known-correct oracle (no live GPU trace).
+
+Named in `fragment.rs` and `scripts/ps3-microcode.py`'s `FP_OPS`.
+`docs/rendering/pads.md`'s "Wiring attempted and stopped" thread was blocked
+on exactly this naming for its pad-glow specular scalar (which, traced by
+hand, turns out to use only `0x3b`/`DIVSQ`, never `0x3d`) - see that page for
+what this clears. `0x3e` (1,155 uses per the count above) is the one opcode
+still genuinely unnamed.
+
 ### What the microcode does and does not settle
 
 With the decoder there, the natural next question is whether a surface takes

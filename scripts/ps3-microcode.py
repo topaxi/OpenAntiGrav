@@ -112,8 +112,29 @@ FP_OPS = {
     0x1E: "LIT", 0x1F: "LRP", 0x20: "STR", 0x21: "SFL", 0x22: "COS",
     0x23: "SIN", 0x24: "PK2H", 0x25: "UP2H", 0x26: "POW", 0x27: "PK4UB",
     0x28: "UP4UB", 0x29: "PK2US", 0x2A: "UP2US", 0x2E: "DP2A", 0x2F: "TXL",
-    0x31: "TXB", 0x36: "RFL", 0x3A: "DIV", 0x3C: "LITEX2", 0x3B: "op3B",
-    0x3D: "op3D",
+    0x31: "TXB", 0x36: "RFL", 0x3A: "DIV", 0x3C: "LITEX2",
+    # `0x3B`/`0x3D` are absent from Mesa's NV30/NV40-era `nvfx_shader.h` (the
+    # header this table is otherwise built from) but present in RPCS3's own
+    # `rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.h` (GPLv2, independently
+    # reverse-engineered against real hardware): `RSX_FP_OPCODE_DIVSQ = 0x3B`
+    # ("Divide by Square Root") and `RSX_FP_OPCODE_FENCT = 0x3D` ("Fence T?",
+    # RPCS3's own hedge on the precise meaning). Named here 2026-09-25 after
+    # disc-wide corroboration (`crates/render/examples/hd_op3b_op3d_census.rs`,
+    # 1,632 `.rcsmaterial` files / 76,358 fragment blocks): every one of
+    # 59,256 `0x3D` uses writes destination register 63 (the 6-bit field's
+    # all-ones value, matching `nvfx_shader.h`'s own `NV40_FP_OP_OUT_NONE`
+    # "no destination" bit, independently confirmed set on every hand-checked
+    # instance) - an exact, disc-wide invariant consistent with "no data
+    # effect", confidence 90. `0x3B`'s 183,623 uses split into the two usage
+    # shapes `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "op3B"
+    # section previously found irreconcilable under an `NRM` (normalize)
+    # reading - `DP3(v,v)->d; op3B(v,d)` (105,800 uses, `v*rsqrt(d)`) and
+    # `op3B(x,x)` (38,284 uses, `x/sqrt(x)=sqrt(x)`, the standard
+    # single-instruction square-root idiom on hardware with no native `SQRT`)
+    # - both of which a generic 2-operand `a/sqrt(b)` unifies at once.
+    # Confidence 84. See `docs/formats/rcsmaterial.md` and `renderer.md` for
+    # the full evidence and history.
+    0x3B: "DIVSQ", 0x3D: "FENCT",
 }
 FP_INPUTS = {0: "f[POS]", 1: "f[COL0]", 2: "f[COL1]", 3: "f[FOGC]"} | {
     4 + n: f"f[TC{n}]" for n in range(10)

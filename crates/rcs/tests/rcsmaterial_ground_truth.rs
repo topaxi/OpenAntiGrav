@@ -380,8 +380,10 @@ fn every_shipped_permutation_is_one_this_reading_can_build() {
 /// instruction - `track_surface` #7 and #9, and
 /// `detonator_ship_rich_iridescent` #2 - gives identical opcode and destination
 /// sequences, differing only where the reference prints its `op3B`/`op3D`
-/// placeholders and this leaves them unnamed. The numbers below are larger
-/// because this walks all seven archives.
+/// placeholders and this leaves them unnamed (true when this test was
+/// written; `0x3b`/`0x3d` are named as `DIVSQ`/`FENCT` since 2026-09-25, see
+/// below). The numbers below are larger because this walks all seven
+/// archives.
 #[test]
 #[ignore]
 fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
@@ -423,19 +425,23 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
     );
     assert_eq!(clean, blocks, "a block did not stop where it said it would");
     assert!(instructions > 1_900_000, "only {instructions} instructions");
-    // Exactly three opcodes in shipped code are outside nouveau's table. If a
-    // fourth appeared, either the corpus grew or the stride is wrong somewhere
-    // and garbage is being read as an opcode.
+    // `0x3b`/`0x3d` were named `DIVSQ`/`FENCT` 2026-09-25 (RPCS3's own
+    // `FPOpcodes.h`, corroborated disc-wide - see `docs/formats/
+    // rcsmaterial.md` and `crates/render/examples/hd_op3b_op3d_census.rs`),
+    // so exactly one opcode in shipped code is now outside nouveau's table
+    // (and this project's own). If a second appeared, either the corpus grew
+    // or the stride is wrong somewhere and garbage is being read as an
+    // opcode.
     assert_eq!(
         unnamed.keys().copied().collect::<Vec<_>>(),
-        vec![0x3b, 0x3d, 0x3e],
-        "an opcode outside the three known-unnamed ones"
+        vec![0x3e],
+        "an opcode outside the one known-unnamed one"
     );
     assert_eq!(
         unnamed.get(&0x3e).copied(),
         Some(1_155),
-        "the rarest of the three - 330 in DATA00 alone, which is where an independent \
-         Python census counted the same number"
+        "330 in DATA00 alone, which is where an independent Python census counted the \
+         same number"
     );
 }
 

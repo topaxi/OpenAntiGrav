@@ -734,3 +734,55 @@ away, but still not what the disc's own microcode computes.
    the general scene pass, so this stays scoped to pad geometry the way the
    evidence is), and the disc's own `MAD`/`EX2` chain reproduced in
    `mesh.wgsl` rather than approximated.
+
+### Item 1 cleared, 2026-09-25: `0x3b`/`0x3d` are named, off RPCS3's opcode table
+
+**Not the existing normalise/rsq hypothesis strengthened - a different
+primary source, found instead.** Mesa's `nvfx_shader.h` (this project's own
+decoder's usual reference) has no entry for either opcode; RPCS3's own
+`rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.h` (GPLv2, independently
+reverse-engineered against real hardware and shipping PS3 games) does:
+`RSX_FP_OPCODE_DIVSQ = 0x3B` ("Divide by Square Root", `a / sqrt(b)`) and
+`RSX_FP_OPCODE_FENCT = 0x3D` ("Fence T?" - RPCS3's own hedge). `DIVSQ`
+resolves the specific contradiction that kept `op3B` below the rename line
+(`renderer.md`'s "second usage shape" paragraph): a generic `a / sqrt(b)`
+produces both the `DP3`-then-`op3B` normalize idiom (`v * rsqrt(d)`) *and*
+the same-register `op3B(x, x)` shape (`x / sqrt(x) = sqrt(x)`, the standard
+one-instruction square root on hardware with no native `SQRT`) from one
+formula, where a dedicated `NRM` could only explain the first.
+
+**Checked disc-wide, not asserted from the two hand-read examples that
+motivated it**: `crates/render/examples/hd_op3b_op3d_census.rs`, all seven
+archives, 1,632 `.rcsmaterial` files, 76,358 fragment blocks. `0x3b`:
+183,623 uses, splitting cleanly into the two shapes above (105,800 /
+38,284) plus 39,539 taking an `Input`/`Constant` operand (expected variety,
+not a counter-example). Confidence 84. `0x3d`: 59,256 uses, **every single
+one** writing destination register 63 (the 6-bit field's all-ones value) -
+independently confirmed by hand on a sample to also carry `nvfx_shader.h`'s
+own `NV40_FP_OP_OUT_NONE` bit set, matching Mesa's documented meaning for
+that bit rather than merely correlating with it. Zero counterexamples: an
+exact disc-wide invariant, not a sampled rate. Confidence 90 on "writes no
+real destination" - consistent with "fence", inconsistent with any real
+arithmetic contribution to a shading result. Both now named in `fragment.rs`
+and `scripts/ps3-microcode.py`. Full evidence in
+`docs/formats/rcsmaterial.md` and `docs/ghidra/functions/ps3-hdfury-eu/
+renderer.md`'s "op3B resolves" section.
+
+**What this clears for the pad glow specifically: item 1, fully.** Re-running
+`hd_pad_ne_tint_probe.rs` with raw opcode numbers shown confirms all six
+chain instructions the hand trace above found (Speedup Pad instructions 15,
+23, 27; Weapon Pad 19, 21, 31) are `0x3b`/`DIVSQ` - **`0x3d` does not appear
+in either pad's specular chain at all**, so both pad programs' specular
+scalar is now fully nameable arithmetic: an `LG2`/`MUL(32.0)`/`EX2` power
+curve fed, at its base, by a `DIVSQ`-built normalize.
+
+**What is not cleared: item 2, still open, and nothing here touches it.**
+The pad's `N.H` still needs a per-pixel tangent frame `mesh.wgsl` does not
+build yet - naming the opcodes that compute the scalar does not supply the
+normal that scalar's own chain needs as an input. **Nothing was wired in this
+pass** - `fragment.rs`'s `Program::dp3_feeding`/`specular_exponent` gates are
+unchanged (deliberately - see `renderer.md`'s own note on why relaxing
+`dp3_feeding` to accept a `DP3`-then-`DIVSQ` idiom is separate work), and
+`skin::picks`, `Pick`, `material_bind_group_layout` and `mesh.wgsl` are all
+untouched. Item 2 (the tangent frame) and item 3 (the bind-group change) are
+exactly as before.

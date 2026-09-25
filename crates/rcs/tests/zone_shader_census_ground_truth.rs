@@ -435,11 +435,14 @@ fn no_ship_or_weapon_material_compiles_a_zone_variant() {
 /// **`-1` reads as the same gate turned off**, at confidence 70 rather than
 /// the count's own: `saturate(N.y - 1)` is zero for every unit normal, so
 /// those blocks multiply the lookup by zero. That rests on the register
-/// feeding the `ADD` being a normalised `N.y`, decoded through an opcode
-/// (`0x3b`) `oag_rcs::rcsmaterial::fragment` does not name - read as a
-/// normalise from its pairing with a `DP3` of a vector against itself, twice
-/// in the same block. What is *measured* here, and what this asserts, is the
-/// two-value threshold set; the "turned off" reading is the interpretation.
+/// feeding the `ADD` being a normalised `N.y`, decoded through opcode `0x3b`,
+/// named `DIVSQ` (`a / sqrt(b)`) 2026-09-25, confidence 84, see
+/// `docs/formats/rcsmaterial.md`. That reading comes from its pairing with a
+/// `DP3` of a vector against itself, twice in the same block: `DP3(v,v)->d;
+/// DIVSQ(v,d) = v * rsqrt(d)`, the normalize idiom the naming itself
+/// confirmed. What is *measured* here, and what this asserts, is the
+/// two-value threshold set; the "turned off" reading is a separate
+/// interpretation the opcode's own name does not itself settle.
 ///
 /// The other half of the answer is geometry rather than microcode - see
 /// `rcsmodel_material_ground_truth.rs`'s

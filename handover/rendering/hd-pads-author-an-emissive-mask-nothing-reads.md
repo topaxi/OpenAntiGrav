@@ -303,6 +303,28 @@ whether to spend on wiring it at all, and the two RE leads.
    text below is kept for the plumbing shape it still correctly describes,
    once the opcodes are named.
 
+   > **The opcode blocker is cleared, 2026-09-25 - do not re-attempt naming
+   > `0x3b`/`0x3d`.** RPCS3's own `FPOpcodes.h` (GPLv2, independently
+   > reverse-engineered against real hardware) names both:
+   > `RSX_FP_OPCODE_DIVSQ = 0x3B` (`a / sqrt(b)`) and `RSX_FP_OPCODE_FENCT =
+   > 0x3D` ("Fence T?"). `DIVSQ` resolves the exact contradiction that kept
+   > `op3B` below the rename line (it produces both the normalize idiom and
+   > the same-register square-root idiom `renderer.md` had found
+   > irreconcilable under a dedicated `NRM`), and a disc-wide census
+   > (`crates/render/examples/hd_op3b_op3d_census.rs`, 1,632 files, 76,358
+   > fragment blocks) confirms `0x3d` writes no real destination on every one
+   > of 59,256 uses - an exact invariant, not a sampled rate. Confidence 84
+   > (`0x3b`/`DIVSQ`) and 90 (`0x3d`/`FENCT`, "no data effect"). Both pad
+   > programs' specular chains use only `0x3b`, never `0x3d` - traced with
+   > `hd_pad_ne_tint_probe.rs`'s raw-opcode output. **What is still open,
+   > unchanged by this**: the tangent frame `mesh.wgsl` needs to build `N` for
+   > this chain (this item's own second, smaller blocker, still unaddressed),
+   > and the bind-group/third-texture change below, which still depends on
+   > that tangent frame landing first. See `docs/rendering/pads.md`'s "Item 1
+   > cleared, 2026-09-25" section and `docs/formats/rcsmaterial.md` for the
+   > full evidence. No code wired; `Program::dp3_feeding` is deliberately
+   > left unrelaxed, a separate change for whoever picks this up next.
+
    Original text, still the plumbing shape once unblocked - and read the
    trap before touching it, twice over now. This is *not* the cheap step it
    looks like, for two separate reasons. First, the one already known: the

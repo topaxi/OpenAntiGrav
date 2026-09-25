@@ -5430,6 +5430,71 @@ own semantics in that instance are not actually a cross-vector dot. Leaving
 possibly-wrong reading - is the correct choice until `op3B` itself resolves,
 not a gap to route around.
 
+**`op3B` resolves 2026-09-25, and `op3D` along with it, off RPCS3's own
+opcode table rather than a stronger guess at the same confidence this page
+already declined to cross.** `rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.h`
+(GPLv2, independently reverse-engineered against real hardware and shipping
+PS3 games - not Mesa's NV30/NV40-era `nvfx_shader.h` this project's own
+decoder is otherwise built from, which has no entry for either opcode) names
+both: `RSX_FP_OPCODE_DIVSQ = 0x3B` ("Divide by Square Root", `a / sqrt(b)`)
+and `RSX_FP_OPCODE_FENCT = 0x3D` ("Fence T?" - RPCS3's own hedge on the exact
+meaning, not this project's).
+
+**`DIVSQ` is what the "second usage shape" paragraph above was missing, and
+it resolves the contradiction rather than adding a third guess.** A generic
+two-operand `a / sqrt(b)` produces *both* recorded shapes from one formula:
+`DP3(v, v) -> d; op3B(v, d)` is `v * rsqrt(d)` (normalize, this section's
+original reading) and `op3B(x, x)` - both operands the same register, no
+preceding self-`DP3`, exactly the ship's `pow(N.H, 40)` block's own shape
+this page already flagged as not fitting a dedicated `NRM` - is `x / sqrt(x)
+= sqrt(x)`, the standard single-instruction square-root idiom on hardware
+with no native `SQRT`. A dedicated `NRM` opcode cannot produce the second
+shape at all; `DIVSQ` produces both without special-casing either.
+
+**Checked disc-wide before naming, not asserted from two hand-read
+examples**, with a new census
+(`crates/render/examples/hd_op3b_op3d_census.rs`) walking all seven archives'
+`.rcsmaterial` files - 1,632 files, 76,358 fragment blocks, the corpus size
+`rcsmaterial_ground_truth.rs` already establishes:
+
+- **`op3B`: 183,623 uses** - 105,800 in the different-register (normalize)
+  shape, 38,284 in the same-register (square-root) shape, and 39,539 taking
+  an `Input` or `Constant` operand rather than two plain registers (expected
+  argument variety for a generic arithmetic primitive, not a counter-example
+  to either shape). **Confidence 84**: matches the primary source unhedged,
+  structurally uniform disc-wide across both shapes that previously seemed
+  irreconcilable. Capped below the 85+ band because nothing here traces an
+  actual computed value against a known-correct oracle - no live GPU trace,
+  the way "Established" would need.
+- **`op3D`: 59,256 uses, every single one writing destination register 63** -
+  the 6-bit destination field's all-ones value. Independently checked by hand
+  on a sample of these: `nvfx_shader.h`'s own `NV40_FP_OP_OUT_NONE` bit (bit
+  30 of the instruction's first dword) is set on every one, matching Mesa's
+  documented meaning for that bit exactly rather than merely correlating with
+  it. Zero counterexamples across the full disc-wide sweep - not a sampled
+  rate, an exact invariant - corroborating this section's own earlier
+  `etched_glass_tech`-only observation of the identical `R63, R0, R0` pattern
+  at far larger scale. Whatever `0x3d`'s precise hardware semantics, it
+  writes no real destination anywhere on this disc, consistent with "fence"
+  and inconsistent with a real arithmetic contributor to any shading result.
+  **Confidence 90** on "no data effect" specifically - the rubric's own
+  top-structural-band ceiling for an exact arithmetic/structural invariant
+  across many real files, held below "Established" because RPCS3's own name
+  is hedged and no live hardware trace confirms an actual synchronisation
+  effect.
+
+**Now named in `fragment.rs` and `scripts/ps3-microcode.py`'s `FP_OPS`** -
+`op3B` as `DIVSQ`, `op3D` as `FENCT`. `Program::dp3_feeding` is deliberately
+**not** relaxed to accept `DIVSQ` in this pass: that was this section's own
+prior caution for a different, unnamed reason (semantics not uniform), and
+now that the semantics *are* understood and uniform, relaxing the gate to
+recognise a `DP3`-then-`DIVSQ` normalize idiom as equivalent to a bare `DP3`
+is a real, separate change to `specular_exponent()`'s own behaviour - left
+for whoever picks it up next, not folded in here alongside a naming change.
+`docs/rendering/pads.md`'s pad-glow specular scalar was blocked on exactly
+this naming; traced by hand, both pad programs' chains use only `0x3b`,
+never `0x3d` - see that page for what this clears and does not.
+
 **The shipped `Program::dp3_feeding` gate is itself lane-unsound in a
 measured fraction of what it currently resolves - found while trying to
 explain the 96 % fallback rate below, and more consequential than that
