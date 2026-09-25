@@ -59,6 +59,28 @@ the ticker's own scroll speed (chosen, not measured), and `Line8`/`Zone`/
 `Elimination`'s own saved records (no raw count anywhere in
 `oag_game::records::Record` to read).
 
+**Update, 2026-09-25, HD/Fury's own three screens
+(`Campaign Selection` -> `Grid Selection` -> `Cell Selection`): a
+capture-only "impossible state" bug fixed, and the footer legend now draws
+on all three screens rather than one.** `crate::capture::campaign_page`'s
+HD arms read `campaign.grids` whole (all sixteen - base `Wipeout HD`'s
+`grid0`..`grid7` plus `Fury`'s `grid8`..`grid15`) instead of one campaign's
+own eight, so `--menu-page grid-select`/`cell-select` drew `Event 01/16`, a
+state the live session never reaches (`CampaignStage::open_grid_selection`
+always narrows first) and RPCS3's own frame never shows (`EVENT 01/08`).
+Fixed by slicing to one campaign, defaulting to `Fury` - the measured
+default and the campaign every RPCS3 reference frame on disk is actually
+of. Separately, RPCS3's own frames show the `NAVIGATION`/`CONFIRM`/`BACK`
+footer row on `Campaign Selection` and `Grid Selection` too, not `Cell
+Selection` alone as the `pulse-campaign-ticker` lane's own note above
+assumed ("matching Pulse's own scope") - `hd_grid_draw_list`/
+`selection::draw_list` gained the same `footer_overlay` parameter
+`hd_cell_draw_list` already had. Full detail, including the still-open
+gaps (the button glyphs themselves, `Grid Selection`'s own third `CHANGE
+DIFFICULTY` prompt, the 3-D flyer model), in
+`docs/ui/campaign-screens.md`'s "`--menu-page` stills match a real screen
+state, and the footer draws on all three, 2026-09-25" section.
+
 Milestone: **M7 - Shell and polish**.
 
 Read first: [`docs/ui/campaign-screens.md`](../../docs/ui/campaign-screens.md)
