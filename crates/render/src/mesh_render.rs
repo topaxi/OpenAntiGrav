@@ -41,6 +41,9 @@ pub use target::{fragment_options, is_linear_target, linear_constants};
 mod anisotropy;
 pub use anisotropy::Anisotropy;
 
+mod pipeline_cache;
+pub use pipeline_cache::Scope as BuildCacheScope;
+
 mod shadow_map;
 mod texture;
 pub mod zone;
@@ -319,10 +322,13 @@ pub fn build(
         Depth::Overlay => (false, wgpu::CompareFunction::LessEqual),
     };
 
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("mesh"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("mesh.wgsl").into()),
-    });
+    // Shared across every drawable an open `pipeline_cache::Scope` covers -
+    // `race::Scene::new`'s whole build - rather than parsed fresh per model;
+    // see `pipeline_cache` for why and by how much. A caller with no scope
+    // open (the viewer, every test but the cache's own) gets exactly the
+    // fresh module this always created.
+    let shader = pipeline_cache::shared_shader_module(device);
+    let shader = &shader;
     // The target format is the statement about colour space - see
     // [`is_linear_target`] - and it reaches the shader as a pipeline
     // constant, so every pipeline built here answers for the target it was
@@ -513,69 +519,100 @@ pub fn build(
         immediate_size: 0,
     });
 
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("mesh"),
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            buffers: &[Some(wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![
-                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-                    9 => Uint32, 10 => Float32, 11 => Float32
-                ],
-            })],
-            compilation_options: Default::default(),
+    // The vertex layout never varies with the model, so it is built once and
+    // shared by reference across every `create_render_pipeline` call below,
+    // in place of the three identical inline copies this used to be.
+    const ATTRS: [wgpu::VertexAttribute; 12] = wgpu::vertex_attr_array![
+        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+        4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
+        9 => Uint32, 10 => Float32, 11 => Float32
+    ];
+    let vertex_buffers = [Some(wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<GpuVertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &ATTRS,
+    })];
+    // Shared by the opaque and the cutout pipeline below - identical for
+    // both, so it is computed once. `pipeline_cache::cached_pipeline` still
+    // keys each of its own callers separately; this only avoids constructing
+    // the same value twice.
+    let primitive = wgpu::PrimitiveState {
+        // Culling is off on purpose. Strip winding is reconstructed rather
+        // than read from the file, so culling would turn any mistake there
+        // into invisible geometry instead of a visible artefact.
+        cull_mode: None,
+        ..Default::default()
+    };
+    let multisample = wgpu::MultisampleState {
+        count: sample_count,
+        ..Default::default()
+    };
+
+    let targets = velocity_targets(
+        wgpu::ColorTargetState {
+            format,
+            blend: None,
+            write_mask: glow.writes(),
         },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some(velocity.entry("fs_main", "fs_main_velocity")),
-            // Alpha is the bloom's glow mask - see [`GlowMask`]. The second
-            // target, when [`Velocity::Write`] adds one, takes this surface's
-            // real screen motion - this pipeline writes depth.
-            targets: &velocity_targets(
-                wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: glow.writes(),
+        velocity.target(false),
+    );
+    let depth_stencil = wgpu::DepthStencilState {
+        format: DEPTH_FORMAT,
+        depth_write_enabled: Some(depth_write),
+        depth_compare: Some(depth_compare),
+        stencil: Default::default(),
+        bias: Default::default(),
+    };
+    // Alpha is the bloom's glow mask - see [`GlowMask`]. The second target,
+    // when [`Velocity::Write`] adds one, takes this surface's real screen
+    // motion - this pipeline writes depth.
+    let fragment_entry = velocity.entry("fs_main", "fs_main_velocity");
+    let pipeline = pipeline_cache::cached_pipeline(
+        "vs_main",
+        fragment_entry,
+        &targets,
+        primitive,
+        Some(depth_stencil.clone()),
+        multisample,
+        constants,
+        || {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("mesh"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &vertex_buffers,
+                    compilation_options: Default::default(),
                 },
-                velocity.target(false),
-            ),
-            compilation_options: wgpu::PipelineCompilationOptions {
-                constants,
-                ..Default::default()
-            },
-        }),
-        primitive: wgpu::PrimitiveState {
-            // Culling is off on purpose. Strip winding is reconstructed rather
-            // than read from the file, so culling would turn any mistake there
-            // into invisible geometry instead of a visible artefact.
-            cull_mode: None,
-            ..Default::default()
+                fragment: Some(wgpu::FragmentState {
+                    module: shader,
+                    entry_point: Some(fragment_entry),
+                    targets: &targets,
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants,
+                        ..Default::default()
+                    },
+                }),
+                primitive,
+                depth_stencil: Some(depth_stencil.clone()),
+                multisample,
+                multiview_mask: None,
+                cache: None,
+            })
         },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(depth_write),
-            depth_compare: Some(depth_compare),
-            stencil: Default::default(),
-            bias: Default::default(),
-        }),
-        multisample: wgpu::MultisampleState {
-            count: sample_count,
-            ..Default::default()
-        },
-        multiview_mask: None,
-        cache: None,
-    });
+    );
 
     // Second pipeline for `Model::alpha_tested_draws`: same shader module,
     // bind group layouts, vertex layout and depth state as the opaque
     // pipeline (a cutout is meant to occlude and be occluded exactly like
     // opaque geometry), except the fragment shader discards pixels below a
     // threshold instead of always returning alpha 1.0.
+    //
+    // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout writes
+    // depth like the opaque pipeline, so it writes real velocity too - same
+    // `targets` as the opaque pipeline above, reused rather than rebuilt.
+    let cutout_fragment_entry = velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity");
     let make_cutout = |label: &str, reference: Option<f32>| {
         // A per-batch reference overrides the model-level one already in
         // `constants`; `wgpu` rejects a duplicate key, so it replaces rather
@@ -585,62 +622,48 @@ pub fn build(
             constants.retain(|(name, _)| *name != "alpha_test_ref");
             constants.push(("alpha_test_ref", f64::from(reference)));
         }
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some(label),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-                        9 => Uint32, 10 => Float32, 11 => Float32
-                    ],
-                })],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some(
-                    velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity"),
-                ),
-                // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout
-                // writes depth like the opaque pipeline, so it writes real
-                // velocity too.
-                targets: &velocity_targets(
-                    wgpu::ColorTargetState {
-                        format,
-                        blend: None,
-                        write_mask: glow.writes(),
+        let depth_stencil = wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(depth_write),
+            depth_compare: Some(cutout::depth_compare(reference, depth_compare)),
+            stencil: Default::default(),
+            bias: Default::default(),
+        };
+        pipeline_cache::cached_pipeline(
+            "vs_main",
+            cutout_fragment_entry,
+            &targets,
+            primitive,
+            Some(depth_stencil.clone()),
+            multisample,
+            &constants,
+            || {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(label),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &vertex_buffers,
+                        compilation_options: Default::default(),
                     },
-                    velocity.target(false),
-                ),
-                compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: &constants,
-                    ..Default::default()
-                },
-            }),
-            primitive: wgpu::PrimitiveState {
-                cull_mode: None,
-                ..Default::default()
+                    fragment: Some(wgpu::FragmentState {
+                        module: shader,
+                        entry_point: Some(cutout_fragment_entry),
+                        targets: &targets,
+                        compilation_options: wgpu::PipelineCompilationOptions {
+                            constants: &constants,
+                            ..Default::default()
+                        },
+                    }),
+                    primitive,
+                    depth_stencil: Some(depth_stencil.clone()),
+                    multisample,
+                    multiview_mask: None,
+                    cache: None,
+                })
             },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(depth_write),
-                depth_compare: Some(cutout::depth_compare(reference, depth_compare)),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                ..Default::default()
-            },
-            multiview_mask: None,
-            cache: None,
-        })
+        )
     };
     let alpha_test_pipeline = make_cutout("mesh alpha test", None);
     let cutout_pipelines = cutout::pipelines(&model.alpha_tested_draws, |label, reference| {
@@ -673,64 +696,69 @@ pub fn build(
     // culling, while culling front faces changes 2,666 - and the pixels that
     // do change are back-facing slivers that were wrongly visible. That is
     // the check the old blanket `cull_mode: None` asked for and never got.
+    // Depth state never varies across this pipeline's callers - blended
+    // geometry never writes depth, whichever `Depth` this model asked for -
+    // so it is computed once outside the closure rather than per call.
+    let blend_depth_stencil = wgpu::DepthStencilState {
+        format: DEPTH_FORMAT,
+        depth_write_enabled: Some(false),
+        depth_compare: Some(depth_compare),
+        stencil: Default::default(),
+        bias: Default::default(),
+    };
     let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some(label),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                        4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-                        9 => Uint32, 10 => Float32, 11 => Float32
-                    ],
-                })],
-                compilation_options: Default::default(),
+        // The second target rides along **write-masked empty** when
+        // [`Velocity::Write`] adds one: a blended draw writes no depth, so
+        // the velocity at its pixels stays the surface's behind it - see
+        // [`Velocity`]. Alpha is the bloom's glow mask - see [`GlowMask`] for
+        // which draw paths are allowed to write it and why.
+        let targets = velocity_targets(
+            wgpu::ColorTargetState {
+                format,
+                blend,
+                write_mask: glow.blend_writes(),
             },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main_blend"),
-                // The second target rides along **write-masked empty** when
-                // [`Velocity::Write`] adds one: a blended draw writes no
-                // depth, so the velocity at its pixels stays the surface's
-                // behind it - see [`Velocity`].
-                targets: &velocity_targets(
-                    wgpu::ColorTargetState {
-                        format,
-                        blend,
-                        // Alpha is the bloom's glow mask - see [`GlowMask`] for
-                        // which draw paths are allowed to write it and why.
-                        write_mask: glow.blend_writes(),
+            velocity.target(true),
+        );
+        let primitive = wgpu::PrimitiveState {
+            cull_mode: cull.then_some(wgpu::Face::Back),
+            ..Default::default()
+        };
+        pipeline_cache::cached_pipeline(
+            "vs_main",
+            "fs_main_blend",
+            &targets,
+            primitive,
+            Some(blend_depth_stencil.clone()),
+            multisample,
+            constants,
+            || {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(label),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &vertex_buffers,
+                        compilation_options: Default::default(),
                     },
-                    velocity.target(true),
-                ),
-                compilation_options: wgpu::PipelineCompilationOptions {
-                    constants,
-                    ..Default::default()
-                },
-            }),
-            primitive: wgpu::PrimitiveState {
-                cull_mode: cull.then_some(wgpu::Face::Back),
-                ..Default::default()
+                    fragment: Some(wgpu::FragmentState {
+                        module: shader,
+                        entry_point: Some("fs_main_blend"),
+                        targets: &targets,
+                        compilation_options: wgpu::PipelineCompilationOptions {
+                            constants,
+                            ..Default::default()
+                        },
+                    }),
+                    primitive,
+                    depth_stencil: Some(blend_depth_stencil.clone()),
+                    multisample,
+                    multiview_mask: None,
+                    cache: None,
+                })
             },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(false),
-                depth_compare: Some(depth_compare),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                ..Default::default()
-            },
-            multiview_mask: None,
-            cache: None,
-        })
+        )
     };
     let blend_pipeline = [
         make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
