@@ -133,3 +133,7 @@ plugin definition activates a second `PI_Skin` at `Data\Skins\Default` whose
 own `Skin.xml` declares all 41 of them. Three of the four sampled values were
 wrong. **Before recording a name as undeclared on a title, check whether that
 title activates a style skin.**
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+the track and craft previews are **rendered 3D meshes** on Pulse PSP, Pulse PS2 and HD, with verified paths rather than inferred ones: `<location>\FE\{forward,reverse}.vex` for a circuit and `<team>\<variant>_FE.vex` for a craft, with HD authoring both as explicit `<Model>` widgets. **Pure is the exception and previews with a pre-rendered 256x128 still**, one of three its own `<location>\screen.xml` names, cycling `Info -> Side -> Top` at two seconds a step - a PPSSPP texture dump matches the drawn pixels to `FEData.wad` entries at RMSE 0 (2026-09-10), correcting nine hours of `Ship.vex`/`track.vex` mesh wiring that was a plausible-looking stand-in. Both of Pure's screens now draw their entry list and their preview off the disc. Open: its stat bars (authored in the same per-entity `screen.xml`, unread), its `Layout` still borrowing Pulse's `panel`/`preview` rects, `screen_m.xml`/`screen_tt.xml` needing a race-mode parameter, and the *camera* the PSP titles frame the mesh previews with. See [race-setup.md](../../docs/formats/race-setup.md)

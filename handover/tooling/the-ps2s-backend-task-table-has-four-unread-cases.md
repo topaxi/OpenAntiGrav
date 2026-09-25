@@ -45,3 +45,7 @@ already what `oag_pulse::movies::LOOSE_MOVIES` prefers, per the maintainer's
    settles the persistence question directly. Note the disc is PAL-only, so the
    *default* is the 50 Hz side and the 60 Hz side is only reachable by answering
    yes.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+what remains after the PAL/NTSC selector's trigger was traced 2026-09-08 to `<Values task="Switch50">` on a first-boot 60 Hz screen ([refresh-mode.md](../../docs/ghidra/functions/ps2-pulse-eu/refresh-mode.md)): four task names the archive never authors, and whether the player's answer is persisted

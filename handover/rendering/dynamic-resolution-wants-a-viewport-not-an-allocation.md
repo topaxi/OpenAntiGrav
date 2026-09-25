@@ -95,3 +95,7 @@ are closed.
 2. Take the Steam Deck memory reading, or say out loud that nobody will.
 3. Ask a player whether the stepping is visible at 49 changes a minute, before
    tuning `RISE_PATIENCE` on a hunch.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+`[render_profiles.<title>] target_fps` names a target rate and `minimum_resolution` bounds the fall, `render_scale` is the ceiling, every scene pass takes a resource size and a viewport separately, and the budget is a share of the target frame period rather than anything off the wall clock ([ADR-0040](../../docs/architecture/adr/0040-the-dynamic-resolution-budget-is-a-share-of-a-frame.md)). **`render_scale` being a ceiling makes every warning that read it as the drawn size wrong** - three on the graphics page were, and each is now two entries. Still open: what each title's defaults should be, the Steam Deck memory reading, `SCENE_SHARE` being a choice rather than a measurement, and whether the scale stepping is visible to a player

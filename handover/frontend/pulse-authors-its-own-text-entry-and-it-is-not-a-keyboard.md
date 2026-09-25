@@ -105,3 +105,7 @@ profile name is the disc's, on the disc's.
    `names.tsv` row - the address is solid at 85 but the *function* was
    never traced, and this project's rule is that the page and the row land
    together.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+a **positive** result found while checking whether the disc had a keyboard to play before this project drew its own. It has no keyboard and no key glyphs, and the standing `sceUtilityOsk` assumption is **refuted at 92** - all four OSK NIDs are absent from both Pulse executables, while Pure links them. What Pulse has instead is a `<TagInput>`: a row of `length` character cells scrolled one glyph at a time, 15 instances in `Data.wad` (entry **#1083**, hash `b94fe6f9`, name unresolved), geometry authored per screen, and a **70-character alphabet in `BOOT.BIN`** at file offset 2,808,976 / vaddr `0x08AB1C10`, at 85. Nothing renders it yet; `../../docs/formats/fexml.md` has no `TagInput` row. Open at 65: the input mapping, one PPSSPP capture away

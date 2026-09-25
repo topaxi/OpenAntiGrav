@@ -119,3 +119,7 @@ including the `~50` confidence still open on `up`/`l1`/`r1`.
   this project's own parse of `DATA00`'s eight Fury grids totals 80 cells
   (`campaign_grids_ground_truth.rs`) - a 7-cell gap. This build draws only
   the earned numerator, no denominator, rather than guess at the 87.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-14. `oag_tables::race_campaign` reads all 32 `plugins/grids/grid_*.xml` across HD's four archives, additively: flat-schema grids parse unchanged, per-difficulty grids (Fury's `grid8-15`, `DATA04`/`06`'s own `grid0-7`) land in `Cell::difficulty_targets`/`nitro_elimination_targets`, `Mode::Other` holds `NitroBattle`/`Detonator`. 157 cells over 16 grids under the archives' own precedence, ground-truthed against the EU disc (`crates/hd/tests/campaign_grids_ground_truth.rs`, [race-campaign.md](../../docs/formats/race-campaign.md)). `grid_04.xml`'s `<Values>` tag is malformed on disc in all three copies and reads zero cells - documented, not patched. Open: which target triple the medal law reads per mode (an HD-executable question), whether the real game tolerates `grid_04`'s tag, base-HD pressing unmeasured. Next: draw HD's `Grid Selection` off `Data\Plugins\Frontend\Gui\CellMode_Definition.xml` on `DATA02` - the thread inventories its widgets and textures

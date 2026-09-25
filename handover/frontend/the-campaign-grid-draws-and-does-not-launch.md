@@ -218,3 +218,7 @@ read), `crates/game/src/main/campaign_stage.rs` and
   rung. Left as-is on the team lead's own instruction pending the atlas fix
   above, which would make the original's own wording legible in the first
   place.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-21. `Grid Selection`/`Cell Selection` draw and launch, off `CellMode_Definition.xml` and the real 236-cell campaign; the tip ticker, the `Confirm`/`Back` footer legend, `Cell Help`'s static overlay and `Line5` (`Cell_SavedRecord`, Time Trial/Speed Lap) all now draw too, via a new `oag_ui::campaign::footer` reading `Skin.xml`'s `<NavigationController>`/`<TextInfo>` directly (neither tag is one `Screens::collect_widgets` recognises). The podium walk closed live: a worktree-local `[ai] difficulty = "novice"` plus `--autopilot-skill ace` podiumed a campaign cell 1st of 8 and `Cell Selection` read `Points 3/3` / `Best Gold` back. Open: the `Grid`/`Grid1` duplicate `GridController`, no live PPSSPP capture of the ticker/footer/`Cell Help` (verified only against this build's own behaviour), the ticker's own scroll speed (chosen, not measured), `Line8` and `Zone`/`Elimination`'s own saved records (no raw count anywhere in `oag_game::records::Record`)

@@ -317,3 +317,7 @@ maintainer call, not one to make here.
    a profile, a replay, a saved setup. It was built to be reused and
    nothing about it knows what a pilot is; the only thing to decide is
    whether that caller wants a wider character set.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+**requested by the maintainer 2026-09-06**: in-game CRUD over the pilot `.toml` files, and **all five operations have now landed**. List, edit, save and create-from-template first; then rename and delete, once `crate::prompt` gave this project the text entry it had none of. Both traps were paid: `set_axis` goes through `toml_edit` so a hand-written comment survives an edit, and `rename_pilot` is a *move*, so the file arrives at its new name byte for byte. **Deleting `aggressive.toml` restores the built-in rather than removing a pilot**, and the confirm says so by name. What is left in the thread is the axis preview, `string_id` for the remaining rows, and the one-axis-at-a-time silence pinned by a test

@@ -141,3 +141,7 @@ The executable's own load-path strings name every model above
    4 for every HD weapon model~~ **Done 2026-09-24.** Next on it: read HD's
    own Rocket/Mine/Bomb per-tick placement (the `Rocket` vtable off
    `Rocket_Construct` `0x001254c8`) so the HD poses stop borrowing Pulse's.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+every weapon model entry is a Pulse PSP name; HD authors its own `.rcsmodel` set per weapon, Plasma's triggers already read; 2026-09-24: placement a rotation, HD bodies culled as authored, HD's own placements unread

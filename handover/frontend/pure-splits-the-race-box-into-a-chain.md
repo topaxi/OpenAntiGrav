@@ -121,3 +121,7 @@ it is the crossplay lobby vote.
 4. Leave 2048 alone for race setup. Its craft screen is the only part that maps
    onto this project's race box, and it is already reachable through the
    existing `remix` page's variant row.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+**Pure authors a fifth speed class** (Vector), which is a data point for the open `is-there-a-fifth-handling-class` thread and explicitly not an answer to it - Pure having five says nothing about Pulse having five, and [handling-stats.md](../../docs/formats/handling-stats.md)'s conclusion should not be edited on the strength of it. Pure authors **no AI difficulty anywhere** and **zero unlock machinery** (no `<Unlock>`, no `Grid=`, no `GSDisableEntriesBitField` across all eleven files), and its one authored preview is a **2D stat graph of the speed class** - the only flat-2D preview found in any title. 2048 has no racebox and no track-select screen at all: racing is entered from a code-drawn campaign event grid, which is a property of the title rather than a gap in the measurement. Open: Pure's two previews, its ordering cap of 88 (redirect targets only, never captured), and a localised-path rewrite that hides two of its twelve definition files
