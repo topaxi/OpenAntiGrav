@@ -1,5 +1,32 @@
 # The campaign grid draws and does not launch
 
+**Update, 2026-09-25, `pulse-campaign-nav` lane: `Grid Selection`'s own
+left/right, reported dead by a maintainer playing this build, now works.**
+`GridSelection::update` bound `Down`/`Up` to a single-tile wrapping step and
+left `Left`/`Right` unbound, on the reasoning that no left/right arrow image
+is authored - which does not follow, the screen's own `GridController` is a
+four-hex row. Measured live against PPSSPP (`pulse-psp-usa.chd`, Xvfb):
+`Down`/`Up` page by a full four-hex row, `Left`/`Right` step one tile within
+the page, and **neither direction wraps** - both clamp at their own boundary,
+and a page turn keeps the pressed-in slot rather than resetting to the new
+page's own first tile. `GridSelection::page_step`/`tile_step`
+(`crates/ui/src/campaign/pointer.rs`) carry the corrected arithmetic; a new
+`per_page` field keeps HD/Fury's own one-tile-per-page flyer pager on the old
+wrapping `step` unchanged. Full walk in `docs/ui/campaign-screens.md`'s
+"Measured against PPSSPP, 2026-09-25" section. **Separately confirmed
+already fixed, not touched this pass**: the upper-case-label defect this
+thread's own "What is still open after this pass" section below still names
+as open was actually closed 2026-09-21 (`docs/ui/campaign-screens.md`'s own
+"upper-case label note" is marked closed, `text_draw` routes through
+`face_atlas_slot` now) - that bullet below is stale and should have been
+struck when the fix landed; struck now. The three "headline differences"
+(`"GRID N"` title, `"SINGLE RACE"` mode name, circuit display name) are also
+already fixed, confirmed via a fresh `--menu-page grid-select` capture this
+pass (`docs/ui/campaign-screens.md`'s `## Open` has the comparison). Left
+open: everything else below, and see `docs/ui/campaign-screens.md`'s own
+`## Open` for what this pass could not settle (the ticker in a `--menu-page`
+capture, unrelated to this fix, was already a known, documented gap).
+
 2026-09-14. `Grid Selection` and `Cell Selection` - the Race Campaign's own
 two screens - now draw, off `Data\Plugins\PI001\GUI\CellMode_Definition.xml`
 and the real 236-cell campaign
@@ -223,17 +250,13 @@ read), `crates/game/src/main/campaign_stage.rs` and
   collide with `Target0`'s own row if drawn unconditionally, and neither
   mode has a raw zone/kill count anywhere in `oag_game::records::Record` to
   read at all; both are real gaps, not implemented this pass.
-- **This whole screen renders every label upper-case** (`SPEED CLASS` for
-  the reference's `Speed class`, and `CONFIRM` for `Confirm`) - not
-  something `oag_ui::campaign` can fix on its own. The menu/campaign
-  render path loads exactly one font atlas (`shell.title_font`); `"default"`/
-  `"small"` are scale multipliers on that same atlas, not switches to a
-  genuinely different, compact, mixed-case face, and `Draw::FacedText`'s
-  own `role` is not checked against anything today - the one alternate
-  atlas that ever loads is the `Title` role, not a body face. Fixing this
-  needs a second, correctly-sized atlas wired into the menu stage, a change
-  well outside this crate. See `docs/ui/campaign-screens.md`'s own
-  "Two defects... fixed same day" section for the full trace.
+- ~~This whole screen renders every label upper-case~~ **Fixed 2026-09-21**,
+  stale bullet struck 2026-09-25 - the atlas gap this bullet itself named as
+  blocking a fix landed (`crates/game/src/boot/fonts.rs`'s
+  `face_atlas_slot`), and `oag_ui::campaign::draw::text_draw` now routes
+  through it. See `docs/ui/campaign-screens.md`'s own "upper-case label
+  note", confirmed still fixed by this pass's own fresh
+  `--menu-page grid-select` capture.
 - **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** - a pre-existing
   label (`DifficultyButton`'s own `string="Change Difficulty"`, predating
   this lane) rather than the original's own template showing the current

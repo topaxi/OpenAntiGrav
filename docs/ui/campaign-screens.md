@@ -62,13 +62,29 @@ capture.** `GridSelection_Update` binds it to `"%d-%d / %d"` off
 `index*4+1, index*4+4, max*4+4` - with sixteen grids that only closes if
 `max` counts *pages* of four (`3*4+4 = 16`), not grids (`16*4+4 = 68`) or
 tiers directly. So the `GridController name="Grid"` widget
-(`MaxX="4" MaxY="1"`) is the current page's four tiers, and up/down (the
-`up arrow`/`down arrow` at `(117, 84)`/`(117, 167)`) pages through all
-sixteen one at a time - the same wrapping-list idiom
-[`oag_ui::picker::Picker`](../../crates/ui/src/picker.rs) already uses for
-`Track Creation`'s circuit list. `oag_ui::campaign::GridSelection` implements
-it that way: one flat `index` over every grid, `page()` and `slot()` derived
-from it, `counter()` reproducing the formula exactly.
+(`MaxX="4" MaxY="1"`) is the current page's four tiers - a **row**, not a
+flat wrapping list. `oag_ui::campaign::GridSelection` implements it as one
+flat `index` over every grid, `page()` and `slot()` derived from it,
+`counter()` reproducing the formula exactly.
+
+**Superseded, 2026-09-25: up/down and left/right are two separate controls,
+not one.** This section used to read the `up arrow`/`down arrow` at
+`(117, 84)`/`(117, 167)` as cycling all sixteen tiers one at a time, on the
+reasoning that `CellMode_Definition.xml` authors no left/right arrow image -
+and, following that same reasoning, `GridSelection::update` left `Left`/
+`Right` unbound entirely. Both are wrong: a maintainer playing this build
+reported left/right dead on this screen, and measuring live against PPSSPP
+settled it the other way - `Up`/`Down` page by a full four-hex row and
+`Left`/`Right` step one tile within the page, and **neither wraps**, both
+clamp at their own boundary (the deck's own ends for `Up`/`Down`, the current
+page's own ends for `Left`/`Right`). See "Measured against PPSSPP,
+2026-09-25" below for the full walk. `GridSelection::page_step`/`tile_step`
+(`crates/ui/src/campaign/pointer.rs`) carry the corrected arithmetic;
+`GridSelection::step` (wrapping, one tile) is kept only for HD/Fury's own
+one-tile-per-page flyer pager, which reuses this same model with
+`per_page` set to `1` - see [Wipeout HD/Fury: `Grid Selection` is not a hex
+grid of tiers](#grid-selection-is-not-a-hex-grid-of-tiers---it-is-a-flyer-pager)
+below.
 
 | Thing | Where | Authored as |
 | --- | --- | --- |
@@ -621,7 +637,10 @@ could disagree with independently of the `Selector` bug above.
   settles which control is the paging one and which is the per-tile one -
   both were assumed to be up/down in the prose above the "Two
   `GridController`s" section, which is not what was pressed. Confidence 90,
-  directly observed.
+  directly observed. **`left`/`right` were never wired to anything in this
+  build at all until 2026-09-25** - see "Measured against PPSSPP,
+  2026-09-25" below for the fix and the fuller walk (whether either
+  direction wraps, and whether a page turn keeps the same slot).
 - **No visible crossfade at a page turn, down to the earliest captured
   frame (~50 ms after the press).** Four bursts, one as tight as `wait 0.05`
   before the first shot, all show the new page already fully rendered - no
@@ -644,6 +663,83 @@ could disagree with independently of the `Selector` bug above.
   else in the panel** (`cell-selection-difficulty-hard.png` against the
   `-t0`/`-t1s` pair) - only the bottom-bar label text changes
   (`"AI difficulty (Medium)"` -> `"(Hard)"`).
+
+## Measured against PPSSPP, 2026-09-25: `left`/`right` on `Grid Selection`
+
+**A maintainer playing this build reported left/right dead on the first
+campaign screen** - `oag_ui::campaign::GridSelection::update` left `Left`/
+`Right` entirely unbound, and bound `Down`/`Up` to a single-tile wrapping
+step, both on the reasoning (struck above) that no left/right arrow image is
+authored. PPSSPP v1.20.4 (SDL build), `pulse-psp-usa.chd`, Xvfb, the same
+disc this build already reads, driven from the existing (non-fresh)
+`~/.config/ppsspp/PSP/SAVEDATA/UCUS98612P0000` profile - `Gold medals 0/8`
+on `grid0`, matching the 2026-09-14 session's own zero-medal reading for
+that grid, so this is the same starting state, just not a first boot.
+Fourteen frames captured with `import -window <id>` after moving the SDL
+window onto Xvfb's own visible root (the window opens off-screen by
+default under a bare Xvfb, no window manager to place it), one `press` at a
+time, state read off the honey counter and the `Title` panel each time
+(`docs/reverse-engineering/ppsspp-debugger.md`'s `Debugger.press`/
+`state_name`). Not committed (`data/` is gitignored); reproducible with the
+same recipe.
+
+The walk, all from `grid0` (`"GRID 1"`, page `"1-4 / 16"`) unless noted:
+
+1. `right` -> `"GRID 2"`, page unchanged (`index 0 -> 1`).
+2. `right` x2 more -> `"GRID 4"`, page unchanged (`index 1 -> 3`, the
+   page's own last slot).
+3. `right` once more from `"GRID 4"` -> **stays on `"GRID 4"`**, `1-4 / 16`
+   unchanged. Does not cross into `grid4`'s own `"GRID 5"` on the next page.
+4. `left` x3 from `"GRID 4"` -> back to `"GRID 1"` (`index 3 -> 0`).
+5. `left` once more from `"GRID 1"` -> **stays on `"GRID 1"`**. The deck's
+   own first slot clamps the same way the page's own last slot does.
+6. `down` x3 from `"GRID 1"` -> `"PHANTOM GRID 1"` (`grid12`, `"13-16 /
+   16"`, the last page - `Grid12` is the first of the four grids whose
+   idstring reads `"Phantom Grid N"` rather than `"Grid N"`, see the
+   `Title` section above).
+7. `down` once more from `"PHANTOM GRID 1"` -> **stays on `"PHANTOM GRID
+   1"`**, `13-16 / 16` unchanged. Does not wrap to `"GRID 1"`.
+8. `up` x4 from `"PHANTOM GRID 1"` -> `"GRID 1"` (`index 12 -> 0`, all in
+   one page-sized step per press, landing exactly on the deck's own start).
+9. `up` once more from `"GRID 1"` -> **stays on `"GRID 1"`**. Symmetric
+   with (5)/(7): no direction on this screen wraps.
+10. `right` once from `"GRID 1"` (-> `"GRID 2"`, `index 1`), then `down`
+    once -> `"GRID 6"` (`grid5`, `index 5`), **not** `"GRID 5"` (`grid4`,
+    `index 4`). A page turn keeps the pressed-in slot; it does not reset to
+    the new page's own first tile.
+
+So: `Down`/`Up` page by a full four-hex row and `Left`/`Right` step one tile
+within the page (already measured 2026-09-14, restated here); **and, new
+this pass: neither direction ever wraps**, both clamp at their own boundary
+(the current page's own ends for `Left`/`Right`, the deck's own ends for
+`Up`/`Down`), and a page turn preserves the slot pressed into rather than
+resetting to the new page's own first tile. Confidence 90 - ten separate
+presses in one session, each read digit-for-digit off the honey counter and
+the `Title` panel, with the two boundary tests ((3)/(5)/(7)/(9)) each showing
+the *identical* frame before and after the press, not merely "a plausible
+neighbour" - a clamp reads as literally nothing moving, which a wrap could
+not produce by coincidence.
+
+`oag_ui::campaign::GridSelection::page_step`/`tile_step`
+(`crates/ui/src/campaign/pointer.rs`) implement this; `GridSelection::update`
+(`crates/ui/src/campaign.rs`) binds `Down`/`Up`/`Left`/`Right` to them.
+`GridSelection::step` (the old wrapping, single-tile method) is kept
+unchanged and still used by HD/Fury's own one-tile-per-page flyer pager
+(`GridSelection::step`'s own doc, and see "`Grid Selection` is not a hex
+grid of tiers" below) - a new `per_page` field, `4` by default and
+overridden to `1` at HD's own construction sites in `campaign_stage.rs`,
+is what tells `page_step` which shape it is turning a page for, and
+`page_step` itself delegates straight back to the old wrapping `step` when
+`per_page` is `1`, so HD's own navigation is unchanged by this pass -
+verified in code review, not re-measured, since HD's own campaign is a
+different lane's own thread.
+
+The up/down and left/right arrow **click** targets (`GridSelection::pointer`
+in `crates/ui/src/campaign/pointer.rs`) now call the same `page_step` the
+pad's `Up`/`Down` does, so a mouse/touch player sees the identical clamped,
+slot-preserving paging a pad player does - no click target exists for a
+single-tile left/right step, since the four hexes are individually
+clickable already and reach the same place in one tap.
 
 ### New: a scrolling tip ticker, not documented anywhere before this pass
 
@@ -1620,6 +1716,22 @@ is the `Title` role, not a body face. Two consequences, both left open:
   drawn.~~ **Both draw, 2026-09-21** - see "The tip ticker, the Confirm/Back
   legend, `Cell Help` and a podium" above. The scroll speed itself is still
   unmeasured against a live PPSSPP frame.
+- **`--menu-page grid-select`'s own capture re-checked against
+  `grid-selection-page1-grid0-unlocked.png`, 2026-09-25: no new gap.** The
+  upper-case defect this page used to flag is confirmed still fixed
+  (`"Gold medals"`/`"Total points"`/`"Points needed"` all read mixed-case in
+  `ours/grid-select.png`), and all three "headline differences" from the
+  2026-09-14 measurement read correctly too (`"GRID 1"` not `"GRID0"`; not
+  re-checked live this pass for `Cell Selection`'s own `"SINGLE RACE"`/track
+  name, but both are struck at their own bullets above as already fixed).
+  The reference frame's scrolling tip and `AAA` badge draw as an empty bar
+  in ours - **not a new finding**, `oag_ui::campaign::draw::grid_draw_list`'s
+  own doc already names this as `--menu-page`'s own known gap (the capture
+  has no `CampaignStage` behind it to drive the ticker's clock or its tip
+  list), not a live-game defect. The two captures otherwise disagree only on
+  medal/points state (this worktree's own `records.toml` carries real
+  progress, `04/08` gold rather than the reference's fresh-profile `0/8`) -
+  a data difference, not a rendering one.
 - **A previous pass's live-walk cell (`grid0_2_1`) is now locked under this
   pass's own rule** - it authors no `Locked` attribute, which defaults to
   `true`, and has no medal or medalled neighbour on a fresh profile. The
