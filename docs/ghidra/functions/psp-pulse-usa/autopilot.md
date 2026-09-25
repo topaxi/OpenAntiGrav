@@ -53,10 +53,17 @@ the pattern the other two set: `Shield_Fire` is `0x10` running on `0x20`
 requested, `Turbo_Fire` is `0x200` on `0x400`. Each running bit is its request
 bit halved.
 
-**It plays nothing.** `Shield_Fire`'s last act is `Shield_Activate`, which opens
-`~SHIELD` and the announcer; this handler has no equivalent call. See "what is
-not recovered" below - `~AUTOPILOT` and `autopilot_eng` are both on the disc and
-neither has a located opener.
+**`Autopilot_Fire` itself plays nothing** - `Shield_Fire`'s last act is
+`Shield_Activate`, which opens `~SHIELD` and the announcer; this handler has
+no equivalent call. **Correction, 2026-09-25: the opener is a sibling
+function, not "not recovered".** The "what is not recovered" section below
+used to claim `~AUTOPILOT` and `autopilot_eng` had no located opener at all;
+that was true of `Autopilot_Fire` alone. `Ship_FireHeldWeapon` (`0x08844ae8`,
+already named and cited by
+[`missile.md`](missile.md#weapon_requestfire-and-the-weapon-id-to-bit-map))
+opens both, in its own switch on the held weapon id - see
+["`Ship_FireHeldWeapon` opens both cues"](#ship_fireheldweapon-opens-both-cues)
+below.
 
 ## `Autopilot_Update` counts it down, and warns at one second
 
@@ -153,18 +160,103 @@ can do. **Still not renamed**: no write site has been found anywhere, and the
 naming threshold is about evidence rather than about how convinced the reader
 is. Recorded at **65**.
 
+## `Ship_FireHeldWeapon` opens both cues
+
+**2026-09-25, resolving the conflict [`missile.md`](missile.md) and this page
+used to carry in opposite directions.** `missile.md`'s own "`Weapon_RequestFire`,
+and the weapon-id to bit map" section already named `Ship_FireHeldWeapon`
+(`0x08844ae8`) as the opener of `ROCKET`, `QUAKELAUNCH` and `_AUTOPILOT` plus
+`autopilot_eng`, off ids 0/2/6 of a switch on the held weapon id; this page's
+own "Not determined" section (below, now corrected) independently claimed
+neither cue had a located opener at all. `missile.md` was right. Decompiling
+`Ship_FireHeldWeapon` directly (`program=BOOT.BIN`, confidence 88 - a direct
+read with every string a literal pointer, held back from `missile.md`'s own 92
+only because the struct identity note below is inferred, not read) gives:
+
+```c
+void Ship_FireHeldWeapon(Entity *param_1)  // 0x08844ae8, local player only - see below
+{
+    // ... fire-button edge, Ship_State == 1, held != -1, and not
+    // (held == 6 && running) gate all elided; Weapon_RequestFire(...) already ran ...
+    if (*(int *)(param_1 + 0x368) == 0) {           // the local-player field every
+        switch (*(int *)(*(int *)(param_1 + 0x4c) + 0x1bc)) {   // other page in this tree reads at this offset
+        case 0:  // Rocket
+            Sound_Play(1.0f, *(void **)(param_1 + 0x50), DAT_08ac1df8 /* weapons.bnk */,
+                       0, "ROCKET", 0);
+            break;
+        case 2:  // Quake
+            Sound_Play(1.0f, *(void **)(param_1 + 0x50), DAT_08ac1df8 /* weapons.bnk */,
+                       0, "QUAKELAUNCH", 0);
+            break;
+        case 6:  // Autopilot
+            param_1->0x58 = FUN_0883e9b0(param_1, DAT_08ac1dec /* hud.bnk */,
+                                          "~AUTOPILOT", 0x400, 0);
+            FUN_0883e9b0(param_1, DAT_08ac1dfc /* speech.bnk */, "autopilot_eng", 0x400, 0);
+            break;
+        // ids 1, 4, 5, 7-12: no sound here, just a per-weapon fire-attempt counter
+        }
+    }
+}
+```
+
+Settles every open question the two bullets below used to carry:
+
+- **The gate is `entity+0x368 == 0`** - the same "local player" field
+  [`pads.md`](pads.md), [`zone-mode.md`](zone-mode.md) and
+  [`shield.md`](shield.md) each independently establish at that exact offset -
+  so this whole switch, sounds included, never runs for an opponent. Matches
+  this port's own `Race::spend_pickup`, which is likewise only ever called for
+  `player` (`crates/game/src/race/tick.rs`).
+- **`~AUTOPILOT` goes through `FUN_0883e9b0`**, the same dry, no-position
+  helper `Cue::Blowup` and `Cue::Disengaging`
+  (`crates/game/src/audio/sfx/cue.rs`) already cite for the player's own ear
+  rather than a craft's emitter - and its return is stored at `param_1+0x58`,
+  matching this page's own note two sections up that `Autopilot_Update`
+  "stops a held handle at `entity+0x58`". The two now agree on the same
+  field from opposite ends: this is that opener. And `Autopilot_Update`'s own
+  `<= 0.0f` arm - the timer's expiry, not the `disengaging` warning edge one
+  second earlier - is where that same handle is released, so the two sides of
+  the loop's own lifetime are both read, not assumed.
+- **`autopilot_eng`'s call discards its return** - a one-shot voice line, the
+  same shape `Cue::Disengaging` (its own "about to let go" partner) already
+  is, not a held loop.
+- **`ROCKET` and `QUAKELAUNCH` go through a plain positional `Sound_Play`**
+  with `*(param_1+0x50)` as an explicit emitter argument, the same call shape
+  [`shield-pickup.md`](shield-pickup.md) reads for `~SHIELD`
+  (`Sound_PlayLooping(1.0, entity->0x50, DAT_08ac1df8, 0, "~SHIELD", entity + 0x54)`)
+  - a positional cue, not a dry one.
+- **The bank pointers cross-check independently.** `DAT_08ac1df8` (weapons.bnk),
+  `DAT_08ac1dec` (hud.bnk) and `DAT_08ac1dfc` (speech.bnk) are the same three
+  globals [`shield-pickup.md`](shield-pickup.md) and [`pads.md`](pads.md) each
+  already read at those addresses for cues already confirmed on those banks -
+  they agree here too, on cues this page separately confirms load from exactly
+  those banks (`~AUTOPILOT` on `hud.bnk`, `autopilot_eng` on `speech.bnk`,
+  above).
+- **No underscore/tilde trap here, despite first appearances.** The bridge's
+  own decompile rendered the string argument as a symbol,
+  `PTR_s__AUTOPILOT_08a7b6af_1_08a7b6bc`, which reads like the `_LEACHATTACH`
+  / `~LEACHATTACH` split `cue.rs`'s own `Cue::LeachAttach` doc comment warns
+  about. It is not: `read_memory` at `0x08a7b6ac` (`program=BOOT.BIN`) shows
+  the bytes directly - `7e 41 55 54 4f 50 49 4c 4f 54 00 00`, `"~AUTOPILOT\0"`,
+  tilde included, at `0x08a7b6b0`. Ghidra substitutes `_` for a
+  non-identifier byte (the `~`) when it auto-names a label, and the label's
+  own `_1` suffix is "one byte past `08a7b6af`", which is exactly
+  `08a7b6b0`. So the pseudocode above already had it right, and confirmed
+  independently against `pulse-psp-usa.chd`'s own bank: `oag-wad sounds`
+  lists `~AUTOPILOT cue 0 cmds 0..4 3 waveform(s), 1 looping, 3.04s total`
+  and `autopilot_eng cue 0 cmds 0..2 2 waveform(s), 0 looping, 3.14s total`.
+
+**Not settled by this read**: whether `param_1` here is the same "entity"
+struct every `+0x368`/`+0x860`/`+0x85c` reference elsewhere in this tree
+names directly, or a distinct "player controller" wrapper that merely mirrors
+those fields at the same offsets and holds a genuine pointer-to-craft at
+`+0x4c` (the read that would explain the extra dereference this function
+takes and every flat `craft->1bc` elsewhere does not). Nothing here turns on
+which is true - the sound-opening behaviour is read either way - so this is
+left as a loose end rather than chased further.
+
 ## Not determined
 
-- **What opens `~AUTOPILOT`.** The cue is real - `Data\Sound\hud.bnk`, three
-  waveforms, one looping, 2.43 s - and `Autopilot_Update` stops a held handle at
-  `entity+0x58`, so something opens one. The opener is not `Autopilot_Fire`. The
-  search that would close it: the string is at unrelocated `0x2776b0` and its
-  pointer slot at `0x27773c`, so the `lui`/`lw` pair to find is
-  `lui r, 0x27` + `lw r, 0x773c(r)` - and note that searching the `lw` immediate
-  alone gives a false positive at `0x08a675b4`, which is `0x5773c`.
-- **What plays `autopilot_eng`.** `Data\Sound\speech.bnk` cue 0, 1.28 s, the
-  obvious "autopilot engaged" partner to `disengaging`. Same situation: no
-  located call site. Its pointer slot is at `0x27780c`.
 - **Where the control source is actually swapped.** `Ai_Construct` (`0x088536bc`)
   names the local player's input `"autopilot input"`, which
   [`weapon-stats.md`](../../../formats/weapon-stats.md) already records, so the

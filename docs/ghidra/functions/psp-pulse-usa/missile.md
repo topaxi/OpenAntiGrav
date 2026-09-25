@@ -172,8 +172,14 @@ is not open to much interpretation; confidence **92**.
 | 4 | `0x400` | 9 | `0x100` | | |
 
 Ids 0, 2 and 6 are named from their own sound cues in `Ship_FireHeldWeapon`
-(`0x08844ae8`): `ROCKET`, `QUAKELAUNCH`, and `_AUTOPILOT` plus `autopilot_eng`.
+(`0x08844ae8`): `ROCKET`, `QUAKELAUNCH`, and `~AUTOPILOT` plus `autopilot_eng`.
 Id 10 is named from its lock distances. The rest are left as numbers.
+**Confirmed by a direct decompile of `Ship_FireHeldWeapon` itself, 2026-09-25**
+- see [`autopilot.md`'s own "`Ship_FireHeldWeapon` opens both
+cues"](autopilot.md#ship_fireheldweapon-opens-both-cues) for the switch body
+and the cross-checks; this page's own claim here used to be the only place
+that read it, and [`autopilot.md`](autopilot.md) independently claimed the
+opposite until that pass.
 
 **Only ids 1 and 10 take a target**, stored to `craft+0x160`/`+0x164` and
 `craft+0x168`/`+0x16c` respectively.

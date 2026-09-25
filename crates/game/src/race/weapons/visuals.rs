@@ -100,6 +100,21 @@ impl Race {
         let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
         let at = ribbon.energy_point(owner, target, beam.range);
 
+        // `LEACHENERGY`: the same pulse block that re-spawns
+        // `WO_LEACHBEAM_ENERGY` below, per `LeachBeam_Advance`'s own reading
+        // (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`).
+        // Gated on `pulsed` alone, not the effect match arm's `playing.is_none()`
+        // fallback below - that fallback is a redraw safety net, not a second
+        // firing of the original's pulse block, and `Ribbon::new`'s `cursor: 0`
+        // already makes the very first `advance` call pulse, so the two agree
+        // on tick one anyway.
+        if pulsed && let Some(at) = at {
+            self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
+                crate::audio::sfx::Cue::LeachEnergy,
+                at,
+            ));
+        }
+
         let effect = self.view.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned();
         match (effect, self.view.leach_beam_effect, at) {
             (Some(effect), playing, Some(at)) if pulsed || playing.is_none() => {

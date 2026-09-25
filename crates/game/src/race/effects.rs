@@ -838,6 +838,19 @@ impl Race {
         self.sim.world.ships[0].physics.craft_state == oag_physics::CraftState::Destroyed
     }
 
+    /// Whether the player's Autopilot pickup is currently active.
+    ///
+    /// A *level*, the same shape [`Self::shield_is_up`] already is:
+    /// `Ship_FireHeldWeapon`'s case 6 opens `~AUTOPILOT` with a handle at
+    /// `entity+0x58`, so the voice's lifetime is this timer's, not an edge's.
+    /// See [`crate::audio::sfx::Cue::Autopilot`] and
+    /// `docs/ghidra/functions/psp-pulse-usa/autopilot.md`'s
+    /// "`Ship_FireHeldWeapon` opens both cues" section.
+    #[must_use]
+    pub fn autopilot_is_active(&self) -> bool {
+        self.sim.world.ships[0].autopilot_timer > 0.0
+    }
+
     /// Whether the player's shield pickup is currently up.
     ///
     /// A *level*, not an edge, and that is what `~SHIELD` wants:

@@ -128,11 +128,16 @@ fn every_cue_has_something_that_raises_it() {
     // own projectile array every tick in `Audio::race_tick`, never pushed as
     // a `CueEvent` - see `TravelVoices`. `LeachAttach` is the same shape
     // again, read directly off `race.sim.world.leach_beam` instead of a
-    // projectile slot - see `SfxVoices::leach_attach`.
-    const BY_LEVEL: [Cue; 9] = [
+    // projectile slot - see `SfxVoices::leach_attach`. `Autopilot` and
+    // `Engaging` join `Blowup` for the same reason it is here: both are read
+    // off `Race::autopilot_is_active` directly in `Audio::race_tick`'s own
+    // level-and-latch match, never pushed.
+    const BY_LEVEL: [Cue; 11] = [
         Cue::Engine,
         Cue::Shield,
         Cue::Blowup,
+        Cue::Autopilot,
+        Cue::Engaging,
         Cue::LockOn,
         Cue::PlasmaTravel,
         Cue::RocketTravel,
@@ -649,12 +654,119 @@ fn a_quake_wave_raises_quakehit_on_the_craft_it_reaches() {
     );
 }
 
+/// `Cue::QuakeLaunch` fires on the press itself, even the one that lands
+/// while a wave is already travelling and the launch itself is a no-op -
+/// see that variant's own doc comment for why `Ship_FireHeldWeapon`'s own
+/// gate has no busy check of its own. Two presses, not one: the first is
+/// the ordinary launch, the second lands on tick 3 with the first wave
+/// still up (`one_quake_table`'s wave easily outlives two ticks), so it
+/// exercises `Race::spend_pickup`'s own busy-return - which must not have
+/// swallowed the cue push ahead of it.
+#[test]
+fn a_re_press_while_a_quake_wave_travels_still_raises_quakelaunch() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_quake_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
+
+    let mut buttons = Buttons::new();
+    let mut launches = 0;
+    for tick in 0..5 {
+        // Pressed twice: the launch on tick 1, and a re-press on tick 3
+        // while that same wave is still `race.sim.world.quake`.
+        let snapshot = if tick == 1 || tick == 3 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        // Forced back every tick: the first press's own launch spends the
+        // pickup through `spend_pickup`'s ordinary `Held::take` tail, and
+        // this fixture wants a Quake in the slot for the second press too,
+        // to land on the busy-return path deliberately rather than on "no
+        // weapon held" for an unrelated reason.
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
+        race.tick(&PlayerInputs::single(snapshot));
+        launches += race
+            .drain_cues()
+            .iter()
+            .filter(|e| e.cue == Cue::QuakeLaunch)
+            .count();
+    }
+    assert_eq!(
+        launches, 2,
+        "QUAKELAUNCH should fire on both presses, busy or not"
+    );
+}
+
 #[test]
 fn a_locked_leachbeam_raises_leach() {
     let raised = leach_fires_locked();
     assert!(
         raised.contains(&Cue::Leach),
         "LEACH never fired on a locked shot: {raised:?}"
+    );
+}
+
+/// `Cue::LeachEnergy` off the ribbon's own pulse edge - see that variant's
+/// doc comment. `Ribbon::new`'s `cursor: 0` means the very first `advance`
+/// call always pulses, so a locked beam raises it immediately; the assertion
+/// that matters is the second one, that a wrong wiring pushing it every tick
+/// (rather than only on the wrap) gets caught rather than passing on the
+/// first-tick freebie alone.
+#[test]
+fn a_locked_leachbeam_pulses_leachenergy_and_not_every_tick() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_leach_beam_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    race.sim.world.ships[1].physics.body.position =
+        race.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+
+    let mut buttons = Buttons::new();
+    let ticks = 120;
+    let mut pulse_ticks = Vec::new();
+    for tick in 0..ticks {
+        let snapshot = if tick == 1 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        race.tick(&PlayerInputs::single(snapshot));
+        if race.drain_cues().iter().any(|e| e.cue == Cue::LeachEnergy) {
+            pulse_ticks.push(tick);
+        }
+    }
+    // At least two pulses, so there is a gap to check at all.
+    assert!(
+        pulse_ticks.len() >= 2,
+        "LEACHENERGY fired fewer than two times over {ticks} ticks: {pulse_ticks:?}"
+    );
+    // `Ribbon::new`'s own `cursor: 0` means the very first `advance` call -
+    // the same tick the beam locks on - always pulses, so the first entry is
+    // exact, not just "eventually".
+    assert_eq!(
+        pulse_ticks[0], 1,
+        "LEACHENERGY did not fire on the fire tick itself: {pulse_ticks:?}"
+    );
+    // The two craft's separation is fixed for this whole fixture, so the
+    // segment count - and therefore the cursor's wrap period - never
+    // changes: every gap between pulses should be the same tick count. A
+    // wiring bug that pushes the cue on every tick, or on some other
+    // unrelated edge, would not produce this regularity.
+    let gaps: Vec<usize> = pulse_ticks.windows(2).map(|w| w[1] - w[0]).collect();
+    assert!(
+        gaps.iter().all(|&gap| gap == gaps[0]),
+        "the gaps between LEACHENERGY pulses are not constant: {gaps:?} from {pulse_ticks:?}"
+    );
+    assert!(
+        gaps[0] > 1,
+        "LEACHENERGY pulsed every tick rather than on the ribbon's own wrap: {pulse_ticks:?}"
     );
 }
 

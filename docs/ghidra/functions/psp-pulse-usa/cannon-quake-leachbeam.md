@@ -1041,9 +1041,13 @@ DAT literal was tracked down to a real cue name this pass; both are read as
 > `Race::advance_quake`'s own `apply_hits` call and compared after - and
 > placed on the **struck** craft, settling this section's own naming
 > ambiguity (`owner_craft_cue_slot`) in favour of the victim, the same craft
-> every pending-damage field around it belongs to. `QUAKELAUNCH` and
-> `~QUAKETRAVEL` stay unwired: the first is named only in passing on
-> `missile.md`, no address, and the second's own cue-name literal is the one
+> every pending-damage field around it belongs to. **2026-09-25:
+> `QUAKELAUNCH` wired too**, once `Ship_FireHeldWeapon` (`0x08844ae8`) was
+> decompiled whole for the missile.md/autopilot.md conflict it settled - see
+> `autopilot.md`'s own "`Ship_FireHeldWeapon` opens both cues" section for
+> the switch body. It fires on the fire press itself, positional, local
+> player only, ahead of `Race::spend_pickup`'s own Quake busy check.
+> `~QUAKETRAVEL` alone stays unwired: its own cue-name literal is the one
 > just above this note - explicitly never resolved to a disc string, twice
 > over - so a same-named cue existing in the bank is not trusted as it.
 
@@ -2498,7 +2502,7 @@ weapon ids `1` and `10` and no others** - the Missile and the LeachBeam - which
 is independent confirmation of "victim selection is the Missile's own lock-on,
 reused whole" above.
 
-**2026-09-23: `LEACH` and `~LEACHATTACH` wired; `LEACHENERGY` still is not.**
+**2026-09-23: `LEACH` and `~LEACHATTACH` wired.**
 `Cue::Leach` and `Cue::LeachAttach` are in `crates/game/src/audio/sfx/cue.rs`.
 `Cue::Leach` fires from both places a beam can be fired locked -
 `Race::spend_pickup`'s own LeachBeam arm and `Race::fire_opponent_leach_beam`
@@ -2507,12 +2511,20 @@ fizzle case. `Cue::LeachAttach` is held for as long as a **locked** `Beam`
 instance exists, through its own disconnect linger, matching "carried by the
 beam itself" above rather than `Beam::connected`'s narrower window; its
 position (the owner/target midpoint) is chosen, since this section does not
-say what the beam's own scene node tracks. `LEACHENERGY` is still open: it
-needs the ribbon's own scroll-cursor wrap, which
-`oag_render::beam::Ribbon::advance` (see the 2026-09-23 ribbon re-read just
-below) now returns as its own `bool` - the edge exists - but that return is
-read and discarded inside `crates/game/src/race/weapons/visuals.rs` rather
-than surfaced anywhere `oag_game::audio` can reach it.
+say what the beam's own scene node tracks.
+
+**2026-09-25: `LEACHENERGY` wired too**, off the same edge this note used to
+call "read and discarded". `oag_render::beam::Ribbon::advance` (see the
+2026-09-23 ribbon re-read just below) returns a `bool` for the cursor's own
+wrap to zero - the pulse block - and
+`crate::race::weapons::visuals::Race::advance_leach_beam_ribbon` now pushes a
+`Cue::LeachEnergy` `CueEvent::at_point` on that same edge, at the ribbon's own
+`energy_point` (the pulse block's `WO_LEACHBEAM_ENERGY` re-spawn target, not
+`LeachAttach`'s owner/target midpoint). Verified against a real disc rather
+than assumed: `LEACHENERGY` resolves on both `pulse-psp-usa.chd`'s own
+`weapons.bnk` and, unexpectedly, on Wipeout HD's own `weapons.bnk` too (6
+waveforms) - see `sfx_ground_truth.rs`'s
+`wipeout_hd_loads_every_cue_but_one_and_reports_the_miss`.
 
 ### 2026-09-17: the LeachBeam ribbon's own texture, and the draw call that proves it
 
