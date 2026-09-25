@@ -177,6 +177,7 @@ pub fn run(
 ) -> Result<()> {
     let Boot {
         title,
+        platform,
         languages,
         strings,
         tracks,
@@ -398,7 +399,7 @@ pub fn run(
         let render_profile = options
             .settings
             .render_profiles
-            .get(title.name)
+            .get(&crate::settings::profile_key(title, platform))
             .cloned()
             .unwrap_or_default();
         // Read-only, off whatever `<config dir>/oag/records.toml` already
@@ -706,6 +707,7 @@ pub fn run(
                     &options.settings,
                     options.anisotropy,
                     title,
+                    platform,
                     page,
                     &tracks,
                     &teams,
@@ -853,7 +855,8 @@ pub fn run(
         format,
         (width, height),
         &options.settings,
-        title.name,
+        title,
+        platform,
         space,
         options.presented,
     )?;

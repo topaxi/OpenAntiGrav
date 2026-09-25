@@ -88,7 +88,11 @@ pub(crate) struct App {
     pub(crate) shell: Option<Shell>,
     /// The title `--race` opened, for the render profile it has no shell to
     /// resolve. `None` on every route that has a shell.
-    pub(crate) race_title: Option<&'static str>,
+    pub(crate) race_title: Option<&'static oag_title::Title>,
+    /// The platform that same source is for - see `settings::profile_key`,
+    /// which is why this travels beside `race_title` rather than alone: a
+    /// render profile is keyed on both.
+    pub(crate) race_platform: Option<oag_disc::Platform>,
     /// The mixer and its device, waiting for the window that will step it.
     ///
     /// Taken by [`Session`] on the first resume, which is why it is an
@@ -131,7 +135,12 @@ impl App {
     /// exists. See [`Self::race_title`].
     fn race_profile(&self) -> settings::RenderProfile {
         self.race_title
-            .and_then(|title| self.settings.render_profiles.get(title))
+            .zip(self.race_platform)
+            .and_then(|(title, platform)| {
+                self.settings
+                    .render_profiles
+                    .get(&settings::profile_key(title, platform))
+            })
             .cloned()
             .unwrap_or_default()
     }
@@ -397,6 +406,7 @@ impl App {
             records: oag_game::records::load(),
             shell: self.shell.clone(),
             race_title: self.race_title,
+            race_platform: self.race_platform,
             // Race Remix's title pickers - see the field's own doc comment
             // for why this is a fresh survey rather than the chooser's.
             titles: launcher::distinct_titles(&launcher::survey(&source::candidates())),

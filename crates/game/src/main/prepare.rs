@@ -229,6 +229,7 @@ impl Pending {
         let shell = Shell {
             definition,
             title,
+            platform: boot_shell.platform,
             circuit_names: boot_shell.circuit_names.clone(),
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),

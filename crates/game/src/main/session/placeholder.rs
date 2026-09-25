@@ -175,6 +175,7 @@ impl Session {
         self.shell = Some(Shell {
             definition: pending.definition.clone(),
             title,
+            platform: archives.layout.platform,
             // 2048 is `oag_title::ZoneCircuit::SameCircuit` - a Zone race
             // runs whichever circuit is already picked, so the CIRCUIT row
             // offers the same list under either mode. See

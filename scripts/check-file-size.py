@@ -122,7 +122,11 @@ BASELINE = {
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,
     "crates/vex/src/vex.rs": 1651,
-    "crates/game/src/boot.rs": 1719,
+    # Ratcheted down from 1,719 when `Options`/`impl Options` moved to
+    # `crates/game/src/boot/options.rs`, split out for the `platform` field
+    # the title+platform render-profile split (`crates/game/src/settings.rs`)
+    # needed on `Boot`/`Shell` - a move, with room left for it.
+    "crates/game/src/boot.rs": 1666,
     # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
     # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -
     # prep for the `oag-ui` extraction, which cannot name a type that lives in

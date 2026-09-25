@@ -453,7 +453,7 @@ pub(crate) fn run_race(
         // reporting nothing wrong. See `Cli::apply_render_overrides`.
         let mut render_profile = settings
             .render_profiles
-            .get(loaded.title.name)
+            .get(&settings::profile_key(loaded.title, loaded.platform))
             .cloned()
             .unwrap_or_default();
         let render_scale = match cli.render_scale {
@@ -563,7 +563,8 @@ pub(crate) fn run_race(
     // Poll rather than Wait: the simulation runs whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
     // Read before `loaded` is moved into the app below.
-    let race_title = loaded.title.name;
+    let race_title = loaded.title;
+    let race_platform = loaded.platform;
     let mut app = App {
         pvs_culling: cli.pvs,
         camera_jitter: cli.camera_jitter,
@@ -596,6 +597,7 @@ pub(crate) fn run_race(
         // `--render-scale 100` and `--render-scale 200` both gave a 0.80 ms
         // scene pass and zero FSR 3.1 chain readings.
         race_title: Some(race_title),
+        race_platform: Some(race_platform),
         audio: Some(audio),
         music_discs,
         // `--race` says up front that it ignores `--prefetch` - that converts

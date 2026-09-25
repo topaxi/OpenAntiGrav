@@ -20,12 +20,68 @@ use super::Settings;
 /// *this build* knows how to boot at all, the same distinction
 /// `render_profiles` itself exists to respect: a profile is not evidence
 /// about hardware someone has, only about a title this game can run.
-pub(super) const KNOWN_TITLES: &[&str] = &[
-    oag_pulse::TITLE.name,
-    oag_pure::TITLE.name,
-    oag_hd::TITLE.name,
-    oag_2048::TITLE.name,
+///
+/// **A list of titles, not of rows** - see [`known_profiles`] for the rows a
+/// fresh file actually writes. A title contributes one row per *platform* it
+/// ships an archive candidate for, and Pulse ships two (PSP and PS2); this
+/// list itself does not carry that, deliberately, so it stays the same list
+/// [`crate::title::open_source`] tries titles from.
+pub(super) const KNOWN_TITLES: &[&oag_title::Title] = &[
+    oag_pulse::TITLE,
+    oag_pure::TITLE,
+    oag_hd::TITLE,
+    oag_2048::TITLE,
+    oag_omega::TITLE,
 ];
+
+/// The `[render_profiles.<key>]` table a `(title, platform)` pair reads and
+/// writes.
+///
+/// **Chosen: `"<Title::name> (<Platform>)"`, e.g. `"Wipeout Pulse (PSP)"` or
+/// `"Wipeout Pulse (PS2)"`.** This keeps the existing convention rather than
+/// inventing a second one beside it: a `render_profiles` key already *is*
+/// `Title::name`, quoted in the TOML file for every title whose name has a
+/// space in it - `[render_profiles."Wipeout HD"]` is what a file on disk
+/// looks like today - and this only extends that string, rather than a
+/// disjoint slug (`pulse-ps2`) or a nested `[render_profiles.<title>.<platform>]`
+/// table. Nesting would need [`Settings::render_profiles`] to become a
+/// `BTreeMap<String, BTreeMap<String, RenderProfile>>` and touch every one of
+/// the call sites - `menu_seeds`, `Session::render_profile`,
+/// `Session::render_profile_mut`, the headless and capture routes - that key
+/// it with one plain string today, for a shape the file gains nothing from:
+/// nothing reads "every platform of this title" as a group.
+///
+/// `Platform`'s own [`std::fmt::Display`] supplies the second half, so
+/// nothing here hand-spells "PSP" or "PS2" a second time - see
+/// `oag_disc::platform` for where that string comes from.
+#[must_use]
+pub fn profile_key(title: &oag_title::Title, platform: oag_disc::Platform) -> String {
+    format!("{} ({platform})", title.name)
+}
+
+/// The platforms `title` ships an archive candidate for, off its own
+/// `archives.data` list rather than hand-spelled - see [`known_profiles`].
+///
+/// Pulse's own `DATA_CANDIDATES` names both `Platform::Psp` and
+/// `Platform::Ps2`, in that order, which is why Pulse alone contributes two
+/// rows below; every other title in [`KNOWN_TITLES`] today names one.
+fn title_platforms(title: &'static oag_title::Title) -> impl Iterator<Item = oag_disc::Platform> {
+    title.archives.data.iter().map(|&(_, platform)| platform)
+}
+
+/// Every `(title, platform)` pair this build knows how to boot - one row per
+/// platform a [`KNOWN_TITLES`] entry ships an archive candidate for.
+///
+/// Derived from each title's own [`oag_title::Title::archives`] rather than
+/// six hand-written pairs, so the known list cannot drift from the one
+/// `crate::title::open_source` actually opens against - a title that grew a
+/// third platform's candidate would grow a third row here for free.
+pub(super) fn known_profiles()
+-> impl Iterator<Item = (&'static oag_title::Title, oag_disc::Platform)> {
+    KNOWN_TITLES
+        .iter()
+        .flat_map(|&title| title_platforms(title).map(move |platform| (title, platform)))
+}
 
 /// See [`RenderProfile::minimum_resolution`]: **50 %**.
 ///
@@ -221,15 +277,16 @@ impl Default for RenderProfile {
     }
 }
 
-/// Inserts a default [`RenderProfile`] for every title in [`KNOWN_TITLES`]
-/// that [`Settings::render_profiles`] does not already hold, so the file
-/// stays a complete reference for what it can hold - the same property
-/// `HEADER` (in `settings.rs`) documents for every other table.
+/// Inserts a default [`RenderProfile`] for every `(title, platform)` row
+/// [`known_profiles`] names that [`Settings::render_profiles`] does not
+/// already hold, so the file stays a complete reference for what it can
+/// hold - the same property `HEADER` (in `settings.rs`) documents for every
+/// other table.
 pub(super) fn ensure_known_titles(settings: &mut Settings) {
-    for title in KNOWN_TITLES {
+    for (title, platform) in known_profiles() {
         settings
             .render_profiles
-            .entry((*title).to_string())
+            .entry(profile_key(title, platform))
             .or_default();
     }
 }
@@ -368,14 +425,72 @@ pub(super) fn migrate_render_profiles(table: &mut toml::Table) {
         .or_insert_with(|| toml::Value::Table(toml::Table::new()))
         .as_table_mut()
         .expect("checked on the way in, and only ever inserted as a table");
-    for title in KNOWN_TITLES {
+    for &title in KNOWN_TITLES {
         let profile = render_profiles
-            .entry((*title).to_string())
+            .entry(title.name.to_string())
             .or_insert_with(|| toml::Value::Table(toml::Table::new()))
             .as_table_mut()
             .expect("only ever inserted as a table, immediately above");
         for (key, value) in &moved {
             profile.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+    }
+}
+
+/// Splits every bare `[render_profiles.<title>]` table - the shape
+/// [`migrate_render_profiles`] just populated, or a hand-migrated file, or an
+/// older file's own - into one `[render_profiles.<key>]` row per platform
+/// that title ships, per [`known_profiles`]. See the parent module's
+/// "Display against graphics against render profiles" doc for why a
+/// PS2-sourced Pulse race and a PSP-sourced one read different rows from here
+/// on: different scenes, different geometry payloads, the PS2's own engine
+/// flare.
+///
+/// **Every platform seeded from the one bare value**, not just one - the
+/// same "absence is not evidence of wrong" rule [`migrate_render_profiles`]'s
+/// own doc names: a bare key has no way to say which platform a saved value
+/// was tuned against, so guessing one would invent evidence the file does not
+/// have. Pulse's PSP and PS2 rows start identical and only diverge once a
+/// player changes one of them on purpose.
+///
+/// **A platform-specific row already present wins**, the same rule
+/// `settings::migrate` applies for `[display]`: a hand edit or a copy from an
+/// older machine putting the bare key back must not clobber a value already
+/// split out per platform.
+///
+/// **The bare key is removed once processed, whether or not it seeded
+/// anything new.** Left in place it is a key nothing types away -
+/// `Settings::render_profiles` is a `BTreeMap<String, RenderProfile>`, and any
+/// string parses as one - so it would round-trip forever as a row nothing
+/// reads or writes.
+///
+/// Run after [`migrate_reconstruction_keys`], not before: that one folds
+/// ADR-0041's `upscaler`/`anti_aliasing` keys wherever `render_profiles`
+/// already has entries, and every file old enough to still carry those two
+/// keys is also old enough to still be bare-title-keyed, so running this
+/// split first would leave the platform rows it just created still holding
+/// the pre-fold spelling.
+pub(super) fn migrate_platform_split(table: &mut toml::Table) {
+    if table
+        .get("render_profiles")
+        .is_some_and(|value| !value.is_table())
+    {
+        return;
+    }
+    let Some(profiles) = table
+        .get_mut("render_profiles")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return;
+    };
+    for &title in KNOWN_TITLES {
+        let Some(bare) = profiles.remove(title.name) else {
+            continue;
+        };
+        for platform in title_platforms(title) {
+            profiles
+                .entry(profile_key(title, platform))
+                .or_insert_with(|| bare.clone());
         }
     }
 }

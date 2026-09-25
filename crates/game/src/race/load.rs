@@ -876,8 +876,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ),
     }
 
-    // Resolved here rather than in `Race::start` because the spline is what
-    // supplies the attitude, and `load` is where the spline is.
+    // Resolved here rather than in `Race::start`: the spline supplies the attitude, and `load` is where it is.
     let pose_override = options.pose.and_then(|request| match request {
         PoseRequest::SplineAligned { position, yaw } => {
             let (_, sample, distance) = spline.nearest(position)?;
@@ -899,6 +898,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
     let mut loaded = Loaded {
         title,
+        platform: archives.layout.platform,
         setup: Setup {
             mode: options.mode,
             eliminator_kill_target: options.eliminator_kill_target,

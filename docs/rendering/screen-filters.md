@@ -22,9 +22,11 @@ far that is from a measurement - which for every one of them is "not one".
 2. **SCREEN FILTER STRENGTH** below it mixes the filter's output with the
    untouched frame, `100` being the preset as written. It is applied by the
    pass itself after the preset returns, so it means the same for every one.
-3. Both persist in `[render_profiles.<title>]` in `settings.toml`, **per
-   title**: a PSP disc can hold `psp-3000` while the PS2 pressing holds
-   `crt-interlaced` and Wipeout HD holds `off`.
+3. Both persist in `[render_profiles.<title> (<platform>)]` in
+   `settings.toml`, **per (title, original platform)**: a PSP disc can hold
+   `psp-3000` while the PS2 pressing holds `crt-interlaced` and Wipeout HD
+   holds `off` - and Pulse's own PSP and PS2 rows are two different rows now,
+   not one shared between them.
 
 From the command line, `--screen-filter <id>` overrides the profile for one
 run, and a `--presented --screenshot` capture is the way to see one in a

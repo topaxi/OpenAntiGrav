@@ -18,12 +18,14 @@ use oag_render::mesh_render::Anisotropy;
 pub(super) fn menu_page(
     settings: &crate::settings::Settings,
     anisotropy: Anisotropy,
-    // Which title's own `[render_profiles.<title>]` the RENDER SCALE / UPSCALER
+    // Which title's own `[render_profiles.<key>]` the RENDER SCALE / UPSCALER
     // / SHARPNESS / ANTI-ALIASING / MOTION BLUR rows read - see
     // `crate::settings::menu_seeds` - and whose front end decides which RACE
     // page rows exist at all. There is exactly one title open in a capture,
     // the same as in a live session, so this is never a choice.
     title: &'static oag_title::Title,
+    // The other half of that same row's key - see `crate::settings::profile_key`.
+    platform: oag_disc::Platform,
     page: &str,
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
@@ -169,7 +171,7 @@ pub(super) fn menu_page(
     // draw one frame with. Supplying the settings value would draw a note that
     // is silent by construction; supplying this capture's adapter would say a
     // player had changed something they have not touched.
-    for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title.name) {
+    for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title, platform) {
         model.seed(key, &value);
     }
     // The AI PILOTS page's own three sources. Read off the player's real

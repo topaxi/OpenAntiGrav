@@ -16,19 +16,23 @@
 //! - **`[graphics]`** is how the picture is drawn, for whichever title the
 //!   value applies to equally: how the textures are filtered, how much of
 //!   the world is in frame.
-//! - **`[render_profiles.<title>]`** is the subset of "how the picture is
-//!   drawn" whose right default trades off against how expensive that
-//!   *particular title's* own scene is to render: resolution, upscaling,
-//!   anti-aliasing, motion blur. Pure and Pulse's PSP/PS2-era scenes and
-//!   HD/Fury/2048's real lighting and higher poly counts are not the same
-//!   cost to draw, and this is kept **one profile per title**, not a shared
-//!   value or a two-way "classic/modern" grouping: a grouping bakes in a
-//!   guess about relative cost that does not hold even within a pair - Pulse
-//!   authors 129 dynamic shadow-occluder hulls across 83 WADs, Pure authors
-//!   none, despite being "the same era". Per title, switching which disc you
-//!   boot switches which profile the menus read and write, with nothing to
-//!   explain in the UI, because only one title is ever open at once. See
-//!   [`RenderProfile`].
+//! - **`[render_profiles.<title> (<platform>)]`** is the subset of "how the
+//!   picture is drawn" whose right default trades off against how expensive
+//!   that *particular source's* own scene is to render: resolution,
+//!   upscaling, anti-aliasing, motion blur. Pure and Pulse's PSP/PS2-era
+//!   scenes and HD/Fury/2048's real lighting and higher poly counts are not
+//!   the same cost to draw, and this is kept **one profile per (title,
+//!   original platform) pair**, not a shared value or a two-way
+//!   "classic/modern" grouping: a grouping bakes in a guess about relative
+//!   cost that does not hold even within a pair - Pulse authors 129 dynamic
+//!   shadow-occluder hulls across 83 WADs, Pure authors none, despite being
+//!   "the same era". The platform half of the key exists for the same
+//!   reason one level up: Pulse's PSP and PS2 releases are different
+//!   scenes - different geometry payloads, different textures, the PS2's
+//!   own engine flare - so the title alone is not a fine enough key.
+//!   Opening a source switches which profile the menus read and write, with
+//!   nothing to explain in the UI, because only one source is ever open at
+//!   once - see [`RenderProfile`] and [`profile_key`].
 //!
 //! The line between `[display]` and `[graphics]` is *whether the renderer
 //! would notice*. Turning off vsync changes nothing about the frame that is
@@ -36,14 +40,17 @@
 //! frame itself. Brightness and gamma sit on the display side under that
 //! rule even though they are a shader: they are a monitor calibration,
 //! applied after the game has finished drawing. The line between
-//! `[graphics]` and `[render_profiles.<title>]` is *whether the right
-//! default depends on which title is open*: anisotropy and field of view
-//! cost about the same whatever is on screen, so they stay in `[graphics]`.
+//! `[graphics]` and `[render_profiles.<title> (<platform>)]` is *whether the
+//! right default depends on which source is open*: anisotropy and field of
+//! view cost about the same whatever is on screen, so they stay in
+//! `[graphics]`.
 //!
 //! Everything was in `[graphics]` until the display split, so [`load`]
 //! migrates a file that still is - see [`migrate`]. Everything
-//! render-profile-shaped was still flat in `[graphics]` until *this* split,
-//! so [`load`] migrates that too - see [`migrate_render_profiles`].
+//! render-profile-shaped was still flat in `[graphics]` until the next
+//! split, so [`load`] migrates that too - see [`migrate_render_profiles`].
+//! And every profile was keyed by title alone until *this* split, so
+//! [`load`] migrates that last - see `render_profile::migrate_platform_split`.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -59,8 +66,11 @@ mod render_profile;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use race::{Race, Remix};
-pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF};
-use render_profile::{ensure_known_titles, migrate_reconstruction_keys, migrate_render_profiles};
+pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
+use render_profile::{
+    ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
+    migrate_render_profiles,
+};
 
 /// Mirrors [`Anisotropy`] for serde, which cannot derive on a type this crate
 /// does not own. Named the same as `Display`/`FromStr` already spell it in
@@ -86,10 +96,11 @@ pub struct Settings {
     pub display: Display,
     #[serde(default)]
     pub graphics: Graphics,
-    /// The render-cost-sensitive slice of [`Graphics`], one entry per title,
-    /// keyed by [`oag_title::Title::name`]. See the module doc's "Display
-    /// against graphics against render profiles" section for why this is
-    /// its own table rather than a field on `Graphics`.
+    /// The render-cost-sensitive slice of [`Graphics`], one entry per
+    /// `(title, original platform)` pair, keyed by [`profile_key`]. See the
+    /// module doc's "Display against graphics against render profiles"
+    /// section for why this is its own table rather than a field on
+    /// `Graphics`, and for why the key carries the platform too.
     ///
     /// A `BTreeMap` rather than `HashMap` so the canonical rewrite
     /// [`load`]/[`save`] write is stable across runs - an unordered map's
@@ -680,6 +691,11 @@ pub fn load() -> Result<Settings> {
             migrate_render_profiles(&mut table);
             // After it, not before - see `migrate_reconstruction_keys`.
             migrate_reconstruction_keys(&mut table);
+            // Last: splits whatever `[render_profiles.<title>]` migrate_render_profiles
+            // just populated (or an older file already had) into one row per
+            // platform - see `migrate_platform_split`'s own doc for why it runs
+            // after the reconstruction fold rather than before.
+            migrate_platform_split(&mut table);
             table
                 .try_into()
                 .with_context(|| format!("parsing {}", path.display()))?
@@ -715,21 +731,23 @@ pub fn load() -> Result<Settings> {
 /// line can override it for one run, and the menus should show what is in
 /// effect.
 ///
-/// `title` names whose [`RenderProfile`] the five `graphics.*` rows below
-/// that moved into `render_profiles` should read. Passed rather than looked
-/// up here because a caller (the live menus) already has the open title in
-/// hand as `Session::title.name` - there is exactly one at a time, so there
-/// is nothing for the menus to choose between.
+/// `title` and `platform` name whose [`RenderProfile`] the five
+/// `graphics.*` rows below that moved into `render_profiles` should read -
+/// see [`profile_key`]. Passed rather than looked up here because a caller
+/// (the live menus) already has the open source's title and platform in
+/// hand - there is exactly one source open at a time, so there is nothing
+/// for the menus to choose between.
 #[must_use]
 pub fn menu_seeds(
     settings: &Settings,
     anisotropy: Anisotropy,
-    title: &str,
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
 ) -> Vec<(&'static str, oag_ui::menu::Value)> {
     let text = |value: &str| oag_ui::menu::Value::Text(value.to_string());
     let profile = settings
         .render_profiles
-        .get(title)
+        .get(&profile_key(title, platform))
         .cloned()
         .unwrap_or_default();
     let mut out = vec![
