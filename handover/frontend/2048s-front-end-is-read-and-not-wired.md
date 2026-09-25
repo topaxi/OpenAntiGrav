@@ -181,12 +181,18 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   `docs/reverse-engineering/toolchain.md#vita` has the import recipe, and the
   program is already open in this project as of the pass above, so this no
   longer needs a fresh `analyzeHeadless` run either.
-- **`frontend.bnk` is located, its cues are not.** `data/audio/sound/frontend.bnk`
-  exists exactly where `SoundManager_Construct`'s decompiled bank list
-  (`game-boot.md`) says it should. `oag_title::Music::front_end` needs a
-  *cue* name inside the bank, not the bank's filename, and `oag-wad sounds`
-  reads a WAD-hosted bank where this one is PSARC-hosted - extracting it
-  first (or teaching the CLI a PSARC-backed path) is the gap.
+- **Resolved 2026-09-25: `frontend.bnk` is located, and its cues turned out
+  not to exist rather than merely to be unread.** `oag_formats::sblk::Bank::sound_names()`
+  on the extracted bank is empty (`HAS_NAME_TABLE` clear), so nothing in it
+  can be addressed by name. `oag_title::Music::front_end` is filled from a
+  standalone file instead: `data/audio/music/FEMusic/frontend_stereo.at9`,
+  RIFF-wrapped ATRAC9 - the same `FEMusic`/`frontend` shape Pulse's and
+  HD's own front-end tracks use, confidence 70 (unambiguous by naming and
+  placement, not confirmed against a decompile). New `oag_game::at9`
+  decoder; `MusicDiscs::survey`/`pick` also needed `Platform::Vita` added,
+  which it previously folded into the same arm as `Unknown`. Full account
+  in `docs/formats/2048-frontend.md`'s "frontend.bnk" bullet; pinned by
+  `crates/game/tests/vita_2048_music_ground_truth.rs`.
 - **The loading screen is real and unauthored.** A percentage-driven
   `LOADING...` bar over the `WIPEOUT 2048` mark runs on every transition seen
   this pass. No `NEWGUI` file declares it - it reads as engine chrome rather
@@ -248,8 +254,12 @@ shape, not by screen, and would have mis-fired on `Team`'s own
    and `SceAppUtil_2DB7BE3B` is `sceAppUtilDrmOpen` per the vitasdk NID
    database. Full detail in `frontend-campaign-map.md`'s own 2026-09-20
    sections.
-3. Extract `frontend.bnk` and read its cue table (`oag_formats::sblk::Bank::parse`)
-   to name `Music::front_end`. **Still open** - not attempted this pass.
+3. ~~Extract `frontend.bnk` and read its cue table
+   (`oag_formats::sblk::Bank::parse`) to name `Music::front_end`.~~ **Done
+   2026-09-25**: the bank has no name table at all, so `front_end` is
+   instead a standalone `FEMusic/frontend_stereo.at9`, the same naming
+   shape Pulse's and HD's tracks use. See the top of this file and
+   `docs/formats/2048-frontend.md`'s "frontend.bnk" bullet.
 4. ~~Once `front_end` is fillable, re-run
    `crates/game/tests/vita_2048_hud_ground_truth.rs` and a fresh
    `just play 2048 --race` boot report~~ **Done 2026-09-20**, and the "real,

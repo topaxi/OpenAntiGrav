@@ -25,14 +25,20 @@
 //! The declared route is the better one wherever it is available, because the
 //! order it yields is the release's own rather than the archive directory's.
 //!
-//! # Two containers, told apart by content
+//! # Three containers, told apart by content
 //!
-//! The PSP titles store music as RIFF-wrapped ATRAC3+ and Wipeout HD stores it
-//! as MP3. Nothing here branches on the *title* to decide which: a blob is
-//! offered to [`crate::at3`] and then to [`crate::mp3`], and whichever reads it
-//! is what it was. That is the same rule `crate::at3`'s own header already
-//! states - the content of the bytes decides, not a name or an archive - and it
-//! is what keeps a title package to naming files rather than describing them.
+//! The PSP titles store music as RIFF-wrapped ATRAC3+, Wipeout HD stores it as
+//! MP3, and 2048 stores it as RIFF-wrapped ATRAC9 - the Vita's own codec, and
+//! otherwise the same wrapper shape as the PSP's. Nothing here branches on the
+//! *title* to decide which: a blob is offered to [`crate::at9`], then
+//! [`crate::at3`], then [`crate::mp3`], and whichever reads it is what it was.
+//! That is the same rule `crate::at3`'s own header already states - the
+//! content of the bytes decides, not a name or an archive - and it is what
+//! keeps a title package to naming files rather than describing them. This
+//! axis ([`load_entry`], the declared/sniffed soundtrack) and
+//! [`load_front_end`] below both go through [`decode`], so 2048's music -
+//! today only [`oag_title::Music::front_end`], no declared soundtrack - reads
+//! the same way the other three titles' does.
 
 use std::path::Path;
 
@@ -93,6 +99,15 @@ pub struct Entry {
 /// **The PS2 release is excluded here and not by accident**: its music is loose
 /// in the filesystem rather than in an archive, so `crate::audio` reads it
 /// through its own `PS2MUSIC.WAD` path and never arrives in this module.
+///
+/// **`Platform::Vita` joined `Psp`/`Ps3` here 2026-09-25**, wiring 2048's
+/// front-end music: before this, `oag_2048::TITLE.music` being `Some` was
+/// not enough by itself - every call landed here first, and every 2048
+/// source failed this match and returned `None` before `title.music` was
+/// ever read, the same silent "this source carries no music" a title this
+/// build does not know at all produces. `Platform::Ps4` (Omega) is not
+/// added: `oag_omega::TITLE.music` is still `None`, so there is nothing yet
+/// for a widened match to reach.
 fn open_archived(source: &str) -> Option<(&'static Title, Archives)> {
     // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
     // path, so a directory somebody extracted with `oag-unpack` answers the
@@ -100,7 +115,7 @@ fn open_archived(source: &str) -> Option<(&'static Title, Archives)> {
     let opened = crate::title::open_source(source, Vec::new(), Vec::new()).ok()?;
     matches!(
         opened.archives.layout.platform,
-        Platform::Psp | Platform::Ps3
+        Platform::Psp | Platform::Ps3 | Platform::Vita
     )
     .then_some((opened.title, opened.archives))
 }
@@ -260,24 +275,37 @@ fn riff_seconds(header: &[u8]) -> Option<f64> {
     stream.seconds()
 }
 
-/// Decodes a music blob, whichever of the two containers it is in.
+/// Decodes a music blob, whichever of the three containers it is in.
 ///
-/// ATRAC3+ goes out to `ffmpeg` through the cache in [`crate::at3`]; MP3 is
-/// decoded in process by [`crate::mp3`] and cached nowhere, for the reason that
-/// module's header gives.
+/// ATRAC9 and ATRAC3+ both go out to `ffmpeg` through the cache in
+/// [`crate::at3`]/[`crate::at9`]; MP3 is decoded in process by [`crate::mp3`]
+/// and cached nowhere, for the reason that module's header gives.
+///
+/// **ATRAC9 is checked first.** [`crate::at9::describe`] verifies the real
+/// `WAVE_FORMAT_EXTENSIBLE` subformat GUID, where [`crate::at3::describe`]
+/// accepts any RIFF/WAVE with a readable `fmt ` chunk at all - deliberately
+/// loosely, since nothing reached this function with a non-ATRAC3+ RIFF
+/// stream before 2048's `frontend_stereo.at9` did. Checking the stricter one
+/// first is what stops the looser one from claiming it by accident.
 ///
 /// # Errors
 ///
-/// A blob that is neither container, or a decode that failed - including
-/// `ffmpeg` being absent, which only the ATRAC3+ half can hit.
+/// A blob that is none of the three, or a decode that failed - including
+/// `ffmpeg` being absent, which the two ATRAC halves can hit.
 fn decode(blob: &[u8], cache_dir: &Path) -> Result<Pcm> {
+    if crate::at9::describe(blob).is_ok() {
+        return crate::at9::decode(blob, cache_dir);
+    }
     if crate::at3::describe(blob).is_ok() {
         return crate::at3::decode(blob, cache_dir);
     }
     if crate::mp3::describe(blob).is_some() {
         return crate::mp3::decode(blob);
     }
-    bail!("this is neither a RIFF-wrapped ATRAC3+ stream nor an MPEG one")
+    bail!(
+        "this is neither a RIFF-wrapped ATRAC9 stream, a RIFF-wrapped ATRAC3+ \
+         stream, nor an MPEG one"
+    )
 }
 
 /// Reads one soundtrack entry and decodes it.

@@ -59,6 +59,14 @@ pub(crate) struct MenuStage {
     /// the rules it draws. Read once, off the front-end XML this source shipped
     /// - see `menu::read_frame` - and empty for a title whose frame is unread.
     pub(crate) frame: menu::Frame,
+    /// The front-end root's own `Confirm`/`Back` legend, carried from
+    /// `Shell::nav_legend` - `None` on a source whose root authors no
+    /// `NavigationController` this build reads. Drawn on every ordinary
+    /// menu page (not the picker, the campaign screens or a frozen race),
+    /// `Confirm` unconditionally and `Back` only past the tree's own root -
+    /// see [`Self::render`]'s own call site for why that boundary and not
+    /// a disc-measured one.
+    pub(crate) nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The modal prompt on screen, if one is: an on-screen keyboard or a
@@ -574,6 +582,15 @@ impl MenuStage {
                                     },
                                 )
                             });
+                        // The footer legend - see `oag_ui::campaign::hd::
+                        // hd_cell_draw_list`'s own doc. No ticker on this
+                        // branch: HD's shared `Skin.xml` authors no
+                        // `TextInfoIsAlwaysLast` viewport at all, so
+                        // `campaign.ticker_draw` is always `None` here and
+                        // there is nothing for it to add.
+                        let default_measure = |text: &str| font::measure(&self.default_atlas, text);
+                        let footer_overlay = campaign
+                            .nav_legend_draw(&campaign.cell_layout().faces, &default_measure);
                         oag_ui::campaign::hd::hd_cell_draw_list(
                             model,
                             campaign.cell_layout(),
@@ -587,6 +604,7 @@ impl MenuStage {
                             if frozen_race { None } else { shown },
                             frozen_race,
                             &|src| campaign.sprites.get(src),
+                            &footer_overlay,
                         )
                     }
                 }
@@ -788,6 +806,31 @@ impl MenuStage {
                             )
                         }),
                 )
+                .collect()
+        } else {
+            list
+        };
+        // The front-end root's own `Confirm`/`Back` legend - see
+        // [`Self::nav_legend`]'s own doc. Skipped mid-transition for the
+        // same reason `axis_preview`/`records_table` above are.
+        //
+        // `Confirm` always; `Back` only past the tree's own root
+        // (`self.menu.depth() > 1`) - this build's own tree has no disc
+        // screen to read a gate off, but the boundary itself is measured,
+        // not guessed: see `docs/architecture/menus.md`'s "A mouse and a
+        // finger" section (`NavigationButtons` census, confidence ~70) for
+        // the two real RPCS3 captures - `Main Menu` alone shows `Confirm`
+        // only, a page reached from it shows both - this reproduces.
+        let list: Vec<Draw> = if self.change.is_none()
+            && let Some(legend) = &self.nav_legend
+        {
+            let measure = |text: &str| font::measure(&self.default_atlas, text);
+            list.into_iter()
+                .chain(legend.draw_gated(
+                    &oag_ui::picker::FaceScales::default(),
+                    &measure,
+                    self.menu.depth() > 1,
+                ))
                 .collect()
         } else {
             list

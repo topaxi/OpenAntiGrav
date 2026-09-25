@@ -1,14 +1,13 @@
-//! The front-end root's own footer fixtures, shared by every menu screen
-//! but authored once: the `NavigationController`'s `Confirm`/`Back` prompts
-//! and the scrolling tip ticker, both on `FE Screen`
-//! (`Data\Plugins\PI001\GUI\Skin.xml`) rather than on `Grid Selection`/`Cell
-//! Selection`'s own `CellMode_Definition.xml`. Neither shape is one
-//! [`crate::screen::Screens::collect_widgets`] recognises at all - `
-//! NavigationController` and `TextInfo` fall through its match to the
-//! catch-all arm, children and all - which is the actual gap
-//! `docs/ui/campaign-screens.md`'s "Open" section names - the main menu's
-//! own copy of this same footer is a sibling gap, tracked in its own
-//! handover thread rather than linked from here.
+//! The front-end root's own footer fixtures: the `NavigationController`'s
+//! `Confirm`/`Back` prompts and the scrolling tip ticker, both authored once
+//! on the shared `FE Screen` (`Data\Plugins\PI001\GUI\Skin.xml` on Pulse,
+//! `Data\Plugins\Frontend\Gui\Skin.xml` on Wipeout HD/Fury and Omega -
+//! `Top FE Screen -> FE Screen -> BodgeScreenContainingNavigationController`
+//! on the latter two, that literal wrapper name being the disc's own)
+//! rather than on any individual navigable screen's own definition file.
+//! Neither shape is one [`crate::screen::Screens::collect_widgets`]
+//! recognises at all - `NavigationController` and `TextInfo` fall through
+//! its match to the catch-all arm, children and all.
 //!
 //! Read directly off the raw parsed tree (`oag_tables::fexml::parse`'s
 //! `Node`) instead of through that model, because the model has no way to
@@ -16,12 +15,35 @@
 //! `NavigationController` picks *per screen* which prompts to show, which
 //! is not a fact any named `Screen` carries; and the ticker's own `TextInfo
 //! type="bar"` is two alternating text buffers sharing one clip viewport,
-//! not a single positioned widget with a string. This build shows the
-//! `NavigationController`'s `Confirm`/`Back` prompts unconditionally
-//! wherever they are asked for - `Cell Selection` alone today, since that
-//! is the one screen `docs/ui/campaign-screens.md`'s 2026-09-14 PPSSPP pass
-//! measured wanting them - rather than modelling the original's own
-//! per-screen gate, which was not traced.
+//! not a single positioned widget with a string.
+//!
+//! **Where this build shows `Confirm`/`Back`, and on what evidence.**
+//! `Cell Selection` (both Pulse's own screen and Wipeout HD/Fury's and
+//! Omega's) shows both unconditionally - the one screen a PPSSPP capture
+//! measured wanting them (`docs/ui/campaign-screens.md`'s 2026-09-14
+//! pass), and neither title's own campaign screen file authors a
+//! per-screen gate to read instead. Every ordinary menu page
+//! (`crate::main::menu_stage::MenuStage::render` in `oag-game`) shows
+//! `Confirm` always and `Back` only past this build's own tree root
+//! (`Menu::depth() > 1`) - **chosen** for this build's own tree, which no
+//! disc screen names, but corroborated rather than picked for symmetry:
+//! see `docs/architecture/menus.md`'s "A mouse and a finger" section for
+//! the `NavigationButtons` census and the two real RPCS3 captures that
+//! measure the identical root/non-root split on the real title. HD/Fury's
+//! own `EndRace Results`/`Menu`/`Rewards` each author their own *local*
+//! `NavigationController` instead of using the shared one, with no `Back`
+//! `Text` at all - read the same way, through
+//! `oag_ui::endrace::hd::hd_results_draw_list` and its siblings, not
+//! through this module.
+//!
+//! **HD/Fury's and Omega's own icon glyph never draws.** Their
+//! `ControlTextConfirmButton`/`BackButton` author `font="buttons"`
+//! (`ps_buttons.fnt`), a face this build loads no atlas for -
+//! `oag_game::boot::fonts` only ever resolves the language plugin's own
+//! `<Font>` role slots, never a literal `font=` attribute - so [`NavigationLegend::read`]
+//! excludes that one widget rather than draw its resolved codepoint (the
+//! same `"ε"`/`"γ"` Pulse's own icon uses) through an unverified face. See
+//! that function's own doc for the full reasoning.
 //!
 //! # The ticker's own content is not authored at all
 //!
@@ -126,6 +148,16 @@ fn find_named<'a>(node: &'a Node, tag: &str, name: &str) -> Option<&'a Node> {
         .find_map(|child| find_named(child, tag, name))
 }
 
+/// Which half of a `NavigationController` a [`Prompt`] belongs to - the
+/// axis [`NavigationLegend::draw_gated`] filters on. Not carried by every
+/// caller: [`NavigationLegend::draw`] draws every prompt regardless, the
+/// same unconditional behaviour this module has always had.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PromptKind {
+    Confirm,
+    Back,
+}
+
 /// One `NavigationController` prompt - an icon glyph and its label, both
 /// resolved through the string table already.
 #[derive(Debug, Clone)]
@@ -135,6 +167,17 @@ struct Prompt {
     x: f32,
     y: f32,
     color: [f32; 4],
+    kind: PromptKind,
+    /// The widget's own authored `scale`, `1.0` when it names none - Pulse's
+    /// four `Text`s never do, but Wipeout HD/Fury's own word half
+    /// (`ControlTextConfirm`/`Back`) authors `scale="0.8"` on both the
+    /// shared Bodge controller and every `EndRace_Definition.xml` copy,
+    /// which was previously read and silently dropped: [`face_scale`] only
+    /// ever answered from the widget's `font`, never its own `scale`.
+    /// Multiplied into [`NavigationLegend::draw_prompt`]'s own scale rather
+    /// than replacing it, so Pulse's font-keyed answer is unchanged (`1.0`
+    /// there, a no-op) and HD's own authored shrink applies on top of it.
+    scale: f32,
     /// `Some` overrides [`Self::x`]/left alignment: draw right-aligned so
     /// the text *ends* here instead of starting at `x`. See
     /// [`NavigationLegend::read`]'s own doc for the one prompt this is
@@ -147,29 +190,53 @@ struct Prompt {
     left_bound: Option<f32>,
 }
 
-/// `Confirm`/`Back`, off `Skin.xml`'s own `<NavigationController
-/// name="NavigationController">`: four `Text` children,
-/// `ControlTextConfirmButton`/`ControlTextConfirm`/`ControlTextBackButton`/
-/// `ControlTextBack`, each an idstring - `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`
-/// resolve to `"ε"`/`"γ"`, the small-font glyphs for the cross/circle
-/// buttons, the same private-glyph idiom `Cell Selection`'s own
-/// `HELP`/`CHANGE DIFFICULTY` row already draws (there with a literal
-/// `β`/`δ` baked into the XML instead of an idstring - the disc is not
-/// consistent about which). `FE_CONFIRM`/`FE_BACK` resolve to the plain
-/// words `"Confirm"`/`"Back"`.
+/// `Confirm`/`Back`, off a `<NavigationController name="NavigationController">`
+/// anywhere in `root`: two `Text` children carrying either half,
+/// `ControlTextConfirmButton`/`ControlTextConfirm` or
+/// `ControlTextBackButton`/`ControlTextBack`, each an idstring -
+/// `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON` resolve to `"ε"`/`"γ"`, the
+/// small-font glyphs for the cross/circle buttons, the same private-glyph
+/// idiom `Cell Selection`'s own `HELP`/`CHANGE DIFFICULTY` row already draws
+/// (there with a literal `β`/`δ` baked into the XML instead of an idstring -
+/// the disc is not consistent about which). `FE_CONFIRM`/`FE_BACK` resolve
+/// to the plain words `"Confirm"`/`"Back"`.
+///
+/// **Not Pulse-only.** Originally read only off Pulse's own `Skin.xml`
+/// (`Data\Plugins\PI001\GUI\Skin.xml`'s `FE Screen`), this reads the
+/// identical shape off Wipeout HD/Fury's own shared front-end root
+/// (`Data\Plugins\Frontend\Gui\Skin.xml`) too - `Top FE Screen -> FE Screen
+/// -> BodgeScreenContainingNavigationController` (that literal name is the
+/// disc's own), six `Text` children rather than four: the same
+/// `ControlTextConfirmButton`/`Confirm`/`BackButton`/`Back` plus
+/// `ControlTextInviteButton`/`ControlTextInvite`, an online multiplayer
+/// invite prompt (`StartEnabled="false"` on the disc, and irrelevant here
+/// regardless - multiplayer is out of scope). [`Self::read`] filters by the
+/// widget's own `name` attribute to exactly the four `ControlText*` names
+/// above, not "any `Text` with an idstring" - without that filter, HD's
+/// `EndRace Results` screen would also pull in its own
+/// `RecordsCycleButton`/`RecordsCycle` (a leaderboard-cycle button, same
+/// online-only shape, sitting in that screen's own *local*
+/// `NavigationController` beside its Confirm prompt - see
+/// `oag_ui::endrace::hd::hd_results_draw_list`'s own doc for where that
+/// pair is excluded a second time, by name, in the ordinary text-widget
+/// path once `crate::screen::Screens::collect_widgets` started walking
+/// `NavigationController` at all).
 #[derive(Debug, Clone, Default)]
 pub struct NavigationLegend {
     prompts: Vec<Prompt>,
 }
 
 impl NavigationLegend {
-    /// `root` is `oag_tables::fexml::parse`'s return over `Skin.xml`'s own
-    /// *expanded* text (`oag_tables::fexml::text`, not
-    /// `crate::screen::Screens::from_xml` - that type never keeps the raw
-    /// tree this needs). `globals` is that same parse's `FEGlobals`
+    /// `root` is `oag_tables::fexml::parse`'s return over the front-end
+    /// root's own *expanded* text (`oag_tables::fexml::text` on Pulse;
+    /// plain UTF-8 on Wipeout HD/Fury and Omega, the same divergence
+    /// `crate::campaign::load_hd`'s own doc gives for every other screen
+    /// file) - not `crate::screen::Screens::from_xml`, which never keeps the
+    /// raw tree this needs. `globals` is that same parse's `FEGlobals`
     /// declarations - `crate::screen::Screens::from_xml(xml).globals` reads
     /// them without needing this module to duplicate that collection pass.
-    /// `None` when the file authors no `NavigationController` at all.
+    /// `None` when the file authors no `NavigationController` at all, or
+    /// authors one with neither half this reads.
     #[must_use]
     pub fn read(
         root: &Node,
@@ -182,6 +249,50 @@ impl NavigationLegend {
             let Some(idstring) = text.value("idstring") else {
                 continue;
             };
+            // The four known `Confirm`/`Back` widgets, by their own `name`
+            // attribute - not every `Text` with an idstring. See
+            // [`NavigationLegend`]'s own doc for the widget this excludes
+            // that would otherwise leak through (`RecordsCycle`), and the
+            // one `StartEnabled="false"` on disc regardless (`Invite`).
+            let Some(kind) = text.attr("name").and_then(|name| match name {
+                "ControlTextConfirmButton" | "ControlTextConfirm" => Some(PromptKind::Confirm),
+                "ControlTextBackButton" | "ControlTextBack" => Some(PromptKind::Back),
+                _ => None,
+            }) else {
+                continue;
+            };
+            // **Wipeout HD/Fury's own icon half draws nothing, on purpose.**
+            // `ControlTextConfirmButton`/`BackButton` author `font="buttons"`
+            // there (`ps_buttons.fnt`, confirmed present in `DATA02` -
+            // `crates/game/src/boot/fonts.rs`'s own module doc), a font this
+            // build loads no atlas for at all: `boot::load_font`/
+            // `load_menu_font` only ever resolve the language plugin's own
+            // `<Font>` role slots (`Default`, `menu`, `small`), never a
+            // literal `font=` attribute value, so there is no loaded face
+            // `face_role`/`Draw::in_role` could route this to. The resolved
+            // idstring is the identical `"ε"`/`"γ"` codepoint Pulse's own
+            // icon halves use (`FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`, both
+            // titles' `entries.xml`) - Pulse's happens to render correctly
+            // through its own `menu`-role atlas, confirmed live
+            // (`docs/ui/campaign-screens.md`'s 2026-09-21 pass), but that is
+            // Pulse's own loaded font actually carrying the remapped glyph
+            // art at that codepoint, not a fact about the codepoint itself.
+            // Nothing here confirms Wipeout HD/Fury's own loaded body face
+            // (`helv`/`arialbd`/`pulsehud`, whichever `menu`/`Default`
+            // resolves to) carries the same remapping rather than the plain
+            // Greek letter, and per `CLAUDE.md`'s "never invent what the
+            // assets already author" a wrong glyph is worse than none - so
+            // this build draws the resolved word (`ControlTextConfirm`/
+            // `Back`, `font="default"` there, which **is** a loaded atlas)
+            // and leaves the icon out rather than risk drawing "ε CONFIRM"
+            // literally. Loading `ps_buttons.fnt` as its own role is the fix,
+            // once something needs it enough to justify a fourth atlas.
+            if text
+                .value("font")
+                .is_some_and(|font| font.eq_ignore_ascii_case("buttons"))
+            {
+                continue;
+            }
             prompts.push((
                 idstring.to_string(),
                 Prompt {
@@ -198,6 +309,8 @@ impl NavigationLegend {
                     x: number(globals, text, "x").unwrap_or(0.0),
                     y: number(globals, text, "y").unwrap_or(0.0),
                     color: color_of(globals, text),
+                    kind,
+                    scale: number(globals, text, "scale").unwrap_or(1.0),
                     align_right_to: None,
                     left_bound: None,
                 },
@@ -258,40 +371,85 @@ impl NavigationLegend {
     pub fn draw(&self, faces: &FaceScales, measure: &dyn Fn(&str) -> f32) -> Vec<Draw> {
         self.prompts
             .iter()
-            .map(|prompt| {
-                let mut scale = face_scale(faces, &prompt.font);
-                let x = match prompt.align_right_to {
-                    Some(right_to) => {
-                        // Shrink just enough that the right-aligned text's
-                        // own left edge does not cross `left_bound` - see
-                        // `NavigationLegend::read`'s own doc for why this
-                        // exists at all.
-                        if let Some(left_bound) = prompt.left_bound {
-                            let width = measure(&prompt.text) * scale;
-                            let available = right_to - left_bound;
-                            if width > available && width > 0.0 {
-                                scale *= available.max(0.0) / width;
-                            }
-                        }
-                        right_to
-                    }
-                    None => prompt.x,
-                };
-                Draw::in_role(
-                    face_role(&prompt.font),
-                    x,
-                    prompt.y,
-                    scale,
-                    prompt.color,
-                    if prompt.align_right_to.is_some() {
-                        Align::Right
-                    } else {
-                        Align::Left
-                    },
-                    prompt.text.clone(),
-                )
-            })
+            .map(|prompt| Self::draw_prompt(prompt, faces, measure))
             .collect()
+    }
+
+    /// [`Self::draw`], with [`PromptKind::Back`] left out when `show_back`
+    /// is `false`. [`PromptKind::Confirm`] is never gated - every menu page
+    /// this build draws has something a `Confirm` press can act on, and
+    /// nothing on either title's own disc suggests otherwise (Pulse's
+    /// `Skin.xml` carries no per-screen visibility fact at all; Wipeout
+    /// HD/Fury's own `NavigationButtons` bitmask, read off `Main Menu` and
+    /// its siblings, never clears the `Confirm` bit on a screen this build
+    /// would call a menu page - see `docs/architecture/menus.md`'s "A mouse
+    /// and a finger" section for the full census and where this rule is
+    /// used).
+    #[must_use]
+    pub fn draw_gated(
+        &self,
+        faces: &FaceScales,
+        measure: &dyn Fn(&str) -> f32,
+        show_back: bool,
+    ) -> Vec<Draw> {
+        self.prompts
+            .iter()
+            .filter(|prompt| show_back || prompt.kind != PromptKind::Back)
+            .map(|prompt| Self::draw_prompt(prompt, faces, measure))
+            .collect()
+    }
+
+    fn draw_prompt(prompt: &Prompt, faces: &FaceScales, measure: &dyn Fn(&str) -> f32) -> Draw {
+        let mut scale = face_scale(faces, &prompt.font) * prompt.scale;
+        let x = match prompt.align_right_to {
+            Some(right_to) => {
+                // Shrink just enough that the right-aligned text's own left
+                // edge does not cross `left_bound` - see
+                // `NavigationLegend::read`'s own doc for why this exists at
+                // all.
+                if let Some(left_bound) = prompt.left_bound {
+                    let width = measure(&prompt.text) * scale;
+                    let available = right_to - left_bound;
+                    if width > available && width > 0.0 {
+                        scale *= available.max(0.0) / width;
+                    }
+                }
+                right_to
+            }
+            None => prompt.x,
+        };
+        Draw::in_role(
+            face_role(&prompt.font),
+            x,
+            prompt.y,
+            scale,
+            prompt.color,
+            if prompt.align_right_to.is_some() {
+                Align::Right
+            } else {
+                Align::Left
+            },
+            prompt.text.clone(),
+        )
+    }
+
+    /// One line saying which halves this legend actually has to draw - for
+    /// a boot report, the same idiom `oag_ui::menu::Frame::describe` and
+    /// `oag_ui::backdrop::Fury::describe` already use, so a source whose
+    /// icon glyph was left out (see [`Self::read`]'s own doc) says so
+    /// without a screenshot.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let has = |kind: PromptKind| self.prompts.iter().any(|prompt| prompt.kind == kind);
+        match (has(PromptKind::Confirm), has(PromptKind::Back)) {
+            (true, true) => "Confirm+Back".to_string(),
+            (true, false) => "Confirm only".to_string(),
+            (false, true) => "Back only".to_string(),
+            // Unreachable in practice - `Self::read` returns `None` rather
+            // than a legend with no prompts at all - kept exhaustive rather
+            // than a `_` so a future prompt kind cannot silently fall here.
+            (false, false) => "no prompts".to_string(),
+        }
     }
 }
 

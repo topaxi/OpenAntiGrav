@@ -6,7 +6,32 @@
 
 use anyhow::{Context, Result};
 use oag_tables::fexml;
+use oag_ui::language::StringTable;
 use oag_ui::screen::Screens;
+
+/// The front-end root's own `Confirm`/`Back` legend, off `skin_xml` -
+/// already-decoded text, the same blob [`super::fury::load`] reads a few
+/// lines up in `super::load_shell`, re-parsed here rather than re-fetched
+/// from the archive a second time. `globals` is that same root's own
+/// `Screens::from_xml`-resolved table (`screens.globals` in the caller),
+/// needed to follow a `FEGlobals->` indirection a prompt's own `x`/`y`/
+/// `color` may carry. `None` when `skin_xml` is `None` (the root did not
+/// decode at all, already reported by the caller) or the file authors no
+/// `NavigationController` with either half
+/// `oag_ui::campaign::footer::NavigationLegend::read` reads.
+///
+/// Split out under the 1,000-line rule alongside every other loader in this
+/// file, not because this one function is large - it is not - but because
+/// `super::load_shell` had no room left for it inline.
+#[must_use]
+pub(super) fn read_nav_legend(
+    skin_xml: Option<&str>,
+    globals: &std::collections::HashMap<String, String>,
+    strings: &StringTable,
+) -> Option<oag_ui::campaign::footer::NavigationLegend> {
+    let xml = skin_xml?;
+    oag_ui::campaign::footer::NavigationLegend::read(&oag_ui::screen::parse(xml), globals, strings)
+}
 
 /// One of the skin's `LoadXML` includes, parsed on its own with the skin's
 /// globals as fallbacks - which is how an include resolves `FEGlobals->`

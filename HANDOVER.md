@@ -601,7 +601,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The AI was never the problem: four contact-path bugs, and what is left after them](handover/gameplay/the-ai-was-never-the-problem-four-contact.md)
 - [DLC packs are mounted; two things inside them are not read](handover/tooling/dlc-packs-are-mounted-two-things-inside-them.md)
 - [Two recovered chase-camera behaviours are ported; `headtilt` is not](handover/rendering/two-recovered-chase-camera-behaviours-are-ported-headtilt.md)
-- [The menus draw the disc's layout; the footer's ticker and prompts are still unbuilt](handover/frontend/the-menus-draw-the-discs-layout-the-chrome.md)
+- [The menus draw the disc's layout; the footer's ticker is still unbuilt](handover/frontend/the-menus-draw-the-discs-layout-the-chrome.md)
 - [PS2 front-end layout is hardcoded to 480x272](handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md)
 - [Audio: race SFX plays on all three titles](handover/audio/audio-race-sfx-plays-on-all-three-titles.md)
 - [`oag-trace plan` has never been replayed into the emulator](handover/tooling/oag-trace-plan-has-never-been-replayed-into.md)

@@ -303,12 +303,24 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_x: 21.0,
     title_y: 20.0,
     title_scale: 0.97,
-    // Unchecked, not measured `None`: Pure's own screen titles' `font=` role
-    // was not read this pass - this title has no single `MainMenu_Definition.xml`
-    // the way Pulse does (see `first_row_y` below), and the same per-screen
-    // sweep that field needed was out of scope for wiring HD's title face.
-    // See `oag_title::MenuSkin::title_font`'s own doc.
-    title_font: None,
+    // **Now checked, both pressings**: `Skin.xml`'s own `Main Menu` screen
+    // (the same root screen `Race Campaign`/`Racebox`/`Remix`/... draws under)
+    // authors `idstring="Main Menu" font="Title" x="FEGlobals->TitleXOffset"
+    // y="FEGlobals->TitleYOffset" scale="FEGlobals->TitleScale"
+    // color="FEGlobals->TitleColor"` - the same role/offset/scale/color
+    // mechanism Pulse's and HD's chrome titles use, read directly off
+    // `pure-psp-eu.chd` and `pure-psp-usa.chd`'s own `Data\Plugins\PI001\GUI\Skin.xml`,
+    // 2026-09-25. Flipping this is a safe wire rather than the open risk
+    // Pulse's own entry describes: `oag_ui::language::roles::TITLE` resolves
+    // to `FX300ANG.fnt` for Pure, the *same file* `DEFAULT` already does (see
+    // that module's own font table), so nothing about which glyphs draw
+    // moves - only the fact that the title now goes through its own
+    // authored role instead of drawing as an untagged `Draw::Text` that
+    // happens to land on the identical atlas. Safe from `face_atlas_slot`'s
+    // other user too: Pure's own campaign-free menus never construct a
+    // `Draw::FacedText { role: "Default", .. }` for this to collide with
+    // (see that function's own doc).
+    title_font: Some("Title"),
     // **Authored, and measured across the whole GUI tree rather than off one
     // screen.** Pure has no `MainMenu_Definition.xml` to read a single number
     // out of, so every `<Menu>` widget in `Skin.xml` and the twelve
