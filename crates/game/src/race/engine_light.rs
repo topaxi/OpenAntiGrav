@@ -85,10 +85,12 @@
 //! the player's hull record in `r19`, at cruise and with a boosted light
 //! in the visible list. See `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`,
 //! "The hull's `record+0xe4 & 0x800` bit is set at load". So the craft
-//! binding below is the original's. At player size the term changes very
-//! little of our frame: an A/B that drops it from the craft moved 0.07-0.12 %
-//! of the pixels, all at the central nozzle. A hull that washes on boost is
-//! being lit by something else.
+//! binding below is the original's. It is also what flattens the inner rear
+//! panels to white at a boost here: an A/B at player size on `Assegai_n1`
+//! loses that wash with the craft binding dropped. The original's boosted
+//! hull glows at the nozzle and housings instead. So the gap is in the
+//! term's inputs, not in whether it applies. The candidates are named in
+//! renderer.md's section.
 //!
 //! The track floor and walls light up only when a craft is
 //! within `D` of them: landings, wall scrapes and banked sections.

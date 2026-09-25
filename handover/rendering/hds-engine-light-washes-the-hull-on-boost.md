@@ -1,4 +1,4 @@
-# HD's hull washes white on boost and blooms off it; the original's does not - the hull binding is measured correct, so the wash is some other term
+# HD's hull washes white on boost and blooms off it; the original's does not - the hull binding is measured correct, so the gap is in the light term's inputs
 
 2026-09-20. Reported from play by the user the same evening the light landed
 (`421b14c9`): "the light work looks amazing, but it exaggerates the bloom".
@@ -21,12 +21,15 @@ and is not repeated here.
   10 times with that record in `r19`, at cruise and with a boosted light in
   the visible list. Full read: renderer.md, "The hull's `record+0xe4 &
   0x800` bit is set at load". **Do not remove the craft binding.**
-- **The SPU term is not what washes our hull.** Talon's Junction, player
-  size, a fired Turbo, ticks 250/290/305, on `Piranha` and `Piranha_n1`. An
-  A/B that took the craft's `SpuLights` out moved 0.07-0.12 % of the
-  frame's pixels, all at the central nozzle. The white wing rims and the
-  pink wash on `Piranha_n1` are still there with the binding removed, at
-  rest as well as boosted.
+- **The SPU term is what flattens our inner rear panels to white.** The A/B
+  was on Talon's Junction at player size, with a fired Turbo (it arms the
+  same `exhaust.boost` the flame's blend reads). On `Assegai_n1` at tick
+  295, the panels either side of the nozzle go flat white with the craft
+  binding and keep their structure without it:
+  `data/scratch/hd-svc1-bit/rear-ab.png`. Two same-command runs differ by
+  about 2 % of pixels at that tick from motion blur, so read the frames, not
+  a pixel count. The white wing rims and the pink on the `_n1` wings stay
+  with the binding removed. They are a separate term.
 
 - **The bloom is measured, not tuned.** `crates/render/src/post/hd_bloom.rs`:
   every pass is the EBOOT's own fragment microcode (`scripts/ps3-microcode.py`),
@@ -90,39 +93,44 @@ the light than ours.
 
 ## Open
 
-- **What does wash the hull, if not the SPU term?** Nothing below is
-  measured yet. The original's boosted frame on RPCS3 is
-  `data/scratch/hd-svc1-bit/bp-081.png`. It shows a speed-pad boost at 449 km/h, the Piranha
-  planform with a dark, yellow-striped livery and a classic blue light. Its
-  hull keeps its livery, and only the nozzle glows. Candidates:
-  1. The flare and plume quads `EngineFlare_PlaceShapes` scales by
-     `EF_Main`/`EF_Boost` at boost. They are additive, and they sit over
-     the rear of the hull.
-  2. The Fury skins' own hull material. `Piranha_n1`'s white rims show at
-     rest with the SPU term off.
-  3. Bloom picking up either of the two above. The chain is measured, so
-     this is an input question, not a tuning one.
-- **The livery in the original's frame is not identified.** The planform
-  is Piranha, but neither `Piranha`, `Piranha_c1` nor `Piranha_n1` matches
-  the dark, yellow-striped paint in `bp-081.png` or `race.png`. The Fury
-  flag also differed between the two boots: `race.png`'s light is
-  `(40, 10, 4)`, this one's is `(4, 10, 40)`. So a same-team comparison
-  still needs the livery named first.
+- **Why the same term washes our panels and not the original's.** The
+  original's boosted frame is `data/scratch/hd-svc1-bit/bp-081.png`: RPCS3,
+  a speed-pad boost at 449 km/h, the Piranha planform in a dark,
+  yellow-striped livery, classic blue light at about `x6`. Its hull glows at
+  the nozzle and housings and keeps its livery elsewhere. Candidates, none
+  measured:
+  1. The space the `EdgeGeom` job evaluates `|d|/D` in. If opcode `0x30`
+     (`RenderOps_BuildEdgeGeomJob`) hands the SPU object-space light
+     positions and the hull's world matrix is scaled, the reach of `D`
+     differs from ours by that scale.
+  2. The anchor-to-panel distance on both sides. The anchor matches the
+     original's records; the panels' distance from it is unmeasured.
+  3. The boost blend at the frames compared: ours near the snap (`x11`),
+     the original's visible boosted light about `x6`.
+- **The livery in the original's frames is not identified.** The planform
+  is Piranha, but `Piranha`, `Piranha_c1` and `Piranha_n1` do not match the
+  dark, yellow-striped paint in `bp-081.png` or `race.png`. The Fury flag
+  also differed between the two boots: `race.png`'s light is `(40, 10, 4)`
+  and this boot's is `(4, 10, 40)`.
+- **The white wing rims on the `_n1` skins** are not the SPU term. Whether
+  the original shows them is unread.
 
 ## Next Steps
 
-1. Name the original's livery, then take a matched frame on both sides:
-   same livery, Talon's Junction, player size, several boosted frames.
-   `data/scratch/hd-svc1-bit/drive.py` is a working private RPCS3 driver
-   (it expects to sit at `<checkout>/data/svc1/`): it walks into the race, reads the craft table, and arms
-   `Z0`s with stop-reply-safe stepping. Reading `craft+0x6ae0 -> +0x204c`
+1. Read how opcode `0x30` builds the `EdgeGeom` light array: world or
+   object space, and whether `D` is scaled. Then read the hull's world
+   matrix scale. This is the cheapest of the three and could explain the
+   whole gap.
+2. Measure our anchor-to-panel distance for the hull in `rear-ab.png`
+   against `D`, with `hd_engine_light_reach_probe.rs` plus the hull's
+   `ship.vex` vertices.
+3. Take a matched pair: same livery, Talon's Junction, player size,
+   several boosted frames at a known blend. `data/scratch/hd-svc1-bit/drive.py`
+   is a working private RPCS3 driver (it expects to sit at
+   `<checkout>/data/svc1/`). It walks into a race, reads the craft table,
+   and arms `Z0`s with stop-reply-safe stepping. `craft+0x6ae0 -> +0x204c`
    gives the hull record index. The team field is not read yet.
-2. On our side, A/B the flare/plume quads the same way the SPU term was
-   A/B'd, at a boosted tick with `--press square` (fires the held Turbo).
-   Measure the pixel share each term moves before touching anything.
-3. Compare `Piranha_n1`'s rim against the original's `_n1` at rest before
-   treating it as part of this thread; it may be the skin's own paint.
 
-What would falsify candidate 1: removing the flare/plume from the hull
-region leaves the wash. What would falsify candidate 2: the original's
-`_n1` hull shows the same rims at rest.
+What would falsify candidate 1: the job gets world-space lights, or the
+hull matrix is unscaled. What would falsify candidate 2: our panels sit
+further than `D` from the anchor, so the wash would need another cause.

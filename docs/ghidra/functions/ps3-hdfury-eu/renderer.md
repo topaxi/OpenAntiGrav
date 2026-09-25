@@ -7028,11 +7028,14 @@ Taken-branch stops on the player's hull came both at cruise and while the visibl
 
 **Confidence 90** that the hull record's `0x800` bit is set in a race and that the gate selects `SVC1` for the player's hull. Evidence: the static writer chain, one live read of the bit, and 10 live stops on the taken branch with the record pointer matching.
 
-**What this falsifies, and what it leaves.** The top candidate on this page, that the original never selects `SVC1` for a hull, is falsified. The craft binding in `crates/game/src/race/scene/frame.rs` is now measured. What is left is why this project's boosted hull looks washed where the original's does not. The SPU term is not a large part of it. An A/B at player size on Talon's Junction took the craft's `SpuLights` binding out and left everything else. On `Piranha` and `Piranha_n1` boosted by a fired Turbo, ticks 250/290/305, removing the binding changed 0.07-0.12 % of a 1440x816 frame's pixels, all at the central nozzle. The white rims and the pink wash on the `_n1` wings are there with the binding removed, at rest (tick 250) as well as boosted. So they come from another term. The next candidates, unmeasured:
+**What this falsifies, and what it leaves.** The top candidate on this page, that the original never selects `SVC1` for a hull, is falsified. The craft binding in `crates/game/src/race/scene/frame.rs` is now measured.
 
-1. The flare and plume quads `EngineFlare_PlaceShapes` scales at boost.
-2. The Fury skins' own hull material.
+The binding is still what produces this project's rear wash. The A/B was run at player size on Talon's Junction, boosted by a fired Turbo, which arms the same `exhaust.boost` the flame's boost blend reads. It took the craft's `SpuLights` out and left everything else. On `Assegai_n1` (Fury light `(40, 10, 4)`) at tick 295, the inner rear panels either side of the nozzle go flat white with the binding and show their grey, yellow and purple structure without it. That is about 600 pixels of a 1440x816 frame, all at the rear. The comparison is `rear-ab.png`, with the two frames beside it, under `data/scratch/hd-svc1-bit/`. Two same-command runs differ by about 2 % of pixels at this tick, from the frame's own motion blur. So the comparison was made against the run whose blur state matched and read by eye, not by pixel count. The white wing rims and the pink on the `_n1` wings are there with the binding removed as well. They are a separate term.
 
-Neither has been read against the original yet.
+So the gap is in the term's inputs or its evaluation, not in whether it applies. At a boost, the original's hull shows the glow on the central nozzle and the housings (`bp-081.png`, classic light at about `x6`), not a flat white panel. The next candidates, unmeasured:
+
+1. **The space the `EdgeGeom` job evaluates the falloff in.** If `RenderOps_BuildEdgeGeomJob` hands the SPU object-space light positions and the hull's world matrix carries a scale, then `|d|/D` is in object units there and in world units here. The reach of `D` differs by that scale. Read how opcode `0x30` builds the light array, and the hull's matrix scale.
+2. **The anchor-to-panel distance.** The anchor's world position matches the original's records. The distance from it to the inner rear panels has not been measured on either side.
+3. **The boost blend at the frame compared.** Ours at tick 295 is near the snap (`x11`). The original frame's visible boosted light was about `x6`.
 
 Names: `ModelRecord_Create` (`0x003f0348`, 80), `ModelRecord_Load` (`0x003eeb08`, 65), `SpuLight_AttachVertexStream` (`0x0040d220`, 72) and `SceneModel_RegisterRenderRecord` (`0x002c0890`, 65) are in `names.tsv` against this page.
