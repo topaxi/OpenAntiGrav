@@ -84,23 +84,14 @@ fn hd_draws_its_model_at_the_muzzle_only_inside_the_flash_window() {
         at.distance(left) < 1e-4 || at.distance(right) < 1e-4,
         "the flash sits on a cannon_flash locator, not the round: {at:?}"
     );
-    // The same round, long past the window: no flash model at all, while the
-    // round itself is still in flight.
+    // The same round half a second on, fire released: still in flight, and
+    // no flash model at all.
     let later = one_round(30);
-    assert!(cannon_rounds(&later) > 0);
-    let flashing = later
-        .sim
-        .world
-        .projectiles
-        .slots
-        .iter()
-        .filter(|p| {
-            p.kind == Some(oag_tables::weapons::Weapon::Cannon)
-                && oag_gameplay::projectile::MAX_FLIGHT_SECONDS - p.lifetime
-                    < oag_render::weapon_quads::geometry::FLASH_WINDOW_SECONDS
-        })
-        .count();
-    assert_eq!(later.cannon_model_matrices(&draw).len(), flashing);
+    assert!(cannon_rounds(&later) > 0, "the round is still flying");
+    assert!(
+        later.cannon_model_matrices(&draw).is_empty(),
+        "the flash is gone once the round is past 0.1 s"
+    );
 }
 
 #[test]

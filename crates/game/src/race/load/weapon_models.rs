@@ -338,7 +338,15 @@ pub(super) fn load_bodies(
         one(models.rocket, "a rocket", true),
         one(models.mine, "a laid mine", true),
         one(models.bomb, "a laid bomb", true),
-        one(models.cannon, "a cannon round", true),
+        // HD's Cannon model flashes at the muzzle rather than riding the round.
+        one(
+            models.cannon,
+            match models.cannon_look {
+                Some(_) => "a cannon muzzle flash",
+                None => "a cannon round",
+            },
+            true,
+        ),
         blast_models::PlasmaBlastModels {
             ball,
             ..plasma_blast

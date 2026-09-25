@@ -76,8 +76,9 @@ parents to the craft node. It lowercases its own name (`0x0016cf58`) and
 calls `strstr` (`0x00676a88` -> `0x0043e0c0`) against `"left"`
 (`0x007a1958`, TOC `+0x69d4`). A match stores the node at **`ship+0x5f38`**;
 anything else stores it at `ship+0x5f3c`. With no craft ancestor it hides
-itself (`+0x34 &= ~2`). Every HD `Locators.vex` authors exactly two such
-nodes: `cannon_flash_left` and `cannon_flash_right`.
+itself (`+0x34 &= ~2`). All 39 `Locators.vex` on the disc name both
+`cannon_flash_left` and `cannon_flash_right`; this was checked by grepping
+for the names, not by walking the nodes.
 
 `ShipMuzzle_AttachToShip` (`0x002dae70`, confidence 80) is the same walk for
 `Ship Muzzle` (`0x3e2`). It stores to `ship+0x5f34`.
@@ -128,17 +129,22 @@ pseudo-random alpha, and this engine draws it from Pulse's
 `[150, 255]` range.
 
 `hd_muzzleflash.vex`'s own bounds are `x, y +/-0.6` and `z -0.18..3.27`: a
-cone along `+Z`. Every HD `cannon_flash` locator's Z is the hull's `+Z`, and
-the hull's `+Z` is forward (its `engine_flare` sits at `z = -7.18`). So the
+cone along `+Z`. All sixteen `cannon_flash` locators on the eight teams a
+race loads have Z equal to the hull's `+Z`, from this engine's own load
+report. The hull's `+Z` is forward: Assegai's `engine_flare` sits at
+`z = -7.18`. So the
 model is a forward flash at the barrel, not a dart.
 
 ## `CannonBullet_DrawQuads` (`0x001329e8`), confidence 80
 
-It transforms the current position (`+0x230`) and the previous one (`+0xe0`)
-by the top of the matrix stack. Then (`0x00132bbc`) it computes
-`near = prev + select(curr - prev)` with the `0x00769cd0` xyz mask, which is
-the current position itself. **The streak covers the whole segment.** There
-is no `0.2` fraction, where Pulse leaves the near fifth uncovered.
+It transforms the current position (`+0x230`, into `v30`) and the previous
+one (`+0xe0`, into `v31`) by the top of the matrix stack. Then (`0x00132bbc`)
+it computes `v31 += vsel(0, v30 - v31, mask)` with the mask at `0x00769cd0`.
+That mask is `00000000 00000000 00000000 ffffffff`: the **w lane only**. So
+the far end keeps the previous position's xyz and only takes the current
+`w`. There is no fraction anywhere between the two loads and the quad build.
+**The streak covers the whole previous-to-current segment**, where Pulse
+leaves the near fifth uncovered.
 
 The half-width is `0.25` (`0x008aa700`, loaded at `0x00132bac`) against
 Pulse's `0.35`. It draws two crossed quads through `0x002c4ad0` with the
