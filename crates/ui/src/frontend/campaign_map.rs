@@ -41,9 +41,7 @@
 //! source for. The city behind the real map does not exist as a 3D backdrop
 //! either way: the Vita3K capture's own tiles sit on a flat light
 //! triangle-outline background, corroborating `2048-frontend.md`'s "not a
-//! real 3D scene" finding from the opposite direction. The panel under the
-//! map naming the selected event is this build's own chrome, in the skin's
-//! own colours.
+//! real 3D scene" finding from the opposite direction.
 //!
 //! **2026-09-25: [`CANVAS`]/[`PITCH`]/[`ORIGIN`]/[`MARKER`] are now scaled
 //! against a direct pixel measurement of frames `12`/`13`, not the raw
@@ -72,6 +70,61 @@
 //! is still a square standing in for a hexagon nothing here draws, so the
 //! whole scheme stays **chosen, not measured**, now with a better-fitted
 //! scale rather than a wrong one.
+//!
+//! # The bottom panel is gone, and no event-card stand-in replaces it
+//!
+//! **2026-09-25.** Until this pass, tapping (pad or pointer) drew a
+//! full-width bar under the map naming the selected event's name/circuit/
+//! mode/laps/weapons - this build's own invented chrome, already labelled
+//! "chosen" in an earlier revision of this doc comment. It covered roughly
+//! 15% of the screen; the live capture shows nothing of the kind on the base
+//! map. What the real game shows on a tap is a completely different screen
+//! (`data/reference/2048-frontend/14-campaign-map-event-card-unity-square.png`):
+//! a photo backdrop, the event's name and kind, a `PASS`/objective line, a
+//! pair of lap-count arrows, three pagination dots and three bottom buttons -
+//! and per that frame's own caption, it opens for a **locked** node too, not
+//! only an open one, so it is a browsing/preview surface as much as a launch
+//! confirmation.
+//!
+//! That screen was searched for, this pass, as XML the way [`PITCH`] and
+//! [`MARKER`] were measured as pixels - and it is not there. Every lead
+//! traces to a dead end: `Definition.xml`'s own `<TouchCampaign>` carries
+//! exactly one child, `redirect="Launch 2048"`, in both the base package and
+//! the `v1.04` patch (`data/plugins/frontend/NEWGUI/InGame_Definition.xml`'s
+//! `Launch 2048` screen is byte-identical between the two); that screen is
+//! nothing but a `<BackendController task="Launch">` straight through to
+//! `InGame2048`, with no confirm step of any kind in between. The two
+//! screens that share the tick/cross vocabulary a confirm dialog would use -
+//! `StartEventConfirm`/`FriendStartEventConfirm`
+//! (`data/plugins/frontend/NEWGUI/Community_Definition.xml`) - are a small
+//! 660x192 online-only "join this friend's event?" box with two buttons and
+//! one line of text, nothing like frame `14`'s three-button, photo-backed
+//! card; nothing else in any of the 25 `NEWGUI/` documents across the base
+//! package, the patch's two archives or either DLC package names a screen
+//! shaped like it. Reproduced with `cargo run -p oag-tools --example
+//! psarc_grep -- <data.psarc> <needle>` against `TouchCampaign`, `Launch
+//! 2048` and every plausible screen name pulled from the archive's own
+//! `Screen name="..."` list, and confirmed with the added `dump_screen_scratch`
+//! scratch tool (dumps any one named `<Screen>` block, the same crude
+//! nesting-depth walk `dump_newfeshell.rs` already used for `newFEshell`
+//! alone). The strings the card shows (`ER_FINISH_5TH` and its siblings in
+//! `data/plugins/languages/*/entries.xml`) are real and already shared with
+//! `EndRace_Definition.xml`'s own post-race objective screen, so the card's
+//! *text* is authored - but its layout, its per-event photo backdrop and its
+//! button chrome are not, the same "native-code-driven, unlocated in any
+//! XML" conclusion this module's own hex-tile/background/header findings
+//! already reached.
+//!
+//! Per this project's own "never invent" rule, an unlocated screen is not
+//! stood in for - so nothing replaces the removed bar. The gap this leaves:
+//! a player who taps or pads onto an event today sees only its marker
+//! recolour under the cursor ring ([`Frontend::draw_cursor_ring`]) - no
+//! name, no circuit, no objective, nothing that says what pressing confirm
+//! would start. [`Frontend::selected_event`] and [`MapEvent::detail`] still
+//! carry the real, disc-authored text (`crates/game/src/boot/campaign2048.rs`
+//! builds it from `SP.xml`) for whenever the card itself is recovered - nothing
+//! about removing the bar touches how that text is built, only where it was
+//! drawn.
 //!
 //! # Progression: locked, open, passed, elite
 //!
@@ -105,7 +158,7 @@
 
 use crate::pointer::{Pointer, contains};
 
-use super::touch::{LABEL_SCALE, Launch, PEN_ABOVE_CAPS};
+use super::touch::{LABEL_SCALE, Launch};
 use super::*;
 use oag_2048::frontend::states as w2048;
 
@@ -124,8 +177,6 @@ const ORIGIN: (f32, f32) = (65.0, 63.0);
 /// hex tile's own measured bounding box in frame `13`. See this module's own
 /// doc comment.
 const MARKER: f32 = 108.0;
-/// The detail panel's rect, in the view. Chosen.
-const PANEL: [f32; 4] = [16.0, 448.0, 928.0, 80.0];
 
 /// One campaign event, in the terms the map draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -447,7 +498,7 @@ impl Frontend {
                 self.draw_cursor_ring(rect, cursor, out);
             }
         }
-        let Some(event) = self.selected_event() else {
+        if self.campaign.events.is_empty() {
             out.push(Draw::Text {
                 x: width * 0.5,
                 y: height * 0.5,
@@ -457,28 +508,6 @@ impl Frontend {
                 align: Align::Centre,
                 text: "no campaign events were loaded".to_string(),
                 wrap_width: None,
-            });
-            return;
-        };
-        out.push(Draw::Fill {
-            rect: PANEL,
-            color: open,
-        });
-        let line = self.default_line_height.unwrap_or(37.0) * LABEL_SCALE;
-        let top = PANEL[1] + 12.0 - PEN_ABOVE_CAPS * LABEL_SCALE;
-        for (row, text) in [event.name.as_str(), event.detail.as_str()]
-            .into_iter()
-            .enumerate()
-        {
-            out.push(Draw::Text {
-                x: PANEL[0] + 16.0,
-                y: top + row as f32 * (line + 6.0),
-                scale: LABEL_SCALE,
-                color: [1.0, 1.0, 1.0, 1.0],
-                border: None,
-                align: Align::Left,
-                text: text.to_string(),
-                wrap_width: Some(PANEL[2] - 32.0),
             });
         }
     }

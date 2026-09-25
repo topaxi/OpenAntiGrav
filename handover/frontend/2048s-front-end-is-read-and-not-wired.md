@@ -93,7 +93,7 @@ shape, not by screen, and would have mis-fired on `Team`'s own
 - **The campaign map's cell-to-pixel mapping is chosen, not measured.** An
   even grid (`oag_ui::frontend::campaign_map::PITCH`/`ORIGIN`) over the
   shell's own `<TouchScroll>` canvas, plain `Blue2048`
-  markers, a panel naming the selected event. **Narrowed 2026-09-21**: `M_X`/
+  markers. **Narrowed 2026-09-21**: `M_X`/
   `M_Y` *are* real `GameModeBase` fields the executable deserialises
   (`0x2c4`/`0x2c8`, an earlier reading of this pass's own decompile missed
   them - two `FUN_812dab08` registrations Ghidra never auto-stringified),
@@ -130,6 +130,26 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   coordinate range, so the fit is spurious: the whole `<CanvasLabel>` set is
   a small corner widget, not hotspots correlated to the map grid, confirming
   `2048-frontend.md`'s existing reading rather than overturning it.
+  **2026-09-25: the invented bottom panel is removed** (it covered ~15% of
+  the screen and the real base map shows nothing like it -
+  `oag_ui::frontend::campaign_map`'s own "The bottom panel is gone" doc
+  section has the full account). A tap on a node in the real game opens a
+  separate event card instead (`data/reference/2048-frontend/
+  14-campaign-map-event-card-unity-square.png`: photo backdrop, name, kind,
+  `PASS`/objective line, lap arrows, pagination dots, three buttons - and it
+  opens for a **locked** node too). That card was searched for as an
+  authored `NEWGUI` screen this pass and is not one: `<TouchCampaign>`'s
+  only child redirects straight to `Launch 2048`, which is nothing but
+  `<BackendController task="Launch">` into `InGame2048` in both the base
+  package and the `v1.04` patch, no confirm step; the only tick/cross
+  confirm dialogs in the archive (`StartEventConfirm`/
+  `FriendStartEventConfirm`, `Community_Definition.xml`) are a small
+  two-button online-only box, nothing like the card. Native-code-driven and
+  unlocated, same as the hex tile art/background/header/season card above -
+  not stood in for, per this project's "never invent" rule. A player who
+  selects an event today sees only the marker's own cursor ring, no name or
+  objective text anywhere on screen; `MapEvent::detail`/`selected_event()`
+  still carry the real text for whenever the card is recovered.
 - **Resolved 2026-09-21: `Home`'s five destinations draw.** See the top of
   this file and `2048-frontend.md`'s own "Wired" section for the full
   account. `team`'s own team/craft-slot picker feeds `settings.race.team`/
