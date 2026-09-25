@@ -190,9 +190,21 @@ pub struct MenuSkin {
     /// (`docs/ui/menus-original.md`'s Layout table) with no capture of its
     /// own checking whether the title's face is what changes; that is a
     /// separate pass this one did not budget for. Whoever takes it next has
-    /// the widget already found, not just the question. Pure was not
-    /// checked at all: its `Main Menu` screen is not at the archive path
-    /// this session tried, and time-boxing stopped there.
+    /// the widget already found, not just the question. Still `None` on both
+    /// PSP Pulse pressings and the PS2 port for exactly that reason.
+    ///
+    /// **Pure is checked now, and wired: `oag_pure::frontend::MENU_SKIN` is
+    /// `Some("Title")`.** `Skin.xml`'s own `Main Menu` screen authors
+    /// `idstring="Main Menu" font="Title" x="FEGlobals->TitleXOffset"
+    /// y="FEGlobals->TitleYOffset" scale="FEGlobals->TitleScale"
+    /// color="FEGlobals->TitleColor"`, read directly off both
+    /// `pure-psp-eu.chd` and `pure-psp-usa.chd`, 2026-09-25. Unlike Pulse,
+    /// this one carried no capture risk to weigh: Pure's `Title` role
+    /// resolves to `FX300ANG.fnt`, the *same file* `Default` already does
+    /// (`oag_ui::language::roles`' own font table), so the flip changes
+    /// nothing about which glyphs draw - only that the title now goes
+    /// through its own authored role rather than an untagged `Draw::Text`
+    /// that happened to land on the identical atlas.
     pub title_font: Option<&'static str>,
     /// Top of the first row, in the layer the rows are drawn in.
     ///

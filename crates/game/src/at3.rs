@@ -385,7 +385,13 @@ fn read_format(blob: &[u8]) -> Result<Format> {
 }
 
 /// Decodes a complete RIFF file, reading the cache when it is already there.
-fn decode_riff(riff: &[u8], format: Format, cache_dir: &Path) -> Result<Pcm> {
+///
+/// `pub(crate)` rather than private: [`crate::at9`] shares it. Once a blob is
+/// confirmed RIFF-wrapped ATRAC9 by its own subformat GUID, decoding it is
+/// exactly this - `ffmpeg` reads the real GUID out of the file itself and
+/// picks its own decoder, so nothing downstream of that check is
+/// ATRAC3+-specific at all. See `at9`'s own module doc.
+pub(crate) fn decode_riff(riff: &[u8], format: Format, cache_dir: &Path) -> Result<Pcm> {
     let out = cache_path(riff, format, cache_dir);
 
     if let Some(pcm) = read_cached(&out, format) {

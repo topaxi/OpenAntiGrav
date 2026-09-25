@@ -20,10 +20,15 @@
 //!   gap: 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary
 //!   anywhere, a touch-icon grid over a persistent scene instead
 //!   ([`oag_title::FrontEnd::touch`]).
-//! - [`Title::loading`] and [`Title::music`] are `None` on the same terms
-//!   `front_end` used to be: real, narrower gaps rather than a structural
-//!   one - a real loading screen with no located plugin XML, and a located
-//!   sound bank (`data/audio/sound/frontend.bnk`) whose cues are unread.
+//! - [`Title::loading`] is `None` on the same terms `front_end` used to be: a
+//!   real gap rather than a structural one - a real loading screen with no
+//!   located plugin XML. [`Title::music`] is `Some` since 2026-09-25:
+//!   `data/audio/sound/frontend.bnk`, the bank this thread's own evidence
+//!   first pointed at, turned out to carry no name table at all (so it
+//!   cannot be what a cue name addresses); the front end's music is instead
+//!   a standalone RIFF-wrapped ATRAC9 file, `FEMusic/frontend_stereo.at9`,
+//!   named the same way Pulse's and HD's front-end tracks are - see
+//!   [`names::FRONT_END_MUSIC`] and `docs/formats/2048-frontend.md`.
 //! - [`Title::exhaust`] and [`Title::flare`] are `Unread`. 2048 ships
 //!   `data/ribboneffects/EngineTrail_BlueRed_triangle.vex` and a per-team
 //!   `Engineflare.vex`, so the *files* are there under HD's own spellings -
@@ -84,7 +89,7 @@ pub const TITLE: &Title = &Title {
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,
-    music: None,
+    music: Some(MUSIC),
     // Invented like the other four - and 2048 is the one title where that
     // is worth a second look: its `data/FE/Images/cursor.gxt` turned out to
     // be a 32x16 mark, the same shape as HD's strip underline `cursor.gtf`,
@@ -103,6 +108,18 @@ pub const TITLE: &Title = &Title {
     // tree, not Pulse's, so reusing Pulse's `.vex` paths the way `oag_pure`
     // does would be a claim this build has not checked.
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
+};
+
+/// 2048's front-end music. No declared soundtrack (`tracks: None`), on the
+/// same terms Pulse's is: nothing has located a `PI_Music`-shaped listing
+/// for 2048's own races yet, so [`crate::race`] does not read one.
+///
+/// [`oag_title::Music::front_end`] is [`names::FRONT_END_MUSIC`] - see that
+/// constant's own doc for the evidence and for why it names a standalone
+/// file rather than a `frontend.bnk` cue.
+pub const MUSIC: &oag_title::Music = &oag_title::Music {
+    front_end: names::FRONT_END_MUSIC,
+    tracks: None,
 };
 
 /// Paths inside the packages.
@@ -130,6 +147,29 @@ pub mod names {
 
     /// The soundtrack plugin, on the same terms as [`TRACK_PLUGIN_DEFINITION`].
     pub const MUSIC_PLUGIN_DEFINITION: &str = r"Data\Plugins\music\Definition.xml";
+
+    /// The music the front end loops under its menus.
+    ///
+    /// **A standalone file, not a `frontend.bnk` cue** - the bank this
+    /// thread's own Next Step originally pointed at turned out to carry no
+    /// name table at all (`oag_formats::sblk::Bank::sound_names` returns
+    /// empty for it, `HAS_NAME_TABLE` clear), so nothing in it can be
+    /// addressed by name the way a cue-based track is. The base package's
+    /// `PSP2/data.psarc` instead carries
+    /// `data/audio/music/FEMusic/frontend_stereo.at9` - RIFF-wrapped ATRAC9,
+    /// 48000 Hz stereo, a 302-second `fact` chunk - beside a second,
+    /// distinctly-named `data/audio/music/FEDemoMusic/frontend_stereo.at9`
+    /// for the attract-mode demo screen. The `FEMusic` folder and `frontend`
+    /// stem are exactly the shape Pulse's `Data\Music\FEMusic\frontend1.at3`
+    /// and HD's `Data\Music\FEMusic\frontend1_stereo.mp3` already use, so the
+    /// match is a naming-convention read across three titles rather than a
+    /// guess picked by listening - **confidence 70**: unambiguous by
+    /// placement and naming, not confirmed against a decompile the way
+    /// Pulse's own template expansion is (see `oag_pulse`'s
+    /// `FRONT_END_MUSIC`), because no `SoundManager`-equivalent construction
+    /// site has been traced in 2048's executable yet. Read 2026-09-25; see
+    /// `docs/formats/2048-frontend.md`.
+    pub const FRONT_END_MUSIC: &str = r"Data\Audio\Music\FEMusic\frontend_stereo.at9";
 }
 
 /// The bulk archive: the base package's one PSARC.

@@ -26,6 +26,7 @@
 
 pub mod adapter;
 pub mod at3;
+pub mod at9;
 pub mod audio;
 pub mod boot;
 pub mod campaign;
