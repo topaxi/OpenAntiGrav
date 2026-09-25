@@ -1,5 +1,5 @@
-//! Wipeout HD/Fury's own `EndRace Results`/`EndRace Menu` - the same two
-//! screen *names* Pulse authors, read off a completely different file
+//! Wipeout HD/Fury's own `EndRace Results`/`EndRace Menu`/`EndRace Rewards` -
+//! the same screen *names* Pulse authors, read off a completely different file
 //! (`Data\Plugins\Frontend\Gui\EndRace_Definition.xml`,
 //! [`oag_hd::endrace::SCREEN_ENTRY`]) at a completely different resolution
 //! (1920x1080, not the PSP's 480x272) and a different widget vocabulary. See
@@ -55,12 +55,15 @@
 //!   settled law behind its trigger, the same "not this pass" this project
 //!   already leaves Pulse's own trophy model in - see
 //!   [`super::Rewards`]'s module doc for the precedent.
-//! - **`EndRace Rewards` and `EndRace Podium` are not read at all.** Out of
-//!   this pass's scope by the brief that opened it; `Podium`'s own three
+//! - **`EndRace Podium` is not read at all.** `Podium`'s own three
 //!   `pod_head.{1,2,3}` widgets all carry the identical idstring
 //!   `IG_HUD_1ST`, which reads as an authoring placeholder rather than
 //!   something this build could draw correctly, and its badge panels are an
 //!   achievement/online system with no analogue here.
+//! - **`EndRace Rewards` draws ([`hd_rewards_draw_list`]) but is never
+//!   entered by the live flow**: the original never enters it either - no
+//!   redirect on any copy of any screen file names it, and the executable
+//!   registers no screen class for it. See that function's own doc.
 //! - **`Line1`'s own placeholder ("race complete!", a literal `string=`, no
 //!   `idstring=` at all) is not drawn verbatim.** [`hd_headline_text`]
 //!   substitutes an idstring instead, reusing
@@ -85,9 +88,11 @@ use crate::language::StringTable;
 use crate::menu::{Frame, Layers, Picture, Skin};
 use crate::screen::{Screen, Text, argb_to_rgba};
 
-use super::draw::{fill_draw, format_ticks, headline_text, image_draw, text_draw};
+use super::draw::{
+    fill_draw, format_ticks, headline_text, image_draw, medal_award_text, text_draw,
+};
 use super::pointer::Target;
-use super::{EndRaceMenu, FieldResults, Headline, Layout};
+use super::{EndRaceMenu, FieldResults, HdRewards, Headline, Layout};
 
 #[cfg(test)]
 mod tests;
@@ -291,6 +296,100 @@ pub fn hd_results_draw_list(
 fn row_y(row: usize) -> f32 {
     let row_height = GRID_ROW_AREA_HEIGHT / oag_gameplay::MAX_SHIPS as f32;
     GRID_ROW_AREA_TOP + row as f32 * row_height
+}
+
+/// `EndRace Rewards`' draw list, off `DATA02`-`05`'s own copy of the screen
+/// (`DATA06` authors none). **The original never enters this screen** -
+/// `docs/formats/hd-endrace-screens.md`'s "`EndRace Rewards`: authored,
+/// never entered" section has the evidence - so everything below that is
+/// not a plain authored label is a rule this build chose, not one it
+/// measured:
+///
+/// - The backdrop, the three divider fills and the `ER_REWARD` title draw
+///   as authored. The confirm prompt would too, but the disc nests it in a
+///   `<NavigationController>`, which [`crate::screen`] does not walk - the
+///   same on `Results` and `Menu`.
+/// - `BigPos` draws the player's own finishing place, and nothing without
+///   one. **Chosen, not measured**: the widget's name and its placeholder
+///   `"1"` are the only evidence it is a place at all - its authored centre
+///   (`610, 370`) sits inside `MedalImg`'s 32x32 square, so it may as well
+///   be a figure drawn on a medal icon.
+/// - `MedalImg` and `LoyaltyImg` never draw. Both author a colour and a
+///   32x32 size but no `src`, the shape [`crate::screen`]'s own
+///   fallback-image doc names as a texture the original assigns at run
+///   time; drawing the authored colour as a flat square would be a stand-in
+///   for an icon nobody has identified.
+/// - `RewardLine1` draws the `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA` tier on a
+///   campaign race, and nothing on any other race. **Chosen, not
+///   measured**: the widget authors the bare label `ER_MEDAL_AWARD`
+///   (`"MEDAL AWARDED:"`) and nothing names a tier beside it; the four tier
+///   idstrings are in HD's own English table verbatim, the same vocabulary
+///   Pulse's own `RewardLine1` resolves through.
+/// - **The loyalty row draws nothing at all** - `LoyaltyImg`, `RewardLine2`,
+///   `RewardLoyaltyPoints`, `RewardLoyaltyActive` (placeholders `"test"`/
+///   `"points!"`/`"line 2"`). HD's own loyalty law is not recovered, and
+///   Pulse's is the PSP's. `loyaltybar` is a `<Slider>`, which
+///   [`crate::screen`] does not collect.
+/// - `EndRaceCountDown` (authored empty) and every other named widget draw
+///   nothing: the text loop below matches names explicitly and defaults to
+///   drawing nothing, so a placeholder this function does not know about
+///   cannot leak the way `Results`' Target/loyalty text once did.
+///
+/// No pointer targets: the screen has nothing to select, and a click
+/// anywhere is its confirm - see [`super::pointer`]'s module doc.
+#[must_use]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same eight facts hd_results_draw_list takes"
+)]
+pub fn hd_rewards_draw_list(
+    model: &HdRewards,
+    layout: &Layout,
+    skin: &Skin,
+    frame: &Frame,
+    strings: &StringTable,
+    backdrop: Option<Picture>,
+    race_behind: bool,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Layers {
+    let mut layers = Layers {
+        backdrop: frame.backdrops(
+            skin.space(),
+            skin.background(),
+            backdrop.map(Picture::draw),
+            race_behind,
+        ),
+        ..Layers::default()
+    };
+    let screen = &layout.screen;
+    let mut out = Vec::new();
+    for fill in &screen.fills {
+        // Unnamed fills only: the backdrop and the dividers. See the doc
+        // above for `MedalImg`/`LoyaltyImg`.
+        if fill.name.is_none() {
+            out.push(fill_draw(fill));
+        }
+    }
+    for image in &screen.images {
+        let Some(placed) = sprites(&image.src) else {
+            continue;
+        };
+        out.push(image_draw(image, placed));
+    }
+    for text in &screen.texts {
+        let content = match text.name.as_deref() {
+            None | Some("ControlTextConfirmButton" | "ControlTextConfirm") => text.string.clone(),
+            Some("BigPos") => model.place.map(|place| place.to_string()),
+            Some("RewardLine1") => model
+                .campaign
+                .then(|| medal_award_text(model.medal, strings)),
+            Some(_) => None,
+        };
+        let Some(content) = content else { continue };
+        out.push(text_draw(text, &content, layout));
+    }
+    layers.body = out;
+    layers
 }
 
 /// Every `<Block>` name `EndRace Menu` authors an [`MenuOption`] for -

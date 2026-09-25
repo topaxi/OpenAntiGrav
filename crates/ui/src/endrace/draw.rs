@@ -358,7 +358,7 @@ fn ordinal_idstring(place: u8) -> Option<&'static str> {
 }
 
 /// `RewardLine1`'s own resolved text: `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA`.
-fn medal_award_text(
+pub(super) fn medal_award_text(
     medal: Option<oag_tables::race_campaign::Medal>,
     strings: &StringTable,
 ) -> String {

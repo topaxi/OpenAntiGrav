@@ -1,5 +1,5 @@
 use super::*;
-use crate::endrace::{FieldRow, Headline, MenuOption};
+use crate::endrace::{FieldRow, HdRewards, Headline, MenuOption};
 use crate::frontend::Draw;
 use crate::language::StringTable;
 use crate::menu::Frame;
@@ -315,4 +315,131 @@ fn menu_targets_are_built_only_for_options_the_model_lists_and_the_screen_author
     assert_eq!(targets[0].index, 0);
     assert_eq!(targets[0].rect[0], 375.0);
     assert_eq!(targets[1].index, 1);
+}
+
+/// `DATA02`'s own `EndRace Rewards` in miniature - every named widget the
+/// real screen authors, with its own placeholder text, so a placeholder the
+/// draw list forgets to exclude shows up here rather than on screen.
+const REWARDS_XML: &str = r#"
+<Screen type="EndRace Rewards" name="EndRace Rewards">
+<Image transition="0"><Values x="-288" y="-200" width="2496" height="1480" color="0xc0000000"></Values></Image>
+<Text><Values idstring="ER_REWARD" font="Title" x="480" y="240"></Values></Text>
+<Image transition="0"><Values x="480" y="292" width="960" height="4" color="0xffffffff"></Values></Image>
+<Image name="MedalImg"><Values x="600" y="360" width="32" height="32" Color="0xff8AC0CA"></Values></Image>
+<Image name="LoyaltyImg"><Values x="600" y="530" width="32" height="32" Color="0xff8AC0CA"></Values></Image>
+<Text name="BigPos"><Values string="1" align="centre" font="title" x="610" y="370"></Values></Text>
+<Text name="RewardLine1"><Values idstring="ER_MEDAL_AWARD" font="title" x="670" y="360"></Values></Text>
+<Text name="RewardLine2"><Values string="test" font="title" x="670" y="530"></Values></Text>
+<Text name="RewardLoyaltyPoints"><Values string="points!" font="title" x="1040" y="530"></Values></Text>
+<Text name="RewardLoyaltyActive"><Values string="line 2" font="title" x="805" y="600"></Values></Text>
+<Slider name="loyaltybar" default="0"><Values idstring="ER_TOT_LOY" x="805" y="600"></Values></Slider>
+<Text name="ControlTextConfirm"><Values idstring="FE_CONFIRM" x="426" y="865"></Values></Text>
+<Text name="EndRaceCountDown"><Values string="" x="960" y="40"></Values></Text>
+</Screen>
+"#;
+
+fn rewards_strings() -> StringTable {
+    StringTable::from_xml(
+        r#"<Strings>
+<Entry ID="ER_REWARD" String="REWARDS"></Entry>
+<Entry ID="ER_MEDAL_AWARD" String="MEDAL AWARDED:"></Entry>
+<Entry ID="ER_GMA" String="GOLD MEDAL AWARDED"></Entry>
+<Entry ID="ER_NMA" String="NO MEDAL AWARDED"></Entry>
+<Entry ID="ER_TOT_LOY" String="TOTAL LOYALTY:"></Entry>
+<Entry ID="FE_CONFIRM" String="CONFIRM"></Entry>
+</Strings>"#,
+    )
+}
+
+fn rewards_layers(model: &HdRewards) -> crate::menu::Layers {
+    let strings = rewards_strings();
+    let layout = Layout::read_authored(
+        &Screens::from_xml(REWARDS_XML),
+        "EndRace Rewards",
+        &strings,
+        crate::picker::FaceScales::default(),
+        [1920.0, 1080.0],
+        [1920.0, 1080.0],
+    )
+    .unwrap();
+    hd_rewards_draw_list(
+        model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    )
+}
+
+fn has_fill_at(layers: &crate::menu::Layers, x: f32, y: f32) -> bool {
+    layers
+        .body
+        .iter()
+        .any(|draw| matches!(draw, Draw::Fill { rect, .. } if rect[0] == x && rect[1] == y))
+}
+
+/// The place, not `BigPos`'s own authored `"1"`, and the medal tier on a
+/// campaign race - with none of the loyalty row's placeholders and neither
+/// src-less icon tile.
+#[test]
+fn rewards_draws_the_place_and_tier_and_no_loyalty_placeholder() {
+    let layers = rewards_layers(&HdRewards {
+        place: Some(3),
+        medal: Some(oag_tables::race_campaign::Medal::Gold),
+        campaign: true,
+    });
+    let drawn = texts(&layers);
+    assert!(drawn.contains(&"REWARDS".to_string()), "{drawn:?}");
+    assert!(drawn.contains(&"3".to_string()), "{drawn:?}");
+    assert!(!drawn.contains(&"1".to_string()), "{drawn:?}");
+    assert!(
+        drawn.contains(&"GOLD MEDAL AWARDED".to_string()),
+        "{drawn:?}"
+    );
+    assert!(drawn.contains(&"CONFIRM".to_string()), "{drawn:?}");
+    for leak in [
+        "test",
+        "points!",
+        "line 2",
+        "TOTAL LOYALTY:",
+        "MEDAL AWARDED:",
+        "",
+    ] {
+        assert!(
+            !drawn.contains(&leak.to_string()),
+            "{leak:?} leaked: {drawn:?}"
+        );
+    }
+    assert!(!has_fill_at(&layers, 600.0, 360.0), "MedalImg never draws");
+    assert!(
+        !has_fill_at(&layers, 600.0, 530.0),
+        "LoyaltyImg never draws"
+    );
+}
+
+/// No place draws neither `BigPos` nor its tile; no campaign cell draws no
+/// medal line at all.
+#[test]
+fn rewards_without_a_place_or_a_campaign_draws_only_the_authored_labels() {
+    let layers = rewards_layers(&HdRewards {
+        place: None,
+        medal: None,
+        campaign: false,
+    });
+    let drawn = texts(&layers);
+    assert_eq!(drawn, vec!["REWARDS".to_string(), "CONFIRM".to_string()]);
+    assert!(!has_fill_at(&layers, 600.0, 360.0));
+}
+
+#[test]
+fn rewards_on_a_campaign_race_with_no_medal_says_so() {
+    let layers = rewards_layers(&HdRewards {
+        place: Some(8),
+        medal: None,
+        campaign: true,
+    });
+    assert!(texts(&layers).contains(&"NO MEDAL AWARDED".to_string()));
 }

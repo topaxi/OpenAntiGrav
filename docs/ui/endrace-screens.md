@@ -241,12 +241,47 @@ go through.
 grid (position and finish time, one row per craft, the player's own row
 highlighted); `EndRace Menu` - the applicable `race_again`/`return_to_grid`/
 `return_to_menu`/`view_again` options, each at its own authored `<Block>`
-position. `EndRace Rewards` and `EndRace Podium` are read (see the formats
-page) but not drawn this pass - out of scope, and `Podium`'s three
-`pod_head.{1,2,3}` widgets sharing one idstring reads as an authoring
-placeholder rather than something this build could draw correctly anyway.
+position. `EndRace Podium` is inventoried (see the formats page) but not
+drawn: its three `pod_head.{1,2,3}` widgets sharing one idstring reads as an
+authoring placeholder rather than something this build could draw correctly.
 Full "what does and does not draw, and why" is
 [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)'s own module doc.
+
+### `EndRace Rewards`: drawn, never entered (2026-09-25)
+
+HD's original never enters its own `EndRace Rewards` - no redirect in any
+screen file names it and the executable registers no screen class for it
+(evidence and confidence in
+[`hd-endrace-screens.md`](../formats/hd-endrace-screens.md#endrace-rewards-authored-never-entered)).
+So the live flow is left as it was: `Results` -> `Menu`, the route HD's own
+`EndRaceMenuRedirect` authors, and `Session::build_endrace` builds no
+rewards model on HD. The screen is drawn only by
+`--menu-page endrace-rewards`, off `DATA02`'s own widgets:
+
+| What | Drawn from | Measured or chosen |
+| --- | --- | --- |
+| Backdrop, title (`ER_REWARD`), three dividers | the widgets as authored | measured |
+| `BigPos` | the player's finishing place | chosen, not measured - the name and its `"1"` placeholder are the only evidence it is a place |
+| `RewardLine1` | `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA` on a campaign race, nothing otherwise | chosen, not measured - the widget authors the bare label `ER_MEDAL_AWARD`; the four tier idstrings are in HD's own English table |
+| `MedalImg`, `LoyaltyImg` | nothing | src-less 32x32 icons the original would texture at run time; a flat square of the authored colour would be a stand-in |
+| Loyalty row (`RewardLine2`, `RewardLoyaltyPoints`, `RewardLoyaltyActive`, `loyaltybar`) | nothing | HD's loyalty law is not recovered; Pulse's is the PSP's, and the placeholders (`"test"`, `"points!"`, `"line 2"`) never draw |
+| Confirm prompt | nothing | nested in a `<NavigationController>`, which `oag_ui::screen` does not walk - the same on Results and Menu |
+
+Pointer: the screen has nothing to select, so it needs no target list - a
+click anywhere is its confirm, the rule `oag_ui::endrace::pointer`'s module
+doc already states for Pulse's Results/Rewards. It would apply unchanged if
+the screen were ever wired in.
+
+Verified headlessly in
+[`crates/game/tests/hd_endrace_ground_truth.rs`](../../crates/game/tests/hd_endrace_ground_truth.rs)'s
+`hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition`: the
+real disc's definition and English table, `BigPos` fed place 3 (not its
+authored `"1"`), `BRONZE MEDAL AWARDED` resolved, no loyalty placeholder and
+no icon tile drawn. Captured at 1280x720
+(`--menu-page endrace-rewards`, `hdfury-ps3-eu-dec.iso --mode single_race`,
+ticks 0 and 120, identical as expected for a static screen): `REWARDS`, the
+`1` at `BigPos`'s authored spot and `GOLD MEDAL AWARDED` beside it, the three
+dividers, nothing else.
 
 ### Two real bugs, found by looking rather than by reading
 

@@ -156,11 +156,12 @@ impl Session {
 
         let is_hd = title_ref.name == oag_hd::TITLE.name;
 
-        // `EndRace Rewards` is not read on this title (see
-        // `oag_game::endrace::EndRaceScreens::rewards`'s own doc), so
-        // recording the loyalty award and building a `Rewards` model to show
-        // it in would be work with no screen to show it on - a title that
-        // never reaches `Which::Rewards` needs no loyalty save either.
+        // HD's original never enters its own `EndRace Rewards` (no redirect
+        // names it and the executable registers no screen class for it -
+        // `docs/formats/hd-endrace-screens.md`), so this flow does not
+        // either: no `Rewards` model means `EndRaceRuntime::advance` goes
+        // Results -> Menu, the route HD's own `EndRaceMenuRedirect` authors.
+        // Pulse's loyalty law is not HD's, so no loyalty is recorded here.
         let rewards = if is_hd {
             None
         } else {
