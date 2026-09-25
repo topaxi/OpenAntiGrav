@@ -138,10 +138,10 @@ impl Race {
     /// never resolves the effect below, the same "an absent name costs one
     /// report line" rule [`RACE_EFFECTS`]'s own doc comment states.
     ///
-    /// **Fires the burst; does not place the model.** The ball itself
-    /// (`hd_leachbeam_ball_bloomring.vex`) is loaded
-    /// (`oag_title::weapons::WeaponModels::leachbeam_ball`) but not drawn -
-    /// see [`oag_render::beam::hd_ball`]'s own module doc comment for why.
+    /// **Fires the burst.** The model's own per-frame placement is a
+    /// separate read of the same accumulator - see
+    /// [`Self::leach_ball_model_matrix`] - since a draw call needs this
+    /// frame's position whether or not this tick happened to wrap.
     fn advance_leach_ball_hd(&mut self, owner: Vec3, target: Vec3, dt: f32) {
         let length = (target - owner).length();
         let wrapped =
@@ -158,6 +158,50 @@ impl Race {
         if let Some(effect) = self.view.effects.get(LEACHBEAM_ABSORB_EFFECT) {
             self.view.stage.play(effect, at, 1.0);
         }
+    }
+
+    /// Where the LeachBeam ball model sits this frame, or `None` when
+    /// nothing is drawn - no [`oag_gameplay::projectile::leach_beam::Kind::Locked`]
+    /// beam this tick, the same gate [`Self::advance_leach_beam_ribbon`]
+    /// takes for the ribbon.
+    ///
+    /// Reads the owner's and target's positions fresh rather than any this
+    /// tick's [`Self::advance_leach_ball_hd`] captured, so a caller at draw
+    /// time (after the tick that moved them) still places the ball against
+    /// where the beam's two ends are now, not where they were a tick ago.
+    ///
+    /// **Translation only - identity rotation and scale, both chosen, not
+    /// measured.** `LeachBall_Advance`'s own placement call
+    /// (`_opd_FUN_001141d8`) reads as "orthonormalise/place a matrix onto the
+    /// node" at confidence 70 (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`,
+    /// "2026-09-25" section) but was not resolved past that, so nothing pins
+    /// an orientation or a scale for this build to reproduce. An identity
+    /// rotation is a determinant-`+1` matrix like every other HD weapon body's
+    /// placement since 2026-09-24, so `load::weapon_models::cull_as_authored`
+    /// still applies correctly if the model's own materials ask for it.
+    #[must_use]
+    pub fn leach_ball_model_matrix(&self) -> Option<Mat4> {
+        let beam = self
+            .sim
+            .world
+            .leach_beam
+            .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked)?;
+        let owner = self.sim.world.ships[beam.owner as usize]
+            .physics
+            .body
+            .position;
+        let target = self.sim.world.ships[beam.target as usize]
+            .physics
+            .body
+            .position;
+        let length = (target - owner).length();
+        let at = oag_render::beam::hd_ball::position(
+            self.view.leach_ball_elapsed,
+            length,
+            owner,
+            target,
+        );
+        Some(Mat4::from_translation(at))
     }
 
     /// The firing craft's LeachBeam hull-overlay pulse on `slot` this tick, or

@@ -26,6 +26,7 @@ mod hd_sprite;
 mod headless;
 mod held_buttons;
 mod hit_sparks;
+mod leach_ball_draw;
 mod leach_beam;
 mod load;
 mod mode_override;

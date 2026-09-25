@@ -350,6 +350,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         cannon_model,
         plasma_blast_models,
         bomb_blast_models,
+        leach_ball_model,
     ) = weapon_models::load_bodies(&mut archives, wm, &mut report);
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
@@ -888,6 +889,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         bomb_model,
         plasma_blast_models,
         bomb_blast_models,
+        leach_ball_model,
         shield_cockpit,
         countdown_model,
         visibility,

@@ -175,7 +175,9 @@ fn load_optional(
 /// the Mine's, the Bomb's, the Cannon round's, the Plasma blast's three - the
 /// bolt's own head included, riding inside the last element rather than a
 /// sixth of its own; see [`blast_models::PlasmaBlastModels`]'s own doc
-/// comment for why - and the Bomb blast's own two.
+/// comment for why - the Bomb blast's own two, and the LeachBeam ball's own,
+/// last because it rides no pool at all - see
+/// `oag_title::weapons::WeaponModels::leachbeam_ball`.
 pub(super) type WeaponBodies = (
     Option<Model>,
     Option<Model>,
@@ -183,6 +185,7 @@ pub(super) type WeaponBodies = (
     Option<Model>,
     blast_models::PlasmaBlastModels,
     bomb_blast::BombBlastModels,
+    Option<Model>,
 );
 
 /// Loads one of the Cannon round's two hand-built quads' textures.
@@ -334,6 +337,14 @@ pub(super) fn load_bodies(
                     shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
                 }
             });
+    // The LeachBall rides no pool of its own - `Scene::new` builds one
+    // drawable, not `MAX_PROJECTILES` of them, since only one beam is ever
+    // live - but its model loads on the same terms as every other weapon
+    // body above. `cull` is `true` on the same grounds the Rocket's is: its
+    // one placement (`Race::leach_ball_model_matrix`) is a translation, a
+    // rotation with determinant `+1`, so `cull_as_authored` is safe to ask
+    // for.
+    let leach_ball = one(models.leachbeam_ball, "a leachbeam ball", true);
     let bodies = (
         one(models.rocket, "a rocket", true),
         one(models.mine, "a laid mine", true),
@@ -352,6 +363,7 @@ pub(super) fn load_bodies(
             ..plasma_blast
         },
         bomb_blast,
+        leach_ball,
     );
     if models.plasma_ball.is_some() && !blast_models::HD_PLASMA_BALL_DRAWN {
         report.push(
@@ -359,6 +371,16 @@ pub(super) fn load_bodies(
              engine's one shared lit shader path with no additive/glow \
              route, and renders as an opaque black shard - see \
              docs/formats/rcsmaterial.md"
+                .to_string(),
+        );
+    }
+    if models.leachbeam_ball.is_some() {
+        report.push(
+            "hd_leachbeam_ball_bloomring drawn through the ordinary lit .rcs pipeline: it \
+             shares a material name with the Missile head's own glow \
+             (hd_leachbeam_ball_glow/hd_leachbeam_bloomring), not confirmed to be the same \
+             family HD_plasma_ball's black-shard failure hit, but not ruled out either - \
+             untested this pass, see docs/ghidra/functions/ps3-hdfury-eu/weapons.md"
                 .to_string(),
         );
     }

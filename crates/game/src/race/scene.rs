@@ -169,6 +169,11 @@ pub struct Scene {
     plasma_blast: blast_models::PlasmaBlastDrawables,
     /// The Bomb's own - a hemisphere and a shockwave; see [`bomb_blast::BombBlastDrawables`].
     bomb_blast: bomb_blast::BombBlastDrawables,
+    /// The LeachBeam's own ball, HD only - `None` when
+    /// `Data\Weapons\hd_leachbeam_ball_bloomring.vex` did not load, drawn at
+    /// [`oag_render::beam::hd_ball::position`] each tick a beam is locked.
+    /// See [`Race::leach_ball_model_matrix`] and `scene/frame/beam.rs`.
+    leach_ball: Option<Drawable>,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -365,6 +370,7 @@ impl Scene {
         cannon_model: Option<Model>,
         plasma_blast_models: blast_models::PlasmaBlastModels,
         bomb_blast_models: bomb_blast::BombBlastModels,
+        leach_ball_model: Option<Model>,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         leach_beam_texture: Option<FlareTexture>,
@@ -668,6 +674,32 @@ impl Scene {
                 zone_art,
                 shadow_maps,
             )?;
+        // The LeachBeam's own ball, HD only - one instance, not a pool: unlike
+        // the Rocket/Mine/Bomb/Cannon above there is never more than one live
+        // beam at once (`oag_gameplay::World::leach_beam` is a single
+        // `Option`, not a slotted pool), so this takes the same
+        // one-drawable shape `Self::shield_cockpit` does rather than
+        // `weapon_models::build`'s per-slot one. Same transparent blend and
+        // protected glow mask every other weapon body above takes - see
+        // `oag_render::beam::hd_ball`'s own doc comment for what is measured
+        // about this model's placement and what is chosen.
+        let leach_ball = match leach_ball_model.filter(|model| !model.indices.is_empty()) {
+            Some(model) => Some(Drawable::new(
+                device,
+                queue,
+                model,
+                format,
+                anisotropy,
+                sample_count,
+                scene_depth,
+                mesh_render::TRANSPARENT_BLEND,
+                mesh_render::GlowMask::Protected,
+                zone_art,
+                shadow_maps,
+                mesh_render::ShadowReceiver::Mapped,
+            )?),
+            None => None,
+        };
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -774,6 +806,7 @@ impl Scene {
             cannon_rounds,
             plasma_blast,
             bomb_blast,
+            leach_ball,
             boost_uv_transforms,
             collision,
             sky,

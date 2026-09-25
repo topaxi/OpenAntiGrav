@@ -568,25 +568,39 @@ instance at every wrap rather than reusing one) at the wrap point. Verified
 present on the HD disc: `/data/psys/wo_leachbeam_absorb.pob` (`DATA02`,
 `scripts/psarc.py list`).
 
-**The ball's own model (`hd_leachbeam_ball_bloomring.vex`) is not drawn.**
-Two independent reasons, either alone sufficient: (1) `race/scene.rs` and
-`race/load.rs` both sit at `scripts/check-file-size.py`'s 1,000-line
-ceiling with zero headroom for a new drawable pool - folding this weapon
-into the unrelated `blast_models::PlasmaBlastModels`/`PlasmaBlastDrawables`
-container the way Plasma's own bolt head already does (see that module's
-own doc comment) was considered and rejected: it already bends that
-container's name once for the Plasma bolt, and bending it a second time for
-an unrelated weapon reads as compounding the workaround rather than reusing
-it. (2) Even if wired, the model may hit the same wall `HD_plasma_ball` did
-(`blast_models.rs`'s own `HD_PLASMA_BALL_DRAWN` doc comment): this engine's
-`mesh::rcs` pipeline has no additive/glow shader path, only the opaque
-`TRANSPARENT_BLEND` one every other weapon body draws through, and this
-ball shares its material (`hd_leachbeam_ball_glow`/`hd_leachbeam_bloomring`)
-with the Missile head's own glow material (see this page's 2026-09-23
-Missile section) - not confirmed identical to Plasma's own material family,
-so not confirmed to hit the same black-shard failure, but not ruled out
-either. Neither reason was tested against a live capture this pass, because
-(1) already blocks wiring the draw at all.
+**The ball's own model (`hd_leachbeam_ball_bloomring.vex`) is drawn, as of
+2026-09-25 (second pass).** `race/scene.rs` and `race/load.rs` were split
+first (`race/scene/boost_flare.rs`, `race/load/gantry_visibility.rs` - a
+pure move, no behaviour change) to buy the headroom `scripts/check-file-size.py`'s
+1,000-line ceiling had none of, rather than folding this weapon into the
+unrelated `blast_models::PlasmaBlastModels`/`PlasmaBlastDrawables`
+container the way Plasma's own bolt head already does (rejected for the
+same "compounding, not reusing" reason the first pass gave). `Scene` now
+carries one `leach_ball: Option<Drawable>` - a single drawable, not a
+`MAX_PROJECTILES` pool, since `oag_gameplay::World::leach_beam` is one
+`Option`, never more than one live beam - written and drawn each frame a
+beam is `Kind::Locked` (`Race::leach_ball_model_matrix`,
+`crates/game/src/race/weapons/visuals.rs`) at
+`oag_render::beam::hd_ball::position`, on a translation-only matrix
+(identity rotation and scale - **chosen, not measured**, since
+`_opd_FUN_001141d8` was never resolved past "orthonormalise/place a matrix
+onto the node" at confidence 70).
+
+**Live capture: the ball draws, and it is not the black-shard failure
+`HD_plasma_ball` hit.** `--race --mode single_race --give leachbeam --hold
+cross --press square --ticks 15 --screenshot` against
+`data/images/hdfury-ps3-eu-dec.iso` (VENOM class, default team, Talon's
+Junction) locks onto grid slot 6 from tick 0 - `lock_min_dist=10`,
+`lock_max_dist=200` read directly off this disc's own weapon table, same as
+Pulse's - and the capture at tick 15 shows a plain light-grey/off-white
+sphere between the player's own craft and the reticle centre, not an opaque
+black shard. Not a measured comparison against RPCS3 - no reference capture
+of a real fired LeachBeam exists on this or any HD pass - but it settles
+the open question this page's own 2026-09-23/first-pass 2026-09-25 sections
+left explicit: the shared `hd_leachbeam_ball_glow`/`hd_leachbeam_bloomring`
+material does not hit `mesh::rcs`'s missing-additive-shader wall the way
+`HD_plasma_ball`'s does. Screenshots and the probe used to find a lockable
+tick are `data/scratch/` (gitignored), not committed.
 
 ### A related finding: `WO_LEACHBEAM_ENERGY` has no string in this EBOOT
 
