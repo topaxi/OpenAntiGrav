@@ -733,6 +733,38 @@ offline with no disc; nothing loads through it any more. It is also still
 pinned by `crates/assets/tests/ps2_image_ground_truth.rs`, which re-derives the
 match instead of asserting the constants against themselves.
 
+## A ship's paintable surface is one atlas on PS2, four slots on PSP
+
+The PSP build's alternate-livery `.dat` files (`ship_alt.dat`,
+`ship_eliminator.dat` - see
+[`ship-skin.md`](../ghidra/functions/psp-pulse-usa/ship-skin.md)) repaint four
+128x128 texture slots a model names `texture1.tga`..`texture4.tga`. A PS2
+`Ship.vex` names no such slot at all: `AG_Systems`, for example, declares
+`ALL_Textures.tga` (256x256) and seven other, differently-shaped textures, and
+the nested texture set it resolves against (the entry immediately before
+`Ship.vex` in `WADS2.WAD`) carries no `texture1.tga`..`texture4.tga` entry
+whatsoever - confirmed by resolving all four names against the set directly,
+not merely by their absence from a node's own declared name.
+
+**The original applies the same `.dat` files here too - confidence 95,
+evidenced rather than assumed.** `strings SCES_547.48` carries `ship_alt.dat`,
+`ship_eliminator.dat`, `PI_ModelSkin`, the `%s\%s.dat` format string that
+builds the first two, and `ALL_TEXTURES.TGA`/`\ALL_TEXTURES.TGA` together.
+Four independent load-bearing strings for one mechanism landing side by side
+in the binary's string table is not circumstantial.
+
+**What is not determined: the byte layout the PS2 build's own applier writes
+into that one atlas.** A straight 2x2 tiling of the four 128x128 blocks is the
+natural reading of the dimensions alone - `256 = 2 * 128` on both axes - but
+that is a reading of arithmetic, not a measurement of the applier's own code
+or a decoded pixel match (there is nothing to match against: no standalone
+`textureN.tga`/`.pct` survives on the PS2 disc to compare a quadrant to).
+Confidence on the 2x2 packing itself is well under 50 and it is not
+implemented anywhere in this project on that basis - see
+[`oag_game::livery::ship_skin`](../../crates/game/src/livery/ship_skin.rs)'s
+own module doc. Settling it needs decompiling the PS2 executable's own xrefs
+to the `ALL_TEXTURES.TGA` string (or to `%s\%s.dat`) in `ps2-pulse-eu`.
+
 ## Not determined
 - **`flags` at `+0x02`.** 0x2000 on 3,925 textures and 0x2040 on 1,423. Nothing
   correlates it with dimensions or depth.

@@ -36,9 +36,43 @@
 //! non-lobby callers of `Skin_ApplyToModel` - `0x08825638`, `0x088256b8`,
 //! `0x08828398`, `0x0882885c`, `0x08843804`, `0x088eaa84`. Both need the
 //! Ghidra bridge.
+//!
+//! # The PS2 build paints one atlas, not four slots
+//!
+//! **The original applies these same `.dat` files on PS2 too - evidenced,
+//! not assumed.** `SCES_547.48`'s own strings carry `ship_alt.dat`,
+//! `ship_eliminator.dat`, `PI_ModelSkin` and `ALL_TEXTURES.TGA` together
+//! (`strings SCES_547.48 | grep -i -E 'ship_alt|all_textures'`). But a PS2
+//! ship's `Ship.vex` names one `ALL_Textures.tga` (256x256) where the PSP
+//! one names four 128x128 `texture1.tga`..`texture4.tga` slots - confirmed
+//! against `pulse-ps2-eu.chd`'s own nested texture set, which decodes no
+//! standalone `textureN.tga` entry at all for a base-roster team, only the
+//! merged atlas. [`apply`] below detects this case and says so rather than
+//! reporting the generic "no slot is named `texture1.tga`" miss, which
+//! would read as "this hull has no skin support" when the disc's own
+//! strings say the opposite.
+//!
+//! **What is not recovered: the byte layout the PS2 counterpart of
+//! `Skin_ApplyToModel` writes into that one atlas.** A straight 2x2 packing
+//! of the four blocks is the natural reading of the dimensions alone - four
+//! 128x128 squares tile a 256x256 exactly - but a reading is not a
+//! measurement, and nothing here writes a guessed quadrant order into the
+//! atlas. The next step is decompiling the PS2 executable's own xrefs to
+//! the `ALL_TEXTURES.TGA` string (or to `%s\%s.dat`, the format string that
+//! builds `ship_alt.dat`'s path) to find that function and read what it
+//! actually does, which needs the Ghidra bridge against the
+//! `ps2-pulse-eu` program.
 
 use oag_race::Mode;
 use oag_render::mesh::{self, Model};
+
+/// The label [`oag_render::mesh::resolve_texture_slots`] gives a PS2 hull's
+/// single paintable atlas, where the PSP build's
+/// [`oag_render::mesh::ship_skin::SLOT_NAMES`] names four separate slots
+/// instead. Used only to tell that specific miss apart from a hull that
+/// truly declares none of the four PSP slot names, in [`apply`]'s own
+/// report line - not to paint it, since the byte layout is unrecovered.
+const PS2_ATLAS_LABEL: &str = "ALL_Textures.tga";
 
 /// The archive entry holding the skin `team` should fly, or nothing.
 ///
@@ -193,10 +227,41 @@ pub(super) fn apply(
         hull.textures.len()
     ));
     if applied == 0 {
-        report.push(format!(
-            "{entry}: no slot of this hull is named texture1.tga..texture4.tga - \
-             the craft keeps its own paint"
-        ));
+        // **A PS2 hull's paintable surface is one atlas, not four slots.**
+        // Its `Ship.vex` names `ALL_Textures.tga` (256x256) where the PSP
+        // one names `texture1.tga`..`texture4.tga` (four 128x128 slots) -
+        // `Ps2TextureSet::resolve` finds no standalone `textureN.tga` entry
+        // at all for a base-roster team, only the merged atlas, so
+        // `mesh::ship_skin::slot_of` has nothing to match against and this
+        // is not the generic "hull declares none of the four slots" miss.
+        // **The original applies the same `.dat` files here too, evidenced
+        // rather than assumed**: `SCES_547.48`'s own strings carry
+        // `ship_alt.dat`, `ship_eliminator.dat`, `PI_ModelSkin` and
+        // `ALL_TEXTURES.TGA` together. What is not recovered is the byte
+        // layout `Skin_ApplyToModel`'s PS2 counterpart writes into that one
+        // atlas - a 2x2 packing of the four blocks is the natural reading of
+        // the dimensions alone, but a reading is not a measurement, so this
+        // build leaves the atlas untouched rather than write a guessed
+        // layout into it. See `docs/formats/ps2-texture.md`.
+        let atlas = hull
+            .textures
+            .iter()
+            .flatten()
+            .any(|slot| slot.label.eq_ignore_ascii_case(PS2_ATLAS_LABEL));
+        if atlas {
+            report.push(format!(
+                "{entry}: this hull's paintable surface is {PS2_ATLAS_LABEL}, not the four \
+                 texture1.tga..texture4.tga slots this file's blocks target - the PS2 \
+                 executable's own strings show it applies ship_alt.dat/ship_eliminator.dat \
+                 here too, but the byte layout it writes into the atlas is not recovered, so \
+                 this build will not guess it - the craft keeps its own paint"
+            ));
+        } else {
+            report.push(format!(
+                "{entry}: no slot of this hull is named texture1.tga..texture4.tga - \
+                 the craft keeps its own paint"
+            ));
+        }
     }
     if !stretched.is_empty() {
         report.push(format!(
