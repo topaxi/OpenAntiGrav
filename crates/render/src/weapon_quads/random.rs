@@ -41,13 +41,30 @@ fn hash01(seed: u32) -> f32 {
 /// `World`, so nothing new needs to be threaded through for repeatability.
 #[must_use]
 pub fn flash_roll(slot: u32, tick: u32) -> (f32, f32, f32) {
+    ranged_flash_roll(slot, tick, FLASH_SIZE_RANGE)
+}
+
+/// [`flash_roll`] with a title's own pre-scale half-size range in place of
+/// Pulse's [`FLASH_SIZE_RANGE`] - see `oag_title::weapons::CannonLook`.
+#[must_use]
+pub fn ranged_flash_roll(slot: u32, tick: u32, size_range: (f32, f32)) -> (f32, f32, f32) {
     let base = slot.wrapping_mul(0x9e37_79b1) ^ tick.wrapping_mul(0x85eb_ca6b);
     let rotation = hash01(base) * std::f32::consts::TAU;
     let size_t = hash01(base ^ 0x1);
-    let half_size = (FLASH_SIZE_RANGE.0 + size_t * (FLASH_SIZE_RANGE.1 - FLASH_SIZE_RANGE.0))
-        * FLASH_SIZE_SCALE;
+    let half_size = (size_range.0 + size_t * (size_range.1 - size_range.0)) * FLASH_SIZE_SCALE;
     let alpha_t = hash01(base ^ 0x2);
     let (lo, hi) = (FLASH_ALPHA_RANGE.0 as f32, FLASH_ALPHA_RANGE.1 as f32);
     let alpha = (lo + alpha_t * (hi - lo)) / 255.0;
     (rotation, half_size, alpha)
+}
+
+/// One more roll from the same `(slot, tick)` seed as [`ranged_flash_roll`],
+/// uniform in `range` - Wipeout HD's Z stretch of its muzzle-flash model,
+/// rolled beside the flash's own size every tick of the window. Decorrelated
+/// from the three draws above by its own seed salt; the sequence is chosen,
+/// not measured, as the rest of this module's is.
+#[must_use]
+pub fn stretch_roll(slot: u32, tick: u32, range: (f32, f32)) -> f32 {
+    let base = slot.wrapping_mul(0x9e37_79b1) ^ tick.wrapping_mul(0x85eb_ca6b);
+    range.0 + hash01(base ^ 0x3) * (range.1 - range.0)
 }

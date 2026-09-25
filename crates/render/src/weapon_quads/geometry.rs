@@ -121,10 +121,26 @@ fn ribbon_quad(near: Vec3, far: Vec3, width_vec: Vec3, colour: [f32; 4]) -> [Gpu
 /// back to back.
 #[must_use]
 pub fn bolt_vertices(prev: Vec3, curr: Vec3, right: Vec3, up: Vec3) -> [GpuVertex; 12] {
-    let near = curr + (prev - curr) * BOLT_NEAR_FRACTION;
+    shaped_bolt_vertices(prev, curr, right, up, BOLT_HALF_WIDTH, BOLT_NEAR_FRACTION)
+}
+
+/// [`bolt_vertices`] with a title's own half-width and near fraction in
+/// place of Pulse's [`BOLT_HALF_WIDTH`]/[`BOLT_NEAR_FRACTION`] - Wipeout HD
+/// reads `0.25` and draws the whole segment; see
+/// `oag_title::weapons::CannonLook`.
+#[must_use]
+pub fn shaped_bolt_vertices(
+    prev: Vec3,
+    curr: Vec3,
+    right: Vec3,
+    up: Vec3,
+    half_width: f32,
+    near_fraction: f32,
+) -> [GpuVertex; 12] {
+    let near = curr + (prev - curr) * near_fraction;
     let far = prev;
-    let diagonal_a = (right - up) * BOLT_HALF_WIDTH;
-    let diagonal_b = (right + up) * BOLT_HALF_WIDTH;
+    let diagonal_a = (right - up) * half_width;
+    let diagonal_b = (right + up) * half_width;
     let mut out = [GpuVertex::zeroed(); 12];
     out[..6].copy_from_slice(&ribbon_quad(near, far, diagonal_a, BOLT_COLOUR));
     out[6..].copy_from_slice(&ribbon_quad(near, far, diagonal_b, BOLT_COLOUR));

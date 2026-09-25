@@ -7,8 +7,10 @@
 //! are in `race/tests/weapons.rs` and `race/tests/scene.rs`, alongside the
 //! rest of the weapon-visuals coverage.
 
+mod cannon;
 mod flares;
 mod laid;
+pub(crate) use cannon::{CannonAssets, CannonDraw};
 pub(in crate::race) use flares::*;
 
 use super::*;
@@ -755,55 +757,6 @@ impl Race {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb)
     }
 
-    /// Where each live Cannon round is, for the model draw.
-    ///
-    /// **The model is the one the original hangs on the round, and nothing
-    /// beside it.** `Cannon_Construct` (`0x088651d8`) loads
-    /// [`CANNON_MODEL_ENTRY`] into every round instance's own scene node, so
-    /// this is playing the disc's data rather than standing in for it. Each
-    /// round *also* builds two display lists of hand-written quads textured
-    /// from the disc's `Cannon_bolt.mip` and `Cannon_muzzle_flash.mip`.
-    ///
-    /// **Which list is which is now settled, confidence 88 - not the load-order
-    /// guess this comment used to carry at confidence 40.** The per-round draw
-    /// function, `FUN_0886545c` (EU `FUN_088652b8`), is instruction-level
-    /// unambiguous: it binds `g_cannon_bolt_texture` and calls
-    /// `Gu_CallList(instance+0x240)` - the list `FUN_08864cd0` (EU
-    /// `FUN_08864b2c`) built from `instance+0x100`/`+0x160` - every frame a
-    /// round is live; then, **only while `instance+0xc8 < 0.1` seconds since
-    /// spawn**, it binds `g_cannon_muzzle_flash_texture` and calls
-    /// `Gu_CallList(instance+0x440)` - the list `FUN_08864dc4` (EU
-    /// `FUN_08864c20`) built from `instance+0x1c0`, sized and coloured from
-    /// `Psys_RandIntRange(0x96,0xff)` each time it is rebuilt. So
-    /// `FUN_08864cd0`/`FUN_08864b2c` is the **bolt** (drawn for the round's
-    /// whole flight, as a streak between its previous and current position)
-    /// and `FUN_08864dc4`/`FUN_08864c20` is the **muzzle flash** (drawn only
-    /// for the round's first tenth of a second, sized and tinted at random).
-    /// This is an independent, stronger check than the archive's
-    /// entry-adjacency cross-check (1057/1058) the earlier reading proposed
-    /// but never spent - it confirms the same answer.
-    ///
-    /// **Neither is drawn here regardless**, and that is still an honest
-    /// absence rather than a regression: both are hand-authored GU quads with
-    /// their own two `.mip` textures, not `Data\Psys` particle effects, so
-    /// drawing them for real needs a textured-billboard path this project's
-    /// mesh/texture-upload machinery does not yet expose outside
-    /// `oag_render::mesh_render` - reaching into it is out of this pass's own
-    /// file ownership. Inventing an untextured stand-in quad instead would be
-    /// exactly the kind of plausible-looking invention `CLAUDE.md` forbids,
-    /// so this stays as a documented next step rather than an approximation.
-    /// See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
-    ///
-    /// Velocity-oriented like the Rocket's rather than pose-oriented like the
-    /// Mine's, for the reason the shared helper below gives: a round is a body
-    /// in flight with a direction of travel, and
-    /// `oag_gameplay::projectile::cannon::launch` gives it no independent
-    /// orientation to read.
-    #[must_use]
-    pub fn cannon_model_matrices(&self) -> Vec<Mat4> {
-        self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon)
-    }
-
     /// Where each live Plasma bolt's own head is, for the model draw.
     ///
     /// **HD only** - `oag_gameplay`'s `Projectile` carries no charge/flight
@@ -825,52 +778,6 @@ impl Race {
     #[must_use]
     pub fn plasma_ball_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Plasma)
-    }
-
-    /// This frame's vertices for every live Cannon round's two hand-built
-    /// quads: the bolt streak into `bolt`, the muzzle flash into `flash`
-    /// while the round's age is under
-    /// [`oag_render::weapon_quads::geometry::FLASH_WINDOW_SECONDS`].
-    ///
-    /// `right`/`up` are the camera's own basis vectors, the same ones
-    /// [`Self::projectile_sprites`] takes. **The flash's rotation, size and
-    /// alpha are rolled from [`oag_render::weapon_quads::random::flash_roll`],
-    /// seeded from the round's own slot index and [`World::tick`] - not from
-    /// `self.sim.world.rng`.** Rolling it from the simulation's own seeded
-    /// stream would advance that stream once per live round per tick for a
-    /// value nothing in `oag_gameplay` ever reads back, moving every
-    /// committed determinism hash for a purely cosmetic reason - see
-    /// `oag_render::weapon_quads::random`'s own doc comment.
-    ///
-    /// The previous tick's position - the bolt's other endpoint - is derived
-    /// as `position - velocity * dt` rather than stored on `Projectile`,
-    /// since both are already there and adding a field for one draw call
-    /// would be new simulation state for a render-only need.
-    pub fn cannon_quad_vertices(
-        &self,
-        right: Vec3,
-        up: Vec3,
-        bolt: &mut Vec<oag_render::mesh::GpuVertex>,
-        flash: &mut Vec<oag_render::mesh::GpuVertex>,
-    ) {
-        use oag_render::weapon_quads::{geometry, random};
-        let dt = TickRate::DEFAULT.dt();
-        let tick = self.sim.world.tick as u32;
-        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
-            if projectile.kind != Some(oag_tables::weapons::Weapon::Cannon) {
-                continue;
-            }
-            let curr = projectile.position;
-            let prev = curr - projectile.velocity * dt;
-            bolt.extend(geometry::bolt_vertices(prev, curr, right, up));
-            let age = oag_gameplay::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
-            if age < geometry::FLASH_WINDOW_SECONDS {
-                let (rotation, half_size, alpha) = random::flash_roll(slot as u32, tick);
-                flash.extend(geometry::flash_vertices(
-                    curr, right, up, half_size, rotation, alpha,
-                ));
-            }
-        }
     }
 
     /// Where each live projectile of one `kind` is and how it is oriented, for

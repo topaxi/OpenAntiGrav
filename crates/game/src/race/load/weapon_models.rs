@@ -229,29 +229,50 @@ fn load_flare_texture(
     }
 }
 
-/// Both of the Cannon round's hand-built quads' textures, in one call and
-/// one tuple - [`super::Loaded::cannon_quad_textures`] takes the pair
-/// unnamed rather than as two fields for the reason this returns them the
-/// same way: a second field, or a second `let` in `load.rs` for them alone,
-/// would cost exactly the line the tuple exists to not spend, in a file
-/// already at its ceiling.
-pub(super) fn load_cannon_quad_textures(
+/// Both of the Cannon round's hand-built quads' textures and the title's own
+/// reading of how they are drawn, in one call and one tuple -
+/// [`super::Loaded::cannon_quad_textures`] takes the three unnamed rather
+/// than as fields for the reason this returns them the same way: another
+/// field, or another `let` in `load.rs` for them alone, would cost exactly
+/// the line the tuple exists to not spend, in a file already at its ceiling.
+///
+/// A title with its own [`oag_title::weapons::CannonLook`] names its own
+/// entries - Wipeout HD's are `.gtf`, off `CannonBullet`'s constructor -
+/// and every other title reads Pulse's `.mip` pair, as it did before the
+/// look existed.
+pub(super) fn cannon_quads(
     archives: &mut oag_assets::Archives,
+    models: &oag_title::weapons::WeaponModels,
     report: &mut Vec<String>,
-) -> (Option<FlareTexture>, Option<FlareTexture>) {
+) -> crate::race::CannonAssets {
+    let look = models.cannon_look;
+    let Some(own) = look else {
+        let bolt = super::super::CANNON_BOLT_TEXTURE_ENTRY;
+        let flash = super::super::CANNON_MUZZLE_FLASH_TEXTURE_ENTRY;
+        return (
+            load_flare_texture(archives, bolt, "the cannon bolt streak", report),
+            load_flare_texture(archives, flash, "the cannon muzzle flash", report),
+            None,
+        );
+    };
+    let mut one = |entry: &str, what: &str| match super::super::assets::decode_gtf(archives, entry)
+    {
+        Ok(texture) => {
+            report.push(format!(
+                "{entry}: {}x{} .gtf - {what}'s own texture",
+                texture.width, texture.height
+            ));
+            Some(texture)
+        }
+        Err(why) => {
+            report.push(format!("{why} - {what} draws a placeholder"));
+            None
+        }
+    };
     (
-        load_flare_texture(
-            archives,
-            super::super::CANNON_BOLT_TEXTURE_ENTRY,
-            "the cannon bolt streak",
-            report,
-        ),
-        load_flare_texture(
-            archives,
-            super::super::CANNON_MUZZLE_FLASH_TEXTURE_ENTRY,
-            "the cannon muzzle flash",
-            report,
-        ),
+        one(own.bolt_texture, "the cannon bolt streak"),
+        one(own.flash_texture, "the cannon muzzle flash"),
+        look,
     )
 }
 

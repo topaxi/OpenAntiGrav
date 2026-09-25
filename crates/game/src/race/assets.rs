@@ -274,7 +274,7 @@ fn authored_ribbon(
 ///
 /// The `.gtf` half of [`authored_ribbon`], lifted out when the ribbon needed a
 /// second texture and both wanted the same reporting.
-fn decode_gtf(
+pub(in crate::race) fn decode_gtf(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<FlareTexture, String> {

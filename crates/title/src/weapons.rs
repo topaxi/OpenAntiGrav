@@ -48,7 +48,7 @@ pub struct Weapons {
 /// yet recovered), the same convention [`Weapons::elimination`] uses; whether a
 /// named entry actually resolves on the mounted archives is a load-time
 /// question the loader's own report line answers, not this table's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct WeaponModels {
     /// The Rocket's own body, oriented along its flight velocity.
     pub rocket: Option<&'static str>,
@@ -87,6 +87,15 @@ pub struct WeaponModels {
     /// read this session - see `oag_game::race::load::weapon_models`'s own
     /// doc comment for where that stopped.
     pub leachbeam_ball: Option<&'static str>,
+    /// How the Cannon's two hand-built quads and its [`Self::cannon`] model
+    /// are drawn, where a title's own executable says so.
+    ///
+    /// `None` is Pulse's own reading, the one recovered first and the one
+    /// `oag_render::weapon_quads::geometry`'s constants and
+    /// `oag_game::race::CANNON_BOLT_TEXTURE_ENTRY` already carry - every
+    /// title without its own reading keeps drawing on those terms, as it did
+    /// before this field existed.
+    pub cannon_look: Option<CannonLook>,
 }
 
 impl WeaponModels {
@@ -106,7 +115,46 @@ impl WeaponModels {
         plasma_blast_hd: None,
         bomb_blast_pulse: None,
         leachbeam_ball: None,
+        cannon_look: None,
     };
+}
+
+/// A title's own reading of how a Cannon round is drawn - see
+/// [`WeaponModels::cannon_look`].
+///
+/// Only the parts that differ between the executables read so far are here:
+/// the flash window (`0.1` s) and the flash quad's `* 3.0` size scale read the
+/// same on both Pulse and HD, and stay `oag_render`'s own constants.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CannonLook {
+    /// The bolt streak's texture entry.
+    pub bolt_texture: &'static str,
+    /// The muzzle flash quad's texture entry.
+    pub flash_texture: &'static str,
+    /// The bolt streak's half-width, world units.
+    pub bolt_half_width: f32,
+    /// How much of the previous-to-current segment, from the current end,
+    /// the streak leaves uncovered. `0.0` draws the whole segment.
+    pub bolt_near_fraction: f32,
+    /// The range the flash's half-size is rolled from each tick of the flash
+    /// window, before the `* 3.0` scale.
+    pub flash_size_range: (f32, f32),
+    /// Where [`WeaponModels::cannon`] is drawn.
+    pub body: CannonBody,
+}
+
+/// Where a title hangs its Cannon model - see [`CannonLook::body`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CannonBody {
+    /// On the round, for its whole flight: Pulse's dart.
+    Round,
+    /// At the firing craft's `cannon_flash` locator, only for the flash
+    /// window, scaled by the same roll the flash quad's half-size takes and
+    /// stretched along its own Z by a second roll from `stretch_range`.
+    Muzzle {
+        /// The range the Z stretch is rolled from each tick.
+        stretch_range: (f32, f32),
+    },
 }
 
 /// Pulse's own plasma-blast trio, in `PlasmaBlast_Construct`'s load order -

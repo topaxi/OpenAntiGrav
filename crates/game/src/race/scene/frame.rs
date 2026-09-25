@@ -72,6 +72,7 @@ impl Scene {
         let prev = MotionState::advance(
             &self.motion,
             race,
+            &self.weapon_quads.draw,
             view_projection,
             usize::from(race.ship_count()),
         );
@@ -642,7 +643,7 @@ impl Scene {
             oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
             _ => false,
         }));
-        race.cannon_quad_vertices(right, up, cannon_bolt, cannon_flash);
+        self.gather_cannon_quads(race, right, up, cannon_bolt, cannon_flash);
         oag_render::perfprobe::mark("exhaust-gather");
         // Shared by every upload below - `to_cols_array_2d` is otherwise
         // recomputed once per pipeline for the same one matrix.
@@ -655,9 +656,7 @@ impl Scene {
             .upload(queue, &vp, race.sim.world.tick, right, up);
         oag_render::perfprobe::mark("exhaust-upload");
         self.upload_particles(race, queue, &vp, right, up, additive, alpha);
-        self.weapon_quads
-            .borrow_mut()
-            .upload(queue, &vp, cannon_bolt, cannon_flash);
+        self.upload_cannon_quads(queue, &vp, cannon_bolt, cannon_flash);
         self.upload_beam(race, queue, &vp);
 
         // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
@@ -913,7 +912,7 @@ impl Scene {
         self.sparks.borrow().draw(&mut pass);
         self.draw_beam(&mut pass);
         self.clouds.borrow().draw(&mut pass);
-        self.weapon_quads.borrow().draw(&mut pass);
+        self.weapon_quads.pipeline.borrow().draw(&mut pass);
         self.draw_ghost(race, lod_eye, &mut pass, &mut stats);
         self.sparks.borrow().draw_flash(&mut pass);
         // The scene pass has to close before the bloom can sample what it drew,

@@ -16,6 +16,7 @@ use oag_vex::track;
 
 mod autopilot;
 mod camera;
+mod cannon_draw;
 mod countdown;
 mod cues;
 mod eliminator;
