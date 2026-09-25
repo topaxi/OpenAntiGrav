@@ -142,9 +142,9 @@ the file level:
 | Archive | Grids | Cells | Schema | `Campaign=` |
 | --- | --- | --- | --- | --- |
 | `DATA00.PSARC` | `grid_08`..`grid_15` (Fury-only - absent from every other archive) | 80 | per-difficulty | `"Fury"` |
-| `DATA02.PSARC` | `grid_00`..`grid_07` | 77 | flat, Pulse's own shape | absent |
-| `DATA04.PSARC` | `grid_00`..`grid_07` | 77 | per-difficulty | absent |
-| `DATA06.PSARC` | `grid_00`..`grid_07` | 77 | per-difficulty | `"HD"` |
+| `DATA02.PSARC` | `grid_00`..`grid_07` | 87 | flat, Pulse's own shape | absent |
+| `DATA04.PSARC` | `grid_00`..`grid_07` | 87 | per-difficulty | absent |
+| `DATA06.PSARC` | `grid_00`..`grid_07` | 87 | per-difficulty | `"HD"` |
 
 Sixteen grids either way - the same count as Pulse's campaign - but
 `oag_assets::Archives`'s own precedence (`data` = `DATA00`, `fe` = `DATA02`,
@@ -248,28 +248,33 @@ into new optional `Grid` fields. None of the four analysed types
 (`bool`/`u32`/`f32`/`i64`) apply to any of them, so nothing here parses them
 further than a `String`.
 
-### `grid_04.xml`'s own `<Values>` tag is broken on the disc
+### `grid_04.xml`'s own `<Values>` tag is broken on the disc, and the original tolerates it
 
 In **all three** of its copies (`DATA02`, `DATA04`, `DATA06`, byte-identical
 at the break): `...vex"</Values>` where every other grid in the corpus reads
 `...vex"></Values>` - the opening `<Values>` tag is missing its closing `>`
 before `BillboardName`'s attribute value ends. Read structurally that
 swallows the text meant to close `<Values>` into the start tag's own
-attribute soup, so the five `<PI_Cell>` elements that follow become
-descendants of the still-open `<Values>` node rather than of `<PI_Grid>`, and
-`race_campaign::parse` correctly reads **zero cells** for a grid that authors
-five. `the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema` asserts
-this directly, so a change to `oag_tables::fexml`'s tag scanner that started
-tolerating the break would have to notice the assertion rather than silently
-disagree with it.
+attribute soup, so the ten `<PI_Cell>` elements that follow become
+descendants of the still-open `<Values>` node rather than of `<PI_Grid>` -
+which is what `race_campaign::parse` used to read as **zero cells** for a
+grid that authors ten (an earlier pass of this doc counted five, a miscount
+against the actual archive contents; the direct read is ten).
 
-**This is not a bug in this crate's parser.** The file is broken on the disc,
-identically in three independent archive copies, and there is no way to
-recover the intended cell boundaries without guessing which of the five
-`<PI_Cell>` elements the original author meant to close `<Values>` before.
-Whether Wipeout HD's own XML reader tolerates the same malformed tag - and so
-whether the real game shows a five-cell `grid4` or an empty one - is a
-decompiled-HD-executable question, out of this pass's scope.
+**Whether Wipeout HD's own XML reader tolerates the same malformed tag was
+this section's own open question, and it is settled now: it does.**
+`Campaign Selection`'s own `GOLD MEDALS` widget draws a campaign's total cell
+count as its denominator (every cell carries exactly one `<Gold>` target),
+and RPCS3 reads `"0 / 87"` for the base `Wipeout HD` campaign - the sum of
+`grid0`..`grid7`'s own eight cell counts, `grid4`'s ten included, not the 77
+a parser that drops them totals. That is first-party evidence about the
+original's own parser, not a guess at which `<PI_Cell>` boundary it intended,
+so `oag_tables::fexml::tag_end` now recovers the same way: an unquoted `<`
+(this exact shape, an attribute value run straight into the next tag's own
+`<`) ends the tag it is in, one character short of it - the same place the
+missing `>` should have been. `the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema`
+and `every_grid_file_on_every_archive_parses` both assert the corrected
+counts (`grid4` = 10, `DATA02`/`04`/`06` = 87 each) against the real disc.
 
 ### What this section does not resolve
 
@@ -278,8 +283,6 @@ decompiled-HD-executable question, out of this pass's scope.
   and by what rule one number per difficulty rung becomes a medal - see above
   and `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s "what is not
   determined" section.
-- **Whether HD's own front end reads `grid4`'s five cells at all**, given the
-  broken `<Values>` tag - see above.
 - **US and Fury-disc-only pressings were not checked.** Only the EU Fury
   pressing (`hdfury-ps3-eu-dec.iso`) was measured; a base-HD-only disc (no
   Fury update) was not available to this pass, so whether `DATA00`'s

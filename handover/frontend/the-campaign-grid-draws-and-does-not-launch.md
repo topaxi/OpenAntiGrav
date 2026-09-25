@@ -108,6 +108,81 @@ DIFFICULTY` prompt, the 3-D flyer model), in
 `docs/ui/campaign-screens.md`'s "`--menu-page` stills match a real screen
 state, and the footer draws on all three, 2026-09-25" section.
 
+**Update, 2026-09-25, `pulse-grid-look` lane: the coordinator's own crop
+comparison against `grid-selection-page1-grid0-unlocked.png` found five real
+render gaps the `pulse-campaign-nav` lane's "no new gap" re-check above (text
+content only) had missed - all colour and number-format, none of them
+launch-affecting.** `Medals`/`Required` were formatted backwards
+(`"04/08"`/`"12"` instead of the disc's own unpadded `"0/8"`/padded
+`"012"` - `race-campaign.md`'s own format-string table had `Required` wrong
+too, `"%d"` where the literal actually reads `"%03d"`, now corrected).
+Three colour gaps turned out to share one root cause: `CellMode_Definition.xml`
+authors the selected-tile glow, the tier hex outlines and the page arrows all
+at a flat, multiply-neutral default, and every one of them is actually
+tinted by native code at runtime (`GridController_UpdateSelectorPulse`,
+`GridSelection_PopulateTiles`, `GridSelection_UpdatePageTransition` - the
+first and third renamed and documented this pass, `race-campaign.md`'s own
+new "The runtime tint layer" section has the full decompile). Fixed:
+`Selector` now draws the measured cyan endpoint of its own real pulse
+animation (the pulse itself is not implemented - no clock reaches the
+draw-list builder); `Grid Selection`'s tier hexes now draw the measured dim
+cyan-teal tint; the page arrows now grey out at their own boundary. **Left
+open, not guessed at**: `Cell Selection`'s own hex-outline tint (its XML
+routes through an unresolved `FEGlobals->CM_HEX_Outline` this project has
+not read the registry value of - `docs/formats/fexml.md`'s own open
+question), the `SelectorGlow` halo widget (procedural, no authored
+geometry/texture located), and a real but unconfirmed lead that the detail
+panel's row-label/value text (`font="default"`) draws smaller than the
+reference capture shows - pointing at `FaceScales::default()`'s own `13/22`
+ratio rather than a per-widget fix, too broad a constant to change off one
+pass's crude pixel measurement. The title bar's own face (`RACE CAMPAIGN`,
+`handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md`'s open
+question) was checked against this same frame and is **not settled by it** -
+a scale-normalized crop reads the two as close to the same size, and a rough
+measurement even reads the reference as slightly *larger*, the opposite
+direction from what would justify shrinking this build's own title. Full
+detail, every crop path and the exact pixel measurements:
+`docs/ui/campaign-screens.md`'s 2026-09-25 bullet under `## Open`.
+
+**Update, 2026-09-25 (second pass), the footer's own button glyphs and the
+`GOLD MEDALS` denominator, both closed.** `ControlTextConfirmButton`/
+`BackButton`/`DifficultyButtonIcon` (`font="buttons"`) now draw through a
+genuine third face atlas (`oag_ui::language::roles::BUTTONS`,
+`render::Renderer::set_buttons_atlas`) rather than being excluded - verified
+against the disc first with a new scratch tool,
+`cargo run -p oag-tools --example hd_buttons_font_probe`. The
+`Grid Selection` "third prompt" the previous pass on this thread named as
+open turned out not to exist: the RPCS3 capture it cited
+(`rpcs3-grid0-3-2/00-default.png`) is `Cell Selection`, not `Grid Selection
+Fury` - every clean frame in the same directory reads unambiguously as
+`Cell Selection`, and neither archive's own `CellMode_Definition.xml`
+authors a `DifficultyButton` on `Grid Selection` at all. `Campaign
+Selection`'s own `GOLD MEDALS` denominator is now `{earned}/{total}` instead
+of a bare numerator - `87` for `Wipeout HD`, `80` for `Fury`, both exactly a
+campaign's own total cell count, matching RPCS3 on both sides. Closing that
+surfaced and fixed a real, separate bug an earlier pass had found and
+deliberately left alone: `grid_04.xml`'s own `<Values>` tag is missing a `>`
+on the disc (all three copies), and `oag_tables::fexml::parse` used to drop
+the whole grid because of it - RPCS3's own `"0 / 87"` is first-party
+evidence the original tolerates the same break, so `fexml::tag_end` now
+does too. Full detail, evidence and confidence in
+`docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: the footer's button
+glyphs, and the `GOLD MEDALS` denominator, 2026-09-25" section - **read that
+before this file's own `## Open` below**, since it supersedes the "button
+glyphs themselves" and "`CHANGE DIFFICULTY` prompt" lines the previous
+paragraph left open.
+
+Still open, not touched this pass: the `DIFFICULTY (<rung>)` runtime
+template (`Cell Selection` still shows the disc's own authored `"Change
+Difficulty"`) and this build's own difficulty default reading `SKILLED`
+where RPCS3's fresh-profile default reads `NOVICE` - two mismatches on the
+same widget, named together in the docs section above; `oag_ui::endrace::hd`'s
+own screens (`Results`/`Rewards`/`Menu`) still draw no button glyph at all,
+since that module's own `text_draw` has no `face_role` check the campaign
+screens' does; and whether Omega's own language plugins declare the same
+`Buttons` slot is unverified (`omega-ps4-eu.pkg` is a raw PS4 package, not
+directly openable the way the decrypted PS3 ISO is).
+
 Milestone: **M7 - Shell and polish**.
 
 Read first: [`docs/ui/campaign-screens.md`](../../docs/ui/campaign-screens.md)
@@ -119,6 +194,30 @@ read), `crates/game/src/main/campaign_stage.rs` and
 
 ## Open
 
+- **`Cell Selection`'s own hex-outline colour is unresolved.** Its
+  `Outline_x_y` widgets author `i="FEGlobals->CM_HEX_Outline"` -
+  `docs/formats/fexml.md`'s own `FEGlobals->` registry is not implemented
+  by this project beyond two confirmed names (`FE_TeamModel`/`FE_ModelSkin`),
+  neither of them this one. `cell-selection-grid0-default-cell.png` looks
+  like the same `0x34acc2` `Grid Selection`'s own literal uses, but that is
+  an inference off one screenshot, not a registry read - see
+  `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The runtime tint
+  layer" section.
+- **`SelectorGlow` is not drawn.** A second, procedurally-created widget
+  `GridController_UpdateSelectorPulse` (`0x088a5700`) also drives - a white
+  halo alpha-pulsing in sync with `Selector`'s own colour pulse - but this
+  pass did not locate its geometry or texture in `CellMode_Definition.xml`
+  (it authors none; the widget is created in code, the same way the
+  `GridController` class itself is), so nothing draws it rather than
+  inventing a stand-in shape.
+- **The detail panel's `default`-role text may be undersized.** One pass's
+  pixel measurement against `grid-selection-page1-grid0-unlocked.png` reads
+  the row labels/values closer to this build's own `small` face ratio
+  (17/22) than the documented `default` ratio (13/22) - but the measurement
+  is a single global brightness threshold with no font-metric baseline, and
+  `FaceScales::default()` is a shared constant several other screens also
+  read, so this is named as a lead rather than fixed. See
+  `docs/ui/campaign-screens.md`'s 2026-09-25 bullet for the numbers.
 - **PPSSPP was not captured against this pass.** Everything drawn is read
   off `CellMode_Definition.xml`'s own XML and `race-campaign.md`'s
   decompiled bindings, never cross-checked against a live screenshot -

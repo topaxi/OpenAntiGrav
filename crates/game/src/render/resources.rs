@@ -6,9 +6,9 @@
 //! as well as at construction.
 
 /// The UI pipeline's one bind group: uniforms, the glyph atlas, the sprite
-/// sheet and the face atlas. Built at construction and again by
-/// `Renderer::set_sprites`/`Renderer::set_face_atlas`, which is why it is a
-/// function.
+/// sheet, the face atlas and the buttons atlas. Built at construction and
+/// again by `Renderer::set_sprites`/`Renderer::set_face_atlas`/
+/// `Renderer::set_buttons_atlas`, which is why it is a function.
 #[expect(
     clippy::too_many_arguments,
     reason = "one bind group's worth of resources, not independent concerns"
@@ -23,6 +23,11 @@ pub(super) fn ui_bind_group(
     sprite_sampler: &wgpu::Sampler,
     face_view: &wgpu::TextureView,
     face_sampler: &wgpu::Sampler,
+    // `buttons_view` alone, not a `buttons_sampler` too: the descriptor is
+    // identical to `face_sampler`'s own (linear, see `render::face::face_sampler`),
+    // so the same `wgpu::Sampler` resource is bound twice rather than a second,
+    // indistinguishable one created for it.
+    buttons_view: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("ui"),
@@ -54,6 +59,14 @@ pub(super) fn ui_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 6,
+                resource: wgpu::BindingResource::Sampler(face_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: wgpu::BindingResource::TextureView(buttons_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
                 resource: wgpu::BindingResource::Sampler(face_sampler),
             },
         ],

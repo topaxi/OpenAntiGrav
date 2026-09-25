@@ -3,6 +3,8 @@
 //! model-level tests the same way `draw.rs` itself was, under the
 //! 1,000-line rule (`scripts/check-file-size.py`).
 
+mod tint;
+
 use super::*;
 use crate::campaign::{CellSelection, GridSelection, GridSummary, Layout, PSP_GRID};
 use crate::frontend::Draw;
@@ -33,6 +35,8 @@ const XML: &str = r#"
 </Item>
 </LeftLayer>
 <LeftLayer transition="0.5">
+<Image name="up arrow" x="117" y="84" width="17" height="14" color="0xffffffff" src="Data\FE\Images\pulse_assets.mip"></Image>
+<Image name="down arrow" x="117" y="167" width="17" height="14" color="0xffffffff" src="Data\FE\Images\pulse_assets.mip"></Image>
 <Text name="honey" String="1/1" x="135" y="167" color="0xffffffff"></Text>
 <Item OffsetX="35" OffsetY="50">
 <GridController name="Grid" focus="true">
@@ -49,11 +53,17 @@ const XML: &str = r#"
 <Item OffsetX="120" OffsetY="0">
 <Image name="Medal_3_0" x="0" y="38" src="Data\FE\Images\hex_filled.mip"></Image>
 </Item>
+<Item OffsetX="30" OffsetY="19">
+<Image name="Outline_0_0" x="0" y="76" color="0xffffffff" src="Data\FE\Images\hex_outline.mip"></Image>
+</Item>
+<Item OffsetX="60" OffsetY="0">
+<Image name="Outline_1_0" x="0" y="76" color="0xffffffff" src="Data\FE\Images\hex_outline.mip"></Image>
+</Item>
 <Item OffsetX="34" OffsetY="23">
-<Image name="Lock_0_0" x="0" y="76" src="Data\FE\Images\pulse_assets.mip"></Image>
+<Image name="Lock_0_0" x="0" y="76" width="20" height="22" src="Data\FE\Images\pulse_assets.mip"></Image>
 </Item>
 <Item OffsetX="64" OffsetY="4">
-<Image name="Lock_1_0" x="0" y="76" src="Data\FE\Images\pulse_assets.mip"></Image>
+<Image name="Lock_1_0" x="0" y="76" width="20" height="22" src="Data\FE\Images\pulse_assets.mip"></Image>
 </Item>
 <Image name="Selector" x="30" y="95" width="42" height="43" src="Data\FE\Images\pulse_assets.mip"></Image>
 </GridController>
@@ -319,7 +329,7 @@ fn a_grids_title_resolves_through_the_per_grid_idstring() {
         "{texts:?}"
     );
     assert!(
-        texts.contains(&("00/08".to_string(), 390.0, 131.0)),
+        texts.contains(&("0/8".to_string(), 390.0, 131.0)),
         "{texts:?}"
     );
     assert!(

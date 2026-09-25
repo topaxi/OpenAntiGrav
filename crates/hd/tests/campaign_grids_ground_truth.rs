@@ -112,22 +112,26 @@ fn the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema() {
     // grid4's own <Values> tag is missing a closing `>` on the disc, in all
     // three of its copies - see campaign.rs's module doc. Read structurally
     // that swallows every <PI_Cell> under the broken <Values> instead of
-    // <PI_Grid>, so this project's own parser correctly reads zero cells for
-    // a grid that authors five. Asserted here so a future fix to the XML
-    // reader that started tolerating the break would have to notice this
-    // assertion rather than silently start disagreeing with it.
+    // <PI_Grid> - which oag_tables::fexml::tag_end now recovers from (an
+    // unquoted `<` also ends a tag, one character short of it), because
+    // RPCS3's own "0 / 87" on Campaign Selection is first-party evidence
+    // that the original's own parser reads all ten of grid4's cells too,
+    // not the zero an untreated read gives. See campaign.rs's module doc for
+    // the full evidence.
     let grid4 = grids.iter().find(|g| g.name == "grid4").expect("grid4");
     assert_eq!(
         grid4.cells.len(),
-        0,
-        "grid4's own <Values> tag is broken on the disc; see campaign.rs"
+        10,
+        "grid4's own <Values> tag is broken on the disc but its ten cells still read; \
+         see campaign.rs and oag_tables::fexml::tag_end"
     );
 
     let total_cells: usize = grids.iter().map(|g| g.cells.len()).sum();
     assert_eq!(
-        total_cells, 157,
-        "77 across DATA02's grid0..7 (6+8+10+10+0+12+14+17, grid4's own 0 included) \
-         plus 80 across DATA00's grid8..15 (7+7+9+9+11+11+13+13)"
+        total_cells, 167,
+        "87 across DATA02's grid0..7 (6+8+10+10+10+12+14+17, grid4's own ten now included) \
+         plus 80 across DATA00's grid8..15 (7+7+9+9+11+11+13+13) - matching RPCS3's own \
+         \"0 / 87\" and \"0 / 80\" on Campaign Selection's GOLD MEDALS widget"
     );
 }
 
@@ -198,9 +202,9 @@ fn every_grid_file_on_every_archive_parses() {
     let cells =
         |archive: &str| -> usize { by_archive[archive].iter().map(|g| g.cells.len()).sum() };
     assert_eq!(cells(oag_hd::archives::DATA00), 80);
-    assert_eq!(cells(oag_hd::archives::DATA02), 77);
-    assert_eq!(cells(oag_hd::archives::DATA04), 77);
-    assert_eq!(cells(oag_hd::archives::DATA06), 77);
+    assert_eq!(cells(oag_hd::archives::DATA02), 87);
+    assert_eq!(cells(oag_hd::archives::DATA04), 87);
+    assert_eq!(cells(oag_hd::archives::DATA06), 87);
 
     // DATA04's and DATA06's copies of grid_00..07 carry the per-difficulty
     // schema too, unlike DATA02's flat one for the same eight grids - a real

@@ -218,3 +218,43 @@ fn children_are_selected_by_name_case_insensitively() {
     let root = parse("<Stats><Class/><class/><Misc/></Stats>");
     assert_eq!(root.children[0].children_named("CLASS").count(), 2);
 }
+
+/// Wipeout HD/Fury's own `grid_04.xml` really does ship a `<Values>` start
+/// tag with no `>` before the real `</Values>` closes it - synthetic here
+/// (made-up attributes and names, not disc content), but the exact shape:
+/// `<Foo attr="x"</Foo>` immediately followed by the sibling that should
+/// have been `Foo`'s own. Left untreated, that shape merges `Foo`'s open
+/// tag with the real `</Foo>` into one never-closed opening tag, and every
+/// following sibling becomes `Foo`'s own child instead of its parent's -
+/// see [`tag_end`]'s own doc for the full mechanism.
+#[test]
+fn an_unquoted_lt_ends_a_tag_one_character_short_of_it() {
+    let root = parse(r#"<Outer><Foo attr="x"</Foo><Bar/></Outer>"#);
+    let outer = &root.children[0];
+    assert_eq!(
+        outer.children.len(),
+        2,
+        "Foo and Bar both children of Outer, not Bar nested inside Foo: {outer:?}"
+    );
+    assert_eq!(outer.children[0].name, "Foo");
+    // The truncated attribute value still reads whole - the missing
+    // trailing quote costs nothing, since the value scan already treats
+    // end-of-input as an unterminated value's own close.
+    assert_eq!(outer.children[0].attr("attr"), Some("x"));
+    assert_eq!(outer.children[1].name, "Bar");
+}
+
+/// A stray `<<` - two unquoted `<` back to back, nothing the disc ships but
+/// a case `tag_end`'s new branch has to survive rather than panic on: its
+/// own `close = index - 1` would be `0` here, and every caller slices
+/// `rest[1..close]` for a tag's inner content, which panics (start past
+/// end) at `rest[1..0]`. The `index > 1` guard (not `index > 0`) exists for
+/// exactly this input - see [`tag_end`]'s own doc.
+#[test]
+fn a_stray_double_lt_does_not_panic() {
+    let root = parse("<Outer><<Foo/></Outer>");
+    // What exactly this parses to is not the point - only that it returns
+    // rather than panicking. `#[cfg(test)]` running at all past this line
+    // is the assertion.
+    let _ = root;
+}

@@ -45,23 +45,35 @@
 //! `grid_00`..`grid_15`; `DATA02`'s and `DATA04`'s own copies list only the
 //! eight they themselves carry.
 //!
-//! # One grid's own tag is broken on the disc
+//! # One grid's own tag is broken on the disc, and the original tolerates it
 //!
 //! `grid_04.xml`'s `<Values>` opening tag is missing its closing `>` before
 //! `BillboardName`'s value in **all three** of its copies (`DATA02`,
 //! `DATA04`, `DATA06`, byte-identical at the break) - `...vex"</Values>`
 //! where every other grid in the corpus reads `...vex"></Values>`. Read
 //! structurally, that swallows the tag meant to close `<Values>` into the
-//! start tag's own attribute text, so the five `<PI_Cell>` elements that
-//! follow become descendants of `<Values>` rather than of `<PI_Grid>`, and
-//! [`oag_tables::race_campaign::parse`] correctly reads zero cells for a
-//! grid that authors five. **This is not a bug in that parser to fix** - the
-//! file is broken on the disc, in three independent copies, and inventing a
-//! recovery would be guessing at which cells the original intended rather
-//! than reading what is there. Whether Wipeout HD's own XML reader tolerates
-//! the same break is not established here and would need decompiling its
-//! executable, out of this pass's scope - see
-//! `docs/formats/race-campaign.md`'s HD section.
+//! start tag's own attribute text, so the ten `<PI_Cell>` elements that
+//! follow become descendants of `<Values>` rather than of `<PI_Grid>` -
+//! which is what [`oag_tables::race_campaign::parse`] used to read as zero
+//! cells for a grid that authors ten (an earlier pass of this file counted
+//! five, a miscount against the actual archive; the direct read is ten).
+//!
+//! **Whether Wipeout HD's own XML reader tolerates the same break was the
+//! open question this section used to leave, and it is settled now: it
+//! does.** `Campaign Selection`'s own `GOLD MEDALS` widget is a campaign's
+//! total cell count (every cell carries exactly one `<Gold>` target), and
+//! RPCS3 reads `"0 / 87"` for the base `Wipeout HD` campaign - the sum of
+//! all eight of `grid0`..`grid7`'s own cell counts, `grid4`'s ten included,
+//! not the 77 a parser that drops them would total. That is first-party
+//! evidence about the original's own parser, not a guess at which cells it
+//! intended - so [`oag_tables::fexml::tag_end`] now recovers the same way:
+//! an unquoted `<` (this shape, `attr="value"` run straight into the next
+//! tag's own `<`) ends the tag it is in, one character short of it, the same
+//! place the real `>` should have been. See that function's own doc for the
+//! mechanism, and `campaign_grids_ground_truth.rs`'s own
+//! `the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema`/
+//! `every_grid_file_on_every_archive_parses` for what pins the corrected
+//! counts against the real disc.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 

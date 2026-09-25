@@ -275,18 +275,23 @@ pub fn hd_results_draw_list(
             "Target Title" | "Target0" | "Target1" | "Target2" | "loyalty1.1" | "loyalty1.2"
             | "loyalty2" => None,
             // The `NavigationController`'s own icon glyph - `font="buttons"`
-            // (`ps_buttons.fnt`), a face this build loads no atlas for at
-            // all, and [`text_draw`]'s own `face_scale` has no role for
-            // that name either - it would draw through whichever body face
-            // this screen's `Layout` was built with, at scale `1.0`,
-            // showing the resolved idstring's literal codepoint (`"ε"`)
-            // rather than the disc's own cross-button glyph. Per
-            // `CLAUDE.md`'s "never invent what the assets already author",
-            // a wrong glyph is worse than none - drawn nothing here, the
-            // same rule `oag_ui::campaign::footer::NavigationLegend::read`
-            // applies to the identical widget on every other screen this
-            // build reads one off. `ControlTextConfirm` (the word,
-            // `font="default"` - a loaded face) still draws below.
+            // (`ps_buttons.fnt`) - still draws nothing **here**, unchanged
+            // by this widget's own local `Layout` never learning a
+            // `Buttons`-role atlas the way `oag_ui::campaign::footer`'s
+            // shared-root path now does (2026-09-25,
+            // `crate::render::Renderer::set_buttons_atlas`): this screen's
+            // `text_draw` (this function's own, not `campaign::draw`'s) has
+            // no `face_role` check at all, so nothing here would route a
+            // `font="buttons"` widget to that atlas even once loaded - a
+            // real gap, left open rather than fixed in the same pass that
+            // found it (out of this screen's own lane). Left `None` in the
+            // meantime for the reason it always was: drawing the resolved
+            // idstring's literal codepoint (`"ε"`) through whichever body
+            // face this screen's `Layout` was built with would show a
+            // Greek letter, not the disc's own cross-button glyph, and per
+            // `CLAUDE.md`'s "never invent what the assets already author" a
+            // wrong glyph is worse than none. `ControlTextConfirm` (the
+            // word, `font="default"` - a loaded face) still draws below.
             "ControlTextConfirmButton" => None,
             // `Gridp.{row}` (`ER_PERFECT`) - not modelled, see the module
             // doc. Everything else (`ResultsTitle`, `GridHead1`/`2`,

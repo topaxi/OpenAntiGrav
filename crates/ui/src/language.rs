@@ -90,6 +90,24 @@ pub mod roles {
     pub const HUD: &str = "HUD";
     /// The HUD's own smaller face. Both titles fill it in, both with `small.fnt`.
     pub const HUD_SMALL: &str = "HUDSmall";
+    /// The PlayStation button glyphs (`ps_buttons.fnt`/`PS_BUTTONS.fnt`) a
+    /// `font="buttons"` widget names - Wipeout HD/Fury's
+    /// `NavigationController` icon halves and `Cell Selection`'s own
+    /// `DifficultyButtonIcon`. **Measured on HD only**: Omega carries HD's
+    /// own `PI001` front-end plugin forward (this crate's own table), so it
+    /// very likely declares the same slot, but this pass could not open
+    /// `data/images/omega-ps4-eu.pkg` directly (`no ISO 9660 primary volume
+    /// descriptor found` - the day-one patch's own `data09.psarc` needs
+    /// extracting first, not attempted here) to check. Not one of the five
+    /// roles `Language`'s own
+    /// module doc table was measured over (Pulse/Pure, 2026-08-12) -
+    /// recovered separately, off HD's own `definition.xml` (`docs/formats/hd-frontend.md`'s
+    /// "`menu_font` is `None`, and that is a measurement" section: all 32
+    /// language plugins on the disc declare a `Buttons` slot resolving to
+    /// `Data\FE\Fonts\PS_BUTTONS.fnt`). Whether Pulse/Pure declare the same
+    /// slot name is not yet checked; `Language::font` answers `None` for a
+    /// title that does not, the same as any other role.
+    pub const BUTTONS: &str = "Buttons";
 }
 
 /// One language the disc ships.

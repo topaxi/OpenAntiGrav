@@ -182,17 +182,30 @@ pub(super) fn campaign_page(
                     );
                 };
                 let model = oag_ui::campaign::selection::CampaignSelection::new();
-                // No progress source in a still - `0`/`0`, the same
+                // No progress source in a still - `0` earned, the same
                 // fresh-profile reading `GridSelection::new`'s own bare
-                // `from_grid` call gives every other number below.
+                // `from_grid` call gives every other number below. The
+                // denominator is not progress, though - a campaign's own
+                // total cell count never depends on a save file - so it is
+                // summed here the same way `CampaignStage::campaign_gold_medals`
+                // does live.
+                let total = |range: std::ops::Range<usize>| {
+                    campaign
+                        .grids
+                        .get(range)
+                        .unwrap_or(&[])
+                        .iter()
+                        .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
+                        .sum::<u32>()
+                };
                 oag_ui::campaign::selection::draw_list(
                     &model,
                     layout,
                     skin,
                     frame,
                     strings,
-                    0,
-                    0,
+                    (0, total(oag_hd::campaign::FURY_GRID_RANGE)),
+                    (0, total(oag_hd::campaign::HD_GRID_RANGE)),
                     backdrop,
                     false,
                     &|src| sprites.get(src),

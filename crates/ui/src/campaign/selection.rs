@@ -352,14 +352,24 @@ impl CampaignSelection {
 
 /// `Campaign Selection`'s draw list.
 ///
-/// `fury_gold_medals`/`hd_gold_medals` are each campaign's own earned-medal
-/// count - `0` on a fresh profile, the same "player-progress source is
-/// optional" reading the rest of this module gives. Drawn as the bare
-/// numerator only, no denominator: an RPCS3 frame reads `"0 / 87"` beside
-/// `Fury`'s own flyer, and this build's own parse of `DATA00`'s eight Fury
-/// grids totals 80 cells, a gap this pass does not explain - see the module
-/// doc. **Never invent what the assets do not settle**: draw the number this
-/// build can derive, not a guessed denominator.
+/// `fury_gold`/`hd_gold` are each `(earned, total)` - `earned` is `0` on a
+/// fresh profile, the same "player-progress source is optional" reading the
+/// rest of this module gives; `total` is the denominator: the campaign's own
+/// total cell count, which is also its total possible gold medals (every
+/// cell carries exactly one `<Gold>` target). **Closed, 2026-09-25**: an
+/// RPCS3 frame reads `"0 / 80"` beside `Fury`'s own flyer and `"0 / 87"`
+/// beside `HD`'s
+/// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-left-tap.png`/
+/// `01-right-tap.png`) - **two different numbers, one per campaign**, which
+/// is what this page's own earlier note ("this build's own parse of
+/// `DATA00`'s eight Fury grids totals 80 cells, a gap this pass does not
+/// explain") missed: it read only the `HD`-side capture (`87`) and never the
+/// `Fury`-side one (`80`) sitting beside it in the same directory, so a
+/// correct count on the wrong side read as unexplained rather than as
+/// "already right, just not for this side". `oag_game::main::campaign_stage::CampaignStage::campaign_gold_medals`
+/// derives both halves, off `grid.cells.len()` summed across the campaign's
+/// own eight grids - no invented denominator, and no title-carried table
+/// either.
 ///
 /// `footer_overlay` is [`super::hd::hd_cell_draw_list`]'s own parameter,
 /// unchanged: an RPCS3 frame of this screen
@@ -379,13 +389,18 @@ pub fn draw_list(
     skin: &Skin,
     frame: &Frame,
     strings: &StringTable,
-    fury_gold_medals: u32,
-    hd_gold_medals: u32,
+    // `(earned, total)` - a pair rather than two scalars each, since a
+    // caller never has one without the other and the pairing is what keeps
+    // a future fifth/sixth argument from landing between them by accident.
+    fury_gold: (u32, u32),
+    hd_gold: (u32, u32),
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
 ) -> Layers {
+    let (fury_gold_medals, fury_gold_total) = fury_gold;
+    let (hd_gold_medals, hd_gold_total) = hd_gold;
     let mut layers = Layers {
         backdrop: frame.backdrops(
             skin.space(),
@@ -437,8 +452,8 @@ pub fn draw_list(
             "ScreenTitle" => None,
             // `RB_EVENT_TYPE` is a reused/generic idstring this build does
             // not trust as content - see [`draw_list`]'s own doc.
-            "NumMedalsTextFury" => Some(fury_gold_medals.to_string()),
-            "NumMedalsTextHD" => Some(hd_gold_medals.to_string()),
+            "NumMedalsTextFury" => Some(format!("{fury_gold_medals} / {fury_gold_total}")),
+            "NumMedalsTextHD" => Some(format!("{hd_gold_medals} / {hd_gold_total}")),
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };

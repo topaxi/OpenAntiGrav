@@ -18,26 +18,40 @@
 use super::*;
 use crate::loading::wrap;
 
+/// Which atlas [`Renderer::push_text`]/[`Renderer::push_wrapped_text`] draw
+/// a line of text from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum GlyphSlot {
+    /// [`Renderer::atlas`] - a plain [`Draw::Text`], or a [`Draw::FacedText`]
+    /// whose `role` does not match [`Renderer::face_role`].
+    Primary,
+    /// [`Renderer::face_atlas`] - falls back to [`GlyphSlot::Primary`] when
+    /// `None`, the same as every caller before [`GlyphSlot::Buttons`]
+    /// existed. See [`Renderer::atlas_for`].
+    Face,
+    /// [`Renderer::buttons_atlas`] - **no fallback**. A [`Draw::FacedText`]
+    /// asking for this with nothing loaded draws nothing at all, per
+    /// [`Renderer::buttons_atlas`]'s own doc.
+    Buttons,
+}
+
 impl Renderer {
     /// The atlas [`Self::push_text`] and [`Self::push_wrapped_text`] read
-    /// glyphs from: [`Self::face_atlas`] when `face` is `true`,
-    /// [`Self::atlas`] otherwise. The caller in [`super::render_with`]'s
-    /// `Draw::FacedText` arm has already resolved `face` against
-    /// [`Self::face_role`] by the time it gets here - a role that does not
-    /// match what is loaded, or a `face_atlas` still `None`, becomes `false`
-    /// there, which is what a title naming a role that failed to read (or
-    /// naming none at all) draws with, per [`Draw::FacedText`]'s own doc.
+    /// glyphs from for `slot`. `None` only for [`GlyphSlot::Buttons`] with
+    /// [`Self::buttons_atlas`] still unloaded - every other slot always
+    /// answers `Some`, [`GlyphSlot::Face`] by falling back to
+    /// [`Self::atlas`] exactly as it did when this was a plain `bool`.
     ///
     /// A short-lived borrow returned fresh on every call rather than bound
     /// once across a text-drawing loop: [`Self::quads`] needs `&mut self` in
     /// the same loop, and this way the two borrows never overlap. See
     /// `Self::atlas.cell(ch)`'s own call site below, which already worked
     /// this way before there was a second atlas to choose between.
-    fn atlas_for(&self, face: bool) -> &Atlas {
-        if face {
-            self.face_atlas.as_ref().unwrap_or(&self.atlas)
-        } else {
-            &self.atlas
+    fn atlas_for(&self, slot: GlyphSlot) -> Option<&Atlas> {
+        match slot {
+            GlyphSlot::Primary => Some(&self.atlas),
+            GlyphSlot::Face => Some(self.face_atlas.as_ref().unwrap_or(&self.atlas)),
+            GlyphSlot::Buttons => self.buttons_atlas.as_ref(),
         }
     }
 
@@ -49,7 +63,7 @@ impl Renderer {
     )]
     pub(super) fn push_text(
         &mut self,
-        face: bool,
+        slot: GlyphSlot,
         x: f32,
         y: f32,
         scale: f32,
@@ -59,15 +73,23 @@ impl Renderer {
         text: &str,
         clip: Option<(f32, f32)>, // a value marquee's window; see `oag_ui::marquee`
     ) {
+        // [`GlyphSlot::Buttons`] with [`Self::buttons_atlas`] still `None` -
+        // see [`GlyphSlot`]'s own doc: no fallback, so there is nothing
+        // honest to draw. Checked before anything else measures or shapes
+        // text against an atlas that is not the one asked for.
+        let Some(atlas) = self.atlas_for(slot) else {
+            return;
+        };
         // `MODE_FACE_ATLAS` only when there is a real face atlas to sample -
         // never for the placeholder [`face::upload_face`] built with no role
         // loaded, which `Self::atlas_for` has already fallen back past.
-        let mode = if face && self.face_atlas.is_some() {
-            MODE_FACE_ATLAS
-        } else {
-            MODE_ATLAS
+        let mode = match slot {
+            GlyphSlot::Primary => MODE_ATLAS,
+            GlyphSlot::Face if self.face_atlas.is_some() => MODE_FACE_ATLAS,
+            GlyphSlot::Face => MODE_ATLAS,
+            GlyphSlot::Buttons => MODE_BUTTONS_ATLAS,
         };
-        let width = font::measure(self.atlas_for(face), text) * scale;
+        let width = font::measure(atlas, text) * scale;
         let mut pen = match align {
             Align::Left => x,
             Align::Centre => x - width / 2.0,
@@ -75,7 +97,10 @@ impl Renderer {
         };
 
         for ch in text.chars() {
-            let Some(cell) = self.atlas_for(face).cell(ch) else {
+            // Re-derived rather than reusing `atlas` above: `self.quads.push`
+            // below needs `&mut self` in this same loop, so the borrow has to
+            // be this short-lived - see [`Self::atlas_for`]'s own doc.
+            let Some(cell) = self.atlas_for(slot).and_then(|atlas| atlas.cell(ch)) else {
                 continue;
             };
             // Size and advance come from the cell rather than a constant: the
@@ -134,7 +159,7 @@ impl Renderer {
     )]
     pub(super) fn push_wrapped_text(
         &mut self,
-        face: bool,
+        slot: GlyphSlot,
         x: f32,
         y: f32,
         scale: f32,
@@ -144,13 +169,16 @@ impl Renderer {
         text: &str,
         width: f32,
     ) {
-        let line_height = self.atlas_for(face).line_height * scale;
-        for (index, line) in wrap(self.atlas_for(face), text, scale, width)
-            .into_iter()
-            .enumerate()
-        {
+        // [`GlyphSlot::Buttons`] with nothing loaded - see [`Self::push_text`]'s
+        // own doc; no caller wraps buttons-atlas text today, but the guard
+        // costs nothing to keep honest.
+        let Some(atlas) = self.atlas_for(slot) else {
+            return;
+        };
+        let line_height = atlas.line_height * scale;
+        for (index, line) in wrap(atlas, text, scale, width).into_iter().enumerate() {
             self.push_text(
-                face,
+                slot,
                 x,
                 y + index as f32 * line_height,
                 scale,
