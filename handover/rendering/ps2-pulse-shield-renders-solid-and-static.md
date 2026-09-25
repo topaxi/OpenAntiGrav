@@ -37,7 +37,9 @@ disc.
 - **No capture of the original PS2 shield has been compared.** The blend is
   an inference from the plume, not a reading of the shell's own draw. The
   shell's colour, brightness and whether it is additive or alpha-over are all
-  unchecked against PCSX2.
+  unchecked against PCSX2. Still true after the 2026-09-25 attempt below - the
+  blocker turned out to be reaching a raised shield at all, not the capture
+  mechanics.
 - **The "not animated" half is explained, not measured.** After the fix, two
   frames a second apart show the shell, but the camera moves between them, so
   no pixel diff isolates the breath. A stationary capture (a `--pose`, or a
@@ -47,10 +49,83 @@ disc.
   Added together, that band would read about twice as bright as the body.
   Whether the two share geometry is unread. Don't drop one to hide it.
 
+## Attempted, 2026-09-25: no capture obtained, but the road there is shorter now
+
+Set out to take the PCSX2 capture the "Open" section above asks for, on Assegai/Moa
+Therma (`Data\Environments\03_Track\track.vex`) to match the walk
+[`pcsx2-debugger.md`](../../docs/reverse-engineering/pcsx2-debugger.md) already
+documents. Built an isolated harness first (own Xvfb `:100`, own PINE slot `45007`,
+own `~/.cache/oag-pcsx2-shield` data path, seeded from the existing grid savestate at
+`~/.cache/oag-pcsx2/PCSX2/sstates/SCES-54748 (F8AE6FF2).01.p2s`) so this ran
+concurrently with other lanes' PCSX2/RPCS3 use without colliding on the stock
+`scripts/pcsx2-drive.py` paths or its `pkill -x pcsx2-qt`. That harness worked cleanly
+- boot, savestate load, verified frame-stepping and screenshots all behaved exactly as
+`pcsx2-debugger.md` describes.
+
+**The blocker was reaching a raised Shield in the first place, not capturing it once
+raised.** The PS2 disc has no `--give` equivalent, so the pickup has to come from an
+actual Weapon Pad on the track:
+
+- `oag-trace pads --source data/images/pulse-ps2-eu.chd --track
+  'Data\Environments\03_Track\track.vex'` lists Moa Therma's weapon pads; pad 0 sits at
+  world `(-516.05, 7.18, -329.96)`, push direction `(-0.544, -0.002, 0.839)`, progress
+  333.9 (i.e. before the first speedup pad).
+- Manual real-time driving (holding cross via XTEST, `data/scratch/drive-2026-09-25/ps2-shield/throttle.py`)
+  crashed or spun the craft ("WRONG WAY") on every attempt before reaching that area -
+  Moa Therma's early corners are unforgiving on cross-only input, consistent with
+  `pcsx2-debugger.md`'s own note that the same holds true on the following straight.
+- `oag-trace plan --gate <pad 0 centre> --gate-dir <pad 0 direction> --look-min 10
+  --look-speed 0.2 --gate-half-width 10` (`crates/trace`'s pursuit planner, the same
+  mechanism `pcsx2-debugger.md`'s Talon's Junction speed-pad example uses) found a
+  script that crosses inside that synthetic gate at tick 563, only 5.08 units off
+  centre - but replaying it into PCSX2 by **verified** frame-stepping (not wall clock;
+  `data/scratch/drive-2026-09-25/ps2-shield/replay_verified.py`, pause/loadstate/
+  re-pause/`advance_frames` per row, per the doc's own method) still left the craft off
+  the racing line ("WRONG WAY") rather than over the pad. The plan transfers for a
+  straight speed-pad approach; it did not transfer cleanly through Moa Therma's early
+  turns for this gate. No weapon was ever picked up.
+- Looked for a PINE-write shortcut (write the pickup/fire-request bit directly, the PS2
+  equivalent of `--give shield --press square`) before spending more time driving.
+  `ShipShield_Hit`'s two callers on `SCES_547.48` (`FUN_00153328`, `FUN_00155188`) both
+  test `craft+0x1b8 & 0x10` for "shield running" - the same offset and bit the PSP's
+  `shield-pickup.md` records for its own `fire_flags`. **That match is coincidental,
+  not a transferable offset**: `scripts/pcsx2_trace_fields.py`'s independently-measured
+  `CRAFT_FIELDS` table (confidence 90, live-verified 2026-09-16) puts `craft_vel_z` at
+  that same `0x1b8` on the documented PS2 craft layout, and reading it live off the grid
+  savestate (`craft = 0x00720f20` for that savestate, per that module's own worked
+  example) came back as a tiny near-zero float, not a small bitmask - confirming it is
+  velocity, not `fire_flags`. So the object `FUN_00153328`/`FUN_00155188` call "craft" is
+  a *different* struct from the physics `Craft` `Ship_UpdateCraft` uses, and the PSP's
+  `fire_flags`/`held` offsets do not carry over. The real PS2 fire-dispatch function (the
+  counterpart of `Weapons_DispatchFire`) and the held-weapon field were not found in the
+  time available.
+
+**What is now in place for the next attempt**, none of it committed since it is all
+`data/scratch/` (gitignored):
+
+- `data/scratch/drive-2026-09-25/ps2-shield/pcsx2_isolated.py` - the isolated harness,
+  reusable as-is.
+- `data/scratch/drive-2026-09-25/ps2-shield/replay_verified.py` - verified-frame-exact
+  script replay, reusable for any `oag-trace plan` output.
+- Moa Therma's weapon pad 0 coordinates and direction, above - reusable for a retuned
+  `--gate`/`--look-*` sweep without re-deriving them.
+
 ## Next Steps
 
-1. Take a PCSX2 capture of a raised shield on the PS2 disc and compare it
-   against the same `--give shield` frame here, same team and circuit.
-2. Follow `0x0029a3a0`'s draw chain (the `obj+0x38` second-base thunks) on
+1. Either retune the `--gate` pursuit plan through Moa Therma's early corners (tighter
+   `--deadband`/`--brake-at`, or planning leg by leg rather than start-to-pad in one
+   call), or drive it by hand with an actual pad/joystick rather than XTEST taps -
+   Moa Therma's opening turns look to be the harder part, not the capture.
+2. Alternatively, find the real PS2 fire-dispatch function and held-weapon field
+   (read-only, `program=SCES_547.48`, starting from `Weapons_DispatchFire`'s structural
+   role rather than from the PSP's offsets) and write the fire-request bit over PINE -
+   the PS2 equivalent of `--give shield --press square`. Validate any offset found by
+   reading it back before capturing anything, the way the `0x1b8` guess above was
+   caught rather than shipped.
+3. Once a raised shield is reachable either way, capture an A/B pair (no fire vs fire)
+   from the same savestate by verified frame-stepping, per `pcsx2-debugger.md`, and
+   compare against `oag-game`'s own `--give shield --press square` frame on the same
+   team/circuit.
+4. Follow `0x0029a3a0`'s draw chain (the `obj+0x38` second-base thunks) on
    `SCES_547.48`. It would turn both the plume's `draw_additive` and the
    shell's `blend_additively` into a decode at once.
