@@ -38,18 +38,19 @@ const EXTRA_TEXTURES: [&str; 2] = [
 ];
 
 /// Everything a caller needs to draw and drive the EndRace screens this
-/// build reads for the open title - Pulse's three, or Wipeout HD/Fury's two
-/// (`rewards: None` - not read this pass, see [`load_hd`]'s own doc).
+/// build reads for the open title - Pulse's three, or Wipeout HD/Fury's
+/// three on a copy that authors `EndRace Rewards` (two on `DATA06`'s, which
+/// does not - see [`load_hd`]'s own doc).
 #[derive(Debug)]
 pub struct EndRaceScreens {
     pub results: Layout,
-    /// `None` for a title whose `EndRace Rewards` this pass does not read -
-    /// Wipeout HD/Fury today. **Not the same as "this title has no such
-    /// screen"** - `DATA02`'s own copy carries one; it is simply out of this
-    /// pass's scope. A caller must not treat `None` here as "skip straight
-    /// to Menu" for a reason a decompile would give; it already does, on the
-    /// title-agnostic ground that this build never opens a screen it has no
-    /// [`Layout`] for.
+    /// `None` when the served copy of the screen file authors no `EndRace
+    /// Rewards` - Wipeout HD/Fury's `DATA06` copy, which this build does not
+    /// serve today. **`Some` does not mean the live flow opens it**: on HD
+    /// the original never enters this screen at all
+    /// (`docs/formats/hd-endrace-screens.md`), so `Session::build_endrace`
+    /// builds no rewards model on HD and the layout is drawn only by
+    /// `--menu-page endrace-rewards`.
     pub rewards: Option<Layout>,
     pub menu: Layout,
     /// `base` extended with this title's own extra textures - the same
@@ -125,8 +126,9 @@ pub fn load(
 /// screen XML - it is plain UTF-8 on this title, the same divergence
 /// `crate::campaign::load_hd`'s own doc gives for `CellMode_Definition.xml`.
 ///
-/// **Reads `EndRace Results`/`EndRace Menu` only.** `EndRace Rewards` is on
-/// the served copy (`DATA02`) but out of this pass's own scope - see
+/// `EndRace Results`/`EndRace Menu` are required; `EndRace Rewards` is read
+/// when the served copy authors it (`DATA02`-`05` do, `DATA06` does not) and
+/// left `None` otherwise, never failing the other two. See
 /// `docs/formats/hd-endrace-screens.md` and [`oag_ui::endrace::hd`]'s module
 /// doc for what does and does not draw and why. `EndRace Podium` (`DATA05`/
 /// `DATA06` only) is not read at all.
@@ -152,6 +154,14 @@ fn load_hd(
         oag_hd::endrace::AUTHORED_GRID,
     )
     .context("EndRace Results is not on this screen")?;
+    let rewards = Layout::read_authored(
+        &screens,
+        "EndRace Rewards",
+        strings,
+        faces,
+        grid,
+        oag_hd::endrace::AUTHORED_GRID,
+    );
     let menu = Layout::read_authored(
         &screens,
         "EndRace Menu",
@@ -177,8 +187,7 @@ fn load_hd(
 
     Ok(EndRaceScreens {
         results,
-        // Not read this pass - see this function's own doc.
-        rewards: None,
+        rewards,
         menu,
         sprites,
     })

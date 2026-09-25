@@ -46,10 +46,10 @@ pub(crate) enum ResultsModel {
 }
 
 /// The screens' own content, built once when the race finishes, and which
-/// one is current. `rewards` is `None` on a title this build does not read
-/// `EndRace Rewards` for (Wipeout HD/Fury today - see
-/// `oag_game::endrace::EndRaceScreens::rewards`'s own doc); [`Which::Rewards`]
-/// is then simply never reached, the same way [`Which::Menu`]'s own
+/// one is current. `rewards` is `None` on Wipeout HD/Fury, whose original
+/// never enters its own `EndRace Rewards` (`docs/formats/hd-endrace-screens.md`)
+/// even though the layout is read; [`Which::Rewards`] is then simply never
+/// reached, the same way [`Which::Menu`]'s own
 /// `Endrace Difficulty` list is authored but never driven.
 pub(crate) struct EndRaceRuntime {
     screens: oag_game::endrace::EndRaceScreens,

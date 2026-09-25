@@ -190,6 +190,25 @@ pub struct Loyalty {
     pub total: u32,
 }
 
+/// Wipeout HD/Fury's own `EndRace Rewards` - see [`hd::hd_rewards_draw_list`]
+/// for what draws off it and why. **No loyalty field**: HD's own loyalty law
+/// is not recovered (the one this project has, [`Loyalty`]'s, is the PSP's),
+/// so the screen's four loyalty widgets draw nothing rather than Pulse's
+/// numbers under HD's layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HdRewards {
+    /// The player's own finishing place, 1-based - `BigPos`'s figure.
+    /// `None` for a race with no place (a field of one that never finished),
+    /// which draws `BigPos` and the tile it sits on as absent.
+    pub place: Option<u8>,
+    /// This race's own campaign medal, the same value [`Rewards::medal`]
+    /// carries on Pulse.
+    pub medal: Option<Medal>,
+    /// Whether a campaign cell was in play - `RewardLine1` draws only when
+    /// it was, since a race with no cell has no medal law to report on.
+    pub campaign: bool,
+}
+
 impl Rewards {
     /// Whether `MedalImg`'s own hex-dash glyph draws - the one measured
     /// case (`results-02.png`): a campaign race with no medal. A medal that

@@ -154,6 +154,7 @@ fn endrace_page(
         return hd_endrace_page(
             kind,
             &screens.results,
+            screens.rewards.as_ref(),
             &screens.menu,
             strings,
             skin,
@@ -263,9 +264,11 @@ fn endrace_page(
 }
 
 /// [`endrace_page`]'s Wipeout HD/Fury branch: `EndRace Results`/`EndRace
-/// Menu` only - see `crate::endrace::load_hd`'s own doc for why `EndRace
-/// Rewards` and `EndRace Podium` are out of scope, and
-/// [`oag_ui::endrace::hd`] for what the two implemented screens draw. Fed a
+/// Rewards`/`EndRace Menu` - see `crate::endrace::load_hd`'s own doc for why
+/// `EndRace Podium` is out of scope, and [`oag_ui::endrace::hd`] for what
+/// the three implemented screens draw. `endrace-rewards` is the only way to
+/// see HD's Rewards at all: the original never enters it, so the live flow
+/// does not either (`docs/formats/hd-endrace-screens.md`). Fed a
 /// synthetic two-craft field: this project holds no live HD capture to seed
 /// real numbers from, the same gap [`endrace_page`]'s own doc names for
 /// Pulse - except there this build has at least a reference frame to match
@@ -273,8 +276,8 @@ fn endrace_page(
 ///
 /// # Errors
 ///
-/// `--menu-page endrace-rewards` on an HD source: this pass reads Results
-/// and Menu only.
+/// `--menu-page endrace-rewards` on an HD copy that authors no `EndRace
+/// Rewards` (`DATA06`'s).
 #[allow(
     clippy::too_many_arguments,
     reason = "the same argument endrace_page's own call sites make: each is a separate fact"
@@ -282,6 +285,7 @@ fn endrace_page(
 fn hd_endrace_page(
     kind: EndRaceKind,
     results: &oag_ui::endrace::Layout,
+    rewards: Option<&oag_ui::endrace::Layout>,
     menu: &oag_ui::endrace::Layout,
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
@@ -317,9 +321,28 @@ fn hd_endrace_page(
                 &|src| sprites.get(src),
             )
         }
-        EndRaceKind::Rewards => anyhow::bail!(
-            "this title's EndRace Rewards is not read by this build - endrace-results/endrace-menu only"
-        ),
+        EndRaceKind::Rewards => {
+            // The same synthetic race the Results arm above draws: the
+            // player first, on a campaign cell whose law gave gold for it.
+            let model = oag_ui::endrace::HdRewards {
+                place: Some(1),
+                medal: Some(oag_tables::race_campaign::Medal::Gold),
+                campaign: true,
+            };
+            let rewards = rewards.context(
+                "the served copy of this title's screen file authors no EndRace Rewards",
+            )?;
+            oag_ui::endrace::hd::hd_rewards_draw_list(
+                &model,
+                rewards,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
         // Tournament is Pulse-only in this build so far - `tournament_next_leg`
         // never reaches this arm true, but the field still has to be bound.
         EndRaceKind::Menu {
