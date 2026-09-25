@@ -16,7 +16,8 @@ worker layout are in
 - **The Steam Deck is unmeasured.** It is where the report came from. After
   `just deploy-deck`, from a Desktop Mode terminal:
   `~/Desktop/OpenAntiGrav-x86_64-portable.AppImage ~/.local/share/oag/images/pulse-psp-eu.chd --no-audio --measure-race-load 2`,
-  and the same with the HD image. Record the printed tables on the doc page.
+  and again with `~/.local/share/oag/images/hdfury-ps3-eu-dec.iso`. Record the
+  printed tables on the doc page.
 - **The build is 7.2 to 8.1 s in a release build on a desktop**, and it is the
   whole of the wait now. A perf profile is almost all naga: `mesh_render::build`
   calls `create_shader_module` on `mesh.wgsl` for every model and then builds

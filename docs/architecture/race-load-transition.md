@@ -33,8 +33,8 @@ window's whole `Gpu`, which also owns the window and the surface.
 
 ## Measurements
 
-Release build, this project's development desktop (Linux, Vulkan, a 100 Hz
-panel), `--no-audio`, the default circuit and settings. "Worst work" is the
+Release build, this project's development desktop (Linux, Vulkan; frame
+intervals of about 10 ms suggest a 100 Hz panel, not checked), `--no-audio`, the default circuit and settings. "Worst work" is the
 longest single frame of main-thread work: the stage update, the ticks and the
 draw, including the swapchain acquire. Taken with `--measure-race-load 2`; the
 second run of each pair pays no cold disc cache.
@@ -109,6 +109,8 @@ Mode terminal:
 ```sh
 ~/Desktop/OpenAntiGrav-x86_64-portable.AppImage \
     ~/.local/share/oag/images/pulse-psp-eu.chd --no-audio --measure-race-load 2
+~/Desktop/OpenAntiGrav-x86_64-portable.AppImage \
+    ~/.local/share/oag/images/hdfury-ps3-eu-dec.iso --no-audio --measure-race-load 2
 ```
 
 **The Steam Deck is unmeasured.** The report that started this was the Deck's
