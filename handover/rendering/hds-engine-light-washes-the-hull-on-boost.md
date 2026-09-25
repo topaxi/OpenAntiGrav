@@ -93,44 +93,57 @@ the light than ours.
 
 ## Open
 
-- **Why the same term washes our panels and not the original's.** The
-  original's boosted frame is `data/scratch/hd-svc1-bit/bp-081.png`: RPCS3,
-  a speed-pad boost at 449 km/h, the Piranha planform in a dark,
-  yellow-striped livery, classic blue light at about `x6`. Its hull glows at
-  the nozzle and housings and keeps its livery elsewhere. Candidates, none
-  measured:
-  1. The space the `EdgeGeom` job evaluates `|d|/D` in. If opcode `0x30`
-     (`RenderOps_BuildEdgeGeomJob`) hands the SPU object-space light
-     positions and the hull's world matrix is scaled, the reach of `D`
-     differs from ours by that scale.
-  2. The anchor-to-panel distance on both sides. The anchor matches the
-     original's records; the panels' distance from it is unmeasured.
-  3. The boost blend at the frames compared: ours near the snap (`x11`),
-     the original's visible boosted light about `x6`.
-- **The livery in the original's frames is not identified.** The planform
-  is Piranha, but `Piranha`, `Piranha_c1` and `Piranha_n1` do not match the
-  dark, yellow-striped paint in `bp-081.png` or `race.png`. The Fury flag
-  also differed between the two boots: `race.png`'s light is `(40, 10, 4)`
-  and this boot's is `(4, 10, 40)`.
+- **Candidate 1 (boost blend at the compared frames) is closed - it does
+  not explain the gap.** `EngineFlare_Update`'s snap-and-decay law is
+  measured identical on both sides already (direct decompile: `*(this+0x144)
+  = 1.0f` under the boost-timer gate, `*= 0.8` per substep otherwise -
+  `engine-flare.md`, "The boost gate is a timer, a snap and an exponential
+  decay"), and `Flame::advance` is the same two branches. There is no
+  ramp-vs-snap bug to find.
+- **The `x11`-vs-`x6` comparison this thread had been running compared two
+  different ships, not two blend states of one ship.** `bp-081.png`'s
+  player is confirmed Piranha (renderer.md's own "Live, RPCS3" entry); the
+  wash this thread chased (`rear-ab.png`, `talons-t487.png`) is
+  `Assegai_n1`. A same-command A/B this session across three ships
+  (`data/scratch/hd-light-boost/{piranha,assegai_n1,harimau}-snap.png`,
+  same circuit, same tick, same boost cadence) found Piranha does not wash
+  and both Assegai_n1 and Harimau do - **and `EngineLightData.xml` gives a
+  disc-verified reason**: Piranha's `Distance` is `0.4` (anchor pulled back
+  off the hull), Assegai's and Harimau's are `0.0` (anchor exactly at the
+  flare locator). Full survey and the reasoning: renderer.md, "Candidate 1
+  ... is closed ... candidate 2 ... gets a disc-verified, per-ship
+  mechanism" (2026-09-25, later still).
+- **What is still open**: whether the *original's* `Distance = 0.0` ships
+  (`assegai`, `harimau`, `ag_systems`, `triakis`) also wash at boost. No
+  live capture of one of them boosted exists on either side yet -
+  `bp-081.png` is Piranha, `Distance = 0.4`. If the original washes there
+  too, this is correct per-ship behaviour and the thread closes with no
+  code change. If it does not, the vertex-side hull geometry (panel
+  distances against `D`, not the blend or the space) is what is left.
+- **Candidate 3's clamp reading, not measured.** The `SVC1` vertex program
+  decodes into `o[TC0]`, a texcoord output, not `o[COL0]`/`o[COL1]` - RSX
+  colour-output clamping would not apply there, consistent with
+  `mesh.wgsl`'s own unclamped `spu_light` varying, but this is a read of
+  which register the microcode targets, not a tested hardware behaviour.
 - **The white wing rims on the `_n1` skins** are not the SPU term. Whether
   the original shows them is unread.
 
 ## Next Steps
 
-1. Read how opcode `0x30` builds the `EdgeGeom` light array: world or
-   object space, and whether `D` is scaled. Then read the hull's world
-   matrix scale. This is the cheapest of the three and could explain the
-   whole gap.
-2. Measure our anchor-to-panel distance for the hull in `rear-ab.png`
-   against `D`, with `hd_engine_light_reach_probe.rs` plus the hull's
-   `ship.vex` vertices.
-3. Take a matched pair: same livery, Talon's Junction, player size,
-   several boosted frames at a known blend. `data/scratch/hd-svc1-bit/drive.py`
-   is a working private RPCS3 driver (it expects to sit at
-   `<checkout>/data/svc1/`). It walks into a race, reads the craft table,
-   and arms `Z0`s with stop-reply-safe stepping. `craft+0x6ae0 -> +0x204c`
-   gives the hull record index. The team field is not read yet.
+1. A live RPCS3 capture of a `Distance = 0.0` team (`assegai`, `harimau`,
+   `ag_systems` or `triakis`) boosted at player size, the way `bp-081.png`
+   caught Piranha. `data/scratch/hd-svc1-bit/drive.py` already reads the
+   player's hull record and the visible SPU light list at the same
+   breakpoint a screenshot is taken on (`hits.jsonl`'s `"lights"` field on
+   `BP_TAKEN_PASS` hits), so one run gets both halves at once.
+2. If that hull washes on the original too: close this thread, no code
+   change - name the per-ship split as correct in the light term's own doc
+   comment.
+3. If it does not: measure the hull's own panel-to-anchor distances
+   against `D` on a `Distance = 0.0` ship, the way
+   `hd_engine_light_reach_probe.rs` already does for the track floor.
 
-What would falsify candidate 1: the job gets world-space lights, or the
-hull matrix is unscaled. What would falsify candidate 2: our panels sit
-further than `D` from the anchor, so the wash would need another cause.
+What would falsify "this is correct behaviour": the original's `Distance =
+0.0` ships do not wash at boost. What would falsify "the geometry itself is
+wrong": the hull's own panels already sit outside `D` of the anchor on
+paper, so a working formula would not wash them either.
