@@ -99,10 +99,22 @@ Screenshots from the 2026-09-23 lane are in
     original was seen to submit one;
   - the airbrakes project from model space rather than their own local
     coordinates.
-- **Pulse HUD: the energy bar flashes white during the absorb window**
-  (`Hud_UpdateEnergyBar` calls `HullOverlay_AbsorbWindowActive` on the
-  player every frame: alpha `0xff` into widget `+0xf4`, and a blink at
-  8 Hz). Visible in the original's frames. Ours stays cyan. Not built.
+- **Pulse HUD: the energy bar's absorb flash - built 2026-09-25.**
+  `Hud_UpdateEnergyBar` calls `HullOverlay_AbsorbWindowActive` on the player
+  every frame and reads it twice: it suppresses the forced-red branch
+  entirely (`iVar1`, now identified - it was the open question in
+  `docs/ghidra/functions/psp-pulse-usa/shield.md`'s own "still open" note),
+  and it enters the same `hud+0x1dc`/`* 8.0` blink loop the low-shield icon
+  uses regardless of the red suppression. See shield.md's "`Hud_UpdateEnergyBar`:
+  the absorb flash (2026-09-25)" for the full decompile. **Still open**: the
+  widget's own `+0xf4` field is written a flat `0xff`/`0x00` in lock-step
+  with the window, on the `ShieldBar` widget itself rather than a
+  separately-named one, but *what it drives* was not chased past that write
+  - the port stands in a flat white copy of the bar's own cropped fill,
+  painted under it, labelled chosen-not-measured in both shield.md and
+  `oag_game::hud::Readout::shield_absorbing`'s own doc comment. A live frame
+  of the original mid-absorb (PPSSPP, watch the `ShieldBar` rect) is what
+  would settle it.
 - **Pulse burst look:** in the original it reads as short crackles on the
   hull, and ours reads as long streaks. Not investigated.
 - **AI absorbs light the hull too.** Seen live: an AI craft absorbed on its
@@ -139,9 +151,11 @@ Screenshots from the 2026-09-23 lane are in
    units on a craft), the player's hull never reaches it, and main switches
    the same way - `docs/formats/vex.md`. Re-check the absorb peak at player
    size with bloom on to confirm the white blob in a normal race.
-3. Pulse HUD: the energy bar's absorb flash (`Hud_UpdateEnergyBar`,
-   `+0xf4 = 0xff`, 8 Hz blink off `+0x1dc`). About an hour, with the
-   original's frames as the reference.
+3. ~~Pulse HUD: the energy bar's absorb flash (`Hud_UpdateEnergyBar`,
+   `+0xf4 = 0xff`, 8 Hz blink off `+0x1dc`).~~ **Done 2026-09-25**: forced-red
+   suppression and the blink are measured and built; the `+0xf4` layer's own
+   texture/blend is not chased past the field write (see Open, above) - a
+   live frame of the original's `ShieldBar` mid-absorb would settle it.
 4. Wire the LeachBeam overlay onto the firing craft, faded by its beam's
    pulse strength. Before that, confirm the record `+0` write live. It
    needs a way to fire a LeachBeam that does not halt PPSSPP, or an AI

@@ -158,3 +158,109 @@ fn the_flash_does_not_bleed_into_the_speed_bar() {
     let color = drawn_colour(&readout, "SpeedBar").expect("a half-full speed bar draws");
     assert_eq!(color, argb_to_rgba(0xFF7D_EFC0));
 }
+
+/// Every colour `draw_list` puts on the named sprite's rect this frame, in
+/// paint order - plural because absorbing draws two: the `+0xf4` flash layer
+/// under the bar itself, then the bar. See [`drawn_colour`] for the
+/// single-sprite case every test above this one uses.
+fn drawn_colours(readout: &Readout, name: &str) -> Vec<[f32; 4]> {
+    let layout = layout();
+    let strings = strings();
+    let sheet = sheet();
+    let cx = context(&layout, &strings, &sheet);
+    draw_list(&cx, readout)
+        .sprites
+        .into_iter()
+        .filter_map(|s| match s {
+            Draw::Sprite { rect, color, .. } if rect[1] == layout_rect_y(&cx, name) => Some(color),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Absorbing suppresses forced red even under the 20% floor: `iVar1`
+/// (identified as [`Readout::shield_absorbing`]) bypasses the whole
+/// forced-red branch in the original, not merely this build's earlier
+/// approximation of it. `shield_blink_phase` defaults to `0.0`, an "on"
+/// blink phase (see the phase tests below), so the bar's own alpha is
+/// untouched and only the colour is at stake here.
+#[test]
+fn absorbing_suppresses_forced_red_below_the_floor() {
+    let mut readout = readout_with(5.0, 100.0, false);
+    readout.shield_absorbing = true;
+    let colours = drawn_colours(&readout, "ShieldBar");
+    let bar = colours.last().expect("a 5% absorbing bar still draws");
+    assert_eq!(*bar, argb_to_rgba(AUTHORED_ARGB));
+}
+
+/// Absorbing still blinks even though it is never forced red - the original
+/// enters the same `hud+0x1dc` accumulator either way. At an "off" phase the
+/// bar's own alpha drops to zero.
+#[test]
+fn absorbing_blinks_even_when_healthy() {
+    let mut readout = readout_with(90.0, 100.0, false);
+    readout.shield_absorbing = true;
+    readout.shield_blink_phase = 0.2; // floor(0.2*8)=1, the "off" half of the cycle.
+    let colours = drawn_colours(&readout, "ShieldBar");
+    let bar = colours.last().expect("a 90% absorbing bar still draws");
+    assert_eq!(bar[3], 0.0, "the off phase zeroes the bar's own alpha");
+}
+
+/// The `+0xf4` highlight: a flat white copy of the same crop, painted before
+/// (under) the bar's own colour, present only while absorbing.
+#[test]
+fn absorbing_draws_a_white_flash_under_the_bar() {
+    let mut readout = readout_with(90.0, 100.0, false);
+    readout.shield_absorbing = true;
+    let colours = drawn_colours(&readout, "ShieldBar");
+    assert_eq!(colours.len(), 2, "the flash layer plus the bar itself");
+    assert_eq!(colours[0], [1.0, 1.0, 1.0, 1.0], "the flash is flat white");
+}
+
+/// Outside the absorb window, no second sprite - every test above this one
+/// in the file already relies on that being true.
+#[test]
+fn no_flash_layer_outside_the_absorb_window() {
+    let readout = readout_with(90.0, 100.0, false);
+    let colours = drawn_colours(&readout, "ShieldBar");
+    assert_eq!(colours.len(), 1, "only the bar itself");
+}
+
+/// [`Readout::shield_blink_phase_on`]'s own parity, off
+/// [`Readout::shield_blink_phase`] alone - `Hud_UpdateEnergyBar`'s
+/// `(uint)(t * 8.0) & 1`, read directly off the decompile.
+#[test]
+fn blink_phase_toggles_every_eighth_of_a_second() {
+    let phase_0 = Readout {
+        shield_blink_phase: 0.0,
+        ..Readout::blank()
+    };
+    assert!(phase_0.shield_blink_phase_on(), "t=0.0s, phase 0, even");
+    let phase_1 = Readout {
+        shield_blink_phase: 0.133,
+        ..Readout::blank()
+    };
+    assert!(!phase_1.shield_blink_phase_on(), "t=0.133s, phase 1, odd");
+    let phase_2 = Readout {
+        shield_blink_phase: 0.25,
+        ..Readout::blank()
+    };
+    assert!(phase_2.shield_blink_phase_on(), "t=0.25s, phase 2, even");
+}
+
+/// [`Readout::shield_blinking`] is true while absorbing alone, a full pool
+/// and no post-hit flash - the case [`Readout::shield_forced_red`] used to
+/// conflate with "never blinks".
+#[test]
+fn shield_blinking_is_true_while_absorbing_even_when_healthy() {
+    let mut readout = readout_with(90.0, 100.0, false);
+    readout.shield_absorbing = true;
+    assert!(readout.shield_blinking());
+}
+
+/// The converse: healthy, no flash, not absorbing - no blink at all.
+#[test]
+fn shield_blinking_is_false_with_nothing_active() {
+    let readout = readout_with(90.0, 100.0, false);
+    assert!(!readout.shield_blinking());
+}

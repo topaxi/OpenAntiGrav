@@ -783,16 +783,121 @@ that, the decompiled branch structure is unambiguous and every value in it
 preserves RGB while only alpha is blink-modulated) is a plain read, not an
 inference.
 
-**What is still open**: `iVar1` (`func_0x0003a904` called on
-`*(_DAT_0005801c + 0x2c0)` - a global race-state pointer `Hud_Update` itself
-also dereferences at that same offset, not a field of the HUD object) is not
-identified - it is read as "some external override that suppresses the
-forced-red branch entirely", plausibly a practice/ghost or no-damage-mode
-flag, but nothing here names it. `func_0x0003a904` rebases to `0x0883e904`,
-which falls in an undefined gap between two functions rather than inside
-one, so it was not chased further this pass. It does not change the
+~~**What is still open**: `iVar1` ... is not identified~~ - **identified
+2026-09-25**, see the next section: `iVar1` is
+`HullOverlay_AbsorbWindowActive(*(g_race_manager + 0x2c0))`, the player's own
+craft, not "some external override" - it does not change the
 threshold-vs-gradient answer either way: whichever flag it is, the function
 still never blends between two colours by percentage.
+
+## `Hud_UpdateEnergyBar`: the absorb flash (2026-09-25)
+
+Read to settle whether, and how, the energy bar flashes white and blinks
+during the absorb window - visible in the original's own frames and not
+reproduced here before this pass. Full decompile on `program=BOOT.BIN`,
+`/pulse/BOOT-psp-pulse-usa.BIN`, `ghidra-mcp`'s
+`decompile_function(0x0881c638)`, which resolves the section above's open
+`iVar1` at the same time:
+
+```c
+iVar1 = HullOverlay_AbsorbWindowActive(*(undefined4 *)(g_race_manager + 0x2c0));
+```
+
+`g_race_manager + 0x2c0` is the player's own craft - the same slot
+`Hud_UpdateEnergyBar`'s caller and `cannon-quake-leachbeam.md`'s "2026-09-23
+(later)" probe both already read the gate off - so `iVar1` is
+**[`Readout::shield_absorbing`]**, not an unread override. Confidence
+**84**, this page's own ceiling for "decompilation only, consistent call
+sites" (see the [confidence rubric](../../../reverse-engineering/confidence-rubric.md)):
+a direct decompile, no VFPU, of an already-named callee against an
+already-identified argument, plus the standing live corroboration that the
+call fires continuously from `Hud_UpdateEnergyBar` specifically (the
+"2026-09-23 (later)" probe's `0x0883e908` reads) - though that probe proved
+only that the *call* happens every frame, not what the three effects below
+*do* with its result, so it does not lift them past the same ceiling.
+
+**Three effects follow from `iVar1`, all in the same function body, all
+decompile-only and so also capped at 84:**
+
+1. **It suppresses the forced-red branch entirely.** The `if (iVar1 == 0) {
+   if (fade_timer > 0.0 || pool <= 20.0) { forced red } }` shape means
+   absorbing skips the whole red test, even under the 20% floor or mid a
+   fresh hit - not merely "ignored", as the pre-2026-09-25 reading of
+   [`Readout::shield_forced_red`] had it, but an active override the
+   original takes every time. Confidence 82, matching this page's own
+   existing rating for the surrounding threshold-plus-flash rule.
+2. **It still enters the blink loop.** The accumulator at `hud+0x1dc`
+   (scaled by `8.0`, `& 1` for the alpha toggle - the same field the
+   "still open" note above already named) is entered whenever `pool <= 20.0`
+   unconditionally, **or** `pool > 20.0` and (`iVar1 != 0` **or**
+   `fade_timer > 0.0`). So absorbing blinks the bar's own alpha at the same
+   4 Hz on/off cycle (8 accumulator transitions/second) the low-shield icon
+   uses, independent of whether it is forced red - the two reads of `iVar1`
+   are separate branches over the same tick. Confidence 80, direct
+   decompile, matching the accumulator `shield.md`'s earlier reading already
+   named but did not trace to a second consumer.
+3. **It writes a flat `0xff`/`0x00` onto a second field of the same
+   widget, unconditionally and with no blink applied:**
+
+   ```c
+   uVar3 = 0;
+   if (iVar1 != 0) { uVar3 = 0xff; }
+   *(undefined4 *)(*(int *)(param_2 + 0x1b0) + 0xf4) = uVar3;
+   ```
+
+   `param_2 + 0x1b0` is the `ShieldBar` widget itself - `Hud_BindWidgets`
+   (`0x0881fbec`) binds it by the literal name `"ShieldBar"` and caches it at
+   that same offset, so this is not a second, separately-named widget.
+   `+0xf4` is written on **every** frame `Hud_UpdateEnergyBar` runs, never
+   conditionally skipped, and only ever takes the two values `0`/`0xff` - a
+   hard cut in and a hard cut out at the window's own edges, no fade. It is
+   a different field from the corner colours (`+0xac`/`+0xb0`/`+0xb4`/`+0xb8`,
+   which take the blinked `iVar4` alpha and either the forced-red or the
+   authored RGB) and from every other cached offset `Hud_BindWidgets` fills
+   (`+0x9c`, `+0xbc`, `+0xc4`), so it drives something else on the same
+   widget rather than duplicating one of those. Confidence 82 for the write
+   itself (direct decompile, unconditional every frame); confidence **60**
+   for what it drives - "Plausible: a reasonable inference from surrounding
+   code, could be wrong" on the rubric's own scale, not "Probable"'s
+   structural fit, because only the write side was read.
+
+   **The search for the read side, and why it came up empty this pass.**
+   `search_instructions(mnemonic="lw", operand_pattern="0xf4(")` across the
+   whole binary returns 80[+] hits, but `+0xf4` is a common stack-frame and
+   struct offset generally - `Collision_RaycastMesh`, `BombBlast_Construct`,
+   `Shuriken_Init`, `CellSelection_PopulateGrid` and dozens of others share
+   it by coincidence of layout, not by touching this widget - and none of
+   the hits sit inside a function that also reads `+0xac`/`+0xb0`/`+0xb4`/
+   `+0xb8` (this widget's corner colours), which is the signal that would
+   confirm one as the draw method. The widget class's vtable at `+0x38` is
+   the more direct route - `Hud_BindWidgets` already calls through it for
+   `ShieldBarMark`'s `+0xd4` slot and others - but the draw slot itself was
+   not identified this pass. **What would raise it**: decompiling that
+   vtable's draw slot and finding a read of `+0xf4`, or a live frame of the
+   original mid-absorb with the `ShieldBar` rectangle watched for a second,
+   independent visual layer.
+
+**Ported** as `oag_game::hud::Readout::shield_absorbing` (wired off
+`Race::absorb_window_active`, which reuses `Race::view.absorb_overlay`
+rather than a second timer - the same `0.0 <= elapsed <= WINDOW` test
+`HullOverlay_AbsorbWindowActive` itself is), `Readout::shield_blinking`/
+`shield_blink_phase_on` for point 2, and `crate::hud::draw::draw_list`'s
+`ShieldBar` arm for point 3 - a flat white copy of the bar's own cropped
+fill, painted underneath it, standing in for the unchased draw target named
+above. **The blink's own accumulator is ported, not approximated**:
+`Race::view.shield_blink_timer` (`crate::race::Race::advance_shield_blink`)
+is `hud+0x1dc` itself - it advances only while
+[`Readout::shield_blinking`]'s three conditions hold and freezes rather
+than resets the rest of the time, the same shape `hud+0x11c`'s existing
+`shield_flash_step` already carries for the post-hit flash - so two blinks
+in the same race can start at different phases, same as the original. One
+assumption stands in for a read: the timer starts at `0.0` on a fresh race,
+which was not checked against `Craft_Construct_q` or the HUD object's own
+constructor this pass - see `crate::race::view::View::shield_blink_timer`'s
+doc comment. **Chosen, not measured**: only the flash layer's own geometry
+and blend mode (point 3's own gap) remain so - the blink's phase is no
+longer one of them, unlike the equivalent gap `hud::runtime::phase_on`
+still carries for HD's own blink.
 
 ## `Ship_AddShield`'s four callers, and `Ship_RefillLapShield` (`0x0883de30`)
 

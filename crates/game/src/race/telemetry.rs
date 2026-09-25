@@ -167,6 +167,8 @@ impl Race {
             // target" would cut off.
             sight: Some(self.view.sight),
             shield_flashing: self.view.shield_flash_timer > 0.0,
+            shield_absorbing: self.absorb_window_active(self.player_slot()),
+            shield_blink_phase: self.view.shield_blink_timer,
             mode: self.sim.world.mode(),
         }
     }
@@ -195,6 +197,27 @@ impl Race {
         );
         self.view.shield_flash_timer = timer;
         self.view.shield_flash_prev = prev;
+    }
+
+    /// Advances the shield bar's blink accumulator for the next
+    /// [`Self::readout`].
+    ///
+    /// Called once a tick, from [`Self::tick`], **after both
+    /// [`Self::advance_shield_flash`] and [`Self::advance_absorb_bursts`]**
+    /// have run - the blink gate reads both of their outputs
+    /// ([`super::view::View::shield_flash_timer`] and
+    /// [`Self::absorb_window_active`]) for this same tick, and reading
+    /// either one stale would blink a tick early or late relative to the
+    /// state the bar itself is drawn from.
+    pub(super) fn advance_shield_blink(&mut self) {
+        let ship = self.ship();
+        let current =
+            oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
+        let blinking = current <= oag_physics::damage::CRITICAL_PERCENT
+            || self.view.shield_flash_timer > 0.0
+            || self.absorb_window_active(self.player_slot());
+        self.view.shield_blink_timer =
+            shield_blink_step(self.view.shield_blink_timer, blinking, self.sim.dt);
     }
 }
 
@@ -227,6 +250,24 @@ fn shield_flash_step(timer: f32, prev: f32, current: f32, dt: f32) -> (f32, f32)
         }
     }
     (timer, current)
+}
+
+/// The shield bar's blink accumulator, one tick of `Hud_UpdateEnergyBar`'s
+/// own `hud+0x1dc`.
+///
+/// **Freezes rather than resets when `blinking` is false** - the decompiled
+/// branch only advances `hud+0x1dc` inside the blink condition at all, so a
+/// tick where nothing blinks leaves the accumulator exactly where it was,
+/// and the next blink resumes from that phase rather than starting fresh.
+/// Wraps to `0.0` once it exceeds `1.0`, the same up-counting shape
+/// [`shield_flash_step`] uses for `hud+0x11c`. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25`.
+fn shield_blink_step(timer: f32, blinking: bool, dt: f32) -> f32 {
+    if !blinking {
+        return timer;
+    }
+    let timer = timer + dt;
+    if timer > 1.0 { 0.0 } else { timer }
 }
 
 #[cfg(test)]
@@ -288,5 +329,63 @@ mod shield_flash_tests {
         // the accumulation is the same either way: one `dt` further on from
         // `timer_a`, not reset to it.
         assert_eq!(timer_b, timer_a + DT);
+    }
+}
+
+#[cfg(test)]
+mod shield_blink_tests {
+    use super::shield_blink_step;
+
+    /// One 60 Hz tick, the same fixed step [`super::Race`] runs at.
+    const DT: f32 = 1.0 / 60.0;
+
+    /// Not blinking: the accumulator does not move at all.
+    #[test]
+    fn not_blinking_leaves_the_timer_alone() {
+        assert_eq!(shield_blink_step(0.4, false, DT), 0.4);
+    }
+
+    /// Blinking: the accumulator advances by `dt`, same as the flash's own.
+    #[test]
+    fn blinking_advances_by_dt() {
+        assert_eq!(shield_blink_step(0.4, true, DT), 0.4 + DT);
+    }
+
+    /// Freezes rather than resets: a run that stops blinking mid-cycle and
+    /// starts again later resumes from where it left off, not from zero -
+    /// the discriminating behaviour against [`shield_flash_step`], which
+    /// this shares the up-counting shape with but not the reset rule.
+    #[test]
+    fn a_gap_in_blinking_does_not_reset_the_phase() {
+        let mut timer = 0.0;
+        for _ in 0..10 {
+            timer = shield_blink_step(timer, true, DT);
+        }
+        let frozen = timer;
+        for _ in 0..20 {
+            timer = shield_blink_step(timer, false, DT);
+        }
+        assert_eq!(timer, frozen, "not blinking must not move the accumulator");
+        timer = shield_blink_step(timer, true, DT);
+        assert_eq!(
+            timer,
+            frozen + DT,
+            "resumes from the frozen phase, not zero"
+        );
+    }
+
+    /// Wraps to zero once it exceeds one second, not at exactly one second -
+    /// `1.0 < accum`, not `<=`, in the decompile. A `0.3` step lands the
+    /// crossing well clear of `f32` rounding at the boundary, unlike
+    /// accumulating sixty `1.0 / 60.0` ticks would.
+    #[test]
+    fn wraps_past_one_second() {
+        let mut timer = 0.0;
+        for _ in 0..3 {
+            timer = shield_blink_step(timer, true, 0.3);
+        }
+        assert!((0.89..0.91).contains(&timer), "0.9s in: {timer}");
+        timer = shield_blink_step(timer, true, 0.3);
+        assert_eq!(timer, 0.0, "1.2s crosses 1.0 and wraps: {timer}");
     }
 }

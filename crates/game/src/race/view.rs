@@ -164,6 +164,20 @@ pub struct RaceView {
     /// [`crate::hud::Readout::shield_flashing`] reads out of it every tick.
     /// Render-side, like [`Self::shield_was_up`], and out of the hash.
     pub(super) shield_flash_timer: f32,
+    /// The shield bar's blink accumulator.
+    ///
+    /// `Hud_UpdateEnergyBar`'s own `hud+0x1dc`: advances by the tick's `dt`
+    /// whenever [`crate::hud::Readout::shield_blinking`]'s three conditions
+    /// hold (low shield, [`Self::shield_flash_timer`] running, or absorbing),
+    /// **freezes rather than resets** the rest of the time - so two blinks
+    /// in the same race can start at different phases, exactly like the
+    /// original - and wraps to `0.0` once it exceeds `1.0`. `floor(t * 8.0)`
+    /// even is the "on" phase; see [`Race::advance_shield_blink`]. Starts at
+    /// `0.0` on a fresh race - **assumed, not read off `Craft_Construct_q`
+    /// or the HUD's own constructor this pass** - so the very first blink of
+    /// a race is known to start "on" only under that assumption. Render-side,
+    /// like [`Self::shield_was_up`], and out of the hash.
+    pub(super) shield_blink_timer: f32,
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///
     /// One value for the whole field, because every craft wears the player's hull

@@ -684,6 +684,10 @@ impl Race {
         // the tick it lands rather than one late. See
         // `Self::advance_shield_flash`.
         self.advance_shield_flash();
+        // After it and after `advance_absorb_bursts` above - see
+        // `Self::advance_shield_blink`'s own doc comment for why both must
+        // already reflect this tick.
+        self.advance_shield_blink();
 
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically

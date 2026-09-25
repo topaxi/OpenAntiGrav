@@ -52,6 +52,7 @@ mod draw;
 mod lap_splits;
 mod overlay;
 mod runtime;
+mod shield_bar;
 mod sight_draw;
 mod widget;
 
@@ -588,6 +589,44 @@ pub struct Readout {
     /// `false` on [`Self::blank`], the same as every other "nothing has run
     /// yet" field.
     pub shield_flashing: bool,
+    /// Whether the player is inside the one-second window after absorbing a
+    /// pickup this frame - `Race::absorb_window_active(player_slot)`, the
+    /// same state [`oag_render::hull_overlay`] draws off.
+    ///
+    /// `Hud_UpdateEnergyBar` (`0x0881c638`) calls
+    /// `HullOverlay_AbsorbWindowActive` on the player's own craft every
+    /// frame and reads it twice: it **suppresses** the forced-red branch
+    /// entirely (see [`Self::shield_forced_red`]) and it writes a flat
+    /// `0xff`/`0x00` alpha into a second field on the `ShieldBar` widget
+    /// (`+0xf4`) that stays off on every other frame this function ever
+    /// touches. Confidence 84 for the call itself - this page's own ceiling
+    /// for "decompilation only" per `docs/reverse-engineering/confidence-rubric.md`,
+    /// a direct decompile with no VFPU, `program=BOOT.BIN` at
+    /// `/pulse/BOOT-psp-pulse-usa.BIN`, plus the standing live corroboration
+    /// that the call itself fires every frame (`cannon-quake-leachbeam.md`'s
+    /// "2026-09-23 (later)" probe) - see
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25`.
+    /// **What `+0xf4` itself drives is not chased past the field write**:
+    /// the widget's own draw method (through its vtable at `+0x38`) was not
+    /// decompiled, so which texture/quad it gates is inferred - see that
+    /// section's own confidence note - rather than read off the draw call.
+    ///
+    /// `false` on [`Self::blank`], the same as every other "nothing has run
+    /// yet" field.
+    pub shield_absorbing: bool,
+    /// The shield bar's blink accumulator - `Hud_UpdateEnergyBar`'s own
+    /// `hud+0x1dc`, in seconds, ported by
+    /// `crate::race::Race::advance_shield_blink`.
+    ///
+    /// Not itself a "is blinking" flag - see [`Self::shield_blinking`] for
+    /// that - just the raw accumulator, so [`Self::shield_blink_phase_on`]
+    /// can apply the original's own `floor(t * 8.0)` parity test to
+    /// whatever this holds, including a value frozen from an earlier blink
+    /// that has since stopped. `0.0` on [`Self::blank`], which reads as the
+    /// window's own start - **assumed for a fresh race**, see
+    /// [`crate::race::view::View::shield_blink_timer`]'s own doc comment for
+    /// what that assumption rests on.
+    pub shield_blink_phase: f32,
     /// The race's mode. Read by a title's runtime HUD rules, which the
     /// original keys on its own mode id - see `hud::runtime`.
     pub mode: oag_race::Mode,
@@ -640,17 +679,49 @@ impl Readout {
     /// bar tint all read the same literal out of `.rodata`, and the point of
     /// naming it once is that the three cannot drift apart.
     ///
-    /// **`iVar1` is not reproduced.** The original guards both branches this
-    /// decides between behind an external override flag
-    /// (`func_0x0003a904` on a global race-state pointer) that is not
-    /// identified - see shield.md's "What is still open". Leaving it out
-    /// means this always takes the forced-red branch on a genuine drop, even
-    /// in whatever mode `iVar1` is meant to suppress it for; a guess at its
-    /// meaning would be worse than the gap.
+    /// **`iVar1` is identified and reproduced, 2026-09-25**: it is
+    /// `HullOverlay_AbsorbWindowActive(player)`, [`Self::shield_absorbing`],
+    /// and the original skips the forced-red branch *entirely* while it is
+    /// set, even under the pool at 20% or a fresh hit. So absorbing always
+    /// wins over a genuine drop for the colour, though not for the blink,
+    /// see [`Self::shield_blinking`]. See shield.md's
+    /// "`Hud_UpdateEnergyBar`: the absorb flash" section, confidence 82.
     #[must_use]
     pub fn shield_forced_red(&self) -> bool {
-        self.shield_flashing
+        !self.shield_absorbing
+            && (self.shield_flashing
+                || self.shield_fraction() * 100.0 <= oag_physics::damage::CRITICAL_PERCENT)
+    }
+
+    /// Whether the shield bar is inside `Hud_UpdateEnergyBar`'s shared blink
+    /// accumulator this tick: the pool at or under
+    /// [`oag_physics::damage::CRITICAL_PERCENT`], mid
+    /// [`Self::shield_flashing`]'s post-hit window, or
+    /// [`Self::shield_absorbing`] - the same three conditions ORed together
+    /// that used to read as one before `iVar1` was identified (see
+    /// [`Self::shield_forced_red`]). Absorbing enters this loop even though
+    /// it is never forced red: the two reads are independent in the
+    /// original. Confidence 80, shield.md's own reading of `hud+0x1dc`.
+    #[must_use]
+    pub fn shield_blinking(&self) -> bool {
+        self.shield_absorbing
+            || self.shield_flashing
             || self.shield_fraction() * 100.0 <= oag_physics::damage::CRITICAL_PERCENT
+    }
+
+    /// Whether [`Self::shield_blink_phase`]'s cycle is in its "on" (visible)
+    /// phase this tick - `floor(t * 8.0)` even, the parity test
+    /// `Hud_UpdateEnergyBar` runs on `hud+0x1dc` directly, ported rather
+    /// than approximated: [`Self::shield_blink_phase`] already carries the
+    /// original's own freeze-not-reset accumulator
+    /// (`crate::race::Race::advance_shield_blink`), so this is the same
+    /// arithmetic the decompile runs on it. The rate (8 transitions/second,
+    /// a 4 Hz on/off cycle) and the 50% duty cycle are read directly off the
+    /// `* 8.0` and `& 1` in the decompile.
+    #[must_use]
+    pub fn shield_blink_phase_on(&self) -> bool {
+        let phase = (self.shield_blink_phase * 8.0).floor() as i64;
+        phase.rem_euclid(2) == 0
     }
 }
 
