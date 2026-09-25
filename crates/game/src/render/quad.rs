@@ -78,6 +78,16 @@ pub(super) const MODE_GRADIENT: f32 = 3.0;
 /// beside [`MODE_ATLAS`]. Only emitted once the role it names has actually
 /// loaded; see `Renderer::push_text`'s `face` parameter.
 pub(super) const MODE_FACE_ATLAS: f32 = 4.0;
+/// A quad whose `uv` is in the **buttons atlas's** pixels -
+/// [`super::Draw::FacedText`] with `role: "Buttons"`, sampled from a
+/// *third* glyph texture (`Renderer::buttons_view`) rather than either of
+/// the other two - HD's own screen title (`Title`-role, [`MODE_FACE_ATLAS`])
+/// and its footer's button glyphs (`Buttons`-role, this) are on screen in
+/// the same frame, so one secondary slot cannot serve both. Only emitted
+/// once `Renderer::buttons_atlas` has actually loaded; see
+/// `render::text::atlas_for`'s own doc for why this mode has **no**
+/// fallback to [`MODE_ATLAS`] the way [`MODE_FACE_ATLAS`] does.
+pub(super) const MODE_BUTTONS_ATLAS: f32 = 5.0;
 
 impl Renderer {
     pub(super) fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: [f32; 2]) {

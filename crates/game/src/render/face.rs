@@ -103,8 +103,49 @@ impl super::Renderer {
             &self.sprite_sampler,
             &self.face_view,
             &self.face_sampler,
+            &self.buttons_view,
         );
         self.face_atlas = atlas;
         self.face_role = role;
+    }
+
+    /// Loads (or clears) the *third* glyph texture `Draw::FacedText { role:
+    /// "Buttons", .. }` samples - Wipeout HD/Fury's own
+    /// `ps_buttons.fnt`/`PS_BUTTONS.fnt` (Omega very likely, unverified this
+    /// pass - see `crate::language::roles::BUTTONS`'s own doc), resolved
+    /// through
+    /// `crate::language::roles::BUTTONS`
+    /// (`oag_game::boot::fonts::load_buttons_font`) the same way
+    /// [`Self::set_face_atlas`]'s own atlas is, but into a slot of its own:
+    /// HD's screen title (`Title` role, [`Self::set_face_atlas`]'s own slot)
+    /// and this screen's footer button glyphs are on screen in the same
+    /// frame, so they cannot share one.
+    ///
+    /// **No role parameter, unlike [`Self::set_face_atlas`].** The role this
+    /// slot answers to is always `crate::language::roles::BUTTONS` - see
+    /// `oag_ui::campaign::footer::face_role`'s own doc - and
+    /// `super::render_with`'s `Draw::FacedText` arm never falls back to the
+    /// primary atlas for it the way it does for [`Self::face_atlas`]; see
+    /// `super::text::GlyphSlot::Buttons`'s own doc for why not.
+    pub fn set_buttons_atlas(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        atlas: Option<Atlas>,
+    ) {
+        self.buttons_view = upload_face(device, queue, atlas.as_ref());
+        self.ui_bind_group = super::resources::ui_bind_group(
+            device,
+            &self.ui_layout,
+            &self.uniform_buffer,
+            &self.atlas_view,
+            &self.atlas_sampler,
+            &self.sprite_view,
+            &self.sprite_sampler,
+            &self.face_view,
+            &self.face_sampler,
+            &self.buttons_view,
+        );
+        self.buttons_atlas = atlas;
     }
 }

@@ -418,6 +418,14 @@ impl Session {
         let (face_atlas, face_role) =
             boot::fonts::face_atlas_slot(shell.menu_skin, &shell.font, shell.title_font.clone());
         renderer.set_face_atlas(&self.gpu.device, &self.gpu.queue, face_atlas, face_role);
+        // A third, independent slot - not routed through `face_atlas_slot`,
+        // which only ever picks between `Title` and `Default` for the one
+        // slot it has. See `render::Renderer::set_buttons_atlas`'s own doc.
+        renderer.set_buttons_atlas(
+            &self.gpu.device,
+            &self.gpu.queue,
+            shell.buttons_font.clone(),
+        );
         // The Fury backdrop's clouds, uploaded once per menu stage the same
         // way the sprite sheet is; the model that flies past them is built
         // below, from the same assets.

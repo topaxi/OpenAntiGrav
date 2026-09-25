@@ -200,7 +200,7 @@ Widgets, off `DATA02`'s copy (confidence 90, direct read):
 | `RewardLine1` | `idstring="ER_MEDAL_AWARD"` (`"MEDAL AWARDED:"`), `x="670" y="360"` | the medal tier on a campaign race (chosen) |
 | `RewardLine2` / `RewardLoyaltyPoints` / `RewardLoyaltyActive` | placeholders `"test"` / `"points!"` / `"line 2"` | no - HD's loyalty law is not recovered |
 | `loyaltybar` | `<Slider>`, `idstring="ER_TOT_LOY"`, `minSlide="0" maxSlide="100000"` | no - `oag_ui::screen` does not collect a `<Slider>` |
-| `ControlTextConfirmButton` | inside a `<NavigationController>`, `font="buttons"` | no - this build loads no atlas for that face and would otherwise risk the raw codepoint (a Greek letter) rather than the disc's own glyph; see `oag_ui::campaign::footer::NavigationLegend::read`'s own doc |
+| `ControlTextConfirmButton` | inside a `<NavigationController>`, `font="buttons"` | no - `oag_ui::endrace::hd`'s own `text_draw` has no `face_role` check, so this screen still risks the raw codepoint (a Greek letter) rather than the disc's own glyph even though a `Buttons`-role atlas now loads (2026-09-25, `oag_ui::campaign::footer::face_role`); a real gap, left open rather than fixed in the same pass that found it - see `oag_ui::endrace::hd::hd_results_draw_list`'s own doc |
 | `ControlTextConfirm` | inside the same `<NavigationController>`, `idstring="FE_CONFIRM"` | **yes, since 2026-09-25** - `crate::screen::Screens::collect_widgets` now walks a `NavigationController` the same as any other container; confirmed live, `--menu-page endrace-rewards` |
 | `EndRaceCountDown` | `string=""` | no |
 

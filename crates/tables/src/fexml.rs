@@ -155,7 +155,8 @@ pub fn expand(data: &[u8]) -> Result<String> {
     Ok(out)
 }
 
-/// Index of the `>` that closes the tag at the front of `rest`.
+/// Index of the `>` that closes the tag at the front of `rest` - real or
+/// implied.
 ///
 /// A quoted attribute value may contain `>`. The front end's own XML is full of
 /// values like `x="FEGlobals->MenuXOffset"`, and stopping at the first `>`
@@ -169,6 +170,50 @@ pub fn expand(data: &[u8]) -> Result<String> {
 /// quote tracking for the whole rest of the file and swallows the entire document
 /// into one unterminated tag. Ending the declaration where XML says it ends costs
 /// two lines and makes eight shipped files readable.
+///
+/// **An unquoted `<` also ends a tag, one character short of it.** Wipeout
+/// HD/Fury's own `grid_04.xml` (`DATA02`/`DATA04`/`DATA06`, all three
+/// identical) authors `<Values RequiredPoints="22" ... RotY="-0.5"</Values>`,
+/// a `<Values>` start tag missing its own `>` before the real `</Values>`
+/// closes it. Left untreated, the scan for an unquoted `>` runs straight
+/// past the missing one and stops at `</Values>`'s own, so the whole run
+/// (`Values`'s attributes, `</Values`, with no `>` in between) reads as one
+/// opening `<Values ...>` tag that never gets a matching close: every
+/// sibling that should follow - `<Unlock>` and all ten of `grid4`'s own
+/// `<PI_Cell>` - becomes a *child of the dangling `Values` node* instead of
+/// a child of `PI_Grid`, so `PI_Grid.children_named("PI_Cell")` finds none
+/// at all. Measured directly: `crates/game/src/campaign.rs`'s own grid
+/// reader logged `grid4 cells=0` where the raw blob (read through
+/// `oag_assets::Archives`, not a file dump) plainly names ten. RPCS3's own
+/// campaign-select frame reads `HD 0/87` - the sum of all eight HD grids'
+/// own cell counts, `grid4`'s ten included - so the original's own parser
+/// tolerates exactly this shape and this build's did not.
+///
+/// The same shape (`attr="value"` immediately followed by `</Tag>`, no `>`
+/// between) recurs in `stats_definition.xml`'s and `endrace_definition.xml`'s
+/// own `<Values ... RotY="-0.5"</Values>` trophy/rank-model blocks (all
+/// three HD archives that carry either file) - not a one-off typo in one
+/// grid, a shape the same authoring tool produced more than once. A repo-wide
+/// check (`rg --no-ignore -n '="[^"]*"</[A-Za-z]'` over
+/// `data/scratch/drive-2026-09-25/hd-xml`) found no other shape and no false
+/// positive: every hit is this exact pattern, always right before
+/// `</Values>`.
+///
+/// Treated as ending the tag **one character short of the `<`**, not naming
+/// the `<` itself as the close: every caller's own `close + 1` already
+/// resumes scanning at the next tag, and the missing final quote this
+/// leaves in `inner` costs nothing - [`attributes`]'s own value scan already
+/// treats end-of-input as an unterminated value's own closing quote, so the
+/// truncated attribute value still reads out whole (`"-0.5"`, not
+/// `"-0.5`-minus-a-character`). Guarded at `index > 1`, not `index > 0`:
+/// `index` is `rest`'s own offset of this `<`, and the caller always slices
+/// `rest[1..close]` for the tag's inner content, which panics (start past
+/// end) if `close` - `index - 1` here - comes back `0`. `index > 0` alone
+/// still allows `index == 1` (a second character that is itself an unquoted
+/// `<`, e.g. a stray `<<` in truly malformed input, not anything the disc
+/// ships), which would return `close = 0` and panic there; `index > 1`
+/// excludes that one case along with `index == 0` (the tag's own opening
+/// `<`, which must never end itself at length zero).
 fn tag_end(rest: &str) -> Option<usize> {
     if let Some(body) = rest.strip_prefix("<!--") {
         return body.find("-->").map(|at| at + "<!--".len() + 2);
@@ -182,6 +227,7 @@ fn tag_end(rest: &str) -> Option<usize> {
         match byte {
             b'"' => quoted = !quoted,
             b'>' if !quoted => return Some(index),
+            b'<' if !quoted && index > 1 => return Some(index - 1),
             _ => {}
         }
     }

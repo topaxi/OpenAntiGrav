@@ -17,6 +17,11 @@
 // frame, and one bound atlas at a time cannot draw that. It carries a 1x1
 // placeholder whenever no title package has loaded a face atlas, which no
 // quad samples in that case - see `MODE_FACE_ATLAS`.
+//
+// And a third, `buttons_texture`, for `Draw::FacedText { role: "Buttons" }` -
+// Wipeout HD/Fury's own footer button glyphs, which need to be on screen
+// alongside `face_texture`'s `Title`-role screen title in the same frame, so
+// they cannot share its one slot. See `MODE_BUTTONS_ATLAS`.
 
 struct Uniforms {
     // Multiplies clip space to letterbox 480x272 into a window of any shape.
@@ -36,6 +41,12 @@ struct Uniforms {
     // size. A 1x1 placeholder whenever no face atlas is loaded, which no quad
     // samples in that case anyway.
     face_atlas: vec2<f32>,
+    // The buttons atlas's own size in pixels, the same idiom as `face_atlas`
+    // one field up - HD/Fury's `ps_buttons.fnt`/`PS_BUTTONS.fnt` once loaded,
+    // a 1x1 placeholder otherwise. Occupies the slot a plain `_padding` field
+    // held before this existed: WGSL still rounds `Uniforms` to 64 bytes
+    // either way, so this is a real field rather than appended bytes.
+    buttons_atlas: vec2<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -45,6 +56,8 @@ struct Uniforms {
 @group(0) @binding(4) var sprite_sampler: sampler;
 @group(0) @binding(5) var face_texture: texture_2d<f32>;
 @group(0) @binding(6) var face_sampler: sampler;
+@group(0) @binding(7) var buttons_texture: texture_2d<f32>;
+@group(0) @binding(8) var buttons_sampler: sampler;
 
 struct Instance {
     // x, y, width, height in screen pixels.
@@ -57,10 +70,14 @@ struct Instance {
     // 0 indexes the glyph atlas, 1 the sprite sheet, 2 the sprite sheet added
     // rather than blended over, 3 a solid fill whose colour runs from `color`
     // on the left to `border` on the right - which the vertex stage resolves
-    // into a plain mode-0 fill - and 4 the **face** atlas, a second glyph
-    // texture for `Draw::FacedText`. Every mode is tested by range rather than
-    // by an open-ended `>`, because 4 sorts above every earlier mode and an
-    // open-ended test would silently catch it too.
+    // into a plain mode-0 fill - 4 the **face** atlas, a second glyph
+    // texture for `Draw::FacedText`, and 5 the **buttons** atlas, a third,
+    // for `Draw::FacedText { role: "Buttons" }`. Every mode is tested by
+    // range rather than by an open-ended `>`, because a higher mode sorts
+    // above every earlier one and an open-ended test would silently catch
+    // it too - the trap `is_face` used to have before `MODE_BUTTONS_ATLAS`
+    // existed to catch it: `mode > 3.5` alone would have counted every
+    // buttons-atlas quad as a face-atlas one.
     @location(4) mode: f32,
     // Clockwise turn about the quad's own centre, in radians. Zero for
     // everything but the lock-on reticle's corner brackets, which are four
@@ -162,9 +179,14 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // to the same value whichever way it reads.
     let is_gradient = instance.mode > 2.5 && instance.mode < 3.5;
     let is_sheet = instance.mode > 0.5 && instance.mode < 2.5;
-    let is_face = instance.mode > 3.5;
+    // Both range-tested, not open-ended - see `Instance::mode`'s own doc:
+    // an untested `is_face = mode > 3.5` would also be true for a mode-5
+    // (buttons-atlas) quad.
+    let is_face = instance.mode > 3.5 && instance.mode < 4.5;
+    let is_buttons = instance.mode > 4.5 && instance.mode < 5.5;
     var size = select(uniforms.atlas, uniforms.sprites, is_sheet);
     size = select(size, uniforms.face_atlas, is_face);
+    size = select(size, uniforms.buttons_atlas, is_buttons);
     out.uv = (instance.uv.xy + corner * instance.uv.zw) / size;
     let tiled = instance.tile.x > 0.0;
     out.tile_rect = select(vec4<f32>(0.0), instance.uv / vec4<f32>(size, size), tiled);
@@ -196,12 +218,18 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let face = textureSample(face_texture, face_sampler, in.uv);
     let face_mask = face.r;
     let face_coverage = face.g;
+    let buttons = textureSample(buttons_texture, buttons_sampler, in.uv);
+    let buttons_mask = buttons.r;
+    let buttons_coverage = buttons.g;
 
     // The vertex stage collapses a gradient (mode 3) to mode 0 before this
-    // runs, so `in.mode` only ever reaches here as 0, 1, 2 or 4 - tested by
-    // range, for the same reason the vertex stage now is.
+    // runs, so `in.mode` only ever reaches here as 0, 1, 2, 4 or 5 - tested
+    // by range, for the same reason the vertex stage now is (see
+    // `Instance::mode`'s own doc for the `is_face`/`is_buttons` trap this
+    // guards against).
     let is_sheet = in.mode > 0.5 && in.mode < 2.5;
-    let is_face = in.mode > 3.5;
+    let is_face = in.mode > 3.5 && in.mode < 4.5;
+    let is_buttons = in.mode > 4.5 && in.mode < 5.5;
 
     // Body toward `color`, outline toward `border`. The alpha is mixed too, so a
     // translucent border colour - which is what the HUD authors, 0x40000000 -
@@ -212,10 +240,16 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // The face atlas mixes the same way the main one does - the menu faces
     // this build has loaded through it all carry a constant mask, same as
     // `from_atlas`'s own menu-font case - so this is not a third formula, only
-    // a third sample.
+    // a third sample. The buttons atlas is a fourth sample of the identical
+    // formula, for the identical reason: `ps_buttons.fnt`'s own mask is
+    // constant too (`oag-tools --example hd_buttons_font_probe`'s own atlas
+    // dump shows plain white glyph art, no baked outline).
     let face_ink = mix(in.border, in.color, face_mask);
     let from_face = vec4<f32>(face_ink.rgb, face_ink.a * face_coverage);
-    let straight = select(select(from_atlas, from_sheet, is_sheet), from_face, is_face);
+    let buttons_ink = mix(in.border, in.color, buttons_mask);
+    let from_buttons = vec4<f32>(buttons_ink.rgb, buttons_ink.a * buttons_coverage);
+    let with_face = select(select(from_atlas, from_sheet, is_sheet), from_face, is_face);
+    let straight = select(with_face, from_buttons, is_buttons);
 
     // **Premultiplied on the way out**, because the pipeline blends
     // premultiplied alpha - see `render.rs`'s colour target. `src.rgb * src.a`

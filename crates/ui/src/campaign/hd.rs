@@ -98,12 +98,23 @@ const TITLE_ID: &str = "FE_RC";
 /// `Grid Selection`'s draw list: HD's flyer-paging screen, not a hex grid of
 /// tiers - see the module doc.
 ///
-/// `footer_overlay` is [`hd_cell_draw_list`]'s own parameter, unchanged: an
-/// RPCS3 frame of this screen (`Fury`'s `grid8`,
-/// `data/scratch/lane-hd/rpcs3-grid0-3-2/00-default.png`) shows the same
-/// `NAVIGATION`/`CONFIRM`/`BACK`/`CHANGE DIFFICULTY` footer row `Cell
-/// Selection`'s own frame does - the shared front-end root's
-/// `NavigationController` is not gated to one screen.
+/// `footer_overlay` is [`hd_cell_draw_list`]'s own parameter, unchanged:
+/// `Campaign Selection`'s own RPCS3 frames
+/// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`/
+/// `01-l1-tap.png`) show `NAVIGATION`/`CONFIRM`/`BACK` under a screen the
+/// shared front-end root also draws the footer for - the
+/// `NavigationController` is not gated to one screen - so this one gets it
+/// too. **Correction, 2026-09-25**: an earlier pass cited
+/// `data/scratch/lane-hd/rpcs3-grid0-3-2/00-default.png` here as `Grid
+/// Selection Fury` showing a third `CHANGE DIFFICULTY` prompt; every frame
+/// in that directory is actually `Cell Selection` (`grid8`'s own hex grid,
+/// confirmed by `01-down.png`/`02-square.png`/`02-triangle.png`'s clean,
+/// legible captures of the same session), and `Grid Selection`/`Grid
+/// Selection Fury` author no `DifficultyButton` widget anywhere in
+/// `CellMode_Definition.xml` at all - see
+/// `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: the footer's button
+/// glyphs" section for the full correction. This screen draws
+/// `Confirm`/`Back` only, and that is the disc's own answer, not a gap.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,

@@ -674,6 +674,10 @@ pub(crate) struct Shell {
     /// to - see `boot::Shell::title_font` and
     /// `oag_title::MenuSkin::title_font`.
     pub(crate) title_font: Option<oag_ui::font::Atlas>,
+    /// The PlayStation button-glyph face, when this source's language
+    /// plugins name one - see `boot::Shell::buttons_font` and
+    /// `render::Renderer::set_buttons_atlas`.
+    pub(crate) buttons_font: Option<oag_ui::font::Atlas>,
     /// The disc's own frame around every menu page, read off the front-end XML
     /// while it was still in hand.
     ///

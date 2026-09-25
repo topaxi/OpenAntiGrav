@@ -1295,7 +1295,7 @@ disagreement on a different file) settles it:
 | `campaignList` (`List`) | idstring `FE_CAMPAIGNLIST`, two `<Entry>`s: `String="FE_RC_FURY"` then `String="FE_RC_HD"` - **Fury first**, matching the measured default. The list's own `<Values>` sits at `y="-500"`, off screen (the file's own comment on that line reads `<!-- -500 for y so it's off screen!! -->`) - that position drives the widget's internal selection state only, never meant to be drawn there. **The two entries' own names are drawn anyway**, at a chosen position - see "Drawing the two entries' own names" below. |
 | `<Redirect>` | `campaignList == FE_RC_FURY -> "Grid Selection Fury"`; `== FE_RC_HD -> "Grid Selection"`; `<Default goto="To Be Done">` - a third branch that is evidence about the build (an unfinished fallback) even though nothing observed here can fire it |
 | `FuryCampaignFlyerModel` / `HDCampaignFlyerModel` (`Flyer`) | `OriginX="640"`/`"1280"` - Fury left, `Wipeout HD` right, both `Src="Data\FE\Flyers\00_flyer.vex"`. **Not the per-campaign models the disc otherwise ships** (`/data/fe/flyers/fury_campaign/flyer.vex`, `/data/fe/flyers/hd_campaign/flyer.vex`, both present in `hd-files.txt`) - this screen's own XML points both widgets at the same generic flyer regardless, so whatever tells the two apart on the real screen is not in this file. Not drawn either way - see "not drawn" below. |
-| `MedalImageFury`/`MedalImageHD` | `Hexmedal_HD.mip`, plus `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` (idstring `RC_GM`, `"GOLD MEDALS"` - the same idstring `Grid Selection`'s own `Medals Title` already resolves) and `NumMedalsTextFury`/`NumMedalsTextHD` (idstring `RB_EVENT_TYPE` - a reused/generic idstring this build does not trust as content, the same "idstring is a placeholder slot, not the text" reading `Line{n}` already gets elsewhere in this module). An RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile; this build's own parse of `DATA00`'s eight Fury grids totals 80 cells (`campaign_grids_ground_truth.rs`), a 7-cell gap this pass does not explain. **Not drawn as a fraction** - `selection::draw_list` shows only the earned count (`0` on a fresh profile, the same "player-progress source is optional" reading the rest of this module gives), not a denominator this build cannot derive to match the disc's own `87`. |
+| `MedalImageFury`/`MedalImageHD` | `Hexmedal_HD.mip`, plus `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` (idstring `RC_GM`, `"GOLD MEDALS"` - the same idstring `Grid Selection`'s own `Medals Title` already resolves) and `NumMedalsTextFury`/`NumMedalsTextHD` (idstring `RB_EVENT_TYPE` - a reused/generic idstring this build does not trust as content, the same "idstring is a placeholder slot, not the text" reading `Line{n}` already gets elsewhere in this module). **Closed, 2026-09-25** - see "Wipeout HD/Fury: the `GOLD MEDALS` denominator" below: RPCS3 reads `"0 / 87"` on the `Wipeout HD` side and `"0 / 80"` on `Fury`'s, and both are exactly the campaign's own total cell count, now drawn as `{earned} / {total}` by `selection::draw_list`. |
 
 **The subtitle and both `GOLD MEDALS` labels are hand-placed, not read
 through `oag_ui::screen::Screens::collect`.** All three are `<MiniText>`,
@@ -2133,21 +2133,15 @@ authors no `TextInfoIsAlwaysLast` viewport at all).
 
 **Still not drawn, both sourced and left open rather than guessed at:**
 
-- **The `Confirm`/`Back`/`Change Difficulty` glyphs themselves** - RPCS3's
-  frame shows private-font icons (Ⓧ/Ⓞ/△) before each word; this build's own
-  `--menu-page cell-select`/`grid-select` captures draw the literal words
-  with no icon (a tofu box before `Change Difficulty` specifically). This is
-  `oag_ui::campaign::footer`'s own mechanism (`NavigationLegend`/glyph
-  resolution) - outside this lane's scope this pass, not touched.
-- **`Grid Selection`'s own third prompt, `CHANGE DIFFICULTY`.** RPCS3's
-  frame shows it beside `CONFIRM`/`BACK` on this screen; this build's
-  `NavigationLegend` only ever resolves the shared root's four `Text`
-  children (`Confirm`/`Back`), so there is nothing to draw a third prompt
-  from even with `footer_overlay` now threaded through. Whether
-  `DifficultyButton`'s own difficulty toggle (`Square` on the pad, already
-  wired on `Cell Selection`) is meant to be live on `Grid Selection` too, and
-  what idstring the real screen's own third prompt reads, is unmeasured -
-  footer-prompts lane territory, named here rather than guessed at.
+- ~~The `Confirm`/`Back`/`Change Difficulty` glyphs themselves~~ - **fixed,
+  2026-09-25**, and the `Change Difficulty` bullet's own premise was wrong -
+  see "Wipeout HD/Fury: the footer's button glyphs, and the `GOLD MEDALS`
+  denominator" below for both corrections.
+- ~~`Grid Selection`'s own third prompt, `CHANGE DIFFICULTY`~~ - **not a real
+  gap, 2026-09-25**: the RPCS3 frame this bullet was read off is `Cell
+  Selection`, not `Grid Selection` - see the same section below. `Grid
+  Selection` authors no `DifficultyButton` widget anywhere and draws
+  `Confirm`/`Back` only, which is the disc's own answer.
 - **The 3-D flyer model behind `Grid Selection`/`Campaign Selection`** -
   unchanged from the "measured on RPCS3" section above, still a render-side
   mechanism this pass did not build.
@@ -2167,3 +2161,167 @@ both directly observed (the captures named above, and the three RPCS3 frames
 cited), not inferred; the `Fury`-default choice for a still with no
 navigation state is **chosen, not measured** on the same terms
 `CampaignSelection::new`'s own default already is.
+
+## Wipeout HD/Fury: the footer's button glyphs, and the `GOLD MEDALS` denominator, 2026-09-25
+
+**The `Confirm`/`Back`/`Difficulty` icon glyphs draw now, through a genuine
+third GPU-side atlas.** `ControlTextConfirmButton`/`BackButton`
+(`NavigationController`, the shared front-end root) and `Cell Selection`'s
+own `DifficultyButtonIcon` all author `font="buttons"` -
+`ps_buttons.fnt`/`PS_BUTTONS.fnt`. This build used to load no atlas for that
+role at all, on the reasoning that a wrong glyph is worse than none per
+`CLAUDE.md`'s "never invent" rule; that reasoning still holds, and what
+closes the gap is loading the *real* face instead of a substitute for it -
+`oag_ui::language::roles::BUTTONS`, resolved off every HD language plugin's
+own `<Font><Values name="Buttons" ... Src="Data\FE\Fonts\PS_BUTTONS.fnt">`
+slot (`docs/formats/hd-frontend.md`'s "`menu_font` is `None`, and that is a
+measurement" section already had this - all 32 plugins on the disc declare
+it, this pass is the first to load it). Loaded by
+`oag_game::boot::fonts::load_buttons_font` into a *third* texture slot
+(`oag_game::render::Renderer::set_buttons_atlas`, `MODE_BUTTONS_ATLAS` in
+`ui.wgsl`) rather than reusing the one `face_atlas_slot` already spends on
+`Title`/`Default`: a screen's own title (`Title` role) and its footer's
+button glyphs (`Buttons` role) are on screen in the same frame, so one slot
+cannot serve both.
+
+**Verified against the disc before wiring it up, not after.**
+`cargo run -p oag-tools --example hd_buttons_font_probe -- <hd iso>
+[out.png]` reads `PS_BUTTONS.fnt` through the same `Archives::read_font`
+production uses and dumps the codepoints this build actually asks it for:
+`FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`/`DifficultyButtonIcon` (`ε`/`γ`/`δ`) all
+carry real glyph boxes, and the atlas dump
+(`data/scratch/drive-2026-09-25/hd-footer-glyphs/atlas-confirm-back-difficulty.png`)
+shows exactly a circled cross, circle and square - matching RPCS3's own
+`Ⓧ CONFIRM`/`Ⓞ BACK`/`⬜ DIFFICULTY (...)` shape for shape. The first attempt
+at this probe read the *wrong* archive entry (`/data/fe/fonts/ps_buttons.gtf`,
+picked by an unfiltered `.first()` over a substring match) and decoded a
+plausible-looking-but-wrong 524,416-byte blob - a reminder that "it decoded
+to something" is not evidence it decoded the right thing; see the probe's
+own module doc for the correction.
+
+**HD's own `CONFIRM` needed one more fix once its icon stopped being
+excluded: it must not shrink-to-fit the way Pulse's does.** Pulse's own
+`Confirm`/`Back` glyphs sit close enough together at `menu`-role scale that
+the word overlaps the back glyph, so `NavigationLegend::read` right-aligns
+and shrinks `FE_CONFIRM` to fit between the two (`docs/ui/campaign-screens.md`'s
+own earlier "not reachable" note on that). Once `FE_CONFIRM_BUTTON` stops
+being excluded from `prompts`, that same block would fire for HD too -
+moving `CONFIRM` off its authored `x="534"` to a shrunk, right-aligned
+position RPCS3 never shows. Gated on the word's own authored `scale`, a
+disc-authored fact rather than a title check this crate would otherwise
+invent: HD's own `ControlTextConfirm` authors `scale="0.8"`
+(`<Values idstring="FE_CONFIRM" x="534" ... scale="0.8">`), Pulse's authors
+none (`1.0` by default) - the shrink block now only applies when
+`scale > 0.99`.
+
+**Correction to the "measured on RPCS3" section above: `00-default.png` is
+`Cell Selection`, not `Grid Selection Fury`.** The 2026-09-14/09-21 passes
+cited `data/scratch/lane-hd/rpcs3-grid0-3-2/00-default.png` as a corrupted
+capture of `Grid Selection Fury` showing a third footer prompt,
+`CHANGE DIFFICULTY`. Re-reading the same directory this pass: every *clean*
+capture in it (`01-down.png`, `02-square.png`, `02-triangle.png`) is
+unmistakably `Cell Selection` - the hex grid, the `blitzed` title, the
+`EVENT TYPE`/`TRACK`/`SPEED CLASS` detail panel - and `00-default.png` itself
+is the same layout, just corrupted by a comb-artifact capture, not a
+different screen. `Grid Selection`/`Grid Selection Fury` author no
+`DifficultyButton` widget anywhere in `CellMode_Definition.xml` at all (both
+`DATA02`'s and `DATA06`'s copies checked directly), so the footer row this
+build now draws there - `Confirm`/`Back` only - is the disc's own answer,
+not a remaining gap.
+
+**The footer's own third prompt reads `DIFFICULTY (<rung>)`, not the disc's
+authored `"Change Difficulty"` string - a real, measured mismatch, left open
+rather than guessed at.** Zoomed crops of the clean captures
+(`02-square.png`'s own `difficulty-icon-zoom.png`, re-derived this pass as
+`data/scratch/drive-2026-09-25/hd-footer-glyphs/difficulty-icon-zoom.png`)
+read `⬜ DIFFICULTY (NOVICE)` and, after a `Triangle` press,
+`⬜ DIFFICULTY (SKILLED)` - composed at runtime from the current difficulty
+rung, not the literal `string="Change Difficulty"`
+`DifficultyButton` authors in `CellMode_Definition.xml`. The rung words
+themselves are disc strings (`Easy`→`"NOVICE"`, `Medium`→`"SKILLED"`,
+`Hard`→`"ELITE"`, `entries.xml`), but the bare word `"DIFFICULTY"` and the
+`"(<rung>)"` composition are not authored as a string-table entry anywhere
+this build has read - runtime UI text, not disc data, the same shape
+`docs/formats/hd-endrace-screens.md`'s `Endrace Difficulty` idstring
+mismatch is. **Not implemented this pass**: this build's own
+`CellSelection::difficulty` also defaults to rung `1` (`SKILLED`) where
+RPCS3's own fresh-profile default reads `NOVICE` (rung `0`) in the same
+captures - two open mismatches on the same widget, named together rather
+than fixing the text and leaving the default silently wrong, or vice versa.
+`Cell Selection` still draws the disc's own authored `"Change Difficulty"`
+string in the meantime, which is honest disc content, just not what RPCS3
+shows at runtime.
+
+**The `GOLD MEDALS` denominator is closed - `87` for `Wipeout HD`, `80` for
+`Fury`, both exactly a campaign's own total cell count.** RPCS3 reads
+`"0 / 87"` beside the `HD` flyer and `"0 / 80"` beside `Fury`'s
+(`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`/
+`01-left-tap.png`) - two different numbers, one per campaign, which is what
+an earlier pass's own note ("this build's own parse of `DATA00`'s eight Fury
+grids totals 80 cells, a gap this pass does not explain") missed: it read
+only the `HD`-side capture (`87`) and never the `Fury`-side one (`80`)
+sitting beside it in the same directory, so a *correct* count on the *wrong*
+side read as unexplained. Every campaign cell carries exactly one `<Gold>`
+target, so a campaign's total possible gold medals is exactly its own cell
+count - `grid.cells.len()` summed across the campaign's own eight grids
+(`oag_game::main::campaign_stage::CampaignStage::campaign_gold_medal_totals`),
+no invented denominator and no title-carried table. `selection::draw_list`
+now draws `{earned} / {total}` instead of a bare numerator.
+
+**Closing it surfaced a real, separate bug: `grid_04.xml`'s own `<Values>`
+tag is missing a `>` on the disc, in all three of its copies, and this
+build's own XML reader used to drop the whole grid because of it.** Before
+this pass, `Wipeout HD`'s own total read `77`, not `87` - ten cells short,
+exactly `grid4`'s own count. `grid_04.xml` authors
+`<Values RequiredPoints="22" ... RotY="-0.5"</Values>` (no `>` before
+`BillboardName`'s value ends), and `oag_tables::fexml::parse`'s tag scanner,
+looking only for an unquoted `>`, ran straight past the missing one and
+stopped at the real `</Values>`'s own - merging `Values`'s attributes,
+`</Values`, and no `>` in between into one never-closed opening tag, so every
+one of `grid4`'s own ten `<PI_Cell>` elements became a child of the dangling
+`Values` node instead of `PI_Grid`. An earlier pass found this exact defect,
+correctly, and **chose not to fix it** - reasoning that recovering the
+intended cell boundaries without knowing whether the original tolerates the
+same break would be guessing, not reading what is there. RPCS3's own `"0 / 87"`
+answers that open question directly: the original's own parser does
+tolerate it, since `87` is only reachable by counting all ten of `grid4`'s
+cells. So `oag_tables::fexml::tag_end` now recovers the same way: an
+unquoted `<` also ends a tag, one character short of it - see that
+function's own doc for the mechanism, `crates/tables/src/fexml/tests.rs`'s
+`an_unquoted_lt_ends_a_tag_one_character_short_of_it`/
+`a_stray_double_lt_does_not_panic` for the synthetic pins, and
+`crates/hd/tests/campaign_grids_ground_truth.rs`'s
+`the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema`/
+`every_grid_file_on_every_archive_parses` for the real-disc ones (`grid4` =
+10 cells, `DATA02`/`04`/`06` each total 87). A blast-radius check
+(`rg --no-ignore -n '="[^"]*"</[A-Za-z]' data/scratch/drive-2026-09-25/hd-xml`)
+found the identical shape recurring in `stats_definition.xml`'s and
+`endrace_definition.xml`'s own `<Values ... RotY="-0.5"</Values>`
+trophy/rank-model blocks (all three HD archives that carry either file) -
+not a one-off typo, the same authoring tool's own repeated mistake - so the
+fix is general rather than special-cased to `grid4`.
+
+**Not fixed this pass, named rather than silently left stale:**
+`oag_ui::endrace::hd`'s own `text_draw` (a different function from
+`oag_ui::campaign::draw::text_draw`) has no `face_role` check at all, so
+`EndRace Results`/`Rewards`/`Menu`'s own `ControlTextConfirmButton`
+(`font="buttons"`) still draws nothing even though a `Buttons`-role atlas
+now loads - see `docs/formats/hd-endrace-screens.md`'s own table and
+`oag_ui::endrace::hd::hd_results_draw_list`'s doc for the gap. Whether Omega
+also declares a `Buttons` slot is unverified this pass -
+`data/images/omega-ps4-eu.pkg` is a raw PS4 package, not directly openable
+the way the decrypted PS3 ISO is (`no ISO 9660 primary volume descriptor
+found`; the day-one patch's own `data09.psarc` would need extracting first),
+and that was not attempted here.
+
+Confidence 90 on the glyph verification (a disc-read atlas dump compared
+directly against the codepoints this build's own footer resolves, plus the
+RPCS3 shape match); confidence 90 on the `00-default.png` correction (every
+clean frame in its own directory reads unambiguously as `Cell Selection`,
+and both `Campaign Selection` archives' own `CellMode_Definition.xml` were
+read directly to confirm `Grid Selection`/`Grid Selection Fury` author no
+`DifficultyButton`); confidence 95 on the `GOLD MEDALS` denominator and the
+`grid4` fix (both sides' own RPCS3 captures read directly, the raw disc
+bytes read directly through the live archive reader rather than a cached
+dump, and the corrected counts pinned by a ground-truth test against the
+real disc).

@@ -74,6 +74,10 @@ pub struct Boot {
     /// The row face and the title's own - see [`Shell::menu_font`]/[`Shell::title_font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
     pub title_font: Option<oag_ui::font::Atlas>,
+    /// The PlayStation button-glyph face, when this source's language
+    /// plugins name one - see [`fonts::load_buttons_font`] and
+    /// [`crate::render::Renderer::set_buttons_atlas`].
+    pub buttons_font: Option<oag_ui::font::Atlas>,
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
     pub font: oag_ui::font::Atlas,
@@ -264,6 +268,9 @@ pub struct Shell {
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
     pub title_font: Option<oag_ui::font::Atlas>,
+    /// The PlayStation button-glyph face - see [`Shell::buttons_font`]'s own
+    /// doc.
+    pub buttons_font: Option<oag_ui::font::Atlas>,
     /// Each font role's face against `Default`, see [`fonts::face_scales`].
     pub face_scales: Vec<(String, f32)>,
     /// Wipeout 2048's campaign map, see [`campaign2048::map_events`]. Empty
@@ -481,6 +488,7 @@ pub fn load_shell(
     steps.lap("strings");
     let menu_font = load_menu_font(&mut archives, &languages, menu_skin, &mut report);
     let title_font = load_title_font(&mut archives, &languages, menu_skin, &mut report);
+    let buttons_font = fonts::load_buttons_font(&mut archives, &languages, &mut report);
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
@@ -735,6 +743,7 @@ pub fn load_shell(
             ship_select,
             menu_font,
             title_font,
+            buttons_font,
             face_scales,
             campaign_events,
             extra_tiles,
@@ -1036,6 +1045,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         ship_select,
         menu_font,
         title_font,
+        buttons_font,
         face_scales,
         campaign_events,
         extra_tiles,
@@ -1240,6 +1250,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         ship_select,
         menu_font,
         title_font,
+        buttons_font,
         languages: offered,
         strings,
         tracks,

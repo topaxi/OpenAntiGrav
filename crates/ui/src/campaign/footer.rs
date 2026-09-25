@@ -36,14 +36,20 @@
 //! `oag_ui::endrace::hd::hd_results_draw_list` and its siblings, not
 //! through this module.
 //!
-//! **HD/Fury's and Omega's own icon glyph never draws.** Their
-//! `ControlTextConfirmButton`/`BackButton` author `font="buttons"`
-//! (`ps_buttons.fnt`), a face this build loads no atlas for -
-//! `oag_game::boot::fonts` only ever resolves the language plugin's own
-//! `<Font>` role slots, never a literal `font=` attribute - so [`NavigationLegend::read`]
-//! excludes that one widget rather than draw its resolved codepoint (the
-//! same `"ε"`/`"γ"` Pulse's own icon uses) through an unverified face. See
-//! that function's own doc for the full reasoning.
+//! **HD/Fury's own icon glyph draws, 2026-09-25, through its own atlas**
+//! (Omega very likely too - unverified this pass, see
+//! `crate::language::roles::BUTTONS`'s own doc). Their
+//! `ControlTextConfirmButton`/`BackButton` author
+//! `font="buttons"` (`ps_buttons.fnt`/`PS_BUTTONS.fnt`) - a role this build
+//! now loads through `crate::language::roles::BUTTONS`
+//! (`oag_game::boot::fonts::load_buttons_font`) the same way `Default` is,
+//! into its own third GPU-side slot (`crate::render::Renderer::set_buttons_atlas`)
+//! rather than the one `face_atlas_slot` already spends on `Title`/`Default`.
+//! Used to be excluded here entirely, on the reasoning that a Greek-letter
+//! fallback through the *wrong* atlas is worse than nothing per `CLAUDE.md`'s
+//! "never invent" rule - which still holds, and is exactly why this reads a
+//! dedicated atlas rather than routing through `Default`/`Title`. See
+//! [`face_role`]'s own doc for the verification this rests on.
 //!
 //! # The ticker's own content is not authored at all
 //!
@@ -102,7 +108,9 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 }
 
 /// The role a `font` value routes a [`Draw::in_role`] call to - `Default`
-/// alone, for now: it is the one Pulse face this build ever loads a second,
+/// and `Buttons`, so far.
+///
+/// **`Default`**: it is the one Pulse face this build ever loads a second,
 /// real atlas for (see `crates/game/src/boot/fonts.rs`'s `face_atlas_slot`),
 /// because it is the one Pulse face with real lowercase glyph art -
 /// `Pulse_20.fnt`/`Pulse_14.fnt` (`menu`/`small`) give every lowercase
@@ -113,14 +121,42 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 /// through - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
 /// for the other" section.
 ///
+/// **`Buttons`**: Wipeout HD/Fury's own `font="buttons"`,
+/// `ps_buttons.fnt`/`PS_BUTTONS.fnt` (Omega very likely, unverified this
+/// pass - see `crate::language::roles::BUTTONS`'s own doc), a genuine second atlas
+/// `oag_game::boot::fonts::load_buttons_font` loads through
+/// `crate::language::roles::BUTTONS` the same way `Default` is, into a
+/// *third* GPU-side face slot (`crate::render::Renderer::set_buttons_atlas`)
+/// rather than the one `face_atlas_slot` already spends on `Title`/`Default`,
+/// because the two are needed in the same frame (a screen title and this
+/// screen's own footer) and one slot cannot serve both. Verified against the
+/// disc: `oag-tools --example hd_buttons_font_probe` decodes real
+/// circled-glyph art at the codepoints `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`/
+/// `DifficultyButtonIcon` resolve to (`ε`/`γ`/`δ`), a cross, a circle and a
+/// square, matching `data/scratch/drive-2026-09-25/hd-footer-glyphs/atlas-confirm-back-difficulty.png`
+/// against the RPCS3 captures shape for shape (compared by eye, not a pixel
+/// diff). **Not Pulse**: Pulse's own
+/// `ControlTextConfirmButton`/`BackButton` author `font="small"`, not
+/// `"buttons"` (`docs/ui/campaign-screens.md`'s "measured on RPCS3"
+/// sections), so this never changes what Pulse draws.
+///
 /// `pub(super)`, not private: [`super::draw::text_draw`] routes `Grid
 /// Selection`/`Cell Selection`'s own body text through the identical check,
 /// once lane 7's own `Default`-role atlas made that mean something (see
 /// `docs/ui/campaign-screens.md`'s "Every label on this screen still
-/// renders upper-case" note, closed by that atlas landing).
+/// renders upper-case" note, closed by that atlas landing) - which is also
+/// what makes `Cell Selection`'s own `DifficultyButtonIcon` (`font="buttons"`,
+/// a plain nested `Text` under `DifficultyButton`, no part of
+/// `NavigationController` at all) draw through this same mapping with no
+/// change to `draw.rs` itself.
 pub(super) fn face_role(font: &str) -> Option<&'static str> {
-    font.eq_ignore_ascii_case("default")
-        .then_some(crate::language::roles::DEFAULT)
+    if font.eq_ignore_ascii_case("default") {
+        return Some(crate::language::roles::DEFAULT);
+    }
+    if font.eq_ignore_ascii_case("buttons") {
+        return Some(crate::language::roles::BUTTONS);
+    }
+    None
 }
 
 /// Depth-first search for the first descendant (or `node` itself) named
@@ -261,38 +297,22 @@ impl NavigationLegend {
             }) else {
                 continue;
             };
-            // **Wipeout HD/Fury's own icon half draws nothing, on purpose.**
-            // `ControlTextConfirmButton`/`BackButton` author `font="buttons"`
-            // there (`ps_buttons.fnt`, confirmed present in `DATA02` -
-            // `crates/game/src/boot/fonts.rs`'s own module doc), a font this
-            // build loads no atlas for at all: `boot::load_font`/
-            // `load_menu_font` only ever resolve the language plugin's own
-            // `<Font>` role slots (`Default`, `menu`, `small`), never a
-            // literal `font=` attribute value, so there is no loaded face
-            // `face_role`/`Draw::in_role` could route this to. The resolved
-            // idstring is the identical `"ε"`/`"γ"` codepoint Pulse's own
-            // icon halves use (`FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`, both
-            // titles' `entries.xml`) - Pulse's happens to render correctly
-            // through its own `menu`-role atlas, confirmed live
-            // (`docs/ui/campaign-screens.md`'s 2026-09-21 pass), but that is
-            // Pulse's own loaded font actually carrying the remapped glyph
-            // art at that codepoint, not a fact about the codepoint itself.
-            // Nothing here confirms Wipeout HD/Fury's own loaded body face
-            // (`helv`/`arialbd`/`pulsehud`, whichever `menu`/`Default`
-            // resolves to) carries the same remapping rather than the plain
-            // Greek letter, and per `CLAUDE.md`'s "never invent what the
-            // assets already author" a wrong glyph is worse than none - so
-            // this build draws the resolved word (`ControlTextConfirm`/
-            // `Back`, `font="default"` there, which **is** a loaded atlas)
-            // and leaves the icon out rather than risk drawing "ε CONFIRM"
-            // literally. Loading `ps_buttons.fnt` as its own role is the fix,
-            // once something needs it enough to justify a fourth atlas.
-            if text
-                .value("font")
-                .is_some_and(|font| font.eq_ignore_ascii_case("buttons"))
-            {
-                continue;
-            }
+            // **Wipeout HD/Fury's own icon half draws now, through its own
+            // atlas.** `ControlTextConfirmButton`/`BackButton` author
+            // `font="buttons"` there (`ps_buttons.fnt`, confirmed present in
+            // `DATA02` - `crates/game/src/boot/fonts.rs`'s own module doc);
+            // [`face_role`] maps that to [`crate::language::roles::BUTTONS`],
+            // a real third atlas `oag_game::boot::fonts::load_buttons_font`
+            // loads (see [`face_role`]'s own doc for the `oag-tools --example
+            // hd_buttons_font_probe` verification this rests on: the
+            // codepoints these two widgets and `Cell Selection`'s own
+            // `DifficultyButtonIcon` resolve to - `"ε"`/`"γ"`/`"δ"` - decode
+            // to real circled cross/circle/square glyph art, not empty boxes).
+            // Used to be excluded here entirely, on the reasoning that a
+            // Greek-letter fallback through the *wrong* atlas is worse than
+            // nothing per `CLAUDE.md`'s "never invent" rule - which still
+            // holds, and is exactly why this reads a dedicated atlas rather
+            // than routing through `Default`/`Title`.
             prompts.push((
                 idstring.to_string(),
                 Prompt {
@@ -338,6 +358,20 @@ impl NavigationLegend {
         // `measure` is in hand. **Chosen, not measured**: nothing on disc
         // says where the word should end or how far it may shrink, only
         // that the original's own (narrower) rendering fits without either.
+        //
+        // **Gated on the word's own authored scale, not on the title.**
+        // Wipeout HD/Fury's own `ControlTextConfirm` authors `scale="0.8"`
+        // (`Skin.xml`'s `<Values idstring="FE_CONFIRM" x="534" ... scale="0.8">`),
+        // unlike Pulse's, which authors none (`1.0` by default, see
+        // [`Prompt::scale`]'s own doc) - a disc-authored fact, not a title
+        // check this crate would otherwise have to invent one of. RPCS3
+        // draws HD's own `CONFIRM` left-aligned at that authored `x="534"`,
+        // 186 native pixels short of `BACK`'s own `x="720"`
+        // (`data/scratch/drive-2026-09-25/hd-footer-glyphs/difficulty-icon-zoom.png`
+        // and the clean `02-square.png`/`02-triangle.png` captures) - plenty
+        // of room at `scale="0.8"`, so applying Pulse's own shrink-to-fit
+        // hack there would move `CONFIRM` to a position and alignment RPCS3
+        // never shows, not fix an overlap that does not exist on this title.
         const GAP: f32 = 6.0;
         if let Some(back_button_x) = prompts
             .iter()
@@ -348,6 +382,7 @@ impl NavigationLegend {
                 .find(|(id, _)| id == "FE_CONFIRM_BUTTON")
                 .map(|(_, p)| p.x)
             && let Some((_, confirm)) = prompts.iter_mut().find(|(id, _)| id == "FE_CONFIRM")
+            && confirm.scale > 0.99
         {
             confirm.align_right_to = Some(back_button_x - GAP);
             // The confirm-button glyph is one character - `measure` is not
