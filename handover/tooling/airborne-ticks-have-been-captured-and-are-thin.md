@@ -116,3 +116,7 @@ ticks, `0.5` runs included - see
   terms off the airborne ticks the same way
   `docs/physics/cornering-ground-truth.md`'s `scripts/trace-cornering.py` reads
   the grounded ones.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+**the old title was false, corrected 2026-09-07.** `talons-junction-clean-lap.csv` holds **31** non-grounded ticks over three events (8 with both probes off, longest event 14 ticks) and `talons-junction-autopilot.csv` another **34** - both on `16_Track`, both already committed. `head-pad*.csv` read `grounded 0` on all 110 of their rows, which is a constant column, not airborne data. They already paid for themselves: `crates/trace/tests/hover_contact_ground_truth.rs` uses them to show our contact test reproduces the whole `grounded` column, 2,976 of 2,976. What they **cannot** settle is more specific than "they are thin": `pitch_air` is a gain on an input axis and **no capture records a pitch axis at all** (`scripts/psp_trace_fields.py` has throttle/brake/steer/airbrakes and nothing else), so that one is blocked on locating the craft's pitch-input offset, not on reaching `13_Track`. The `-0.3` weathervane is blocked on a capture that **centres the stick** while airborne - which `16_Track` can give, no unlock needed - not on a longer jump. `grip_air` is genuinely excited (right airbrake pinned at 100 through 1602-1608, lateral velocity -9.3 to -4.7) but confounded by 1 rad/s of yaw across seven ticks: falsifiable off what exists, not fittable

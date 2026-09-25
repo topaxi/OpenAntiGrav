@@ -69,3 +69,7 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   and every `Grid{col}.{row}` cell at `x="0" y="0"`, so this build divides
   the grid's own measured frame by `oag_gameplay::MAX_SHIPS` (eight) rather
   than ten. See `oag_ui::endrace::hd::row_y`'s own doc.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-21; `Grid{col}.{row}` is four columns by ten rows, not eight by ten; no live capture reaches a finished `EndRace Results` yet (a full race renders at ~5s/frame under this project's own Xvfb sandbox), substituted by a disc-backed, GPU-free ground-truth test

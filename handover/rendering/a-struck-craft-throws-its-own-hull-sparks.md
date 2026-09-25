@@ -98,3 +98,7 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 - Find HD's `Ship_Damage` (the `uWeaponDamageReceived` telemetry string is
   a lead) and read whether it sparks the hull. Then read the `WO_DAMAGE_*`
   consumer through the TOC-displacement search.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-24: `Ship_Damage`'s weapon branch throws `WO_SHIP_COLL_SPARK_DAMAGE` (LeachBeam: its own variant) on one or two random hull locators per landed hit, severity 2.4, 0.8 s per locator; built as `race::hit_sparks`, Pulse only. The streak strips and atlas advance landed and did not close the bloom gap (rays became orange wedge heads); next is a matched struck/unstruck capture off the light strip. HD's Cannon sparks are read, not built.

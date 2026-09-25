@@ -70,3 +70,7 @@ in `crates/game/tests/sfx_weapon_ground_truth.rs`.
    Autopilot/`QUAKELAUNCH` conflict above.
 2. Once `leachbeam-gfx`'s own ribbon-cursor edge is surfaced outside
    `weapons/visuals.rs`, wire `LEACHENERGY` off it.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-23; landed same day - `Cue::ALL` grew 14 to 28, every "wire" row pushed; still open: what the original plays on a Rocket/Cannon timeout reap, `LEACHENERGY`, and a `Ship_FireHeldWeapon` read-through

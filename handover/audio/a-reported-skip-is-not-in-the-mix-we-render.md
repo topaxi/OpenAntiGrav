@@ -131,3 +131,7 @@ fidelity gap rather than an audible one.
    wrap in `Mixer::render` (including its interpolation partner, currently
    `sound.frame(0)`) and the same treatment in `Mixer::seek`. Worth doing for
    the fidelity, not for the fault.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+the PS-ADPCM run-out block was played once per loop and is now trimmed; the reporter can no longer hear the skip, and 2026-09-15's two `--tap-audio` runs (Pulse and HD, windowed) found no gap, no held sample and a clean 512-frame chunk seam, with the recurring `frame 136` shown to be a cue's own attack on the 1,024-frame trigger grid. The `audio:` line is a `warn` only for a fault (dropped, late, refused) now and `trace` for content-only windows, and the late check is `owed * 3 / 2`. Open only for the loop-start fidelity gap and the "if it ever comes back" recipe

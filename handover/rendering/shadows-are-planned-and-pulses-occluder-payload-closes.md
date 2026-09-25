@@ -206,3 +206,7 @@ unblocked by it:
 - Once the GXP decoder exists: **what `track_proximity_shadow_vp`/`_fp` actually does**, **where `Lighting.ShadowLight direction` is authored** (`.envsettings` is the leading guess), and **whether 2048's directional bake is a radiosity-normal basis or a single dominant direction**
 - **A PPSSPP watchpoint on `self+0x50`** during a lap past a known occluder circuit would move `Shadow_RenderOccluderVolume` and `DynamicShadowOccluder_RegisterClass` past confidence 84 - optional, not blocking anything
 - **What actually decides the padded-bbox field's remaining exceptions** (the 3-of-17 value-groups and the 2-of-14 `min.y` nodes) - file/build-version, node name and specific value are all now ruled out (see above), so the driver is something not yet identified; likely needs the export tool's own behaviour, not more disc-side sweeping
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+RE only; the implementation half has its own thread, below. Pulse's `0x3c3` occluder, HD's `LiveStencilShadow`/`shadow.stencilvolume` path (all 39 real files decoded, vertex shader disassembled) and 2048's `Nova` bake are all traced and closed at confidence 82-92; what is left is 2048's `track_proximity_shadow_vp`/`_fp` pair (unread), where `Lighting.ShadowLight direction` is authored, and one ship-scale outlier (`detonator`) whose box does not match its weapon class - see the thread for the full trail.

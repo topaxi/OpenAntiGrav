@@ -90,3 +90,7 @@ twice the size, right-hand column off screen.
    end to end; `race`'s own fixed menu walk is not - see the bullet above.
    Re-running `race` against a genuinely fresh save (or fixing the Game Mode
    tile's select-then-confirm timing some other way) is the open half.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+**the first time this project drove the Vita title** (2026-09-16, `../../docs/reverse-engineering/vita3k-capture.md`), extended 2026-09-20: `EnergyBar` crops vertically from the bottom keyed to shield fraction (confirmed independently by decompiling `Hud_UpdateEnergyBar`, which also found that `EnergyBg` - not `EnergyBar` - is what the executable tints red under 20% shield, and that `EnergyBarDelay` is a lagging trail rather than a flash, both corrections not yet applied), and the held pickup icon's UV rewrite table is read straight off `eboot.elf` (`g_pickup_icon_uv_table`, all eleven weapons, `pickup-icon-uv-table.md`) and wired, checked live against five weapons. `scripts/vita3k-drive.py` replaces the manual shell scripts for the next capture; its `display`/`boot`/`stop`/`tap`/`key`/`hold`/`shot` are checked end to end, its fixed `race` menu walk is not (save-state dependent, measured). Open: the runtime colour of anything (`EnergyBg`'s tint is now sourced but unwired), the pickup grant announcement (needs new `Readout` state), the speed fills, `PilotAssist`, `ZoneLightN`, and the text (single-string `1/3`/`8/8`, a `SCORE` no composed Zone widget authors, no font or language plugin named for the title)

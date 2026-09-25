@@ -106,7 +106,7 @@ pub(super) fn place(
         );
         return None;
     };
-    let model = match load(archives, name) {
+    let model = match load(archives, name, report) {
         Ok(model) => model,
         Err(e) => {
             report.push(format!("no start gantry: {name} did not load ({e})"));
@@ -195,12 +195,16 @@ fn place_bounds(model: &mut Model, matrix: Mat4) {
 /// `Data\Environments\321_Go\321Go_StartFinish.vex`. HD's PSARC paths really
 /// are `/`-joined, so the authored spelling is tried first and unchanged; the
 /// PSP spelling is a fallback rather than a rewrite.
-fn load(archives: &mut oag_assets::Archives, name: &str) -> Result<Model> {
+fn load(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Result<Model> {
     let trimmed = name.trim_start_matches(['/', '\\']);
     let mut error = None;
     for candidate in [name, &trimmed.replace('/', "\\"), trimmed] {
         match archives.read_name(candidate) {
-            Ok(blob) => return build(archives, name, candidate, &blob),
+            Ok(blob) => return build(archives, name, candidate, &blob, report),
             Err(e) => error = error.or(Some(e)),
         }
     }
@@ -225,9 +229,22 @@ fn build(
     name: &str,
     candidate: &str,
     blob: &[u8],
+    report: &mut Vec<String>,
 ) -> Result<Model> {
     if !mesh::geometry_is_external(blob) {
-        return mesh::build_with_textures(name, blob, None);
+        let mut model = mesh::build_with_textures(name, blob, None)?;
+        // The same PS2 signature `livery::shield_model` and `livery::plume`
+        // both gate on: every `Texture` node present and none decoded,
+        // because a PS2 model's texture block is empty by design and its
+        // pixels are the archive entry directly before it (`ps2-texture.md`).
+        // `321Go_StartFinish.vex` is 74,944 bytes on the PS2 disc against
+        // 54,032 on PSP - a different file, not a missing one - and it takes
+        // this branch the same way the shield and the plume do; a PSP/PS3
+        // gantry has its textures embedded and never enters it.
+        if !model.textures.is_empty() && model.textures.iter().all(Option::is_none) {
+            ps2_skin(archives, name, candidate, blob, &mut model, report);
+        }
+        return Ok(model);
     }
     let sibling = mesh::rcs::sibling_name(candidate)
         .with_context(|| format!("{name}: a PS3 .vex with no .rcsmodel spelling"))?;
@@ -242,6 +259,44 @@ fn build(
         |c| c.mesh,
     )?;
     Ok(model)
+}
+
+/// Re-skins a PS2 gantry model from the texture set in the archive entry
+/// before it - the same directory-position rule `livery::ps2_skin` applies to
+/// the hull, the plume and the shield models, reimplemented here rather than
+/// exported from `livery` since the two live in different modules and the
+/// rule itself is generic (`ps2_texture_set`, `docs/formats/ps2-texture.md`).
+fn ps2_skin(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    candidate: &str,
+    blob: &[u8],
+    model: &mut Model,
+    report: &mut Vec<String>,
+) {
+    let slots = model.textures.len();
+    let Some(external) = super::ps2_texture_set(archives, candidate) else {
+        report.push(format!(
+            "{name}: {slots} empty texture slot(s) and the preceding archive entry is \
+             not a texture set - the gantry draws untextured"
+        ));
+        return;
+    };
+    let found = external.entry_count();
+    let decoded = external.decoded_count();
+    match mesh::build_with_textures(name, blob, Some(&external)) {
+        Ok(rebuilt) => {
+            *model = rebuilt;
+            report.push(format!(
+                "{name}: {decoded} of {found} texture(s) from the preceding archive entry, \
+                 into {slots} slot(s)"
+            ));
+        }
+        Err(error) => report.push(format!(
+            "{name}: the preceding archive entry holds {found} texture(s) but re-skinning \
+             failed ({error}) - the gantry draws untextured"
+        )),
+    }
 }
 
 /// How far in front of the mount the gantry stands, in track units.

@@ -128,3 +128,7 @@ neither blocks anything.
    against the captured body and phase directly, through this crate's own
    rotation composition rather than hand algebra, so a future regression on
    this constant fails a test rather than waiting for a play-test to notice.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+drawn and on screen since 2026-09-06: a symmetric quadratic ease on `ShipState::roll_phase`, then `eased * 6.28` radians about the craft's **nose** on its display matrix, and the same angle on the internal camera's up vector, all at confidence 88. **The sign is now measured too (2026-09-08, confidence 92)**: a memory-read capture against a real, booted `pulse-psp-usa.chd` settled the VFPU `sin`/`-sin` ambiguity the axis survived but the sign didn't, and closed `vmmul.q`'s operand order and `[0x002ace1c] = 0.75 = g_craft_scale` in the same pass - `oag_render::roll::ROLL_DIRECTION` is `-1.0`, flipped from the `+1.0` a player's own gesture would have suggested. Only the internal camera's own site (`FUN_088455ec`) was not independently captured; it inherits the ship's measured sign as a labelled inference. `craft+0x854`'s lean term shares the angle and must not be transcribed - confidence 0 upstream. **Also found this pass**: every offset in this section is on the **entity**, not the craft `Ship_UpdateCraft` itself takes - the third time this exact trap has bitten the project

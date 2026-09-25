@@ -173,3 +173,7 @@ Screenshots from the 2026-09-23 lane are in
    pulse strength. Before that, confirm the record `+0` write live. It
    needs a way to fire a LeachBeam that does not halt PPSSPP, or an AI
    LeachBeam caught with a write watch on every record's `+0`.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-23: burst on every title; HD's shell and Pulse's hull overlay drawn, both confirmed live; Pulse's hull lighting, glow mask and bloom now measured and ported; the LOD gap is closed (tier 0 up close, switched per frame); 2026-09-25: Pulse's HUD energy bar now flashes white and blinks through an absorb (forced-red suppression and the blink accumulator both ported and measured, the `+0xf4` flash layer's own draw target still not chased); open: the LeachBeam overlay, HD's cockpit shell

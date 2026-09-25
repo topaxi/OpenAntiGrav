@@ -204,3 +204,7 @@ order:
   The distinction this bullet drew still holds going forward: the override
   layer here must not be used to paper over a *read*-side bug in some future
   title, only to add or replace text this project authors itself.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+the mechanism landed: `oag_game::strings` merges a project-owned `assets/ui/strings/<language>.toml` over a `StringTable`, project entries winning, either onto the disc's own (`boot::load_strings`) or, for a caller with no disc open yet, a project-only one (`strings::project_table`). Every `menu.toml` row/page now names a `string_id`/`title_string_id` (`just check-strings` reports 0 baselined either way), and `assets/ui/strings/french.toml` is the first second-language file: 86 of 109 ids translated, 23 honestly named under its own `[untranslated]` rather than guessed at, proved on screen with headless `--menu-page options`/`--menu-page audio` screenshots against `pulse-psp-usa.chd` (the EU disc ships no English plugin at all, a real disc-content gotcha named in the thread). Still open: `english.toml` duplicates the `hints.rs`/`wording.rs` literals by hand rather than being their one source of truth, and only one of the four other languages the disc offers (German, Spanish, Italian, ...) has a project translation yet

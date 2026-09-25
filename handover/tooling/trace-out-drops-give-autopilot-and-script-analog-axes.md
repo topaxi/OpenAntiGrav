@@ -71,3 +71,7 @@ rather than a one-line fix.
    `airbrake_left`/`airbrake_right` off the script's `State` when present,
    instead of only `.buttons`, and add a test that a partial-deflection
    script produces a partial `InputSnapshot` rather than a full one.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+the `--trace-out --input-script` bug is fixed (`write_trace` now drives through `HeldButtons::advance`, pinned by a disc-backed test), but the sweep that closed it found two more of the same shape: `write_trace` still never reads `--give`/`--autopilot`/`--autopilot-pilot`/`--autopilot-skill` (every other headless leg does), and every `oag-game` capture - scripted or not - drops a script's `stick_x`/`stick_y`/`airbrake_*` analog fields, re-deriving them through the keyboard path instead, where `oag-trace run`/`drive` applies them directly. Neither is fixed - each needs its own review pass and its own assertion

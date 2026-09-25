@@ -155,3 +155,7 @@ own frame.
 3. Read `FUN_08945284` if the muzzle's extra particle spawn turns out to be
    visually significant - `Cannon_Init` and `Cannon_UpdateRound` both call
    it; neither call site's argument shapes have been read.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+**2026-09-17: both hand-built quads landed.** The bolt is two crossed camera-facing ribbons between the round's last/current position, fixed white; the flash is one quad, randomly sized/rotated/faded under `0.1 s` of age, fixed white with only its **alpha** rerolled (not RGB - corrects the thread's earlier framing). Both drawn through a new `oag_render::weapon_quads::Pipeline`, random roll seeded render-side so no determinism hash moves. Confirmed on a real disc screenshot: the flash draws on a fresh round and correctly vanishes on older ones. Open: the bolt's own contribution was not distinguishable in any capture (near-head-on foreshortening, not a code defect), no frame caught the wall-hit spark itself, and a small extra particle spawn (`FUN_08945284`) in the same window is unread.
