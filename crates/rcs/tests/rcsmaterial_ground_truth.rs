@@ -392,6 +392,7 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
     };
     let (mut blocks, mut clean, mut instructions) = (0usize, 0usize, 0usize);
     let mut unnamed: BTreeMap<u8, usize> = BTreeMap::new();
+    let mut fencb = 0usize;
     for (path, bytes) in &every_material() {
         let mut at = 0usize;
         while let Some(i) = bytes[at..].windows(4).position(|w| w == b"SHO\x08") {
@@ -407,6 +408,7 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
                     clean += 1;
                     instructions += p.instructions.len();
                     for i in &p.instructions {
+                        fencb += usize::from(i.opcode == 0x3e);
                         if i.name().is_none() {
                             *unnamed.entry(i.opcode).or_default() += 1;
                         }
@@ -425,21 +427,18 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
     );
     assert_eq!(clean, blocks, "a block did not stop where it said it would");
     assert!(instructions > 1_900_000, "only {instructions} instructions");
-    // `0x3b`/`0x3d` were named `DIVSQ`/`FENCT` 2026-09-25 (RPCS3's own
-    // `FPOpcodes.h`, corroborated disc-wide - see `docs/formats/
-    // rcsmaterial.md` and `crates/render/examples/hd_op3b_op3d_census.rs`),
-    // so exactly one opcode in shipped code is now outside nouveau's table
-    // (and this project's own). If a second appeared, either the corpus grew
-    // or the stride is wrong somewhere and garbage is being read as an
-    // opcode.
-    assert_eq!(
-        unnamed.keys().copied().collect::<Vec<_>>(),
-        vec![0x3e],
-        "an opcode outside the one known-unnamed one"
+    // `0x3b`/`0x3d`/`0x3e` were named `DIVSQ`/`FENCT`/`FENCB` 2026-09-25
+    // (RPCS3's own `FPOpcodes.h`, corroborated disc-wide - see `docs/formats/
+    // rcsmaterial.md` and `crates/render/examples/hd_op3b_op3d_census.rs`), so
+    // every opcode in shipped code is now named. One appearing unnamed would
+    // mean the corpus grew or the stride is wrong somewhere and garbage is
+    // being read as an opcode.
+    assert!(
+        unnamed.is_empty(),
+        "an opcode outside the table: {unnamed:?}"
     );
     assert_eq!(
-        unnamed.get(&0x3e).copied(),
-        Some(1_155),
+        fencb, 1_155,
         "330 in DATA00 alone, which is where an independent Python census counted the \
          same number"
     );

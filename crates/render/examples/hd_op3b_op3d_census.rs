@@ -46,6 +46,11 @@ fn main() -> anyhow::Result<()> {
     let mut op3d_dst_is_63 = 0usize;
     let mut op3d_counterexamples: Vec<String> = Vec::new();
 
+    let mut op3e_total = 0usize;
+    let mut op3e_dst_is_63 = 0usize;
+    let mut op3e_counterexamples: Vec<String> = Vec::new();
+    let mut unnamed: std::collections::BTreeMap<u8, usize> = std::collections::BTreeMap::new();
+
     for archive in ARCHIVES {
         let spec = format!("{image}:PS3_GAME/USRDIR/{archive}.PSARC");
         let Ok(mut handle) = oag_assets::psarc::Archive::open(&spec) else {
@@ -90,6 +95,20 @@ fn main() -> anyhow::Result<()> {
                             _ => op3b_other_shape += 1,
                         }
                     }
+                    if insn.name().is_none() {
+                        *unnamed.entry(insn.opcode).or_default() += 1;
+                    }
+                    if insn.opcode == 0x3e {
+                        op3e_total += 1;
+                        if insn.dst == 63 {
+                            op3e_dst_is_63 += 1;
+                        } else if op3e_counterexamples.len() < 10 {
+                            op3e_counterexamples.push(format!(
+                                "{archive}:{path} dst={} dst_half={} sources={:?}",
+                                insn.dst, insn.dst_half, insn.sources
+                            ));
+                        }
+                    }
                     if insn.opcode == 0x3d {
                         op3d_total += 1;
                         if insn.dst == 63 {
@@ -127,6 +146,22 @@ fn main() -> anyhow::Result<()> {
             println!("    {c}");
         }
     }
+
+    println!();
+    println!(
+        "op3E (0x3e): {op3e_total} total - {op3e_dst_is_63} write destination register 63 \
+         (no real destination)"
+    );
+    if op3e_counterexamples.is_empty() {
+        println!("  no counterexamples: every single use writes register 63");
+    } else {
+        println!("  counterexamples (destination register is not 63):");
+        for c in &op3e_counterexamples {
+            println!("    {c}");
+        }
+    }
+    println!();
+    println!("opcodes the decoder leaves unnamed, with their use counts: {unnamed:x?}");
 
     Ok(())
 }

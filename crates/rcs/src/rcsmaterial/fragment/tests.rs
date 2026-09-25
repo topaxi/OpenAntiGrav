@@ -62,20 +62,34 @@ fn arity_follows_the_mnemonic() {
     assert!(!insn(0x04).is_texture());
 }
 
-/// Opcodes this project has never named at all - not in Mesa's
-/// `nvfx_shader.h`, not in RPCS3's `FPOpcodes.h` either (`0x2b`, never
-/// checked against shipped code), or below this project's own naming line
-/// (`0x3e`, the one opcode `docs/formats/rcsmaterial.md` still records as
-/// genuinely unnamed after `0x3b`/`0x3d` were named 2026-09-25 - see
-/// [`opcode_0x3b_is_named_divsq`]/[`opcode_0x3d_is_named_fenct`]). Both fall
-/// back to two sources - the reference decoder's own behaviour.
+/// Opcodes neither source names - absent from Mesa's `nvfx_shader.h` and from
+/// RPCS3's `FPOpcodes.h` alike. Both fall back to two sources, the reference
+/// decoder's own behaviour.
 #[test]
 fn an_opcode_outside_the_table_stays_unnamed() {
-    for opcode in [0x3e, 0x2b] {
+    for opcode in [0x30, 0x32] {
         assert_eq!(insn(opcode).name(), None, "{opcode:#04x}");
         assert_eq!(insn(opcode).arity(), 2);
         assert!(!insn(opcode).is_texture());
     }
+}
+
+/// `RSX_FP_OPCODE_FENCB`, RPCS3's `FPOpcodes.h`: every one of its 3,115 uses
+/// on the HD disc writes destination register 63, the same invariant
+/// [`opcode_0x3d_is_named_fenct`] rests on.
+#[test]
+fn opcode_0x3e_is_named_fencb() {
+    assert_eq!(insn(0x3e).name(), Some("FENCB"));
+}
+
+/// The RPCS3-only numbers that never occur in shipped HD code are named off
+/// that header alone - `0x2b` is `BEM` there, and `0x39` is `NRM`, which is
+/// also why `0x3b` was never the normalize.
+#[test]
+fn rpcs3_only_opcodes_take_rpcs3_names() {
+    assert_eq!(insn(0x2b).name(), Some("BEM"));
+    assert_eq!(insn(0x38).name(), Some("DP2"));
+    assert_eq!(insn(0x39).name(), Some("NRM"));
 }
 
 /// `NVFX_FP_OP_OPCODE_LITEX2_NV40` - confirmed against Mesa's own

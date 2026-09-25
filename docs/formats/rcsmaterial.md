@@ -495,8 +495,26 @@ Named in `fragment.rs` and `scripts/ps3-microcode.py`'s `FP_OPS`.
 `docs/rendering/pads.md`'s "Wiring attempted and stopped" thread was blocked
 on exactly this naming for its pad-glow specular scalar (which, traced by
 hand, turns out to use only `0x3b`/`DIVSQ`, never `0x3d`) - see that page for
-what this clears. `0x3e` (1,155 uses per the count above) is the one opcode
-still genuinely unnamed.
+what this clears.
+
+**`0x3e` is `FENCB`, named the same day off the same header**:
+`RSX_FP_OPCODE_FENCB = 0x3E` ("Fence B?", hedged by RPCS3 like `FENCT`). The
+same census, extended to it, finds **3,115 of 3,115** uses writing destination
+register 63, the invariant `FENCT` rests on, with no counterexample. The raw
+`SHO\x08` walk in `every_fragment_program_on_the_disc_decodes_to_a_clean_end`
+counts 1,155 of them because it reaches fewer blocks (37,461 against the
+census's 76,358 variant programs). **Confidence 90** on "writes no real
+destination", for the same reasons as `FENCT`. **No opcode in shipped HD code
+is unnamed any more**, and that test now asserts it.
+
+**The rest of RPCS3's table is named too, off that header alone**: `0x2b`
+`BEM`, `0x2c` `PKG`, `0x2d` `UPG`, `0x33` `TEXBEM`, `0x34` `TXPBEM`, `0x35`
+`BEMLUM`, `0x37` `TIMESWTEX`, `0x38` `DP2`, `0x39` `NRM`. None occurs in
+shipped HD code, so nothing here corroborates them and nothing depends on
+them; they carry no confidence score, and their operand counts stay at the
+reference decoder's default of two. `0x39` being RPCS3's `NRM` is one more
+reason `0x3b` never was. `0x30` and `0x32` are in neither header and stay
+unnamed.
 
 ### What the microcode does and does not settle
 

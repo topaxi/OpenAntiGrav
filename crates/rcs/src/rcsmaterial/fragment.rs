@@ -21,6 +21,8 @@
 
 use super::Declared;
 
+mod opcode;
+
 /// One fragment-program dword, whose 16-bit halves are stored swapped.
 #[must_use]
 fn word(data: &[u8], at: usize) -> Option<u32> {
@@ -175,68 +177,7 @@ impl Instruction {
     /// The mnemonic, or `None` for an opcode this reading does not name.
     #[must_use]
     pub fn name(&self) -> Option<&'static str> {
-        Some(match self.opcode {
-            0x00 => "NOP",
-            0x01 => "MOV",
-            0x02 => "MUL",
-            0x03 => "ADD",
-            0x04 => "MAD",
-            0x05 => "DP3",
-            0x06 => "DP4",
-            0x07 => "DST",
-            0x08 => "MIN",
-            0x09 => "MAX",
-            0x0a => "SLT",
-            0x0b => "SGE",
-            0x0c => "SLE",
-            0x0d => "SGT",
-            0x0e => "SNE",
-            0x0f => "SEQ",
-            0x10 => "FRC",
-            0x11 => "FLR",
-            0x12 => "KIL",
-            0x13 => "PK4B",
-            0x14 => "UP4B",
-            0x15 => "DDX",
-            0x16 => "DDY",
-            0x17 => "TEX",
-            0x18 => "TXP",
-            0x19 => "TXD",
-            0x1a => "RCP",
-            0x1b => "RSQ",
-            0x1c => "EX2",
-            0x1d => "LG2",
-            0x1e => "LIT",
-            0x1f => "LRP",
-            0x20 => "STR",
-            0x21 => "SFL",
-            0x22 => "COS",
-            0x23 => "SIN",
-            0x24 => "PK2H",
-            0x25 => "UP2H",
-            0x26 => "POW",
-            0x27 => "PK4UB",
-            0x28 => "UP4UB",
-            0x29 => "PK2US",
-            0x2a => "UP2US",
-            0x2e => "DP2A",
-            0x2f => "TXL",
-            0x31 => "TXB",
-            0x36 => "RFL",
-            0x3a => "DIV",
-            // `NVFX_FP_OP_OPCODE_LITEX2_NV40` in Mesa's `nvfx_shader.h`,
-            // confirmed against the primary source; absent from every
-            // fragment block on this disc (`hd_litex2_census.rs`, 0 of
-            // 76,358) - named for completeness, not because it's needed.
-            0x3c => "LIT_EX2_NV40",
-            // `RSX_FP_OPCODE_DIVSQ` (`a / sqrt(b)`), RPCS3's `FPOpcodes.h`
-            // (GPLv2); confidence 84, see `docs/formats/rcsmaterial.md`.
-            0x3b => "DIVSQ",
-            // `RSX_FP_OPCODE_FENCT`; writes no real destination on this disc
-            // (confidence 90) - same source and evidence page as `DIVSQ`.
-            0x3d => "FENCT",
-            _ => return None,
-        })
+        opcode::name(self.opcode)
     }
 
     /// How many of [`Self::sources`] this opcode reads.

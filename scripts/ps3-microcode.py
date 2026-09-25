@@ -135,6 +135,13 @@ FP_OPS = {
     # Confidence 84. See `docs/formats/rcsmaterial.md` and `renderer.md` for
     # the full evidence and history.
     0x3B: "DIVSQ", 0x3D: "FENCT",
+    # `RSX_FP_OPCODE_FENCB`, same header: all 3,115 uses on the disc write
+    # destination register 63, the invariant `FENCT` rests on. Confidence 90.
+    0x3E: "FENCB",
+    # RPCS3's header alone; none of these occurs in shipped HD code. `0x30`
+    # and `0x32` are in neither header and stay unnamed.
+    0x2B: "BEM", 0x2C: "PKG", 0x2D: "UPG", 0x33: "TEXBEM", 0x34: "TXPBEM",
+    0x35: "BEMLUM", 0x37: "TIMESWTEX", 0x38: "DP2", 0x39: "NRM",
 }
 FP_INPUTS = {0: "f[POS]", 1: "f[COL0]", 2: "f[COL1]", 3: "f[FOGC]"} | {
     4 + n: f"f[TC{n}]" for n in range(10)
