@@ -437,3 +437,7 @@
 0x001329e8	function	CannonBullet_DrawQuads	80	cannon.md
 0x002d8ec0	function	ShipCannonFlash_AttachToShip	85	cannon.md
 0x002dae70	function	ShipMuzzle_AttachToShip	80	cannon.md
+0x003f0348	function	ModelRecord_Create	80	renderer.md
+0x003eeb08	function	ModelRecord_Load	65	renderer.md
+0x0040d220	function	SpuLight_AttachVertexStream	72	renderer.md
+0x002c0890	function	SceneModel_RegisterRenderRecord	65	renderer.md

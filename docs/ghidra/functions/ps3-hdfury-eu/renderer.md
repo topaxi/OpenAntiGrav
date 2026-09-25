@@ -6994,3 +6994,45 @@ This is the exact shape this page already decompiled for the two Zone-Stage trac
 The crop comparison this session pulled (`data/scratch/hd-engine-light/crops/{orig,ours}-crop.png`, off `data/traces/hd-spu-light-companion/race.png` and `data/scratch/hd-engine-light/talons-t487.png`) shows the original's copper tint confined to the housing/fin geometry against this project's wider wash across flat underside panels - but the two frames are different teams/cameras (unverified against the capture's own team) at different angles, so this is not the "same ship and track, player size, more than one frame" comparison the task asked for, and is read here only as a qualitative prompt for the open bit above, not as evidence on its own.
 
 No renames needed: `Ship_DrawModels` (`0x003ea368`, confidence 78) and `Ship_AddToRenderList` (`0x003e4cc8`, confidence 74) are already named on [ship-sun-occlusion.md](ship-sun-occlusion.md); `SpuLight_AnyVisibleLightTouchesSphere` (`0x0040dae8`), `SpuLight_GetVisibleCount`/`GetVisibleSlotAddress` (`0x0040d390`/`0x0040d370`) and `Shader_GetVariantHash` (`0x003f0ff8`) are already named on this page. No code changed.
+
+### The hull's `record+0xe4 & 0x800` bit is set at load and the gate selects `SVC1` on the player's hull in a live race - the craft binding is measured (2026-09-25, confidence 90)
+
+**This closes the open question the section above left.** Both routes it named were run: the writer was found statically, and the bit and the taken branch were read live.
+
+**The writer, statically.** `record+0xe4` has one writer in the renderer module: `ModelRecord_Create` (`0x003f0348`), which scans the `0x1b0`-byte table off `PTR_DAT_008b7da0` for a free slot (`+0xe8 == 0`) and stores its third argument straight into the flag word, `0x003f0404: stw r5,0xe4(r29)`. A byte scan of `0x3e4000`-`0x3f2000` finds no other `stw rS,0xe4(rA)` outside the stack; the `stwx` loops at `0x3e7fec`/`0x3e8024`/`0x3e806c` and `0x3e9be0`-`0x3e9cf8` write `+0xe0`, not `+0xe4`. A whole-image scan of the 177 non-stack `stw rS,0xe4(rA)` finds none preceded by an `ori` that sets `0x800`. `ModelRecord_Create` is reached only through the TOC trampoline `0x006794d8`, and that only from `SceneModel_RegisterRenderRecord` (`0x002c0890`), which passes its own `r5` through untouched (`or r25,r5,r5` at `0x002c08c4`, `rldicl r5,r25,...` at `0x002c0948`/`0x002c0964`) and stores the returned index at `model+0x204c`. `Ship_ReloadModelForSkin` (`0x000dbdc8`) registers the hull `ship.vex` it stores at `ship+0x6ae0` (`0x000dc054`) with `li r5,0x1ccb` (`0x000dc044`, call `0x000dc058`); the wreck and both LODs (`+0x6ae4`/`+0x6ae8`/`+0x6aec`) get `0x1c8b`, and `+0x6af4` gets `0x480`. `0x1ccb` and `0x1c8b` both carry `0x800`; `0x480` does not.
+
+**What the bit does at load.** `ModelRecord_Load` (`0x003eeb08`, called from `ModelRecord_Create` on the synchronous path) tests `record+0xe4 & 0x800` right after the model loads and calls `SpuLight_AttachVertexStream` (`0x0040d220`) on it. That walks every segment of type `5` (EdgeGeom) and appends one input-stream descriptor per geometry block, pointing at the SPU-light buffer base `*0x008b83b0` with format bytes `(1, 4, 0x44)`, skipping a block that already has one. So the hull's EdgeGeom blocks carry the `SpuVertexColours` stream from the moment the hull loads.
+
+**Which pass draws it.** `Ship_DrawModels`' pass loop runs twice: pass 0 draws records with `0x80` set, pass 1 the rest. The hull's `0x1ccb` has `0x80`, so it goes through the gate at `LAB_003ea904` in pass 0.
+
+**Live, RPCS3.** `0.0.42-19980`, `PPU Decoder: Interpreter (static)`, private config and cache, Campaign walk into a Talon's Junction race, thrust held. The player's craft is the entry of the eight at `0x0098d7c0` with `craft+0x7a60 == 0`; on both boots it was entry 7 (`0x33fbe380`, then `0x33fc2250` on the boot the breakpoints below ran on). One paused read on that boot, before any breakpoint:
+
+| Field | Model | `+0x204c` (index) | `record+0xe4` |
+| --- | --- | --- | --- |
+| `+0x6adc` / `+0x6ae0` (hull) | `0x34028140` | `0x199` | `0x1ccb` |
+| `+0x6ae4` | `0x3402af80` | `0x19a` | `0x1c8b` |
+| `+0x6ae8` | `0x3402d010` | `0x19b` | `0x1c8b` |
+| `+0x6aec` | `0x3402fd60` | `0x19c` | `0x1c8b` |
+
+The table base read `*0x008b7da0 = 0x00c86880`, so the player's hull record is `0x00c86880 + 0x199 * 0x1b0 = 0x00cb1ab0`, and the u32 at `0x00cb1b94` is `0x1ccb`. The earlier boot read the same indices and flags for its player. Every one of the other seven crafts has a hull record at `+0x6ae0` reading `0x1ccb`. Their LOD records read `0x1c8b`.
+
+Then four `Z0` breakpoints for 240 s of race, each stop read and stepped off:
+
+- `0x003ea988`, just after `lwz r0,0xe4(r19)` in the pass loop: `r19` is the record, `r0` its flags, `r9` the `Enable_spu_vertex_light && Debug.Enable_EdgeGeom` gate, `r31` the visible-light count. 65 stops. `r9 = 1` on every one, and the count was 3 or 4.
+- `0x003eb368`, the instruction after `SpuLight_GetVisibleSlotAddress` on the taken branch (the next instruction is `li r5,0x800`): 26 stops, **10 of them with `r19 = 0x00cb1ab0`, the player's hull**. The other 16 were other crafts' hull and LOD records. `r3` held the visible slot (`0x00f4b380`/`0x00f4c380`) and `r31` the count.
+- `0x003eb858` (the first, `0x4000`-gated loop) and `0x003ec244` (the twin `0x003eb890`): no stops. Neither draws a hull on this path.
+
+Taken-branch stops on the player's hull came both at cruise and while the visible list held a boosted light. The list read at the stop had one record at `(24.5, 61.2, 244.8)`, then `(20.4, 51.0, 203.8)`: that is `(4, 10, 40) * (1 + 10 * blend)` decaying. The HUD in the screenshot taken at the same stop shows the player on a speed-pad boost at 449 km/h: `data/scratch/hd-svc1-bit/bp-081.png`. That the boosted record is the player's own light is consistent with the frame, not read. The player's own position was not read.
+
+**What the picture shows.** At that boost, on the original, the player's hull is drawn with `SVC1`. The blue light shows as a glow on the central nozzle and the housings around it. The flat panels and wings keep their livery, with no wash. The player's livery on this boot is dark with yellow stripes, on the Piranha planform. The light is classic `(4, 10, 40)`, not the Fury `(40, 10, 4)` of the earlier `race.png`.
+
+**Confidence 90** that the hull record's `0x800` bit is set in a race and that the gate selects `SVC1` for the player's hull. Evidence: the static writer chain, one live read of the bit, and 10 live stops on the taken branch with the record pointer matching.
+
+**What this falsifies, and what it leaves.** The top candidate on this page, that the original never selects `SVC1` for a hull, is falsified. The craft binding in `crates/game/src/race/scene/frame.rs` is now measured. What is left is why this project's boosted hull looks washed where the original's does not. The SPU term is not a large part of it. An A/B at player size on Talon's Junction took the craft's `SpuLights` binding out and left everything else. On `Piranha` and `Piranha_n1` boosted by a fired Turbo, ticks 250/290/305, removing the binding changed 0.07-0.12 % of a 1440x816 frame's pixels, all at the central nozzle. The white rims and the pink wash on the `_n1` wings are there with the binding removed, at rest (tick 250) as well as boosted. So they come from another term. The next candidates, unmeasured:
+
+1. The flare and plume quads `EngineFlare_PlaceShapes` scales at boost.
+2. The Fury skins' own hull material.
+
+Neither has been read against the original yet.
+
+Names: `ModelRecord_Create` (`0x003f0348`, 80), `ModelRecord_Load` (`0x003eeb08`, 65), `SpuLight_AttachVertexStream` (`0x0040d220`, 72) and `SceneModel_RegisterRenderRecord` (`0x002c0890`, 65) are in `names.tsv` against this page.
