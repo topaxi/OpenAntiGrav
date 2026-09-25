@@ -89,3 +89,7 @@ content against `hd-frontend.md`.
   other reasons (`docs/formats/psarc.md`'s own open "garbage" population) -
   a generic fix there would likely recover this file's opening tags too,
   rather than needing Omega-specific work.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+swept 2026-09-21 from a player observation ("the Omega menu looks like HD/Fury's"); `FEGlobals` matches HD's to the digit and this project's own screen reader parses it unchanged, but which of the patch's four archives the runtime actually loads is the one open question HD's own six-copy version needed an RPCS3 capture to close

@@ -47,3 +47,7 @@ run `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored
 ignored-only ai_clean_lap_gate`, and diff the Turbo branch's behaviour against
 the old `fire_turbo_at_once` gate on `07_Track` first - a Turbo fired into a
 corner is the shape the old policy's own doc comment warned about.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+**2026-09-16: the fire-or-absorb decision is read in full and its inputs named; the port sits unmerged on branch `plasma-flash-ai`, red on 14 `ai_clean_lap_gate` rows - see the thread's last section before touching opponent weapons.**

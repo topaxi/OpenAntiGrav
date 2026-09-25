@@ -136,3 +136,7 @@ should look like and not what garbage looks like.
   `assets/ui/menu.toml` and `assets/ui/strings/english.toml` together).
 - Diff `Data\Ships\<Team>\zone01.vex` against `Zone.vex` and `Ship.vex`.
   Independent of everything above.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+**Which skin a race flies is chosen, not measured, and no unlock is checked** - the original selects `ship_eliminator.dat` on a global equal to `0x12`, confidence 55 on what that number denotes, so a mode gate on it would be a guess dressed as a reproduction. Settled by `scripts/psp-relocate.py resolve` on the comparison or by tracing the six non-lobby callers of `Skin_ApplyToModel`; both need the bridge. Still open: the composed fourth slot (new asset-side corroboration for the linear layout, not proof), `zone01.vex`, the `%s\%s.dat` fallback, and a RACE-page SKIN row that needs its own `string_id`

@@ -180,3 +180,7 @@ Results` draws correctly over a real, just-finished race. What is left:
   reproducing at all versus staying results-only, the way `RECORDS`'s own
   `fe-menu-definitions.md` section already chose to drop TAG/TEAM columns
   this project's schema cannot back honestly.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-14. A campaign race in the original ends in three authored states this build never had: `EndRace Results` (per-lap table), `EndRace Rewards` (a 3D trophy model unpaused off `Cell_EvaluateMedal`'s ordinal - `gold`/`silver`/`bronze.vex`, a dash glyph for none - plus per-team loyalty with a bar) and `EndRace Menu` (`RETURN TO GRID` default, ghost record). `EndRace_Definition.xml` is read widget by widget ([endrace-screens.md](../../docs/formats/endrace-screens.md)) and the fill code decompiled ([ghidra page](../../docs/ghidra/functions/psp-pulse-usa/endrace-screens.md)). Open: the loyalty writer (30 points a lap fits one observation, capped at 70), the pennant column's meaning, four sibling populate functions (Tournament/Zone/Elimination/split-screen). Next: draw the three states off the XML in place of our own results table

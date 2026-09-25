@@ -185,3 +185,7 @@ DISPLAY=:99 import -window root shot.png
 ## Next Steps
 
 None currently open.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+the CONTROLS page's key-capture prompt landed (2026-09-07) and stays landed. **The pause overlay itself did not actually show on a live run, found and fixed in the same pass (2026-09-09):** a real `Escape` from a running race parked the state correctly, but Pulse's own `FE_SCREEN` authors a full-screen `<Image>` mark that `draw_list` drew unconditionally, painting straight over both the pause overlay's fill and the parked race underneath it - the docs' "Both PSP titles' frames are unread" was stale. `Frame::backdrops` (`crates/game/src/menu/frame.rs`) now drops any full-screen clear/mark behind a parked race while keeping structural chrome (top bar, footers); live-reproduced before and after, full `just` gate green including the ground-truth regression under `OAG_REQUIRE_GAME_DATA=1`. This also closes the `<ScreenClear>`/`MenuSkin::background` gap the same way. `../../docs/architecture/menus.md`'s two stale paragraphs (line ~62's "frames are unread", line ~679's "now draws it, dimmed") still need their owner to fix - both are `docs/architecture/`, out of this thread's `docs/frontend/` lane

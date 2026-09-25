@@ -62,3 +62,7 @@ written ahead of them - see `oag_ui::campaign::pointer` and
 1. The Pure live pass above - five minutes with a window.
 2. Decode `TV.gxt` and read what 2048's PS TV front end does with a pointer,
    before treating `2048.svg` as final.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+every front-end screen answers a mouse and a finger and each title draws its own cursor (`../../docs/architecture/menus.md`, "A mouse and a finger"); left open are a live pass over Pure's language picker, whether 2048 draws a real pointer under PS TV (`TV.gxt` undecoded), drag-to-scroll, and a `--click` for headless captures

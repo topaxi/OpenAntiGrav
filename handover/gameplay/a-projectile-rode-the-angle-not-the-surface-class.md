@@ -56,3 +56,7 @@ nothing on the title axis; the gameplay determinism reference did not move.
 2. Read HD's projectile update in `ps3-hdfury-eu` far enough to confirm the
    probe length, the ride height and the fall term, and put anything that
    differs on `oag-hd`.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+player report on HD, "rockets go straight or disappear in a wavy section", measured on eight circuits across both titles and **Pulse broke the same way** (52 of 120 rockets on Talon's Junction flew off the circuit; 58 of 123 on Anulpha Pass). `nearest_hit` dropped any geometry hit under `WALL_FACING` as floor clipping, so a rocket passed *through the barrier* at a shallow angle, and it detonated on any floor met steeply. `Collision_SweepSegment` (`0x0883198c`) returns the struck collider's surface type and `Rocket_Update` switches on it; the raycaster had carried `RaycastHit::surface` all along. Fixed 2026-09-13 by branching on the class; see [projectile-floor.md](../../docs/gameplay/projectile-floor.md). Open: the born normal is still `Vec3::Y` where the original seeds it from the craft, and HD's own update is unread.

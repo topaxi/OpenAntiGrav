@@ -101,3 +101,7 @@ every submesh record reachable from exactly one mesh object.
   slot 3 and of the pivot composition would move 75 and 88 to the 90s.
 - The UV scroll needs the material's shader-input floats, which is the
   `material.rs` struct-shape problem, not an animation one.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2048's `track.vex` authors no `Anim Transform`; what moves its scenery is a node table in `track.rcsmodel` plus the `.rcsskeleton`/`.rcsanimclip` beside it, all three read 2026-09-16 and played through the same node-matrix table the other titles use (`mesh::Motion`). Checked node by node against Wipeout HD's own `Anim Transform`s on the twelve circuits both titles ship - the pivot composition is the finding `altima` alone would not have given - and reading the table put 130 of `altima`'s meshes (median 1,086 units off) and every craft's airbrakes where the original draws them. Open: the Zone and start-grid clips are parsed and unwired, 2048's `uv_anim` materials still do not scroll (a material-struct problem), visibility is at 75, no loader named. See [2048-animation.md](../../docs/formats/2048-animation.md)

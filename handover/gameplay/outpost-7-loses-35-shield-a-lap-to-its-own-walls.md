@@ -429,3 +429,7 @@ instrumentation additions reverted, neither committed):
    disc-backed suite, and the two tests a span of 10 broke are both in it. Run
    `just test-data`; only `shuriken_ground_truth` and `stall_rescue_ground_truth`
    should be red.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+steps 1-6 done by 2026-09-07 and all in the thread file: the loss is kinematic (a line of curvature `k` admits `1.55 / k`, 07 peaks at 0.047), the yaw-rate cap is in `driver::pace::corner_target`, `curvature_span` is 11 (10 wins solo and turns two field tests red), the wall bleed is exactly `0.035` and the stopping is 73 % bounce / 27 % friction. 07 now reaches lap 4 at 28-30 shield a lap. **Still open**: `corner_target`'s span-11 curvature understates the two remaining crash apexes (idx 2,158 / 2,395) by 1.66-1.85x; a span change that resolves them without re-breaking the field board is unmeasured. Do not trim `07_Track` from the known-good list; do not move `lateral_accel`, `grip_ground` or `grip_air`.

@@ -229,3 +229,7 @@ than overlapping it).
    `BEST MEDAL` now draws for a race launched through `Cell Selection`.
 6. Runtime-verify `Session::escape`'s capture site on a real desktop, per
    "Still open" above - this sandbox cannot deliver the keypress.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+best lap, best total time, the last result and (unfed, still) a campaign medal survive a restart (`crates/game/src/records.rs`, `<config dir>/oag/records.toml`), captured outside `Race::tick` at two sites - `Session::frame`'s finish transition and `Session::escape`. `crate::scoreboard`'s results table now draws a "PERSONAL BEST LAP"/"BEST MEDAL" line off `records::PersonalBest::compare`, verified live off a real disc, three ways (no record, a beaten record, a standing record plus medal). Schema is chosen, not measured, carries no confidence score: [ADR-0049](../../docs/architecture/adr/0049-race-records-are-a-chosen-schema-captured-outside-the-tick.md), [persistence.md](../../docs/architecture/persistence.md). Open: no records browser yet, no wiring from a real race to a campaign cell (so the medal line never draws outside a hand-seeded demo file), and `Session::escape`'s own capture site is still not runtime-verified on a real desktop

@@ -88,3 +88,7 @@ probably not even per-process-startup for anything but small/dev iteration.
    on - this is exactly the kind of claim that needs evidence recorded next
    to it, not just a code comment, per this project's own RE-documentation
    habit even though it's an engineering choice rather than an RE one
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+No disc authors ASTC (standardized after both consoles' GPUs shipped), so this is an encode of this project's own already-faithful RGBA output, not new content. Open: no encoder is wired, no cache location decided, and "pick whichever performs better as the default when both are supported" is unmeasured - needs a real benchmark on hardware that offers both, not a spec-sheet assumption

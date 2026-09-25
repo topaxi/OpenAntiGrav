@@ -130,3 +130,7 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
   `oag_render::flash` consumer, one `Kind` constant each.
 - Capture a close track hit (`WO_ROCKET_EXPLO_TRACK`) in PPSSPP. None was
   captured at player size: scenario A detonated 402 units away.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+2026-09-24: particles draw their own `GU_TFX_MODULATE`d sprites, the sprite offsets are base-relative, and the Quake's `/ 50` is its extent co-factor. Second pass, Pulse PSP only: `ScreenFlash_Update` is read and drawn (`oag_render::flash`, matched to PPSSPP frame by frame), streaks sample their sprite as `DrawStreak`'s wedge and `DrawCappedStreak`'s bar, and the atlas frame advances. Open: the other ten flash kinds' callers.

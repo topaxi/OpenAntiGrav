@@ -97,3 +97,7 @@ project.
   not gameplay/simulation work. `.wem`/Wwise is the next format gap to scope
   (the way `.gnf` already is for the base `.pkg`'s textures) rather than
   `data08`'s file listing, which this census now closes.
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+Censused: all four patch the existing HD + 2048 roster (every circuit/zone name already known to this project, none new) rather than adding bonus content - `data08` (5.3 GiB) is textures/models/lighting/audio, `data05`/`07` are material and localization patches. First asset-level confirmation of the 2048/HD shared lineage, and the first Wwise `.wem`/`.bnk` audio this project has seen anywhere - no reader for either yet. Open: what `data06`'s absence means, and the `.wem` format itself

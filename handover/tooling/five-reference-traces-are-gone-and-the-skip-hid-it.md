@@ -237,3 +237,7 @@ answer this question for any other capture, not a grep.
    against the recovered `-omega` capture.
 4. Commit `data/traces/talons-junction-time-trial-lap-omega.csv` (currently
    staged, not committed - see "Recovered, 2026-09-11" above).
+
+## From the HANDOVER.md index (moved 2026-09-25)
+
+`just test-data` reports 2 failures; the same suite under `OAG_REQUIRE_GAME_DATA=1` reports 14, eleven of them missing-file panics rather than behaviour. [ADR-0046](../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md) now tracks a trace a test names, per file by name, so this cannot recur - it does not recover the five. Open: removing the skip path, recapturing, and two docs that assert a capture this checkout cannot demonstrate
