@@ -247,13 +247,14 @@ authoring placeholder rather than something this build could draw correctly.
 Full "what does and does not draw, and why" is
 [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)'s own module doc.
 
-**`EndRace Menu`'s own `Confirm` prompt draws, since 2026-09-25** - see the
-Rewards table below for the mechanism. **`EndRace Results`' own does not**,
-and not for the same reason: a malformed tag earlier in that one screen's
-own XML (three copies, `MedalModelGold`/`Silver`/`Bronze`) corrupts this
-project's own parse of everything the file authors afterwards, `Confirm`
-included - see
-[hd-endrace-screens.md](../formats/hd-endrace-screens.md#a-malformed-tag-upstream-swallows-navigationcontroller-on-this-screen-alone)
+**Every one of the three end screens' own `Confirm` prompt draws, since
+2026-09-25** - see the Rewards table below for the walking mechanism.
+`EndRace Results`' own needed a second fix on the same day: a malformed tag
+earlier in that screen's own XML (three copies, `MedalModelGold`/`Silver`/
+`Bronze`) used to corrupt this project's own parse of everything the file
+authors afterwards, `Confirm` included, until `oag_tables::fexml`'s own
+parser gained a general recovery for the shape - see
+[hd-endrace-screens.md](../formats/hd-endrace-screens.md#a-malformed-tag-upstream-swallowed-navigationcontroller-on-this-screen-alone---fixed-2026-09-25)
 for the full account.
 
 ### `EndRace Rewards`: drawn, never entered (2026-09-25)
@@ -348,6 +349,11 @@ digit-for-digit identical to this page's own reference numbers above -
 `3.11.76` (this machine's own source has no English table, the same
 "German, not missing" situation the Live section above records for
 Pulse).
+
+**Re-captured 2026-09-25 after the `fexml` malformed-tag fix**: `endrace-results`
+now also draws `CONFIRM` bottom-left, the same position and style as
+`EndRace Menu`/`EndRace Rewards` - see the formats page's own account of
+the bug this closes.
 
 **The disc-backed end-to-end path is verified without a GPU or a live
 race**, in

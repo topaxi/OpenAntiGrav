@@ -210,21 +210,91 @@ accept the indirection is not enumerated** - only `Color` on a text widget's
   shortening: the PS2 reader parses `<code>` exactly as described above. Whether
   the *element* vocabulary matches is still open.
 - How layout and anchoring are expressed.
-- **This project's own reader (`oag_tables::fexml::parse`, not the original's)
-  has no recovery for a `<Tag ...attr="value"</Tag>` shape - an opening tag
-  missing the `>` that should close it before the matching close tag's own
-  text appears.** `tag_end`'s quote-tracking scan finds no unquoted `>`
-  inside the malformed attribute list, so it keeps scanning into the
-  following `</Tag>` and treats *that* `>` as the opening tag's own
-  terminator - leaving the node open on the parse stack and reparenting
-  everything the file authors afterwards underneath it instead of beside
-  it. Confirmed on real shipped data: Wipeout HD/Fury's own
-  `EndRace_Definition.xml` authors `<Values Src="..." ... RotY="-0.5"</Values>`
-  three times (`MedalModelGold`/`Silver`/`Bronze`, `EndRace Results`'
-  own trophy widgets) - see
-  [hd-endrace-screens.md](hd-endrace-screens.md#a-malformed-tag-upstream-swallows-navigationcontroller-on-this-screen-alone)
-  for what it silently swallows as a result. Not attempted here: a general
-  fix touches every front-end screen this project reads.
+
+## Recovering a start tag missing its own `>` (fixed 2026-09-25, `876b5d4d`)
+
+**Fixed.** `tag_end` (`crates/tables/src/fexml.rs`) used to have no recovery
+for a `<Tag ...attr="value"</Tag>` shape - an opening tag missing the `>`
+that should close it before the matching close tag's own text appears. Its
+quote-tracking scan found no unquoted `>` inside the malformed attribute
+list, so it kept scanning into the following `</Tag>` and treated *that* `>`
+as the opening tag's own terminator, leaving the node open on the parse
+stack and reparenting everything the file authors afterwards underneath it
+instead of beside it.
+
+**The rule, the fix, and the evidence that the original itself tolerates
+this shape are all on
+[race-campaign.md](race-campaign.md#grid_04xmls-own-values-tag-is-broken-on-the-disc-and-the-original-tolerates-it) -
+not repeated here.** The short version: an unquoted `<` met while still
+scanning a tag proves the previous tag was never closed, so `tag_end` now
+ends the tag one character short of it; and this is not merely a
+self-consistent choice for this project's own reader, because RPCS3's own
+`Campaign Selection` screen reads `"0 / 87"` for the base Wipeout HD
+campaign - a total only reachable by counting all ten of `grid_04`'s own
+cells, which is what settles that the *original's* parser tolerates the
+identical break rather than this project inventing behaviour the disc never
+had.
+
+**First found on `EndRace_Definition.xml`, this page's own thread into it.**
+Wipeout HD/Fury's `EndRace_Definition.xml` authors
+`<Values Src="..." ... RotY="-0.5"</Values>` three times
+(`MedalModelGold`/`Silver`/`Bronze`, `EndRace Results`' own trophy widgets) -
+the same shape, on a screen this project reads for its own front end rather
+than the campaign grid `race-campaign.md` measures. See
+[hd-endrace-screens.md](hd-endrace-screens.md#a-malformed-tag-upstream-swallowed-navigationcontroller-on-this-screen-alone---fixed-2026-09-25)
+for what it silently swallowed there before the fix - `NavigationController`
+and everything the screen authors after it, which is why `EndRace Results`
+alone, of HD's three end screens, used to draw no `Confirm` prompt at all.
+No RPCS3 capture of `EndRace Results` specifically exists to independently
+corroborate this screen the way `grid_04`'s cell count does for the
+campaign - the `race-campaign.md` evidence is what establishes the *rule*
+tolerates this exact authoring shape in general, and this screen is the
+same shape on the same disc, not a second, separately-confirmed instance.
+
+**Not a no-op anywhere else, and that is itself worth recording.** A
+scratch census (`cargo run -p oag-game --example fexml_recovery_noop_census`,
+not committed as a test - it needs every disc image and every decrypted
+`data/extracted/` tree this project has) parses every fexml-candidate entry
+across all eight sources this project reads (Pulse PSP EU/USA, Pulse PS2 EU,
+Pure PSP EU/USA, HD, Omega, 2048/Vita) with the old pipeline (`tag_end_old`,
+and - for a shortened blob - `expand_old`/`dictionary_old`, all copied
+verbatim rather than reusing the crate's own now-fixed `expand`, since that
+would silently run the fix on both sides of the comparison) against the
+fixed one, and diffs the trees. Of **2,966 entries checked, 23 differ** -
+the same authoring bug shipped in more places than the two screens above:
+
+| File | Where | What the old tree lost |
+| --- | --- | --- |
+| `EndRace_Definition.xml` | HD, all 5 served copies; Omega, 1 | `NavigationController` and everything after it on `EndRace Results` |
+| `grid_04.xml` | HD (3 copies), Omega, 2048/Vita | Ten real `PI_Cell` campaign-grid cells - see race-campaign.md |
+| `stats_definition.xml` | HD (4 copies), Omega (1) | `MiniText`, `ScrollBar`, `Item`, `Redirect`, and two entire sibling `Screen`s |
+| `HUD_objectives.xml` | 2048/Vita | An `Image` widget's own `Values` attribute carrier |
+| `SP.xml` | Omega | 2048's campaign schema (read through [`mjolnir`](../../crates/tables/src/mjolnir.rs), which builds on this same tree) |
+| Pulse's "stats holder" screen | PSP EU, PSP USA, PS2 EU (`fe.wad`, 2 entries) - four entries total, all three platforms | `LeftLayer`, misnaming the first child `Text` instead |
+
+One further instance, `Data/environments2048/tower/track.pvsxml` (Omega),
+is not fexml this project actually reads at all -
+[`docs/formats/README.md`](README.md)'s own census marks `.pvsxml` "not
+opened or compared against" anything, so whatever the recovery does there
+has no live consequence. In every instance above (dumped and read
+individually, not just diffed), the old tree lost real, named elements as
+descendants of the wrongly-left-open tag; the new tree recovers them as the
+tree's own authored siblings, never the other way round - the recovery only
+ever *adds back* structure the old parser was dropping, on every fexml file
+this project reads across every title it has data for.
+
+Regression coverage: `crates/tables/src/fexml/tests.rs`'s
+`an_unquoted_lt_ends_a_tag_one_character_short_of_it`/
+`a_stray_double_lt_does_not_panic` (the `index > 1` guard's own edge case)
+pin the rule through `parse`; `expand_recovers_a_start_tag_missing_its_closing_bracket`
+pins the same shape through `expand` on a *shortened* blob - a real gap
+until this pass, since `expand` runs the recovery before the short-name
+dictionary substitutes real names in, and Pulse's own PSP "stats holder"
+screen only reaches `tag_end` that way. `crates/game/tests/hd_endrace_ground_truth.rs`'s
+`hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag`
+covers the `EndRace Results` consequence against the real disc; see
+`crates/hd/tests/campaign_grids_ground_truth.rs` for `grid_04`'s own
+disc-backed coverage.
 
 ## Parser behaviour worth knowing
 
