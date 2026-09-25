@@ -557,6 +557,48 @@ const SRCLESS_IMAGE: &str = r#"
 </Screen>
 "#;
 
+/// Wipeout HD/Fury's own `EndRace Results` shape, cut down to the one thing
+/// this test cares about: a `<NavigationController>` nested directly inside
+/// a named screen, the same as `EndRace_Definition.xml`'s own copy
+/// (`data/scratch/drive-2026-09-25/hd-xml/DATA02/...`).
+const ENDRACE_RESULTS_WITH_NAV_CONTROLLER: &str = r#"
+<Screen>
+  <Screen type="EndRace Results" name="EndRace Results">
+    <Text name="ResultsTitle"><Values idstring="ER_RESULTS"></Values></Text>
+    <NavigationController name="NavigationController">
+      <Text name="ControlTextConfirmButton"><Values idstring="FE_CONFIRM_BUTTON" font="buttons"></Values></Text>
+      <Text name="ControlTextConfirm"><Values idstring="FE_CONFIRM"></Values></Text>
+    </NavigationController>
+  </Screen>
+</Screen>
+"#;
+
+/// The gap `docs/formats/hd-endrace-screens.md`'s own widget table named -
+/// "that container is not walked" - closed: a `NavigationController`'s own
+/// `Text` children now reach `screen.texts` the same as any other widget's,
+/// scoped to the named screen that encloses them rather than leaking
+/// sideways.
+#[test]
+fn a_navigation_controllers_text_children_reach_the_enclosing_named_screens_texts() {
+    let screen = Screens::from_xml(ENDRACE_RESULTS_WITH_NAV_CONTROLLER)
+        .by_name("EndRace Results")
+        .unwrap()
+        .clone();
+    let names: Vec<Option<&str>> = screen
+        .texts
+        .iter()
+        .map(|text| text.name.as_deref())
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            Some("ResultsTitle"),
+            Some("ControlTextConfirmButton"),
+            Some("ControlTextConfirm"),
+        ]
+    );
+}
+
 #[test]
 fn a_src_less_image_stays_dropped_with_no_fallback_table() {
     // The behaviour before `fallback_images` existed, pinned so a title with

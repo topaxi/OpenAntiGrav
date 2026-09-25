@@ -152,6 +152,21 @@ accept the indirection is not enumerated** - only `Color` on a text widget's
   shortening: the PS2 reader parses `<code>` exactly as described above. Whether
   the *element* vocabulary matches is still open.
 - How layout and anchoring are expressed.
+- **This project's own reader (`oag_tables::fexml::parse`, not the original's)
+  has no recovery for a `<Tag ...attr="value"</Tag>` shape - an opening tag
+  missing the `>` that should close it before the matching close tag's own
+  text appears.** `tag_end`'s quote-tracking scan finds no unquoted `>`
+  inside the malformed attribute list, so it keeps scanning into the
+  following `</Tag>` and treats *that* `>` as the opening tag's own
+  terminator - leaving the node open on the parse stack and reparenting
+  everything the file authors afterwards underneath it instead of beside
+  it. Confirmed on real shipped data: Wipeout HD/Fury's own
+  `EndRace_Definition.xml` authors `<Values Src="..." ... RotY="-0.5"</Values>`
+  three times (`MedalModelGold`/`Silver`/`Bronze`, `EndRace Results`'
+  own trophy widgets) - see
+  [hd-endrace-screens.md](hd-endrace-screens.md#a-malformed-tag-upstream-swallows-navigationcontroller-on-this-screen-alone)
+  for what it silently swallows as a result. Not attempted here: a general
+  fix touches every front-end screen this project reads.
 
 ## Parser behaviour worth knowing
 

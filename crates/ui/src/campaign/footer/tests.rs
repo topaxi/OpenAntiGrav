@@ -213,6 +213,132 @@ fn scrolling_moves_the_tip_left_at_ticker_speed() {
     assert!((x0 - x1 - TICKER_SPEED).abs() < f32::EPSILON);
 }
 
+/// Wipeout HD/Fury's own shape: the shared `BodgeScreenContainingNavigationController`
+/// (`Data\Plugins\Frontend\Gui\Skin.xml`, real widget name, confirmed by
+/// direct read) carries six `Text` children, not four - `Confirm`/`Back`
+/// plus an online `ControlTextInviteButton`/`ControlTextInvite` pair
+/// (`StartEnabled="false"` on disc, irrelevant here regardless), and its own
+/// icon halves author `font="buttons"` rather than Pulse's `font="small"`.
+/// Trimmed to the controller alone - `NavigationLegend::read` does not care
+/// what encloses it - unlike `XML` above, which pins the real nesting depth
+/// too.
+const HD_XML: &str = r#"
+<Screen name="BodgeScreenContainingNavigationController">
+<NavigationController name="NavigationController">
+<Text name="ControlTextConfirmButton">
+<Values idstring="FE_CONFIRM_BUTTON" font="buttons" x="490" y="988" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextConfirm">
+<Values idstring="FE_CONFIRM" x="534" y="994" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextBackButton">
+<Values idstring="FE_BACK_BUTTON" font="buttons" x="720" y="988" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextBack">
+<Values idstring="FE_BACK" x="764" y="994" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextInviteButton" StartEnabled="false">
+<Values string="X" font="buttons" x="1094" y="988" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextInvite" StartEnabled="false">
+<Values idstring="FE_COMMUNITY" x="1094" y="994" scale="0.8"></Values>
+</Text>
+</NavigationController>
+</Screen>
+"#;
+
+/// The `EndRace Results` shape: a *local* controller (one screen's own, not
+/// the shared root) that also carries an online-only `RecordsCycle` pair
+/// beside `Confirm` - real widget names, off `EndRace_Definition.xml`
+/// directly (`data/scratch/drive-2026-09-25/hd-xml/DATA02/...`). No `Back`
+/// at all on this screen, unlike the shared Bodge controller above.
+const HD_RESULTS_XML: &str = r#"
+<NavigationController name="NavigationController">
+<Text name="ControlTextConfirmButton">
+<Values idstring="FE_CONFIRM_BUTTON" font="buttons" x="376" y="890" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextConfirm">
+<Values idstring="FE_CONFIRM" x="426" y="892"></Values>
+</Text>
+<Text name="RecordsCycleButton">
+<Values string="d" font="buttons" x="776" y="890" scale="0.8"></Values>
+</Text>
+<Text name="RecordsCycle">
+<Values idstring="ER_GLOB_REC" x="826" y="892"></Values>
+</Text>
+</NavigationController>
+"#;
+
+/// The name filter added alongside Wipeout HD/Fury reuse: only the four
+/// `ControlText*` widgets `NavigationLegend` knows resolve, not "any `Text`
+/// with an idstring" - `RecordsCycle` (idstring `ER_GLOB_REC`) is the widget
+/// that finding exists to exclude.
+#[test]
+fn a_local_controllers_online_only_records_cycle_pair_never_resolves() {
+    let root = parse(HD_RESULTS_XML);
+    let strings = StringTable::from_xml(
+        r#"<Entries><Entry ID="FE_CONFIRM_BUTTON" String="e"></Entry><Entry ID="FE_CONFIRM" String="CONFIRM"></Entry><Entry ID="ER_GLOB_REC" String="RECORDS"></Entry></Entries>"#,
+    );
+    let legend =
+        NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
+    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    // Just the word - the icon half is `font="buttons"`, excluded on its
+    // own terms, see the next test.
+    assert_eq!(draws.len(), 1);
+    let (text, _) = text_and_y(&draws[0]);
+    assert_eq!(text, "CONFIRM");
+}
+
+/// Wipeout HD/Fury's own icon glyph (`font="buttons"`) draws nothing at
+/// all - this build loads no atlas for that face, and drawing the resolved
+/// idstring's raw codepoint through whatever face happened to be bound
+/// would risk showing the literal Greek letter rather than the disc's own
+/// button icon (see [`NavigationLegend::read`]'s own doc). The four
+/// remaining prompts - `Confirm`/`Back`'s own words, `Invite`'s pair
+/// excluded by the name filter regardless - resolve to exactly the two
+/// words.
+#[test]
+fn wipeout_hds_own_buttons_font_icon_draws_nothing_but_its_word_does() {
+    let root = parse(HD_XML);
+    let strings = StringTable::from_xml(
+        r#"<Entries><Entry ID="FE_CONFIRM_BUTTON" String="e"></Entry><Entry ID="FE_CONFIRM" String="CONFIRM"></Entry><Entry ID="FE_BACK_BUTTON" String="g"></Entry><Entry ID="FE_BACK" String="BACK"></Entry><Entry ID="FE_COMMUNITY" String="INVITE"></Entry></Entries>"#,
+    );
+    let legend =
+        NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
+    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
+    assert_eq!(texts, ["CONFIRM", "BACK"]);
+    // And the authored `scale="0.8"` on the word half reaches the draw -
+    // `face_scale`'s own font-keyed answer for `"default"` is `1.0`, so a
+    // `1.0` result here would mean the widget's own `scale=` was silently
+    // dropped rather than multiplied in.
+    let Draw::FacedText { scale, .. } = &draws[0] else {
+        unreachable!("CONFIRM authors no font, falls to \"default\" - see text_and_y's own doc");
+    };
+    assert!(
+        (*scale - 0.8).abs() < f32::EPSILON,
+        "the widget's own scale=\"0.8\" must reach the draw, got {scale}"
+    );
+}
+
+/// [`NavigationLegend::draw_gated`]'s own reason to exist: `Back` drops out
+/// when asked to, `Confirm` never does.
+#[test]
+fn draw_gated_drops_back_but_never_confirm() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
+    let with_back = legend.draw_gated(&FaceScales::default(), &|_| 100.0, true);
+    assert_eq!(with_back.len(), 4, "unchanged from draw() when show_back");
+    let without_back = legend.draw_gated(&FaceScales::default(), &|_| 100.0, false);
+    let texts: Vec<&str> = without_back.iter().map(|draw| text_and_y(draw).0).collect();
+    assert_eq!(
+        texts,
+        ["ε", "Confirm"],
+        "both Back widgets drop, both Confirm widgets stay"
+    );
+}
+
 /// The clip mechanism this pass added needs an index into the *flattened*
 /// draw list, not a value out of `ticker_draw` alone - `CampaignStage::ticker_draw`
 /// (in `oag-game`) finds it by equality against the returned `Draw`, so a

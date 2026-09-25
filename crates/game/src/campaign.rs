@@ -49,13 +49,18 @@ pub struct Campaign {
     pub cell_help: Option<Layout>,
     /// The shared front-end root's own `NavigationController` - `Confirm`/
     /// `Back`, see [`oag_ui::campaign::footer::NavigationLegend`]'s own doc.
-    /// **Pulse only** - reading Wipeout HD/Fury's equivalent is a different
-    /// lane's own thread (`docs/ui/campaign-screens.md`'s `## Open` HD
-    /// section), so [`load_hd`]/[`load_omega`] leave this `None`.
+    /// Read on every title now: Pulse's own `Data\Plugins\PI001\GUI\Skin.xml`
+    /// and Wipeout HD/Fury's and Omega's shared
+    /// `Data\Plugins\Frontend\Gui\Skin.xml` alike, off [`read_footer`]. `None`
+    /// when that read fails, or the root authors no `NavigationController`
+    /// with either half this build draws.
     pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
     /// The shared front-end root's own scrolling tip ticker - see
-    /// [`oag_ui::campaign::footer::TickerLayout`]'s own doc. **Pulse only**,
-    /// for the same reason [`Self::nav_legend`] is.
+    /// [`oag_ui::campaign::footer::TickerLayout`]'s own doc. Read the same
+    /// way [`Self::nav_legend`] is, on every title - `None` in practice on
+    /// Wipeout HD/Fury and Omega regardless, since neither's own `Skin.xml`
+    /// authors the `TextInfoIsAlwaysLast` viewport that read looks for
+    /// (confirmed by direct read, not assumed).
     pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
     /// `base` extended with the title's own hex/other textures - the same
     /// "front end's own sheet plus this screen's own art" shape
@@ -78,28 +83,34 @@ pub struct Campaign {
 }
 
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]: both live on the front-end
-/// root (`Data\Plugins\PI001\GUI\Skin.xml`, [`oag_pulse::names::FRONTEND_ROOT`]),
-/// not on `CellMode_Definition.xml` - a second, small archive read and parse
-/// alongside the screen's own, since neither
-/// [`oag_ui::screen::Screens::collect_widgets`] nor this crate's existing
-/// `Screens` value for that file (`Shell::screens`, already merged with
-/// every `LoadXML` include) keeps the raw node tree
-/// [`oag_ui::campaign::footer`] needs. Errors are logged and treated as "not
-/// authored" rather than failing the whole campaign screen over a footer.
+/// root (`front_end_root` - `Data\Plugins\PI001\GUI\Skin.xml`,
+/// [`oag_pulse::names::FRONTEND_ROOT`], on Pulse; `Data\Plugins\Frontend\Gui\Skin.xml`,
+/// [`oag_hd::frontend::names::FRONTEND_ROOT`]/[`oag_omega::frontend::names::FRONTEND_ROOT`],
+/// on Wipeout HD/Fury and Omega), not on `CellMode_Definition.xml` - a
+/// second, small archive read and parse alongside the screen's own, since
+/// neither [`oag_ui::screen::Screens::collect_widgets`] nor this crate's
+/// existing `Screens` value for that file (`Shell::screens`, already merged
+/// with every `LoadXML` include) keeps the raw node tree
+/// [`oag_ui::campaign::footer`] needs. `oag_tables::fexml::text` reads
+/// either encoding this file comes in - Pulse's own dictionary-shortened
+/// copy or Wipeout HD/Fury and Omega's plain UTF-8 one - so this needs no
+/// dispatch of its own, unlike [`load_hd`]'s screen-XML read a few
+/// functions down. Errors are logged and treated as "not authored" rather
+/// than failing the whole campaign screen over a footer.
 fn read_footer(
     archives: &mut oag_assets::Archives,
+    front_end_root: &str,
     strings: &StringTable,
     fallback_globals: &[(&str, &str)],
 ) -> (
     Option<oag_ui::campaign::footer::NavigationLegend>,
     Option<oag_ui::campaign::footer::TickerLayout>,
 ) {
-    let blob = match archives.read_name(oag_pulse::names::FRONTEND_ROOT) {
+    let blob = match archives.read_name(front_end_root) {
         Ok(blob) => blob,
         Err(error) => {
             log::warn!(
-                "{}: {error:#} - the footer's Confirm/Back legend and tip ticker draw nothing",
-                oag_pulse::names::FRONTEND_ROOT
+                "{front_end_root}: {error:#} - the footer's Confirm/Back legend and tip ticker draw nothing"
             );
             return (None, None);
         }
@@ -108,8 +119,7 @@ fn read_footer(
         Ok(xml) => xml,
         Err(error) => {
             log::warn!(
-                "expanding {}: {error:#} - the footer's Confirm/Back legend and tip ticker draw nothing",
-                oag_pulse::names::FRONTEND_ROOT
+                "expanding {front_end_root}: {error:#} - the footer's Confirm/Back legend and tip ticker draw nothing"
             );
             return (None, None);
         }
@@ -224,7 +234,12 @@ pub fn load(
     let cell_help = Layout::read(&screens, "Cell Help", strings, faces, grid);
 
     let grids = read_grids(archives, oag_pulse::campaign::DEFINITION_ENTRY)?;
-    let (nav_legend, ticker) = read_footer(archives, strings, fallback_globals);
+    let (nav_legend, ticker) = read_footer(
+        archives,
+        oag_pulse::names::FRONTEND_ROOT,
+        strings,
+        fallback_globals,
+    );
 
     let mut blobs = Vec::new();
     for src in HEX_TEXTURES {
@@ -294,6 +309,19 @@ fn load_hd(
     let grids = read_grids(archives, oag_hd::campaign::DEFINITION_ENTRY)?;
     let (selection_layout, grid_layout_fury) =
         load_hd_campaign_selection(archives, strings, faces, grid, fallback_globals);
+    // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
+    // front-end root - see [`read_footer`]'s own doc. `Cell Help` and the
+    // ticker are still unmodelled: `CellMode_Definition.xml` authors no
+    // `Cell Help` screen on HD at all (unlike Pulse's own copy), and
+    // `Skin.xml` authors no `TextInfoIsAlwaysLast` viewport either
+    // (confirmed by direct read, `TickerLayout::read` answers `None`
+    // regardless of that - this call just never invents the gap).
+    let (nav_legend, ticker) = read_footer(
+        archives,
+        oag_hd::frontend::names::FRONTEND_ROOT,
+        strings,
+        fallback_globals,
+    );
 
     let mut blobs = Vec::new();
     // `HEX_TEXTURES`' own `(widget src, archive path)` pairs - read off the
@@ -324,12 +352,12 @@ fn load_hd(
         grids,
         grid_layout,
         cell_layout,
-        // HD/Omega's own `Cell Help`/`NavigationController`/ticker are a
-        // different lane's own thread - see `Campaign::nav_legend`'s own
-        // doc.
+        // HD's own `Cell Help` is still a different lane's own thread - see
+        // `Campaign::nav_legend`'s own doc. The legend and the ticker are
+        // read above.
         cell_help: None,
-        nav_legend: None,
-        ticker: None,
+        nav_legend,
+        ticker,
         sprites,
         selection_layout,
         grid_layout_fury,
@@ -519,6 +547,14 @@ fn load_omega(
     .context("Cell Selection is not on this screen")?;
 
     let grids = read_grids(archives, oag_omega::campaign::DEFINITION_ENTRY)?;
+    // See [`load_hd`]'s own identical call - Omega's front end is HD's
+    // `PI001` plugin carried forward, at the same relative root path.
+    let (nav_legend, ticker) = read_footer(
+        archives,
+        oag_omega::frontend::names::FRONTEND_ROOT,
+        strings,
+        fallback_globals,
+    );
 
     let mut blobs = Vec::new();
     for (widget_src, archive_path) in oag_hd::campaign::HEX_TEXTURES {
@@ -545,12 +581,11 @@ fn load_omega(
         grids,
         grid_layout,
         cell_layout,
-        // HD/Omega's own `Cell Help`/`NavigationController`/ticker are a
-        // different lane's own thread - see `Campaign::nav_legend`'s own
-        // doc.
+        // Omega's own `Cell Help` is still unmodelled - see `load_hd`'s own
+        // identical note; the legend and the ticker are read above.
         cell_help: None,
-        nav_legend: None,
-        ticker: None,
+        nav_legend,
+        ticker,
         sprites,
         // Omega's own front end is HD's `PI001` plugin carried forward, but
         // no `Campaign Selection`/`Grid Selection Fury` has been measured on

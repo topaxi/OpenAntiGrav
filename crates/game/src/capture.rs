@@ -197,6 +197,7 @@ pub fn run(
         // *movie* frame a backdrop is showing, and two things called `frame` in
         // one scope is how the wrong one gets passed.
         frame: menu_frame,
+        nav_legend,
         fury_backdrop,
         track_select,
         ship_select,
@@ -728,6 +729,8 @@ pub fn run(
                     &menu_frame,
                     options.menu_anim_phase,
                     options.menu_prompt.as_deref(),
+                    nav_legend.as_ref(),
+                    &|text| oag_ui::font::measure(&font, text),
                 )?;
                 (backdrop, format, list, space)
             }

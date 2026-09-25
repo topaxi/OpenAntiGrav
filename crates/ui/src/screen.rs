@@ -818,7 +818,53 @@ impl Screens {
                     );
                 }
             }
-            "animation" | "backgroundcontroller" | "leftlayer" | "item" => {
+            // `NavigationController` is Wipeout HD/Fury's own per-screen
+            // `Confirm`/`Back` prompt group - `EndRace_Definition.xml`
+            // authors one nested directly inside `EndRace Results`/`EndRace
+            // Menu`/`EndRace Rewards`, each with its own `Text` children
+            // (`ControlTextConfirmButton`/`ControlTextConfirm`, and on
+            // `Results` two more for an online-only "cycle records" button
+            // this build already excludes by name - see
+            // `oag_ui::endrace::hd::hd_results_draw_list`'s own doc). Before
+            // this arm existed the whole container was silently dropped, the
+            // same gap `docs/formats/hd-endrace-screens.md`'s own widget
+            // table names for all three screens - "that container is not
+            // walked". Walking it here, straight through to `screen.texts`
+            // like `"text"` above, is additive for every screen this build
+            // actually draws in play: confirmed by direct read that no
+            // *navigable* screen on either title's own disc
+            // (`Data\Plugins\PI001\GUI\*.xml` on Pulse,
+            // `Data\Plugins\Frontend\Gui\*.xml` on Wipeout HD/Fury, outside
+            // `EndRace_Definition.xml` itself) authors this tag.
+            //
+            // **One inert exception, worth naming rather than hiding.**
+            // Pulse's own shared `Skin.xml` nests its single
+            // `NavigationController` inside `FE Screen` itself (an anonymous
+            // wrapper `<Screen>` in between, which this same match arm
+            // already walks through) - so `FE Screen`'s own `screen.texts`
+            // now carries these four widgets too, alongside `Frame::read`'s
+            // `<Image>`/`<ScreenClear>` reading, which this arm does not
+            // touch. That is harmless in play: `FE_SCREEN` is used only as
+            // `oag_title::FrontEnd::menu_frame` (`crates/pulse/src/lib.rs`,
+            // `crates/hd/src/frontend.rs`), which never reaches
+            // `screen.texts` at all (see `oag_ui::menu::frame`'s own doc for
+            // why), and the boot-chain state machine
+            // (`crate::frontend::Frontend`) never names `"FE Screen"` as a
+            // step, so `Frontend::draw_screen_at` - the one function that
+            // does draw a named screen's own `.texts` generically - is never
+            // called with it during a live boot. It is reachable only
+            // through the `--screen "FE Screen"` debug path, where drawing
+            // widgets `FE Screen` genuinely authors is not a wrong picture.
+            // The one shared, title-wide copy this build actually *draws*
+            // from - Pulse's and Wipeout HD/Fury's own `Skin.xml`, via
+            // `oag_ui::campaign::footer` - is read directly off the raw
+            // parse tree instead, unconditionally rather than gated on this
+            // arm, so nothing here duplicates that read.
+            "navigationcontroller"
+            | "animation"
+            | "backgroundcontroller"
+            | "leftlayer"
+            | "item" => {
                 for grandchild in &child.children {
                     self.collect_widgets(
                         screen,

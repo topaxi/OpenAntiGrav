@@ -54,6 +54,13 @@ pub(super) fn menu_page(
     // [`prompt_draws`], and the block that calls it for why a prompt cannot
     // otherwise appear on this path at all.
     prompt: Option<&str>,
+    // The front-end root's own `Confirm`/`Back` legend - `None` on a source
+    // whose root authors no `NavigationController` this build reads. See
+    // `crate::main::menu_stage::MenuStage::render`'s own call site for the
+    // identical draw this mirrors.
+    nav_legend: Option<&oag_ui::campaign::footer::NavigationLegend>,
+    // The `Default`-role face `nav_legend`'s own word half draws through.
+    default_measure: &dyn Fn(&str) -> f32,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
         .context("parsing the built-in menu definition")?;
@@ -259,6 +266,21 @@ pub(super) fn menu_page(
     // draws this line through too; see `crate::pilots::axis_preview_for`'s
     // own doc.
     let axis_preview = crate::pilots::axis_preview_for(&model, Some(strings));
+    // The legend's own draw list - empty on a source with none. **`Back`
+    // never shows here**: `model.open(page)` above replaces the stack
+    // outright rather than walking to it (`Menu::open`'s own doc - "a page
+    // reached this way was not reached through anything"), so
+    // `model.depth()` is always `1` regardless of which page was named.
+    // See `crate::main::menu_stage::MenuStage::render`'s own call site,
+    // which this mirrors, for the live session's own gate.
+    let nav_legend_draws: Vec<oag_ui::frontend::Draw> =
+        nav_legend.map_or_else(Vec::new, |legend| {
+            legend.draw_gated(
+                &oag_ui::picker::FaceScales::default(),
+                default_measure,
+                model.depth() > 1,
+            )
+        });
 
     // A modal prompt over the page, when one was asked for.
     //
@@ -303,6 +325,7 @@ pub(super) fn menu_page(
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
+        list.extend(nav_legend_draws);
         list.extend(prompt_draws(kind, &name, strings, skin)?);
         return Ok(list);
     }
@@ -312,6 +335,7 @@ pub(super) fn menu_page(
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
+        list.extend(nav_legend_draws);
         return Ok(list);
     };
     // The same arithmetic the live stage runs, through the same easing, so what

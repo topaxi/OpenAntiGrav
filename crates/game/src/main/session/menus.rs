@@ -483,6 +483,7 @@ impl Session {
                 text_atlas,
                 default_atlas: shell.font.clone(),
                 frame: shell.frame.clone(),
+                nav_legend: shell.nav_legend.clone(),
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own
                 // hand-off already had its moment, and starting a transition

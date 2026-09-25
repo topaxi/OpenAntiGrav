@@ -223,6 +223,13 @@ fn event_counter(index: usize, total: usize) -> String {
 /// `Cell Selection`'s draw list: the same 32-position staggered hex grid
 /// Pulse's own `Cell Selection` is, plus HD's wider detail column and
 /// difficulty toggle - see the module doc.
+///
+/// `footer_overlay` is [`crate::campaign::draw::cell_draw_list`]'s own
+/// parameter, unchanged: HD's shared front-end root carries the identical
+/// `NavigationController` shape Pulse's does (see
+/// `oag_ui::campaign::footer::NavigationLegend`'s own doc), and neither
+/// title's `CellMode_Definition.xml` authors a per-screen gate on `Cell
+/// Selection`, so this draws it on the same terms Pulse's own screen does.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
@@ -243,6 +250,7 @@ pub fn hd_cell_draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    footer_overlay: &[Draw],
 ) -> Layers {
     let mut layers = Layers {
         backdrop: frame.backdrops(
@@ -262,6 +270,7 @@ pub fn hd_cell_draw_list(
         skin.title_color(frame.ink),
         strings.get_or_id(TITLE_ID).to_string(),
     ));
+    layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
     let mut out = Vec::new();
