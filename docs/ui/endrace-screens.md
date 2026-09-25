@@ -247,6 +247,15 @@ authoring placeholder rather than something this build could draw correctly.
 Full "what does and does not draw, and why" is
 [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)'s own module doc.
 
+**`EndRace Menu`'s own `Confirm` prompt draws, since 2026-09-25** - see the
+Rewards table below for the mechanism. **`EndRace Results`' own does not**,
+and not for the same reason: a malformed tag earlier in that one screen's
+own XML (three copies, `MedalModelGold`/`Silver`/`Bronze`) corrupts this
+project's own parse of everything the file authors afterwards, `Confirm`
+included - see
+[hd-endrace-screens.md](../formats/hd-endrace-screens.md#a-malformed-tag-upstream-swallows-navigationcontroller-on-this-screen-alone)
+for the full account.
+
 ### `EndRace Rewards`: drawn, never entered (2026-09-25)
 
 HD's original never enters its own `EndRace Rewards` - no redirect in any
@@ -265,7 +274,8 @@ rewards model on HD. The screen is drawn only by
 | `RewardLine1` | `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA` on a campaign race, nothing otherwise | chosen, not measured - the widget authors the bare label `ER_MEDAL_AWARD`; the four tier idstrings are in HD's own English table |
 | `MedalImg`, `LoyaltyImg` | nothing | src-less 32x32 icons the original would texture at run time; a flat square of the authored colour would be a stand-in |
 | Loyalty row (`RewardLine2`, `RewardLoyaltyPoints`, `RewardLoyaltyActive`, `loyaltybar`) | nothing | HD's loyalty law is not recovered; Pulse's is the PSP's, and the placeholders (`"test"`, `"points!"`, `"line 2"`) never draw |
-| Confirm prompt | nothing | nested in a `<NavigationController>`, which `oag_ui::screen` does not walk - the same on Results and Menu |
+| Confirm prompt (word) | the resolved `FE_CONFIRM` text, at the authored position | **measured, since 2026-09-25** - `crate::screen::Screens::collect_widgets` now walks a `NavigationController` the same as any other container |
+| Confirm prompt (icon glyph) | nothing | `font="buttons"`, a face this build loads no atlas for - see `docs/formats/hd-endrace-screens.md`'s own doc for why a wrong glyph would be worse than none |
 
 Pointer: the screen has nothing to select, so it needs no target list - a
 click anywhere is its confirm, the rule `oag_ui::endrace::pointer`'s module

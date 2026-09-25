@@ -70,7 +70,7 @@ by ten columns" the inventory pass guessed before this one read the file.
 | Loyalty block (`Item OffsetX="1180" OffsetY="368"`) | `ER_LOYSTAT` caption, two `<Block>`s (`ER_LOY`/`IG_HUD_TOTAL`), `loyalty1.1`/`loyalty1.2`/`loyalty2` placeholder text (`"834 POINTS"`/`"3745"`) | 85 - **on `Results`, not a separate `Rewards` screen the way Pulse keeps it** |
 | `DelayPostMsg` | `idstring="ONL_MSG_DELAYPOST"` | 95 - online-only |
 | `RecordsCycleButton`/`RecordsCycle` | `δ` glyph / `idstring="ER_GLOB_REC"` | 95 - online leaderboard cycling, no binding possible offline |
-| `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 - direct idstrings, same convention as Pulse |
+| `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 - direct idstrings, same convention as Pulse, but see "A malformed tag upstream" below for why this screen alone does not draw either one |
 | `EndRaceMenuRedirect` | `<Default goto="Race End Save">` | 90 - confirm always goes through this intermediate save-transition screen, not straight to `Rewards`/`Menu` |
 
 ### The grid is four columns, not eight rows - and only two of the four are real
@@ -105,6 +105,51 @@ placeholder with these exact strings, but `EndRace Menu`'s own `<Block>`
 idstrings (`ER_RACE_AGAIN`, `ER_RETURN_GRID`, etc.) are verbatim identical to
 Pulse's, which is the corroboration that this is shared engine vocabulary
 rather than a Pulse-only table.
+
+### A malformed tag upstream swallows `NavigationController` on this screen alone
+
+**2026-09-25.** `crate::screen::Screens::collect_widgets` now walks a
+`NavigationController` the same as any other container - see
+[campaign-screens.md](../ui/campaign-screens.md)'s 2026-09-25 entry for the
+mechanism - and confirmed live on `EndRace Menu`/`EndRace Rewards` - both
+now draw `CONFIRM` at the authored position. **`EndRace Results` alone does
+not, and it is not this reading's own bug**: `DATA02`'s own copy of the
+screen authors `MedalModelGold`/`Silver`/`Bronze` (the loyalty-block trophy
+widgets, `x="1180" y="532"` `Item`) as
+
+```xml
+<ImageModel name="MedalModelGold" ...>
+  <Values Src="Data\FE\Trophies\hd_gold.vex" ... RotY="-0.5"</Values>
+</ImageModel>
+```
+
+three times, one per medal - every `<Values>` here is missing the `>` that
+should close its own opening tag before `</Values>` appears. `oag_tables::fexml::parse`'s
+own `tag_end` (`crates/tables/src/fexml.rs`) tracks quoted `>` correctly but
+has no recovery for a missing one: with no unquoted `>` anywhere in the
+malformed `<Values ...>`, the scan runs on into the *literal text*
+`</Values>` and treats **its** `>` as the one that closes the opening tag -
+so the `Values` node is pushed onto the parse stack still open, and
+everything the file authors afterwards (`MedalModelSilver`/`Bronze`,
+`RecordNotifyBlock`, `DelayPostMsg`, the divider `<Image>`, and
+`NavigationController` itself) becomes a *descendant* of that wrongly-open
+node instead of a sibling of `EndRace Results`. Confirmed directly:
+extracting just the `NavigationController` fragment into its own
+well-formed file parses and resolves both `Confirm` widgets correctly in
+isolation; extracting the whole screen (malformed tags included) finds
+none of `screen.texts` named `ControlText*` at all, out of 69 collected.
+This is a pre-existing gap in `fexml::tag_end`'s own recovery, not
+specific to `NavigationController` - `MedalModelGold`/`Silver`/`Bronze`
+were already uncollected before this pass (no `"imagemodel"` arm in
+`collect_widgets`, per the table above), so nothing that used to draw
+stopped drawing, but nothing downstream of the first malformed tag in
+this one screen ever reaches `screen.texts` either, and no one had reason
+to notice until something that *should* draw did not. Left open rather than fixed here:
+a general recovery (treating an unquoted `<` encountered mid-tag as proof
+the tag was never closed) touches a parser every front-end screen in this
+project reads through, and deserves its own pass and its own tests rather
+than a rushed patch inside this lane's own scope. See `docs/formats/fexml.md`'s
+own module doc.
 
 ## `EndRace Rewards`: authored, never entered
 
@@ -155,7 +200,8 @@ Widgets, off `DATA02`'s copy (confidence 90, direct read):
 | `RewardLine1` | `idstring="ER_MEDAL_AWARD"` (`"MEDAL AWARDED:"`), `x="670" y="360"` | the medal tier on a campaign race (chosen) |
 | `RewardLine2` / `RewardLoyaltyPoints` / `RewardLoyaltyActive` | placeholders `"test"` / `"points!"` / `"line 2"` | no - HD's loyalty law is not recovered |
 | `loyaltybar` | `<Slider>`, `idstring="ER_TOT_LOY"`, `minSlide="0" maxSlide="100000"` | no - `oag_ui::screen` does not collect a `<Slider>` |
-| `ControlTextConfirmButton` / `ControlTextConfirm` | inside a `<NavigationController>` | no - that container is not walked, the same on Results and Menu |
+| `ControlTextConfirmButton` | inside a `<NavigationController>`, `font="buttons"` | no - this build loads no atlas for that face and would otherwise risk the raw codepoint (a Greek letter) rather than the disc's own glyph; see `oag_ui::campaign::footer::NavigationLegend::read`'s own doc |
+| `ControlTextConfirm` | inside the same `<NavigationController>`, `idstring="FE_CONFIRM"` | **yes, since 2026-09-25** - `crate::screen::Screens::collect_widgets` now walks a `NavigationController` the same as any other container; confirmed live, `--menu-page endrace-rewards` |
 | `EndRaceCountDown` | `string=""` | no |
 
 `oag_game::endrace::load_hd` reads the layout when the served copy has it

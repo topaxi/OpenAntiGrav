@@ -274,10 +274,23 @@ pub fn hd_results_draw_list(
             // `ER_PERFECT` would if `Gridp.{row}` were not excluded too.
             "Target Title" | "Target0" | "Target1" | "Target2" | "loyalty1.1" | "loyalty1.2"
             | "loyalty2" => None,
+            // The `NavigationController`'s own icon glyph - `font="buttons"`
+            // (`ps_buttons.fnt`), a face this build loads no atlas for at
+            // all, and [`text_draw`]'s own `face_scale` has no role for
+            // that name either - it would draw through whichever body face
+            // this screen's `Layout` was built with, at scale `1.0`,
+            // showing the resolved idstring's literal codepoint (`"ε"`)
+            // rather than the disc's own cross-button glyph. Per
+            // `CLAUDE.md`'s "never invent what the assets already author",
+            // a wrong glyph is worse than none - drawn nothing here, the
+            // same rule `oag_ui::campaign::footer::NavigationLegend::read`
+            // applies to the identical widget on every other screen this
+            // build reads one off. `ControlTextConfirm` (the word,
+            // `font="default"` - a loaded face) still draws below.
+            "ControlTextConfirmButton" => None,
             // `Gridp.{row}` (`ER_PERFECT`) - not modelled, see the module
             // doc. Everything else (`ResultsTitle`, `GridHead1`/`2`,
-            // `ControlTextConfirmButton`/`ControlTextConfirm`) already
-            // carries its own resolved text.
+            // `ControlTextConfirm`) already carries its own resolved text.
             _ if name.starts_with("Gridp.") => None,
             _ => text.string.clone(),
         };
@@ -306,9 +319,13 @@ fn row_y(row: usize) -> f32 {
 /// measured:
 ///
 /// - The backdrop, the three divider fills and the `ER_REWARD` title draw
-///   as authored. The confirm prompt would too, but the disc nests it in a
-///   `<NavigationController>`, which [`crate::screen`] does not walk - the
-///   same on `Results` and `Menu`.
+///   as authored, and now so does the confirm prompt's own word
+///   (`ControlTextConfirm`, `"CONFIRM"`): the disc nests it in a
+///   `<NavigationController>`, which [`crate::screen`]'s
+///   `collect_widgets` walks straight through as of the change that added
+///   this sentence - the same on `Results` and `Menu`. Its own icon glyph
+///   (`ControlTextConfirmButton`, `font="buttons"`) still draws nothing -
+///   see this function's own text-loop match arm for why.
 /// - `BigPos` draws the player's own finishing place, and nothing without
 ///   one. **Chosen, not measured**: the widget's name and its placeholder
 ///   `"1"` are the only evidence it is a place at all - its authored centre
@@ -378,7 +395,10 @@ pub fn hd_rewards_draw_list(
     }
     for text in &screen.texts {
         let content = match text.name.as_deref() {
-            None | Some("ControlTextConfirmButton" | "ControlTextConfirm") => text.string.clone(),
+            // The icon glyph draws nothing - see `hd_results_draw_list`'s
+            // identical exclusion and its own doc for why.
+            Some("ControlTextConfirmButton") => None,
+            None | Some("ControlTextConfirm") => text.string.clone(),
             Some("BigPos") => model.place.map(|place| place.to_string()),
             Some("RewardLine1") => model
                 .campaign
@@ -451,7 +471,9 @@ pub fn hd_menu_draw_list(
     }
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
-        if ALL_BLOCK_NAMES.contains(&name) {
+        // The icon glyph draws nothing - see `hd_results_draw_list`'s
+        // identical exclusion and its own doc for why.
+        if ALL_BLOCK_NAMES.contains(&name) || name == "ControlTextConfirmButton" {
             continue;
         }
         let Some(content) = text.string.clone() else {

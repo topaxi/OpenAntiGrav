@@ -1043,6 +1043,82 @@ delivered on the next rather than lost - finding U5's argument, applied to a
 button with no repeat rate. Focus loss drops the pending presses beside
 `Controls::release_all`.
 
+### The `Confirm`/`Back` footer, and the `NavigationButtons` census that gates it
+
+**2026-09-25.** Both PSP titles' shared front-end root (`Skin.xml`) and
+Wipeout HD/Fury's and Omega's own carry an identical shape: one
+`<NavigationController>`, off `Top FE Screen -> FE Screen`, authoring
+`Confirm`/`Back` (plus, on HD/Omega, an online `Invite` pair,
+`StartEnabled="false"` and irrelevant here) - the literal wrapper name on
+HD/Omega's own disc is `BodgeScreenContainingNavigationController`, not this
+project's own naming. `oag_ui::campaign::footer::NavigationLegend` reads it
+directly off the raw parsed tree (`oag_tables::fexml::parse`, not
+`Screens::from_xml`, which never keeps the tree this needs), and is now read
+once at boot (`boot::screens::read_nav_legend`) and carried on `Shell`/
+`Boot` for both the live session and `--menu-page`, in addition to the
+per-open read `crate::campaign::load` already made for `Cell Selection`.
+`MenuStage::render` draws it on every ordinary menu page.
+
+**Which prompt shows where is read off the XML on Wipeout HD/Fury, and
+chosen - corroborated, not guessed - for this build's own tree.** HD/Fury's
+own front-end XML authors a `NavigationButtons="N"` attribute on most of its
+navigable `<Screen>`s (Pulse's own `Skin.xml`/`CellMode_Definition.xml`
+author no such attribute anywhere - confirmed by direct read of both, so
+"unconditional, chosen" is what stands for Pulse, unchanged). A census of
+every copy of every `*_Definition.xml` this project reads (`DATA00`-`06`)
+finds four values, and their pattern reads as a two-bit mask - bit 0
+(`1`) enables `Confirm`, bit 1 (`2`) enables `Back`:
+
+| Value | Meaning (inferred) | Screens carrying it |
+| --- | --- | --- |
+| `0` | neither - the screen draws its own prompts | Confirmation dialogs with their own Yes/No buttons (`GenericInviteConfirm`, `LeaveConfirm`, `Play Now`) |
+| `1` | `Confirm` only | `Main Menu` (the tree's own root), every `EndRace_Definition.xml` screen (`Results`/`Rewards`/`Menu`, which also author their own *local* controller with no `Back` `Text` at all - consistent), `PurchaseGame` |
+| `2` | `Back` only | `Manual`/`Manual Part 1`-`5` (page-turning, nothing to confirm), the `Stats`/`OnlineStats` sub-pages, `Race Records` |
+| `3` | both | `InGame Settings`/`InGame Settings P2`/`InGame Settings MP`/`InGame 3D Settings`/`InGame Audio Settings` (a save-or-cancel pause page) |
+
+Confidence 65 on the bitmask reading itself (an inference from the pattern,
+not a traced consumer - `NavigationButtons` is read nowhere in this
+project's own Ghidra names yet). Confidence 80 on the boundary this project
+actually uses (`Confirm` always, `Back` only past the root), because it is
+independently **measured**, not only inferred: two real RPCS3 captures
+already in this repository (`data/reference/hd-main-menu-screenshot/00.png`,
+`data/reference/hd-settings-screenshot/00.png`) show `Main Menu`'s own
+footer as `(X) CONFIRM` alone with no `Back` glyph anywhere, and `OPTIONS`
+(a page reached *from* Main Menu) as `NAVIGATION (X) CONFIRM (O) BACK` -
+exactly the `1` vs `3` split the census above reads off the XML, on the
+real title rather than this build's own tree.
+
+**This build's own tree has no disc screen to read a literal
+`NavigationButtons` value off, since the tree is ours** (see this page's own
+opening section) - so `MenuStage::render` gates on `Menu::depth() > 1`
+instead: `Confirm` always, `Back` only past the root. That boundary is
+**chosen** for exactly the same reason the tree itself is, but it is the
+boundary the two captures above corroborate rather than one picked for
+symmetry. `Cell Selection` (both Pulse's own screen and, since 2026-09-25,
+Wipeout HD/Fury's and Omega's) draws both unconditionally regardless - the
+CellMode dialect never authors `NavigationButtons` on that screen on any
+title, so there is nothing narrower to read, and Pulse's own capture already
+measured both prompts showing there
+(`docs/ui/campaign-screens.md`'s 2026-09-21 section).
+
+**Wipeout HD/Fury's own icon glyph draws nothing, on every screen this
+reads one off.** `ControlTextConfirmButton`/`BackButton` author
+`font="buttons"` (`ps_buttons.fnt`) rather than Pulse's `font="small"`, and
+this build loads no atlas for that face at all -
+`boot::fonts::load_font`/`load_menu_font` only ever resolve the language
+plugin's own `<Font>` role slots, never a literal `font=` attribute. The
+resolved idstring is the identical `"ε"`/`"γ"` codepoint Pulse's own icon
+half uses, which happens to render correctly through Pulse's own loaded
+`menu`-role atlas (confirmed live, `docs/ui/campaign-screens.md`'s
+2026-09-21 pass) - but that is Pulse's own font actually carrying the
+remapped glyph art at that codepoint, not a fact about the codepoint
+itself, and nothing confirms Wipeout HD/Fury's own loaded body face carries
+the same remapping rather than the plain Greek letter. Per `CLAUDE.md`'s
+"never invent what the assets already author", a wrong glyph is worse than
+none, so the icon half is left out and the resolved word
+(`ControlTextConfirm`/`Back`, `font="default"`, a face this build does load)
+draws alone.
+
 ## The background the menus sit on
 
 The rows are drawn over **the disc's own looping menu backdrop**, and that is a

@@ -63,6 +63,8 @@ pub struct Boot {
     pub menu_skin: &'static oag_title::MenuSkin,
     /// The frame its menus are drawn inside. See [`Shell::frame`].
     pub frame: oag_ui::menu::Frame,
+    /// Its `Confirm`/`Back` legend - see [`Shell::nav_legend`].
+    pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
     /// The Fury menu backdrop's clouds and settings, on a Fury-style HD source
     /// - see [`fury::load`]. `None` everywhere else.
     pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
@@ -246,6 +248,8 @@ pub struct Shell {
     /// all three are in hand. Empty for a title whose frame is unread, which
     /// draws the menus exactly as they were drawn before this existed.
     pub frame: oag_ui::menu::Frame,
+    /// Its `Confirm`/`Back` legend - see `screens::read_nav_legend`.
+    pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
     /// The Fury menu backdrop's settings, clouds and tints, read here for the
     /// same reason the frame is; `None` on every source but a Fury-style HD.
     pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
@@ -690,6 +694,11 @@ pub fn load_shell(
     if let Some(name) = front_end.menu_frame {
         report.push(format!("menu frame {name}: {}", frame.describe()));
     }
+    // See [`screens::read_nav_legend`]'s own doc.
+    let nav_legend = read_nav_legend(skin_xml.as_deref(), &screens.globals, &strings);
+    if let Some(legend) = &nav_legend {
+        report.push(format!("nav legend: {}", legend.describe()));
+    }
     let (track_select, ship_select) = selection_layouts(
         race_box.as_ref(),
         &strings,
@@ -720,6 +729,7 @@ pub fn load_shell(
             profile,
             menu_skin,
             frame,
+            nav_legend,
             fury_backdrop,
             track_select,
             ship_select,
@@ -1020,6 +1030,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         profile,
         menu_skin,
         frame,
+        nav_legend,
         fury_backdrop,
         track_select,
         ship_select,
@@ -1223,6 +1234,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         entries,
         menu_skin,
         frame,
+        nav_legend,
         fury_backdrop,
         track_select,
         ship_select,
@@ -1451,140 +1463,12 @@ fn load_second_movie(
     }
 }
 
-/// Every language plugin this source carries.
-///
-/// Public because a race needs the string table too, for the HUD's `idstring`
-/// captions, and it does not go through the boot path that used to be the only
-/// caller. See [`load_strings`].
-pub fn load_languages(
-    archives: &mut oag_assets::Archives,
-    plugins: &[&str],
-    report: &mut Vec<String>,
-) -> Vec<Language> {
-    let mut out = Vec::new();
-    for plugin in plugins {
-        // **Pulse's path convention, applied to every title.** It is genuinely
-        // shared today - HD's plugins resolve through it - but it lives in the
-        // Pulse crate rather than on `oag_title`, so a title that keeps its
-        // plugins elsewhere would load zero languages. That used to happen
-        // *silently*, one `continue` per miss (finding G4 of the 2026-08-18
-        // review); each miss now names the entry it asked for, so the shape of
-        // the failure is legible from the load report rather than only from an
-        // empty picker. Promoting the convention to an axis waits for the title
-        // that disagrees, which is ADR-0022's rule and the same call S6 makes.
-        let name = pulse::names::language_definition(plugin);
-        let Ok(blob) = archives.read_name(&name) else {
-            report.push(format!(
-                "language plugin {plugin}: no {name} in this source"
-            ));
-            continue;
-        };
-        let Ok(xml) = expand(&blob) else {
-            report.push(format!(
-                "language plugin {plugin}: {name} is not readable XML"
-            ));
-            continue;
-        };
-        match Language::from_definition(plugin, &xml) {
-            Some(language) => out.push(language),
-            None => report.push(format!(
-                "language plugin {plugin}: {name} declares no language"
-            )),
-        }
-    }
-
-    if out.is_empty() {
-        report.push("no language plugins resolved; the picker will be empty".to_string());
-    } else {
-        report.push(format!(
-            "{} language(s): {}",
-            out.len(),
-            out.iter()
-                .map(|l| format!("{} ({}, {})", l.name, l.native_name, l.plugin))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-    }
-    out
-}
-
-/// Which language a boot reads its text in.
-///
-/// The saved language first, then English, then whatever comes first. The
-/// fallback chain used to end at English with a note that there was nothing
-/// saved to prefer; there is now. A saved name this source does not carry falls
-/// through rather than failing - the same rule the picker's own preselection
-/// follows, and for the same reason: a settings file written against the EU
-/// disc must not stop the USA one booting.
-///
-/// Its own function so that [`load_strings`] and
-/// [`roster::load_circuit_names`] cannot answer it differently and put half the
-/// front end in one language and the circuit list in another.
-#[must_use]
-pub fn chosen_language<'a>(
-    languages: &'a [Language],
-    preferred: Option<&str>,
-) -> Option<&'a Language> {
-    preferred
-        .and_then(|name| languages.iter().find(|l| l.name.eq_ignore_ascii_case(name)))
-        .or_else(|| languages.iter().find(|l| l.name == "English"))
-        .or_else(|| languages.first())
-}
-
-/// The chosen language's string table.
-///
-/// Public for the same reason [`load_languages`] is: the HUD resolves its own
-/// `idstring` keys through this (`IG_HUD_LAP` on Pulse, `HUD_Lap` on Pure),
-/// and a race reaches it without booting the front end.
-pub fn load_strings(
-    archives: &mut oag_assets::Archives,
-    languages: &[Language],
-    preferred: Option<&str>,
-    report: &mut Vec<String>,
-) -> StringTable {
-    let Some(language) = chosen_language(languages, preferred) else {
-        return StringTable::default();
-    };
-    // No `Dynamic Entry File Source` does not always mean no strings: Pure's
-    // `PI000` (English) states every string inline in `Definition.xml`
-    // instead of naming a separate file - see `docs/formats/pure-status.md`.
-    // Re-parsing the definition is safe for a plugin that really names
-    // nothing too: `<Font>`/`<Values>` carry no `<Entry>` tag.
-    let name = match language.entries.as_deref() {
-        Some(entries) => entries.to_string(),
-        None => pulse::names::language_definition(&language.plugin),
-    };
-
-    match archives
-        .read_name(&name)
-        .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
-    {
-        Ok(xml) => {
-            let mut table = StringTable::from_xml(&xml);
-            oag_ui::strings::overlay(&mut table, &language.name, report);
-            if table.is_empty() {
-                report.push(format!("{} names no string table", language.name));
-            } else {
-                report.push(format!(
-                    "{name}: {} strings for {}",
-                    table.len(),
-                    language.name
-                ));
-            }
-            table
-        }
-        Err(e) => {
-            report.push(format!("{name}: {e}"));
-            StringTable::default()
-        }
-    }
-}
-
 mod campaign2048;
 pub mod fonts;
 pub mod fury;
 mod images;
 mod includes;
+pub mod languages;
 mod movies;
 mod options;
 mod progress;
@@ -1596,12 +1480,13 @@ mod steps;
 pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font, load_title_font};
+pub use languages::{chosen_language, load_languages, load_strings};
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};
 pub use progress::MediaProgress;
 use progress::{loaded, lock_media, starting, watching};
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
-use screens::{load_included_screens, load_screens, selection_layouts};
+use screens::{load_included_screens, load_screens, read_nav_legend, selection_layouts};
 use steps::Steps;
 use xml::expand;
 

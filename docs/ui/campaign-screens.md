@@ -1855,3 +1855,24 @@ and its own "what is not determined" section.
   own numbers, still chosen rather than measured. Confirmed live,
   `cellselect-after3-footer-crop.png` next to the reference frame:
   `Confirm` and `Back` now match in size and sit on the same baseline.
+- ~~Wipeout HD/Fury's own `Cell Selection` draws no `Confirm`/`Back` legend
+  at all - a different lane's own thread.~~ **Done, 2026-09-25**:
+  `oag_game::campaign::load_hd`/`load_omega` now call the same
+  `read_footer` Pulse's own `load` does, pointed at
+  `oag_hd`/`oag_omega::frontend::names::FRONTEND_ROOT` instead of Pulse's -
+  the identical `NavigationController` shape lives on HD/Omega's own shared
+  `Skin.xml` too (`Top FE Screen -> FE Screen ->
+  BodgeScreenContainingNavigationController`, that literal name is the
+  disc's own). Wired into `oag_ui::campaign::hd::hd_cell_draw_list`'s new
+  `footer_overlay` parameter, drawn on `Cell Selection` only - the same
+  screen Pulse's own draws it on, and for the same reason: neither title's
+  `CellMode_Definition.xml` authors a `NavigationButtons` gate on that
+  screen, so there is nothing to read a narrower rule off. `Grid Selection`
+  still does not draw it, matching Pulse's own scope. Confirmed live via
+  `--menu-page cell-select` against `hdfury-ps3-eu-dec.iso`: `CONFIRM`/
+  `BACK` both draw at the screen's own authored position
+  (`data/scratch/drive-2026-09-25/shots/hd-cellselect2.png`, not committed).
+  HD's own ticker stays unbuilt - confirmed by direct read that its shared
+  `Skin.xml` authors no `TextInfoIsAlwaysLast` viewport at all, so
+  `TickerLayout::read` correctly answers `None` rather than there being
+  anything left to wire.
