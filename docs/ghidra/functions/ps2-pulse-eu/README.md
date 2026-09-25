@@ -27,13 +27,14 @@ form, and Ghidra's string search will return all three.
 | [Recovered C library](libc.md) | `strlen`, `strcmp`, `strcasecmp`, `tolower`, `_ctype_` |
 | [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
 | [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |
+| [Ship skins](ship-skin.md) | A skin is a whole sibling atlas picked by the `.dat`'s file name; the `.dat`'s bytes are never read |
 | [Batch draw state](batch-draw-state.md) | The port keeps the PSP's `pass_mask` bit for bit, and programs the same two blend equations into GS registers |
 | [Collision feedback](collision-shake.md) | The hull-spark trigger, the shield-bubble hit-flash, and a camera shake on impact - all three shared with the PSP, the shake mislabelled a sound cue there until this page's own read prompted correcting it |
 | [Anim Transform](anim-transform.md) | The scene-graph node the boost plume's anchors ride: one shared per-race clock, not a per-object timer, matching PSP's class field for field |
 
 ## Renames
 
-**175 applied live**, 3 more collected in [names.tsv](names.tsv) but not yet
+**180 applied live**, 3 more collected in [names.tsv](names.tsv) but not yet
 applied - the `Anim Transform` page's three data globals, rejected by the
 MCP bridge's `rename_data` name-quality gate (see that page). Run the script
 directly against a bridge with `SCES_547.48` open to pick those up, since it

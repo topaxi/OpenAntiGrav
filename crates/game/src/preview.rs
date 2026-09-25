@@ -164,6 +164,22 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
     Ok(model)
 }
 
+/// Paints the skin file `entry` onto a preview `model` built from
+/// `model_name`, the same swap a race makes - the PSP's four-block upload or
+/// the PS2's whole-atlas sibling, whichever the hull's own slots call for.
+/// Returns the report lines; a skin that will not apply leaves the hull's
+/// own paint and says so in them. See `crate::livery::ship_skin`.
+pub fn paint(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    model_name: &str,
+    model: &mut Model,
+) -> Vec<String> {
+    let mut report = Vec::new();
+    crate::livery::ship_skin::apply(archives, entry, model_name, model, &mut report);
+    report
+}
+
 /// One preview model and the GPU state that draws it.
 pub struct Preview {
     model: Model,

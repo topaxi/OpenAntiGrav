@@ -221,3 +221,8 @@
 0x001867d0	function	BackendController_ParseAttributes	90	refresh-mode.md
 0x0027a85c	data	g_refresh_mode	90	refresh-mode.md
 0x0027f030	data	g_backend_task_names	90	refresh-mode.md
+0x001dfb70	function	Skin_SwapAtlasSibling	88	ship-skin.md
+0x001eea58	function	Texture_LoadVexNode	80	ship-skin.md
+0x001117c0	function	strstr	90	ship-skin.md
+0x0010ec30	function	strcat	85	ship-skin.md
+0x00102d28	function	memcpy	90	ship-skin.md

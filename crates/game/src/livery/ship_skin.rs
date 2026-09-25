@@ -37,42 +37,26 @@
 //! `0x08828398`, `0x0882885c`, `0x08843804`, `0x088eaa84`. Both need the
 //! Ghidra bridge.
 //!
-//! # The PS2 build paints one atlas, not four slots
+//! # The PS2 build swaps one whole atlas, and never reads the `.dat`
 //!
-//! **The original applies these same `.dat` files on PS2 too - evidenced,
-//! not assumed.** `SCES_547.48`'s own strings carry `ship_alt.dat`,
-//! `ship_eliminator.dat`, `PI_ModelSkin` and `ALL_TEXTURES.TGA` together
-//! (`strings SCES_547.48 | grep -i -E 'ship_alt|all_textures'`). But a PS2
-//! ship's `Ship.vex` names one `ALL_Textures.tga` (256x256) where the PSP
-//! one names four 128x128 `texture1.tga`..`texture4.tga` slots - confirmed
-//! against `pulse-ps2-eu.chd`'s own nested texture set, which decodes no
-//! standalone `textureN.tga` entry at all for a base-roster team, only the
-//! merged atlas. [`apply`] below detects this case and says so rather than
-//! reporting the generic "no slot is named `texture1.tga`" miss, which
-//! would read as "this hull has no skin support" when the disc's own
-//! strings say the opposite.
+//! A PS2 ship's `Ship.vex` names one 256x256 `ALL_Textures.tga` atlas where
+//! the PSP one names four `texture1.tga`..`texture4.tga` slots, so the PSP's
+//! block upload has nothing to land on. The PS2 port's own applier,
+//! `Skin_SwapAtlasSibling` (`0x001dfb70` in `SCES_547.48`), takes only the
+//! skin's **file name**: `ship_alt.dat` loads `livery.pct` beside the atlas,
+//! `ship_eliminator.dat` loads `<stem>_eliminator.pct`, and the whole sibling
+//! is copied over the atlas. Confidence 88; every sibling exists for all twelve
+//! PS2 teams at the atlas's exact size. [`apply`] takes that path whenever the
+//! hull carries the atlas, before and regardless of whether the `.dat` parses.
+//! See `docs/ghidra/functions/ps2-pulse-eu/ship-skin.md`.
 //!
-//! **What is not recovered: the byte layout the PS2 counterpart of
-//! `Skin_ApplyToModel` writes into that one atlas.** A straight 2x2 packing
-//! of the four blocks is the natural reading of the dimensions alone - four
-//! 128x128 squares tile a 256x256 exactly - but a reading is not a
-//! measurement, and nothing here writes a guessed quadrant order into the
-//! atlas. The next step is decompiling the PS2 executable's own xrefs to
-//! the `ALL_TEXTURES.TGA` string (or to `%s\%s.dat`, the format string that
-//! builds `ship_alt.dat`'s path) to find that function and read what it
-//! actually does, which needs the Ghidra bridge against the
-//! `ps2-pulse-eu` program.
+//! **`ship.dat`'s `<stem>2.pct` baseline restore is not applied.** Whether the
+//! original repaints every un-skinned craft with it is not traced, and for
+//! Feisar and Harimau it differs from the atlas the hull already wears, so
+//! applying it on a guess would change every PS2 race's picture.
 
 use oag_race::Mode;
 use oag_render::mesh::{self, Model};
-
-/// The label [`oag_render::mesh::resolve_texture_slots`] gives a PS2 hull's
-/// single paintable atlas, where the PSP build's
-/// [`oag_render::mesh::ship_skin::SLOT_NAMES`] names four separate slots
-/// instead. Used only to tell that specific miss apart from a hull that
-/// truly declares none of the four PSP slot names, in [`apply`]'s own
-/// report line - not to paint it, since the byte layout is unrecovered.
-const PS2_ATLAS_LABEL: &str = "ALL_Textures.tga";
 
 /// The archive entry holding the skin `team` should fly, or nothing.
 ///
@@ -171,7 +155,9 @@ fn declared(
     Some(skin.location.clone())
 }
 
-/// Puts `entry`'s four blocks over `hull`'s matching texture slots.
+/// Puts the skin `entry` names onto `hull`: the PS2 sibling atlas when the
+/// hull carries the PS2 atlas, else `entry`'s own four blocks over the PSP
+/// hull's matching texture slots.
 ///
 /// Every outcome is reported and none is silent, on the module rule a missing
 /// hull already follows: a race that quietly flew the baseline paint after
@@ -180,12 +166,22 @@ fn declared(
 /// **A file that will not read or will not parse leaves the hull's own
 /// textures alone**, which is the disc's own data rather than a stand-in, and
 /// says so. Nothing here invents a texture.
-pub(super) fn apply(
+pub(crate) fn apply(
     archives: &mut oag_assets::Archives,
     entry: &str,
+    hull_name: &str,
     hull: &mut Model,
     report: &mut Vec<String>,
 ) {
+    if hull
+        .textures
+        .iter()
+        .flatten()
+        .any(|slot| mesh::ship_skin::is_ps2_atlas(&slot.label))
+    {
+        apply_ps2_atlas(archives, entry, hull_name, hull, report);
+        return;
+    }
     let blob = match archives.read_name(entry) {
         Ok(blob) => blob,
         Err(error) => {
@@ -227,47 +223,79 @@ pub(super) fn apply(
         hull.textures.len()
     ));
     if applied == 0 {
-        // **A PS2 hull's paintable surface is one atlas, not four slots.**
-        // Its `Ship.vex` names `ALL_Textures.tga` (256x256) where the PSP
-        // one names `texture1.tga`..`texture4.tga` (four 128x128 slots) -
-        // `Ps2TextureSet::resolve` finds no standalone `textureN.tga` entry
-        // at all for a base-roster team, only the merged atlas, so
-        // `mesh::ship_skin::slot_of` has nothing to match against and this
-        // is not the generic "hull declares none of the four slots" miss.
-        // **The original applies the same `.dat` files here too, evidenced
-        // rather than assumed**: `SCES_547.48`'s own strings carry
-        // `ship_alt.dat`, `ship_eliminator.dat`, `PI_ModelSkin` and
-        // `ALL_TEXTURES.TGA` together. What is not recovered is the byte
-        // layout `Skin_ApplyToModel`'s PS2 counterpart writes into that one
-        // atlas - a 2x2 packing of the four blocks is the natural reading of
-        // the dimensions alone, but a reading is not a measurement, so this
-        // build leaves the atlas untouched rather than write a guessed
-        // layout into it. See `docs/formats/ps2-texture.md`.
-        let atlas = hull
-            .textures
-            .iter()
-            .flatten()
-            .any(|slot| slot.label.eq_ignore_ascii_case(PS2_ATLAS_LABEL));
-        if atlas {
-            report.push(format!(
-                "{entry}: this hull's paintable surface is {PS2_ATLAS_LABEL}, not the four \
-                 texture1.tga..texture4.tga slots this file's blocks target - the PS2 \
-                 executable's own strings show it applies ship_alt.dat/ship_eliminator.dat \
-                 here too, but the byte layout it writes into the atlas is not recovered, so \
-                 this build will not guess it - the craft keeps its own paint"
-            ));
-        } else {
-            report.push(format!(
-                "{entry}: no slot of this hull is named texture1.tga..texture4.tga - \
-                 the craft keeps its own paint"
-            ));
-        }
+        report.push(format!(
+            "{entry}: no slot of this hull is named texture1.tga..texture4.tga - \
+             the craft keeps its own paint"
+        ));
     }
     if !stretched.is_empty() {
         report.push(format!(
             "{entry}: {} slot(s) whose size the skin does not match ({})",
             stretched.len(),
             stretched.join("; ")
+        ));
+    }
+}
+
+/// The PS2 half of [`apply`]: `Skin_SwapAtlasSibling`'s whole-atlas swap.
+///
+/// The sibling's directory is the atlas node's own declared path, re-read
+/// from `hull_name`'s `.vex` because a built [`Model`] keeps only each slot's
+/// last path component. `entry`'s bytes are never read, as in the original.
+fn apply_ps2_atlas(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    hull_name: &str,
+    hull: &mut Model,
+    report: &mut Vec<String>,
+) {
+    let atlas_path = match archives.read_name(hull_name) {
+        Ok(blob) => mesh::ship_skin::ps2_atlas_path(&blob),
+        Err(error) => {
+            report.push(format!(
+                "{entry}: re-reading {hull_name} failed ({error}) - the craft keeps its own paint"
+            ));
+            return;
+        }
+    };
+    let Some(atlas_path) = atlas_path else {
+        report.push(format!(
+            "{entry}: {hull_name} declares no ALL_Textures.tga node path - the craft keeps \
+             its own paint"
+        ));
+        return;
+    };
+    let Some(sibling) = mesh::ship_skin::ps2_atlas_sibling(&atlas_path, entry) else {
+        report.push(format!(
+            "{entry}: not a skin file name the PS2 applier knows (ship_alt.dat, \
+             ship_eliminator.dat) - the craft keeps its own paint"
+        ));
+        return;
+    };
+    let name = oag_pulse::ps2_texture_name(&sibling).unwrap_or(sibling);
+    let decoded = archives
+        .read_name(&name)
+        .map_err(|error| error.to_string())
+        .and_then(|blob| oag_texture::ps2_texture::parse(&blob).map_err(|e| e.to_string()));
+    let texture = match decoded {
+        Ok(texture) => texture,
+        Err(error) => {
+            report.push(format!(
+                "{entry}: its PS2 atlas {name} will not load ({error}) - the craft keeps its \
+                 own paint"
+            ));
+            return;
+        }
+    };
+    let (width, height) = (u32::from(texture.width), u32::from(texture.height));
+    let applied = mesh::ship_skin::apply_ps2_atlas(hull, width, height, &texture.to_rgba());
+    report.push(format!(
+        "{entry}: PS2 skin swaps in {name} ({width}x{height}) whole, as \
+         Skin_SwapAtlasSibling does ({applied} atlas slot(s) repainted)"
+    ));
+    if applied == 0 {
+        report.push(format!(
+            "{entry}: {name} is not the size of this hull's atlas - the craft keeps its own paint"
         ));
     }
 }

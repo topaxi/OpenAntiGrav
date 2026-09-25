@@ -125,3 +125,54 @@ fn a_hull_with_no_matching_slots_is_left_untouched() {
         "something_else.tga"
     );
 }
+
+/// The three skin file names the PS2 applier knows, and the sibling each one
+/// builds - read off `Skin_SwapAtlasSibling`'s string table.
+#[test]
+fn each_ps2_skin_name_builds_its_own_sibling() {
+    let atlas = r"Data\Ships\Alpha\Textures\ALL_Textures.tga";
+    assert_eq!(
+        ps2_atlas_sibling(atlas, r"Data\Ships\Alpha\ship_alt.dat").as_deref(),
+        Some(r"Data\Ships\Alpha\Textures\livery.mip")
+    );
+    assert_eq!(
+        ps2_atlas_sibling(atlas, r"Data\Ships\Alpha\SHIP_ELIMINATOR.DAT").as_deref(),
+        Some(r"Data\Ships\Alpha\Textures\ALL_Textures_eliminator.mip")
+    );
+    assert_eq!(
+        ps2_atlas_sibling(atlas, "ship.dat").as_deref(),
+        Some(r"Data\Ships\Alpha\Textures\ALL_Textures2.mip")
+    );
+    assert_eq!(
+        ps2_atlas_sibling(atlas, r"Data\Ships\Alpha\other.dat"),
+        None
+    );
+}
+
+/// Both atlas spellings are the atlas, in any case; nothing else is.
+#[test]
+fn both_atlas_spellings_match_case_insensitively() {
+    assert!(is_ps2_atlas("ALL_Textures.tga"));
+    assert!(is_ps2_atlas("all_textures.tga"));
+    assert!(is_ps2_atlas("Textures_All.tga"));
+    assert!(!is_ps2_atlas("texture1.tga"));
+    assert!(!is_ps2_atlas("Lights_GLOW.tga"));
+}
+
+/// Only the atlas slot is replaced, and only by a same-sized picture.
+#[test]
+fn the_atlas_slot_alone_is_replaced_and_only_at_its_own_size() {
+    let mut hull = Model::none("test hull");
+    hull.textures = vec![
+        texture("Lights_GLOW.tga"),
+        texture("ALL_Textures.tga"),
+        None,
+    ];
+    let painted = [1u8; 16];
+    assert_eq!(apply_ps2_atlas(&mut hull, 4, 1, &painted), 0);
+    assert_eq!(apply_ps2_atlas(&mut hull, 2, 2, &painted), 1);
+    assert_eq!(rgba(hull.textures[0].as_ref().unwrap())[0], 9);
+    let atlas = hull.textures[1].as_ref().unwrap();
+    assert_eq!(atlas.label, "ALL_Textures.tga");
+    assert_eq!(rgba(atlas), painted);
+}

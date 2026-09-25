@@ -18,10 +18,20 @@
 //! runtime asset path's own last component, the same rule this reads), so
 //! matching against the already-built [`super::Model::textures`] needs no
 //! second look at the source `.vex` bytes.
+//!
+//! # The PS2 build swaps one whole atlas instead
+//!
+//! A PS2 hull has no `\TEXTUREn.TGA` slots; it names one 256x256
+//! `ALL_Textures.tga` atlas. The PS2 port's `Skin_SwapAtlasSibling` never reads
+//! the `.dat` at all: it maps the skin's file name to a sibling atlas entry
+//! beside the hull's own and copies that over the atlas whole. [`is_ps2_atlas`],
+//! [`ps2_atlas_path`], [`ps2_atlas_sibling`] and [`apply_ps2_atlas`] are that
+//! path. See `docs/ghidra/functions/ps2-pulse-eu/ship-skin.md`.
 
 use std::sync::Arc;
 
 use oag_texture::ship_skin;
+use oag_vex::vex;
 
 use super::{Model, ModelTexture};
 
@@ -83,6 +93,91 @@ pub fn apply(hull: &mut Model, skin: &ship_skin::Skin) -> usize {
             block.width as u32,
             block.height as u32,
             block.to_rgba(),
+            None,
+        )));
+        applied += 1;
+    }
+    applied
+}
+
+/// The two spellings of a PS2 hull's one paintable atlas that
+/// `Skin_SwapAtlasSibling` (`0x001dfb70` in `SCES_547.48`) matches, as a
+/// file name. Feisar authors the second; the other eleven teams the first.
+/// See `docs/ghidra/functions/ps2-pulse-eu/ship-skin.md`.
+pub const PS2_ATLAS_NAMES: [&str; 2] = ["all_textures.tga", "textures_all.tga"];
+
+/// Whether a texture slot's own label is a PS2 hull's paintable atlas.
+/// Case-insensitive: the original upper-cases the name before it matches, and
+/// the disc spells it three different ways.
+#[must_use]
+pub fn is_ps2_atlas(label: &str) -> bool {
+    PS2_ATLAS_NAMES
+        .iter()
+        .any(|name| label.eq_ignore_ascii_case(name))
+}
+
+/// The declared runtime path of `data`'s PS2 atlas `Texture` node, if the
+/// model has one - `Data\Ships\<Team>\Textures\ALL_Textures.tga` and its
+/// spellings. The directory [`ps2_atlas_sibling`] builds in comes from here,
+/// because that is where the original takes it from: the node's own name.
+#[must_use]
+pub fn ps2_atlas_path(data: &[u8]) -> Option<String> {
+    let classes = vex::classes_of(data).ok()?;
+    let texture = classes.texture?;
+    let nodes = vex::nodes(data).ok()?;
+    nodes
+        .iter()
+        .filter(|node| node.class_id == texture)
+        .filter_map(|node| vex::texture_asset_path(data.get(node.payload())?))
+        .find(|path| is_ps2_atlas(path.rsplit(['/', '\\']).next().unwrap_or(path)))
+}
+
+/// The sibling atlas a PS2 skin file names, built the way
+/// `Skin_SwapAtlasSibling` builds it, with the `.mip` extension the original
+/// appends (its `Texture_FindOrLoad` then rewrites that to `.pct`).
+///
+/// Only the skin's **file name** is consulted, never its bytes:
+/// `ship_alt.dat` gives `<dir>\livery.mip`, `ship_eliminator.dat`
+/// `<dir>\<stem>_eliminator.mip`, and `ship.dat` `<dir>\<stem>2.mip`. Any other
+/// name is `None`, the original's own no-op. `atlas_path` is the atlas node's
+/// declared path, see [`ps2_atlas_path`].
+#[must_use]
+pub fn ps2_atlas_sibling(atlas_path: &str, skin_entry: &str) -> Option<String> {
+    let skin_file = skin_entry.rsplit(['/', '\\']).next().unwrap_or(skin_entry);
+    let (dir, atlas_file) = atlas_path.rsplit_once(['/', '\\'])?;
+    let stem = atlas_file
+        .rsplit_once('.')
+        .map_or(atlas_file, |(stem, _)| stem);
+    let file = if skin_file.eq_ignore_ascii_case("ship_alt.dat") {
+        "livery".to_string()
+    } else if skin_file.eq_ignore_ascii_case("ship_eliminator.dat") {
+        format!("{stem}_eliminator")
+    } else if skin_file.eq_ignore_ascii_case("ship.dat") {
+        format!("{stem}2")
+    } else {
+        return None;
+    };
+    Some(format!(r"{dir}\{file}.mip"))
+}
+
+/// Replaces every PS2 atlas slot of `hull` with `atlas`, whole, in place -
+/// the original's `memcpy` of the sibling's image over the hull atlas's own.
+/// Returns how many slots were replaced. A sibling whose size differs from the
+/// slot it would land in is refused: the original copies the *hull* atlas's
+/// length, which only means anything when the two are the same shape, and
+/// every shipped sibling is.
+pub fn apply_ps2_atlas(hull: &mut Model, width: u32, height: u32, rgba: &[u8]) -> usize {
+    let mut applied = 0;
+    for slot in &mut hull.textures {
+        let Some(existing) = slot else { continue };
+        if !is_ps2_atlas(&existing.label) || existing.width != width || existing.height != height {
+            continue;
+        }
+        *slot = Some(Arc::new(ModelTexture::rgba8(
+            existing.label.clone(),
+            width,
+            height,
+            rgba.to_vec(),
             None,
         )));
         applied += 1;

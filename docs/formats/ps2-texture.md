@@ -746,24 +746,22 @@ the nested texture set it resolves against (the entry immediately before
 whatsoever - confirmed by resolving all four names against the set directly,
 not merely by their absence from a node's own declared name.
 
-**The original applies the same `.dat` files here too - confidence 95,
-evidenced rather than assumed.** `strings SCES_547.48` carries `ship_alt.dat`,
-`ship_eliminator.dat`, `PI_ModelSkin`, the `%s\%s.dat` format string that
-builds the first two, and `ALL_TEXTURES.TGA`/`\ALL_TEXTURES.TGA` together.
-Four independent load-bearing strings for one mechanism landing side by side
-in the binary's string table is not circumstantial.
-
-**What is not determined: the byte layout the PS2 build's own applier writes
-into that one atlas.** A straight 2x2 tiling of the four 128x128 blocks is the
-natural reading of the dimensions alone - `256 = 2 * 128` on both axes - but
-that is a reading of arithmetic, not a measurement of the applier's own code
-or a decoded pixel match (there is nothing to match against: no standalone
-`textureN.tga`/`.pct` survives on the PS2 disc to compare a quadrant to).
-Confidence on the 2x2 packing itself is well under 50 and it is not
-implemented anywhere in this project on that basis - see
-[`oag_game::livery::ship_skin`](../../crates/game/src/livery/ship_skin.rs)'s
-own module doc. Settling it needs decompiling the PS2 executable's own xrefs
-to the `ALL_TEXTURES.TGA` string (or to `%s\%s.dat`) in `ps2-pulse-eu`.
+**The PS2 port has its own skin mechanism, and it is not a block upload -
+confidence 88.** `Skin_SwapAtlasSibling` (`0x001dfb70` in `SCES_547.48`, found
+from the only xref to `\ALL_TEXTURES.TGA`) consults only the skin file's
+**name**: `ship_alt.dat` loads `livery.pct` from the atlas's own directory,
+`ship_eliminator.dat` loads `<stem>_eliminator.pct`, and the whole sibling is
+`memcpy`d over the hull's atlas at the atlas's own size. The `.dat`'s bytes are
+never read on PS2, even though the disc still carries them in the PSP layout.
+There is no quadrant packing to recover. Every sibling exists for all twelve
+PS2 teams, each 256x256 and the same 66,829 bytes as the atlas, and
+AG_Systems' `livery.pct` is the same cyan livery the PSP's `ship_alt.dat`
+paints. Full reading, the per-player atlas copies `Texture_LoadVexNode`
+makes, and the untraced `ship.dat` baseline restore in
+[`ps2-pulse-eu/ship-skin.md`](../ghidra/functions/ps2-pulse-eu/ship-skin.md);
+implemented by `oag_render::mesh::ship_skin::apply_ps2_atlas` and
+[`oag_game::livery::ship_skin`](../../crates/game/src/livery/ship_skin.rs),
+pinned by `crates/game/tests/ps2_ship_skin_ground_truth.rs`.
 
 ## Not determined
 - **`flags` at `+0x02`.** 0x2000 on 3,925 textures and 0x2040 on 1,423. Nothing
