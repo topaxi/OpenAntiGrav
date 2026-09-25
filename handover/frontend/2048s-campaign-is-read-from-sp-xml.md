@@ -99,7 +99,14 @@ needed.
   twenty `MPSeason01`-`20` entries carry no `linkedevent` and no relation to
   `SP.xml` at all, yet sit in the identical small coordinate range - so the
   fit is spurious, not a real one, and is not worth re-attempting without a
-  decompile.
+  decompile. **2026-09-25: the per-event detail screen (real game's tap
+  target, not this build's now-removed bottom bar) was also searched for as
+  an authored `NEWGUI` screen and is not one** - see
+  [2048s-front-end-is-read-and-not-wired.md](2048s-front-end-is-read-and-not-wired.md)'s
+  own 2026-09-25 note. `MapEvent::detail` (built from this file's own
+  `M_TRACKDEF`/engine-mode/laps/weapon-set fields, `crates/game/src/boot/
+  campaign2048.rs`) is still correct, real data - only where the front end
+  draws it changed, not how it is derived here.
 - **`Data\xml\MP.xml`'s own 230-instance season/level schema
   (`1114956821`/`425681076`) is unread beyond its field census.** Not
   `SP.xml`'s shape at all - see `2048-campaign.md`'s own section.

@@ -648,7 +648,7 @@ the order a player sees it, with what each part rests on:
 | `TitleScreen` | its own six button redirects, all to `GameModeChoice` | `Title_Screen.gtf` centred, `BOOT_PRESS_ANY` pulsing after its `delay="1.0"`, the EU legal footer through the `DirectEmbed` include, in `NEOSANS_BOLD` at its own 22-unit line height against `NEOSANS_BOLD_LARGE`'s 37 | authored, 92; the font-role ratio is read off the two `.fnt` headers |
 | `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the `Orange2048` cursor ring is **chosen** |
 | `Home` | the same | its five `<TouchButton>`s; each destination now draws - see [Wired: `Home`'s five destinations draw](#wired-homes-five-destinations-draw-2026-09-21) | authored, 92 |
-| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own scrollable canvas, plus a panel naming the selected event | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored); **2026-09-25: the grid's own scale is now measured, not the DLC-tier projection** - see below |
+| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own scrollable canvas; **no panel or card draws on a tap since 2026-09-25** - see below | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored); **2026-09-25: the grid's own scale is now measured, not the DLC-tier projection** - see below |
 
 **2026-09-25: the campaign map's canvas/pitch/marker scale is measured off
 frames `12`/`13`, correcting a wrong reading of the shell's own XML.** The
@@ -692,6 +692,46 @@ the base package, with `cargo run -p oag-tools --example psarc_grep`,
 matches zero of them: the real tile art and its per-event placement are
 native-code-driven, out of reach without a Ghidra pass, the same conclusion
 `frontend-campaign-map.md` already reached for the DLC tiers' own hotspots.
+
+**2026-09-25: the invented bottom panel is removed, and no event-card
+screen replaces it - searched for as XML and not found.** Until this pass a
+tap drew a full-width bar naming the selected event's name/circuit/mode/laps
+/weapons, covering roughly 15% of the screen - this build's own chrome, not
+anything the disc draws there. The real screen shows nothing on the base map
+itself; tapping a node (`data/reference/2048-frontend/
+14-campaign-map-event-card-unity-square.png`, gitignored - **and this fires
+for a locked node too**, not only an open one) opens a separate, richer
+card: a per-event photo backdrop, the event's name and kind, a `PASS`/
+objective line, lap-count arrows, three pagination dots and three bottom
+buttons. That card was searched for as an authored `NEWGUI` screen the way
+`CANVAS`/`PITCH`/`MARKER` above were measured as pixels, and it is not
+there: `<TouchCampaign>` carries exactly one child, `redirect="Launch
+2048"`, in both the base package and the `v1.04` patch; `Launch 2048`
+(`InGame_Definition.xml`, byte-identical between the two) is nothing but a
+`<BackendController task="Launch">` straight through to `InGame2048`, no
+confirm screen in between. The two screens that share the tick/cross
+vocabulary a confirm dialog would use - `StartEventConfirm`/
+`FriendStartEventConfirm` (`Community_Definition.xml`) - are a small
+660x192 online "join this friend's event?" box, two buttons, one line of
+text: nothing like the three-button, photo-backed card. None of the 25
+`NEWGUI/` documents across the base package, the patch's two archives or
+either DLC package name anything shaped like it (`cargo run -p oag-tools
+--example psarc_grep -- <data.psarc> <needle>` against `TouchCampaign`,
+`Launch 2048` and every screen name the archive itself lists; a new scratch
+tool, `dump_screen_scratch.rs`, dumps any one named `<Screen>` block out of
+any `NEWGUI/*.xml` entry to check each candidate in full). The card's own
+text is real and already shared with `EndRace_Definition.xml`'s post-race
+objective screen (`ER_FINISH_5TH` and its siblings in
+`data/plugins/languages/*/entries.xml`), but its layout, its per-event photo
+and its button chrome are not - native-code-driven and unlocated, the same
+conclusion the hex tile art, background, header and season card above
+already reached. Per this project's "never invent" rule, nothing stands in
+for it: a player who selects an event today sees only its marker recolour
+under the cursor ring, with no name, circuit or objective text anywhere on
+screen - `Frontend::selected_event`/`MapEvent::detail` still carry that real,
+disc-authored text (built from `SP.xml` in
+`crates/game/src/boot/campaign2048.rs`) for whenever the card itself is
+recovered, but the draw call that used to show it is gone, not replaced.
 | `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
 
 **How the screens are found.** `NEWGUI/Skin.xml` declares no screen; the
