@@ -407,6 +407,9 @@ impl CampaignStage {
     pub(crate) fn open_grid_selection(&mut self, campaign: Campaign) {
         self.grid_range = campaign.grid_range();
         self.active_campaign = Some(campaign);
+        // `with_per_page(1)` - HD/Fury's own `Grid Selection` pages one
+        // flyer at a time, not Pulse's four-hex page. See
+        // `oag_ui::campaign::GridSelection::per_page`'s own doc.
         let model = oag_ui::campaign::GridSelection::new(
             self.grids
                 .get(self.grid_range.clone())
@@ -414,7 +417,8 @@ impl CampaignStage {
                 .iter()
                 .map(|grid| Self::grid_summary(grid, &self.title, &self.records))
                 .collect(),
-        );
+        )
+        .with_per_page(1);
         self.screen = Screen::Grid(model);
     }
 
@@ -570,6 +574,11 @@ impl CampaignStage {
             // function was never meant to see.
             Screen::Selection(_) => 0,
         };
+        // Shared by every title - [`Self::has_selection`] is the same "did
+        // `Campaign Selection` read" discriminator [`Self::open_grid_selection`]'s
+        // own doc and `crate::main::session::campaign::handle_campaign`'s
+        // `Back` routing already use, so this rebuild pages the same way
+        // the screen it is returning to just did.
         let mut model = oag_ui::campaign::GridSelection::new(
             self.grids
                 .get(self.grid_range.clone())
@@ -578,6 +587,9 @@ impl CampaignStage {
                 .map(|grid| Self::grid_summary(grid, &self.title, &self.records))
                 .collect(),
         );
+        if self.has_selection() {
+            model = model.with_per_page(1);
+        }
         model.set_index(index);
         self.screen = Screen::Grid(model);
     }

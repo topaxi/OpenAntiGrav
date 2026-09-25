@@ -173,9 +173,12 @@ impl GridSelection {
         if pointer.clicked
             && let Some(target) = hit
         {
+            // `up arrow`/`down arrow` are the click equivalent of the pad's
+            // `Up`/`Down` - see `Self::page_step`'s own doc for the
+            // measurement this mirrors.
             match target.what {
-                What::Previous => out.extend(self.step(-1)),
-                What::Next => out.extend(self.step(1)),
+                What::Previous => out.extend(self.page_step(-1)),
+                What::Next => out.extend(self.page_step(1)),
                 What::Hex(index) if index == was => out.push(Event::Confirmed),
                 What::Hex(index) => out.extend(self.select(index)),
             }
@@ -186,8 +189,15 @@ impl GridSelection {
         out
     }
 
-    /// Moves the selection by one tier, wrapping - shared by [`Self::update`]'s
-    /// keyboard up/down and a click on the paging arrows.
+    /// Moves the selection by one tier, wrapping. **HD/Fury only now** -
+    /// its own `Grid Selection` pages one flyer at a time
+    /// ([`Self::per_page`] `== 1`), reusing this unchanged wrapping idiom
+    /// since that pager's own clamp-versus-wrap behaviour was never
+    /// independently measured (unlike Pulse's own, see [`Self::page_step`]).
+    /// [`Self::page_step`] delegates back to this whenever `per_page <= 1`,
+    /// so nothing about HD's own paging (pad or the click arrows in
+    /// `super::hd::GridSelection::hd_pointer`) changed when Pulse's own
+    /// paging was fixed.
     pub(super) fn step(&mut self, step: i32) -> Option<Event> {
         let count = self.grids.len();
         if count == 0 {
@@ -195,6 +205,82 @@ impl GridSelection {
         }
         let index = (self.index as i64 + i64::from(step)).rem_euclid(count as i64) as usize;
         self.index = index;
+        Some(Event::Moved)
+    }
+
+    /// A page turn - `Up`/`Down` on Pulse's own `Grid Selection`, and the
+    /// `up arrow`/`down arrow` click targets. **Clamps at the deck's own
+    /// ends, does not wrap**, and moves to the same slot within the new
+    /// page - all three measured live against PPSSPP on 2026-09-25
+    /// (`pulse-psp-usa.chd`, a down press from `grid0` landing on `grid4`'s
+    /// own `"GRID 5"`, a further down from the last page **staying on
+    /// `"PHANTOM GRID 1"` rather than moving at all** - not sliding to the
+    /// deck's own last grid either, which is what clamping the raw index
+    /// rather than the page index would give - and a right-then-down from
+    /// `grid1` landing on `grid5`'s own `"GRID 6"` rather than resetting to
+    /// `"GRID 5"`). See `docs/ui/campaign-screens.md`'s "Measured against
+    /// PPSSPP, 2026-09-25" for the full walk. Confidence 90.
+    ///
+    /// **HD only**: delegates to [`Self::step`] (wraps by one tier)
+    /// whenever `per_page <= 1` - see that method's own doc for why this
+    /// pass leaves HD's own paging exactly as it was.
+    pub(super) fn page_step(&mut self, direction: i32) -> Option<Event> {
+        if self.per_page <= 1 {
+            return self.step(direction);
+        }
+        let count = self.grids.len();
+        if count == 0 {
+            return None;
+        }
+        let per_page = self.per_page;
+        let current_page = self.index / per_page;
+        let last_page = (count - 1) / per_page;
+        let new_page = i64::from(direction) + i64::try_from(current_page).unwrap_or(0);
+        let new_page = new_page.clamp(0, i64::try_from(last_page).unwrap_or(0));
+        #[allow(
+            clippy::cast_sign_loss,
+            reason = "clamp(0, ..) above already rules out negative"
+        )]
+        let new_page = new_page as usize;
+        if new_page == current_page {
+            return None;
+        }
+        let slot = self.index % per_page;
+        self.index = (new_page * per_page + slot).min(count - 1);
+        Some(Event::Moved)
+    }
+
+    /// One tile - `Left`/`Right` on Pulse's own `Grid Selection`. **Clamps
+    /// at the current page's own ends, does not cross into the next/previous
+    /// page** - measured live: a right from `grid0`'s own last-slot tier
+    /// (`grid3`, `"GRID 4"`) stays on `"GRID 4"` rather than crossing to
+    /// `grid4`'s `"GRID 5"`, and a left from `grid0` (the deck's own first
+    /// slot) stays on `"GRID 1"`. See [`Self::page_step`]'s own doc for the
+    /// full measurement citation - the two were read in the same PPSSPP
+    /// session. Confidence 90.
+    ///
+    /// **A no-op wherever [`Self::per_page`] is `1`** (HD's own one-tile
+    /// page) - the page a single tile spans is itself, so this never moves
+    /// anything there. HD's pad `Left`/`Right` were never bound to
+    /// anything before this pass either, so that is not a behaviour change.
+    pub(super) fn tile_step(&mut self, direction: i32) -> Option<Event> {
+        if self.grids.is_empty() {
+            return None;
+        }
+        let per_page = self.per_page.max(1);
+        let page_start = (self.index / per_page) * per_page;
+        let page_end = (page_start + per_page - 1).min(self.grids.len() - 1);
+        let new_index =
+            (self.index as i64 + i64::from(direction)).clamp(page_start as i64, page_end as i64);
+        #[allow(
+            clippy::cast_sign_loss,
+            reason = "clamp(page_start, ..) above already rules out negative"
+        )]
+        let new_index = new_index as usize;
+        if new_index == self.index {
+            return None;
+        }
+        self.index = new_index;
         Some(Event::Moved)
     }
 

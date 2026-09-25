@@ -166,44 +166,108 @@ fn race_cell(name: &str, track: &str) -> Cell {
     }
 }
 
+/// The pad's four directions on `Grid Selection`, all four measured live
+/// against PPSSPP - see [`super::GridSelection::update`]'s own doc for the
+/// full session ("Measured against PPSSPP, 2026-09-25" in
+/// `docs/ui/campaign-screens.md`). `Down`/`Up` page by a full
+/// [`super::GridSelection::per_page`\]; `Left`/`Right` step one tile within
+/// the current page. **Neither ever wraps** - both clamp at their own
+/// boundary and consume the press with no [`Event`] once there, the same
+/// "nothing further to select" shape
+/// `cell_selection_moves_toward_the_pressed_direction_and_skips_absent_slots`
+/// already pins for `Cell Selection`'s own edge.
 #[test]
-fn grid_selection_pages_four_at_a_time_and_wraps() {
-    let grids: Vec<GridSummary> = (0..6)
-        .map(|n| GridSummary {
-            name: format!("grid{n}"),
-            cell_count: 8,
-            max_points: 24,
-            required_points: 12,
-            gold_medals: 0,
-            points_earned: 0,
-            locked: false,
-        })
-        .collect();
-    let mut model = GridSelection::new(grids);
+fn grid_selection_pages_by_per_page_and_clamps_rather_than_wrapping() {
+    // Eight grids, two full pages of four - the same shape Pulse's own
+    // sixteen (four pages) has, just shorter, so the page-boundary clamp
+    // lands on a real page edge rather than a fixture-only partial page.
+    let mut model = GridSelection::new(grid_summaries(8));
     assert_eq!(model.page(), 0);
-    assert_eq!(model.counter(), "1-4 / 6");
+    assert_eq!(model.counter(), "1-4 / 8");
     let mut input = Input::new();
-    for _ in 0..4 {
-        press(&mut input, Button::Down);
-        model.update(&mut input);
-    }
-    assert_eq!(model.index(), 4);
-    assert_eq!(model.page(), 1);
-    assert_eq!(model.counter(), "5-6 / 6");
+
     press(&mut input, Button::Down);
     model.update(&mut input);
-    assert_eq!(model.index(), 5);
+    assert_eq!(model.index(), 4, "down moves a full page, not one tile");
+    assert_eq!(model.page(), 1);
+    assert_eq!(model.counter(), "5-8 / 8");
+
     press(&mut input, Button::Down);
+    assert_eq!(
+        model.update(&mut input),
+        Vec::new(),
+        "down past the last page clamps (stays put) rather than wrapping to the first"
+    );
+    assert_eq!(model.index(), 4);
+
+    press(&mut input, Button::Right);
+    model.update(&mut input);
+    assert_eq!(model.index(), 5, "right moves one tile within the page");
+
+    press(&mut input, Button::Right);
+    model.update(&mut input);
+    press(&mut input, Button::Right);
+    model.update(&mut input);
+    assert_eq!(model.index(), 7, "the page's own last tile");
+
+    press(&mut input, Button::Right);
+    assert_eq!(
+        model.update(&mut input),
+        Vec::new(),
+        "right past the page's own last tile clamps rather than crossing into the next page"
+    );
+
+    press(&mut input, Button::Up);
     model.update(&mut input);
     assert_eq!(
         model.index(),
-        0,
-        "down off the last tier wraps to the first"
+        3,
+        "up moves a full page back, keeping the same slot"
     );
+
+    press(&mut input, Button::Up);
+    assert_eq!(
+        model.update(&mut input),
+        Vec::new(),
+        "up past the first page clamps (stays put) rather than wrapping to the last"
+    );
+    assert_eq!(model.index(), 3);
+
+    press(&mut input, Button::Left);
+    model.update(&mut input);
+    press(&mut input, Button::Left);
+    model.update(&mut input);
+    press(&mut input, Button::Left);
+    model.update(&mut input);
+    assert_eq!(model.index(), 0);
+
+    press(&mut input, Button::Left);
+    assert_eq!(
+        model.update(&mut input),
+        Vec::new(),
+        "left at the deck's own first tile clamps rather than wrapping to the last"
+    );
+
     press(&mut input, Button::Cross);
     assert_eq!(model.update(&mut input), vec![Event::Confirmed]);
     press(&mut input, Button::Circle);
     assert_eq!(model.update(&mut input), vec![Event::Back]);
+}
+
+/// A page turn keeps the same slot within the new page - measured live,
+/// see [`super::GridSelection::update`]'s own doc: a `right` then a `down`
+/// from `grid0` landed on `grid5` (`"GRID 6"`), not `grid4` (`"GRID 5"`).
+#[test]
+fn a_page_turn_keeps_the_same_slot_rather_than_resetting_to_the_pages_first_tile() {
+    let grids = grid_summaries(6);
+    let mut model = GridSelection::new(grids);
+    let mut input = Input::new();
+    press(&mut input, Button::Right);
+    model.update(&mut input);
+    assert_eq!(model.index(), 1);
+    press(&mut input, Button::Down);
+    model.update(&mut input);
+    assert_eq!(model.index(), 5, "slot 1 carried over into the new page");
 }
 
 #[test]
@@ -584,9 +648,15 @@ fn a_point_in_the_gap_between_two_grid_hexes_picks_nothing() {
 }
 
 #[test]
-fn clicking_the_paging_arrow_steps_one_tier_and_the_secondary_button_backs_out() {
+fn clicking_the_paging_arrow_turns_a_page_and_the_secondary_button_backs_out() {
     let layout = grid_layout_with_arrows();
-    let mut model = GridSelection::new(grid_summaries(4));
+    let mut model = GridSelection::new(grid_summaries(8));
+    // Page 1 (`grid4`) - the up arrow's own click target is the same
+    // `page_step(-1)` the pad's `Up` takes, see
+    // `GridSelection::update`'s own doc: it pages back a full page and
+    // clamps rather than wrapping, so starting on page 0 would make this
+    // click a no-op.
+    model.set_index(4);
     let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
     let up = targets
         .iter()
@@ -596,7 +666,11 @@ fn clicking_the_paging_arrow_steps_one_tier_and_the_secondary_button_backs_out()
         model.pointer(&click(hex_centre(up.rect)), &targets),
         vec![Event::Moved]
     );
-    assert_eq!(model.index(), 3, "up from tier 0 wraps to the last tier");
+    assert_eq!(
+        model.index(),
+        0,
+        "the up arrow pages back a full page, not one tile"
+    );
     let back = Pointer {
         back: true,
         ..Pointer::default()

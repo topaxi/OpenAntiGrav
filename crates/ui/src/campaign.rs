@@ -203,12 +203,33 @@ impl GridSummary {
 pub struct GridSelection {
     grids: Vec<GridSummary>,
     index: usize,
+    /// How many tiers a page turn (`Up`/`Down`) moves by - [`GRIDS_PER_PAGE`]
+    /// for Pulse's own four-hex page, `1` for HD/Fury's one-tier-at-a-time
+    /// flyer pager (`with_per_page`). [`Self::step`] (`Left`/`Right`, the
+    /// paging arrows) always moves by one tier regardless - see
+    /// [`Self::update`]'s own doc for the measurement this splits on.
+    per_page: usize,
 }
 
 impl GridSelection {
     #[must_use]
     pub fn new(grids: Vec<GridSummary>) -> Self {
-        Self { grids, index: 0 }
+        Self {
+            grids,
+            index: 0,
+            per_page: GRIDS_PER_PAGE,
+        }
+    }
+
+    /// Overrides [`Self::per_page`] - HD/Fury's own `Grid Selection` calls
+    /// this with `1`, since its own `Grid Selection` pages one flyer at a
+    /// time rather than Pulse's four-hex page. See
+    /// `docs/ui/campaign-screens.md`'s "`Grid Selection` is not a hex grid
+    /// of tiers - it is a flyer pager".
+    #[must_use]
+    pub fn with_per_page(mut self, per_page: usize) -> Self {
+        self.per_page = per_page.max(1);
+        self
     }
 
     #[must_use]
@@ -294,20 +315,61 @@ impl GridSelection {
         previous.points_earned < previous.required_points
     }
 
-    /// Up/down wrap over every grid, one at a time - the same `Picker::update`
-    /// idiom `oag_ui::picker` already uses for a wrapping list. Left/right are
-    /// inert: nothing in `CellMode_Definition.xml` authors a left/right arrow
-    /// on this screen, unlike `Track Creation`'s livery row.
+    /// **Superseded, 2026-09-25.** Up/down and left/right were previously
+    /// read backwards: this used to wrap the flat index by one tier per
+    /// `Up`/`Down` press and leave `Left`/`Right` inert, on the reasoning
+    /// that `CellMode_Definition.xml` authors no left/right arrow image on
+    /// this screen. That reasoning does not follow - the screen's own
+    /// `GridController name="Grid" MaxX="4" MaxY="1"` is a **row** of four
+    /// hexes, and a maintainer playing this build reported left/right dead
+    /// on `Grid Selection`.
+    ///
+    /// Measured live against PPSSPP (`pulse-psp-usa.chd`, 2026-09-25, Xvfb,
+    /// the existing zero-medal profile - see `docs/ui/campaign-screens.md`'s
+    /// "Measured against PPSSPP, 2026-09-25" for the full screenshot walk):
+    ///
+    /// - `Down` from `grid0` landed on `grid4`'s own `"GRID 5"` - a full
+    ///   page (`index += 4`), not one tile.
+    /// - `Right` from `grid0` landed on `grid1`'s own `"GRID 2"` - one tile
+    ///   within the page (`index += 1`).
+    /// - `Right` pressed three more times from there landed on `grid3`'s
+    ///   own `"GRID 4"`, the page's own last slot; a fifth `Right` **stayed
+    ///   on `"GRID 4"`** rather than crossing into `grid4`'s `"GRID 5"` -
+    ///   `Left`/`Right` clamp at the current page's own ends, they do not
+    ///   wrap into the next/previous page.
+    /// - `Left` from `grid0` (the deck's own first slot) also stayed put.
+    /// - `Down` three more times from `grid0` reached `grid12`'s own
+    ///   `"PHANTOM GRID 1"` (the last page, `"13-16 / 16"`); one more
+    ///   `Down` **stayed there** rather than wrapping to `"GRID 1"` -
+    ///   `Up`/`Down` clamp at the deck's own ends too. Symmetrically, `Up`
+    ///   from `grid0` also stayed on `"GRID 1"`.
+    /// - `Right` once from `grid0` then `Down` once landed on `grid5`'s own
+    ///   `"GRID 6"`, not `grid4`'s `"GRID 5"` - a page turn keeps the same
+    ///   slot within the new page, it does not reset to the page's own
+    ///   first slot.
+    ///
+    /// So: no direction ever wraps on this screen. [`Self::page_step`]/
+    /// [`Self::tile_step`] (in `campaign::pointer`, alongside the pointer
+    /// code that shares them with the paging-arrow clicks) carry the
+    /// clamped arithmetic; this method only decides which button maps to
+    /// which. Confidence 90 - six separate presses, each read
+    /// digit-for-digit off the honey counter and the title, in one session.
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
         if self.grids.is_empty() {
             return out;
         }
         if input.take(Button::Down) {
-            out.extend(self.step(1));
+            out.extend(self.page_step(1));
         }
         if input.take(Button::Up) {
-            out.extend(self.step(-1));
+            out.extend(self.page_step(-1));
+        }
+        if input.take(Button::Right) {
+            out.extend(self.tile_step(1));
+        }
+        if input.take(Button::Left) {
+            out.extend(self.tile_step(-1));
         }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
