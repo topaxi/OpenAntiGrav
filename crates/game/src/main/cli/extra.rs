@@ -57,3 +57,25 @@ pub(crate) struct GhostArgs {
     #[arg(long, value_name = "FILE.oagr")]
     pub(crate) record_ghost: Option<PathBuf>,
 }
+
+/// Timing the loading screen's hand-off to a race, in a window.
+#[derive(clap::Args, Debug)]
+pub(crate) struct MeasureArgs {
+    /// Skip the boot sequence, launch this many races from the menus one
+    /// after another, print every main-thread frame of each load-to-race
+    /// transition that went over a 60 Hz frame's budget, and quit.
+    ///
+    /// The windowed route a player takes - the menus' own `LAUNCH RACE`, the
+    /// loading screen, the hand-off - rather than `--race`, which loads before
+    /// the window opens and never shows the loading screen at all. The first
+    /// run pays a cold disc cache and the second does not, so asking for two
+    /// separates the two. Measure a release build: a debug one is several
+    /// times slower on exactly the work this times.
+    ///
+    /// ```sh
+    /// cargo run --release -p oag-game -- data/images/pulse-psp-eu.chd \
+    ///     --no-audio --measure-race-load 2
+    /// ```
+    #[arg(long, value_name = "RUNS", num_args = 0..=1, default_missing_value = "1")]
+    pub(crate) measure_race_load: Option<u32>,
+}

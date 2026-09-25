@@ -4,7 +4,7 @@ use log::warn;
 use oag_display::display;
 use oag_game::{race, upscale};
 
-use crate::gpu::Gpu;
+use crate::gpu::GpuContext;
 
 #[path = "race_stage/endrace.rs"]
 pub(crate) mod endrace;
@@ -142,7 +142,7 @@ impl RaceStage {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn render(
         &mut self,
-        gpu: &Gpu,
+        gpu: &impl GpuContext,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
@@ -170,14 +170,14 @@ impl RaceStage {
         // reports, not run every frame, the same "log the edge, not the
         // state" rule its own info! call follows.
         if self.scene.sync_zone_grade(&self.race) {
-            self.scene.rebind_zone_art(&gpu.device, &gpu.queue);
+            self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
         // The scene and nothing else. The HUD used to follow it here, into the
         // same target; it composites at presentation resolution now - see
         // [`RaceStage::draw_hud`].
         self.scene.render(
-            &gpu.device,
-            &gpu.queue,
+            gpu.device(),
+            gpu.queue(),
             encoder,
             view,
             &self.race,
@@ -386,7 +386,7 @@ impl RaceStage {
     /// would have to guess at.
     pub(crate) fn draw_hud(
         &mut self,
-        gpu: &Gpu,
+        gpu: &impl GpuContext,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
@@ -398,13 +398,13 @@ impl RaceStage {
         // such screen, or whose read failed, draws exactly what it always
         // did.
         if let Some(endrace) = &mut self.endrace {
-            endrace.draw(&gpu.device, &gpu.queue, encoder, view, viewport);
+            endrace.draw(gpu.device(), gpu.queue(), encoder, view, viewport);
             return;
         }
         match self.race.results() {
             Some(board) => self.scoreboard.draw(
-                &gpu.device,
-                &gpu.queue,
+                gpu.device(),
+                gpu.queue(),
                 encoder,
                 view,
                 board,
@@ -420,7 +420,7 @@ impl RaceStage {
                     readout.zone_next_in = self
                         .scene
                         .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
-                    hud.draw(&gpu.device, &gpu.queue, encoder, view, &readout, viewport);
+                    hud.draw(gpu.device(), gpu.queue(), encoder, view, &readout, viewport);
                     // The countdown, for exactly the measured start-line gate's
                     // span and no other window - see `oag_game::hud::countdown`
                     // and `oag_race::RaceState::thrust_gated`, whose own doc
@@ -441,8 +441,8 @@ impl RaceStage {
                         && oag_race::RaceState::thrust_gated(readout.race_ticks)
                     {
                         countdown.draw(
-                            &gpu.device,
-                            &gpu.queue,
+                            gpu.device(),
+                            gpu.queue(),
                             encoder,
                             view,
                             readout.race_ticks as f32 / 60.0,
@@ -492,7 +492,7 @@ impl RaceStage {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn warm_up(
         &mut self,
-        gpu: &Gpu,
+        gpu: &impl GpuContext,
         target: &wgpu::TextureView,
         target_size: (u32, u32),
         viewport: (f32, f32, f32, f32),
@@ -502,7 +502,7 @@ impl RaceStage {
         anim_seconds: Option<f32>,
     ) {
         let mut encoder = gpu
-            .device
+            .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race warmup"),
             });
@@ -553,8 +553,8 @@ impl RaceStage {
         // is built from, and that one *is* sized against the attachment
         // rather than only its format. See this function's own doc.
         self.draw_hud(gpu, &mut encoder, target, viewport, target_size);
-        gpu.queue.submit(Some(encoder.finish()));
-        if let Err(e) = gpu.device.poll(wgpu::PollType::wait_indefinitely()) {
+        gpu.queue().submit(Some(encoder.finish()));
+        if let Err(e) = gpu.device().poll(wgpu::PollType::wait_indefinitely()) {
             // Not fatal: the worst outcome is the compile this call exists to
             // avoid happening on the first real frame instead, exactly as it
             // did before this existed.

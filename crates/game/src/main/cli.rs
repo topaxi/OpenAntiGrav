@@ -982,4 +982,8 @@ pub(crate) struct Cli {
     /// `--ghost` and `--record-ghost` - see [`extra::GhostArgs`].
     #[command(flatten)]
     pub(crate) ghost: extra::GhostArgs,
+
+    /// `--measure-race-load` - see [`extra::MeasureArgs`].
+    #[command(flatten)]
+    pub(crate) measure: extra::MeasureArgs,
 }

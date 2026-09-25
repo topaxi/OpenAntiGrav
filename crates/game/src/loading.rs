@@ -575,11 +575,12 @@ impl Screen {
         // original's and the texture is not, which is the opposite way round
         // from drawing a pattern that is not there.
         //
-        // The **fill** is not drawn at all on a race load, because this build
-        // has no number to fill it with - `race::load` reports no progress. So
-        // the trough says "there is a bar here and nothing has told it
-        // anything" rather than inventing a fraction. See
-        // `docs/formats/hd-loading.md`, which carries that as an open gap.
+        // A race load has no number to fill it with - `race::load` reports no
+        // progress - so its fill is a time-based estimate that slows rather
+        // than stops and completes when the wait does: an empty trough read
+        // as a stuck screen. See `wording::estimated_fraction`, and
+        // `docs/formats/hd-loading.md`, which carries the real fill as an
+        // open gap.
         if self.illustration.is_some() {
             out.push(Draw::Fill {
                 rect: [BAR_BOX.0, BAR_BOX.1, BAR_BOX.2, BAR_BOX.3],
@@ -587,6 +588,8 @@ impl Screen {
             });
             let filled = if counted(progress) {
                 fraction(phase, progress) * BAR_BOX.2
+            } else if matches!(phase, Phase::Race) {
+                estimated_fraction(self.frames, self.fade > 0) * BAR_BOX.2
             } else {
                 0.0
             };
@@ -974,7 +977,7 @@ const CENTRED_ROW_PITCH: f32 = 16.0;
 mod assets;
 mod wording;
 pub use assets::{Art, Assets, Feature, tips};
-use wording::{counted, counts, fraction, heading, percentage, step_line};
+use wording::{counted, counts, estimated_fraction, fraction, heading, percentage, step_line};
 
 #[cfg(test)]
 mod tests;

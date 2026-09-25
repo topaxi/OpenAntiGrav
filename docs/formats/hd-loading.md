@@ -246,9 +246,14 @@ Three departures, each deliberate:
   place are the original's and the texture is not, which is the right way round.
   The rules *are* faithful: `line.gtf` is an 8x8 tile the original stretches
   itself (see [hd-frontend.md](hd-frontend.md)).
-- **The bar has no fill.** `race::load` reports no progress, so there is no
-  honest number to fill it with and the trough is drawn empty. See
-  [Still unread](#still-unread).
+- **The bar's fill is a time-based estimate, not the original's.**
+  `race::load` reports no progress, so there is no number to fill it with. The
+  trough used to be drawn empty, which read as a stuck screen; since 2026-09-25
+  it fills along `1 - e^(-t / 4 s)` (chosen, not measured), never completing on
+  its own, and fills completely the moment the race scene is ready. See
+  `loading::wording::estimated_fraction`,
+  [race-load-transition.md](../architecture/race-load-transition.md) and
+  [Still unread](#still-unread) for the real fill.
 
 And the panels are two columns of this build's proportions rather than the
 original's exact halves: our grid is 480 wide where HD's is 1920, and prose in

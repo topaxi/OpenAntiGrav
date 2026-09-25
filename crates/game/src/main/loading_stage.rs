@@ -43,6 +43,11 @@ pub(crate) struct LoadingStage {
     /// twice - see [`Session::finish_loading`], which branches on exactly this
     /// pair and is the only reader that has to care.
     pub(crate) race: Option<race::LoadWorker>,
+    /// The race scene being built from what [`Self::race`] landed, on a
+    /// thread of its own - see [`crate::race_build`]. `Some` from the frame
+    /// the load lands until the frame the build does, when its result moves
+    /// into [`Self::built_race`].
+    pub(crate) build: Option<crate::race_build::BuildWorker>,
     /// The race stage, built and waiting, once [`Self::race`]'s data has landed.
     ///
     /// **This is what the fade actually waits on, not [`Self::race`] alone.**

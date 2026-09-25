@@ -93,6 +93,8 @@ mod pointer;
 mod pose;
 #[path = "main/prepare.rs"]
 mod prepare;
+#[path = "main/race_build.rs"]
+mod race_build;
 #[path = "main/race_stage.rs"]
 mod race_stage;
 #[path = "main/rebind.rs"]
@@ -527,6 +529,7 @@ fn main() -> Result<()> {
         media,
         boot_overlay,
         pick_language,
+        measure_race_load: cli.measure.measure_race_load,
         give,
         autopilot,
         autopilot_pilot,

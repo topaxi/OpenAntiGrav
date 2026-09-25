@@ -572,6 +572,9 @@ pub(crate) fn run_race(
         media: None,
         boot_overlay: false,
         pick_language: false,
+        // `--race` never shows the loading screen, so there is no
+        // transition to time.
+        measure_race_load: None,
         give,
         autopilot: cli.autopilot,
         autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,

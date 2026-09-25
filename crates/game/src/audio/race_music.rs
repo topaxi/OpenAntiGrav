@@ -78,7 +78,11 @@ pub(super) fn locate(
 #[derive(Debug)]
 pub struct MusicFetchWorker {
     /// `None` once joined, which is what makes [`Self::join`] idempotent.
-    handle: Option<std::thread::JoinHandle<Result<Option<Loaded>>>>,
+    handle: Option<std::thread::JoinHandle<(Result<Option<Loaded>>, usize)>>,
+    /// The booted disc's soundtrack length, read on the same thread as the
+    /// fetch and available once [`Self::join`] has returned - see
+    /// [`Audio::race_soundtrack_len`].
+    soundtrack_len: Option<usize>,
 }
 
 impl MusicFetchWorker {
@@ -103,9 +107,15 @@ impl MusicFetchWorker {
     ) -> Self {
         let handle = std::thread::Builder::new()
             .name(label.to_string())
-            .spawn(move || fetch_track(&discs, choice, &cache_dir, index))
+            .spawn(move || {
+                let fetched = fetch_track(&discs, choice, &cache_dir, index);
+                (fetched, Audio::booted_soundtrack_len(&discs))
+            })
             .ok();
-        Self { handle }
+        Self {
+            handle,
+            soundtrack_len: None,
+        }
     }
 
     /// Whether the fetch has returned.
@@ -129,11 +139,20 @@ impl MusicFetchWorker {
     pub fn join(&mut self) -> Option<Result<Option<Loaded>>> {
         let handle = self.handle.take()?;
         Some(match handle.join() {
-            Ok(result) => result,
+            Ok((result, len)) => {
+                self.soundtrack_len = Some(len);
+                result
+            }
             // A panic on the fetch thread is reported as a failed fetch rather
             // than resumed here, which would take the window down with it.
             Err(_) => Err(anyhow::anyhow!("the music fetch panicked")),
         })
+    }
+
+    /// The booted disc's soundtrack length this worker read, once joined.
+    #[must_use]
+    pub fn soundtrack_len(&self) -> Option<usize> {
+        self.soundtrack_len
     }
 }
 
@@ -256,7 +275,6 @@ impl Audio {
              the worker this method takes",
         );
         let seek = (self.race_position > 0.0).then_some(self.race_position);
-        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
         // Never actually waits: this is only called once the loading screen's
         // own `race_ready` has seen `worker.is_finished()` true - see
         // `LoadingStage::race_ready`.
@@ -265,6 +283,8 @@ impl Audio {
                 "the race music fetch thread would not start"
             ))
         });
+        let len = worker.soundtrack_len().filter(|&len| len > 0);
+        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf(), len));
         self.apply_fetched_race_track(index, fetched, seek);
         if self.race_voice.is_some() {
             self.race_position = 0.0;
@@ -348,6 +368,34 @@ impl Audio {
         }
     }
 
+    /// The modulus the race playlist wraps at: [`Self::booted_soundtrack_len`],
+    /// read once and kept.
+    ///
+    /// **Not read on the tick thread when it can be helped.** Reading it opens
+    /// the disc image and parses its soundtrack table - 38 ms on the first race
+    /// tick in a release build on a desktop, the one frame over budget left
+    /// once the race scene's build moved off the frame thread (see
+    /// `docs/architecture/race-load-transition.md`). The race load's own
+    /// [`MusicFetchWorker`] reads it alongside the track it fetches, and
+    /// [`Self::finish_race_music`] keeps that answer in
+    /// [`Self::race_context`]; the synchronous
+    /// read is only the fallback for a run that never had one.
+    ///
+    /// A `0` - no soundtrack, or a read that failed - is never kept, so a
+    /// transient failure is retried the next time exactly as it was before
+    /// this cache existed.
+    fn race_soundtrack_len(&mut self) -> usize {
+        let Some((discs, _, _, known)) = self.race_context.as_mut() else {
+            return 0;
+        };
+        if let Some(len) = *known {
+            return len;
+        }
+        let len = Self::booted_soundtrack_len(discs);
+        *known = (len > 0).then_some(len);
+        len
+    }
+
     /// Starts fetching the race playlist's next track as soon as the current
     /// one is playing, rather than waiting until it is close to ending - see
     /// [`Audio::race_prefetch`] for why this exists and what it replaces.
@@ -372,10 +420,10 @@ impl Audio {
         let Some(index) = self.race_index else {
             return;
         };
-        let Some((discs, choice, cache_dir)) = self.race_context.clone() else {
+        let Some((discs, choice, cache_dir, _)) = self.race_context.clone() else {
             return;
         };
-        let next = next_race_index(index, Self::booted_soundtrack_len(&discs));
+        let next = next_race_index(index, self.race_soundtrack_len());
         self.race_prefetch = Some((
             next,
             MusicFetchWorker::spawn(discs, choice, cache_dir, next, "race-music"),
@@ -398,7 +446,7 @@ impl Audio {
     /// this is no longer the same question as (a source change since - the
     /// index check below is what catches that).
     pub(super) fn advance_race_track(&mut self) {
-        let Some((discs, choice, cache_dir)) = self.race_context.clone() else {
+        let Some((discs, choice, cache_dir, _)) = self.race_context.clone() else {
             return;
         };
         let Some(index) = self.race_index else {
@@ -414,7 +462,7 @@ impl Audio {
         if let Some(id) = self.race_voice.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
-        let next = next_race_index(index, Self::booted_soundtrack_len(&discs));
+        let next = next_race_index(index, self.race_soundtrack_len());
         self.race_index = Some(next);
 
         if let Some((prefetch_index, mut worker)) = self.race_prefetch.take()
@@ -651,7 +699,7 @@ impl Audio {
                 });
                 self.race_from = self.race_voice.and(loaded.from);
                 self.race_cache = loaded.from.map(|platform| (platform, index, loaded.sound));
-                if let Some((cached_discs, cached_choice, _)) = &mut self.race_context {
+                if let Some((cached_discs, cached_choice, ..)) = &mut self.race_context {
                     *cached_discs = discs;
                     *cached_choice = choice;
                 }

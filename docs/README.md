@@ -35,6 +35,7 @@ Then, depending on what you are here to do:
 | Use the tools | [Tool docs](tools/README.md) |
 | Package it for a Steam Deck | [Packaging](tools/packaging.md) |
 | Run the game | [Front-end boot](architecture/frontend-boot.md) |
+| Keep the loading screen from freezing | [Load-to-race transition](architecture/race-load-transition.md) |
 | Add or change a menu | [Menus](architecture/menus.md) |
 | Persist something to a player's own machine | [Persistence](architecture/persistence.md) |
 | Verify against the original | [Verification protocol](reverse-engineering/verification-protocol.md) |

@@ -46,6 +46,9 @@ pub(crate) struct App {
     pub(crate) boot_overlay: bool,
     /// `--pick-language`: show the picker even when the settings name one.
     pub(crate) pick_language: bool,
+    /// `--measure-race-load`, the number of races to time. See
+    /// `session::load_probe`.
+    pub(crate) measure_race_load: Option<u32>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--autopilot`: whether the player's craft is flown for them. A
@@ -430,6 +433,9 @@ impl App {
             boot_overlay: self.boot_overlay,
             pick_language: self.pick_language,
             race_ready_at: None,
+            load_probe: self
+                .measure_race_load
+                .and_then(crate::session::LoadProbe::new),
             suspended_race: None,
             campaign_cell: None,
             tournament: None,

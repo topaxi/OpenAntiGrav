@@ -823,3 +823,48 @@ fn a_feature_layout_draws_one_bar_and_puts_its_counts_under_it() {
         "the counts are below the bar: {counted_row:?}"
     );
 }
+
+/// The bar's fill on a feature layout's race load, or `None` when only the
+/// trough is drawn.
+fn race_fill(screen: &Screen) -> Option<f32> {
+    let atlas = Atlas::build();
+    let list = screen.draw_list(Phase::Race, &Progress::default(), &atlas);
+    let fills: Vec<[f32; 4]> = list
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Fill { rect, .. } if (rect[1] - BAR_BOX.1).abs() < f32::EPSILON => Some(*rect),
+            _ => None,
+        })
+        .collect();
+    fills.get(1).map(|rect| rect[2])
+}
+
+/// A race load counts nothing, and its bar still moves: a time-based
+/// estimate that grows every tick, never fills the bar while the wait is on,
+/// and fills it the moment the wait is over. The empty trough this replaces
+/// read as a stuck screen.
+#[test]
+fn a_race_load_fills_its_bar_over_time_and_completes_when_ready() {
+    let mut screen = feature_screen();
+    assert_eq!(race_fill(&screen), None, "nothing to show at tick zero");
+
+    let mut last = 0.0;
+    for _ in 0..4 {
+        for _ in 0..60 {
+            screen.advance(false);
+        }
+        let fill = race_fill(&screen).expect("a fill once time has passed");
+        assert!(
+            fill > last,
+            "the bar moves every second: {fill} after {last}"
+        );
+        assert!(fill < BAR_BOX.2, "and never completes on its own: {fill}");
+        last = fill;
+    }
+    // Four seconds is `ESTIMATE_TICKS`: two thirds of the bar.
+    let expected = (1.0 - (-1.0f32).exp()) * BAR_BOX.2;
+    assert!((last - expected).abs() < 1.0, "{last} against {expected}");
+
+    screen.advance(true);
+    assert_eq!(race_fill(&screen), Some(BAR_BOX.2), "full once ready");
+}

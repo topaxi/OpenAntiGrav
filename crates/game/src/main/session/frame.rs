@@ -21,6 +21,9 @@ use super::pointer;
 
 impl Session {
     pub(crate) fn frame(&mut self) -> Result<()> {
+        // `--measure-race-load`'s clock and its `LAUNCH RACE`, first so the
+        // frame it times is all of this one. A no-op on every other run.
+        self.probe_begin_frame();
         // Whatever the audio callback could not render while this thread held
         // the mixer lock, said out loud from a thread that can afford to
         // allocate a sentence. Here rather than in the tick loop because a
@@ -64,7 +67,10 @@ impl Session {
         // gets us here is still spelled the way the disc spells it while what it
         // reaches is not a recovered screen at all. See `oag_ui::menu`.
         if !self.launched
-            && matches!(&self.stage, Stage::Frontend(stage) if stage.frontend.is_finished())
+            && matches!(&self.stage, Stage::Frontend(stage)
+                // `--measure-race-load` times the race path, not the boot
+                // sequence, and skips straight past it.
+                if stage.frontend.is_finished() || self.load_probe.is_some())
         {
             self.launched = true;
             info!("{}: opening the menus", frontend::states::LAUNCH_GAME);
@@ -710,6 +716,7 @@ impl Session {
         self.build_endrace();
 
         let presented = self.draw(now, frame_seconds)?;
+        self.probe_end_frame(elapsed);
         // **What the `OUTSIDE` row is derived from**, and the anchor matters:
         // measured from `now`, which is the same instant `elapsed` above is
         // taken from, so this frame's body and the gap after it partition the
