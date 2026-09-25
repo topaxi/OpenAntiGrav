@@ -1717,21 +1717,106 @@ is the `Title` role, not a body face. Two consequences, both left open:
   legend, `Cell Help` and a podium" above. The scroll speed itself is still
   unmeasured against a live PPSSPP frame.
 - **`--menu-page grid-select`'s own capture re-checked against
-  `grid-selection-page1-grid0-unlocked.png`, 2026-09-25: no new gap.** The
-  upper-case defect this page used to flag is confirmed still fixed
-  (`"Gold medals"`/`"Total points"`/`"Points needed"` all read mixed-case in
-  `ours/grid-select.png`), and all three "headline differences" from the
-  2026-09-14 measurement read correctly too (`"GRID 1"` not `"GRID0"`; not
-  re-checked live this pass for `Cell Selection`'s own `"SINGLE RACE"`/track
-  name, but both are struck at their own bullets above as already fixed).
-  The reference frame's scrolling tip and `AAA` badge draw as an empty bar
-  in ours - **not a new finding**, `oag_ui::campaign::draw::grid_draw_list`'s
-  own doc already names this as `--menu-page`'s own known gap (the capture
-  has no `CampaignStage` behind it to drive the ticker's clock or its tip
-  list), not a live-game defect. The two captures otherwise disagree only on
-  medal/points state (this worktree's own `records.toml` carries real
-  progress, `04/08` gold rather than the reference's fresh-profile `0/8`) -
-  a data difference, not a rendering one.
+  `grid-selection-page1-grid0-unlocked.png`, 2026-09-25: the earlier "no new
+  gap" pass under-checked this.** A side-by-side crop comparison (not just a
+  text-content read) found five real render differences, closed here off
+  the disc's own data unless noted:
+  - **`Medals`/`Required` formatted backwards.** `GridSelection_Update`
+    (`0x088dec24`) binds `Medals` through `FUN_08972550(..., s__d__d_08a83544, ...)`
+    - the literal at `0x08a83544` reads `"%d/%d"`, unpadded - and `Required`
+      through the literal at `0x08a83568`, which reads `"%03d"`, not the `"%d"`
+      `race-campaign.md`'s own table previously read it as (corrected there
+      too, this change). This build had it backwards: `Medals` was
+      zero-padded (`"04/08"`) and `Required` was not (`"12"`); the disc shows
+      `"0/8"` and `"012"`. Fixed, `oag_ui::campaign::draw::grid_draw_list`.
+  - **The selected hex/cell drew plain white, not tinted.** A shared,
+    non-PI001 widget routine (`FUN_088a5700`, reached off the `Selector`/
+    `SelectorGlow` widget-name strings at `0x08a7f130`/`0x08a7f178`) pulses
+    the selected tile's own colour on a continuous ~1s cycle between
+    `0xff33a6b9` and white - `CellMode_Definition.xml` itself only authors
+    `Selector` at a fixed, multiply-neutral `i="0xffffffff"`, so this build's
+    plain white was the XML's own default with no runtime tint applied at
+    all. Fixed as a static draw of the cyan endpoint (`SELECTOR_TINT`,
+    `oag_ui::campaign::draw`) - the real widget animates and this build's
+    draw-list builder has no clock to animate it with, so this always shows
+    the phase `grid-selection-page1-grid0-unlocked.png`/
+    `cell-selection-grid0-default-cell.png` happen to have caught, not the
+    full pulse. Applied to both `grid_draw_list` and `cell_draw_list`, since
+    `race-campaign.md` already documents this widget family as shared
+    between the two screens, not `GridSelection`-only.
+  - **`Grid Selection`'s locked/unlocked tier hexes drew plain white, not
+    dimmed.** `GridSelection_PopulateTiles` (`0x088de6f4`) tints every tier's
+    own base hex - locked or not, unconditionally - to RGB `0x34acc2` at
+    roughly half alpha; only the lock glyph itself (white, full alpha, the
+    same as this build's own untinted default) distinguishes locked from
+    unlocked. Fixed (`TIER_OUTLINE_TINT`), `grid_draw_list` only - **not**
+    `cell_draw_list`: `CellSelection_PopulateGrid` never calls
+    `GridController_SetTileColor` on the base-hex layer at all, so `Cell
+    Selection`'s own hex outlines stay at the XML's own default there, a
+    real asymmetry between the two screens rather than an oversight. `Cell
+    Selection`'s own `Outline_x_y` widgets *do* author a colour
+    (`i="FEGlobals->CM_HEX_Outline"`), but `CM_HEX_Outline` is not one of
+    the two `FEGlobals->` names this project has resolved
+    (`docs/formats/fexml.md`'s own open question) and this pass does not
+    guess its value - `cell-selection-grid0-default-cell.png` shows the
+    same dim cyan-teal outline as `Grid Selection`'s, strongly suggesting
+    the same `0x34acc2`, but that is inference off one screenshot, not a
+    read of the registry, so it is left alone and named here rather than
+    applied.
+  - **The up/down page arrows never greyed out.** `FUN_088de9bc`, called at
+    the end of every `GridSelection_Update`, tints `up arrow` to
+    `0xff505050` when already on the first page and `down arrow` to the same
+    grey on the last page, full white otherwise - `CellMode_Definition.xml`
+    authors both at a fixed white, so again this was the untinted default.
+    Fixed (`ARROW_DISABLED_TINT`), `grid_draw_list`.
+  - **The detail panel's row labels/values read smaller, relative to the
+    panel, than `grid-selection-page1-grid0-unlocked.png` shows.** Pixel
+    measurement (cap height of `0/8`'s glyphs against `GRID 1`'s own, both
+    against the same 960x544 frame): the reference's `default`-role text
+    measures roughly 16px against the `Menu`-role title's 22px, a ~0.73
+    ratio - closer to this build's own `small` role (17/22, `docs/ui/menus-original.md`)
+    than to `default`'s own documented `13/22`. Neither `Medals`/`Points`/
+    `Required`/their titles author an explicit `scale=` in
+    `CellMode_Definition.xml` (checked directly, `just wad cat`), so if this
+    is real it points at `FaceScales::default()`'s own `13/22` ratio being
+    wrong rather than a per-widget fix - a shared constant several other
+    screens also read, and not something this pass's one glyph-height
+    measurement is rigorous enough to change safely. **Not fixed - left
+    open, named here rather than guessed at.** The measurement method itself
+    is crude (a single global brightness threshold, no font-metric baseline)
+    and should be treated as a lead, not a confirmed number.
+  - **The title bar text (`RACE CAMPAIGN`) was flagged as possibly
+    oversized** - checked against the open question (tracked in this
+    project's own frontend handover) of whether Pulse's chrome title should
+    flip from the row face to its own taller `Title` role. A scale-normalized crop (both
+    frames resampled to the same 960x544) shows the two titles close to the
+    same size by eye, and a rough cap-height measurement reads *larger* in
+    the reference (36px) than in this build (32px) - the opposite direction
+    from "ours is too big." Given the noise in that measurement (the title's
+    own `pulse="true"` glow inflates a brightness-threshold height
+    differently between the two images) and that it does not support a
+    same-direction fix, this capture is read as **not settling** the
+    row-face-vs-`Title`-role question either way; the `Next Steps` in that
+    handover file stand unchanged.
+
+  The reference frame's scrolling tip and `AAA` badge still draw as an empty
+  bar in ours - **not a new finding**,
+  `oag_ui::campaign::draw::grid_draw_list`'s own doc already names this as
+  `--menu-page`'s own known gap (the capture has no `CampaignStage` behind it
+  to drive the ticker's clock or its tip list), not a live-game defect. The
+  two captures otherwise disagree only on medal/points state (this
+  worktree's own `records.toml` carries real progress, `04/08` gold rather
+  than the reference's fresh-profile `0/8`) - a data difference, not a
+  rendering one.
+  - **`Cell Selection` against `cell-selection-grid0-default-cell.png`,
+    checked the same way, time allowing:** the same selected-hex cyan glow
+    (now fixed, see above) and the same dim locked-cell outlines/white
+    padlocks as `Grid Selection`'s own (the `Outline_` tint gap above is
+    `Cell Selection`'s one open item). Text formatting, row layout and the
+    detail panel's own scale were not separately re-checked against this
+    frame this pass - the two screens share `text_draw`/`FaceScales`, so the
+    open panel-scale question above applies here too, unverified against
+    this specific frame.
 - **A previous pass's live-walk cell (`grid0_2_1`) is now locked under this
   pass's own rule** - it authors no `Locked` attribute, which defaults to
   `true`, and has no medal or medalled neighbour on a fresh profile. The

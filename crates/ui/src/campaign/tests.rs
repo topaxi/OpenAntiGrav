@@ -316,7 +316,7 @@ fn triangle_opens_help_and_suspends_movement() {
 }
 
 /// [`GridSummary::from_grid_with_medals`]'s own reason to exist: a real
-/// progress source moves `Medals`/`Points` off the fresh-profile `"00/.."`
+/// progress source moves `Medals`/`Points` off the fresh-profile `"0/.."`
 /// this crate otherwise draws.
 #[test]
 fn a_grid_with_one_gold_cell_shows_it_on_medals_and_points() {

@@ -836,6 +836,8 @@
 0x088de180	function	GridSelection_CommitSelection	90	race-campaign.md
 0x088de630	function	GridSelection_PopulateTiles	90	race-campaign.md
 0x088de320	function	GridSelection_FindTileAt	80	race-campaign.md
+0x088a5700	function	GridController_UpdateSelectorPulse	85	race-campaign.md
+0x088de9bc	function	GridSelection_UpdatePageTransition	85	race-campaign.md
 0x088db968	function	EndRaceResults_Construct	78	endrace-screens.md
 0x088dd89c	function	EndRaceRewards_Construct	78	endrace-screens.md
 0x088d90dc	function	EndRaceMenu_Construct	78	endrace-screens.md
