@@ -537,6 +537,16 @@ impl MenuStage {
                         match campaign.selection_layout() {
                             Some(layout) => {
                                 let (fury_gold, hd_gold) = campaign.campaign_gold_medals();
+                                // The footer legend - see
+                                // `oag_ui::campaign::hd::hd_cell_draw_list`'s
+                                // own doc; this screen's own frame
+                                // (`rpcs3-campaign-selection/01-right-tap.png`)
+                                // shows the identical row. No ticker, same
+                                // reason the `Cell` arm below has none.
+                                let default_measure =
+                                    |text: &str| font::measure(&self.default_atlas, text);
+                                let footer_overlay =
+                                    campaign.nav_legend_draw(&layout.faces, &default_measure);
                                 oag_ui::campaign::selection::draw_list(
                                     model,
                                     layout,
@@ -548,12 +558,20 @@ impl MenuStage {
                                     if frozen_race { None } else { shown },
                                     frozen_race,
                                     &|src| campaign.sprites.get(src),
+                                    &footer_overlay,
                                 )
                             }
                             None => oag_ui::menu::Layers::default(),
                         }
                     }
                     crate::campaign_stage::Screen::Grid(model) => {
+                        // The footer legend - see the `Selection` arm above,
+                        // whose own RPCS3 evidence is `Grid Selection
+                        // Fury`'s frame (`rpcs3-grid0-3-2/00-default.png`),
+                        // showing the same row plus `CHANGE DIFFICULTY`.
+                        let default_measure = |text: &str| font::measure(&self.default_atlas, text);
+                        let footer_overlay = campaign
+                            .nav_legend_draw(&campaign.grid_layout().faces, &default_measure);
                         oag_ui::campaign::hd::hd_grid_draw_list(
                             model,
                             campaign.grid_layout(),
@@ -563,6 +581,7 @@ impl MenuStage {
                             if frozen_race { None } else { shown },
                             frozen_race,
                             &|src| campaign.sprites.get(src),
+                            &footer_overlay,
                         )
                     }
                     crate::campaign_stage::Screen::Cell { model, .. } => {

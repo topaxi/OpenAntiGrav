@@ -144,16 +144,33 @@ pub(super) fn campaign_page(
     // read `campaign.grids` whole, all sixteen) drew a page counter no real
     // screen ever shows: `Event 01/16` where RPCS3's own frame reads `Event
     // 01/08` (`docs/ui/campaign-screens.md`'s "measured on RPCS3" section).
-    // Defaults to the base `Wipeout HD` campaign (`HD_GRID_RANGE`, grid0..7)
-    // rather than `Fury` - `campaign.grid_layout` is that campaign's own
-    // screen; `Fury`'s is a separate, differently-sourced
-    // `campaign.grid_layout_fury` this capture path does not thread through,
-    // so picking `Fury` here would draw `Fury`'s grids under `Wipeout HD`'s
-    // own widget layout instead.
-    let hd_grids = campaign
-        .grids
-        .get(oag_hd::campaign::HD_GRID_RANGE)
-        .unwrap_or(&[]);
+    // Defaults to `Fury` - the measured default `CampaignSelection::new`
+    // itself starts on and the campaign every RPCS3 reference frame this
+    // pass found is actually of (`data/scratch/lane-hd/rpcs3-grid0-3-2`,
+    // `lane-hd-sel/rpcs3-campaign-selection`) - so a `--menu-page`
+    // `grid-select`/`cell-select` still is directly comparable to those
+    // frames rather than to a base-campaign state nothing on disk shows.
+    // `campaign.grid_layout_fury` is `Fury`'s own screen (a `pub` field,
+    // already loaded by `crate::campaign::load_hd`); falls back to the base
+    // `Wipeout HD` campaign only when a source's `DATA06` copy is missing or
+    // incomplete and `grid_layout_fury` is `None` (`Campaign::selection_layout`'s
+    // own doc: the two are `Some`/`None` together).
+    let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref() {
+        Some(layout) => (
+            campaign
+                .grids
+                .get(oag_hd::campaign::FURY_GRID_RANGE)
+                .unwrap_or(&[]),
+            layout,
+        ),
+        None => (
+            campaign
+                .grids
+                .get(oag_hd::campaign::HD_GRID_RANGE)
+                .unwrap_or(&[]),
+            &campaign.grid_layout,
+        ),
+    };
     let layers = if is_hd {
         match kind {
             CampaignKind::Selection => {
@@ -179,6 +196,7 @@ pub(super) fn campaign_page(
                     backdrop,
                     false,
                     &|src| sprites.get(src),
+                    &footer_overlay,
                 )
             }
             CampaignKind::Grid => {
@@ -192,13 +210,14 @@ pub(super) fn campaign_page(
                 );
                 oag_ui::campaign::hd::hd_grid_draw_list(
                     &model,
-                    &campaign.grid_layout,
+                    hd_grid_layout,
                     skin,
                     frame,
                     strings,
                     backdrop,
                     false,
                     &|src| sprites.get(src),
+                    &footer_overlay,
                 )
             }
             CampaignKind::Cell => {

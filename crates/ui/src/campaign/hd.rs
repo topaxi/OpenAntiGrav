@@ -97,10 +97,18 @@ const TITLE_ID: &str = "FE_RC";
 
 /// `Grid Selection`'s draw list: HD's flyer-paging screen, not a hex grid of
 /// tiers - see the module doc.
+///
+/// `footer_overlay` is [`hd_cell_draw_list`]'s own parameter, unchanged: an
+/// RPCS3 frame of this screen (`Fury`'s `grid8`,
+/// `data/scratch/lane-hd/rpcs3-grid0-3-2/00-default.png`) shows the same
+/// `NAVIGATION`/`CONFIRM`/`BACK`/`CHANGE DIFFICULTY` footer row `Cell
+/// Selection`'s own frame does - the shared front-end root's
+/// `NavigationController` is not gated to one screen.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
-    reason = "the same eight facts crate::campaign::draw::grid_draw_list takes"
+    reason = "the same eight facts crate::campaign::draw::grid_draw_list takes, plus the footer \
+              overlay hd_cell_draw_list already takes"
 )]
 pub fn hd_grid_draw_list(
     model: &GridSelection,
@@ -111,6 +119,7 @@ pub fn hd_grid_draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    footer_overlay: &[Draw],
 ) -> Layers {
     let mut layers = Layers {
         backdrop: frame.backdrops(
@@ -130,6 +139,7 @@ pub fn hd_grid_draw_list(
         skin.title_color(frame.ink),
         strings.get_or_id(TITLE_ID).to_string(),
     ));
+    layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
     let mut out = Vec::new();
