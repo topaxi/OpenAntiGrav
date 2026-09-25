@@ -10,7 +10,7 @@ and neither program takes a light at all.
 Tools: `scripts/ps3-microcode.py fp-file`/`vp-file` for the listings,
 `crates/render/examples/hd_unlit_probe.rs` for the raw material state,
 vertex layout and winding, `crates/render/examples/hd_unlit_census.rs` for the
-disc-wide survey, and `crates/render/tests/hd_rim_glow_ground_truth.rs` for
+disc-wide survey, and `crates/game/tests/hd_rim_glow_ground_truth.rs` for
 what is pinned.
 
 ## The variants the race resolves
@@ -31,9 +31,10 @@ below) already cover.
 (28,368 bytes) bakes `0.9` into block `@0x19b0`; `DATA02`'s (29,984) moves it
 into a model parameter, `0x743ea80b` (no preimage), which the LeachBall's own
 `.rcsmodel` authors as `0.1` - `(1 - p)` is the same `0.9` - and additionally
-multiplies the output alpha by `VertexColour1.w`. `oag_assets::Archives`
-serves `DATA00`'s, which is the one routed below; the `DATA02` shape is not
-matched. Which copy the original serves is the same open question
+multiplies the output alpha by `VertexColour1.w`. The race's own
+`oag_assets::Archives` for HD serves `DATA00`'s (pinned by
+`the_race_serves_the_data00_copy_of_the_leachball_glow_material`), which is
+the one routed below; the `DATA02` shape is not matched. Which copy the original serves is the same open question
 `docs/formats/hd-frontend.md` carries for `skin.xml`. Confidence 90 on the
 arithmetic of both, read instruction by instruction.
 
@@ -157,7 +158,8 @@ are on screen today; the rest (`frontendscene_hd_atg`, `aurora`, `drone`,
 are not drawn by this engine. The halo now shows its texture instead of one
 flat sample: `--give plasma` with a grid-shot input script, tick 190, before
 and after differ, and the after frame's dome carries the streaks its
-texture authors.
+texture authors. The shield cockpit was not looked at before
+and after; it draws only from the internal camera with a shield up.
 
 ## Gates
 

@@ -5,7 +5,7 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
 //!     -E 'binary(hd_rim_glow_ground_truth)'
 //! ```
 //!
@@ -25,22 +25,41 @@ fn image() -> Option<PathBuf> {
     oag_testdata::image(PS3_IMAGE)
 }
 
-/// Builds a `DATA02` weapon model with its materials and textures read the
-/// way the race's `Archives` serves them: `DATA00` first, where a copy
-/// exists in both (the LeachBall's glow material does, and the two copies
-/// differ).
+/// Builds a weapon model with its materials and textures read through the
+/// race's own `oag_assets::Archives` for Wipeout HD - the same precedence
+/// `race::load` gets, which decides which of the LeachBall glow material's
+/// two differing copies (`DATA00`'s, `DATA02`'s) is the one drawn.
 fn build(image: &Path, path: &str) -> mesh::Model {
-    let archive = |name: &str| format!("{}:PS3_GAME/USRDIR/{name}", image.display());
-    let spec = archive("DATA02.PSARC");
-    let data = mesh::read_blob(&spec, path).expect("the .vex reads");
-    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("an .rcsmodel beside it");
+    let mut archives = oag_assets::Archives::open(&image.to_string_lossy(), oag_hd::TITLE)
+        .expect("the archives open");
+    let data = archives.read_name(path).expect("the .vex reads");
+    let sibling = mesh::rcs::sibling_name(path).expect("a PS3 .vex names its .rcsmodel");
+    let geometry = archives
+        .read_name(&sibling)
+        .expect("an .rcsmodel beside it");
     let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        ["DATA00.PSARC", "DATA02.PSARC"]
-            .iter()
-            .find_map(|a| mesh::read_blob(&archive(a), name).ok())
+        archives.read_name(name).ok()
     })
     .expect("the scene builds");
     model
+}
+
+/// The copy the race serves is `DATA00`'s - the one whose program bakes the
+/// `0.9` `rim_glow` matches. Its length alone tells the two apart.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_race_serves_the_data00_copy_of_the_leachball_glow_material() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_assets::Archives::open(&image.to_string_lossy(), oag_hd::TITLE)
+        .expect("the archives open");
+    let blob = archives
+        .read_name("/data/weapons/materials/hd_leachbeam_ball_glow.rcsmaterial")
+        .expect("the material reads");
+    assert_eq!(
+        blob.len(),
+        28_368,
+        "DATA00's copy is 28,368 bytes, DATA02's 29,984"
+    );
 }
 
 fn roles(model: &mesh::Model) -> Vec<u32> {
