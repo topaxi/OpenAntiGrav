@@ -263,7 +263,8 @@ impl Scene {
         // light rig still reach them unchanged - only `zone` is dropped.
         oag_render::perfprobe::mark("fog+zonevis");
         // The SPU lights stay - at ride height the hull is the only receiver
-        // in range; see `race::engine_light`, "Who receives it".
+        // in range, and the original selects `SVC1` for the hull (read live);
+        // see `race::engine_light`, "Who receives it".
         let ship_scene = mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             light,

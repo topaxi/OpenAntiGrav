@@ -45,7 +45,7 @@
 //!   unread, so it stays unwired rather than fired on a guess. A capture
 //!   showed it once, on a different boot.
 //!
-//! # Who receives it, and why the floor is not it (the hull binding is chosen, not measured)
+//! # Who receives it, and why the floor is not it (the hull binding is measured)
 //!
 //! [`Race::hd_engine_lights`] is bound into the `Scene` uniform of the track
 //! chunks **and of the craft**. Bound to the track alone it changed zero
@@ -74,21 +74,25 @@
 //! capture shows, and boosted (`1 + 10 * blend`, a 440-unit light a hand's
 //! breadth from the housing) the whole rear of the hull washes warm.
 //!
-//! **The runtime half is narrowed, not closed (2026-09-25).**
-//! `Ship_DrawModels` (`0x003ea368` in `ps3-hdfury-eu`, confidence 80 for the
-//! gate's shape - `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, the
-//! `Ship_DrawModels` section) carries the identical per-object
-//! `Enable_spu_vertex_light` gate this project already read on the track's
-//! own Zone-Stage compilers: `SpuLight_AnyVisibleLightTouchesSphere`
-//! against the ship's own bounding sphere, `Shader_GetVariantHash(...
-//! | 0x800)` on a hit - but the gate's own leading condition,
-//! `record+0xe4 & 0x800`, is a per-ship flag whose writer this project has
-//! not yet found, statically or live. So the *mechanism* to select `SVC1`
-//! on a hull exists and has the right shape; whether it is ever actually
-//! armed on a real ship is unread. **The hull binding stays chosen, not
-//! measured** until that bit is read one way or the other - do not treat
-//! either direction (keep it, or `SpuLights::none()` the craft) as settled
-//! from this alone. The track floor and walls light up only when a craft is
+//! **The runtime half is read live (2026-09-25, confidence 90).** The
+//! original selects `SVC1` for the hull. `Ship_ReloadModelForSkin`
+//! registers the hull `ship.vex` with flag word `0x1ccb`
+//! (`0x000dc044`), and `ModelRecord_Create` (`0x003f0348`) stores it at
+//! `record+0xe4`. `0x1ccb` carries the `0x800` bit that `Ship_DrawModels`
+//! (`0x003ea368`) gates on. On RPCS3 in a Talon's Junction race, the
+//! player's hull record read `0x1ccb`. A breakpoint on the gate's taken
+//! branch (`0x003eb368`, just before `li r5,0x800`) stopped 10 times with
+//! the player's hull record in `r19`, at cruise and with a boosted light
+//! in the visible list. See `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`,
+//! "The hull's `record+0xe4 & 0x800` bit is set at load". So the craft
+//! binding below is the original's. It is also what flattens the inner rear
+//! panels to white at a boost here: an A/B at player size on `Assegai_n1`
+//! loses that wash with the craft binding dropped. The original's boosted
+//! hull glows at the nozzle and housings instead. So the gap is in the
+//! term's inputs, not in whether it applies. The candidates are named in
+//! renderer.md's section.
+//!
+//! The track floor and walls light up only when a craft is
 //! within `D` of them: landings, wall scrapes and banked sections.
 
 use oag_core::Rng;
