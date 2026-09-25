@@ -136,6 +136,25 @@ impl Ps2TextureSet {
 /// A node with no declared name, or whose name resolves to nothing in the
 /// set, comes back `None` - drawn as nothing, per this project's rule
 /// against standing in a neighbour's texture for a genuine miss.
+///
+/// **The returned slot's own [`ModelTexture::label`] is the node's declared
+/// name, not [`Ps2TextureSet::resolve`]'s own `{name_hash:08x}` label.** A
+/// WAD entry carries only a hash, never a string (`oag_formats::wad::Entry`
+/// has no name field), so that hash is the only identity the *set* can give
+/// a texture - but a consumer matching a slot by name, the way
+/// `oag_game::livery::ship_skin::apply` matches `\TEXTUREn.TGA` and
+/// `crate::gantry` matches a billboard name, needs the same
+/// last-path-component label the PSP embedded path already produces (see
+/// `super::build_class`'s `embedded` construction). Leaving the hash in
+/// place is why a PS2 ship's alternative skin used to select and never draw:
+/// `ship_skin::slot_of` compared `"3a1f2b4c"` against `"texture1.tga"` and
+/// never matched, so every apply reported 0 of N slots repainted.
+///
+/// Relabeled once per distinct declared name rather than once per node, so a
+/// track's hundreds of material slots naming a handful of distinct textures
+/// still cost one clone per texture, the same dedup [`Ps2TextureSet::by_hash`]
+/// already does by hash - not one clone per slot, which would undo the memory
+/// sharing [`super::ModelTexture`]'s own doc measured.
 #[must_use]
 pub fn resolve_texture_slots(
     data: &[u8],
@@ -143,12 +162,26 @@ pub fn resolve_texture_slots(
     texture_class: Option<u32>,
     set: &Ps2TextureSet,
 ) -> super::TextureSlots {
+    let mut relabeled: HashMap<String, Arc<ModelTexture>> = HashMap::new();
     nodes
         .iter()
         .filter(|n| Some(n.class_id) == texture_class)
         .map(|node| {
             let payload = data.get(node.payload())?;
-            vex::texture_asset_path(payload).and_then(|name| set.resolve(&name))
+            let name = vex::texture_asset_path(payload)?;
+            let texture = set.resolve(&name)?;
+            let label = name.rsplit(['/', '\\']).next().unwrap_or(&name).to_string();
+            Some(
+                relabeled
+                    .entry(label.clone())
+                    .or_insert_with(|| {
+                        Arc::new(ModelTexture {
+                            label,
+                            ..(*texture).clone()
+                        })
+                    })
+                    .clone(),
+            )
         })
         .collect()
 }

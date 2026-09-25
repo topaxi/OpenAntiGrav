@@ -57,9 +57,13 @@ use std::path::{Path, PathBuf};
 use oag_render::mesh::{self, Model};
 use oag_vex::vex;
 
-/// The magstrip surface texture, by artist-given label. PSP embeds labels;
-/// the PS2 build's textures are nameless (external texture sets), so PS2
-/// magstrip geometry is identified positionally, never by this.
+/// The magstrip surface texture, by artist-given label. PSP embeds labels
+/// directly; a PS2 model's slot now carries the same declared-name label too
+/// (`mesh::resolve_texture_slots` relabels it off the node rather than the
+/// texture set's own hash - see that function's doc), but every call site in
+/// this file still only ever builds from `pulse-psp-usa.chd`, so PS2 magstrip
+/// geometry below is still identified positionally, by [`is_magstrip`] simply
+/// never being exercised against a PS2-built model here.
 const MAGSTRIP: &str = "_magsurface3_1verb.tga";
 
 /// Moa Therma - `Data\Environments\03_Track` on both discs.

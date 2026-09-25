@@ -62,19 +62,31 @@ fn positional_hashes(set_blob: &[u8]) -> Vec<u32> {
     directory.entries.iter().map(|e| e.name_hash).collect()
 }
 
-/// Every `Texture`-class node's own resolved entry, through the same
-/// production path `mesh::build_class` uses - not a reimplementation of the
-/// canonicalisation, so a bug in [`mesh::Ps2TextureSet::resolve`] shows up
-/// here too. [`mesh::Ps2TextureSet::parse`] labels each decoded entry with its
-/// own hex `name_hash`, which is what turns a binding into a string compare
-/// below instead of a pointer identity that a coincidental re-decode could
-/// still satisfy.
+/// Every `Texture`-class node's own resolved entry, by calling
+/// [`mesh::Ps2TextureSet::resolve`] directly - not a reimplementation of the
+/// canonicalisation, so a bug in `resolve` itself shows up here too.
+/// [`mesh::Ps2TextureSet::parse`] labels each decoded entry with its own hex
+/// `name_hash`, which is what turns a binding into a string compare below
+/// instead of a pointer identity that a coincidental re-decode could still
+/// satisfy.
+///
+/// **Deliberately not [`mesh::resolve_texture_slots`]:** that function now
+/// overwrites `resolve`'s hash label with the node's own declared name before
+/// returning a slot, so a ship-skin or gantry-billboard match sees
+/// `"texture1.tga"` rather than a hash it can never compare against - see its
+/// own doc. `resolve` itself, called here, is unaffected: it still returns the same
+/// hash-labelled entry it always did.
 fn resolved_labels(data: &[u8], set: &mesh::Ps2TextureSet) -> Vec<Option<String>> {
     let classes = vex::classes_of(data).expect("class table");
     let nodes = vex::nodes(data).expect("decoding nodes");
-    mesh::resolve_texture_slots(data, &nodes, classes.texture, set)
-        .into_iter()
-        .map(|slot| slot.map(|t| t.label.clone()))
+    nodes
+        .iter()
+        .filter(|n| Some(n.class_id) == classes.texture)
+        .map(|node| {
+            let payload = data.get(node.payload())?;
+            let name = vex::texture_asset_path(payload)?;
+            set.resolve(&name).map(|t| t.label.clone())
+        })
         .collect()
 }
 
