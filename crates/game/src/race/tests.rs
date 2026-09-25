@@ -20,6 +20,7 @@ mod cannon_draw;
 mod countdown;
 mod cues;
 mod eliminator;
+mod energy_bar_delay;
 mod field;
 mod hash;
 mod hd_sprite;

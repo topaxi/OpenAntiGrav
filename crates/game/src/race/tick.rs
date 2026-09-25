@@ -688,6 +688,9 @@ impl Race {
         // `Self::advance_shield_blink`'s own doc comment for why both must
         // already reflect this tick.
         self.advance_shield_blink();
+        // 2048's own trail, independent of the two above - see
+        // `Self::advance_energy_bar_delay`.
+        self.advance_energy_bar_delay();
 
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically

@@ -48,6 +48,7 @@ use oag_tables::fexml::{self, Node};
 mod assets;
 mod compose;
 pub mod countdown;
+mod dialect_2048;
 mod draw;
 mod lap_splits;
 mod overlay;
@@ -627,6 +628,24 @@ pub struct Readout {
     /// [`crate::race::view::View::shield_blink_timer`]'s own doc comment for
     /// what that assumption rests on.
     pub shield_blink_phase: f32,
+    /// 2048's `EnergyBarDelay`: an exponentially-smoothed trail behind
+    /// [`Self::shield_fraction`], `0..=1`.
+    ///
+    /// `Hud_UpdateEnergyBar` (`0x811957a2`, vita-2048-eu-v104) applies
+    /// `lagging += (target - lagging) * 0.1` every tick, where `target`
+    /// resolves to the current shield fraction on every path through the
+    /// branch that sets it (a rise snaps it up immediately; a fall lowers
+    /// it to the current fraction the same tick) - so this is a plain
+    /// one-pole low-pass toward [`Self::shield_fraction`], not a filter that
+    /// only runs one direction. Ported by
+    /// `crate::race::Race::advance_energy_bar_delay`, the same
+    /// advance-then-read shape [`Self::shield_blink_phase`] uses. `0.0` on
+    /// [`Self::blank`] - the pool itself reads `0.0` before `<Misc>` loads
+    /// (see [`Self::shield_fraction`]'s own zero-guard and
+    /// `crate::race::start`'s `shield_flash_prev: 0.0` choice), so seeding
+    /// this at the shield's own pre-load value avoids a false catch-up
+    /// animation from an assumed "full" start that never happened.
+    pub energy_bar_delay_fraction: f32,
     /// The race's mode. Read by a title's runtime HUD rules, which the
     /// original keys on its own mode id - see `hud::runtime`.
     pub mode: oag_race::Mode,

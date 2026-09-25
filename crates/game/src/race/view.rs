@@ -178,6 +178,15 @@ pub struct RaceView {
     /// a race is known to start "on" only under that assumption. Render-side,
     /// like [`Self::shield_was_up`], and out of the hash.
     pub(super) shield_blink_timer: f32,
+    /// 2048's `EnergyBarDelay`: the lagging shield fraction
+    /// [`crate::hud::Readout::energy_bar_delay_fraction`] reads out of it
+    /// every tick - `Hud_UpdateEnergyBar`'s own `hud+0x1ec`
+    /// (`0x811957a2`, vita-2048-eu-v104), advanced by
+    /// [`super::Race::advance_energy_bar_delay`]. `0.0` on a fresh race, the
+    /// same reasoning [`Self::shield_flash_prev`] gives for its own seed:
+    /// the pool itself is `0.0` before `<Misc>` loads. Render-side, like
+    /// every other field in this group, and out of the hash.
+    pub(super) energy_bar_delay_fraction: f32,
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///
     /// One value for the whole field, because every craft wears the player's hull

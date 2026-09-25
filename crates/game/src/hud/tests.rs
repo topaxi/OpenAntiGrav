@@ -219,6 +219,7 @@ fn the_total_time_yields_its_anchor_to_the_place() {
                     true,
                     None,
                     true,
+                    layout.label("Position Outof").is_none(),
                 )
                 .is_some()
             })

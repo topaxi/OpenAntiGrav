@@ -169,6 +169,7 @@ impl Race {
             shield_flashing: self.view.shield_flash_timer > 0.0,
             shield_absorbing: self.absorb_window_active(self.player_slot()),
             shield_blink_phase: self.view.shield_blink_timer,
+            energy_bar_delay_fraction: self.view.energy_bar_delay_fraction,
             mode: self.sim.world.mode(),
         }
     }
@@ -219,7 +220,27 @@ impl Race {
         self.view.shield_blink_timer =
             shield_blink_step(self.view.shield_blink_timer, blinking, self.sim.dt);
     }
+
+    /// Advances 2048's `EnergyBarDelay` trail for the next [`Self::readout`].
+    ///
+    /// Called once a tick, from [`Self::tick`]. **Not `dt`-scaled** -
+    /// `Hud_UpdateEnergyBar` applies a fixed `0.1` factor once per its own
+    /// update, and this project runs a fixed 60 Hz tick throughout
+    /// (`docs/architecture/determinism.md`), so a literal per-tick port is
+    /// the closest reproduction available without a recovered original
+    /// frame rate for this function specifically. See
+    /// [`crate::hud::Readout::energy_bar_delay_fraction`] for the formula
+    /// and the decompile it is read off.
+    pub(super) fn advance_energy_bar_delay(&mut self) {
+        let target = self.readout().shield_fraction();
+        self.view.energy_bar_delay_fraction +=
+            (target - self.view.energy_bar_delay_fraction) * ENERGY_BAR_DELAY_RATE;
+    }
 }
+
+/// `Hud_UpdateEnergyBar`'s own `0.1` - see
+/// [`Race::advance_energy_bar_delay`].
+const ENERGY_BAR_DELAY_RATE: f32 = 0.1;
 
 /// The shield bar's post-hit flash, one tick of `Hud_UpdateEnergyBar`'s own
 /// `hud+0x118`/`hud+0x11c` pair.

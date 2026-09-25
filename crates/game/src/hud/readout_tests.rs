@@ -330,11 +330,11 @@ fn the_shield_readout_drops_the_percent_on_a_title_that_measures_none() {
     };
     let label = &layout.labels[0];
     assert_eq!(
-        text_for(label, &readout, &strings, false, true, None, false),
+        text_for(label, &readout, &strings, false, true, None, false, false),
         Some("98".to_string())
     );
     assert_eq!(
-        text_for(label, &readout, &strings, false, true, None, true),
+        text_for(label, &readout, &strings, false, true, None, true, false),
         Some("98%".to_string())
     );
 }
@@ -363,7 +363,16 @@ fn pickup_damage_and_absorb_draw_nothing_without_a_tracked_hit() {
         ));
         let label = &layout.labels[0];
         assert_eq!(
-            text_for(label, &Readout::blank(), &strings, false, true, None, false),
+            text_for(
+                label,
+                &Readout::blank(),
+                &strings,
+                false,
+                true,
+                None,
+                false,
+                false
+            ),
             None,
             "{name} should draw nothing without a tracked recent-hit value"
         );
@@ -372,7 +381,7 @@ fn pickup_damage_and_absorb_draw_nothing_without_a_tracked_hit() {
 
 /// **A second `POS` never draws.** `HUD_positions.xml` carries two widgets
 /// sharing `idstring="IG_HUD_POS"` - `PositionTxt` (this module's own
-/// `"PositionTxt"` arm, gated on `place_shown`) and `PositionTxt2`, deep
+/// `"PositionTxt"` arm, gated on `readout.place`) and `PositionTxt2`, deep
 /// inside the head-to-head `PosTag0`-`7` cluster whose sprites
 /// (`VoiceCom0`-`7`) are already excluded from every title's `ALWAYS_ON`. No
 /// `talons-matched` frame shows a second `POS` label.
@@ -389,7 +398,7 @@ fn position_txt2_never_draws_a_second_pos_caption() {
     };
     let label = &layout.labels[0];
     assert_eq!(
-        text_for(label, &readout, &strings, true, true, None, false),
+        text_for(label, &readout, &strings, true, true, None, false, false),
         None
     );
 }

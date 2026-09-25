@@ -207,7 +207,7 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 /// | --- | --- |
 /// | `ThrustBarBG` | the dim two-bar speed readout, bottom right, in every arcade and time-trial frame from the grid onward. Its lit copies (`ThrustBar`, `SpeedBar0`-`4`) fill in as speed rises. |
 /// | `EnergyBgFrame` | the ship-silhouette outline, bottom left, in every arcade and Zone frame. Time trial does not author it and the time-trial frames show none. |
-/// | `EnergyBg` | the translucent silhouette *inside* that outline, visible as the grey cap above the white fill at 95% and as the whole upper three quarters at 27%. |
+/// | `EnergyBg` | the silhouette *inside* that outline, tinted light grey normally and red at or under a critical shield - see "`EnergyBg` tints" below. |
 /// | `ZoneCounterBG` | the dim arc of ten dashes round the zone number, bottom left - authored at alpha 0.31 and read at that in the Zone frames; `ZoneLight0`-`9` are the bright copies lit one per zone. |
 ///
 /// Confidence **90** on the first two (dozens of frames, both modes, both
@@ -231,26 +231,45 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 /// implements; see `crop_vertically`'s own doc comment for the confidence
 /// (80, same terms as `crop_horizontally`'s).
 ///
-/// **Chosen, not measured: the runtime colour.** The layout authors
-/// `EnergyBar` green at half alpha (`[0.19, 1.0, 0.19, 0.50]`, read straight
-/// off the composed layout) and `EnergyBarDelay` opaque white, but the
-/// captured frames show the *live* fill as white, with a red cap and red
-/// stripe outlines for a moment after a hit (`36-w-15.png`). Nothing here
-/// tints `EnergyBar` to white or wires `EnergyBarDelay`'s red flash at all -
-/// a tint recalled from the frames rather than sourced from the disc or the
-/// executable would be an invented colour, the failure mode this project's
-/// "never invent what the assets already author" rule exists to prevent. So
-/// the fill draws at its authored green-at-half-alpha, cropped correctly and
-/// coloured wrong, and the white/red runtime tint stays an open gap - see
+/// **Chosen, not measured: `EnergyBar`'s own runtime colour.** The layout
+/// authors it green at half alpha (`[0.19, 1.0, 0.19, 0.50]`, read straight
+/// off the composed layout), but the captured frames show the *live* fill as
+/// white (`36-w-5.png`). Nothing decompiled writes a colour onto `EnergyBar`
+/// itself (see "`EnergyBg` tints" below for the widget that *is* decompiled),
+/// so a tint recalled from the frames rather than sourced from the disc or
+/// the executable would be an invented colour - the fill draws at its
+/// authored green-at-half-alpha, cropped correctly and coloured wrong. See
 /// `docs/formats/2048-hud.md`'s dated section.
+///
+/// # `EnergyBg` tints, and `EnergyBarDelay` is wired - 2026-09-25
+///
+/// **Decompiled `Hud_UpdateEnergyBar` in full**
+/// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`,
+/// confidence 85) rather than reading only its "confirms the crop" summary,
+/// and it settled two things the frame-based pass above could not:
+///
+/// - **`EnergyBg`, not `EnergyBar`, is what turns red.** The function calls
+///   a fixed-colour draw on `EnergyBg` every tick: opaque light grey
+///   (`0xffa7a5a7`) normally, opaque red (`0xffff0000`) at or under 20%
+///   shield or during the shared post-hit flash window
+///   (`Readout::shield_flashing`) - wired in
+///   `oag_game::hud::dialect_2048::energy_bg_tint`, resolving the earlier
+///   "our silhouette is opaque white" gap against the running original.
+/// - **`EnergyBarDelay` is a lagging trail, not a flash.** It receives the
+///   same vertical crop as `EnergyBar`, fed an exponentially-smoothed
+///   fraction (`lagging += (target - lagging) * 0.1` every tick, `target`
+///   the current shield fraction on every path) rather than the raw one -
+///   wired in `oag_game::hud::dialect_2048::vertical_bar_fraction` and
+///   `Race::advance_energy_bar_delay`. Now in this list too.
+///
+/// `EnergyBarDelay`'s own runtime colour is the one open gap this pass did
+/// not close: nothing in the decompiled function writes a colour onto it
+/// either, so it draws at its authored opaque white - the "red cap... for a
+/// moment after a hit" `docs/formats/2048-hud.md` recorded off `36-w-15.png`
+/// is not reproduced.
 ///
 /// # What is still deliberately left out
 ///
-/// - `EnergyBarDelay`: the red post-hit flash, on the paragraph above. Not
-///   established that it crops the same way `EnergyBar` does, or what keys
-///   its timing - `Hud_UpdateEnergyBar`'s own flash logic is unread on this
-///   title (`oag_game`'s `Readout::shield_flashing`/`shield_forced_red` are
-///   ported from Pulse/HD's own reading, not re-derived here).
 /// - `PickupBgFrame`: the arc round the held pickup, right of the shield.
 ///   Absent on the grid and in every no-pickup frame; up the whole time a
 ///   Missile or Rocket is held. State-gated, with the pickup.
@@ -277,6 +296,7 @@ pub const ALWAYS_ON: &[&str] = &[
     "EnergyBgFrame",
     "EnergyBg",
     "EnergyBar",
+    "EnergyBarDelay",
     "ZoneCounterBG",
 ];
 
