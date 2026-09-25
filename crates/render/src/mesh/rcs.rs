@@ -123,6 +123,23 @@ pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, 
 /// archive does not have, which [`Report::untextured`] counts.
 pub type Textures<'a> = &'a mut dyn FnMut(&str) -> Option<Vec<u8>>;
 
+/// The [`super::slots::RIM_GLOW`]/[`super::slots::RIM_EDGE`] bit a resolved
+/// fragment program earns, or `0` - `rim_glow`'s own classifier, public so a
+/// disc-wide census (`crates/render/examples/hd_unlit_census.rs`) asks the
+/// same question the loader does rather than a copy of it.
+#[must_use]
+pub fn rim_glow_bit(
+    declared: &oag_rcs::rcsmaterial::Declared,
+    program: &oag_rcs::rcsmaterial::fragment::Program,
+    authored_alpha: Option<f32>,
+) -> u32 {
+    rim_glow::classify(declared, program, authored_alpha)
+}
+
+/// The Plasma head's per-material alpha parameter hash - see
+/// [`rim_glow_bit`].
+pub const RIM_EDGE_ALPHA: u32 = rim_glow::RIM_EDGE_ALPHA;
+
 /// A loader that finds nothing, for a caller with no archive in hand.
 ///
 /// **Not a convenience** - it is the honest way to build geometry when the
@@ -139,6 +156,7 @@ mod pads;
 pub use pads::{build_pads, build_weapon_pads};
 mod glass_sheen;
 pub mod psp2;
+mod rim_glow;
 mod skin;
 
 mod emissive;

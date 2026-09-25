@@ -18,6 +18,36 @@ use oag_rcs::rcsmodel;
 use oag_render::mesh;
 
 fn main() -> anyhow::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("--program") {
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        let blob = mesh::read_blob(&args[0], &args[1])?;
+        let at = usize::from_str_radix(args[2].trim_start_matches("0x"), 16)?;
+        let program = oag_rcs::rcsmaterial::fragment::Program::parse(&blob, at)
+            .ok_or_else(|| anyhow::anyhow!("no program at {at:#x}"))?;
+        let declared = oag_rcs::rcsmaterial::Declared::parse(&blob, at)
+            .ok_or_else(|| anyhow::anyhow!("no SHO block at {at:#x}"))?;
+        let names: Vec<&str> = program
+            .instructions
+            .iter()
+            .map(|i| i.name().unwrap_or("?"))
+            .collect();
+        println!("mnemonics: {names:?}");
+        let patched: Vec<u16> = declared
+            .parameters
+            .iter()
+            .flat_map(|&h| program.patches(h).collect::<Vec<_>>())
+            .collect();
+        let literals: Vec<[f32; 4]> = program
+            .instructions
+            .iter()
+            .filter(|i| i.const_slot.is_some_and(|s| !patched.contains(&s)))
+            .filter_map(|i| i.constant)
+            .collect();
+        println!("literals: {literals:?}");
+        println!("parameters: {:08x?}", declared.parameters);
+        println!("samplers: {:08x?}", declared.samplers);
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("--undeclared") {
         undeclared("data/images/hdfury-ps3-eu-dec.iso");
         return Ok(());
@@ -218,14 +248,19 @@ fn undeclared(image: &str) {
                 }
                 if tail_bad && ten_ok && stride == 18 && shown < 200 {
                     shown += 1;
-                    println!("tail non-finite: {archive} {path} mesh {:#010x} stride {stride}", mesh.hash);
+                    println!(
+                        "tail non-finite: {archive} {path} mesh {:#010x} stride {stride}",
+                        mesh.hash
+                    );
                 }
                 *counts.entry((stride, tail_bad, ten_ok)).or_default() += 1;
             }
         }
     }
     for ((stride, tail_bad, ten_ok), n) in counts {
-        println!("stride {stride:>2} tail non-finite {tail_bad:<5} +10 finite {ten_ok:<5} {n} chunk(s)");
+        println!(
+            "stride {stride:>2} tail non-finite {tail_bad:<5} +10 finite {ten_ok:<5} {n} chunk(s)"
+        );
     }
 }
 
@@ -308,8 +343,11 @@ fn slot_order(image: &str) {
                     continue;
                 };
                 let slots = vertex_attributes(&blob, variant.vertex.offset);
-                let mut by_offset: Vec<(u8, u32)> =
-                    decl.attributes.iter().map(|a| (a.offset, a.name_hash)).collect();
+                let mut by_offset: Vec<(u8, u32)> = decl
+                    .attributes
+                    .iter()
+                    .map(|a| (a.offset, a.name_hash))
+                    .collect();
                 by_offset.sort_unstable();
                 let with_slot: Vec<u32> = by_offset
                     .iter()

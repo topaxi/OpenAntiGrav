@@ -1466,7 +1466,54 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         in.texcoord + vec2<f32>(absorb_offset, absorb_offset),
     ).rgb;
     let absorb = vec4<f32>(absorb_rgb, in.colour.a);
-    return mix(mix(shaded_or_sheen, flame, flame_shading), absorb, absorb_shading);
+    let composed = mix(mix(shaded_or_sheen, flame, flame_shading), absorb, absorb_shading);
+
+    // **Wipeout HD's two rim-shaded weapon glows**, `slots::RIM_GLOW` (the
+    // LeachBall) and `slots::RIM_EDGE` (the Plasma bolt's head), each set only
+    // where `mesh::rcs::rim_glow` matched the material's own program - its
+    // mnemonics, its literals and its declared parameters. Read instruction by
+    // instruction in docs/rendering/hd-unlit-programs.md; every number below
+    // is a literal of that program. Neither program reads a light, the vertex
+    // colour or the texture's own alpha as coverage, so these replace
+    // everything above rather than modifying it, as `flame` does; and like
+    // `flame` they are not decoded on the linear target, since the programs
+    // apply no transfer function.
+    //
+    //     TEX R1.w, (u, v + 0.0001 time)            <- the noise is the ALPHA
+    //     MAD R3.zw, noise, 0.2, (u, v)
+    //     MAD R1.zw, time, 0.4, R3.zw               <- both axes
+    //     TEX H1.xyz, R1.zwzz                       <- the colour tap
+    //     ADD_SAT rim, -dot(N, V), 1
+    //
+    // `rim` is `flame`'s own angle, for `flame`'s own reason: the vertex
+    // program dots an untransformed normal against `eye - position`, and the
+    // angle survives the rigid transform this path applies first.
+    let rim_noise = textureSample(
+        albedo,
+        albedo_sampler,
+        vec2<f32>(in.texcoord.x, in.texcoord.y + 0.0001 * scene.time.x),
+    ).a;
+    let rim_tap = in.texcoord + vec2<f32>(0.2 * rim_noise + 0.4 * scene.time.x);
+    let rim_c = textureSample(albedo, albedo_sampler, rim_tap).rgb;
+    let rim_angle = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
+    // `LG2`/`MUL 5`/`EX2` in the program: `rim^5`, multiplied out so `0^5` is
+    // `0` rather than whatever `pow(0, 5)` answers on a given backend.
+    let rim_5 = rim_angle * rim_angle * rim_angle * rim_angle * rim_angle;
+    // RIM_GLOW: `MAD_SAT -x, 0.9, 0.9`, then `^5` again.
+    let rim_fade_base = clamp(0.9 - 0.9 * rim_5, 0.0, 1.0);
+    let rim_fade = rim_fade_base * rim_fade_base * rim_fade_base * rim_fade_base * rim_fade_base;
+    // `c / (1 - c)` through three `RCP`s of half registers. A texel at 255
+    // makes that `1 / 0`; **chosen, not measured**: it is held at the largest
+    // finite half, 65504, rather than let an infinity into the float target
+    // and its bloom.
+    let rim_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - rim_c), vec3<f32>(65504.0));
+    let rim_glow = vec4<f32>(rim_fade * rim_c * rim_expand, rim_fade);
+    // RIM_EDGE: `MUL H1.w, rim^5, 1000`, times the tap; the alpha is the
+    // material's `0x7611a2d8`, which `rim_glow::classify` only routes at 1.0.
+    let rim_edge = vec4<f32>(1000.0 * rim_5 * rim_c, 1.0);
+    let rim_glow_on = (in.slots & 2048u) != 0u;
+    let rim_edge_on = (in.slots & 4096u) != 0u;
+    return select(select(composed, rim_glow, rim_glow_on), rim_edge, rim_edge_on);
 }
 
 // **Whether this model stamps the bloom's glow mask** - 1.0 only for a

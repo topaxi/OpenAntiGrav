@@ -256,6 +256,20 @@ pub mod slots {
     /// `docs/formats/rcsmaterial.md` traces.
     pub const FACING_RAMP_SHEEN: u32 = 1 << 10;
 
+    /// This material's resolved fragment program is the LeachBall's glow -
+    /// `hd_leachbeam_ball_glow.rcsmaterial`'s shape, matched by
+    /// `mesh::rcs::rim_glow`'s fingerprint: a noise-displaced, clock-scrolled
+    /// tap, faded toward the silhouette by `(0.9 (1 - rim^5))^5` and
+    /// expanded by `c / (1 - c)`. No light enters it. See
+    /// `docs/rendering/hd-unlit-programs.md`.
+    pub const RIM_GLOW: u32 = 1 << 11;
+
+    /// This material's resolved fragment program is the Plasma bolt's head -
+    /// `plasmasphere_subtractive_glow.rcsmaterial`'s shape: the same two
+    /// taps, times `1000 rim^5`, at the alpha the material authors. See
+    /// [`RIM_GLOW`] and the same page.
+    pub const RIM_EDGE: u32 = 1 << 12;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///

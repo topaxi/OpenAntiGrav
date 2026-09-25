@@ -824,7 +824,7 @@ impl Mesh {
     }
 
     /// An inline stride-18 chunk whose last four bytes are **not** two halves
-    /// - `ff ff ff cc` on the LeachBall's sphere, which is `NaN` twice - reads
+    /// (`ff ff ff cc` on the LeachBall's sphere, which is `NaN` twice) reads
     /// its `Uv1` from `+0x0a` instead, right after the normal.
     ///
     /// **Why `+0x0a`, and why only then.** Declared stride-18 chunks carry
