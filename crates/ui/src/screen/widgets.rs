@@ -9,7 +9,13 @@ use super::{Fill, Image, Menu, Node, Screens, Text, parse_argb};
 impl Screens {
     /// A colour-only `Image`: a plain `color` fill, or a `Color1`..`Color4`
     /// gradient. A widget with neither is not a fill and is dropped.
-    pub(super) fn fill_from_node(&self, node: &Node, offset: (f32, f32)) -> Option<Fill> {
+    ///
+    /// `pub(crate)` for [`crate::tag_entry`], the same reason
+    /// [`Self::image_from_node`] already is: it walks a screen's own
+    /// `TagInput` siblings (the cell backgrounds and confirm bars) directly,
+    /// off a screen `collect_widgets` never registers - see that module's
+    /// own doc.
+    pub(crate) fn fill_from_node(&self, node: &Node, offset: (f32, f32)) -> Option<Fill> {
         let argb = |attr: &str| {
             self.resolve(node.value(attr).unwrap_or_default())
                 .and_then(parse_argb)
@@ -96,7 +102,9 @@ impl Screens {
         text
     }
 
-    pub(super) fn text_from_node(
+    /// `pub(crate)` for [`crate::tag_entry`] - see [`Self::fill_from_node`]'s
+    /// own note.
+    pub(crate) fn text_from_node(
         &self,
         node: &Node,
         viewport_width: Option<f32>,

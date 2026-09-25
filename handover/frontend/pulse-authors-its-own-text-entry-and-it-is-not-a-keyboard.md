@@ -75,36 +75,86 @@ unchecked one. Two reasons, both structural:
 A pilot name is this project's own data on this project's own screen. A
 profile name is the disc's, on the disc's.
 
+## Landed 2026-09-25: parsed, drawn, and wired as RENAME's other shape
+
+`docs/formats/fexml.md` has a `TagInput` row and section now, with the
+schema table and the anonymous-screen gap below written up there.
+`oag_ui::screen::TagInput` (+ `Screens::tag_input_from_node`) parses the
+element itself, checked in `crates/ui/tests/tag_input_ground_truth.rs`
+against `Create Profile Setup`'s own `Tag` - the one instance under a
+*named* `Screen`. The other three in this entry - `Name` and the earlier
+`Tag` (the ones this project actually draws) - sit under an **anonymous**
+`Screen`, which `Screens::collect` walks through without registering (that
+rule is shared code and was not changed for this); `oag_ui::tag_entry::geometry`
+reads them by walking `fexml::parse`'s tree directly instead, checked
+against the real disc in `crates/ui/tests/tag_entry_ground_truth.rs`.
+`oag_pulse::tag_input::ALPHABET` is the 70-byte alphabet as a recovered
+constant (the same shape `oag_vex::CLASS_*` already is - the runtime never
+maps `BOOT.BIN`, so there is no live path to read it from, unlike the WAD
+entries above), checked against both pressings' real bytes in
+`crates/pulse/tests/tag_input_alphabet_ground_truth.rs`; EU sits at file
+offset 2,806,800, USA at 2,808,976, byte-identical.
+
+`oag_ui::tag_entry::TagEntry` is the interactive model, drawn over its own
+scrim and panel (the real screen has no live menu behind it to hide; this
+one always does). `session::pilot_editor::Session::tag_entry_for_rename`
+gates RENAME PILOT onto it: entry parses, `Name`'s geometry is found,
+the current name fits the authored `length` (10), and every glyph the name
+holds survives `oag_pulse::tag_input::ALPHABET` filtered through
+`oag_ui::prompt::accepts` - failing any of those falls back to
+`oag_ui::prompt::Keyboard` unchanged, logged at `info!` naming which
+condition failed. Screenshotted via `--menu-page pilots --menu-prompt
+tag-entry`/`tag-entry-typed` (extended for this, needs `--race`'s own
+`source` to read the disc live) against `pulse-psp-eu.chd`, both frames
+looked at: a still one and one after four scripted glyph edits, both
+legible.
+
+**The authored `scale`/position numbers are not all played verbatim,
+and that is recorded rather than silently diverged from**: the disc's
+`TagInput.scale` (e.g. `2.0`) is calibrated for Pulse's own renderer, and
+feeding it straight into this renderer's `Draw::Text.scale` drew glyphs
+several times too large - found by looking at a capture. Glyph and label
+*text size* is sized off `Skin::row_scale()` instead, the same convention
+`crate::prompt::Keyboard` already uses; every *position* (cell rects, the
+confirm label, the bars) is still the disc's own, unchanged.
+
 ## Open
 
-- **Nothing renders the `TagInput` yet.** `crates/formats`' front-end XML
-  path would need the element; `docs/formats/fexml.md`'s element table has
-  no `TagInput` row, and the schema recovered here is `length`, `Encrypt`,
-  `AllowBlank` plus the usual `x`/`y`/scale/colour/`focus`/`transition`.
-- **Input mapping is unsettled, at 65**: up/down presumed to cycle the
-  glyph under the cursor and left/right to move between cells, which is
-  the only reading the cell strip and a `sll`/`sra` byte sign-extend (a
-  cycling selector's wrap) support - but nothing has been captured.
+- **Input mapping is still unsettled, at 65** - the PPSSPP capture in the
+  superseded Next Step 1 below was not taken (time-boxed and skipped this
+  round). Implemented as the only reading the cell strip and a `sll`/`sra`
+  byte sign-extend support: up/down cycles the glyph under the cursor,
+  left/right moves along the row and onto the confirm slot. Labelled
+  "chosen, not measured" in `TagEntry::update`'s own doc, no confidence
+  score.
+- **The filtered alphabet cannot spell every name `Keyboard` can.**
+  `oag_pulse::tag_input::ALPHABET` has no `_` at all, which
+  `crate::pilots::check_name` allows - so a pilot named with one, or longer
+  than 10 characters, always falls back to the grid. Not a bug; recorded
+  because condition 4 of this thread's own review asked for it named
+  explicitly.
 - **Not checked at all**: PS2 Pulse, both EU discs, the HD/Fury PSARC
   interiors (a raw grep cannot see inside them), and 2048 (its PKGs are
   encrypted).
-- Whether Pure *uses* its `TagInput` or its firmware OSK, having both.
+- Whether Pure *uses* its `TagInput` or its firmware OSK, having both -
+  still open; Pure's own alphabet is uppercase-only, so even if wired it
+  could never be pilot RENAME's fallback.
+- Entry `b94fe6f9`'s own **name** is still unrecovered; reached by hash
+  throughout, which is what the code already does.
+- The alphabet's Ghidra consumer is still unwritten up: confidence 85 is
+  the *address*, not a traced function, so no `names.tsv` row - see
+  Next Step 4 below, still open.
 
 ## Next Steps
 
-1. Settle the input mapping with a PPSSPP capture of
-   `Profile > Your Details > Enter your name` - one recording answers the
-   only thing between this and a faithful implementation.
-2. Add `TagInput` to `docs/formats/fexml.md`'s element table with the
-   schema above, and a parser for it in `crates/formats`, testing against
-   `Data.wad` entry #1083's own numbers rather than against a fixture.
-3. Recover entry #1083's **name**; until then any code reaching it does so
-   by index, which is the kind of thing that silently breaks on the EU
-   pressing. `just mine-names` is the tool.
-4. Write the alphabet's consumer up as a Ghidra evidence page before any
+1. Recover entry `b94fe6f9`'s **name** with `just mine-names`.
+2. Write the alphabet's consumer up as a Ghidra evidence page before any
    `names.tsv` row - the address is solid at 85 but the *function* was
    never traced, and this project's rule is that the page and the row land
    together.
+3. Settle the input mapping with a PPSSPP capture of
+   `Profile > Your Details > Enter your name`, and correct
+   `TagEntry::update`'s doc and confidence once it lands.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

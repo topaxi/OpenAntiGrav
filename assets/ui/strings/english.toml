@@ -238,6 +238,12 @@ OAG_KEYBOARD_ACCEPT = "OK"
 # and a line naming keys would be wrong on a pad.
 OAG_KEYBOARD_HINT = "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL"
 
+# The other RENAME PILOT shape: Pulse's own `TagInput` cell row, used instead
+# of the grid above when the disc's own alphabet can spell the name being
+# edited - see `docs/formats/fexml.md`'s `TagInput` section. One line under
+# the row, on the same terms as `OAG_KEYBOARD_HINT`.
+OAG_TAG_ENTRY_HINT = "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL"
+
 # `%s` is the pilot's own name, substituted where the entry is read. A string
 # table is edited by translators and the disc's own tables already spell a
 # substitution that way; Rust's `{}` would make an accidental brace in a

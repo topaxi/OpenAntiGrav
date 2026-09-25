@@ -418,6 +418,13 @@ pub(crate) struct Cli {
     /// key-capture prompt - `--menu-page controls --menu-prompt binding`
     /// draws it over whichever row's `button` its own page opens on first,
     /// since a still has no selected row to prefer over another.
+    ///
+    /// `tag-entry`/`tag-entry-typed` draw Pulse's own `TagInput` cell row
+    /// instead of `rename`'s grid - the shape `session::pilot_editor` opens
+    /// when the disc's own alphabet can spell the pilot's name, see
+    /// `docs/formats/fexml.md`'s `TagInput` section. Needs a real `--race`
+    /// source open, since it reads the row's geometry live off the disc;
+    /// `-typed` is the same screen after a few glyph changes.
     #[arg(long, value_name = "PROMPT", requires = "menu_page")]
     pub(crate) menu_prompt: Option<String>,
 

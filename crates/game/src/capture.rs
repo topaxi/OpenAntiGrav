@@ -728,6 +728,7 @@ pub fn run(
                     &menu_frame,
                     options.menu_anim_phase,
                     options.menu_prompt.as_deref(),
+                    options.race.as_ref().map(|r| r.source.as_str()),
                 )?;
                 (backdrop, format, list, space)
             }

@@ -25,6 +25,7 @@ pub mod loading;
 pub mod movies;
 pub mod race;
 pub mod shadow;
+pub mod tag_input;
 pub mod textures;
 
 use oag_assets::{Archives, Result};
@@ -407,6 +408,17 @@ pub mod names {
 /// `CLAUDE.md` forbid below 50 confidence, and a movie filename that no string
 /// search, no XML and no runtime trace has produced is well below that.
 pub mod hashes {
+    /// `Data.wad`'s front-end screen holding the `Name`/`Tag` `<TagInput>`
+    /// profile-entry widgets - see [`crate::tag_input`] and
+    /// `docs/formats/fexml.md`'s `TagInput` section.
+    ///
+    /// **Name unresolved**: 16 prefix variants were tried against this hash
+    /// and none hit, so it is reached by hash rather than by path. **The
+    /// index is not stable across pressings and the hash is**: entry 1083 on
+    /// `pulse-psp-usa.chd`'s `Data.wad`, entry 1082 on `pulse-psp-eu.chd`'s -
+    /// both this same hash, 40,083 bytes.
+    pub const TAG_INPUT_SCREENS: u32 = 0xb94f_e6f9;
+
     /// The dev/pub reel `Intro Screen->IntroMovie1` plays, in its three
     /// regional cuts.
     ///

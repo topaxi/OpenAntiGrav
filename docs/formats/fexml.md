@@ -94,6 +94,64 @@ Recovered from expanded files, not exhaustive:
 | `Redirect`, `goto` | State transitions |
 | `Entry`, `Class`, `Difficulty` | Menu and mode data |
 | `LoadXML` | Includes another XML file |
+| `TagInput` | Pulse and Pure's own text-entry widget; see below |
+
+## `TagInput`: the row of character cells, and it is not a keyboard
+
+Neither PSP title hands text entry to a key grid or the firmware OSK - all
+four `sceUtilityOsk` NIDs are absent from both Pulse executables (confidence
+92), and Pure links the firmware dialog yet still carries this element (a
+different, uppercase-only alphabet), so linking it settles nothing about
+which one it draws with. Both author a `<TagInput>` instead: a fixed row of
+`length` character cells the player scrolls one glyph at a time.
+
+```xml
+<TagInput name="Name" focus="true" Transition="0.1">
+<Values x="FEGlobals->TitleXOffset" y="85" length="10" color="FEGlobals->TextColor" scale="2.0"></Values>
+</TagInput>
+```
+
+Measured off `Data.wad` entry hash `0xb94fe6f9` on `pulse-psp-usa.chd` (index
+1083) and `pulse-psp-eu.chd` (index 1082 - **the index differs across
+pressings, the hash does not**, which is why this entry has no resolved name
+and is reached by hash):
+
+| Attribute | On | Type | Notes |
+| --- | --- | --- | --- |
+| `name` | `TagInput` | string | Which field - `Name`, `Tag`, or the online `GameNameTag`/`GamePasswordTag`/`UsernameTag`/`PasswordTag` |
+| `focus` | `TagInput` | `true`/`false`/`force` | `force` on the two online fields that must be filled before the screen proceeds |
+| `Transition`/`transition` | `TagInput` | float | Case varies by instance; unread here |
+| `x`, `y` | `Values` | number, `FEGlobals->` | Text position, not the cell background's |
+| `length` | `Values` | integer | Cell count: `10` (Name), `3` (Tag/pilot tag), `14` (every online field) |
+| `color` | `Values` | ARGB, `FEGlobals->` | Glyph colour |
+| `scale` | `Values` | float | Absent on `Create Profile Setup`'s `Tag`, meaning `1.0` |
+| `Encrypt` | `Values` | bool | `GamePasswordTag`/`PasswordTag` only - masks the glyphs |
+| `AllowBlank` | `Values` | bool | `UsernameTag` (`false`), `PasswordTag` (`true`) |
+
+**The cell row, the `FE_CONFIRM` item and its two gradient bars are drawn as
+ordinary sibling widgets, not part of the `TagInput` schema itself**: a
+`<TagInput>`'s cell backgrounds are colour-only `<Image name="BGgradient">`
+tiles under a sibling `<Item OffsetX="46" OffsetY="88">` (each `x="0"`,
+`x="30"`, `x="60"`... - 30 units apart, `width="28" height="25"`,
+`color="0x2fffffff"`), and the confirm prompt is a `<Text name="confirm"
+idstring="FE_CONFIRM">` bracketed by two `<Image>` ARGB gradients. Nothing
+here couples a `TagInput`'s `length` to that pitch; a reader that wants the
+cell rects reads the `Item`'s own `BGgradient` children, and mapping glyph
+*i* to cell *i* by index is this project's own choice, not authored.
+
+**Reachable via `oag_ui::screen::Screens` only from a *named* enclosing
+`Screen`.** The `Name`/first `Tag` instances (profile name/tag) sit directly
+under an **anonymous** `<Screen type="FE_Default">`, which
+`Screens::collect` walks through without registering - see that function's
+own doc for why this project does not change that rule for one widget.
+`Create Profile Setup`'s own `Tag` (`length="3"`) is the one instance that
+*is* under a named `Screen`, and is what `crates/ui/tests/tag_input_ground_truth.rs`
+checks against the real disc. A reader after the anonymous instances (Pulse's
+own profile-name/tag screens) walks `oag_tables::fexml::parse`'s tree
+directly - see `oag_ui::tag_entry`.
+
+**The alphabet is not in this file.** It is 70 bytes in `BOOT.BIN`, not the
+WAD - see `oag_pulse::tag_input::ALPHABET`.
 
 ## `FEGlobals->` and `FEConst->`: named values where a number is expected
 

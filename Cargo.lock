@@ -2133,7 +2133,9 @@ name = "oag-pulse"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-disc",
  "oag-formats",
+ "oag-testdata",
  "oag-title",
 ]
 

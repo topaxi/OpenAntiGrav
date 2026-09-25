@@ -21,8 +21,15 @@ oag-title.workspace = true
 # `wad::hash_name` and nothing else from the format layer. The check runs
 # offline, without a disc, which is why it is worth an edge the shipping crate
 # does not have.
+#
+# `oag-disc`/`oag-testdata` are here for the same reason and the same offline
+# rule does not apply to them: `tag_input_alphabet_ground_truth.rs` reads
+# `BOOT.BIN` directly off a real disc image, `#[ignore]`d, only via
+# `just test-data`.
 [dev-dependencies]
+oag-disc.workspace = true
 oag-formats.workspace = true
+oag-testdata.workspace = true
 
 [lints]
 workspace = true

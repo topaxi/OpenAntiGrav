@@ -27,9 +27,11 @@ use oag_gameplay::input::Button;
 pub use oag_tables::fexml::{Node, parse};
 
 mod settings;
+mod tag_input;
 mod touch;
 mod widgets;
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
+pub use tag_input::TagInput;
 pub use touch::{Include, TouchButton};
 
 /// Container extensions a `Movie` widget's `src` may already carry.
@@ -391,6 +393,10 @@ pub struct Screen {
     pub display_languages: bool,
     /// The screen's `Menu` widget, if it has one.
     pub menu: Option<Menu>,
+    /// `TagInput` widgets in document order. Empty for every screen whose
+    /// `TagInput` sits under an anonymous `Screen` - see [`TagInput`]'s own
+    /// doc and `docs/formats/fexml.md`.
+    pub tag_inputs: Vec<TagInput>,
     /// What the screen's `<ScreenClear>` fills the frame with, as ARGB.
     ///
     /// **Not [`Self::fills`]**, which is the `<Image>`-with-a-colour-and-no-`src`
@@ -776,6 +782,7 @@ impl Screens {
                 .push(self.touch_slider_from_node(child, inner)),
             "displaylanguages" => screen.display_languages = true,
             "menu" => screen.menu = Some(self.menu_from_node(child, offset)),
+            "taginput" => screen.tag_inputs.push(self.tag_input_from_node(child)),
             "viewport" => {
                 let width = self.number(child.value("width"));
                 for grandchild in &child.children {
@@ -881,7 +888,9 @@ impl Screens {
         }
     }
 
-    fn number(&self, value: Option<&str>) -> Option<f32> {
+    /// `pub(crate)` for [`crate::tag_entry`] - see
+    /// [`Screens::fill_from_node`]'s own note.
+    pub(crate) fn number(&self, value: Option<&str>) -> Option<f32> {
         self.resolve(value?)?.trim().parse().ok()
     }
 
