@@ -17,6 +17,13 @@ layout are in
 
 ## Open
 
+- **The pipeline cache's key leaves out the pipeline layout and the vertex
+  buffer layout.** Both are safe today only because `mesh_render::build`
+  builds the same four bind group layouts and the one `GpuVertex` layout on
+  every call, and wgpu treats bind group layouts with identical entries as
+  compatible. A change that gives some drawables a different bind group set or
+  vertex format must add it to `pipeline_cache::Key` in the same change, or a
+  cached pipeline is handed to a drawable it does not fit.
 - **The Steam Deck is unmeasured.** It is where the report came from, and it
   is the only thing left open on this thread - the desktop build time below
   is fixed. After `just deploy-deck`, from a Desktop Mode terminal:
