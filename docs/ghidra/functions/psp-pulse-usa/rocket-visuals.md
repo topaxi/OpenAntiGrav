@@ -343,6 +343,51 @@ Confidence **90** for the split: both functions decompile cleanly, the
 offsets are `WeaponStats_ParseRocket`'s own ([weapon-fire.md](weapon-fire.md)),
 and the teardown is the same eleven-line shape as `Plasmas_Update`'s.
 
+**2026-09-25: the timeout reap is genuinely silent, confirmed rather than
+inferred.** `RocketPool_Update` itself (`0x0886de60`, confidence 90 - read
+whole via `decompile_function` against `psp-pulse-usa`'s `BOOT.BIN`) is the
+function both paragraphs above describe. Its despawn pass is:
+
+```c
+if (5.0 < age /* +0x48 */) flags |= 4;          // age-only reap sets *only* bit 0x4
+if ((flags & 4) != 0) {
+    FUN_088f3298(...);                          // release the particle system
+    ...
+    if ((flags & 0x10) == 0) {
+        if ((flags & 0x20) != 0) Sound_Play(..., "ROCKEXPLSHIP", ...);
+        // else: no Sound_Play call at all
+    } else {
+        Sound_Play(..., "ROCKEXPLWALL", ...);
+    }
+    ...
+}
+```
+
+There is no third arm. The `if`/`else if` only ever chooses between
+`ROCKEXPLWALL` and `ROCKEXPLSHIP`; a rocket that ages out without a hit sets
+neither `0x10` nor `0x20`, so the whole `Sound_Play` block is skipped and the
+teardown falls straight through to releasing the slot. The original plays
+**nothing** on a Rocket time-out, matching what this port already does (see
+`Cue::RocketHitWall`'s own doc comment in `crates/game/src/audio/sfx/cue.rs`).
+
+**The teardown's own callees were read too, not just the branch that skips
+`Sound_Play`.** `FUN_088f3298` (particle-system release) and
+`FUN_08939bcc`/`FUN_08939460` (both reached off `iVar5 + 0x50`, the rocket's
+own sound emitter - the same one `~ROCKETTVL` loops on) were each decompiled
+in full: none of the three calls `Sound_Play` or reaches one transitively.
+`FUN_08939460(emitter, 0)` copies the emitter's last-known world position out
+of its attached node and clears the node pointer - a detach, not a stop
+notification - so there is no cue hiding in the teardown's own call tree
+either. **What actually silences `~ROCKETTVL` on a timeout is not a call in
+this function at all**: `TravelVoices::tick`
+(`crates/game/src/audio/sfx/travel.rs`) reads `flying`/`position` straight
+off the world's own projectile array every tick, independent of whether an
+`Impact` was written that tick, and `flight.rs`'s timeout branch resets the
+slot to `Projectile::default()` - so the loop's own falling edge fires the
+same tick the slot goes inactive, on the projectile's own liveness rather
+than on any `Impact`. Confirmed by reading both sides, not assumed from the
+port's own shape.
+
 `Rocket_SweepProjectiles` (`0x0886f154`, confidence 78) is the third call
 in the per-rocket loop: the same cylinder test against every live **mine**
 (pool `DAT_08b3bf8c`, radius `+0x100` of the rocket record) and every live

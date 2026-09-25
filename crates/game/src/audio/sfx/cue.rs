@@ -437,11 +437,13 @@ pub enum Cue {
     /// loop - every one it sees there is a real wall hit, settling which cue
     /// *this port's* reap plays (none) without needing to disambiguate one
     /// from a wall hit. **What the original itself plays on that same
-    /// timeout is still unread**: `rocket-visuals.md`'s "What a rocket hit
-    /// spends" section says the teardown branches on the round's own
-    /// `0x10`/`0x20` flags and a reap sets neither, but does not say what -
-    /// if anything - a timed-out rocket's teardown call otherwise plays.
-    /// Placed at the impact point ([`super::Placement::Point`]), same
+    /// timeout is now settled too, 2026-09-25**: `RocketPool_Update` itself
+    /// (`0x0886de60`) was read whole - its age-only reap sets flag `0x4` and
+    /// nothing else, and the teardown's `Sound_Play` only ever branches on
+    /// `0x10` vs `0x20`, so a rocket with neither set falls through and
+    /// plays no cue at all. See `rocket-visuals.md`'s "What a rocket hit
+    /// spends" section - the original is silent on a timeout, matching this
+    /// port. Placed at the impact point ([`super::Placement::Point`]), same
     /// reasoning as [`Self::PlasmaHitWall`].
     RocketHitWall,
     /// A Rocket bolt ending on a struck craft.
@@ -511,9 +513,14 @@ pub enum Cue {
     /// `MAX_FLIGHT_SECONDS` reap (the branch every weapon but Rocket,
     /// Missile and Plasma falls into) resets the slot with no `Impact`
     /// written, so a Cannon round that outlives its flight time is silent
-    /// here too, never a false `struck: None`. Placed at the impact point;
-    /// no emitter override is stated, so this keeps
-    /// [`oag_audio::Emitter::CRAFT_RADIUS`].
+    /// here too, never a false `struck: None`. **The original matches,
+    /// settled 2026-09-25**: `CannonPool_Update` (`0x088582b0`) reaches the
+    /// same teardown block on `1.0 < age || (flags & 4) != 0` - the age test
+    /// is an `||` on the gate itself, not a bit it sets first the way the
+    /// Rocket's does - but once inside, `Sound_Play` only ever branches on
+    /// `0x10` vs `0x20`, so a round that ages out with neither flag set
+    /// still plays nothing. Placed at the impact point; no emitter override
+    /// is stated, so this keeps [`oag_audio::Emitter::CRAFT_RADIUS`].
     CannonHitWall,
     /// A Cannon round ending on a struck craft.
     ///

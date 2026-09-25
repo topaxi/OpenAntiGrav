@@ -474,6 +474,23 @@ indexing `CANNONEXPLWALL` directly - see
 craft hit plays the wall cue's own nine waveforms rather than a set of its
 own.
 
+**2026-09-25: the timeout reap is genuinely silent here too, confirmed the
+same way as the Rocket's.** `CannonPool_Update` (`0x088582b0`, confidence 88
+- read whole via `decompile_function` against `psp-pulse-usa`'s `BOOT.BIN`)
+has the same outcome, though the gate is shaped slightly differently from the
+Rocket's: the despawn pass enters its teardown block on
+`if (1.0 < age || (flags & 4) != 0)` - the age test (the Cannon's own,
+shorter, flight timeout) is an **`||` on the gate itself**, not a bit the age
+check sets first the way `RocketPool_Update` does. Once inside, it is the
+same shape as the Rocket: `Sound_Play` only ever branches on `flags & 0x10`
+(`CANNONEXPLWALL`) versus `flags & 0x20` (`CANNONEXPLSHIP`) - no third arm.
+A round that ages out with neither flag set (no hit recorded) still enters
+the teardown block on the `1.0 < age` half of the `||`, but falls through
+both `Sound_Play` branches and plays nothing. Confirms, rather than just
+mirrors by reasoning, the "silent by construction" note above and the
+equivalent Rocket finding in `rocket-visuals.md`'s "What a rocket hit spends"
+section.
+
 ### What draws a Cannon round: two textures and three quads, and not a particle effect at all
 
 **Read 2026-09-08, confidence 85, and it refutes the premise the visuals thread
