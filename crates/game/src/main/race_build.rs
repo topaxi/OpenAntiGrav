@@ -185,3 +185,10 @@ pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
         log::warn!("could not release the parked race off the frame thread: {e}");
     }
 }
+
+// `#[path]` for the reason `headless.rs` gives for its own: this module was
+// loaded via `#[path = "main/race_build.rs"]`, so a bare `mod tests;` would
+// resolve to `src/main/tests.rs`.
+#[cfg(test)]
+#[path = "race_build/tests.rs"]
+mod tests;
