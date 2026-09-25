@@ -431,7 +431,7 @@ fn one(
     // `hull` wholesale, so a skin applied earlier would be thrown away with
     // the model it was painted onto.
     if let Some(skin) = skin {
-        ship_skin::apply(archives, skin, &mut hull, report);
+        ship_skin::apply(archives, skin, &hull_name, &mut hull, report);
     }
     report.push(format!(
         "{hull_name}: {} triangle(s), model centre {:?}, radius {:.2}",

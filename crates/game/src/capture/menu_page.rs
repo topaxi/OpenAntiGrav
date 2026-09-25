@@ -667,17 +667,8 @@ pub(super) fn draw_preview(
         // The chosen paint, the same swap the live screen and a race make;
         // a skin that will not read leaves the hull's own and says so.
         if let Some(entry) = &request.skin {
-            match archives
-                .read_name(entry)
-                .map_err(anyhow::Error::from)
-                .and_then(|blob| oag_texture::ship_skin::parse(&blob).map_err(anyhow::Error::from))
-            {
-                Ok(paint) => {
-                    oag_render::mesh::ship_skin::apply(&mut model, &paint);
-                }
-                Err(error) => {
-                    log::warn!("{entry}: {error:#} - the preview keeps the hull's own paint");
-                }
+            for line in crate::preview::paint(&mut archives, entry, &request.entry, &mut model) {
+                log::info!("preview {}: {line}", request.entry);
             }
         }
         crate::preview::Preview::new(

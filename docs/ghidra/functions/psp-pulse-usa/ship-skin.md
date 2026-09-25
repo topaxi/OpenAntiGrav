@@ -363,3 +363,10 @@ question properly, and is left open.
 `MPLobby_UpdateShipPreview_q` itself has **no** `jal` caller, so it is reached
 through a vtable or a function pointer. That is one of the reasons its own
 confidence is below 70.
+
+## The PS2 port does not use this layout
+
+The PS2 build never reads a `.dat`'s bytes: its `Skin_SwapAtlasSibling`
+maps the file name to a whole sibling atlas beside the hull's one
+`ALL_Textures.tga` and copies that over it. See
+[`ps2-pulse-eu/ship-skin.md`](../ps2-pulse-eu/ship-skin.md).

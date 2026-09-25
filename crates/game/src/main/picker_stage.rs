@@ -317,17 +317,8 @@ impl PickerStage {
             (&source, skin.filter(|s| !s.is_empty()))
             && let Some((_, entry)) = skins.iter().find(|(id, _)| id == skin)
         {
-            match self
-                .archives
-                .read_name(entry)
-                .map_err(anyhow::Error::from)
-                .and_then(|blob| oag_texture::ship_skin::parse(&blob).map_err(anyhow::Error::from))
-            {
-                Ok(paint) => {
-                    let applied = oag_render::mesh::ship_skin::apply(&mut model, &paint);
-                    info!("preview {name}: skin {entry} over {applied} texture slot(s)");
-                }
-                Err(error) => warn!("{entry}: {error:#} - the preview keeps the hull's own paint"),
+            for line in oag_game::preview::paint(&mut self.archives, entry, &name, &mut model) {
+                info!("preview {name}: {line}");
             }
         }
         info!(
