@@ -137,6 +137,23 @@ pub(super) fn campaign_page(
     // one (`Shell::circuit_names`) and is the path that matters for a
     // player.
     let circuit_names = oag_ui::language::CircuitNames::default();
+    // **HD/Fury only.** A still has no `Campaign Selection` step to narrow
+    // `campaign.grids` the way `CampaignStage::open_grid_selection` always
+    // does before a live session ever draws `Grid Selection`/`Cell
+    // Selection` - undoing that narrowing here (`Grid`/`Cell` below used to
+    // read `campaign.grids` whole, all sixteen) drew a page counter no real
+    // screen ever shows: `Event 01/16` where RPCS3's own frame reads `Event
+    // 01/08` (`docs/ui/campaign-screens.md`'s "measured on RPCS3" section).
+    // Defaults to the base `Wipeout HD` campaign (`HD_GRID_RANGE`, grid0..7)
+    // rather than `Fury` - `campaign.grid_layout` is that campaign's own
+    // screen; `Fury`'s is a separate, differently-sourced
+    // `campaign.grid_layout_fury` this capture path does not thread through,
+    // so picking `Fury` here would draw `Fury`'s grids under `Wipeout HD`'s
+    // own widget layout instead.
+    let hd_grids = campaign
+        .grids
+        .get(oag_hd::campaign::HD_GRID_RANGE)
+        .unwrap_or(&[]);
     let layers = if is_hd {
         match kind {
             CampaignKind::Selection => {
@@ -166,8 +183,7 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid => {
                 let model = oag_ui::campaign::GridSelection::new(
-                    campaign
-                        .grids
+                    hd_grids
                         .iter()
                         .map(|grid| {
                             oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
@@ -192,7 +208,7 @@ pub(super) fn campaign_page(
                 // summary rather than a panic, on the same "a still draws
                 // something honest rather than crashing" terms the rest of
                 // this module follows.
-                let grid = campaign.grids.first();
+                let grid = hd_grids.first();
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
                 let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of);
                 let grid_summary = grid.map_or(
@@ -215,7 +231,7 @@ pub(super) fn campaign_page(
                     strings,
                     &circuit_names,
                     0,
-                    campaign.grids.len().max(1),
+                    hd_grids.len().max(1),
                     &grid_summary,
                     backdrop,
                     false,
