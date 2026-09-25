@@ -25,6 +25,37 @@
 
 use super::*;
 
+/// **`false`: the LeachBall has no unlit/emissive shader path either, the
+/// same gap `blast_models::HD_PLASMA_BALL_DRAWN` already documents for the
+/// Plasma bolt's head.**
+///
+/// Checked directly, not assumed, 2026-09-25: `oag-view --draws` against
+/// `Data\Weapons\hd_leachbeam_ball_bloomring.vex` shows both its draws
+/// resolve real, bound textures (`hd_leechbeam_ball.gtf`,
+/// `hd_leechbeam_ball_bloomring_ramp_128x32.gtf`) and an authored blend
+/// factor pair - so this is not `oag-view`'s "0 draws resolve no texture"
+/// missing-asset case, and not a missing-blend-state case either. Both
+/// draws' own vertex colour is `rgba 0.00,0.00,0.00,1.00` - black - on
+/// every triangle: a "the texture alone is the picture, diffuse
+/// contributes nothing" authoring pattern that only makes sense under an
+/// unlit/emissive shader, and this engine's one shared `mesh::rcs` shader
+/// (`mesh.wgsl`, the lit race pass) has no such mode - it always multiplies
+/// texture by vertex colour by lighting. Forced `true` and measured live
+/// (`--give leachbeam --hold cross --press square`, a real lock from tick
+/// 0 on `--mode single_race`'s own grid): the ball draws as a flat,
+/// opaque, uniformly-lit grey sphere - the ambient+specular response of a
+/// black-diffuse surface, not the "bloomring" glow its own name promises.
+/// **Not the missing-texture stand-in `CLAUDE.md` forbids** - the model
+/// loads, resolves its own materials and textures, and is culled as
+/// authored; what is missing is a shading mode this engine has not built.
+/// Until it has one, this stays `false`: the model still loads, so the
+/// report line below still says what it found, but nothing is drawn -
+/// `Scene::leach_ball`, `Race::leach_ball_model_matrix` and
+/// `oag_render::beam::hd_ball::position` are all already in place and
+/// tested, ready the moment this flips. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`'s 2026-09-25 sections.
+const LEACH_BALL_DRAWN: bool = false;
+
 /// Loads one weapon's own model by entry name.
 ///
 /// Not per-team and not per-track - one entry serves every projectile of that
@@ -175,7 +206,9 @@ fn load_optional(
 /// the Mine's, the Bomb's, the Cannon round's, the Plasma blast's three - the
 /// bolt's own head included, riding inside the last element rather than a
 /// sixth of its own; see [`blast_models::PlasmaBlastModels`]'s own doc
-/// comment for why - and the Bomb blast's own two.
+/// comment for why - the Bomb blast's own two, and the LeachBeam ball's own,
+/// last because it rides no pool at all - see
+/// `oag_title::weapons::WeaponModels::leachbeam_ball`.
 pub(super) type WeaponBodies = (
     Option<Model>,
     Option<Model>,
@@ -183,6 +216,7 @@ pub(super) type WeaponBodies = (
     Option<Model>,
     blast_models::PlasmaBlastModels,
     bomb_blast::BombBlastModels,
+    Option<Model>,
 );
 
 /// Loads one of the Cannon round's two hand-built quads' textures.
@@ -334,6 +368,21 @@ pub(super) fn load_bodies(
                     shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
                 }
             });
+    // The LeachBall rides no pool of its own - `Scene::new` builds one
+    // drawable, not `MAX_PROJECTILES` of them, since only one beam is ever
+    // live - but its model loads on the same terms as every other weapon
+    // body above. `cull` is `true` on the same grounds the Rocket's is: its
+    // one placement (`Race::leach_ball_model_matrix`) is a translation, a
+    // rotation with determinant `+1`, so `cull_as_authored` is safe to ask
+    // for. **Loaded for the report line always; handed to `Scene` only when
+    // `LEACH_BALL_DRAWN` is true** - see that constant's own doc comment for
+    // why it is `false`.
+    let leach_ball_loaded = one(models.leachbeam_ball, "a leachbeam ball", true);
+    let leach_ball = if LEACH_BALL_DRAWN {
+        leach_ball_loaded
+    } else {
+        None
+    };
     let bodies = (
         one(models.rocket, "a rocket", true),
         one(models.mine, "a laid mine", true),
@@ -352,6 +401,7 @@ pub(super) fn load_bodies(
             ..plasma_blast
         },
         bomb_blast,
+        leach_ball,
     );
     if models.plasma_ball.is_some() && !blast_models::HD_PLASMA_BALL_DRAWN {
         report.push(
@@ -359,6 +409,19 @@ pub(super) fn load_bodies(
              engine's one shared lit shader path with no additive/glow \
              route, and renders as an opaque black shard - see \
              docs/formats/rcsmaterial.md"
+                .to_string(),
+        );
+    }
+    if models.leachbeam_ball.is_some() && !LEACH_BALL_DRAWN {
+        report.push(
+            "hd_leachbeam_ball_bloomring loaded, not drawn: its own vertex colour is \
+             authored black on every triangle (oag-view --draws confirms real, bound \
+             textures and an authored blend factor pair, so this is not a missing-texture \
+             or missing-blend fault) - a diffuse-contributes-nothing, texture-is-a-pure-glow \
+             authoring pattern this engine's one shared mesh::rcs shader has no \
+             unlit/emissive mode for, the same gap HD_plasma_ball hits. Forced on and \
+             measured live: a flat, opaque, uniformly-lit grey sphere, not a bloom - see \
+             docs/ghidra/functions/ps3-hdfury-eu/weapons.md"
                 .to_string(),
         );
     }

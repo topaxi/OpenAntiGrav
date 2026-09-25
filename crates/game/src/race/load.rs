@@ -13,6 +13,7 @@ pub mod campaign;
 mod countdown;
 mod engine_light;
 mod environment;
+mod gantry_visibility;
 mod geometry;
 mod global;
 mod pads;
@@ -349,6 +350,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         cannon_model,
         plasma_blast_models,
         bomb_blast_models,
+        leach_ball_model,
     ) = weapon_models::load_bodies(&mut archives, wm, &mut report);
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
@@ -623,107 +625,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
-    // The authored PVS. Skipped for a ribbon build, whose geometry is generated
-    // from the spline rather than authored, so the section boxes have nothing
-    // to say about it.
-    // **What the circuit asks to be loaded with it, and what of that this
-    // project does.** `trackstartup.xml` names up to eight billboard slots and
-    // a sound bank; every model it names is on the disc. Seven of the eight are
-    // still unplaced - where a hoarding attaches is unrecovered, so they stay
-    // unwired rather than put somewhere plausible. **Slot 8 is not a hoarding
-    // and is no longer among them**: it is the start gantry, and the circuit's
-    // own track geometry authors the surface it stands on. See
-    // `oag_tables::trackstartup` and `docs/rendering/start-gantry.md`.
-    //
-    // **Not HD-only.** Pulse ships the same file per circuit, `fexml`-shortened
-    // rather than plain - `TrackStartup::parse` expands either form - so this
-    // also runs on real geometry (`vex_geometry`), whose paths are `\`-joined
-    // where HD's are `/`-joined; `rfind('/')` alone found nothing on Pulse.
-    let mut gantry = None;
-    // Whether anything named a slot 8 at all, which is what separates "the gantry
-    // did not load" (`place` says so itself) from "nothing asked for one", which
-    // otherwise reports nothing at all - see the block after this one.
-    let mut named_slot_8 = false;
-    if (ps3_geometry.is_some() || vex_geometry)
-        && let Some(name) = track
-            .rfind(['/', '\\'])
-            .map(|at| format!("{}/trackstartup.xml", &track[..at]))
-        && let Ok(blob) = archives.read_name(&name)
-    {
-        let manifest =
-            oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
-        let models = manifest
-            .billboards
-            .iter()
-            .filter(|b| b.location().is_some())
-            .count();
-        report.push(format!(
-            "{name}: {} billboard slot(s), {models} naming a model and {} a colour - \
-             slots 1-7 unplaced, because what a hoarding attaches to is unrecovered{}",
-            manifest.billboards.len(),
-            manifest.billboards.len() - models,
-            match &manifest.sound_bank {
-                Some(bank) => format!("; sound bank {bank}"),
-                None => String::new(),
-            },
-        ));
-        // The manifest's own spelling of the model, not a constant here:
-        // every Pulse circuit names the same file, and a source that names
-        // another gets that one drawn rather than Pulse's substituted for it.
-        if let Some(model) = manifest.billboard(8).and_then(|b| b.location()) {
-            named_slot_8 = true;
-            gantry = super::gantry::place(
-                &mut archives,
-                model,
-                &track_model,
-                start_position.as_ref(),
-                &mut report,
-            );
-        }
-    }
-    // **Draw nothing and say so**, on the one route into `place` that reports
-    // nothing itself: a circuit whose manifest is missing, unreadable, or
-    // names no slot 8 never calls it. That circuit can still have a measurable
-    // mount, so the silence would read exactly like a circuit that has none.
-    if !named_slot_8 && let Some(mount) = oag_render::gantry::mount(&track_model) {
-        report.push(format!(
-            "no start gantry: nothing named slot 8 - no manifest, or one that names no \
-             model for it - although this circuit does author a mount for one, a \
-             {:.1} x {:.1} panel at {:?}",
-            mount.width,
-            mount.height,
-            mount.centre.to_array().map(|v| (v * 10.0).round() / 10.0),
-        ));
-    }
-    // The billboard slots are never artwork - see `strip_slot_placeholders`'s own doc.
-    let stripped = oag_render::gantry::strip_slot_placeholders(&mut track_model);
-    if stripped > 0 {
-        report.push(format!("{stripped} billboard-slot placeholder draw(s) suppressed: drawn nothing rather than the stub"));
-    }
-    let visibility = if vex_geometry {
-        TrackVisibility::build(&track_model, &track_blob, &ai)
-    } else if ps3_geometry.is_some() {
-        TrackVisibility::from_hd_pvs(&mut archives, &track, &mut report)
-    } else {
-        None
-    };
-    // A PS3 circuit reports its own line from `from_hd_pvs`, so only the
-    // section partition and its absence are described here.
-    match &visibility {
-        Some(v) if v.chunks().is_none() => report.push(format!(
-            "{} authored visibility section(s); {} of {} draw call(s) governed by one \
-             ({:.1}%), the rest always drawn; {} LOD-swap pair(s)",
-            v.pvs.len(),
-            v.placement.placed,
-            v.placement.total(),
-            v.placement.placed_fraction() * 100.0,
-            v.swap_pairs(),
-        )),
-        None if vex_geometry => report.push(
-            "no authored visibility sections: PVS culling is unavailable on this track".to_string(),
-        ),
-        _ => {}
-    }
+    let (gantry, visibility) = gantry_visibility::build(
+        &mut archives,
+        &track,
+        &mut track_model,
+        &track_blob,
+        &ai,
+        ps3_geometry.is_some(),
+        vex_geometry,
+        start_position.as_ref(),
+        &mut report,
+    );
 
     let spline = Spline::from_track(&ai);
     report.push(format!(
@@ -977,6 +889,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         bomb_model,
         plasma_blast_models,
         bomb_blast_models,
+        leach_ball_model,
         shield_cockpit,
         countdown_model,
         visibility,

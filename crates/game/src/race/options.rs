@@ -655,6 +655,13 @@ pub struct Loaded {
     /// The Bomb's own detonation: a hemisphere and a shockwave, `None` on
     /// every title but Pulse - see `bomb_blast`.
     pub bomb_blast_models: bomb_blast::BombBlastModels,
+    /// The LeachBeam's own ball, HD only:
+    /// `Data\Weapons\hd_leachbeam_ball_bloomring.vex`. `None` on the same
+    /// terms as [`Self::rocket_model`] - a source with no entry, or none
+    /// recovered on this title's own [`oag_title::weapons::WeaponModels`],
+    /// draws no ball at all rather than a stand-in. See
+    /// `oag_render::beam::hd_ball` for the position law it is drawn at.
+    pub leach_ball_model: Option<Model>,
     /// The sphere a fired Shield shows from **inside** the cockpit, drawn
     /// instead of the per-team shell when the camera is in the craft.
     ///
