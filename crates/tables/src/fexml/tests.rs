@@ -258,3 +258,27 @@ fn a_stray_double_lt_does_not_panic() {
     // is the assertion.
     let _ = root;
 }
+
+/// [`tag_end`]'s recovery is reached through [`expand`] too, not only
+/// through [`parse`] on already-plain text - and the two paths are not
+/// interchangeable: `expand` runs the recovery *before* the short-name
+/// dictionary substitutes real names in, so this is the only test that
+/// exercises the recovery on a shortened blob at all. That gap was real:
+/// a cross-title census (`cargo run -p oag-game --example
+/// fexml_recovery_noop_census`) found the identical `attr="x"</Tag>` shape
+/// on Pulse's own shortened "stats holder" screen (`Data.wad`, PSP EU/USA
+/// both), which only reaches `tag_end` through this path.
+#[test]
+fn expand_recovers_a_start_tag_missing_its_closing_bracket() {
+    let src = concat!(
+        r#"<code as="Values" bs="ImageModel"></code>"#,
+        r#"<b><a Src="x.vex" RotY="-0.5"</a></b>"#,
+    );
+    let out = expand(src.as_bytes()).unwrap();
+    assert!(
+        out.contains(r#"<Values Src="x.vex" RotY="-0.5">"#),
+        "the opening tag gets its own `>`: {out}"
+    );
+    assert!(out.contains("</Values>"), "{out}");
+    assert!(out.contains("</ImageModel>"), "{out}");
+}

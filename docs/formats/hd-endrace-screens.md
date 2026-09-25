@@ -147,7 +147,7 @@ one screen ever reached `screen.texts` either.
 **Fixed the same day, in `oag_tables::fexml` directly**: `tag_end` now
 treats an unquoted `<` met mid-tag as proof the previous tag was never
 closed, recovering the missing `>` in place - see
-[fexml.md](fexml.md#recovering-a-start-tag-missing-its-own--2026-09-25) for
+[fexml.md](fexml.md#recovering-a-start-tag-missing-its-own--fixed-2026-09-25-876b5d4d) for
 the rule, its evidence, and a census proving it changes nothing on every
 other fexml file this project reads except a small, named set of *other*
 instances of the identical authoring bug (also fixed by the same change).
