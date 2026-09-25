@@ -105,16 +105,25 @@ Screenshots from the 2026-09-23 lane are in
   entirely (`iVar1`, now identified - it was the open question in
   `docs/ghidra/functions/psp-pulse-usa/shield.md`'s own "still open" note),
   and it enters the same `hud+0x1dc`/`* 8.0` blink loop the low-shield icon
-  uses regardless of the red suppression. See shield.md's "`Hud_UpdateEnergyBar`:
-  the absorb flash (2026-09-25)" for the full decompile. **Still open**: the
-  widget's own `+0xf4` field is written a flat `0xff`/`0x00` in lock-step
-  with the window, on the `ShieldBar` widget itself rather than a
-  separately-named one, but *what it drives* was not chased past that write
-  - the port stands in a flat white copy of the bar's own cropped fill,
-  painted under it, labelled chosen-not-measured in both shield.md and
-  `oag_game::hud::Readout::shield_absorbing`'s own doc comment. A live frame
-  of the original mid-absorb (PPSSPP, watch the `ShieldBar` rect) is what
-  would settle it.
+  uses regardless of the red suppression. Confidence 84/82/80 for the call,
+  the red suppression and the blink respectively (this page's own decompile
+  ceiling). See shield.md's "`Hud_UpdateEnergyBar`: the absorb flash
+  (2026-09-25)" for the full decompile. **Still open**: the widget's own
+  `+0xf4` field is written a flat `0xff`/`0x00` in lock-step with the
+  window, on the `ShieldBar` widget itself rather than a separately-named
+  one, but *what it drives* was not chased past that write despite a
+  targeted `search_instructions` pass (confidence 60) - the port stands in
+  a flat white copy of the bar's own cropped fill, painted under it. The
+  fourteen `pulse-absorb-probe` frames now settle that **a white layer
+  genuinely exists**: the off-phase pixels read near-`255,255,255`
+  uniformly across the fill, and `ShieldBarBg`'s own authored colour
+  (`HudColour3A`, `0x60B5D7C8` - pale, 38% alpha) is nowhere near white, so
+  "alpha-to-zero exposing the background" is ruled out by the XML itself,
+  not just by the pixels. Confidence 82. Still open only at the byte
+  level: which draw call paints the white layer; see shield.md's own frame
+  note, which also records that the blink's *phase* does not read as
+  zeroed at the absorb - consistent with the freeze-not-reset accumulator
+  the port already implements, not with a per-absorb reset.
 - **Pulse burst look:** in the original it reads as short crackles on the
   hull, and ours reads as long streaks. Not investigated.
 - **AI absorbs light the hull too.** Seen live: an AI craft absorbed on its
@@ -153,9 +162,13 @@ Screenshots from the 2026-09-23 lane are in
    size with bloom on to confirm the white blob in a normal race.
 3. ~~Pulse HUD: the energy bar's absorb flash (`Hud_UpdateEnergyBar`,
    `+0xf4 = 0xff`, 8 Hz blink off `+0x1dc`).~~ **Done 2026-09-25**: forced-red
-   suppression and the blink are measured and built; the `+0xf4` layer's own
-   texture/blend is not chased past the field write (see Open, above) - a
-   live frame of the original's `ShieldBar` mid-absorb would settle it.
+   suppression and the blink are measured and built. Pixel-sampled against
+   the `pulse-absorb-probe` frames: the off-phase reads a uniform white
+   across the whole fill with no gradient or partial patch, and `ShieldBarBg`'s
+   own authored colour rules out an alpha-reveal of the background as the
+   mechanism (see shield.md's "the fourteen `pulse-absorb-probe` frames"
+   note) - a white layer genuinely exists, which is what the port draws.
+   Still open only at the byte level: which draw call paints it.
 4. Wire the LeachBeam overlay onto the firing craft, faded by its beam's
    pulse strength. Before that, confirm the record `+0` write live. It
    needs a way to fire a LeachBeam that does not halt PPSSPP, or an AI

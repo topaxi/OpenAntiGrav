@@ -873,9 +873,63 @@ decompile-only and so also capped at 84:**
    the more direct route - `Hud_BindWidgets` already calls through it for
    `ShieldBarMark`'s `+0xd4` slot and others - but the draw slot itself was
    not identified this pass. **What would raise it**: decompiling that
-   vtable's draw slot and finding a read of `+0xf4`, or a live frame of the
-   original mid-absorb with the `ShieldBar` rectangle watched for a second,
-   independent visual layer.
+   vtable's draw slot and finding a read of `+0xf4`.
+
+   **The fourteen `pulse-absorb-probe` frames (0.11-1.09 s into the window,
+   `~0.075 s` apart) settle that a white layer exists, and rule out the
+   alternative that would have needed no port change at all.** Pixel-sampled
+   with PIL across the fill's own horizontal extent (`y=495`,
+   `x=625..900` step 25), against the *empty speed bar's* own background
+   directly above it (`y=455` - `SpeedBarBg`, not `ShieldBarBg`, which sits
+   under the shield fill and is fully covered at a non-zero percentage, so
+   it cannot be read off these frames directly): frames 01, 02, 05, 06, 08,
+   09, 11, 12 read a uniform cyan fill (`R≈35-57, G=255, B=248-255`,
+   matching `HudColour3`, `0xFF0DDFDD`); frames 03, 04, 07, 10, 13 read a
+   uniform near-white fill (`R/G/B` at or near `255` across nearly the
+   whole sampled width, a few samples near the right edge landing on the
+   end-cap rather than the fill and reading mixed); frame 14, past the
+   window, is back to a steady, unblinking `(14, 224, 222)` - `HudColour3`
+   almost exactly. **No frame shows a gradient or a partial-width patch** -
+   every in-window frame is uniformly cyan or uniformly white across the
+   fill, and `SpeedBarBg` is pixel-identical throughout, so this is not
+   bloom bleeding in from the hull glow (which would have moved that row
+   too).
+
+   **`ShieldBarBg` itself is read from the XML** (`just wad cat --expand
+   <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\Arcade_HUD.xml'` - a single
+   backslash, per `hud.md`'s own corrected note on this exact call): `Color=
+   "FEConst->HudColour3A"`, and `Arcade_HUD.xml`'s own `<Variable global="HudColour3A">`
+   declares `0x60B5D7C8` - alpha `0x60` (38%), RGB `(0xB5, 0xD7, 0xC8)`, a
+   pale desaturated green-cyan, composited at well under half opacity over
+   the dark track. **That is nowhere near the near-`255,255,255` the
+   off-phase frames read**, which rules out "the fill's alpha drops to `0`
+   and `ShieldBarBg` shows through" as the mechanism - a translucent pale
+   green-cyan over a dark track cannot read as bright white. What remains
+   is a same-geometry white layer, which is what the port draws. Confidence
+   **82** for "a white layer exists, not an alpha-reveal of the background" -
+   pixel data plus the XML's own authored colour, still short of a runtime
+   trace of the draw call itself; the vtable's draw slot is what would
+   settle *how* it is drawn, not whether one exists.
+
+   **The blink's phase does not read as zero at the absorb.** The thirteen
+   in-window frames read `C C W W C C W C C W C C W` in order - a first
+   "off" stretch spanning two samples (03, 04) starting around 0.26 s into
+   the window, then single-sample "off" hits roughly every 0.23-0.30 s
+   after (07, 10, 13), consistent with a period near the measured 4 Hz
+   once sampling-rate aliasing against the `~0.075 s` capture interval is
+   accounted for. **A zero-initialised accumulator at the absorb's own
+   start would put the first "off" half at `0.125-0.25 s`**, one half-cycle
+   earlier than what these frames show. That is not a contradiction of the
+   port: `hud+0x1dc` is read as a shared, freezing (not resetting)
+   accumulator with no connection to the absorb trigger at all - the same
+   shape `Race::advance_shield_blink`/`shield_blink_step` already
+   implement, see below - so an absorb beginning mid-cycle, with whatever
+   phase the icon's own earlier blinking (or a prior post-hit flash) left
+   it at, is exactly what the freeze-not-reset model predicts and a
+   zero-reset model would not. It is not evidence the phase is right,
+   only that the *shape* (freezes rather than resets on the absorb) is -
+   this capture's own pre-absorb history is not known, so there is nothing
+   to check the resulting phase against.
 
 **Ported** as `oag_game::hud::Readout::shield_absorbing` (wired off
 `Race::absorb_window_active`, which reuses `Race::view.absorb_overlay`
