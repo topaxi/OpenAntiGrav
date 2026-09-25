@@ -45,7 +45,7 @@
 //!   unread, so it stays unwired rather than fired on a guess. A capture
 //!   showed it once, on a different boot.
 //!
-//! # Who receives it, and why the floor is not it (the hull binding is chosen, not measured)
+//! # Who receives it, and why the floor is not it (the hull binding is measured)
 //!
 //! [`Race::hd_engine_lights`] is bound into the `Scene` uniform of the track
 //! chunks **and of the craft**. Bound to the track alone it changed zero
@@ -72,14 +72,27 @@
 //! carrying the `(255, 128)` decode and the `0x868f8229` attribute). The
 //! picture agrees: the Fury housings take the warm tint the reference
 //! capture shows, and boosted (`1 + 10 * blend`, a 440-unit light a hand's
-//! breadth from the housing) the whole rear of the hull washes warm. What is
-//! still not measured is the runtime half - whether `LightCulling` sets a
-//! hull chunk's `SVC1` bit, and whether the original's hull washes like that
-//! on boost - and that is the one RPCS3 read that would settle it. **The
-//! hull binding is chosen, not measured**, on the static evidence above, and
-//! carries no confidence score. The track floor and
-//! walls light up only when a craft is within `D` of them: landings, wall
-//! scrapes and banked sections.
+//! breadth from the housing) the whole rear of the hull washes warm.
+//!
+//! **The runtime half is now read too (2026-09-25).** `Ship_DrawModels`
+//! (`0x003ea368` in `ps3-hdfury-eu`, confidence 80 -
+//! `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The hull binding is
+//! settled") performs the identical per-object `Enable_spu_vertex_light`
+//! gate this project already read on the track's own Zone-Stage compilers:
+//! `SpuLight_AnyVisibleLightTouchesSphere` against the ship's own bounding
+//! sphere, `Shader_GetVariantHash(... | 0x800)` on a hit. The original does
+//! draw the hull with the `SVC1` twin, conditionally on that per-ship touch
+//! test - which the craft's own engine light, anchored at or inside its own
+//! nozzle, trivially passes. **The hull binding is measured, not chosen**:
+//! do not remove it. What is *not* yet measured is the wash's own shape - a
+//! crop comparison (`data/scratch/hd-engine-light/crops/`) shows the
+//! original's tint confined to the housing/fin geometry against this
+//! project's wider wash across flat underside panels, consistent with (but
+//! not confirmed as) a tessellation/vertex-density difference near the
+//! housing rather than a binding, formula or record error - see the
+//! handover thread's "Open" section for the untested next step. The track
+//! floor and walls light up only when a craft is within `D` of them:
+//! landings, wall scrapes and banked sections.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;

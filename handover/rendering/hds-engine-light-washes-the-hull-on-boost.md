@@ -1,4 +1,4 @@
-# HD's engine light washes the hull white on boost and blooms off it; the original's stays copper - the hull binding is the suspect, not the bloom
+# HD's engine light washes the hull white on boost and blooms off it; the original's stays copper - the binding is measured correct now, the wash's shape is the open suspect
 
 2026-09-20. Reported from play by the user the same evening the light landed
 (`421b14c9`): "the light work looks amazing, but it exaggerates the bloom".
@@ -39,6 +39,17 @@ and is not repeated here.
   `ambient + sun * N.L (+ lightmap)` *before* the albedo multiply (confidence
   80 / 88). `crates/render/src/mesh.wgsl::spu_light_sum` is that, with the
   `256/255`.
+- **The hull binding is measured, not chosen, as of 2026-09-25.**
+  `Ship_DrawModels` (`0x003ea368`) and its one-entity twin (`0x003eb890`)
+  perform the identical per-object `Enable_spu_vertex_light` gate this
+  project already read on the track's Zone-Stage compilers -
+  `SpuLight_AnyVisibleLightTouchesSphere` against the ship's own bounding
+  sphere, `Shader_GetVariantHash(... | 0x800)` on a hit - so the original
+  does draw the hull with the `SVC1` twin, conditionally, during a race.
+  Confidence 80, renderer.md "The hull binding is settled". **Do not remove
+  the binding or gate it off** - that would recreate a state the original
+  never produces. See "Open" below for what is still unmeasured (the wash's
+  own shape, not whether it happens at all).
 - **At ride height the light never reaches the track.** Measured on both
   sides (`crates/game/examples/hd_engine_light_reach_probe.rs`): all 40 of
   the original's captured positions sit 2.98-4.41 units from the nearest
@@ -73,18 +84,38 @@ the light than ours.
 
 ## Open
 
-- **Does the original light the hull at all?** This is the top candidate.
-  The `SVC1` selection this project has read is the *track* path:
-  `LightCulling` takes the track's per-chunk bounding spheres, and
-  `FUN_004074e0`/`FUN_00408fa8` - the track draw compilers - emit opcode
-  `0x2d` and set the `| 0x800` variant bit for chunks the bit table marks.
-  Nothing read so far shows a *ship* chunk going through that selection; the
-  74 `SVC1` twins prove the hull's materials were compiled with the variant
-  available, not that the runtime ever picks it. If the original's hull is
-  never `SVC1`, the light is invisible at ride height by the disc's own
-  numbers (it lights walls and floors within one to two units, i.e. tunnels,
-  banked walls and scrapes), and the fix is `SpuLights::none()` for the craft
-  in `frame.rs` - the path the implementing lane already left in place.
+- **Settled 2026-09-25: yes, the original does light the hull, conditionally.**
+  `Ship_DrawModels` (`0x003ea368`, already named on
+  [ship-sun-occlusion.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md))
+  and its one-entity twin `0x003eb890` - the functions that actually walk
+  the ship table (`PTR_DAT_008b7da0`, count `+0x933c4`, `0x1b0`-byte records)
+  and issue each ship's own `Render_RunCompiledOps_q` draw - perform the
+  identical per-object `Enable_spu_vertex_light` gate this page already read
+  on the two track Zone-Stage compilers: `SpuLight_GetVisibleCount`,
+  `SpuLight_AnyVisibleLightTouchesSphere`, `SpuLight_GetVisibleSlotAddress`,
+  `Shader_GetVariantHash(... | 0x800)`, staged into the same `ctx+0x14c`/
+  `+0x150` fields the opcode-`0x2d` handler already proved is read
+  regardless of which family wrote it. Full read:
+  [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+  "The hull binding is settled", confidence 80. **This falsifies the top
+  candidate** - the hull is a real, conditionally-gated `SVC1` receiver in
+  the original, not a structurally-dead one, and `SpuLights::none()` for the
+  craft would be wrong, not merely untested. `frame.rs`'s binding is
+  therefore correct as implemented; it is relabelled below rather than
+  reverted.
+- **What is still open: the wash's own shape.** A crop comparison this
+  session (`data/scratch/hd-engine-light/crops/{orig,ours}-crop.png`, off
+  `race.png` and `talons-t487.png` - camera angles differ too much for a
+  pixel measurement) shows the original's copper tint confined to the
+  housing/fin geometry while this project's render washes flat underside
+  panels well beyond it. Candidate, **not measured**: sparser tessellation
+  near the housing on this project's `ship.vex` reading would let one or two
+  nearby vertices' ~440-magnitude term interpolate across a much larger
+  screen area than the same falloff produces on a more subdivided original
+  mesh - the same light, the same formula, a coarser receiver. Untested:
+  comparing vertex density at the housing between this project's mesh and
+  the original's own geometry; no ground-truth vertex count from the PS3
+  side exists yet to compare against.
 - **If it does, is our light closer to the housing than the original's?**
   Second candidate, geometric: the anchor `pos - z * Distance` carries the
   locator's Z axis through the craft's world matrix
@@ -101,29 +132,30 @@ the light than ours.
 
 ## Next Steps
 
-1. **Settle the hull binding with one RPCS3 read** (the implementing lane's
-   own suggestion): under `--interpreter`, break in the *ship* draw compiler
-   (find it the way the track's was found - the caller that stores the
-   `0x868f8229` hash's variant word for a `RigidBody` chunk) and read whether
-   the `| 0x800` bit is ever set on a hull chunk during a race; or, cheaper
-   and static first, `get_xrefs_to` on `SpuLight_GetVisibleSlotAddress` /
-   `SpuLight_GetVisibleCount` (`0x0040d370` / `0x0040d390`) and see whether
-   any caller outside the track pass hands the slot to a ship draw. Either
-   answer closes the top bullet. `scripts/rpcs3-drive.py`, Xvfb `:77`, port
-   `2345`, one emulator at a time.
-2. If the answer is *no*: `SpuLights::none()` for the craft in `frame.rs`,
-   relabel the binding **measured**, and re-take `talons-t487.png` - the wash
-   and its bloom go with it. The light then shows only where the disc puts
-   it (walls within `D`); say so in `docs/rendering/README.md`'s entry rather
-   than leaving the rest-state housing tint that players liked.
-3. If *yes*: measure our anchor-to-housing distance against the original's
-   record-to-hull distance (`hd_engine_light_reach_probe.rs` already loads
-   the records; add the hull's vertices from `ship.vex`), and fix the
-   locator/axis/sign if they differ. Only then compare the boost frames
-   again.
+1. **Done, 2026-09-25, statically**: the hull binding is settled - see
+   "Open" above and renderer.md's "The hull binding is settled". No
+   `SpuLights::none()` change; the binding stays as implemented.
+2. **Measure vertex density at the housing**, `ship.vex` against whatever
+   ground truth for the original's own geometry can be found (a decoded
+   `.rcsmodel` chunk count near the `Engine Flare` locator, or a live
+   RPCS3 vertex-buffer read) - the live candidate for the wash's different
+   *shape*, per "Open" above. If this project's housing mesh is coarser
+   (fewer, larger triangles near the nozzle) than the original's, that is
+   the fix: subdivide or re-check the LOD/chunk selection feeding the
+   housing at player-camera distance, not the light or the binding.
+3. Measure our anchor-to-housing distance against the original's
+   record-to-hull distance anyway (`hd_engine_light_reach_probe.rs` already
+   loads the records; add the hull's vertices from `ship.vex`) - a cheap
+   independent check that rules geometry *placement* in or out before
+   chasing tessellation. Our anchor's world position already matches the
+   original's captured records exactly (engine_light.rs's own 40/40 finding),
+   so this is likely to come back negative, but it has not been measured.
 4. Capture a Turbo boost away from any speed pad on the original, to have a
-   reference free of the pad's own flash.
+   reference free of the pad's own flash - useful once a same-angle
+   comparison is possible, not blocking the tessellation check above.
 
-What would falsify the top candidate: a hull chunk observed with the `SVC1`
-bit set on the original during a race. What would falsify the second: our
-light-to-housing distance matching the original's within the `±0.1` jitter.
+What would falsify the tessellation candidate: this project's housing mesh
+carrying the same or higher vertex density near the `Engine Flare` locator
+as the original's. What would falsify the geometric-placement candidate:
+our light-to-housing distance matching the original's within the `±0.1`
+jitter.
