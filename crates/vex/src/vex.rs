@@ -69,12 +69,11 @@ pub const MAGIC_BE: &[u8; 4] = b"XXEV";
 
 pub mod class_names;
 pub mod classes;
-mod matrix;
+pub mod matrix;
 
 pub use matrix::{
-    Anchored, IDENTITY, anchor_world, anim_anchors, class_world_transforms, multiply,
-    named_class_world_transforms, transform, transform_point, world_transforms,
-    world_transforms_at,
+    Anchored, IDENTITY, anchor_world, anim_anchors, class_world_transforms, multiply, transform,
+    transform_point, world_transforms, world_transforms_at,
 };
 
 /// Class ID of a `Mesh` node.
@@ -163,17 +162,6 @@ pub const CLASS_ENGINE_FIRE: u32 = 0x3e5;
 
 /// Class ID of a `Ship Collision Fx` node.
 pub const CLASS_SHIP_COLLISION_FX: u32 = 0x3d0;
-
-/// Class ID of a `cannon_flash` node: the two locators Wipeout HD hangs its
-/// Cannon's muzzle flash on, `cannon_flash_left` and `cannon_flash_right` in
-/// every HD `Locators.vex`.
-///
-/// **From HD's executable.** `ShipCannonFlash_Importer` registers this class,
-/// and its attach step `FUN_002d8ec0` stores the node on the owning craft at
-/// `+0x5f38` when its lowercased name contains `left`, `+0x5f3c` otherwise -
-/// the two muzzles `CannonManager` alternates between. Confidence 85; see
-/// `docs/ghidra/functions/ps3-hdfury-eu/cannon.md`.
-pub const CLASS_CANNON_FLASH: u32 = 0x3eb;
 
 /// Class ID of a `Ship Muzzle` node.
 pub const CLASS_SHIP_MUZZLE: u32 = 0x3e2;

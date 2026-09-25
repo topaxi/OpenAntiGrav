@@ -11,6 +11,7 @@
 
 use oag_core::math::Mat4;
 use oag_vex::vex;
+use oag_vex::vex::classes::CLASS_CANNON_FLASH as CLASS;
 
 use super::{LOCATORS_ENTRY, sibling_entry};
 
@@ -59,7 +60,7 @@ fn pair(blob: &[u8]) -> [Option<Mat4>; 2] {
     let Ok(nodes) = vex::nodes(blob) else {
         return out;
     };
-    for (name, matrix) in vex::named_class_world_transforms(blob, &nodes, vex::CLASS_CANNON_FLASH) {
+    for (name, matrix) in vex::matrix::named_class_world_transforms(blob, &nodes, CLASS) {
         let left = name.is_some_and(|name| name.to_ascii_lowercase().contains("left"));
         out[usize::from(!left)] = Some(Mat4::from_cols_array(&matrix));
     }
