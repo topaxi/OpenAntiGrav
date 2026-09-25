@@ -158,8 +158,23 @@ are on screen today; the rest (`frontendscene_hd_atg`, `aurora`, `drone`,
 are not drawn by this engine. The halo now shows its texture instead of one
 flat sample: `--give plasma` with a grid-shot input script, tick 190, before
 and after differ, and the after frame's dome carries the streaks its
-texture authors. The shield cockpit was not looked at before
-and after; it draws only from the internal camera with a shield up.
+texture authors. Measured on that frame: 310,143 of 1,175,040
+pixels move, 3,654 of them by more than 16 levels, mean luminance 132.0 to
+131.5 - the dome picks up texture detail, nothing gets worse.
+
+The 62 by model: `frontendscene_hd_atg` 43, `hd_plasma_ball` 2,
+`detonator_bomb_shockwave` 2, `00_flyer` 2, `drone` 2, and one each for
+`aurora`, `pvs_blocker/amphiseum`, `detonator_bomb_glowedges`,
+`detonator_mine_explosion_kaleidoscopic`, `lightbarrier_new_shockwave`,
+`rockettrail_triangle`, `hd_leachbeam_ball_bloomring`,
+`hd_missile_ball_bloomring`, `hd_missile_explosion`, `hd_plasma_halo` and
+`vr_shield_cockpit`. The shield cockpit's tail is `7f 7f 7f 7f`, two `NaN`
+halves, so before this it sampled one texel; now its `Uv1` spans `u
+0.20..0.40`, `v 0..1`. **It was not looked at in a frame**: `--give shield`
+never activates the shield in a headless run (`holding Shield` through tick
+420 with `--press square`, internal camera), the same limit HD's shield-flash
+work recorded, and `oag-view` draws the additive sphere as nothing against
+its black background either way.
 
 ## Gates
 
