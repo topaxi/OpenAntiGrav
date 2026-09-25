@@ -137,6 +137,40 @@ pub(super) fn campaign_page(
     // one (`Shell::circuit_names`) and is the path that matters for a
     // player.
     let circuit_names = oag_ui::language::CircuitNames::default();
+    // **HD/Fury only.** A still has no `Campaign Selection` step to narrow
+    // `campaign.grids` the way `CampaignStage::open_grid_selection` always
+    // does before a live session ever draws `Grid Selection`/`Cell
+    // Selection` - undoing that narrowing here (`Grid`/`Cell` below used to
+    // read `campaign.grids` whole, all sixteen) drew a page counter no real
+    // screen ever shows: `Event 01/16` where RPCS3's own frame reads `Event
+    // 01/08` (`docs/ui/campaign-screens.md`'s "measured on RPCS3" section).
+    // Defaults to `Fury` - the measured default `CampaignSelection::new`
+    // itself starts on and the campaign every RPCS3 reference frame this
+    // pass found is actually of (`data/scratch/lane-hd/rpcs3-grid0-3-2`,
+    // `lane-hd-sel/rpcs3-campaign-selection`) - so a `--menu-page`
+    // `grid-select`/`cell-select` still is directly comparable to those
+    // frames rather than to a base-campaign state nothing on disk shows.
+    // `campaign.grid_layout_fury` is `Fury`'s own screen (a `pub` field,
+    // already loaded by `crate::campaign::load_hd`); falls back to the base
+    // `Wipeout HD` campaign only when a source's `DATA06` copy is missing or
+    // incomplete and `grid_layout_fury` is `None` (`Campaign::selection_layout`'s
+    // own doc: the two are `Some`/`None` together).
+    let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref() {
+        Some(layout) => (
+            campaign
+                .grids
+                .get(oag_hd::campaign::FURY_GRID_RANGE)
+                .unwrap_or(&[]),
+            layout,
+        ),
+        None => (
+            campaign
+                .grids
+                .get(oag_hd::campaign::HD_GRID_RANGE)
+                .unwrap_or(&[]),
+            &campaign.grid_layout,
+        ),
+    };
     let layers = if is_hd {
         match kind {
             CampaignKind::Selection => {
@@ -162,12 +196,12 @@ pub(super) fn campaign_page(
                     backdrop,
                     false,
                     &|src| sprites.get(src),
+                    &footer_overlay,
                 )
             }
             CampaignKind::Grid => {
                 let model = oag_ui::campaign::GridSelection::new(
-                    campaign
-                        .grids
+                    hd_grids
                         .iter()
                         .map(|grid| {
                             oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
@@ -176,13 +210,14 @@ pub(super) fn campaign_page(
                 );
                 oag_ui::campaign::hd::hd_grid_draw_list(
                     &model,
-                    &campaign.grid_layout,
+                    hd_grid_layout,
                     skin,
                     frame,
                     strings,
                     backdrop,
                     false,
                     &|src| sprites.get(src),
+                    &footer_overlay,
                 )
             }
             CampaignKind::Cell => {
@@ -192,7 +227,7 @@ pub(super) fn campaign_page(
                 // summary rather than a panic, on the same "a still draws
                 // something honest rather than crashing" terms the rest of
                 // this module follows.
-                let grid = campaign.grids.first();
+                let grid = hd_grids.first();
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
                 let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of);
                 let grid_summary = grid.map_or(
@@ -215,7 +250,7 @@ pub(super) fn campaign_page(
                     strings,
                     &circuit_names,
                     0,
-                    campaign.grids.len().max(1),
+                    hd_grids.len().max(1),
                     &grid_summary,
                     backdrop,
                     false,

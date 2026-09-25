@@ -1876,3 +1876,97 @@ and its own "what is not determined" section.
   `Skin.xml` authors no `TextInfoIsAlwaysLast` viewport at all, so
   `TickerLayout::read` correctly answers `None` rather than there being
   anything left to wire.
+
+## Wipeout HD/Fury: `--menu-page` stills match a real screen state, and the footer draws on all three, 2026-09-25
+
+**Side-by-side pass**: `--menu-page campaign-select`/`grid-select`/`cell-select`
+against `hdfury-ps3-eu-dec.iso` at 1280x720, next to the RPCS3 frames already
+on disk from the 2026-09-14/09-21 passes above
+(`data/scratch/lane-hd-sel/rpcs3-campaign-selection/`,
+`data/scratch/lane-hd/rpcs3-grid0-3-2/`) - no new RPCS3 boot needed, the
+existing captures cover all three screens once the settled (not mid-animation)
+frames are used (`01-right-tap.png`/`01-l1-tap.png` for `Campaign Selection`,
+not the corrupted `00-default.png` grabbed mid-transition).
+
+**A capture-only bug, not a live-session one: `grid-select`/`cell-select`
+showed `Event 01/16`, a state no real screen ever reaches.**
+`crate::capture::campaign_page::campaign_page`'s HD arms read
+`campaign.grids` whole - all sixteen, base `Wipeout HD`'s `grid0`..`grid7`
+plus `Fury`'s `grid8`..`grid15` concatenated - because a still has no
+`Campaign Selection` step to narrow it the way
+`CampaignStage::open_grid_selection` always does before a live session ever
+draws either screen. RPCS3's own frame reads `EVENT 01/08` (see "measured on
+RPCS3" above); ours read `01/16`. Fixed in
+`crates/game/src/capture/campaign_page.rs`: both arms now slice to one
+campaign's own eight grids before building `GridSelection`/`CellSelection`,
+defaulting to `Fury` when `campaign.grid_layout_fury` is `Some` (using that
+layout, not the base campaign's `campaign.grid_layout`, for `Grid
+Selection`'s own screen) and falling back to the base campaign otherwise.
+`Fury` is picked because it is both the measured default
+(`CampaignSelection::new`'s own `index: 0`, "The toggle" above) and the
+campaign every RPCS3 reference frame on disk actually shows - a `--menu-page`
+still is now directly comparable to those frames rather than to a
+combined-16 state nothing on the real disc, or this build's own live
+session, ever draws. **Capture-only**: the live `CampaignStage` path already
+narrowed correctly before this change; a player was never shown `01/16`.
+`crates/game/src/main/campaign_stage.rs`'s own `grid_layout()` already picks
+`grid_layout_fury` the same way when `active_campaign == Some(Campaign::Fury)`
+- the still-path fix mirrors that existing rule rather than inventing a new
+one.
+
+**The footer legend draws on `Campaign Selection` and `Grid Selection` too,
+not `Cell Selection` alone.** The entry above ("Done, 2026-09-25") reads
+"`Grid Selection` still does not draw it, matching Pulse's own scope" -
+correct for Pulse (nothing measured that screen wanting it there), but this
+pass's own RPCS3 frames say otherwise for HD specifically:
+`rpcs3-campaign-selection/01-right-tap.png`/`01-l1-tap.png` both show
+`NAVIGATION  Ⓧ CONFIRM  Ⓞ BACK` under `Campaign Selection`, and
+`rpcs3-grid0-3-2/00-default.png` shows the same row plus a third prompt
+(`CHANGE DIFFICULTY`) under `Grid Selection Fury` - the identical row `Cell
+Selection`'s own frame carries. `hd_grid_draw_list`/`selection::draw_list`
+(`crates/ui/src/campaign/hd.rs`/`crates/ui/src/campaign/selection.rs`) both
+gained the same `footer_overlay: &[Draw]` parameter `hd_cell_draw_list`
+already had, appended to `layers.chrome` right after the title the same way;
+`crates/game/src/main/menu_stage.rs`'s `Selection`/`Grid` arms and
+`crates/game/src/capture/campaign_page.rs`'s two HD arms all now pass
+`campaign.nav_legend_draw(...)`/the already-computed `footer_overlay`
+through, the same call `Cell`'s own arm already made. No ticker on either
+screen, same reason `Cell Selection` has none (HD's shared `Skin.xml`
+authors no `TextInfoIsAlwaysLast` viewport at all).
+
+**Still not drawn, both sourced and left open rather than guessed at:**
+
+- **The `Confirm`/`Back`/`Change Difficulty` glyphs themselves** - RPCS3's
+  frame shows private-font icons (Ⓧ/Ⓞ/△) before each word; this build's own
+  `--menu-page cell-select`/`grid-select` captures draw the literal words
+  with no icon (a tofu box before `Change Difficulty` specifically). This is
+  `oag_ui::campaign::footer`'s own mechanism (`NavigationLegend`/glyph
+  resolution) - outside this lane's scope this pass, not touched.
+- **`Grid Selection`'s own third prompt, `CHANGE DIFFICULTY`.** RPCS3's
+  frame shows it beside `CONFIRM`/`BACK` on this screen; this build's
+  `NavigationLegend` only ever resolves the shared root's four `Text`
+  children (`Confirm`/`Back`), so there is nothing to draw a third prompt
+  from even with `footer_overlay` now threaded through. Whether
+  `DifficultyButton`'s own difficulty toggle (`Square` on the pad, already
+  wired on `Cell Selection`) is meant to be live on `Grid Selection` too, and
+  what idstring the real screen's own third prompt reads, is unmeasured -
+  footer-prompts lane territory, named here rather than guessed at.
+- **The 3-D flyer model behind `Grid Selection`/`Campaign Selection`** -
+  unchanged from the "measured on RPCS3" section above, still a render-side
+  mechanism this pass did not build.
+
+**Recaptured after the fixes above**, all HD, `hdfury-ps3-eu-dec.iso`,
+1280x720, `data/scratch/drive-2026-09-25/hd-campaign/` (not committed, game
+content): `ours-campaign-select-v4.png`, `ours-grid-select-v4.png`,
+`ours-cell-select-v4.png`. `cell-select-v4`'s own default cell now reads
+`grid8`'s first entry (`19_Track`, `NitroBattle` mode) rather than `grid0`'s
+- `class="NitroBattle"` on the `Speed Class` row is not a misread: `grid_08.xml`
+itself authors `class="NitroBattle"` for this cell
+(`data/scratch/drive-2026-09-25/hd-xml/DATA00/data/plugins/grids/grid_08.xml`),
+the disc's own value, read as-is rather than second-guessed.
+
+Confidence 85: the `Event 01/16` reading and the RPCS3 footer evidence are
+both directly observed (the captures named above, and the three RPCS3 frames
+cited), not inferred; the `Fury`-default choice for a still with no
+navigation state is **chosen, not measured** on the same terms
+`CampaignSelection::new`'s own default already is.

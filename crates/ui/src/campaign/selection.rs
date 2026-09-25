@@ -360,11 +360,18 @@ impl CampaignSelection {
 /// grids totals 80 cells, a gap this pass does not explain - see the module
 /// doc. **Never invent what the assets do not settle**: draw the number this
 /// build can derive, not a guessed denominator.
+///
+/// `footer_overlay` is [`super::hd::hd_cell_draw_list`]'s own parameter,
+/// unchanged: an RPCS3 frame of this screen
+/// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`)
+/// shows the same `NAVIGATION`/`CONFIRM`/`BACK` footer row `Cell
+/// Selection`'s own frame does.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
     reason = "the same shape every other screen's own *_draw_list takes, plus the two medal \
-              counts this screen alone needs"
+              counts this screen alone needs and the footer overlay hd_cell_draw_list already \
+              takes"
 )]
 pub fn draw_list(
     model: &CampaignSelection,
@@ -377,6 +384,7 @@ pub fn draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    footer_overlay: &[Draw],
 ) -> Layers {
     let mut layers = Layers {
         backdrop: frame.backdrops(
@@ -396,6 +404,7 @@ pub fn draw_list(
         skin.title_color(frame.ink),
         strings.get_or_id(TITLE_ID).to_string(),
     ));
+    layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
     let mut out = Vec::new();
