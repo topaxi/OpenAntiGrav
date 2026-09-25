@@ -825,13 +825,16 @@ pub fn run(
     if let Some(assets) = &fury_backdrop {
         renderer.set_fury_backdrop(&device, &queue, &assets.clouds);
     }
-    // On both PSP titles this loads the `Default`-role atlas rather than a
-    // title role, so `oag_ui::campaign::footer`'s `Draw::FacedText` draws
-    // the same mixed-case body face here as the live window does - see
-    // `boot::fonts::face_atlas_slot`. Unconditional, so a menu-page capture
-    // and the live window (`session::menus`) build the same picture whether
-    // or not this run's draw list ever reaches `oag_ui::menu::draw_list`/
-    // `picker::draw_list`.
+    // On Pulse (both PSP pressings and the PS2 port) this loads the
+    // `Default`-role atlas rather than a title role, so
+    // `oag_ui::campaign::footer`'s `Draw::FacedText` draws the same
+    // mixed-case body face here as the live window does - see
+    // `boot::fonts::face_atlas_slot`. Pure now loads its own `Title`-role
+    // atlas instead, which resolves to the identical `.fnt` `Default` does
+    // for that title, so the slot's contents are unchanged even though its
+    // label is. Unconditional, so a menu-page capture and the live window
+    // (`session::menus`) build the same picture whether or not this run's
+    // draw list ever reaches `oag_ui::menu::draw_list`/`picker::draw_list`.
     let (face_atlas, face_role) =
         crate::boot::fonts::face_atlas_slot(menu_skin, &font, title_font.clone());
     renderer.set_face_atlas(&device, &queue, face_atlas, face_role);

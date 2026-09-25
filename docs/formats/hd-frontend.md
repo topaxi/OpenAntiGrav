@@ -1747,8 +1747,21 @@ landing on `Pulse_14.fnt` (17px) against `Default`'s 13px `pulse_text.fnt`;
 [menus-original.md](../ui/menus-original.md)'s Layout table already verified
 against a capture at confidence 95, and no capture has checked whether the
 taller face is what that capture actually shows - see
-`oag_title::MenuSkin::title_font`'s own doc. Pure's `Main Menu` screen was
-not located at the archive path this pass tried, and was not checked at all.
+`oag_title::MenuSkin::title_font`'s own doc.
+
+**Pure's `Main Menu` screen was located and checked, 2026-09-25, and wired.**
+`Data.wad`'s `Data\Plugins\PI001\GUI\Skin.xml` (both `pure-psp-eu.chd` and
+`pure-psp-usa.chd`) authors `idstring="Main Menu" font="Title"
+x="FEGlobals->TitleXOffset" y="FEGlobals->TitleYOffset"
+scale="FEGlobals->TitleScale" color="FEGlobals->TitleColor"` on the same root
+screen `Race Campaign`/`Racebox`/`Remix`/`Records`/`Options`/`Quit` draw
+under. Unlike Pulse, this carried none of the same risk: Pure's `Title` role
+resolves to `FX300ANG.fnt`, the identical file `Default` already does (see
+`oag_ui::language::roles`'s own font table), so `oag_pure::frontend::MENU_SKIN::title_font`
+is now `Some("Title")` and a `--menu-page main --screenshot` render is
+pixel-identical before and after - the flip is correctness (the title now
+draws through its own authored role) rather than a visible change, so it
+needed no fresh capture to justify.
 
 ## Filling in `BootProfile`
 
