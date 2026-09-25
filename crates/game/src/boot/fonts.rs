@@ -231,6 +231,48 @@ pub fn face_atlas_slot(
     }
 }
 
+/// Reads the PlayStation button-glyph face
+/// ([`oag_ui::language::roles::BUTTONS`]), when this source's language
+/// plugins name one.
+///
+/// Mirrors [`load_menu_font`]/[`load_title_font`]'s shape one role over -
+/// `None` whenever any link in the chain is missing (no plugin fills the
+/// `Buttons` slot, or the named `.fnt` does not read), the same honest
+/// absence the caller then draws nothing for
+/// (`oag_ui::campaign::footer::face_role`'s own doc names why a wrong
+/// fallback would be worse). **Not gated by [`oag_title::MenuSkin`]** the
+/// way [`load_menu_font`]/[`load_title_font`] are: unlike `Title`/`menu`,
+/// nothing about which screen wants this role varies by title package, and
+/// a title that never authors a `font="buttons"` widget simply never emits
+/// a `Draw::FacedText` asking for it, so loading the face whenever the disc
+/// names one costs nothing extra to gate.
+pub(super) fn load_buttons_font(
+    archives: &mut oag_assets::Archives,
+    languages: &[Language],
+    report: &mut Vec<String>,
+) -> Option<oag_ui::font::Atlas> {
+    let role = oag_ui::language::roles::BUTTONS;
+    let name = role_font(languages, role)?;
+    match archives.read_font(&name) {
+        Ok(font) => {
+            report.push(format!(
+                "buttons font {name} (role {role:?}): {}x{} atlas, {} glyphs",
+                font.width,
+                font.height,
+                font.glyphs.len()
+            ));
+            Some(oag_ui::font::Atlas::from_font(&font))
+        }
+        Err(why) => {
+            report.push(format!(
+                "buttons font {name} (role {role:?}) unavailable ({why}); \
+                 button glyphs draw as nothing rather than a wrong codepoint"
+            ));
+            None
+        }
+    }
+}
+
 /// Every font role the chosen language declares, with its face's line height
 /// as a ratio of the `Default` role's - what [`oag_ui::frontend::Frontend::set_face_scales`]
 /// takes.

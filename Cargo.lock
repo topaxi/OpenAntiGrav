@@ -2252,8 +2252,10 @@ dependencies = [
  "oag-assets",
  "oag-disc",
  "oag-formats",
+ "oag-hd",
  "oag-tables",
  "oag-texture",
+ "oag-title",
 ]
 
 [[package]]

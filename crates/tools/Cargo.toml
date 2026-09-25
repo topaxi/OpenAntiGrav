@@ -24,5 +24,17 @@ oag-formats.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 
+[dev-dependencies]
+# `examples/hd_buttons_font_probe.rs` only - reads through the same
+# `Archives::open`/`read_font` path production uses, rather than a raw
+# `psarc::Archive::read_path` over an unfiltered path match (which that
+# file's first version did, and which read `ps_buttons.gtf` by mistake, not
+# `ps_buttons.fnt` - see that file's own doc for the mundane selection bug
+# this was, not an archive-precedence one). Not a `[dependencies]` add:
+# `oag-tools` still may not depend on `oag-hd`/`oag-title` at build time, and
+# `just check-deps` only walks the non-dev graph.
+oag-hd.workspace = true
+oag-title.workspace = true
+
 [lints]
 workspace = true

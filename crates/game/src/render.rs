@@ -31,7 +31,10 @@ use resources::{
     upload_rgba,
 };
 
-use quad::{MODE_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE, Quad};
+use quad::{
+    MODE_ATLAS, MODE_BUTTONS_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE, Quad,
+};
+use text::GlyphSlot;
 use video::Video;
 
 pub use backdrop::FuryBackdrop;
@@ -54,10 +57,14 @@ struct Uniforms {
     /// UVs - `ui.wgsl` alone reads this; `video.wgsl` does not declare the
     /// field at all, the same way it already stops short of `sprites`.
     face_atlas: [f32; 2],
-    /// Unread: WGSL rounds `ui.wgsl`'s `Uniforms` up to 64 bytes (`vec4`
-    /// alignment), and a 56-byte binding is a validation error, not a
-    /// truncated read.
-    _padding: [f32; 2],
+    /// The buttons atlas's own size, the same idiom one field up -
+    /// `ui.wgsl` alone reads this too. Occupies the 8 bytes a `_padding`
+    /// field held before `Draw::FacedText { role: "Buttons" }` existed:
+    /// WGSL still rounds `Uniforms` to 64 bytes either way (`vec4`
+    /// alignment), so this has to be *this* field and not one appended
+    /// after it - appending would leave `ui.wgsl`'s own `buttons_atlas`
+    /// reading whatever the real padding held instead.
+    buttons_atlas: [f32; 2],
 }
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.
@@ -151,6 +158,20 @@ pub struct Renderer {
     /// `None`, falls back to [`Self::atlas`] - see [`Self::push_text`]'s
     /// `face` argument.
     face_role: Option<&'static str>,
+    /// The third glyph texture, for `Draw::FacedText { role: "Buttons" }` -
+    /// a 1x1 placeholder until `Renderer::set_buttons_atlas` loads
+    /// `ps_buttons.fnt`/`PS_BUTTONS.fnt`. Reuses `Self::face_sampler`
+    /// (identical linear descriptor) rather than a second one - see
+    /// `render::resources::ui_bind_group`'s own doc.
+    buttons_view: wgpu::TextureView,
+    /// `Some` once `Renderer::set_buttons_atlas` has loaded a real atlas.
+    /// Unlike `Self::face_atlas`, there is no role name to check and no
+    /// fallback to `Self::atlas` when this is `None` - a `Draw::FacedText`
+    /// asking for `"Buttons"` with nothing loaded draws **nothing**, per
+    /// `CLAUDE.md`'s "never invent" rule: the plain codepoint this would
+    /// otherwise fall back to is a Greek letter, not a button glyph. See
+    /// `render::text::atlas_for`.
+    buttons_atlas: Option<Atlas>,
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
@@ -289,6 +310,12 @@ impl Renderer {
         // real face later needs no layout change.
         let face_view = upload_face(device, queue, None);
         let face_sampler = face_sampler(device);
+        // The buttons atlas, uploaded through the same helper `face_view`
+        // is - it is the identical shape (a two-channel glyph texture, 1x1
+        // placeholder until a title's boot loads a real one) - see
+        // `Renderer::buttons_view`'s own doc for why this is a separate
+        // texture rather than a second use of `face_view`.
+        let buttons_view = upload_face(device, queue, None);
 
         let ui_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ui"),
@@ -300,6 +327,8 @@ impl Renderer {
                 sampler_entry(4, wgpu::SamplerBindingType::Filtering),
                 texture_entry(5),
                 sampler_entry(6, wgpu::SamplerBindingType::Filtering),
+                texture_entry(7),
+                sampler_entry(8, wgpu::SamplerBindingType::Filtering),
             ],
         });
 
@@ -313,6 +342,7 @@ impl Renderer {
             &sprite_sampler,
             &face_view,
             &face_sampler,
+            &buttons_view,
         );
 
         let ui_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -396,6 +426,8 @@ impl Renderer {
             face_sampler,
             face_atlas: None,
             face_role: None,
+            buttons_view,
+            buttons_atlas: None,
             uniform_buffer,
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
@@ -457,6 +489,7 @@ impl Renderer {
             &self.sprite_sampler,
             &self.face_view,
             &self.face_sampler,
+            &self.buttons_view,
         );
         self.sprites = (sprites.width, sprites.height);
     }
@@ -723,20 +756,38 @@ impl Renderer {
                         // rather than threaded through every line.
                         Some(width) => {
                             self.push_wrapped_text(
-                                false, *x, *y, *scale, *color, border, *align, text, *width,
+                                GlyphSlot::Primary,
+                                *x,
+                                *y,
+                                *scale,
+                                *color,
+                                border,
+                                *align,
+                                text,
+                                *width,
                             );
                         }
-                        None => self
-                            .push_text(false, *x, *y, *scale, *color, border, *align, text, bounds),
+                        None => self.push_text(
+                            GlyphSlot::Primary,
+                            *x,
+                            *y,
+                            *scale,
+                            *color,
+                            border,
+                            *align,
+                            text,
+                            bounds,
+                        ),
                     }
                 }
                 Draw::FacedText {
-                    // Checked against `Self::face_role`, which is the role
-                    // name `Self::set_face_atlas` loaded the slot for - a
-                    // title whose slot carries a *different* role (or no
-                    // atlas at all) falls back to the primary atlas here,
-                    // the same fallback a role that failed to load has
-                    // always drawn with. See `Self::face_role`'s own doc.
+                    // Resolved against `Self::face_role`/`Self::buttons_atlas`
+                    // below - a `"buttons"` role always reads
+                    // `Self::buttons_atlas` and never falls back
+                    // ([`GlyphSlot::Buttons`]'s own doc); every other role
+                    // falls back to the primary atlas the way it always has,
+                    // whether or not it matches `Self::face_role`. See
+                    // `Self::face_role`'s own doc.
                     role,
                     x,
                     y,
@@ -749,19 +800,25 @@ impl Renderer {
                 } => {
                     let border = border.unwrap_or(TRANSPARENT);
                     let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
-                    let use_face = self.face_atlas.is_some()
+                    let slot = if role.eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS) {
+                        GlyphSlot::Buttons
+                    } else if self.face_atlas.is_some()
                         && self
                             .face_role
-                            .is_some_and(|loaded| loaded.eq_ignore_ascii_case(role));
+                            .is_some_and(|loaded| loaded.eq_ignore_ascii_case(role))
+                    {
+                        GlyphSlot::Face
+                    } else {
+                        GlyphSlot::Primary
+                    };
                     match wrap_width {
                         Some(width) => {
                             self.push_wrapped_text(
-                                use_face, *x, *y, *scale, *color, border, *align, text, *width,
+                                slot, *x, *y, *scale, *color, border, *align, text, *width,
                             );
                         }
-                        None => self.push_text(
-                            use_face, *x, *y, *scale, *color, border, *align, text, bounds,
-                        ),
+                        None => self
+                            .push_text(slot, *x, *y, *scale, *color, border, *align, text, bounds),
                     }
                 }
             }
@@ -789,7 +846,7 @@ impl Renderer {
                 sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
                 video_rect,
                 face_atlas: face_atlas_size(self.face_atlas.as_ref()),
-                _padding: [0.0, 0.0],
+                buttons_atlas: face_atlas_size(self.buttons_atlas.as_ref()),
             }),
         );
 

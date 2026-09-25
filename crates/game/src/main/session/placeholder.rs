@@ -196,6 +196,7 @@ impl Session {
             space: oag_display::space::Space::default(),
             menu_font: None,
             title_font: None,
+            buttons_font: None,
             frame: menu::Frame::default(),
             // This placeholder shell reads no front-end XML at all - see
             // the module doc - so there is no `NavigationController` to

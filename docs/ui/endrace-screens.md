@@ -275,7 +275,7 @@ rewards model on HD. The screen is drawn only by
 | `MedalImg`, `LoyaltyImg` | nothing | src-less 32x32 icons the original would texture at run time; a flat square of the authored colour would be a stand-in |
 | Loyalty row (`RewardLine2`, `RewardLoyaltyPoints`, `RewardLoyaltyActive`, `loyaltybar`) | nothing | HD's loyalty law is not recovered; Pulse's is the PSP's, and the placeholders (`"test"`, `"points!"`, `"line 2"`) never draw |
 | Confirm prompt (word) | the resolved `FE_CONFIRM` text, at the authored position | **measured, since 2026-09-25** - `crate::screen::Screens::collect_widgets` now walks a `NavigationController` the same as any other container |
-| Confirm prompt (icon glyph) | nothing | `font="buttons"`, a face this build loads no atlas for - see `docs/formats/hd-endrace-screens.md`'s own doc for why a wrong glyph would be worse than none |
+| Confirm prompt (icon glyph) | nothing | `font="buttons"` - a `Buttons`-role atlas now loads (2026-09-25, HD's campaign footer), but this screen's own draw path does not yet route to it; see `docs/formats/hd-endrace-screens.md`'s own doc for the gap and why a wrong glyph would be worse than none in the meantime |
 
 Pointer: the screen has nothing to select, so it needs no target list - a
 click anywhere is its confirm, the rule `oag_ui::endrace::pointer`'s module

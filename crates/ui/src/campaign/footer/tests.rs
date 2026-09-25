@@ -272,7 +272,9 @@ const HD_RESULTS_XML: &str = r#"
 /// The name filter added alongside Wipeout HD/Fury reuse: only the four
 /// `ControlText*` widgets `NavigationLegend` knows resolve, not "any `Text`
 /// with an idstring" - `RecordsCycle` (idstring `ER_GLOB_REC`) is the widget
-/// that finding exists to exclude.
+/// that finding exists to exclude. Two draws, not four: `Confirm`'s own icon
+/// (`font="buttons"`) plus its word - `RecordsCycleButton`/`RecordsCycle`
+/// drop regardless of the icon fix, by name, same as ever.
 #[test]
 fn a_local_controllers_online_only_records_cycle_pair_never_resolves() {
     let root = parse(HD_RESULTS_XML);
@@ -282,23 +284,20 @@ fn a_local_controllers_online_only_records_cycle_pair_never_resolves() {
     let legend =
         NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
     let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
-    // Just the word - the icon half is `font="buttons"`, excluded on its
-    // own terms, see the next test.
-    assert_eq!(draws.len(), 1);
-    let (text, _) = text_and_y(&draws[0]);
-    assert_eq!(text, "CONFIRM");
+    assert_eq!(draws.len(), 2);
+    let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
+    assert_eq!(texts, ["e", "CONFIRM"]);
 }
 
-/// Wipeout HD/Fury's own icon glyph (`font="buttons"`) draws nothing at
-/// all - this build loads no atlas for that face, and drawing the resolved
-/// idstring's raw codepoint through whatever face happened to be bound
-/// would risk showing the literal Greek letter rather than the disc's own
-/// button icon (see [`NavigationLegend::read`]'s own doc). The four
-/// remaining prompts - `Confirm`/`Back`'s own words, `Invite`'s pair
-/// excluded by the name filter regardless - resolve to exactly the two
-/// words.
+/// Wipeout HD/Fury's own icon glyph (`font="buttons"`) draws now, through
+/// its own `Buttons`-role atlas - see [`face_role`]'s own doc for the
+/// verification this rests on (`oag-tools --example hd_buttons_font_probe`
+/// decoding real circled cross/circle glyph art at these codepoints). The
+/// four remaining prompts - `Confirm`/`Back`'s own icon-then-word pairs,
+/// `Invite`'s pair excluded by the name filter regardless - resolve to all
+/// four, icon before word, matching document order.
 #[test]
-fn wipeout_hds_own_buttons_font_icon_draws_nothing_but_its_word_does() {
+fn wipeout_hds_own_buttons_font_icon_and_word_both_draw() {
     let root = parse(HD_XML);
     let strings = StringTable::from_xml(
         r#"<Entries><Entry ID="FE_CONFIRM_BUTTON" String="e"></Entry><Entry ID="FE_CONFIRM" String="CONFIRM"></Entry><Entry ID="FE_BACK_BUTTON" String="g"></Entry><Entry ID="FE_BACK" String="BACK"></Entry><Entry ID="FE_COMMUNITY" String="INVITE"></Entry></Entries>"#,
@@ -307,17 +306,65 @@ fn wipeout_hds_own_buttons_font_icon_draws_nothing_but_its_word_does() {
         NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
     let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
-    assert_eq!(texts, ["CONFIRM", "BACK"]);
+    assert_eq!(texts, ["e", "CONFIRM", "g", "BACK"]);
+    // The icon draws through the `Buttons` role, not a fallback.
+    let Draw::FacedText { role, scale, .. } = &draws[0] else {
+        unreachable!("FE_CONFIRM_BUTTON authors font=\"buttons\"");
+    };
+    assert_eq!(*role, "Buttons");
+    assert!(
+        (*scale - 0.8).abs() < f32::EPSILON,
+        "the icon's own scale=\"0.8\" must reach the draw, got {scale}"
+    );
     // And the authored `scale="0.8"` on the word half reaches the draw -
     // `face_scale`'s own font-keyed answer for `"default"` is `1.0`, so a
     // `1.0` result here would mean the widget's own `scale=` was silently
     // dropped rather than multiplied in.
-    let Draw::FacedText { scale, .. } = &draws[0] else {
+    let Draw::FacedText { scale, .. } = &draws[1] else {
         unreachable!("CONFIRM authors no font, falls to \"default\" - see text_and_y's own doc");
     };
     assert!(
         (*scale - 0.8).abs() < f32::EPSILON,
         "the widget's own scale=\"0.8\" must reach the draw, got {scale}"
+    );
+}
+
+/// **The Pulse-only shrink-to-fit block does not fire for HD.** Once
+/// `FE_CONFIRM_BUTTON`'s `font="buttons"` no longer excludes it from
+/// `prompts`, both `FE_BACK_BUTTON` and `FE_CONFIRM_BUTTON` are present and
+/// the shrink/right-align block (`read`'s own `GAP`/`GLYPH_WIDTH_ESTIMATE`
+/// note) would trigger on HD too if it were not gated - moving `CONFIRM`
+/// off its authored `x="534"` and right-aligning it, which RPCS3 never
+/// shows (`data/scratch/drive-2026-09-25/hd-footer-glyphs/atlas-confirm-back-difficulty.png`
+/// and the clean `02-square.png`/`02-triangle.png` captures both show it
+/// left-aligned, well short of `BACK`'s own `x="720"`). The gate is
+/// `confirm.scale > 0.99`: HD's own `ControlTextConfirm` authors
+/// `scale="0.8"`, Pulse's authors none (`1.0`).
+#[test]
+fn hds_own_confirm_stays_left_aligned_at_its_authored_x() {
+    let root = parse(HD_XML);
+    let strings = StringTable::from_xml(
+        r#"<Entries><Entry ID="FE_CONFIRM_BUTTON" String="e"></Entry><Entry ID="FE_CONFIRM" String="CONFIRM"></Entry><Entry ID="FE_BACK_BUTTON" String="g"></Entry><Entry ID="FE_BACK" String="BACK"></Entry></Entries>"#,
+    );
+    let legend =
+        NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
+    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    let Draw::FacedText {
+        x: confirm_x,
+        align: confirm_align,
+        ..
+    } = &draws[1]
+    else {
+        unreachable!("index 1 is FE_CONFIRM - icon then word, see the fixture's document order");
+    };
+    assert_eq!(
+        *confirm_align,
+        Align::Left,
+        "HD's own CONFIRM is left-aligned, not shrunk to fit"
+    );
+    assert_eq!(
+        *confirm_x, 534.0,
+        "left at its own authored x, not right-aligned to the back glyph"
     );
 }
 

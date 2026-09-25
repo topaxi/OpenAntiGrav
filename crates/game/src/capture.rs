@@ -203,6 +203,7 @@ pub fn run(
         ship_select,
         menu_font,
         title_font,
+        buttons_font,
         ..
     } = loaded;
 
@@ -842,6 +843,11 @@ pub fn run(
     let (face_atlas, face_role) =
         crate::boot::fonts::face_atlas_slot(menu_skin, &font, title_font.clone());
     renderer.set_face_atlas(&device, &queue, face_atlas, face_role);
+    // The buttons atlas is not routed through `face_atlas_slot` at all - it
+    // is a third, independent slot, not a substitute for `Title`/`Default`
+    // in the one `face_atlas_slot` already picks between. See
+    // `crate::render::Renderer::set_buttons_atlas`'s own doc.
+    renderer.set_buttons_atlas(&device, &queue, buttons_font);
 
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),
