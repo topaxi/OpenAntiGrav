@@ -1,0 +1,187 @@
+//! Building a race scene off the frame thread, behind the loading screen.
+//!
+//! **This is the freeze the loading screen used to end on.** Building the
+//! scene - every mesh uploaded, every pipeline created, and wgpu parsing and
+//! translating the WGSL behind each of those pipelines - measured 8.0 s in a
+//! release build of Pulse PSP on a desktop, and it ran inside one frame of the
+//! loading screen: the wave stopped, the window stopped answering, and only
+//! then did the fade start. See `docs/architecture/race-load-transition.md`.
+//!
+//! So the build runs here, on a thread of its own, and the frame loop only
+//! ever asks [`BuildWorker::take`] whether it has landed - a poll, never a
+//! wait. `wgpu::Device` and `wgpu::Queue` are `Send + Sync`, and nothing the
+//! scene holds is tied to the thread that made it, so the stage that comes
+//! back is the same `RaceStage` the frame thread would have built.
+
+use std::time::{Duration, Instant};
+
+use log::info;
+
+use oag_game::{race, settings};
+use oag_gameplay::ControlScheme;
+use oag_render::mesh_render::Anisotropy;
+
+use crate::gpu::Handles;
+use crate::loading_stage::RaceBuildError;
+use crate::race_stage::RaceStage;
+use crate::stage::Stage;
+
+/// Everything [`Stage::build_race_stage`] and [`RaceStage::warm_up`] read,
+/// copied off the session on the frame the circuit's load lands.
+///
+/// Copied rather than borrowed because the build outlives that frame. The
+/// settings are the ones in force at that moment; a menu row changed while the
+/// loading screen is up has nothing to reach anyway.
+pub(crate) struct Request {
+    pub(crate) gpu: Handles,
+    /// The scene target's allocation, which the scene's depth attachment has
+    /// to match - see [`Stage::race`].
+    pub(crate) allocation: (u32, u32),
+    /// The viewport the warmup draws: the framebuffer's extent, not its
+    /// allocation. See `Session::advance_race_build`.
+    pub(crate) extent: (u32, u32),
+    /// Where the warmup draws: the scene target, idle while the loading
+    /// screen draws straight to the presentation target (ADR-0038).
+    pub(crate) warm_target: wgpu::TextureView,
+    pub(crate) anisotropy: Anisotropy,
+    pub(crate) settings: settings::Settings,
+    pub(crate) render_profile: settings::RenderProfile,
+    pub(crate) scheme: ControlScheme,
+    pub(crate) autopilot: bool,
+    pub(crate) autopilot_pilot: Option<oag_ai::Pilot>,
+    pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
+    pub(crate) track_entry: Option<String>,
+    pub(crate) pvs_culling: bool,
+    pub(crate) anim_seconds: Option<f32>,
+}
+
+/// What comes back: the stage, what it was built against, and how long the
+/// two halves took on the worker.
+pub(crate) struct Built {
+    pub(crate) stage: Result<Box<RaceStage>, RaceBuildError>,
+    /// The allocation the scene was sized for. A resize that landed while the
+    /// build ran means the frame thread has to resize it before use.
+    pub(crate) allocation: (u32, u32),
+    pub(crate) build: Duration,
+    pub(crate) warm_up: Duration,
+}
+
+/// The build, running.
+pub(crate) struct BuildWorker {
+    handle: Option<std::thread::JoinHandle<Built>>,
+    allocation: (u32, u32),
+}
+
+impl BuildWorker {
+    /// Starts building `loaded` into a race scene.
+    pub(crate) fn spawn(request: Request, loaded: race::Loaded) -> Self {
+        let allocation = request.allocation;
+        let handle = std::thread::Builder::new()
+            // Named like `race-load` beside it, so a debugger and `top` say
+            // which thread the loading screen is waiting on.
+            .name("race-build".to_string())
+            .spawn(move || build(request, loaded))
+            .ok();
+        Self { handle, allocation }
+    }
+
+    /// The result, once the build has returned; `None` while it is still
+    /// running. **Never waits**, which is the whole point: the frame loop
+    /// calls this once a frame and the loading screen keeps drawing.
+    ///
+    /// A worker whose thread would not spawn, or that panicked, reports a
+    /// [`RaceBuildError::Gpu`] - the same fatal class a pipeline that would
+    /// not build always was.
+    pub(crate) fn take(&mut self) -> Option<Built> {
+        if self.handle.as_ref().is_some_and(|h| !h.is_finished()) {
+            return None;
+        }
+        let failed = |why: &str| Built {
+            stage: Err(RaceBuildError::Gpu(anyhow::anyhow!("{why}"))),
+            allocation: self.allocation,
+            build: Duration::ZERO,
+            warm_up: Duration::ZERO,
+        };
+        Some(match self.handle.take() {
+            Some(handle) => handle
+                .join()
+                .unwrap_or_else(|_| failed("the race scene's build thread panicked")),
+            None => failed("the race scene's build thread would not start"),
+        })
+    }
+}
+
+fn build(request: Request, loaded: race::Loaded) -> Built {
+    let Request {
+        gpu,
+        allocation,
+        extent,
+        warm_target,
+        anisotropy,
+        settings,
+        render_profile,
+        scheme,
+        autopilot,
+        autopilot_pilot,
+        autopilot_skill,
+        track_entry,
+        pvs_culling,
+        anim_seconds,
+    } = request;
+    let start = Instant::now();
+    let built = Stage::build_race_stage(
+        &gpu,
+        loaded,
+        allocation,
+        anisotropy,
+        &settings,
+        &render_profile,
+        scheme,
+        autopilot,
+        autopilot_pilot,
+        autopilot_skill,
+        track_entry.as_deref(),
+    );
+    let build = start.elapsed();
+    info!("race scene built in {build:?}, off the frame thread");
+    let mut stage = built.map_err(RaceBuildError::Gpu);
+    let warm_start = Instant::now();
+    // **Building the pipeline objects is not the same as the driver having
+    // compiled them.** Several backends defer that to the first real draw, so
+    // the scene draws one frame here, still behind the loading screen. See
+    // `RaceStage::warm_up`.
+    if let Ok(race_stage) = &mut stage {
+        race_stage.warm_up(
+            &gpu,
+            &warm_target,
+            allocation,
+            (0.0, 0.0, extent.0 as f32, extent.1 as f32),
+            settings.graphics.fov,
+            settings.graphics.frustum_culling,
+            pvs_culling,
+            anim_seconds,
+        );
+    }
+    let warm_up = warm_start.elapsed();
+    info!("race scene warmed up in {warm_up:?}, off the frame thread");
+    Built {
+        stage,
+        allocation,
+        build,
+        warm_up,
+    }
+}
+
+/// Drops a race stage on a thread of its own, so releasing its GPU resources
+/// does not cost the frame that let go of it.
+///
+/// A thread that will not spawn drops its closure, and the stage with it,
+/// right here: a hitch rather than a leak.
+pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
+    let spawned = std::thread::Builder::new()
+        .name("race-drop".to_string())
+        .spawn(move || drop(stage));
+    if let Err(e) = spawned {
+        log::warn!("could not release the parked race off the frame thread: {e}");
+    }
+}

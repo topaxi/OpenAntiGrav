@@ -389,7 +389,15 @@ impl Session {
         // `Session::suspended_race`, which `Session::resume_race` is the way
         // back to instead. Dropped here rather than left to sit until some
         // later resize or race end reaches for it.
-        self.suspended_race = None;
+        //
+        // **Dropped on a thread of its own**, not here: releasing a whole
+        // race scene's buffers, textures and pipelines measured 86 ms on the
+        // frame thread in a release build on a desktop - the menu frame the
+        // player just pressed LAUNCH RACE on, frozen. See
+        // `docs/architecture/race-load-transition.md`.
+        if let Some(parked) = self.suspended_race.take() {
+            crate::race_build::drop_off_thread(parked);
+        }
         let options = self
             .race_options
             .clone()
@@ -459,37 +467,70 @@ impl Session {
         Ok(())
     }
 
-    /// Builds the race scene as soon as the circuit's own load lands, rather
-    /// than waiting for [`Self::finish_race_loading`] to do it at the fade's
-    /// end.
+    /// Starts building the race scene as soon as the circuit's own load
+    /// lands, and collects it once built - both without ever waiting.
     ///
-    /// **This is the fix for the gap that used to sit behind the black
-    /// screen.** `LoadingStage::race_ready` used to mean only "the disc read
-    /// is done", and the fade started on that alone - so it ran to zero
-    /// opacity while `Stage::race` (meshes, pipelines) was still unbuilt, and
-    /// only then did [`Self::finish_race_loading`] build it, on an already-black
-    /// screen. Now the build happens here, the moment the worker lands, and
-    /// `race_ready` waits on the result - see
-    /// [`LoadingStage::built_race`] - so the fade cannot start until there is
-    /// nothing left to build.
+    /// **Two fixes live here.** The first is the gap that used to sit behind
+    /// the black screen: `LoadingStage::race_ready` used to mean only "the
+    /// disc read is done", so the fade ran to zero opacity while the scene was
+    /// still unbuilt, and only then did [`Self::finish_race_loading`] build it.
+    /// `race_ready` now waits on [`LoadingStage::built_race`], so the fade
+    /// cannot start until there is nothing left to build.
     ///
-    /// A no-op on every frame but the one the worker finishes on: idempotent
-    /// because it returns immediately once [`LoadingStage::built_race`] is
-    /// already `Some`, and a no-op entirely on the boot path or off the
-    /// loading stage, where there is no worker to poll.
+    /// The second is the freeze that fix left: the build itself - measured at
+    /// 8.0 s for Pulse PSP in a release build, most of it wgpu turning WGSL
+    /// into pipelines - ran here, inside one frame of the loading screen,
+    /// which stopped the wave dead for the whole of it. It runs on a
+    /// [`crate::race_build::BuildWorker`] now, and this only polls it, so the
+    /// loading screen draws every frame until the race is ready. See
+    /// `docs/architecture/race-load-transition.md`.
+    ///
+    /// A no-op off the loading stage and on the boot path, where there is no
+    /// worker to poll, and once [`LoadingStage::built_race`] is `Some`.
     pub(crate) fn advance_race_build(&mut self) {
         // Read before the `Stage::Loading` borrow below, the same reason
         // `Session::frame` reads it before its own `match &mut self.stage`:
-        // `pvs_culling` takes `&self` as a whole, and the borrow that pattern
-        // takes out on `self.stage` alone would conflict with a whole-`self`
-        // call made while it is still live.
+        // both take `&self` as a whole.
         let pvs_culling = self.pvs_culling();
-        // Read before the borrow below too, for the same reason.
         let render_profile = self.render_profile();
         let Stage::Loading(stage) = &mut self.stage else {
             return;
         };
         if stage.built_race.is_some() {
+            return;
+        }
+        if let Some(build) = stage.build.as_mut() {
+            let Some(built) = build.take() else {
+                return;
+            };
+            stage.build = None;
+            let mut result = built.stage;
+            if let Ok(race_stage) = &mut result {
+                // A resize that landed while the build ran: the scene was
+                // sized for a framebuffer that no longer exists, and
+                // `Session::draw`'s own resize only reaches a scene that was
+                // already in `built_race` when it happened.
+                let allocation = self.framebuffer.allocation();
+                if built.allocation != allocation {
+                    race_stage
+                        .scene
+                        .resize(&self.gpu.device, self.gpu.config.format, allocation);
+                }
+                // Drained here, not read: this is the one place a launch that
+                // set `self.campaign_cell` (`Session::launch_campaign_cell`)
+                // and a stage that is actually about to become live meet - see
+                // `RaceStage::campaign_cell`'s own doc. `.take()` leaves
+                // `self.campaign_cell` empty for whatever races next.
+                race_stage.campaign_cell = self.campaign_cell.take();
+            }
+            if let Some(probe) = self.load_probe.as_mut() {
+                probe.span("race-build thread: build_race_stage", built.build);
+                probe.span("race-build thread: warm_up", built.warm_up);
+            }
+            stage.built_race = Some(result);
+            // The reference point the other two diagnostic timestamps are read
+            // against - see `Session::race_ready_at`.
+            self.race_ready_at = Some(std::time::Instant::now());
             return;
         }
         let Some(worker) = stage.race.as_mut() else {
@@ -498,98 +539,45 @@ impl Session {
         if !worker.is_finished() {
             return;
         }
-        // The same flag every other load in this file sets, and for the same
-        // reason: building the scene below is itself a stall, and recording it
-        // as a frame time would put one dropped-frame-sized column across the
-        // performance graph for the load nobody asked to see measured.
-        self.stalled = true;
+        // Finished, so this join returns at once - see `LoadWorker::join`.
         let loaded = worker
             .join()
             .unwrap_or_else(|| Err(anyhow::anyhow!("the circuit's load thread would not start")));
-        let built = match loaded {
+        match loaded {
             Ok(loaded) => {
                 for line in &loaded.report {
                     info!("{line}");
                 }
-                // Timed rather than left to be inferred from the frame that
-                // carries it: this is the wait this whole change moved earlier,
-                // and a log that names it is what lets a run confirm it landed
-                // before the fade rather than after - see this method's own
-                // documentation.
-                let start = std::time::Instant::now();
-                let mut built = Stage::build_race_stage(
-                    &self.gpu,
-                    loaded,
-                    self.framebuffer.allocation(),
-                    self.anisotropy,
-                    &self.settings,
-                    &render_profile,
-                    self.scheme,
-                    self.autopilot,
-                    self.autopilot_pilot,
-                    self.autopilot_skill,
+                let request = crate::race_build::Request {
+                    gpu: self.gpu.handles(),
+                    allocation: self.framebuffer.allocation(),
+                    // The extent: this is a viewport, not an attachment size.
+                    extent: self.framebuffer.extent(),
+                    warm_target: self.framebuffer.view().clone(),
+                    anisotropy: self.anisotropy,
+                    settings: self.settings.clone(),
+                    render_profile,
+                    scheme: self.scheme,
+                    autopilot: self.autopilot,
+                    autopilot_pilot: self.autopilot_pilot,
+                    autopilot_skill: self.autopilot_skill,
                     // The same options this load itself was started from -
-                    // see `Session::launch_race`, which clones this same
-                    // field into the worker rather than taking it, so it is
-                    // still here once the worker reports back.
-                    self.race_options
+                    // see `Session::launch_race`, which clones this field into
+                    // the worker rather than taking it.
+                    track_entry: self
+                        .race_options
                         .as_ref()
-                        .and_then(|options| options.track.as_deref()),
-                );
-                info!("race scene built in {:?}", start.elapsed());
-                // Drained here, not read: this is the one place a launch
-                // that set `self.campaign_cell` (`Session::launch_campaign_cell`)
-                // and a stage that is actually about to become live meet -
-                // see `RaceStage::campaign_cell`'s own doc. `.take()` leaves
-                // `self.campaign_cell` empty for whatever races next,
-                // campaign or not.
-                if let Ok(race_stage) = &mut built {
-                    race_stage.campaign_cell = self.campaign_cell.take();
-                }
-                // **Building the pipeline objects above is not the same as the
-                // driver having compiled them.** Several backends defer that to
-                // the first real draw call, which is why the eager build alone
-                // did not close the gap: the compile just moved to the first
-                // race frame, held behind the loading screen's own last
-                // presented frame - opacity zero - for however long it took.
-                // Warming up here, before the scene is marked ready, pays that
-                // cost while the loading screen is still animating instead. See
-                // `RaceStage::warm_up`.
-                if let Ok(race_stage) = &mut built {
-                    let warm_up_start = std::time::Instant::now();
-                    // The extent: this is a viewport, not an attachment
-                    // size. `build_race_stage` above took the allocation, for
-                    // the opposite reason.
-                    let size = self.framebuffer.extent();
-                    race_stage.warm_up(
-                        &self.gpu,
-                        self.framebuffer.view(),
-                        // The allocation, not `size` above: `target_size` has
-                        // to be the scene texture's own full dimensions - see
-                        // `RaceStage::warm_up`'s own doc for the validation
-                        // error this stops, which a windowed run at any
-                        // letterboxed aspect used to hit here on the
-                        // countdown's own pass.
-                        self.framebuffer.allocation(),
-                        (0.0, 0.0, size.0 as f32, size.1 as f32),
-                        self.settings.graphics.fov,
-                        self.settings.graphics.frustum_culling,
-                        pvs_culling,
-                        self.anim_seconds,
-                    );
-                    info!("race scene warmed up in {:?}", warm_up_start.elapsed());
-                }
-                built.map_err(RaceBuildError::Gpu)
+                        .and_then(|options| options.track.clone()),
+                    pvs_culling,
+                    anim_seconds: self.anim_seconds,
+                };
+                stage.build = Some(crate::race_build::BuildWorker::spawn(request, loaded));
             }
-            Err(e) => Err(RaceBuildError::Load(e)),
-        };
-        // `stage` still borrows only `self.stage`, disjoint from the fields
-        // read above - the same shape `Session::frame`'s own field accesses
-        // rely on elsewhere in this module.
-        stage.built_race = Some(built);
-        // The reference point the other two diagnostic timestamps are read
-        // against - see `Session::race_ready_at`.
-        self.race_ready_at = Some(std::time::Instant::now());
+            Err(e) => {
+                stage.built_race = Some(Err(RaceBuildError::Load(e)));
+                self.race_ready_at = Some(std::time::Instant::now());
+            }
+        }
     }
 
     /// Swaps the loading screen for the grid, once the circuit has landed and

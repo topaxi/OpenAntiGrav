@@ -39,6 +39,9 @@ mod frame;
 mod launch2048;
 #[path = "session/load.rs"]
 mod load;
+#[path = "session/load_probe.rs"]
+mod load_probe;
+pub(crate) use load_probe::LoadProbe;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
 #[path = "session/picker.rs"]
@@ -491,6 +494,9 @@ pub(crate) struct Session {
     /// where a driver that defers pipeline compilation to first use would show
     /// up, since building the pipeline object earlier does not force that.
     pub(crate) race_ready_at: Option<std::time::Instant>,
+    /// `--measure-race-load`, when this run was asked to time its race
+    /// loads. See `session::load_probe`.
+    pub(crate) load_probe: Option<load_probe::LoadProbe>,
     /// A race `escape` parked rather than discarded, waiting for
     /// [`Self::resume_race`].
     ///

@@ -17,7 +17,7 @@ use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
 
 use crate::frontend_stage::{FrontendStage, PendingMovie};
-use crate::gpu::Gpu;
+use crate::gpu::{Gpu, GpuContext};
 use crate::launcher_stage::LauncherStage;
 use crate::loading_stage::LoadingStage;
 use crate::menu_stage::MenuStage;
@@ -136,6 +136,7 @@ impl Stage {
             shell: Some(shell),
             media,
             race: None,
+            build: None,
             built_race: None,
             music: None,
             trace,
@@ -193,6 +194,7 @@ impl Stage {
             shell: None,
             media: None,
             race: Some(worker),
+            build: None,
             built_race: None,
             music: Some(music),
             trace,
@@ -300,7 +302,7 @@ impl Stage {
     /// exactly the case that would let it ship looking correct.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn race(
-        gpu: &Gpu,
+        gpu: &impl GpuContext,
         loaded: race::Loaded,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -350,7 +352,7 @@ impl Stage {
     /// [`LoadingStage::built_race`] holds exactly that distinction.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn build_race_stage(
-        gpu: &Gpu,
+        gpu: &impl GpuContext,
         loaded: race::Loaded,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -456,8 +458,8 @@ impl Stage {
             &setup.class,
         );
         let mut scene = race::Scene::new(
-            &gpu.device,
-            &gpu.queue,
+            gpu.device(),
+            gpu.queue(),
             track_model,
             &liveries,
             collision_model,
@@ -480,7 +482,7 @@ impl Stage {
             trail_shape,
             cannon_quad_textures,
             clouds,
-            gpu.config.format,
+            gpu.format(),
             size,
             anisotropy,
             settings.graphics.bloom,
@@ -497,16 +499,16 @@ impl Stage {
         scene.attach_ripples(ripples);
         // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.
         scene.prepare_ghost(
-            &gpu.device,
-            &gpu.queue,
-            gpu.config.format,
+            gpu.device(),
+            gpu.queue(),
+            gpu.format(),
             setup.mode,
             &liveries,
             ghost_static.as_ref(),
         );
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.
-        let overlay = oag_game::hud::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
+        let overlay = oag_game::hud::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &hud)
             .context("building the HUD overlay")?;
         // The results table, built from the same assets and drawn into the same
         // target - see `oag_game::scoreboard`, which is where the "this is ours,
@@ -515,7 +517,7 @@ impl Stage {
         // stall, and doing it at the finish would drop frames on the lap the
         // player is most likely to be watching.
         let scoreboard =
-            oag_game::scoreboard::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
+            oag_game::scoreboard::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &hud)
                 .context("building the scoreboard overlay")?;
         // The countdown's own `<Mode3D>` model, when this mode's layout carries
         // one - see `oag_game::hud::countdown`. Built the same way `overlay`
@@ -523,9 +525,9 @@ impl Stage {
         let countdown = countdown_model
             .map(|(model, widget)| {
                 oag_game::hud::Countdown::new(
-                    &gpu.device,
-                    &gpu.queue,
-                    gpu.config.format,
+                    gpu.device(),
+                    gpu.queue(),
+                    gpu.format(),
                     model,
                     &widget,
                 )

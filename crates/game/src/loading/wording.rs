@@ -283,6 +283,32 @@ pub(super) fn percentage(phase: Phase, progress: &Progress) -> String {
     format!("{}%", (fraction(phase, progress) * 100.0).round())
 }
 
+/// How long [`estimated_fraction`] takes to reach two thirds of the bar: four
+/// seconds at 60 Hz.
+///
+/// **Chosen, not measured.** A race load counts nothing - `race::load` and the
+/// scene build behind it report no progress - so this is a guess at the wait,
+/// not a reading of it. Four seconds puts the bar at 86 % after the eight a
+/// release build takes to build a Pulse or HD scene on a desktop (see
+/// `docs/architecture/race-load-transition.md`), and still moving after the
+/// longer wait a Steam Deck will have.
+pub(super) const ESTIMATE_TICKS: f32 = 240.0;
+
+/// A time-based fill for a race load's bar: `1 - e^(-ticks / ESTIMATE_TICKS)`,
+/// which always moves and never arrives, and the whole bar once the wait is
+/// over.
+///
+/// **A stand-in, asked for.** The original fills this bar from its own
+/// loader, which this build does not reproduce; an empty trough read as a
+/// stuck screen. The curve slows rather than stops so a long load never looks
+/// finished early, and `finished` is the one real fact it carries.
+pub(super) fn estimated_fraction(ticks: u32, finished: bool) -> f32 {
+    if finished {
+        return 1.0;
+    }
+    1.0 - (-(ticks as f32) / ESTIMATE_TICKS).exp()
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;

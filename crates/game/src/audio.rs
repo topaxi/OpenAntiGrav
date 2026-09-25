@@ -546,7 +546,10 @@ pub struct Audio {
     /// and threading `discs`/`choice`/`cache_dir` through every one of them
     /// for the sake of one internal fetch would be a wider signature change
     /// than the feature needs. `None` outside a race.
-    race_context: Option<(MusicDiscs, MusicSource, PathBuf)>,
+    ///
+    /// The fourth element is the booted soundtrack's length once known - see
+    /// [`Self::race_soundtrack_len`].
+    race_context: Option<(MusicDiscs, MusicSource, PathBuf, Option<usize>)>,
     /// The **next** race track, being fetched ahead of the current one ending
     /// - the track index it targets, alongside the worker fetching it.
     ///
@@ -859,7 +862,7 @@ impl Audio {
 
         let index = self.reserve_race_music_index(discs);
         let seek = (self.race_position > 0.0).then_some(self.race_position);
-        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
+        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf(), None));
         self.play_race_track(discs, choice, cache_dir, index, seek);
         // Only consumed once actually applied to a sounding voice - a failed
         // attempt (no `ffmpeg` this one time, a disc that briefly would not

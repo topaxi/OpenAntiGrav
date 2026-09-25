@@ -69,6 +69,7 @@ use oag_ui::frontend::{Align, Draw};
 
 pub mod cost;
 pub mod memory;
+pub mod transition;
 
 pub use cost::{CpuCost, GpuCost};
 

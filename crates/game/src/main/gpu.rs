@@ -302,3 +302,64 @@ impl Gpu {
         (self.config.width, self.config.height)
     }
 }
+
+/// The three things a scene is built and drawn with: the device, the queue
+/// and the surface format.
+///
+/// **A trait so a scene can be built off the frame thread.** [`Gpu`] also owns
+/// the window and the surface, which stay with the event loop; a race scene
+/// needs neither, so [`crate::race_build`] hands a worker a [`Handles`] - three
+/// cheap clones - and the same functions the frame loop calls with a `&Gpu`
+/// take it unchanged.
+pub(crate) trait GpuContext {
+    fn device(&self) -> &wgpu::Device;
+    fn queue(&self) -> &wgpu::Queue;
+    fn format(&self) -> wgpu::TextureFormat;
+}
+
+impl GpuContext for Gpu {
+    fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+    fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+    fn format(&self) -> wgpu::TextureFormat {
+        self.config.format
+    }
+}
+
+/// [`Gpu`] without the window and the surface: what a worker thread may hold.
+///
+/// `wgpu::Device` and `wgpu::Queue` are reference-counted and `Send + Sync` in
+/// wgpu 30, so these are the frame loop's own device and queue, not a second
+/// pair.
+#[derive(Clone)]
+pub(crate) struct Handles {
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
+    pub(crate) format: wgpu::TextureFormat,
+}
+
+impl Gpu {
+    /// This window's [`Handles`].
+    pub(crate) fn handles(&self) -> Handles {
+        Handles {
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+            format: self.config.format,
+        }
+    }
+}
+
+impl GpuContext for Handles {
+    fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+    fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+    fn format(&self) -> wgpu::TextureFormat {
+        self.format
+    }
+}
