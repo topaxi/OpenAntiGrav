@@ -43,19 +43,16 @@
 //!   A `<TagInput>` widget: a row of character cells the player scrolls one
 //!   glyph at a time, with an alphabet held in the executable.
 //!
-//! So why is this a grid rather than that? **Because the authored alphabet
-//! cannot spell a pilot name.** It is 70 characters -
-//! `ABC…XYZabc…xyz 0123456789!-+@:?*` - and a name may hold none of the
-//! uppercase, the space or the punctuation (`crate::pilots::check_name`).
-//! Playing the disc's data here is not an option that exists: any use of that
-//! widget for this screen would re-author a 38-character subset of its
-//! alphabet, which is invention either way, and would adopt PSP-authored cell
-//! coordinates for a page no PSP has - where deriving from the live
-//! [`Skin`] instead is what lets an HD skin get an HD-sized panel.
-//!
-//! The `<TagInput>` is still worth having for the screens it *is* the idiom
-//! for; that is its own open question, with the entry index and the
-//! alphabet's address in it.
+//! So why does a grid still exist at all, now that `oag_ui::tag_entry` plays
+//! that widget? **Because the authored alphabet cannot spell every pilot
+//! name.** `crate::pilots::check_name` allows lowercase, digits, `-` and
+//! `_`; the disc's 70-character alphabet has no `_` at all, and a longer
+//! name than the authored `length` (10) never fits either. RENAME opens
+//! `TagEntry` only when the alphabet - filtered live through
+//! [`accepts`] - already covers every glyph the current name holds;
+//! otherwise this grid, unchanged. See `docs/formats/fexml.md`'s
+//! `TagInput` section for the gate and `session::pilot_editor::Session::tag_entry_for_rename`
+//! for where it runs.
 //!
 //! # Every label is passed in, already resolved
 //!

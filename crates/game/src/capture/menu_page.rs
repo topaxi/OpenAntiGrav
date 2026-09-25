@@ -54,6 +54,12 @@ pub(super) fn menu_page(
     // [`prompt_draws`], and the block that calls it for why a prompt cannot
     // otherwise appear on this path at all.
     prompt: Option<&str>,
+    // The disc image path, `capture::Options::race`'s own `source` - `None`
+    // on the `--menu-page` leg with no race hand-off behind it at all.
+    // `prompt_draws`' only use is `tag-entry`/`tag-entry-typed`, which reads
+    // Pulse's own `TagInput` screens live off it - every other prompt kind
+    // ignores this.
+    source: Option<&str>,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
         .context("parsing the built-in menu definition")?;
@@ -303,7 +309,7 @@ pub(super) fn menu_page(
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
-        list.extend(prompt_draws(kind, &name, strings, skin)?);
+        list.extend(prompt_draws(kind, &name, strings, skin, source)?);
         return Ok(list);
     }
     let Some(phase) = phase else {
@@ -377,16 +383,66 @@ fn records_draws(
 ///
 /// # Errors
 ///
-/// If `kind` is not one of the prompts this flag knows.
+/// If `kind` is not one of the prompts this flag knows, or - `tag-entry`/
+/// `tag-entry-typed` only - if `source` is `None` or its disc does not carry
+/// Pulse's own `TagInput` screens intact. Every other kind ignores `source`
+/// entirely.
 fn prompt_draws(
     kind: &str,
     name: &str,
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
+    source: Option<&str>,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
     let say_of = |id: &str, english: &str| strings.get(id).unwrap_or(english).replace("%s", name);
     match kind {
+        "tag-entry" | "tag-entry-typed" => {
+            let source = source.context("tag-entry needs a --race source open")?;
+            let mut archives = oag_pulse::open(source).context("this source is not Pulse's own")?;
+            let skin_raw = archives
+                .read_name(oag_pulse::names::FRONTEND_ROOT)
+                .context("no front-end root on this disc")?;
+            let skin_xml = oag_tables::fexml::text(&skin_raw).context("front-end root text")?;
+            let globals = oag_ui::screen::Screens::from_xml(&skin_xml).globals;
+            let entry_raw = archives
+                .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
+                .context("no TagInput screens entry on this disc")?;
+            let xml = oag_tables::fexml::text(&entry_raw).context("TagInput entry text")?;
+            let geometry = oag_ui::tag_entry::geometry(&xml, &globals, "Name")
+                .context("the Name TagInput was not found in it")?;
+            let alphabet: String = oag_pulse::tag_input::ALPHABET
+                .chars()
+                .filter(|&c| oag_ui::prompt::accepts(c))
+                .collect();
+            let mut tag_entry = oag_ui::tag_entry::TagEntry::new(
+                oag_ui::tag_entry::Labels {
+                    title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
+                    confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
+                    hint: say(
+                        "OAG_TAG_ENTRY_HINT",
+                        "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
+                    ),
+                },
+                geometry,
+                &alphabet,
+                name,
+            );
+            if kind == "tag-entry-typed" {
+                // A few glyph changes past what `name` opened on, so a
+                // before/after pair actually differs - the same reason
+                // `rename-note` exists beside `rename` above.
+                for edit in [
+                    oag_ui::prompt::Edit::Type('z'),
+                    oag_ui::prompt::Edit::Type('9'),
+                    oag_ui::prompt::Edit::Delete,
+                    oag_ui::prompt::Edit::Type('-'),
+                ] {
+                    tag_entry.edit(edit);
+                }
+            }
+            Ok(tag_entry.draw(skin))
+        }
         "rename" | "rename-note" => {
             let mut keyboard = oag_ui::prompt::Keyboard::new(
                 oag_ui::prompt::Labels {

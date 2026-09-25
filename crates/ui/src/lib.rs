@@ -26,3 +26,4 @@ pub mod prompt;
 pub mod screen;
 pub mod state_machine;
 pub mod strings;
+pub mod tag_entry;

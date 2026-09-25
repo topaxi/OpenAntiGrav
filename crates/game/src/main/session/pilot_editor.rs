@@ -33,12 +33,22 @@ use oag_game::pilots;
 use oag_ui::language::StringTable;
 use oag_ui::menu::{self, Value};
 use oag_ui::prompt::{self, Outcome};
+use oag_ui::tag_entry::{self, TagEntry};
 
 use crate::menu_stage::MenuStage;
 use crate::overlay::{Finished, Prompt, Purpose};
 use crate::stage::Stage;
 
 use super::Session;
+
+/// Which typing model `Session::rename_pilot` decided on, before either is
+/// wrapped in a [`Prompt`] - kept apart from [`crate::overlay::Model`]
+/// because nothing else needs to name "one of these two, not yet a prompt".
+enum RenameModel {
+    Keyboard(prompt::Keyboard),
+    // Boxed: see `crate::overlay::Model::TagEntry`'s own note.
+    TagEntry(Box<TagEntry>),
+}
 
 /// One project-owned string, or the English written beside its id.
 ///
@@ -329,7 +339,9 @@ impl Session {
         self.reload_pilot_roster(Some(&name));
     }
 
-    /// Opens the on-screen keyboard on PILOT's current name.
+    /// Opens the on-screen text entry on PILOT's current name: Pulse's own
+    /// `TagInput` cell row when the data says it can show this exact name,
+    /// this project's own grid otherwise.
     ///
     /// **Refused for a pilot with no file of its own.** An untouched built-in
     /// lives in the binary and there is nothing on disk to move; the way to
@@ -349,23 +361,100 @@ impl Session {
             );
             return;
         }
-        let labels = prompt::Labels {
+
+        let model = match self.tag_entry_for_rename(&name) {
+            Ok(tag_entry) => {
+                info!("RENAME PILOT: using Pulse's own TagInput for {name}");
+                RenameModel::TagEntry(Box::new(tag_entry))
+            }
+            Err(reason) => {
+                // Visible on purpose - see `docs/formats/fexml.md`'s
+                // `TagInput` section: the fallback is a real, expected path
+                // (Pure's alphabet cannot spell a pilot name either, every
+                // non-Pulse title has no `TagInput` proven yet, and a longer
+                // or `_`-carrying name never qualifies on any title), not a
+                // bug to chase silently.
+                info!(
+                    "RENAME PILOT: using the on-screen grid, not Pulse's own TagInput - {reason}"
+                );
+                let labels = prompt::Labels {
+                    title: say(self.table(), "OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
+                    delete: say(self.table(), "OAG_KEYBOARD_DELETE", "DEL"),
+                    accept: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
+                    hint: say(
+                        self.table(),
+                        "OAG_KEYBOARD_HINT",
+                        "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
+                    ),
+                };
+                RenameModel::Keyboard(prompt::Keyboard::new(labels, &name, pilots::MAX_NAME))
+            }
+        };
+        if let Stage::Menu(stage) = &mut self.stage {
+            let purpose = Purpose::RenamePilot { from: name };
+            stage.prompt = Some(match model {
+                RenameModel::Keyboard(keyboard) => Prompt::typing(purpose, keyboard),
+                RenameModel::TagEntry(tag_entry) => Prompt::tagging(purpose, *tag_entry),
+            });
+        }
+    }
+
+    /// The four conditions that let RENAME open Pulse's own `TagInput`
+    /// instead of this project's grid, and the reason the first failing one
+    /// gives - see `docs/formats/fexml.md`'s `TagInput` section.
+    ///
+    /// **Every glyph `name` already holds must be one the authored alphabet
+    /// can show, checked before [`TagEntry`] is ever built** - so a
+    /// character the row cannot display is never silently dropped or
+    /// swapped; the whole prompt falls back to the grid instead, which shows
+    /// every character unchanged. An underscore is the one every pilot name
+    /// this project's own `crate::pilots::check_name` allows can carry that
+    /// the disc's alphabet has no glyph for at all - see this method's own
+    /// `## Open` note in the handover thread.
+    fn tag_entry_for_rename(&self, name: &str) -> Result<TagEntry, &'static str> {
+        let source = self
+            .race_options
+            .as_ref()
+            .ok_or("no disc source loaded yet")?
+            .source
+            .clone();
+        let mut archives = oag_pulse::open(&source).map_err(|_| "not a Pulse source")?;
+
+        let skin_raw = archives
+            .read_name(oag_pulse::names::FRONTEND_ROOT)
+            .map_err(|_| "no front-end root on this disc")?;
+        let skin_xml =
+            oag_tables::fexml::text(&skin_raw).map_err(|_| "front-end root is not text")?;
+        let globals = oag_ui::screen::Screens::from_xml(&skin_xml).globals;
+
+        let entry_raw = archives
+            .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
+            .map_err(|_| "no TagInput screens entry on this disc")?;
+        let xml = oag_tables::fexml::text(&entry_raw).map_err(|_| "TagInput entry is not text")?;
+        let geometry = tag_entry::geometry(&xml, &globals, "Name")
+            .ok_or("the Name TagInput was not found in it")?;
+
+        let alphabet: String = oag_pulse::tag_input::ALPHABET
+            .chars()
+            .filter(|&c| prompt::accepts(c))
+            .collect();
+        if name.chars().count() as u32 > geometry.tag_input.length {
+            return Err("the name is longer than the authored row");
+        }
+        if !name.chars().all(|c| alphabet.contains(c)) {
+            return Err("the name has a character the authored alphabet cannot show");
+        }
+
+        let labels = tag_entry::Labels {
             title: say(self.table(), "OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
-            delete: say(self.table(), "OAG_KEYBOARD_DELETE", "DEL"),
-            accept: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
+            confirm: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
             hint: say(
                 self.table(),
-                "OAG_KEYBOARD_HINT",
-                "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
+                "OAG_TAG_ENTRY_HINT",
+                "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
             ),
         };
-        let keyboard = prompt::Keyboard::new(labels, &name, pilots::MAX_NAME);
-        if let Stage::Menu(stage) = &mut self.stage {
-            stage.prompt = Some(Prompt::typing(
-                Purpose::RenamePilot { from: name },
-                keyboard,
-            ));
-        }
+        Ok(TagEntry::new(labels, geometry, &alphabet, name))
     }
 
     /// Asks whether to delete PILOT's file, and says what deleting it will
@@ -488,7 +577,8 @@ impl Session {
         }
     }
 
-    /// Whether an on-screen **keyboard** is open - not a confirm, which has
+    /// Whether an on-screen **typing model** is open - [`crate::overlay::Model::Keyboard`]
+    /// or [`crate::overlay::Model::TagEntry`], not a confirm, which has
     /// nothing to type into.
     ///
     /// Read by `app.rs` before it decides whether a raw key event is text or
@@ -500,7 +590,7 @@ impl Session {
         stage
             .prompt
             .as_ref()
-            .is_some_and(|prompt| matches!(prompt.model, crate::overlay::Model::Keyboard(_)))
+            .is_some_and(crate::overlay::Prompt::is_typing)
     }
 
     /// Applies one decision off a desk keyboard, and says whether it was
@@ -516,17 +606,15 @@ impl Session {
         let Some(prompt) = stage.prompt.as_mut() else {
             return false;
         };
-        let Some(keyboard) = prompt.keyboard_mut() else {
-            // A confirm has no buffer, so a typed key is not its business.
-            return false;
-        };
         match typed {
-            crate::typing::Typed::Edit(edit) => {
-                keyboard.edit(edit);
-                true
-            }
+            crate::typing::Typed::Edit(edit) => prompt.edit(edit),
             crate::typing::Typed::Accept => {
-                let text = keyboard.text().to_string();
+                // A confirm has no buffer, so a typed accept is not its
+                // business - the same gate `Edit` above gets through
+                // `Prompt::edit`'s own `false` on that arm.
+                let Some(text) = prompt.typed_text() else {
+                    return false;
+                };
                 let prompt = stage.prompt.take().expect("checked just above");
                 self.finish_prompt(Finished {
                     purpose: prompt.purpose,
@@ -557,12 +645,12 @@ impl Session {
         let prompt = stage.prompt.as_mut()?;
         // The note is set from out here every tick because whether there is
         // anything to say depends on what the text *means*, which is exactly
-        // what `prompt::Keyboard` does not know.
+        // what neither typing model knows about itself.
         if let Purpose::RenamePilot { from } = &prompt.purpose {
             let from = from.clone();
-            if let Some(keyboard) = prompt.keyboard_mut() {
-                let note = rename_note(keyboard.text(), &from, roster, strings);
-                keyboard.set_note(note);
+            if let Some(text) = prompt.typed_text() {
+                let note = rename_note(&text, &from, roster, strings);
+                prompt.set_note(note);
             }
         }
         // The pad first, then the pointer, and the first to finish wins:
@@ -578,11 +666,8 @@ impl Session {
                 None
             }
             Outcome::Accepted => {
-                let mut prompt = stage.prompt.take().expect("checked just above");
-                let text = prompt
-                    .keyboard_mut()
-                    .map(|keyboard| keyboard.text().to_string())
-                    .unwrap_or_default();
+                let prompt = stage.prompt.take().expect("checked just above");
+                let text = prompt.typed_text().unwrap_or_default();
                 Some(Finished {
                     purpose: prompt.purpose,
                     text,
