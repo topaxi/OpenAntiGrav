@@ -16,7 +16,9 @@ fn main() {
     let xml = String::from_utf8(bytes).expect("not UTF-8");
     // Crude: find the <Screen name="newFEshell" ...> block by nesting depth
     // of <Screen> tags, since this is a scratch probe and not a real parser.
-    let start = xml.find("name=\"newFEshell\"").expect("newFEshell not found");
+    let start = xml
+        .find("name=\"newFEshell\"")
+        .expect("newFEshell not found");
     let tag_start = xml[..start].rfind("<Screen").expect("enclosing <Screen");
     let mut depth = 0usize;
     let mut end = tag_start;

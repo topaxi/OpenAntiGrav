@@ -5,8 +5,12 @@
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let path = args.next().expect("usage: psarc_grep <data.psarc> <needle>");
-    let needle = args.next().expect("usage: psarc_grep <data.psarc> <needle>");
+    let path = args
+        .next()
+        .expect("usage: psarc_grep <data.psarc> <needle>");
+    let needle = args
+        .next()
+        .expect("usage: psarc_grep <data.psarc> <needle>");
     let mut archive =
         oag_assets::psarc::Archive::open(&path).unwrap_or_else(|e| panic!("open {path}: {e}"));
     let paths: Vec<String> = archive
