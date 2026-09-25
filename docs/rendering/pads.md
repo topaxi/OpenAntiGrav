@@ -626,3 +626,111 @@ resolved first, not only the colour. What it does settle is that a future
 wiring should read this parameter **per material instance**, never assume
 one shared constant for "the pad glow colour" the way the retracted reading
 would have.
+
+### Wiring attempted and stopped, 2026-09-25: the glow term reaches output through a multiply, and that multiply's own chain is undecoded
+
+**Handover's Next Steps item 1 asked, before touching anything, whether the
+`_ne`-gated term reaches the program's output through ADDs alone (the disc's
+real term, safe to wire) or through a multiply by the specular scalar (needs
+a chain this renderer cannot reproduce).** The page above already states the
+answer in prose ("scaled again by the program's own specular scalar") but had
+not traced it register-by-register to confirm it, and one sentence nearby
+reads as if the diffuse alpha gates the accumulate itself rather than a
+sibling term - worth resolving properly before writing a bind-group change on
+top of it.
+
+Traced both pad programs to their true final instruction with
+`crates/render/examples/hd_pad_ne_tint_probe.rs` against
+`12_sol_2/track.vex` (`DATA02.PSARC` on the EU disc), by hand, register by
+register:
+
+```text
+Speedup Pad:
+  [41] MAD H4, R0.wwww, C(0x7611a2d8), H4        ; the _ne-gated term itself
+  [48] MAD H1, H1, H5.wwww, H4                    ; H4 only ADDED here
+  [49] MAD H0, R0.xxxx, H1, R1                     ; END - H1 (carrying H4) MULTIPLIED by R0.x
+
+Weapon Pad:
+  [43] MAD H2, R0.wwww, C(0xce5c4410), H0          ; the _ne-gated term itself
+  [46] MAD H0, H0, H0.wwww, H2                     ; H2 only ADDED here
+  [49] MAD H0, R0.zzzz, H0, R1                      ; END - H0 (carrying H2) MULTIPLIED by R0.z
+```
+
+So the earlier "Which alpha channel gates the accumulate" section's own
+`H1.xyz = H1.xyz * diffuse_alpha + H4.xyz` equation is right as written - the
+`_ne`-gated term is only ever *added*, never itself multiplied by the diffuse
+alpha - and the "scaled by the specular scalar" sentence is also right: the
+**sum it lands in** (`H1`/`H0`, diffuse-alpha term plus `_ne`-gated term
+together) is multiplied by `R0.x`/`R0.z` at the program's true final
+instruction, before the last additive term. Both were true at once; neither
+sentence was wrong, they were about two different multiplies. **This settles
+Next Steps item 1's own question: no, wiring the `_ne`-gated term unscaled is
+not the disc's real term - it omits a multiply that measurably still applies
+to it.** Confidence 82, the same mechanical-trace ceiling the rest of this
+page's hand traces carry, for the same reason: a straight-line 50-instruction
+program with no branches, reproducible from the probe's own output.
+
+**What blocks reproducing `R0.x`/`R0.z` is not the arithmetic itself but two
+of the opcodes that build it.** Tracing back from the final `EX2 R0_sat,
+R1.wwww -> .x` (speedup) / `EX2 R0_sat, R1.wwww -> .z` (weapon) through the
+`LG2`/`MUL(1/ln2)`/`EX2` idiom this page already names
+`specular_exponent`'s own shape, both chains pass through instructions the
+probe prints as `???` - `Program::name()` (`crates/rcs/src/rcsmaterial/fragment.rs`)
+returns `None` for opcodes `0x3b` and `0x3d`, the two nouveau's own opcode
+table has no entry for and `docs/formats/rcsmaterial.md` already records as
+genuinely unnamed disc-wide (86,664 and 28,634 uses respectively), not merely
+unported. Three fall inside Speedup Pad's own chain (probe instructions 15,
+23, 27) and three inside Weapon Pad's (19, 21, 31), all between the `_ne`
+sample and the `EX2` that produces the scalar - `renderer.md` already reads
+`0x3b` as a normalise/rsq helper "from its position in the stream", at
+confidence ~70, and **deliberately does not apply that reading**, per
+`docs/formats/rcsmaterial.md`'s own account of why it stays below this
+project's rename line.
+
+**So this is not a cost question any more, and stopping here is the correct
+call under this project's own rule, not a shortcut around it.** Naming
+`0x3b`/`0x3d` a value good enough to build a lit pixel from, at a confidence
+this project has already looked at and declined to rename with, is exactly
+the guess `CLAUDE.md` and this thread's own handover both ask not to make -
+"below 50 confidence, do not rename at all... a guess dressed as a name stops
+other people from looking" applies as much to a shader opcode as to a Ghidra
+function. **Separately, and only relevant once the opcodes are named**: `N`
+in this chain's own `N.H` is the tangent-space normal `_ne` itself decodes to
+per pixel, not the vertex normal `mesh.wgsl`'s existing specular term already
+uses - `crates/render/src/mesh.wgsl`'s `GpuVertex` carries no tangent
+attribute, so even a correctly-named chain would need a per-pixel tangent
+frame this renderer does not build yet, either from authored data or from
+screen-space derivatives of `in.world`/`in.texcoord`. That is real, separate
+work, but it is not what is blocking right now - the opcode names are.
+
+**Nothing was wired.** `skin::picks`, `Pick`, `TextureSlots`,
+`material_bind_group_layout` and `mesh.wgsl` are all unchanged by this pass:
+adding a bind-group entry with no correct combine to put in it would draw a
+picture with the right texture in the wrong place in the equation, worse than
+the honest absence this page already documents. The two traps this project's
+own history already named for this step - dropping the lightmap by reusing
+its binding slot, and reproducing `mesh.wgsl`'s generic `glow = second.rgb *
+tint.rgb * first.a` shape where the disc's own program does neither - are
+both still live for whoever unblocks the opcodes and picks this up; a naive
+"just add a third texture and gate by `_ne`'s alpha, undecoded scalar and
+all" would be a third failure of the same shape, drawn instead of guessed
+away, but still not what the disc's own microcode computes.
+
+**What actually unblocks this, cheapest first:**
+
+1. Get `0x3b`/`0x3d` past this project's own confidence line - independent
+   corroboration for the existing normalise/rsq hypothesis (a second, unrelated
+   usage shape, a primary-source opcode table, or a live GPU trace), not a
+   second guess at the same confidence. `docs/formats/rcsmaterial.md`'s "A
+   fourth, `0x3c`" paragraph is the template: it moved one opcode from
+   unnamed to confirmed against Mesa's own header, on real primary-source
+   evidence, not a stronger hunch.
+2. Add a per-pixel tangent frame to `mesh.wgsl` for the one shading path that
+   needs it - screen-space derivatives are the cheaper of the two options
+   named above, since they need no new vertex attribute or `Model` field.
+3. Only then does the bind-group change from the "Next Steps" plan below
+   become worth making: a fourth (`_ne`) texture in `material_bind_group_layout`,
+   a `Model::pad_mask`-shaped field populated only by `mesh::rcs::pads` (never
+   the general scene pass, so this stays scoped to pad geometry the way the
+   evidence is), and the disc's own `MAD`/`EX2` chain reproduced in
+   `mesh.wgsl` rather than approximated.

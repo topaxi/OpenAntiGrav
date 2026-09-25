@@ -265,9 +265,48 @@ old step 0 (which alpha channel gates the accumulate) is done too, and
 changed step 1's own cost estimate - see below. What is left is deciding
 whether to spend on wiring it at all, and the two RE leads.
 
-1. **Wire the emissive layer - and read the trap before touching it, twice
-   over now.** This is *not* the cheap step it looks like, for two separate
-   reasons. First, the one already known: the naive fix - make
+1. **Attempted 2026-09-25, stopped before any code change - do not
+   re-attempt without first reading `docs/rendering/pads.md`'s "Wiring
+   attempted and stopped" section.** The question this item's own "read the
+   trap before touching it, twice over" text asked - does the `_ne`-gated
+   term reach the program's output through ADDs alone, or through a multiply
+   - is now settled by a register-level trace of both pad programs on
+   `12_sol_2`, reproducible from `hd_pad_ne_tint_probe.rs`: **through a
+   multiply.** The term is only ever added into the sum it shares with the
+   diffuse-alpha-gated term (the earlier "Which alpha channel gates the
+   accumulate" section's own equation was already right about that), but
+   that whole sum is then multiplied by the program's specular scalar at the
+   program's true final instruction, before the last additive term. Wiring
+   it unscaled would not be the disc's real term.
+
+   **What blocks reproducing the scalar is not effort, it is two opcodes
+   this project has already looked at and declined to name.** Both chains
+   (`Program::specular_exponent`'s own `LG2`/`MUL`/`EX2` idiom) pass through
+   opcodes `0x3b`/`0x3d`, which `Program::name()` returns `None` for and
+   `docs/formats/rcsmaterial.md` already records as genuinely absent from
+   nouveau's opcode table, not merely unported - `renderer.md` reads `0x3b`
+   as a normalise/rsq helper at confidence ~70 and deliberately does not
+   apply that reading, per this project's own rename-confidence line. Naming
+   it anyway to get a picture out of this pass would be exactly the guess
+   `CLAUDE.md` asks not to make. A second, smaller blocker sits behind the
+   first: the `N` in this chain's `N.H` is `_ne`'s own decoded tangent-space
+   normal, and `mesh.wgsl` has no tangent frame to build it from yet
+   (screen-space derivatives of `in.world`/`in.texcoord` are the cheaper of
+   the two ways to add one, needing no new vertex attribute).
+
+   **Nothing wired, nothing regressed** - `skin::picks`, `Pick`,
+   `TextureSlots`, `material_bind_group_layout` and `mesh.wgsl` are all
+   unchanged. The two traps this item already named (trading the lightmap
+   away, and reproducing the wrong generic shape) are both still live for
+   whoever unblocks the opcodes; a bind-group change with no correct combine
+   to put in it would be a third failure of the same shape. The original
+   text below is kept for the plumbing shape it still correctly describes,
+   once the opcodes are named.
+
+   Original text, still the plumbing shape once unblocked - and read the
+   trap before touching it, twice over now. This is *not* the cheap step it
+   looks like, for two separate reasons. First, the one already known: the
+   naive fix - make
    `skin::picks`'s `aux` slot land on sampler entry `[1]` instead of `[2]`
    for a pad material - is a regression, not a fix: it drops the lightmap
    binding entirely, and `docs/rendering/pads.md` already establishes what
