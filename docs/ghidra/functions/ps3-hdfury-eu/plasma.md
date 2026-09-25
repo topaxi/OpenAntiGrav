@@ -555,3 +555,138 @@ row lengths of the matrix at `r4`. The prediction is row length = `cur` =
 `target * (1 - (1 - rate)^n)` with `n` the number of `Draw` calls since
 `Start`; a live row length that differs from `cur`, or a `cur` that grows at
 half this rate (a 30 Hz slot 5), would overturn the table above.
+
+## 2026-09-25: `UV_offset`'s binding mechanism, and the sphere basis's found/not-found branch
+
+Reading the two items this page's 2026-09-23 section left open for the
+Plasma explosion's `UV_offset` and the sphere's track-fitted basis. Read on
+the bridge (`program=EBOOT.elf`, read-only, `analysis_status` idle first),
+decompile cross-checked against the raw disassembly at every point the
+decompiler produced Altivec noise - the same caution this page's earlier
+sections already took. **Not run this pass**: the live RPCS3 `Z0` check the
+previous section proposed; both findings below stand on static reads alone.
+
+### `UV_offset`: bound by pointer, not by value, to a generic Anim Transform node's own live output
+
+`WeaponExplosions_Construct` (`0x00128ab0`) calls two small helpers to make
+the binding, and both are now named from [names.tsv](names.tsv):
+
+| Address | Name | Confidence | What it is |
+| --- | --- | ---: | --- |
+| `0x002c11c8` | `AnimNode_FindTransformValueField` | 80 | `(model)`: if the model's *own* node isn't already class `PTR_PTR_008b3988`, walks its children (`_opd_FUN_006b2108` matches by class) for the first one that is; returns **that node's address plus `0xc0`**, unconditionally - even the "not found" path returns `0 + 0xc0`, i.e. `0xc0`, which the caller never checks for validity |
+| `0x002c1b30` | `AnimNode_UpdateTransformTree` | 82 | `(age, node)`: if `node`'s vtable is one of the three Anim Transform classes (`PTR_PTR_008b3984`/`88`/`8c`), calls **virtual slot `+0x40`** on it with no visible extra args beyond the implicit `this`/`age` pair already in registers; then recurses every child via a *different* walker, `_opd_FUN_002c1778` |
+| `0x00677018` | `Material_BindInstanceParamPointer` | 85 | two-line thunk: sets up its own TOC then tail-calls the already-named `Material_SetInstanceParamPointer` - confirms the bind is **by pointer**, not a value copy |
+
+`Construct`'s own body (decompiled and matched against `WeaponExplosions_cpp`
+string context) does, per model, in order: resolve the model's `UV_offset`
+constant slot via `FUN_00677008` (name-hash lookup, `~FUN_00676ff8(name)`
+already established on this page for the psys tag), and if that lookup
+succeeds, call `AnimNode_FindTransformValueField(model)` then
+`Material_BindInstanceParamPointer(..., ~name_hash, field_ptr)` - i.e. the
+shader constant named `UV_offset` is pointed **directly** at `node + 0xc0` of
+the model's first Anim-Transform-class node, read fresh by the RSX every
+draw, never copied into the material's own storage.
+
+**Confirmed to be the same mechanism, not merely similar, by a second,
+independent call site.** `MissileManager_Construct` (`0x00154cf0`) makes the
+identical two calls **twice** against the **same** node
+(`param_1[0x61]`, `HD_missile_explosion`'s own model): once with
+`~FUN_00676ff8("UV_offset")`, once with `~FUN_00676ff8("Shockwave_scalar")` -
+both binding to the *same* `node + 0xc0` pointer. Two shader parameters with
+different names aliasing the identical four bytes only makes sense if that
+field is a single generic "current value" the node's own Anim Transform
+class produces each tick, read by whichever material asks for it under
+whichever name its own `.cgfx` program uses - not a UV-specific field at all.
+This raises confidence in the *general* reading (0-80 for what the field
+literally is) beyond what either call site alone would support.
+
+**What `node + 0xc0` holds and what law drives it was not resolved to
+specific numbers this pass.** `AnimNode_UpdateTransformTree`'s virtual slot
+`+0x40` resolves (checked via the class's own vtable at `0x008b3988` -> OPD
+`0x00875268` -> `0x001047b8`) to a keyframe evaluator: a loop bounded at 19
+iterations (`0x13`), reading a frame index that wraps at 112 (`0x70`) out of
+the node's own `+0x310`/`+0x314` fields and calling a per-key blend
+(`_opd_FUN_0010c958`) - the same shape this page's own 2026-09-23 section
+already described for `HD_missile_explosion`'s 1x-to-18x keyed scale ramp,
+generalised to whatever property a given node instance carries. **None of
+that function's own field offsets (`+0x30`, `+0x40`, `+0x50`, `+0x70`,
+`+0x80`..`+0x88`) is `0xc0`**, so it evaluates into a shared/global scratch
+object (`PTR_DAT_008a9758`) rather than into the node directly by this read;
+how the evaluated value reaches the node's own `+0xc0` field - and therefore
+what its authored keys and units are for each of the ring/sphere/halo models
+- needs the **data** side: the Anim Transform track's own keyframes in each
+`.vex`, the same way `HD_missile_explosion`'s scale keys were read directly
+off the file rather than off the code. `hd_weapon_extents`'s own measurement
+(`identity at every sampled time`) was checking the models' *geometry*
+transform nodes, not this Anim-Transform-class node, so it says nothing
+about whether this field moves. **Confidence on "what the value is used for
+by the shader" stays at the 80 above; confidence on "what its law is" is
+below 50 and nothing is guessed here** - CLAUDE.md's line against
+hand-transcribing a table applies exactly here: the next step is parsing the
+node's own keys, not authoring a plausible scroll rate.
+
+`Shockwave_scalar` (the thread's other open name) is now placed: it is
+Missile's own second binding to the same mechanism, not a Plasma parameter
+at all - none of the three Plasma explosion models' own name-hash lookups in
+`WeaponExplosions_Construct` resolve a second name; only `UV_offset` does,
+per model, once.
+
+### The sphere's basis: a found/not-found branch on the same track query, not a separate function
+
+`WeaponExplosions_Start` (`0x00127cd0`) seeds the shared basis at
+`param_1 + 0x90 .. + 0xc0` (four 16-byte rows: `+0x90/+0xa0/+0xb0` from a
+constant at `0x008aa29c`, which **is** a plain 4x4 identity matrix - read
+directly at the address the TOC slot points to, `0x00769d70`:
+`[1,0,0,0][0,1,0,0][0,0,1,0][0,0,0,1]`, confidence 95 - and `+0xc0`
+overwritten with the detonation position from `param_1 + 0x40`) **before**
+calling `FUN_000a97f0`, then branches on that
+call's own boolean return (`r3`, masked to a byte, `bne` on nonzero at
+`0x00128030`-`0x00128034`):
+
+- **Not found (`r3 == 0`, the fallthrough at `0x00128038`)**: the function
+  goes straight into the per-viewport loop this page's 2026-09-23 section
+  already described (`+0xd0 + v * 0x40`, camera vector negated and
+  Gram-Schmidt'd against the seeded rows) - `+0x90/+0xa0/+0xb0` are never
+  touched again and keep the seeded constant.
+- **Found (`r3 != 0`, the branch to `0x001282b8`)**: before joining the
+  *same* per-viewport loop (it falls into it via an unconditional `b
+  0x00128038` at the end, `0x001283fc`), the code does **one extra
+  Gram-Schmidt-shaped construction** - normalise, cross, cross again, the
+  identical instruction pattern the per-viewport loop itself uses - seeded
+  from a 16-byte vector at the caller's own stack (`r1 + 0x140`, negated
+  from zero first) rather than from a camera matrix, and writes the result
+  into `param_1 + 0xa0` and `+0xb0` only (`+0x90` is read, not rewritten).
+
+That difference is exactly what "the sphere takes the track fit, the ring
+and halo take the camera-facing override" (this page's 2026-09-23 section)
+predicts: the *shared* rows are camera-independent only when the track query
+found a point, and get an extra orthogonalisation pass keyed off whatever
+`r1 + 0x140` is when it did.
+
+**What feeds `r1 + 0x140` was not pinned down, and the confidence on this
+whole branch reading is 60, below this project's rename threshold - nothing
+above gets a new name for `FUN_000a97f0` itself.** The call site passes
+`r3 = *(RaceManager + 0xbc)` (a pointer, read from the singleton, not a
+per-call position) and `r4 = r1 + 0x120`, with `r8 = 0` (`in_r8` in the
+decompile, meaning `FUN_000a97f0`'s own "seed/write-back through r8" path is
+dead code at this call site - it always starts from zero and never copies
+its find back out through that argument). Both `_opd_FUN_000a8b20` and
+`_opd_FUN_000a8198`, which it calls in sequence, disassemble as a
+node-indexed tree walk (child pointers at `+8`/`+0xc` of 0x20/0x18-byte
+records, squared-distance comparisons via `vmaddfp`/`vrsqrtefp` against a
+vector in a hidden vector-register argument) consistent with a nearest-point
+search over some spatial structure hung off `RaceManager + 0xbc` - plausibly
+the track collision mesh the way `Plasma_Update`'s own `Collide` calls read
+it, but that identification is a hypothesis, not a read: nothing here
+confirms `RaceManager + 0xbc` is the track rather than, say, a per-race
+weapon-explosion pool with its own spatial index. **Where `r1 + 0x140` gets
+its sixteen bytes from was not traced further** - it sits outside the 16-byte
+buffer at `r1 + 0x120` that is the only address actually passed into
+`FUN_000a97f0`'s own frame, so the two are not obviously the same value, and
+resolving that needs either a slower instruction-by-instruction trace of
+`FUN_000a97f0`'s own prologue (its `param_2`/`in_r8` handling suggests the
+buffer might be threaded through a call this pass didn't follow into
+`_opd_FUN_000a8198`) or the live `Z0` check the 2026-09-23 section already
+proposed, on this call site instead. **Left exactly as it was**: this
+engine's sphere keeps the camera-facing basis, chosen not measured, and nothing
+above changes that gate.
