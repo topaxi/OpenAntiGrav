@@ -66,12 +66,36 @@ section.
   which is the honest choice while the render mapping stays unread rather
   than a plausible-looking guess.
 
+**2026-09-26: the vtable hunt is a dead end, retracted one candidate, and a
+live watchpoint narrows what "unread" means.** `Animation`'s own base
+constructor chain (`Animation_ConstructFromNode` ->`FUN_088b350c` ->
+`FUN_08892e6c`, all three decompiled this pass) explicitly zeroes offset
+`+0x00` and never writes it again - the "find the real vtable there" plan
+this thread carried since 2026-09-23 assumes a field none of the three
+constructors ever populate. `FUN_088b9ca8`, the candidate the previous pass
+flagged from the `+0x3c` table's neighbourhood, is retracted: decompiled
+this pass, it is an unrelated `position += velocity` integrator, not an
+`Animation` method. Separately, a non-halting `memory.breakpoint` (PPSSPP's
+websocket debugger) armed on twelve `Key.TextureWidth` addresses - static
+and byte-identical across two cold boots, so hardcodable - through a full
+scripted run from `Language Selection` to a settled `Title Screen` shows
+each written exactly once (the authored-value parse, at a shared low-level
+setter, `0x08899318`, not Animation-specific) and **read by a normal CPU
+load never**, including through the entire authored reveal window. A direct
+write into an already-settled `Key` also has no visible effect next frame.
+Leading hypothesis, unverified: the real consumer reads the `Key`'s first
+16-byte VFPU quad via `lv.q` rather than a scalar load, which this
+debugger's watchpoints do not appear to hook. Full method and evidence:
+`docs/ghidra/functions/psp-pure-eu/title-screen.md`'s "2026-09-26" section.
+
 ## Open
 
-- Which function is `Animation`'s real leading vtable's `Update`/`Draw` slot,
-  and what it does with an interpolated `TextureWidth` - crop vs scale,
-  which edge anchors. See `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s
-  own "Next steps".
+- The actual reveal consumer is still not located. Static: the vtable-chase
+  approach is a dead end (see above); the more promising static route is
+  forward from a definitely-live per-frame screen update/draw entry point,
+  not backward from `Animation`'s own constructors. Dynamic: a VFPU `lv.q`
+  disassembly search, once a real candidate function is in hand - no
+  consumer function has been found yet to search from.
 - `Data.wad` entry 536 (`Data\FE\Images\FMV_last_frame_JAP.mip` by hash) is
   unwired - no Japanese-region Pure disc is in this project's corpus.
 - Whether some skin *other than* `Data\Skins\Default` (none seen activated on
@@ -80,12 +104,16 @@ section.
 
 ## Next Steps
 
-- Find `Animation`'s real object vtable (offset `+0x00` in the C++ ABI
-  sense): a breakpoint on whatever calls `Animation_ParseValuesOrKey`'s own
-  caller (the generic "walk an element's children by tag" loop, not yet
-  identified) would find where the parsed `Key`/`Animation` objects go next,
-  which is more likely to reach `Update`/`Draw` than the `+0x3c` parse table
-  this pass found instead.
+- Find the screen's own per-frame update/draw entry point (not `Animation`'s
+  constructors) and read what it calls each frame - the 2026-09-26 pass's
+  vtable-chase and its one flagged candidate (`FUN_088b9ca8`) are both
+  retracted as dead ends now, so the next attempt should start from a
+  confirmed-live call site rather than `Animation`'s own layout.
+- Once a candidate consumer is found, check its disassembly for `lv.q`/
+  `vt4444.q`-family VFPU instructions touching the `Key` list's first quad -
+  the 2026-09-26 pass's live watchpoint proved no *scalar* load ever reads
+  `Key.TextureWidth`, which is the concrete reason to suspect VFPU rather
+  than the next reason to suspect the field is simply unused.
 - Once read: implement the reveal in `oag_ui::screen`, verified against a
   PPSSPP capture of `Title Screen` mid-reveal (not just its settled state) -
   breakpoint-driven per-frame reads, not timed screenshots racing a 0.7s

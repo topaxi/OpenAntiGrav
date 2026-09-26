@@ -1156,8 +1156,28 @@ discards the `<Key>` timeline and draws every widget at its final, fully
 revealed state** - a defensible simplification given the render mapping is
 genuinely unread, not an oversight, and not something to guess at: `CLAUDE.md`
 is explicit that a plausible-looking stand-in is worse than an honest gap.
-See `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s own "Next steps" for
-where this picks back up.
+
+**2026-09-26: a live watchpoint narrows the gap without closing it.** A
+non-halting `memory.breakpoint` armed on twelve `Key.TextureWidth` addresses
+(all twelve static and byte-identical across two independent cold boots, so
+hardcodable rather than rescanned) through a full scripted run from
+`Language Selection` to a settled `Title Screen` shows each written **exactly
+once** (the authored-value parse) and **read by a normal CPU load never** -
+not during construction, not during the authored 0.65-1.5 s reveal window,
+not afterward. Writing a new value directly into an already-settled `Key`
+and letting the emulator run confirms the same thing from the other side: no
+visible effect next frame. The leading hypothesis is that the actual
+consumer reads the `Key` struct's first VFPU quad (`Time`/`X`/`Y`/
+`TextureWidth` are exactly 16 bytes) via `lv.q` rather than a scalar load,
+which this debugger's watchpoints do not appear to hook - unverified, since
+no consumer function has been located to check for it. The `Animation`
+class's own leading vtable slot (offset `+0x00`) is confirmed zeroed by its
+root-most constructor and never written by any constructor read so far, and
+the one candidate update function the previous pass flagged from the `+0x3c`
+table's neighbourhood (`FUN_088b9ca8`) is retracted - decompiled this pass,
+it is an unrelated position/velocity integrator. Full method, the retraction,
+and the exact watchpoint results: `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s
+own "2026-09-26" section and "Next steps" for where this picks back up.
 
 ### The language plugin id space is Pure's own, not Pulse's
 
