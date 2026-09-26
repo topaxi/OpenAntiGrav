@@ -210,14 +210,130 @@ convention (both read directly and cross-checked against the shipped XML);
 | `0x088ba694` | `Animation_ParseValuesOrKey` | 80 | Pure USA |
 | `0x088b9854` | `Animation_ConstructFromNode` | 80 | Pure EU (USA twin not located this pass) |
 
+## 2026-09-26: the reveal's `TextureWidth` is write-once, not re-read - a live watchpoint, not a guess
+
+**The consumer is still not found, and this pass adds a specific, evidence-backed
+reason why the obvious next moves both failed**, rather than another round of the same
+static search.
+
+**`Animation` base-class chain confirmed to write `0` at offset `+0x00`, never a vtable
+pointer.** `Animation_ConstructFromNode` (`0x088b9854`) calls `FUN_088b350c`, which
+calls `FUN_08892e6c`; decompiling all three top to bottom (the full chain, not just the
+outermost frame) shows `+0x3c` overwritten three times, once per level, with three
+*different* table pointers (`0x2b4b08`, then `0x2b50f8` from the derived level) - a
+reused "current parse-tag-dispatch table" slot, not a vtable, matching what the
+2026-09-23 pass already flagged. **`FUN_08892e6c` (the root-most constructor reached)
+explicitly zeroes `+0x00`** (`*param_1 = 0;`) and nothing later in the chain writes it
+again. So the "find the real vtable" plan in the old Next Steps here rests on a field
+that is deliberately zero at construction and never assigned by any constructor this or
+the prior pass decompiled - either it is written far later (post-construction, at first
+use) by a function neither pass has reached, or this class does not use a leading vtable
+at all and dispatches some other way (a type tag plus a switch, most likely, given the
+engine already reuses `+0x3c` as a manually-maintained table elsewhere).
+
+**`FUN_088b9ca8`, the one candidate the 2026-09-23 pass flagged from the `+0x3c` table's
+neighbourhood, is retracted - decompiled this pass, and it is unrelated:**
+
+```c
+void FUN_088b9ca8(int param_1)
+{
+  FUN_088b5010();
+  *(float *)(param_1 + 0x48) = *(float *)(param_1 + 0x48) + *(float *)(param_1 + 0xbc);
+  *(float *)(param_1 + 0x4c) = *(float *)(param_1 + 0x4c) + *(float *)(param_1 + 0xc0);
+  *(float *)(param_1 + 0x50) = *(float *)(param_1 + 0x50) + *(float *)(param_1 + 0xc4);
+  *(float *)(param_1 + 0x54) = *(float *)(param_1 + 0x54) + *(float *)(param_1 + 200);
+  return;
+}
+```
+
+A four-field `position += velocity` integrator at offsets `+0x48..0x54`/`+0xbc..0xc8` -
+nothing in `Animation`'s own mapped layout (`+0x9c` key list, `+0xa8..0xd8` bools/counts)
+lines up with those offsets. It is a different class entirely; the two other data-shaped
+entries decompiled from the same table (`0x08826428`, `0x088267d0`, reached by applying
+this project's documented "`+0x08804000`" decompiler-constant correction to the table's
+own raw words) are 3D mesh/vertex-sort code, not UI. **The correction that page's own
+banner names is verified only for `lui`/`addiu`-embedded `.rodata` addresses inside a
+decompiled function body** - applying it blindly to raw data words read out of a table
+at runtime is not the same claim, and this pass's result is exactly the kind of false
+lead that mixing the two produces. Retracting the candidate rather than leaving it
+findable and untested.
+
+**A live, non-halting memory watchpoint answers a narrower but real question: nothing
+reads `Key.TextureWidth` through a normal CPU load, ever, across a full boot-to-reveal
+window.** Method: PPSSPP v1.20.4 SDL build, Xvfb `:97`, debugger port `45001`,
+`memory.breakpoint.add` with `enabled=False, log=True, read=True, write=True` (the
+non-halting form `docs/reverse-engineering/ppsspp-debugger.md`'s watchpoint section
+documents) armed on twelve `Key.TextureWidth` addresses *before* any navigation input,
+covering the four wide frame-line-shaped keys (`-448`, `-444`, `-438`, `-256`/`-176`
+two-and-three-key chains) plus one textured-patch chain (`-347`). These addresses are
+**static and reproducible**: identical byte-for-byte across two independent cold boots,
+both while `Language Selection` was still showing and again once `Title Screen` itself
+was on screen and fully settled - the front end's screen-definition parse tree lives at
+a fixed location (`0x08b32460`-`0x08b3722c` this build) regardless of which screen is
+currently active, not a per-navigation heap allocation the way the `TitleFrame`/
+`BackgroundController` texture assignments are.
+
+Scripted the whole way from a cold boot - `Language Selection` (cross) ->
+`Developer Publisher Screen` (auto) -> `MemoryStickWarning` (cross) -> `FMV Intro`
+(start, skipping the movie) -> `Title Screen`, then a further 6 s sitting on the
+settled title screen - with the twelve watchpoints armed for the entire span. Result,
+read via `memory.breakpoint.list` and cross-checked against the emulator's own log
+lines:
+
+- **Every one of the twelve fired exactly once, a `Write32`, all at the same PC**
+  (`0x08899318`, PPSSPP's own auto-symbol `z_un_088992f4`) - the parse-time write that
+  populates the `Key` from the authored XML attribute, matching
+  `Animation_ParseValuesOrKey`'s already-documented behaviour. `0x08899318` is a
+  low-level "write a parsed float into a struct field" helper reused across many parsers
+  in this binary, not Animation-specific, so it is not named in `names.tsv` here -
+  confidence in what it does (evidenced by this one call site) is fine, confidence that
+  it deserves a `Subsystem_VerbNoun` identity of its own is not.
+- **Zero reads, on any of the twelve, across the whole window** - including the roughly
+  0.65-1.5 s the authored `Key` data itself says the reveal should be actively
+  interpolating in. The watchpoint mechanism itself is demonstrably alive for this
+  exact window (it caught all twelve writes, correctly timestamped and PC-tagged), so
+  this is not the "watchpoint never armed" failure `ppsspp-debugger.md` warns about.
+
+**Reading, not certain: this is most consistent with the consumer using an Allegrex
+VFPU quad-load (`lv.q`) rather than a scalar `lw`/`lwc1`.** The `Key` struct is exactly
+two 16-byte VFPU quads (`Time,X,Y,TextureWidth` / `TextureHeight,ScaleX,Scaley,next`),
+this binary is VFPU-heavy throughout (the reason this project's own Allegrex Ghidra
+module exists at all), and `docs/reverse-engineering/ppsspp-debugger.md`'s own
+watchpoint section already documents one other case of a write that provably happened
+with no corresponding log line, attributed there to an access path the debugger's
+CPU-instruction-store hook does not cover. A `lv.q` reading the whole first quad in one
+instruction to feed an interpolation would produce exactly this signature: the field
+gets touched (so the value is real and used), but never through a hooked scalar
+load. **Not verified independently this pass** - no VFPU-load search was run against a
+correctly-identified consumer function, because no consumer function was identified to
+search from. Recorded as the leading hypothesis for whoever picks this up next, not as
+a finding.
+
+Also checked and ruled out: writing a new value directly into an already-settled
+`Key.TextureWidth` (post-reveal, `Title Screen` sitting on "PRESS START") and letting
+the CPU run has **no visible effect on the next rendered frame** - consistent with (and
+independent evidence for) "write-once, not re-read": whatever renders the settled
+widget is not deriving its width from this field every frame either, scalar or VFPU.
+
+Confidence **75** for "the raw `Key.TextureWidth` field is not read by any normal CPU
+load during construction, the reveal window, or afterward" (the watchpoint result,
+positive-signal-checked); **no confidence claimed** for the VFPU hypothesis or for the
+render mapping itself, both still unread.
+
 ## Next steps
 
-- Find the object's real leading vtable (offset `+0x00`) for the `Animation`
-  class, and read its `Update`/`Draw` slots - this is what would answer the
-  render-mapping question above. A breakpoint on `Animation_
-  ParseValuesOrKey`'s own caller (the generic "walk an element's children by
-  tag" loop, not yet identified either) would find where the allocated
-  `Key`/`Animation` objects go next.
+- The VFPU-load hypothesis above is the most promising unopened door: find the actual
+  `Animation` update call (still not located - see the vtable dead end above) and check
+  it for `lv.q`/`vt4444.q`-family instructions touching the `Key` list's first quad. A
+  disassembly-level search for `lv.q` within functions reachable from wherever
+  `Screens::collect_widgets`' analogue on the original side calls per-frame update is
+  more likely to land on it than another vtable hunt.
+- Given the vtable dead end, the more promising trace is **forward from a definitely-
+  live per-frame call site** rather than backward from the `Animation` object's own
+  layout: breakpoint the screen's own per-frame update/draw entry point (not yet
+  identified either) and read what it calls, rather than continuing to search
+  `Animation`'s own constructors for a dispatch mechanism that may not be a classical
+  vtable at all.
 - `Data.wad` entry 536 (`Data\FE\Images\FMV_last_frame_JAP.mip`) names no
   disc in this project's corpus. Leave unwired rather than guessed at.
 - `FUN_088aff90`/`FUN_08a3af94`/`FUN_088b0118` (global-to-string resolution,
