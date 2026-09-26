@@ -492,6 +492,13 @@ impl Session {
                 default_atlas: shell.font.clone(),
                 frame: shell.frame.clone(),
                 nav_legend: shell.nav_legend.clone(),
+                ticker: shell.ticker.clone(),
+                // Free-running from zero on every open, the same choice
+                // `CampaignStage::ticker_elapsed` already makes and for the
+                // same reason: nothing measured suggests the original resets
+                // its phase on a menu open, so there is nothing to seed this
+                // from instead.
+                ticker_elapsed: 0.0,
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own
                 // hand-off already had its moment, and starting a transition

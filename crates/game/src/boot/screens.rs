@@ -33,6 +33,24 @@ pub(super) fn read_nav_legend(
     oag_ui::campaign::footer::NavigationLegend::read(&oag_ui::screen::parse(xml), globals, strings)
 }
 
+/// The front-end root's own scrolling tip ticker layout, off the identical
+/// `skin_xml`/`globals` pair [`read_nav_legend`] reads - mirrors that
+/// function for [`oag_ui::campaign::footer::TickerLayout`], the ordinary
+/// menu pages' own footer read rather than `Cell Selection`'s own copy
+/// (`oag_game::campaign::read_footer`, which reads the same root a second
+/// time for the campaign screens - see that function's own doc for why it
+/// cannot share this one's parse). `None` when `skin_xml` is `None`, or the
+/// root authors no `TextInfoIsAlwaysLast` viewport - every title but Pulse
+/// today.
+#[must_use]
+pub(super) fn read_ticker(
+    skin_xml: Option<&str>,
+    globals: &std::collections::HashMap<String, String>,
+) -> Option<oag_ui::campaign::footer::TickerLayout> {
+    let xml = skin_xml?;
+    oag_ui::campaign::footer::TickerLayout::read(&oag_ui::screen::parse(xml), globals)
+}
+
 /// One of the skin's `LoadXML` includes, parsed on its own with the skin's
 /// globals as fallbacks - which is how an include resolves `FEGlobals->`
 /// names it never declares.

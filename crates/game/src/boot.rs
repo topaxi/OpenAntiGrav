@@ -65,6 +65,8 @@ pub struct Boot {
     pub frame: oag_ui::menu::Frame,
     /// Its `Confirm`/`Back` legend - see [`Shell::nav_legend`].
     pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    /// Its footer's scrolling tip ticker layout - see [`Shell::ticker`].
+    pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
     /// The Fury menu backdrop's clouds and settings, on a Fury-style HD source
     /// - see [`fury::load`]. `None` everywhere else.
     pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
@@ -254,6 +256,15 @@ pub struct Shell {
     pub frame: oag_ui::menu::Frame,
     /// Its `Confirm`/`Back` legend - see `screens::read_nav_legend`.
     pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    /// Its footer's scrolling tip ticker layout, off the same root -
+    /// `None` when this source's front-end root authors no
+    /// `TextInfoIsAlwaysLast` viewport, which is every title but Pulse
+    /// today. See `screens::read_ticker`. Carries no content of its own:
+    /// `MenuStage`'s own per-tick clock supplies which tip is showing, off
+    /// `oag_game::records::ticker_tips` - the same rotation the Race
+    /// Campaign's own footer already reads, so a live session's two footers
+    /// cannot disagree about what a save file honestly has to show.
+    pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
     /// The Fury menu backdrop's settings, clouds and tints, read here for the
     /// same reason the frame is; `None` on every source but a Fury-style HD.
     pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
@@ -707,6 +718,11 @@ pub fn load_shell(
     if let Some(legend) = &nav_legend {
         report.push(format!("nav legend: {}", legend.describe()));
     }
+    // See [`screens::read_ticker`]'s own doc.
+    let ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
+    if let Some(ticker) = &ticker {
+        report.push(format!("footer ticker: viewport {:?}", ticker.viewport));
+    }
     let (track_select, ship_select) = selection_layouts(
         race_box.as_ref(),
         &strings,
@@ -738,6 +754,7 @@ pub fn load_shell(
             menu_skin,
             frame,
             nav_legend,
+            ticker,
             fury_backdrop,
             track_select,
             ship_select,
@@ -1040,6 +1057,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         menu_skin,
         frame,
         nav_legend,
+        ticker,
         fury_backdrop,
         track_select,
         ship_select,
@@ -1245,6 +1263,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         menu_skin,
         frame,
         nav_legend,
+        ticker,
         fury_backdrop,
         track_select,
         ship_select,
@@ -1497,7 +1516,9 @@ use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};
 pub use progress::MediaProgress;
 use progress::{loaded, lock_media, starting, watching};
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
-use screens::{load_included_screens, load_screens, read_nav_legend, selection_layouts};
+use screens::{
+    load_included_screens, load_screens, read_nav_legend, read_ticker, selection_layouts,
+};
 use steps::Steps;
 use xml::expand;
 

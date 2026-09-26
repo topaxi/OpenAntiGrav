@@ -67,6 +67,16 @@ pub(super) fn menu_page(
     nav_legend: Option<&oag_ui::campaign::footer::NavigationLegend>,
     // The `Default`-role face `nav_legend`'s own word half draws through.
     default_measure: &dyn Fn(&str) -> f32,
+    // The footer's own scrolling tip ticker layout - `None` on a source
+    // whose front-end root authors no `TextInfoIsAlwaysLast` viewport
+    // (every title but Pulse today). See
+    // `crate::main::menu_stage::MenuStage::render`'s own call site for the
+    // identical draw this mirrors, at a frozen `elapsed` of `0.0` since a
+    // still has no clock of its own to animate the scroll with.
+    ticker: Option<&oag_ui::campaign::footer::TickerLayout>,
+    // This source's own honest tip rotation, off `records` - see
+    // `crate::records::ticker_tips`'s own doc.
+    ticker_tips: &[String],
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
         .context("parsing the built-in menu definition")?;
@@ -287,6 +297,26 @@ pub(super) fn menu_page(
                 model.depth() > 1,
             )
         });
+    // The footer's own scrolling tip ticker, frozen at `elapsed = 0.0` - a
+    // still has no clock of its own to animate the scroll with, so this
+    // shows whichever tip the rotation starts on rather than one mid-scroll.
+    // `measure`, not `default_measure`: the ticker's own `font="small"`
+    // routes through no named role (`oag_ui::campaign::footer::face_role`
+    // answers `None` for it), so it draws through the same primary atlas the
+    // rows do - see `crate::main::menu_stage::MenuStage::render`'s own
+    // identical choice for its live ticker.
+    let ticker_draws: Vec<oag_ui::frontend::Draw> = ticker
+        .and_then(|layout| {
+            oag_ui::campaign::footer::ticker_draw(
+                layout,
+                0.0,
+                ticker_tips,
+                &oag_ui::picker::FaceScales::default(),
+                measure,
+            )
+        })
+        .into_iter()
+        .collect();
 
     // A modal prompt over the page, when one was asked for.
     //
@@ -332,6 +362,7 @@ pub(super) fn menu_page(
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(nav_legend_draws);
+        list.extend(ticker_draws);
         list.extend(prompt_draws(kind, &name, strings, skin, source)?);
         return Ok(list);
     }
@@ -342,6 +373,7 @@ pub(super) fn menu_page(
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(nav_legend_draws);
+        list.extend(ticker_draws);
         return Ok(list);
     };
     // The same arithmetic the live stage runs, through the same easing, so what

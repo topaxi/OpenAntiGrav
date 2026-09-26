@@ -235,43 +235,15 @@ impl CampaignStage {
         Some((x, x + width))
     }
 
-    /// Which tip strings the ticker honestly has to show - the `TKR_NO*`
-    /// family, the only ones on disc that carry no `%d`/`%s`/`%.2f`
-    /// template this build has a real counter for (see
-    /// `oag_ui::campaign::footer`'s own module doc for why nothing here
-    /// invents a play-time or song-count statistic instead).
-    ///
-    /// `Tournament`/`Head2Head` never launch at all in this engine
-    /// (`oag_game::campaign::race_mode_for_cell`), so `TKR_NOTOURN`/
-    /// `TKR_NOHH` are unconditionally true and always included. The other
-    /// five are gated on whether [`Self::records`] carries any row for that
-    /// mode - `oag_race::Mode::name`'s own spelling, the same string
-    /// `oag_game::records::Key::new` normalises every record's `mode` to -
-    /// which reads real save data rather than a guess, at the cost of never
-    /// re-showing a tip once its mode has been raced even once.
+    /// Which tip strings the ticker honestly has to show - see
+    /// `oag_game::records::ticker_tips`'s own doc for the `TKR_NO*` rotation
+    /// and why it is one shared function rather than three copies:
+    /// `MenuStage`'s own ticker (`crate::main::menu_stage`) and
+    /// `capture::menu_page`'s `--menu-page` still both read the identical
+    /// list off the identical save file.
     #[must_use]
     fn ticker_tips(&self) -> Vec<String> {
-        let never_raced = |mode: &str| !self.records.rows().iter().any(|row| row.mode == mode);
-        let mut ids = vec!["TKR_NOTOURN", "TKR_NOHH"];
-        if never_raced(oag_race::Mode::SingleRace.name()) {
-            ids.push("TKR_NOSR");
-        }
-        if never_raced(oag_race::Mode::TimeTrial.name()) {
-            ids.push("TKR_NOTT");
-        }
-        if never_raced(oag_race::Mode::SpeedLap.name()) {
-            ids.push("TKR_NOSL");
-        }
-        if never_raced(oag_race::Mode::Zone.name()) {
-            ids.push("TKR_NOZONE");
-        }
-        if never_raced(oag_race::Mode::Eliminator.name()) {
-            ids.push("TKR_NOELIM");
-        }
-        ids.into_iter()
-            .filter_map(|id| self.strings.get(id))
-            .map(str::to_string)
-            .collect()
+        oag_game::records::ticker_tips(&self.strings, &self.records)
     }
 
     /// Whether this is Wipeout HD/Fury's own campaign - what

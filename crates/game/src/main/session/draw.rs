@@ -607,6 +607,14 @@ impl Session {
                 .as_ref()
                 .and_then(|shell| crate::records_page::table_for(&stage.menu, shell, &self.records))
                 .unwrap_or_default();
+            // The footer ticker's own honest rotation, off `Session::records` -
+            // `None` shell answers empty, the same "nothing loaded yet" gap
+            // `records_table` above already has. See
+            // `oag_game::records::ticker_tips`'s own doc for why this is the
+            // one function every reader of this save file rotates through.
+            let ticker_tips = self.shell.as_ref().map_or_else(Vec::new, |shell| {
+                oag_game::records::ticker_tips(&shell.strings, &self.records)
+            });
             stage.render(
                 &self.gpu,
                 &mut encoder,
@@ -618,6 +626,7 @@ impl Session {
                 binding_prompt.as_deref(),
                 axis_preview.as_deref(),
                 &records_table,
+                &ticker_tips,
                 self.framebuffer.output_size(),
             )?;
         }

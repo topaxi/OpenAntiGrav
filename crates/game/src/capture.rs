@@ -198,6 +198,7 @@ pub fn run(
         // one scope is how the wrong one gets passed.
         frame: menu_frame,
         nav_legend,
+        ticker,
         fury_backdrop,
         track_select,
         ship_select,
@@ -705,6 +706,11 @@ pub fn run(
                 // this machine has never raced under, draws every class's
                 // `-` placeholder rather than a shorter table.
                 let records = crate::records::load();
+                // The same rotation the Race Campaign's own footer reads -
+                // see `crate::records::ticker_tips`'s own doc for why one
+                // function answers for both, and for the live session's own
+                // ordinary menu pages besides.
+                let ticker_tips = crate::records::ticker_tips(&strings, &records);
                 let list = menu_page(
                     &options.settings,
                     options.anisotropy,
@@ -733,6 +739,8 @@ pub fn run(
                     options.race.as_ref().map(|r| r.source.as_str()),
                     nav_legend.as_ref(),
                     &|text| oag_ui::font::measure(&font, text),
+                    ticker.as_ref(),
+                    &ticker_tips,
                 )?;
                 (backdrop, format, list, space)
             }

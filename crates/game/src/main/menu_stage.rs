@@ -11,6 +11,10 @@ use oag_ui::{font, marquee, menu};
 use crate::frontend_stage::HeldFrame;
 use crate::gpu::Gpu;
 
+/// The footer's `Confirm`/`Back` legend and tip ticker - split out under the 1,000-line rule.
+#[path = "menu_stage/footer.rs"]
+mod footer;
+
 /// The pause overlay's tint, over a parked race's picture.
 ///
 /// **Chosen, not authored.** Neither PSP title's own front-end XML defines a
@@ -67,6 +71,10 @@ pub(crate) struct MenuStage {
     /// see [`Self::render`]'s own call site for why that boundary and not
     /// a disc-measured one.
     pub(crate) nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    /// The footer ticker layout, from `Shell::ticker`, and its free-running
+    /// clock (advanced by [`Self::tick`]). See `footer::ticker_overlay`.
+    pub(crate) ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    pub(crate) ticker_elapsed: f32,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The modal prompt on screen, if one is: an on-screen keyboard or a
@@ -248,11 +256,15 @@ impl MenuStage {
                 self.change = None;
             }
         }
+        // This stage's own footer ticker clock, free-running alongside the marquee's.
         #[expect(
             clippy::cast_possible_truncation,
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
-        self.marquee.tick(dt as f32, marquee::focus(&self.menu));
+        {
+            self.marquee.tick(dt as f32, marquee::focus(&self.menu));
+            self.ticker_elapsed += dt as f32;
+        }
         // The campaign footer's own ticker clock - free-running, the same
         // "no reset on a screen change" choice the marquee's own pulse
         // above is documented making, since nothing measured says the
@@ -403,6 +415,8 @@ impl MenuStage {
         // lines rather than the single one `axis_preview` occupies, and
         // `oag_ui::prompt::record_row_draw` for how each pair is drawn.
         records_table: &[(String, String)],
+        // This source's honest tip rotation - see `oag_game::records::ticker_tips`.
+        ticker_tips: &[String],
         // `view`'s own full size, which a pillarboxed window makes different
         // from `viewport` - the picker's preview pass needs it for its depth
         // attachment, the same reason `RaceStage::draw_hud` takes it.
@@ -812,30 +826,11 @@ impl MenuStage {
         } else {
             list
         };
-        // The front-end root's own `Confirm`/`Back` legend - see
-        // [`Self::nav_legend`]'s own doc. Skipped mid-transition for the
-        // same reason `axis_preview`/`records_table` above are.
-        //
-        // `Confirm` always; `Back` only past the tree's own root
-        // (`self.menu.depth() > 1`) - this build's own tree has no disc
-        // screen to read a gate off, but the boundary itself is measured,
-        // not guessed: see `docs/architecture/menus.md`'s "A mouse and a
-        // finger" section (`NavigationButtons` census, confidence ~70) for
-        // the two real RPCS3 captures - `Main Menu` alone shows `Confirm`
-        // only, a page reached from it shows both - this reproduces.
-        let list: Vec<Draw> = if self.change.is_none()
-            && let Some(legend) = &self.nav_legend
-        {
-            let measure = |text: &str| font::measure(&self.default_atlas, text);
-            list.into_iter()
-                .chain(legend.draw_gated(
-                    &oag_ui::picker::FaceScales::default(),
-                    &measure,
-                    self.menu.depth() > 1,
-                ))
-                .collect()
+        // The footer's own draws, skipped mid-transition too - see `footer.rs`.
+        let (list, ticker_clip) = if self.change.is_none() {
+            self.footer_overlay(list, ticker_tips)
         } else {
-            list
+            (list, None)
         };
         // The pause overlay, drawn under the rows and over everything else:
         // first in the list, since the list paints back to front. Ahead of
@@ -882,6 +877,8 @@ impl MenuStage {
                 .collect(),
             None => list,
         };
+        // See [`footer::resolve_clip`] for the marquee/ticker trade-off.
+        let clip = footer::resolve_clip(clip, ticker_clip, frozen_race);
         // `LoadOp::Load` over a parked race - `Session::draw` already
         // resolved its scene into `view` this frame, and clearing here would
         // erase it. `Renderer::render`'s own black clear is right the rest
