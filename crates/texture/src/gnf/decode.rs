@@ -158,13 +158,13 @@ fn decode_micro_tiled(texture: &Texture, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
     for by in 0..height_blocks {
         for bx in 0..width_blocks {
             let start = texture.data_offset + micro_tiled_block_offset(bx, by, tiles_x) as usize;
-            let block: [u8; 16] =
-                blob.get(start..start + 16)
-                    .and_then(|s| s.try_into().ok())
-                    .ok_or(Error::DataOutOfBounds {
-                        need: start + 16,
-                        got: blob.len(),
-                    })?;
+            let block: [u8; 16] = blob
+                .get(start..start + 16)
+                .and_then(|s| s.try_into().ok())
+                .ok_or(Error::DataOutOfBounds {
+                    need: start + 16,
+                    got: blob.len(),
+                })?;
             let texels = crate::bcn::bc7(&block);
             for ty in 0..4 {
                 for tx in 0..4 {

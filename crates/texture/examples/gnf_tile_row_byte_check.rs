@@ -63,14 +63,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     for (n, b) in blocks.iter().enumerate() {
         let stored = if *b == 0 { block_size } else { u64::from(*b) };
-        println!("  block[{n}] (table index {}): stored_len={stored}", entry.first_block as usize + n);
+        println!(
+            "  block[{n}] (table index {}): stored_len={stored}",
+            entry.first_block as usize + n
+        );
     }
 
     let blob = archive.read_path(&target)?;
     let texture = Texture::parse(&blob)?;
     println!(
         "parsed: {}x{} format={:?} tile_mode={} data_offset={} stream_size={}",
-        texture.width, texture.height, texture.surface_format, texture.tile_mode.0, texture.data_offset, texture.stream_size
+        texture.width,
+        texture.height,
+        texture.surface_format,
+        texture.tile_mode.0,
+        texture.data_offset,
+        texture.stream_size
     );
     assert_eq!(texture.surface_format, SurfaceFormat::Bc7);
 

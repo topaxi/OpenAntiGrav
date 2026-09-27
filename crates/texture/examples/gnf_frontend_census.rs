@@ -88,7 +88,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(Error::UnsupportedFormat { format }) => {
                     unsupported += 1;
-                    *by_reason.entry(format!("unsupported format {format:?}")).or_default() += 1;
+                    *by_reason
+                        .entry(format!("unsupported format {format:?}"))
+                        .or_default() += 1;
                 }
                 Err(e) => {
                     other_err += 1;
