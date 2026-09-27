@@ -805,10 +805,6 @@ nowhere or only partway there.
   passes a project-only one from `oag_game::strings::project_table`, because
   it runs before any disc is open; `capture::menu_page` passes the real,
   disc-merged one, because it draws a page of an already-open title.
-- **Applying a language without relaunching.** The LANGUAGE row writes the
-  setting, and the string table it selects is loaded once at boot; the change
-  therefore lands on the next launch. Anisotropic filtering is the same, and is
-  less noticeable because a race is built after the menus anyway.
 - **Switching renderer without relaunching.** The RENDERER row writes the
   setting; the adapter it names is chosen once, at boot. Applying it live would
   mean destroying the device and with it the surface, the upscaler's
@@ -1711,3 +1707,88 @@ for what can go in it. That rewrite is what finishes the `[graphics]` to
 entered and left the same frame rather than being skipped in the state machine,
 so the transition sequence `boot_ground_truth.rs` asserts on is unchanged. A
 language this source does not carry falls back to asking, with a note.
+
+## Switching language without relaunching
+
+**Fixed 2026-09-27.** The LANGUAGE row used to only write `settings.language`;
+the string table, the tables built from it and the menu's own faces stayed
+whatever they were at boot, so the switch a player just made showed nowhere
+until the next launch - reported by a maintainer playing Pulse on the PSP,
+alongside a second bug this shares its root with (see below).
+`Session::resupply_language` (`main/session/menus.rs`) is the reload, and it
+runs the LANGUAGE row's own `apply_setting` arm:
+
+- Re-opens the source through `boot::load_shell` - the same "cheap half of the
+  boot" a fresh launch calls, measured at 0.05 s on the EU disc - with
+  `boot::Options::language` set to the new pick, and folds the result through
+  `Shell::from_boot`, the one function both a boot and this reload build a
+  `main::session::Shell` from.
+- Re-`supply`s [`menu::ValueSource::Teams`]/`Tracks`/`RaceModes`/`Languages`/
+  `FrontEndStyles` onto the **already open** `Menu`, rather than building a
+  new one - a title's row structure does not depend on which language draws
+  its labels, so the player's cursor, page and scroll position are untouched.
+- Copies the new `nav_legend`, `ticker`, `frame` and fonts onto the live
+  `MenuStage`, and pushes the new faces into the GPU-side atlases through
+  `Renderer::set_face_atlas`/`set_buttons_atlas` - the same setters a fresh
+  menu stage build already uses, so a language whose plugin names a different
+  face (`boot::fonts::role_font`, below) redraws in it immediately.
+- Calls `Session::reload_loading_assets`, so the loading screen's own tip text
+  follows too.
+
+**What this does not reach.** `self.shell.definition` - the row *tree itself*,
+including every literal row title `assets/ui/menu.toml` authors - is left
+alone: those titles resolve through `oag_ui::strings::project_table`, a
+project-owned translation layer parsed once at process start and entirely
+separate from the disc's own table (see "Localised labels" above), and this
+build ships one today for English and French only. Picking German changes
+nothing there at a fresh boot either, so there is nothing a live reload could
+show that a restart would not also fail to. A race already parked behind
+`Escape` (`Session::suspended_race`) keeps the `hud::Assets` it loaded when it
+started; only a fresh `LAUNCH RACE` picks up the new language, through
+`race::Options::language` below.
+
+**Verification gap, stated rather than papered over.** The player-visible
+before/after of the HUD case (below) is a real `--race --screenshot` run
+against the EU disc; the OPTIONS page's own live switch is not, because
+nothing in this build's headless input model can reach it. `--press`/`--hold`
+apply one fixed button set on alternating ticks for the whole run, and
+reaching LANGUAGE means a scripted sequence - several `down`s, a `cross`, more
+`down`s - that model cannot express; `--menu-page` draws a named page but
+"takes no input and runs no state machine" (its own doc). `--input-script`
+does express a sequence, but is `requires = "race"` and a `--race` run never
+opens these menus at all. What is verified instead is
+`language_reload_ground_truth.rs`
+(`crates/game/tests/language_reload_ground_truth.rs`): three ground-truth
+tests proving `boot::load_shell` itself - the call `resupply_language` repeats
+- resolves to the requested language's own plugin and produces row labels
+that move between German and Italian, which is the exact, shared, GPU-free
+mechanism `Shell::from_boot` builds `Teams`/`RaceModes` from on both a fresh
+boot and a live switch. The GPU-touching half - the re-`supply` onto an
+already-open `Menu` and the atlas swap - is `main`-binary-only code with no
+integration-test surface, and is verified by reading `resupply_language`
+against `Session::open_menus`'s own construction line for line rather than by
+a captured frame. A future session with a way to script multi-step headless
+input could close this the rest of the way.
+
+## The HUD following the front end's language
+
+The second half of the same report: Pulse's in-race HUD (`race/hud.rs`) reads
+its own language plugins and string table independently of the front end's,
+because a `--race` run has no menus to read a saved choice from at all. Its one
+call site (`race/load.rs`) used to hand it `None` unconditionally - "the
+chain's own default" - rather than the player's saved `settings.language`,
+which is invisible on whichever language a title's plugin order happens to
+put first (French, on the PSP EU pressing) and wrong on every other pick.
+`race::Options::language` is the fix: every launch site sets it from the live
+`settings::Settings::language` - `main::prepare::Pending::race_options` for
+`--race`, refreshed again in `main::session::Session::launch_race` for every
+menu-driven route, because `Session::race_options` can otherwise sit stale
+from whenever it was last built while the LANGUAGE row keeps moving
+`self.settings.language` underneath it.
+
+`boot::fonts::role_font` had the same bug one level down, shared by
+`race::hud::hud_font`: both scanned every language plugin in source order for
+the `.fnt` a role names, with no preference for the language actually chosen,
+so a role whose file genuinely differs by plugin would draw whichever plugin
+happened to load first. Both now ask the chosen language's own slot before
+falling back to the scan.

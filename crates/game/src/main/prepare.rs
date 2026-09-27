@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use log::info;
 
-use oag_game::{audio, boot, catalogue, loading, movie, prefetch, race, settings};
+use oag_game::{audio, boot, loading, movie, prefetch, race, settings};
 use oag_ui::frontend;
 use oag_ui::{menu, strings};
 
@@ -129,6 +129,17 @@ impl Pending {
             skin: self.cli.skin.clone(),
             class: self.class.clone(),
             mode: self.mode,
+            // **From the settings here too, the same reason `difficulty`
+            // below is** - `--race` has its own `settings::Settings`, loaded
+            // the same way the menus' does, and a `None` baked in here is
+            // what made `race::load` fall back to the chain's own default
+            // language regardless of what the player had saved. Kept in
+            // step with the *live* value at every menu-driven launch by
+            // `Session::launch_race`, which overwrites this same field from
+            // `self.settings.language` right before `race::load` runs - see
+            // that function's own doc for why a value set once here would
+            // go stale the moment the OPTIONS page's LANGUAGE row changes it.
+            language: self.settings.language.clone(),
             // `None`: no CLI flag names one and the campaign grid a real
             // value would come from is not wired into this engine yet - see
             // `race::Options::eliminator_kill_target`.
@@ -226,89 +237,11 @@ impl Pending {
         // And the three rows the race box's own screens pick, on a title
         // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
         definition.drop_rows_picked_on_screen(title);
-        let shell = Shell {
-            definition,
-            title,
-            platform: boot_shell.platform,
-            circuit_names: boot_shell.circuit_names.clone(),
-            strings: boot_shell.strings.clone(),
-            entries: boot_shell.entries.clone(),
-            modes: menu::mode_choices(&boot_shell.strings),
-            // The disc's own names for its stylings, so the row offers what the
-            // source has rather than a list this build holds.
-            front_end_styles: boot_shell
-                .loading
-                .map(|loading| {
-                    loading
-                        .features
-                        .iter()
-                        .map(|style| menu::Choice::plain(style.name))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            teams: boot_shell
-                .teams
-                .iter()
-                .map(|team| menu::Choice::labelled(&team.id, team.label(&boot_shell.strings)))
-                .collect(),
-            tracks: boot_shell
-                .tracks
-                .iter()
-                .map(|track| {
-                    (
-                        track.clone(),
-                        catalogue::label(
-                            track,
-                            &boot_shell.circuit_names,
-                            &boot_shell.strings,
-                            &boot_shell.tracks,
-                        ),
-                    )
-                })
-                .collect(),
-            zone_tracks: boot_shell
-                .zone_tracks
-                .iter()
-                .map(|track| {
-                    (
-                        track.clone(),
-                        catalogue::label(
-                            track,
-                            &boot_shell.circuit_names,
-                            &boot_shell.strings,
-                            &boot_shell.zone_tracks,
-                        ),
-                    )
-                })
-                .collect(),
-            languages: boot_shell
-                .languages
-                .iter()
-                .map(|language| menu::Choice::labelled(&language.name, &language.native_name))
-                .collect(),
-            font: boot_shell.font.clone(),
-            menu_skin: boot_shell.menu_skin,
-            space: boot_shell.space,
-            menu_font: boot_shell.menu_font.clone(),
-            title_font: boot_shell.title_font.clone(),
-            buttons_font: boot_shell.buttons_font.clone(),
-            sprites: boot_shell.sprites.clone(),
-            globals: boot_shell
-                .screens
-                .globals
-                .iter()
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect(),
-            // The disc's own chrome, read by the boot itself - which is where
-            // the parsed XML, the sheet and the grid were all in hand.
-            frame: boot_shell.frame.clone(),
-            nav_legend: boot_shell.nav_legend.clone(),
-            ticker: boot_shell.ticker.clone(),
-            fury_backdrop: boot_shell.fury_backdrop.clone(),
-            track_select: boot_shell.track_select.clone(),
-            ship_select: boot_shell.ship_select.clone(),
-            team_details: boot_shell.teams.clone(),
-        };
+        // Built through `Shell::from_boot` rather than a literal here, so
+        // this boot and a live LANGUAGE-row switch
+        // (`Session::resupply_language`) read the same `boot::Shell` the
+        // same way - see that function's own doc.
+        let shell = Shell::from_boot(title, definition, &boot_shell);
 
         println!("\n{}", hints::menu_keys(&boot_shell.strings));
 

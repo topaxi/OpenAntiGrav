@@ -122,6 +122,25 @@ pub struct Options {
     /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other
     /// two share `TimeTrial_HUD.xml`. See [`hud_layout`].
     pub mode: Mode,
+    /// The HUD's own preferred language, by its plugin's own English name -
+    /// `None` takes the chain's default the same way an unset
+    /// `boot::Options::language` does everywhere else a source is opened.
+    ///
+    /// **Threaded through explicitly rather than read off a global.** The
+    /// HUD used to be handed `None` outright at its one call site
+    /// ([`hud_layout`]'s caller, `load::load`), which is a bug this field
+    /// exists to close: `None` is the chain's default language, and on the
+    /// PSP EU pressing that default is French rather than English - so a
+    /// player who picked German got a HUD that happened to look right only
+    /// if they had picked French. Every launch site sets this from the live
+    /// `settings::Settings::language` at the moment it builds these
+    /// `Options` - `main::prepare::Pending::race_options` for `--race`, and
+    /// `main::session::Session::launch_race` for every menu-driven route,
+    /// which re-reads it there rather than trusting whatever this field held
+    /// when `Session::race_options` was last built, precisely because the
+    /// OPTIONS page's LANGUAGE row can change the live setting without
+    /// rebuilding this struct at all.
+    pub language: Option<String>,
     /// The kill count that ends an Eliminator event, or `None` for
     /// [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
     ///
@@ -300,6 +319,7 @@ impl Default for Options {
             // not silently inherit one that was.
             class: SpeedClass::Venom.as_str().to_string(),
             mode: Mode::default(),
+            language: None,
             eliminator_kill_target: None,
             laps_override: None,
             zone_stage: None,
