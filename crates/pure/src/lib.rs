@@ -154,6 +154,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // Confidence 90.
     language_plugins: &["PI000", "PI008", "PI009", "PI010", "PI011"],
     menu: Some(frontend::MENU_SKIN),
+    menu_ps2: None,
     // Pure authors the same `FEGlobals`/`<Menu>` vocabulary Pulse does, not
     // the touch-icon idiom - see ADR-0054.
     touch: None,

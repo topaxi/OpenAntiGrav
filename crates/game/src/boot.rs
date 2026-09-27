@@ -408,7 +408,19 @@ pub fn load_shell(
     // the skin below is only what this build's *own* menus would draw in if
     // they were ever opened on it - `oag_ui::placeholder`'s numbers, which
     // belong to no disc and are never mistaken for a measurement.
-    let menu_skin = front_end.menu.unwrap_or(&oag_ui::placeholder::MENU_SKIN);
+    //
+    // **A PS2 source prefers `front_end.menu_ps2` over `front_end.menu`.**
+    // Only Wipeout Pulse fills the former today - see its own doc for why a
+    // title's PSP-authored `MenuSkin` scaled by grid ratio alone is an
+    // approximation `oag_ui::menu::Skin::new` already documents as one - and
+    // every other title's `None` falls straight through to `front_end.menu`
+    // exactly as before this axis existed, so this changes no title but
+    // Pulse's PS2 pressing.
+    let menu_skin = match archives.layout.platform {
+        oag_title::Platform::Ps2 => front_end.menu_ps2.or(front_end.menu),
+        _ => front_end.menu,
+    }
+    .unwrap_or(&oag_ui::placeholder::MENU_SKIN);
     let profile = front_end.boot;
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));

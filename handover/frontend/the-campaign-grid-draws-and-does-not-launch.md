@@ -194,6 +194,16 @@ read), `crates/game/src/main/campaign_stage.rs` and
 
 ## Open
 
+- **2026-09-27, `pulse-ps2-fe` lane: fixed, not open any more - noted here
+  only as a pointer.** The PS2 pressing drew both grid screens' lock icons
+  with no hex cell shape under them at all (`hex_filled.mip`/
+  `hex_outline.mip` never resolved: `crates/game/src/campaign.rs` read them
+  with `archives.read_name` directly, which only tries the PSP-declared
+  name, instead of `oag_pulse::read_image`, which retries the PS2 build's
+  own `.mip`->`.pct` rewrite every other Pulse texture load already gets).
+  Fixed in `crates/game/src/campaign.rs`; PSP output unchanged. This thread
+  otherwise never mentions the PS2 pressing at all - everything below is
+  PSP/HD, unaudited on PS2.
 - **`Cell Selection`'s own hex-outline colour is unresolved.** Its
   `Outline_x_y` widgets author `i="FEGlobals->CM_HEX_Outline"` -
   `docs/formats/fexml.md`'s own `FEGlobals->` registry is not implemented

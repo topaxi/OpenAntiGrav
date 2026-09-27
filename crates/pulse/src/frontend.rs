@@ -214,6 +214,93 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     }),
 };
 
+/// [`MENU_SKIN`] again, read off the PS2 pressing's own `Skin.xml` and
+/// `Data\Plugins\PI001\GUI\MainMenu_Definition.xml` (`WADS2.WAD`, both off
+/// `pulse-ps2-eu.chd`) instead of scaled from the PSP's.
+///
+/// **Why this exists**: `oag_game::menu::Skin::new`'s own doc says scaling
+/// [`MENU_SKIN`] by the PS2's 640x448 grid is an approximation, and
+/// `oag_display::space::Space`'s doc puts a number on it - 30 of 43 shared
+/// coordinates land within a pixel of the ratio, 13 do not. This title's own
+/// `<Menu>`/`helptext0` pair is one of the 13, and the miss was not cosmetic:
+/// scaling the PSP's `helptext0.y - first_row_y = 18` by the space ratio
+/// (`448 / 272 = 1.647`) gives `29.6`, while `row_pitch` scaled the same way
+/// only grows to `33.9` - because the PS2's own `Pulse_20.fnt` loads
+/// natively at 24px, not `22 * 1.647`. The subtitle crept ahead of the row
+/// pitch it is supposed to sit inside, and by row two (`RACEBOX`/`COURSE`)
+/// the two lines overlapped - a fresh PCSX2 capture of `pulse-ps2-eu.chd`'s
+/// real `Main Menu` (`SCES-54748`, 2026-09-27) confirms the real disc does
+/// not.
+///
+/// Every field but [`MenuSkin::row_extra_leading`] below is **authored**,
+/// read directly off `WADS2.WAD` the same way [`MENU_SKIN`]'s own fields
+/// were read off the PSP's `Data.wad`:
+///
+/// | field | PS2 `Skin.xml` / `MainMenu_Definition.xml` |
+/// | --- | --- |
+/// | `space` | `oag_display::space::Space::PS2.size` (`640x448`), the grid the file's own coordinates are already in |
+/// | `menu_x`, `title_x` | `FEGlobals->MenuXOffset` = `FEGlobals->TitleXOffset` = `66` |
+/// | `menu_scale` | `FEGlobals->MenuScale` = `1.0` |
+/// | `title_y` | `FEGlobals->TitleYOffset` = `9` |
+/// | `title_scale` | `FEGlobals->TitleScale` = `0.8` |
+/// | `first_row_y` | `<Menu>` widget `y="53"` - shared by `Main Menu`, `Racebox` and `Additional` (Options), the same way the PSP's `32` is shared by `Main Menu` and `Racebox` |
+/// | `help_text.offset_y` | `helptext0` `y="75"`, `75 - 53 = 22` |
+///
+/// `row_extra_leading` is **derived, not authored, and single-source**: the
+/// file's own `<!-- +41 for each line -->` comment above `Main Menu`'s seven
+/// `helptext` widgets states the row pitch outright, and `41 - 24` (this
+/// source's own loaded `menu`-role line height) is `17`. The PSP's matching
+/// constant (`6`) was corroborated on four screens across two faces before
+/// this crate trusted it; this one has the pitch confirmed only on `Main
+/// Menu` and the same `y="53"` corroborated on two more screens that carry
+/// no `helptext` of their own to re-check the pitch with. Confidence
+/// accordingly lower than the rest of this table, and worth a second
+/// screen's `helptext` step before leaning on it anywhere but the pages this
+/// build reads `Main Menu`/`Racebox` off.
+///
+/// `title_font`, `selected`, `selected_pulse_period_secs`, `background`,
+/// `strip`, `blocks` and `list` are carried over from [`MENU_SKIN`]
+/// unchanged: none of the seven is a coordinate in [`MenuSkin::space`], so
+/// the PS2/PSP grid disagreement that motivates the rest of this table does
+/// not touch them, and nothing has measured a PS2-specific value for any of
+/// the seven to replace a PSP one with. `title_font` in particular stays
+/// `None` for the same reason [`MENU_SKIN`]'s does - a 2026-09-27 PCSX2
+/// capture of `Main Menu` shows `MAIN MENU`'s glyphs in what reads as the
+/// same face as `RACE CAMPAIGN` below it, not a taller one, which is a lean
+/// against flipping it rather than a capture that proves the flip the way
+/// this project's own rule requires.
+pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
+    // `oag_display::space::Space::PS2.size` - a literal here, not that type,
+    // the same way `MENU_SKIN.space` above is a literal `(480.0, 272.0)`
+    // rather than `Space::PSP.size`: `MenuSkin::space` is `(f32, f32)`, and
+    // this crate has no dependency on `oag-display` to spend on holding the
+    // richer type for one field.
+    space: (640.0, 448.0),
+    menu_x: 66.0,
+    menu_scale: 1.0,
+    title_x: 66.0,
+    title_y: 9.0,
+    title_scale: 0.8,
+    title_font: None,
+    first_row_y: Some(53.0),
+    row_extra_leading: Some(17.0),
+    menu_font: Some("menu"),
+    text: Some(0xFF33_A6B9),
+    title: Some(0xFF00_0000),
+    background: None,
+    selected: Some(0xFFFF_FFFF),
+    selected_pulse_period_secs: Some(1.1),
+    transition_secs: 0.5,
+    strip: None,
+    blocks: None,
+    list: None,
+    help_text: Some(oag_title::HelpText {
+        offset_y: 22.0,
+        scale: 1.0,
+        color: 0xFFFF_FFFF,
+    }),
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
