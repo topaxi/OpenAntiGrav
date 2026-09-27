@@ -66,14 +66,18 @@ machinery Pulse's use.
   Pure draws today reads those rects - its stills carry their own x/y and its
   rows come off the `<Menu>` widget - so this is latent rather than visible,
   and it will bite the first widget that does.
-- **Pure's selection screens draw no stat panel.** `Team Selection`'s
-  `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars and `Track Selection`'s `RACE
-  RECORD`/`LAP RECORD`/`LENGTH`/`HEIGHT` block are authored in the *entry's*
-  `screen.xml` (the same file as the stills), not in
+- **Done, 2026-09-27: Pure's selection screens now draw their stat panel.**
+  `Team Selection`'s `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars and `Track
+  Selection`'s `RACE RECORD`/`LAP RECORD`/`LENGTH`/`HEIGHT` block are authored
+  in the *entry's* `screen.xml` (the same file as the stills), not in
   `Selection_Definition.xml` where `oag_ui::picker::body` looks for Pulse's
-  named `<Text>` widgets. The slideshow reader walks that file already and
-  keeps only its `<Image src=>` nodes; the bars and their labels are the next
-  thing to read out of it.
+  named `<Text>` widgets. `oag_ui::picker::slideshow::Slideshow` now reads
+  the colour-only bars and the text above any named `Screen` alongside the
+  stills, resolving `idstring` through the title's own string table.
+  Confidence 90; see `docs/formats/race-setup.md`'s "The stat panel is read
+  and drawn" section for the full evidence and the one open item it left -
+  a German label (`RUNDEN-REKORD`) running into its neighbour's column,
+  unmeasured against real hardware.
 - **The entry list does not scroll, and the packed roster is uncounted.**
   Pure's `<Menu allocate="16">` is a capacity; `oag_ui::picker`'s
   `entry_rows` draws one row per entry and a source offering more than fit
@@ -99,10 +103,9 @@ machinery Pulse's use.
 
 ## Next Steps
 
-1. Read the stat bars out of the same per-entity `screen.xml` the stills come
-   from, so Pure's two screens show their numbers as well as their picture.
-   **This is the visible gap a player meets**: both screens show a list and a
-   picture and no numbers at all.
+1. **Done, 2026-09-27**: the stat bars now read out of the same per-entity
+   `screen.xml` the stills come from - see the Open item above and
+   `docs/formats/race-setup.md`.
 2. Give Pure's `Layout` its own `panel`/`preview` rects off its `<Viewport>`,
    before something starts drawing from the borrowed ones.
 3. Thread a race mode into `oag_game::preview::slideshow` so `screen_m.xml`
@@ -115,6 +118,10 @@ machinery Pulse's use.
    four-slot texture swap
    (`docs/ghidra/functions/psp-pulse-usa/ship-skin.md`) applies to
    `ship_FE.vex` the way it does to the in-race hull.
+6. Check whether Pure's own real hardware/PPSSPP also overlaps
+   `RUNDEN-REKORD`/`HÖHE` in German, or wraps/shrinks somehow this build does
+   not reproduce - a capture with the language set to German, which none of
+   this thread's own captures were.
 
 ## The two checks that would have caught this
 

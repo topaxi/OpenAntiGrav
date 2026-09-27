@@ -85,7 +85,9 @@ pub type Still = (String, Vec<u8>);
 ///
 /// `globals` are the front end's own `FEGlobals` table: a per-entity
 /// `screen.xml` declares none and still names them for its stills' colour.
-/// See [`oag_ui::picker::slideshow::Slideshow::read`].
+/// `strings` resolves the panel's own `idstring` labels - Pure's stat bars,
+/// authored in this same file rather than in `Selection_Definition.xml`. See
+/// [`oag_ui::picker::slideshow::Slideshow::read`].
 ///
 /// The stills are read through [`oag_pulse::read_image`], which is what
 /// finds a PS2 disc's `.pct` under a `.mip` name. One that is missing is
@@ -102,6 +104,7 @@ pub fn slideshow(
     location: &str,
     zone: bool,
     globals: &[(&str, &str)],
+    strings: &oag_ui::language::StringTable,
     report: &mut Vec<String>,
 ) -> Result<(Slideshow, Vec<Still>)> {
     let read = |archives: &mut oag_assets::Archives, file: &str, start: &str| {
@@ -112,7 +115,7 @@ pub fn slideshow(
         } else {
             String::from_utf8(blob).ok()?
         };
-        Slideshow::read(&xml, location, start, globals)
+        Slideshow::read(&xml, location, start, globals, strings)
     };
     let show = if zone {
         read(archives, "screen_zone.xml", "Zone")

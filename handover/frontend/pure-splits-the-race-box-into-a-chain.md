@@ -85,9 +85,10 @@ it is the crossplay lobby vote.
   2026-09-10), named in full by the entry's own `screen.xml`.
   `<location>\Ship.vex` / `<location>\track.vex` were wired at confidence ~70
   on 2026-09-10 and removed the same day - they are the in-race hull and the
-  full racing circuit. Still open: the stat bars authored in that same
-  `screen.xml`, and `TeamSelection_ApplySelection`'s Phantom-model trigger
-  (confidence 60, campaign-progress-shaped). Tracked in
+  full racing circuit. The stat bars authored in that same `screen.xml` are
+  read and drawn as of 2026-09-27. Still open:
+  `TeamSelection_ApplySelection`'s Phantom-model trigger (confidence 60,
+  campaign-progress-shaped). Tracked in
   `handover/rendering/the-race-setup-previews-differ-by-title.md`.
 - **Pure's screen ordering is capped at 88** - it rests on `<Redirect>` targets
   only and has never been confirmed against a capture.

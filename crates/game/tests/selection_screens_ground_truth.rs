@@ -16,6 +16,7 @@
 use std::path::PathBuf;
 
 use oag_game::boot;
+use oag_ui::language::StringTable;
 use oag_ui::picker::{Details, Entry, Kind, Picker};
 
 fn image() -> Option<PathBuf> {
@@ -255,6 +256,7 @@ fn the_circuits_own_screen_xml_is_the_slideshow_behind_the_window() {
         r"Data\Environments\16_Track",
         false,
         &[],
+        &StringTable::default(),
         &mut report,
     )
     .expect("16_Track authors a screen.xml with an Info chain");
@@ -300,6 +302,7 @@ fn the_circuits_own_screen_xml_is_the_slideshow_behind_the_window() {
         r"Data\Environments\16_Track",
         true,
         &[],
+        &StringTable::default(),
         &mut report,
     )
     .expect("16_Track authors a screen_zone.xml");
@@ -386,6 +389,7 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
         r"Data\Environments\16_Track",
         false,
         &[],
+        &StringTable::default(),
         &mut report,
     )
     .expect("the PS2 16_Track authors a screen.xml");
@@ -397,6 +401,7 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
         r"Data\Environments\16_Track",
         true,
         &[],
+        &StringTable::default(),
         &mut report,
     )
     .expect("the Zone chain is in the same file");
@@ -485,7 +490,7 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
     ] {
         let mut report = Vec::new();
         let (show, blobs) =
-            oag_game::preview::slideshow(&mut archives, location, false, &globals, &mut report)
+            oag_game::preview::slideshow(&mut archives, location, false, &globals, &StringTable::default(), &mut report)
                 .unwrap_or_else(|e| panic!("{location} authors a screen.xml chain: {e:#}"));
         assert!(report.is_empty(), "{report:?}");
         let names: Vec<&str> = show.states().iter().map(|s| s.name.as_str()).collect();
@@ -516,6 +521,7 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
         r"Data\Zone\01_Zone",
         true,
         &globals,
+        &StringTable::default(),
         &mut report,
     )
     .expect("01_Zone authors a screen_z.xml chain");

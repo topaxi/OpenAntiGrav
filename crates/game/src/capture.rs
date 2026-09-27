@@ -578,6 +578,7 @@ pub fn run(
                     &teams,
                     archives.as_mut(),
                     frontend.screens(),
+                    &strings,
                     &mut sprites,
                 );
                 let (mut list, request) = picker_page(

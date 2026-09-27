@@ -42,7 +42,8 @@ const XML: &str = r#"
 const LOCATION: &str = r"Data\Environments\16_Track";
 
 fn show() -> Slideshow {
-    Slideshow::read(XML, LOCATION, "Info", &[]).expect("the Info chain reads")
+    Slideshow::read(XML, LOCATION, "Info", &[], &StringTable::default())
+        .expect("the Info chain reads")
 }
 
 #[test]
@@ -131,15 +132,87 @@ fn a_card_draws_at_its_authored_place_and_the_shadow_scales_its_sub_rect() {
 
 #[test]
 fn a_chain_the_file_does_not_author_is_none() {
-    assert!(Slideshow::read(XML, LOCATION, "Zone", &[]).is_none());
+    assert!(Slideshow::read(XML, LOCATION, "Zone", &[], &StringTable::default()).is_none());
     // A file with a start state and no redirects is one terminal state.
     let lone = Slideshow::read(
         r#"<Screen><Image><Values x="1" y="2" Src="a.mip"></Values></Image><Screen name="Info"></Screen></Screen>"#,
         LOCATION,
         "Info",
         &[],
+        &StringTable::default(),
     )
     .unwrap();
     assert_eq!(lone.at(100.0).name, "Info");
     assert_eq!(lone.at(100.0).images.len(), 1);
+}
+
+/// `Team Selection`'s own stat panel, authored above any named `Screen` in
+/// the entry's `screen.xml` - the same shape `Data\Ships\Feisar\screen.xml`
+/// carries: a `TabBackColor`/`TabFrontColor` bar pair, a resolved `idstring`
+/// label and a literal-string value beside it. Both are inherited into every
+/// state the same way a still is.
+#[test]
+fn the_panel_bars_and_labels_are_read_above_any_named_screen() {
+    let xml = r#"
+    <Screen>
+    <Viewport>
+    <Values Reset="true"></Values>
+    <Image><Values x="247" y="180" Width="100" Height="4" color="0xFF2081A1"></Values></Image>
+    <Text><Values idstring="SPEED" font="Stats" x="249" y="164" color="0xFF11ACD0"></Values></Text>
+    <Text><Values string="2/5" font="Stats" x="329" y="164" color="0xFF11ACD0"></Values></Text>
+    <Screen name="Info">
+    <Image><Values x="50" y="70" Src="%s\FE\image_01.mip"></Values></Image>
+    </Screen>
+    </Viewport>
+    </Screen>
+    "#;
+    let mut strings = StringTable::default();
+    strings.merge(std::collections::HashMap::from([(
+        "SPEED".to_string(),
+        "GESCHWINDIGKEIT".to_string(),
+    )]));
+    let show = Slideshow::read(xml, LOCATION, "Info", &[], &strings)
+        .expect("the panel and its Info state both read");
+    let state = show.at(0.0);
+    assert_eq!(state.fills.len(), 1, "the bar, with no src");
+    assert_eq!(state.fills[0].color, 0xFF20_81A1);
+    assert_eq!(state.texts.len(), 2, "the idstring label and the literal value");
+    assert_eq!(
+        state.texts[0].string.as_deref(),
+        Some("GESCHWINDIGKEIT"),
+        "idstring resolved through the string table"
+    );
+    assert_eq!(state.texts[1].string.as_deref(), Some("2/5"));
+
+    let draws = show.draws(0.0, &|_| None);
+    assert_eq!(
+        draws,
+        vec![
+            Draw::Fill {
+                rect: [247.0, 180.0, 100.0, 4.0],
+                color: argb_to_rgba(0xFF20_81A1),
+            },
+            Draw::Text {
+                x: 249.0,
+                y: 164.0,
+                scale: 1.0,
+                color: argb_to_rgba(0xFF11_ACD0),
+                border: None,
+                align: Align::Left,
+                text: "GESCHWINDIGKEIT".to_string(),
+                wrap_width: None,
+            },
+            Draw::Text {
+                x: 329.0,
+                y: 164.0,
+                scale: 1.0,
+                color: argb_to_rgba(0xFF11_ACD0),
+                border: None,
+                align: Align::Left,
+                text: "2/5".to_string(),
+                wrap_width: None,
+            },
+        ],
+        "the panel draws before the still, since it sits before it in the XML"
+    );
 }
