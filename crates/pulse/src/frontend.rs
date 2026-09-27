@@ -228,8 +228,9 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 /// only grows to `33.9` - because the PS2's own `Pulse_20.fnt` loads
 /// natively at 24px, not `22 * 1.647`. The subtitle crept ahead of the row
 /// pitch it is supposed to sit inside, and by row two (`RACEBOX`/`COURSE`)
-/// the two lines overlapped - a fresh PCSX2 capture confirms the real
-/// disc does not (see the handover thread cited below).
+/// the two lines overlapped - a fresh PCSX2 capture of `pulse-ps2-eu.chd`'s
+/// real `Main Menu` (`SCES-54748`, 2026-09-27) confirms the real disc does
+/// not.
 ///
 /// Every field but [`MenuSkin::row_extra_leading`] below is **authored**,
 /// read directly off `WADS2.WAD` the same way [`MENU_SKIN`]'s own fields
