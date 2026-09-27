@@ -173,6 +173,47 @@ Screenshots: `data/scratch/drive-2026-09-27/omega-gnf/omega-{boot,main,grid,cell
   through their `.gnf` siblings and draw - see the `grid-select`/
   `cell-select` screenshots.
 
+### Why so much of this is missing: an extraction-tool bug, not this build's data
+
+`lane/omega-psarc`, 2026-09-27. Every "not found"/"all-zero"/"corrupt
+blocks" name above (`saveIcons.gnf`, `line.gnf`, `Hexmedal_HD.gnf`, the five
+campaign hex textures, most of the boot-time sprite set) was checked against
+one open question this project's own extraction of
+`omega-ps4-eu{,-patch}.pkg` left unresolved: is the content genuinely absent
+from the package, or did this project's own copy of it come out wrong? It is
+the latter, confidence 90 - see
+[`gnf.md`'s "Root cause"](gnf.md#root-cause-confidence-90-a-short-streamread-in-the-extraction-tool-not-this-projects-reader)
+for the full mechanism. In short: `PkgTool.Core`'s (`LibOrbisPkg`'s) PFSC
+sector decompressor calls `DeflateStream.Read` once per 64 KiB sector and
+never checks whether that call actually filled the buffer - most of the time
+it does not, and the untouched remainder reads back as zero bytes, which is
+what this page's "all-zero"/"corrupt" checks are seeing. **Not this
+project's PSARC/GNF readers** - both are confirmed correct against the raw
+archive bytes and against a from-source repro of the extraction tool. A
+one-line loop fix in that tool's `PFSCReader.ReadSector`, verified by
+rebuilding the tool and re-reading `Harimau_c1_Livery.gnf` directly out of
+the real `.pkg`, turns a previously-refused (`Error::CorruptBlocks { count:
+49899 }`) livery texture into a fully legible PNG through this project's own
+unmodified decoder.
+
+**Checked against a corrected re-extraction
+(`data/extracted/ps4/omega-eu-fixed{,-patch}`), 2026-09-27: every named
+"missing"/"corrupt" texture above recovers, and none of it was genuinely
+absent.** `saveIcons.gnf`, `line.gnf`, `Hexmedal_HD.gnf` and all five
+campaign hex texture names (`Hexagon_HD_OUTLINE`, `Hexagon_HD`, `Hexlock_HD`,
+`Hexagon_HD_THICK_OUT`, `NonSelectable_Arrow_HD`) all have real `.gnf`
+entries in the corrected `data00.psarc` (duplicated in the patch's
+`data08.psarc`) and decode clean through this project's own unmodified
+`oag_texture::gnf::Texture::decode` - the old, corrupted manifest had not
+just corrupted their pixel payloads but hidden most of them from the
+directory listing entirely, which is why "no `.gnf` sibling either" read as
+absence rather than corruption. `vr_headset.gnf` (447x370, `data08.psarc`)
+recovers the same way, previously "no entry at all" for the same manifest
+reason. `StudioLiverpool.bik` remains genuinely absent under that name even
+in the corrected extraction, across all nine archives - not a reading
+artefact. See `data/scratch/drive-2026-09-27/omega-psarc.md` for the exact
+decode results and the full census.
+
 ## Racing: out of scope, and why nothing crashes
 
 No CLI path in this lane starts a race. `oag_title::RaceDefaults`'s otherwise

@@ -441,8 +441,46 @@ three, and present in the third only at exactly `entry.offset + entry.size`
 - i.e. it is the *next* entry's own header, not this entry's, shifted. A
 constant per-entry offset error is ruled out by this sample; what actually
 produces bytes that are present, substantial (tens of KB to over a
-megabyte, not a stray byte), and still not the claimed container is not
-established.
+megabyte, not a stray byte), and still not the claimed container **is now
+established, confidence 90**: see
+[`gnf.md`'s "Root cause"](gnf.md#root-cause-confidence-90-a-short-streamread-in-the-extraction-tool-not-this-projects-reader)
+section, `lane/omega-psarc`, 2026-09-27. It is a short, non-looped
+`Stream.Read` inside `PkgTool.Core`'s (`LibOrbisPkg`'s) `PFSCReader.ReadSector`,
+not this project's reader or anything about `entry.offset` - reproduced and
+fixed against the real `.pkg` directly, not just read off the tool's source.
+
+**The fix was also run at family scale, not just on the one file above**:
+`omega-ps4-eu{,-patch}.pkg` re-extracted whole with the patched tool
+(`data/extracted/ps4/omega-eu-fixed{,-patch}`, 2026-09-27) and re-run through
+`psarc_oracle` on every archive:
+
+| Archive | valid (before → after) | garbage (before → after) | all-zero (before → after) |
+| --- | ---: | ---: | ---: |
+| `data00.psarc` | 593 → 9,137 | 476 → 6 | 169 → 0 |
+| `data01.psarc` | 338 → 4,507 | 434 → 10 | 93 → 0 |
+| `data02.psarc` | 409 → 5,421 | 458 → 8 | 33 → 0 |
+| `data03.psarc` | 95 → 632 | 130 → 2 | 90 → 0 |
+| `data04.psarc` | 358 → 4,465 | 357 → 0 | 103 → 0 |
+| `data05.psarc` | 389 → 7,933 | 739 → 0 | 30 → 0 |
+| `data07.psarc` | 3 → 3 | 0 → 0 | 0 → 0 |
+| `data08.psarc` | 635 → 10,065 | 896 → 0 | 72 → 0 |
+
+(`data09.psarc` carries no magic-checked extension - only XML, in the
+`unvalidated_*` buckets - so it has no row above; its own `unvalidated_all_zero`
+count still drops from 15 to 0.) `garbage` falls from **3,490 to 26** across
+the family (99.3%) and `all_zero` from **590 to 0** for every magic-checked
+extension. `data07.psarc` was already clean - it is small enough (7 entries)
+that this session's sample never happened to exercise the buggy branch on it.
+The `valid` count's own jump (e.g. `data00.psarc` 593 to 9,137, a 15x
+increase, far more than the `garbage`+`all_zero` reduction alone explains) is
+a second effect of the same bug: the archive's own manifest text is read
+through this same buggy decompressor, so the old extraction's manifest was
+itself truncated-then-zero-padded, and thousands of real entries were never
+even reachable by path (`match_paths_to_entries` never saw their name at
+all) rather than reachable-but-corrupt. The 26 residual `garbage` entries
+were not chased further - `docs/formats/omega-status.md` and this page's own
+"torn write" paragraphs above already document that a handful of entries per
+archive carry implausible `first_block`/`size` values unrelated to this bug.
 
 **Two structural findings still hold and are not affected by the
 correction above:**
@@ -527,8 +565,10 @@ minutes before measuring it. That rules out "one bad extraction run" as an
 explanation as thoroughly as the merge theory above did: two independent
 extractions, from two different `.pkg` files, on the same machine, in the
 same session, both show the split. Whatever produces it is a property of
-this archive family (or of `PkgTool.Core`'s own PFS reader, not chased
-further - see below), not of one directory's provenance.
+this archive family (or of `PkgTool.Core`'s own PFS reader) - **and it is
+the latter, chased to ground and fixed 2026-09-27**, see the "Block data
+location" section's own root-cause paragraph above - not of one directory's
+provenance.
 
 **`psarc_sweep` (`crates/assets/examples/psarc_sweep.rs`) is superseded by
 `psarc_oracle` (`crates/assets/examples/psarc_oracle.rs`) for this

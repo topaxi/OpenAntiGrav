@@ -16,8 +16,10 @@ as 2048's own: the screen *shape* (`Campaign Selection` -> `Grid Selection
 types extended by one branch, but the map *content* one level in
 (`Campaign2048_Definition.xml`, newly authored, `<LoadXML>`'d as a sibling of
 `CellMode_Definition.xml`) is 2048's own `FE3DCanvas`/`CanvasLabel`/
-`linkedevent` vocabulary, unreadable past its own corrupted prefix in this
-extraction.
+`linkedevent` vocabulary - unreadable past its own corrupted prefix in the
+original extraction this thread was opened against, **now fully readable**
+after `lane/omega-psarc` (2026-09-27) fixed the extraction-tool bug behind
+that corruption; see the "Open"/"Next Steps" updates below.
 
 Prior art this sits beside without duplicating:
 [`omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md`](../tooling/omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md)
@@ -27,22 +29,32 @@ content against `hd-frontend.md`.
 
 ## Open
 
-- **Load order between the patch's own four archives is not settled.**
-  `cellmode_definition.xml` exists in both `data07.psarc` (garbage - real
-  text recovered from byte 35,404 of 69,013, and it disagrees with the other
-  copy past the corruption) and `data09.psarc` (clean from byte zero, and the
-  one with the complete plugin set). `data09` is the circumstantial favourite
-  - most complete, cleanest-reading, highest-numbered - but that is exactly
-  the shape of evidence `hd-frontend.md`'s own history warns against trusting
-  before a runtime capture (its `DATA00` looked like the newest layer for the
-  same reasons, and "looking like it is not evidence" was the finding right
-  up until RPCS3 settled it with a `TTY.log` load-order printf). No PS4
-  emulator exists in this project's toolchain to do the equivalent capture.
-- **`campaign2048_definition.xml`'s own opening `<Screen>`/`<FE3DCanvas>`
-  tags are unreadable** - real content starts at byte 18,269 of 29,919 in
-  this extraction, past the file's own corrupted, all-zero prefix. What
-  screen name it declares, and what widget wraps the recovered
-  `<CanvasLabel>` fragment, is unknown.
+- **Load order between the patch's own four archives is not settled, but
+  both files this bullet used to call unreadable now read clean everywhere,
+  and one of them narrows the question to two candidates instead of three.**
+  `lane/omega-psarc` (2026-09-27) found and fixed the extraction-tool bug
+  that was corrupting both copies - see the resolved bullet below - and a
+  corrected re-extraction (`data/extracted/ps4/omega-eu-patch-fixed`) also
+  surfaced a **third** copy of both files that the old, corrupted manifest
+  never even listed as a candidate: `data08.psarc` carries its own
+  `cellmode_definition.xml` and `campaign2048_definition.xml`, previously
+  invisible entirely. `campaign2048_definition.xml` is now **byte-identical**
+  between `data08` and `data09` (both 567 lines, whole-file `diff` clean),
+  so between those two it no longer matters which one loads.
+  `cellmode_definition.xml` is where the real difference sits:
+  `data08`/`data09`'s copies are byte-identical to each other (1,265 lines)
+  but **genuinely differ from `data07`'s** (also 1,265 lines, not
+  corruption) - `data07`'s uses a scalar `orthoScale` and no
+  `IsHidden`/`IsCallbackChk` attributes; `data08`/`data09`'s use vector
+  `orthoScaleX/Y/Z` and add both flags, a newer authoring revision. So the
+  open question is now binary (`data07`'s older revision vs. `data08`/`data09`'s
+  newer, identical one), not three-way, and `data09` - highest-numbered, per
+  a numeric-order-wins patch-layering guess - remains the same circumstantial
+  favourite `hd-frontend.md`'s own history warns against trusting before a
+  runtime capture (its `DATA00` looked like the newest layer for the same
+  reasons, and "looking like it is not evidence" was the finding right up
+  until RPCS3 settled it with a `TTY.log` load-order printf). No PS4 emulator
+  exists in this project's toolchain to do the equivalent capture.
 - **`vita_legacy.xml`'s role is a hypothesis, not a finding** (confidence
   50). It is confirmed live - `skin.xml`'s own `<LoadXML>` list includes it
   unconditionally - and it is real 2048-shaped content (`FE3DCanvas`,
@@ -78,8 +90,23 @@ content against `hd-frontend.md`.
     four siblings - no `.gnf` sibling either, not an unread name) and most
     of the front end's small *boot-time* image set (`saveIcons.gnf` is
     present but corrupt, `line.gnf` fails its own magic check) -
-    `omega-status.md`'s "What did not draw" section names each one; whether
-    a more complete disc dump has them is unchecked.
+    `omega-status.md`'s "What did not draw" section names each one. **Update
+    2026-09-27, and every one of these recovers:** this "missing"/"corrupt"
+    content was this project's own extraction, not the package - see the
+    resolved bullet two below. Checked by name against the corrected
+    re-extraction (`data/extracted/ps4/omega-eu-fixed{,-patch}`): all five hex
+    texture names (`hexagon_hd_outline.gnf`, `hexagon_hd.gnf`,
+    `hexlock_hd.gnf`, `hexagon_hd_thick_out.gnf`,
+    `nonselectable_arrow_hd.gnf`) now have real entries in `data00.psarc`
+    (duplicated in the patch's `data08.psarc` - both invisible before, since
+    the old, corrupted manifest never surfaced them as candidates at all,
+    not just their content) and decode clean through this project's own
+    unmodified `Texture::decode`; so do `saveicons.gnf` (257x129),
+    `line.gnf` (8x8), `hexmedal_hd.gnf` (976x549) and `vr_headset.gnf`
+    (447x370, `data08.psarc` - previously "no entry at all", also a manifest
+    casualty). `StudioLiverpool.bik` still does not appear under that name
+    in any of the nine archives even in the corrected extraction - genuinely
+    absent, not a reading artefact.
   - ~~`crates/game/src/campaign.rs::load_omega` reads its hex textures by the
     literal HD path rather than through the front end's own
     `gnf_sibling_report`~~ - landed in the same change: it now falls back to
@@ -95,11 +122,17 @@ content against `hd-frontend.md`.
   currently covers PCSX2/PPSSPP/RPCS3 only), a boot capture would settle load
   order and the boot chain's `Provenance` in the same pass RPCS3 did for HD -
   see [ADR-0025](../../docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md).
-- Chasing `campaign2048_definition.xml`'s corrupted prefix is worth revisiting
-  if `oag_formats::psarc`'s block-data-location understanding advances for
-  other reasons (`docs/formats/psarc.md`'s own open "garbage" population) -
-  a generic fix there would likely recover this file's opening tags too,
-  rather than needing Omega-specific work.
+- ~~Chasing `campaign2048_definition.xml`'s corrupted prefix is worth
+  revisiting if `oag_formats::psarc`'s block-data-location understanding
+  advances for other reasons~~ - landed 2026-09-27, exactly this way and not
+  Omega-specific: `lane/omega-psarc` root-caused and fixed the extraction
+  tool bug behind the whole "garbage"/"all-zero" population
+  (`docs/formats/gnf.md`'s "Root cause" section), and
+  `campaign2048_definition.xml` reads clean from byte zero in the corrected
+  extraction - see "Open" above for its content (`<Screen type="Campaign2048"
+  name="Cell Selection 2048">`, `FE3DCanvas`/`CanvasLabel` widgets intact).
+  Turning that into a real campaign-map render is `campaign-map`/2048-lane
+  work, not started here (PSARC/GNF only, per this lane's own boundary).
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
