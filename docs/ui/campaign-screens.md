@@ -1377,21 +1377,34 @@ own `Target0/1/2 Image` (`Subtitle_Arrow_HD.gtf`, no `Hexmedal_HD` reference
 at all), this is first-party evidence the real PS3 renders `Cell Selection`
 off `DATA06`, not `DATA02` - the same open question
 
-**A fourth, adjacent screen checked and ruled clean - `EndRace Results`,
+**A second screen checked and ruled clean - `EndRace Results`,
 2026-09-27**: `Target0/1/2 Image` on `EndRace Results`
 (`data/scratch/hd-rewards/endrace-0{2..6}.xml`, every archive copy this
 project has extracted) **does** author a real crop of `Hexmedal_HD.mip` -
 `width="60" height="60" U="0"`, `V="0"/"61"/"122"` for `Target0`/`1`/`2`,
-matching `hd_medal_frame`'s own numbers exactly (a third, independent
-confirmation of them, on a third screen). But `hd_results_draw_list`'s own
-image loop (`crates/ui/src/endrace/hd.rs`) skips it anyway - not through a
-name filter, but because `sprites(&image.src)` answers `None`: this pass's
-own asset loader never puts `Hexmedal_HD` on the `EndRace` sprite sheet at
-all (the loop's own comment already says so - "the target/medal art... is
-skipped here for free"), the same way the sibling `Target0`/`1`/`2` *text*
-widgets are already explicitly left `None`. Net effect: the whole target
-row draws nothing on `Results`, not a wrong render - an honest absence
-(`--menu-page endrace-results`, checked directly,
+matching `hd_medal_frame`'s own numbers exactly (a second independent
+confirmation, on a second screen - `DATA06`'s `Cell Selection` `Target0/1/2
+Medal` was the first). A fourth widget on the same screen, `Single Target
+Image` (for a mode with one target rather than three), authors the
+identical `60x60`/`u=0`/`v=0` crop too - a third confirming instance of the
+gold row specifically.
+
+But none of it ever draws: **this is not a runtime skip, it is a
+compile-time-fixed list**. `oag_hd::endrace::EXTRA_TEXTURES`
+(`crates/hd/src/endrace.rs`) is the complete set of textures
+`oag_game::endrace::load_hd` extends the front-end's base sheet with for
+this screen, and it names exactly one file - `Title_Arrow_HD.gtf` -
+`Hexmedal_HD` is not in it, on any code path: the same constant builds the
+sheet whether the caller is a live session (`crate::main::session::endrace`,
+which passes `shell.sprites` - the plain front-end sheet, not the
+campaign-extended one `renderer_set_sprites` only ever uploads to the GPU
+transiently while campaign screens are up) or `--menu-page endrace-results`.
+So `hd_results_draw_list`'s own image loop (`crates/ui/src/endrace/hd.rs`)
+finds no sprite for any of these four widgets and skips them (`sprites(&image.src)`
+answers `None`), the same absence the sibling `Target0`/`1`/`2` *text*
+widgets are already explicitly given. Net effect: the whole target row
+draws nothing on `Results`, in any session, not a wrong render - an honest
+absence (`--menu-page endrace-results`, checked directly,
 `data/scratch/drive-2026-09-27/hd-medals/endrace-results.png`), not a
 second instance of this bug. `EndRace Rewards`'s own XML has no `Hexmedal`
 reference at all, on any copy - nothing to check there.
