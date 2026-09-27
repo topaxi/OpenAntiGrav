@@ -1225,6 +1225,220 @@ likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
 `texture_width`/`texture_height` fields would need to select, not something
 `hex_rect`'s own fix touches.
 
+### That latent bug was real and is fixed - 2026-09-27
+
+**Confirmed by seeding a `records.toml` with earned medals rather than
+waiting for a live podium finish** - `--menu-page cell-select` reads that
+file the same "read, never write" way a live session does
+(`crate::capture::campaign_page::campaign_page`'s own `records` parameter),
+so three synthetic `[[campaign]]` rows (`grid8_2_1` gold, `grid8_4_1`
+silver, `grid8_3_1` bronze - Fury's own first tier, the campaign this build
+defaults to) put a real medal glyph on screen with no race actually run.
+Before this fix, the whole 1024x256 `Hexmedal_HD` atlas - every tier, every
+frame of what turned out to be a many-frame rotation strip - drew stretched
+across each occupied hex and multiplied by a flat swatch on top,
+`before-cell-select.png`'s own smear of overlapping medal renders spilling
+past the hex grid into the detail column's own text. Not committed (game
+content); reproducible with the same `--menu-page cell-select` capture.
+
+**Root cause, precisely**: `hd_cell_draw_list`'s own `Medal_{x}_{y}` arm
+called `tinted_medal_draw(image, placed, medal_argb(medal))`, and neither
+half of that was right for HD. `tinted_medal_draw` (still correct for
+Pulse's own plain-white `hex_filled.mip`) draws at `image.width.unwrap_or(placed.width)`
+- the unauthored widget's own XML gives no size, so this fell back to the
+*placed* size, which for `Hexmedal_HD.mip` is the whole atlas, not a hex.
+And `medal_argb` multiplies a flat tier swatch over whatever draws - correct
+for a plain white hex, actively wrong for an atlas frame that already
+carries the tier's own baked-in colour.
+
+**The fix, and the evidence pinning its numbers**: `oag_ui::campaign::hd::hd_medal_frame`
+crops one 60x60 frame of the correct tier and `hd_tinted_medal_draw` draws it
+at the widget's own authored `image.x`/`image.y` (no tint) - unchanged from
+the pre-fix code's own position, which was always right; only the size and
+crop were wrong. **An earlier draft of this fix centred the crop on
+`Outline_{x}_{y}`'s own hex instead**, the same `hex_rect` idiom `Selector`
+already uses - plausible, but wrong: `CellMode_Definition.xml`'s own `<Item>`
+grouping shows every `Medal_{x}_{y}` sits in its own item, offset a constant
+`(+7, +2)` from `Bg_{x}_{y}`/`Outline_{x}_{y}`'s own item at the same slot,
+checked across all seven columns. That is the disc's own registration
+between the medal layer and the hex layer, authored once, not a per-column
+tune a runtime centring formula could reproduce - the centred draft's own
+`(+34, +2)` overshot the real `(+7, +2)` by 27px in `x` on every column
+(`y` only agreed by coincidence: both `+2`, for unrelated reasons - the
+disc's own constant on one side, half a 4px size delta on the other).
+Reverted in favour of the authored position; see `hd_tinted_medal_draw`'s
+own doc for the seven offset pairs and the visible before/after. The crop
+rect is not a guess - `DATA06.PSARC`'s own
+`Cell Selection` variant authors the identical crop on its own `Target0/1/2
+Medal` widgets, the only place either archive authors a `u`/`v`/`TxtrWidth`/
+`TxtrHeight` sub-rect of this texture at all: `width="60" height="60" u="0"`
+on all three, `v="0"`/`"61"`/`"122"` for `Target0`/`1`/`2`, which this file's
+own `hd_cell_draw_list` already reads as gold/silver/bronze respectively.
+Confidence 90 on the crop rect (a real widget's own authored attributes for
+the identical texture, on the same title's own screen family); confidence
+95 that this was the actual bug (before/after capture, see below).
+Cross-checked independently by decoding `Hexmedal_HD.gtf` directly
+(`oag_texture::gtf::Gtf::parse`) and reading the raster back: the two
+readings only agree once a Y-flip between this project's own raster order
+and the GPU's `V` convention is accounted for (unmeasured which side is
+"backwards" - not worth a second GTF reader to settle when the disc's own
+widget already gives the numbers a caller needs). See
+`crates/ui/src/campaign/hd.rs`'s own `hd_medal_frame` doc for the full
+reconciliation, and `crates/hd/tests/campaign_selection_ground_truth.rs`'s
+`target_medal_widgets_author_the_hexmedal_atlas_crop_hd_medal_frame_reads`
+for the disc-backed pin.
+
+**Which rotation frame is "the" icon**: `u=0` matches `Target0 Medal`'s own
+choice, and two independent RPCS3 captures agree it does not visibly
+animate over the timescale a capture script's own button presses span -
+`data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png` and `01-down.png`
+(a different moment in the same drive script, `grid8_3_2`'s own `TARGET
+200 (NOVICE)` row in both) show pixel-indistinguishable gold/silver/bronze
+icons once cropped to the same window. Most of that directory's other
+frames (`00-default.png`, `10-default.png`, `11-down.png`) are still too
+interlace-corrupted mid-transition captures to use. **Not full
+confidence**: those two comparable frames are themselves low-resolution
+and compression-softened, so a flat, simple hexagon is all either shows -
+neither clearly resolves the swirl/ribbon detail this section's own decoded
+atlas frame carries, so this is consistent with a static `u=0` read but
+does not independently confirm it is *this* atlas rather than some other
+plain medal glyph. Left as "chosen, with two frames' worth of static
+corroboration" rather than fully measured - still the same "one endpoint"
+idiom `SELECTOR_TINT` uses, just less uncertain than before.
+
+**Position correction, same day**: a first draft of this fix centred the
+crop on `Outline_{x}_{y}`'s own hex rect (`hex_rect`, the same idiom
+`Selector` already uses) rather than the widget's own authored position.
+Wrong: `CellMode_Definition.xml`'s own `<Item>` grouping shows every
+`Medal_{x}_{y}` sits in its own item, offset a **constant** `(+7, +2)` from
+`Bg_{x}_{y}`/`Outline_{x}_{y}`'s own item at the same slot, checked across
+all seven columns - the disc's own registration between the medal layer and
+the hex layer, authored once, not a per-column tune. The centred draft's own
+`(+34, +2)` (half the 60x60 crop's own delta from the 128x64 hex) overshot
+the real `(+7, +2)` by 27px in `x` - `y` only agreed by coincidence (both
+`+2`, for unrelated reasons: the disc's constant on one side, half a 4px
+size delta on the other). `hd_tinted_medal_draw` now draws at the widget's
+own `image.x`/`image.y` instead, matching the pre-fix code's own position
+(which was always right - only the crop and tint were wrong).
+
+**A second, real bug found while re-verifying against that same RPCS3
+frame - fixed the same pass**: `EPoints Title` (`hd_cell_draw_list`) read
+`format!("{:02}/{:02} POINTS", grid_summary.gold_medals, grid_summary.cell_count)`,
+confused with `Grid Selection`'s own, different `Points`/`Medals Title`
+field (which genuinely is `gold_medals`/`cell_count`). The disc's own
+`<Values string="00/16 POINTS">` is a dummy placeholder, not the runtime
+format; `02-square.png` (`grid8_3_2` selected, fresh zero-medal profile)
+reads `"0/21 POINTS"` - not zero-padded, and `21` is `grid_summary.max_points`
+(`3 * cell_count`), not `cell_count` itself. Fixed to
+`format!("{}/{} POINTS", grid_summary.points_earned, grid_summary.max_points)`.
+Confidence 90 on the **denominator and the padding** - one live capture on
+the exact grid this thread already had a decoded `grid_08.xml` for
+(`NitroElimElite/Skilled/Novice Target="200"` on `grid8_3_2` matches
+`02-square.png`'s own `"TARGET 200 (NOVICE)"` exactly), giving `21` as
+`max_points` unambiguously and confirming no zero-pad. **Lower on the
+numerator's own field**: the capture is a fresh, zero-medal profile, so
+`points_earned` and `gold_medals` both read `0` there and the frame alone
+cannot tell the two apart - the choice of `points_earned` over `gold_medals`
+rests on the `"POINTS"` label itself (`gold_medals` is a medal *count*, not
+a point total) and on `Grid Selection`'s own sibling field `TotPoints`
+already reading `points_earned`/`max_points` the same way, not on a second
+capture with an earned medal. Not yet cross-checked against a second grid's
+own numbers either way.
+
+**A third finding, real but left open rather than fixed this pass**: that
+same RPCS3 frame's `TARGET 200 (NOVICE)` row shows three lit, shaded medal
+icons beside `1ST`/`2ND`/`3RD` - not the plain grey `Subtitle_Arrow_HD.gtf`
+bullet `hd_cell_draw_list` draws today for `Target0/1/2 Image` (gated on
+`targets_visible`, drawn unmodified via `image_draw`). An earlier read of
+this pass's own attributed those icons to `MedalModelGold`/`Silver`/`Bronze`
+(the 3-D trophy `<ImageModel>` `docs/formats/hd-endrace-screens.md`
+documents for `Results`, already known **not collected** by this build's
+screen parser at all) - wrong, caught by checking directly:
+`CellMode_Definition.xml` (either archive's copy) authors no `ImageModel`/
+`Trophies`/`MedalModel` anywhere on `Cell Selection` at all
+(`grep -n 'ImageModel\|Trophies\|MedalModel'` over both, no match) - so
+these are not 3-D trophies. **What they are instead is inferred, not
+independently confirmed by the pixels themselves**: every `.xml` this
+project holds an extracted copy of was greped for `Hexmedal`
+(`data/scratch/lane-hd-sel/*.xml` and `data/scratch/hd-rewards/*.xml` -
+not a full disc-wide sweep, only the front-end screens this project has
+already pulled a copy of), and the *only* widgets that source it anywhere
+on either archive's `Cell Selection` are `Medal_{x}_{y}` (both archives, no
+crop authored) and `DATA06`'s own `Target0/1/2 Medal` (`width="60"
+height="60" u="0"`, `v="0"/"61"/"122"` - the exact numbers `hd_medal_frame`
+already reads as evidence, see above); nothing else on either screen names
+a medal-shaped 2-D asset at all. The captured icon itself, zoomed, is too
+compression-softened to independently confirm it carries the same
+swirl/ribbon detail this section's own decoded atlas frame does - a plain,
+flat hexagon is all either resolves - so the identification rests on
+process of elimination (not a trophy, nothing else on the disc is a
+plausible source) rather than a pixel match. Taken together with `DATA02`'s
+own `Target0/1/2 Image` (`Subtitle_Arrow_HD.gtf`, no `Hexmedal_HD` reference
+at all), this is first-party evidence the real PS3 renders `Cell Selection`
+off `DATA06`, not `DATA02` - the same open question
+
+**A second screen checked and ruled clean - `EndRace Results`,
+2026-09-27**: `Target0/1/2 Image` on `EndRace Results`
+(`data/scratch/hd-rewards/endrace-0{2..6}.xml`, every archive copy this
+project has extracted) **does** author a real crop of `Hexmedal_HD.mip` -
+`width="60" height="60" U="0"`, `V="0"/"61"/"122"` for `Target0`/`1`/`2`,
+matching `hd_medal_frame`'s own numbers exactly (a second independent
+confirmation, on a second screen - `DATA06`'s `Cell Selection` `Target0/1/2
+Medal` was the first). A fourth widget on the same screen, `Single Target
+Image` (for a mode with one target rather than three), authors the
+identical `60x60`/`u=0`/`v=0` crop too - a third confirming instance of the
+gold row specifically.
+
+But none of it ever draws: **this is not a runtime skip, it is a
+compile-time-fixed list**. `oag_hd::endrace::EXTRA_TEXTURES`
+(`crates/hd/src/endrace.rs`) is the complete set of textures
+`oag_game::endrace::load_hd` extends the front-end's base sheet with for
+this screen, and it names exactly one file - `Title_Arrow_HD.gtf` -
+`Hexmedal_HD` is not in it, on any code path: the same constant builds the
+sheet whether the caller is a live session (`crate::main::session::endrace`,
+which passes `shell.sprites` - the plain front-end sheet, not the
+campaign-extended one `renderer_set_sprites` only ever uploads to the GPU
+transiently while campaign screens are up) or `--menu-page endrace-results`.
+So `hd_results_draw_list`'s own image loop (`crates/ui/src/endrace/hd.rs`)
+finds no sprite for any of these four widgets and skips them (`sprites(&image.src)`
+answers `None`), the same absence the sibling `Target0`/`1`/`2` *text*
+widgets are already explicitly given. Net effect: the whole target row
+draws nothing on `Results`, in any session, not a wrong render - an honest
+absence (`--menu-page endrace-results`, checked directly,
+`data/scratch/drive-2026-09-27/hd-medals/endrace-results.png`), not a
+second instance of this bug. `EndRace Rewards`'s own XML has no `Hexmedal`
+reference at all, on any copy - nothing to check there.
+`docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
+section below already measured for that screen alone, now with a second,
+independent data point pointing the same way for `Cell Selection` too.
+**Not adopted this pass**: switching `hd_cell_draw_list` from `DATA02` to
+`DATA06` is a bigger change than this lane's own scope - `DATA06`'s `Cell
+Selection` also carries an extra `bBg_x_y` layer and a shared `Target
+Title` header replacing `Target0/1/2 Title`, both already flagged and
+deferred in the "Where the screen actually lives" section below, for the
+same "safer, already-verified copy" reasoning. Whoever picks this up next
+has a second confirming data point now, not just the archive-precedence
+question `Campaign Selection` already settled.
+
+**Reproducing any of this without a real podium finish**: `--menu-page
+cell-select` reads `<config dir>/oag/records.toml` the same "read, never
+write" way a live session does. Point `XDG_CONFIG_HOME` at a scratch
+directory with its own `oag/records.toml` (`dirs::config_dir()` honours it)
+rather than editing the real, shared `~/.config/oag/records.toml` - e.g.:
+
+```sh
+mkdir -p /tmp/oag-scratch-cfg/oag
+cat > /tmp/oag-scratch-cfg/oag/records.toml <<'EOF'
+[[campaign]]
+title = "wipeout hd"
+cell = "grid8_2_1"
+best_medal = "gold"
+EOF
+XDG_CONFIG_HOME=/tmp/oag-scratch-cfg cargo run -q -p oag-game -- \
+  data/images/hdfury-ps3-eu-dec.iso --menu-page cell-select --no-audio \
+  --screenshot /tmp/cell-select.png
+```
+
 ## Wipeout HD/Fury: `Campaign Selection`, 2026-09-21
 
 **Modelled and driven, off the disc's own XML.** The 2026-09-21 RPCS3 pass
