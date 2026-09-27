@@ -12,7 +12,7 @@
 //! lookup below is already in pixels, so only this file has to change.
 
 use oag_texture::texture::Texture;
-use oag_texture::{gtf, gxt, ps2_texture};
+use oag_texture::{gnf, gtf, gxt, ps2_texture};
 use oag_vex::vex;
 
 /// One decoded image, from any of the four sources' texture formats.
@@ -52,6 +52,14 @@ impl Image {
     /// reason `.gtf` is tried after the two PSP-era formats: 2048 is the one
     /// title whose textures reach it, and every other title's blob fails it
     /// immediately on the magic check.
+    ///
+    /// **The PS4 branch is [`Self::decode_gnf`]**, tried last of all - Omega
+    /// is the only title whose front end reaches it, and `boot::sprites`'s
+    /// own `gnf_sibling` already decides *whether* to hand a `.gnf` blob
+    /// here at all, reporting a precise reason (a genuinely tiled surface
+    /// this project has no formula for, or `Error::CorruptBlocks`) rather
+    /// than letting a doomed one fall through to this function's generic
+    /// `.mip`-parser error. See `docs/formats/gnf.md`.
     fn decode(blob: &[u8]) -> Result<Self, String> {
         match Texture::parse(blob) {
             Ok(t) => Ok(Self {
@@ -69,6 +77,7 @@ impl Image {
                 }),
                 Err(_) => Self::decode_gtf(blob)
                     .or_else(|| Self::decode_gxt(blob))
+                    .or_else(|| Self::decode_gnf(blob))
                     .ok_or_else(|| psp.to_string()),
             },
         }
@@ -148,6 +157,28 @@ impl Image {
             width: texture.width,
             height: texture.height,
             // BC2 is 16 bytes per 4x4 block, 8 bits per texel.
+            bits_per_pixel: 8,
+            rgba: rgba.into_iter().flatten().collect(),
+        })
+    }
+
+    /// The PS4 branch, or `None` for a blob that is not a `.gnf` this build
+    /// draws.
+    ///
+    /// **Not flipped.** Checked directly against the boot report and
+    /// against `Data/fe/images/presents_finnish.gnf`, `wipeout_omega_logo.gnf`
+    /// and `hex_select.gnf` decoded to PNG (see `docs/formats/gnf.md`'s
+    /// "Tiling" section) - the wordmark, the localized "esittää" text and
+    /// the hexagon-select icon all read the right way up straight out of
+    /// [`gnf::Texture::decode`], unlike [`Self::decode_gtf`]'s PS3 rows.
+    fn decode_gnf(blob: &[u8]) -> Option<Self> {
+        let texture = gnf::Texture::parse(blob).ok()?;
+        let rgba = texture.decode(blob).ok()?;
+        Some(Self {
+            width: u16::try_from(texture.width).ok()?,
+            height: u16::try_from(texture.height).ok()?,
+            // BC7 is 16 bytes per 4x4 block, 8 bits per texel - the only
+            // surface format this build's `gnf::Texture::decode` reaches.
             bits_per_pixel: 8,
             rgba: rgba.into_iter().flatten().collect(),
         })

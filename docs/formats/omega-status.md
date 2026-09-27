@@ -12,10 +12,11 @@ boot chain, `mainmenu_definition.xml`'s `<HorizMenu>`, `CellMode_Definition.xml`
 `Grid Selection`/`Cell Selection` schema. What is genuinely new is the
 *plumbing* - `oag-omega` as a title package, a nine-archive candidate list
 where the patch's own front-end-complete archive has to win a name collision
-with the base package's older, incomplete copies - and two things that are
-**not** carried forward at all: the front-end images are Sony's PS4 `.gnf`
-container, which this project has no reader for, and the circuit files are a
-mix of plain `.vex` and an unread `.final.*` family. Racing is out of scope
+with the base package's older, incomplete copies - and one thing that is
+**not** carried forward at all: the circuit files are a mix of plain `.vex`
+and an unread `.final.*` family. Front-end images are Sony's PS4 `.gnf`
+container, which [`gnf.md`](gnf.md) now decodes for most of the sprite sheet
+(219 of 289 front-end/campaign `.gnf` files draw). Racing is out of scope
 for this crate; see [`omega-frontend.md`](omega-frontend.md) for the frontend
 census this page builds on.
 
@@ -50,17 +51,32 @@ own `SHIP_DIR` constant records it. Sound banks moved too:
 `Data\audio\sound\<name>.bnk`, not HD's `Data\Sound\<name>.bnk` - `shipHD.bnk`,
 `weapons.bnk` and `speech.bnk` are confirmed present under the new path.
 
-**Front-end images are `.gnf`, a PS4 texture container this project cannot
-decode at all.** The XML still names `.gtf` (HD's spelling, never
-re-authored), and the shipped file is `.gnf` under the same stem -
+**Front-end images are `.gnf`, a PS4 texture container `gnf.md` now decodes
+for most of the sprite sheet.** The XML still names `.gtf` (HD's spelling,
+never re-authored), and the shipped file is `.gnf` under the same stem -
 `saveIcons.gnf`, `line.gnf`, `Title_Arrow_HD.gnf` all confirmed present this
-way. `crates/game/src/boot/sprites.rs::gnf_sibling_report` names each one by
-size in the boot report (`image Data\FE\Images\line.gtf: found as
-Data\FE\Images\line.gnf (4352 bytes) - PS4 GNF container, no reader in this
-project, drawing nothing`) rather than reporting a bare "not found" - the
-bytes are never handed to a decoder. `0` of the front end's own sprite sheet
-decodes this lane; the front end draws in `oag_ui`'s fallback 5x7 face and no
-images at all.
+way. `crates/game/src/boot/sprites.rs::gnf_sibling` checks the `.gnf`
+sibling directly: when it decodes, its bytes are pushed into the sheet under
+the widget's own `.gtf`-spelled key (`crates/game/src/sprite.rs::Image::decode_gnf`
+is what actually rasterises them); when it does not, the boot report names
+the exact reason rather than a bare "not found" (`image
+Data\FE\Images\saveIcons.gtf: found as Data\FE\Images\saveIcons.gnf (158976
+bytes) - PS4 GNF container, 342 block(s) in the base level have no valid BC7
+mode bit - refusing rather than decoding around missing bytes, see
+docs/formats/gnf.md, drawing nothing`). On this lane's own two-archive
+extraction, the front end's own **boot-time** image set is small (8 names)
+and mostly either genuinely absent from these archives or corrupt -
+`Title_Arrow_HD.gtf` (32x32) is the one that decodes and draws, visible as
+the nav-legend arrow in `just play omega --menu-page main`'s own screenshot.
+The front end's full sprite sheet fares far better: `gnf_frontend_census`
+(`crates/texture/examples/gnf_frontend_census.rs`) measures 219 of 289
+front-end/campaign `.gnf` files decoding clean, 53 refused for a corrupt
+base level, 17 in a format this module does not decode at all (`Bc4`, font
+surfaces) - see `gnf.md`'s own "Tiling" section for the evidence that closed
+the tiling question and the `CorruptBlocks` refusal's own reasoning. What
+still draws with no images at boot specifically is a data-availability fact
+about this two-archive extraction (most boot-time names are absent or
+corrupt here), not a decoder gap.
 
 **Fonts are unread too, on the same terms.** `Data\FE\Fonts\helv.fnt`/
 `helvb.fnt` (HD's own spellings) do not resolve on Omega under either
@@ -112,14 +128,27 @@ reimplemented menus - **not** the disc's own `Main Menu`/`Grid Selection`/
 all: `crates/game/src/boot/includes.rs`'s `LoadXML`-follow mechanism only runs
 for a title whose `FrontEnd::touch` is `Some` (2048 alone), by design, since
 following every include on HD would pull in art this build never samples.
-`main` draws the RACE CAMPAIGN row on white (no block art - see "What did not
-draw" below); `grid-select` shows `EVENT 01/08` and lays out the twelve grids
-that parsed; `cell-select` draws the header with no cell content (needs a
-grid selected first, not exercised this lane).
+`main` draws the RACE CAMPAIGN row on white, with `Title_Arrow_HD.gtf`'s
+decoded `.gnf` sibling as the nav-legend arrow (no block art - see "What did
+not draw" below); `grid-select` shows `EVENT 01/08` and lays out the twelve
+grids that parsed, with `Subtitle_Arrow_HD.gtf`/`Padlock.gtf` also decoding
+through their own `.gnf` siblings; `cell-select` draws the header with no
+cell content (needs a grid selected first, not exercised this lane).
+Screenshots: `data/scratch/drive-2026-09-27/omega-gnf/omega-{boot,main,grid,cell}.png`.
 
 ### What did not draw, by name
 
-- **Every front-end sprite** - `.gnf`, unread. See above.
+- **Most of the front end's own *boot-time* sprite set** (8 names reached
+  before `Language Selection`) - `saveIcons.gnf` is present but its base
+  level carries 342 corrupt blocks (`Error::CorruptBlocks`, refused by
+  name); `line.gnf` is present but fails the `GNF ` magic check outright
+  (an all-zero PSARC entry, the same population `psarc.md`'s "Block data
+  location" section documents); `vr_headset.gtf` and the four
+  `NewImages/Demo/*.gtf` names have no entry at all on this base+patch
+  extraction, `.gnf` sibling included. Only `Title_Arrow_HD.gtf` (32x32)
+  decodes and draws. The front end's *full* sprite sheet fares much better
+  off this same boot's screens - see `gnf.md`'s own census (219 of 289
+  decode) - this boot-time set is just small and unlucky.
 - **`Data/FE/Images/StudioLiverpool.bik`**, `Studio Logo`'s own reel - not
   found under that name in any of the nine archives, unlike every other
   front-end asset this lane looked for. Whether it is elsewhere under a
@@ -132,12 +161,17 @@ grid selected first, not exercised this lane).
   equivalence between two different binaries. The menu strip and list
   positions (`MenuStrip`/`MenuList`) **are** authored and independently
   re-derived off Omega's own `mainmenu_definition.xml`/`additional_definition.xml`.
-- **The campaign hex textures** (`Hexagon_HD_OUTLINE.gtf` and siblings) -
-  same `.gnf`-not-`.gtf` gap as the front end's own sheet, but
-  `crates/game/src/campaign.rs::load_omega` reads them by the literal HD path
-  rather than through `gnf_sibling_report`, so these report a bare "not
-  found" rather than naming the `.gnf` file. Extending that reporting to the
-  campaign screens' own texture step is next-step work, not attempted here.
+- **Most of the campaign hex textures** (`Hexagon_HD_OUTLINE.gtf`,
+  `Hexagon_HD.gtf`, `Hexlock_HD.gtf`, `Hexagon_HD_THICK_OUT.gtf`,
+  `NonSelectable_Arrow_HD.gtf`) - `crates/game/src/campaign.rs::load_omega`
+  now falls back to `crate::boot::sprites::gnf_sibling` the same way the
+  front end's own sheet does, but none of these five has a `.gnf` sibling
+  either on this base+patch extraction - genuinely absent content, not an
+  unread name. `Hexmedal_HD.gnf` **is** present (1,402,112 bytes) but fails
+  the `GNF ` magic check, the same all-zero population as `line.gnf` above.
+  `Subtitle_Arrow_HD.gtf` and `Padlock.gtf` (`OTHER_TEXTURES`) both decode
+  through their `.gnf` siblings and draw - see the `grid-select`/
+  `cell-select` screenshots.
 
 ## Racing: out of scope, and why nothing crashes
 

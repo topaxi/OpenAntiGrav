@@ -144,19 +144,21 @@ pub(super) fn load(
     for src in &srcs {
         match read_front_end_first(archives, src) {
             Ok(blob) => blobs.push((src.clone(), blob)),
-            Err(e) => report.push(match gnf_sibling_report(archives, src) {
-                // **Reporting only - the bytes are never decoded or handed to
-                // `Sheet::build`.** Wipeout: Omega Collection's front-end XML
-                // still spells its images `.gtf`, the way `vita_texture_name`
-                // above already documents for 2048's `.gxt`, but the shipped
-                // file is Sony's PS4 `.gnf` container - a format this
-                // project has no reader for (`docs/formats/omega-frontend.md`).
-                // Naming the honest absence by its real name, rather than
-                // the `.gtf` spelling that was never going to resolve, is
-                // what `CLAUDE.md`'s "draw nothing and say so" asks for.
-                Some(found) => found,
-                None => format!("image {src}: {e}"),
-            }),
+            // Wipeout: Omega Collection's front-end XML still spells its
+            // images `.gtf`, the way `vita_texture_name` above already
+            // documents for 2048's `.gxt`, but the shipped file is Sony's
+            // PS4 `.gnf` container (`docs/formats/gnf.md`) - checked and,
+            // when it decodes, pushed under `src`'s own `.gtf`-spelled key
+            // so every downstream lookup keeps working unchanged; when it
+            // does not, a report line names the real file and the exact
+            // reason rather than the `.gtf` spelling that was never going
+            // to resolve, what `CLAUDE.md`'s "draw nothing and say so" asks
+            // for.
+            Err(e) => match gnf_sibling(archives, src) {
+                Some(Ok(blob)) => blobs.push((src.clone(), blob)),
+                Some(Err(reason)) => report.push(reason),
+                None => report.push(format!("image {src}: {e}")),
+            },
         }
     }
 
@@ -230,18 +232,38 @@ fn vita_texture_name(name: &str) -> Option<String> {
 }
 
 /// If `name`'s `.gtf` spelling failed to resolve but a `.gnf` sibling is
-/// present in the served archives, a report line naming it and its size -
-/// **never its bytes**, which are not read into anything this build decodes.
-/// `None` when there is no `.gnf` sibling either, so the caller falls back to
-/// the ordinary "not found" message.
-fn gnf_sibling_report(archives: &mut oag_assets::Archives, name: &str) -> Option<String> {
+/// present in the served archives, decodes it (`docs/formats/gnf.md`) and
+/// returns `Some(Ok(bytes))` - still the raw `.gnf` bytes, not pixels, so
+/// [`crate::sprite::Image::decode`]'s own `.gnf` branch is what actually
+/// draws them, the same one `Sheet::build` already runs every other image
+/// through - or `Some(Err(reason))` naming the file, its size and the exact
+/// reason it draws nothing instead (a genuinely tiled surface this project
+/// has no formula for, or [`oag_texture::gnf::Error::CorruptBlocks`] - the
+/// PSARC-level missing-content population `docs/formats/psarc.md`'s "Block
+/// data location" section documents, landing on this specific file).
+/// `None` when there is no `.gnf` sibling either, so the caller falls back
+/// to the ordinary "not found" message.
+pub(crate) fn gnf_sibling(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> Option<Result<Vec<u8>, String>> {
     let stem = name
         .strip_suffix(".gtf")
         .or_else(|| name.strip_suffix(".GTF"))?;
     let gnf = format!("{stem}.gnf");
     let bytes = archives.read_name(&gnf).ok()?;
-    Some(format!(
-        "image {name}: found as {gnf} ({} bytes) - PS4 GNF container, no reader in this project, drawing nothing",
-        bytes.len()
-    ))
+    let refuse = |detail: String| {
+        format!(
+            "image {name}: found as {gnf} ({} bytes) - PS4 GNF container, {detail}, drawing nothing",
+            bytes.len()
+        )
+    };
+    let texture = match oag_texture::gnf::Texture::parse(&bytes) {
+        Ok(t) => t,
+        Err(e) => return Some(Err(refuse(e.to_string()))),
+    };
+    match texture.decode(&bytes) {
+        Ok(_) => Some(Ok(bytes)),
+        Err(e) => Some(Err(refuse(e.to_string()))),
+    }
 }

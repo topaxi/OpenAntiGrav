@@ -1,13 +1,21 @@
 # GNF: the PS4's native texture container
 
 **Confidence: 80 for the container and descriptor, 75 for the BC7 block
-decoder, unscored for tiling (unimplemented).** A genuine Sony SDK format
-("Gnm Format") with no first-party spec this project holds, so the layout is
-triangulated from two independent, non-affiliated open-source implementations
-and one public AMD hardware reference rather than read off an SDK header. See
+decoder, 80 for the micro-tile (`Thin_1DThin`) address formula.** A genuine
+Sony SDK format ("Gnm Format") with no first-party spec this project holds,
+so the layout is triangulated from two independent, non-affiliated
+open-source implementations and one public AMD hardware reference rather
+than read off an SDK header. See
 [`psarc.md`](psarc.md#the-check-the-confidence-rests-on) for why this project
 scores a publicly-documented-but-not-recovered-here container in the 80s-90s
-rather than treating "publicly documented" as a free pass to 100.
+rather than treating "publicly documented" as a free pass to 100. The
+address formula's own 80 is a whole-image MAD of 1.66 against an HD `.gtf`
+oracle on a real, multi-tile-row front-end image (`hex_select.gnf`, see
+"Tiling" below) - single digits is the "correct match" band
+[`gxt.md`](gxt.md)'s own method uses - not higher because the corpus that
+would raise it (a wider spread of oracle-paired sizes, decoded and diffed in
+a committed ground-truth test rather than a scratch example run by hand) has
+not been built.
 
 Applies to `.gnf` entries inside `omega-ps4-eu`'s `dataNN.psarc` archives -
 see [`psarc.md`'s](psarc.md#the-ps4-omega-collection-family) own PS4 section
@@ -150,13 +158,17 @@ scale, one step up for being a public spec rather than a decompilation: the
 implementation is internally consistent and spec-exact, not yet externally
 corroborated.
 
-## Tiling: why `Thin_1DThin` is not untiled
+## Tiling: `Thin_1DThin` is untiled, guarded by a corrupt-block refusal
 
 **Every one of the 1,407 valid `.gnf` entries this census found declares
-`TileMode(0x0d)`.** `Texture::decode` refuses it by name
-(`Error::Tiled { tile_mode: 13 }`) rather than guessing at a picture - the
-same rule this project applied when the header/descriptor work first landed,
-now backed by a specific, measured reason it still applies.
+`TileMode(0x0d)`.** `Texture::decode` now untiles it - see "The micro-tile
+formula" below for the address formula and "The corruption is not tiling:
+it is PSARC-level missing content" for what closed the periodic-corruption
+question this section used to leave open. A tile mode with no address
+formula here at all still refuses by name (`Error::Tiled { tile_mode }`),
+the same rule this project applied when the header/descriptor work first
+landed - just no real `.gnf` this project has sampled reaches it any more,
+since every one declares 13.
 
 ### The array mode was misread by one index - and that changed everything
 
@@ -178,7 +190,7 @@ Index 13 - what every real `.gnf` this project has found declares - is
 `Thin_2DThin`. This is why the macro-tile search scored at chance: it was
 searching the right hardware family for the wrong array mode entirely.
 
-### The micro-tile formula: strong partial confirmation, not yet a full match
+### The micro-tile formula: strong partial confirmation on these two pairs
 
 `EgBasedLib::ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's MIT `addrlib`,
 `egbaddrlib.cpp`) is the formula for a 1D-tiled surface - no banks, no
@@ -210,27 +222,41 @@ MAD under 1 across a full 1,024-texel tile is not achievable by a wrong
 decode landing on the right answer by chance - this is real, structural
 confirmation of the core formula, not a coincidence.
 
-### The unexplained part: a precise, periodic corruption - confirmed to be tiling, not content
+### The corruption is not tiling: it is PSARC-level missing content
 
-The 1024x1024 pair's break does **not** land on a tile-row boundary (its
-row is 32 tiles wide; the break is at tile 14), so it is a different
-symptom from the 128x64 pair's break (which lands exactly at its own
-4-tile row boundary). Per-tile-row mean brightness across the whole
-1024x1024 image (`data/scratch/drive-2026-09-21/gnf/harimau-diag/`) shows
-a precise, sustained **period-2 tile-row alternation**: rows 0, 2, 4, ...,
-30 average brightness 7-16 (real content), rows 1, 3, 5, ..., 31 average
-0.2-2.6 (near-black - either all-zero bytes, or bytes this project's own
-`bc7()` happens to decode near-black).
+The period-2 tile-row banding this section used to report as unexplained is
+now explained, by a check the earlier passes skipped: **whether the "bad"
+bytes are genuinely-encoded BC7 at all**, independent of what order they are
+read in. A BC7 block's mode field is unary over its first byte (`N` zero
+bits then a one bit, modes 0-7) - a byte of `0x00` has no such bit and is
+the spec's own reserved pattern, never emitted by a real encoder. Counting
+that pattern per on-disk 32-tile row of `Harimau_c1_Livery.gnf`
+(`crates/texture/examples/gnf_tile_row_byte_check.rs`) finds every odd row
+(1, 3, 5, ..., 31) at an identical 1840/2048 blocks (89.8%) invalid, every
+single time - too precise to be organic image content, and dense enough to
+answer the question outright: **this is missing data, not a wrong tile
+order.** The same file's own PSARC block table
+(`gnf_tile_row_byte_check.rs`'s own block-table dump) shows the corruption
+boundary is a PSARC-block property, not a tile-row one: the archive's own
+64 KiB blocks (`psarc.md`'s `header.block_size`) are each exactly two
+32 KiB tile-rows wide for this file, and the first invalid byte inside
+each of blocks 0-3 falls a varying ~10-15 KiB in (15104, 11952, 10208,
+13856), which is a property of *that PSARC block's own stored bytes*, not
+of the address formula reading them in the wrong order. This is the same
+"garbage"/"all-zero" population [`psarc.md`'s](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+own "Block data location" section documents family-wide - landing on this
+specific ship-livery texture's own copy, not a defect in the tiling math.
 
-**Ruled out by directly comparing the decoded and oracle images
-side by side** (the content-vs-tiling test this page's own method
-elsewhere and `gxt.md`'s precedent both call for): the pattern is
-horizontal banding with a sharp, regular period, not a spatially coherent
-shape - a genuine content difference (a remaster redrawing this ship's
-sponsor decal) would show as a logo-shaped region, not an every-other-row
-stripe. This is a tiling artifact.
+The 128x64 `Holographic_02_GLOW.gnf` pair's own break (row 1, MAD 24.6 then
+~78) is the same signature on direct byte inspection: its row 1 (file bytes
+4352-8448) is 211/256 blocks (82.4%) invalid-mode, 85.7% zero bytes outright
+- dense data loss, not a scrambled read.
 
-**Hypotheses tested and ruled out, all measured**:
+**None of the tile-order/shift/deinterleave hypotheses below were ever going
+to explain this**, because the premise they shared - that every declared
+pixel byte is real, encoded content whose correct spatial slot has not been
+found yet - was the wrong premise for these two specific oracle files. Kept
+as the historical record of a real, measured negative:
 
 | Hypothesis | Result |
 | --- | --- |
@@ -245,20 +271,43 @@ stripe. This is a tiling artifact.
 | `is_pow2_pad` | `false` |
 | Stride by the descriptor's own `pitch` rather than raw width | Already what the code does - `pitch == width` exactly for both multi-tile pairs tested, so this made no difference for either |
 
-None explain the period-2 pattern. It remains open.
+### The formula validated on clean, multi-tile-row data instead
 
-### What would close this
+With the two original oracle pairs both explained as partially-missing
+source data, the formula was checked on files that are *not* missing
+content: real front-end sprites, decoded through `Texture::decode` (the
+shipped path, not a scratch probe) and read as PNG.
+`Data/fe/images/wipeout_omega_logo.gnf` (894x265, 9 tile rows) decodes to
+the legible "WIPEOUT" wordmark and "Omega Collection" subtitle;
+`Data/fe/images/presents_finnish.gnf` (1024x64) decodes to the legible
+Finnish word "esittää" ("presents") - both multi-tile-row, both spatially
+coherent, both matching what the filename says they are. Numerically,
+`Data/fe/images/hex_select.gnf` (128x128, 2 tile rows) against its HD
+`.gtf` twin scores **whole-image MAD 1.66** - single digits, the "correct
+match" band [`gxt.md`](gxt.md)'s own method uses, on a multi-tile-row image
+with no missing content. This is what the "Confidence" line at the top of
+this page counts.
 
-A real PS4, an accurate GCN-generation emulator, or a leaked/documented
-`libSceGnm` source for `ComputeSurfaceAddrFromCoordMicroTiled`'s exact
-tile-row indexing on this hardware, to render a known texture and compare
-directly - the way `docs/formats/hd-frontend.md`'s own boot chain was
-settled by three cold boots on RPCS3. Absent that, the next empirical step
-is sweeping the period-2 pattern's phase/parity against more oracle pairs
-of varying tile-grid width and height (odd vs. even `tiles_x`/`tiles_y`) to
-see whether the alternation is keyed to a coordinate parity this project's
-own `Texture` struct already decodes (row parity, `pitch` parity, mip
-count parity) rather than to an unrecovered hardware constant.
+### The refusal this project ships instead
+
+Because a `.gnf`'s own byte range can genuinely be missing PSARC-level
+content, `Texture::decode` scans the base level's own block grid for this
+same invalid-mode-byte signature before decoding it, and refuses the whole
+surface with `Error::CorruptBlocks { count }` the moment it finds one,
+rather than decoding around missing bytes into a picture with silent black
+patches standing in for them - this project's rule against inventing what
+the assets do not author, applied to a decode that only *sometimes* fails
+rather than one that always does. Measured on the front end's own sprite
+sheet (`crates/texture/examples/gnf_frontend_census.rs`, using
+`Texture::decode` directly): **219 draw, 53 refused for a corrupt base
+level, 17 unsupported format** (`Bc4`/other font surfaces this module does
+not decode at all) out of 289 `.gnf` files the front end and campaign
+screens reference. The base-level-only scan matters: a naive whole-file
+byte scan over-counts by walking every smaller mip level's own
+tile-alignment padding too (`Data/fe/images/wipeout_omega_logo.gnf`'s own
+894x265 base level is fully clean; its whole declared range is not, purely
+from the 5 padding block-rows `ceil(67/8)*8 - 67 = 5` needed to round its
+67 real block-rows up to a whole number of 8-row tiles).
 
 ### Superseded: the macro-tile search (kept as evidence of a real negative, not the live theory)
 
@@ -307,20 +356,32 @@ bank/pipe reduction.
 ## Implemented where
 
 `oag_texture::gnf`, since 2026-09-16; `Texture::decode` and the BC7 block
-decoder since 2026-09-21. `Texture::parse` reads the header, contents and
+decoder since 2026-09-21; the micro-tile untiler and the `CorruptBlocks`
+refusal since 2026-09-27. `Texture::parse` reads the header, contents and
 first descriptor; `Texture::decode` untiles and decodes a **linear** surface
-only, returning `Error::Tiled` for every real sample (see above).
+unconditionally, and a `Thin_1DThin` (`TileMode(13)`) BC7 surface whenever
+its base level carries no block with an invalid mode byte - see "Tiling"
+above for the evidence and the refusal's own reasoning.
 `crates/texture/tests/omega_gnf_ground_truth.rs` (`#[ignore]`d, needs
 `data/extracted/ps4/omega-eu/uroot/`) parses every real `.gnf` across all
 five base archives without a panic, and pins the worked example above to its
 exact decoded fields. `crates/texture/tests/omega_gnf_pixels_ground_truth.rs`
 (`#[ignore]`d, needs the patch archives too) runs `decode` over the whole
 corpus - all nine archives, `data08`'s `Data/fe/` subtree swept in full -
-asserting it never panics and that every `Error::Tiled` names the exact
-`tile_mode` the descriptor declares. `crates/texture/src/gnf/search_tests.rs`
-(`#[ignore]`d) holds both tiling-configuration searches this page's "Tiling"
-section reports: the superseded macro-tile one, and the micro-tile one with
-its still-open periodic-corruption diagnostics.
+asserting it never panics, that `data08`'s own `Data/fe/` subtree decodes at
+least one real image, and that a still-refused `Error::Tiled` names the
+exact `tile_mode` the descriptor declares.
+`crates/texture/src/gnf/micro_tile_tests.rs` and `search_tests.rs`
+(`#[ignore]`d) hold the tiling-configuration searches this page's "Tiling"
+section reports: the superseded macro-tile one, and the micro-tile probe
+whose diagnostics `gnf_tile_row_byte_check.rs` (a plain example, public-API
+only) extended to close the periodic-corruption question.
+`crates/texture/examples/gnf_frontend_census.rs` reports the front end's own
+draws/refused/unsupported split directly off `Texture::decode`, and
+`crates/game/src/sprite.rs::Image::decode_gnf` plus
+`crates/game/src/boot/sprites.rs::gnf_sibling` (reused by
+`crates/game/src/campaign.rs::load_omega`) are what actually wire a decoded
+`.gnf` into the running front end - see `docs/formats/omega-status.md`.
 
 ## See also
 

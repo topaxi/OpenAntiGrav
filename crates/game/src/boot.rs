@@ -1517,7 +1517,7 @@ mod progress;
 mod provenance;
 pub(crate) mod roster;
 mod screens;
-mod sprites;
+pub(crate) mod sprites;
 mod steps;
 pub(crate) mod xml;
 

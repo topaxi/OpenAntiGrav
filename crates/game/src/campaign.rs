@@ -521,14 +521,14 @@ fn hd_selection_screens(
 /// declaring Omega's own copies: Omega's front end is HD's `PI001` plugin
 /// carried forward (`docs/formats/omega-frontend.md`), so these are the same
 /// widget/archive-path pairs, not a new measurement. **Every one of them
-/// will report "not found" and draw nothing** - the shipped files are `.gnf`
-/// now, not `.gtf`, and this function reads by exact name the way
-/// `oag_hd::campaign`'s own texture step always has; see
-/// `crate::boot::sprites::gnf_sibling_report` for the front end's own sheet,
-/// which does name the `.gnf` sibling. Extending that same naming to this
-/// screen's own textures is future work, not attempted here - the hex grid
-/// still lays out and draws its cells with no texture rather than failing to
-/// load at all.
+/// reads by the literal HD `.gtf` path first and falls back to
+/// [`crate::boot::sprites::gnf_sibling`]** the same way the front end's own
+/// sheet does (`crate::boot::sprites::load`) - the shipped files are `.gnf`
+/// now, not `.gtf`, so the first read always misses on this title and the
+/// fallback is what actually decodes and names them. A texture whose `.gnf`
+/// will not decode either (`docs/formats/gnf.md`'s "Tiling" section) still
+/// leaves the widget it was for undrawn rather than failing the whole screen
+/// load.
 fn load_omega(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
@@ -575,15 +575,23 @@ fn load_omega(
     for (widget_src, archive_path) in oag_hd::campaign::HEX_TEXTURES {
         match archives.read_name(archive_path) {
             Ok(blob) => blobs.push((widget_src.to_string(), blob)),
-            Err(error) => {
-                log::warn!("{archive_path}: {error:#} - the widget it is for draws nothing");
-            }
+            Err(error) => match crate::boot::sprites::gnf_sibling(archives, archive_path) {
+                Some(Ok(blob)) => blobs.push((widget_src.to_string(), blob)),
+                Some(Err(reason)) => log::warn!("campaign {reason}"),
+                None => {
+                    log::warn!("{archive_path}: {error:#} - the widget it is for draws nothing");
+                }
+            },
         }
     }
     for src in oag_hd::campaign::OTHER_TEXTURES {
         match archives.read_name(src) {
             Ok(blob) => blobs.push((src.to_string(), blob)),
-            Err(error) => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
+            Err(error) => match crate::boot::sprites::gnf_sibling(archives, src) {
+                Some(Ok(blob)) => blobs.push((src.to_string(), blob)),
+                Some(Err(reason)) => log::warn!("campaign {reason}"),
+                None => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
+            },
         }
     }
     let mut report = Vec::new();

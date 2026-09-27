@@ -81,38 +81,39 @@
 //!
 //! # What this does not do
 //!
-//! **[`Texture::decode`] untiles a linear surface only** -
-//! `SurfaceFormat::Bc1`/`Bc3`/`Bc7` through the same block math
-//! [`crate::bcn`] already decodes for PS3/Vita, when the data is laid out
-//! row-major. Every real `.gnf` this project has sampled declares
-//! `TileMode(13)` (`Thin_1DThin`, micro-tiled only - see the correction
-//! above), never a linear one, so `decode` returns [`Error::Tiled`] for the
-//! whole real corpus today.
+//! **[`Texture::decode`] untiles a linear surface unconditionally, and a
+//! micro-tiled (`Thin_1DThin`) BC7 surface only when its base level carries
+//! no corrupt block.** AMD's `ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's
+//! MIT `addrlib`, `egbaddrlib.cpp`) is a simple row-major-tiles formula with
+//! no banks, pipes or row-size unknowns - unlike the macro-tiled formula the
+//! earlier, disproven pass reached for. Checked against real oracle-paired
+//! textures (`crates/texture/src/gnf/micro_tile_tests.rs`, `#[ignore]`d): a
+//! single-micro-tile 32x32 image decodes **exactly** (MAD 0.00), and on
+//! larger multi-tile images the first several on-disk tiles decode
+//! near-perfectly before a region that used to read as an unexplained
+//! periodic corruption. **That region is now explained**: a byte-level scan
+//! of the same ship-livery oracle pair
+//! (`crates/texture/examples/gnf_tile_row_byte_check.rs`) finds it dense
+//! with BC7 blocks whose byte 0 carries no valid mode bit - a pattern a real
+//! encoder never produces, and the same PSARC-level missing/garbage-content
+//! population `docs/formats/psarc.md`'s "Block data location" section
+//! already documents family-wide, landing on this specific ship texture's
+//! own copy rather than on a wrong tile order. See `docs/formats/gnf.md`'s
+//! "Tiling" section for the full evidence trail.
 //!
-//! **Micro-tile addressing is partially, not fully, measured.** AMD's
-//! `ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's MIT `addrlib`,
-//! `egbaddrlib.cpp`) is a simple row-major-tiles formula with no banks,
-//! pipes or row-size unknowns - unlike the macro-tiled formula the earlier,
-//! disproven pass reached for. Implemented as a probe
-//! (`crates/texture/src/gnf/search_tests.rs`, `#[ignore]`d) and checked
-//! against real oracle-paired textures: a single-micro-tile 32x32 image
-//! decodes **exactly** (MAD 0.00), and on larger multi-tile images the
-//! first several on-disk tiles decode near-perfectly under plain row-major
-//! order before an unexplained, precisely periodic corruption sets in (a
-//! clean 2-tile-row alternation on a 1024x1024 sample, confirmed by a
-//! content-diff visualization to be tiling noise and not a remaster content
-//! change - see `docs/formats/gnf.md`'s "Tiling" section for the full
-//! diagnostic trail). That periodicity has not been explained by any tile
-//! order (row-major, column-major, Morton), byte-level shift, stride
-//! halving, or even/odd tile-row deinterleaving tried so far - so shipping
-//! this formula as `decode`'s tiled path would be exactly the "stand-in
-//! that reads as legible" this project's own rule against inventing what
-//! the assets already author warns about, even though the early evidence is
-//! strong. A future pass that finds (or proves) a **linear**
-//! (`Display_LinearAligned`/`Display_LinearGeneral`) `.gnf` could decode
-//! that one losslessly through [`crate::bcn`] directly today; none has been
-//! found among the entries `docs/formats/psarc.md` classifies "valid" so
-//! far.
+//! So [`Texture::decode`] ships the row-major micro-tile formula for real
+//! use, guarded rather than open-ended: it scans the base level's own block
+//! grid for that same invalid-mode signature first, and refuses the whole
+//! surface with [`Error::CorruptBlocks`] the moment it finds one, rather
+//! than decoding around missing bytes into a picture with silent garbage
+//! patches. A census of the front end's own sprite sheet
+//! (`crates/texture/examples/gnf_frontend_census.rs`) finds a wide spread -
+//! many single-mip images clean at 0%, others (mostly multi-mip ones, where
+//! a per-level tile-alignment pad is expected past the base level this
+//! module never reads) well into double digits - so this guard is doing
+//! real, title-wide work, not gating on one bad file. `SurfaceFormat::Bc1`/
+//! `Bc3` still decode only through the linear path; no real `.gnf` this
+//! project has sampled ships either format under `TileMode(13)`.
 
 use std::fmt;
 
@@ -141,8 +142,9 @@ pub enum Error {
         /// The four bytes found.
         found: [u8; 4],
     },
-    /// A genuinely tiled surface - [`Texture::decode`] only untiles a
-    /// linear one. See this module's own "What this does not do".
+    /// A tiled surface [`Texture::decode`] has no address formula for at
+    /// all - every [`TileMode`] except a linear one and `Thin_1DThin`
+    /// (0x0d). See this module's own "What this does not do".
     Tiled {
         /// The declared [`TileMode`] index.
         tile_mode: u8,
@@ -159,6 +161,16 @@ pub enum Error {
         /// Bytes supplied.
         got: usize,
     },
+    /// The base level's own micro-tile grid has at least one BC7 block
+    /// whose byte 0 carries no valid mode bit - the same PSARC-level
+    /// missing/garbage-content population `docs/formats/psarc.md`'s "Block
+    /// data location" section documents family-wide, not a wrong tile
+    /// order. [`Texture::decode`] refuses the whole surface rather than
+    /// decoding around it - see this module's own "What this does not do".
+    CorruptBlocks {
+        /// Blocks in the base level's own grid with no valid mode bit.
+        count: usize,
+    },
 }
 
 impl fmt::Display for Error {
@@ -168,7 +180,7 @@ impl fmt::Display for Error {
             Self::BadMagic { found } => write!(f, "not a GNF: magic {found:02x?}"),
             Self::Tiled { tile_mode } => write!(
                 f,
-                "TileMode({tile_mode}) is genuinely tiled - decode() only untiles a linear surface, see docs/formats/gnf.md"
+                "TileMode({tile_mode}) has no address formula here - decode() only untiles a linear surface or Thin_1DThin (13), see docs/formats/gnf.md"
             ),
             Self::UnsupportedFormat { format } => {
                 write!(f, "no block decoder for {format:?}")
@@ -176,6 +188,10 @@ impl fmt::Display for Error {
             Self::DataOutOfBounds { need, got } => {
                 write!(f, "pixel data needs {need} bytes, got {got}")
             }
+            Self::CorruptBlocks { count } => write!(
+                f,
+                "{count} block(s) in the base level have no valid BC7 mode bit - refusing rather than decoding around missing bytes, see docs/formats/gnf.md"
+            ),
         }
     }
 }
@@ -278,6 +294,10 @@ impl TileMode {
     /// `Display_LinearGeneral` - the same, at the SDK's own "hugely
     /// inefficient, do not use" mode.
     const LINEAR_GENERAL: u8 = 0x1f;
+    /// `Thin_1DThin` - micro-tiled only, no banks/pipes. Every real `.gnf`
+    /// this project has sampled declares this one; see `decode`'s own doc
+    /// comment and `docs/formats/gnf.md`'s "Tiling" section.
+    pub(crate) const THIN_1D_THIN: u8 = 0x0d;
 
     /// Whether this mode is one of the two linear (untiled) ones.
     #[must_use]
