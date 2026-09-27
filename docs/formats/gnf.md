@@ -271,6 +271,100 @@ as the historical record of a real, measured negative:
 | `is_pow2_pad` | `false` |
 | Stride by the descriptor's own `pitch` rather than raw width | Already what the code does - `pitch == width` exactly for both multi-tile pairs tested, so this made no difference for either |
 
+### Root cause, confidence 90: a short `Stream.Read` in the extraction tool, not this project's reader
+
+`lane/omega-psarc`, 2026-09-27, closes the "missing data" finding above with
+*why* it is missing. **This project's own PSARC/GNF readers are not the
+cause** - `docs/formats/psarc.md`'s own "Block data location" section
+already establishes the block table is self-consistent and the corruption
+is not file-position-dependent; this section adds the mechanism.
+
+The discriminating step: `dd`-ing `Harimau_c1_Livery.gnf`'s bytes directly
+out of the already-extracted `data03.psarc` on disk, entirely outside this
+project's code, reproduces the identical "small real prefix, then zero"
+pattern `gnf_tile_row_byte_check.rs` measured - so the corruption is baked
+into the extracted `.psarc` file's own bytes, not introduced by
+`Directory::read_entry`'s block-copy loop (a straightforward sequential
+`extend_from_slice` with no stride or width bug, confirmed by reading the
+80 lines of `crates/formats/src/psarc.rs` that do it). The good/bad boundary
+recurs with a period of **exactly 65,536 bytes** across the whole entry -
+`docs/reverse-engineering/source-images.md`'s own extraction command names
+the tool: `LibOrbisPkg`'s `PkgTool.Core pkg_extract` (`maxton/LibOrbisPkg`,
+the exact revision this project's own repro instructions clone).
+
+That tool's `PFS/PFSCReader.cs::ReadSector` decompresses each PFSC sector
+(also 64 KiB on this title, matching the measured period) like this:
+
+```csharp
+// slow case: compressed sector
+var sectorBuf = new byte[(int)sectorSize - 2];
+_accessor.Read(sectorOffset + 2, sectorBuf, 0, (int)sectorSize - 2);
+using (var bufStream = new MemoryStream(sectorBuf))
+using (var ds = new DeflateStream(bufStream, CompressionMode.Decompress))
+{
+  ds.Read(output, 0, hdr.BlockSz);
+}
+```
+
+`Stream.Read` (and `DeflateStream.Read` specifically) is never guaranteed to
+fill the requested count in one call even when more data is available - the
+.NET docs say so explicitly, and callers are required to loop. This call
+does not: it reads once, discards the return value, and leaves whatever was
+already in `output` (freshly allocated, hence zero) for every byte the one
+call did not produce. A genuine compressed sector therefore decodes
+correctly for however many bytes that single `Read` happened to return, and
+zero for the rest - exactly the measured shape, and it also explains the
+**other**, previously-separate "all-zero" bucket in `psarc.md`'s census: the
+sibling branch two lines up, `else { Array.Clear(output, 0, hdr.BlockSz); }`
+for a sector whose declared size exceeds `BlockSz2`, zeroes the whole sector
+outright. Both buckets are the same function, two branches, one
+never-looped `Read`.
+
+**Verified by patching and re-running the actual tool against the real
+`.pkg`, not just by reading its source:**
+
+1. A minimal program linking `LibOrbisPkg.Core` (the same library
+   `pkg_extract` uses) opened `data/images/omega-ps4-eu.pkg`, walked to
+   `Harimau_c1_Livery.gnf`'s exact byte range inside `uroot/data03.psarc`
+   through the library's own `PfsReader`/`PFSCReader`, and read it directly -
+   no full extraction needed, under a second per run.
+2. **Unpatched, two independent runs of the identical read against the
+   identical bytes returned two different truncation lengths** (14,818 and
+   ~14,832 bytes of identical real content before the zero tail) - the
+   signature of a short read whose exact count depends on the stream's
+   internal buffering state, not of deterministic content. Deterministic
+   corruption (a wrong tile order, a bad offset) cannot do this; a
+   non-looped `Read` against a buffered stream can and does.
+3. **Patched** (`ReadSector`'s compressed branch loops `ds.Read` until
+   `hdr.BlockSz` bytes are collected or the stream is exhausted, ~9 lines),
+   the same read returns all 65,536 bytes of every sector with **zero**
+   invalid-mode BC7 blocks across the 4,096 sampled, and this project's own,
+   completely unmodified `oag_texture::gnf::Texture::decode` turns the
+   result into a fully legible ship-livery texture -
+   `data/scratch/drive-2026-09-27/omega-psarc/harimau_c1_livery4_patched.gnf.png`.
+   The file as currently shipped in `data/extracted/ps4/omega-eu` still
+   correctly raises `Error::CorruptBlocks { count: 49899 }` on the same
+   entry - the refusal this project's reader is supposed to make on
+   genuinely missing content, working exactly as designed against a
+   genuinely broken extraction.
+
+Confidence 90, not higher: read from the exact pinned tool's own source
+(not decompiled or guessed) and confirmed by a controlled before/after
+intervention against the real archive, but short of this project's own
+"Established" band, which is reserved for this project's *own* engine
+claims verified against a runtime trace. See
+`data/scratch/drive-2026-09-27/omega-psarc.md` for the full transcript,
+including the exact patch diff and repro commands.
+
+**Not fixable in this project's own code** - the defect is upstream, in a
+third-party extraction tool this project depends on but does not vendor.
+The fix is the tool-side patch above, applied to a `LibOrbisPkg` checkout
+before running the two `pkg_extract` commands
+[`source-images.md`](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
+already documents; see that page for the exact commands and the full
+before/after census once a corrected extraction lands in
+`data/extracted/ps4/`.
+
 ### The formula validated on clean, multi-tile-row data instead
 
 With the two original oracle pairs both explained as partially-missing

@@ -245,6 +245,27 @@ finds all 10 segments already unencrypted for this build, and
 build-ghidra-orbis`) is the loader that reads it from there, no separate
 decrypt tool needed the way Vita's is.
 
+**Correction, 2026-09-27: `pkg_extract` as built above reproducibly drops
+content, and both extraction commands on this page need a one-line patch to
+this tool before they are re-run.** `LibOrbisPkg`'s `PFS/PFSCReader.cs::ReadSector`
+decompresses each 64 KiB PFSC sector with a single, non-looped
+`DeflateStream.Read(output, 0, hdr.BlockSz)` call and discards how many
+bytes it actually returned - `Stream.Read` is never guaranteed to fill the
+requested count in one call, and here it routinely does not, leaving the
+untouched remainder of the sector as zero. This is the root cause of the
+"garbage"/"all-zero" split
+[`psarc.md`](../formats/psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+documents on every archive extracted this way, confirmed by patching
+`ReadSector` to loop the `Read` call to completion, rebuilding, and
+re-reading the same bytes straight out of `omega-ps4-eu.pkg` - full detail
+and the exact patch in
+[`gnf.md`'s "Root cause"](../formats/gnf.md#root-cause-confidence-90-a-short-streamread-in-the-extraction-tool-not-this-projects-reader).
+Apply that patch to the `LibOrbisPkg` checkout before the `dotnet build` step
+below and both `pkg_extract` invocations on this page recover real content
+that the unpatched tool silently zeroed - re-extraction with the fix landed
+in `data/extracted/ps4/omega-eu-fixed{,-patch}` 2026-09-27; see
+`data/scratch/drive-2026-09-27/omega-psarc.md` for the before/after numbers.
+
 **`omega-ps4-eu-patch.pkg` extracts separately and adds content, rather than
 completing the base `.pkg`'s.** `pkg_extract` takes exactly one `.pkg` and
 one output directory - checked directly against `PkgTool/Program.cs`'s own
