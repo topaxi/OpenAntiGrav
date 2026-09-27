@@ -10,7 +10,7 @@
 use super::*;
 use crate::language::StringTable;
 use crate::screen::{Screen, Text};
-use oag_tables::race_campaign::Mode;
+use oag_tables::race_campaign::{DifficultyTargets, MedalTargets, Mode};
 
 fn cell(mode: Mode, track: Option<&str>) -> Cell {
     Cell {
@@ -187,4 +187,183 @@ fn hd_tinted_medal_draw_crops_one_frame_of_the_right_tier_at_its_own_authored_po
     assert_eq!(uv, [0.0, 799.0, 60.0, 60.0]);
     // No tint: the atlas frame's own pixels already carry the tier colour.
     assert_eq!(color, [1.0, 1.0, 1.0, 1.0]);
+}
+
+/// `Target0/1/2 Medal` needs no `hd_medal_frame` help at all - unlike
+/// `Medal_{x}_{y}`, `DATA06`'s own widget authors its own crop
+/// (`width="60" height="60" u="0" v="61" TxtrWidth="60" TxtrHeight="60"` for
+/// `Target1 Medal`), so the plain [`image_draw`] path already reads it
+/// through `sprite_draw`. Pins the geometry this pass switched to drawing
+/// for real (see the module doc's "The winning archive" section) against
+/// the exact numbers `data/scratch/lane-hd-sel/cs_data06.xml` authors.
+#[test]
+fn a_target_medal_widget_crops_through_the_plain_image_path_with_no_extra_help() {
+    let image = Image {
+        name: Some("Target1 Medal".to_string()),
+        src: r"Data\FE\Images\Hexmedal_HD.gtf".to_string(),
+        x: 21.0,
+        y: 2.0,
+        width: Some(60.0),
+        height: Some(60.0),
+        centred: false,
+        color: 0xffff_ffff,
+        u: Some(0.0),
+        v: Some(61.0),
+        texture_width: Some(60.0),
+        texture_height: Some(60.0),
+        auto_load: false,
+    };
+    let placed = medal_atlas_placed();
+    let Draw::Sprite { rect, uv, color } = image_draw(&image, placed) else {
+        panic!("expected a plain Sprite");
+    };
+    assert_eq!(rect, [21.0, 2.0, 60.0, 60.0]);
+    assert_eq!(uv, [0.0, 799.0, 60.0, 60.0]);
+    assert_eq!(color, [1.0, 1.0, 1.0, 1.0]);
+}
+
+fn placement_targets() -> MedalTargets {
+    MedalTargets {
+        gold: 1,
+        silver: 2,
+        bronze: 3,
+    }
+}
+
+/// `hd_target_title`'s three measured shapes - one live RPCS3 frame each,
+/// see that function's own doc for the capture paths and the reasoning
+/// behind each part.
+#[test]
+fn target_title_reads_a_plain_target_with_the_difficulty_in_parens_for_race() {
+    let mut cell = cell(Mode::Race, Some("17_Track"));
+    cell.difficulty_targets = Some(DifficultyTargets {
+        easy: placement_targets(),
+        medium: placement_targets(),
+        hard: placement_targets(),
+    });
+    cell.nitro_elimination_targets = Some((1, 1, 1));
+    let strings = StringTable::default();
+    assert_eq!(hd_target_title(&cell, &strings, 0), "IG_HUD_TARGET (Easy)");
+}
+
+#[test]
+fn target_title_uses_its_own_idstring_for_speed_lap() {
+    let mut cell = cell(Mode::SpeedLap, Some("19_Track"));
+    cell.difficulty_targets = Some(DifficultyTargets {
+        easy: placement_targets(),
+        medium: placement_targets(),
+        hard: placement_targets(),
+    });
+    cell.nitro_elimination_targets = Some((1, 1, 1));
+    let strings = StringTable::default();
+    assert_eq!(hd_target_title(&cell, &strings, 0), "FE_TLTIME (Easy)");
+}
+
+#[test]
+fn target_title_inserts_the_nitro_target_only_for_elimination() {
+    let mut cell = cell(Mode::Elimination, Some("19_Track"));
+    cell.difficulty_targets = Some(DifficultyTargets {
+        easy: placement_targets(),
+        medium: placement_targets(),
+        hard: placement_targets(),
+    });
+    cell.nitro_elimination_targets = Some((200, 200, 200));
+    let strings = StringTable::default();
+    assert_eq!(
+        hd_target_title(&cell, &strings, 0),
+        "IG_HUD_TARGET 200 (Easy)"
+    );
+}
+
+/// `Mode::Other("NitroBattle")` gets the same number-insertion `Elimination`
+/// does - not from a capture of its own, but from
+/// `campaign_grids_ground_truth.rs`'s own
+/// `eliminationfamily_cells_carry_a_real_nitro_triple_and_a_dummy_flat_one`,
+/// which ground-truths the pairing against the real disc. `"Detonator"`
+/// keeps the plain default (that same ground-truth test's mirror case: a
+/// real `difficulty_targets`, a dummy nitro triple).
+#[test]
+fn target_title_extends_the_nitro_target_to_nitrobattle_but_not_detonator() {
+    let mut nitro_battle = cell(Mode::Other("NitroBattle".to_string()), Some("19_Track"));
+    nitro_battle.difficulty_targets = Some(DifficultyTargets {
+        easy: placement_targets(),
+        medium: placement_targets(),
+        hard: placement_targets(),
+    });
+    nitro_battle.nitro_elimination_targets = Some((12, 15, 20));
+    let strings = StringTable::default();
+    assert_eq!(
+        hd_target_title(&nitro_battle, &strings, 0),
+        "IG_HUD_TARGET 12 (Easy)"
+    );
+
+    let mut detonator = cell(Mode::Other("Detonator".to_string()), Some("26_Track"));
+    detonator.difficulty_targets = Some(DifficultyTargets {
+        easy: MedalTargets {
+            gold: 100_000,
+            silver: 90_000,
+            bronze: 80_000,
+        },
+        medium: placement_targets(),
+        hard: placement_targets(),
+    });
+    detonator.nitro_elimination_targets = Some((1, 1, 1));
+    assert_eq!(
+        hd_target_title(&detonator, &strings, 0),
+        "IG_HUD_TARGET (Easy)"
+    );
+}
+
+#[test]
+fn target_title_has_no_difficulty_suffix_when_the_cell_authors_no_rung() {
+    let cell = cell(Mode::Race, Some("17_Track"));
+    let strings = StringTable::default();
+    assert_eq!(hd_target_title(&cell, &strings, 1), "IG_HUD_TARGET");
+}
+
+/// `hd_target_value`'s three arms - the ordinal reading (measured for
+/// `Race`/`Elimination`, chosen by documented equivalence for the rest of
+/// its `_` arm), the excluded `Zone` case, and the HD-only time separator.
+/// See that function's own doc for the capture evidence.
+#[test]
+fn target_value_reads_a_placement_as_an_ordinal() {
+    let strings = StringTable::default();
+    let race = cell(Mode::Race, Some("17_Track"));
+    assert_eq!(hd_target_value(1, &race, &strings), "IG_HUD_1ST");
+    assert_eq!(hd_target_value(2, &race, &strings), "IG_HUD_2ND");
+    assert_eq!(hd_target_value(3, &race, &strings), "IG_HUD_3RD");
+    let elimination = cell(Mode::Elimination, Some("19_Track"));
+    assert_eq!(hd_target_value(1, &elimination, &strings), "IG_HUD_1ST");
+}
+
+#[test]
+fn target_value_keeps_a_zone_count_as_a_plain_number() {
+    let strings = StringTable::default();
+    let zone = cell(Mode::Zone, Some("01_Track"));
+    assert_eq!(hd_target_value(10, &zone, &strings), "10");
+}
+
+#[test]
+fn target_value_formats_a_lap_time_with_periods_not_a_colon() {
+    let strings = StringTable::default();
+    let speed_lap = cell(Mode::SpeedLap, Some("19_Track"));
+    assert_eq!(hd_target_value(4750, &speed_lap, &strings), "0.47.50");
+    let time_trial = cell(Mode::TimeTrial, Some("08_Track"));
+    assert_eq!(hd_target_value(6600, &time_trial, &strings), "1.06.00");
+}
+
+#[test]
+fn target_value_reads_nitrobattle_as_an_ordinal_too_but_a_big_detonator_score_stays_a_number() {
+    let strings = StringTable::default();
+    let nitro_battle = cell(Mode::Other("NitroBattle".to_string()), Some("19_Track"));
+    assert_eq!(hd_target_value(1, &nitro_battle, &strings), "IG_HUD_1ST");
+    let detonator = cell(Mode::Other("Detonator".to_string()), Some("26_Track"));
+    assert_eq!(hd_target_value(100_000, &detonator, &strings), "100000");
+}
+
+#[test]
+fn difficulty_id_maps_the_three_rungs_in_order() {
+    assert_eq!(hd_difficulty_id(0), "Easy");
+    assert_eq!(hd_difficulty_id(1), "Medium");
+    assert_eq!(hd_difficulty_id(2), "Hard");
 }

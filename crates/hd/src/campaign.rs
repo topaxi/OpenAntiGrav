@@ -101,8 +101,9 @@ pub fn entry_name(index: u8) -> String {
 /// [`oag_pulse::campaign`]'s `Data\Plugins\PI001\GUI\CellMode_Definition.xml`.
 /// Present on `DATA02` (42,548 bytes) and, disagreeing, `DATA06` (59,361
 /// bytes) - [`oag_assets::Archives`]'s own precedence reaches `DATA02`'s
-/// copy for `oag_game::campaign::load_hd`'s own `Grid Selection`/`Cell
-/// Selection` read.
+/// copy, but `oag_game::campaign::load_hd` reads `DATA06`'s directly (by
+/// archive label, not precedence) for all four screens this file authors,
+/// not only `Campaign Selection`/`Grid Selection Fury` - see below.
 ///
 /// **`DATA06`'s copy is a later, Fury-era build, not merely a different
 /// one - now measured, not just presumed.** It is the only copy carrying a
@@ -113,15 +114,26 @@ pub fn entry_name(index: u8) -> String {
 /// RPCS3's own `TTY.log` prints `Grid Selection Fury` as a screen name on
 /// `hdfury-ps3-eu-dec.iso`, a name that exists nowhere in `DATA02`'s copy -
 /// see `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign
-/// Selection`" section for the full comparison, including the one place
-/// `DATA06`'s own `Cell Selection` diverges further (a renamed target-medal
-/// row, an extra background layer) that this crate does not adopt.
-/// `oag_game::campaign::load_hd` reads `Campaign Selection`/`Grid Selection
-/// Fury` from `DATA06` directly (by archive label, not precedence) and
-/// leaves `Grid Selection`/`Cell Selection` on `DATA02`, since those two are
-/// diffed byte-for-byte equivalent between the two copies (bar two
-/// `FEGlobals->` colour names this title's own `skin.xml` resolves
-/// identically either way).
+/// Selection`" section for the full comparison.
+///
+/// **`Grid Selection` (the base one) is diffed byte-for-byte equivalent
+/// between the two copies**, bar two `FEGlobals->` colour names this
+/// title's own `skin.xml` resolves identically either way and the real
+/// `flyerlist` entries above (which this build never draws, authored
+/// `y="-500"`, off screen) - so reading it off `DATA06` instead of `DATA02`
+/// changes nothing observable. **`Cell Selection` is not equivalent at
+/// all**, and `oag_game::campaign::load_hd` reads `DATA06`'s copy of it too,
+/// **switched from `DATA02` on 2026-09-27** -
+/// [`crate::TITLE`]/`oag_ui::campaign::hd`'s own module doc has the full
+/// archive-precedence argument (a general last-wins overlay rule plus a
+/// direct, per-widget RPCS3 confirmation) and the complete list of
+/// differences (an extra `bBg_x_y` background layer, a repositioned
+/// `GridController`, a `Target0/1/2 Medal` icon row replacing `DATA02`'s
+/// plain-arrow `Target0/1/2 Image`, and a reflowed `Event`/`Track`/`Speed
+/// Class`/`Weapons`/`RightColumnText` detail column). Left deliberately
+/// unswitched: the sixteen `grid_00.xml`..`grid_15.xml` files below still
+/// read through the unchanged precedence, a separate, bigger question this
+/// pass did not extend to (same module doc, "Left explicitly unswitched").
 ///
 /// **Plain UTF-8, not dictionary-shortened** - unlike [`DEFINITION_ENTRY`],
 /// reading this needs no `oag_tables::fexml` expansion first. See
@@ -215,16 +227,33 @@ pub const HEX_TEXTURES: [(&str, &str); 5] = [
 /// Everything else `SCREEN_ENTRY`'s own `src=` attributes name that this
 /// build draws, beyond the hex art above - the bullet arrow beside every
 /// detail-column row, the lock overlay HD's `Grid Selection` shows over a
-/// locked flyer, and the bracket-cornered ticker's placeholder fill. Every
+/// locked flyer, the bracket-cornered ticker's placeholder fill, and
+/// `Cell Selection`'s own `Target0/1/2 Medal` row (`DATA06`'s copy - see
+/// `oag_ui::campaign::hd`'s own module doc, "The winning archive"). Every
 /// one of these is already spelled `.gtf` on both the widget and the
 /// archive, unlike [`HEX_TEXTURES`], so a flat list is enough. Read the same
 /// way: off the file directly, not invented. A texture that will not decode
 /// still leaves the widget it was for undrawn - see
 /// `docs/ui/campaign-screens.md`'s HD section.
-pub const OTHER_TEXTURES: [&str; 3] = [
+///
+/// **`Hexmedal_HD.gtf` is a second, deliberate copy of a texture
+/// [`HEX_TEXTURES`] already loads**, not a new asset - `Medal_{x}_{y}`
+/// spells its own `src` the PSP-era `.mip` way (`HEX_TEXTURES`'s own
+/// rewrite), but `Target0/1/2 Medal` spells the same file `.gtf`, verbatim,
+/// on the same screen. `crate::sprite::Sheet::get` keys by an exact string
+/// match against a widget's own `image.src`, so one archive read has to be
+/// shelved under both spellings for both widgets to find it - measured
+/// directly: without this, `Target0/1/2 Medal` looked up its own
+/// `.gtf`-spelled `src` against a sheet that only had the `.mip` spelling
+/// shelved, found nothing, and drew no icon at all (`sprites(&image.src)`
+/// answering `None`, the same silent, honest-absence path a genuinely
+/// missing texture takes) - confirmed on a live capture,
+/// `data/scratch/drive-2026-09-27/hd-targets/after-cell-select-2.png`.
+pub const OTHER_TEXTURES: [&str; 4] = [
     r"Data\FE\Images\NonSelectable_Arrow_HD.gtf",
     r"Data\FE\Images\Subtitle_Arrow_HD.gtf",
     r"Data\FE\Images\Padlock.gtf",
+    r"Data\FE\Images\Hexmedal_HD.gtf",
 ];
 
 #[cfg(test)]

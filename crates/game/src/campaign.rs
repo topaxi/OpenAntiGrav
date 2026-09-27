@@ -292,9 +292,27 @@ fn load_hd(
     base: &Sheet,
     fallback_globals: &[(&str, &str)],
 ) -> Result<Campaign> {
-    let blob = archives
-        .read_name(oag_hd::campaign::SCREEN_ENTRY)
-        .with_context(|| format!("reading {}", oag_hd::campaign::SCREEN_ENTRY))?;
+    // `DATA06`'s copy, not `oag_assets::Archives::read_name`'s own
+    // precedence (which lands on `DATA02`'s) - **switched 2026-09-27**, see
+    // `oag_ui::campaign::hd`'s own module doc ("The winning archive is
+    // `DATA06`") for the full archive-precedence argument and
+    // `oag_hd::campaign::SCREEN_ENTRY`'s doc for the file-level summary.
+    // One parse now covers all four screens `CellMode_Definition.xml`
+    // authors on this archive - `Grid Selection`/`Cell Selection` below,
+    // plus `Campaign Selection`/`Grid Selection Fury` via
+    // [`hd_selection_screens`] - where a separate `load_hd_campaign_selection`
+    // used to re-read and re-parse the same file a second time.
+    let copies = archives.read_every_name(oag_hd::campaign::SCREEN_ENTRY);
+    let Some((_, blob)) = copies
+        .into_iter()
+        .find(|(label, _)| label.ends_with(oag_hd::campaign::SELECTION_SCREEN_ARCHIVE))
+    else {
+        anyhow::bail!(
+            "no {} copy of {} - Wipeout HD/Fury's own Cell Selection cannot draw",
+            oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
+            oag_hd::campaign::SCREEN_ENTRY,
+        );
+    };
     let xml = String::from_utf8(blob).context("CellMode_Definition.xml is not UTF-8")?;
     let screens = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
     let grid_layout = Layout::read_authored(
@@ -317,8 +335,7 @@ fn load_hd(
     .context("Cell Selection is not on this screen")?;
 
     let grids = read_grids(archives, oag_hd::campaign::DEFINITION_ENTRY)?;
-    let (selection_layout, grid_layout_fury) =
-        load_hd_campaign_selection(archives, strings, faces, grid, fallback_globals);
+    let (selection_layout, grid_layout_fury) = hd_selection_screens(&screens, strings, faces, grid);
     // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
     // front-end root - see [`read_footer`]'s own doc. `Cell Help` and the
     // ticker are still unmodelled: `CellMode_Definition.xml` authors no
@@ -443,41 +460,29 @@ pub fn hd_selection_string_overlay(
         .unwrap_or_default()
 }
 
-fn load_hd_campaign_selection(
-    archives: &mut oag_assets::Archives,
+/// `Campaign Selection`/`Grid Selection Fury`, off the same already-parsed
+/// `DATA06` copy of [`oag_hd::campaign::SCREEN_ENTRY`] [`load_hd`] reads its
+/// base `Grid Selection`/`Cell Selection` from - **one parse serving all
+/// four screens now**, where this function used to open and parse the file
+/// a second time on its own (`load_hd_campaign_selection`, before
+/// 2026-09-27 switched `load_hd`'s own screen source to `DATA06` too, making
+/// the second read redundant - see `oag_ui::campaign::hd`'s own module doc).
+///
+/// `(None, None)` when this copy's own XML does not carry both screens - a
+/// base, non-Fury HD pressing this project has not seen, say.
+/// [`load_hd`] still returns its own `Campaign` in that case: the base
+/// `Grid Selection`/`Cell Selection` are unaffected, and
+/// `crate::main::session::campaign::open_campaign` falls back to opening
+/// straight on `Grid Selection`, the pre-`Campaign Selection` behaviour,
+/// rather than refusing the whole campaign over one missing screen.
+fn hd_selection_screens(
+    screens: &oag_ui::screen::Screens,
     strings: &StringTable,
     faces: FaceScales,
     grid: [f32; 2],
-    fallback_globals: &[(&str, &str)],
 ) -> (Option<Layout>, Option<Layout>) {
-    let copies = archives.read_every_name(oag_hd::campaign::SCREEN_ENTRY);
-    let Some((_, blob)) = copies
-        .into_iter()
-        .find(|(label, _)| label.ends_with(oag_hd::campaign::SELECTION_SCREEN_ARCHIVE))
-    else {
-        log::warn!(
-            "{}: no {} copy of {} - Campaign Selection stays unmodelled, RACE CAMPAIGN opens \
-             straight on the base Grid Selection",
-            oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
-            oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
-            oag_hd::campaign::SCREEN_ENTRY,
-        );
-        return (None, None);
-    };
-    let xml = match String::from_utf8(blob) {
-        Ok(xml) => xml,
-        Err(error) => {
-            log::warn!(
-                "{}'s own copy of {} is not UTF-8 ({error}) - Campaign Selection stays unmodelled",
-                oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
-                oag_hd::campaign::SCREEN_ENTRY,
-            );
-            return (None, None);
-        }
-    };
-    let screens = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
     let selection = Layout::read_authored(
-        &screens,
+        screens,
         oag_hd::campaign::SELECTION_SCREEN,
         strings,
         faces,
@@ -485,7 +490,7 @@ fn load_hd_campaign_selection(
         oag_hd::campaign::AUTHORED_GRID,
     );
     let fury = Layout::read_authored(
-        &screens,
+        screens,
         oag_hd::campaign::FURY_GRID_SCREEN,
         strings,
         faces,
