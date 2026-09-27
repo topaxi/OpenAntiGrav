@@ -188,9 +188,34 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
    match, per this project's EU-preference. A single-address fuzzy check
    already came back too weak to act on; a broader sweep may still turn up
    real matches the same way the physics-code pass found 115.
-3. Walk the PS2's race box on PCSX2 the way `scripts/psp-frontend-capture.py`
+3. ~~Walk the PS2's race box on PCSX2 the way `scripts/psp-frontend-capture.py`
    walks the PSP's, and read the two screens' PS2 captures against
-   `--menu-page track-select`/`ship-select` on `pulse-ps2-eu.chd`.
+   `--menu-page track-select`/`ship-select` on `pulse-ps2-eu.chd`.~~ **Done
+   2026-09-27**: `RACEBOX` -> `TRACK SELECT` -> `SHIP SELECT` on
+   `pulse-ps2-eu.chd` (`SCES-54748`, PCSX2, English). Both screens match
+   this build's `--menu-page track-select`/`ship-select` digit for digit -
+   Talon's Junction White (1/3, `Distance(m)` reading the disc's `5178`
+   against this build's already-documented `5094`, ~2% under, unchanged),
+   Assegai/Classic (1/12, `Speed 8 / Thrust 8 / Handling 9 / Shield 7`). No
+   card-size or `0`-suffixed-widget placement bug found, closing
+   `docs/ui/selection-screens.md`'s "no PCSX2 walk exists yet" gap. Full
+   captures and the `RACEBOX` row list itself (which turned up a separate,
+   real gap - see below) are under
+   `data/scratch/drive-2026-09-27/ps2-walk/`.
+
+   **New finding from the same walk: `RACEBOX` authors two rows this
+   build's `race` page does not.** The disc's screen (`racebox1.png`) has
+   five - `RACE TYPE`, `SPEED CLASS`, `WEAPONS`, `AI DIFFICULTY`, `KILLS` -
+   against this build's three (`MODE`, `SPEED CLASS`, `AI DIFFICULTY`;
+   `TEAM`/`VARIANT`/`TRACK` are correctly dropped, per "The flow" above).
+   `WEAPONS` (an on/off toggle, separate from `Mode::weapons_enabled`'s
+   per-mode default) and `KILLS` (an Eliminator kill-limit) have no setting
+   anywhere in this crate to back a row with. Shared with the PSP build
+   (same `menu.toml`), so not a PS2-only gap; a settings + UI addition
+   rather than a small fix, so left for whoever picks up this thread next
+   rather than built here. See
+   `handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md`'s own
+   Open/Next-Steps for the pointer.
 4. HD's equivalent screen-population code is still unfound - see
    `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md` - and
    solving it there would let the two titles' readings corroborate each

@@ -43,20 +43,41 @@ is unchanged: every `--menu-page` PNG across all twelve pages is byte-identical
 before and after. See `crates/pulse/src/frontend.rs`'s own doc on
 `PS2_MENU_SKIN` for the full authored/derived table and confidence per field.
 
+**2026-09-27: the PS2 title-font question is settled, not just leaned on -
+do not flip `PS2_MENU_SKIN::title_font`.** A second, independent PCSX2 walk
+(fresh boot, `SCES-54748`, English) pixel-measured both glyph heights in the
+same capture rather than eyeballing them: cropping `MAIN MENU`'s title-bar
+text and gridding it 8x found its cap height spans y=13 to y=27 (14 px);
+the same treatment on `RACE CAMPAIGN` (the selected row, white) and `SPLIT
+SCREEN VERTICAL` (an unselected row, teal) both span 14 px too - three
+glyphs, two different draw states, one measured height. If the title drew
+in the disc's `Title` role (`Pulse_14.fnt`, 17px) at any scale that did not
+happen to net out to exactly the `Default` row face's rendered size, this
+would show as a visibly taller title; it does not. This is the capture the
+project's own rule asks for before flipping a font, and it says don't -
+closing what 2026-09-25 and the first 2026-09-27 pass could each only lean
+on. See `data/scratch/drive-2026-09-27/ps2-walk/measure-title.png` and
+`measure-row.png` (the gridded crops) and `back2.png` (the source capture).
+
+A same-image x-position check on the two glyphs' left edges (`M` of `MAIN`
+at x=63, `R` of `RACE` at x=68, both against `menu_x`/`title_x`'s shared
+authored `66`) came back within 5 px of each other - consistent with the
+one shared x offset the XML already gives both, not evidence of a second
+one. The y position is less clean: calibrating a px-per-authored-unit scale
+off the `SPLIT SCREEN VERTICAL` -> `SPLIT SCREEN HORIZONTAL` gap (47 px for
+the authored 41-unit pitch, itself a second, independent corroboration of
+that pitch beyond `Main Menu`'s own `helptext` run) and projecting from
+`first_row_y=53`'s measured cap-top (68 px) predicts the title's cap-top at
+`title_y=9` should land near y=18; it measures at y=13, a 5 px (~4 authored
+unit) residual. That is plausibly font-metrics bearing between two
+different typefaces rather than a real coordinate error - the same
+measurement approach that settled the font question outright can't settle
+this one at this capture resolution - so `title_x`/`title_y`/`title_scale`
+stay open below rather than promoted, but with data now instead of an
+unmeasured gap.
+
 ## Open
 
-- Pulse's screen title (both PSP pressings and the PS2 port) still draws in
-  the row (`menu`) face at title scale rather than the disc's own `Title`
-  role (`Pulse_14.fnt`, 17px against `Default`'s 13px `pulse_text.fnt`) -
-  confirmed unchanged by a fresh `--menu-page main` render of both PSP disc
-  and the PS2 port, 2026-09-25 (`OPENANTIGRAV` draws in the same face as
-  `RACE CAMPAIGN` below it on both). **2026-09-27**: the first real PS2
-  capture of this screen (PCSX2, `SCES-54748`) is inconclusive rather than
-  confirming - `MAIN MENU`'s glyphs in the title bar read as the same face
-  as `RACE CAMPAIGN` below it, not a visibly taller one, which is a lean
-  against flipping `PS2_MENU_SKIN::title_font` rather than the capture this
-  project's own rule needs to flip it. See
-  `data/scratch/drive-2026-09-27/ps2-fe/pcsx2-main-raw11.png`.
 - `PS2_MENU_SKIN::row_extra_leading` (`17.0`) is corroborated on `Main
   Menu`'s own `helptext0..6` step alone. `first_row_y` (`53.0`) is
   corroborated on three screens (`Main Menu`, `Racebox`, `Additional`/
@@ -68,38 +89,61 @@ before and after. See `crates/pulse/src/frontend.rs`'s own doc on
   PS2 name, if it has one, is the natural next check - it is the PSP
   screen that measured the `small`-face pitch).
 - `title_x`/`title_y`/`title_scale` (`66.0`, `9.0`, `0.8`) are authored,
-  straight off `WADS2.WAD`'s `FEGlobals`, but not independently corroborated
-  against a pixel measurement of the PCSX2 capture the way the row list was -
-  the capture's own resolution (682x512, not evenly divisible into 640x448)
-  and this build's own presented output (1440x816, `480/272` display aspect)
-  do not share a common scale factor without recalibration. Worth a proper
-  measurement before treating the title bar position as settled the way the
-  row list now is.
+  straight off `WADS2.WAD`'s `FEGlobals`. **2026-09-27**: a same-image pixel
+  check (above) found the x offset consistent with the authored `66` within
+  ~5 px of measurement noise, and the y offset within a 5 px (~4 authored
+  unit) residual of a row-pitch-calibrated prediction - not a confirmed
+  match the way the row list is, but not a contradiction either. Settling it
+  fully needs a cleaner anchor than glyph cap-tops across two typefaces at
+  682x512 - a widget whose box (not just its text) is visible in the
+  capture, or a higher internal resolution.
 - Every other Pulse menu page's PS2 XML (`race`/`Racebox` confirmed sharing
-  `Main Menu`'s row-list numbers; `remix`/`records`/`display`/`graphics`/
-  `audio`/`controls`/`pilots` not read at all) is unread. All eight rendered
-  clean under `PS2_MENU_SKIN` in a 2026-09-27 sweep
-  (`data/scratch/drive-2026-09-27/ps2-fe/`), but "clean" here means "no
-  overlap `first_row_y`/`row_extra_leading` would produce," not "confirmed
-  against that screen's own XML" the way `Main Menu` now is.
+  `Main Menu`'s row-list numbers; `remix`/`display`/`graphics`/`audio`/
+  `controls`/`pilots` not read at all) is unread. Nine of the eleven pages
+  rendered clean under `PS2_MENU_SKIN` in the 2026-09-27 sweeps
+  (`data/scratch/drive-2026-09-27/ps2-fe/`, `ps2-walk/`), but "clean" here
+  means "no overlap `first_row_y`/`row_extra_leading` would produce," not
+  "confirmed against that screen's own XML" the way `Main Menu` now is.
+  `records` is the exception worth a look: the PS2 disc's own `RACE
+  RECORDS` is a two-tier flow (`Profile` -> `Race Records` -> `Single Race
+  Records`, the last carrying a `Track`/`Speed Class` picker and a
+  `Lap`/`Time`/`Tag`/`Team` podium table) where this build's single
+  `records` page lists `Mode`/`Track` then every speed class's best time
+  flat - a real structural difference from the disc, but a menu-content
+  reorganisation this project already makes throughout (`OPTIONS`'s own
+  four-screen split versus this build's six flat pages is the same shape of
+  difference), not a PS2-specific layout bug. See
+  `data/scratch/drive-2026-09-27/ps2-walk/pcsx2-race-records.png`,
+  `pcsx2-single-race-records.png` against `ours-records.png`.
+- **A real, non-layout gap found in the same walk**: the PS2's own
+  `RACEBOX` screen (`--menu-page race`'s equivalent) authors five rows -
+  `RACE TYPE`, `SPEED CLASS`, `WEAPONS`, `AI DIFFICULTY`, `KILLS` - and this
+  build's `race` page in `assets/ui/menu.toml` offers three (`MODE`,
+  `SPEED CLASS`, `AI DIFFICULTY`); `WEAPONS` and `KILLS` (the Eliminator
+  kill-limit setting) have no row and no backing setting anywhere in this
+  crate (`rg` for `weapons_enabled|eliminations|kill_limit` across
+  `crates/` finds only `Mode::weapons_enabled`, a per-mode default with no
+  player override, and no kill-limit field at all). This is shared with the
+  PSP build (same `menu.toml`), not PS2-specific, and it is a settings +
+  UI feature addition rather than a position/font fix, so it is out of this
+  lane's scope - documented here since this walk is what found it. See
+  `data/scratch/drive-2026-09-27/ps2-walk/racebox1.png` (the disc's row
+  list) against `ours-race.png` (this build's).
 
 ## Next Steps
 
-- This is a genuinely different case from Pure's: Pulse's `Title` role
-  resolves to a *different* file than `Default`, so flipping
-  `oag_pulse::frontend::MENU_SKIN::title_font` (PSP) or
-  `PS2_MENU_SKIN::title_font` (PS2) to `Some("Title")` would be a real
-  visual change, not a no-op one. `docs/ui/menus-original.md`'s Layout
-  table is already capture-verified at confidence 95 against the current
-  (unflipped) PSP rendering, and the 2026-09-27 PS2 capture above leans
-  against rather than for flipping the PS2 one. Whoever takes this next
-  needs a PSP capture (PPSSPP, the way `hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md`
-  did for HD on RPCS3) checking the title specifically, and a second look at
-  the PS2 capture already taken, before flipping either - see
-  `oag_title::MenuSkin::title_font`'s own doc for the widget already found.
 - Read a second PS2 screen's `helptext` step (or find the PS2's equivalent
   of `Single Player`/`Cell Setup`, the two PSP screens that corroborated the
   `small`-face pitch) to move `row_extra_leading`'s confidence up from
-  single-source.
-- A pixel measurement of `title_x`/`title_y`/`title_scale` against a PCSX2
-  capture, once the two images' scales are reconciled (see Open above).
+  single-source. **2026-09-27**: `RACEBOX` itself (this walk's own capture,
+  `racebox1.png`) turned out to author no per-row subtitle at all, so it
+  cannot be that second screen - the PS2's equivalent of `Single Player`
+  remains unfound.
+- `title_x`/`title_y`/`title_scale`'s residual (see Open) needs a cleaner
+  anchor than two typefaces' cap-tops at 682x512 to close - a widget
+  bounding box, or a capture at a higher internal resolution than PCSX2's
+  GS buffer gives on this title.
+- The `WEAPONS`/`KILLS` row gap above, as its own piece of work: a
+  `race.weapons`/`race.kill_limit` setting, wired into `Mode::weapons_enabled`
+  and the Eliminator mode's own kill threshold, plus two `menu.toml` rows
+  gated the way `AI DIFFICULTY` already is.
