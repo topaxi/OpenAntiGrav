@@ -94,6 +94,9 @@ pub(crate) struct Previews {
     /// without this Pure's stills tint white - invisible on its white front
     /// end. See [`oag_ui::picker::slideshow::Slideshow::read`].
     pub(crate) globals: Vec<(String, String)>,
+    /// The title's own string table, for the panel's `idstring` labels - see
+    /// [`oag_ui::picker::slideshow::Slideshow::read`].
+    pub(crate) strings: oag_ui::language::StringTable,
 }
 
 /// Which axis the ship picker's livery row moves - see
@@ -270,6 +273,7 @@ impl PickerStage {
             &location,
             zone,
             &globals,
+            &self.previews.strings,
             &mut report,
         );
         for line in report {

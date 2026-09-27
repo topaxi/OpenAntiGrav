@@ -328,6 +328,12 @@ impl Session {
                 .shell
                 .as_ref()
                 .map_or_else(Vec::new, |shell| shell.globals.clone()),
+            strings: self
+                .shell
+                .as_ref()
+                .map_or_else(oag_ui::language::StringTable::default, |shell| {
+                    shell.strings.clone()
+                }),
         };
         let mut picker = PickerStage::new(
             model,

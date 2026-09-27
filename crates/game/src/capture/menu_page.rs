@@ -864,6 +864,7 @@ pub(super) fn picker_stills(
     teams: &[crate::catalogue::Team],
     archives: Option<&mut oag_assets::Archives>,
     screens: &oag_ui::screen::Screens,
+    strings: &oag_ui::language::StringTable,
     sprites: &mut crate::sprite::Sheet,
 ) -> Vec<oag_ui::frontend::Draw> {
     // The entry the *picker* selects, which falls back to the first when the
@@ -893,7 +894,14 @@ pub(super) fn picker_stills(
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
     let mut report = Vec::new();
-    let stills = match crate::preview::slideshow(archives, &location, zone, &globals, &mut report) {
+    let stills = match crate::preview::slideshow(
+        archives,
+        &location,
+        zone,
+        &globals,
+        strings,
+        &mut report,
+    ) {
         Ok((show, blobs)) => {
             *sprites = sprites.extended(&blobs, &mut report);
             show.draws(0.0, &|src| sprites.get(src))

@@ -33,8 +33,9 @@
 //! circuit's own `location` - the same formatter `%s\FE\%s.vex` goes
 //! through for the outline. Substituted at read time here.
 
-use crate::frontend::{Draw, Placed};
-use crate::screen::{Image, Screens, argb_to_rgba, parse};
+use crate::frontend::{Align, Draw, Placed};
+use crate::language::StringTable;
+use crate::screen::{Fill, Image, Screens, Text, argb_to_rgba, parse};
 
 /// One state of the chain: what is on screen while it holds, and where the
 /// chain goes next.
@@ -45,11 +46,39 @@ pub struct State {
     /// Every still on screen in this state, ancestors first - which is the
     /// paint order, the deepest card on top.
     pub images: Vec<Image>,
+    /// The panel's own bars and rules - colour-only `Image`s with no `src`,
+    /// authored above any named `Screen` the same file's stills sit under,
+    /// so every state inherits the same set. See [`Self::images`]'s own
+    /// sibling gap this closes: `Team Selection`'s `SPEED`/`THRUST`/
+    /// `HANDLING`/`SHIELD` bars and `Track Selection`'s stat rules are
+    /// authored here, in the entry's own `screen.xml`, not in
+    /// `Selection_Definition.xml` where [`crate::picker::body`] looks for
+    /// Pulse's named widgets - `docs/formats/race-setup.md`.
+    pub fills: Vec<Fill>,
+    /// The panel's own labels and values - `idstring="SPEED"` and a literal
+    /// `"2/5"` alongside it, both authored the same way and both inherited
+    /// the same way [`Self::fills`] is. `idstring`s are resolved against the
+    /// title's own string table at read time, the same rule
+    /// `picker::Layout::read` applies to `Selection_Definition.xml`'s own
+    /// text widgets; an id the table does not carry falls back to itself
+    /// rather than drawing nothing, [`StringTable::get_or_id`]'s own rule.
+    pub texts: Vec<Text>,
     /// Seconds this state holds before its redirect fires; zero when the
     /// state has no timed redirect, which makes it terminal.
     pub delay: f32,
     /// The state the redirect goes to.
     pub goto: Option<String>,
+}
+
+/// What a still state inherits from its enclosing containers: the stills
+/// already on screen, plus the panel content sitting above any named
+/// `Screen` in the same file - bundled so [`walk`] stays under Rust's
+/// default lint threshold for a function's own argument count.
+#[derive(Debug, Clone, Default)]
+struct Collected {
+    images: Vec<Image>,
+    fills: Vec<Fill>,
+    texts: Vec<Text>,
 }
 
 /// The `<Mode3D><Model>` the same file places: the outline ribbon's own
@@ -97,14 +126,32 @@ impl Slideshow {
     /// those resolve to nothing and the still is tinted white - which on
     /// Pure's white front end is not a wrong colour but an invisible
     /// picture. Pulse's stills name no colour and are unaffected.
+    ///
+    /// `strings` resolves the panel's own `idstring` labels - see
+    /// [`State::texts`].
     #[must_use]
-    pub fn read(xml: &str, location: &str, start: &str, globals: &[(&str, &str)]) -> Option<Self> {
+    pub fn read(
+        xml: &str,
+        location: &str,
+        start: &str,
+        globals: &[(&str, &str)],
+        strings: &StringTable,
+    ) -> Option<Self> {
         let screens = Screens::from_xml_with_fallback_globals(xml, globals);
         let root = parse(xml);
         let mut states = Vec::new();
         let mut model = None;
+        let inherited = Collected::default();
         for child in &root.children {
-            walk(child, &[], &screens, location, &mut states, &mut model);
+            walk(
+                child,
+                &inherited,
+                &screens,
+                strings,
+                location,
+                &mut states,
+                &mut model,
+            );
         }
         let start = states.iter().position(|state| state.name == start)?;
         let (path, cycle_from) = chain(&states, start);
@@ -170,28 +217,31 @@ impl Slideshow {
         &self.states[current]
     }
 
-    /// The stills on screen `seconds` in, as sprites out of the sheet
-    /// `sprites` answers for. A still the sheet does not hold is left out,
-    /// the same rule every other image on the screen follows.
+    /// The panel's bars and labels plus the stills, all on screen `seconds`
+    /// in, in the file's own paint order - the bars sit above any named
+    /// `Screen` in the XML, so they draw first. A still the sheet does not
+    /// hold is left out, the same rule every other image on the screen
+    /// follows; a label with no resolved string draws nothing rather than a
+    /// blank.
     #[must_use]
     pub fn draws(&self, seconds: f32, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
-        self.at(seconds)
-            .images
-            .iter()
-            .filter_map(|image| {
-                let placed = sprites(&image.src)?;
-                Some(Draw::Sprite {
-                    rect: [
-                        image.x,
-                        image.y,
-                        image.width.unwrap_or(placed.width as f32),
-                        image.height.unwrap_or(placed.height as f32),
-                    ],
-                    uv: super::image_uv(image, placed),
-                    color: argb_to_rgba(image.color),
-                })
+        let state = self.at(seconds);
+        let mut out: Vec<Draw> = state.fills.iter().map(super::fill_draw).collect();
+        out.extend(state.texts.iter().filter_map(label_draw));
+        out.extend(state.images.iter().filter_map(|image| {
+            let placed = sprites(&image.src)?;
+            Some(Draw::Sprite {
+                rect: [
+                    image.x,
+                    image.y,
+                    image.width.unwrap_or(placed.width as f32),
+                    image.height.unwrap_or(placed.height as f32),
+                ],
+                uv: super::image_uv(image, placed),
+                color: argb_to_rgba(image.color),
             })
-            .collect()
+        }));
+        out
     }
 }
 
@@ -215,12 +265,14 @@ fn chain(states: &[State], start: usize) -> (Vec<usize>, Option<usize>) {
     }
 }
 
-/// Collects the states under `node`, each with the stills of every screen
-/// enclosing it. A named `Screen`'s own stills are on screen with it too.
+/// Collects the states under `node`, each with the stills and panel content
+/// of every screen enclosing it. A named `Screen`'s own widgets are on
+/// screen with it too.
 fn walk(
     node: &crate::screen::Node,
-    inherited: &[Image],
+    inherited: &Collected,
     screens: &Screens,
+    strings: &StringTable,
     location: &str,
     out: &mut Vec<State>,
     model: &mut Option<Model>,
@@ -232,17 +284,19 @@ fn walk(
             *model = model_from(node, location);
         }
         for child in &node.children {
-            walk(child, inherited, screens, location, out, model);
+            walk(child, inherited, screens, strings, location, out, model);
         }
         return;
     }
-    let mut images = inherited.to_vec();
-    collect_images(node, screens, location, &mut images);
+    let mut collected = inherited.clone();
+    collect_widgets(node, screens, strings, location, &mut collected);
     if let Some(name) = node.attr("name") {
         let redirect = node.children_named("Redirect").next();
         out.push(State {
             name: name.to_string(),
-            images: images.clone(),
+            images: collected.images.clone(),
+            fills: collected.fills.clone(),
+            texts: collected.texts.clone(),
             delay: redirect
                 .and_then(|r| r.value("delay"))
                 .and_then(|d| d.trim().parse().ok())
@@ -255,32 +309,79 @@ fn walk(
         });
     }
     for child in &node.children {
-        walk(child, &images, screens, location, out, model);
+        walk(child, &collected, screens, strings, location, out, model);
     }
 }
 
-/// The `Image` widgets directly on `node`, through any container that is
-/// not itself a `Screen` - a nested screen's stills are its own.
-fn collect_images(
+/// The `Image`, colour-only-`Image` and `Text` widgets directly on `node`,
+/// through any container that is not itself a `Screen` - a nested screen's
+/// own widgets are its own. This is the panel content a per-entity
+/// `screen.xml` authors above any named `Screen`: the stat bars and their
+/// labels, inherited into every state the same way a still is.
+fn collect_widgets(
     node: &crate::screen::Node,
     screens: &Screens,
+    strings: &StringTable,
     location: &str,
-    out: &mut Vec<Image>,
+    out: &mut Collected,
 ) {
     for child in &node.children {
         let name = child.name.to_ascii_lowercase();
         match name.as_str() {
             "screen" | "redirect" | "values" | "mode3d" => {}
-            "image" => {
-                if let Some(src) = child.value("src") {
+            "image" => match child.value("src") {
+                Some(src) => {
                     let mut image = screens.image_from_node(child, src, (0.0, 0.0));
                     image.src = substitute(&image.src, location);
-                    out.push(image);
+                    out.images.push(image);
                 }
+                // No `src`: a colour bar, like `Team Selection`'s own
+                // `TabBackColor`/`TabFrontColor` rects - a [`Fill`], not a
+                // still.
+                None => {
+                    if let Some(fill) = screens.fill_from_node(child, (0.0, 0.0)) {
+                        out.fills.push(fill);
+                    }
+                }
+            },
+            "text" => {
+                let mut text = screens.text_from_node(child, None, (0.0, 0.0));
+                if let Some(id) = text.idstring.as_deref() {
+                    text.string = Some(strings.get_or_id(id).to_string());
+                }
+                out.texts.push(text);
             }
-            _ => collect_images(child, screens, location, out),
+            _ => collect_widgets(child, screens, strings, location, out),
         }
     }
+}
+
+/// A panel label as a draw, when it resolved to a string - an `idstring`
+/// with no match in the table still falls back to the id itself
+/// ([`StringTable::get_or_id`]), so this is only `None` for a widget that
+/// authors neither an `idstring` nor a literal `String`.
+///
+/// No [`crate::picker::Layout`] face-scale lookup here, unlike
+/// [`crate::picker::body`]'s own text draws: every widget this module reads
+/// carries `font="Stats"`, a role `Layout::face_scale` does not recognise
+/// and falls through to `1.0` for, so applying it would be a no-op dressed
+/// up as a dependency.
+fn label_draw(text: &Text) -> Option<Draw> {
+    let content = text.string.clone()?;
+    Some(Draw::Text {
+        x: text.x,
+        y: text.y,
+        scale: text.scale,
+        color: argb_to_rgba(text.color),
+        border: None,
+        align: match text.align.to_ascii_lowercase().as_str() {
+            "right" => Align::Right,
+            "centre" | "center" => Align::Centre,
+            _ => Align::Left,
+        },
+        text: content,
+        wrap_width: text.wrap_width,
+    })
 }
 
 fn model_from(node: &crate::screen::Node, location: &str) -> Option<Model> {

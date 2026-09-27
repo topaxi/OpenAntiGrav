@@ -477,6 +477,50 @@ by `oag_pure::frontend::FALLBACK_GLOBALS`, a table sampled off captured frames
 at confidence 60-65. The disc's own values differ from three of the four, most
 of all on `TextColor` (`0x11ACD0` against the sampled `0x88D6E8`).
 
+#### The stat panel is read and drawn, off the entry's own `screen.xml`
+
+**Implemented 2026-09-27.** The `RACE RECORD`/`LAP RECORD`/`LENGTH`/`HEIGHT`
+block and the `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars above draw now -
+`oag_ui::picker::body` never had a chance at them, because they are not in
+`Selection_Definition.xml` at all: they sit above any named `Screen` in the
+*entry's own* `screen.xml`, the same file the slideshow stills come from
+(`Data\Ships\Feisar\screen.xml`, `Data\Environments\01_Vineta_K\screen.xml`).
+`oag_ui::picker::slideshow::Slideshow` reads them the same way it already read
+the stills - inherited into every state, since they sit outside any of the
+three (`Info`/`Side`/`Top`) - as a `Vec<Fill>` (the colour-only bars, no
+`src`) and a `Vec<Text>` (`idstring="SPEED"` resolved through the title's own
+string table the same way `Layout::read` resolves `Selection_Definition.xml`'s
+own text, plus the literal fraction beside it - `"2/5"` on Feisar's own
+`Speed` row, authored directly rather than computed from any `<FE>` rating,
+which Pure's `Definition.xml` does not author at all - see
+["Pure differs in shape, not only in value"](#pure-differs-in-shape-not-only-in-value)).
+An `idstring` the table does not carry falls back to itself
+(`StringTable::get_or_id`) rather than drawing nothing.
+
+Confidence **90**: every value drawn is the disc's own literal XML content -
+no bar fraction is computed, no rating is read, nothing is guessed - checked
+against a fresh `--menu-page track-select`/`ship-select` capture on
+`pure-psp-eu.chd` (German: `RENN-REKORD`/`LÄNGE`/`RUNDEN-REKORD`/`HÖHE`,
+`TEMPO`/`HANDLING`/`SCHILD`/`SCHUB`, all idstrings resolving through
+`Data\Plugins\PI009\Definition.xml`). Short of 94 because it is not checked
+against a real PPSSPP frame in the same language - the 2026-09-05 capture
+above is English and a fresh profile, whose `RACE RECORD 0.00.00` differs in
+punctuation from this build's `00' 00' 00`, both being the entry's own
+authored placeholder text (`docs/formats/pure-status.md`'s "Show the records
+and fill them in for this track" comment, still unfilled here: `DisplayRecords`
+is read as a node but nothing populates it, so a set record still shows the
+placeholder).
+
+**One overflow, not fixed here**: German's `RUNDEN-REKORD` (`LAP RECORD`) is
+wider than English's own and its authored `x` runs into `HÖHE`'s (`HEIGHT`)
+column, which is otherwise a separate authored `x`. Both are drawn exactly at
+their own authored position with no wrapping, which is what
+`Selection_Definition.xml`'s own English-authored text widgets already do
+everywhere else in this crate - nothing here adds a wrap Pulse's own screens
+do not have either. Whether the real PSP also overlaps at this string length
+in German is unmeasured; recorded as an open item below rather than guessed
+at with a wrap this format gives no evidence for.
+
 #### Pure lists, Pulse shows one
 
 The two titles disagree on the *shape* of a selection screen, not just on how
