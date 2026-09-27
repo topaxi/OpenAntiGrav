@@ -648,7 +648,7 @@ the order a player sees it, with what each part rests on:
 | `TitleScreen` | its own six button redirects, all to `GameModeChoice` | `Title_Screen.gtf` centred, `BOOT_PRESS_ANY` pulsing after its `delay="1.0"`, the EU legal footer through the `DirectEmbed` include, in `NEOSANS_BOLD` at its own 22-unit line height against `NEOSANS_BOLD_LARGE`'s 37 | authored, 92; the font-role ratio is read off the two `.fnt` headers |
 | `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the `Orange2048` cursor ring is **chosen** |
 | `Home` | the same | its five `<TouchButton>`s; each destination now draws - see [Wired: `Home`'s five destinations draw](#wired-homes-five-destinations-draw-2026-09-21) | authored, 92 |
-| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own scrollable canvas; **no panel or card draws on a tap since 2026-09-25** - see below | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored); **2026-09-25: the grid's own scale is now measured, not the DLC-tier projection** - see below |
+| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own scrollable canvas, **each drawn with the disc's own hex tile art and mode icon since 2026-09-27** - see below; **no panel or card draws on a tap since 2026-09-25** - see below | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored); **2026-09-25: the grid's own scale is now measured, not the DLC-tier projection**, and **2026-09-27: each cell's own hex tile, outline, selection ring and mode icon are the disc's own decoded art**, pixel-confirmed against frames `12`/`13`'s green/grey chequered-flag and stopwatch tiles - see below |
 
 **2026-09-25: the campaign map's canvas/pitch/marker scale is measured off
 frames `12`/`13`, correcting a wrong reading of the shell's own XML.** The
@@ -669,10 +669,10 @@ XML attribute; node size and spacing now visibly match the reference frames'
 own density (previously about a third of the correct size and spacing).
 **Still unmeasured**: the per-event `M_X`/`M_Y` -> pixel formula itself (the
 square grid still places events by cell index alone, not by whatever
-compiled-in projection the DLC tiers' own `+0x15c`/`+0x160` reads), the hex
-tile art and its per-kind icon (chequered flag / stopwatch), the light
-triangle-pattern background, the persistent header (home button, top-right
-badge cluster) and the season title card / per-node trophy badges
+compiled-in projection the DLC tiers' own `+0x15c`/`+0x160` reads), the light
+triangle-pattern background and its striped/dotted "reachable path" overlay,
+the persistent header (home button, top-right badge cluster) and the season
+title card / per-node trophy badges
 `FE3DCanvas`'s `<CanvasLabel>`s carry. **A negative finding worth recording
 so it is not re-attempted**: a linear least-squares fit of the 47
 `linkedevent`-carrying `<CanvasLabel>`s' own `x`/`y` against their linked
@@ -689,9 +689,13 @@ asset name for the hex tile, the season card and the per-node badges
 `Cup2048.gxt`/`Cup2049.gxt`/`Cup2050.gxt`, every `trophy/*.gxt`, every
 `medals/Icon_*.gxt`, every `TinyCallout_*.gxt`) against every `.xml` entry in
 the base package, with `cargo run -p oag-tools --example psarc_grep`,
-matches zero of them: the real tile art and its per-event placement are
-native-code-driven, out of reach without a Ghidra pass, the same conclusion
-`frontend-campaign-map.md` already reached for the DLC tiers' own hotspots.
+matches zero of them: **matching no widget's own text is not the same as not
+existing in the archive**, and every one of the names in that list is a real
+file that decodes (checked directly, 2026-09-27, below) - the per-event
+*placement* is what stays native-code-driven and out of reach without a
+Ghidra pass, the same conclusion `frontend-campaign-map.md` already reached
+for the DLC tiers' own hotspots, but the *art itself* was never actually
+missing.
 
 **2026-09-25: the invented bottom panel is removed, and no event-card
 screen replaces it - searched for as XML and not found.** Until this pass a
@@ -733,6 +737,44 @@ disc-authored text (built from `SP.xml` in
 `crates/game/src/boot/campaign2048.rs`) for whenever the card itself is
 recovered, but the draw call that used to show it is gone, not replaced.
 | `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
+
+**2026-09-27: each map marker draws the disc's own hex tile art and mode
+icon, not a flat colour square.** The 2026-09-25 pass's own texture survey
+(`hex_filled.gxt`, `hex_outline.gxt`, the per-kind icon names) only grepped
+candidate filenames against every `.xml` entry's own text and, finding no
+widget naming them, filed the hex art as unlocated alongside the season card
+and the header. That check never opened the files as pixels. This pass did:
+`data/FE/Images/hex_{filled,outline,select}.gxt` and `data/FE/NewImages/
+callout/{race,speed,zone,combat}_mode.gxt` (all base package) decode to a
+gloss-filled hexagon, a thin hex outline, a thicker glow ring, and a
+chequered flag / stopwatch / radar-target / crosshair icon respectively -
+confirmed against the same `data/reference/2048-frontend/` frames `12`/`13`
+the grid's own scale was measured off: those frames show green hexagon tiles
+carrying a chequered-flag glyph and a stopwatch glyph, grey ones carrying the
+same two glyphs unlit, exactly matching `race_mode`/`speed_mode`'s decoded
+art on the same `Pass2048`/`Grey2048` split this build already drew a flat
+square in. `oag_2048::campaign::EventKind` (already measured at confidence
+78-82, `docs/formats/2048-campaign.md`) picks the icon per event, plus the
+already-measured `laps == 0` Speed Lap split. See
+`oag_ui::frontend::campaign_map`'s own "2026-09-27" doc section for the
+implementation and what the real tile still has that this build does not (a
+3D bevel/drop-shadow, the striped/dotted path texture connecting a season's
+own tiles, the season card, the header). `crates/game/tests/
+vita_2048_boot_ground_truth.rs::the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares`
+pins it against the real package.
+
+**One plumbing bug this pass found and fixed, worth naming since it hid in
+plain sight.** `oag_game::boot::sprites::load`'s own report already said "N
+of N front-end image(s) decoded" including the seven new names - the decode
+worked from the first attempt. What did not work silently was
+`boot::assemble`'s own `Frontend::placements`, rebuilt by re-walking every
+screen's `Image`/`TouchButton` `Src=` rather than reading `Sheet::entries`
+directly - a walk that, by construction, never named an `extra`-only texture
+(the menu blocks' own nine-patch was in the same position before this pass,
+just never read back out through `placements` by anything). Fixed by reading
+`Sheet::entries` directly, a strict superset. Caught only by taking an actual
+screenshot and comparing it against the boot log's own success line, not by
+either alone - the log was truthful and the screen was still wrong.
 
 **How the screens are found.** `NEWGUI/Skin.xml` declares no screen; the
 boot follows four of the root's `<LoadXML>` includes by name

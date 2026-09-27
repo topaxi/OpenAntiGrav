@@ -276,6 +276,58 @@ fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
     );
 }
 
+/// The campaign map draws the disc's own hex tile art and mode icons, not
+/// the flat colour square [`oag_ui::frontend::campaign_map::Frontend::placed`]
+/// falls back to when the sheet has none of it.
+///
+/// **What this pins.** `oag_game::boot::sprites::load` asks for
+/// `HEX_FILLED`/`HEX_OUTLINE`/`HEX_SELECT` and the four `EventIcon` names
+/// through its own `extra` list (2026-09-27), the same mechanism the menu
+/// blocks' nine-patch already used - but `boot::assemble`'s own
+/// `Frontend::placements` used to be rebuilt by re-walking every screen's
+/// `Image`/`TouchButton` `Src=`, which by construction never named an
+/// `extra`-only texture at all. Nothing caught that gap until this test:
+/// `sprites::load`'s own report line said "N of N decoded" (true), and
+/// `oag-ui`'s unit tests boot with an empty sheet either way (see
+/// `crate::frontend::campaign_map::HEX_FILLED`'s own doc comment), so both
+/// looked green while the campaign map silently drew flat squares against a
+/// full sheet. `assemble` now reads `Frontend::placements` straight off
+/// `Sheet::entries`, which is a superset that already includes them; this
+/// test is what would have caught the old, narrower rebuild.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::NEW_FE_SHELL
+    ));
+    let list = frontend.draw_list();
+    let hex_tiles = list
+        .iter()
+        .filter(|draw| matches!(draw, frontend::Draw::Sprite { uv, .. } if uv[2] == 128.0 && uv[3] == 128.0))
+        .count();
+    assert!(
+        hex_tiles >= 2,
+        "expected at least a filled and an outline hex sprite per visible \
+         marker, found {hex_tiles} 128x128 sprites in {} draw(s): {list:#?}",
+        list.len()
+    );
+    let mode_icons = list
+        .iter()
+        .filter(|draw| matches!(draw, frontend::Draw::Sprite { uv, .. } if uv[2] == 64.0 && uv[3] == 64.0))
+        .count();
+    assert!(
+        mode_icons >= 1,
+        "expected at least one 64x64 mode-icon sprite (race/speed/zone/combat), \
+         found {mode_icons} in {} draw(s): {list:#?}",
+        list.len()
+    );
+}
+
 /// A network mode cannot be confirmed here, and says so.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]

@@ -391,6 +391,7 @@ fn three_events() -> Vec<MapEvent> {
         y,
         detail: "circuit / mode".to_string(),
         requires: None,
+        kind: EventIcon::Race,
     })
     .collect()
 }
@@ -407,6 +408,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             y: 5,
             detail: "circuit / mode".to_string(),
             requires: None,
+            kind: EventIcon::Race,
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
@@ -414,6 +416,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             y: 5,
             detail: "circuit / mode".to_string(),
             requires: Some("2048 - Event 1".to_string()),
+            kind: EventIcon::Race,
         },
     ]
 }

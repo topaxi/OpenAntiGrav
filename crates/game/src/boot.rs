@@ -570,7 +570,7 @@ pub fn load_shell(
     // The menu blocks' three textures are the executable's own, named by no
     // screen - see `oag_title::MenuBlocks` - so they are asked for by name
     // alongside everything the screens name.
-    let block_textures: Vec<&str> = menu_skin
+    let mut block_textures: Vec<&str> = menu_skin
         .blocks
         .map(|blocks| {
             vec![
@@ -580,6 +580,22 @@ pub fn load_shell(
             ]
         })
         .unwrap_or_default();
+    // The campaign map's own hex tile art and its four mode icons - named
+    // by no screen either, the same "executable draws it, not a widget"
+    // shape the menu blocks are already in. See
+    // `oag_ui::frontend::campaign_map::HEX_FILLED`'s own doc comment for why
+    // these decode but are not authored anywhere in `NEWGUI/*.xml`.
+    if front_end.touch.is_some() {
+        block_textures.extend([
+            oag_ui::frontend::HEX_FILLED,
+            oag_ui::frontend::HEX_OUTLINE,
+            oag_ui::frontend::HEX_SELECT,
+            oag_ui::frontend::EventIcon::Race.texture_name(),
+            oag_ui::frontend::EventIcon::SpeedLap.texture_name(),
+            oag_ui::frontend::EventIcon::Zone.texture_name(),
+            oag_ui::frontend::EventIcon::Elimination.texture_name(),
+        ]);
+    }
     let sprites = sprites::load(
         &mut archives,
         &std::iter::once(&screens)
@@ -1098,19 +1114,18 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     // the sequence takes one of them by value. See `Boot::languages`.
     let offered = languages.clone();
 
-    // Every `Image` and every `TouchButton` icon, by the name the widget
-    // spells - the same set `sprites::load` read.
-    let placements = screens
-        .screens
-        .iter()
-        .flat_map(|s| {
-            s.images
-                .iter()
-                .map(|image| &image.src)
-                .chain(s.touch_buttons.iter().filter_map(|b| b.src.as_ref()))
-        })
-        .filter_map(|src| sprites.get(src).map(|p| (src.clone(), p)))
-        .collect();
+    // Every image `sprites` actually decoded - every `Image`/`TouchButton`
+    // icon a screen spells, **plus** the menu blocks' own nine-patch and the
+    // campaign map's hex tile/mode-icon art, neither named by any screen
+    // (`sprites::load`'s own `extra` list). `Sheet::entries` is already
+    // exactly this set, so reading it directly is both simpler and more
+    // complete than the screen-only walk this replaced: that walk never
+    // surfaced an `extra` name at all, which stayed harmless while nothing
+    // read one back out of `Frontend::placements` - `sprites::block_art`
+    // gets its own `BlockArt` straight from `sprites` instead - until
+    // `oag_ui::frontend::campaign_map::Frontend::placed` became the first
+    // caller that does (2026-09-27).
+    let placements = sprites.entries().to_vec();
     // Both movies described the same way, each from its own container: the cached
     // frame count when there is a cache and the demuxed one when there is not,
     // because `--no-video` and a missing `ffmpeg` still have to play a leg out

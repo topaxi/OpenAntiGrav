@@ -10,7 +10,7 @@
 //! language are in hand, so the front end receives text and cells and never
 //! opens a file.
 
-use oag_ui::frontend::{ExtraTile, Launch, MapEvent};
+use oag_ui::frontend::{EventIcon, ExtraTile, Launch, MapEvent};
 use oag_ui::language::StringTable;
 
 /// Every `SP.xml` event that has a map cell, as the map draws it.
@@ -79,6 +79,16 @@ pub(super) fn map_events(
             .and_then(oag_2048::campaign::EClass::from_ordinal)
             .map(|class| class.as_str());
         let mode = oag_2048::campaign::engine_mode(event).unwrap_or("unknown mode");
+        // The disc's own four mode icons - see `EventIcon`'s own doc
+        // comment. Mirrors `oag_2048::campaign::engine_mode`'s own
+        // `laps == Some(0)` Speed Lap split rather than re-deriving it, so
+        // the two never disagree about which events are Speed Lap.
+        let kind = match event.kind {
+            oag_2048::campaign::EventKind::Zone => EventIcon::Zone,
+            oag_2048::campaign::EventKind::Elimination => EventIcon::Elimination,
+            oag_2048::campaign::EventKind::Race if event.laps == Some(0) => EventIcon::SpeedLap,
+            oag_2048::campaign::EventKind::Race => EventIcon::Race,
+        };
         let mut detail = format!("{circuit} / {}", mode.replace('_', " "));
         if let Some(class) = class {
             detail.push_str(&format!(" / {class}"));
@@ -103,6 +113,7 @@ pub(super) fn map_events(
             y,
             detail,
             requires,
+            kind,
         });
     }
     report.push(format!(
