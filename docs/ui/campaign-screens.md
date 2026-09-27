@@ -1358,23 +1358,43 @@ screen parser at all) - wrong, caught by checking directly:
 `Trophies`/`MedalModel` anywhere on `Cell Selection` at all
 (`grep -n 'ImageModel\|Trophies\|MedalModel'` over both, no match) - so
 these are not 3-D trophies. **What they are instead is inferred, not
-independently confirmed by the pixels themselves**: the disc's whole `Data\FE\Images\`
-tree was greped for every `Hexmedal` reference (`grep -n 'Hexmedal'` over
-every extracted front-end XML this project holds a copy of - see
-`data/scratch/lane-hd-sel/*.xml`), and the *only* widgets that source it
-anywhere on either archive's `Cell Selection` are `Medal_{x}_{y}` (both
-archives, no crop authored) and `DATA06`'s own `Target0/1/2 Medal`
-(`width="60" height="60" u="0"`, `v="0"/"61"/"122"` - the exact numbers
-`hd_medal_frame` already reads as evidence, see above); nothing else on
-either screen names a medal-shaped 2-D asset at all. The captured icon
-itself, zoomed, is too compression-softened to independently confirm it
-carries the same swirl/ribbon detail this section's own decoded atlas frame
-does - a plain, flat hexagon is all either resolves - so the identification
-rests on process of elimination (not a trophy, nothing else on the disc is
-a plausible source) rather than a pixel match. Taken together with `DATA02`'s
+independently confirmed by the pixels themselves**: every `.xml` this
+project holds an extracted copy of was greped for `Hexmedal`
+(`data/scratch/lane-hd-sel/*.xml` and `data/scratch/hd-rewards/*.xml` -
+not a full disc-wide sweep, only the front-end screens this project has
+already pulled a copy of), and the *only* widgets that source it anywhere
+on either archive's `Cell Selection` are `Medal_{x}_{y}` (both archives, no
+crop authored) and `DATA06`'s own `Target0/1/2 Medal` (`width="60"
+height="60" u="0"`, `v="0"/"61"/"122"` - the exact numbers `hd_medal_frame`
+already reads as evidence, see above); nothing else on either screen names
+a medal-shaped 2-D asset at all. The captured icon itself, zoomed, is too
+compression-softened to independently confirm it carries the same
+swirl/ribbon detail this section's own decoded atlas frame does - a plain,
+flat hexagon is all either resolves - so the identification rests on
+process of elimination (not a trophy, nothing else on the disc is a
+plausible source) rather than a pixel match. Taken together with `DATA02`'s
 own `Target0/1/2 Image` (`Subtitle_Arrow_HD.gtf`, no `Hexmedal_HD` reference
 at all), this is first-party evidence the real PS3 renders `Cell Selection`
 off `DATA06`, not `DATA02` - the same open question
+
+**A fourth, adjacent screen checked and ruled clean - `EndRace Results`,
+2026-09-27**: `Target0/1/2 Image` on `EndRace Results`
+(`data/scratch/hd-rewards/endrace-0{2..6}.xml`, every archive copy this
+project has extracted) **does** author a real crop of `Hexmedal_HD.mip` -
+`width="60" height="60" U="0"`, `V="0"/"61"/"122"` for `Target0`/`1`/`2`,
+matching `hd_medal_frame`'s own numbers exactly (a third, independent
+confirmation of them, on a third screen). But `hd_results_draw_list`'s own
+image loop (`crates/ui/src/endrace/hd.rs`) skips it anyway - not through a
+name filter, but because `sprites(&image.src)` answers `None`: this pass's
+own asset loader never puts `Hexmedal_HD` on the `EndRace` sprite sheet at
+all (the loop's own comment already says so - "the target/medal art... is
+skipped here for free"), the same way the sibling `Target0`/`1`/`2` *text*
+widgets are already explicitly left `None`. Net effect: the whole target
+row draws nothing on `Results`, not a wrong render - an honest absence
+(`--menu-page endrace-results`, checked directly,
+`data/scratch/drive-2026-09-27/hd-medals/endrace-results.png`), not a
+second instance of this bug. `EndRace Rewards`'s own XML has no `Hexmedal`
+reference at all, on any copy - nothing to check there.
 `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
 section below already measured for that screen alone, now with a second,
 independent data point pointing the same way for `Cell Selection` too.

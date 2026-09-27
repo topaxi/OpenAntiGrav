@@ -130,7 +130,14 @@ including the `~50` confidence still open on `up`/`l1`/`r1`.
   draws as a plain grey arrow (`DATA02`'s own `Target0/1/2 Image` has no
   `Hexmedal_HD` reference at all - only `DATA06`'s differently-shaped
   `Target0/1/2 Medal` does), a second data point toward `Cell Selection`
-  needing `DATA06` generally, not just `Campaign Selection`.
+  needing `DATA06` generally, not just `Campaign Selection`. `EndRace
+  Results` was checked too, as the more obviously-reachable screen (no
+  medal needed to see a `TimeTrial`/`Zone`/`Elimination`/`SpeedLap` cell's
+  own target row) - ruled clean: its own `Target0/1/2 Image` authors the
+  identical `Hexmedal_HD` crop (a third confirmation of `hd_medal_frame`'s
+  numbers), but this build's own asset loader never puts `Hexmedal_HD` on
+  that screen's sprite sheet at all, so the whole row draws nothing rather
+  than something wrong - an honest absence, not a second bug.
 - **`Campaign Selection`'s own medal fraction denominator is unexplained**:
   an RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile, and
   this project's own parse of `DATA00`'s eight Fury grids totals 80 cells
