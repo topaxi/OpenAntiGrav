@@ -1262,10 +1262,13 @@ grouping shows every `Medal_{x}_{y}` sits in its own item, offset a constant
 `(+7, +2)` from `Bg_{x}_{y}`/`Outline_{x}_{y}`'s own item at the same slot,
 checked across all seven columns. That is the disc's own registration
 between the medal layer and the hex layer, authored once, not a per-column
-tune a runtime centring formula could reproduce - the centred version
-visibly undershot it on every column once compared side by side. Reverted in
-favour of the authored position; see `hd_tinted_medal_draw`'s own doc for
-the seven offset pairs. The crop rect is not a guess - `DATA06.PSARC`'s own
+tune a runtime centring formula could reproduce - the centred draft's own
+`(+34, +2)` overshot the real `(+7, +2)` by 27px in `x` on every column
+(`y` only agreed by coincidence: both `+2`, for unrelated reasons - the
+disc's own constant on one side, half a 4px size delta on the other).
+Reverted in favour of the authored position; see `hd_tinted_medal_draw`'s
+own doc for the seven offset pairs and the visible before/after. The crop
+rect is not a guess - `DATA06.PSARC`'s own
 `Cell Selection` variant authors the identical crop on its own `Target0/1/2
 Medal` widgets, the only place either archive authors a `u`/`v`/`TxtrWidth`/
 `TxtrHeight` sub-rect of this texture at all: `width="60" height="60" u="0"`
@@ -1285,15 +1288,23 @@ reconciliation, and `crates/hd/tests/campaign_selection_ground_truth.rs`'s
 `target_medal_widgets_author_the_hexmedal_atlas_crop_hd_medal_frame_reads`
 for the disc-backed pin.
 
-**Which rotation frame is "the" icon is still not independently measured** -
-`u=0` matches `Target0 Medal`'s own choice, but nothing here decodes whether
-the real screen holds still on it or animates the spin the rest of the row
-implies (the atlas is far wider than one frame). Left as the same "one
-endpoint of an unmeasured animation" idiom `SELECTOR_TINT` already uses.
-`data/scratch/lane-hd/rpcs3-grid0-3-2/`'s own other frames were checked for
-a second data point and are too interlace-corrupted to compare (every one
-but `02-square.png` is a mid-transition capture); no second clean frame
-exists to diff against.
+**Which rotation frame is "the" icon**: `u=0` matches `Target0 Medal`'s own
+choice, and two independent RPCS3 captures agree it does not visibly
+animate over the timescale a capture script's own button presses span -
+`data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png` and `01-down.png`
+(a different moment in the same drive script, `grid8_3_2`'s own `TARGET
+200 (NOVICE)` row in both) show pixel-indistinguishable gold/silver/bronze
+icons once cropped to the same window. Most of that directory's other
+frames (`00-default.png`, `10-default.png`, `11-down.png`) are still too
+interlace-corrupted mid-transition captures to use. **Not full
+confidence**: those two comparable frames are themselves low-resolution
+and compression-softened, so a flat, simple hexagon is all either shows -
+neither clearly resolves the swirl/ribbon detail this section's own decoded
+atlas frame carries, so this is consistent with a static `u=0` read but
+does not independently confirm it is *this* atlas rather than some other
+plain medal glyph. Left as "chosen, with two frames' worth of static
+corroboration" rather than fully measured - still the same "one endpoint"
+idiom `SELECTOR_TINT` uses, just less uncertain than before.
 
 **Position correction, same day**: a first draft of this fix centred the
 crop on `Outline_{x}_{y}`'s own hex rect (`hex_rect`, the same idiom
@@ -1320,10 +1331,19 @@ format; `02-square.png` (`grid8_3_2` selected, fresh zero-medal profile)
 reads `"0/21 POINTS"` - not zero-padded, and `21` is `grid_summary.max_points`
 (`3 * cell_count`), not `cell_count` itself. Fixed to
 `format!("{}/{} POINTS", grid_summary.points_earned, grid_summary.max_points)`.
-Confidence 90 - one live capture on the exact grid this thread already had a
-decoded `grid_08.xml` for (`NitroElimElite/Skilled/Novice Target="200"` on
-`grid8_3_2` matches `02-square.png`'s own `"TARGET 200 (NOVICE)"` exactly),
-not yet cross-checked against a second grid's own numbers.
+Confidence 90 on the **denominator and the padding** - one live capture on
+the exact grid this thread already had a decoded `grid_08.xml` for
+(`NitroElimElite/Skilled/Novice Target="200"` on `grid8_3_2` matches
+`02-square.png`'s own `"TARGET 200 (NOVICE)"` exactly), giving `21` as
+`max_points` unambiguously and confirming no zero-pad. **Lower on the
+numerator's own field**: the capture is a fresh, zero-medal profile, so
+`points_earned` and `gold_medals` both read `0` there and the frame alone
+cannot tell the two apart - the choice of `points_earned` over `gold_medals`
+rests on the `"POINTS"` label itself (`gold_medals` is a medal *count*, not
+a point total) and on `Grid Selection`'s own sibling field `TotPoints`
+already reading `points_earned`/`max_points` the same way, not on a second
+capture with an earned medal. Not yet cross-checked against a second grid's
+own numbers either way.
 
 **A third finding, real but left open rather than fixed this pass**: that
 same RPCS3 frame's `TARGET 200 (NOVICE)` row shows three lit, shaded medal
@@ -1336,14 +1356,25 @@ documents for `Results`, already known **not collected** by this build's
 screen parser at all) - wrong, caught by checking directly:
 `CellMode_Definition.xml` (either archive's copy) authors no `ImageModel`/
 `Trophies`/`MedalModel` anywhere on `Cell Selection` at all
-(`grep -n 'ImageModel\|Trophies\|MedalModel'` over both, no match). The real
-icons are flat 2-D, the same `Hexmedal_HD` atlas this section's own fix
-crops - but from **`DATA06`'s** own `Target0/1/2 Medal` widgets
+(`grep -n 'ImageModel\|Trophies\|MedalModel'` over both, no match) - so
+these are not 3-D trophies. **What they are instead is inferred, not
+independently confirmed by the pixels themselves**: the disc's whole `Data\FE\Images\`
+tree was greped for every `Hexmedal` reference (`grep -n 'Hexmedal'` over
+every extracted front-end XML this project holds a copy of - see
+`data/scratch/lane-hd-sel/*.xml`), and the *only* widgets that source it
+anywhere on either archive's `Cell Selection` are `Medal_{x}_{y}` (both
+archives, no crop authored) and `DATA06`'s own `Target0/1/2 Medal`
 (`width="60" height="60" u="0"`, `v="0"/"61"/"122"` - the exact numbers
-`hd_medal_frame` already reads as evidence, see above), which `DATA02`'s
+`hd_medal_frame` already reads as evidence, see above); nothing else on
+either screen names a medal-shaped 2-D asset at all. The captured icon
+itself, zoomed, is too compression-softened to independently confirm it
+carries the same swirl/ribbon detail this section's own decoded atlas frame
+does - a plain, flat hexagon is all either resolves - so the identification
+rests on process of elimination (not a trophy, nothing else on the disc is
+a plausible source) rather than a pixel match. Taken together with `DATA02`'s
 own `Target0/1/2 Image` (`Subtitle_Arrow_HD.gtf`, no `Hexmedal_HD` reference
-at all) does not have. This is first-party evidence the real PS3 renders
-`Cell Selection` off `DATA06`, not `DATA02` - the same open question
+at all), this is first-party evidence the real PS3 renders `Cell Selection`
+off `DATA06`, not `DATA02` - the same open question
 `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
 section below already measured for that screen alone, now with a second,
 independent data point pointing the same way for `Cell Selection` too.
