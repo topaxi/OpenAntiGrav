@@ -171,9 +171,7 @@ fn picking_a_language_changes_the_labels_shell_from_boot_builds_rows_from() {
         "German RACE MODE rows did not include \"Zeitrennen\": {german_modes:?}"
     );
     assert!(
-        italian_modes
-            .iter()
-            .any(|label| label == "Prova a tempo"),
+        italian_modes.iter().any(|label| label == "Prova a tempo"),
         "Italian RACE MODE rows did not include \"Prova a tempo\": {italian_modes:?}"
     );
 }
