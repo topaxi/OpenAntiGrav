@@ -727,6 +727,54 @@ impl Store {
     }
 }
 
+/// The footer ticker's own honest tip rotation - the `TKR_NO*` family, the
+/// only strings on disc that carry no `%d`/`%s`/`%.2f` template this build has
+/// a real counter for. See `oag_ui::campaign::footer`'s own module doc for why
+/// nothing here invents a play-time or song-count statistic instead.
+///
+/// **One function, three callers that must agree.** The Race Campaign's own
+/// screens (`CampaignStage::ticker_tips` in the `oag-game` binary), the
+/// ordinary menu pages (`Session::draw`'s call into `MenuStage::render`, same
+/// binary) and `--menu-page`'s still (`capture::menu_page`, this crate) all
+/// rotate through the same list off the same save file - a live session and a
+/// screenshot of it must not show two different tips for one
+/// `<config dir>/oag/records.toml`. Living here rather than beside either
+/// `CampaignStage` or `capture::menu_page` is what lets both reach it: neither
+/// binary module is visible to this crate's own `capture`, and this crate
+/// cannot depend on the binary the other way (`workspace-layout.md`'s rule 2).
+///
+/// `Tournament`/`Head2Head` never launch in this engine
+/// (`crate::campaign::race_mode_for_cell`), so `TKR_NOTOURN`/`TKR_NOHH` are
+/// unconditionally included; the other five are gated on whether `store`
+/// carries any row for that mode - `oag_race::Mode::name`'s own spelling, the
+/// same string [`Key::new`] normalises every record's `mode` to - which reads
+/// real save data rather than a guess, at the cost of never re-showing a tip
+/// once its mode has been raced even once.
+#[must_use]
+pub fn ticker_tips(strings: &oag_ui::language::StringTable, store: &Store) -> Vec<String> {
+    let never_raced = |mode: &str| !store.rows().iter().any(|row| row.mode == mode);
+    let mut ids = vec!["TKR_NOTOURN", "TKR_NOHH"];
+    if never_raced(oag_race::Mode::SingleRace.name()) {
+        ids.push("TKR_NOSR");
+    }
+    if never_raced(oag_race::Mode::TimeTrial.name()) {
+        ids.push("TKR_NOTT");
+    }
+    if never_raced(oag_race::Mode::SpeedLap.name()) {
+        ids.push("TKR_NOSL");
+    }
+    if never_raced(oag_race::Mode::Zone.name()) {
+        ids.push("TKR_NOZONE");
+    }
+    if never_raced(oag_race::Mode::Eliminator.name()) {
+        ids.push("TKR_NOELIM");
+    }
+    ids.into_iter()
+        .filter_map(|id| strings.get(id))
+        .map(str::to_string)
+        .collect()
+}
+
 /// Parses `text` as a records file, keeping every row that decodes and
 /// noting - never discarding the whole file over - one that does not.
 ///

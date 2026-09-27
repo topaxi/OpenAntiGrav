@@ -695,6 +695,12 @@ pub(crate) struct Shell {
     /// with either half [`oag_ui::campaign::footer::NavigationLegend::read`]
     /// reads.
     pub(crate) nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    /// The front-end root's own footer ticker layout, carried from
+    /// `boot::Shell::ticker` on the same terms `nav_legend` is - a property
+    /// of the source, read once while the archives were open. `None` for a
+    /// source whose root authors no `TextInfoIsAlwaysLast` viewport, which is
+    /// every title but Pulse today.
+    pub(crate) ticker: Option<oag_ui::campaign::footer::TickerLayout>,
     /// The Fury menu backdrop's settings, clouds and tints, read at boot -
     /// see `oag_game::boot::fury`. `None` on every source but a Fury-style
     /// HD, and then the menus sit on the movie or the page's clear.

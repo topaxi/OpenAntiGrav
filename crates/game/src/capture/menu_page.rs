@@ -5,11 +5,30 @@
 use anyhow::{Context, Result};
 use oag_render::mesh_render::Anisotropy;
 
+/// A draw's clip: its index in the flattened list, plus `(left, right)` in
+/// screen space - what [`menu_page`] returns for the footer ticker and
+/// `capture::run`'s own call site hands `Renderer::render` unchanged. Named
+/// so the return type below reads rather than counting parentheses.
+type TickerClip = Option<(usize, f32, f32)>;
+
 /// Draws one page of our own menus, with the source's own lists supplied.
 ///
 /// The lists matter even for a still: a circuit row with nothing in it and one
 /// showing this disc's twenty-four circuits are different pictures, and the
 /// point of the flag is to look at the real one.
+///
+/// Returns the draw list alongside the footer ticker's own clip, when one is
+/// on screen: `(index in the returned list, left, right)` in screen space -
+/// what `capture::run`'s own call site hands `Renderer::render` so the
+/// ticker's text is cut at its viewport's edges instead of overdrawing the
+/// nav legend and running off the frame. Found by equality against the
+/// ticker's own draw after the page's layers are flattened, the same
+/// `position`-after-`flatten` idiom `MenuStage::render`'s own call site
+/// uses for the Race Campaign's grid/cell screens - not a hand-tracked
+/// index, which `flatten` would have been free to invalidate. `None` when
+/// this page draws no ticker at all: no layout, no honest tip to show, or a
+/// mid-transition capture, which skips the whole footer the way
+/// `MenuStage::render`'s own gate does.
 #[allow(
     clippy::too_many_arguments,
     reason = "every one of these is a separate thing the page needs, and a struct \
@@ -67,7 +86,17 @@ pub(super) fn menu_page(
     nav_legend: Option<&oag_ui::campaign::footer::NavigationLegend>,
     // The `Default`-role face `nav_legend`'s own word half draws through.
     default_measure: &dyn Fn(&str) -> f32,
-) -> Result<Vec<oag_ui::frontend::Draw>> {
+    // The footer's own scrolling tip ticker layout - `None` on a source
+    // whose front-end root authors no `TextInfoIsAlwaysLast` viewport
+    // (every title but Pulse today). See
+    // `crate::main::menu_stage::MenuStage::render`'s own call site for the
+    // identical draw this mirrors, at a frozen `elapsed` of `0.0` since a
+    // still has no clock of its own to animate the scroll with.
+    ticker: Option<&oag_ui::campaign::footer::TickerLayout>,
+    // This source's own honest tip rotation, off `records` - see
+    // `crate::records::ticker_tips`'s own doc.
+    ticker_tips: &[String],
+) -> Result<(Vec<oag_ui::frontend::Draw>, TickerClip)> {
     let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
         .context("parsing the built-in menu definition")?;
     // The same two trims `crate::prepare` makes before a live menu opens, so
@@ -287,6 +316,35 @@ pub(super) fn menu_page(
                 model.depth() > 1,
             )
         });
+    // The footer's own scrolling tip ticker, frozen at `elapsed = 0.0` - a
+    // still has no clock of its own to animate the scroll with, so this
+    // shows whichever tip the rotation starts on rather than one mid-scroll.
+    // `measure`, not `default_measure`: the ticker's own `font="small"`
+    // routes through no named role (`oag_ui::campaign::footer::face_role`
+    // answers `None` for it), so it draws through the same primary atlas the
+    // rows do - see `crate::main::menu_stage::MenuStage::render`'s own
+    // identical choice for its live ticker.
+    let ticker_draw: Option<oag_ui::frontend::Draw> = ticker.and_then(|layout| {
+        oag_ui::campaign::footer::ticker_draw(
+            layout,
+            0.0,
+            ticker_tips,
+            &oag_ui::picker::FaceScales::default(),
+            measure,
+        )
+    });
+    let ticker_draws: Vec<oag_ui::frontend::Draw> = ticker_draw.clone().into_iter().collect();
+    // The ticker's own clip window, `(left, right)` in screen space - see
+    // this function's own doc. Resolved against `list` after every draw is
+    // in it, the same `position`-by-equality idiom `MenuStage::render`'s own
+    // call site uses, rather than a hand-tracked index a later `extend`
+    // could silently invalidate.
+    let ticker_clip = |list: &[oag_ui::frontend::Draw]| {
+        let draw = ticker_draw.as_ref()?;
+        let index = list.iter().position(|d| d == draw)?;
+        let [x, _, width, _] = ticker?.viewport;
+        Some((index, x, x + width))
+    };
 
     // A modal prompt over the page, when one was asked for.
     //
@@ -332,8 +390,10 @@ pub(super) fn menu_page(
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(nav_legend_draws);
+        list.extend(ticker_draws);
+        let clip = ticker_clip(&list);
         list.extend(prompt_draws(kind, &name, strings, skin, source)?);
-        return Ok(list);
+        return Ok((list, clip));
     }
     let Some(phase) = phase else {
         let mut list = layers.flatten();
@@ -342,7 +402,9 @@ pub(super) fn menu_page(
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(nav_legend_draws);
-        return Ok(list);
+        list.extend(ticker_draws);
+        let clip = ticker_clip(&list);
+        return Ok((list, clip));
     };
     // The same arithmetic the live stage runs, through the same easing, so what
     // this draws is a frame of the real transition rather than a picture of one.
@@ -353,9 +415,12 @@ pub(super) fn menu_page(
     let mut tween = oag_ui::anim::Tween::new(1.0);
     tween.advance(phase.clamp(0.0, 1.0));
     let t = tween.eased();
-    Ok(layers
-        .zoomed(shape.origin, shape.in_scale + (1.0 - shape.in_scale) * t, t)
-        .flatten())
+    Ok((
+        layers
+            .zoomed(shape.origin, shape.in_scale + (1.0 - shape.in_scale) * t, t)
+            .flatten(),
+        None,
+    ))
 }
 
 /// The RECORDS page's own live per-class table, as draws - empty off any

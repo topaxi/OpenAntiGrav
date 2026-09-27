@@ -202,6 +202,7 @@ impl Session {
             // the module doc - so there is no `NavigationController` to
             // find one in either.
             nav_legend: None,
+            ticker: None,
             fury_backdrop: None,
             // 2048's front end is unread, so its race launches from the
             // RACE page the way every title's did before the pickers.
