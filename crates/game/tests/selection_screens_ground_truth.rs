@@ -489,9 +489,15 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
         ),
     ] {
         let mut report = Vec::new();
-        let (show, blobs) =
-            oag_game::preview::slideshow(&mut archives, location, false, &globals, &StringTable::default(), &mut report)
-                .unwrap_or_else(|e| panic!("{location} authors a screen.xml chain: {e:#}"));
+        let (show, blobs) = oag_game::preview::slideshow(
+            &mut archives,
+            location,
+            false,
+            &globals,
+            &StringTable::default(),
+            &mut report,
+        )
+        .unwrap_or_else(|e| panic!("{location} authors a screen.xml chain: {e:#}"));
         assert!(report.is_empty(), "{report:?}");
         let names: Vec<&str> = show.states().iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Info", "Side", "Top"], "{location}");

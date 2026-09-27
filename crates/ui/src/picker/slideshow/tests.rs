@@ -176,7 +176,11 @@ fn the_panel_bars_and_labels_are_read_above_any_named_screen() {
     let state = show.at(0.0);
     assert_eq!(state.fills.len(), 1, "the bar, with no src");
     assert_eq!(state.fills[0].color, 0xFF20_81A1);
-    assert_eq!(state.texts.len(), 2, "the idstring label and the literal value");
+    assert_eq!(
+        state.texts.len(),
+        2,
+        "the idstring label and the literal value"
+    );
     assert_eq!(
         state.texts[0].string.as_deref(),
         Some("GESCHWINDIGKEIT"),
