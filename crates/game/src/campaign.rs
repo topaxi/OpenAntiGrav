@@ -243,7 +243,17 @@ pub fn load(
 
     let mut blobs = Vec::new();
     for src in HEX_TEXTURES {
-        match archives.read_name(src) {
+        // `oag_pulse::read_image`, not `archives.read_name` - this source's
+        // compiled texture container is not always the declared `.mip`
+        // (`Texture_FindOrLoad` rewrites to `.pct` on the PS2 build; see that
+        // function's own doc). `hex_bg.mip`/`hex_bg.pct` already needed this
+        // for the selection screens' own hex tile
+        // (`docs/ui/selection-screens.md`'s "The hex grid is a 32x16 tile");
+        // these two names went through the archive directly instead and so
+        // never got the same rewrite, which is why the PS2 campaign grid
+        // drew its lock icons with no hex cell under them at all where the
+        // PSP draws both.
+        match oag_pulse::read_image(archives, src) {
             Ok(blob) => blobs.push((src.to_string(), blob)),
             Err(error) => log::warn!("{src}: {error:#} - the hex grid draws without it"),
         }
