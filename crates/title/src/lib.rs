@@ -324,6 +324,32 @@ pub struct FrontEnd {
     ///
     /// [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
     pub menu: Option<&'static menu::MenuSkin>,
+    /// [`Self::menu`] again, for a title's PS2 pressing specifically, when one
+    /// has been read off that pressing's own `Skin.xml` rather than approximated
+    /// from the other.
+    ///
+    /// **Why this exists instead of `menu` alone scaling by [`menu::MenuSkin::space`]:**
+    /// [`oag_game::menu::Skin::new`]'s own doc already says the PS2 conversion
+    /// is "an approximation and says so" - `oag_display::space::Space` records
+    /// 30 of 43 shared `Skin.xml` coordinates landing within a pixel of a
+    /// uniform 640/480, 448/272 stretch and 13 not. Wipeout Pulse's own PS2
+    /// `Data\Plugins\PI001\GUI\MainMenu_Definition.xml` is one of the 13: its
+    /// `<Menu>` authors `y="53"` (not `32 * 448/272 = 52.7` - that one is
+    /// close by coincidence) and its `helptext0` a `y="75"`, 22 below the row
+    /// rather than PSP's 18 scaled to 29.6 - the gap the scaled number leaves
+    /// before the next row (`row_pitch` 41, authored in the same file's own
+    /// `<!-- +41 for each line -->` comment, against the scaled approximation's
+    /// 33.9) is what let that subtitle overrun `RACEBOX`/`COURSE` below it.
+    /// See `oag_pulse::frontend::PS2_MENU_SKIN` and
+    /// `handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md`.
+    ///
+    /// `None` for every title including Pulse's *other* pressings - a PSP-only
+    /// title has nothing to read here, and Pulse's own PSP pressings keep
+    /// using [`Self::menu`] unchanged. Falls back to [`Self::menu`] when
+    /// `None`, so filling this in only ever narrows an approximation, never
+    /// widens a gap: a title read for one pressing and not the other still
+    /// boots and draws on both.
+    pub menu_ps2: Option<&'static menu::MenuSkin>,
     /// How this title lays a touch-icon front end out, for a title that
     /// authors *that* vocabulary instead of [`menu::MenuSkin`]'s. See
     /// [`touch::TouchFrontEnd`].

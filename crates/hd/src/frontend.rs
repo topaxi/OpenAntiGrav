@@ -358,6 +358,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
     menu: Some(MENU_SKIN),
+    menu_ps2: None,
     // HD authors the controller-driven `FEGlobals`/`<HorizMenu>` vocabulary
     // `MenuSkin` describes, not 2048's touch-icon idiom - see ADR-0054.
     touch: None,

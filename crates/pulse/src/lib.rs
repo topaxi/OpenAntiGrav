@@ -97,6 +97,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
     menu: Some(frontend::MENU_SKIN),
+    // Read off the PS2 pressing's own `Skin.xml`/`MainMenu_Definition.xml`,
+    // not scaled from the PSP's - see `frontend::PS2_MENU_SKIN`'s own doc.
+    menu_ps2: Some(frontend::PS2_MENU_SKIN),
     // Pulse authors the `FEGlobals`/`<Menu>` vocabulary `MenuSkin` describes,
     // not the touch-icon idiom `TouchFrontEnd` does - see ADR-0054.
     touch: None,

@@ -385,6 +385,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
     menu: None,
+    menu_ps2: None,
     touch: Some(TOUCH),
     boot: BOOT_PROFILE,
     // No frame screen in this idiom - `newFEshell` is the touch shell itself,
