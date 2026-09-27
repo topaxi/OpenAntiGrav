@@ -121,8 +121,16 @@ including the `~50` confidence still open on `up`/`l1`/`r1`.
   (seeded `records.toml` instead); the crop rect came from `DATA06`'s own
   `Target0/1/2 Medal` widgets, the very ones the bullet below still leaves
   unadopted for `hd_cell_draw_list` generally - only their crop numbers were
-  borrowed here, not the wider widget-name switch. See `docs/ui/campaign-screens.md`'s
-  "That latent bug was real and is fixed" section.
+  borrowed here, not the wider widget-name switch. `EPoints Title`'s own
+  `gold_medals`/`cell_count` mix-up (should read `points_earned`/`max_points`,
+  confirmed against a live RPCS3 frame) was found and fixed the same pass.
+  See `docs/ui/campaign-screens.md`'s "That latent bug was real and is
+  fixed" section for both, plus a third finding left open there: the same
+  RPCS3 frame's `Target0/1/2` row shows real medal icons this build still
+  draws as a plain grey arrow (`DATA02`'s own `Target0/1/2 Image` has no
+  `Hexmedal_HD` reference at all - only `DATA06`'s differently-shaped
+  `Target0/1/2 Medal` does), a second data point toward `Cell Selection`
+  needing `DATA06` generally, not just `Campaign Selection`.
 - **`Campaign Selection`'s own medal fraction denominator is unexplained**:
   an RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile, and
   this project's own parse of `DATA00`'s eight Fury grids totals 80 cells

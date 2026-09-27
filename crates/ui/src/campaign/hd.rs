@@ -363,9 +363,23 @@ pub fn hd_cell_draw_list(
         let name = text.name.as_deref().unwrap_or("");
         let content = match name {
             "EventNum" | "GridNum" => Some(event_counter(grid_index, grid_count)),
+            // `EPoints Title`'s own `<Values string="00/16 POINTS">` is a
+            // dummy placeholder, not the runtime format - measured directly
+            // against a live RPCS3 frame on this exact cell
+            // (`data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png`,
+            // `grid8_3_2` selected, a fresh zero-medal profile): the real
+            // screen reads `"0/21 POINTS"`, not zero-padded, and `21` is
+            // `grid_summary.max_points` (`3 * cell_count`, `Grid_PointsPossible`),
+            // not `cell_count` itself - `gold_medals`/`cell_count` was this
+            // widget's own earlier, wrong reading, confused with `Grid
+            // Selection`'s different `Points`/`Medals Title` field (that one
+            // genuinely is `gold_medals`/`cell_count`, unrelated to this
+            // screen's own `POINTS` line). Confidence 90: one live capture on
+            // the exact cell used here, not yet cross-checked against a
+            // second cell's own numbers.
             "EPoints Title" => Some(format!(
-                "{:02}/{:02} POINTS",
-                grid_summary.gold_medals, grid_summary.cell_count
+                "{}/{} POINTS",
+                grid_summary.points_earned, grid_summary.max_points
             )),
             "Event" => Some(cell_title(cell, strings)),
             "Track" => Some(hd_track_line(cell, circuit_names, strings)),

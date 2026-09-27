@@ -1290,6 +1290,90 @@ for the disc-backed pin.
 the real screen holds still on it or animates the spin the rest of the row
 implies (the atlas is far wider than one frame). Left as the same "one
 endpoint of an unmeasured animation" idiom `SELECTOR_TINT` already uses.
+`data/scratch/lane-hd/rpcs3-grid0-3-2/`'s own other frames were checked for
+a second data point and are too interlace-corrupted to compare (every one
+but `02-square.png` is a mid-transition capture); no second clean frame
+exists to diff against.
+
+**Position correction, same day**: a first draft of this fix centred the
+crop on `Outline_{x}_{y}`'s own hex rect (`hex_rect`, the same idiom
+`Selector` already uses) rather than the widget's own authored position.
+Wrong: `CellMode_Definition.xml`'s own `<Item>` grouping shows every
+`Medal_{x}_{y}` sits in its own item, offset a **constant** `(+7, +2)` from
+`Bg_{x}_{y}`/`Outline_{x}_{y}`'s own item at the same slot, checked across
+all seven columns - the disc's own registration between the medal layer and
+the hex layer, authored once, not a per-column tune. The centred draft's own
+`(+34, +2)` (half the 60x60 crop's own delta from the 128x64 hex) overshot
+the real `(+7, +2)` by 27px in `x` - `y` only agreed by coincidence (both
+`+2`, for unrelated reasons: the disc's constant on one side, half a 4px
+size delta on the other). `hd_tinted_medal_draw` now draws at the widget's
+own `image.x`/`image.y` instead, matching the pre-fix code's own position
+(which was always right - only the crop and tint were wrong).
+
+**A second, real bug found while re-verifying against that same RPCS3
+frame - fixed the same pass**: `EPoints Title` (`hd_cell_draw_list`) read
+`format!("{:02}/{:02} POINTS", grid_summary.gold_medals, grid_summary.cell_count)`,
+confused with `Grid Selection`'s own, different `Points`/`Medals Title`
+field (which genuinely is `gold_medals`/`cell_count`). The disc's own
+`<Values string="00/16 POINTS">` is a dummy placeholder, not the runtime
+format; `02-square.png` (`grid8_3_2` selected, fresh zero-medal profile)
+reads `"0/21 POINTS"` - not zero-padded, and `21` is `grid_summary.max_points`
+(`3 * cell_count`), not `cell_count` itself. Fixed to
+`format!("{}/{} POINTS", grid_summary.points_earned, grid_summary.max_points)`.
+Confidence 90 - one live capture on the exact grid this thread already had a
+decoded `grid_08.xml` for (`NitroElimElite/Skilled/Novice Target="200"` on
+`grid8_3_2` matches `02-square.png`'s own `"TARGET 200 (NOVICE)"` exactly),
+not yet cross-checked against a second grid's own numbers.
+
+**A third finding, real but left open rather than fixed this pass**: that
+same RPCS3 frame's `TARGET 200 (NOVICE)` row shows three lit, shaded medal
+icons beside `1ST`/`2ND`/`3RD` - not the plain grey `Subtitle_Arrow_HD.gtf`
+bullet `hd_cell_draw_list` draws today for `Target0/1/2 Image` (gated on
+`targets_visible`, drawn unmodified via `image_draw`). An earlier read of
+this pass's own attributed those icons to `MedalModelGold`/`Silver`/`Bronze`
+(the 3-D trophy `<ImageModel>` `docs/formats/hd-endrace-screens.md`
+documents for `Results`, already known **not collected** by this build's
+screen parser at all) - wrong, caught by checking directly:
+`CellMode_Definition.xml` (either archive's copy) authors no `ImageModel`/
+`Trophies`/`MedalModel` anywhere on `Cell Selection` at all
+(`grep -n 'ImageModel\|Trophies\|MedalModel'` over both, no match). The real
+icons are flat 2-D, the same `Hexmedal_HD` atlas this section's own fix
+crops - but from **`DATA06`'s** own `Target0/1/2 Medal` widgets
+(`width="60" height="60" u="0"`, `v="0"/"61"/"122"` - the exact numbers
+`hd_medal_frame` already reads as evidence, see above), which `DATA02`'s
+own `Target0/1/2 Image` (`Subtitle_Arrow_HD.gtf`, no `Hexmedal_HD` reference
+at all) does not have. This is first-party evidence the real PS3 renders
+`Cell Selection` off `DATA06`, not `DATA02` - the same open question
+`docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
+section below already measured for that screen alone, now with a second,
+independent data point pointing the same way for `Cell Selection` too.
+**Not adopted this pass**: switching `hd_cell_draw_list` from `DATA02` to
+`DATA06` is a bigger change than this lane's own scope - `DATA06`'s `Cell
+Selection` also carries an extra `bBg_x_y` layer and a shared `Target
+Title` header replacing `Target0/1/2 Title`, both already flagged and
+deferred in the "Where the screen actually lives" section below, for the
+same "safer, already-verified copy" reasoning. Whoever picks this up next
+has a second confirming data point now, not just the archive-precedence
+question `Campaign Selection` already settled.
+
+**Reproducing any of this without a real podium finish**: `--menu-page
+cell-select` reads `<config dir>/oag/records.toml` the same "read, never
+write" way a live session does. Point `XDG_CONFIG_HOME` at a scratch
+directory with its own `oag/records.toml` (`dirs::config_dir()` honours it)
+rather than editing the real, shared `~/.config/oag/records.toml` - e.g.:
+
+```sh
+mkdir -p /tmp/oag-scratch-cfg/oag
+cat > /tmp/oag-scratch-cfg/oag/records.toml <<'EOF'
+[[campaign]]
+title = "wipeout hd"
+cell = "grid8_2_1"
+best_medal = "gold"
+EOF
+XDG_CONFIG_HOME=/tmp/oag-scratch-cfg cargo run -q -p oag-game -- \
+  data/images/hdfury-ps3-eu-dec.iso --menu-page cell-select --no-audio \
+  --screenshot /tmp/cell-select.png
+```
 
 ## Wipeout HD/Fury: `Campaign Selection`, 2026-09-21
 
