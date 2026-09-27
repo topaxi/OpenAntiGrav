@@ -71,6 +71,55 @@
 //! whole scheme stays **chosen, not measured**, now with a better-fitted
 //! scale rather than a wrong one.
 //!
+//! # 2026-09-27: the marker itself is the disc's own hex art, not a flat square
+//!
+//! **The grid's own scale and the per-event placement formula are still
+//! exactly as the section above leaves them - chosen, not measured, same
+//! even grid.** What changed is what each cell draws *with*: this pass
+//! decoded every plausible hex/icon filename the 2026-09-25 pass's own
+//! survey had only grepped for **by name against XML text**, never opened as
+//! pixels (`data/FE/Images/hex_{filled,outline,select}.gxt`,
+//! `data/FE/NewImages/callout/{race,speed,zone,combat}_mode.gxt`, all in the
+//! base package, none named by any `NEWGUI/*.xml` widget - the same
+//! "native-code-driven, unlocated in a widget" situation `canvasTexture.gxt`
+//! is already in). All seven decode to real, unambiguous art:
+//! `hex_filled`/`hex_outline`/`hex_select` are a gloss-filled hexagon, a thin
+//! hexagonal outline and a thicker glow ring; `race_mode` is a chequered
+//! flag, `speed_mode` a stopwatch, `zone_mode` a radar/target glyph and
+//! `combat_mode` a crosshair.
+//!
+//! **Confirmed against the same committed frames the grid's own scale was
+//! measured off, not just visually plausible in isolation.** Frames `12`
+//! and `13` (`data/reference/2048-frontend/`) show green hexagon tiles
+//! carrying a chequered-flag glyph and a stopwatch glyph, grey ones carrying
+//! the same two glyphs unlit - exactly `race_mode`'s flag and `speed_mode`'s
+//! stopwatch, on exactly the green/grey split [`ProgressState::Passed`]/
+//! [`ProgressState::Locked`] already draw with `Pass2048`/`Grey2048`. This
+//! is a stronger correction than the 2026-09-25 pass could make with a name
+//! search alone: `hex_filled.gxt`, `hex_outline.gxt` and the four
+//! `*_mode.gxt` icons all decode to pixels a live capture already showed
+//! sitting on the map, not merely names that were never ruled out.
+//!
+//! **Still not the real thing, honestly**: the real tile is lit with a 3D
+//! bevel and drop shadow this build's flat colour-tinted sprite does not
+//! reproduce; the striped/dotted "reachable path" texture connecting a
+//! season's own tiles (visible behind the hexagons in both frames) has no
+//! decoded source and is not drawn; the season title card
+//! (`A·G·R·C 2048`/`2049`/`2050`, frame `12`'s own left edge) and the header
+//! (home button, top-right badge cluster) remain undrawn, same gaps the
+//! 2026-09-25 pass already named. [`EventIcon`] itself is measured at the
+//! same confidence `EventKind` already carries (78-82,
+//! `docs/formats/2048-campaign.md`), since it is a direct re-reading of that
+//! same field - not a new guess.
+//!
+//! Wired through `oag_game::boot::sprites::load`'s own `extra` mechanism
+//! (the same one the menu blocks' nine-patch already used) - see
+//! [`HEX_FILLED`] and [`EventIcon::texture_name`]'s own doc comments. A
+//! sheet with none of these seven (every `oag-ui` unit test in this crate,
+//! which boots with an empty sheet) falls back to the original flat square
+//! and rectangle cursor ring exactly as before - see [`Frontend::placed`]
+//! and [`Frontend::draw_campaign_map`].
+//!
 //! # The bottom panel is gone, and no event-card stand-in replaces it
 //!
 //! **2026-09-25.** Until this pass, tapping (pad or pointer) drew a
@@ -178,6 +227,67 @@ const ORIGIN: (f32, f32) = (65.0, 63.0);
 /// doc comment.
 const MARKER: f32 = 108.0;
 
+/// The disc's own hex tile art (`data/FE/Images/hex_{filled,outline,select}.gxt`),
+/// decoded and visually confirmed 2026-09-27: a gloss-filled hexagon, a thin
+/// hexagonal outline and a thicker glow ring, all matching the hexagonal
+/// silhouette the live Vita3K capture already showed. **Not named by any
+/// front-end widget**, the same "native-code-driven, no authoring `<Image>`"
+/// situation `canvasTexture.gxt` is already in, so
+/// `oag_game::boot::sprites::load` asks for them by name through its own
+/// `extra` list, the same mechanism the menu-block art already uses. Drawn
+/// in place of the flat colour square whenever the sheet decoded them
+/// (`Frontend::placed` returning `Some`); falls back to the old flat square
+/// otherwise, so a build with no sprite sheet (every `oag-ui` unit test in
+/// this crate) draws exactly what it always did rather than a blank hole.
+/// Confidence 80: the shape and the file names are a direct pixel read, not
+/// a guess, but which exact draw call composites them (still unfound, see
+/// this module's own doc comment above) is not, so the per-event pixel
+/// formula and the hex tessellation itself stay **chosen, not measured**.
+pub const HEX_FILLED: &str = r"Data\FE\Images\hex_filled.gtf";
+/// See [`HEX_FILLED`].
+pub const HEX_OUTLINE: &str = r"Data\FE\Images\hex_outline.gtf";
+/// See [`HEX_FILLED`]. Drawn only on the selected marker, in `Orange2048`,
+/// in place of [`Frontend::draw_cursor_ring`]'s rectangle ring when it
+/// decoded.
+pub const HEX_SELECT: &str = r"Data\FE\Images\hex_select.gtf";
+
+/// Which of the disc's own four campaign-event icons an event's own kind
+/// draws, `Data\FE\NewImages\callout\*_mode.gtf` - decoded and visually
+/// confirmed 2026-09-27: `race_mode` is a chequered flag, `speed_mode` a
+/// stopwatch, `zone_mode` a radar/target glyph and `combat_mode` a
+/// crosshair, exactly the "chequered flag / stopwatch" icon this module's
+/// doc comment already speculated existed on the real map. **This crate's
+/// own copy of `oag_2048::campaign::EventKind`** (plus the `laps == 0`
+/// Speed Lap split `oag_2048::campaign::engine_mode` already makes), kept
+/// separate so `oag-ui` never depends on `oag_2048` or `oag_tables` - the
+/// same reason [`EarnedTier`] is its own copy of `oag_2048::campaign::Tier`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventIcon {
+    /// A lap race with one or more laps.
+    Race,
+    /// A lap race with `laps == Some(0)`, Speed Lap's own sentinel.
+    SpeedLap,
+    /// A Zone survival event.
+    Zone,
+    /// An Elimination event.
+    Elimination,
+}
+
+impl EventIcon {
+    /// The disc's own texture name, spelled the way every other front-end
+    /// `Src=` is (`.gtf`, respelled `.gxt` by
+    /// `oag_game::boot::sprites::read_front_end_first`).
+    #[must_use]
+    pub fn texture_name(self) -> &'static str {
+        match self {
+            Self::Race => r"Data\FE\NewImages\callout\race_mode.gtf",
+            Self::SpeedLap => r"Data\FE\NewImages\callout\speed_mode.gtf",
+            Self::Zone => r"Data\FE\NewImages\callout\zone_mode.gtf",
+            Self::Elimination => r"Data\FE\NewImages\callout\combat_mode.gtf",
+        }
+    }
+}
+
 /// One campaign event, in the terms the map draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapEvent {
@@ -194,6 +304,9 @@ pub struct MapEvent {
     /// event open from the start. Authored data, read once at boot; see
     /// this module's own "Progression" section.
     pub requires: Option<String>,
+    /// Which of the disc's own four mode icons this event draws - see
+    /// [`EventIcon`].
+    pub kind: EventIcon,
 }
 
 /// A finished attempt's own two-tier result - this crate's copy of
@@ -469,6 +582,33 @@ impl Frontend {
         true
     }
 
+    /// Where `src` sits in the sheet, or `None` when it never decoded (or
+    /// never loaded - every `oag-ui` unit test in this crate boots with an
+    /// empty sheet, which is what makes the hex art in [`Self::draw_campaign_map`]
+    /// optional rather than assumed).
+    fn placed(&self, src: &str) -> Option<Placed> {
+        self.placements
+            .iter()
+            .find(|(name, _)| name == src)
+            .map(|(_, placed)| *placed)
+    }
+
+    /// A sprite of `placed`'s own texture, stretched to `rect` and tinted
+    /// `color` - the shared shape [`Self::draw_campaign_map`]'s three hex
+    /// layers and its mode icon all draw with.
+    fn sprite_at(rect: [f32; 4], placed: Placed, color: [f32; 4]) -> Draw {
+        Draw::Sprite {
+            rect,
+            uv: [
+                placed.x as f32,
+                placed.y as f32,
+                placed.width as f32,
+                placed.height as f32,
+            ],
+            color,
+        }
+    }
+
     /// The map: every marker in view, the cursor ring, and the panel.
     ///
     /// Each marker's own colour is one of the disc's own four -
@@ -476,11 +616,22 @@ impl Frontend {
     /// the same `Blue2048` this always drew, [`ProgressState::Passed`]
     /// `Pass2048` and [`ProgressState::Elite`] `ElitePass2048` - see this
     /// module's own "Progression" section for why no fifth colour is drawn.
+    ///
+    /// **Each marker is the disc's own hex tile art since 2026-09-27**, when
+    /// the sheet has it - see [`HEX_FILLED`]'s own doc comment - tinted by
+    /// the same four colours a flat square always was, with
+    /// [`EventIcon::texture_name`]'s mode glyph centred on top. A sheet with
+    /// none of it falls back to the original flat square and rectangle
+    /// cursor ring, unchanged.
     pub(super) fn draw_campaign_map(&self, out: &mut Vec<Draw>) {
         let (width, height) = self.space.size;
         let open = self.global_colour("Blue2048");
         let cursor = self.global_colour("Orange2048");
+        let white = [1.0, 1.0, 1.0, 1.0];
         let (sx, sy) = self.campaign.scroll;
+        let hex_filled = self.placed(HEX_FILLED);
+        let hex_outline = self.placed(HEX_OUTLINE);
+        let hex_select = self.placed(HEX_SELECT);
         for (at, event) in self.campaign.events.iter().enumerate() {
             let [x, y, w, h] = CampaignMap::marker(event);
             let rect = [x - sx, y - sy, w, h];
@@ -493,9 +644,36 @@ impl Frontend {
                 ProgressState::Passed => self.global_colour("Pass2048"),
                 ProgressState::Elite => self.global_colour("ElitePass2048"),
             };
-            out.push(Draw::Fill { rect, color });
+            match hex_filled {
+                Some(filled) => {
+                    out.push(Self::sprite_at(rect, filled, color));
+                    if let Some(outline) = hex_outline {
+                        out.push(Self::sprite_at(rect, outline, white));
+                    }
+                }
+                None => out.push(Draw::Fill { rect, color }),
+            }
+            if let Some(icon) = self.placed(event.kind.texture_name()) {
+                // The mode glyph, centred, at a fraction of the marker's own
+                // side - **chosen**, since nothing measured the real map's
+                // own icon-to-hex size ratio.
+                let side = w * 0.42;
+                out.push(Self::sprite_at(
+                    [
+                        rect[0] + (w - side) * 0.5,
+                        rect[1] + (h - side) * 0.5,
+                        side,
+                        side,
+                    ],
+                    icon,
+                    white,
+                ));
+            }
             if at == self.campaign.selected {
-                self.draw_cursor_ring(rect, cursor, out);
+                match hex_select {
+                    Some(select) => out.push(Self::sprite_at(rect, select, cursor)),
+                    None => self.draw_cursor_ring(rect, cursor, out),
+                }
             }
         }
         if self.campaign.events.is_empty() {

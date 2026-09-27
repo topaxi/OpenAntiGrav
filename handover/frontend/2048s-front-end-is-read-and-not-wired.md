@@ -116,13 +116,29 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   that factor, with `MARKER` set directly off a real hex tile's own
   measured bounding box (122x117 px, frame `13`). See
   `docs/formats/2048-frontend.md`'s campaign-map row for the full pixel
-  evidence. Still unmeasured: the per-event `M_X`/`M_Y` formula itself, the
-  hex tile art, the background, the header and the season card - a full
-  archive-wide `.xml` grep for every plausible asset name
+  evidence. A full archive-wide `.xml` grep for every plausible asset name
   (`hex_filled.gxt`, `Hexagon_HD*.gxt`, `Cup2048.gxt`, `TinyCallout_*.gxt`,
-  every `medals/`/`trophy/` icon) found none of them referenced anywhere,
-  so this is still native-code-driven and needs a Ghidra pass, not another
-  data sweep. **A dead end worth recording**: correlating the 47
+  every `medals/`/`trophy/` icon) found none of them referenced by any
+  widget - **but referenced by no widget is not the same as absent from the
+  archive**, and every name in that list is real. **Resolved 2026-09-27: the
+  hex tile art and the four per-kind icons are decoded and drawn.**
+  `hex_filled.gxt`/`hex_outline.gxt`/`hex_select.gxt` and `callout/
+  {race,speed,zone,combat}_mode.gxt` (all base package) open as real pixels -
+  a gloss-filled hexagon, a thin outline, a glow ring, and a chequered flag /
+  stopwatch / radar-target / crosshair - confirmed against frames `12`/`13`'s
+  own green/grey tiles carrying exactly the flag and stopwatch glyphs.
+  `oag_ui::frontend::campaign_map` now draws them, tinted by the same four
+  progress colours a flat square always was, gated on `EventKind`;
+  `crates/game/tests/vita_2048_boot_ground_truth.rs::
+  the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares` pins it
+  against the real package. Still unmeasured: the per-event `M_X`/`M_Y`
+  formula itself (the grid is still an even square, just drawn with hex art
+  now), the 3D bevel/drop-shadow the real tile carries, the striped/dotted
+  path texture connecting a season's own tiles, the background, the header
+  and the season card - all still native-code-driven and needing a Ghidra
+  pass, not another data sweep (the sweep this time was pixels, not text,
+  and still did not place them). **A dead end worth recording**: correlating
+  the 47
   `linkedevent`-carrying `<CanvasLabel>`s' own `x`/`y` against their event's
   `M_X`/`M_Y` looks like a projection at first (a least-squares fit lands
   `y` almost exactly), but the file's own `MPSeason01`-`20` labels - no
