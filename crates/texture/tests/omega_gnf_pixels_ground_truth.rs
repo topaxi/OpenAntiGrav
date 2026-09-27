@@ -14,24 +14,28 @@
 //!
 //! # What this asserts, and what it deliberately does not
 //!
-//! **`decode` untiles nothing - see `docs/formats/gnf.md`'s tiling
-//! section for why.** Every valid `.gnf` `docs/formats/gnf.md`'s census
-//! found (1,407 across all nine archives) declares `TileMode(13)`
-//! (`Thin_1DThin` - GFD-Studio's own `TileMode.cs` enum), micro-tiled, so
-//! every one of them is expected to fail `decode` with
-//! [`oag_texture::gnf::Error::Tiled`] - naming that outright rather than a
-//! floor on how many decode successfully is what keeps this test
-//! meaningful (and failing loudly) the day someone lands the untiler.
+//! **`decode` now untiles `TileMode(13)` (`Thin_1DThin`) BC7 - see
+//! `docs/formats/gnf.md`'s "Tiling" section for the evidence trail that
+//! closed the open question this test used to pin (every entry refused by
+//! name).** A real, base-level-clean `Thin_1DThin` entry now decodes; one
+//! whose base level carries a block with no valid BC7 mode bit - the same
+//! PSARC-level missing/garbage-content population `docs/formats/psarc.md`'s
+//! "Block data location" section documents family-wide - is refused by name
+//! with [`oag_texture::gnf::Error::CorruptBlocks`] instead, never decoded
+//! around. `crates/texture/examples/gnf_frontend_census.rs` measures the
+//! split on the front end's own sprite sheet specifically.
 //!
 //! What this corpus sweep actually is a fact about:
 //!
 //! 1. `Texture::decode` never panics on any real, `GNF `-valid entry across
 //!    the whole corpus - a decode-time analogue of
 //!    `omega_gnf_ground_truth.rs`'s own parse-time sweep.
-//! 2. Every entry's [`oag_texture::gnf::Error`] is one of the three
-//!    `decode` can raise, and a tiled entry's [`Error::Tiled`] names the
-//!    *exact* `tile_mode` byte the descriptor itself declares - not just
-//!    "an error happened".
+//! 2. Every entry's [`oag_texture::gnf::Error`] is one of the four
+//!    `decode` can raise for this corpus (`Tiled` no real entry here has
+//!    triggered since every one declares 8 or 13; `CorruptBlocks`,
+//!    `UnsupportedFormat`, `DataOutOfBounds`), and a still-tiled entry's
+//!    [`oag_texture::gnf::Error::Tiled`] names the *exact* `tile_mode` byte
+//!    the descriptor itself declares - not just "an error happened".
 //! 3. `data08.psarc`'s `Data/fe/` subtree specifically (the front-end
 //!    images and fonts) - named in the task brief as the set to sweep in
 //!    full - gets the same treatment, isolated from the rest so a reader
@@ -72,16 +76,18 @@ fn open_patch(name: &str) -> Option<Archive> {
 /// asserting it never panics and, when it errs, that the error is one this
 /// module's own contract promises - [`Error::Tiled`]'s own `tile_mode`
 /// checked against the descriptor's, not just "an error came back".
-/// Returns `(decoded, tiled, other_error, unparsed)` counts - `unparsed` is
-/// the still-open "garbage"/"all-zero" population `docs/formats/psarc.md`
+/// Returns `(decoded, corrupt, other_error, unparsed)` counts - `unparsed`
+/// is the still-open "garbage"/"all-zero" population `docs/formats/psarc.md`
 /// measures, already covered for panics by `omega_gnf_ground_truth.rs`, not
-/// this function's own concern beyond counting it.
+/// this function's own concern beyond counting it; `corrupt` is
+/// [`Error::CorruptBlocks`], the base-level-only refusal this test's own doc
+/// comment explains.
 fn decode_all(
     archive: &mut Archive,
     paths: &[String],
     label: &str,
 ) -> (usize, usize, usize, usize) {
-    let (mut decoded, mut tiled, mut other, mut unparsed) = (0, 0, 0, 0);
+    let (mut decoded, mut corrupt, mut other, mut unparsed) = (0, 0, 0, 0);
     for path in paths {
         let bytes = archive
             .read_path(path)
@@ -99,12 +105,15 @@ fn decode_all(
                 );
                 decoded += 1;
             }
+            Err(gnf::Error::CorruptBlocks { .. }) => {
+                corrupt += 1;
+            }
             Err(gnf::Error::Tiled { tile_mode }) => {
                 assert_eq!(
                     tile_mode, texture.tile_mode.0,
                     "{label}: {path}: Error::Tiled named the wrong tile_mode"
                 );
-                tiled += 1;
+                other += 1;
             }
             Err(gnf::Error::UnsupportedFormat { .. } | gnf::Error::DataOutOfBounds { .. }) => {
                 other += 1;
@@ -112,7 +121,7 @@ fn decode_all(
             Err(other_err) => panic!("{label}: {path}: unexpected error: {other_err}"),
         }
     }
-    (decoded, tiled, other, unparsed)
+    (decoded, corrupt, other, unparsed)
 }
 
 fn check_archive(open: impl FnOnce() -> Option<Archive>, name: &str) {
@@ -128,13 +137,13 @@ fn check_archive(open: impl FnOnce() -> Option<Archive>, name: &str) {
     if paths.is_empty() {
         return;
     }
-    let (decoded, tiled, other, unparsed) = decode_all(&mut archive, &paths, name);
+    let (decoded, corrupt, other, unparsed) = decode_all(&mut archive, &paths, name);
     println!(
-        "{name}: {decoded} decoded, {tiled} tiled (refused by name), {other} other clean errors, {unparsed} unparsed, out of {} entries",
+        "{name}: {decoded} decoded, {corrupt} refused (corrupt base level), {other} other clean errors, {unparsed} unparsed, out of {} entries",
         paths.len()
     );
     assert!(
-        decoded + tiled + other > 0,
+        decoded + corrupt + other > 0,
         "{name}: not one of {} .gnf entries reached decode()",
         paths.len()
     );
@@ -142,49 +151,49 @@ fn check_archive(open: impl FnOnce() -> Option<Archive>, name: &str) {
 
 #[test]
 #[ignore]
-fn data00_gnf_entries_decode_or_are_named_tiled() {
+fn data00_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_base(BASE_ARCHIVES[0]), BASE_ARCHIVES[0]);
 }
 
 #[test]
 #[ignore]
-fn data01_gnf_entries_decode_or_are_named_tiled() {
+fn data01_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_base(BASE_ARCHIVES[1]), BASE_ARCHIVES[1]);
 }
 
 #[test]
 #[ignore]
-fn data02_gnf_entries_decode_or_are_named_tiled() {
+fn data02_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_base(BASE_ARCHIVES[2]), BASE_ARCHIVES[2]);
 }
 
 #[test]
 #[ignore]
-fn data03_gnf_entries_decode_or_are_named_tiled() {
+fn data03_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_base(BASE_ARCHIVES[3]), BASE_ARCHIVES[3]);
 }
 
 #[test]
 #[ignore]
-fn data04_gnf_entries_decode_or_are_named_tiled() {
+fn data04_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_base(BASE_ARCHIVES[4]), BASE_ARCHIVES[4]);
 }
 
 #[test]
 #[ignore]
-fn patch_data05_gnf_entries_decode_or_are_named_tiled() {
+fn patch_data05_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_patch(PATCH_ARCHIVES[0]), PATCH_ARCHIVES[0]);
 }
 
 #[test]
 #[ignore]
-fn patch_data07_gnf_entries_decode_or_are_named_tiled() {
+fn patch_data07_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_patch(PATCH_ARCHIVES[1]), PATCH_ARCHIVES[1]);
 }
 
 #[test]
 #[ignore]
-fn patch_data09_gnf_entries_decode_or_are_named_tiled() {
+fn patch_data09_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_patch(PATCH_ARCHIVES[3]), PATCH_ARCHIVES[3]);
 }
 
@@ -193,10 +202,14 @@ fn patch_data09_gnf_entries_decode_or_are_named_tiled() {
 /// `Data/fe/fonts/*.gnf`) - swept in full rather than sampled, since it is
 /// small enough to (312 `.gnf` entries in the whole archive, per
 /// `docs/formats/gnf.md`'s census) and is exactly the asset class a reader
-/// would check first.
+/// would check first. Asserts `decoded > 0` outright, not just
+/// `decoded + corrupt + other > 0` the way the whole-archive sweeps above
+/// do - `crates/texture/examples/gnf_frontend_census.rs` measured 219 of
+/// this exact subtree drawing clean, so a regression that drops this back
+/// to zero real pictures is the one this test exists to catch.
 #[test]
 #[ignore]
-fn data08_fe_gnf_entries_decode_or_are_named_tiled() {
+fn data08_fe_gnf_entries_decode_or_refuse_by_name() {
     let Some(mut archive) = open_patch("data08.psarc") else {
         return;
     };
@@ -211,20 +224,19 @@ fn data08_fe_gnf_entries_decode_or_are_named_tiled() {
         !paths.is_empty(),
         "data08.psarc: no Data/fe/*.gnf entries at all"
     );
-    let (decoded, tiled, other, unparsed) =
+    let (decoded, corrupt, other, unparsed) =
         decode_all(&mut archive, &paths, "data08.psarc Data/fe/");
     println!(
-        "data08.psarc Data/fe/: {decoded} decoded, {tiled} tiled (refused by name), {other} other clean errors, {unparsed} unparsed, out of {} entries",
+        "data08.psarc Data/fe/: {decoded} decoded, {corrupt} refused (corrupt base level), {other} other clean errors, {unparsed} unparsed, out of {} entries",
         paths.len()
     );
     assert_eq!(
-        decoded + tiled + other + unparsed,
+        decoded + corrupt + other + unparsed,
         paths.len(),
         "data08.psarc Data/fe/: not every entry reached an accounted-for outcome"
     );
     assert!(
-        decoded + tiled + other > 0,
-        "data08.psarc Data/fe/: not one of {} entries reached decode()",
-        paths.len()
+        decoded > 0,
+        "data08.psarc Data/fe/: not one real front-end image decoded"
     );
 }

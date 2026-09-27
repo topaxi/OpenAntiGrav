@@ -65,15 +65,26 @@ content against `hd-frontend.md`.
   boots and stops on `Language Selection`; `--menu-page` draws this build's
   own main menu and the campaign grid/cell screens (nineteen grids, twelve
   parse). What that opened rather than closed:
-  - **A `.gnf` reader** is the single highest-value follow-on now - every
-    front-end image and the campaign's hex textures are `.gnf`, confirmed
-    present under the expected stems and named by size in the boot report,
-    and nothing draws until one exists. Not attempted in the crate's own
-    lane, by its own brief's instruction.
-  - `crates/game/src/campaign.rs::load_omega` reads its hex textures by the
+  - ~~A `.gnf` reader is the single highest-value follow-on now~~ - landed
+    2026-09-27 (`oag_texture::gnf`, [`gnf.md`](../../docs/formats/gnf.md)):
+    container, BC7 and the micro-tile address formula all decode, guarded by
+    an `Error::CorruptBlocks` refusal for a base level with genuinely
+    missing PSARC-level content (219 of 289 front-end/campaign `.gnf` files
+    draw clean). Wired into `crates/game/src/sprite.rs`,
+    `crates/game/src/boot/sprites.rs::gnf_sibling` and
+    `crates/game/src/campaign.rs::load_omega`. What that opened rather than
+    closed: this lane's own two-archive extraction is missing five of the
+    campaign's own hex texture names outright (`Hexagon_HD_OUTLINE.gtf` and
+    four siblings - no `.gnf` sibling either, not an unread name) and most
+    of the front end's small *boot-time* image set (`saveIcons.gnf` is
+    present but corrupt, `line.gnf` fails its own magic check) -
+    `omega-status.md`'s "What did not draw" section names each one; whether
+    a more complete disc dump has them is unchecked.
+  - ~~`crates/game/src/campaign.rs::load_omega` reads its hex textures by the
     literal HD path rather than through the front end's own
-    `gnf_sibling_report`, so a missing one reports a bare "not found" instead
-    of naming the `.gnf` sibling - a small, not-yet-done follow-up.
+    `gnf_sibling_report`~~ - landed in the same change: it now falls back to
+    `crate::boot::sprites::gnf_sibling` (renamed, and reused rather than
+    front-end-only) the same way the sprite sheet does.
   - Racing stays fully out of scope: `oag_omega::race::DEFAULTS` is
     real-but-unread placeholders, and whether `tech_de_ra\track.vex` (the
     chosen default) even parses as a `WO Track` node was not checked past a

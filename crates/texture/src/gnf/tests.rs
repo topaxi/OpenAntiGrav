@@ -104,12 +104,34 @@ fn linear_tile_modes_are_recognised() {
 }
 
 #[test]
-fn decode_refuses_the_tiled_real_sample_by_name() {
+fn decode_reports_out_of_bounds_on_the_truncated_real_sample() {
+    // `holographic_glow_head()` is the descriptor only - `docs/formats/gnf.md`'s
+    // own doc comment on the fixture says so - so decoding its `Thin_1DThin`
+    // base level (needs 8x4 = 32 BC7 blocks, 512 bytes past `data_offset`)
+    // runs off the end of the 52-byte fixture. See
+    // `decode_refuses_a_tile_mode_with_no_address_formula_by_name` for the
+    // actually-refused-by-name case (a genuinely unhandled `TileMode`).
     let texture = Texture::parse(&holographic_glow_head()).expect("parses");
-    assert_eq!(
+    assert!(matches!(
         texture.decode(&holographic_glow_head()),
-        Err(Error::Tiled { tile_mode: 0x0d })
-    );
+        Err(Error::DataOutOfBounds { .. })
+    ));
+}
+
+#[test]
+fn decode_refuses_a_tile_mode_with_no_address_formula_by_name() {
+    // `Thin_2DThin` (14) - macro-tiled, one index past the `Thin_1DThin`
+    // (13) this module's `decode` handles - still has no address formula
+    // here, and no real `.gnf` this project has sampled declares it. Built
+    // from the linear fixture with only `word3`'s `tile_mode` field
+    // rewritten, so the rest of the descriptor stays a small, valid 4x4 BC7
+    // texture and the refusal is provably about the tile mode alone.
+    let mut bytes = linear_bc7_4x4([0u8; 16]);
+    let at = 16;
+    let word3 = 0x0eu32 << 20; // TileMode 14, Thin_2DThin
+    bytes[at + 12..at + 16].copy_from_slice(&word3.to_le_bytes());
+    let texture = Texture::parse(&bytes).expect("parses");
+    assert_eq!(texture.decode(&bytes), Err(Error::Tiled { tile_mode: 14 }));
 }
 
 /// A minimal synthetic single-block `.gnf`: linear, BC7, 4x4 - small enough
