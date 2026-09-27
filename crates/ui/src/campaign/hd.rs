@@ -67,7 +67,7 @@
 //!   this build keeps no saved record for, the same absence
 //!   `crate::campaign::draw::cell_draw_list`'s own `Line5`/`Line8` leave.
 
-use oag_tables::race_campaign::{Cell, Mode};
+use oag_tables::race_campaign::{Cell, Medal, Mode};
 
 use crate::frontend::{Draw, Placed};
 use crate::language::{CircuitNames, StringTable};
@@ -76,8 +76,8 @@ use crate::pointer::{Pointer, contains};
 use crate::screen::Image;
 
 use super::draw::{
-    cell_title, centred_selector_draw, fill_draw, hex_slot_xy, image_draw, laps_line, medal_argb,
-    medal_line, target_value, text_draw, tinted_medal_draw,
+    cell_title, centred_selector_draw, fill_draw, hex_slot_xy, image_draw, laps_line, medal_line,
+    sprite_draw, target_value, text_draw,
 };
 use super::pointer::{Target, What};
 use super::{CellSelection, Event, GridSelection, GridSummary, Layout, hex_rect};
@@ -340,11 +340,11 @@ pub fn hd_cell_draw_list(
             continue;
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
-            out.push(tinted_medal_draw(
-                image,
-                placed,
-                model.medal_at(x, y).map_or(0xffff_ffff, medal_argb),
-            ));
+            if let Some(medal) = model.medal_at(x, y)
+                && let Some(hex) = hex_rect(screen, x as usize, y as usize, sprites)
+            {
+                out.push(hd_tinted_medal_draw(image, placed, medal, hex));
+            }
             continue;
         }
         out.push(image_draw(image, placed));
@@ -431,6 +431,89 @@ pub fn hd_cell_draw_list(
     }
     layers.body = out;
     layers
+}
+
+/// Where one medal tier's own static icon sits in `Hexmedal_HD.mip`/`.gtf` -
+/// **measured off the disc's own authored crop, not eyeballed**:
+/// `DATA06.PSARC`'s own copy of `CellMode_Definition.xml` (`data/fe/frontend/gui/cellmode_definition.xml`)
+/// draws the same shared atlas a third way, on `Cell Selection`'s
+/// `Target0/1/2 Medal` widgets, and *those* author the crop this build never
+/// had for `Medal_{x}_{y}`: `width="60" height="60" u="0" v="0"` for
+/// `Target0 Medal`, `v="61"` for `Target1`, `v="122"` for `Target2`,
+/// `TxtrWidth`/`TxtrHeight` both `60` on all three. `Target0`/`Target1`/
+/// `Target2` are already gold/silver/bronze elsewhere on this same screen
+/// (`hd_cell_draw_list`'s own `"Target0" => target_value(targets.gold, ..)`
+/// arm and siblings, and `docs/ui/campaign-screens.md`'s note that this
+/// widget family replaces the disc's own `IG_HUD_GOLD`/`SILVER`/`BRONZE`
+/// labels), so the atlas reads **gold at the top, descending** - confidence
+/// 90: a real widget's own authored attributes, for the identical texture,
+/// on the same title's own screen family, not a decompile or a capture.
+///
+/// **Cross-checked against the raw texel data independently**, and the two
+/// disagree on which end is "top" until the discrepancy itself is
+/// explained: decoding `data/fe/images/hexmedal_hd.gtf` directly
+/// (`oag_texture::gtf::Gtf::parse`, `crates/texture/examples/scratch_hexmedal.rs`,
+/// not committed) shows a 1024x256 DXT5 atlas whose *raster* row order is
+/// the authored one upside down - the band this decode puts at
+/// `y=196..256` (reaching the texture's own bottom edge exactly) is the one
+/// whose mean RGB reads warm yellow-gold, matching `Target0`'s own gold at
+/// `v=0`. That is consistent with a Y-flip between this decoder's raster
+/// order and the GPU's own `V` convention (unmeasured *which* of the two is
+/// "backwards" - nothing here decodes a second, independently-written GTF
+/// reader to settle it) rather than two different textures: the row order,
+/// the row height (60, matching `TxtrHeight`) and the per-row colour (one
+/// warm, one neutral grey, one warm) all agree once the flip is accounted
+/// for. The authored numbers below are what a caller already trusts
+/// elsewhere in this same file (`Target0 Medal`'s own widget, wired as
+/// ordinary XML), so they are used verbatim rather than the raster reading.
+///
+/// **Which column is "the" icon is not independently measured, and says
+/// so** - `Target0 Medal`'s own `u="0"` picks the same first frame this
+/// function already uses, but nothing pins whether the real screen holds
+/// still on it or animates a spin through the rest of the row (the atlas
+/// is far wider than one 60px frame). No earned-medal capture exists to
+/// check either way - the same gap `medal_argb`'s own doc already records.
+/// `u=0` is used because it is what the disc's own comparable widget uses,
+/// not a guess.
+fn hd_medal_frame(medal: Medal) -> [f32; 4] {
+    const FRAME: f32 = 60.0;
+    let v = match medal {
+        Medal::Gold => 0.0,
+        Medal::Silver => 61.0,
+        Medal::Bronze => 122.0,
+    };
+    [0.0, v, FRAME, FRAME]
+}
+
+/// `Medal_{x}_{y}`'s own draw: [`hd_medal_frame`]'s crop, drawn at its own
+/// native 60x60 size and centred on `hex` (the slot's own rect - the same
+/// [`hex_rect`] call already resolves for [`centred_selector_draw`], so
+/// this lands on `Outline_{x}_{y}`'s own tile) - not stretched to fill
+/// `hex`'s own `128x64`, since the source frame is roughly square and
+/// `hex`'s own rect is not: forcing the crop to that aspect would squash
+/// the medal rather than fix it. The same centring
+/// [`centred_selector_draw`] already does for `Selector`'s own sprite, not
+/// the unauthored full-atlas size the widget's own XML would otherwise
+/// fall back to. **No tint**: unlike Pulse's `hex_filled.mip` (a plain
+/// white hex [`super::draw::tinted_medal_draw`] still colours with
+/// [`super::draw::medal_argb`] - that path is untouched, and still correct
+/// for Pulse), HD's own atlas frame already carries the tier's colour
+/// baked into its texels, so multiplying a flat swatch over it a second
+/// time was the other half of the bug this replaces.
+fn hd_tinted_medal_draw(image: &Image, placed: Placed, medal: Medal, hex: [f32; 4]) -> Draw {
+    let [u, v, frame_width, frame_height] = hd_medal_frame(medal);
+    let cropped = Image {
+        width: Some(frame_width),
+        height: Some(frame_height),
+        u: Some(u),
+        v: Some(v),
+        texture_width: Some(frame_width),
+        texture_height: Some(frame_height),
+        ..image.clone()
+    };
+    let x = hex[0] + (hex[2] - frame_width) * 0.5;
+    let y = hex[1] + (hex[3] - frame_height) * 0.5;
+    sprite_draw(&cropped, placed, x, y, 0xffff_ffff)
 }
 
 /// `Track`'s own resolution - the circuit's display name through

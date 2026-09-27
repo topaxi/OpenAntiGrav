@@ -1225,6 +1225,60 @@ likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
 `texture_width`/`texture_height` fields would need to select, not something
 `hex_rect`'s own fix touches.
 
+### That latent bug was real and is fixed - 2026-09-27
+
+**Confirmed by seeding a `records.toml` with earned medals rather than
+waiting for a live podium finish** - `--menu-page cell-select` reads that
+file the same "read, never write" way a live session does
+(`crate::capture::campaign_page::campaign_page`'s own `records` parameter),
+so three synthetic `[[campaign]]` rows (`grid8_2_1` gold, `grid8_4_1`
+silver, `grid8_3_1` bronze - Fury's own first tier, the campaign this build
+defaults to) put a real medal glyph on screen with no race actually run.
+Before this fix, the whole 1024x256 `Hexmedal_HD` atlas - every tier, every
+frame of what turned out to be a many-frame rotation strip - drew stretched
+across each occupied hex and multiplied by a flat swatch on top,
+`before-cell-select.png`'s own smear of overlapping medal renders spilling
+past the hex grid into the detail column's own text. Not committed (game
+content); reproducible with the same `--menu-page cell-select` capture.
+
+**Root cause, precisely**: `hd_cell_draw_list`'s own `Medal_{x}_{y}` arm
+called `tinted_medal_draw(image, placed, medal_argb(medal))`, and neither
+half of that was right for HD. `tinted_medal_draw` (still correct for
+Pulse's own plain-white `hex_filled.mip`) draws at `image.width.unwrap_or(placed.width)`
+- the unauthored widget's own XML gives no size, so this fell back to the
+*placed* size, which for `Hexmedal_HD.mip` is the whole atlas, not a hex.
+And `medal_argb` multiplies a flat tier swatch over whatever draws - correct
+for a plain white hex, actively wrong for an atlas frame that already
+carries the tier's own baked-in colour.
+
+**The fix, and the evidence pinning its numbers**: `oag_ui::campaign::hd::hd_medal_frame`
+crops one 60x60 frame of the correct tier and `hd_tinted_medal_draw` centres
+it on the hex (no tint). The crop rect is not a guess - `DATA06.PSARC`'s own
+`Cell Selection` variant authors the identical crop on its own `Target0/1/2
+Medal` widgets, the only place either archive authors a `u`/`v`/`TxtrWidth`/
+`TxtrHeight` sub-rect of this texture at all: `width="60" height="60" u="0"`
+on all three, `v="0"`/`"61"`/`"122"` for `Target0`/`1`/`2`, which this file's
+own `hd_cell_draw_list` already reads as gold/silver/bronze respectively.
+Confidence 90 on the crop rect (a real widget's own authored attributes for
+the identical texture, on the same title's own screen family); confidence
+95 that this was the actual bug (before/after capture, see below).
+Cross-checked independently by decoding `Hexmedal_HD.gtf` directly
+(`oag_texture::gtf::Gtf::parse`) and reading the raster back: the two
+readings only agree once a Y-flip between this project's own raster order
+and the GPU's `V` convention is accounted for (unmeasured which side is
+"backwards" - not worth a second GTF reader to settle when the disc's own
+widget already gives the numbers a caller needs). See
+`crates/ui/src/campaign/hd.rs`'s own `hd_medal_frame` doc for the full
+reconciliation, and `crates/hd/tests/campaign_selection_ground_truth.rs`'s
+`target_medal_widgets_author_the_hexmedal_atlas_crop_hd_medal_frame_reads`
+for the disc-backed pin.
+
+**Which rotation frame is "the" icon is still not independently measured** -
+`u=0` matches `Target0 Medal`'s own choice, but nothing here decodes whether
+the real screen holds still on it or animates the spin the rest of the row
+implies (the atlas is far wider than one frame). Left as the same "one
+endpoint of an unmeasured animation" idiom `SELECTOR_TINT` already uses.
+
 ## Wipeout HD/Fury: `Campaign Selection`, 2026-09-21
 
 **Modelled and driven, off the disc's own XML.** The 2026-09-21 RPCS3 pass

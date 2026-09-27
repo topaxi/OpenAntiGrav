@@ -170,3 +170,51 @@ fn each_grid_screens_own_flyerlist_matches_its_campaigns_grid_range() {
         );
     }
 }
+
+/// `DATA06`'s own `Cell Selection`'s `Target0/1/2 Medal` widgets author the
+/// crop `oag_ui::campaign::hd::hd_medal_frame` reads for `DATA02`'s own
+/// `Medal_{x}_{y}` (a different widget on a different archive's copy of the
+/// screen, but the same shared `Hexmedal_HD` atlas) - the only place on
+/// either disc that authors a `u`/`v`/`TxtrWidth`/`TxtrHeight` crop of this
+/// texture at all, so it is the ground truth `hd_medal_frame`'s own doc
+/// cites. Pins the exact attributes so a re-extraction of the disc, not
+/// just this test file, is what could move these numbers.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn target_medal_widgets_author_the_hexmedal_atlas_crop_hd_medal_frame_reads() {
+    let Some(mut archives) = opened() else {
+        return;
+    };
+    let text = data06_screen_text(&mut archives);
+    let cases = [
+        (r#"name="Target0 Medal""#, r#"v="0""#),
+        (r#"name="Target1 Medal""#, r#"v="61""#),
+        (r#"name="Target2 Medal""#, r#"v="122""#),
+    ];
+    for (widget, v) in cases {
+        let at = text
+            .find(widget)
+            .unwrap_or_else(|| panic!("{widget} should be on Cell Selection"));
+        // The widget's own `<Values>` sits a short, bounded distance after
+        // its opening tag - slicing a window rather than searching the
+        // whole rest of the file keeps this from matching a later widget's
+        // own `v="..."` by accident.
+        let window = &text[at..(at + 200).min(text.len())];
+        assert!(
+            window.contains(r#"width="60" height="60" u="0""#),
+            "{widget} should crop a 60x60 frame at u=0, got: {window}"
+        );
+        assert!(
+            window.contains(v),
+            "{widget} should author {v}, got: {window}"
+        );
+        assert!(
+            window.contains(r#"TxtrWidth="60" TxtrHeight="60""#),
+            "{widget} should sample a 60x60 source rect, got: {window}"
+        );
+        assert!(
+            window.contains(r"Data\FE\Images\Hexmedal_HD.gtf"),
+            "{widget} should source Hexmedal_HD, got: {window}"
+        );
+    }
+}
