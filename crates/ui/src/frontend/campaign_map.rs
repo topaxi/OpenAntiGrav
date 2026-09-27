@@ -227,12 +227,12 @@ const ORIGIN: (f32, f32) = (65.0, 63.0);
 /// doc comment.
 const MARKER: f32 = 108.0;
 
-/// The disc's own hex tile art, `data/FE/Images/hex_{filled,outline,select}.gxt`
-/// - decoded and visually confirmed 2026-09-27 (a gloss-filled hexagon, a
-/// thin hexagonal outline and a thicker glow ring, all matching the
-/// hexagonal silhouette the live Vita3K capture already showed). **Not
-/// named by any front-end widget** - the same "native-code-driven, no
-/// authoring `<Image>`" situation `canvasTexture.gxt` is already in - so
+/// The disc's own hex tile art (`data/FE/Images/hex_{filled,outline,select}.gxt`),
+/// decoded and visually confirmed 2026-09-27: a gloss-filled hexagon, a thin
+/// hexagonal outline and a thicker glow ring, all matching the hexagonal
+/// silhouette the live Vita3K capture already showed. **Not named by any
+/// front-end widget**, the same "native-code-driven, no authoring `<Image>`"
+/// situation `canvasTexture.gxt` is already in, so
 /// `oag_game::boot::sprites::load` asks for them by name through its own
 /// `extra` list, the same mechanism the menu-block art already uses. Drawn
 /// in place of the flat colour square whenever the sheet decoded them
@@ -241,7 +241,7 @@ const MARKER: f32 = 108.0;
 /// this crate) draws exactly what it always did rather than a blank hole.
 /// Confidence 80: the shape and the file names are a direct pixel read, not
 /// a guess, but which exact draw call composites them (still unfound, see
-/// this module's own doc comment above) is not - the per-event pixel
+/// this module's own doc comment above) is not, so the per-event pixel
 /// formula and the hex tessellation itself stay **chosen, not measured**.
 pub const HEX_FILLED: &str = r"Data\FE\Images\hex_filled.gtf";
 /// See [`HEX_FILLED`].
