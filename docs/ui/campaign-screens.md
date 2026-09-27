@@ -1554,7 +1554,10 @@ reads both directly off the raw parsed tree instead - see its own module doc.
   scrolling-text rate as the nearest precedent rather than a number invented
   from nothing. **Content is never invented**: `NewsItemBarText1`/`2` carry
   no `idstring` and no literal `string` on disc - populated at runtime by a
-  mechanism this build does not have - so `CampaignStage::ticker_tips` only
+  mechanism this build does not have - so `oag_game::records::ticker_tips`
+  (moved there 2026-09-27 so `MenuStage`'s own ordinary-menu ticker and
+  `capture::menu_page`'s `--menu-page` still could read the identical
+  rotation `CampaignStage::ticker_tips` used to keep to itself) only
   rotates the `TKR_NO*` family (no `%d`/`%s`/`%.2f` template), five of the
   seven gated on whether `oag_game::records::Store` carries any row for that
   mode (a real, save-backed "have I raced this yet"), and `TKR_NOTOURN`/
@@ -1709,6 +1712,51 @@ is the `Title` role, not a body face. Two consequences, both left open:
   string and its mechanism are named here for whoever picks up the atlas
   work above, since fixing the case issue would make this one legible
   without also fixing the missing rung substitution.
+
+### The same unclipped-ticker defect recurred in a new capture path, 2026-09-27
+
+**`pulse-menu-ticker` lane, wiring the ordinary menus' own footer ticker
+(`MenuStage`, not `CampaignStage`).** `crate::main::menu_stage::footer` copied
+this page's own 2026-09-21 fix correctly for the *live* session
+(`footer::resolve_clip` mirrors `CampaignStage::ticker_clip_bounds`'s call
+site exactly), but `crate::capture::menu_page` - the `--menu-page main` still
+this lane also added, so a player-facing render could be judged by eye rather
+than only by test - never got it: it called `Renderer::render` with a bare
+`None` clip, a line inherited unchanged from before either page's ticker
+existed ("a capture is one static frame with no `MenuStage` clock behind it,
+so there is nothing here for a value marquee to be mid-scroll of"). That
+comment was true until this lane gave the still a second scrolling thing to
+draw and did not give it a second clip. Confirmed by screenshot before the
+fix (`data/scratch/drive-2026-09-27/ticker/psp-eu-main-before-clip-fix.png`,
+`ps2-eu-main-before-clip-fix.png`): the German `TKR_NOTOURN` text ran off the
+right edge of the frame on PSP and past its own bar on PS2. `Cell Selection`'s
+own still (`crate::capture::campaign_page`) never hit this because its
+`static_footer_overlay` draws the ticker with `tips = &[]` - an honest empty
+rotation, not a clip - so the bug had no text to be visible with there.
+
+Fixed the same way this page's own 2026-09-21 fix did: `menu_page` now
+returns `(Vec<Draw>, TickerClip)` (`TickerClip = Option<(usize, f32, f32)>`),
+finding the ticker draw's index by equality after the page's own layers
+flatten - the identical `position`-after-`flatten` idiom `MenuStage::render`
+uses for the Race Campaign's own grid/cell screens - rather than a hand-
+tracked index a later `.extend()` could invalidate. `capture::run` threads it
+through to `renderer.render`'s own `clip` parameter. Confirmed live,
+`data/scratch/drive-2026-09-27/ticker/psp-eu-main.png`/`ps2-eu-main.png`: the
+text now cuts cleanly at each platform's own viewport edge (PSP
+`[85, 235, 370, 32]`; PS2 `[113, 392, 493, 53]`, its own front-end root's own
+grid, not a scaled copy of the PSP's). Also confirmed scrolling (not just
+positioned correctly) via a temporary, reverted-before-commit env-var probe
+on `ticker_draw`'s `elapsed` argument, since `--menu-page` runs no clock of
+its own: `psp-eu-main-t0.0.png`/`-t1.0.png`/`-t2.5.png` show the same German
+sentence sliding left at the documented 60px/s.
+
+**Lesson for whoever adds a third scrolling-text draw to a still capture**:
+`Renderer::render`'s `clip` is one slot, shared by whichever of the value
+marquee, a `MenuStage` ticker or a `CampaignStage` ticker wants it on a given
+frame - a fresh capture call site that draws unclipped text starts from
+`None` by default, and nothing except a side-by-side screenshot against the
+real viewport catches the omission, since `oag_ui::campaign::footer`'s own
+unit tests only check the *draw*, never how a caller clips it.
 
 ## Open
 

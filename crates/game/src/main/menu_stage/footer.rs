@@ -109,8 +109,10 @@ impl MenuStage {
 /// also scrolling).
 ///
 /// **Chosen: the marquee wins.** An overflowing value is the thing a player
-/// is reading; an unclipped ticker for that one frame is a page-edge overdraw
-/// past its own footer strip, not a correctness bug. `ticker_clip`'s own
+/// is reading; an unclipped ticker for as long as that row stays focused and
+/// overflowing - not just one frame, since nothing here times out a held
+/// selection - is a page-edge overdraw past its own footer strip, not a
+/// correctness bug. `ticker_clip`'s own
 /// index is shifted by one exactly when `frozen_race`, the same way the Race
 /// Campaign's own ticker clip is (`CampaignStage::ticker_clip_bounds`'s call
 /// site) - the pause overlay's `Fill` is prepended ahead of the unshifted

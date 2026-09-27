@@ -503,6 +503,12 @@ pub fn run(
     // The selection screens' preview mesh, owed after the draw list - see
     // `draw_preview`. `None` on every other page.
     let mut preview_request: Option<PreviewRequest> = None;
+    // The footer ticker's own clip, `(index in `list`, left, right)` in
+    // screen space - set only by the ordinary `--menu-page` arm below
+    // (`menu_page`'s own return), since it is the only page kind that reads
+    // a ticker at all. `None` everywhere else, which `renderer.render`'s own
+    // `clip` parameter already treats as "nothing to clip".
+    let mut ticker_clip: Option<(usize, f32, f32)> = None;
     let (mut movie, video_format, list, space) = match (&options.menu_page, &options.screen) {
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
@@ -711,7 +717,7 @@ pub fn run(
                 // function answers for both, and for the live session's own
                 // ordinary menu pages besides.
                 let ticker_tips = crate::records::ticker_tips(&strings, &records);
-                let list = menu_page(
+                let (list, clip) = menu_page(
                     &options.settings,
                     options.anisotropy,
                     title,
@@ -742,6 +748,7 @@ pub fn run(
                     ticker.as_ref(),
                     &ticker_tips,
                 )?;
+                ticker_clip = clip;
                 (backdrop, format, list, space)
             }
         }
@@ -900,8 +907,11 @@ pub fn run(
         &list,
         oag_display::display::viewport((width, height), options.settings.display.aspect),
         // A capture is one static frame with no `MenuStage` clock behind it,
-        // so there is nothing here for a value marquee to be mid-scroll of.
-        None,
+        // so there is nothing here for a value marquee to be mid-scroll of -
+        // `ticker_clip` is the one thing here that still needs a clip, on a
+        // `--menu-page` capture whose footer ticker's frozen text is wider
+        // than its own viewport (see `capture::menu_page`'s own doc).
+        ticker_clip,
     );
     if let (Some(request), Some(race)) = (preview_request, &options.race) {
         draw_preview(
