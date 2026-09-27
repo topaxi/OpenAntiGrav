@@ -197,7 +197,7 @@ the real `.pkg`, turns a previously-refused (`Error::CorruptBlocks { count:
 unmodified decoder.
 
 **Checked against a corrected re-extraction
-(`data/extracted/ps4/omega-eu-fixed{,-patch}`), 2026-09-27: every named
+(`data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/{omega-eu-fixed,omega-eu-patch-fixed}`), 2026-09-27: every named
 "missing"/"corrupt" texture above recovers, and none of it was genuinely
 absent.** `saveIcons.gnf`, `line.gnf`, `Hexmedal_HD.gnf` and all five
 campaign hex texture names (`Hexagon_HD_OUTLINE`, `Hexagon_HD`, `Hexlock_HD`,
