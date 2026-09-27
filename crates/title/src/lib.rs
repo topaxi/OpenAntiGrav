@@ -329,7 +329,7 @@ pub struct FrontEnd {
     /// from the other.
     ///
     /// **Why this exists instead of `menu` alone scaling by [`menu::MenuSkin::space`]:**
-    /// [`oag_game::menu::Skin::new`]'s own doc already says the PS2 conversion
+    /// `oag_game::menu::Skin::new`'s own doc already says the PS2 conversion
     /// is "an approximation and says so" - `oag_display::space::Space` records
     /// 30 of 43 shared `Skin.xml` coordinates landing within a pixel of a
     /// uniform 640/480, 448/272 stretch and 13 not. Wipeout Pulse's own PS2
@@ -340,8 +340,7 @@ pub struct FrontEnd {
     /// before the next row (`row_pitch` 41, authored in the same file's own
     /// `<!-- +41 for each line -->` comment, against the scaled approximation's
     /// 33.9) is what let that subtitle overrun `RACEBOX`/`COURSE` below it.
-    /// See `oag_pulse::frontend::PS2_MENU_SKIN` and
-    /// `handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md`.
+    /// See `oag_pulse::frontend::PS2_MENU_SKIN`'s own doc for the full table.
     ///
     /// `None` for every title including Pulse's *other* pressings - a PSP-only
     /// title has nothing to read here, and Pulse's own PSP pressings keep

@@ -268,8 +268,6 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 /// same face as `RACE CAMPAIGN` below it, not a taller one, which is a lean
 /// against flipping it rather than a capture that proves the flip the way
 /// this project's own rule requires.
-///
-/// See `handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md`.
 pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // `oag_display::space::Space::PS2.size` - a literal here, not that type,
     // the same way `MENU_SKIN.space` above is a literal `(480.0, 272.0)`
