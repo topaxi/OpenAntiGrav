@@ -1748,7 +1748,13 @@ grid, not a scaled copy of the PSP's). Also confirmed scrolling (not just
 positioned correctly) via a temporary, reverted-before-commit env-var probe
 on `ticker_draw`'s `elapsed` argument, since `--menu-page` runs no clock of
 its own: `psp-eu-main-t0.0.png`/`-t1.0.png`/`-t2.5.png` show the same German
-sentence sliding left at the documented 60px/s.
+sentence sliding left at the documented 60px/s. The first pass through this
+probe only exercised the right edge (`elapsed = 0` starts the text flush
+against the viewport's own left edge); re-shot at `elapsed = 1.0`/`2.5` after
+the fix confirms the left edge clips exactly as cleanly - `push_text`'s own
+`clip: Option<(f32, f32)>` trims a glyph's `rect`/`uv` on whichever side it
+straddles, not only the right, and `ps2-eu-main-t2.5.png` confirms the same
+on PS2's own wider viewport.
 
 **Lesson for whoever adds a third scrolling-text draw to a still capture**:
 `Renderer::render`'s `clip` is one slot, shared by whichever of the value
