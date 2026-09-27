@@ -167,21 +167,21 @@ fn hd_medal_frame_matches_the_discs_own_target_medal_widget_crop() {
 /// spinning medal) stretched across the hex slot and multiplied by a flat
 /// swatch on top - "medals rendered off/wrong", the maintainer's own report
 /// this lane opened against. This pins the fix: one 60x60 frame of the
-/// right tier, centred on the hex rather than stretched to fill it, and
-/// left untinted since the frame's own pixels already carry the tier's
-/// colour.
+/// right tier, at the widget's own authored position (unchanged from the
+/// pre-fix code - see `hd_tinted_medal_draw`'s own doc for why this is not
+/// `hex_rect`-centred), left untinted since the frame's own pixels already
+/// carry the tier's colour.
 #[test]
-fn hd_tinted_medal_draw_crops_one_frame_of_the_right_tier_and_centres_it_on_the_hex() {
+fn hd_tinted_medal_draw_crops_one_frame_of_the_right_tier_at_its_own_authored_position() {
     let image = medal_image("Medal_0_0");
     let placed = medal_atlas_placed();
-    let hex = [350.0, 332.0, 128.0, 64.0];
-    let draw = hd_tinted_medal_draw(&image, placed, Medal::Silver, hex);
+    let draw = hd_tinted_medal_draw(&image, placed, Medal::Silver);
     let Draw::Sprite { rect, uv, color } = draw else {
         panic!("expected a plain Sprite, not a tiled or rotated one");
     };
-    // Native 60x60, centred on the 128x64 hex:
-    // x = 350 + (128-60)/2 = 384, y = 332 + (64-60)/2 = 334.
-    assert_eq!(rect, [384.0, 334.0, 60.0, 60.0]);
+    // Native 60x60, at the widget's own authored (350, 332) - not stretched
+    // or repositioned.
+    assert_eq!(rect, [350.0, 332.0, 60.0, 60.0]);
     // Silver's own row (v=61) at u=0, offset by the atlas's own placement
     // in the sheet (0, 738).
     assert_eq!(uv, [0.0, 799.0, 60.0, 60.0]);

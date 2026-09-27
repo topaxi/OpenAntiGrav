@@ -340,10 +340,8 @@ pub fn hd_cell_draw_list(
             continue;
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
-            if let Some(medal) = model.medal_at(x, y)
-                && let Some(hex) = hex_rect(screen, x as usize, y as usize, sprites)
-            {
-                out.push(hd_tinted_medal_draw(image, placed, medal, hex));
+            if let Some(medal) = model.medal_at(x, y) {
+                out.push(hd_tinted_medal_draw(image, placed, medal));
             }
             continue;
         }
@@ -486,21 +484,29 @@ fn hd_medal_frame(medal: Medal) -> [f32; 4] {
 }
 
 /// `Medal_{x}_{y}`'s own draw: [`hd_medal_frame`]'s crop, drawn at its own
-/// native 60x60 size and centred on `hex` (the slot's own rect - the same
-/// [`hex_rect`] call already resolves for [`centred_selector_draw`], so
-/// this lands on `Outline_{x}_{y}`'s own tile) - not stretched to fill
-/// `hex`'s own `128x64`, since the source frame is roughly square and
-/// `hex`'s own rect is not: forcing the crop to that aspect would squash
-/// the medal rather than fix it. The same centring
-/// [`centred_selector_draw`] already does for `Selector`'s own sprite, not
-/// the unauthored full-atlas size the widget's own XML would otherwise
-/// fall back to. **No tint**: unlike Pulse's `hex_filled.mip` (a plain
-/// white hex [`super::draw::tinted_medal_draw`] still colours with
-/// [`super::draw::medal_argb`] - that path is untouched, and still correct
-/// for Pulse), HD's own atlas frame already carries the tier's colour
-/// baked into its texels, so multiplying a flat swatch over it a second
-/// time was the other half of the bug this replaces.
-fn hd_tinted_medal_draw(image: &Image, placed: Placed, medal: Medal, hex: [f32; 4]) -> Draw {
+/// native 60x60 size, **at the widget's own authored `image.x`/`image.y`** -
+/// unchanged from the pre-fix code, which already drew there (the size and
+/// crop were the only things wrong - see the module's own bug writeup in
+/// `docs/ui/campaign-screens.md`). **Deliberately not `hex_rect`-centred**,
+/// an earlier draft of this fix tried: `CellMode_Definition.xml`'s own
+/// `<Item>` grouping shows every `Medal_{x}_{y}` sits in its own item,
+/// offset a constant `(+7, +2)` from `Bg_{x}_{y}`/`Outline_{x}_{y}`'s own
+/// item at the same grid slot - checked across all seven columns
+/// (`(7,2)`/`(67,36)`/`(127,2)`/`(187,36)`/`(247,2)`/`(307,36)`/`(367,2)`
+/// against `Bg`'s own `(0,0)`/`(60,34)`/`(120,0)`/`(180,34)`/`(240,0)`/
+/// `(300,34)`/`(360,0)`, the same `+7,+2` every time). That is the disc's
+/// own registration between the medal layer and the hex layer, authored
+/// once and not a per-column tune - a runtime centring formula would only
+/// coincidentally reproduce it, and does not: it was tried, produced a
+/// visibly-offset badge on every column, and was reverted in favour of
+/// this, the simpler and disc-measured choice. **No tint**: unlike Pulse's
+/// `hex_filled.mip` (a plain white hex [`super::draw::tinted_medal_draw`]
+/// still colours with [`super::draw::medal_argb`] - that path is
+/// untouched, and still correct for Pulse), HD's own atlas frame already
+/// carries the tier's colour baked into its texels, so multiplying a flat
+/// swatch over it a second time was the other half of the bug this
+/// replaces.
+fn hd_tinted_medal_draw(image: &Image, placed: Placed, medal: Medal) -> Draw {
     let [u, v, frame_width, frame_height] = hd_medal_frame(medal);
     let cropped = Image {
         width: Some(frame_width),
@@ -511,9 +517,7 @@ fn hd_tinted_medal_draw(image: &Image, placed: Placed, medal: Medal, hex: [f32; 
         texture_height: Some(frame_height),
         ..image.clone()
     };
-    let x = hex[0] + (hex[2] - frame_width) * 0.5;
-    let y = hex[1] + (hex[3] - frame_height) * 0.5;
-    sprite_draw(&cropped, placed, x, y, 0xffff_ffff)
+    sprite_draw(&cropped, placed, image.x, image.y, 0xffff_ffff)
 }
 
 /// `Track`'s own resolution - the circuit's display name through

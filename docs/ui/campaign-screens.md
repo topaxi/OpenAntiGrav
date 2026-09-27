@@ -1252,8 +1252,20 @@ for a plain white hex, actively wrong for an atlas frame that already
 carries the tier's own baked-in colour.
 
 **The fix, and the evidence pinning its numbers**: `oag_ui::campaign::hd::hd_medal_frame`
-crops one 60x60 frame of the correct tier and `hd_tinted_medal_draw` centres
-it on the hex (no tint). The crop rect is not a guess - `DATA06.PSARC`'s own
+crops one 60x60 frame of the correct tier and `hd_tinted_medal_draw` draws it
+at the widget's own authored `image.x`/`image.y` (no tint) - unchanged from
+the pre-fix code's own position, which was always right; only the size and
+crop were wrong. **An earlier draft of this fix centred the crop on
+`Outline_{x}_{y}`'s own hex instead**, the same `hex_rect` idiom `Selector`
+already uses - plausible, but wrong: `CellMode_Definition.xml`'s own `<Item>`
+grouping shows every `Medal_{x}_{y}` sits in its own item, offset a constant
+`(+7, +2)` from `Bg_{x}_{y}`/`Outline_{x}_{y}`'s own item at the same slot,
+checked across all seven columns. That is the disc's own registration
+between the medal layer and the hex layer, authored once, not a per-column
+tune a runtime centring formula could reproduce - the centred version
+visibly undershot it on every column once compared side by side. Reverted in
+favour of the authored position; see `hd_tinted_medal_draw`'s own doc for
+the seven offset pairs. The crop rect is not a guess - `DATA06.PSARC`'s own
 `Cell Selection` variant authors the identical crop on its own `Target0/1/2
 Medal` widgets, the only place either archive authors a `u`/`v`/`TxtrWidth`/
 `TxtrHeight` sub-rect of this texture at all: `width="60" height="60" u="0"`
