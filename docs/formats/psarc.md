@@ -451,8 +451,14 @@ fixed against the real `.pkg` directly, not just read off the tool's source.
 
 **The fix was also run at family scale, not just on the one file above**:
 `omega-ps4-eu{,-patch}.pkg` re-extracted whole with the patched tool
-(`data/extracted/ps4/omega-eu-fixed{,-patch}`, 2026-09-27) and re-run through
-`psarc_oracle` on every archive:
+(`data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/{omega-eu-fixed,omega-eu-patch-fixed}`,
+2026-09-27) and re-run through `psarc_oracle` on every archive. **Deliberately
+kept under `data/scratch/`, not `data/extracted/ps4/`** - `oag_omega`'s own
+source discovery (`crates/assets/src/source.rs`) walks every subdirectory of
+`data/extracted/ps4` looking for its archive candidates, so a same-named
+sibling there is picked up by `omega_title_ground_truth.rs` even mid-write
+(caught this directly: a first attempt landed under `data/extracted/ps4/`
+and briefly broke `main`'s gate on a zero-byte file read mid-extraction).
 
 | Archive | valid (before → after) | garbage (before → after) | all-zero (before → after) |
 | --- | ---: | ---: | ---: |

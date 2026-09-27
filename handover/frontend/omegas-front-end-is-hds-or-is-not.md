@@ -34,7 +34,7 @@ content against `hd-frontend.md`.
   and one of them narrows the question to two candidates instead of three.**
   `lane/omega-psarc` (2026-09-27) found and fixed the extraction-tool bug
   that was corrupting both copies - see the resolved bullet below - and a
-  corrected re-extraction (`data/extracted/ps4/omega-eu-patch-fixed`) also
+  corrected re-extraction (`data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/omega-eu-patch-fixed`) also
   surfaced a **third** copy of both files that the old, corrupted manifest
   never even listed as a candidate: `data08.psarc` carries its own
   `cellmode_definition.xml` and `campaign2048_definition.xml`, previously
@@ -94,7 +94,7 @@ content against `hd-frontend.md`.
     2026-09-27, and every one of these recovers:** this "missing"/"corrupt"
     content was this project's own extraction, not the package - see the
     resolved bullet two below. Checked by name against the corrected
-    re-extraction (`data/extracted/ps4/omega-eu-fixed{,-patch}`): all five hex
+    re-extraction (`data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/{omega-eu-fixed,omega-eu-patch-fixed}`): all five hex
     texture names (`hexagon_hd_outline.gnf`, `hexagon_hd.gnf`,
     `hexlock_hd.gnf`, `hexagon_hd_thick_out.gnf`,
     `nonselectable_arrow_hd.gnf`) now have real entries in `data00.psarc`
