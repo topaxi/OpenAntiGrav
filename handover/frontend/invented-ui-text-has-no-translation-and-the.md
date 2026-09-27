@@ -97,6 +97,45 @@ order:
   example. No second language file exists yet to prove this against, so the
   rule is written ahead of a caller rather than proven by one.
 
+## Landed 2026-09-27: the HUD and the OPTIONS page's LANGUAGE row both follow the chosen language live, not this thread's own mechanism but the same shape of bug
+
+Two player-reported bugs, adjacent to everything above but about the *disc's*
+own table rather than the project's: `race::hud::load_hud`'s one caller
+(`race/load.rs`) passed `None` - "the chain's own default" - instead of the
+player's saved `settings.language`, so the in-race HUD showed whichever
+language a title's plugin order happened to list first, invisibly correct
+only for whoever tested with that one. On the EU pressing (see this thread's
+own "no English plugin" gotcha above) that default is French, so a German
+pick showed a French HUD. Separately, the OPTIONS page's own LANGUAGE row
+wrote `settings.language` and stopped - the string table, the menus' own
+faces and every disc-labelled row stayed whatever they were at boot, so a
+switch a player just made showed nowhere until the next launch.
+
+Both fixed: `race::Options` grows a `language` field, threaded from
+`settings::Settings::language` at every launch site and refreshed again in
+`Session::launch_race` so it cannot go stale against a live LANGUAGE-row
+change; `Session::resupply_language` (`crates/game/src/main/session/language.rs`)
+re-runs `boot::load_shell` with the new language and folds the result through
+`Shell::from_boot` - the same function a fresh boot uses - re-supplying the
+open menu's language-scoped rows and the GPU-side fonts without losing cursor
+position or restarting. `boot::fonts::role_font` and `race::hud::hud_font`
+had the same "first plugin, no preference" bug one level down for font roles;
+both now ask the chosen language first. Full writeup, including what a
+headless run could and could not verify, in
+`docs/architecture/menus.md#switching-language-without-relaunching` and
+`docs/architecture/menus.md#the-hud-following-the-front-ends-language`.
+
+**Incidental finding, not fixed, not this lane's to fix**: the HD/Fury
+pressing's own sixteen-language table (`hdfury-ps3-eu-dec.iso`) reports
+Japanese, Korean and TraditionalChinese all under the *native name*
+`"Svenska"` (Swedish), and Russian's native name as `"P??????"` - a mojibake
+that survived whatever encoding `Language::from_definition` reads Cyrillic
+through. Neither breaks the mechanism this thread or the 2026-09-27 entry
+above are about (the *English* name, which both key off, is unaffected), but
+the LANGUAGE row's own picker would show a Swedish label for three languages
+that are not Swedish. Measured with `--race --dry-run --no-audio` against
+`hdfury-ps3-eu-dec.iso`; not chased further here.
+
 ## Open
 
 - **Stale claim from an earlier pass corrected 2026-09-09: the `string_id`

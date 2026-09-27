@@ -49,11 +49,17 @@ pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'stati
 /// Every piece degrades on its own and says so. The report matters more here than
 /// it looks: a HUD drawn in the 5x7 fallback font looks like a rendering bug, and
 /// a silent fallback would send someone looking in the shader.
+///
+/// `preferred_language` is `race::Options::language` - the player's saved
+/// choice - passed straight through rather than read here: `None` when
+/// nothing has been chosen yet, resolved the same way everywhere else a
+/// chosen language is resolved, through [`crate::boot::chosen_language`].
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mode: Mode,
     language_plugins: &[&str],
+    preferred_language: Option<&str>,
     report: &mut Vec<String>,
 ) -> crate::hud::Assets {
     let entry = hud_layout(title, mode);
@@ -104,15 +110,21 @@ pub(super) fn load_hud(
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP` on Pulse,
     // `HUD_Lap` on Pure, whatever the layout's own XML names - and without a
     // table `StringTable::get_or_id` falls back to the key itself, which put
-    // `IG_HUD_LAP` on screen where `LAP` belongs. The preferred language is
-    // the player's saved one; a race reached through `--race` has no settings
-    // to read, so this takes the chain's default rather than threading one
-    // through.
+    // `IG_HUD_LAP` on screen where `LAP` belongs. `preferred_language` is the
+    // player's own saved choice, threaded down from `race::Options::language`
+    // by every caller of [`load`] (`load::load`) - `None` only when nothing
+    // has been chosen yet, in which case this takes the chain's own default
+    // exactly as the front-end picker's own preselection does. **This used to
+    // be `None` unconditionally here**, which is a bug this parameter closes:
+    // a player who picked German still got whichever language a title's own
+    // plugin order puts first - French on the PSP EU pressing - and it read
+    // as correct only for whoever happened to test with that one.
     //
     // **Before the fonts now**, because the plugins parsed here are also what
     // name the two faces below - the same reordering `boot::load_shell` needed.
     let languages = crate::boot::load_languages(archives, language_plugins, report);
-    let strings = crate::boot::load_strings(archives, &languages, None, report);
+    let chosen = crate::boot::chosen_language(&languages, preferred_language);
+    let strings = crate::boot::load_strings(archives, &languages, preferred_language, report);
 
     // The role names are this *title's* own, through `oag_title::HudArt` -
     // not the shared `oag_ui::language::roles::HUD`/`HUD_SMALL` literals
@@ -124,7 +136,13 @@ pub(super) fn load_hud(
     // pointing at files 2048 does not ship - which the old literal ask could
     // pick up ahead of the plugin the player actually chose. See
     // `oag_title::HudArt::hud_font_role`.
-    let font = hud_font(archives, &languages, title.hud_art.hud_font_role, report);
+    let font = hud_font(
+        archives,
+        &languages,
+        chosen,
+        title.hud_art.hud_font_role,
+        report,
+    );
     // `None` is a real gap on 2048's own plugins - see
     // `oag_title::HudArt::hud_small_font_role` - and the caption face falls
     // back to the value face's own atlas rather than to 5x7, chosen rather
@@ -132,7 +150,7 @@ pub(super) fn load_hud(
     // layout's own per-widget `scale` is what draws the difference, not a
     // second `.fnt` file this pass located.
     let small_font = match title.hud_art.hud_small_font_role {
-        Some(role) => hud_font(archives, &languages, role, report),
+        Some(role) => hud_font(archives, &languages, chosen, role, report),
         None => {
             // Named as "reuse", not "draw in the {role} face": `font` above
             // may itself already be the 5x7 fallback if the value role
@@ -472,10 +490,19 @@ fn read_hud_texture(
 ///
 /// The same shape as `crate::boot::load_font`, which reads the front end's
 /// `Default` face, and now the same read *and* the same resolution: both take
-/// the filename off a `<Font>` slot rather than naming one, and both go through
+/// the filename off a `<Font>` slot rather than naming one, through the same
+/// [`crate::boot::fonts::role_font`], and both go through
 /// [`oag_assets::Archives::read_font`], so a PS2 source finds the glyph atlas
 /// the disc keeps in the entry after the `.fnt` rather than falling back to 5x7.
 /// Kept separate only so the report line says which font is being talked about.
+///
+/// `preferred` is the chosen language - the same one [`load_hud`] resolved
+/// `strings` from - asked for `role` first; `role_font`'s own fallback across
+/// every plugin only fires when the chosen one names nothing for it. **This
+/// used to scan every plugin in source order with no preference at all**,
+/// which is the same bug `load_hud`'s old `None` was: a HUD asking for the
+/// caption face got whichever plugin happened to be first, not the one the
+/// player picked.
 ///
 /// A source whose plugins fill in no such slot draws in 5x7 and says which role
 /// went unanswered - see `oag_ui::language::roles` for what each disc fills in.
@@ -487,14 +514,11 @@ fn read_hud_texture(
 pub(super) fn hud_font(
     archives: &mut oag_assets::Archives,
     languages: &[oag_ui::language::Language],
+    preferred: Option<&oag_ui::language::Language>,
     role: &str,
     report: &mut Vec<String>,
 ) -> oag_ui::font::Atlas {
-    let Some(name) = languages
-        .iter()
-        .find_map(|language| language.font(role))
-        .map(str::to_string)
-    else {
+    let Some(name) = crate::boot::fonts::role_font(languages, preferred, role) else {
         report.push(format!(
             "no language plugin names a {role:?} font on this source; drawing with 5x7"
         ));

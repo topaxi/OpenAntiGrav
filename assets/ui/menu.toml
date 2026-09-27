@@ -421,10 +421,13 @@ label = "AI PILOTS"
 string_id = "OAG_PILOT_PAGE_TITLE"
 target = "pilots"
 
-# Also read from the source. Changing it takes effect on the **next launch**:
-# the string table is loaded once at boot, and reloading it under a front end
-# that has already handed off is work nothing needs yet. Picking a language here
-# also means the picker stays skipped, since that is the same setting.
+# Also read from the source. Applied live, not on the next launch:
+# `Session::apply_setting`'s own "language" row calls `Session::resupply_language`,
+# which re-reads the source under the language just picked and re-supplies this
+# page's own rows (and TEAM/CIRCUIT/RACE MODE's) without losing the player's
+# place in the menu - see `docs/architecture/menus.md#switching-language-without-relaunching`.
+# Picking a language here also means the picker stays skipped, since that is
+# the same setting.
 [[page.entry]]
 kind = "choice"
 label = "LANGUAGE"

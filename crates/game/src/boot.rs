@@ -448,7 +448,13 @@ pub fn load_shell(
     let languages = load_languages(&mut archives, front_end.language_plugins, &mut report);
     let offered = languages.clone();
     steps.lap("languages");
-    let font = load_font(&mut archives, &languages, &mut report);
+    // Resolved once and threaded through every font/table read below rather
+    // than re-asked with `options.language.as_deref()` at each one: the
+    // fonts used to skip this entirely and take whichever plugin's `<Font>`
+    // slot came first in source order, which is the same bug
+    // `race::hud::hud_font`'s own doc records - see `fonts::role_font`.
+    let preferred_language = chosen_language(&languages, options.language.as_deref());
+    let font = load_font(&mut archives, &languages, preferred_language, &mut report);
     steps.lap("font");
     // **`TitleFrame` is appended here, not carried in `profile.fallback_images`
     // itself.** Its own real `src` differs by pressing - `Screen_
@@ -509,9 +515,22 @@ pub fn load_shell(
         &mut report,
     );
     steps.lap("strings");
-    let menu_font = load_menu_font(&mut archives, &languages, menu_skin, &mut report);
-    let title_font = load_title_font(&mut archives, &languages, menu_skin, &mut report);
-    let buttons_font = fonts::load_buttons_font(&mut archives, &languages, &mut report);
+    let menu_font = load_menu_font(
+        &mut archives,
+        &languages,
+        preferred_language,
+        menu_skin,
+        &mut report,
+    );
+    let title_font = load_title_font(
+        &mut archives,
+        &languages,
+        preferred_language,
+        menu_skin,
+        &mut report,
+    );
+    let buttons_font =
+        fonts::load_buttons_font(&mut archives, &languages, preferred_language, &mut report);
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
@@ -519,7 +538,7 @@ pub fn load_shell(
     let face_scales = if front_end.touch.is_some() {
         fonts::face_scales(
             &mut archives,
-            chosen_language(&languages, options.language.as_deref()),
+            preferred_language,
             font.line_height,
             &mut report,
         )
@@ -561,7 +580,7 @@ pub fn load_shell(
     // is a question about the list this just produced.
     let circuit_names = load_circuit_names(
         &mut archives,
-        chosen_language(&languages, options.language.as_deref()),
+        preferred_language,
         &strings,
         &tracks,
         &mut report,
@@ -750,8 +769,7 @@ pub fn load_shell(
             title,
             platform: archives.layout.platform,
             screens,
-            entries: chosen_language(&languages, options.language.as_deref())
-                .and_then(|language| language.entries.clone()),
+            entries: preferred_language.and_then(|language| language.entries.clone()),
             loading: title.loading,
             languages: offered,
             strings,

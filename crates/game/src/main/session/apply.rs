@@ -19,10 +19,10 @@ impl Session {
     /// Puts the window onto the monitor, and into the mode and size, that the
     /// settings now hold.
     ///
-    /// Immediately, unlike anisotropy and the language: a player who picks
-    /// borderless and sees nothing happen will assume it is broken. The resize
-    /// event the compositor sends back is what reconfigures the surface, so
-    /// nothing here touches it.
+    /// Immediately, unlike anisotropy: a player who picks borderless and sees
+    /// nothing happen will assume it is broken. The resize event the
+    /// compositor sends back is what reconfigures the surface, so nothing
+    /// here touches it.
     ///
     /// The size and the position are asked for only in windowed mode, and
     /// **every request here may be refused** - a compositor is allowed to
@@ -565,7 +565,19 @@ impl Session {
                 self.resupply_remix_variant();
             }
             "remix.variant" => self.settings.remix.variant = text,
-            "language" => self.settings.language = Some(text),
+            // **Applied immediately now, not deferred to the next boot** -
+            // this row used to be a bare settings write, and `Self::apply_window`'s
+            // own doc comment named it beside anisotropy as the two rows a
+            // player would see nothing happen for. `Session::resupply_language`
+            // is the reload: the disc's own string table and overlay, the
+            // mode/team/circuit/front-end-style labels, the ticker and nav
+            // legend, and the menu's own faces, without losing where the
+            // player is standing in the tree. See that function's own doc for
+            // what it deliberately still leaves for the next boot.
+            "language" => {
+                self.settings.language = Some(text);
+                self.resupply_language();
+            }
             // The AI PILOTS page's own four rows - see `super::pilot_editor`.
             // None of the four is part of `self.settings`: which pilot and
             // which axis are on screen is not persisted, so both return

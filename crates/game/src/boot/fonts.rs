@@ -63,10 +63,11 @@ use super::*;
 pub(super) fn load_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
+    preferred: Option<&Language>,
     report: &mut Vec<String>,
 ) -> oag_ui::font::Atlas {
     let role = oag_ui::language::roles::DEFAULT;
-    let Some(name) = role_font(languages, role) else {
+    let Some(name) = role_font(languages, preferred, role) else {
         // Reported rather than fallen back to a remembered filename: a source
         // whose plugins name no body face is a finding about that source, and a
         // constant here would hide it behind another title's answer.
@@ -96,14 +97,27 @@ pub(super) fn load_font(
 
 /// The `.fnt` a role resolves to on this source, from its language plugins.
 ///
-/// Any language will do: the plugins differ in which glyphs a face carries, not
-/// in which file a role names. `None` for a role no plugin on this source fills
-/// in - which is an ordinary answer rather than a failure, because the two discs
-/// fill in different subsets: Pure declares four slots to Pulse's eight.
-pub(super) fn role_font(languages: &[Language], role: &str) -> Option<String> {
-    languages
-        .iter()
-        .find_map(|language| language.font(role))
+/// **`preferred`'s own slot first.** A role that plugin does not fill falls
+/// through to a scan of every plugin in source order - not because two
+/// plugins are known to name a shared role's file differently, but because a
+/// role the chosen language leaves silent (Pure declares four slots to
+/// Pulse's eight) still deserves the answer *some* plugin on this source
+/// gives, rather than 5x7. `None` only when no plugin at all fills `role` -
+/// an ordinary answer, not a failure.
+///
+/// **`preferred` used to not exist at all here** - every caller scanned
+/// every plugin with no preference, so a face this asked for came off
+/// whichever plugin happened to load first rather than the language the
+/// player chose. See [`crate::race::hud::hud_font`]'s own doc for the sibling
+/// this mirrors and the bug both used to share.
+pub(crate) fn role_font(
+    languages: &[Language],
+    preferred: Option<&Language>,
+    role: &str,
+) -> Option<String> {
+    preferred
+        .and_then(|language| language.font(role))
+        .or_else(|| languages.iter().find_map(|language| language.font(role)))
         .map(str::to_string)
 }
 
@@ -124,11 +138,12 @@ pub(super) fn role_font(languages: &[Language], role: &str) -> Option<String> {
 pub(super) fn load_menu_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
+    preferred: Option<&Language>,
     skin: &oag_title::MenuSkin,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
     let role = skin.menu_font?;
-    let name = role_font(languages, role)?;
+    let name = role_font(languages, preferred, role)?;
     match archives.read_font(&name) {
         Ok(font) => {
             report.push(format!(
@@ -159,11 +174,12 @@ pub(super) fn load_menu_font(
 pub(super) fn load_title_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
+    preferred: Option<&Language>,
     skin: &oag_title::MenuSkin,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
     let role = skin.title_font?;
-    let name = role_font(languages, role)?;
+    let name = role_font(languages, preferred, role)?;
     match archives.read_font(&name) {
         Ok(font) => {
             report.push(format!(
@@ -249,10 +265,11 @@ pub fn face_atlas_slot(
 pub(super) fn load_buttons_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
+    preferred: Option<&Language>,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
     let role = oag_ui::language::roles::BUTTONS;
-    let name = role_font(languages, role)?;
+    let name = role_font(languages, preferred, role)?;
     match archives.read_font(&name) {
         Ok(font) => {
             report.push(format!(

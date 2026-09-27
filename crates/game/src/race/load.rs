@@ -757,11 +757,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
     // **The HUD follows the craft**, art included - `load_hud` reads its
     // atlas, font and sight art out of whichever `Archives` it is given.
+    // **`options.language`, not `None`** - see that field's own doc for the
+    // bug this closes: every launch site now sets it from the live
+    // `settings::Settings::language` before `load` ever runs.
     let hud = load_hud(
         craft_of(&mut craft, &mut archives),
         craft_title,
         options.mode,
         language_plugins,
+        options.language.as_deref(),
         &mut report,
     );
 

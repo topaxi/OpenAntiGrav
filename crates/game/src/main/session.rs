@@ -9,7 +9,8 @@ use oag_core::TickClock;
 
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, catalogue, drs, loading, movie, perf, pilots, prefetch, race, records, settings, upscale,
+    audio, boot, catalogue, drs, loading, movie, perf, pilots, prefetch, race, records, settings,
+    upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -35,6 +36,8 @@ mod endrace;
 mod escape;
 #[path = "session/frame.rs"]
 mod frame;
+#[path = "session/language.rs"]
+mod language;
 #[path = "session/launch2048.rs"]
 mod launch2048;
 #[path = "session/load.rs"]
@@ -717,6 +720,114 @@ pub(crate) struct Shell {
 }
 
 impl Shell {
+    /// Builds every field a booted [`boot::Shell`] settles, keeping
+    /// `definition` as the caller's own rather than re-deriving it.
+    ///
+    /// **The one place this literal is written**, so a first boot
+    /// ([`crate::prepare::Pending::windowed`]) and a live LANGUAGE-row switch
+    /// ([`Session::resupply_language`]) cannot drift onto two different
+    /// readings of the same `boot::Shell` - which is exactly the shape of bug
+    /// this project has already hit once: [`crate::race::hud::load_hud`]'s
+    /// own `None` language stayed correct for months because nothing forced
+    /// its one caller to agree with the picker.
+    ///
+    /// `definition` stays the caller's rather than being read off `title`
+    /// again: the row *structure* a title offers - which rows exist, which
+    /// are dropped by [`menu::Definition::drop_unavailable_race_variant`]/
+    /// [`menu::Definition::drop_rows_picked_on_screen`] - does not depend on
+    /// which language draws their labels, so a live switch passes in the
+    /// menus' own current definition unchanged and only the fields below
+    /// move.
+    pub(crate) fn from_boot(
+        title: &'static oag_title::Title,
+        definition: menu::Definition,
+        boot_shell: &boot::Shell,
+    ) -> Self {
+        Self {
+            definition,
+            title,
+            platform: boot_shell.platform,
+            circuit_names: boot_shell.circuit_names.clone(),
+            strings: boot_shell.strings.clone(),
+            entries: boot_shell.entries.clone(),
+            modes: menu::mode_choices(&boot_shell.strings),
+            // The disc's own names for its stylings, so the row offers what the
+            // source has rather than a list this build holds.
+            front_end_styles: boot_shell
+                .loading
+                .map(|loading| {
+                    loading
+                        .features
+                        .iter()
+                        .map(|style| menu::Choice::plain(style.name))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            teams: boot_shell
+                .teams
+                .iter()
+                .map(|team| menu::Choice::labelled(&team.id, team.label(&boot_shell.strings)))
+                .collect(),
+            tracks: boot_shell
+                .tracks
+                .iter()
+                .map(|track| {
+                    (
+                        track.clone(),
+                        catalogue::label(
+                            track,
+                            &boot_shell.circuit_names,
+                            &boot_shell.strings,
+                            &boot_shell.tracks,
+                        ),
+                    )
+                })
+                .collect(),
+            zone_tracks: boot_shell
+                .zone_tracks
+                .iter()
+                .map(|track| {
+                    (
+                        track.clone(),
+                        catalogue::label(
+                            track,
+                            &boot_shell.circuit_names,
+                            &boot_shell.strings,
+                            &boot_shell.zone_tracks,
+                        ),
+                    )
+                })
+                .collect(),
+            languages: boot_shell
+                .languages
+                .iter()
+                .map(|language| menu::Choice::labelled(&language.name, &language.native_name))
+                .collect(),
+            font: boot_shell.font.clone(),
+            menu_skin: boot_shell.menu_skin,
+            space: boot_shell.space,
+            menu_font: boot_shell.menu_font.clone(),
+            title_font: boot_shell.title_font.clone(),
+            buttons_font: boot_shell.buttons_font.clone(),
+            sprites: boot_shell.sprites.clone(),
+            globals: boot_shell
+                .screens
+                .globals
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            // The disc's own chrome, read by the boot itself - which is where
+            // the parsed XML, the sheet and the grid were all in hand.
+            frame: boot_shell.frame.clone(),
+            nav_legend: boot_shell.nav_legend.clone(),
+            ticker: boot_shell.ticker.clone(),
+            fury_backdrop: boot_shell.fury_backdrop.clone(),
+            track_select: boot_shell.track_select.clone(),
+            ship_select: boot_shell.ship_select.clone(),
+            team_details: boot_shell.teams.clone(),
+        }
+    }
+
     /// The list the CIRCUIT row shows for `mode` - [`Self::zone_tracks`] under
     /// Zone, [`Self::tracks`] otherwise. The one place that dispatch is made,
     /// so the row drawn, the row seeded and the circuit a launched race

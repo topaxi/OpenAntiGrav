@@ -398,10 +398,18 @@ impl Session {
         if let Some(parked) = self.suspended_race.take() {
             crate::race_build::drop_off_thread(parked);
         }
-        let options = self
+        let mut options = self
             .race_options
             .clone()
             .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
+        // **Refreshed here, not trusted from whenever `race_options` was last
+        // built or mutated** (boot, RACE REMIX, a campaign cell launch): the
+        // OPTIONS page's LANGUAGE row writes `self.settings.language` without
+        // touching `race_options` at all, and every launch path funnels
+        // through this one function, so this is the one place a launch
+        // cannot race a value picked-then-abandoned earlier in the session.
+        // See `race::Options::language`'s own doc.
+        options.language = self.settings.language.clone();
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
         // `oag_game::catalogue::label`. `None` on a run whose source offered
