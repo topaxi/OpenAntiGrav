@@ -1,8 +1,11 @@
 //! Wipeout HD/Fury's own `Campaign Selection` screen, read off `DATA06.PSARC`'s
 //! copy of `Data\Plugins\Frontend\Gui\CellMode_Definition.xml` directly - see
 //! `crates/hd/src/campaign.rs`'s own doc on `SCREEN_ENTRY`/`SELECTION_SCREEN_ARCHIVE`
-//! for why this is a different archive than `Grid Selection`/`Cell Selection`
-//! read from, and `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign
+//! for why this is a different archive than [`oag_assets::Archives::read_name`]'s
+//! own precedence resolves (still `DATA02`, unlike `oag_game::campaign::load_hd`'s
+//! own `Grid Selection`/`Cell Selection` read, which now also reads `DATA06`
+//! directly - see `oag_ui::campaign::hd`'s own module doc, "The winning
+//! archive"), and `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign
 //! Selection`" section for the full measurement this file proves.
 //!
 //! **Checked as raw text, not through `oag_ui::screen::Screens`** - that
@@ -34,7 +37,9 @@ fn opened() -> Option<Archives> {
 }
 
 /// `DATA06`'s own copy of `SCREEN_ENTRY`, as plain UTF-8 text - the same
-/// blob `oag_game::campaign::load_hd_campaign_selection` reads.
+/// blob `oag_game::campaign::load_hd` reads (all four screens now, not only
+/// `Campaign Selection`/`Grid Selection Fury` - see that function's own
+/// doc).
 fn data06_screen_text(archives: &mut Archives) -> String {
     let copies = archives.read_every_name(oag_hd::campaign::SCREEN_ENTRY);
     let (_, blob) = copies
@@ -45,10 +50,11 @@ fn data06_screen_text(archives: &mut Archives) -> String {
 }
 
 /// `DATA02`'s own copy, the one `oag_assets::Archives::read_name`'s
-/// precedence resolves to for everything else this title reads off
-/// `SCREEN_ENTRY` - confirmed to lack `Campaign Selection` entirely, the
-/// fact `oag_game::campaign::load_hd_campaign_selection` exists to work
-/// around.
+/// precedence still resolves to (for `Data\Plugins\grids\grid_*.xml`, which
+/// this project's own read of `SCREEN_ENTRY` no longer uses precedence for -
+/// see `oag_game::campaign::load_hd`'s own doc) - confirmed to lack
+/// `Campaign Selection` entirely, the reason `load_hd` reads `DATA06`
+/// directly instead.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn the_precedence_resolved_copy_has_no_campaign_selection_screen() {

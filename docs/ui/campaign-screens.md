@@ -1411,14 +1411,15 @@ reference at all, on any copy - nothing to check there.
 `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
 section below already measured for that screen alone, now with a second,
 independent data point pointing the same way for `Cell Selection` too.
-**Not adopted this pass**: switching `hd_cell_draw_list` from `DATA02` to
-`DATA06` is a bigger change than this lane's own scope - `DATA06`'s `Cell
-Selection` also carries an extra `bBg_x_y` layer and a shared `Target
-Title` header replacing `Target0/1/2 Title`, both already flagged and
-deferred in the "Where the screen actually lives" section below, for the
-same "safer, already-verified copy" reasoning. Whoever picks this up next
-has a second confirming data point now, not just the archive-precedence
-question `Campaign Selection` already settled.
+**Adopted, 2026-09-27**: `oag_game::campaign::load_hd` now reads `DATA06`'s
+copy of `CellMode_Definition.xml` for `Grid Selection`/`Cell Selection` too,
+not only `Campaign Selection`/`Grid Selection Fury` - see "Wipeout HD/Fury:
+the TARGET block reads `DATA06` too" below for the full argument (a general
+last-wins archive-overlay rule plus this section's own per-widget RPCS3
+confirmation) and what changed once the switch landed (`bBg_x_y`, the
+repositioned `GridController`, the `Target0/1/2 Medal` icon row, the
+reflowed detail column, and the mode-dependent `TARGET` header text a fresh
+capture round found once the medals were finally visible to check against).
 
 **Reproducing any of this without a real podium finish**: `--menu-page
 cell-select` reads `<config dir>/oag/records.toml` the same "read, never
@@ -1438,6 +1439,135 @@ XDG_CONFIG_HOME=/tmp/oag-scratch-cfg cargo run -q -p oag-game -- \
   data/images/hdfury-ps3-eu-dec.iso --menu-page cell-select --no-audio \
   --screenshot /tmp/cell-select.png
 ```
+
+## Wipeout HD/Fury: the TARGET block reads `DATA06` too, 2026-09-27
+
+The maintainer's own "medals render off/wrong" report had a second cause
+flagged but not chased by the pass above: `Cell Selection`'s `Target0/1/2
+Image` drew a plain grey `Subtitle_Arrow_HD.gtf` bullet on every
+`TimeTrial`/`Zone`/`Elimination`/`SpeedLap` cell, needing no earned medal to
+see - unlike the hex-badge bug, visible on every fresh profile. This pass
+closes it by switching `Cell Selection`'s own screen source, not by grafting
+one widget onto the old screen.
+
+### Archive precedence, settled on paper before RPCS3 booted
+
+`CellMode_Definition.xml` is one path on two archives (`DATA02`, `DATA06`).
+`oag_hd::campaign::SCREEN_ENTRY`'s own doc already had `DATA06` as a later,
+Fury-era build (measured: it alone carries `Campaign Selection`/`Grid
+Selection Fury`), but stopped short of the general rule that would extend
+that to `Cell Selection` too. This section's own "`DATA00`'s copy is the
+live one" measurement gives it: `TTY.log`'s own archive load order is
+`data01, data02, data03, data04, data05, data06, data00` - `DATA06` loads
+after `DATA02`, and `DATA00`'s own load-last, its-own-copy-wins behaviour
+(confirmed by a `sys_fs_stat` probe naming a file only `DATA00`'s `skin.xml`
+has) is evidence of a **last-wins overlay**, not just a discovery order.
+`CellMode_Definition.xml` has no `DATA00` copy at all, so among the two
+archives that do carry it, `DATA06` - loading after `DATA02` - wins the
+same way. Confidence 85, from two converging lines: this general rule, and
+a direct per-screen confirmation - the medal icons below only exist on
+`DATA06`'s own `Target0/1/2 Medal` widget, and a live RPCS3 frame shows
+them.
+
+`oag_game::campaign::load_hd` (`crates/game/src/campaign.rs`) now reads
+`DATA06`'s copy for `Grid Selection`/`Cell Selection` directly (by archive
+label, the same way it already did for `Campaign Selection`/`Grid Selection
+Fury`), one parse serving all four screens. Not a merge: `DATA06`'s `Cell
+Selection` draws *whole* - its own `bBg_x_y` layer, its own repositioned
+`GridController` (`OffsetX="240" OffsetY="370"`, was `"170"`/`"230"`), its
+own `Event`/`Track`/`Speed Class`/`Weapons` emblem layout and
+`RightColumnText` panel - not a graft of `DATA06`'s medal icons onto
+`DATA02`'s otherwise-unchanged screen (`oag_ui::campaign::hd`'s own module
+doc, "The winning archive", has the complete widget diff). Every
+`OffsetX`/`OffsetY` difference draws correctly with no code change at all:
+`oag_ui::screen`'s widget collector already folds offsets generically, and
+the new `<Bracket>` borders around the emblems and the target row have no
+parser arm (the same "silently dropped, not drawn wrong" rule
+`oag_ui::campaign::selection` already established for `Campaign
+Selection`'s own `Bracket`).
+
+**Left unswitched, deliberately**: the sixteen `grid_00.xml`..`grid_15.xml`
+grid files still read through the unchanged archive precedence (`DATA02`'s
+flat-schema copy for `grid_00`..`07`), even though the same rule argues
+`DATA06`'s per-difficulty copy is equally live - see "A base-HD grid's own
+precedence, not settled this pass" below. Switching a screen's widgets and
+switching the campaign's own medal-law numbers are different-sized changes;
+only the first was in this lane's scope.
+
+### What actually needed fixing beyond the archive switch
+
+Three real bugs surfaced once the medal icons were finally visible to check
+against a live frame, all in `oag_ui::campaign::hd::hd_cell_draw_list`
+(`crates/ui/src/campaign/hd.rs`) - see that file's own doc comments on
+`hd_target_title`/`hd_target_value`/`hd_format_centiseconds` for the full
+capture-by-capture evidence:
+
+1. **`Target0/1/2 Medal` looked up its own texture and found nothing.** The
+   widget spells its `src` as `Data\FE\Images\Hexmedal_HD.gtf`, but this
+   build's sprite sheet only shelved that file under the `.mip` spelling
+   `Medal_{x}_{y}` uses (`oag_hd::campaign::HEX_TEXTURES`'s own rewrite).
+   Fixed by adding the `.gtf` spelling to `oag_hd::campaign::OTHER_TEXTURES`
+   too - a second, deliberate shelving of the same decoded texture under
+   the second spelling a widget actually asks for.
+2. **`weapons_visible`/`targets_visible` excluded modes the real screen
+   shows them on.** `grid8_3_1` (`Race`) shows a `TARGET (NOVICE)` row the
+   pre-switch code's own mode list excluded; `grid8_3_2` (`Elimination`)
+   shows a `WEAPONS ON` row a different mode list excluded. Three of three
+   sampled cells across three different modes (`Race`, `Speed Lap`,
+   `Elimination`) show both rows, and every cell on the disc authors both
+   fields regardless of mode - both gates are unconditional now.
+3. **The TARGET header and its three values are mode-dependent text, not
+   one idstring plus a bare number.** `grid8_3_1`/`grid8_4_2`/`grid8_3_2`
+   read `"TARGET (NOVICE)"`/`"TARGET LAP TIME (NOVICE)"`/`"TARGET 200
+   (NOVICE)"` and `"1ST"/"2ND"/"3RD"` beside gold/silver/bronze icons - none
+   of which the pre-switch `target_value`/a bare `IG_HUD_TARGET` read could
+   produce. `hd_target_title`/`hd_target_value` compose it from the mode,
+   the difficulty rung and (for `Elimination`/`NitroBattle` -
+   `campaign_grids_ground_truth.rs`'s own
+   `eliminationfamily_cells_carry_a_real_nitro_triple_and_a_dummy_flat_one`
+   ground-truths that pairing against the real disc) the cell's own nitro
+   target.
+
+### Captures
+
+`data/scratch/drive-2026-09-27/hd-targets/`: `fury-race-3-1.png` (`grid8_3_1`,
+`Race`), `fury-speedlap-4-2.png` (`grid8_4_2`, `Speed Lap`) - both fresh RPCS3
+captures this pass took (own config, Xvfb `:92`, audio off); `grid8_3_2`
+(`Elimination`) reuses the earlier pass's own
+`data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png`, not recaptured. This
+build's own before/after: `after-cell-select.png` (medal icon missing, the
+`.gtf`/`.mip` bug above, on `grid8_2_1`/`NitroBattle`) through
+`after-cell-select-4.png` (final: `TARGET 15 (SKILLED)` header, `NitroElimSkilled
+Target="15"` on `grid_08.xml` matching exactly, three medal icons with
+`1ST`/`2ND`/`3RD`) - the four-shot sequence pins each fix in turn rather than
+only the end state. Not committed (game content).
+
+### A base-HD grid's own precedence, not settled this pass
+
+`grid_00.xml`'s `DATA06` copy (per-difficulty `Time Trial`/`Zone`/`Speed
+Lap` targets, e.g. `EasyGold Target="12000"` on `grid0_2_2`) was read
+directly this pass to compare against `DATA02`'s flat copy - the same
+"which archive a base-`Wipeout HD` grid actually reads" question
+`oag_hd::campaign::SCREEN_ENTRY`'s own doc leaves open for the grid files.
+No base-HD `Time Trial` cell was captured on RPCS3 this pass (only Fury's
+own `grid8` cells were reached), so this remains unmeasured, exactly where
+the archive-precedence pass before this one left it - reported, not acted
+on, per this lane's own scope.
+
+### Pointer
+
+`Cell Selection`'s own hex click targets (`oag_ui::campaign::pointer::cell_targets`)
+read the same generically-parsed `Outline_x_y`/`Bg_x_y` widget positions
+this section's own screenshots confirm draw correctly at their new
+`DATA06`-authored offset - the geometry is shared between drawing and
+hit-testing, not duplicated, so nothing here changes independently of what
+the captures above already show. The existing pointer test suite (95 tests
+under `oag_ui::campaign`) is unchanged and green. Not independently
+exercised with a live mouse click this pass - `--press right` produced no
+visible navigation in a `--menu-page cell-select` capture, which reads as a
+capture-tooling gap (this debug flag's own d-pad mapping on this screen, not
+exercised anywhere this project's own docs confirm working) rather than a
+regression, since nothing pointer-specific changed in this lane's own code.
 
 ## Wipeout HD/Fury: `Campaign Selection`, 2026-09-21
 
@@ -1483,18 +1613,18 @@ disagreement on a different file) settles it:
   already records as agreeing on this title, both `0xFF646464`; a literal
   `0xffdedede` vs `FEGlobals->HD_LightGrey`) and the real `flyerlist` entries
   noted above, which this build never draws (`y="-500"`, authored off
-  screen). So this pass reads `Campaign Selection` and `Grid Selection Fury`
-  from `DATA06` and leaves the already-verified `Grid Selection`/`Cell
-  Selection` on `DATA02`, unchanged - **chosen, not measured**, on the safe
-  side of a real, larger divergence: `DATA06`'s own `Cell Selection` also
-  differs from `DATA02`'s (an extra `bBg_x_y` background layer under the hex
-  grid; `Target0/1/2 Image` + `Target0/1/2 Title` replaced by one shared
-  `Target Title` header and per-rung `Target0/1/2 Medal` icons sourcing
-  `Hexmedal_HD.gtf`, dropping the disc's own `IG_HUD_GOLD`/`SILVER`/`BRONZE`
-  per-target labels `DATA02`'s copy still carries in favour of a colour-coded
-  medal glyph; plus new `GridTopBar`/`chooserace Arrow`/`NextPoints
-  Arrow`/`Track Reverse` widgets) - none of that is adopted this pass, and
-  `hd_cell_draw_list` still matches `DATA02`'s own names. Left open below.
+  screen). This pass (2026-09-21) read `Campaign Selection` and `Grid
+  Selection Fury` from `DATA06` and left `Grid Selection`/`Cell Selection`
+  on `DATA02` - **chosen, not measured**, on the safe side of a real, larger
+  divergence in `Cell Selection` (an extra `bBg_x_y` background layer under
+  the hex grid; `Target0/1/2 Image` + `Target0/1/2 Title` replaced by one
+  shared `Target Title` header and per-rung `Target0/1/2 Medal` icons
+  sourcing `Hexmedal_HD.gtf`; plus new `GridTopBar`/`chooserace
+  Arrow`/`NextPoints Arrow`/`Track Reverse` widgets).
+  **Superseded, 2026-09-27**: `hd_cell_draw_list` reads `DATA06` for both
+  screens now - see "Wipeout HD/Fury: the TARGET block reads `DATA06` too"
+  below for the archive-precedence argument that closed this out and what
+  the divergence turned out to mean once it actually drew.
 
 ### The screen itself
 
