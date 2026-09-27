@@ -258,10 +258,18 @@ keeps all three rows and launches from `START` as before.
 
 - The cards' arrival transition, and the `Mode3D` pose of the outline -
   both authored in the circuit's `screen.xml` and read, neither acted on.
-- The PS2 screens are captured headlessly against the PSP's live capture
-  only: no PCSX2 walk of the PS2's own race box exists yet to read the
-  card sizes (256x128 on a 640x448 grid, smaller than the PSP's) or the
-  `0`-set placement against.
+- ~~The PS2 screens are captured headlessly against the PSP's live capture
+  only: no PCSX2 walk of the PS2's own race box exists yet~~ **2026-09-27:
+  walked.** `pulse-ps2-eu.chd` on PCSX2 (`SCES-54748`), `RACEBOX` -> `TRACK
+  SELECT` -> `SHIP SELECT`, English (the profile the memory card already
+  carried at this walk's start; see the PS2 layout thread for why French
+  was not used here). Both screens read Talon's Junction White (1/3) and
+  Assegai/Classic (1/12) with `Speed 8 / Thrust 8 / Handling 9 / Shield 7` -
+  digit for digit what `--menu-page track-select`/`ship-select` draws on the
+  same source. No card-size or `0`-set placement bug found: the two screens
+  match. Captures: `data/scratch/drive-2026-09-27/ps2-walk/pcsx2-track-select.png`,
+  `pcsx2-ship-select.png` against `ours-track-select.png`/`ours-ship-select.png`
+  in the same directory.
 - Which curve the original's `Distance(m)` sums - see above.
 - The `Loyalty` counter, once anything keeps one.
 - The `Track Help` / `Team Help` overlays and `Pre Race Music Select`: read
