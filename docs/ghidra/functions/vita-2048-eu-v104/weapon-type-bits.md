@@ -26,7 +26,7 @@ void WeaponType_RegisterEnum(void)
 }
 ```
 
-Found from the second of two `"WeaponType"` string hits in the binary
+Found from the first of two `"WeaponType"` string hits in the binary
 (`search_strings`): `0x8141c8d4` (this function's own literal) and
 `0x814dcad4` (the field-type string `m_weaponAvailableBits`'s own registration
 cites, see below). `FUN_812da48a` is mjolnir's enum-type registrar (by shape:
@@ -59,13 +59,14 @@ void WeaponType_RegisterValues(void)
 }
 ```
 
-`FUN_812da67c` clears the enum's own value table before population (shape
-matches other mjolnir reflection resets in this binary), then eleven calls to
-`FUN_812dafe6(table, name, value)` register one `(name, ordinal)` pair each.
-`DAT_8141c32c` and `DAT_8141c334` are C-string literals read directly off
-memory (`inspect_memory_content`), not inlined by Ghidra's string search
-because they are two five-byte, null-padded strings back to back rather than
-one contiguous run: `"BOMB\0"` at `0x8141c32c` and `"MINE\0"` at `0x8141c334`.
+`FUN_812da67c` is called once before the eleven registrations; not read past
+that single call, so what it does is not established here. The eleven calls
+to `FUN_812dafe6(table, name, value)` register one `(name, ordinal)` pair
+each. `DAT_8141c32c` and `DAT_8141c334` did not surface in a `search_strings`
+query for `MINE|BOMB` (153 total matches, first 100 returned, neither
+address among them) - read directly with `inspect_memory_content` instead,
+which confirmed both as C strings: `"BOMB\0"` at `0x8141c32c`, `"MINE\0"` at
+`0x8141c334`.
 
 This **is** `WeaponType`'s own declaration: the eleven `(name, ordinal)` pairs
 are the enum's complete membership, straight from the executable, independent

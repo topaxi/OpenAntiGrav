@@ -786,6 +786,15 @@ is what settles the bits instead, the same "string only at registration,
 reader unfound" wall `frontend-campaign-map.md`'s own `m_x`/`m_y` chase
 already hit).
 
+**How far bit 4 actually reaches the campaign**: of the 20 named
+`WeaponSetDefinition` instances, `"DemoWeapons"` (`1023`) is the only one
+that sets it. Of `SP.xml`'s 141 events, 36 carry a non-empty `M_WEAPONSET`,
+and exactly 5 of those point at `"DemoWeapons"` - measured directly off the
+real file, not estimated. Those five events are the only ones whose gate
+changes behaviour from this fix; every other restricted event
+(`"EliminatorWeapons"` at 17 events, both `"Combat*"` sets, etc.) already
+excluded `Shield` and still does, since none of them set bit 4.
+
 ## What is not determined
 
 - **`GameModeObjective`'s own semantics are mostly resolved - see "The
