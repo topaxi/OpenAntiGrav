@@ -110,6 +110,12 @@ pub struct Options {
     /// order does not reach yet - most of them - can still be looked at. See
     /// [`oag_ui::frontend::Frontend::draw_screen`].
     pub screen: Option<String>,
+    /// With [`Options::screen`], seconds since it appeared - `None` draws it
+    /// settled. `Title Screen`'s own `<Animation><Key>` wipe and `Show
+    /// Logo`'s `pulse="true"` throb both need a clock to show anything but
+    /// their own settled end state; see
+    /// [`oag_ui::frontend::Frontend::draw_screen_at`].
+    pub screen_seconds: Option<f32>,
     /// Anisotropic filtering level, only relevant if the handoff to
     /// [`Options::race`] happens.
     pub anisotropy: Anisotropy,
@@ -125,6 +131,11 @@ pub struct Options {
     ///
     /// See the CLI flag's own docs for why a still needs this at all.
     pub menu_anim_phase: Option<f32>,
+    /// With `--menu-page track-select`/`ship-select`, seconds since the
+    /// screen opened - `None` draws it settled. See the CLI flag's own docs;
+    /// `--menu-anim-phase`'s equivalent for the race box's own two screens,
+    /// which are not `assets/ui/menu.toml` pages and so do not reach it.
+    pub menu_picker_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -580,6 +591,7 @@ pub fn run(
                     frontend.screens(),
                     &strings,
                     &mut sprites,
+                    options.menu_picker_seconds,
                 );
                 let (mut list, request) = picker_page(
                     kind,
@@ -595,6 +607,7 @@ pub fn run(
                     &sprites,
                     &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                     distance,
+                    options.menu_picker_seconds,
                 );
                 list.extend(stills);
                 // A title that previews with stills alone has no mesh to
@@ -754,7 +767,10 @@ pub fn run(
             }
         }
         (None, Some(name)) => {
-            let list = frontend.draw_screen(name);
+            let list = match options.screen_seconds {
+                Some(seconds) => frontend.draw_screen_at(name, f64::from(seconds)),
+                None => frontend.draw_screen(name),
+            };
             (movie, video_format, list, frontend.space())
         }
         (None, None) => {

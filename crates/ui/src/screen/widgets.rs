@@ -39,6 +39,7 @@ impl Screens {
             color,
             gradient,
             reveal: Vec::new(),
+            transition: 0.0,
         })
     }
 
@@ -64,6 +65,7 @@ impl Screens {
             texture_height: self.number(node.value("TxtrHeight")),
             auto_load: node.flag("AutoLoad").unwrap_or(false),
             reveal: Vec::new(),
+            transition: 0.0,
         }
     }
 
@@ -136,6 +138,7 @@ impl Screens {
                 .unwrap_or(false)
                 .then_some(viewport_width)
                 .flatten(),
+            transition: 0.0,
         }
     }
 }

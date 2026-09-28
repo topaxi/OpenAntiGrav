@@ -312,6 +312,19 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) screen: Option<String>,
 
+    /// With `--screen`, draw it this many seconds after it appeared, instead
+    /// of settled.
+    ///
+    /// The live boot order's own clock - `Show Logo`'s `pulse="true"` throb
+    /// and `Title Screen`'s `<Animation><Key>` wipe both need it, since
+    /// `--screen` otherwise calls the public `draw_screen`, which reads as
+    /// `f64::INFINITY` and freezes every one of those at its own settled
+    /// end state. `None` keeps that settled behaviour, the same rule
+    /// `--menu-anim-phase`/`--menu-picker-seconds` follow for the menu
+    /// pages `--screen` does not reach.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) screen_seconds: Option<f32>,
+
     /// With `--screenshot`, capture the frame the way a window presents it:
     /// through the render scale, the upscaler, the brightness/gamma grade and
     /// the aspect bars.
@@ -372,61 +385,10 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) overlay: bool,
 
-    /// Load the menu tree from this file instead of the one built into the
-    /// binary.
-    ///
-    /// For editing `assets/ui/menu.toml` without a rebuild. Checked the same
-    /// way the built-in one is, so a mistake in it is a startup error.
-    #[arg(long, value_name = "FILE")]
-    pub(crate) menu: Option<std::path::PathBuf>,
-
-    /// With `--screenshot`, draw one page of our own menus instead of the
-    /// sequence: a page id from `assets/ui/menu.toml`.
-    ///
-    /// For looking at a layout without launching the game and walking to it.
-    /// Like `--screen`, it takes no input and runs no state machine.
-    #[arg(long, value_name = "PAGE")]
-    pub(crate) menu_page: Option<String>,
-
-    /// With `--menu-page`, draw that page part-way through arriving.
-    ///
-    /// `0` is the instant a page change starts and `1` is the end of it. A
-    /// still cannot otherwise show a transition at all: `--menu-page` runs no
-    /// clock, and `--ticks` does nothing alongside it, so without this the only
-    /// way to look at the effect is to play the game and watch.
-    ///
-    /// Shows the *arriving* half only. The page being left is whatever the
-    /// player came from, which a one-page capture has no way to know.
-    #[arg(long, value_name = "0..1")]
-    pub(crate) menu_anim_phase: Option<f32>,
-
-    /// With `--menu-page`, draw a modal prompt over it: `rename`,
-    /// `rename-note`, `delete`, `delete-built-in` or `binding`.
-    ///
-    /// The same argument `--menu-anim-phase` makes, one step stronger. A
-    /// prompt is on screen because a row was **activated**, and this path runs
-    /// no state machine and calls no `Menu::update` - so the on-screen
-    /// keyboard can never appear here on its own, and without this flag its
-    /// layout is reviewable only by playing the game on a machine that has a
-    /// display. The models drawn are the live ones (`oag_ui::prompt`) and
-    /// the labels come out of the same string table `session::pilot_editor`
-    /// resolves, so this is the real screen rather than a mock-up of it.
-    ///
-    /// `rename-note` and `delete-built-in` are the two worst cases for the
-    /// layout: the live note under the buffer, and the longest message
-    /// anything asks a player to read. `binding` is the CONTROLS page's own
-    /// key-capture prompt - `--menu-page controls --menu-prompt binding`
-    /// draws it over whichever row's `button` its own page opens on first,
-    /// since a still has no selected row to prefer over another.
-    ///
-    /// `tag-entry`/`tag-entry-typed` draw Pulse's own `TagInput` cell row
-    /// instead of `rename`'s grid - the shape `session::pilot_editor` opens
-    /// when the disc's own alphabet can spell the pilot's name, see
-    /// `docs/formats/fexml.md`'s `TagInput` section. Needs a real `--race`
-    /// source open, since it reads the row's geometry live off the disc;
-    /// `-typed` is the same screen after a few glyph changes.
-    #[arg(long, value_name = "PROMPT", requires = "menu_page")]
-    pub(crate) menu_prompt: Option<String>,
+    /// `--menu`, `--menu-page`, `--menu-anim-phase`, `--menu-picker-seconds`
+    /// and `--menu-prompt` - see [`extra::MenuArgs`].
+    #[command(flatten)]
+    pub(crate) menu_args: extra::MenuArgs,
 
     /// Show the language picker even when a language is already chosen.
     ///

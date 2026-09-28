@@ -99,12 +99,26 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
 
 ## Open
 
-- **The cards arrive without their transition, and the outline is framed
-  off the capture rather than off `screen.xml`'s own `Mode3D` pose** -
-  both read (`slideshow::Model`, the `transition` attributes), neither
-  acted on. The pose needs the `Mode3D` projection understood
-  (`OriginX/OriginY` are in an unmeasured space: `-145,13` on the PSP,
-  `193,-21` on the PS2).
+- **The outline is framed off the capture rather than off `screen.xml`'s
+  own `Mode3D` pose** - read (`slideshow::Model`), not acted on. The pose
+  needs the `Mode3D` projection understood (`OriginX/OriginY` are in an
+  unmeasured space: `-145,13` on the PSP, `193,-21` on the PS2).
+  ~~The cards arrive without their transition~~ **2026-09-28: closed.**
+  `LeftLayer`'s own `transition` attribute is a per-widget fade-in/fade-out
+  duration in seconds - not a slide, not a scale - read off the generic
+  widget constructor (`Widget_CreateFromElement`, confidence 72,
+  `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`) and confirmed
+  against a live PPSSPP capture (panel and first card both faint at 130ms
+  into `Track Creation`, settled by 320-480ms, title bar's own
+  `transition="0"` group solid throughout). The panel now fades in
+  (`oag_ui::picker::body`, reading `Text`/`Image`/`Fill::transition`); the
+  hexagonal window's own stills author no `transition` of their own, so
+  their fade (`oag_game::preview::CARD_FADE_SECONDS`) reuses the panel's
+  measured `0.5`s rather than inventing one, labelled chosen-not-measured
+  in both places it is used. New CLI flag `--menu-picker-seconds` (`--menu-page
+  track-select`/`ship-select`'s equivalent of `--menu-anim-phase`, since
+  neither that flag nor `--ticks` reaches this screen) makes the arrival
+  reviewable as a still. See `docs/ui/selection-screens.md`.
 - **Split screen is not built, and the PS2 authors it here.** The `0`/`1`
   widget suffixes are player indices - `Team Selection` carries the `0`
   set alone, `Team SelectionSplit` both, and `Track CreationSplit` sits

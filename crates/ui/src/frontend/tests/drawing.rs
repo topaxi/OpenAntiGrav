@@ -362,7 +362,10 @@ fn titles_screen_reveals_over_a_live_boot_not_just_settled() {
     let already = frontend.on_screen_for;
     let early = underline_width(&frontend.draw_list())
         .expect("the wrapped Fill must reach the live draw list, not just draw_screen_at");
-    assert_eq!(early, 0.0, "on entry: fully hidden, not already drawn settled");
+    assert_eq!(
+        early, 0.0,
+        "on entry: fully hidden, not already drawn settled"
+    );
 
     input.begin_frame(0);
     frontend.update(0.3 - already, &mut input, None);

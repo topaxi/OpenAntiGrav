@@ -463,6 +463,7 @@ fn a_colour_only_image_inside_an_animation_keeps_its_own_rect_and_carries_the_re
                     texture_width: 0.0,
                 },
             ],
+            transition: 0.0,
         }]
     );
     assert!(
@@ -504,6 +505,7 @@ fn an_animation_wrapped_fill_resolves_a_feglobals_colour() {
             color: 0xffff_ffff,
             gradient: None,
             reveal: Vec::new(),
+            transition: 0.0,
         }]
     );
 }
@@ -543,6 +545,7 @@ fn collects_solid_colour_backdrops() {
             color: 0xff00_0000,
             gradient: None,
             reveal: Vec::new(),
+            transition: 0.0,
         }]
     );
 }
@@ -608,6 +611,57 @@ fn a_navigation_controllers_text_children_reach_the_enclosing_named_screens_text
             Some("ControlTextConfirmButton"),
             Some("ControlTextConfirm"),
         ]
+    );
+}
+
+#[test]
+fn a_leftlayers_transition_is_inherited_by_everything_nested_under_it() {
+    // `Selection_Definition.xml`'s own shape: one `LeftLayer` with no
+    // `transition` at all (inherits the screen's default of zero, so its
+    // text is not faded), one with `transition="0"` (explicit, same
+    // result), and one with `transition="0.5"` wrapping an `Item` - whose
+    // own children inherit it too, the same way `OffsetX`/`OffsetY` already
+    // thread through `Item`.
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Track Creation">
+    <LeftLayer>
+      <Text name="untouched" String="Track Select"></Text>
+    </LeftLayer>
+    <LeftLayer transition="0">
+      <Text name="instant" String="1/3"></Text>
+    </LeftLayer>
+    <LeftLayer transition="0.5">
+      <Image name="panel" width="170" height="200" color="0x2f000000"></Image>
+      <Item OffsetY="59">
+        <Text name="nested" String="SPEED"></Text>
+      </Item>
+    </LeftLayer>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Track Creation").unwrap();
+    let text_transition = |name: &str| {
+        screen
+            .texts
+            .iter()
+            .find(|text| text.name.as_deref() == Some(name))
+            .unwrap()
+            .transition
+    };
+    assert_eq!(text_transition("untouched"), 0.0);
+    assert_eq!(text_transition("instant"), 0.0);
+    assert_eq!(text_transition("nested"), 0.5, "inherited through Item");
+    assert_eq!(
+        screen
+            .fills
+            .iter()
+            .find(|fill| fill.name.as_deref() == Some("panel"))
+            .unwrap()
+            .transition,
+        0.5
     );
 }
 

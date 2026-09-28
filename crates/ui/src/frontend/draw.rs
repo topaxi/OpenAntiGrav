@@ -423,21 +423,16 @@ impl Frontend {
         }
 
         if self.machine.is(pure_states::TITLE_SCREEN) {
-            // Pure's own counterpart to `Show Logo` above, and drawn the same
-            // way: its widgets and nothing else. See
+            // Pure's own counterpart to `Show Logo` above: its widgets and
+            // nothing else, and `draw_screen_at`/`self.on_screen_for` for
+            // the same reason - its thirteen `<Animation>`-wrapped frame-line/
+            // bracket/patch widgets wipe in over their own key timeline
+            // (`docs/ghidra/functions/psp-pure-eu/title-screen.md`) and only
+            // the live boot order has a clock to give them. `self.advance`
+            // resets `on_screen_for` to `0.0` on every transition, this one
+            // included, so the reveal starts clean. See
             // [`pure_states::TITLE_SCREEN`] for what advancing past it would
             // need that is not yet evidenced.
-            //
-            // `draw_screen_at`, not `draw_screen`, and `self.on_screen_for`
-            // as its clock - the same reason `Show Logo` above takes it:
-            // the thirteen `<Animation>`-wrapped frame-line/bracket/patch
-            // widgets this screen authors wipe in over their own key
-            // timeline (`docs/ghidra/functions/psp-pure-eu/title-screen.md`),
-            // and only the live boot order has a clock to give them.
-            // `self.advance` resets `on_screen_for` to `0.0` on every
-            // transition, `Title Screen`'s own included, so this reveals
-            // from a clean start rather than carrying over whatever the
-            // previous screen's clock read.
             let mut out = self.draw_screen_at(pure_states::TITLE_SCREEN, self.on_screen_for);
             self.insert_backdrop(&mut out);
             return out;
@@ -598,11 +593,18 @@ impl Frontend {
 
     /// [`Self::draw_screen`], with `elapsed` seconds of wall clock since the
     /// screen appeared - the one piece of state that lets a `pulse="true"`
-    /// widget's alpha move. `f64::INFINITY` (what the public method passes)
-    /// reads as "settled": every pulsing widget's alpha lands on the ceiling
-    /// [`pulse_alpha`] converges to, which is its own authored colour, so
-    /// nothing here changes for a caller that never had a clock to give.
-    pub(super) fn draw_screen_at(&self, name: &str, elapsed: f64) -> Vec<Draw> {
+    /// widget's alpha move, or a `<Animation><Key>`-wrapped widget wipe in.
+    /// `f64::INFINITY` (what the public method passes) reads as "settled":
+    /// every pulsing widget's alpha lands on the ceiling [`pulse_alpha`]
+    /// converges to and every reveal lands on its own final key, so nothing
+    /// here changes for a caller that never had a clock to give.
+    ///
+    /// `pub`, not `pub(super)`, since `--screen-seconds` needs it from
+    /// `oag_game::capture` to show a mid-reveal still without moving the
+    /// screen into the live boot order - the same reason `--menu-anim-phase`/
+    /// `--menu-picker-seconds` exist for the menu pages this does not reach.
+    #[must_use]
+    pub fn draw_screen_at(&self, name: &str, elapsed: f64) -> Vec<Draw> {
         let (width, height) = self.space.size;
         let mut out = vec![Draw::Fill {
             rect: [0.0, 0.0, width, height],

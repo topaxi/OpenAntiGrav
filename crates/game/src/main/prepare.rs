@@ -294,7 +294,7 @@ impl Pending {
 /// A `--menu` file that will not read, or a definition that will not parse.
 pub(crate) fn definition(cli: &Cli, language: Option<&str>) -> Result<menu::Definition> {
     let strings = strings::project_table(language);
-    match cli.menu.as_deref() {
+    match cli.menu_args.menu.as_deref() {
         Some(path) => {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("reading {}", path.display()))?;

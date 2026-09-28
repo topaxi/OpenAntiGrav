@@ -31,6 +31,7 @@ fn geometry(length: u32) -> Geometry {
                 color: 0x2fff_ffff,
                 gradient: None,
                 reveal: Vec::new(),
+                transition: 0.0,
             })
             .collect(),
         title: None,
@@ -49,6 +50,7 @@ fn geometry(length: u32) -> Geometry {
             pulse: false,
             delay: 0.0,
             wrap_width: None,
+            transition: 0.0,
         }),
         bars: Vec::new(),
     }

@@ -136,6 +136,59 @@ pub fn slideshow(
     Ok((show, blobs))
 }
 
+/// Seconds the hexagonal window's own stills take to fade in on a fresh
+/// selection - **chosen, not measured**: the circuit's own `screen.xml`
+/// authors no `transition` of its own for them (unlike `Selection_Definition.xml`'s
+/// `LeftLayer`s, which do - see [`oag_ui::picker`]'s own reading of that
+/// attribute), but a live PPSSPP capture shows them arriving in step with
+/// the info panel's own measured `0.5`s (`docs/ui/selection-screens.md`), so
+/// this reuses that number rather than inventing an unrelated one.
+pub const CARD_FADE_SECONDS: f32 = 0.5;
+
+/// `draw` with every colour it carries multiplied by `alpha` - [`CARD_FADE_SECONDS`]'s
+/// own arrival fade, applied after [`Slideshow::draws`] since that method
+/// reads no fade of its own. Shared by the live picker stage and the
+/// `--menu-page` still capture so the two cannot draw the cards differently.
+#[must_use]
+pub fn fade_draw(draw: oag_ui::frontend::Draw, alpha: f32) -> oag_ui::frontend::Draw {
+    use oag_ui::frontend::Draw;
+    if alpha >= 1.0 {
+        return draw;
+    }
+    let scale = |c: [f32; 4]| [c[0], c[1], c[2], c[3] * alpha];
+    match draw {
+        Draw::Sprite { rect, uv, color } => Draw::Sprite {
+            rect,
+            uv,
+            color: scale(color),
+        },
+        Draw::Fill { rect, color } => Draw::Fill {
+            rect,
+            color: scale(color),
+        },
+        Draw::Text {
+            x,
+            y,
+            scale: text_scale,
+            color,
+            border,
+            align,
+            text,
+            wrap_width,
+        } => Draw::Text {
+            x,
+            y,
+            scale: text_scale,
+            color: scale(color),
+            border,
+            align,
+            text,
+            wrap_width,
+        },
+        other => other,
+    }
+}
+
 /// Reads and decodes a preview mesh off the disc - the outline ribbon or
 /// the front-end hull - with a PS2 disc's sibling texture set resolved the
 /// way a race resolves its own hull's and circuit's
