@@ -54,6 +54,42 @@ pub(crate) enum Screen {
     },
 }
 
+/// `Cell Selection`'s own cursor, remembered per grid for as long as the
+/// campaign screens stay open, so backing out to `Grid Selection` and
+/// re-entering the same grid lands on the cell the player left rather than
+/// on `CellSelection::new`'s own first-visit default.
+///
+/// **Measured** (PPSSPP, `pulse-psp-usa.chd`, `docs/ui/campaign-screens.md`'s
+/// "Cell Selection's cursor across a back-out" section): moved to `grid0_3_2`,
+/// backed out, came back in on `grid0_3_2`, not `grid0_3_1`. **Chosen, not
+/// measured**: keying by grid (a different grid keeps its own cursor, or
+/// its first-visit default if never entered), and forgetting everything
+/// once the campaign screens close (`CampaignStage` is rebuilt on every
+/// `RACE CAMPAIGN` entry) - neither case was observed on the original.
+#[derive(Debug, Default)]
+pub(crate) struct CellCursors(Vec<(usize, String)>);
+
+impl CellCursors {
+    /// Records `model`'s selected cell as grid `which`'s own cursor.
+    pub(crate) fn remember(&mut self, which: usize, model: &oag_ui::campaign::CellSelection) {
+        let Some(name) = model.selected().map(|cell| cell.name.clone()) else {
+            return;
+        };
+        match self.0.iter_mut().find(|(grid, _)| *grid == which) {
+            Some((_, remembered)) => *remembered = name,
+            None => self.0.push((which, name)),
+        }
+    }
+
+    /// Moves `model`'s cursor to grid `which`'s remembered cell, if any -
+    /// a no-op on a grid never entered, which keeps the first-visit default.
+    pub(crate) fn restore(&self, which: usize, model: &mut oag_ui::campaign::CellSelection) {
+        if let Some((_, name)) = self.0.iter().find(|(grid, _)| *grid == which) {
+            model.select_by_name(name);
+        }
+    }
+}
+
 /// The whole campaign, read once when it opens.
 ///
 /// **Every grid, not only the selected one.** `Grid Selection`'s own honey
@@ -134,6 +170,8 @@ pub(crate) struct CampaignStage {
     /// `Session::records` while a campaign screen is open, only a finished
     /// or escaped race does, and reaching one closes this stage first.
     records: oag_game::records::Store,
+    /// See [`CellCursors`]'s own doc.
+    cell_cursors: CellCursors,
 }
 
 impl CampaignStage {
@@ -193,6 +231,7 @@ impl CampaignStage {
             title,
             circuit_names,
             records,
+            cell_cursors: CellCursors::default(),
         }
     }
 
@@ -506,6 +545,7 @@ impl CampaignStage {
         if self.is_hd() {
             model = model.with_default_difficulty(race_campaign::Difficulty::Easy);
         }
+        self.cell_cursors.restore(which, &mut model);
         self.screen = Screen::Cell { model, which };
         true
     }
@@ -580,6 +620,9 @@ impl CampaignStage {
     /// Returns to `Grid Selection`, on the tier `Cell Selection` was opened
     /// from.
     pub(crate) fn back_to_grid_selection(&mut self) {
+        if let Screen::Cell { model, which } = &self.screen {
+            self.cell_cursors.remember(*which, model);
+        }
         let index = match &self.screen {
             Screen::Cell { which, .. } => which.saturating_sub(self.grid_range.start),
             Screen::Grid(model) => model.index(),
@@ -607,5 +650,66 @@ impl CampaignStage {
         }
         model.set_index(index);
         self.screen = Screen::Grid(model);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CellCursors;
+    use oag_tables::race_campaign::{Cell, Mode};
+    use oag_ui::campaign::CellSelection;
+
+    fn cell(name: &str) -> Cell {
+        Cell {
+            name: name.to_string(),
+            track: Some("track".to_string()),
+            mode: Mode::Race,
+            class: "Venom".to_string(),
+            weapons: true,
+            damage: true,
+            locked: Some(false),
+            status: None,
+            ai_count: Some(7),
+            skill: None,
+            skill_easy: None,
+            skill_hard: None,
+            laps: Some(3),
+            ship: None,
+            ship_choice: Some(true),
+            gold: 1,
+            silver: 2,
+            bronze: 3,
+            tournament_tracks: Vec::new(),
+            difficulty_targets: None,
+            nitro_elimination_targets: None,
+        }
+    }
+
+    fn selected(model: &CellSelection) -> &str {
+        model.selected().map_or("", |cell| cell.name.as_str())
+    }
+
+    /// The measured case: a cursor moved on one grid survives the model
+    /// being rebuilt on re-entry to that same grid, instead of resetting
+    /// to `CellSelection::new`'s own first-visit default.
+    #[test]
+    fn a_re_entered_grid_restores_the_cursor_it_was_left_on() {
+        let cells = vec![cell("grid0_3_1"), cell("grid0_3_2")];
+        let mut cursors = CellCursors::default();
+
+        let mut first = CellSelection::new(cells.clone());
+        assert_eq!(selected(&first), "grid0_3_1");
+        first.select_by_name("grid0_3_2");
+        cursors.remember(0, &first);
+
+        let mut again = CellSelection::new(cells.clone());
+        cursors.restore(0, &mut again);
+        assert_eq!(selected(&again), "grid0_3_2");
+
+        // A grid never entered keeps its own first-visit default - chosen,
+        // not measured; see `CellCursors`'s own doc.
+        let mut other = CellSelection::new(cells);
+        cursors.restore(1, &mut other);
+        assert_eq!(selected(&other), "grid0_3_1");
     }
 }
