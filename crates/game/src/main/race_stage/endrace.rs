@@ -69,6 +69,11 @@ pub(crate) struct EndRaceRuntime {
     rewards: Option<Rewards>,
     menu: EndRaceMenu,
     which: Which,
+    /// `EndRace Rewards`' trophy for this race's medal, when a campaign
+    /// cell awarded one and its `.vex` decoded - `oag_game::endrace::Trophy`,
+    /// drawn over the screen's own draw list with the `Mode3D` camera the
+    /// disc authors for it.
+    trophy: Option<(oag_game::preview::Preview, oag_ui::picker::slideshow::Model)>,
 }
 
 impl std::fmt::Debug for EndRaceRuntime {
@@ -100,9 +105,21 @@ impl EndRaceRuntime {
         results: ResultsModel,
         rewards: Option<Rewards>,
         menu: EndRaceMenu,
+        anisotropy: oag_render::mesh_render::Anisotropy,
     ) -> Result<Self> {
+        let mut screens = screens;
         let mut renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
         renderer.set_space(skin.space());
+        let trophy = trophy_for(rewards.as_ref(), &mut screens.trophies).and_then(|trophy| {
+            let placement = trophy.placement.model;
+            match oag_game::preview::Preview::new(device, queue, format, anisotropy, trophy.mesh) {
+                Ok(preview) => Some((preview, placement)),
+                Err(error) => {
+                    log::warn!("{}: {error:#} - the trophy draws nothing", placement.src);
+                    None
+                }
+            }
+        });
         Ok(Self {
             screens,
             skin,
@@ -113,6 +130,7 @@ impl EndRaceRuntime {
             rewards,
             menu,
             which: Which::Results,
+            trophy,
         })
     }
 
@@ -210,6 +228,7 @@ impl EndRaceRuntime {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
     ) {
         let sprites = &self.screens.sprites;
         let layers = match (self.which, &self.results) {
@@ -295,7 +314,51 @@ impl EndRaceRuntime {
         };
         self.renderer
             .overlay(device, queue, encoder, view, &layers.flatten(), viewport);
+        // The trophy after the screen's own widgets: nothing this build
+        // draws on `Rewards` overlaps it (`MedalImg` hides under an earned
+        // medal, `BigPos` is not drawn on Pulse). Held at its first frame -
+        // every `TrophyPanel` model authors `StartPaused="yes"`, and the
+        // `|= 4` `EndRaceRewards_OnEnter` sets on the chosen one reads as
+        // the widget's visible bit, not an animation release.
+        if self.which == Which::Rewards
+            && let Some((preview, placement)) = &mut self.trophy
+        {
+            preview.draw_mode3d(
+                device,
+                queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                self.skin.space(),
+                placement,
+                0.0,
+            );
+        }
     }
+}
+
+/// The trophy this race shows, taken out of `trophies`: the one whose
+/// medal a campaign cell awarded, `None` on a race with no cell or no medal
+/// - `EndRaceRewards_OnEnter`'s own two branches
+/// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`).
+fn trophy_for(
+    rewards: Option<&Rewards>,
+    trophies: &mut Vec<oag_game::endrace::Trophy>,
+) -> Option<oag_game::endrace::Trophy> {
+    let index = trophy_index(rewards, trophies.iter().map(|trophy| trophy.medal))?;
+    Some(trophies.swap_remove(index))
+}
+
+/// [`trophy_for`]'s choice, over the medals alone so it tests without a
+/// decoded mesh.
+fn trophy_index(
+    rewards: Option<&Rewards>,
+    medals: impl IntoIterator<Item = oag_tables::race_campaign::Medal>,
+) -> Option<usize> {
+    let rewards = rewards.filter(|rewards| rewards.campaign)?;
+    let medal = rewards.medal?;
+    medals.into_iter().position(|candidate| candidate == medal)
 }
 
 /// `Line1`'s own headline, off this run's outcome - see
@@ -561,8 +624,30 @@ pub(crate) fn results_table_takes_confirm(finished: bool, endrace_built: bool) -
 
 #[cfg(test)]
 mod tests {
-    use super::{LoyaltyInputs, hd_field_rows, loyalty_award};
+    use super::{LoyaltyInputs, hd_field_rows, loyalty_award, trophy_index};
     use oag_game::scoreboard::{Board, Row};
+    use oag_tables::race_campaign::Medal;
+
+    /// A campaign medal picks its own trophy; no cell, or no medal, picks
+    /// none - `EndRaceRewards_OnEnter`'s two branches.
+    #[test]
+    fn a_campaign_medal_picks_its_own_trophy_and_nothing_else_picks_one() {
+        let rewards = |medal, campaign| oag_ui::endrace::Rewards {
+            medal,
+            campaign,
+            loyalty: None,
+        };
+        let loaded = [Medal::Gold, Medal::Silver, Medal::Bronze];
+        let pick = |r: &oag_ui::endrace::Rewards| trophy_index(Some(r), loaded);
+        assert_eq!(pick(&rewards(Some(Medal::Bronze), true)), Some(2));
+        assert_eq!(pick(&rewards(Some(Medal::Gold), true)), Some(0));
+        assert_eq!(pick(&rewards(Some(Medal::Gold), false)), None);
+        assert_eq!(pick(&rewards(None, true)), None);
+        assert_eq!(trophy_index(None, loaded), None);
+        let missing = [Medal::Gold];
+        let silver = rewards(Some(Medal::Silver), true);
+        assert_eq!(trophy_index(Some(&silver), missing), None);
+    }
 
     /// `hd_field_rows` reads place/finish tick/player straight off the
     /// field's own `Board`, in the board's own order - no reordering, no

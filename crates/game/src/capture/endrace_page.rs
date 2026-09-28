@@ -9,13 +9,21 @@
 
 use anyhow::{Context, Result};
 
-use crate::capture::menu_page::open_for_previews;
+use crate::capture::menu_page::{PreviewRequest, open_for_previews};
+use oag_tables::race_campaign::Medal;
 
 /// Which EndRace screen a `--menu-page` name asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum EndRaceKind {
     Results,
-    Rewards,
+    /// `medal` is the campaign cell's award the synthetic model carries:
+    /// `None` is the one reference capture's no-medal run, `Some` draws the
+    /// matching `TrophyPanel` model (`endrace-rewards-gold`/`-silver`/
+    /// `-bronze`) - a capture-only knob, so an earned trophy can be looked
+    /// at without racing to one.
+    Rewards {
+        medal: Option<Medal>,
+    },
     /// `tournament_next_leg` swaps `RACE AGAIN` for `ER_NEXT_RACE` - see
     /// `crate::race_stage::endrace::menu_options`'s own doc for when this
     /// engine actually does that. A capture-only knob: nothing about the
@@ -44,7 +52,16 @@ pub(super) enum EndRaceKind {
 pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
     match page {
         "endrace-results" | "endrace_results" => Some(EndRaceKind::Results),
-        "endrace-rewards" | "endrace_rewards" => Some(EndRaceKind::Rewards),
+        "endrace-rewards" | "endrace_rewards" => Some(EndRaceKind::Rewards { medal: None }),
+        "endrace-rewards-gold" => Some(EndRaceKind::Rewards {
+            medal: Some(Medal::Gold),
+        }),
+        "endrace-rewards-silver" => Some(EndRaceKind::Rewards {
+            medal: Some(Medal::Silver),
+        }),
+        "endrace-rewards-bronze" => Some(EndRaceKind::Rewards {
+            medal: Some(Medal::Bronze),
+        }),
         "endrace-menu" | "endrace_menu" => Some(EndRaceKind::Menu {
             tournament_next_leg: false,
         }),
@@ -100,7 +117,7 @@ pub(super) fn capture(
     frame: &oag_ui::menu::Frame,
     sprites: &mut crate::sprite::Sheet,
     title: &'static oag_title::Title,
-) -> Result<Vec<oag_ui::frontend::Draw>> {
+) -> Result<(Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>)> {
     let mut archives = match race {
         Some(race) => open_for_previews(race)?,
         None => anyhow::bail!(
@@ -157,7 +174,7 @@ fn endrace_page(
     sprites: &mut crate::sprite::Sheet,
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
-) -> Result<Vec<oag_ui::frontend::Draw>> {
+) -> Result<(Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>)> {
     let screens = crate::endrace::load(
         archives,
         strings,
@@ -180,8 +197,10 @@ fn endrace_page(
             frame,
             backdrop,
             sprites,
-        );
+        )
+        .map(|list| (list, None));
     }
+    let mut trophy = None;
     let layers = match kind {
         EndRaceKind::Results => {
             let model = oag_ui::endrace::Results {
@@ -213,9 +232,21 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
-        EndRaceKind::Rewards => {
+        EndRaceKind::Rewards { medal } => {
+            // The trophy is a 3D pass after the draw list, the one the
+            // live `EndRaceRuntime::draw` makes - see
+            // `crate::endrace::Trophy`.
+            trophy = medal
+                .and_then(|medal| screens.trophies.iter().find(|t| t.medal == medal))
+                .map(|trophy| PreviewRequest {
+                    entry: trophy.placement.model.src.clone(),
+                    skin: None,
+                    rect: [0.0, 0.0, grid[0], grid[1]],
+                    kind: oag_ui::picker::Kind::Ship,
+                    mode3d: Some(trophy.placement.model.clone()),
+                });
             let model = oag_ui::endrace::Rewards {
-                medal: None,
+                medal,
                 campaign: true,
                 // The reference capture's own numbers
                 // (`docs/ui/campaign-screens.md`'s "After a campaign race,
@@ -328,7 +359,7 @@ fn endrace_page(
             )
         }
     };
-    Ok(layers.flatten())
+    Ok((layers.flatten(), trophy))
 }
 
 /// [`endrace_page`]'s Wipeout HD/Fury branch: `EndRace Results`/`EndRace
@@ -389,7 +420,7 @@ fn hd_endrace_page(
                 &|src| sprites.get(src),
             )
         }
-        EndRaceKind::Rewards => {
+        EndRaceKind::Rewards { .. } => {
             // The same synthetic race the Results arm above draws: the
             // player first, on a campaign cell whose law gave gold for it.
             let model = oag_ui::endrace::HdRewards {

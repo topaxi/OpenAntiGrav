@@ -57,6 +57,70 @@ pub struct EndRaceScreens {
     /// "front end's own sheet plus this screen's own art" shape
     /// [`crate::campaign::load`] already extends it with.
     pub sprites: Sheet,
+    /// `EndRace Rewards`' `TrophyPanel` models, decoded - see [`Trophy`].
+    /// Empty on Wipeout HD/Fury, whose `MedalBlock` is an `<ImageModel>`
+    /// this build does not read, and on a Pulse source whose trophy `.vex`
+    /// will not decode (logged, never substituted).
+    pub trophies: Vec<Trophy>,
+}
+
+/// One of `EndRace Rewards`' three `TrophyPanel` models: which medal it is,
+/// where the disc places it, and its decoded mesh.
+///
+/// **Which medal a model is comes off its widget name**, the switch
+/// `EndRaceRewards_OnEnter` (`0x088dbbd4`) makes on the medal ordinal:
+/// `0` shows `g_trophy`, `1` `s_trophy`, `2` `b_trophy`
+/// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`, confidence 80).
+pub struct Trophy {
+    pub medal: oag_tables::race_campaign::Medal,
+    pub placement: oag_ui::screen::Mode3dModel,
+    pub mesh: oag_render::mesh::Model,
+}
+
+impl std::fmt::Debug for Trophy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Trophy")
+            .field("medal", &self.medal)
+            .field("src", &self.placement.model.src)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The medal a `TrophyPanel` model's widget name stands for - see
+/// [`Trophy`].
+fn trophy_medal(name: &str) -> Option<oag_tables::race_campaign::Medal> {
+    use oag_tables::race_campaign::Medal;
+    match name {
+        "g_trophy" => Some(Medal::Gold),
+        "s_trophy" => Some(Medal::Silver),
+        "b_trophy" => Some(Medal::Bronze),
+        _ => None,
+    }
+}
+
+/// Decodes every `TrophyPanel` model `rewards` places, through the same
+/// [`crate::preview::model`] a picker's ship preview loads with. A model
+/// that will not read or decode is logged and left out: the medal it stands
+/// for then draws no trophy, rather than another one in its place.
+fn load_trophies(archives: &mut oag_assets::Archives, rewards: &Layout) -> Vec<Trophy> {
+    let mut out = Vec::new();
+    for placement in &rewards.screen.models {
+        let Some(medal) = placement.name.as_deref().and_then(trophy_medal) else {
+            continue;
+        };
+        match crate::preview::model(archives, &placement.model.src) {
+            Ok(mesh) => out.push(Trophy {
+                medal,
+                placement: placement.clone(),
+                mesh,
+            }),
+            Err(error) => log::warn!(
+                "{}: {error:#} - the {medal:?} trophy draws nothing",
+                placement.model.src
+            ),
+        }
+    }
+    out
 }
 
 /// Reads this open title's own EndRace screens, title-dispatched: Pulse's
@@ -113,11 +177,13 @@ pub fn load(
         log::info!("endrace sprites {line}");
     }
 
+    let trophies = load_trophies(archives, &rewards);
     Ok(EndRaceScreens {
         results,
         rewards: Some(rewards),
         menu,
         sprites,
+        trophies,
     })
 }
 
@@ -190,5 +256,6 @@ fn load_hd(
         rewards,
         menu,
         sprites,
+        trophies: Vec::new(),
     })
 }

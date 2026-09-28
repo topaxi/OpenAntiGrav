@@ -30,6 +30,7 @@ mod movie;
 #[cfg(test)]
 use movie::has_movie_extension;
 mod block;
+mod mode3d;
 mod reveal;
 mod settings;
 mod tag_input;
@@ -38,6 +39,7 @@ mod widgets;
 pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
 pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
+pub use mode3d::Mode3dModel;
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
 pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
@@ -320,9 +322,10 @@ pub struct Screen {
     pub movies: Vec<Movie>,
     /// `Text` widgets in document order.
     pub texts: Vec<Text>,
-    /// The box half of every `<Block>`, in document order - its label half
-    /// is in [`Self::texts`]. See [`BlockWidget`].
+    /// The box half of every `<Block>` (label in [`Self::texts`]).
     pub blocks: Vec<BlockWidget>,
+    /// Every `<Mode3D>`'s `<Model>`s, in document order.
+    pub models: Vec<Mode3dModel>,
     /// `Redirect` widgets in document order.
     pub redirects: Vec<Redirect>,
     /// `TouchButton` widgets in document order - Wipeout 2048's icon tiles,
@@ -730,6 +733,7 @@ impl Screens {
                     .blocks
                     .push(self.block_widget_from_node(child, inner));
             }
+            "mode3d" => screen.models.extend(self.mode3d_models_from_node(child)),
             "redirect" => screen.redirects.push(widgets::redirect_from_node(child)),
             "touchbutton" => screen
                 .touch_buttons

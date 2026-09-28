@@ -242,6 +242,7 @@ impl Session {
             results,
             rewards,
             menu,
+            self.anisotropy,
         ) {
             Ok(runtime) => {
                 if let Stage::Race(stage) = &mut self.stage {
