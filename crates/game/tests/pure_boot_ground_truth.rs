@@ -584,6 +584,7 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
                     height: Some(1.0),
                     color,
                     gradient: None,
+                    transition: 0.0,
                 },
                 oag_ui::screen::Fill {
                     name: None,
@@ -593,6 +594,7 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
                     height: Some(1.0),
                     color,
                     gradient: None,
+                    transition: 0.0,
                 },
             ],
             "{label}: two thin stripes, not a 480x272 wash"
@@ -638,6 +640,7 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             height: Some(height),
             color,
             gradient: None,
+            transition: 0.0,
         };
         let white_background = oag_ui::screen::Fill {
             name: None,
@@ -647,6 +650,7 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             height: Some(272.0),
             color: 0xffff_ffff,
             gradient: None,
+            transition: 0.0,
         };
         assert_eq!(
             screen.fills,

@@ -206,10 +206,17 @@ impl PickerStage {
     }
 
     /// The stills on screen this tick, timed from the last selection change
-    /// - see [`oag_ui::picker::slideshow::Slideshow::at`].
+    /// (see [`oag_ui::picker::slideshow::Slideshow::at`]), faded in over
+    /// [`oag_game::preview::CARD_FADE_SECONDS`] - see that constant's own doc
+    /// for why this reads it rather than an attribute of its own.
     pub(crate) fn slideshow_draws(&self) -> Vec<Draw> {
         self.slideshow.as_ref().map_or_else(Vec::new, |show| {
-            show.draws(self.model.since_selection(), &|src| self.placed(src))
+            let seconds = self.model.since_selection();
+            let alpha = (seconds / oag_game::preview::CARD_FADE_SECONDS).clamp(0.0, 1.0);
+            show.draws(seconds, &|src| self.placed(src))
+                .into_iter()
+                .map(|draw| oag_game::preview::fade_draw(draw, alpha))
+                .collect()
         })
     }
 

@@ -280,6 +280,77 @@ a sibling `<Image name="{label} Bar">`'s fill fraction to
 `scale * min(value, max) / max` - the generic widget both `Speed`/`Thrust`/
 `Handling`/`Shield`/`Loyalty` on `Team Selection` go through.
 
+## `LeftLayer`'s own `transition` attribute is a fade duration
+
+Both screens' info panel is wrapped in `Data\Plugins\PI001\GUI\
+Selection_Definition.xml`'s own `<LeftLayer transition="0.5">` -
+`docs/ui/selection-screens.md` already read that the attribute exists and
+that a live capture shows a card mid-arrival, but not what the number means.
+It is a fade-in/fade-out duration in seconds, on every widget kind alike,
+not a slide or a scale.
+
+**The evidence is the generic widget constructor, not the screen classes.**
+Every XML element - `LeftLayer`, `Item`, `Text`, `Image` and so on -
+passes through `Widget_CreateFromElement` (`0x088920fc`, confidence 72:
+the attribute set matches the disc's own XML exactly and unambiguously, but
+the surrounding class-dispatch machinery was read only at the call site).
+It reads a fixed base-attribute set off the element - `Global`, `Focus`,
+`Default`, `Transition`, `EnableTransition`, `DisableTransition`,
+`OffsetX`/`OffsetY`/`OffsetZ`, `Delay`, `StartEnabled`, `PushWidth`,
+`PushHeight`, `GSDisable`, `DontUsePass2` - before creating the widget
+through the class registry and recursing into its children. The relevant
+four lines:
+
+```c
+fVar10 = local_768;                          // EnableTransition
+if ((local_768 == FLT_MIN) && (fVar10 = local_76c, local_76c == FLT_MIN)) {
+    fVar10 = *(float *)(iVar7 + 0x68);       // inherited, if neither is authored
+}
+*(float *)(iVar7 + 0x68) = fVar10;           // the widget's own enable-fade seconds
+
+if (local_764 == FLT_MIN) {                  // DisableTransition
+    fVar10 = local_76c;                      // falls back to Transition
+    if (local_76c == FLT_MIN) { fVar10 = *(float *)(iVar7 + 0x6c); }
+    *(float *)(iVar7 + 0x6c) = fVar10;
+} else {
+    *(float *)(iVar7 + 0x6c) = local_764;    // DisableTransition, when authored
+}
+```
+
+(`local_76c`/`local_768`/`local_764` are `Transition`/`EnableTransition`/
+`DisableTransition`; `FLT_MIN` is this reader's sentinel for "not authored",
+same idiom the rest of the function uses.) So `transition="0.5"` on a
+`LeftLayer` sets both the enable- and disable-fade of every widget under it
+to half a second, unless a widget declares its own `EnableTransition`/
+`DisableTransition` - neither of which either selection screen's own XML
+does, only the plain `transition` name.
+
+**A live capture confirms the shape is a fade, not a slide.** Walking
+`pulse-psp-usa.chd` under PPSSPP into `Track Creation` and screenshotting
+every ~130ms of the first 1.2 seconds: the panel (`transition="0.5"`) and
+the hexagonal window's own first card are both faint-to-invisible at 0-130ms
+and fully settled by 320-480ms, while the title bar's own group
+(`<LeftLayer transition="0">`) is solid from the very first frame - matching
+`transition`'s reading as a duration exactly, and ruling out a position or
+scale change (nothing in the frames moves or resizes; only opacity climbs).
+The *curve* (linear vs eased) is not settled by four screenshots a tenth of
+a second apart - implemented as a linear ramp, **chosen, not measured**.
+Confidence 85 on "a per-widget alpha fade, `transition` seconds long" as the
+mechanism (static decompile plus a live capture at the predicted timing);
+no score on the ramp's own shape.
+
+**The hexagonal window's own stills author no `transition` of their own** -
+the circuit's per-entry `screen.xml` (`docs/ui/selection-screens.md`) has no
+`LeftLayer` and no `transition` attribute anywhere in it - so their fade in
+this build (`oag_game::preview::CARD_FADE_SECONDS`) reuses the panel's own
+measured `0.5`s rather than inventing an unrelated number, on the strength
+of the capture above showing both arrive in the same window. Implemented in
+`oag_ui::picker::body` (the panel, reading `Text`/`Image`/`Fill::transition`
+off `oag_ui::screen`'s own `LeftLayer` inheritance) and
+`oag_game::preview::fade_draw` (the cards, shared between the live picker
+stage and the `--menu-page --menu-picker-seconds` still capture). See
+`docs/ui/selection-screens.md`'s own "cards slide in" section, now closed.
+
 ## What is still open after this pass
 
 - The nine unlock-predicate functions inside `Definition_IsUnlocked` are
@@ -338,6 +409,17 @@ whoever picks EU coverage of this area up next.
 
 ## History
 
+- 2026-09-28: `Widget_CreateFromElement` (`0x088920fc`) named - the generic
+  XML-element-to-widget constructor every front-end screen's tree goes
+  through, and the one that reads `LeftLayer`'s own `transition` attribute
+  as a per-widget fade-in/fade-out duration (`EnableTransition`/
+  `DisableTransition`, falling back to plain `Transition`). Confirmed
+  against a live PPSSPP capture: the panel and the hexagonal window's first
+  card are both faint at 130ms into `Track Creation` and settled by
+  320-480ms, matching the XML's own `transition="0.5"`, while the title
+  bar's `transition="0"` group is solid from the first frame. Built in
+  `oag_ui::picker::body` and `oag_game::preview::fade_draw` - see the new
+  section above and `docs/ui/selection-screens.md`.
 - 2026-09-10: `FUN_088c4410` and `FUN_08891448` named, off
   `TrackSelection_ApplySelection`'s own call; the per-circuit `screen.xml`
   found and read on both pressings. The "flythrough" reading is retired.
