@@ -83,7 +83,7 @@ from the player's craft:
 | `+0x6c` | `craft+0x920` | **current lap time, seconds** |
 | `+0x70` | `craft+0x92c` | last lap time, centiseconds |
 | `+0x74` | `craft+0x930` | best lap, centiseconds |
-| `+0x78` / `+0x7c` / `+0x80` | see below | the target-time readout (Time Trial, Speed Lap, Free Play) |
+| `+0x78` / `+0x7c` / `+0x80` | see "The target-time readout" below | the target-time readout (Time Trial, Speed Lap, Free Play) |
 | `+0x84` | `Ship_Shield(craft)` | |
 | `+0x8c` | `dot(craft forward, craft+0xb00) < -0.4` | **wrong way**; in Zone it also charges `Ship_Damage(dt * 15)` after 5 s of it |
 | `+0x90` | `craft->+0x4c->+0x1bc` remapped | the held weapon's HUD icon index |
@@ -101,6 +101,155 @@ the player), the `FE_ModelSkin` livery, `PlayerInput_Construct`, then
 `sceKernelGetGPI() & 4` devkit switch swaps the `player_input` binding for
 `autopilot_input` - a hardware DIP that makes the player's craft drive
 itself.
+
+## The target-time readout: `+0x78`/`+0x7c`/`+0x80`, closed 2026-09-28
+
+**Confidence 92** for `PlayerStatus_Update`'s own write of these three
+fields, up from 82: a PPSSPP write watchpoint on all three, armed live off
+`g_hud` (`0x08ab0838`) -> `+0x3c` (the registered `"PLAYER_HUD"` pointer,
+`self+0x48`) -> `+0x30`/`+0x34`/`+0x38`, logged every write's own PC across
+an eight-second drive of a real Venom Time Trial on Talon's Junction
+(`pulse-psp-usa.chd`). **Checked against a full re-scan of the raw PPSSPP
+log, not a `tail` sample** (an earlier revision of this page read only the
+tail and undercounted, both the number of hits and the number of distinct
+PCs) - `grep -a 'CHK Write' ppsspp.log | grep -oE 'at 09a4a7(28|2c|30)
+\(\(09a4a7(28|2c|30)\)\), PC=[0-9a-f]+' | sed -E 's/ \(\(.*\)\),/ /' | sort
+| uniq -c`, keyed by address as well as PC:
+
+```text
+   8373 at 09a4a728  PC=0883b800
+   8374 at 09a4a728  PC=0883baf0
+   8374 at 09a4a72c  PC=0883ba38
+   8374 at 09a4a730  PC=0883b808
+   4153 at 09a4a730  PC=0883bad8
+```
+
+Five distinct write sites, not four as an earlier revision of this page
+said. Two of them share `0x09a4a730` (`+0x38`, the redden bool):
+`0x0883b808` at the same per-tick rate as every other write (the
+unconditional `redden = false` reset at the top of the block), and
+`0x0883bad8` at roughly half that rate - consistent with the conditional
+`redden = true` store inside the tier comparison (`bVar1`'s own branch in
+the decompile below), which only fires on a subset of ticks, though this
+particular 8-second window's own field reads (taken before and after, not
+continuously through it) never confirmed `redden` actually flipped during
+it - an address-level correlation, not a behaviourally confirmed one. All
+five write sites fall inside `PlayerStatus_Update`'s real body,
+`0x0883b3b8`-`0x0883c0cb` (`get_function_by_address`); no address outside
+that range ever wrote any of the three fields in this run. This is what
+closes
+[`hud-time-caption-substitution.md`](hud-time-caption-substitution.md)'s own
+"what the tier itself is" gap - see that page for the reader
+(`Hud_UpdateTimeCluster`) and the caption table.
+
+This is the one block of `PlayerStatus_Update`'s own decompile that reads
+`g_game_mode` rather than `craft`, gated on it reading `5`, `0x11` or `10` -
+a different ordinal space
+from [`race-campaign.md`](race-campaign.md)'s `PI_Cell.mode` (which also
+uses `5` for `Time Trial` and `10` for `Speed Lap`, coincidentally or not;
+`0x11` is not one of that enum's nine documented values, so this block's own
+third gate is likely a front-end-only "Free Play Time Trial" variant with no
+campaign cell behind it - not chased further, since the campaign branch
+below needed only "which of the three modes", not what `0x11` itself is
+called):
+
+```c
+uVar14 = craft->0x920 * 100.0;              // current lap time, centiseconds
+if (mode != SpeedLap) {                     // Time Trial / "Free Play": sum every
+    for (i in 0..20)                        // completed lap split at craft+0x934+4i
+        uVar14 += craft->(0x900 + i*4 + 0x34);
+}
+target[0x78] = -1;                          // hidden unless a target exists
+redden[0x80] = false;
+if DAT_08ab0de0 != 0 {                      // a global gate, unread past this
+    ghost = FUN_088091a0(DAT_08b31774);     // per-team, per-track split-time
+                                             // record store - a separate,
+                                             // unread format, see below.
+                                             // Read unconditionally, campaign
+                                             // cell or not.
+    if campaign_cell := DAT_08b30ffc; campaign_cell != 0 {
+        gold   = campaign_cell->0xa0;       // == Cell::gold, `<Gold Target=>`
+        silver = campaign_cell->0xa4;       // == Cell::silver
+        bronze = campaign_cell->0xa8;       // == Cell::bronze
+        // gold < silver < bronze, all in centiseconds, exactly
+        // `oag_tables::race_campaign::Cell`'s own three fields -
+        // race-campaign.md's own Target0..2 table confirms the offsets
+        // independently, off the XML parser rather than off this function.
+    } else {
+        gold = silver = bronze = 0;         // forces the branch below
+        // ghost is replaced with min(ghost, the per-track/per-class
+        // `RaceTimes` record read off `DAT_08b310b4`, confirmed live at
+        // 117.0 s for Venom/Talon's Junction - race-campaign.md's own
+        // `<RaceTimes>` table) here, non-campaign only.
+    }
+    if      gold == 0:                  tier[0x7c] = 3            // RECORD - always true, non-campaign
+    elif    ghost < gold && uVar14 < ghost: tier[0x7c] = 3         // RECORD - a campaign cell too, when
+                                                                    // the player's own stored best already
+                                                                    // beats gold and current pace beats it.
+                                                                    // oag_game::hud::TimeTrialPace does not
+                                                                    // reproduce this branch - see its own doc.
+    elif    uVar14 <= gold:   tier[0x7c] = 2  // GOLD
+    elif    uVar14 <= silver: tier[0x7c] = 1  // SILVER
+    elif    uVar14 <= bronze: tier[0x7c] = 0  // BRONZE
+    else: /* tier left at its previous value - see below */
+    target[0x78] = the winning branch's own threshold - uVar14 (ghost for
+                    RECORD, gold/silver/bronze otherwise), or 0 + redden=true
+                    once uVar14 exceeds it
+}
+```
+
+**The original's own tier field is stateful - it is simply not written once
+`uVar14` exceeds every target**, so it keeps showing whichever tier was last
+in reach. Because `uVar14` only grows across a race, that is provably the
+same tier a fresh per-tick evaluation against the current `uVar14` alone
+would show, past the point every target is missed: the last real write
+before that point necessarily left it at `0` (bronze), which is exactly what
+a stateless re-evaluation also produces once `uVar14 > bronze`. See
+[`oag_game::hud::TimeTrialPace::from_elapsed`](../../../../crates/game/src/hud/time_trial_pace.rs)'s
+own doc comment for the branch-by-branch argument this reimplementation is
+built on - it needed no persistent per-race state as a result, only
+`race_ticks`/`lap_ticks`, already on `Readout`.
+
+**What this closes for the implementation**: a campaign Time Trial or Speed
+Lap cell's own `gold`/`silver`/`bronze` fields
+(`oag_tables::race_campaign::Cell`, already parsed, already the exact
+numbers `campaign_cell->0xa0/0xa4/0xa8` read) are what the original compares
+the live elapsed time against - the mapping this project needed to draw the
+HUD tier is honest, not invented.
+[`oag_game::hud::Readout::time_trial_pace`](../../../../crates/game/src/hud.rs)
+carries it, computed at `RaceStage::draw_hud` (where the campaign cell
+lives) and consumed by `oag_game::hud::draw`'s `TotalTime`/`TotalTimeTxt`
+arms - see [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
+
+**What stays open**: the `ghost`/`FUN_088091a0` branch, on both paths, not
+only the non-campaign one - see the pseudocode above. That function reads a
+per-team, per-track record keyed by `DAT_08b31774` (the same store
+[`race-campaign.md`](race-campaign.md)'s loyalty section already names) and
+sums up to five `ushort` split times per lap from an offset this page has
+not chased (`param_1+0x460`/`+0x464` select which track/class row). This
+project's own `oag_game::records` has no split-time equivalent, so:
+
+- a non-campaign Time Trial still draws the plain elapsed `TotalTime` it
+  always has - a known, documented divergence now, not an unexamined
+  default;
+- a campaign Time Trial/Speed Lap cell where the player's own stored
+  personal best already beats gold shows `GOLD` where the original would
+  show `RECORD` - `oag_game::hud::TimeTrialPace::from_elapsed` implements
+  the `gold`/`silver`/`bronze` ladder alone, not this branch, and says so in
+  its own doc comment.
+
+Also open: `g_game_mode`'s own full enum (what `0x11` and `7` are called),
+`DAT_08ab0de0`'s own meaning (confirmed non-zero on a fresh profile, gating
+the whole block; `0` forces tier `4`, the layout's own default "Total"
+caption), and **whether this build's own `TotalTime`/`TotalTimeTxt` should
+be hidden on Zone/Elimination at all**: `g_game_mode` for those two modes is
+outside `{5, 0x11, 10, 7}`, so the original leaves `+0x78 = -1` on them,
+which `Hud_UpdateTimeCluster`'s own `iVar6 == -1` check hides both widgets
+for - but `Zone_HUD.xml`/`Elimination_HUD.xml` both author `TotalTime`
+(`hud.md`'s "place and the total time" section), and this build draws it
+unconditionally whenever no place is shown, which is every tick of both
+modes. Pre-existing (not introduced by this pass, and not fixed by it) -
+noticed while reading this decompile, not chased further.
 
 ## The counter: `Craft_UpdateLapProgress` (`0x08842a18`)
 

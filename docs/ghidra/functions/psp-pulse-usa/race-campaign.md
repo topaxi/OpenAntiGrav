@@ -162,7 +162,7 @@ Anything else falls through to `Definition_ParseUnlock` (`0x0888f094`).
 corroborations: `Elimination`'s gold `10` matches `FEData`'s
 `Targets Elimination="10"` exactly, and `Zone`'s `20` would be `32` read as hex,
 which no `Zone` record supports. Times are **centiseconds** - the same unit
-`Hud_UpdateTimeCluster_q` feeds `FUN_088196e4` after multiplying a float
+`Hud_UpdateTimeCluster` feeds `FUN_088196e4` after multiplying a float
 seconds value by `100.0`, and the same formatter (`FUN_08819878`) `Cell
 Selection` uses on a `Time Trial`/`Speed Lap` target.
 
@@ -1908,20 +1908,23 @@ unconfirmed `+0xbe` flag were.
   for `Zone`. Left open rather than guessed; the parser keeps `class` as a raw
   string and maps only the four known names, per
   [`docs/formats/race-campaign.md`](../../../formats/race-campaign.md).
-- **The in-race HUD's medal tier is a different value and is still unread.**
-  [`hud.md`](../../../ui/hud.md) records `Hud_UpdateTimeCluster_q`
-  (`0x0881c9d0`) picking a caption from a five-way table on an ordinal where
-  `0 = BRONZE, 1 = SILVER, 2 = GOLD, 3 = RECORD`. `Cell_EvaluateMedal` runs the
-  **opposite** way (`0 = gold`) and has no `RECORD` tier at all, so the two are
-  not the same number and this page does not close that item. What is pinned
-  down for the next pass: the field is `*(hud + 0x3c) + 0x34`, cached against
-  `hud + 0x190` so the localised string is re-resolved only on a change; its
-  siblings are `+0x30` (the target value, formatted by `FUN_08819878` or
-  `FUN_088196e4`) and `+0x38` (a bool that turns the number red). Ruled out as
-  its writer: `Hud_BindWidgets`' two `DAT_08b30ffc` reads at `0x088207d8` /
-  `0x088207e4` (a results-screen `sprintf` of `cell + 0xa0`),
-  `Eliminator_UpdateKillTarget_q` and `AI_ResolveSkillScale`. Confidence **50**,
-  deliberately not renamed.
+- ~~The in-race HUD's medal tier is a different value and is still
+  unread...~~ **Closed 2026-09-28.** The writer is `PlayerStatus_Update`
+  (`0x0883b3b8`), runtime-verified with a PPSSPP write watchpoint. It is
+  genuinely a different ordinal from `Cell_EvaluateMedal`'s, as this bullet
+  suspected - `0 = BRONZE` up to `3 = RECORD`, related to
+  `Cell_EvaluateMedal`'s `0 = gold, 1 = silver, 2 = bronze` by `2 - medal` on
+  the three tiers they share - evaluated live, every tick, against **this
+  same cell's own** `gold`/`silver`/`bronze` fields (`cell + 0xa0/0xa4/0xa8`,
+  exactly `Target0..2` above) for a campaign Time Trial/Speed Lap cell,
+  **except that `RECORD` can still win there** when the player's own stored
+  personal best beats gold and the live pace beats that too; or a separate
+  personal-best/track-record pair otherwise (always `RECORD` on that second
+  path). Full law and the live evidence:
+  [`race-progress.md`](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28).
+  Wired into the HUD for the campaign branch's gold/silver/bronze ladder,
+  `oag_game::hud::TimeTrialPace`; `RECORD` on either path stays
+  unimplemented - see that page's own "What stays open".
 - **`Locked` on both `PI_Cell` (`+0xb9`) and `PI_Grid` (`+0xa0`) is now
   settled, 2026-09-14** - see
   ["Unlock rules, cell and tier"](#unlock-rules-cell-and-tier) above.

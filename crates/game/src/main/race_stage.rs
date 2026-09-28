@@ -471,6 +471,29 @@ impl RaceStage {
                     readout.zone_next_in = self
                         .scene
                         .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
+                    // Campaign Time Trial/Speed Lap only - see
+                    // `oag_game::hud::Readout::time_trial_pace`'s own doc for
+                    // why a non-campaign Time Trial is deliberately left
+                    // alone here. `campaign_cell` is title-blind (HD reuses
+                    // the same `oag_tables::race_campaign::Cell`), so
+                    // nothing here stops it computing on HD - what actually
+                    // keeps this Pulse-only is `draw.rs`'s own widget-name
+                    // match: no shipped HD layout authors a widget literally
+                    // named `TotalTime`/`TotalTimeTxt` (only `TotalTimeBG`,
+                    // a background), so the substitution never has anything
+                    // to substitute on. A future HD layout that does author
+                    // one would need this gate revisited.
+                    readout.time_trial_pace = self.campaign_cell.as_ref().and_then(|cell| {
+                        let elapsed_ticks = match cell.mode {
+                            oag_tables::race_campaign::Mode::TimeTrial => readout.race_ticks,
+                            oag_tables::race_campaign::Mode::SpeedLap => readout.lap_ticks,
+                            _ => return None,
+                        };
+                        Some(oag_game::hud::TimeTrialPace::from_elapsed(
+                            elapsed_ticks,
+                            cell,
+                        ))
+                    });
                     hud.draw(gpu.device(), gpu.queue(), encoder, view, &readout, viewport);
                     // The countdown, for exactly the measured start-line gate's
                     // span and no other window - see `oag_game::hud::countdown`

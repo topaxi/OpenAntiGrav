@@ -259,6 +259,86 @@ fn a_layout_with_no_place_widget_keeps_its_total_time() {
     assert_eq!(frame.hud_text.len(), 1, "{frame:?}");
 }
 
+/// A campaign Time Trial cell substitutes the medal caption and the
+/// countdown-to-target for `TotalTime`/`TotalTimeTxt`'s own plain elapsed
+/// clock, on pace: no red.
+#[test]
+fn a_campaign_pace_substitutes_the_caption_and_the_countdown() {
+    let layout = Layout::from_xml(TOP_RIGHT);
+    let strings = strings();
+    let readout = Readout {
+        time_trial_pace: Some(super::time_trial_pace::TimeTrialPace {
+            medal: oag_tables::race_campaign::Medal::Silver,
+            remaining_ticks: 179,
+            missed: false,
+        }),
+        ..Readout::blank()
+    };
+    let frame = draw_list(&context(&layout, &strings), &readout);
+
+    let hud_text: Vec<(&str, [f32; 4])> = frame
+        .hud_text
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, color, .. } => Some((text.as_str(), *color)),
+            _ => None,
+        })
+        .collect();
+    // `179` ticks is `2.98` at `Precision::Tenths` - `format_lap_time`'s own
+    // truncation, not `TimeTrialPace`'s.
+    assert_eq!(hud_text, [("0.02.9", [1.0, 1.0, 1.0, 1.0])], "{frame:?}");
+
+    let small_text: Vec<&str> = frame
+        .small_text
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    // Substituted, not the layout's own `idstring="IG_HUD_TOTAL"`.
+    assert_eq!(small_text, ["IG_HUD_SILVER"], "{frame:?}");
+}
+
+/// Past the cell's own bronze target: the caption sticks on `BRONZE`, the
+/// countdown reads zero, and `TotalTime` alone reddens -
+/// `Hud_UpdateTimeCluster_q`'s literal `0xffff0000`, never applied to the
+/// caption.
+#[test]
+fn a_missed_campaign_pace_reddens_only_the_countdown() {
+    let layout = Layout::from_xml(TOP_RIGHT);
+    let strings = strings();
+    let readout = Readout {
+        time_trial_pace: Some(super::time_trial_pace::TimeTrialPace {
+            medal: oag_tables::race_campaign::Medal::Bronze,
+            remaining_ticks: 0,
+            missed: true,
+        }),
+        ..Readout::blank()
+    };
+    let frame = draw_list(&context(&layout, &strings), &readout);
+
+    let hud_text: Vec<(&str, [f32; 4])> = frame
+        .hud_text
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, color, .. } => Some((text.as_str(), *color)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(hud_text, [("0.00.0", [1.0, 0.0, 0.0, 1.0])], "{frame:?}");
+
+    let small_text: Vec<&str> = frame
+        .small_text
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(small_text, ["IG_HUD_BRONZE"], "{frame:?}");
+}
+
 #[test]
 fn the_sample_yields_every_widget_it_declares() {
     let layout = Layout::from_xml(SAMPLE);

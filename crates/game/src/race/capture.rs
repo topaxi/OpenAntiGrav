@@ -820,6 +820,12 @@ pub fn capture(
                 readout.zone_stage = scene.zone_stage().unwrap_or(0);
                 readout.zone_next_in =
                     scene.zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
+                // `readout.time_trial_pace` is deliberately left `None` here,
+                // unlike `RaceStage::draw_hud`'s own equivalent line: this
+                // headless capture path has no campaign cell in scope at all
+                // (see this function's own `campaign_medal: None` a few
+                // lines up), so there is nothing for `TimeTrialPace` to read
+                // off - `None` is correct, not an oversight.
                 overlay.draw(
                     &device,
                     &queue,

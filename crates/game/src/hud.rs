@@ -55,6 +55,7 @@ mod overlay;
 mod runtime;
 mod shield_bar;
 mod sight_draw;
+mod time_trial_pace;
 mod widget;
 
 pub use assets::Assets;
@@ -62,6 +63,7 @@ pub use compose::{Composed, compose};
 pub use countdown::Countdown;
 pub use draw::{Context, Frame, draw_list, pickup_icon_name, sprite_draw};
 pub use overlay::Overlay;
+pub use time_trial_pace::TimeTrialPace;
 pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
 
 // The two the outline default is built from. Everything else `draw` decides is
@@ -649,6 +651,20 @@ pub struct Readout {
     /// The race's mode. Read by a title's runtime HUD rules, which the
     /// original keys on its own mode id - see `hud::runtime`.
     pub mode: oag_race::Mode,
+    /// The campaign Time Trial/Speed Lap "pacing" indicator -
+    /// `Hud_UpdateTimeCluster`'s tier/target/redden triple
+    /// (`*(hud+0x3c)+0x34`/`+0x30`/`+0x38`), for the gold/silver/bronze
+    /// ladder of the campaign branch (`DAT_08b30ffc != 0`) alone. `None`
+    /// outside a campaign Time Trial/Speed Lap cell. Two things the
+    /// original's own ladder does that this field does not reproduce, both
+    /// named rather than silently dropped - see
+    /// [`TimeTrialPace::from_elapsed`]'s own doc:
+    /// `RECORD` beating a personal best even on a campaign cell
+    /// (`FUN_088091a0`, unread), and the whole non-campaign ghost/record
+    /// branch (a non-campaign Time Trial still draws the plain elapsed
+    /// `TotalTime` it always has). See
+    /// `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`.
+    pub time_trial_pace: Option<TimeTrialPace>,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.
