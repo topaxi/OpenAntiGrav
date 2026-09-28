@@ -74,31 +74,39 @@ impl TimeTrialPace {
     ///
     /// **`elapsed_ticks` inherits `TotalTime`/`CurrentTime`'s own existing
     /// clock-start conventions, not newly-checked ones, and the two are not
-    /// the same convention.** `Race_ticks` (Time Trial) is `World::tick`,
+    /// the same convention.** `race_ticks` (Time Trial) is `World::tick`,
     /// counting from the standing start (`tick == 0`), before the green
-    /// flag - matching `race-progress.md`'s own reading of the original's
-    /// `craft+0x920`, which "is only reset by a *lap* completion" and so
-    /// "is timed from whenever `Race_UpdatePositions` starts stepping
-    /// crafts", i.e. the same standing start, not the green flag either.
-    /// `Readout::lap_ticks` (Speed Lap) is different: `RaceState`
+    /// flag - the same *reset convention* `race-progress.md`'s own reading
+    /// of the original's `craft+0x920` describes ("is only reset by a
+    /// *lap* completion", so "is timed from whenever
+    /// `Race_UpdatePositions` starts stepping crafts", not the green flag
+    /// either). **Not the same *value*, though**: this build's own grid
+    /// spawn sits further back from the line than the original's
+    /// (`crates/race/src/state.rs`'s own `advance_progress` comment), so
+    /// `race_ticks` on lap 1 carries that extra run-up on top of matching
+    /// the reset convention - unmeasured how much.
+    ///
+    /// `Readout::lap_ticks` (Speed Lap) diverges further still: `RaceState`
     /// deliberately resets `lap_start_tick` at the *first* line crossing,
-    /// not at the standing start, to compensate for this build's own grid
-    /// spawn sitting further back from the line than the original's
-    /// (`crates/race/src/state.rs`'s own `advance_progress`, "Start lap 1's
-    /// clock here rather than at the standing start... the original does
-    /// *not* restart its lap clock at the first crossing"). So a Speed Lap
-    /// pace here starts its own clock at the first crossing while the
-    /// original's `craft+0x920` keeps running from the standing start
-    /// through it - a real, if usually small (`Course::START_LINE_ADVANCE`
-    /// at Speed Lap velocity, a few tenths of a second on most circuits),
-    /// divergence this function inherits rather than introduces. Whether
-    /// the original's own clock is also offset from the *countdown's* own
-    /// start (before `RaceState::thrust_gated` releases thrust) is a
-    /// separate, still-open question neither `race_ticks` nor `lap_ticks`
-    /// answers - see
+    /// not at the standing start, to compensate for the same spawn
+    /// difference ("Start lap 1's clock here rather than at the standing
+    /// start... the original does *not* restart its lap clock at the first
+    /// crossing"). So a Speed Lap pace here starts its own clock at the
+    /// first crossing while the original's `craft+0x920` keeps running
+    /// from the standing start through it - lap 1 only (every lap after
+    /// resets on completion in both), magnitude unmeasured, and possibly
+    /// larger than a Speed Lap cell's own gold/silver gap (`grid0_2_2`
+    /// authors `4000`/`4200`/`4500`, a 2 s gold-to-silver window) - large
+    /// enough to flip the tier on a lap-1 Speed Lap reading. A divergence
+    /// this function inherits rather than introduces, not yet measured
+    /// closely enough to correct for. Whether the original's own clock is
+    /// also offset from the *countdown's* own start (before
+    /// `RaceState::thrust_gated` releases thrust) is a separate,
+    /// still-open question neither `race_ticks` nor `lap_ticks` answers -
+    /// see
     /// `docs/ghidra/functions/psp-pulse-usa/race-progress.md`'s own "The
-    /// first crossing starts the race but not the clock" bullet, open since
-    /// before this pass.
+    /// first crossing starts the race but not the clock" bullet, open
+    /// since before this pass.
     #[must_use]
     pub fn from_elapsed(elapsed_ticks: u64, cell: &oag_tables::race_campaign::Cell) -> Self {
         let elapsed_centis = i64::try_from(elapsed_ticks * 100 / 60).unwrap_or(i64::MAX);

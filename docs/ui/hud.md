@@ -1015,7 +1015,7 @@ personal-best/track-record pair rather than a medal at all.
 `RECORD` on either path.**
 [`oag_game::hud::TimeTrialPace`](../../crates/game/src/hud/time_trial_pace.rs)
 reimplements the live ladder as a pure function of the elapsed tick count
-(`Race_ticks` for Time Trial, `lap_ticks` for Speed Lap) against
+(`race_ticks` for Time Trial, `lap_ticks` for Speed Lap) against
 `oag_tables::race_campaign::Cell::gold`/`silver`/`bronze` - already-parsed
 fields, no new RE needed to reach them. `RaceStage::draw_hud` computes it
 (the campaign cell lives on `RaceStage`, not on `Race`) and

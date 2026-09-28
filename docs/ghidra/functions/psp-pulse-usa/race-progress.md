@@ -208,7 +208,7 @@ a stateless re-evaluation also produces once `uVar14 > bronze`. See
 [`oag_game::hud::TimeTrialPace::from_elapsed`](../../../../crates/game/src/hud/time_trial_pace.rs)'s
 own doc comment for the branch-by-branch argument this reimplementation is
 built on - it needed no persistent per-race state as a result, only
-`Race_ticks`/`lap_ticks`, already on `Readout`.
+`race_ticks`/`lap_ticks`, already on `Readout`.
 
 **What this closes for the implementation**: a campaign Time Trial or Speed
 Lap cell's own `gold`/`silver`/`bronze` fields

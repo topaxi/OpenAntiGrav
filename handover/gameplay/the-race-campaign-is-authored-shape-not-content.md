@@ -90,7 +90,14 @@ The law, all decompiled and all in `race-campaign.md`:
   before this pass, reused here rather than newly introduced) start at the
   same instant the original's own lap clock does - see
   `race-progress.md`'s "The first crossing starts the race but not the
-  clock", open since before this pass.
+  clock", open since before this pass. **Inferred from the decompile, no
+  frame taken**: `Zone_HUD.xml`/`Elimination_HUD.xml` both author
+  `TotalTime`, but the original's own `g_game_mode` gate (outside
+  `{5, 0x11, 10, 7}`) leaves `+0x78 = -1` for both modes, which
+  `Hud_UpdateTimeCluster` hides both `TotalTime`/`TotalTimeTxt` for - yet
+  this build draws `TotalTime` unconditionally whenever no place is shown,
+  which is every tick of both modes. Pre-existing, not touched by this
+  pass.
 - **`FUN_088085d0` and `FUN_08808624` are deliberately unnamed.** Ghidra
   recovers three parameters where every call site passes four; the fourth reads
   as create-if-missing but that is inference. Fixing the prototype in Ghidra and
