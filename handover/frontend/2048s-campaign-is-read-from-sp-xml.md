@@ -87,20 +87,29 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   events.** This engine has no player rank at all; live verification needs a
   progressed save, which `data/extracted/vita/PCSF00007/base/savedata` does
   not ship (empty).
-- **Which `GameMode_*` C++ class each of the two `Race`-kind typedefs
-  (`-1915183557`, `-1353052320`) actually instantiates is not resolved.**
-  `eboot.elf`'s own string table names six classes
-  (`GameMode_ArcadeRace`/`CheckPointRace`/`EliminatorRace`/`SpeedLapRace`/
-  `ZombieRace`/`ZoneRace`); `Zone` and `Elimination` bind cleanly to two of
-  them by field shape and corroborating instance names, but the two `Race`
-  typedefs do not - their own `M_PNEXTEVENT` chains cross freely between
-  them (`"2048 - Event 3"`, one typedef, names `"2048 - Event 4"`, the
-  other, as its own next event), which argues against a mode split rather
-  than for one. No Ghidra session was opened this pass, per this lane's own
-  scope - a decompile of `GameModeFactory::OnNewInst` (the string
-  `"GameModeFactory::OnNewInst %s: %s - %s"` is in the binary) is the
-  concrete next step if this is worth resolving, since it likely names the
-  concrete class per instance at construction time.
+- **Closed 2026-09-28 (Q2): which `GameMode_*` C++ class each of the four
+  event typedefs instantiates.** Not by decompiling a factory dispatch
+  function (the string `"GameModeFactory::OnNewInst %s: %s - %s"` this
+  thread's own earlier note named as the way in does not exist in this
+  binary - searched, zero hits) but by hash: `oag_formats::wad::hash_name`
+  of each of the six `GameMode_*` class names `eboot.elf`'s string table
+  carries lands exactly on four of `SP.xml`'s own typedef ids, the same
+  case-folded-CRC-32 convention this module's own five in-file names already
+  confirm these ids use, zero misses across all ten names checked.
+  `RACE_A` is `GameMode_SpeedLapRace`, `RACE_B` is `GameMode_ArcadeRace`,
+  `ELIMINATION` is `GameMode_EliminatorRace`, `ZONE` is `GameMode_ZoneRace` -
+  confidence 92, pinned in a new test
+  (`crates/tables/src/mjolnir/campaign/tests.rs::
+  typedef_ids_are_hash_name_of_the_class_they_are`). `GameMode_CheckPointRace`
+  and `GameMode_ZombieRace` hash to ids `SP.xml` does not carry at all -
+  shipped classes the campaign never instantiates. The `M_PNEXTEVENT`
+  cross-chaining between `RACE_A`/`RACE_B` this thread's own earlier note
+  read as evidence against a mode split was never that - it only shows the
+  unlock graph chains across concrete classes freely; `EventKind::Race` still
+  merges them, correctly, since `engine_mode` already derives the Speed
+  Lap/ordinary split off `laps == Some(0)` independently. See
+  `docs/formats/2048-campaign.md`'s typedef table and
+  `crates/tables/src/mjolnir.rs`'s own updated module doc.
 - **`GameModeObjective`'s own semantics: closed 2026-09-21, mostly.** See
   `docs/formats/2048-campaign.md`'s "The objective law" section -
   `M_OBJECTIVETYPE`'s four real ordinals (`FINISH`/`POSITION`/`KILLS`/
