@@ -467,7 +467,12 @@ pass's `53.7s` / `5.2s`), consistent with a rendering-path limitation
 specific to a full race scene under this sandbox's display stack rather
 than either lane's own code. The disc-backed ground-truth test above is
 this pass's substitute end-to-end check; a live capture through to
-`EndRace Results` is real hardware's job:
+`EndRace Results` is real hardware's job. **Corrected 2026-09-28**: it was
+not. With the HD render profile cut to `render_scale = 50` and MSAA, motion
+blur and shadows off, the same llvmpipe adapter ran a campaign race at 60
+ticks a second, and the walk reached `EndRace Results` and `EndRace Menu` -
+see `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: walked live, end to
+end, 2026-09-28". The recipe as it was written:
 
 ```sh
 DISPLAY=:1 WAYLAND_DISPLAY= XDG_CONFIG_HOME=<isolated> \

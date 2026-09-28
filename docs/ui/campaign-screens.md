@@ -2731,6 +2731,11 @@ and its own "what is not determined" section.
   not spent this pass. `session::campaign::handle_campaign`/
   `launch_campaign_cell` received no HD-specific edit, confirmed once more
   by this walk working unmodified.
+  **Driven to results, 2026-09-28**: with the HD render profile cut to
+  `render_scale = 50` and MSAA, motion blur and shadows off, the same
+  llvmpipe adapter ran the race at 60 ticks a second, and the walk reached
+  `EndRace Results`, `EndRace Menu` and back to `Cell Selection` - see
+  "Wipeout HD/Fury: walked live, end to end, 2026-09-28" below.
   **2026-09-28, `grid8_3_1` specifically checked on both sides, without a
   new RPCS3 race boot.** The two-orders-of-magnitude slowdown above is
   **this project's own** race render path, not RPCS3's - a fresh RPCS3 boot
@@ -3177,8 +3182,9 @@ real disc).
 `--menu-page` stills.** Xvfb `:93` (1280x720), `hdfury-ps3-eu-dec.iso`,
 release build, `--autopilot --no-audio`, `WAYLAND_DISPLAY` unset, an
 isolated `XDG_CONFIG_HOME` (`window_size = "1200x680"`, the HD render
-profile cut to `render_scale = 50` with MSAA, motion blur and shadows off so
-the race runs at full tick rate under software rendering). Input was the
+profile cut to `render_scale = 50` with MSAA, motion blur and shadows off;
+the adapter is llvmpipe, `renderer: vulkan: llvmpipe` in the log, and at
+these settings the race ran at 60 ticks a second). Input was the
 keyboard through `xdotool keydown`/`keyup` with a 120 ms hold after
 `xdotool windowfocus --sync` - the earlier pass's delivery gap did not
 reproduce. What a player sees, screen by screen (two or more frames each):
