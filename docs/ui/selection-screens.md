@@ -131,11 +131,20 @@ circuit with no `screen.xml` draws an empty window and says so in the log.
 The same file's `<Screen name="Top">` carries the `<Mode3D><Model
 name="Ship">` the outline ribbon is loaded into, with an authored pose
 (`x=0 y=-300 z=-3700 RotX=1.5 RotY=0.1`, `OriginX=-145 OriginY=13
-nearZ=1000 farZ=5000`). **Read and carried
-(`slideshow::Model`), not yet drawn from**: the outline is still framed by
-the capture-read orbit in `oag_game::preview::orbit_for`, because turning
-those numbers into a camera needs the `Mode3D` projection understood
-first. Open, below.
+nearZ=1000 farZ=5000`). **Now read and drawn from, not just carried** -
+the camera has no position or rotation of its own (only `Origin`/`nearZ`/
+`farZ`; the `Model` is what moves), a fixed vertical FOV and the PSP's own
+`480/272` aspect regardless of the panel's shape, and `Origin` is a plain
+screen-pixel shift of the viewport's own centre -
+[race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#mode3ds-own-fixed-camera-and-the-child-models-own-pose-2026-09-28)
+has the addresses and confidence. `oag_game::preview::mode3d_view_projection`
+builds it; `oag_game::preview::orbit_for`'s own `Track` branch is now dead
+code kept only as the fallback for a circuit whose `screen.xml` authors no
+usable `Mode3D`. Open: the `Model`'s own rotation composition order in this
+renderer's column-vector convention is a plausible transpose of the PSP's
+own row-vector one, not confirmed by stepping through a frame, and the PS2's
+own `Origin` sign is inferred from the two pressings' authored numbers
+rather than read off `psp-pulse-eu`.
 
 **The cards fade in on the original, and now here too.** Every `LeftLayer`
 on the screen carries a `transition` - a fade-in/fade-out duration in
@@ -289,13 +298,15 @@ keeps all three rows and launches from `START` as before.
 
 - ~~The cards' arrival transition, and the `Mode3D` pose of the outline -
   both authored in the circuit's `screen.xml` and read, neither acted
-  on.~~ **2026-09-28: the transition half is closed** - see "The cards fade
-  in on the original, and now here too" above and
+  on.~~ **2026-09-28: both halves are closed.** The transition - see "The
+  cards fade in on the original, and now here too" above and
   [race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#leftlayers-own-transition-attribute-is-a-fade-duration).
-  **The `Mode3D` pose stays open**: the outline is still framed by the
-  capture-read orbit in `oag_game::preview::orbit_for`, because turning
-  those numbers into a camera needs the `Mode3D` projection understood
-  first (`OriginX`/`OriginY` are in an unmeasured space).
+  The `Mode3D` pose - see the new paragraph above and
+  [race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#mode3ds-own-fixed-camera-and-the-child-models-own-pose-2026-09-28):
+  the outline is now framed by the disc's own fixed camera
+  (`oag_game::preview::mode3d_view_projection`), with the rotation
+  composition order and the PS2's `Origin` sign left as the two open
+  sub-items that page's own history entry names.
 - ~~The PS2 screens are captured headlessly against the PSP's live capture
   only: no PCSX2 walk of the PS2's own race box exists yet~~ **2026-09-27:
   walked.** `pulse-ps2-eu.chd` on PCSX2 (`SCES-54748`), `RACEBOX` -> `TRACK

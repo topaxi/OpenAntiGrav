@@ -11,30 +11,35 @@
 //! whatever the UI has already drawn - the same shape
 //! [`crate::hud::Countdown`] takes for the start-line glyph, and the same
 //! pipeline every mesh in this project draws through. The difference is the
-//! camera: the countdown's is orthographic over the HUD grid, while this one
-//! frames the model from its own bounding sphere the way the asset viewer
-//! does (`oag_render::mesh_render::write_uniforms`), and confines the pass
-//! to a rectangle given in the screen's own grid.
+//! camera: the countdown's is orthographic over the HUD grid, `Team
+//! Selection`'s ship still frames the model from its own bounding sphere the
+//! way the asset viewer does (`oag_render::mesh_render::write_uniforms`) and
+//! confines the pass to a rectangle given in the screen's own grid, and
+//! `Track Creation`'s outline ribbon uses the disc's own fixed `<Mode3D>`
+//! camera instead - see [`mode3d_view_projection`].
 
 use anyhow::{Context, Result};
+use oag_core::math::{Mat4, Vec3, camera};
 use oag_display::space::Space;
 use oag_render::camera::orbit::Orbit;
 use oag_render::mesh::Model;
 use oag_render::mesh_render::{
     Anisotropy, Built, CutoutPipelines, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver,
     TRANSPARENT_BLEND, TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build,
-    write_uniforms,
+    write_uniforms, write_uniforms_raw,
 };
 use oag_ui::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
 
-/// How a selection screen's preview is framed at `seconds` into the screen.
+/// How the ship preview on `Team Selection` is framed at `seconds` into the
+/// screen.
 ///
-/// **Both are this build's own numbers**, read off the capture rather than
-/// recovered from the executable: the craft turns once every twelve seconds
-/// seen slightly from above, and the circuit outline is tilted the way the
-/// info panel shows it - see `docs/ui/selection-screens.md`.
+/// **This build's own number, read off the capture rather than recovered
+/// from the executable**: the craft turns once every twelve seconds seen
+/// slightly from above - see `docs/ui/selection-screens.md`. `Track
+/// Creation`'s outline ribbon no longer goes through this: see
+/// [`mode3d_view_projection`] for the disc's own camera, now read instead.
 #[must_use]
 pub fn orbit_for(kind: oag_ui::picker::Kind, seconds: f32) -> Orbit {
     match kind {
@@ -51,6 +56,87 @@ pub fn orbit_for(kind: oag_ui::picker::Kind, seconds: f32) -> Orbit {
             ..Orbit::default()
         },
     }
+}
+
+/// The race box's own fixed `<Mode3D>` camera and the child `<Model>`'s own
+/// pose, in place of [`orbit_for`]'s capture-read orbit - `None` when the
+/// circuit's own `screen.xml` authors no usable one (no `<Mode3D>` at all, or
+/// a degenerate `nearZ`/`farZ`), so a caller can fall back to the orbit.
+///
+/// **Measured off `psp-pulse-usa`'s own `Mode3D` widget class**
+/// (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`), not chosen:
+///
+/// - **The camera itself has no position or rotation of its own** - only
+///   `OriginX`/`OriginY` (a viewport-centre shift, in the screen's own
+///   pixels) and `nearZ`/`farZ`. It sits at the origin, always looking down
+///   `-Z`; what moves is the `<Model>` child's own authored `x y z RotX
+///   RotY`.
+/// - **The projection is a standard symmetric perspective frustum**, vertical
+///   FOV a fixed `1.0` radian (confirmed live: `FUN_088b8548`, the callback
+///   `Gfx_FlushRenderManager` actually invokes when the queued draw replays -
+///   the one that runs at polygon-submission time, after `FUN_088b7f24`'s
+///   own earlier, superseded `~1.134` radian setup), aspect fixed to the
+///   screen's own `480/272` regardless of the panel's shape.
+/// - **`OriginX`/`OriginY` shift the projection's own centre**, not the
+///   model - confirmed live via `FUN_08811220`'s default arguments
+///   (`1808, 1912 == 2048 - 240, 2048 - 136`, the PSP's own screen half-
+///   extents subtracted from the GE's `2048` viewport centre): a widget's
+///   `OriginX`/`OriginY` are added to that pair before the same call, i.e. a
+///   plain screen-pixel offset from centre. Applied here as a post-
+///   projection NDC shift, the off-axis-frustum equivalent of the same GE
+///   viewport-offset register.
+///
+/// **The PS2's own `OriginX`/`OriginY` are negated relative to the PSP's**,
+/// not measured on `psp-pulse-eu`'s own PS2 sibling: this circuit's two
+/// pressings' authored values (`-145, 13` PSP vs `193, -21` PS2, within
+/// rounding of `-(-145, 13) * (640/480, 448/272)`) suggested it, and applying
+/// the PSP's own sign to the PS2's raw values confirmed it live - the outline
+/// lands bottom-left of the panel instead of inside it
+/// (`data/scratch/pulse-mode3d/shots/track-select-ps2.png` before the flip
+/// below). **What is not independently confirmed:** the `<Model>`'s own
+/// rotation order and axis handedness - PSP code builds its transform in a
+/// form consistent with row-vector composition, `v * RotY * RotX * T`, which
+/// this reads into this renderer's column-vector convention as `T * RotX *
+/// RotY` applied innermost-first the same way, a plausible transpose rather
+/// than a breakpoint-confirmed one. A live PSP screenshot at this reading
+/// looks right (`data/scratch/pulse-mode3d/shots/track-select-psp.png`
+/// against a live PPSSPP capture of the same panel), which does not prove the
+/// order - RotY here is `0.1` rad, small enough that a wrong order would be
+/// hard to see on this circuit alone.
+#[must_use]
+pub fn mode3d_view_projection(
+    model: &oag_ui::picker::slideshow::Model,
+    space: Space,
+) -> Option<(Mat4, Mat4)> {
+    let [near, far] = model.depth;
+    if !(near > 0.0 && far > near) {
+        return None;
+    }
+    let fov_y = 1.0; // radians, fixed - see this function's own doc.
+    let projection = camera::perspective(fov_y, space.display_aspect, near, far);
+    // The PS2 pressing's own OriginX/OriginY read negated relative to the
+    // PSP's - see this function's own doc - confirmed live 2026-09-28:
+    // applying the PSP sign to the PS2's raw values landed the outline
+    // bottom-left of the panel instead of inside it (`data/scratch/pulse-mode3d/`).
+    let sign = if space.size == Space::PS2.size {
+        -1.0
+    } else {
+        1.0
+    };
+    let ndc_shift = Vec3::new(
+        sign * -2.0 * model.origin[0] / space.size.0,
+        sign * 2.0 * model.origin[1] / space.size.1,
+        0.0,
+    );
+    let view_projection = Mat4::from_translation(ndc_shift) * projection;
+
+    let [x, y, z] = model.position;
+    let [rot_x, rot_y] = model.rotation;
+    let model_matrix = Mat4::from_translation(Vec3::new(x, y, z))
+        * Mat4::from_rotation_x(rot_x)
+        * Mat4::from_rotation_y(rot_y);
+
+    Some((view_projection, model_matrix))
 }
 
 /// One still of a slideshow as read off the disc: its entry name and its
@@ -409,6 +495,137 @@ impl Preview {
             width / height,
             orbit,
         );
+        self.render(
+            device,
+            queue,
+            encoder,
+            view,
+            target_size,
+            seconds,
+            (x, y, width, height),
+            (x0, y0, x1, y1),
+        );
+    }
+
+    /// [`Self::draw_mode3d`], falling back to [`Self::draw`] when `mode3d` is
+    /// `None` or its own `screen.xml` authors no usable `<Mode3D>` - the one
+    /// call both selection screens' draw sites make (live and `--menu-page`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_auto(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        space: Space,
+        mode3d: Option<&oag_ui::picker::slideshow::Model>,
+        rect: [f32; 4],
+        orbit: Orbit,
+        seconds: f32,
+    ) {
+        let drew_mode3d = mode3d.is_some_and(|model| {
+            self.draw_mode3d(
+                device,
+                queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                model,
+                seconds,
+            )
+        });
+        if !drew_mode3d {
+            self.draw(
+                device,
+                queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                rect,
+                orbit,
+                seconds,
+            );
+        }
+    }
+
+    /// [`Self::draw`], with the disc's own `<Mode3D>` camera in place of an
+    /// [`Orbit`] - see [`mode3d_view_projection`]. `None` when the circuit's
+    /// `screen.xml` authors no usable `<Mode3D>`, so a caller falls back to
+    /// [`Self::draw`].
+    ///
+    /// **Draws into the full letterboxed screen, not `rect`** - unlike
+    /// [`Self::draw`]'s panel-confined pass, this camera's own
+    /// `OriginX`/`OriginY` are a shift of the *screen's* own centre (see
+    /// [`mode3d_view_projection`]), so confining the viewport to the panel
+    /// would apply that shift, and the fixed FOV/aspect, against the wrong
+    /// rectangle.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_mode3d(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        space: Space,
+        model: &oag_ui::picker::slideshow::Model,
+        seconds: f32,
+    ) -> bool {
+        if self.model.vertices.is_empty() || self.model.indices.is_empty() {
+            return false;
+        }
+        let Some((view_projection, model_matrix)) = mode3d_view_projection(model, space) else {
+            return false;
+        };
+        let (x, y, width, height) =
+            pixel_rect(space, viewport, [0.0, 0.0, space.size.0, space.size.1]);
+        let (max_w, max_h) = (target_size.0 as f32, target_size.1 as f32);
+        let x0 = x.clamp(0.0, max_w);
+        let y0 = y.clamp(0.0, max_h);
+        let x1 = (x + width).clamp(0.0, max_w);
+        let y1 = (y + height).clamp(0.0, max_h);
+        if x1 - x0 < 1.0 || y1 - y0 < 1.0 {
+            return false;
+        }
+
+        write_uniforms_raw(queue, &self.uniform_buffer, view_projection, model_matrix);
+        self.render(
+            device,
+            queue,
+            encoder,
+            view,
+            target_size,
+            seconds,
+            (x, y, width, height),
+            (x0, y0, x1, y1),
+        );
+        true
+    }
+
+    /// The render pass both [`Self::draw`] and [`Self::draw_mode3d`] run,
+    /// once each has written its own uniforms - texture/node animation
+    /// sampling, the pass itself, and the three draw-call lists in the
+    /// model's own paint order. Split out so the two only duplicate the
+    /// camera maths that actually differs between them.
+    #[allow(clippy::too_many_arguments)]
+    fn render(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        target_size: (u32, u32),
+        seconds: f32,
+        viewport_px: (f32, f32, f32, f32),
+        scissor_px: (f32, f32, f32, f32),
+    ) {
         queue.write_buffer(
             &self.built.anim_buffer,
             0,
@@ -446,7 +663,9 @@ impl Preview {
         });
         // The viewport is the unclamped rectangle so the projection keeps its
         // aspect; the scissor is what actually confines the pixels.
+        let (x, y, width, height) = viewport_px;
         pass.set_viewport(x, y, width, height, 0.0, 1.0);
+        let (x0, y0, x1, y1) = scissor_px;
         #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,

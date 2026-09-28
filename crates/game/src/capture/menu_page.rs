@@ -616,6 +616,11 @@ pub(super) struct PreviewRequest {
     /// Where it goes, in the screen's grid - [`oag_ui::picker::Layout::preview`].
     pub rect: [f32; 4],
     pub kind: oag_ui::picker::Kind,
+    /// The selected circuit's own `<Mode3D><Model>` pose, when its
+    /// `screen.xml` authors one - see
+    /// [`oag_game::preview::mode3d_view_projection`]. `None` falls back to
+    /// [`oag_game::preview::orbit_for`], same as the live screen.
+    pub mode3d: Option<oag_ui::picker::slideshow::Model>,
 }
 
 /// Which selection screen a `--menu-page` name asks for, if either.
@@ -773,6 +778,9 @@ pub(super) fn picker_page(
         skin: skin_entry,
         rect: layout.preview,
         kind,
+        // Filled in by the caller, which already has `picker_stills`'s own
+        // slideshow read - see `capture.rs`.
+        mode3d: None,
     });
     let layers = oag_ui::picker::draw_list(
         &picker,
@@ -837,7 +845,7 @@ pub(super) fn draw_preview(
         )
     });
     match built {
-        Ok(mut preview) => preview.draw(
+        Ok(mut preview) => preview.draw_auto(
             device,
             queue,
             encoder,
@@ -845,6 +853,7 @@ pub(super) fn draw_preview(
             viewport,
             target_size,
             space,
+            request.mode3d.as_ref(),
             request.rect,
             crate::preview::orbit_for(request.kind, 0.0),
             0.0,
@@ -881,7 +890,10 @@ pub(super) fn picker_stills(
     // a low value shows both effects the screen's own arrival authors: the
     // fade in and the first card sliding under a second.
     seconds: Option<f32>,
-) -> Vec<oag_ui::frontend::Draw> {
+) -> (
+    Vec<oag_ui::frontend::Draw>,
+    Option<oag_ui::picker::slideshow::Model>,
+) {
     // The entry the *picker* selects, which falls back to the first when the
     // setting names none this source offers - `Picker::new`'s own rule. A
     // second lookup that stopped at `None` instead would leave a capture of
@@ -901,7 +913,7 @@ pub(super) fn picker_stills(
             .map(|team| (team.location.clone(), false)),
     };
     let (Some(archives), Some((location, zone))) = (archives, source) else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
     let globals: Vec<(&str, &str)> = screens
         .globals
@@ -909,7 +921,7 @@ pub(super) fn picker_stills(
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
     let mut report = Vec::new();
-    let stills = match crate::preview::slideshow(
+    let (stills, mode3d) = match crate::preview::slideshow(
         archives,
         &location,
         zone,
@@ -921,20 +933,22 @@ pub(super) fn picker_stills(
             *sprites = sprites.extended(&blobs, &mut report);
             let alpha = (seconds.unwrap_or(SETTLED_SECONDS) / crate::preview::CARD_FADE_SECONDS)
                 .clamp(0.0, 1.0);
-            show.draws(seconds.unwrap_or(0.0), &|src| sprites.get(src))
+            let draws = show
+                .draws(seconds.unwrap_or(0.0), &|src| sprites.get(src))
                 .into_iter()
                 .map(|draw| crate::preview::fade_draw(draw, alpha))
-                .collect()
+                .collect();
+            (draws, show.model.clone())
         }
         Err(error) => {
             log::info!("{error:#} - {location} shows no stills");
-            Vec::new()
+            (Vec::new(), None)
         }
     };
     for line in report {
         log::info!("{line}");
     }
-    stills
+    (stills, mode3d)
 }
 
 /// The Fury backdrop's frame for a captured page, on a source that has one:
