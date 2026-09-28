@@ -427,7 +427,18 @@ impl Frontend {
             // way: its widgets and nothing else. See
             // [`pure_states::TITLE_SCREEN`] for what advancing past it would
             // need that is not yet evidenced.
-            let mut out = self.draw_screen(pure_states::TITLE_SCREEN);
+            //
+            // `draw_screen_at`, not `draw_screen`, and `self.on_screen_for`
+            // as its clock - the same reason `Show Logo` above takes it:
+            // the thirteen `<Animation>`-wrapped frame-line/bracket/patch
+            // widgets this screen authors wipe in over their own key
+            // timeline (`docs/ghidra/functions/psp-pure-eu/title-screen.md`),
+            // and only the live boot order has a clock to give them.
+            // `self.advance` resets `on_screen_for` to `0.0` on every
+            // transition, `Title Screen`'s own included, so this reveals
+            // from a clean start rather than carrying over whatever the
+            // previous screen's clock read.
+            let mut out = self.draw_screen_at(pure_states::TITLE_SCREEN, self.on_screen_for);
             self.insert_backdrop(&mut out);
             return out;
         }

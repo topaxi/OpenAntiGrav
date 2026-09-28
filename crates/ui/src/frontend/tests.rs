@@ -103,6 +103,12 @@ const PURE_XML: &str = r#"
 </Screen>
 <Screen type="Title" name="Title Screen">
   <Text><Values align="right" idstring="PRESS START" font="Title" x="408" y="194" color="0xFFED4896"></Values></Text>
+  <Animation name="TitleAnimTest">
+    <Values></Values>
+    <Key Time="0" TextureWidth="-100"></Key>
+    <Key Time="0.2" TextureWidth="0"></Key>
+    <Image><Values x="14" y="240" width="100" height="1" color="0xFFED4896"></Values></Image>
+  </Animation>
 </Screen>
   </Screen>
 </Screen>
