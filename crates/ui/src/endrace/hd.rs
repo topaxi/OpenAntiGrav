@@ -657,6 +657,34 @@ pub fn hd_menu_draw_list(
     layers
 }
 
+/// `model` with its options in the order their `<Block>`s stand on
+/// `layout`'s screen, top to bottom, and the same option still focused.
+///
+/// The shared option list ([`super::MenuOption`], built by the binary's
+/// `menu_options`) is Pulse's `<Menu>` order - `RETURN TO GRID` first - and
+/// HD draws each option at its own Block's `y` instead
+/// (`race_again` 235, `return_to_grid` 285, `view_again` 335). Stepping the
+/// list's order on HD made Up move the cursor down the screen. A Block the
+/// screen does not author sorts last, where it draws nothing anyway.
+#[must_use]
+pub fn hd_screen_order(model: &EndRaceMenu, layout: &Layout) -> EndRaceMenu {
+    let focused = model.selected();
+    let mut options = model.options().to_vec();
+    options.sort_by(|a, b| {
+        let y = |option: &super::MenuOption| {
+            find_block(&layout.screen, option.hd_block_name()).map_or(f32::INFINITY, |b| b.y)
+        };
+        y(a).total_cmp(&y(b))
+    });
+    let mut out = EndRaceMenu::new(options, model.new_best_lap_ticks);
+    if let Some(focused) = focused
+        && let Some(index) = out.options().iter().position(|option| *option == focused)
+    {
+        out.select(index);
+    }
+    out
+}
+
 /// A named [`BlockWidget`] on `screen` - the box half of a `<Block>`, see
 /// [`crate::screen::BlockWidget`].
 fn find_block<'a>(screen: &'a Screen, name: &str) -> Option<&'a BlockWidget> {

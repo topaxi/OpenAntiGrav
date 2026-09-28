@@ -110,6 +110,12 @@ impl EndRaceRuntime {
         let mut screens = screens;
         let mut renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
         renderer.set_space(skin.space());
+        // Wipeout HD/Fury steps its options in their Blocks' own on-screen
+        // order - see `oag_ui::endrace::hd::hd_screen_order`.
+        let menu = match &results {
+            ResultsModel::Hd(_) => oag_ui::endrace::hd::hd_screen_order(&menu, &screens.menu),
+            _ => menu,
+        };
         let trophy = trophy_for(rewards.as_ref(), &mut screens.trophies).and_then(|trophy| {
             let placement = trophy.placement.model;
             match oag_game::preview::Preview::new(device, queue, format, anisotropy, trophy.mesh) {

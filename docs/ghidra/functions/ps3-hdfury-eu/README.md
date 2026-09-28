@@ -139,6 +139,9 @@ Two structural facts to expect, both different from every other binary here:
   per-tick Zone-mode ladder-rung advance both its callers were read for; also
   the negative that rules it out as the still-missing writer of
   `craftArray[n]->+0x640` (see `zone-effectsettings-loader.md`).
+- [endrace-results-grid.md](endrace-results-grid.md) - `EndRace Results`'
+  standings grid laid out in code per mode: the race family's 443-tall frame,
+  rows at `96 + 45 r`, columns at 40/200/545, the footer block hidden.
 - [menu-blocks.md](menu-blocks.md) - `Block_Item.cpp`, the box behind every
   `<HorizMenu>` tab, `<List>` row and `<aVertMenu>` entry: a nine-patch frame
   off `file2.gtf`, a fill whose alpha is a swatch texel (drawn twice, the second

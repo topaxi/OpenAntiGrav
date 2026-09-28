@@ -253,3 +253,18 @@ fn a_race_lays_its_grid_out_as_the_executable_does() {
     );
     assert!(!fills.iter().any(|rect| rect[3] == 2.0), "{fills:?}");
 }
+
+/// Up and Down follow the Blocks down the screen, not the shared list's
+/// Pulse order, and the default focus survives the reorder.
+#[test]
+fn hd_steps_its_options_in_screen_order_keeping_the_focus() {
+    let pulse_order = EndRaceMenu::new(vec![MenuOption::ReturnToGrid, MenuOption::RaceAgain], None);
+    let mut menu = crate::endrace::hd::hd_screen_order(&pulse_order, &layout("EndRace Menu"));
+    assert_eq!(
+        menu.options(),
+        [MenuOption::RaceAgain, MenuOption::ReturnToGrid]
+    );
+    assert_eq!(menu.selected(), Some(MenuOption::ReturnToGrid));
+    menu.step(-1);
+    assert_eq!(menu.selected(), Some(MenuOption::RaceAgain), "Up goes up");
+}

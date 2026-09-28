@@ -1,4 +1,4 @@
-//! A `<Block>` widget's own box: what `Block_ParseXml_q` (`0x0018df70` in
+//! A `<Block>` widget's own box: what `Block_ParseXml` (`0x0018df70` in
 //! Wipeout HD/Fury's `EBOOT.elf`) reads off the element beside the label
 //! [`super::Screens::collect_widgets`] already folds into a [`super::Text`].
 //!

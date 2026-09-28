@@ -335,6 +335,91 @@ row boxes `39` units tall (`40` less the inset) with a 2-px `(150,150,150)` bord
 over a `(102,102,102)` inside, and the selected `MENU STYLE` value box wider than the
 rows above it by the eased 60.
 
+## A standalone `<Block>`: parse, selectable, update (2026-09-28)
+
+The three menu classes above build their `Block`s in code. A screen can also
+author one directly, and `EndRace Menu`'s five options and `EndRace Results`'
+two column headers do. What such a block draws is its own parser and its own
+update, found off the attribute strings beside `Block_Item.cpp`
+(`0x007891c0` `selectable`, `0x007891d0` `ArrowColor`, `0x00789218` `shaped`;
+`scripts/ps3-toc.py attrib` names one function for all three). Every
+function below reads TOC `0x008ad4d8`, `exact`.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0018df70` | `Block_ParseXml` | 85 |
+| `0x0018c0e8` | `Block_MakeSelectable` | 75 |
+| `0x00189c38` | `Block_CreateLabel` | 75 |
+| `0x0018d588` | `Block_Update` | 80 |
+
+### `Block_ParseXml` - `0x0018df70`
+
+Vtable slot 18 of `0x008654e8`. The attribute chain, each string resolved
+through the function's own TOC (`-0xeb8` .. `-0xe58`):
+
+| Attribute | Lands in |
+| --- | --- |
+| `IDString` / `string` | label text (locals) |
+| `X` / `Y` / `Width` / `Height` | `+0xa4` / `+0xa8` / `+0xac` / `+0xb0` |
+| `Color` | `+0xbc` (the fill; copied to `+0xc4` once parsed) |
+| `ActiveColor` | `+0xc0` |
+| `DeltaWidth` / `DeltaHeight` | `+0xb4` / `+0xb8` |
+| `scroll` | `+0xcd` |
+| `unselectable` / `selectable` | locals, compared against `"true"` / `"1"` |
+| `ArrowColor` | `+0x154` |
+| `TextColor` | `+0x150` |
+| `AlwaysSolidColor` | `+0x108` |
+| `RenderEdges` | `+0x10c` |
+| `shaped` | local, then stored to `+0x11c` - the landing-style byte |
+| `TextScale` | `+0xec` |
+
+Unauthored, the defaults are `Block_Construct`'s: height `40.0`, `Color`
+`0xffffffff`, **`ActiveColor` the literal `0xff8ac0ca`** (`+0xc0`; the
+constructor sets no "is a global" bit for it), `TextScale` `0x3f4ccccd` =
+`0.8`. `EndRace Menu` authors `Color="0xff646464"` and no `ActiveColor`, so
+its focused option is `0xff8ac0ca`. A `selectable="true"` block calls
+`Block_MakeSelectable` with its `ArrowColor`.
+
+### `Block_MakeSelectable` - `0x0018c0e8`
+
+Sets `+0x159` (the byte `Block_Update` keys focus on) and `+0x15a`, stores
+the resting width in `+0x160`, and creates an `Image` child (`+0x168`,
+`Widget_CreateChildByType(.., "Image", ..)`) of
+`Data\FE\Images\HD_options_arrow.gtf` - TOC `-0xef4` - at `X + 8.0`
+(`0x008ac554`), `Y + 4.0` (`0x008ac588`), `32.0` square (`0x42000000`),
+tinted `ArrowColor` through `Image_SetVertexColours`. The same arrow, and
+the same `(8, 4)` offset, `List_CreateWidgets` gives a settings row's marker.
+
+### `Block_CreateLabel` - `0x00189c38`
+
+Creates the label as a `Text` child (`+0x164`) in the `default` font,
+coloured `TextColor`, scaled `TextScale`, at `X + 40.0` (`0x008ac55c`) and -
+on an output of 720 lines or more - `Y + 3.0` (below 720 lines: `Y`, with
+the scale times `1.25`). The line count is the console's video mode, not a
+window this build opens.
+
+### `Block_Update` - `0x0018d588`
+
+Vtable slot 3. For a block with `+0x159` set:
+
+- **Focused** (`+0x34 & 0x200`): colour `+0xbc = +0xc0` (`ActiveColor`); a
+  byte counter at `+0x158` counts up and wraps past `0x11`; the arrow image
+  is shown (`|= 4`) for counter values `0..7` and hidden for `8..16` - eight
+  ticks on, nine off, the rhythm `HorizMenu_LayoutBlocks` gives the strip's
+  underline. The focus target is `1.0` (`0x008ac540`).
+- **Unfocused**: arrow hidden; colour `+0xbc = +0xc4` (the parsed `Color`)
+  when enabled (`+0x34 & 0x100`), else `0x5fdedede` with the label at
+  `0x3fffffff`. Focus target `0.0`, and the counter is left where it was.
+- **Either way**: the label takes `TextColor`, and the focus fraction
+  `+0x15c` moves toward its target by `|target - f| * 0x3e2aaaab` (one sixth,
+  `0x008ac608`). The block's width is `+0x160 + f * 60.0` (`0x008ac60c`).
+
+So a focused standalone block is its `ActiveColor`, sixty units wider once
+eased, with a blinking arrow at its left edge; nothing brightens its label.
+Implemented in `oag_ui::menu::block::Focus` and
+`oag_ui::endrace::hd::hd_menu_draw_list`; the parsed attributes are
+`oag_ui::screen::BlockWidget`.
+
 ## `FrontEnd_IsFuryStyle` - `0x0015b620`
 
 Returns the byte at `0x009947c8`. It is read in `Block_Render` to pick the top-left

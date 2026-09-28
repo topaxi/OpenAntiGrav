@@ -470,7 +470,7 @@ fn hd_endrace_page(
             // shows the cursor a player sees most of the time rather than
             // the first frame's narrow box. The tick count is this
             // capture's choice; the ease and blink are `Block_Update`'s.
-            let mut model = model;
+            let mut model = oag_ui::endrace::hd::hd_screen_order(&model, menu);
             for _ in 0..34 {
                 model.tick();
             }
