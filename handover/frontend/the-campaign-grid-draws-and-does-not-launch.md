@@ -1,5 +1,88 @@
 # The campaign grid draws and does not launch
 
+**Update, 2026-09-28, `pulse-campaign` lane: the first live PPSSPP capture of
+this leg, and four of the open items above/below settled by it - two closed,
+one refined, one found new.** Walked `Main Menu` -> `Grid Selection` ->
+`Cell Selection` -> `Cell Help` by hand under Xvfb `:93`/PPSSPP port 45001
+against `pulse-psp-usa.chd` (fresh and returning profiles), aligned-cropped
+every frame against this build's own `--menu-page grid-select`/`cell-select`
+at the same 960x544. `scripts/psp-frontend-capture.py` now walks the same
+leg as a committed step (commit `7f2b7855`, same day, same finding on
+`TournamentLoad` below - not duplicated here). Full detail and every crop
+path: `docs/ui/campaign-screens.md`'s own "## Open" section, in place at each
+item below.
+
+1. **Closed: `Cell Selection`'s own hex-outline colour was never actually
+   open.** `crate::campaign::load`'s `fallback_globals` plumbing (landed
+   2026-09-14) already resolves `Outline_x_y`'s `i="FEGlobals->CM_HEX_Outline"`
+   to `Skin.xml`'s own declared `0x7F34ACC2`, and `cell_draw_list` already
+   applies it through the generic `image_draw` path - the "not one of the
+   two confirmed `FEGlobals->` names" sentence in this thread's own bullet
+   below was stale the day it was written, not re-checked against the code
+   that already existed. A locked hex's outline stroke averages RGB
+   `(31, 58, 63)` on the PPSSPP capture against `(26, 56, 62)` on this
+   build's own render of the same hex - within anti-aliasing noise.
+2. **Fixed: the detail panel's `default`-role text (`Line1`..`8`/`Title`/
+   `Track Line`/`Speed class`, both screens) was drawing at roughly 60% the
+   real size - a genuine bug, not a "too broad a constant" risk.**
+   `crates/ui/src/campaign/draw.rs`'s `text_draw` was multiplying `scale` by
+   `layout.face_scale("default")` (`13/22`) *on top of* routing through the
+   real `Default`-role atlas `face_atlas_slot` already loads at its own
+   native size - double-shrinking glyphs that needed no shrinking at all.
+   `oag_ui::campaign::footer::face_scale` already carries the correct form
+   (`"default" => 1.0`) for the footer's own prompts, landed the same day as
+   `face_atlas_slot` (2026-09-21) but never mirrored onto
+   `Layout::face_scale` (`crates/ui/src/campaign.rs`), which every panel
+   label reads instead. Now does. **`FaceScales::default()` itself
+   (`crates/ui/src/picker.rs`) was never touched** - every other screen that
+   reads it is unaffected. Verified against the same aligned crop (this
+   build's `"Speed class"` row now within a pixel of the reference) and
+   `cargo nextest run -p oag-ui campaign`/`-p oag-game campaign`, both green.
+3. **Refined, not closed: `SelectorGlow` is a real, phase-synced draw this
+   build still does not produce - not confirmed absent from the original.**
+   An eight-frame burst (`data/scratch/pulse-campaign/captures/burst/`,
+   ~180ms apart) shows a soft halo tracking `Selector`'s own cyan/white pulse
+   exactly, and `Selector`'s own sprite crop has zero alpha in its padding
+   (`docs/ui/campaign-screens.md`'s own texture read), so a plain colour tint
+   of that one sprite cannot explain the halo bleeding past the hex edge.
+   `get_xrefs_to` on the `"SelectorGlow"` string still returns exactly one
+   hit (`GridController_UpdateSelectorPulse`'s own lookup, no creation site)
+   - real, but not proof either way of what draws it. Left undrawn, per this
+   project's own rule against a stand-in shape with no located geometry.
+4. **Found and fixed, same pass: `Cell Selection`'s initial cursor is not
+   "first cell in document order".** Measured live first, then decompiled:
+   a genuinely fresh profile's first-ever `Cell Selection` selects
+   `grid0_3_1` (`"SINGLE RACE"`/`"Moa Therma White"`), never `grid0_2_1`
+   (`grid_00.xml`'s own first-listed cell, and what `CellSelection::new`'s
+   old `index: 0` picked). `CellSelection_OnEnter` (`0x088d59c4`) decompiles
+   to a plain linear scan for the first cell in document order whose own
+   `Locked` byte (`+0xb9`) parses as the literal value `false` - an absent
+   attribute and an explicit `true` both skipped alike, which is exactly
+   `grid0_3_1` (fourth listed, first explicit `false`) and not `grid0_2_1`
+   (first listed, no `Locked` attribute at all). See
+   `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s new
+   "`CellSelection_OnEnter`'s own default-cursor scan" section for the full
+   decompile and confidence. `CellSelection::new`/`with_medals_and_records`
+   (`crates/ui/src/campaign.rs`) now reproduce it, with two new tests
+   (`crates/ui/src/campaign/tests.rs`). **Separately measured, still
+   unreproduced**: the cursor **persists** across a back-out to `Grid
+   Selection` and a re-entry (moved to `grid0_3_2`, backed out, came back in
+   on `grid0_3_2`, not reset to `grid0_3_1`) - this build's own screen
+   already holds `index` as live state for the session, so re-entering
+   `Cell Selection` without tearing down the model would carry this for
+   free, but that plumbing (does `CampaignStage` keep the `CellSelection`
+   instance alive across a back-out today, or rebuild it) was not checked
+   this pass.
+
+Separately corrected, no doc change needed beyond `scripts/psp-frontend-capture.py`
+itself (commit `7f2b7855`): **`TournamentLoad`'s autosave dialog was never
+observed, on a fresh profile or a returning one, at a 50ms poll right on the
+confirm press** - `MainMenu_Definition.xml`'s own `TournamentLoad` screen
+authors a `NumOptions="0"` dialog with a `Redirect` gated on the same
+`DialogMenu` value, which is consistent with the whole screen resolving in
+fewer ticks than either walk's polling cadence catches, not with the screen
+or dialog being unauthored. Say "no frame observed", not "never appears".
+
 **Update, 2026-09-25, `pulse-campaign-nav` lane: `Grid Selection`'s own
 left/right, reported dead by a maintainer playing this build, now works.**
 `GridSelection::update` bound `Down`/`Up` to a single-tile wrapping step and
@@ -204,41 +287,34 @@ read), `crates/game/src/main/campaign_stage.rs` and
   Fixed in `crates/game/src/campaign.rs`; PSP output unchanged. This thread
   otherwise never mentions the PS2 pressing at all - everything below is
   PSP/HD, unaudited on PS2.
-- **`Cell Selection`'s own hex-outline colour is unresolved.** Its
-  `Outline_x_y` widgets author `i="FEGlobals->CM_HEX_Outline"` -
-  `docs/formats/fexml.md`'s own `FEGlobals->` registry is not implemented
-  by this project beyond two confirmed names (`FE_TeamModel`/`FE_ModelSkin`),
-  neither of them this one. `cell-selection-grid0-default-cell.png` looks
-  like the same `0x34acc2` `Grid Selection`'s own literal uses, but that is
-  an inference off one screenshot, not a registry read - see
-  `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The runtime tint
-  layer" section.
-- **`SelectorGlow` is not drawn.** A second, procedurally-created widget
-  `GridController_UpdateSelectorPulse` (`0x088a5700`) also drives - a white
-  halo alpha-pulsing in sync with `Selector`'s own colour pulse - but this
-  pass did not locate its geometry or texture in `CellMode_Definition.xml`
-  (it authors none; the widget is created in code, the same way the
-  `GridController` class itself is), so nothing draws it rather than
-  inventing a stand-in shape.
-- **The detail panel's `default`-role text may be undersized.** One pass's
-  pixel measurement against `grid-selection-page1-grid0-unlocked.png` reads
-  the row labels/values closer to this build's own `small` face ratio
-  (17/22) than the documented `default` ratio (13/22) - but the measurement
-  is a single global brightness threshold with no font-metric baseline, and
-  `FaceScales::default()` is a shared constant several other screens also
-  read, so this is named as a lead rather than fixed. See
-  `docs/ui/campaign-screens.md`'s 2026-09-25 bullet for the numbers.
-- **PPSSPP was not captured against this pass.** Everything drawn is read
-  off `CellMode_Definition.xml`'s own XML and `race-campaign.md`'s
-  decompiled bindings, never cross-checked against a live screenshot -
-  unlike `docs/ui/selection-screens.md`'s numbers, which are. The walk:
-  `Main Menu` (`FE_RACE_CAM`) -> `TournamentLoad` (an autosave dialog behind
-  `MSC_SQ_MSG7`, reachable once on a fresh profile) -> `Grid Selection` ->
-  `Cell Selection` -> `Cell Help`. `scripts/psp-frontend-capture.py` walks
-  as far as `Team Selection` today; this leg needs adding, with the
-  first-boot and autosave dialogs answered. See
-  `docs/reverse-engineering/ppsspp-debugger.md` and
-  `scripts/psp-drive.py preflight`.
+- ~~`Cell Selection`'s own hex-outline colour is unresolved.~~ **Done -
+  never actually open, `pulse-campaign` lane, 2026-09-28.** The
+  `fallback_globals` plumbing landed 2026-09-14 already resolves it to
+  `Skin.xml`'s own `0x7F34ACC2`; this bullet's "not one of the two
+  confirmed names" claim was stale against the code the day it was written.
+  Confirmed against a fresh live PPSSPP capture, not just static reading -
+  see this file's own 2026-09-28 update paragraph above.
+- **`SelectorGlow` is not drawn - refined, not closed, `pulse-campaign`
+  lane, 2026-09-28.** An eight-frame burst confirms a real, phase-synced
+  halo the sprite's own zero-alpha padding cannot explain by itself, but
+  still no located creation site (`get_xrefs_to` on the string: one hit,
+  the lookup itself). See this file's own 2026-09-28 update paragraph
+  above and `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+  matching section.
+- ~~The detail panel's `default`-role text may be undersized.~~ **Fixed,
+  `pulse-campaign` lane, 2026-09-28** - a real bug, not too broad a
+  constant to touch: `crates/ui/src/campaign.rs`'s own `Layout::face_scale`
+  was double-scaling `"default"`-role text against the real `Default` atlas
+  `face_atlas_slot` already loads at native size, the same shape
+  `oag_ui::campaign::footer::face_scale` was already fixed for one widget
+  over. `FaceScales::default()` itself was never touched. See this file's
+  own 2026-09-28 update paragraph above.
+- ~~PPSSPP was not captured against this pass.~~ **Captured, `pulse-campaign`
+  lane, 2026-09-28** - the first live capture of this leg, folded into
+  `scripts/psp-frontend-capture.py` the same day (commit `7f2b7855`). See
+  this file's own 2026-09-28 update paragraph above for what it settled and
+  what it didn't (the `Grid`/`Grid1` crossfade question below is still
+  open).
 - **The `Grid`/`Grid1` duplicate `GridController` is read but not resolved.**
   `Grid Selection` authors two identical controllers at one position - `Grid`
   (`focus="true"`, a staggered `delay` reveal on its own hexes) and `Grid1`
@@ -287,6 +363,15 @@ read), `crates/game/src/main/campaign_stage.rs` and
 
 ## Next Steps
 
+- ~~Decompile `CellSelection_OnEnter` (`0x088d59c4`)'s own default-cursor
+  logic.~~ **Done, `pulse-campaign` lane, 2026-09-28** - see this file's own
+  2026-09-28 update paragraph, point 4: the first-visit default (skip a
+  cell whose `Locked` byte is absent or `true`, select the first explicit
+  `false`) is decompiled and implemented. **Still open**: the cursor
+  persisting across a back-out/re-entry is a separate mechanism, measured
+  live but not traced in the decompile or reproduced in this build - check
+  whether `CampaignStage` keeps one `CellSelection` instance alive across a
+  screen swap today, or rebuilds it from scratch on every entry.
 - ~~Wire the launch, once the other lane's trace lands.~~ **Done,
   2026-09-14**, in the `campaign-launch-wiring` lane -
   `Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)

@@ -417,10 +417,29 @@ pub struct CellSelection {
 
 impl CellSelection {
     /// `cells` is one [`Grid`]'s own list, in document order. `index` starts
-    /// on the first cell the grid names - not necessarily hex position
-    /// `(0, 0)`, since not every grid fills that slot. The fresh-profile
-    /// reading - every cell's own medal absent - see [`Self::with_medals`]
-    /// for the real one.
+    /// on the first cell the grid's own `Locked` byte parses as literal
+    /// `false` - **not** the first cell the grid names, and **not**
+    /// `Cell::locked`'s own "absent defaults locked" reading either, which
+    /// is a display rule for the lock glyph, not this. `CellSelection_OnEnter`
+    /// (`0x088d59c4`, decompiled in full 2026-09-28), on a fresh entry with
+    /// no cell already selected: `for cell in cells (document order): if
+    /// cell->flags & 8 == 0 && cell->Locked (+0xb9) == 0: select it, break` -
+    /// a plain linear scan for the first cell whose own byte is literally
+    /// `false`, `None`/absent and `true` both skipped alike. Measured live
+    /// against PPSSPP, `pulse-psp-usa.chd`, fresh profile: `grid0`'s own
+    /// default cursor is `grid0_3_1` (`Locked="false"`, fourth in document
+    /// order), never `grid0_2_1` (no `Locked` attribute, first in document
+    /// order) - `docs/ui/campaign-screens.md`'s 2026-09-14/2026-09-28
+    /// sections. `cell->flags & 8` was not chased this pass (no consumer
+    /// this project has read names it); every authored cell this pass
+    /// checked reads `0` there, so it has not yet excluded anything real.
+    /// Falls back to the first cell in document order when no cell's own
+    /// byte is literal `false` (every grid this project has read authors at
+    /// least one, but the decompile itself leaves the selection at whatever
+    /// it already was - `0`/none - in that case, which this reimplementation
+    /// cannot leave a screen showing) - **chosen, not measured**, for a case
+    /// not yet observed on a real grid. The fresh-profile reading - every
+    /// cell's own medal absent - see [`Self::with_medals`] for the real one.
     #[must_use]
     pub fn new(cells: Vec<Cell>) -> Self {
         Self::with_medals(cells, &|_| None)
@@ -445,11 +464,15 @@ impl CellSelection {
     ) -> Self {
         let medals = cells.iter().map(|cell| medal_of(&cell.name)).collect();
         let records = cells.iter().map(|cell| record_of(&cell.name)).collect();
+        let index = cells
+            .iter()
+            .position(|cell| cell.locked == Some(false))
+            .unwrap_or(0);
         Self {
             cells,
             medals,
             records,
-            index: 0,
+            index,
             help_open: false,
             difficulty: 1,
         }
@@ -778,9 +801,25 @@ impl Layout {
         })
     }
 
+    /// `"default"` draws `1.0`, not `self.faces.default` (a ratio against
+    /// the `menu` role, 13/22): `text_draw` routes a `"default"`-labelled
+    /// widget through its own `Default`-role atlas at that face's own
+    /// native size (`crates/game/src/boot/fonts.rs`'s `face_atlas_slot`),
+    /// the same fix `oag_ui::campaign::footer`'s own `face_scale` already
+    /// carries for the footer's prompts - see that function's doc.
+    /// Applying `faces.default` on top double-scaled it down, since the
+    /// atlas is already native-sized: `Cell Selection`'s `"Speed class"`
+    /// row measured 11px tall (960x544, cyan-threshold scan) against a
+    /// fresh PPSSPP capture's 18px for the same widget - confirmed fixed
+    /// by the same measurement, pixel-identical to the reference
+    /// (`172..189`, 18px, both) after this change -
+    /// `docs/ui/campaign-screens.md`'s 2026-09-28 section has the full
+    /// capture comparison. `"small"` still needs the ratio: no real
+    /// `Small`-role atlas is ever loaded, so that text still fakes its
+    /// size out of the `menu` atlas's own glyphs.
     fn face_scale(&self, font: &str) -> f32 {
         match font.to_ascii_lowercase().as_str() {
-            "default" => self.faces.default,
+            "default" => 1.0,
             "small" => self.faces.small,
             _ => 1.0,
         }

@@ -288,6 +288,47 @@ fn cell_selection_moves_toward_the_pressed_direction_and_skips_absent_slots() {
     assert_eq!(model.selected().unwrap().name, "g_1_0");
 }
 
+/// `CellSelection_OnEnter` (`0x088d59c4`) picks the first cell in document
+/// order whose own `Locked` byte parses to literal `false` - not the first
+/// cell overall, and not `Cell::locked`'s own "absent defaults locked"
+/// display reading either. Measured live against PPSSPP: `grid0`'s default
+/// cursor is `grid0_3_1` (`Locked="false"`, fourth in document order), never
+/// `grid0_2_1` (no `Locked` attribute, first) - see [`CellSelection::new`]'s
+/// own doc.
+#[test]
+fn the_default_cursor_is_the_first_cell_whose_own_locked_byte_is_literally_false() {
+    let mut first_locked = race_cell("grid0_2_1", "16_Track");
+    first_locked.locked = None;
+    let mut second_locked = race_cell("grid0_2_2", "16_Track");
+    second_locked.locked = Some(true);
+    let mut third_unlocked = race_cell("grid0_3_1", "03_Track");
+    third_unlocked.locked = Some(false);
+    let fourth = race_cell("grid0_3_2", "16_Track");
+
+    let model = CellSelection::new(vec![first_locked, second_locked, third_unlocked, fourth]);
+    assert_eq!(
+        model.selected().unwrap().name,
+        "grid0_3_1",
+        "skips an absent Locked attribute and an explicit true, lands on the first explicit false"
+    );
+}
+
+/// When no cell in the grid authors `Locked="false"` at all, the decompiled
+/// rule above leaves the selection exactly where it already was (none) -
+/// this reimplementation cannot leave a screen with nothing selected, so it
+/// falls back to document order instead. **Chosen, not measured**: no real
+/// grid this project has read exercises this case.
+#[test]
+fn falls_back_to_document_order_when_no_cell_is_explicitly_unlocked() {
+    let mut a = race_cell("grid15_0_0", "16_Track");
+    a.locked = None;
+    let mut b = race_cell("grid15_1_0", "16_Track");
+    b.locked = Some(true);
+
+    let model = CellSelection::new(vec![a, b]);
+    assert_eq!(model.selected().unwrap().name, "grid15_0_0");
+}
+
 #[test]
 fn triangle_opens_help_and_suspends_movement() {
     let cells = vec![

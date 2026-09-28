@@ -2110,6 +2110,25 @@ unit tests only check the *draw*, never how a caller clips it.
 
 ## Open
 
+- ~~`Cell Selection`'s initial cursor was "first cell in document order"~~ -
+  **wrong, found and fixed, `pulse-campaign` lane, 2026-09-28.** A live
+  PPSSPP capture (fresh profile) opens `grid0`'s own `Cell Selection` on
+  `grid0_3_1`, never `grid0_2_1` (`grid_00.xml`'s own first-listed cell,
+  what `CellSelection::new`'s old `index: 0` picked). `CellSelection_OnEnter`
+  (`0x088d59c4`), decompiled in full this pass, scans document order for the
+  first cell whose own `Locked` byte parses as the literal `false` - an
+  absent attribute or an explicit `true` are both skipped, which lands on
+  `grid0_3_1` (fourth listed, first explicit `false`) exactly. See
+  `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s new
+  "`CellSelection_OnEnter`'s own default-cursor scan" section for the full
+  decompile, and `crates/ui/src/campaign.rs`'s `CellSelection::new`. **Still
+  open**: the cursor is separately confirmed to *persist* across a back-out
+  to `Grid Selection` and a re-entry in the original, live-tested twice this
+  pass - this build's own `CampaignStage::open_cell_selection`
+  (`crates/game/src/main/campaign_stage.rs`) rebuilds a fresh
+  `CellSelection` on every call instead, so a re-entry here always lands
+  back on the document-order default rather than wherever the player left
+  it. Not fixed this pass.
 - ~~The scrolling tip ticker and the button-legend footer row are still not
   drawn.~~ **Both draw, 2026-09-21** - see "The tip ticker, the Confirm/Back
   legend, `Cell Help` and a podium" above. The scroll speed itself is still
@@ -2153,14 +2172,10 @@ unit tests only check the *draw*, never how a caller clips it.
     Selection`'s own hex outlines stay at the XML's own default there, a
     real asymmetry between the two screens rather than an oversight. `Cell
     Selection`'s own `Outline_x_y` widgets *do* author a colour
-    (`i="FEGlobals->CM_HEX_Outline"`), but `CM_HEX_Outline` is not one of
-    the two `FEGlobals->` names this project has resolved
-    (`docs/formats/fexml.md`'s own open question) and this pass does not
-    guess its value - `cell-selection-grid0-default-cell.png` shows the
-    same dim cyan-teal outline as `Grid Selection`'s, strongly suggesting
-    the same `0x34acc2`, but that is inference off one screenshot, not a
-    read of the registry, so it is left alone and named here rather than
-    applied.
+    (`i="FEGlobals->CM_HEX_Outline"`) - **already resolved, not an open
+    question**: see the `pulse-campaign` lane's 2026-09-28 correction below,
+    this bullet's own "not one of the two confirmed names" claim was stale
+    the day it was written.
   - **The up/down page arrows never greyed out.** `FUN_088de9bc`, called at
     the end of every `GridSelection_Update`, tints `up arrow` to
     `0xff505050` when already on the first page and `down arrow` to the same
@@ -2183,6 +2198,66 @@ unit tests only check the *draw*, never how a caller clips it.
     open, named here rather than guessed at.** The measurement method itself
     is crude (a single global brightness threshold, no font-metric baseline)
     and should be treated as a lead, not a confirmed number.
+
+    **Confirmed real, `pulse-campaign` lane, 2026-09-28 - a direct
+    same-widget comparison, not another single-screenshot cap-height ratio.**
+    A first check against the `.fnt` files' own `+0x10` line-height field
+    (`docs/formats/fnt.md`'s table, and a new scratch probe reading the raw
+    glyph records, `crates/tools/examples/campaign_font_probe.rs`:
+    `pulse_text.fnt`'s own `'S'` glyph is 12px tall at line-height 13,
+    `Pulse_20.fnt`'s is 19px at line-height 22) looked like it closed this as
+    "two different bitmap fonts, cap-height ratios need not match line-height
+    ratios" - but that reasoning doesn't survive comparing the *same* widget
+    on the *same* capture instead of two different widgets on two different
+    captures. `data/scratch/pulse-campaign/captures/ours-cell-select-fresh.png`
+    (this build, fresh profile, `--menu-page cell-select`) and
+    `02-cell-selection-default-window.png` (a fresh live PPSSPP capture this
+    pass took, `pulse-psp-usa.chd`, both 960x544) crop identically at
+    `(538,165)-(700,190)` for `"Speed class"`'s own row: the reference reads
+    **18px** tall (cyan-threshold scan, first to last non-black row) against
+    this build's **11px**, a 64% difference visible by eye in the crop, not
+    just in the numbers - not a brightness-threshold artifact, since both
+    crops are read with the identical script against the identical widget.
+    `crates/ui/src/campaign/draw.rs`'s `text_draw` draws every `font="..."`
+    role off the **Menu** face's own glyphs, scaled down by
+    `layout.face_scale(&text.font)` (`13.0/22.0` for `"default"`) rather than
+    loading a separate small atlas - a technique that only reproduces the
+    original if that ratio is the one the original itself effectively draws
+    at, and this comparison says it is not, for this text specifically.
+    **Fixed, same pass, once the actual draw path was read rather than
+    guessed at - `FaceScales::default()` itself was never the bug.**
+    `TitleScale` is confirmed `1.0` on the PSP (`Skin.xml`'s own `<Variable
+    global="TitleScale">`, ruling out a title-side scale confound), which
+    left `crates/ui/src/campaign/draw.rs`'s own `text_draw` as the only
+    other place the ratio could be applied wrong. It was: `text_draw`
+    already routes a `font="default"` widget through
+    `oag_ui::campaign::footer::face_role`, which since the `face_atlas_slot`
+    fix (2026-09-21) resolves to `Draw::FacedText { role: "Default", .. }` -
+    a real second atlas (`pulse_text.fnt`, loaded at its own native size),
+    not the `Menu` atlas faked smaller. `crates/game/src/render/text.rs`'s
+    `push_text` confirms the atlas is read at face value: `(cell.width as
+    f32 * scale, cell.height as f32 * scale)` off whichever atlas `slot`
+    names, so `scale = 1.0` on `GlyphSlot::Face` already draws the `Default`
+    atlas's own 13px-line-height glyphs at their native size. `text_draw`
+    was still multiplying that `scale` by `layout.face_scale("default")`
+    (`13/22`) on top - shrinking already-native-sized glyphs by another
+    `13/22`, roughly 60% too small, which is exactly the ~64% gap this
+    pass's crop measurement found. **The identical bug, already found and
+    fixed one widget over**: `oag_ui::campaign::footer`'s own `face_scale`
+    (`crates/ui/src/campaign/footer.rs:97`) carries the correct form -
+    `"default" => 1.0` with a doc comment naming this exact shape - for the
+    footer's `Confirm`/`Back`/`Help` prompts, landed when `face_atlas_slot`
+    did; `Layout::face_scale` (`crates/ui/src/campaign.rs`, feeding every
+    `Line1`..`8`/`Title`/`Track Line`/`Speed class` label on both screens)
+    was simply never given the matching fix. Now is: `"default" => 1.0`,
+    mirroring `footer::face_scale` exactly. `"small"` is untouched - no real
+    `Small`-role atlas is ever loaded, so that text still has to fake its
+    size out of the `Menu` atlas's own glyphs, the ratio it always needed.
+    Verified against the same aligned crop: this build's `"Speed class"` row
+    now reads within a pixel of the PPSSPP reference's 18px at the same
+    960x544 scale, both screens' full panels visually match side by side,
+    and `cargo nextest run -p oag-ui campaign`/`-p oag-game campaign` both
+    stay green - nothing asserted the old, wrong size. Confidence 92.
   - **The title bar text (`RACE CAMPAIGN`) was flagged as possibly
     oversized** - checked against the open question (tracked in this
     project's own frontend handover) of whether Pulse's chrome title should
@@ -2209,12 +2284,15 @@ unit tests only check the *draw*, never how a caller clips it.
   - **`Cell Selection` against `cell-selection-grid0-default-cell.png`,
     checked the same way, time allowing:** the same selected-hex cyan glow
     (now fixed, see above) and the same dim locked-cell outlines/white
-    padlocks as `Grid Selection`'s own (the `Outline_` tint gap above is
-    `Cell Selection`'s one open item). Text formatting, row layout and the
+    padlocks as `Grid Selection`'s own (the `Outline_` tint the previous
+    sentence's own parenthetical named as `Cell Selection`'s one open item
+    turned out already fixed - see the `pulse-campaign` lane's 2026-09-28
+    correction above). Text formatting, row layout and the
     detail panel's own scale were not separately re-checked against this
     frame this pass - the two screens share `text_draw`/`FaceScales`, so the
-    open panel-scale question above applies here too, unverified against
-    this specific frame.
+    panel-scale bug confirmed above (the `pulse-campaign` lane's 2026-09-28
+    direct comparison) applies here too, unverified against this specific
+    frame but the same code path.
 - **A previous pass's live-walk cell (`grid0_2_1`) is now locked under this
   pass's own rule** - it authors no `Locked` attribute, which defaults to
   `true`, and has no medal or medalled neighbour on a fresh profile. The
@@ -2223,19 +2301,28 @@ unit tests only check the *draw*, never how a caller clips it.
   `Team Selection`. `grid0_3_1`/`grid0_3_2` (both author `Locked="false"`) are
   the cells to re-walk with, or any cell after the profile has earned it or
   a hex-adjacent medal.
-- **PPSSPP was not captured against this pass.** Every number above is read
-  off the disc's own XML and the executable's decompiled binding, not
-  cross-checked against a live screenshot the way `selection-screens.md`'s
-  numbers are. The walk: `Main Menu` (`FE_RACE_CAM`) -> `TournamentLoad`
-  (behind `MSC_MSG_AUTOSAVE3`, gated on `MSC_SQ_MSG7`, on a fresh profile
-  only reached once) -> `Grid Selection` -> `Cell Selection` -> `Cell Help`.
-  `scripts/psp-frontend-capture.py` walks as far as `Team Selection` today
-  and would need this leg added, with the autosave dialog answered.
-  `docs/reverse-engineering/ppsspp-debugger.md` and
-  `scripts/psp-drive.py preflight` are the entry points. Two things this
-  would settle that reading alone cannot: whether the `Grid`/`Grid1`
-  duplicate reads as a crossfade or a settled state, and what the empty-hex
-  fill looks like against the filled/current one on a genuinely fresh save.
+- ~~PPSSPP was not captured against this pass.~~ **Captured, `pulse-campaign`
+  lane, 2026-09-28** - the first live PPSSPP capture of this leg.
+  `scripts/psp-frontend-capture.py` now walks it (commit `7f2b7855`), and
+  this pass drove it by hand under Xvfb `:93`/port 45001 for the
+  aligned-crop comparisons the fixes above cite. **The walk is one hop
+  shorter than assumed: `Main Menu` (`FE_RACE_CAM`) confirms straight into
+  `Grid Selection`, with no `TournamentLoad` frame ever observed** - a 50ms
+  poll right on the confirm press, on a genuinely fresh profile (all four
+  first-boot dialogs answered first), never caught one. `MainMenu_Definition.xml`
+  explains why without contradicting `TournamentLoad`'s own authored
+  `Dialog`/`Redirect` blocks (`Icon="Warning" TextID="MSC_MSG_AUTOSAVE3"
+  NumOptions="0"`, gated `Entry item="DialogMenu" equals="MSC_SQ_MSG7" goto="Grid
+  Selection"`): a zero-option dialog has nothing for a player to answer, so
+  it can resolve to its own redirect in fewer ticks than this project's
+  polling cadence catches - a `Redirect` passing through in zero rendered
+  frames, not evidence the screen or its dialog are unauthored or skipped.
+  Say "no frame observed on either a fresh or a returning profile", not
+  "never appears" - this pass could not tell those apart. The `Grid`/`Grid1`
+  crossfade-vs-settled-state question and the empty-hex-fill-on-a-fresh-save
+  question are **still open**; this pass's own profile stayed at zero
+  medals throughout (see the cells re-walked below), so neither was
+  reachable from it either.
 - ~~`Cell Help`'s own overlay is read but not drawn.~~ **Draws as a static
   panel, 2026-09-21** - see "The tip ticker..." above. Its `Viewport`/
   `Animation` scroll timeline (`LimitVerticalScroll="10"`) is still not

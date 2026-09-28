@@ -31,7 +31,25 @@ What it captures, in order:
 - `Track Creation`, twice per circuit a second apart (the preview animates)
   and the `Track Help` overlay;
 - `Team Selection`, twice per team a second apart, the `Team Help` overlay
-  and the `Pre Race Music Select` overlay.
+  and the `Pre Race Music Select` overlay;
+- the Race Campaign leg, from `Main Menu` back to itself: `Grid Selection`
+  (page 1, then paged to the last page of locked "Phantom Grid" tiers),
+  `Cell Selection` on the default cursor, and `Cell Help`.
+
+**`TournamentLoad`'s autosave dialog never fires on this walk, fresh profile
+or not.** A confirm on `Main Menu`'s own default cursor (`RACE CAMPAIGN`, row
+1 - no `down` press needed) goes straight to `Grid Selection`, measured with
+a 50 ms poll on a memory stick that had just answered every first-boot
+dialog for the first time (`RemoveMemoryStickWarning` through
+`Language Selection`, confirmed fresh). `docs/formats/race-setup.md`'s
+original reading of the dialog (behind `MSC_SQ_MSG7`) is corroborated
+elsewhere in this project's own docs as tied to `Race_RecordResult`'s dirty
+flag, i.e. it fires on *returning* from a race that changed the profile, not
+on first entry - consistent with never seeing it here, since this walk never
+races. The campaign leg below does not wait for or answer it.
+
+`--skip-racebox` runs only the campaign leg, for faster iteration once the
+racebox/track/team screens above are already captured.
 """
 
 import argparse
@@ -55,6 +73,9 @@ RACEBOX = psp_drive.RACEBOX
 CUSTOM_RACE = psp_drive.CUSTOM_RACE
 TRACK_SELECT = psp_drive.TRACK_SELECT
 TEAM_SELECT = "Team Selection"
+GRID_SELECT = "Grid Selection"
+CELL_SELECT = "Cell Selection"
+CELL_HELP = "Cell Help"
 IN_GAME = psp_drive.IN_GAME
 DEMO_PREFIX = psp_drive.DEMO_PREFIX
 SATURATE = psp_drive.SATURATE
@@ -71,6 +92,11 @@ CUSTOM_RACE_ROWS = 6
 RACE_TYPES = 7
 TRACKS = 3
 TEAMS = 8
+
+# Sixteen grids, four tiers per page (`docs/ui/campaign-screens.md`'s honey
+# counter reading) - the last page holds `grid12`..`grid15`, the four whose
+# idstring reads "Phantom Grid N" rather than "Grid N".
+GRID_PAGES = 4
 
 
 class Shots:
@@ -141,12 +167,62 @@ def each_row(dbg, shots, label, rows, settle=0.6):
     tap(dbg, "up", rows - 1, wait=0.25)
 
 
+def campaign_leg(dbg, shots):
+    """The Race Campaign, from wherever the emulator is back to itself.
+
+    Confirms `Main Menu`'s own default cursor (`RACE CAMPAIGN`, row 1 - see
+    this module's own doc for why no dialog needs answering on the way in),
+    captures `Grid Selection` on its first page and its last (the locked
+    "Phantom Grid" tiers), opens `Cell Selection` on the default cursor,
+    opens `Cell Help`, then backs out to `Main Menu` the same way the
+    walk above does.
+    """
+    state = dbg.state_name()
+    if not named(state, MAIN_MENU):
+        print("campaign leg expects Main Menu, saw %r" % state, file=sys.stderr)
+        raise SystemExit(1)
+    tap(dbg, "cross", 1, wait=1.5)
+    expect(dbg, GRID_SELECT, "confirming RACE CAMPAIGN")
+    shots.take("grid-selection-page1")
+
+    for page in range(2, GRID_PAGES + 1):
+        tap(dbg, "down", 1, wait=1.0)
+        shots.take("grid-selection-page%d" % page)
+
+    tap(dbg, "up", GRID_PAGES - 1, wait=0.5)  # back to page 1 / grid0
+    expect(dbg, GRID_SELECT, "paging back to grid0")
+
+    tap(dbg, "cross", 1, wait=1.5)
+    expect(dbg, CELL_SELECT, "confirming grid0")
+    shots.take("cell-selection-default")
+
+    tap(dbg, "triangle", 1, wait=1.2)
+    expect(dbg, CELL_HELP, "opening Cell Help")
+    shots.take("cell-help")
+
+    tap(dbg, "circle", 1, wait=1.2)
+    expect(dbg, CELL_SELECT, "closing Cell Help")
+    tap(dbg, "circle", 1, wait=1.2)
+    expect(dbg, GRID_SELECT, "backing out of Cell Selection")
+    tap(dbg, "circle", 1, wait=1.2)
+    for _ in range(5):
+        if named(dbg.state_name(), MAIN_MENU):
+            break
+        tap(dbg, "circle", 1, wait=1.2)
+    shots.take("campaign-back-at-main-menu")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=47810)
     ap.add_argument("--display", default=":97")
     ap.add_argument("--out", default="data/cache/fe-capture")
     ap.add_argument("--boot-timeout", type=float, default=240.0)
+    ap.add_argument(
+        "--skip-racebox",
+        action="store_true",
+        help="only the campaign leg, for iterating on it without replaying racebox/track/team",
+    )
     args = ap.parse_args()
 
     shots = Shots(args.out, args.display)
@@ -155,6 +231,12 @@ def main():
 
     boot(dbg, shots, args.boot_timeout)
     print("at %r" % MAIN_MENU, file=sys.stderr)
+
+    if args.skip_racebox:
+        campaign_leg(dbg, shots)
+        dbg.close()
+        return
+
     each_row(dbg, shots, "main-menu", MAIN_MENU_ROWS)
 
     tap(dbg, "down")  # RACE CAMPAIGN -> RACEBOX
@@ -211,6 +293,8 @@ def main():
             break
         tap(dbg, "circle", 1, wait=1.5)
     shots.take("back-at-main-menu")
+
+    campaign_leg(dbg, shots)
     dbg.close()
 
 
