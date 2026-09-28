@@ -328,19 +328,24 @@ impl Session {
                 // screen now, and it has not been drawn once yet.
                 break;
             }
-            // What leaves the results table, and it is the same thing escape
-            // does from a race: hand the window back to the menus, or quit a
-            // `--race` run that never had any. There is nothing else the table
-            // can do - the original's `Race End Proceed` chain, which is where a
-            // photo, a save and the records go, is not built. See
-            // `oag_game::scoreboard`.
+            // What leaves the built-in results table, and it is the same thing
+            // escape does from a race: hand the window back to the menus, or
+            // quit a `--race` run that never had any. See
+            // `oag_game::scoreboard`. **Only while no EndRace flow is built**:
+            // once it is, Cross/Start belong to `Session::tick_endrace` below,
+            // which walks `Results` -> `Rewards` -> `Menu` - see
+            // `race_stage::endrace::results_table_takes_confirm` for the bug
+            // this guard fixed.
             //
             // **A rising edge**, so the thrust the player was holding as they
             // crossed the line cannot dismiss the board they have not read yet.
-            if matches!(&self.stage, Stage::Race(stage) if stage.race.finished())
-                && [Button::Cross, Button::Start]
-                    .into_iter()
-                    .any(|press| self.controls.buttons().is_pressed(press))
+            if matches!(&self.stage, Stage::Race(stage)
+            if crate::race_stage::endrace::results_table_takes_confirm(
+                stage.race.finished(),
+                stage.endrace.is_some(),
+            )) && [Button::Cross, Button::Start]
+                .into_iter()
+                .any(|press| self.controls.buttons().is_pressed(press))
             {
                 for press in [Button::Cross, Button::Start] {
                     self.controls.buttons_mut().consume_press(press);

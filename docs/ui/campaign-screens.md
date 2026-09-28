@@ -2351,7 +2351,19 @@ unit tests only check the *draw*, never how a caller clips it.
   (`crates/game/src/main/campaign_stage.rs`) rebuilds a fresh
   `CellSelection` on every call instead, so a re-entry here always lands
   back on the document-order default rather than wherever the player left
-  it. Not fixed this pass.
+  it. ~~Not fixed this pass.~~ **Fixed, 2026-09-28 (`pulse-campaign-flow`
+  lane)**: `CampaignStage` now keeps a per-grid `CellCursors` memory,
+  written by `back_to_grid_selection` and restored by
+  `open_cell_selection` (test
+  `campaign_stage::tests::a_re_entered_grid_restores_the_cursor_it_was_left_on`),
+  and verified live under Xvfb: moved to `grid0_3_2` (Time Trial, Metropia
+  White), backed out to `Grid 1`, re-entered on `grid0_3_2`. **Chosen, not
+  measured**: that the memory is keyed per grid (a grid never entered keeps
+  its own first-visit default) and that it is forgotten once the campaign
+  screens close - the original was only observed backing out of and
+  re-entering the same grid. Also chosen, not measured: HD/Fury share
+  `CampaignStage`, so their `Cell Selection` now persists the cursor too,
+  though only Pulse PSP was observed doing it.
 - ~~The scrolling tip ticker and the button-legend footer row are still not
   drawn.~~ **Both draw, 2026-09-21** - see "The tip ticker, the Confirm/Back
   legend, `Cell Help` and a podium" above. The scroll speed itself is still
