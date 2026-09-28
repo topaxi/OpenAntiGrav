@@ -152,9 +152,13 @@ Read into `Text`/`Image`/`Fill::transition` by `oag_ui::screen`'s
 `LeftLayer` container (inherited by everything nested under it, the same
 way `OffsetX`/`OffsetY` already thread down) and applied in
 `oag_ui::picker::body` as a linear alpha ramp against
-`Picker::seconds()` - **the ramp's own shape is chosen, not measured**: a
-capture a tenth of a second apart cannot tell linear from eased. The
-hexagonal window's own stills author no `transition` of their own (the
+`Picker::seconds()` - **the ramp's own shape is measured, not chosen**:
+`Widget_UpdateTransitionFraction` (`0x0888d8e4`, confidence 80,
+[race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#the-per-widget-fade-is-confirmed-linear-2026-09-28)),
+the generic per-widget fade every widget kind's own `Update` calls, is
+`elapsed / duration` on both its enable and disable branches with no curve
+anywhere, confirmed against several thousand live breakpoint hits, not just
+the decompile. The hexagonal window's own stills author no `transition` of their own (the
 per-circuit `screen.xml` has no `LeftLayer`), so their fade
 (`oag_game::preview::CARD_FADE_SECONDS`) reuses the panel's own measured
 `0.5`s against `Picker::since_selection()` rather than inventing an
