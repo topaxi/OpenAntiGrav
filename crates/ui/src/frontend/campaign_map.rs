@@ -175,6 +175,22 @@
 //! about removing the bar touches how that text is built, only where it was
 //! drawn.
 //!
+//! **2026-09-28: the card's own *code* is located, not its layout.**
+//! `docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md` -
+//! `CampaignEventCard_HandleInput`/`Draw` (`0x810f2164`/`0x810f1196`), found
+//! chasing the user's own play observation that 2048 restricts craft choice
+//! on some events. Its own three bottom buttons are Launch (refused when the
+//! current craft fails `GameModeBase_IsShipTypeAllowed`), Back, and Change
+//! Craft (redirected to `Team_Definition.xml`'s `team` screen, unfiltered -
+//! the same screen [`super::team`] already implements). The photo backdrop,
+//! per-event art and pagination dots this doc comment's own paragraphs above
+//! describe are still unlocated - only the button logic was decompiled -
+//! so the "never invent" conclusion for the *layout* is unchanged.
+//! [`Frontend::launch_selected_event`] below now applies the same
+//! craft-restriction gate the original's card does, on this map screen
+//! rather than waiting on the card - see [`MapEvent::refused_craft`] and
+//! `docs/formats/2048-campaign.md`'s "Craft choice" section.
+//!
 //! # Progression: locked, open, passed, elite
 //!
 //! **Resolved 2026-09-21.** [`MapEvent::requires`] is authored data - the
@@ -210,6 +226,7 @@ use crate::pointer::{Pointer, contains};
 use super::touch::{LABEL_SCALE, Launch};
 use super::*;
 use oag_2048::frontend::states as w2048;
+use oag_2048::race::TEAM_VARIANTS;
 
 /// The real scrollable canvas - not the shell's own declared
 /// `MaxScrollX="960" maxscrolly="544"` (view + that = 1920x1088), but that
@@ -307,6 +324,19 @@ pub struct MapEvent {
     /// Which of the disc's own four mode icons this event draws - see
     /// [`EventIcon`].
     pub kind: EventIcon,
+    /// `oag_2048::campaign::craft::forced_craft`'s own team id
+    /// (e.g. `"Qirex2048\1"`) when this event authors
+    /// `M_PPLAYERSHIPMODELDATA` - `None` for the 127 of 141 that leave the
+    /// player's own craft alone. Forces the launch onto this craft
+    /// unconditionally; [`Self::refused_craft`] is never consulted when this
+    /// is `Some`, the same precedence `race::load_event` already applies.
+    pub forced_craft: Option<String>,
+    /// `oag_2048::campaign::craft::refused_craft`'s own set - every native
+    /// team id this event's own `M_bPrevent*Ships` flags forbid. Empty for
+    /// every unforced, unrestricted event (135 of 141) and always empty
+    /// alongside [`Self::forced_craft`], which never coexists with a
+    /// restriction on the real file.
+    pub refused_craft: Vec<String>,
 }
 
 /// A finished attempt's own two-tier result - this crate's copy of
@@ -351,6 +381,19 @@ pub struct CampaignMap {
     earned: Vec<Option<EarnedTier>>,
     selected: usize,
     scroll: (f32, f32),
+    /// The craft a fresh boot is about to race, before the player ever
+    /// touches `Team` this session - `settings.race.team`/`variant`,
+    /// combined the same way a campaign launch eventually loads with
+    /// (`crate::main::session::menus::combine_variant`'s own return shape,
+    /// e.g. `"Qirex2048\3"`). `Frontend::team_choice` stays `None` until the
+    /// player actually moves on `Team` - `Session::frame` relies on that to
+    /// tell "never touched" from "touched, first tile" - so this is the
+    /// *only* place the untouched default reaches the front end at all. Set
+    /// once, by [`Frontend::seed_craft`], next to
+    /// [`Frontend::refresh_campaign_progress`] (`Session::finish_loading`'s
+    /// own call site) since both need the save/settings a fresh boot has
+    /// just read.
+    craft_seed: Option<String>,
 }
 
 impl CampaignMap {
@@ -440,6 +483,16 @@ impl Frontend {
             .iter()
             .map(|event| earned(&event.name))
             .collect();
+    }
+
+    /// Tells the map what craft a launch will fly before the player ever
+    /// touches `Team` this session - see [`CampaignMap::craft_seed`]'s own
+    /// doc for why this is the only path that reaches the front end at all,
+    /// and why it is a separate call from [`Self::refresh_campaign_progress`]
+    /// rather than folded into it (a caller with no save still boots with a
+    /// real craft, the two are independent facts).
+    pub fn seed_craft(&mut self, team_id: String) {
+        self.campaign.craft_seed = Some(team_id);
     }
 
     /// The events on the map, in the order they were given.
@@ -534,6 +587,32 @@ impl Frontend {
                 event.name
             ));
             return;
+        }
+        // `event.forced_craft` always wins over a restriction on the real
+        // file (`MapEvent::forced_craft`'s own doc), so a forced event never
+        // consults `refused_craft` at all - it launches unconditionally,
+        // same as before this check existed. A restricted event with
+        // neither `team_choice()` (untouched `Team` this session) nor a
+        // `craft_seed` (a caller that never called `Self::seed_craft`, e.g.
+        // a unit test building its own fixture) has no craft to check at
+        // all, so it launches rather than refusing on missing data - the
+        // same "never guess" rule [`MapEvent::refused_craft`]'s own
+        // construction already follows.
+        if event.forced_craft.is_none() && !event.refused_craft.is_empty() {
+            let current = self
+                .team_choice()
+                .map(|(team, suffix)| TEAM_VARIANTS.join.combine(team, suffix))
+                .or_else(|| self.campaign.craft_seed.clone());
+            if let Some(current) = current
+                && event.refused_craft.contains(&current)
+            {
+                self.notes.push(format!(
+                    "{}: {:?} forbids {current:?}, refusing to launch - change craft at Team",
+                    w2048::NEW_FE_SHELL,
+                    event.name
+                ));
+                return;
+            }
         }
         self.notes.push(format!(
             "{}: {:?} tapped, firing {}",

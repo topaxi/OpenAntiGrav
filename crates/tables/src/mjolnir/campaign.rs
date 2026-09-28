@@ -506,6 +506,14 @@ pub struct ShipModel {
     /// `M_LIVERY`, e.g. `"speed"`, `"combat"`, `"agility"`, `"prototype"`.
     /// Empty on `"WINGMAN"`.
     pub livery: String,
+    /// `M_PROTOTYPELIVERY` - authored only on the five `livery == "prototype"`
+    /// instances, one per team (`"Agility"`/`"Combat"`/`"Speed"`, title-cased
+    /// unlike [`Self::livery`]'s own lower-case spelling). Empty everywhere
+    /// else. See `oag_2048::campaign::craft`'s own doc comment for what this
+    /// is: the class a team's own prototype craft "counts as" wherever a
+    /// category restriction is checked against it, rather than a fifth,
+    /// independent axis.
+    pub prototype_livery: String,
 }
 
 impl ShipModel {
@@ -526,6 +534,11 @@ impl ShipModel {
                 .to_string(),
             livery: instance
                 .field("M_LIVERY")
+                .and_then(super::Field::value)
+                .unwrap_or_default()
+                .to_string(),
+            prototype_livery: instance
+                .field("M_PROTOTYPELIVERY")
                 .and_then(super::Field::value)
                 .unwrap_or_default()
                 .to_string(),

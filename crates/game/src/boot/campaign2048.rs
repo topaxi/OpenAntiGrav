@@ -107,6 +107,16 @@ pub(super) fn map_events(
         {
             detail.push_str(&format!(" - {text}"));
         }
+        // Both read off the same `Instance` this event's own fields already
+        // came from - `oag_2048::campaign::craft`'s own doc comment for what
+        // each means and why they never coexist on the real file.
+        let (forced_craft, refused_craft) = match doc.instance(event.instance_id) {
+            Some(instance) => (
+                oag_2048::campaign::craft::forced_craft(&doc, instance),
+                oag_2048::campaign::craft::refused_craft(&doc, instance),
+            ),
+            None => (None, Vec::new()),
+        };
         out.push(MapEvent {
             name: event.name.clone(),
             x,
@@ -114,6 +124,8 @@ pub(super) fn map_events(
             detail,
             requires,
             kind,
+            forced_craft,
+            refused_craft,
         });
     }
     report.push(format!(

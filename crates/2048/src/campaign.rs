@@ -250,6 +250,93 @@ pub mod craft {
         ]
         .map(|tag| event.field(tag).and_then(super::Field::bool) == Some(true))
     }
+
+    /// [`variant_index`]'s own order, the other way round - `SHIP_TYPES`'
+    /// four slots spelled the way `M_LIVERY`/[`restriction`] spell them
+    /// (`"combat"`, not [`crate::race::SHIP_TYPES`]'s own `"fighter"`).
+    const LIVERY_BY_INDEX: [&str; 4] = ["combat", "agility", "speed", "prototype"];
+
+    /// Every one of [`crate::race::NATIVE_TEAMS`]' twenty craft `event`'s own
+    /// [`restriction`] refuses, as `team_id` spells one (`crate::race::TEAM_VARIANTS`'
+    /// own join, e.g. `"Qirex2048\4"`) - empty for every one of `SP.xml`'s 135
+    /// unrestricted events. **Never names a guest (HD-roster) team.**
+    /// `GameModeBase_IsShipTypeAllowed` (`0x812b41da`,
+    /// `docs/ghidra/functions/vita-2048-eu-v104/game-mode-base-fields.md`)
+    /// falls through to its own `return true` once none of `"combat"`/
+    /// `"agility"`/`"speed"`/`"prototype"` match the queried livery - a guest
+    /// team's own `M_LIVERY` resolves to `"fe_hd_livery_normal"`
+    /// (`FUN_8105b6c2`), which matches none of the four, so a guest craft is
+    /// always allowed on every event this file authors, restricted or not.
+    ///
+    /// **A prototype craft is not a fifth, independent class.** The same
+    /// function only refuses a `"prototype"` query outright when
+    /// `M_bPreventProtoShips` itself is set; otherwise it looks up the
+    /// querying team's own prototype [`super::ShipModel`] and re-checks its
+    /// [`super::ShipModel::prototype_livery`] instead - measured off the real
+    /// `SP.xml`: `AG_System_Proto`/`Auricom_Proto`/`Feisar_Proto`/
+    /// `Piranha_Proto`/`Qirex_Proto` each carry exactly one of `"Agility"`/
+    /// `"Combat"`/`"Speed"`, never `"Prototype"` itself. So Qirex's own proto
+    /// craft (`"Combat"`) is refused by `"2050 - Event 7"` (no Combat, no
+    /// Speed) exactly as `Qirex_Combat` is, and allowed by `"2050 - Event 5"`
+    /// (no Agility, no Speed) exactly as `Qirex_Combat` is - confidence 85,
+    /// the decompile is literal but this was not watched running.
+    #[must_use]
+    pub fn refused_craft(document: &Document, event: &Instance) -> Vec<String> {
+        let restriction = restriction(event);
+        if restriction == [false; 4] {
+            return Vec::new();
+        }
+        let models = super::ship_models(document);
+        let mut refused = Vec::new();
+        for team in crate::race::NATIVE_TEAMS {
+            for (index, variant) in crate::race::TEAM_VARIANTS.variants.iter().enumerate() {
+                if !class_allowed(&models, restriction, team, LIVERY_BY_INDEX[index]) {
+                    refused.push(
+                        crate::race::TEAM_VARIANTS
+                            .join
+                            .combine(team, variant.suffix),
+                    );
+                }
+            }
+        }
+        refused
+    }
+
+    /// [`refused_craft`]'s own recursion, once a `(team, livery)` pair is
+    /// already resolved - see that function's own doc for the prototype
+    /// substitution this repeats for. `livery` is matched case-insensitively
+    /// against [`variant_index`]'s own lower-case spelling: [`super::ShipModel::prototype_livery`]
+    /// is title-cased (`"Combat"`) where every other caller of this already
+    /// spells it lower-case.
+    fn class_allowed(
+        models: &[super::ShipModel],
+        restriction: [bool; 4],
+        team: &str,
+        livery: &str,
+    ) -> bool {
+        let lower = livery.to_ascii_lowercase();
+        let Some(index) = variant_index(&lower) else {
+            return true;
+        };
+        if lower != "prototype" {
+            return !restriction[index];
+        }
+        if restriction[3] {
+            return false;
+        }
+        let Some(base) = models
+            .iter()
+            .find(|model| model.team.eq_ignore_ascii_case(team) && model.livery == "prototype")
+            .map(|model| model.prototype_livery.trim())
+            .filter(|base| !base.is_empty())
+        else {
+            return false;
+        };
+        if base.eq_ignore_ascii_case("prototype") {
+            return false;
+        }
+        class_allowed(models, restriction, team, base)
+    }
 }
 
 /// The circuit `Event::track` resolves to, as `oag_2048::race::DEFAULT_TRACK`

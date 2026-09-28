@@ -13,6 +13,7 @@ use crate::hints;
 use crate::loading_stage::RaceBuildError;
 use crate::stage::Stage;
 
+use super::menus::combine_variant;
 use super::{BackdropShape, Session};
 
 impl Session {
@@ -238,6 +239,23 @@ impl Session {
                     records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
                 })
         });
+        // What a launch off the map would fly before the player ever
+        // touches `Team` this session - see `oag_ui::frontend::campaign_map`'s
+        // own `CampaignMap::craft_seed` doc for why a restricted event's own
+        // launch gate needs this at all. `combine_variant`'s own warning is
+        // dropped rather than logged: an unrecognised `settings.race.team`
+        // is the same "racing the first one it does offer" case the RACE
+        // page already accepts silently at boot, and this is only ever a
+        // fallback the player's own `Team` choice overrides the moment they
+        // touch it.
+        loaded.frontend.seed_craft(
+            combine_variant(
+                loaded.title,
+                &self.settings.race.team,
+                &self.settings.race.variant,
+            )
+            .0,
+        );
         // A language chosen on an earlier run skips the picker. Reported either
         // way: silently not asking is indistinguishable from a broken picker,
         // and silently asking again is indistinguishable from a setting that
