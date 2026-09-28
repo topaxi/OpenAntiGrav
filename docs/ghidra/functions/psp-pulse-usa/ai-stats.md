@@ -193,21 +193,82 @@ launch change. Neither has been done.
 
 ## What is not determined
 
-- **Units, and what any of these numbers multiply.** The parser stores the
-  attribute; it does not use it. This needs the consumer, and the consumer is
-  not identified.
-- **The consumer itself.** Normally reached from the caller of
+- **Units, and what most of these numbers multiply.** The parser stores the
+  attribute; only the `SkillScale` block's own consumer is found (below) -
+  `AIThrust`/`SpreadDist`/the `RubberBanding` six and `StartStats` still have
+  none identified.
+- ~~**The consumer itself.** Normally reached from the caller of
   `AiStats_LoadAll`, which the unrelocated-call-graph problem above makes
-  invisible to `get_function_callers`. The remaining route is a byte search for
-  the record base or a live read under PPSSPP.
+  invisible to `get_function_callers`.~~ **Found 2026-09-28 - see [the section
+  below](#the-skillscale-consumer-ai_computeopponentthrust).** Reached from
+  the *other* direction: a live caller of `AI_ResolveSkillScale`
+  (`race-campaign.md`), not a caller of the loader.
 - **`Data\XML\WeaponAIstats.xml`** (`0x08a7be38`, tag `WeaponAIStats` at
   `0x08a7bda4`) is a sixth AI file that `AiStats_LoadAll` does **not** load.
   ~~It has a separate loader that has not been looked for.~~ **Found 2026-08-17 -
   see [the section below](#the-sixth-ai-file-weaponaistatsxml).** It pairs with
   the `WEAPON AI %d` string and is the weapon-side AI.
-- **`SkillScaleValue`** (`0x08a8134c`) appears in the string table and in none of
-  the nine functions here. Reads like a computed runtime quantity; unchased.
+- ~~**`SkillScaleValue`** (`0x08a8134c`) appears in the string table and in none
+  of the nine functions here. Reads like a computed runtime quantity;
+  unchased.~~ **Found 2026-09-28**, off `FEData.wad`'s own `stats.xml` rather
+  than off this page's nine functions - see
+  [`race-campaign.md`](race-campaign.md#where-fedatawads-per-track-records-are-actually-read)
+  and [the section below](#the-skillscale-consumer-ai_computeopponentthrust).
 
+
+## The `SkillScale` consumer: `AI_ComputeOpponentThrust`
+
+**Found 2026-09-28**, while wiring `oag-ai` to the campaign's own difficulty
+rung (`crates/tables/src/track_stats.rs`). `AI_ResolveSkillScale`
+(`0x08834df4`, `race-campaign.md`) is called from exactly one site,
+`AI_ComputeOpponentThrust` (`0x08855904`, confidence 82 - clean decompile,
+cross-checked below), the per-tick AI thrust update for one opponent slot.
+
+```text
+fVar13 = AI_ResolveSkillScale()                 # 1.0..3.0-ish, campaign or ambient
+if fVar13 < 2.0:
+    (offset, mult) = (class->SkillScalePoint1, class->SkillScalePoint2)  # +0xc4, +0xdc
+else:
+    (offset, mult) = (class->SkillScalePoint2, class->SkillScalePoint3)  # +0xdc, +0xf4
+(thrustOffset, thrustMul, spreadMul) =
+    AI_InterpolateThrustPoint(offset[i], mult[i], fVar13 - floor) for i in 0..3
+
+spread = spreadMul * class->SpreadDist[grid_position]     # +0x88, PosBalancing - player-coupled
+...pack-position-matching loop over every ship's own rank...
+rubberband = leading/behind speed adjustment against DAT_08b34410  # the PLAYER's own ship,
+                                                                    # RubberBanding - player-coupled
+thrust = thrustOffset + (posBalancingThrust + rubberband - base) * thrustMul + base
+```
+
+Three independent offset checks against `ai-stats.md`'s own already-scored-88
+struct layout close on this function, which is the evidence for the address:
+the `SkillScalePoint1/2/3` stride (`+0xc4`, `+0xdc`, `+0xf4` - exactly
+`0x18` apart, the stride `AiStats_ParseFile` itself multiplies by), the
+`AIThrust`/`SpreadDist` array reads at `+0x68`/`+0x88`, and all six
+`RubberBanding` fields (`+0xa8`..`+0xbc`) in the exact `WhenLeading`/
+`WhenBehind` shape `ai-stats.md`'s own table already has.
+
+**Why this project still does not port it, campaign wiring included**: the
+`SkillScale` triple is not read alone here - it is one input added inside the
+identical per-tick computation as `PosBalancing`'s `SpreadDist` lookup (keyed
+on the whole field's grid rank) and `RubberBanding`'s leading/behind term
+(keyed on the gap to `DAT_08b34410`, confirmed elsewhere on this page to be
+the player's own snapshot slot). `docs/gameplay/ai.md`'s own table already
+classifies `PosBalancing`/`RubberBanding` as player-coupled and refuses to
+port either - finding their consumer does not change that refusal, it only
+confirms `SkillScale`'s raw number cannot be extracted from this function
+without carrying the player-coupled terms along with it. What this project
+*does* carry is the faithful half one level up: `AI_ResolveSkillScale`'s own
+campaign-cell branch resolves a position on the track's `SkillScaleValue`
+curve, and `oag_ai::Difficulty::tune_at_scale` is this project's own
+(**chosen, not measured**) reading of what a position on that curve should
+mean for its own four-axis AI - see `crates/tables/src/track_stats.rs` and
+`crates/ai/src/difficulty.rs`.
+
+`AI_InterpolateThrustPoint` (`0x08852d14`) and `AI_InterpolateSkillScale`
+(`0x088347b8`, `AI_ResolveSkillScale`'s own helper) are the same one-line
+lerp (`a*(1-t) + t*b`), confidence 95 each - unambiguous decompile, no second
+reading possible.
 
 ## The sixth AI file: `WeaponAIstats.xml`
 
