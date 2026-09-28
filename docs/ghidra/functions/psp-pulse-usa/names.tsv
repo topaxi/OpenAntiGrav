@@ -792,6 +792,9 @@
 0x088c454c	function	TrackStats_Load	90	race-campaign.md
 0x088c46f8	function	TrackStats_ParseElement	90	race-campaign.md
 0x08834df4	function	AI_ResolveSkillScale	85	race-campaign.md
+0x08855904	function	AI_ComputeOpponentThrust	82	ai-stats.md
+0x08852d14	function	AI_InterpolateThrustPoint	95	ai-stats.md
+0x088347b8	function	AI_InterpolateSkillScale	95	ai-stats.md
 0x0882ce18	function	Eliminator_UpdateKillTarget	80	race-campaign.md
 0x089733ec	function	Libc_StrChr	92	race-campaign.md
 0x088df1a4	function	GridSelection_Construct	78	race-campaign.md

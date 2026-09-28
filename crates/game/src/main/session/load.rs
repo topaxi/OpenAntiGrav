@@ -531,6 +531,25 @@ impl Session {
                 // `self.campaign_cell` empty for whatever races next.
                 race_stage.campaign_cell = self.campaign_cell.take();
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
+                race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();
+                // Applied here, once, before the stage ever ticks - see
+                // `Session::campaign_ai_skill_scale`'s own doc.
+                // `oag_ai::Difficulty::tune_at_scale` is the continuous
+                // generalisation of `Setup::difficulty`'s own discrete
+                // `tune()`, which `race::Race::start` already ran once with
+                // whatever ambient difficulty the RACE page had selected -
+                // this overrides it with the campaign's own resolved
+                // position rather than adding to it, the same "replaces,
+                // not adds" shape `AI_ResolveSkillScale`'s own campaign
+                // branch has.
+                if let Some(scale) = race_stage.campaign_ai_skill_scale {
+                    race_stage
+                        .race
+                        .set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
+                            scale,
+                            &oag_ai::Tuning::default(),
+                        ));
+                }
             }
             if let Some(probe) = self.load_probe.as_mut() {
                 probe.span("race-build thread: build_race_stage", built.build);

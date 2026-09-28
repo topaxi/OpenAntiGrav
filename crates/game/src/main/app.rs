@@ -439,6 +439,7 @@ impl App {
             suspended_race: None,
             campaign_cell: None,
             campaign_difficulty: None,
+            campaign_ai_skill_scale: None,
             tournament: None,
             awaiting_binding: None,
             // A load failure here is not fatal - it is the same "corrupt

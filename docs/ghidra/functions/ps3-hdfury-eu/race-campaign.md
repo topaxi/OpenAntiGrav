@@ -305,3 +305,51 @@ earned-difficulty keying for `Medal_{x}_{y}` are this project's own
 anything found this pass, but not read off a confirmed original consumer
 either. See that struct's and that function's own doc comments for the
 full reasoning `docs/ui/campaign-screens.md` and this page together give.
+
+## Whether the `SkillScale`/`stats.xml` AI-difficulty mechanism is shared with Pulse - checked, not decompiled, 2026-09-28
+
+A separate lane wired Pulse's own `AI_ResolveSkillScale`
+(`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`) into `oag-ai`
+this pass, and checked whether this binary carries the same mechanism
+before extending the wiring here. It does, by every string-level signal
+this budget covers, but **no HD consumer function was found or
+decompiled** - this is a narrower claim than the Pulse page's own,
+recorded so the next pass does not have to re-run the same search.
+
+**What is shared, confirmed by string search alone:**
+
+- `SkillScaleValue` (`0x0078fb78`), `SkillScalePoint1`/`2`/`3`
+  (`0x007809f8`/`0x00780a10`/`0x00780a28`) and `SkillScale` itself
+  (`0x00780b88`) - the identical `AIControlStats.xml`/`AIRaceStats_<class>.xml`
+  vocabulary `ai-stats.md` reads off the PSP binary.
+- `skillMedium` (`0x0078f098`) - already used by
+  `oag_tables::race_campaign::Cell::skill_for_difficulty` as this executable's
+  own alias for Pulse's `skill` attribute, per that field's own doc comment.
+- The literal format string `%s\stats.xml` (`0x0078fc20`) - the same
+  per-track-directory template `TrackStats_Load` opens on the PSP build.
+
+**What is not confirmed: the consumer, on either end.** Both addresses
+`get_xrefs_to(0x0078fc20)` names as callers (`0x006fabe0`, `0x006fdca0`)
+decompile as unrelated `FIOS` disk-cache flush routines - the same
+unrelocated-address artifact `ai-stats.md`'s own "Read this first" section
+documents for the PSP binary, now observed here too. Locating the real
+reader needs the same route that worked on PSP: a live caller of whatever
+this executable's own `AI_ResolveSkillScale` equivalent is, not a caller of
+the loader - and that equivalent has not been named on this binary at all.
+
+**Consequence for this project's own implementation**: `oag_game`'s
+campaign-cell skill-scale resolution
+(`Session::resolve_campaign_ai_skill_scale`,
+`crates/game/src/main/session/campaign.rs`) is wired generically - it runs
+for any campaign cell, HD's included, since `Cell::skill_for_difficulty`
+already reads `skillMedium`. What is **not** wired is HD's own archive
+path: the resolver only opens `PSP_GAME/USRDIR/FEData.wad`, which does not
+exist on an HD source (seven `DATA0*.PSARC` archives, no WAD at all), so
+an HD campaign launch today falls back to
+`oag_tables::track_stats::resolve_skill_scale`'s own documented default
+curve (`1.0`/`2.0`/`3.0`) rather than HD's real per-track `SkillScaleValue`
+numbers - a real, but coarser, application of the same mechanism, until
+someone finds which of HD's seven archives (and under which of HD's own
+directory names - `docs/formats/race-setup.md`'s `01_Vineta_K`-style
+example, not necessarily Pulse's own `NN_Track`) carries the `stats.xml`
+family here.

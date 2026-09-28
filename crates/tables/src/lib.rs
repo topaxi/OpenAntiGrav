@@ -8,7 +8,9 @@
 //! the lighting and colour-grade rigs the later titles ship, [`enginelight`]
 //! is where Wipeout HD hangs each ship's engine light, and
 //! [`fury_backdrop`] is the one `.envsettings` that is a menu's camera paths
-//! rather than a circuit's light.
+//! rather than a circuit's light, and [`track_stats`] is a track's own
+//! `stats.xml` - the per-class `SkillScaleValue` curve the built-in campaign
+//! reads to scale AI difficulty.
 //!
 //! [`fexml`] is the layer underneath all of them: the tag-and-attribute reader,
 //! including the name shortening the originals apply to element names.
@@ -31,5 +33,6 @@ pub mod fury_backdrop;
 pub mod handling;
 pub mod mjolnir;
 pub mod race_campaign;
+pub mod track_stats;
 pub mod trackstartup;
 pub mod weapons;

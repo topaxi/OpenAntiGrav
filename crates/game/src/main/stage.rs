@@ -600,6 +600,7 @@ impl Stage {
             // here: this function has no `Session` to read it from.
             campaign_cell: None,
             campaign_difficulty: None,
+            campaign_ai_skill_scale: None,
             // Not known until the leg itself finishes - see
             // `RaceStage::tournament_final_rank`'s own doc.
             tournament_final_rank: None,

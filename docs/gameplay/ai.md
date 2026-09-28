@@ -181,6 +181,29 @@ difficulty level is six fields split across two elements for authoring
 convenience. Pack swapping is part of the difficulty setting, not a system
 beside it.
 
+**The consumer is found, `AI_ComputeOpponentThrust`
+(`0x08855904`) - see
+[ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#the-skillscale-consumer-ai_computeopponentthrust)
+- and it confirms the table above rather than moving it.** `SkillScale`'s
+`ThrustOffset` is added inside the identical per-tick computation as
+`PosBalancing`'s `SpreadDist` and `RubberBanding`'s leading/behind term, so
+this project's own refusal to port either still covers `SkillScale`'s raw
+number too: it cannot be pulled out of that function without carrying the
+player-coupled terms along with it. What *is* now wired, one level up, is
+the campaign's own contribution to `AI_ResolveSkillScale`'s **return
+value** - a position on the track's `SkillScaleValue` curve
+(`oag_tables::track_stats::resolve_skill_scale`), which a campaign cell's
+own `skillEasy`/`skill`/`skillHard` places on. `oag_ai::Difficulty::tune_at_scale`
+is this project's own (**chosen, not measured**) reading of what that
+position should mean for the four axes below - continuous, so a cell's own
+authored position is not quantized to the nearest named tier, and bounded
+to `Novice..Elite` since the campaign's own three-rung vocabulary never
+names a fourth, harder setting either
+(`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s `HARD ≡ ELITE`
+finding). Measured on the real disc, same seed, opponents alone on the
+circuit: `16_Track`'s `grid0_2_1` best-laps 51.3s at Easy and 43.0s at
+Hard - `crates/game/tests/campaign_skill_scale_ground_truth.rs`.
+
 Alongside them sit `AIPackSwapping1..3`, one per skill level, with
 `numAIPositionSwaps`, `numIntermediatePositions` and `intermediateOffsetSize`.
 The reading is that opponents hold assigned slots in a pack and are shuffled
