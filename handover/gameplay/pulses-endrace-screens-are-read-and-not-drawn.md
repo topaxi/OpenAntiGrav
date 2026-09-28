@@ -169,9 +169,12 @@ Results` draws correctly over a real, just-finished race. What is left:
 - ~~**A live-walk discrepancy is unresolved**~~ **Fixed 2026-09-28**: not
   `campaign_cell` - the built-in results table's own Cross/Start dismiss in
   `Session::frame` ran before `tick_endrace` and escaped to `Main Menu`. See
-  `docs/ui/endrace-screens.md`'s Open section. New, unchased: the live walk's
-  `EndRace Rewards` drew no loyalty row on a campaign launch (team possibly
-  not carried by `launch_campaign_cell`/`finish_launch`).
+  `docs/ui/endrace-screens.md`'s Open section. ~~New, unchased: the live
+  walk's `EndRace Rewards` drew no loyalty row on a campaign launch~~
+  **Fixed 2026-09-28**: the campaign launch never copied the picked team
+  into `race::Options::team`; now `Session::launch_campaign_race` does, and
+  a live Pulse walk drew `FEISAR LOYALTY 45 POINTS` and banked it. Same
+  Open section.
 - Decide, once `data/images/pulse-psp-usa.chd`'s save/ghost system (if any)
   exists in this project, whether `EndRace Menu`'s ghost comparison is worth
   reproducing at all versus staying results-only, the way `RECORDS`'s own

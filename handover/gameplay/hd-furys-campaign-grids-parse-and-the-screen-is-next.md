@@ -94,7 +94,16 @@ base `Wipeout HD` campaign - see `docs/ui/campaign-screens.md`'s own
 including the `~50` confidence still open on `up`/`l1`/`r1`.
 
 **Left open by this pass**:
-- **A live, interactive walk was not completed** - `Main
+- ~~**A live, interactive walk was not completed**~~ **Closed 2026-09-28**:
+  walked live on Xvfb, `Main Menu` -> `Campaign Selection` (HD and Fury) ->
+  `Grid Selection` -> `Cell Selection` -> race -> `EndRace Results` ->
+  `EndRace Menu` -> `RETURN TO GRID` -> `Cell Selection`. See
+  `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: walked live, end to
+  end, 2026-09-28". Found on that walk and still open: no `Team Selection`
+  on HD (the ship screen is unread, so the race flies the RACE page's
+  team), `EndRace Menu`'s rows have no visible cursor on the light panel,
+  and the 8th Results row overlaps the panel's footer bar. The earlier
+  note follows. `Main
   Menu` -> `RACE CAMPAIGN` -> pick a campaign -> `Cell Selection` is proven
   by a headless `--menu-page campaign-select` capture and by model-level
   unit tests, but not by a running session: an X11 input-delivery gap

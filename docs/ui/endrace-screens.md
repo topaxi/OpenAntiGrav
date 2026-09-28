@@ -258,11 +258,27 @@ still.
   `EndRace Menu` with `RETURN TO GRID` as the default row -> Enter ->
   `Cell Selection` back on `grid0_3_1`, its `Best` now `Bronze`. So
   `RaceStage::campaign_cell` does survive the drain in
-  `Session::advance_race_build`. **Seen on the same walk, not chased**:
-  `EndRace Rewards` drew no loyalty row, which it only omits when the launch
-  named no team (`race::Options::team` is `None`) - a campaign launch goes
-  through `Session::finish_launch` directly, not `launch_from_settings`, and
-  may not carry the picked team; unverified.
+  `Session::advance_race_build`. **Seen on the same walk, fixed
+  2026-09-28**: `EndRace Rewards` drew no loyalty row. Cause, confirmed by
+  reading the code: `Session::launch_campaign_cell` built `race_options`
+  without a team, and the campaign's `Team Selection` Confirm went straight
+  to `Session::finish_launch`, skipping `launch_from_settings`, the only
+  writer of `race::Options::team`. A session's first campaign race so flew
+  `team = None` (no loyalty row, nothing banked, and `race::load`'s own
+  default ship rather than the one picked); after a RACE-page race it flew
+  that race's stale team instead. The team/variant/skin resolution is now
+  `menus::team::apply_race_team`, shared by the RACE page and a new
+  `Session::launch_campaign_race` tail that both campaign exits take (the
+  picker's Confirm and `launch_campaign_cell`'s no-picker fallback). Pinned
+  by `session::menus::team::tests::*`, at the helper only: `Session` needs a
+  GPU and has no headless harness, so the two call sites are covered by
+  the live walk alone. **Verified live** (Xvfb `:93`, `pulse-psp-usa.chd`,
+  fresh records, keyboard): `grid0_3_1` -> `Team Selection` moved off the
+  stored `Assegai` to `Feisar` (3/12) -> slot 0 loaded
+  `Data\Ships\Feisar` -> 5th, `2.16.83` -> `EndRace Rewards` drew `NO
+  MEDAL AWARDED` and `FEISAR LOYALTY 45 POINTS`, `TOTAL LOYALTY: 45`, and
+  `records.toml` banked `[[loyalty]] team = "feisar" total = 45` -> `EndRace
+  Menu` -> `RETURN TO GRID` -> `Cell Selection`.
 - **`boostimg`'s own condition disagrees with the decompile.** `results-01.png`
   shows a flag/pennant glyph in the header row at approximately `boostimg`'s
   own authored position (`x=320 y=77`), but
