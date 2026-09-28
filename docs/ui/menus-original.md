@@ -201,6 +201,17 @@ that the motion *accelerates* - the scale steps are 0.026, 0.027, 0.026, 0.026,
 picked to match the shape rather than derived. **Confidence 30**, and it is one
 function to change if someone reads the real curve out of the executable.
 
+**2026-09-28: the per-widget fade mechanism `LeftLayer`'s own `transition`
+attribute drives is now read from code, and it is exactly linear** -
+`Widget_UpdateTransitionFraction` (`0x0888d8e4`), see
+[race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#the-per-widget-fade-is-confirmed-linear-2026-09-28).
+That does not settle this curve, though: a raw linear disable ramp off that
+mechanism predicts alpha `0.267` at frame 11 of this page's own transition,
+against the `0.55` measured above. The discrepancy is left open rather than
+explained away - see that page's own account of what was ruled out and what
+a live capture of the transition's first few frames would still need to
+confirm.
+
 **The zoom origin. Confidence 55.** Solving `p' = p0 + (p - p0) * s` across
 frames 0-4 puts it near y=110 and x=120, neither of which is the screen centre
 (240, 136); both sit nearer the centre of the menu's own content block. The

@@ -351,6 +351,106 @@ off `oag_ui::screen`'s own `LeftLayer` inheritance) and
 stage and the `--menu-page --menu-picker-seconds` still capture). See
 `docs/ui/selection-screens.md`'s own "cards slide in" section, now closed.
 
+## The per-widget fade is confirmed linear, 2026-09-28
+
+Chasing [menus-original.md](../../../ui/menus-original.md)'s own open item on
+`Tween::eased`'s invented page-transition curve. **The generic
+per-widget fade ramp is exactly linear, both in the decompile and live.**
+`Widget_UpdateTransitionFraction` (`0x0888d8e4`, confidence 80) is the
+function every widget kind's own `Update` calls (found by intersecting
+`lwc1 ...,0x68(a0)` and `lwc1 ...,0x6c(a0)` - reading both transition
+durations on the same register - across the whole binary, which turns up
+exactly one function):
+
+```c
+undefined4 Widget_UpdateTransitionFraction(float dt, int widget) {
+    float enable_dur = widget->0x68;     // EnableTransition seconds
+    if (enable_dur == 0.0) {
+        // +0x90 hold, then jump straight to the enabled/disabled state -
+        // only reachable when no EnableTransition is authored at all.
+    } else if (widget->0x60->0xbe == 0) {         // parent says "disabled"
+        float disable_dur = widget->0x6c;          // DisableTransition seconds
+        widget->0x8c = clamp(widget->0x8c - dt, 0.0, disable_dur);
+        widget->0x64 = disable_dur == 0.0 ? 0.0 : widget->0x8c / disable_dur;
+    } else {                                        // parent says "enabled"
+        if (widget->0x90 > 0.0) { widget->0x90 -= dt; }   // hold, enable branch only
+        else {
+            widget->0x8c = clamp(widget->0x8c + dt, 0.0, enable_dur);
+            widget->0x64 = widget->0x8c / enable_dur;
+        }
+    }
+}
+```
+
+No curve anywhere: both the enable and disable branches are `elapsed / duration`,
+a plain linear ramp, clamped at the ends. `+0x64` is the fraction every widget's
+own `Draw` presumably reads (not traced this pass) - it is what
+`Widget_CreateFromElement`'s existing "fade duration" finding actually drives.
+
+**Confirmed against a live capture, not just the decompile.** `pulse-psp-usa.chd`
+under PPSSPP 1.20.4, breaking on this function on every hit (`data/scratch/pulse-easing/`):
+across several thousand hits spanning many different widget kinds and screens
+(the front end's own attract-idle timer having fired at least once mid-session,
+corroborating `MainMenu_Update`'s own 60-second idle-to-demo reading elsewhere
+in this doc), `dt` sat at `0.033360`-`0.033381` on every single hit - six
+distinct values within 21 microseconds of each other, consistent with a
+per-frame `dt` genuinely measured off the front end's own clock (`DAT_08b317b0`,
+a pointer - `*DAT_08b317b0 + 0x40` is the float seconds field) rather than a
+hand-tuned constant, and with real per-frame variance too small to explain any
+visible curvature on its own. `+0x68`/`+0x6c` matched `CellMode_Definition.xml`'s
+authored `0.5` and `0.7` durations exactly on the widgets checked, and `+0x64`
+was pinned at exactly `0.0` or `1.0` on every steady-state sample - never a
+partial value - which is what a ramp that reaches its endpoint and clamps there
+should look like.
+
+**This does not settle the page-level zoom-and-crossfade `Tween::eased`
+exists for, and it should not be read as though it does.** Two static reads
+this pass ruled out as the source of that curve:
+
+- **`Widget_SubtreeTransitionFraction`** (`0x0889050c`, confidence 75) is a
+  recursive `max()` of `Widget_UpdateTransitionFraction`'s own `+0x64` across
+  a widget's active subtree, used only to answer "is anything under me still
+  fading" - rate-limited to `1.0` (busy) for the first `0.1` s after a widget
+  is shown (`+0xc8`, stamped by `FUN_0889007c`'s own widget-arrival handler).
+  It never computes a value anything draws.
+- **`Widget_DestroyIfTransitionSettled`** (`0x08890358`, confidence 72), the
+  first thing `MainMenu_Update` calls every frame, is pure garbage collection:
+  once the subtree fraction above reports `0.0`, it queues the widget for
+  destruction. Also not a drawn value.
+
+**A live-measured discrepancy argues against `Widget_UpdateTransitionFraction`
+alone driving the outgoing page's own alpha**, even though it is the same
+`transition="0.5"` mechanism `Widget_CreateFromElement` already ties to
+`LeftLayer`. [menus-original.md](../../../ui/menus-original.md) measured the
+outgoing page's alpha at `0.55` eleven presented frames into a `0.5` s (fifteen-
+frame) transition; a raw linear disable ramp from `1.0` predicts `1 - 11/15 =
+0.267` at that frame, not `0.55`. Two live-capture attempts this pass tried to
+resolve this directly (breaking on `StateMachine_TransitionTo`,
+`0x0889123c`, to catch the transition's own first frame with no free-running
+gap) and neither landed a clean capture of the actual page-swap in progress -
+the attract-mode idle timer and a stray extra button press both derailed
+individual runs, and the sessions available this pass ran out before a third
+attempt. **Left open, not guessed at.** A plausible unifying account - the
+outgoing widget still takes the *enable* branch (with its own `+0x90` hold)
+for the first frame or two, until `+0xbe` actually flips once the state's own
+`OnExit` propagates down the tree - is written down here as a hypothesis for
+whoever picks this up next, not as a finding: nothing in this pass traced
+`+0xbe`'s setter or confirmed the timing.
+
+`FUN_08890248` (`StateMachine_TransitionTo`'s own OnEnter/OnExit/OnLeave
+dispatch) and `LeftLayerTransition` (a `Dialog`-only XML attribute name,
+distinct from the generic `Transition`/`EnableTransition`/`DisableTransition`
+trio) were also read this pass and are vtable dispatch and an unrelated
+attribute respectively - neither is a curve either.
+
+**`Tween::eased` (`crates/ui/src/anim.rs`) is unchanged, and its `invented`
+marker (confidence 30) stays.** Nothing this pass found is evidence for *any*
+particular shape of the zoom-and-crossfade curve, linear included - see the
+discrepancy above. Swapping the invented `t*t` for an equally unproven `t`
+would trade one unverified guess for another; the project's own rule against
+tuning a curve to look right cuts against doing that on the strength of "linear
+elsewhere in this engine" alone.
+
 ## What is still open after this pass
 
 - The nine unlock-predicate functions inside `Definition_IsUnlocked` are
@@ -373,6 +473,14 @@ stage and the `--menu-page --menu-picker-seconds` still capture). See
 - None of this is runtime-verified. A PPSSPP capture stepping through
   `TrackSelection_PopulateList` or `TeamSelection_Update` with a breakpoint
   would move several of the 70s here into the 90s.
+- **The page-level zoom-and-crossfade `Tween::eased` exists for is still
+  unlocated.** `Widget_UpdateTransitionFraction` is confirmed linear but does
+  not by itself explain the outgoing page's measured `0.55` alpha at frame 11
+  (see above); no function that reads a widget's own scale, or that shapes
+  `+0x64` into anything but a straight pass-through, has been found.
+  `+0xbe`'s setter (who actually flips a widget's parent-enabled flag on a
+  state exit) is untraced, which is what a live capture of the transition's
+  first two or three frames - not yet landed - would settle.
 
 ## Cross-platform: one exact-hash match on `psp-pulse-eu`
 
@@ -409,6 +517,15 @@ whoever picks EU coverage of this area up next.
 
 ## History
 
+- 2026-09-28, `pulse-easing` lane: `Widget_UpdateTransitionFraction`
+  (`0x0888d8e4`), `Widget_SubtreeTransitionFraction` (`0x0889050c`) and
+  `Widget_DestroyIfTransitionSettled` (`0x08890358`) named - the per-widget
+  linear fade ramp `Widget_CreateFromElement`'s own `+0x68`/`+0x6c` feed, and
+  the subtree-completion/garbage-collection pair built on top of it. See "The
+  per-widget fade is confirmed linear" above. Chasing
+  [menus-original.md](../../../ui/menus-original.md)'s page-transition-curve
+  item; did not close it - the page-level zoom-and-crossfade curve is still
+  unlocated, see "What is still open" above.
 - 2026-09-28: `Widget_CreateFromElement` (`0x088920fc`) named - the generic
   XML-element-to-widget constructor every front-end screen's tree goes
   through, and the one that reads `LeftLayer`'s own `transition` attribute
