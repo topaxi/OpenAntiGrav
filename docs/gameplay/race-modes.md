@@ -7,11 +7,8 @@ stubbed. The fourth, **single race**, is the first with weapons, and it exists
 because pickups have nowhere else to happen; see below.
 
 **The disc names three more.** `Tournament`, `Elimination` and `Head2Head` sit
-alongside the four above in `Single Player`'s own `Mode` list; `Elimination`
-and, since this pass, `Tournament` are implemented (below); `Head2Head` is
-not - see [Eliminator](#eliminator)'s own "what is deliberately out of
-scope" and `oag_game::campaign::race_mode_for_cell`'s doc for why it refuses
-to launch even from the campaign. Above all seven of them sits a
+alongside the four above in `Single Player`'s own `Mode` list; all three are
+now implemented (below). Above all seven of them sits a
 `RACE CAMPAIGN` main-menu entry - a persistent grid of events with medals
 and unlocks, not a single race repeated - whose two screens now draw and
 launch a cell in any of the six modes this engine runs; see
@@ -822,15 +819,71 @@ onward) scored as one event:
   rows into that table's fields was never located in the decompile either
   (`tournament.md`'s own "what is not determined"), so there is no traced
   mechanism this could reproduce yet.
-- **Head2Head, `DAT_08b30fa0`'s write site, `DAT_08b31158+0xdc`'s exact
-  meaning, the leg-name-hash to `PI_Track` resolution and
-  `DAT_08b34320`'s reset condition** all stay open - `tournament.md`'s own
-  list, unchanged by this pass; none of them was forced by this
-  implementation.
+- **`DAT_08b30fa0`'s write site, `DAT_08b31158+0xdc`'s exact meaning, the
+  leg-name-hash to `PI_Track` resolution and `DAT_08b34320`'s reset
+  condition** all stay open - `tournament.md`'s own list, unchanged by this
+  pass; none of them was forced by this implementation. `Head2Head`, the
+  other item this list used to carry, is now its own section below.
 
 [`oag_race::Mode::Tournament`]: ../../crates/race/src/mode.rs
 [`oag_race::tournament`]: ../../crates/race/src/tournament.rs
 [`oag_race::tournament::Standings::ranks`]: ../../crates/race/src/tournament.rs
+
+## Head2Head
+
+**Built.** `oag_game::campaign::race_mode_for_cell` maps a campaign cell's
+`Head2Head` onto [`oag_race::Mode::Head2Head`], and a campaign cell in that
+mode now launches: a two-craft field, weapons locked off, the cell's own
+laps, and the campaign's ordinary win-or-nothing medal. The law is recovered
+in full in
+[`head2head.md`](../ghidra/functions/psp-pulse-usa/head2head.md); this
+section is what implements it.
+
+- **The field is the player plus exactly one AI opponent, not seven** -
+  measured off `AICount="1"` on all 23 authored cells and the per-mode
+  grid-size table's own row for mode `9`, not designed.
+  [`Mode::opponent_count`][`oag_race::Mode::opponent_count`] carries this;
+  every other opponent-fielding mode still fields seven.
+- **Weapons are locked off, not merely defaulted off** - `shield.md`'s own
+  `g_weapons_enabled` switch puts mode `9` in both its default-off set and
+  its no-override set, and all 23 cells carry `Weapons="off"` with no
+  exception. [`oag_race::Mode::weapons_enabled`] answers `false`.
+- **Laps follow the same per-class census `Single Race` uses** - every
+  authored cell's own `laps` is `4` (Flash, Rapier) or `5` (Phantom); no
+  Venom-class `Head2Head` cell exists, so that rung falls back to the same
+  table's `3`, on this crate's usual chosen-not-measured footing for an
+  unauthored combination.
+- **The medal is win or nothing, flat across all 23 cells**: gold target
+  `1`, silver and bronze both `0` - the same `evaluate_medal` compare every
+  other position-scored mode uses, unmodified.
+- **Which team the AI opponent flies is not measured**, the same open
+  question `crates/game/src/livery.rs`'s `teams_for_slots` already carries
+  for `Single Race`'s own seven opponents - no cell authors an opponent
+  identity (`ship="None"` on all 23, like every other mode), and the code
+  path that does carry a real per-entrant team id has no confirmed write
+  site. This build answers it the same way: `teams_for_slots`'s own cyclic
+  assignment, chosen rather than measured.
+- **The sole opponent's grid slot is extrapolated, not independently
+  measured for a two-craft field** - composing `grid.md`'s own compaction
+  rule ("a short grid packs to the back") with "the local player is forced
+  to the back" puts the opponent at slot 7, immediately ahead of the
+  player, but no live capture of an actual two-craft grid confirms it.
+- **The HUD's own gap readout - `MSC_EVENT_HTH`'s "track the distance
+  between you and your opponent" - is decompiled in full but not wired.**
+  `Hud_BindWidgets` and its per-tick updater swap the ordinary Position
+  readout for a "1ST"/"2ND" plus "+/-NNNm" bar (`HeadToHeadBar`) whenever
+  the live mode is `9`; several widget-struct field meanings are not
+  independently confirmed, so it is read and recorded rather than wired
+  on a guess. See `head2head.md`'s own HUD section.
+- **Deliberately absent from [`Mode::ALL`]**, like `Tournament` - reachable
+  only through a campaign cell. Unlike `Tournament` this is not a leg-list
+  problem; a field of one opponent has no row on the RACE page's own mode
+  list to ask for it from.
+
+[`oag_race::Mode::Head2Head`]: ../../crates/race/src/mode.rs
+[`oag_race::Mode::opponent_count`]: ../../crates/race/src/mode.rs
+[`oag_race::Mode::weapons_enabled`]: ../../crates/race/src/mode.rs
+[`Mode::ALL`]: ../../crates/race/src/mode.rs
 
 ## What happens when a race ends
 

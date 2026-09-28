@@ -649,19 +649,16 @@ fn read_grids(archives: &mut oag_assets::Archives, definition_entry: &str) -> Re
 }
 
 /// Which [`oag_race::Mode`] a campaign cell's own [`race_campaign::Mode`]
-/// launches as - `None` for the three this engine cannot run at all.
+/// launches as - `None` for the two this engine cannot run at all.
 ///
 /// **Not a spelling mismatch to resolve, a scope one.** `oag_race::Mode` has
-/// six variants because that is what `crates/race` implements; a campaign
+/// seven variants because that is what `crates/race` implements; a campaign
 /// cell's own mode is one of nine, read straight off the disc
-/// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`). `Head2Head` has
-/// no [`oag_race::Mode`] variant to map onto - a two-craft race is a design
-/// question (how many opponents, which HUD), not a naming one, and
-/// inventing an answer here is exactly what `CLAUDE.md`'s "never invent what
-/// the assets author" forbids; `Custom Grid`/`AI Race` are not authored by
-/// any shipped `grid_NN.xml` cell at all. A cell whose mode maps to `None`
-/// must not launch - the caller logs why and stays on `Cell Selection`
-/// rather than substituting an implemented mode for an unimplemented one.
+/// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`). `Custom
+/// Grid`/`AI Race` are not authored by any shipped `grid_NN.xml` cell at
+/// all - nothing to map onto. A cell whose mode maps to `None` must not
+/// launch - the caller logs why and stays on `Cell Selection` rather than
+/// substituting an implemented mode for an unimplemented one.
 ///
 /// **`Tournament` now maps too**, since `docs/ghidra/functions/psp-pulse-usa/tournament.md`
 /// read the per-leg scoring and standings law in full -
@@ -670,6 +667,12 @@ fn read_grids(archives: &mut oag_assets::Archives, definition_entry: &str) -> Re
 /// per-leg rules a Tournament leg races under (`oag_race::Mode::Tournament`
 /// mirrors [`oag_race::Mode::SingleRace`] exactly - see that variant's own
 /// doc comment).
+///
+/// **`Head2Head` maps too**, since `docs/ghidra/functions/psp-pulse-usa/head2head.md`
+/// read its own law in full: a field of two (measured off `AICount="1"` on
+/// all 23 authored cells, not this project's invention), weapons locked
+/// off, and a win-or-nothing medal - see [`oag_race::Mode::Head2Head`]'s own
+/// doc comment for the evidence.
 #[must_use]
 pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
     match mode {
@@ -679,11 +682,11 @@ pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
         race_campaign::Mode::Elimination => Some(oag_race::Mode::Eliminator),
         race_campaign::Mode::SpeedLap => Some(oag_race::Mode::SpeedLap),
         race_campaign::Mode::Tournament => Some(oag_race::Mode::Tournament),
+        race_campaign::Mode::Head2Head => Some(oag_race::Mode::Head2Head),
         // `Other` is a mode name with no Pulse ordinal at all (HD's
         // `NitroBattle`/`Detonator`) - nothing to map onto, so it refuses
-        // the same way the three unimplemented Pulse modes do.
-        race_campaign::Mode::Head2Head
-        | race_campaign::Mode::CustomGrid
+        // the same way the two unimplemented Pulse modes do.
+        race_campaign::Mode::CustomGrid
         | race_campaign::Mode::AiRace
         | race_campaign::Mode::Other(_) => None,
     }
@@ -695,7 +698,7 @@ mod tests {
     use oag_tables::race_campaign::Mode as CampaignMode;
 
     #[test]
-    fn the_six_implemented_modes_map_onto_their_oag_race_mode() {
+    fn the_seven_implemented_modes_map_onto_their_oag_race_mode() {
         assert_eq!(
             race_mode_for_cell(CampaignMode::Race),
             Some(oag_race::Mode::SingleRace)
@@ -720,15 +723,15 @@ mod tests {
             race_mode_for_cell(CampaignMode::Tournament),
             Some(oag_race::Mode::Tournament)
         );
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::Head2Head),
+            Some(oag_race::Mode::Head2Head)
+        );
     }
 
     #[test]
-    fn the_three_unimplemented_modes_refuse_to_map_at_all() {
-        for mode in [
-            CampaignMode::Head2Head,
-            CampaignMode::CustomGrid,
-            CampaignMode::AiRace,
-        ] {
+    fn the_two_unimplemented_modes_refuse_to_map_at_all() {
+        for mode in [CampaignMode::CustomGrid, CampaignMode::AiRace] {
             assert_eq!(
                 race_mode_for_cell(mode.clone()),
                 None,
