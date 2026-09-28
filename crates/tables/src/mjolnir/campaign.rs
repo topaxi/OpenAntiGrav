@@ -49,10 +49,12 @@ pub mod typedef {
     /// team+livery craft catalogue (`M_TEAM`/`M_LIVERY`, e.g.
     /// `"Feisar2048"`/`"speed"`) with its own rank-unlock ladder
     /// (`M_RANKUNLOCK`) or campaign-unlock edge (`M_PCAMPAIGNUNLOCK`) - the
-    /// roster screen's own unlock table, not an event's opponent grid, even
-    /// though an event's `M_PGRIDSHIPMODELDATA`/`M_PPLAYERSHIPMODELDATA`
-    /// fields reference this same typedef for the rare event that names its
-    /// grid explicitly. Not otherwise typed by this module.
+    /// roster screen's own unlock table. **Not the rare case it first looked
+    /// like**: `M_PPLAYERSHIPMODELDATA` is authored (non-empty) on 14 of
+    /// `SP.xml`'s 141 events - forcing that event's player craft - and
+    /// `M_PGRIDSHIPMODELDATA` on most numbered events, sizing the AI grid
+    /// explicitly. See [`ShipModel`] and `oag_2048::campaign` for what
+    /// forcing a craft this way means for a launch.
     pub const SHIP_MODEL_DATA: i64 = 520725191;
     /// One of two "lap race" typedefs, measured, **not named in the file**
     /// (see [`super::super`]'s doc comment on why). 53 instances. The only
@@ -450,6 +452,69 @@ pub fn objectives(document: &Document) -> Vec<Objective> {
 #[must_use]
 pub fn objective_for(document: &Document, reference: Reference) -> Option<Objective> {
     Objective::from_instance(document.instance(reference.instance_id)?)
+}
+
+/// One `WOShipModelData`: a team+livery craft the roster screen offers, or
+/// what an event's own `M_PPLAYERSHIPMODELDATA`/`M_PGRIDSHIPMODELDATA`
+/// reference points at when authored - see `oag_2048::campaign` for what
+/// forcing a specific one onto an event means and how a `(team, livery)` pair
+/// resolves onto `race::Options::team`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShipModel {
+    /// This instance's own `instanceid`.
+    pub instance_id: i64,
+    /// The instance's own `name=`, e.g. `"Feisar_Speed"`. `"WINGMAN"` is the
+    /// one instance with an empty [`Self::team`]/[`Self::livery`] - not part
+    /// of any of the five native teams' four-craft roster.
+    pub name: String,
+    /// `M_TEAM`, e.g. `"Feisar2048"` - matches `oag_2048::race::NATIVE_TEAMS`
+    /// exactly. Empty on `"WINGMAN"`.
+    pub team: String,
+    /// `M_LIVERY`, e.g. `"speed"`, `"combat"`, `"agility"`, `"prototype"`.
+    /// Empty on `"WINGMAN"`.
+    pub livery: String,
+}
+
+impl ShipModel {
+    /// Builds a [`ShipModel`] from an [`Instance`] of
+    /// [`typedef::SHIP_MODEL_DATA`]. `None` for any other typedef.
+    #[must_use]
+    pub fn from_instance(instance: &Instance) -> Option<Self> {
+        if instance.typedef_id != typedef::SHIP_MODEL_DATA {
+            return None;
+        }
+        Some(Self {
+            instance_id: instance.instance_id,
+            name: instance.name.clone(),
+            team: instance
+                .field("M_TEAM")
+                .and_then(super::Field::value)
+                .unwrap_or_default()
+                .to_string(),
+            livery: instance
+                .field("M_LIVERY")
+                .and_then(super::Field::value)
+                .unwrap_or_default()
+                .to_string(),
+        })
+    }
+}
+
+/// Every [`ShipModel`] in a document, in document order.
+#[must_use]
+pub fn ship_models(document: &Document) -> Vec<ShipModel> {
+    document
+        .instances
+        .iter()
+        .filter_map(ShipModel::from_instance)
+        .collect()
+}
+
+/// A [`ShipModel`] reference (an event's own `M_PPLAYERSHIPMODELDATA`, or one
+/// slot of `M_PGRIDSHIPMODELDATA`) resolved against its own document.
+#[must_use]
+pub fn ship_model_for(document: &Document, reference: Reference) -> Option<ShipModel> {
+    ShipModel::from_instance(document.instance(reference.instance_id)?)
 }
 
 #[cfg(test)]

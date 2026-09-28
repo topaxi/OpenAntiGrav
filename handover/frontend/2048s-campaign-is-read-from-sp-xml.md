@@ -40,8 +40,48 @@ four of `SP.xml`'s event kinds resolve to a working mode. Nothing on this
 title needs the "refuse by name" path SP.xml's campaign would otherwise have
 needed.
 
+**2026-09-28: the user's own play observation ("2048 may restrict which craft
+you can pick, or force one") is confirmed, and the field this project expected
+to carry it was the wrong one.** `WOShipCreatorParams` is authored on zero of
+`SP.xml`'s 141 events; the real mechanism, `GameModeBase_RegisterFields`
+(`0x812b0e2a`, `docs/ghidra/functions/vita-2048-eu-v104/game-mode-base-fields.md`)
+names two fields no prior pass had read: `M_PPLAYERSHIPMODELDATA` forces a
+specific craft (14 events - all five `"* P Ship Challenge"`, four `E3_Demo*`,
+five ordinary numbered events) and `M_bPrevent{Combat,Agility,Speed,Proto}Ships`
+restricts choice to a subset (6 events, all "2050" bar one). `oag_2048::
+campaign::craft` resolves the first onto `race::Options::team` and
+`race::load_event` applies it, verified live (`--race --event "2048 - Event
+4-2"` -> `Qirex2048\1`). The restriction mask is read and reported but **not
+enforced** - which native screen applies it was not found this pass; see
+"Open" below. Full write-up: `docs/formats/2048-campaign.md`'s "Craft choice"
+section. Also surfaced, not chased: `M_PGRIDSHIPMODELDATA` authors the AI
+grid explicitly on most events (a `teams_for_slots` replacement, unwired) and
+the five/ten Ship/Phantom Challenge side events - "open on a fresh save" by
+the unlock graph - also carry `M_RankRequired`, unread and unenforced.
+
 ## Open
 
+- **Which native screen enforces `M_bPrevent{Combat,Agility,Speed,Proto}Ships`.**
+  `Frontend/Screens/TeamSelection_Screen.cpp`'s own constructor and every
+  vtable method decompiled this pass (`0x8113b4dc`, `0x8113b668`,
+  `0x8113b77e`, `0x8113bec8`) touch neither these four byte offsets nor
+  `GameModeBase+0x3c`; the two screens naming `"TeamSelectRedirectPlayer1"`
+  as a tick target (`0x811410e6`, `0x81143efc`) are a track/course carousel
+  transitioning *into* Team Selection, not the enforcement site. The read is
+  somewhere else on that screen's own remaining vtable slots, not all
+  decompiled this pass, or in a different class - confidence under 50 for any
+  specific site, so nothing is wired. See `docs/formats/2048-campaign.md`'s
+  "Craft choice" section.
+- **`M_PGRIDSHIPMODELDATA`'s authored grid vs. `oag_game::livery::
+  teams_for_slots`'s own "chosen, not measured" one.** Most numbered events
+  author all 7 grid slots explicitly; wiring it would replace a guess with
+  real data for every event that carries it. Not attempted this pass -
+  `Options::opponent_teams` is a pool, not per-slot, so this needs its own
+  design rather than a drop-in.
+- **The rank gate (`M_RankRequired`) on the Ship/Phantom Challenge side
+  events.** This engine has no player rank at all; live verification needs a
+  progressed save, which `data/extracted/vita/PCSF00007/base/savedata` does
+  not ship (empty).
 - **Which `GameMode_*` C++ class each of the two `Race`-kind typedefs
   (`-1915183557`, `-1353052320`) actually instantiates is not resolved.**
   `eboot.elf`'s own string table names six classes
@@ -153,6 +193,16 @@ needed.
    own campaign map the way the DLC tiers' `FE3DCanvas` hotspots are already
    understood to place), a Ghidra pass over the base-campaign refresh path is
    the way in - out of this lane's own scope entirely this time.
+6. Decompile `TeamSelection_Screen`'s remaining vtable methods (beyond the
+   constructor and the three found this pass) to find where
+   `M_bPrevent{Combat,Agility,Speed,Proto}Ships` is actually enforced, then
+   wire the restriction into that screen the way `forced_craft` is already
+   wired into `race::load_event` - if a caller wants the restricted six
+   events to actually restrict the player rather than only report the flags.
+7. Wire `M_PGRIDSHIPMODELDATA` into the AI grid assignment (replacing
+   `oag_game::livery::teams_for_slots`'s own "chosen" pool for every event
+   that authors all 7 slots), if a caller wants the opponent roster to match
+   the disc rather than this project's own placement rule.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

@@ -43,8 +43,16 @@ use super::*;
 ///   is left `None` and [`Mode::laps_target`] answers for the `speed_lap`
 ///   mode instead, the same way every non-campaign Speed Lap already
 ///   resolves its lap count.
-/// - Everything else on [`Options`] (source, DLC, team, difficulty, ...) is
-///   the caller's, untouched.
+/// - **Team**: overridden only when the event authors
+///   `M_PPLAYERSHIPMODELDATA` - `oag_2048::campaign::craft::forced_craft`, 14
+///   of `SP.xml`'s 141 events (see that module's own doc comment). Every
+///   other event leaves [`Options::team`] as the caller's. An event's own
+///   `M_bPrevent*Ships` category restriction (6 events, never one that also
+///   forces a craft) is read but **not enforced** - reported on
+///   [`Loaded::report`] instead of applied, since which native screen enforces
+///   it was not found; see `docs/formats/2048-campaign.md`.
+/// - Everything else on [`Options`] (source, DLC, difficulty, ...) is the
+///   caller's, untouched.
 ///
 /// # Errors
 ///
@@ -118,7 +126,34 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // function's own doc comment and `Options::laps_override`'s.
     resolved.laps_override = event.laps.filter(|&laps| laps > 0);
 
+    // Overrides the caller's own team pick, unlike every other field this
+    // function leaves alone - see `oag_2048::campaign::craft`'s own doc
+    // comment for why: `M_PPLAYERSHIPMODELDATA` is the original forcing a
+    // specific craft onto this event, not a default a menu choice should
+    // survive.
+    let forced_craft = oag_2048::campaign::craft::forced_craft(&doc, instance);
+    if let Some(forced) = &forced_craft {
+        resolved.team = Some(forced.clone());
+    }
+
+    let restriction = oag_2048::campaign::craft::restriction(instance);
+    let restricted: Vec<&str> = ["combat", "agility", "speed", "prototype"]
+        .into_iter()
+        .zip(restriction)
+        .filter_map(|(label, prevented)| prevented.then_some(label))
+        .collect();
+
     let mut loaded = load(&resolved)?;
+    if let Some(forced) = forced_craft {
+        loaded
+            .report
+            .push(format!("{event_name:?} forces the player craft: {forced}"));
+    } else if !restricted.is_empty() {
+        loaded.report.push(format!(
+            "{event_name:?} forbids these craft categories, not enforced by this build: {}",
+            restricted.join(", ")
+        ));
+    }
     // Resolved here, where the parsed `Document` is already in hand, rather
     // than re-opened later at grading time - see `Loaded::campaign_2048_event`'s
     // own doc for why this rides on `Loaded` instead of through `Session` the

@@ -382,6 +382,82 @@ no authored formula connecting them found in the data. Left open rather than
 fitted; per this lane's own scope, no Ghidra session was opened to chase it
 further.
 
+## Craft choice: forced on some events, restricted on others, never through `WOShipCreatorParams`
+
+**2026-09-28, answering the user's own play observation directly**: 2048 is
+more restrictive about craft than the earlier "which is not the mechanism"
+line below assumed. `WOShipCreatorParams` (referenced by every event's
+`M_PPlayerShipCreatorParams`/`M_PGridShipCreatorParams`) is authored on
+**zero** of `SP.xml`'s 141 events, player or grid - confirmed exhaustively
+this pass, not just "every observed reference is empty" on a sample. The real
+mechanism is two fields `GameModeBase_RegisterFields`
+(`docs/ghidra/functions/vita-2048-eu-v104/game-mode-base-fields.md`) already
+names but no prior pass had read at runtime:
+
+- **`M_PPLAYERSHIPMODELDATA` forces one specific craft**, authored on 14 of
+  the 141 events: all five per-team `"* P Ship Challenge"` events (the team's
+  own craft - `"AG-Systems P Ship Challenge"` forces `AG_System_Proto`,
+  `"Qirex P Ship Challenge"` forces `Qirex_Proto`, and so on), all four
+  `E3_Demo*` builds (Feisar Speed) and five ordinary numbered events
+  (`"2048 - Event 4-2"`, `"2049 - Event 3-3"`, `"2050 - Event 3-4"`, `"2050 -
+  Event 6-1"`). `WOShipModelData`'s own `M_TEAM`/`M_LIVERY` resolve onto a
+  `race::Options::team` id through `oag_2048::campaign::craft::{team_id,
+  variant_index}`: `M_TEAM` matches `oag_2048::race::NATIVE_TEAMS` exactly,
+  and `M_LIVERY`'s four values (`"combat"`, `"agility"`, `"speed"`,
+  `"prototype"`) map onto `oag_2048::race::SHIP_TYPES`' own slots in that
+  order - **not a string match**: `"combat"` is `SHIP_TYPES`' `"fighter"`
+  slot (Feisar and Qirex spell the slot differently, see that constant's own
+  doc comment), corroborated by `GameModeBase_RegisterFields`' own four
+  prevent-flag offsets below landing in the identical order. `race::load_event`
+  applies this unconditionally, overriding the caller's own team pick -
+  confirmed live: `--race --event "2048 - Event 4-2"` reports `"2048 - Event
+  4-2" forces the player craft: Qirex2048\1`, `--event "AG-Systems P Ship
+  Challenge"` reports `AG_Systems2048\4`, and `--event "2048 - Event 1"`
+  (no `M_PPLAYERSHIPMODELDATA`) reports nothing, team untouched.
+- **`M_bPreventCombatShips`/`M_bPreventAgilityShips`/`M_bPreventSpeedShips`/`M_bPreventProtoShips`
+  restrict choice to a subset of `SHIP_TYPES`** without forcing one, authored
+  `true` on 6 events - none of which also forces a craft: `"2050 - Event
+  3"`/`"2050 - Event 3-2"` (no Combat/Agility), `"2050 - Event 5"`/`"2050 -
+  Event 5-4"`/`"2049 - Event 2-3"` (no Agility/Speed) and `"2050 - Event 7"`
+  (no Combat/Speed) - all five bar one in the "2050" story arc.
+  `oag_2048::campaign::craft::restriction` reads the four flags into a mask;
+  `race::load_event` reports which categories an event forbids but **does
+  not enforce the restriction**, because which native screen applies it
+  (greying a tile, clamping the cursor, refusing the launch) was not found in
+  `eboot.elf` this pass - `Frontend/Screens/TeamSelection_Screen.cpp`'s own
+  constructor and the two screens that redirect into it
+  (`TeamSelectRedirectPlayer1`) were read and neither touches these four
+  offsets or `+0x3c`; the actual read site is elsewhere in that screen's own
+  method table and was not chased further. Confidence 90 for the flags
+  themselves (structural: four boolean fields, offsets `0x80`-`0x83`,
+  authored on a small, coherent subset of events); confidence under 50 for
+  how the original enforces them, so nothing is guessed there.
+- **`M_PGRIDSHIPMODELDATA`** (capacity 7) sizes the AI grid explicitly on most
+  numbered events - a second, larger finding this pass surfaced but did not
+  wire: it would replace `oag_game::livery::teams_for_slots`' own "chosen, not
+  measured" grid assignment with authored data for every event that carries
+  it. Left as a next step. One event, `"Pirhana P Ship Challenge"`
+  (`RACE_A`, 2 laps), authors an **empty** grid alongside its forced player
+  craft - a solo or ghost run, not measured further this pass.
+
+This falsifies neither half of the user's own observation: the disc really
+does both force a specific craft on some events and restrict the category on
+others, measured directly off `SP.xml` rather than assumed from
+`WOShipCreatorParams`'s existence.
+
+**Correction to "The unlock graph" above**: all five `"* P Ship Challenge"`
+and all ten `"* - S Phantom Challenge"` side events - named there as "open on
+a fresh save" - also carry `M_RankRequired` (`10`-`50` for the Ship
+Challenges, `25`-`34` for the Phantom Challenges), unread and unenforced by
+this engine (there is no player rank at all in this build). "Open on a fresh
+save" is still correct for the unlock-graph gate specifically - nothing
+incoming or `M_PEventRequired` blocks them - but the original likely also
+rank-gates them, a second, independent gate this project does not model.
+Live verification of the rank gate was not attempted:
+`data/extracted/vita/PCSF00007/base/savedata` ships empty (no progressed
+profile), and reaching rank 10 (Feisar's own Ship Challenge, the lowest of
+the five) needs playing through the campaign, out of this pass's scope.
+
 ## The launch: `crates/game/src/race/load/campaign.rs`
 
 `race::load_event(options, event_name)` resolves `event_name` against
@@ -437,12 +513,19 @@ package.
   `M_WEAPONAVAILABLEBITS` is a raw value per instance (`"Rockets Only"` is
   `1`); which bit is which weapon is not chased.
 - **`WOShipCreatorParams`.** Referenced by every event's
-  `M_PGridShipCreatorParams`/`M_PPlayerShipCreatorParams`, never itself
-  seen as an instance in `SP.xml` (every observed reference is empty) -
-  its own shape is unread.
+  `M_PGridShipCreatorParams`/`M_PPlayerShipCreatorParams`, never itself seen
+  as an instance in `SP.xml` - confirmed **zero** authored references across
+  all 141 events, not a sample - so its own shape stays unread; it is not
+  the craft-restriction mechanism (see "Craft choice" above,
+  `M_PPLAYERSHIPMODELDATA`/`M_bPrevent*Ships` are).
+- **Which native screen enforces `M_bPrevent*Ships`.** See "Craft choice"
+  above - the flags themselves are measured, how the original applies them at
+  the Team Selection screen is not.
 - **The `M_X`/`M_Y` -> screen projection for a native event.** See
   [above](#what-m_xm_y-project-to-on-screen-is-not-in-spxml-and-is-left-open).
 - **`MP.xml`'s season/level ladder.** See [above](#dataxmlmpxml-is-not-spxmls-schema).
+- **`M_PGRIDSHIPMODELDATA`'s own authored grid, against `teams_for_slots`.**
+  See "Craft choice" above - not wired into the AI grid assignment this pass.
 
 ## See also
 

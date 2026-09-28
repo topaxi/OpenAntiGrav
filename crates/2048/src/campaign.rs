@@ -17,8 +17,8 @@
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 pub use oag_tables::mjolnir::campaign::{
-    Event, EventKind, Objective, Track, WeaponSet, events, objective_for, objectives, track_for,
-    tracks, typedef, weapon_set_for, weapon_sets,
+    Event, EventKind, Objective, ShipModel, Track, WeaponSet, events, objective_for, objectives,
+    ship_model_for, ship_models, track_for, tracks, typedef, weapon_set_for, weapon_sets,
 };
 pub use oag_tables::mjolnir::{Document, Field, Instance, Reference, parse};
 
@@ -150,6 +150,106 @@ impl EClass {
 #[must_use]
 pub fn event_class(event: &Event) -> Option<EClass> {
     event.speed_class.and_then(EClass::from_ordinal)
+}
+
+/// **2048 restricts craft choice on some events - measured, not the "open
+/// pick" this build assumed before this pass.** `WOShipCreatorParams`
+/// (`M_PPLAYERSHIPCREATORPARAMS`/`M_PGRIDSHIPCREATORPARAMS`) is the
+/// mechanism a prior pass expected to carry this and is authored on **zero**
+/// of `SP.xml`'s 141 events, player or grid - its own shape stays unread.
+/// The real mechanism is two other, already-authored fields
+/// `GameModeBase_RegisterFields` (`docs/ghidra/functions/vita-2048-eu-v104/game-mode-base-fields.md`)
+/// names but this crate had not read before now:
+///
+/// - **`M_PPLAYERSHIPMODELDATA`** forces one specific craft. Authored on 14
+///   of the 141 events: all five per-team `"* P Ship Challenge"` events (the
+///   team's own craft, e.g. `"AG-Systems P Ship Challenge"` forces
+///   `AG_System_Proto`), all four `E3_Demo*` builds (Feisar Speed) and five
+///   ordinary numbered events (`"2048 - Event 4-2"`, `"2049 - Event 3-3"`,
+///   `"2050 - Event 3-4"`, `"2050 - Event 6-1"`). [`forced_craft`] resolves
+///   it onto a `race::Options::team` id.
+/// - **`M_bPreventCombatShips`/`M_bPreventAgilityShips`/`M_bPreventSpeedShips`/`M_bPreventProtoShips`**
+///   restrict player choice to a subset of [`crate::race::SHIP_TYPES`]
+///   without forcing one. Authored `true` on 6 events, all in the "2050"
+///   story arc bar one (`"2049 - Event 2-3"`): `"2050 - Event 3"`/`"2050 -
+///   Event 3-2"` (no Combat/Agility), `"2050 - Event 5"`/`"2050 - Event
+///   5-4"`/`"2049 - Event 2-3"` (no Agility/Speed) and `"2050 - Event 7"`
+///   (no Combat/Speed). None of these 6 also forces a craft. [`craft_restriction`]
+///   reads the four flags into a mask.
+///
+/// **Not wired into a launch.** [`forced_craft`]'s override lands in
+/// `race::load_event` (`crates/game/src/race/load/campaign.rs`); the
+/// restriction mask does not, because which native screen would enforce it
+/// (grey a tile, clamp the cursor, refuse the launch) was not found in
+/// `eboot.elf` this pass - see `docs/formats/2048-campaign.md`'s "What is not
+/// determined" section. Reported by the loader instead of silently ignored.
+pub mod craft {
+    use super::{Document, Instance, Reference, ship_model_for};
+
+    /// [`crate::race::SHIP_TYPES`] index for a [`super::ShipModel::livery`]
+    /// string. **Not a string match against [`crate::race::SHIP_TYPES`]
+    /// itself** - `"combat"` is that table's own `"fighter"` slot (Feisar and
+    /// Qirex spell the same slot differently, see that constant's own doc
+    /// comment) and would silently miss every combat craft if compared
+    /// directly. Order corroborated by `GameModeBase_RegisterFields`' own
+    /// four prevent-flag offsets, `0x80`..`0x83` for
+    /// combat/agility/speed/proto in that order, matching [`crate::race::TEAM_VARIANTS`]'
+    /// own suffix order `1`..`4`.
+    #[must_use]
+    pub fn variant_index(livery: &str) -> Option<usize> {
+        match livery {
+            "combat" => Some(0),
+            "agility" => Some(1),
+            "speed" => Some(2),
+            "prototype" => Some(3),
+            _ => None,
+        }
+    }
+
+    /// A [`super::ShipModel`] resolved onto a `race::Options::team` id -
+    /// `crate::race::TEAM_VARIANTS`' own join, e.g. `("Feisar2048",
+    /// "speed")` -> `Feisar2048\3`. `None` for `"WINGMAN"` (empty
+    /// [`super::ShipModel::team`]) or a livery [`variant_index`] does not
+    /// recognise.
+    #[must_use]
+    pub fn team_id(model: &super::ShipModel) -> Option<String> {
+        if model.team.is_empty() {
+            return None;
+        }
+        let index = variant_index(&model.livery)?;
+        let variant = crate::race::TEAM_VARIANTS.variants[index];
+        Some(
+            crate::race::TEAM_VARIANTS
+                .join
+                .combine(&model.team, variant.suffix),
+        )
+    }
+
+    /// `event`'s own `M_PPLAYERSHIPMODELDATA`, resolved straight onto a
+    /// `race::Options::team` id - `None` when the field is unauthored (127 of
+    /// 141 events) or the referenced [`super::ShipModel`] does not resolve
+    /// (not observed on the real file).
+    #[must_use]
+    pub fn forced_craft(document: &Document, event: &Instance) -> Option<String> {
+        let reference: Reference = event.field("M_PPLAYERSHIPMODELDATA")?.reference()?;
+        let model = ship_model_for(document, reference)?;
+        team_id(&model)
+    }
+
+    /// Which of [`crate::race::SHIP_TYPES`] `event`'s own four
+    /// `M_bPrevent*Ships` flags forbid, in that table's own order. Every flag
+    /// defaults to allowed (`false`/absent) - 135 of 141 events return all
+    /// four `false`.
+    #[must_use]
+    pub fn restriction(event: &Instance) -> [bool; 4] {
+        [
+            "M_BPREVENTCOMBATSHIPS",
+            "M_BPREVENTAGILITYSHIPS",
+            "M_BPREVENTSPEEDSHIPS",
+            "M_BPREVENTPROTOSHIPS",
+        ]
+        .map(|tag| event.field(tag).and_then(super::Field::bool) == Some(true))
+    }
 }
 
 /// The circuit `Event::track` resolves to, as `oag_2048::race::DEFAULT_TRACK`
