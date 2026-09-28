@@ -60,7 +60,7 @@ pub(crate) enum Screen {
 /// on `CellSelection::new`'s own first-visit default.
 ///
 /// **Measured** (PPSSPP, `pulse-psp-usa.chd`, `docs/ui/campaign-screens.md`'s
-/// "Cell Selection's cursor across a back-out" section): moved to `grid0_3_2`,
+/// Open entry on `Cell Selection`'s initial cursor): moved to `grid0_3_2`,
 /// backed out, came back in on `grid0_3_2`, not `grid0_3_1`. **Chosen, not
 /// measured**: keying by grid (a different grid keeps its own cursor, or
 /// its first-visit default if never entered), and forgetting everything

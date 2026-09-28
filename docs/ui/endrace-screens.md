@@ -237,26 +237,32 @@ still.
   same limitation `docs/ui/campaign-screens.md` already records for the hex
   swatch colours. `MedalImg`'s own state under an earned trophy (see the
   table above) cannot be settled without one.
-- **A discrepancy surfaced in the live walk, not root-caused this pass**: a
-  single confirm at `EndRace Results`, after a campaign-launched race
-  (`grid0_3_2`), landed the player on the ordinary `Main Menu` rather than
-  stopping at `EndRace Rewards` or reaching `EndRace Menu`'s own
-  `RETURN TO GRID` with the campaign context intact - behaviour consistent
-  with `Rewards::campaign`/`RaceStage::campaign_cell` reading `false`/`None`
-  at the point `Session::build_endrace` ran, despite the race having been
-  launched through `Cell Selection`. Not reproduced with logging in this
-  pass (each cycle costs a multi-minute autopiloted race), and no evidence in
-  the run's own log narrows it further - no `RACE CAMPAIGN`/`cannot open`
-  warning fired, which rules out `Session::return_to_campaign`'s own
-  cell-search failing silently. **The next session's fastest path**: add a
-  temporary `log::info!` to `Session::build_endrace` printing
-  `stage.campaign_cell.is_some()` and to
-  `Session::handle_endrace_menu_option` printing the `MenuOption` it
-  received, then repeat this page's own live-walk recipe once. Until this is
-  settled, `RETURN TO GRID`'s own live behaviour is unverified even though
-  its code path (`Session::return_to_campaign`,
-  `oag_ui::campaign::CellSelection::select_by_name`) builds and is exercised
-  by nothing but a walk that did not reach it.
+- ~~**A discrepancy surfaced in the live walk**: a single confirm at `EndRace
+  Results` after a campaign race landed on `Main Menu`.~~ **Root-caused and
+  fixed, 2026-09-28 (`pulse-campaign-flow` lane) - and it was not
+  `campaign_cell`.** `Session::frame`'s tick loop
+  (`crates/game/src/main/session/frame.rs`) still carried the built-in
+  results table's own dismiss block - any Cross/Start rising edge on a
+  finished race called `Session::escape`, i.e. `Main Menu` - and it ran
+  *before* the finished-race arm that reaches `Session::tick_endrace`, with
+  no guard on the EndRace flow being built. So the pad's confirm never
+  reached `EndRace Results` at all, on every race with a built flow,
+  campaign or not; only a mouse click advanced it (`pointer::press_for_click`
+  was already skipped once `endrace` is `Some`). The block is now gated on
+  `race_stage::endrace::results_table_takes_confirm(finished, endrace_built)`,
+  pinned by `race_stage::endrace::tests::a_built_endrace_flow_keeps_the_confirm_from_the_results_table`.
+  **Verified live** (Xvfb, `pulse-psp-eu.chd`, keyboard only, autopilot):
+  `RACE CAMPAIGN` -> `grid0_3_1` (Single Race, Moa Therma White, Venom, 3
+  laps) -> `Team Selection` -> raced to 3rd, `2.16.05` -> Enter at `EndRace
+  Results` -> `EndRace Rewards` ("bronze medal received") -> Enter ->
+  `EndRace Menu` with `RETURN TO GRID` as the default row -> Enter ->
+  `Cell Selection` back on `grid0_3_1`, its `Best` now `Bronze`. So
+  `RaceStage::campaign_cell` does survive the drain in
+  `Session::advance_race_build`. **Seen on the same walk, not chased**:
+  `EndRace Rewards` drew no loyalty row, which it only omits when the launch
+  named no team (`race::Options::team` is `None`) - a campaign launch goes
+  through `Session::finish_launch` directly, not `launch_from_settings`, and
+  may not carry the picked team; unverified.
 - **`boostimg`'s own condition disagrees with the decompile.** `results-01.png`
   shows a flag/pennant glyph in the header row at approximately `boostimg`'s
   own authored position (`x=320 y=77`), but

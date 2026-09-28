@@ -166,15 +166,12 @@ Results` draws correctly over a real, just-finished race. What is left:
   collected by `oag_ui::screen::Screens::collect_widgets`, and no capture
   this project holds is a medal-earning run to check the result against
   anyway. See `docs/ui/endrace-screens.md`'s own Open section.
-- **A live-walk discrepancy is unresolved**: after a campaign-launched race,
-  a single confirm at `EndRace Results` landed on the ordinary `Main Menu`
-  rather than stopping at `Rewards` or reaching `Menu`'s own
-  `RETURN TO GRID` with the campaign context intact - consistent with
-  `RaceStage::campaign_cell` reading `None` at the point the EndRace flow was
-  built, despite the race having launched through `Cell Selection`. Not
-  root-caused (each repro cycle costs a multi-minute autopiloted race); see
-  `docs/ui/endrace-screens.md`'s Open section for the exact next diagnostic
-  step (two `log::info!` calls and one repeat of the live walk).
+- ~~**A live-walk discrepancy is unresolved**~~ **Fixed 2026-09-28**: not
+  `campaign_cell` - the built-in results table's own Cross/Start dismiss in
+  `Session::frame` ran before `tick_endrace` and escaped to `Main Menu`. See
+  `docs/ui/endrace-screens.md`'s Open section. New, unchased: the live walk's
+  `EndRace Rewards` drew no loyalty row on a campaign launch (team possibly
+  not carried by `launch_campaign_cell`/`finish_launch`).
 - Decide, once `data/images/pulse-psp-usa.chd`'s save/ghost system (if any)
   exists in this project, whether `EndRace Menu`'s ghost comparison is worth
   reproducing at all versus staying results-only, the way `RECORDS`'s own

@@ -434,9 +434,11 @@ read), `crates/game/src/main/campaign_stage.rs` and
   cell whose `Locked` byte is absent or `true`, select the first explicit
   `false`) is decompiled and implemented. **Still open**: the cursor
   persisting across a back-out/re-entry is a separate mechanism, measured
-  live but not traced in the decompile or reproduced in this build - check
-  whether `CampaignStage` keeps one `CellSelection` instance alive across a
-  screen swap today, or rebuilds it from scratch on every entry.
+  live but not traced in the decompile. **Reproduced 2026-09-28**
+  (`pulse-campaign-flow` lane, `CellCursors` in `campaign_stage.rs`), see
+  `docs/ui/campaign-screens.md`'s Open entry; the per-grid keying and
+  forgetting it on leaving the campaign are chosen, not measured, and the
+  decompile of where the original keeps it is still untraced.
 - ~~Wire the launch, once the other lane's trace lands.~~ **Done,
   2026-09-14**, in the `campaign-launch-wiring` lane -
   `Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)
