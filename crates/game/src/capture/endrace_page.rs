@@ -268,13 +268,14 @@ fn endrace_page(
                     row("Assegai", 8, true),
                     row("Feisar", 6, false),
                     row("Qirex", 5, false),
-                    row("AG-Systems", 0, false),
+                    row("AG-Systems", 4, false),
                 ],
+                // Leg 1 was Feisar, Qirex, Assegai, AG-Systems (8/6/5/4).
                 vec![
                     row("Feisar", 14, false),
-                    row("Assegai", 12, true),
-                    row("Qirex", 9, false),
-                    row("AG-Systems", 4, false),
+                    row("Assegai", 13, true),
+                    row("Qirex", 11, false),
+                    row("AG-Systems", 8, false),
                 ],
             );
             if standings {
