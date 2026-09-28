@@ -419,9 +419,10 @@ impl Session {
                 // (`Session::launch_campaign_cell`) - `launch_from_settings`
                 // would overwrite the cell's own track/mode/class with
                 // whatever the RACE page's own settings happen to hold, so
-                // a campaign launch takes the shared tail directly instead.
+                // a campaign launch takes its own tail instead, which copies
+                // only the team this screen just picked.
                 if self.campaign_cell.is_some() {
-                    self.finish_launch();
+                    self.launch_campaign_race();
                 } else {
                     self.launch_from_settings();
                 }

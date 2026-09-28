@@ -2046,7 +2046,9 @@ animation - see "Drawing the two entries' own names, and the selector" above.
   and combining it with `--menu-page` here launches the default race instead
   of drawing the still, the same trap `--screenshot --press cross --until`
   fell into below for a different reason.
-- **A live, interactive walk (`Main Menu` -> `RACE CAMPAIGN` -> click a
+- **Closed 2026-09-28** - see "Wipeout HD/Fury: walked live, end to end,
+  2026-09-28" below. What follows is the earlier attempt's record.
+  **A live, interactive walk (`Main Menu` -> `RACE CAMPAIGN` -> click a
   campaign -> `Grid Selection`/`Grid Selection Fury` -> `Cell Selection`) was
   attempted and not completed this pass** - left open, see below. Two
   approaches were tried, both under Xvfb `:93`:
@@ -2729,6 +2731,11 @@ and its own "what is not determined" section.
   not spent this pass. `session::campaign::handle_campaign`/
   `launch_campaign_cell` received no HD-specific edit, confirmed once more
   by this walk working unmodified.
+  **Driven to results, 2026-09-28**: with the HD render profile cut to
+  `render_scale = 50` and MSAA, motion blur and shadows off, the same
+  llvmpipe adapter ran the race at 60 ticks a second, and the walk reached
+  `EndRace Results`, `EndRace Menu` and back to `Cell Selection` - see
+  "Wipeout HD/Fury: walked live, end to end, 2026-09-28" below.
   **2026-09-28, `grid8_3_1` specifically checked on both sides, without a
   new RPCS3 race boot.** The two-orders-of-magnitude slowdown above is
   **this project's own** race render path, not RPCS3's - a fresh RPCS3 boot
@@ -3168,3 +3175,69 @@ read directly to confirm `Grid Selection`/`Grid Selection Fury` author no
 bytes read directly through the live archive reader rather than a cached
 dump, and the corrected counts pinned by a ground-truth test against the
 real disc).
+
+## Wipeout HD/Fury: walked live, end to end, 2026-09-28
+
+**The whole campaign path now runs in a live session on HD, not only as
+`--menu-page` stills.** Xvfb `:93` (1280x720), `hdfury-ps3-eu-dec.iso`,
+release build, `--autopilot --no-audio`, `WAYLAND_DISPLAY` unset, an
+isolated `XDG_CONFIG_HOME` (`window_size = "1200x680"`, the HD render
+profile cut to `render_scale = 50` with MSAA, motion blur and shadows off;
+the adapter is llvmpipe, `renderer: vulkan: llvmpipe` in the log, and at
+these settings the race ran at 60 ticks a second). Input was the
+keyboard through `xdotool keydown`/`keyup` with a 120 ms hold after
+`xdotool windowfocus --sync` - the earlier pass's delivery gap did not
+reproduce. What a player sees, screen by screen (two or more frames each):
+
+1. **`Main Menu`**: the `<HorizMenu>` strip, `RACE CAMPAIGN` highlighted.
+   Enter opens the campaign.
+2. **`Campaign Selection`**: `CAMPAIGN SELECT`, `CAMPAIGN MODES`, the two
+   boxes `FURY CAMPAIGN` (`0 / 80`) and `HD CAMPAIGN` (`GOLD MEDALS`,
+   `0 / 87`), the white selection frame on Fury first. `Right` moves the
+   frame to HD, `Left` back.
+3. **`Grid Selection`** (HD): `Event 01/08`, `POINTS ACHIEVED 00/06`,
+   `TOTAL POINTS AVAILABLE 000/018`, the point-cloud flyer. On Fury:
+   `00/07`, `000/021`, a different flyer.
+4. **`Cell Selection`** (HD `grid0`): `Single Race`, `VINETA K`, Venom,
+   weapons on, 3 laps, `0/3` points, best `NONE`, the three target medals,
+   `10 MORE POINTS NEEDED TO UNLOCK:`, footer `AI DIFFICULTY (NOVICE)`. On
+   Fury: Talon's Junction, `0/21`, `12 MORE POINTS`.
+5. **Enter launches straight into the race - no `Team Selection`.** The boot
+   logs `selection screens: track unread, ship unread` on HD, so
+   `Session::open_ship_picker` returns `false` and `launch_campaign_cell`
+   takes its no-picker fallback. The race flies `settings.race.team`
+   (`Assegai` here), which the RACE page's TEAM row sets. Whether HD's
+   original shows a ship screen between `Cell Selection` and the race is
+   not measured here.
+6. **The race**: 8 craft on Vineta K, the HD HUD, 60 ticks a second. The
+   autopilot finished 5th.
+7. **`EndRace Results`**: `RESULTS`, `5TH PLACE`, the standings grid
+   (`1.51.65` .. `1.54.95`, the player's row highlighted red, `-` for the
+   two craft still racing), the `LOYALTY` header and its empty bracket,
+   `CONFIRM`. It matches the existing `--menu-page endrace-results`
+   capture, including the near-invisible white `POS`/`TIME` headers on the
+   light panel. The grid's 8th row sits over the panel's dark footer bar.
+8. **Enter goes to `EndRace Menu`** - `Rewards` is skipped, as HD's own
+   `EndRaceMenuRedirect` authors (`docs/ui/endrace-screens.md`). `MENU`,
+   `RACE AGAIN`, `RETURN TO GRID`, `VIEW RESULTS AGAIN`, `CONFIRM`. **The
+   rows are white on the light, see-through panel over a bright race
+   scene, and no row shows a visible cursor**, so a player cannot tell
+   which one Enter will pick.
+9. **Enter (the default row) is `RETURN TO GRID`**: back on `Cell Selection`
+   for the same event, the backdrop still animating. `records.toml` gained
+   the HD race record and `[[campaign]] cell = "grid0_3_1"
+   last_difficulty = "easy"`. No `[[loyalty]]` row, which is correct: HD's
+   loyalty law is not recovered and the Rewards screen that banks it is
+   never entered.
+10. **Back, Back** returns through `Grid Selection` to `Campaign
+    Selection`, with the frame still on HD.
+11. **Cursor persistence on Fury**: `Down` to the Eliminator cell (The
+    Amphiseum, `TARGET 200 (NOVICE)`, footer `Difficulty (NOVICE)`), Back,
+    Enter - the cursor came back on the Eliminator cell. That is our
+    `CellCursors`, still **chosen, not measured** on HD.
+
+Screenshots are under `data/scratch/drive-2026-09-28/clw/shots/h*.png`
+(gitignored, game content). Left open by this walk: the `EndRace Menu`
+cursor's visibility on HD, the 8th Results row overlapping the footer bar,
+and whether HD's original has a ship screen on the campaign path.
+
