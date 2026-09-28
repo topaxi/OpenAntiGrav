@@ -586,7 +586,9 @@ one.
 ```sh
 # scripts/rpcs3-drive.py's own DISPLAY_NUMBER is hardcoded to :77; this
 # session used OAG_RPCS3_DISPLAY (added this pass, defaults to 77 unchanged)
-# to avoid the display another concurrent lane's PPSSPP work was using.
+# because the brief assigned this lane :96 - not because :77 was ever in use
+# (a concurrent lane's own PPSSPP work runs on :93/:94, a different emulator,
+# no actual collision either way).
 OAG_RPCS3_DISPLAY=96 uv run --with evdev python3 scripts/rpcs3-drive.py \
   --image data/images/hdfury-ps3-eu-dec.iso \
   browse --screen "Cell Selection" --button triangle --steps 6 \

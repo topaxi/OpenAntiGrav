@@ -229,7 +229,15 @@ citations.
    own target triple is separately named `Novice`/`Skilled`/`Elite` rather
    than `1st`/`2nd`/`3rd` - `scripts/rpcs3-drive.py browse`'s own `--nav` is
    dead once `--screen` is reached, so reaching a cell other than the
-   default needs a different driver.
+   default needs a different driver. **Same pass, unplanned**: the footer's
+   own `DIFFICULTY (<rung>)` prompt reads `AI DIFFICULTY (<rung>)` on this
+   cell (`Race`) but bare `DIFFICULTY (<rung>)` on `grid8_3_2` (`Eliminator`,
+   the cell the 2026-09-25 section's own capture used) - a real,
+   cross-checked-against-a-third-boot mismatch, not a crop artifact. Bears
+   directly on `pulse-cellsel`'s own runtime-prompt work; see
+   `docs/ui/campaign-screens.md`'s "Which block is which difficulty" section
+   for the full three-boot account. Not this thread's/lane's to fix - for
+   the lead to route.
 2. The saved-record struct's own field layout, precisely enough to settle
    whether `SaveData_MigrateCellMedalsToHardElite`'s own `+0x6c` write and
    `0x001e1138`/`0x001e1188`'s own `+8`/`+9` reads are the same field -

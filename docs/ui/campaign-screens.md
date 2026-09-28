@@ -1523,13 +1523,46 @@ confidence 90, not higher, per `hd_medal_frame`'s own doc comment. This
 project's own render of the identical cell at its fixed default browsed rung
 (`--menu-page cell-select`, `CellSelection::new`'s `Difficulty::Medium`
 default) draws the same cane shape at `TARGET (SKILLED)` - an internal
-consistency check, not a second independent capture. **Not reproduced this
-pass**: a second boot, or an `Elimination`/`NitroBattle` cell (whose own
-target triple is separately named `Novice`/`Skilled`/`Elite` rather than
-`1st`/`2nd`/`3rd` - see "measured on RPCS3" above); `browse`'s own `--nav`
-plan is dead once `--screen` is reached (breaks the walk loop before
-`navigate()` fires), so reaching a *different* cell than the default needs a
-different driver than the one used here.
+consistency check, not a second independent capture. **`00.png` (the
+unpressed frame) is not usable evidence of anything**: it is a comb-artifact
+mid-transition capture (`browse` screenshots it with no settle at all - see
+`rpcs3-capture.md`'s own account), and inferring its rung from the three-rung
+cycle's own periodicity against `01.png` would assume the first
+`DifficultyButton` press did not drop, which is exactly the kind of
+press-count reasoning this same page's own "pair by footer text, not press
+count" rule exists to rule out. The pre-press rung on this boot is simply
+unknown. **Not reproduced this pass**: a second boot, or an
+`Elimination`/`NitroBattle` cell (whose own target triple is separately
+named `Novice`/`Skilled`/`Elite` rather than `1st`/`2nd`/`3rd` - see
+"measured on RPCS3" above); `browse`'s own `--nav` plan is dead once
+`--screen` is reached (breaks the walk loop before `navigate()` fires), so
+reaching a *different* cell than the default needs a different driver than
+the one used here.
+
+**A second, unplanned finding: the footer's `DIFFICULTY` prompt is
+mode-dependent text, not the fixed string the 2026-09-25 section below
+assumed.** Every frame from this pass's own `grid8_3_1` boot (`Race`,
+`TARGET (<rung>)`, `1st`/`2nd`/`3rd`) reads **`AI DIFFICULTY (<rung>)`**, not
+the bare `DIFFICULTY (<rung>)` the 2026-09-25 section records - and that is
+not a crop that clipped an `AI` off: re-checking that section's own source
+frames (`data/scratch/lane-hd/rpcs3-grid0-3-2/02-triangle.png`,
+`data/scratch/drive-2026-09-25/hd-footer-glyphs/difficulty-icon-zoom.png`)
+directly, both are `grid8_3_2` (`Eliminator`, The Amphiseum, `TARGET 200
+(<rung>)`), and both genuinely read the bare `DIFFICULTY (<rung>)` with no
+`AI` - a wider crop of the same frame confirms nothing is cut off to its
+left. A third, independent, pre-existing capture of `grid8_3_1` itself -
+`data/reference/hd-capture/talons-matched/screen-Cell-Selection.png`
+(2026-09-13, a different boot entirely) - also reads `AI DIFFICULTY
+(NOVICE)`, agreeing with this pass's own `grid8_3_1` reading rather than the
+2026-09-25 `grid8_3_2` one. So the pattern across three boots is consistent
+with the prompt depending on the cell's own mode (`AI DIFFICULTY` for
+`Race`, bare `DIFFICULTY` for `Eliminator`) rather than being one fixed
+string - not itself confirmed against a third mode family, and not chased
+further this pass, but recorded here rather than silently generalised from
+either single-mode reading. **Left for the lead to route**: this bears
+directly on `pulse-cellsel`'s own `DIFFICULTY (<rung>)` runtime-prompt work,
+which this section's own 2026-09-25 write-up (below) is the source this
+pass found the mismatch against.
 
 The convergent-evidence reasoning that predicted this mapping before any
 capture existed: `DATA02`'s shorter, flat-schema copy - the one every
@@ -1546,13 +1579,13 @@ facts agreed on, now corroborated rather than merely argued for.
 boot ran on an existing (non-fresh) save - moving it aside was refused by
 this session's own permission classifier as an edit to the user's real
 `~/.config/rpcs3` outside the repo - so `00.png` (before any `DifficultyButton`
-press) is not evidence of a *fresh* default, only of whatever rung that save
-already held. It is consistent with the earlier "fresh-profile default reads
-`NOVICE`" finding (the three-rung cycle's own periodicity places the
-unpressed state one step before `01.png`'s `SKILLED`, i.e. `NOVICE`), not an
-independent re-measurement of it. `CellSelection::difficulty`'s own
-`Difficulty::Medium` (`SKILLED`) default versus RPCS3's `NOVICE` stays open,
-per the 2026-09-25 section above - not this pass's to fix.
+press, and itself a comb-artifact frame per the note above) is not evidence
+of a *fresh* default, only of whatever rung that save already held, and its
+own pre-press rung is not read at all this pass (not inferred from the
+cycle's periodicity either - see the note above on why that would be
+press-count reasoning). `CellSelection::difficulty`'s own `Difficulty::Medium`
+(`SKILLED`) default versus RPCS3's `NOVICE` stays open, per the 2026-09-25
+section above - not this pass's to fix.
 
 ### The fix, and this project's own render as an internal consistency check
 
@@ -1587,11 +1620,21 @@ difficulty plumbing agree with each other. Seeding
 `data/scratch/hd-medals/scratch-cfg/oag/records.toml` with
 `best_difficulty = "easy"`/`"medium"`/`"hard"` on `grid8_2_1` and rendering
 `--menu-page cell-select` (recipe above) drew the plain hex, the cane and
-the swirl respectively, on both the `Target0/1/2 Medal` row (keyed on
-`model.difficulty()`, cycled via the in-screen `DifficultyButton`) and the
-`Medal_{x}_{y}` grid badge (keyed on the seeded `best_difficulty`) - not
-committed (game content, `data/scratch/` is gitignored), reproducible with
-the recipe above.
+the swirl respectively on the `Medal_{x}_{y}` grid badge (keyed on the
+seeded `best_difficulty`) - not committed (game content, `data/scratch/` is
+gitignored), reproducible with the recipe above.
+**Correction, 2026-09-28**: the `Target0/1/2 Medal` row does **not** vary
+with the seeded record the way the paragraph here previously claimed.
+`model.difficulty()` is `CellSelection`'s own single browsed-rung field, and
+`--menu-page cell-select` has no session to cycle `DifficultyButton` through
+at all - `CellSelection::new` hardwires it to `Difficulty::Medium`
+(`crates/ui/src/campaign.rs`), so every `--menu-page cell-select` render
+draws `Target0/1/2 Medal` at the cane shape regardless of what
+`best_difficulty` a scratch `records.toml` seeds. Only `Medal_{x}_{y}` reads
+the seeded value. This pass's own render
+(`data/scratch/hd-campaign-live/ours-cellselect-default.png`) is the
+`Target0/1/2 Medal` row's actual internal-consistency check - one rung
+(`Medium`/`SKILLED`), matching the live RPCS3 read above at that same rung.
 
 ## Wipeout HD/Fury: the TARGET block reads `DATA06` too, 2026-09-27
 
@@ -2647,28 +2690,44 @@ and its own "what is not determined" section.
   not spent this pass. `session::campaign::handle_campaign`/
   `launch_campaign_cell` received no HD-specific edit, confirmed once more
   by this walk working unmodified.
-  **2026-09-28, `grid8_3_1` specifically checked, headlessly rather than by
-  a second live drive**: a full race build/tick cost two orders of
-  magnitude more wall clock than a menu screen here (this section's own
-  measurement above), so this pass read `launch_campaign_cell`
+  **2026-09-28, `grid8_3_1` specifically checked on both sides, without a
+  new RPCS3 race boot.** The two-orders-of-magnitude slowdown above is
+  **this project's own** race render path, not RPCS3's - a fresh RPCS3 boot
+  to a running race costs the same few minutes any other capture in this
+  document does. This pass skipped a new one anyway because a pre-existing
+  capture already had it: `data/reference/hd-capture/talons-matched/`
+  (2026-09-13, the default Fury-campaign walk, same `grid8_3_1` this pass's
+  own `browse` boot also landed on) carries both
+  `screen-Cell-Selection.png` (`blitzed`, `EVENT 01/08`, `SINGLE RACE`,
+  `TALON'S JUNCTION`, `VENOM`, `WEAPONS ON`, `LAPS 3`) and three in-race
+  frames (`00.png`-`03.png`) whose own `NN.json` carries
+  `"track": "Data\\Environments\\Talons_Junction\\track.rcsmodel"` - read
+  from `TTY.log`'s own `Loading track model` line inside the *started*
+  race, not the pre-launch screen - and whose HUD reads `LAP 1/3`. So the
+  RPCS3 side of "same track, mode, laps, class" is itself measured from a
+  launched race, not only inferred from the selection screen's own text.
+  On this project's own side, rather than drive a second race build (the
+  slow path measured above), this pass read `launch_campaign_cell`
   (`crates/game/src/main/session/campaign.rs:287`, read-only - a different
-  lane's own file) rather than drive a second race. Its own mapping is
-  field-for-field: `race_mode_for_cell(cell.mode)` sends the authored string
-  `"Race"` straight to `oag_race::Mode::SingleRace` (unit-tested,
+  lane's own file), whose mapping for this cell is field-for-field:
+  `race_mode_for_cell(cell.mode)` sends the authored string `"Race"`
+  straight to `oag_race::Mode::SingleRace` (unit-tested,
   `crates/game/src/campaign.rs`'s own `the_seven_implemented_modes_map_onto_their_oag_race_mode`),
   `race_options.class = cell.class.clone()` keeps `"Venom"` verbatim, and
   `laps_override = cell.laps` carries `3` through unmodified for
   `SingleRace`. `race_options.track` resolves `"17_Track"` through
   `shell.track` to the same circuit `docs/formats/hd-frontend.md`'s own
-  `17_Track -> Talons_Junction` measurement already names. Every one of
-  those four values (`Race`/`Venom`/`3`/`Talon's Junction`) already reads
-  identically on both sides at the *selection* screen - this pass's own
+  `17_Track -> Talons_Junction` measurement already names, matching
+  `talons-matched`'s own `TTY.log`-sourced track string. Every one of those
+  four values (`Race`/`Venom`/`3`/`Talon's Junction`) also reads identically
+  at the *selection* screen on both sides - this pass's own
   `ours-cellselect-default.png` next to the RPCS3 `01.png`/`04.png` frames
   above, all four fields matching pixel-for-text. What this does **not**
   re-confirm is that `finish_launch`/`open_ship_picker` carry those same
   `race_options` through into a *started* race unmodified for this specific
-  cell - only that the values reaching `race_options` are right; the
-  2026-09-21 walk already showed a *different* HD cell's launch reaching a
+  cell on this project's own side - only that the values reaching
+  `race_options` are right; the 2026-09-21 walk already showed a *different*
+  HD cell's launch reaching a
   genuinely ticking race with correct HUD/opponents/track, and nothing in
   the code path between the two cells differs.
 - **The `Required`/`Required Previous`/`NextPoints` unlock-reason
