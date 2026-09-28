@@ -531,6 +531,18 @@ pub(crate) struct Session {
     /// identical moment - see [`Session::launch_campaign_cell`]'s own doc
     /// for when this is `None` even with a cell in play.
     pub(crate) campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
+    /// [`Self::campaign_cell`]'s own resolved AI skill scale - `AI_ResolveSkillScale`
+    /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`, `0x08834df4`)
+    /// against [`Self::campaign_difficulty`]'s own rung and the launched
+    /// track's `stats.xml` - draining into [`RaceStage::campaign_ai_skill_scale`]
+    /// the identical way [`Self::campaign_difficulty`] does, and applied to
+    /// the race's AI tuning there
+    /// (`crate::main::session::load::advance_race_build`). Computed once, in
+    /// [`Session::launch_campaign_cell`], rather than read again at drain
+    /// time - see that function's own `resolve_campaign_ai_skill_scale`.
+    /// `None` whenever [`Self::campaign_difficulty`] is, or the resolution
+    /// itself falls back (see that function's own doc for when).
+    pub(crate) campaign_ai_skill_scale: Option<f32>,
     /// A Tournament cell's own leg list and running standings, from the
     /// moment `Session::launch_campaign_cell` starts one to the moment its
     /// last leg's `EndRace Menu` is left (`RETURN TO GRID`/`RETURN TO MENU`).

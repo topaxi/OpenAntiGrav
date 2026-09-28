@@ -435,6 +435,7 @@ impl Session {
                 // and drops the abandoned cell rather than let it leak into
                 // whatever race is launched next.
                 self.campaign_difficulty = None;
+                self.campaign_ai_skill_scale = None;
                 if self.campaign_cell.take().is_some() {
                     self.open_campaign();
                 } else {

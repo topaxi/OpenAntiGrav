@@ -83,6 +83,12 @@ pub(crate) struct RaceStage {
     /// `Session::launch_campaign_cell`'s own doc. Read by
     /// [`RaceStage::campaign_medal`] alone.
     pub(crate) campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
+    /// [`Self::campaign_cell`]'s own resolved AI skill scale, drained the
+    /// same moment and applied to [`Self::race`]'s AI tuning right after -
+    /// see `Session::campaign_ai_skill_scale`'s own doc and
+    /// `crate::main::session::load::advance_race_build`, the one place this
+    /// is read.
+    pub(crate) campaign_ai_skill_scale: Option<f32>,
     /// The final standings rank this leg earns against
     /// [`Session::tournament`], or `None` on every leg but a Tournament
     /// cell's own last one - see that field's own doc.

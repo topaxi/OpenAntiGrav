@@ -370,9 +370,21 @@ impl Session {
         )
         .then_some(cell.laps)
         .flatten();
+        // `AI_ResolveSkillScale`'s campaign-cell branch
+        // (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`,
+        // `0x08834df4`) - resolved once here, against the first leg's own
+        // track, rather than per tournament leg: this engine does not
+        // re-run AI setup between legs today, so a multi-track cell races
+        // every leg at the position its first track's own curve gives -
+        // chosen, not measured, on the multi-leg case only.
+        let ai_skill_scale = difficulty.and_then(|rung| {
+            let location = shell.track(mode, &track_ids[0])?.location.clone();
+            self.resolve_campaign_ai_skill_scale(&cell, rung, &location)
+        });
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
         self.campaign_difficulty = difficulty;
+        self.campaign_ai_skill_scale = ai_skill_scale;
         // `None` for every ordinary cell, clearing whatever a previous
         // tournament (finished or abandoned) left behind - see
         // `Self::tournament`'s own doc for why nothing else has to clear it
@@ -385,5 +397,38 @@ impl Session {
         if !self.open_ship_picker() {
             self.finish_launch();
         }
+    }
+
+    /// `AI_ResolveSkillScale`'s campaign-cell branch
+    /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`,
+    /// `0x08834df4`, confidence 85): `cell`'s own position on `location`'s
+    /// track carries a `stats.xml` in `FEData.wad` reads as, at `rung`.
+    ///
+    /// `None` on any failure to open or read that file - a title with no
+    /// `FEData.wad` at this path (only PSP Pulse is wired; PS2 Pulse ships
+    /// the same per-track data under a different archive root this project
+    /// has not measured, and HD/Fury does not use this mechanism at all,
+    /// see `docs/gameplay/ai.md`'s campaign section), a track missing its
+    /// own record, or `cell` carrying no [`oag_tables::race_campaign::Cell::skill`]
+    /// at all (a solo-mode cell has no AI to scale). Every one of those
+    /// falls back to [`oag_tables::track_stats::resolve_skill_scale`]'s own
+    /// documented default curve rather than refusing the launch - the
+    /// original substitutes the same default when its own track table has
+    /// not loaded.
+    fn resolve_campaign_ai_skill_scale(
+        &self,
+        cell: &oag_tables::race_campaign::Cell,
+        rung: oag_tables::race_campaign::Difficulty,
+        location: &str,
+    ) -> Option<f32> {
+        let options = self.race_options.as_ref()?;
+        let spec = format!("{}:{}", options.source, oag_pulse::archives::FEDATA);
+        let mut archive = oag_assets::Archive::open(&spec).ok()?;
+        let entry = format!(r"{location}\stats.xml");
+        let stats = archive
+            .read_name(&entry)
+            .ok()
+            .and_then(|blob| oag_tables::track_stats::from_blob(&blob).ok());
+        oag_tables::track_stats::resolve_skill_scale(cell, rung, stats.as_ref())
     }
 }

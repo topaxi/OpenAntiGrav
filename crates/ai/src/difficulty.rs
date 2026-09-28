@@ -237,6 +237,63 @@ impl Difficulty {
         }
     }
 
+    /// A continuous position on this ladder, for a caller that has a
+    /// non-integer skill to place rather than a named level to pick.
+    ///
+    /// `1.0` reads as [`Self::Novice`], `2.0` as [`Self::Skilled`], `3.0` as
+    /// [`Self::Elite`] - the same three-rung vocabulary the built-in
+    /// campaign's own Easy/Medium/Hard already carries: Wipeout HD's own
+    /// debug text equates them rung for rung
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s `HARD ≡
+    /// ELITE` section, corroborated at the UI layer by
+    /// `docs/ui/campaign-screens.md`'s RPCS3 capture). A value between two
+    /// integers blends the neighbouring levels' axes linearly rather than
+    /// snapping to the nearer one, so a campaign cell's own authored
+    /// position on the disc's `SkillScaleValue` curve
+    /// (`oag_tables::track_stats::resolve_skill_scale`) is not discarded on
+    /// the way in - see `docs/gameplay/ai.md`'s own campaign section for
+    /// where this scale comes from and what it does not carry.
+    ///
+    /// **`Ace` is unreachable through this path**, on purpose: the
+    /// campaign's own three-rung vocabulary never names a fourth, harder
+    /// setting either, and `Ace` stays what it always was - "the measured
+    /// ceiling, with nothing given back" - reachable only by naming it
+    /// directly (`--autopilot-skill ace`, the RACE page's own Ace choice).
+    ///
+    /// Clamped to `1.0..=3.0` - the curve a track authors can run slightly
+    /// outside that band (a cell's `skillEasy` a little under `1.0`, or a
+    /// track's own `SkillScaleValue` a little over `3.0`), and this project
+    /// has no fifth level to extrapolate into.
+    #[must_use]
+    pub fn tune_at_scale(scale: f32, measured: &Tuning) -> Tuning {
+        let (lo, hi, t) = Self::straddle(scale);
+        let lo = lo.tune(measured);
+        let hi = hi.tune(measured);
+        Tuning {
+            lateral_accel: lerp(lo.lateral_accel, hi.lateral_accel, t),
+            max_turn_rate: lerp(lo.max_turn_rate, hi.max_turn_rate, t),
+            mistake_rate: lerp(lo.mistake_rate, hi.mistake_rate, t),
+            reaction_ticks: lerp(
+                f32::from(lo.reaction_ticks),
+                f32::from(hi.reaction_ticks),
+                t,
+            )
+            .round() as u16,
+            ..*measured
+        }
+    }
+
+    /// The two named levels `scale` sits between, and how far across - see
+    /// [`Self::tune_at_scale`]. `t` is always in `0.0..=1.0`.
+    fn straddle(scale: f32) -> (Self, Self, f32) {
+        let scale = scale.clamp(1.0, 3.0);
+        if scale <= 2.0 {
+            (Self::Novice, Self::Skilled, scale - 1.0)
+        } else {
+            (Self::Skilled, Self::Elite, scale - 2.0)
+        }
+    }
+
     /// This level's version of a pilot.
     ///
     /// Only the axes that decide how a driver treats *other craft* are scaled.
@@ -273,6 +330,10 @@ impl Difficulty {
     }
 }
 
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
 impl std::fmt::Display for Difficulty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
@@ -297,156 +358,4 @@ impl std::str::FromStr for Difficulty {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn from_str_matches_from_name() {
-        use std::str::FromStr;
-
-        for (name, level) in Difficulty::ALL {
-            assert_eq!(Difficulty::from_str(name), Ok(level));
-            assert_eq!(level.to_string(), name);
-        }
-        assert!(Difficulty::from_str("impossible").is_err());
-    }
-
-    #[test]
-    fn every_level_round_trips_through_its_name() {
-        for (name, level) in Difficulty::ALL {
-            assert_eq!(Difficulty::from_name(name), Some(level));
-            assert_eq!(level.name(), name);
-        }
-        assert_eq!(Difficulty::from_name("impossible"), None);
-    }
-
-    /// The scales have to be ordered, or a "harder" setting is not harder.
-    #[test]
-    fn every_axis_rises_with_the_level() {
-        let levels = Difficulty::ALL.map(|(_, level)| level);
-        for pair in levels.windows(2) {
-            let (easier, harder) = (pair[0], pair[1]);
-            assert!(harder.grip_believed() > easier.grip_believed());
-            assert!(harder.turn_allowed() > easier.turn_allowed());
-            assert!(harder.aggression() > easier.aggression());
-            assert!(harder.roll_appetite() > easier.roll_appetite());
-            // Mistakes are one of the two that fall, and how much a level keeps
-            // back from a roll is the other: a harder driver rolls more readily
-            // and off less.
-            assert!(harder.mistakes() < easier.mistakes());
-            assert!(harder.roll_caution() < easier.roll_caution());
-        }
-    }
-
-    /// The top level gives back the measurement untouched, mistakes included:
-    /// `Tuning::default()` does not err and neither does an ace. If it ever
-    /// scaled the pace, the hardest setting would be the least tested one.
-    #[test]
-    fn the_top_level_gives_back_the_measured_tuning_exactly() {
-        let measured = Tuning::default();
-        let ace = Difficulty::Ace.tune(&measured);
-        assert_eq!(ace.lateral_accel, measured.lateral_accel);
-        assert_eq!(ace.max_turn_rate, measured.max_turn_rate);
-        assert_eq!(
-            ace, measured,
-            "the top level changed something, and it is the measured tuning"
-        );
-        assert_eq!(
-            Difficulty::Ace.temper(&Pilot::AGGRESSIVE),
-            Pilot::AGGRESSIVE
-        );
-        assert_eq!(Difficulty::Ace.mistakes(), 0.0);
-    }
-
-    #[test]
-    fn a_novice_field_is_slower_and_turns_less_hard() {
-        let measured = Tuning::default();
-        let easy = Difficulty::Novice.tune(&measured);
-        assert!(easy.lateral_accel < measured.lateral_accel);
-        assert!(easy.max_turn_rate < measured.max_turn_rate);
-        // And everything else is left alone.
-        assert_eq!(easy.look_min, measured.look_min);
-        assert_eq!(easy.brake_floor, measured.brake_floor);
-        assert_eq!(easy.trail_gain, measured.trail_gain);
-        // And the novice is the one that errs.
-        assert!(easy.mistake_rate > 0.0);
-        assert_eq!(Difficulty::Ace.tune(&measured).mistake_rate, 0.0);
-    }
-
-    /// The three roll axes degrade in the directions their meanings run, and
-    /// `Ace` gets the pilot's own numbers back untouched.
-    ///
-    /// **Degradation, never a boost** - the module's own rule. A level that
-    /// rolled *more* readily than the pilot asked for would be tuning nobody
-    /// had measured, on the setting that matters most.
-    #[test]
-    fn a_lower_level_rolls_less_readily_off_more_shield_and_after_a_longer_jump() {
-        let base = Pilot::BALANCED;
-        let ace = Difficulty::Ace.temper(&base);
-        assert_eq!(ace.roll_chance, base.roll_chance);
-        assert_eq!(ace.roll_floor, base.roll_floor);
-        assert_eq!(ace.roll_airtime, base.roll_airtime);
-
-        let levels = Difficulty::ALL.map(|(_, level)| level);
-        for pair in levels.windows(2) {
-            let (easier, harder) = (pair[0].temper(&base), pair[1].temper(&base));
-            assert!(harder.roll_chance.high > easier.roll_chance.high);
-            assert!(harder.roll_floor.low < easier.roll_floor.low);
-            assert!(harder.roll_airtime.low < easier.roll_airtime.low);
-        }
-    }
-
-    /// A floor is a fraction of the pool, so raising it can only reach one -
-    /// which is a pilot that never rolls, and not a span that runs backwards.
-    #[test]
-    fn no_level_raises_a_roll_floor_past_the_whole_pool() {
-        for (_, level) in Difficulty::ALL {
-            for (name, pilot) in Pilot::BUILT_IN {
-                let tempered = level.temper(&pilot);
-                assert!(tempered.roll_floor.high <= 1.0, "{name}");
-                assert!(tempered.is_well_formed(), "{name} at {}", level.name());
-            }
-        }
-    }
-
-    /// A slow opponent that still shoots you in the back is not an easy race.
-    #[test]
-    fn a_novice_field_leaves_the_player_alone() {
-        let calm = Difficulty::Novice.temper(&Pilot::AGGRESSIVE);
-        assert_eq!(calm.trigger.high, 0.0);
-        assert_eq!(calm.ram.high, 0.0);
-        assert_eq!(calm.defence.high, 0.0);
-    }
-
-    /// A pilot has to stay itself at every level, or four difficulties give one
-    /// generic slow driver and one generic fast one.
-    #[test]
-    fn a_level_does_not_change_which_pilot_a_craft_is() {
-        for (_, level) in Difficulty::ALL {
-            for (name, pilot) in Pilot::BUILT_IN {
-                let tempered = level.temper(&pilot);
-                assert_eq!(tempered.line_bias, pilot.line_bias, "{name}");
-                assert_eq!(tempered.wander, pilot.wander, "{name}");
-                assert_eq!(tempered.inside, pilot.inside, "{name}");
-                assert_eq!(tempered.commitment, pilot.commitment, "{name}");
-                assert_eq!(tempered.courtesy, pilot.courtesy, "{name}");
-                assert!(tempered.is_well_formed(), "{name} at {}", level.name());
-            }
-        }
-    }
-
-    /// Scaling must not push a pilot past the ceiling that keeps a craft out of
-    /// the wall.
-    #[test]
-    fn no_level_lets_a_pilot_ask_for_more_grip_than_the_hull_has() {
-        for (_, level) in Difficulty::ALL {
-            for (name, pilot) in Pilot::BUILT_IN {
-                assert!(
-                    level.temper(&pilot).validated().is_ok(),
-                    "{name} at {}",
-                    level.name()
-                );
-            }
-        }
-    }
-}
+mod tests;
