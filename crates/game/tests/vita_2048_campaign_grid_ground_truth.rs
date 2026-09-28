@@ -2,8 +2,8 @@
 //! seven authored opponents reach `race::load_event`'s output roster, in
 //! place of `oag_game::livery::teams_for_slots`'s own "chosen, not measured"
 //! placement - see `oag_2048::campaign::craft::grid_craft`'s own doc comment
-//! for the census this pins one row of, and
-//! `handover/frontend/2048s-campaign-is-read-from-sp-xml.md`'s item 7.
+//! for the census this pins one row of, and `docs/formats/2048-campaign.md`'s
+//! "Craft choice" section for the full write-up.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship - `data/extracted/vita/PCSF00007/base`, the
