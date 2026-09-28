@@ -2253,6 +2253,7 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-hd",
+ "oag-pulse",
  "oag-tables",
  "oag-texture",
  "oag-title",

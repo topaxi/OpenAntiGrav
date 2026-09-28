@@ -469,6 +469,41 @@ coordinate match. The `%s %d %d` spacing rather than `%s_%d_%d` is what the
 comparison uses; the underscore form at `0x08a78364` is the *serialiser* for a
 user-built grid (`<PI_Cell name="%s_%d_%d">`, `0x08a783a4`).
 
+### `CellSelection_OnEnter`'s own default-cursor scan, decompiled in full, 2026-09-28
+
+Closes `docs/ui/campaign-screens.md`'s own "default cell" question
+(`pulse-campaign` lane): on a fresh entry with no cell already selected,
+`CellSelection_OnEnter` walks the screen's own collected cell definitions in
+document order and selects the **first one whose `Locked` byte (`+0xb9`)
+parses as the literal value `false`** - not the first cell overall, and not
+`Locked`'s own "absent defaults to locked" reading the lock-glyph predicate
+uses elsewhere on this page:
+
+```
+for cell in cells (document order):
+    if cell->flags & 8 == 0 and cell->Locked (+0xb9) == 0:
+        select cell
+        break
+```
+
+An absent `Locked` attribute and an explicit `Locked="true"` are both
+skipped alike - only an explicit `Locked="false"` stops the scan. Measured
+live against PPSSPP (`pulse-psp-usa.chd`, Xvfb, a genuinely fresh profile):
+`grid0`'s own default cursor is `grid0_3_1` (`Locked="false"`, fourth in
+`grid_00.xml`'s own document order), never `grid0_2_1` (no `Locked`
+attribute at all, first in document order) - matching this scan and
+falsifying the "first cell listed" reading `oag_ui::campaign::CellSelection::new`
+carried until this pass. Confidence **80**, the same band the rest of this
+function's own reads sit at - clean decompilation, corroborated by a live
+capture, not itself breakpoint-verified. `cell->flags & 8` was not chased
+this pass (no consumer of that bit found elsewhere in this file), and every
+authored cell this pass checked reads `0` there, so it has not yet excluded
+anything real; `oag_ui::campaign::CellSelection::with_medals_and_records`
+reproduces the scan and falls back to document order when no cell answers
+`Locked="false"` at all (**chosen, not measured** for that fallback case -
+the decompile itself would leave the selection at whatever it already was,
+which a reimplementation cannot do for a screen that must show something).
+
 ### `CellSelection_PopulateDetail` (`0x088d68d8`) fills the panel
 
 Everything `race-setup.md` read as a placeholder, sourced:
@@ -1136,6 +1171,33 @@ outline tint is named as an open question rather than implemented on the
 strength of that inference. Confidence **80** for "the asymmetry is real",
 no confidence assigned to `CM_HEX_Outline`'s own value.
 
+**Superseded, `pulse-campaign` lane, 2026-09-28: `CM_HEX_Outline`'s own
+value was already read and wired the same day this pass's own `Outline_x_y`
+section above was written (2026-09-14, `crate::campaign::load`'s
+`fallback_globals`), and the "not one of the two confirmed names" sentence
+above simply never re-checked the code.** `just wad cat` on
+`Data\Plugins\PI001\GUI\Skin.xml` reads a `<Variable global="CM_HEX_Outline">`
+declaring `0x7F34ACC2` directly (a semi-transparent teal, the same
+`0x34acc2` RGB every inference above already suspected, now a literal
+`<Values color=>` read rather than a guess); `search_strings` for
+`"CM_HEX_Outline"` against this binary returns **zero** hits, so no native
+code path ever names this key at runtime - the `FEGlobals->` resolver hashes
+whatever name the XML gives it, and `Skin.xml`'s own declared value is
+final, with no override to chase further. `crate::campaign::load` already
+threads the front-end root's own parsed globals through as
+`fallback_globals` and `oag_ui::campaign::draw::cell_draw_list`'s
+`Outline_x_y` arm already falls to the generic `image_draw` path, which
+applies `image.color` (the widget's own resolved attribute) unmodified - so
+this was fixed by the earlier pass's own `fallback_globals` plumbing, not
+left open. Confirmed against a fresh live capture, not just static code
+reading: a locked hex's outline stroke on `pulse-psp-usa.chd` (PPSSPP,
+`Cell Selection`, fresh profile) averages RGB `(31, 58, 63)` over ~2,000
+sampled pixels; this build's own `--menu-page cell-select` still of the same
+hex averages `(26, 56, 62)` - within a few units, well inside anti-aliasing/
+background-gradient noise. Confidence **90**. `docs/ui/campaign-screens.md`'s
+own "Open" bullet on this and the handover thread's matching bullet are
+stale and are corrected in the same change that adds this section.
+
 **`GridController_UpdateSelectorPulse` (`0x088a5700`, renamed this pass,
 confidence 85)** is the actual source of the selected tile's own glow -
 reached generically (not a PI001 screen method) whenever a `GridController`
@@ -1165,6 +1227,42 @@ the animation - the draw-list builder has no clock) and does not implement
 - drawing a halo shape this build never measured would be exactly the
 "plausible-looking stand-in" this project's CLAUDE.md warns against.
 `docs/ui/campaign-screens.md`'s own comparison names the gap.
+
+**`pulse-campaign` lane, 2026-09-28: an 8-frame burst shows the halo is
+real and phase-correlated, but its own xref count still gives no creation
+site to point at.** `get_xrefs_to` on the `"SelectorGlow"` string
+(`0x08a7f178`) returns exactly **one** hit in the whole binary: the lookup
+inside this function. No separate widget-creation or allocation site
+references the string anywhere - evidence that nothing in the executable
+*names* a widget `"SelectorGlow"` at any traceable site, though not proof
+that no widget is ever built with that name at runtime (a generic
+`GridController`-driven clone, the way the controller class itself is never
+authored as XML content either, would not need to re-reference this
+string). (For comparison, `"Selector"` at `0x08a7f130` has two xrefs - this
+function's own lookup plus a second site, `FUN_088a4d24` - consistent with
+it being a real, authored, twice-referenced widget the way
+`docs/ui/campaign-screens.md`'s "authored twice" note already describes.)
+
+**The halo is not a one-frame illusion.** Eight frames of `Grid Selection`'s
+own selected tile, `pulse-psp-usa.chd`, ~180ms apart (`Xvfb :93`,
+`data/scratch/pulse-campaign/captures/burst/f1..f8.png`): the halo's own
+size and brightness track `Selector`'s documented colour phase exactly -
+small and dim when `Selector` reads cyan (`f1`, `f4`, `f5`, `f8`), large and
+bright when `Selector` reads white (`f2`, `f3`, `f6`, `f7`), the same
+period the decompile above gives both widgets. A colour tint on `Selector`'s
+own sprite cannot explain this by itself: `docs/ui/campaign-screens.md`'s
+own texture read of the `Selector` crop (42x43, content bbox `(5,9)`-`(37,37)`,
+**zero alpha in the padding**) has no ink outside its own 32x28 content to
+brighten, so a plain alpha-blended tint of that one sprite cannot bleed
+light past the hex's own edge the way every frame in the burst does.
+**Something does draw a second, softer element in sync with the pulse** -
+this is stronger than "one frame might have caught a bright phase", but
+still not a located geometry/texture to draw, so `oag_ui::campaign::draw`
+continues to draw nothing extra for it rather than invent a stand-in shape,
+per this project's own rule. Left open, now with a clearer description of
+what is missing: not necessarily the literal `"SelectorGlow"` widget this
+function's own lookup names, but *some* phase-synced soft-edged draw the
+burst makes undeniable.
 
 **`GridSelection_UpdatePageTransition` (`0x088de9bc`, renamed this pass,
 confidence 85)**, called at the end of every `GridSelection_Update`, is
