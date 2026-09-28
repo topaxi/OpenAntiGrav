@@ -339,8 +339,8 @@ impl EndRaceRuntime {
 }
 
 /// The trophy this race shows, taken out of `trophies`: the one whose
-/// medal a campaign cell awarded, `None` on a race with no cell or no medal
-/// - `EndRaceRewards_OnEnter`'s own two branches
+/// medal a campaign cell awarded, `None` on a race with no cell or no
+/// medal, as `EndRaceRewards_OnEnter`'s own two branches have it
 /// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`).
 fn trophy_for(
     rewards: Option<&Rewards>,
