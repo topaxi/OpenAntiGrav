@@ -431,8 +431,7 @@ fn ship_model_data_forces_the_player_craft_on_some_events() {
         source: source.display().to_string(),
         ..oag_game::race::Options::default()
     };
-    let forced =
-        oag_game::race::load_event(&race, "2048 - Event 4-2").expect("the event loads");
+    let forced = oag_game::race::load_event(&race, "2048 - Event 4-2").expect("the event loads");
     assert!(
         forced
             .report
