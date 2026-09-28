@@ -556,22 +556,32 @@ impl Held {
 /// that gave one weapon nearly all the weight would repeat often, and
 /// `an_overwhelming_weight_terminates_and_may_repeat` pins that rather than
 /// pretending otherwise.
+/// `allowed` restricts the draw to a subset of [`IMPLEMENTED`]: `None` draws
+/// from all of [`IMPLEMENTED`] exactly as before this parameter existed, and
+/// `Some(&[])` (as opposed to omitting a weapon from a non-empty slice) hands
+/// out nothing at all rather than falling back to unrestricted - the same
+/// "authored absence is honest, not an invitation to guess" rule
+/// `docs/formats/2048-campaign.md`'s weapon-set gate follows. See
+/// `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`, this
+/// project's own reader of Wipeout 2048's `WeaponSetDefinition`, for the one
+/// caller that passes `Some`.
 #[must_use]
 pub fn draw(
     rng: &mut Rng,
     table: &PickupTable,
     driver: Driver,
     last: Option<Weapon>,
+    allowed: Option<&[Weapon]>,
 ) -> Option<Weapon> {
     for _ in 0..REDRAW_ATTEMPTS {
-        let drawn = draw_once(rng, table, driver)?;
+        let drawn = draw_once(rng, table, driver, allowed)?;
         if Some(drawn) != last {
             return Some(drawn);
         }
     }
     // Every attempt came back the same weapon. Hand it over rather than hand over
     // nothing: a pad that silently grants nothing reads as a broken pad.
-    draw_once(rng, table, driver)
+    draw_once(rng, table, driver, allowed)
 }
 
 /// How many times [`draw`] re-rolls to avoid repeating the last pickup.
@@ -582,12 +592,35 @@ pub fn draw(
 /// spends nine generator draws rather than hanging.
 pub const REDRAW_ATTEMPTS: usize = 8;
 
+/// A weapon's weight for this draw: `driver`/`table`'s own, or `0.0` when
+/// `allowed` is `Some` and does not list it. `None` never filters, so every
+/// existing caller (`allowed: None`) draws exactly as before this parameter
+/// existed - the walk below still only ever sees zero or a real weight, the
+/// same as when a table simply authored no odds for a weapon.
+#[must_use]
+fn gated_weight(
+    driver: Driver,
+    table: &PickupTable,
+    weapon: Weapon,
+    allowed: Option<&[Weapon]>,
+) -> f32 {
+    if allowed.is_some_and(|allowed| !allowed.contains(&weapon)) {
+        return 0.0;
+    }
+    driver.weight(table, weapon).max(0.0)
+}
+
 /// One weighted draw, with no regard for what came before it.
 #[must_use]
-fn draw_once(rng: &mut Rng, table: &PickupTable, driver: Driver) -> Option<Weapon> {
+fn draw_once(
+    rng: &mut Rng,
+    table: &PickupTable,
+    driver: Driver,
+    allowed: Option<&[Weapon]>,
+) -> Option<Weapon> {
     let total: f32 = IMPLEMENTED
         .iter()
-        .map(|&weapon| driver.weight(table, weapon).max(0.0))
+        .map(|&weapon| gated_weight(driver, table, weapon, allowed))
         .sum();
     if total <= 0.0 || !total.is_finite() {
         return None;
@@ -595,7 +628,7 @@ fn draw_once(rng: &mut Rng, table: &PickupTable, driver: Driver) -> Option<Weapo
 
     let mut roll = rng.next_f32() * total;
     for &weapon in IMPLEMENTED {
-        let weight = driver.weight(table, weapon).max(0.0);
+        let weight = gated_weight(driver, table, weapon, allowed);
         if weight <= 0.0 {
             continue;
         }
@@ -611,7 +644,7 @@ fn draw_once(rng: &mut Rng, table: &PickupTable, driver: Driver) -> Option<Weapo
         .iter()
         .rev()
         .copied()
-        .find(|&weapon| driver.weight(table, weapon) > 0.0)
+        .find(|&weapon| gated_weight(driver, table, weapon, allowed) > 0.0)
 }
 
 /// The class's own table out of a whole weapon file.

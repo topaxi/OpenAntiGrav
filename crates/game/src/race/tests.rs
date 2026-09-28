@@ -241,6 +241,10 @@ fn setup(handling: Handling) -> Setup {
         // nothing out. `race_with_weapon_pads` supplies one where a test
         // needs a pickup to exist.
         weapons: None,
+        // No restriction - the same "empty is no override" state every
+        // non-2048 race is in. See `Setup::allowed_weapons`'s own doc
+        // comment.
+        allowed_weapons: Vec::new(),
         weapon_pad_refresh: 0.0,
         // These tests run on a synthetic straight and want the ordinary
         // spawn and the ordinary chase camera; `--pose` and its camera are

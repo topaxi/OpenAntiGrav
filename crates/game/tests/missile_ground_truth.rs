@@ -344,6 +344,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
             table,
             oag_gameplay::pickup::Driver::HUMAN_UNPLACED,
             None,
+            None,
         ) == Some(Weapon::Missile)
     });
     assert!(

@@ -621,6 +621,128 @@ vita_2048_campaign_progress_ground_truth.rs` pins `"2048 - Event 1"`'s own
 resolved pair (`FinishRaceAnyPosition`/`Win`) end to end against the real
 package.
 
+## The weapon set gate: `WeaponType`'s bit layout, decoded where the data pins it
+
+2026-09-28. `WeaponSetDefinition`'s own `M_WEAPONAVAILABLEBITS` (typedef
+`2139957613`, named `WeaponType` in-file, confidence 95) carries one raw
+value per instance - 20 instances in `SP.xml`, each with a descriptive
+`name=` (`"Rockets Only"`, `"Cannons, Missile, Plasma"`, `"EliminatorWeapons"`,
+...). Which bit is which weapon was chased from the data alone first, per
+this project's own methodology, and only the bits the data alone could not
+settle went to `eboot.elf`.
+
+**Step 1: what the 20 names, tabulated against their bits, force by
+themselves.**
+
+| Bits | Name(s) |
+| ---: | --- |
+| 1 | Rockets Only |
+| 2 | Missile Only |
+| 4 | Quake Only |
+| 8 | Turbo Only |
+| 32 | Cannons Only, NoQuake |
+| 34 | Cannons and Missile |
+| 64 | Autopilot only |
+| 128 | Plasma Only |
+| 162 | Cannons, Missile, Plasma |
+| 170 | Can, Mis, Plas, Turbo |
+| 768 | Mines Only |
+| 800 | Cannons and Mines |
+| 929 | TEST, CombatNoLeechQuakeMissile |
+| 931 | CombatNoLeechQuake |
+| 1023 | DemoWeapons |
+| 1024 | Leech Beam Only |
+| 1056 | Leech and Cannons |
+| 1959 | EliminatorWeapons |
+
+Eight bits are pinned at **confidence 95** by the "Only"-named singletons
+alone, cross-checked against every multi-weapon value with no residue left
+over (`"Cannons and Missile"` = `34` = `32 + 2`, `"Cannons, Missile,
+Plasma"` = `162` = `128 + 32 + 2`, `"Can, Mis, Plas, Turbo"` = `170` = `128 +
+32 + 8 + 2`, `"Leech and Cannons"` = `1056` = `1024 + 32`,
+`"CombatNoLeechQuakeMissile"`/`"TEST"` = `929` = `1 + 32 + 128 + 768`,
+`"CombatNoLeechQuake"` = `931` = `929 + 2`, `"EliminatorWeapons"` = `1959` =
+`1024 + 512 + 256 + 128 + 32 + 4 + 2 + 1`):
+
+| Bit | Weapon | Confidence |
+| ---: | --- | ---: |
+| 0 (`1`) | Rocket | 95 |
+| 1 (`2`) | Missile | 95 |
+| 2 (`4`) | Quake | 95 |
+| 3 (`8`) | Turbo | 95 |
+| 5 (`32`) | Cannon | 95 |
+| 6 (`64`) | Autopilot | 95 |
+| 7 (`128`) | Plasma | 95 |
+| 10 (`1024`) | LeachBeam | 95 |
+
+**Bits 8 and 9 (`256`/`512`), confidence 75 as a pair.** Across all 20
+instances the two are always both set or both clear - `"Mines Only"` =
+`768` = `256 + 512`, and every composite that includes it (`"Cannons and
+Mines"` = `800`, `"DemoWeapons"` = `1023`, `"EliminatorWeapons"` = `1959`)
+carries the full pair, never one half. Read as one joint gate for
+`Weapon::Mine` and `Weapon::Bomb` together rather than as two independent
+bits - which individual bit is which weapon is not determined, and
+enforcement never needs it, since the two never appear apart in the shipped
+data.
+
+**Bit 4 (`16`) is not pinned, and stays unnamed.** It is set on
+`"DemoWeapons"` (`1023`) and clear on every one of the eight singleton-named
+instances and on `"EliminatorWeapons"`/both `"Combat*"` sets - a pattern
+that would fit a third non-damaging pickup alongside Turbo (bit 3) and
+Autopilot (bit 6), and `Weapon::Shield` is specifically the only one of
+2048's eleven real, distinct pickups (see below) this reading's eight
+confirmed bits plus the mines pair do not already account for. That is
+suggestive, not a read of the enum's own declaration, so it stays under the
+70 threshold this project enforces at and this pass does not rename it.
+
+**`"NoQuake"` (`32`) is an authored anomaly, not evidence either way.** Its
+value is identical to `"Cannons Only"`'s, which contradicts what the name
+promises ("every weapon except Quake" would need most of the other bits
+set too). The bit table above is read off the *value*, not the name, so
+this project enforces what `"NoQuake"` actually carries (`Cannon` alone) and
+flags the mismatch here rather than guessing at repair.
+
+**No `WeaponSetDefinition` instance in `SP.xml` ever sets a bit above 10**
+(the highest observed raw value is `1959`), so `Weapon::Repulser` and
+`Weapon::Shuriken` have no bit at all in this reading - consistent with
+`docs/gameplay/pickups.md` recording neither as implemented on any title.
+
+**Step 2, corroboration rather than resolution: `eboot.elf`'s own
+held-weapon id order is a *different* enum from this one.**
+[`pickup-icon-uv-table.md`](../ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md)'s
+`Hud_UpdatePickupIcon` reading already recovered 2048's *held-weapon* id
+order at confidence 80-90: `1` Rocket, `2` Missile, `3` Quake, `4` Turbo,
+`5` Shield, `6` Autopilot, `7` Plasma, `8` Mines, `9` Bomb, `10` Cannon,
+`11` LeachBeam - eleven real, distinct pickups, no Repulser or Shuriken.
+That order **disagrees with `WeaponType`'s own bit order from id/bit 5
+onward** (held-id `5` is Shield, `WeaponType` bit `5` is Cannon; held-id
+`6` is Autopilot, `WeaponType` bit `6` is Autopilot too, but the two only
+agree there by coincidence, since held-id `10` is Cannon, not bit 10's
+LeachBeam) - so this is independent confirmation that 2048 ships these
+eleven weapons as real, separately-tracked pickups, and nothing more; it
+does not resolve `WeaponType`'s own bit assignment for bit 4 or the
+Mine/Bomb split, because the two enums are declared in different orders.
+Checked directly: `Data\XML\weaponstats_Race_2048.xml` weights all
+thirteen of Pulse's pool (Shield included) for all four classes, so
+`Weapon::Shield` is a real, weighted 2048 pickup either way - whether or not
+bit 4 is ever confirmed to be its `WeaponType` flag.
+
+**Wiring**: `WeaponSet::allowed_weapons` (`crates/tables/src/mjolnir/
+campaign.rs`) decodes exactly the bits above (the eight singletons plus the
+mines pair) and nothing else - `oag_gameplay::pickup::draw`'s own `allowed`
+parameter gates a `Weapon Pad`'s draw to that list, wired from the event's
+own `M_WEAPONSET` in `race::load_event`
+(`crates/game/src/race/load/campaign.rs`) onto `Setup::allowed_weapons`.
+An event whose weapon set decodes to nothing recognised (only bit 4, or no
+weapon set authored at all) races unrestricted rather than this project
+guessing - the report says which. **AI slots are gated the same as the
+player's - chosen, not measured**, since no consumer of this mask has been
+found in `eboot.elf` to read otherwise (see "Step 2" above: the one runtime
+reference to `m_weaponAvailableBits`'s own field registration found by
+string cross-reference is the schema registration itself, not a consumer -
+the same "string only at registration, reader unfound" wall
+`frontend-campaign-map.md`'s own `m_x`/`m_y` chase already hit).
+
 ## What is not determined
 
 - **`GameModeObjective`'s own semantics are mostly resolved - see "The
@@ -631,9 +753,10 @@ package.
 - **Which `GameMode_*` C++ class each of the four event typedefs
   instantiates.** See [Four more typedefs carry no name in the file at
   all](#four-more-typedefs-carry-no-name-in-the-file-at-all).
-- **`WeaponType`'s bit layout.** `WeaponSetDefinition`'s own
-  `M_WEAPONAVAILABLEBITS` is a raw value per instance (`"Rockets Only"` is
-  `1`); which bit is which weapon is not chased.
+- **`WeaponType` bit 4, and which of bits 8/9 is `Mine` versus `Bomb`.**
+  See "The weapon set gate" above - eight bits plus the 8/9 pair are
+  decoded and wired; bit 4 stays under this project's 70-confidence
+  threshold and is not enforced.
 - **`WOShipCreatorParams`.** Referenced by every event's
   `M_PGridShipCreatorParams`/`M_PPlayerShipCreatorParams`, never itself seen
   as an instance in `SP.xml` - confirmed **zero** authored references across

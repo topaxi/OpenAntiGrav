@@ -309,6 +309,9 @@ pub struct RaceSim {
     pub(super) weapon_pad_refresh: f32,
     /// This race's weapon table - see [`Setup::weapons`].
     pub(super) weapons: Option<oag_tables::weapons::WeaponStats>,
+    /// Restricts what a `Weapon Pad` hands out - see
+    /// [`Setup::allowed_weapons`]. Empty is no restriction.
+    pub(super) allowed_weapons: Vec<oag_tables::weapons::Weapon>,
     /// The speed class, which indexes the pickup odds - see [`Setup::class`].
     ///
     /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,

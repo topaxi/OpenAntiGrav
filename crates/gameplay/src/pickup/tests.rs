@@ -52,7 +52,13 @@ fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
     let repulsers_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
     let mut rng = Rng::new(1);
     assert_eq!(
-        draw(&mut rng, &repulsers_only, Driver::HUMAN_UNPLACED, None),
+        draw(
+            &mut rng,
+            &repulsers_only,
+            Driver::HUMAN_UNPLACED,
+            None,
+            None
+        ),
         None
     );
 }
@@ -63,7 +69,7 @@ fn a_zero_weight_is_never_drawn() {
     let mut rng = Rng::new(1);
     for _ in 0..100 {
         assert_eq!(
-            draw(&mut rng, &no_turbo, Driver::HUMAN_UNPLACED, None),
+            draw(&mut rng, &no_turbo, Driver::HUMAN_UNPLACED, None, None),
             None
         );
     }
@@ -77,10 +83,13 @@ fn the_two_drivers_read_their_own_columns() {
     let ai_only = table(&[(Weapon::Turbo, 0.0, 1.0)]);
     let mut rng = Rng::new(7);
     assert_eq!(
-        draw(&mut rng, &ai_only, Driver::Ai, None),
+        draw(&mut rng, &ai_only, Driver::Ai, None, None),
         Some(Weapon::Turbo)
     );
-    assert_eq!(draw(&mut rng, &ai_only, Driver::HUMAN_UNPLACED, None), None);
+    assert_eq!(
+        draw(&mut rng, &ai_only, Driver::HUMAN_UNPLACED, None, None),
+        None
+    );
 }
 
 /// **The only thing about the draw that can be checked against the
@@ -104,7 +113,7 @@ fn the_walk_visits_a_weight_in_proportion_to_it() {
     let mut rng = Rng::new(99);
     let (mut turbos, mut shields) = (0, 0);
     for _ in 0..10_000 {
-        match draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None) {
+        match draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None, None) {
             Some(Weapon::Turbo) => turbos += 1,
             Some(Weapon::Shield) => shields += 1,
             other => panic!("drew {other:?}, which is not implemented"),
@@ -120,6 +129,42 @@ fn the_walk_visits_a_weight_in_proportion_to_it() {
     );
 }
 
+/// `allowed` restricts the draw without changing the odds of what stays in -
+/// the 2048 campaign's own weapon-set gate, wired through `race::pads`. Both
+/// halves of [`draw`]'s own doc comment on the parameter: a non-empty list
+/// filters, and an empty `Some` hands out nothing rather than falling back to
+/// unrestricted.
+#[test]
+fn allowed_restricts_the_draw_without_changing_the_ratio_of_what_stays_in() {
+    let weighted = table(&[
+        (Weapon::Turbo, 3.0, 3.0),
+        (Weapon::Shield, 1.0, 1.0),
+        (Weapon::Rocket, 50.0, 50.0),
+    ]);
+    let mut rng = Rng::new(99);
+    for _ in 0..1_000 {
+        let drawn = draw(
+            &mut rng,
+            &weighted,
+            Driver::HUMAN_UNPLACED,
+            None,
+            Some(&[Weapon::Turbo, Weapon::Shield]),
+        );
+        assert!(
+            matches!(drawn, Some(Weapon::Turbo) | Some(Weapon::Shield)),
+            "drew {drawn:?}, which `allowed` does not list"
+        );
+    }
+
+    // `Some(&[])`, as opposed to `None`, hands out nothing at all - the
+    // honest reading of a weapon set that authors no recognised bit, rather
+    // than a silent fall-through to the unrestricted table.
+    assert_eq!(
+        draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None, Some(&[])),
+        None
+    );
+}
+
 /// The property the determinism gate needs from this: same seed, same
 /// sequence. It is the one guarantee that survives the original's PRNG being
 /// unrecovered.
@@ -129,7 +174,7 @@ fn the_same_seed_draws_the_same_sequence() {
     let sequence = |seed| {
         let mut rng = Rng::new(seed);
         (0..50)
-            .map(|_| draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None))
+            .map(|_| draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None, None))
             .collect::<Vec<_>>()
     };
     assert_eq!(sequence(4), sequence(4));
@@ -174,7 +219,7 @@ fn the_players_odds_bend_with_their_place() {
     let count = |driver| {
         let mut rng = Rng::new(11);
         (0..2_000)
-            .filter(|_| draw(&mut rng, &odds, driver, None) == Some(Weapon::Shield))
+            .filter(|_| draw(&mut rng, &odds, driver, None, None) == Some(Weapon::Shield))
             .count()
     };
 
@@ -204,10 +249,10 @@ fn an_opponents_odds_do_not_bend() {
     let mut first = Rng::new(11);
     let mut second = Rng::new(11);
     let front: Vec<_> = (0..200)
-        .map(|_| draw(&mut first, &odds, Driver::Ai, None))
+        .map(|_| draw(&mut first, &odds, Driver::Ai, None, None))
         .collect();
     let back: Vec<_> = (0..200)
-        .map(|_| draw(&mut second, &odds, Driver::Ai, None))
+        .map(|_| draw(&mut second, &odds, Driver::Ai, None, None))
         .collect();
     assert_eq!(front, back, "the AI column is not a function of place");
 }
@@ -253,7 +298,7 @@ fn a_pad_does_not_hand_out_the_same_weapon_twice_running() {
     let mut rng = Rng::new(3);
     let mut last = None;
     for _ in 0..500 {
-        let drawn = draw(&mut rng, &odds, Driver::HUMAN_UNPLACED, last);
+        let drawn = draw(&mut rng, &odds, Driver::HUMAN_UNPLACED, last, None);
         assert_ne!(drawn, last, "the same weapon came out twice running");
         last = drawn;
     }
@@ -271,7 +316,13 @@ fn an_overwhelming_weight_terminates_and_may_repeat() {
     let odds = table(&[(Weapon::Turbo, 1.0, 1.0)]);
     let mut rng = Rng::new(5);
     assert_eq!(
-        draw(&mut rng, &odds, Driver::HUMAN_UNPLACED, Some(Weapon::Turbo)),
+        draw(
+            &mut rng,
+            &odds,
+            Driver::HUMAN_UNPLACED,
+            Some(Weapon::Turbo),
+            None
+        ),
         Some(Weapon::Turbo),
         "the only weighted weapon must still come out"
     );
