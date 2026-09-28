@@ -185,10 +185,17 @@ across the two doc pages**:
   `GameState+0xdc`-held difficulty, not a per-cell stored one - so the
   original engine's own "current difficulty" concept is (at least for
   evaluation) global/browsed, not frozen per earned medal.
-- **Chosen, not measured**: which atlas block is which difficulty
-  (`easy=plain hex`, `medium=cane`, `hard=swirl` - reasoned from the swirl
-  being `DATA02`'s only shape plus the migration crediting old medals at
-  Hard, not read off a live capture toggling `DifficultyButton`).
+- **Measured, 2026-09-28, confidence 90**: which atlas block is which
+  difficulty (`easy=plain hex`, `medium=cane`, `hard=swirl`). An RPCS3
+  capture toggling `DifficultyButton` on `grid8_3_1` (`Fury`'s default
+  `Cell Selection` cell, `Race`/Talon's Junction) through two full
+  `NOVICE -> SKILLED -> ELITE` cycles read exactly this mapping off the
+  `Target0/1/2 Medal` row, paired to each frame's own `AI DIFFICULTY
+  (<rung>)` footer text - see `docs/ui/campaign-screens.md`'s "Which block
+  is which difficulty" section and `docs/reverse-engineering/rpcs3-capture.md`'s
+  "Cell Selection: `DifficultyButton` toggle" section for the full capture,
+  recipe and confidence accounting. One boot, one cell, one mode - not
+  reproduced on a second boot or an `Elimination`/`NitroBattle` cell.
 - **Chosen, not measured**: that this project's own persistence stores a
   per-cell "earned at" difficulty at all, and that a harder rung should
   outright beat a better medal at an easier one. `SaveData_MigrateCellMedalsToHardElite`
@@ -213,13 +220,35 @@ medal law - see `docs/formats/race-campaign.md`'s own new section for the
 citations.
 
 **Left open, in priority order**:
-1. An RPCS3 capture toggling `DifficultyButton` on a fresh (unearned)
-   profile, reading which icon shape the `Target0/1/2 Medal` row shows at
-   each of the three rungs - the single check that would upgrade the
-   block-to-difficulty mapping from chosen to measured. No campaign
-   navigation recipe for reaching Fury's own `Cell Selection` on RPCS3 is
-   written down anywhere this pass found; whoever does this first should
-   record the `--nav` sequence for the next one.
+1. ~~An RPCS3 capture toggling `DifficultyButton`...~~ **Done, 2026-09-28**:
+   see the measured bullet above. Left by that pass: a second boot (this one
+   ran on an existing, non-fresh save - moving it aside was refused by that
+   session's own permission classifier as a write outside the repository,
+   though the reading itself turned out to be save-independent, see the
+   capture doc's own account) and an `Elimination`/`NitroBattle` cell, whose
+   own target triple is separately named `Novice`/`Skilled`/`Elite` rather
+   than `1st`/`2nd`/`3rd` - `scripts/rpcs3-drive.py browse`'s own `--nav` is
+   dead once `--screen` is reached, so reaching a cell other than the
+   default needs a different driver. **Same pass, unplanned**: the footer's
+   own `DIFFICULTY (<rung>)` prompt reads `AI DIFFICULTY (<rung>)` on this
+   cell (`Race`) but bare `DIFFICULTY (<rung>)` on `grid8_3_2` (`Eliminator`,
+   the cell the 2026-09-25 section's own capture used) - a real,
+   cross-checked-against-a-third-boot mismatch, not a crop artifact. **Both
+   words are genuine disc strings**: `DATA04.PSARC`'s own `entries.xml`
+   carries `RB_DIF="DIFFICULTY"` and `RB_AI_DIF="AI DIFFICULTY"` as two
+   distinct idstrings (`psarc_grep`, direct read) - correcting the
+   2026-09-25 section's own claim that the bare word was unauthored runtime
+   text - though which idstring a given mode picks is chosen by the
+   executable at draw time, not by an XML-authored redirect near
+   `DifficultyButton`'s own widget. The same `entries.xml`'s
+   `UPDATE_ANNOUNCEMENT` string plausibly explains the split: `AI
+   DIFFICULTY` is the original `Single Race`/`Tournament`-only "adjust your
+   opponents' skill" mechanic, bare `DIFFICULTY` the Update 1.20 addition
+   giving every other mode its own selectable target-threshold rung. Bears
+   directly on `pulse-cellsel`'s own runtime-prompt work; see
+   `docs/ui/campaign-screens.md`'s "Which block is which difficulty" section
+   for the full three-boot account and the correction's own full text. Not
+   this thread's/lane's to fix - for the lead to route.
 2. The saved-record struct's own field layout, precisely enough to settle
    whether `SaveData_MigrateCellMedalsToHardElite`'s own `+0x6c` write and
    `0x001e1138`/`0x001e1188`'s own `+8`/`+9` reads are the same field -

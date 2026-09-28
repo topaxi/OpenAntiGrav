@@ -89,7 +89,7 @@ import rpcs3_pad
 import xvfb_display
 
 TTY = os.path.expanduser("~/.cache/rpcs3/TTY.log")
-DISPLAY_NUMBER = 77
+DISPLAY_NUMBER = int(os.environ.get("OAG_RPCS3_DISPLAY", "77"))
 DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
 
 #: Records the pid of the `Xvfb` *this tooling* started, so a later `stop` -

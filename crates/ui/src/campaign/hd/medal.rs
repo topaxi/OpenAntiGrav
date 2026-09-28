@@ -80,26 +80,35 @@ use super::super::draw::sprite_draw;
 /// cross-checks the `61` spacing. Confidence 60 on the pitch number itself,
 /// still measured rather than guessed.
 ///
-/// **Block-to-difficulty mapping is chosen from convergent evidence, not an
-/// authored crop or a live capture.** The three blocks hold visibly
-/// different icon *shapes*, not only colour - a plain, unadorned hex
-/// (bottom of the raster, nearest `v=0`), a hook/"cane"-shaped emblem
-/// (middle), and a swirl/spiral emblem (top of the raster, farthest from
-/// `v=0`), after the same raster/`V`-flip this file's own crop-reconciliation
-/// paragraph above already establishes. `DATA02`'s shorter, flat-schema
-/// copy (the one every pre-Fury cell effectively used before per-difficulty
-/// targets existed) carries *only* the swirl shape, and
+/// **Block-to-difficulty mapping is measured, 2026-09-28, confidence 90.**
+/// The three blocks hold visibly different icon *shapes*, not only colour -
+/// a plain, unadorned hex (bottom of the raster, nearest `v=0`), a
+/// hook/"cane"-shaped emblem (middle), and a swirl/spiral emblem (top of the
+/// raster, farthest from `v=0`), after the same raster/`V`-flip this file's
+/// own crop-reconciliation paragraph above already establishes. An RPCS3
+/// capture toggling `DifficultyButton` on `grid8_3_1` (`Cell Selection`,
+/// `Fury`, `Race`/Talon's Junction/Venom, the first-reached cell on a
+/// default walk) read the `Target0/1/2 Medal` row twice per rung across one
+/// boot: `NOVICE` -> plain hex, `SKILLED` -> cane, `ELITE` -> swirl, paired
+/// to each frame's own `AI DIFFICULTY (<rung>)` footer text rather than by
+/// press count (`docs/reverse-engineering/rpcs3-capture.md`'s "Cell
+/// Selection: DifficultyButton toggle, per-rung icon shape" section has the
+/// full capture and this project's own matching render). That confirms,
+/// rather than falsifies, the convergent-evidence reading this doc
+/// previously reasoned to before any capture existed: `DATA02`'s shorter,
+/// flat-schema copy (the one every pre-Fury cell effectively used before
+/// per-difficulty targets existed) carries *only* the swirl shape, and
 /// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
 /// `SaveData_MigrateCellMedalsToHardElite` credits exactly that
 /// pre-existing, single-tier medal at `HARD`/`ELITE` when migrating an old
-/// save: the swirl icon and the hardest rung are the two things that
-/// pre-existed the difficulty split, and the migration equates them. That
-/// makes `easy/novice = plain hex = v-block 0`, `medium/skilled =
-/// cane = v-block 1`, `hard/elite = swirl = v-block 2` the reading two
-/// independent facts agree on, not a coin flip, but neither fact is a
-/// pixel on a live screen, so this stays a **chosen** mapping (no
-/// confidence score) until an RPCS3 capture toggling `DifficultyButton`
-/// confirms which shape actually draws at which rung.
+/// save - the swirl icon and the hardest rung are the two things that
+/// pre-existed the difficulty split, and the migration equates them. So
+/// `easy/novice = plain hex = v-block 0`, `medium/skilled = cane =
+/// v-block 1`, `hard/elite = swirl = v-block 2`, now a live-screen reading
+/// rather than reasoned-to. Confidence 90, not higher: one boot, one cell,
+/// one mode (`Race`) - not independently reproduced across a second boot or
+/// a second mode family (e.g. an `Elimination`/`NitroBattle` cell's own
+/// `Novice`/`Skilled`/`Elite`-named target triple).
 pub(super) fn hd_medal_frame(medal: Medal, difficulty: Difficulty) -> [f32; 4] {
     const FRAME: f32 = 60.0;
     const BLOCK_PITCH: f32 = 183.0;

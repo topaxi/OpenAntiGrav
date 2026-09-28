@@ -573,6 +573,88 @@ geometry does not. And HD's own output is 1280x720 whatever the scale, so a
 scale-100 capture already *is* native; the scaling buys resolution above native,
 not a fix to a downscale that was never happening.
 
+## Cell Selection: `DifficultyButton` toggle, per-rung icon shape (2026-09-28)
+
+**Reads a widget's own state across a screen's default `DifficultyButton`
+cycle, with no race entered** - `scripts/rpcs3-drive.py browse`, not
+`capture`: `capture`'s own `walk_to_race` only stops at `RACE_ARRIVED`, and
+`browse` is the one that screenshots a screen's own carousel/toggle at every
+step instead. This is what settled `docs/ui/campaign-screens.md`'s "Which
+block is which difficulty" section from a reasoned-to mapping to a measured
+one.
+
+```sh
+# scripts/rpcs3-drive.py's own DISPLAY_NUMBER is hardcoded to :77; this
+# session used OAG_RPCS3_DISPLAY (added this pass, defaults to 77 unchanged)
+# because the brief assigned this lane :96 - not because :77 was ever in use
+# (a concurrent lane's own PPSSPP work runs on :93/:94, a different emulator,
+# no actual collision either way).
+OAG_RPCS3_DISPLAY=96 uv run --with evdev python3 scripts/rpcs3-drive.py \
+  --image data/images/hdfury-ps3-eu-dec.iso \
+  browse --screen "Cell Selection" --button triangle --steps 6 \
+  --settle-step 3 --max-presses 12 --timeout 300 \
+  --out data/scratch/<your-lane>/rpcs3-cellsel-difficulty
+```
+
+**No `--nav` plan is needed to reach `Cell Selection` this way**: the
+`browse` loop presses `cross` at every screen's own default-highlighted row
+until it reaches `--screen`, the identical path `RACE_WALK` already names -
+`Main Menu` -> `Campaign Selection` -> `Grid Selection Fury` -> `Cell
+Selection`, landing on `grid8_3_1` (`Fury`, `Race`, Talon's Junction, Venom,
+weapons on, 3 laps - the grid's own first cell with an authored
+`Locked="false"`, `oag_hd::campaign`'s own precedence-resolved order,
+`data/scratch/.../grid_08.xml` read directly off `DATA00.PSARC` confirms the
+cell name). **A `--nav "Cell Selection=..."` entry is dead here**: `browse`'s
+walk loop breaks out the moment `current_screen() == args.screen`, before
+`session.navigate(plan)` ever runs - so reaching a *different* cell (an
+`Elimination`/`NitroBattle` one, to check whether its own
+`Novice`/`Skilled`/`Elite`-named target triple reads the same icon-shape
+mapping) needs a different driver, not an extra `--nav` flag on this one.
+
+Once at `Cell Selection`, `--button triangle` cycles the footer's own rung
+one step per press, wrapping `NOVICE -> SKILLED -> ELITE -> NOVICE`;
+`square`/`l1`/`r1` were no-ops on this rig on an earlier pass (2026-09-21)
+despite the footer's own icon reading `Square` - not re-tested this pass
+since `triangle` worked cleanly. `--steps 6` gives two full cycles, two
+frames per rung, past the atlas's own "many-frame rotation strip" shape (a
+single frame can catch an odd phase).
+
+**Pair each frame to the rung by its own footer text, never by press
+count.** Face-button presses drop at HD's own ~9 fps here and produce no
+`TTY.log` line to re-synchronise against, unlike a screen transition.
+`00.png` - the unpressed frame, taken immediately on reaching the screen
+with no settle at all (`browse`'s own `--settle-step` only applies between
+*subsequent* presses, unlike `capture --nav-shots`'s `photograph()`, which
+does sleep `SCREEN_SETTLE` before its shot - see "A screen must settle
+before it is photographed" above) - is a comb-artifact mid-transition
+capture on this boot and unreadable. **Its pre-press rung is unknown; do not
+infer it from the triangle-cycle's own periodicity against `01.png`** -
+that assumes the first press did not drop, which is exactly the reasoning
+this paragraph's own first sentence rules out.
+
+**This boot did not run on a fresh profile.** An existing save
+(`BCES00664-AUTO-` under `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/`,
+left by an earlier HD lane) was on disk, and moving it aside - the
+`justfile:700`-documented recipe - was refused by this session's own
+permission classifier as a write outside the repository. This turned out not
+to matter for the icon-shape measurement above: `Target0/1/2 Medal`'s row is
+a live target-threshold indicator keyed on the currently-browsed rung
+(`model.difficulty()`), not on any earned/saved state, so that reading is
+save-independent - but it does mean `00.png` (unreadable regardless, see
+above) says nothing about the fresh-profile default rung either way.
+
+**A separate, pre-existing capture does carry that arrival rung, cleanly.**
+`data/reference/hd-capture/talons-matched/screen-Cell-Selection.png`
+(2026-09-13, `cmd_capture`'s own `--nav-shots`, which *does* sleep
+`SCREEN_SETTLE` before its shot and involves no `DifficultyButton` press at
+all on the way in) is the settled arrival state of this exact cell
+(`grid8_3_1`) on whatever profile that boot ran on, and it reads `AI
+DIFFICULTY (NOVICE)` - see `docs/ui/campaign-screens.md`'s "Which block is
+which difficulty" section for the full comparison against this project's
+own `Difficulty::Medium` (`SKILLED`) default. Whether *that* profile was
+itself fresh is not established either, so this is corroborating rather
+than dispositive, but it is a real settled reading, unlike `00.png` above.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
