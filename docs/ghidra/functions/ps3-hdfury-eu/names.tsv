@@ -448,3 +448,6 @@
 0x002c11c8	function	AnimNode_FindTransformValueField	80	plasma.md
 0x002c1b30	function	AnimNode_UpdateTransformTree	82	plasma.md
 0x00677018	function	Material_BindInstanceParamPointer	85	plasma.md
+0x00023ee8	function	Profile_GetDifficultyRC	75	race-campaign.md
+0x0002a4a8	function	Profile_SetDifficultyRC	75	race-campaign.md
+0x0021db80	function	CellSelection_UpdateDifficultyButton	60	race-campaign.md

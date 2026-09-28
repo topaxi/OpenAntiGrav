@@ -539,6 +539,13 @@ pub fn hd_cell_draw_list(
                 oag_tables::race_campaign::Medal::Gold.points()
             )),
             "Best" => Some(medal_line(model.selected_medal(), None, strings)),
+            // The square-button prompt - see [`hd_difficulty_button_line`]'s
+            // own doc for the `RB_AI_DIF`/`RB_DIF` split and which modes get
+            // computed text at all.
+            "DifficultyButton" => {
+                hd_difficulty_button_line(&cell.mode, model.difficulty(), strings)
+                    .or_else(|| text.string.clone())
+            }
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
@@ -687,6 +694,89 @@ fn hd_track_line(cell: &Cell, circuit_names: &CircuitNames, strings: &StringTabl
         .get(id)
         .unwrap_or_else(|| strings.get_or_id(id))
         .to_string()
+}
+
+/// `DifficultyButton`'s own text on HD/Fury's `Cell Selection` - unlike
+/// Pulse's identically-named widget ([`super::draw::difficulty_button_line`],
+/// left untouched: this is a separate, HD-only function, not a shared one),
+/// HD authors *two* distinct idstrings for it - `RB_AI_DIF` ("AI
+/// DIFFICULTY") and `RB_DIF` ("DIFFICULTY"), both real `entries.xml` rows on
+/// `DATA04.PSARC` (`/data/plugins/languages/american/entries.xml`), neither
+/// referenced from `CellMode_Definition.xml` at all (checked directly on
+/// `DATA06`'s copy: the widget authors one unconditional literal,
+/// `string="Change Difficulty"` - the choice is the executable's, at draw
+/// time, not an XML-authored per-mode swap). `docs/ui/campaign-screens.md`'s
+/// "Which block is which difficulty" section (2026-09-28) reads the split
+/// directly off three independent RPCS3 boots: `grid8_3_1` (`Race`, Talon's
+/// Junction) shows `AI DIFFICULTY (<rung>)` on two boots, `grid8_3_2`
+/// (`Elimination`, The Amphiseum) shows bare `DIFFICULTY (<rung>)` on one -
+/// confidence 90 for those two modes specifically, per that section's own
+/// rubric.
+///
+/// **The `RB_AI_DIF`/`RB_DIF` call site itself was not found in Ghidra this
+/// pass** - see `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
+/// "The TOC-xref trap" section for why `get_xrefs_to` on either string
+/// resolves to an unrelated function on this binary, and what was checked
+/// instead. What *was* found and independently confirms the mode split's
+/// shape: `CellSelection_UpdateDifficultyButton_q` (`0x0021db80`, the
+/// widget's own square-press/update handler, found via a real `bl` xref
+/// chasing `DifficultyRC`'s persist call) gates its whole cycle-the-rung
+/// behaviour on `GameState+0xe0` (the selected cell's mode) being one of
+/// `Race`/`TimeTrial`/`Zone`/`Elimination`/`Head2Head`/`SpeedLap` or the two
+/// raw ordinals `0xd`/`0xe` (HD's `NitroBattle`/`Detonator` spellings,
+/// [`Mode::Other`]) - and **not** `Tournament`. That match is reused
+/// verbatim here for *whether* this function returns a computed line at all;
+/// [`Mode::CustomGrid`]/[`Mode::AiRace`] are excluded the same way, on the
+/// same "never authored by a shipped grid" grounds
+/// [`Mode::ALL`](oag_tables::race_campaign::Mode::ALL)'s own doc already
+/// gives them, not fresh Ghidra evidence.
+///
+/// The two-way split within that active set - `Race`/`Head2Head` get
+/// `RB_AI_DIF`, everything else `RB_DIF` - extends the two measured modes by
+/// `DATA04.PSARC`'s own `UPDATE_ANNOUNCEMENT` string (`entries.xml`):
+/// `"Rather than having difficulty options for just Single Race and
+/// Tournament events in campaign, it is now possible... to select Novice,
+/// Skilled or Elite difficulty options for all events"` - i.e. `AI
+/// DIFFICULTY` (opponent skill) is the original `Single Race`/`Tournament`-
+/// only mechanic, and bare `DIFFICULTY` (a target threshold) is the later
+/// addition covering every other mode. `Head2Head` is grouped with `Race`
+/// by the same "single AI opponent, opponent skill matters" reading
+/// `hd_target_value`'s own doc already uses to group the two for their
+/// placement-target wording - **chosen, not measured**, confidence 55.
+/// `TimeTrial`/`Zone`/`SpeedLap`/[`Mode::Other`] are grouped with the
+/// confirmed-bare `Elimination` reading by the announcement's own
+/// "target-threshold" description and by `0x0021db80`'s own gate treating
+/// `0xd`/`0xe` no differently from `Elimination`'s `8` - confidence 60.
+///
+/// **`Tournament` is deliberately left out of the computed text**, even
+/// though the announcement groups it with `Race` by name: `0x0021db80`'s
+/// gate excludes ordinal `4` outright, so a `Tournament` cell's own
+/// `DifficultyButton` is not confirmed to be interactive on this screen at
+/// all (`Tournament` may route difficulty through a separate screen this
+/// pass did not read) - showing computed `AI DIFFICULTY` text there would
+/// contradict, not extend, the one piece of measured evidence this pass has
+/// for that mode. `Cell Selection` keeps drawing the disc's own authored
+/// `"Change Difficulty"` for it instead, the same honest fallback the
+/// pre-existing catch-all already draws for every mode.
+#[must_use]
+fn hd_difficulty_button_line(
+    mode: &Mode,
+    difficulty: Difficulty,
+    strings: &StringTable,
+) -> Option<String> {
+    let ai_difficulty = match mode {
+        Mode::Race | Mode::Head2Head => true,
+        Mode::TimeTrial | Mode::Zone | Mode::Elimination | Mode::SpeedLap | Mode::Other(_) => {
+            false
+        }
+        Mode::Tournament | Mode::CustomGrid | Mode::AiRace => return None,
+    };
+    let id = if ai_difficulty { "RB_AI_DIF" } else { "RB_DIF" };
+    Some(format!(
+        "{} ({})",
+        strings.get_or_id(id),
+        strings.get_or_id(hd_difficulty_id(difficulty))
+    ))
 }
 
 /// `Grid Selection`'s pointer targets: the paging arrows, and a confirm

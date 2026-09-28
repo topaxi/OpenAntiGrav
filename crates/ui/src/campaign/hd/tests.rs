@@ -410,3 +410,46 @@ fn difficulty_id_maps_the_three_rungs_in_order() {
     assert_eq!(hd_difficulty_id(Difficulty::Medium), "Medium");
     assert_eq!(hd_difficulty_id(Difficulty::Hard), "Hard");
 }
+
+#[test]
+fn difficulty_button_line_reads_ai_difficulty_for_race_and_head2head() {
+    let strings = StringTable::default();
+    assert_eq!(
+        hd_difficulty_button_line(&Mode::Race, Difficulty::Easy, &strings).as_deref(),
+        Some("RB_AI_DIF (Easy)")
+    );
+    assert_eq!(
+        hd_difficulty_button_line(&Mode::Head2Head, Difficulty::Hard, &strings).as_deref(),
+        Some("RB_AI_DIF (Hard)")
+    );
+}
+
+#[test]
+fn difficulty_button_line_reads_bare_difficulty_for_target_threshold_modes() {
+    let strings = StringTable::default();
+    for mode in [
+        Mode::TimeTrial,
+        Mode::Zone,
+        Mode::Elimination,
+        Mode::SpeedLap,
+        Mode::Other("NitroBattle".to_string()),
+    ] {
+        assert_eq!(
+            hd_difficulty_button_line(&mode, Difficulty::Medium, &strings).as_deref(),
+            Some("RB_DIF (Medium)"),
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn difficulty_button_line_is_none_for_modes_the_button_is_not_measured_active_on() {
+    let strings = StringTable::default();
+    for mode in [Mode::Tournament, Mode::CustomGrid, Mode::AiRace] {
+        assert_eq!(
+            hd_difficulty_button_line(&mode, Difficulty::Medium, &strings),
+            None,
+            "{mode:?}"
+        );
+    }
+}

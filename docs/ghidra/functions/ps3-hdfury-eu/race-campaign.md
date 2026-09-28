@@ -305,3 +305,129 @@ earned-difficulty keying for `Medal_{x}_{y}` are this project's own
 anything found this pass, but not read off a confirmed original consumer
 either. See that struct's and that function's own doc comments for the
 full reasoning `docs/ui/campaign-screens.md` and this page together give.
+
+## The TOC-xref trap: `get_xrefs_to` on `RB_AI_DIF`/`RB_DIF` resolves to the wrong function - 2026-09-28
+
+This pass went looking for the executable's own choice between `RB_AI_DIF`
+("AI DIFFICULTY") and `RB_DIF` ("DIFFICULTY") on `DifficultyButton`'s square-
+button prompt (`docs/ui/campaign-screens.md`'s "Which block is which
+difficulty" and its 2026-09-28 correction). `get_xrefs_to` on either string's
+address (`0x00793218`/`0x00793228`) resolves to a single function,
+`.opd.FUN_00621eb0` - and its decompile is Sulpha/DECI3 debug-port setup
+code, wholly unrelated to any UI text. **This is not a one-off**: the same
+tool on the widget-name string `"DifficultyButton"` (`0x00793020`) resolves
+to `.opd.FUN_0061ff90`, a font-glyph-rendering loop, equally unrelated.
+
+**Root cause, confirmed by comparing the decompiler's own output against the
+xref tool's claim.** This binary's ABI is `PowerPC:BE:64:A2ALT-32addr` - the
+Cell PPU's non-standard variant, where each function call goes through an
+`.opd` descriptor pairing an entry address with its own TOC/`r2` base, and a
+binary this size links multiple object files that do not all share one TOC.
+Decompiling `FUN_00621eb0` directly shows its `r2`-relative loads resolving
+to a *different* base (`PTR_DAT_008bfff8`-region Sulpha globals) than the one
+every GUI/campaign function in this section uses (`0x008ad4d8`, where
+`PTR_g_GameState` lives, confirmed via `Profile_SetDifficultyRC`'s own
+callers below) - the decompiler re-derives each function's real TOC
+correctly. `get_xrefs_to` does not: it is backed by Ghidra's
+`ReferenceAnalyzer`/`SymbolicPropagator` pass, which builds the static xref
+index using one context-register value for `r2`, not each function's own
+`.opd`-declared base. A function whose real TOC differs from that default
+gets every TOC-relative reference computed against the wrong base - which is
+exactly what a `stb r9,0x0(r10)` in `FUN_00621eb0` (a debug-flag write) was
+doing when it got reported as a "read" of `RB_AI_DIF`.
+
+**Workaround used instead, this pass**: `just wad`/`oag-unpack extract` +
+`cargo run -p oag-tools --example psarc_grep` to read
+`/data/plugins/frontend/gui/cellmode_definition.xml` off `DATA06.PSARC`
+directly - confirms `DifficultyButton` authors one unconditional literal
+(`string="Change Difficulty"`, no `<Entry>` redirect nearby), so the
+`RB_AI_DIF`/`RB_DIF` choice is genuinely the executable's, not an XML swap
+this pass missed. The actual call site that resolves one string or the other
+was **not found** this pass: neither `CellSelection_UpdateDifficultyButton_q`
+(below, `0x0021db80` - the widget's own square-press/update handler, found
+through a real `bl` xref to `Profile_SetDifficultyRC`, not a TOC-based one)
+nor the screen's large per-mode detail dispatcher (`0x002181a8`, called from
+`0x00217b20`/`FlyerSelection`-family init) references either string's TOC
+slot in its own disassembly.
+
+**A real fix exists and has precedent in this project** (`just build-allegrex`
+patches Ghidra's Sleigh model for the PSP's Allegrex/VFPU ISA, a different
+subsystem solving the same class of problem: stock Ghidra not modelling a
+console-specific compiler/ISA convention). Here it would be a post-analysis
+script that walks every `.opd` pair, sets the correct per-function `r2`
+register context before the reference analyzer runs, then reruns it. Out of
+scope for this pass; flagged here so the next person chasing an xref on this
+binary does not spend the same hour on it that this pass did - **trust the
+decompiler's own TOC resolution over `get_xrefs_to` for any `PowerPC:BE:64:A2ALT-32addr`
+program**, and prefer a `bl`-reached call chain (like `Profile_SetDifficultyRC`'s
+callers, found this way) or the disc's own XML/PSARC as ground truth instead.
+
+## `Profile_GetDifficultyRC`/`Profile_SetDifficultyRC` and the difficulty-cycle handler - 2026-09-28
+
+Searching for `"DifficultyRC"` (`0x0077a5a0`) - the same profile-record key
+name Pulse's own `DifficultyRC` persisted-rung mechanism uses
+(`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The `DifficultyRC`
+persisted rung" section) - turns up a real getter/setter pair on HD, reached
+through genuine `bl` call xrefs (not the TOC-slot trap above):
+
+- **`Profile_GetDifficultyRC`** (`0x00023ee8`). Hashes `"DifficultyRC"`
+  (`FUN_0032a740`), walks a profile's own linked list of named records
+  (`*(profile+0x450)`, next-pointer at `+0x50`), and returns the matching
+  node's field at `+0x64` (`node[0x19]`) - or, if no record exists yet, a
+  single global fallback `iRam00000000`. Confidence 75: the hash-lookup
+  shape matches `Profile_SetDifficultyRC` below exactly, and the field index
+  matches between getter and setter, but the fallback global's own
+  initializer was not read this pass (see "not settled" below).
+- **`Profile_SetDifficultyRC`** (`0x0002a4a8`). Same hash, find-or-insert
+  into the same list (allocates a new `0x68`-byte record via
+  `FUN_006762b8`/`Profile.cpp`-tagged allocator when none exists yet), writes
+  `param_2` into the same `+0x64` field. Confidence 75, same basis.
+
+**`CellSelection_UpdateDifficultyButton_q`** (`0x0021db80`) is one of two
+real callers (the other, `0x00216870`, fires unconditionally at the end of a
+much larger cell-selection routine and was not fully read this pass).
+Confidence 60 - legible and internally consistent, but the exact class this
+vtable slot belongs to was not pinned down (see below), hence the `_q`. Found
+via `Profile_SetDifficultyRC`'s own `bl` xrefs, not the TOC-slot search that
+misled the RB_AI_DIF/RB_DIF hunt above. Disassembly and decompile agree
+exactly (both read the same way; no TOC-trap risk here since every load in
+this function is a direct `bl` or a `GameState`-relative load matching
+`Profile_SetDifficultyRC`'s own callers' TOC). Its shape, condensed:
+
+```
+if (this->accumulator += dt; !this->focused || *some_global) return base_update(...);
+mode = GameState->mode;                      // GameState+0xe0
+if mode not in {3,5,6,8,9,10,0xd} and not (mode == 0xe and GameState->0x90 != 0):
+    return base_update(...);                 // no cycle: button inert this frame
+rung = GameState->difficulty;                // GameState+0xdc
+new_rung = (cycle rung 0->1->2->0 against this->selection_index, firing a
+            "set_easy"/"set_medium"/"set_hard"-shaped debug string per step)
+GameState->difficulty = new_rung;
+if mode in {0xd, 0x15}: GameState->0xee (a short) = per-rung table lookup
+if mode in {8, 0x14}:   GameState->0x20 (an int)   = per-rung table lookup
+Profile_SetDifficultyRC(profile, new_rung);
+return base_update(...);
+```
+
+**What this settles**: the mode set where HD/Fury's own `DifficultyButton`
+square-press actually cycles the rung on `Cell Selection` is
+`{Race(3), TimeTrial(5), Zone(6), Elimination(8), Head2Head(9), SpeedLap(10),
+0xd, 0xe(conditional)}` - **not** `Tournament(4)`. `0xd`/`0x14`/`0x15` are HD
+ordinals past Pulse's own 0-12 range (`oag_tables::race_campaign::Mode::ordinal`
+doesn't cover them; this page's own earlier section already found `0xe` as
+"possibly `NitroBattle`/`Detonator`, not chased further" on a *different*
+struct's mode field - `0xd`/`0x14`/`0x15` here plausibly the same two
+spellings' Fury-grid ordinals, not independently confirmed this pass either).
+[`oag_ui::campaign::hd::hd_difficulty_button_line`] reuses this exact mode
+set to decide whether it returns computed text at all, and keeps `Tournament`
+on the disc's own static `"Change Difficulty"` string on that basis - see its
+own doc comment for the full reasoning and confidence per mode.
+
+**What this does not settle**: which idstring (`RB_AI_DIF` vs `RB_DIF`) the
+prompt shows - this function never resolves either string, so that choice
+lives in a still-unfound draw/text-refresh routine (see the TOC-xref trap
+section above for what was checked and why it came up empty), and
+`Profile_GetDifficultyRC`'s own fallback global (the value read on a record-
+less profile, i.e. plausibly the fresh-profile default rung) was not traced
+to its initializer this pass - `docs/ui/campaign-screens.md`'s RPCS3 capture
+is this project's only evidence for the default, not this reading.
