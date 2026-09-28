@@ -23,6 +23,7 @@ use crate::args::{
 };
 use crate::cli::Cli;
 use crate::hints;
+use crate::session::menus::combine_variant;
 
 /// Every leg that never opens a window: `--dry-run` and the three captures.
 ///
@@ -88,6 +89,18 @@ pub(crate) fn run_windowless(
                 records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
             })
     });
+    // `race_options.team` when the CLI named one (`--team`/`--variant`,
+    // already combined by the time it reaches here) - the same value
+    // `race::load_event` below actually races, so a `--press` capture's own
+    // craft-restriction gate checks against what will really load rather
+    // than a `settings.race` default the CLI is about to override. Falls
+    // back to that default when the CLI left `--team` unset, same as the
+    // windowed boot.
+    loaded
+        .frontend
+        .seed_craft(race_options.team.clone().unwrap_or_else(|| {
+            combine_variant(loaded.title, &settings.race.team, &settings.race.variant).0
+        }));
 
     if cli.dry_run {
         return Ok(());

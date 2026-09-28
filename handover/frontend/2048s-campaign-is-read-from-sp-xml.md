@@ -207,13 +207,19 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    own campaign map the way the DLC tiers' `FE3DCanvas` hotspots are already
    understood to place), a Ghidra pass over the base-campaign refresh path is
    the way in - out of this lane's own scope entirely this time.
-6. **Superseded 2026-09-28**: the 2048 campaign launch path has no
-   craft-selection step to wire a restriction into (see "Open" above) - this
-   is closed negative, not merely deferred. If `M_bPrevent*Ships` is ever
-   enforced by *some* other path (multiplayer's own team select, perhaps -
-   `TeamSelection_Screen.cpp`'s "Team Selection Player 2" branch was seen but
-   not chased), that would need its own investigation from scratch rather
-   than continuing this one.
+6. **Superseded 2026-09-28, in the other direction from the 2026-09-28 entry
+   above**: `M_bPrevent*Ships` *is* enforced by the original, at
+   `GameModeBase_IsShipTypeAllowed` (`0x812b41da`), called from a
+   previously-unlocated native screen - the campaign map's own per-event card
+   (`docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`), not
+   `TeamSelection_Screen.cpp`. This project now enforces the same gate at
+   `oag_ui::frontend::campaign_map::Frontend::launch_selected_event`. See
+   `docs/formats/2048-campaign.md`'s "Craft choice" section for the full
+   finding. Still open: the card's own *layout* (photo backdrop, per-event
+   art, pagination dots) was not decompiled past its three buttons' own hit
+   rects, so building that screen for real is still its own, separate piece
+   of work - see `campaign-event-card.md`'s own "not chased" note on the
+   `M_X`/`M_Y` projection its draw call also computes.
 7. Wire `M_PGRIDSHIPMODELDATA` into the AI grid assignment (replacing
    `oag_game::livery::teams_for_slots`'s own "chosen" pool for every event
    that authors all 7 slots), if a caller wants the opponent roster to match

@@ -64,3 +64,8 @@
 0x813cf478	function	TouchCampaign_Item_Construct	82	frontend-campaign-map.md
 0x813cf498	function	TouchCampaign_Item_Create	82	frontend-campaign-map.md
 0x812b0e2a	function	GameModeBase_RegisterFields	90	game-mode-base-fields.md
+0x812b41da	function	GameModeBase_IsShipTypeAllowed	85	game-mode-base-fields.md
+0x8105b6c2	function	WOShipModelData_LiveryLabelId	90	game-mode-base-fields.md
+0x810f2164	function	CampaignEventCard_HandleInput	75	campaign-event-card.md
+0x810f1196	function	CampaignEventCard_Draw	75	campaign-event-card.md
+0x8111eb74	function	PostRace_ShipCategoryTip	70	campaign-event-card.md

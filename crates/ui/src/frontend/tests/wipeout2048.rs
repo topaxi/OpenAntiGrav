@@ -392,6 +392,8 @@ fn three_events() -> Vec<MapEvent> {
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
+        forced_craft: None,
+        refused_craft: Vec::new(),
     })
     .collect()
 }
@@ -409,6 +411,8 @@ fn a_gated_event() -> Vec<MapEvent> {
             detail: "circuit / mode".to_string(),
             requires: None,
             kind: EventIcon::Race,
+            forced_craft: None,
+            refused_craft: Vec::new(),
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
@@ -417,6 +421,8 @@ fn a_gated_event() -> Vec<MapEvent> {
             detail: "circuit / mode".to_string(),
             requires: Some("2048 - Event 1".to_string()),
             kind: EventIcon::Race,
+            forced_craft: None,
+            refused_craft: Vec::new(),
         },
     ]
 }
@@ -568,6 +574,157 @@ fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
     let notes = frontend.take_notes();
     assert!(
         notes.iter().any(|note| note.contains("is locked")),
+        "{notes:#?}"
+    );
+}
+
+/// One event restricted the way `"2050 - Event 5"` really is (no Agility, no
+/// Speed) - `Feisar2048\3` (Feisar's own speed craft) is the one refused id
+/// these tests exercise.
+fn a_restricted_event() -> Vec<MapEvent> {
+    vec![MapEvent {
+        name: "2048 - Event 1".to_string(),
+        x: 1,
+        y: 5,
+        detail: "circuit / mode".to_string(),
+        requires: None,
+        kind: EventIcon::Race,
+        forced_craft: None,
+        refused_craft: vec!["Feisar2048\\3".to_string()],
+    }]
+}
+
+/// One event forcing a specific craft the way `"2048 - Event 4-2"` really
+/// does - `refused_craft` is non-empty here too, to prove
+/// [`Frontend::launch_selected_event`] never consults it once
+/// [`MapEvent::forced_craft`] is `Some`, the precedence `race::load_event`
+/// already applies.
+fn a_forced_event() -> Vec<MapEvent> {
+    vec![MapEvent {
+        name: "2048 - Event 1".to_string(),
+        x: 1,
+        y: 5,
+        detail: "circuit / mode".to_string(),
+        requires: None,
+        kind: EventIcon::Race,
+        forced_craft: Some("Qirex2048\\1".to_string()),
+        refused_craft: vec!["Feisar2048\\3".to_string()],
+    }]
+}
+
+#[test]
+fn a_restricted_event_refuses_a_launch_when_the_seeded_craft_is_forbidden() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_restricted_event());
+    frontend.seed_craft("Feisar2048\\3".to_string());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(
+        !frontend.is_finished(),
+        "the seeded craft is this event's own refused one"
+    );
+    let notes = frontend.take_notes();
+    assert!(
+        notes.iter().any(|note| note.contains("forbids")),
+        "{notes:#?}"
+    );
+}
+
+#[test]
+fn a_restricted_event_launches_when_the_seeded_craft_is_allowed() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_restricted_event());
+    frontend.seed_craft("Feisar2048\\1".to_string());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.is_finished());
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Event("2048 - Event 1".to_string()))
+    );
+}
+
+#[test]
+fn touching_team_overrides_the_seed_in_either_direction() {
+    // Seeded with an allowed craft, then the player moves on `Team` to the
+    // one this event forbids - `team_choice()` wins.
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_restricted_event());
+    frontend.seed_craft("Feisar2048\\1".to_string());
+    frontend.touch.team_choice = Some((2, 2)); // Feisar2048, speed (suffix "3")
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(
+        !frontend.is_finished(),
+        "team_choice() names the forbidden craft, overriding an allowed seed"
+    );
+
+    // The other way: seeded with the forbidden craft, then the player moves
+    // to an allowed one.
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_restricted_event());
+    frontend.seed_craft("Feisar2048\\3".to_string());
+    frontend.touch.team_choice = Some((2, 0)); // Feisar2048, fighter (suffix "1")
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.is_finished());
+}
+
+#[test]
+fn a_forced_event_launches_regardless_of_refused_craft_or_the_seed() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_forced_event());
+    frontend.seed_craft("Feisar2048\\3".to_string());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.is_finished());
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Event("2048 - Event 1".to_string()))
+    );
+}
+
+#[test]
+fn a_click_on_a_restricted_events_marker_refuses_the_same_way_the_pad_does() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_restricted_event());
+    frontend.seed_craft("Feisar2048\\3".to_string());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    let marker = {
+        let list = frontend.draw_list();
+        list.iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                _ => None,
+            })
+            .next()
+            .expect("a marker")
+    };
+    let click = Pointer {
+        at: Some((marker[0] + 54.0, marker[1] + 54.0)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    // First click selects (matching `a_click_on_an_unselected_marker...`'s
+    // own shape) - the map opens on this event already selected here since
+    // it is the only one, so this click already lands on the selected
+    // marker and should refuse straight away.
+    assert!(frontend.pointer(&click));
+    tick(&mut frontend, &mut input, 0);
+    assert!(
+        !frontend.is_finished(),
+        "the seeded craft is this event's own refused one"
+    );
+    let notes = frontend.take_notes();
+    assert!(
+        notes.iter().any(|note| note.contains("forbids")),
         "{notes:#?}"
     );
 }

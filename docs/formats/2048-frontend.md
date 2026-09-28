@@ -736,6 +736,24 @@ screen - `Frontend::selected_event`/`MapEvent::detail` still carry that real,
 disc-authored text (built from `SP.xml` in
 `crates/game/src/boot/campaign2048.rs`) for whenever the card itself is
 recovered, but the draw call that used to show it is gone, not replaced.
+
+**2026-09-28: the card's own *code* is now located, its layout still is
+not.** Chasing the user's own play observation that 2048 restricts craft
+choice on some events led to `GameModeBase_IsShipTypeAllowed` (`0x812b41da`)
+and its two callers, `CampaignEventCard_HandleInput`/`CampaignEventCard_Draw`
+(`0x810f2164`/`0x810f1196`,
+`docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`) - the input
+handler and draw call for exactly this card: three buttons at the same
+bottom-row height the live capture shows, one of which (Launch) is disabled
+by the same craft-restriction check this page's own "never invent" paragraph
+above says nothing draws. **Still nothing stands in for the layout** - the
+photo backdrop, the per-event art and the pagination dots are drawn by this
+same function but their placement was not decompiled past the button rects,
+so the "never invent" conclusion above is unchanged: this project's own
+craft-restriction gate runs at
+`oag_ui::frontend::campaign_map::Frontend::launch_selected_event` instead, on
+the existing map screen, rather than waiting on this card - see
+`docs/formats/2048-campaign.md`'s "Craft choice" section.
 | `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
 
 **2026-09-27: each map marker draws the disc's own hex tile art and mode

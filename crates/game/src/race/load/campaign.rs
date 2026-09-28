@@ -46,11 +46,21 @@ use super::*;
 /// - **Team**: overridden only when the event authors
 ///   `M_PPLAYERSHIPMODELDATA` - `oag_2048::campaign::craft::forced_craft`, 14
 ///   of `SP.xml`'s 141 events (see that module's own doc comment). Every
-///   other event leaves [`Options::team`] as the caller's. An event's own
-///   `M_bPrevent*Ships` category restriction (6 events, never one that also
-///   forces a craft) is read but **not enforced** - reported on
-///   [`Loaded::report`] instead of applied, since which native screen enforces
-///   it was not found; see `docs/formats/2048-campaign.md`.
+///   other event leaves [`Options::team`] as the caller's, **including** one
+///   with an `M_bPrevent*Ships` category restriction (6 events, never one
+///   that also forces a craft) - this function only reports which
+///   categories it forbids on [`Loaded::report`]. The enforcement itself is
+///   the campaign map's own job: `oag_ui::frontend::campaign_map::Frontend::launch_selected_event`
+///   refuses the tap before this function is ever called, off
+///   `oag_2048::campaign::craft::refused_craft` precomputed onto each
+///   `MapEvent` at boot (`crates/game/src/boot/campaign2048.rs`) - see that
+///   module's own doc for why the refusal lives there and not here: `--event`
+///   is also this function's own entry point from a headless capture and the
+///   ground-truth suite, neither of which has a map to refuse on, so
+///   enforcing here would make every one of those refuse to load a
+///   restricted event's own track/mode/objective data too, which is not what
+///   `load_event`'s contract has ever promised. See
+///   `docs/formats/2048-campaign.md`.
 /// - Everything else on [`Options`] (source, DLC, difficulty, ...) is the
 ///   caller's, untouched.
 ///
@@ -150,7 +160,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
             .push(format!("{event_name:?} forces the player craft: {forced}"));
     } else if !restricted.is_empty() {
         loaded.report.push(format!(
-            "{event_name:?} forbids these craft categories, not enforced by this build: {}",
+            "{event_name:?} forbids these craft categories - enforced at the campaign map's own launch gate, not here: {}",
             restricted.join(", ")
         ));
     }

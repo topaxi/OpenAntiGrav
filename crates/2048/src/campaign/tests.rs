@@ -278,3 +278,118 @@ fn unlock_gates_collapse_a_chain_edge_and_a_required_edge_to_one_name() {
         "reached by M_PEVENTREQUIRED alone, never chained"
     );
 }
+
+/// Three restricted events, shaped after the real `SP.xml`'s own
+/// `"2050 - Event 3"` (no Combat/Agility), `"2050 - Event 5"` (no
+/// Agility/Speed) and `"2050 - Event 7"` (no Combat/Speed), plus three
+/// teams' own prototype [`ShipModel`]s carrying the real
+/// `M_PROTOTYPELIVERY` values `ship_creator_scan` measured off the disc:
+/// Qirex counts as Combat, Feisar as Speed, AG_Systems as Agility. One
+/// unrestricted event is the control.
+const RESTRICTION_FIXTURE: &str = r#"<mjolnir>
+<instance instanceid="1" typedefid="-1915183557" name="No Combat Or Agility"><DATA>
+<M_BPREVENTCOMBATSHIPS name="m_bPreventCombatShips" type="bool" length="1" typedefid="0"><ARRAY value="true" typedefid="0"/></M_BPREVENTCOMBATSHIPS>
+<M_BPREVENTAGILITYSHIPS name="m_bPreventAgilityShips" type="bool" length="1" typedefid="0"><ARRAY value="true" typedefid="0"/></M_BPREVENTAGILITYSHIPS>
+</DATA></instance>
+<instance instanceid="2" typedefid="-1915183557" name="No Agility Or Speed"><DATA>
+<M_BPREVENTAGILITYSHIPS name="m_bPreventAgilityShips" type="bool" length="1" typedefid="0"><ARRAY value="true" typedefid="0"/></M_BPREVENTAGILITYSHIPS>
+<M_BPREVENTSPEEDSHIPS name="m_bPreventSpeedShips" type="bool" length="1" typedefid="0"><ARRAY value="true" typedefid="0"/></M_BPREVENTSPEEDSHIPS>
+</DATA></instance>
+<instance instanceid="3" typedefid="-1915183557" name="No Combat Or Speed"><DATA>
+<M_BPREVENTCOMBATSHIPS name="m_bPreventCombatShips" type="bool" length="1" typedefid="0"><ARRAY value="true" typedefid="0"/></M_BPREVENTCOMBATSHIPS>
+<M_BPREVENTSPEEDSHIPS name="m_bPreventSpeedShips" type="bool" length="1" typedefid="0"><ARRAY value="true" typedefid="0"/></M_BPREVENTSPEEDSHIPS>
+</DATA></instance>
+<instance instanceid="4" typedefid="-1915183557" name="Unrestricted"><DATA>
+</DATA></instance>
+<instance instanceid="10" typedefid="520725191" name="Qirex_Proto"><DATA>
+<M_TEAM name="m_team" type="char" length="32" typedefid="0"><ARRAY value="Qirex2048" typedefid="0"/></M_TEAM>
+<M_LIVERY name="m_livery" type="char" length="32" typedefid="0"><ARRAY value="prototype" typedefid="0"/></M_LIVERY>
+<M_PROTOTYPELIVERY name="m_prototypeLivery" type="char" length="32" typedefid="0"><ARRAY value="Combat" typedefid="0"/></M_PROTOTYPELIVERY>
+</DATA></instance>
+<instance instanceid="11" typedefid="520725191" name="Feisar_Proto"><DATA>
+<M_TEAM name="m_team" type="char" length="32" typedefid="0"><ARRAY value="Feisar2048" typedefid="0"/></M_TEAM>
+<M_LIVERY name="m_livery" type="char" length="32" typedefid="0"><ARRAY value="prototype" typedefid="0"/></M_LIVERY>
+<M_PROTOTYPELIVERY name="m_prototypeLivery" type="char" length="32" typedefid="0"><ARRAY value="Speed" typedefid="0"/></M_PROTOTYPELIVERY>
+</DATA></instance>
+<instance instanceid="12" typedefid="520725191" name="AG_System_Proto"><DATA>
+<M_TEAM name="m_team" type="char" length="32" typedefid="0"><ARRAY value="AG_Systems2048" typedefid="0"/></M_TEAM>
+<M_LIVERY name="m_livery" type="char" length="32" typedefid="0"><ARRAY value="prototype" typedefid="0"/></M_LIVERY>
+<M_PROTOTYPELIVERY name="m_prototypeLivery" type="char" length="32" typedefid="0"><ARRAY value="Agility" typedefid="0"/></M_PROTOTYPELIVERY>
+</DATA></instance>
+</mjolnir>"#;
+
+fn restriction_event<'a>(doc: &'a Document, name: &str) -> &'a Instance {
+    doc.instance_named(name).unwrap()
+}
+
+#[test]
+fn unrestricted_event_refuses_no_craft_at_all() {
+    let doc = parse(RESTRICTION_FIXTURE);
+    let event = restriction_event(&doc, "Unrestricted");
+    assert_eq!(craft::refused_craft(&doc, event), Vec::<String>::new());
+}
+
+#[test]
+fn a_prototype_craft_is_checked_by_what_it_counts_as() {
+    let doc = parse(RESTRICTION_FIXTURE);
+
+    // "No Combat Or Speed" - Qirex's own proto counts as Combat, refused;
+    // AG_Systems' own proto counts as Agility, still allowed.
+    let no_combat_or_speed = restriction_event(&doc, "No Combat Or Speed");
+    let refused = craft::refused_craft(&doc, no_combat_or_speed);
+    assert!(
+        refused.contains(&"Qirex2048\\4".to_string()),
+        "Qirex's own proto counts as Combat, which this event forbids: {refused:?}"
+    );
+    assert!(
+        !refused.contains(&"AG_Systems2048\\4".to_string()),
+        "AG_Systems' own proto counts as Agility, which this event allows: {refused:?}"
+    );
+
+    // "No Agility Or Speed" - Qirex's own proto (Combat) stays allowed;
+    // Feisar's own proto counts as Speed, refused.
+    let no_agility_or_speed = restriction_event(&doc, "No Agility Or Speed");
+    let refused = craft::refused_craft(&doc, no_agility_or_speed);
+    assert!(
+        !refused.contains(&"Qirex2048\\4".to_string()),
+        "Qirex's own proto counts as Combat, which this event allows: {refused:?}"
+    );
+    assert!(
+        refused.contains(&"Feisar2048\\4".to_string()),
+        "Feisar's own proto counts as Speed, which this event forbids: {refused:?}"
+    );
+
+    // "No Combat Or Agility" - AG_Systems' own proto counts as Agility,
+    // refused.
+    let no_combat_or_agility = restriction_event(&doc, "No Combat Or Agility");
+    let refused = craft::refused_craft(&doc, no_combat_or_agility);
+    assert!(
+        refused.contains(&"AG_Systems2048\\4".to_string()),
+        "AG_Systems' own proto counts as Agility, which this event forbids: {refused:?}"
+    );
+}
+
+#[test]
+fn a_guest_team_id_is_never_refused() {
+    let doc = parse(RESTRICTION_FIXTURE);
+    // Every restricted fixture event's own refused set is drawn from
+    // `crate::race::NATIVE_TEAMS` alone - a guest (HD-roster) team id never
+    // appears, matching `GameModeBase_IsShipTypeAllowed`'s own fallthrough
+    // `return true` for a livery that matches none of the four native ones.
+    for name in [
+        "No Combat Or Agility",
+        "No Agility Or Speed",
+        "No Combat Or Speed",
+    ] {
+        let event = restriction_event(&doc, name);
+        let refused = craft::refused_craft(&doc, event);
+        assert!(
+            refused.iter().all(|id| id.starts_with("AG_Systems2048")
+                || id.starts_with("Auricom2048")
+                || id.starts_with("Feisar2048")
+                || id.starts_with("Piranha2048")
+                || id.starts_with("Qirex2048")),
+            "{name}: refused set named something outside the five native teams: {refused:?}"
+        );
+    }
+}

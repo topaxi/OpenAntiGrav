@@ -467,38 +467,55 @@ names but no prior pass had read at runtime:
   Event 5-4"`/`"2049 - Event 2-3"` (no Agility/Speed) and `"2050 - Event 7"`
   (no Combat/Speed) - all five bar one in the "2050" story arc.
   `oag_2048::campaign::craft::restriction` reads the four flags into a mask;
-  `race::load_event` reports which categories an event forbids but **does
-  not enforce the restriction**, because which native screen applies it
-  (greying a tile, clamping the cursor, refusing the launch) was not found in
-  `eboot.elf` this pass - `Frontend/Screens/TeamSelection_Screen.cpp`'s own
-  constructor and the two screens that redirect into it
-  (`TeamSelectRedirectPlayer1`) were read and neither touches these four
-  offsets or `+0x3c`; the actual read site is elsewhere in that screen's own
-  method table and was not chased further. Confidence 90 for the flags
-  themselves (structural: four boolean fields, offsets `0x80`-`0x83`,
-  authored on a small, coherent subset of events); confidence under 50 for
-  how the original enforces them, so nothing is guessed there.
+  `oag_2048::campaign::craft::refused_craft` resolves that mask onto the
+  twenty native craft it actually forbids, including a prototype craft's own
+  substitution (see below). Confidence 90 for the flags themselves
+  (structural: four boolean fields, offsets `0x80`-`0x83`, authored on a
+  small, coherent subset of events).
 
-  **2026-09-28: settled why no enforcement site was found - the campaign
-  launch path never reaches `team` at all.** `NEW_FE_SHELL`'s
-  `<TouchCampaign>`/`<FE3DCanvas>` tap redirects straight to `Launch 2048`,
-  and `Launch 2048` (`InGame_Definition.xml`) is "nothing but a
-  `<BackendController task="Launch">` straight through to `InGame2048`, no
-  confirm screen in between" (`2048-frontend.md`'s own "Launch 2048" row,
-  confidence 85, read off the disc's own XML). `team` (`Team_Definition.xml`'s
-  `teamshell->team`) is reached by exactly one authored edge in the whole
-  front end: `HOME`'s own `ER_TEAM` tile (`oag_2048::frontend::states::TEAM`'s
-  own doc comment). **The original has no craft-selection step on the
-  campaign path at all** - a campaign race, forced-craft events aside, flies
-  whatever the player last set at `Home -> Team`, a global choice RACE
-  BOX/REMIX share, invisibly overridden or (for the 6 restricted events) not
-  actually gated at the UI at all. This project's own `oag_ui::frontend::team`
-  screen is therefore correctly scoped as-is: there is no picker to add
-  on the campaign launch path, and adding one would be inventing a step the
-  disc's own screen graph does not author. The restriction stays reported,
-  not enforced, for exactly the reason above - not for lack of finding the
-  right function, but because the function this project looked for does not
-  exist on this path.
+  **2026-09-28: the enforcement site is `GameModeBase_IsShipTypeAllowed`
+  (`0x812b41da`), not `TeamSelection_Screen.cpp`.** The first pass's search
+  focused on `TeamSelection_Screen.cpp` because the restriction reads as a
+  Team-screen concern; the real caller is a different, previously
+  undocumented native screen - the campaign map's own per-event card
+  (`docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`), the
+  same three-button, photo-backed screen `2048-frontend.md`'s own module doc
+  photographed live but could not locate any authoring XML for. Its Launch
+  button refuses (silently, no redirect) when the player's own current craft
+  fails `GameModeBase_IsShipTypeAllowed`; its Change Craft button (drawn only
+  when the event does **not** force a craft) redirects to `Team_Definition.xml`'s
+  `team` screen - the same one `oag_ui::frontend::team` already implements,
+  and **unfiltered**: no read of `GameModeBase+0x80`..`0x83` was found on
+  that redirect, so the original's own Team screen offers every craft
+  regardless of the pending event's restriction, exactly matching
+  `oag_ui::frontend::team`'s existing shape. This project now enforces the
+  same gate at the same layer: `oag_ui::frontend::campaign_map::Frontend::launch_selected_event`
+  refuses the tap when the player's own current craft (`Frontend::team_choice`,
+  or a `settings.race.team`/`variant` seed before the player has touched
+  `Team` this session - see `CampaignMap::craft_seed`'s own doc) is in the
+  event's own `MapEvent::refused_craft` set, precomputed at boot
+  (`crates/game/src/boot/campaign2048.rs`) from `refused_craft`. A forced
+  event never consults this set at all, the same precedence the original's
+  own card applies (its Change Craft button does not even draw on one).
+  `race::load_event` itself still only reports the forbidden categories on
+  `Loaded::report` - the refusal lives at the map, not the loader, since
+  `--event` is also the loader's own entry point from a headless capture and
+  the ground-truth suite, neither of which has a map to refuse on.
+
+  **A prototype craft is not a fifth, independent class.** `M_PROTOTYPELIVERY`
+  (`WOShipModelData+0x25`, one field past `M_LIVERY`) names the class a
+  team's own prototype craft "counts as" for this check alone: measured off
+  the real `SP.xml`, `AG_System_Proto`→Agility, `Auricom_Proto`→Combat,
+  `Feisar_Proto`→Speed, `Piranha_Proto`→Speed, `Qirex_Proto`→Combat. So
+  Qirex's own prototype is refused by `"2050 - Event 7"` (no Combat, no
+  Speed) exactly as `Qirex_Combat` is, and allowed by `"2050 - Event 5"` (no
+  Agility, no Speed) exactly as `Qirex_Combat` is. Confidence 85 - the
+  decompile is literal (`docs/ghidra/functions/vita-2048-eu-v104/game-mode-base-fields.md`'s
+  own `GameModeBase_IsShipTypeAllowed` section) but this was not watched
+  running against a live restricted event; the six restricted events all sit
+  in the "2049"/"2050" story arcs and are locked on a fresh save, so the
+  in-window refusal itself was verified through `oag-ui`'s own unit tests
+  (`crates/ui/src/frontend/tests/wipeout2048.rs`) rather than a live capture.
 - **`M_PGRIDSHIPMODELDATA`** (capacity 7) sizes the AI grid explicitly on most
   numbered events - a second, larger finding this pass surfaced but did not
   wire: it would replace `oag_game::livery::teams_for_slots`' own "chosen, not
@@ -585,9 +602,9 @@ package.
   all 141 events, not a sample - so its own shape stays unread; it is not
   the craft-restriction mechanism (see "Craft choice" above,
   `M_PPLAYERSHIPMODELDATA`/`M_bPrevent*Ships` are).
-- **Which native screen enforces `M_bPrevent*Ships`.** See "Craft choice"
-  above - the flags themselves are measured, how the original applies them at
-  the Team Selection screen is not.
+- **2026-09-28: closed** - `GameModeBase_IsShipTypeAllowed`, called from the
+  campaign map's own event card. See "Craft choice" above and
+  `docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`.
 - **The `M_X`/`M_Y` -> screen projection for a native event.** See
   [above](#what-m_xm_y-project-to-on-screen-is-not-in-spxml-and-is-left-open).
 - **`MP.xml`'s season/level ladder.** See [above](#dataxmlmpxml-is-not-spxmls-schema).
