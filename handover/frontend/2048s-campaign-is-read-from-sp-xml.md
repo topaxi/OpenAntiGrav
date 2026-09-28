@@ -52,8 +52,9 @@ restricts choice to a subset (6 events, all "2050" bar one). `oag_2048::
 campaign::craft` resolves the first onto `race::Options::team` and
 `race::load_event` applies it, verified live (`--race --event "2048 - Event
 4-2"` -> `Qirex2048\1`). The restriction mask is read and reported but **not
-enforced** - which native screen applies it was not found this pass; see
-"Open" below. Full write-up: `docs/formats/2048-campaign.md`'s "Craft choice"
+enforced, because the original has no craft-selection step on the campaign
+launch path at all** to enforce it against - see "Open" below, closed
+negative. Full write-up: `docs/formats/2048-campaign.md`'s "Craft choice"
 section. Also surfaced, not chased: `M_PGRIDSHIPMODELDATA` authors the AI
 grid explicitly on most events (a `teams_for_slots` replacement, unwired) and
 the five/ten Ship/Phantom Challenge side events - "open on a fresh save" by
@@ -61,17 +62,21 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
 
 ## Open
 
-- **Which native screen enforces `M_bPrevent{Combat,Agility,Speed,Proto}Ships`.**
-  `Frontend/Screens/TeamSelection_Screen.cpp`'s own constructor and every
-  vtable method decompiled this pass (`0x8113b4dc`, `0x8113b668`,
-  `0x8113b77e`, `0x8113bec8`) touch neither these four byte offsets nor
-  `GameModeBase+0x3c`; the two screens naming `"TeamSelectRedirectPlayer1"`
-  as a tick target (`0x811410e6`, `0x81143efc`) are a track/course carousel
-  transitioning *into* Team Selection, not the enforcement site. The read is
-  somewhere else on that screen's own remaining vtable slots, not all
-  decompiled this pass, or in a different class - confidence under 50 for any
-  specific site, so nothing is wired. See `docs/formats/2048-campaign.md`'s
-  "Craft choice" section.
+- **Closed 2026-09-28, negative result: the 2048 campaign launch path has no
+  craft-selection step at all, in the original.** `NEW_FE_SHELL`'s campaign
+  tap redirects straight to `Launch 2048`, which `2048-frontend.md` already
+  measures as "nothing but a `<BackendController task="Launch">` ... no
+  confirm screen in between"; `team` (`Team_Definition.xml`) is reached by
+  exactly one authored edge, `HOME`'s own `ER_TEAM` tile. So a campaign race
+  flies whatever the player last set at `Home -> Team` (forced-craft events
+  aside), and `M_bPrevent{Combat,Agility,Speed,Proto}Ships` has no UI to
+  enforce it against on this path - not a function this pass failed to find,
+  but one that does not exist here. `TeamSelection_Screen.cpp`'s own
+  constructor and three vtable methods (`0x8113b4dc`, `0x8113b668`,
+  `0x8113b77e`, `0x8113bec8`) were decompiled looking for it anyway and, as
+  expected, touch neither `GameModeBase+0x80..0x83` nor `+0x3c`. No picker was
+  added - inventing one the disc does not author would violate this project's
+  own rule. See `docs/formats/2048-campaign.md`'s "Craft choice" section.
 - **`M_PGRIDSHIPMODELDATA`'s authored grid vs. `oag_game::livery::
   teams_for_slots`'s own "chosen, not measured" one.** Most numbered events
   author all 7 grid slots explicitly; wiring it would replace a guess with
@@ -193,12 +198,13 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    own campaign map the way the DLC tiers' `FE3DCanvas` hotspots are already
    understood to place), a Ghidra pass over the base-campaign refresh path is
    the way in - out of this lane's own scope entirely this time.
-6. Decompile `TeamSelection_Screen`'s remaining vtable methods (beyond the
-   constructor and the three found this pass) to find where
-   `M_bPrevent{Combat,Agility,Speed,Proto}Ships` is actually enforced, then
-   wire the restriction into that screen the way `forced_craft` is already
-   wired into `race::load_event` - if a caller wants the restricted six
-   events to actually restrict the player rather than only report the flags.
+6. **Superseded 2026-09-28**: the 2048 campaign launch path has no
+   craft-selection step to wire a restriction into (see "Open" above) - this
+   is closed negative, not merely deferred. If `M_bPrevent*Ships` is ever
+   enforced by *some* other path (multiplayer's own team select, perhaps -
+   `TeamSelection_Screen.cpp`'s "Team Selection Player 2" branch was seen but
+   not chased), that would need its own investigation from scratch rather
+   than continuing this one.
 7. Wire `M_PGRIDSHIPMODELDATA` into the AI grid assignment (replacing
    `oag_game::livery::teams_for_slots`'s own "chosen" pool for every event
    that authors all 7 slots), if a caller wants the opponent roster to match

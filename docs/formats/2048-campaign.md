@@ -432,6 +432,27 @@ names but no prior pass had read at runtime:
   themselves (structural: four boolean fields, offsets `0x80`-`0x83`,
   authored on a small, coherent subset of events); confidence under 50 for
   how the original enforces them, so nothing is guessed there.
+
+  **2026-09-28: settled why no enforcement site was found - the campaign
+  launch path never reaches `team` at all.** `NEW_FE_SHELL`'s
+  `<TouchCampaign>`/`<FE3DCanvas>` tap redirects straight to `Launch 2048`,
+  and `Launch 2048` (`InGame_Definition.xml`) is "nothing but a
+  `<BackendController task="Launch">` straight through to `InGame2048`, no
+  confirm screen in between" (`2048-frontend.md`'s own "Launch 2048" row,
+  confidence 85, read off the disc's own XML). `team` (`Team_Definition.xml`'s
+  `teamshell->team`) is reached by exactly one authored edge in the whole
+  front end: `HOME`'s own `ER_TEAM` tile (`oag_2048::frontend::states::TEAM`'s
+  own doc comment). **The original has no craft-selection step on the
+  campaign path at all** - a campaign race, forced-craft events aside, flies
+  whatever the player last set at `Home -> Team`, a global choice RACE
+  BOX/REMIX share, invisibly overridden or (for the 6 restricted events) not
+  actually gated at the UI at all. This project's own `oag_ui::frontend::team`
+  screen is therefore correctly scoped as-is: there is no picker to add
+  on the campaign launch path, and adding one would be inventing a step the
+  disc's own screen graph does not author. The restriction stays reported,
+  not enforced, for exactly the reason above - not for lack of finding the
+  right function, but because the function this project looked for does not
+  exist on this path.
 - **`M_PGRIDSHIPMODELDATA`** (capacity 7) sizes the AI grid explicitly on most
   numbered events - a second, larger finding this pass surfaced but did not
   wire: it would replace `oag_game::livery::teams_for_slots`' own "chosen, not
