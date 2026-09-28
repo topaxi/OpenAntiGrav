@@ -79,7 +79,7 @@
 //! and stops, and what happens next is the composition root's business.
 
 use crate::language::{Language, StringTable};
-use crate::screen::{Screen, Screens, Text, argb_to_rgba, parse_argb};
+use crate::screen::{Screen, Screens, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
 use oag_gameplay::input::{Button, Input};
 

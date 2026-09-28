@@ -140,6 +140,7 @@ fn medal_image(name: &str) -> Image {
         auto_load: false,
         reveal: Vec::new(),
         transition: 0.0,
+        start_enabled: true,
     }
 }
 
@@ -216,6 +217,7 @@ fn a_target_medal_widget_crops_through_the_plain_image_path_with_no_extra_help()
         auto_load: false,
         reveal: Vec::new(),
         transition: 0.0,
+        start_enabled: true,
     };
     let placed = medal_atlas_placed();
     let Draw::Sprite { rect, uv, color } = image_draw(&image, placed) else {

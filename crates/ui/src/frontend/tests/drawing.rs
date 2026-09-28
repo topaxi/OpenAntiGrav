@@ -93,10 +93,10 @@ fn pulse_below_its_delay_is_invisible_and_above_it_throbs() {
         color[3]
     );
 
-    // `draw::PULSE_PERIOD`/`PULSE_FLOOR`: five and a quarter periods past the
+    // `draw::widget_alpha::PULSE_PERIOD`/`PULSE_FLOOR`: five and a quarter periods past the
     // delay is a sine peak (`sin(0.25 * tau) == 1`) with the one-period ramp
     // long since at 1.0, so alpha lands exactly on the widget's own ceiling.
-    let period = f64::from(draw::PULSE_PERIOD);
+    let period = f64::from(draw::widget_alpha::PULSE_PERIOD);
     input.begin_frame(0);
     frontend.update(5.25 * period - 0.009, &mut input, None); // now at 1 + 5.25 periods
     let (.., color, _) = press_start(&frontend.draw_list());
@@ -111,7 +111,7 @@ fn pulse_below_its_delay_is_invisible_and_above_it_throbs() {
     input.begin_frame(0);
     frontend.update(0.5 * period, &mut input, None); // now at 1 + 5.75 periods
     let (.., color, _) = press_start(&frontend.draw_list());
-    let floor = ceiling * draw::PULSE_FLOOR;
+    let floor = ceiling * draw::widget_alpha::PULSE_FLOOR;
     assert!(
         (color[3] - floor).abs() < 1e-5,
         "a sine trough should sit on the measured floor fraction of the \

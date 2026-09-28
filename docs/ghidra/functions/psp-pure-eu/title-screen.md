@@ -197,6 +197,7 @@ Named `Animation_ParseValuesOrKey` (EU and USA) and `Animation_ConstructFromNode
 | `0x088b9ca8` | `Animation_ComputeRect` | 85 | Pure EU |
 | `0x0889300c` | `Element_UpdateTree` | 85 | Pure EU |
 | `0x088b38b4` | `Element_UpdateFade` | 85 | Pure EU |
+| `0x088b73c4` | `Widget_CreateFromElement` | 80 | Pure EU (USA twin not located this pass) |
 | `0x088b5010` | `Element_ComputeRect` | 80 | Pure EU |
 
 ## 2026-09-26: the reveal's `TextureWidth` is write-once, not re-read - a live watchpoint, not a guess
@@ -438,7 +439,121 @@ directly and the vtable-slot correspondence confirmed, short of 90 only because 
 rasteriser that reads `+0x48..+0x54` is still not located. `Element_UpdateTree`: **85**
 (decompiled, and the `ra` hit proves it runs); the crop-vs-stretch render detail is
 **corroborated by one live capture**, not read from a draw call. `Element_UpdateFade`:
-**85** for the mechanism; **no confidence** on where `0.1` is authored.
+**85** for the mechanism. **Where `0.1` itself comes from is resolved in the
+2026-09-28 section below this one**: a class-wide `Widget_CreateFromElement`
+default, confidence 85, not an XML attribute.
+
+## 2026-09-28: where `0.1` comes from - a class-wide default, not an attribute, and `TitleFrame`'s fade is now wired
+
+**Not an XML attribute anywhere.** A full-text search of both expanded XMLs
+`TitleFrame` could plausibly read from - `Data\Plugins\PI001\GUI\Skin.xml`
+(the front-end root) and `Data\Skins\Default\Skin.xml` (the activated style
+skin, `docs/formats/race-setup.md`) - for any `Fade*`/`Transition*` attribute
+or `<Variable global="...">` comes back empty in both files (`oag-wad cat
+--expand`, `pure-psp-eu.chd`). `TitleFrame`'s own node is exactly
+`<Image name="TitleFrame" StartEnabled="false"><Values width="480" x="0"
+y="76" height="128" .../></Image>` - no `Transition`, `EnableTransition` or
+`DisableTransition` of its own, and nothing wraps it in a container that
+authors one either (`Title Screen->Viewport` authors `enabletransition="0.7"`,
+but see below - that does not reach `TitleFrame`).
+
+**The generic node-to-widget constructor, found and fully decompiled.**
+`FUN_088b73c4` (renamed `Widget_CreateFromElement`, matching the name
+Pulse's own independently-RE'd twin already carries -
+`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`'s own
+`Widget_CreateFromElement`, `0x088920fc`) is the function every front-end
+XML element passes through, `Image`/`Text`/`Animation`/`Viewport` alike -
+found via `get_xrefs_to` on the `"Transition"`/`"Delay"` string literals,
+both landing in this one function. It reads a fixed attribute set including
+`Transition`, `EnableTransition` (`"DisableTransition"` at `0x08a4e2ec`,
+confirmed by direct memory read) and `Delay`, matching Pulse's own
+documented set closely enough that the two are almost certainly the same
+generic UI toolkit shared across titles, not independently written twice.
+The four relevant lines (`iVar6` is the widget just allocated,
+`local_748`/`local_744` are `EnableTransition`/`DisableTransition`,
+`local_74c` is `Transition`, `1.1754944e-38` (`FLT_MIN`) is this reader's
+own "not authored" sentinel - the same idiom Pulse's own reader uses):
+
+```c
+if (local_748 == FLT_MIN) {                    // EnableTransition
+    fVar9 = local_74c;                          // falls back to Transition
+    if (local_74c == FLT_MIN) { fVar9 = *(float *)(iVar6 + 0x70); }  // inherited
+    *(float *)(iVar6 + 0x70) = fVar9;
+} else {
+    *(float *)(iVar6 + 0x70) = local_748;
+}
+// symmetric for local_744 (DisableTransition) -> `iVar6 + 0x74`
+```
+
+**"Inherited" is not "cascaded from the parent's current state" - it is
+whatever `iVar6` (the freshly-allocated widget) already held before this
+attribute read ran**, confirmed by direct observation rather than inferred:
+`TitleScreen_AssignWordmarkTexture` runs *after* `Widget_CreateFromElement`
+for `TitleFrame` and never writes `+0x70`/`+0x74` at all (its own five
+writes are `+0xd4`/`+0xdc`/`+0xe0`/`+0xe4`/`+0xe8`, all texture-assignment
+fields), so whatever value a live breakpoint there reads is already the
+class-wide default the allocator itself supplied.
+
+**Confirmed live, not inferred from the decompile alone.** A breakpoint on
+`0x08952694` (`TitleScreen_AssignWordmarkTexture`'s own last write to
+`TitleFrame`'s `+0x2c` flags, right after the constructor above has already
+run) on a real `pure-psp-eu.chd` boot (PPSSPP v1.20.4, Xvfb `:94`, websocket
+debugger, scripted the same `Language Selection -> ... -> Title Screen` path
+the 2026-09-26 pass used) reads `TitleFrame+0x70 = TitleFrame+0x74 = 0.1`
+exactly, at address `0x08ed6880` - the same address a pass two sessions
+earlier already recorded for this same widget on this same boot script, so
+the address itself is reproducible, not a heap coincidence. Walking
+`Title Screen->Viewport`'s own child list (`+0x10` head, `+0xc` sibling
+pointer) at the same breakpoint:
+
+| Widget | vtable | `+0x70` | `+0x74` |
+| --- | --- | --- | --- |
+| White Background (`Fill`) | `0x8ab9c58` | `0.1` | `0.1` |
+| `TitleFrame` | `0x8ab9c58` | `0.1` | `0.1` |
+| `PRESS START` (`Text`) | `0x8abb040` | `0.1` | `0.1` |
+| `StartCursor` (`Text`) | `0x8abb040` | `0.1` | `0.1` |
+| `HOLD ON!` (`Text`) | `0x8abb040` | `0.1` | `0.1` |
+| every `TitleAnimN` (`Animation`) | `0x8ab90f8` | `0.0` | `0.0` |
+| `Title Screen->Viewport` itself | `0x8abb380` | `0.7` (authored `enabletransition`) | `0.1` |
+
+**`0.1` is a genuine class-wide default, not `TitleFrame`-specific, and not
+even `Image`-specific** - three different vtables (`Fill`, `Image`, `Text`)
+all land on the identical `0.1`/`0.1` when neither authors a transition
+attribute nor sits under a container that does. `Animation` objects
+themselves are the one exception, reading `0.0`/`0.0` - `Animation_ConstructFromNode`
+overwrites the inherited default rather than never receiving one, so an
+`<Animation>`-wrapped widget's own reveal is the `TextureWidth` wipe alone,
+confirming the 2026-09-28 (earlier, same-day) finding above that
+`Element_UpdateFade` runs on every `Animation`-wrapped widget "unconditionally
+at its own top" but produces no visible second fade. **The Viewport's own
+`enabletransition="0.7"` does not cascade to its children** - `TitleFrame`
+reads `0.1`, not `0.7`, settling that `Widget_CreateFromElement`'s own
+"inherited" fallback is a per-widget construction-time default, not a
+parent-to-child cascade (unlike `LeftLayer`'s own confirmed cascading
+behaviour on Pulse, which is a different, deliberate mechanism - see
+`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`).
+
+**Implemented.** `oag_ui::screen::resolve_fade_in`/`MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS`
+and `oag_ui::frontend::draw`'s `fade_alpha` reproduce
+`Element_UpdateFade`'s entering-branch formula (`elapsed / duration`,
+clamped, confirmed linear the same way Pulse's own
+`Widget_UpdateTransitionFraction` already is) for `Image` widgets, gated on
+`StartEnabled="false"` rather than applied unconditionally - see that
+function's own doc comment for exactly why the scope is narrower here than
+what the executable itself does. Pinned against the real disc in
+`crates/game/tests/pure_boot_ground_truth.rs`'s
+`title_screens_own_wordmark_gets_the_measured_texture`, and checked by eye
+against `--screen "Title Screen" --screen-seconds 0.03/0.06/0.1` on both
+pressings: the wordmark is invisible at `0.0`, faintly visible partway
+through, and fully settled at `0.1`, in each pressing's own colourway.
+
+Confidence **85** for `0.1` as the measured class-wide default (three
+independent widget types, one reproducible address, matches a second pass's
+own earlier capture) - short of 90 only because `Widget_CreateFromElement`'s
+own allocator (`FUN_08a3a928`, which resolves a tag name to its class's own
+prototype/vtable before this function runs) was read only at the call site,
+not independently decompiled, so exactly *where* the `0.1` itself is first
+written (the prototype object's own construction, unlocated) stays open.
 
 ## Next steps
 
@@ -447,11 +562,18 @@ rasteriser that reads `+0x48..+0x54` is still not located. `Element_UpdateTree`:
   `Animation_ComputeRect`'s width formula for every `<Animation>`-wrapped `Image`/`Fill`,
   pinned against the real disc's own per-widget key data in
   `crates/game/tests/pure_boot_ground_truth.rs`'s
-  `title_screens_frame_lines_keep_their_own_rects_and_share_one_colour`. **Not
-  implemented**: `TitleFrame`'s own 0.1s alpha fade (`Element_UpdateFade`) - visually
-  near-imperceptible (six frames), and a per-title fade table in a generic crate for one
-  measured widget was judged out of scope. Look for where `0.1` is authored first, rather
-  than hard-coding the one measured value.
+  `title_screens_frame_lines_keep_their_own_rects_and_share_one_colour`.
+  **Also implemented, 2026-09-28**: `TitleFrame`'s own `0.1`s alpha fade -
+  see the section immediately above. **Not implemented**: the same measured
+  default for `Text`/`Fill` widgets that start enabled (`PRESS START` etc.
+  above all measure `0.1`/`0.1` too, live) - scoped out on purpose to avoid
+  a blanket rendering change across every screen of every title on the
+  strength of one Pure EU capture; see `oag_ui::screen::resolve_fade_in`'s
+  own doc for the reasoning and the one theoretical gap it leaves open
+  (an inherited literal `0` is indistinguishable from true absence).
+  `Widget_CreateFromElement`'s own allocator (`FUN_08a3a928`) is unlocated
+  past the call site - finding it would show exactly where `0.1` is first
+  written into a fresh widget, closing the one open point above.
 - The actual **rasteriser** - whatever reads `element+0x48..+0x54` and a widget's own
   `TxtrWidth`/`U`/`V` to produce pixels - is still not located. Finding it would upgrade
   the crop-vs-stretch reading above from "one live capture" to "read off the draw call

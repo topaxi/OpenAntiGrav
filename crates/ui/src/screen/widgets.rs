@@ -4,7 +4,8 @@
 //! already split their own `touch_button_from_node`/`touch_list_from_node`/
 //! `touch_slider_from_node` into. A move, not a behaviour change.
 
-use super::{Fill, Image, Menu, Node, Screens, Text, parse_argb};
+use super::{Fill, Image, Menu, Node, Redirect, Screens, Text, parse_argb};
+use oag_gameplay::input::button_from_name;
 
 impl Screens {
     /// A colour-only `Image`: a plain `color` fill, or a `Color1`..`Color4`
@@ -66,6 +67,7 @@ impl Screens {
             auto_load: node.flag("AutoLoad").unwrap_or(false),
             reveal: Vec::new(),
             transition: 0.0,
+            start_enabled: node.flag("StartEnabled").unwrap_or(true),
         }
     }
 
@@ -140,5 +142,18 @@ impl Screens {
                 .flatten(),
             transition: 0.0,
         }
+    }
+}
+
+pub(super) fn redirect_from_node(node: &Node) -> Redirect {
+    Redirect {
+        name: node.attr("name").map(str::to_string),
+        forward: node.value("forward").and_then(button_from_name),
+        backward: node.value("backward").and_then(button_from_name),
+        goto: node
+            .children_named("Default")
+            .find_map(|d| d.attr("goto"))
+            .map(str::to_string),
+        delay: node.value("delay").and_then(|d| d.trim().parse().ok()),
     }
 }

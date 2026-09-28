@@ -174,3 +174,4 @@
 0x0886ba6c	function	Exhaust_Update	88	../psp-pure-usa/exhaust-sound.md
 0x0886b06c	function	Exhaust_UpdateEngineSound	88	../psp-pure-usa/exhaust-sound.md
 0x0886b340	function	ExhaustFlare_OnSpeedupPad	88	../psp-pure-usa/exhaust-sound.md
+0x088b73c4	function	Widget_CreateFromElement	80	title-screen.md
