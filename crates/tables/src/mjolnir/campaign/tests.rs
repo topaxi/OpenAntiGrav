@@ -173,9 +173,11 @@ fn tracks_and_weapon_sets_are_found_by_typedef_not_by_field_shape() {
 /// [`WeaponSet::allowed_weapons`] against the values `SP.xml`'s real 20
 /// `WeaponSetDefinition` instances actually carry - see
 /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section for the
-/// full census this pins these against.
+/// full census this pins these against, and
+/// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md` for
+/// `WeaponType`'s own declaration this now decodes all eleven bits from.
 #[test]
-fn allowed_weapons_decodes_the_confidence_70_bits_and_no_others() {
+fn allowed_weapons_decodes_every_weapon_type_bit() {
     use crate::weapons::Weapon;
 
     let of = |bits: i64| WeaponSet {
@@ -197,13 +199,33 @@ fn allowed_weapons_decodes_the_confidence_70_bits_and_no_others() {
         vec![Weapon::Missile, Weapon::Cannon, Weapon::Plasma]
     );
 
-    // `"Mines Only"` = 768 = bits 8 and 9 together - one joint gate for two
-    // weapons, per `MINES_BITS`'s own doc comment.
-    assert_eq!(of(768).allowed_weapons(), vec![Weapon::Mine, Weapon::Bomb]);
+    // `"Mines Only"` = 768 = bit 8 (`Bomb`) and bit 9 (`Mine`) together -
+    // `WeaponType`'s own declaration order, not the HUD held-weapon id
+    // table's reversed one.
+    assert_eq!(of(768).allowed_weapons(), vec![Weapon::Bomb, Weapon::Mine]);
 
-    // `"EliminatorWeapons"` = 1959 = every confidence-95 bit plus the mines
-    // pair - and, critically, bit 4 (16) does **not** turn into a weapon:
-    // this reading leaves it out even though the real instance sets it.
+    // `"DemoWeapons"` = 1023 sets bit 4 - `Shield` - alongside every
+    // confidence-95 bit below it and the mines pair. This is the
+    // discriminating case against the prior reading, which left bit 4 out.
+    assert_eq!(
+        of(1023).allowed_weapons(),
+        vec![
+            Weapon::Rocket,
+            Weapon::Missile,
+            Weapon::Quake,
+            Weapon::Turbo,
+            Weapon::Shield,
+            Weapon::Cannon,
+            Weapon::Autopilot,
+            Weapon::Plasma,
+            Weapon::Bomb,
+            Weapon::Mine,
+        ]
+    );
+
+    // `"EliminatorWeapons"` = 1959 sets every bit except Turbo (3), Shield
+    // (4) and Autopilot (6) - confirms Shield stays out when its own bit is
+    // clear, not decoded unconditionally.
     assert_eq!(
         of(1959).allowed_weapons(),
         vec![
@@ -212,9 +234,9 @@ fn allowed_weapons_decodes_the_confidence_70_bits_and_no_others() {
             Weapon::Quake,
             Weapon::Cannon,
             Weapon::Plasma,
-            Weapon::LeachBeam,
-            Weapon::Mine,
             Weapon::Bomb,
+            Weapon::Mine,
+            Weapon::LeachBeam,
         ]
     );
 

@@ -45,6 +45,10 @@ pub mod typedef {
     /// **2026-09-28: `WeaponType`'s bit meanings are decoded for the bits
     /// pinned at confidence >= 70** - see [`WeaponSet::allowed_weapons`] and
     /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section.
+    /// **2026-09-28: all eleven bits now pinned**, including bit 4
+    /// (`Shield`) and the `Mine`/`Bomb` split, from `WeaponType`'s own enum
+    /// declaration in `eboot.elf` -
+    /// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md`.
     pub const WEAPON_SET_DEFINITION: i64 = -966434245;
     /// `WOShipModelData`, confidence 95 (named in-file). 21 instances: a
     /// team+livery craft catalogue (`M_TEAM`/`M_LIVERY`, e.g.
@@ -425,87 +429,69 @@ pub fn weapon_set_for(document: &Document, reference: Reference) -> Option<Weapo
     WeaponSet::from_instance(document.instance(reference.instance_id)?)
 }
 
-/// `(bit index, weapon)` for every `M_WEAPONAVAILABLEBITS` bit this project
-/// has pinned at confidence >= 70, from `SP.xml`'s own 20
-/// `WeaponSetDefinition` instances alone - no executable needed. See
-/// `docs/formats/2048-campaign.md`'s "The weapon set gate" section for the
-/// full table, including the bits this leaves out.
+/// `(bit index, weapon)` for every `M_WEAPONAVAILABLEBITS` bit - all eleven
+/// of `WeaponType`'s own members, from `WeaponType`'s own enum declaration in
+/// `eboot.elf`. See
+/// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md` for the
+/// decompiled registration this reads, and `docs/formats/2048-campaign.md`'s
+/// "The weapon set gate" section for the full history, including the earlier,
+/// data-only pass this superseded.
 ///
-/// **Confidence 95 for all eight.** Each is the sole bit set on a
-/// `"<Weapon> Only"`-named instance (`"Rockets Only"` = `1`, `"Missile
-/// Only"` = `2`, ... `"Leech Beam Only"` = `1024`), and every multi-weapon
-/// instance's value is the sum of its members' bits with no residue,
-/// checked across all 20: `"Cannons and Missile"` = `34` = `32 + 2`,
-/// `"Cannons, Missile, Plasma"` = `162` = `128 + 32 + 2`, `"Can, Mis, Plas,
-/// Turbo"` = `170` = `128 + 32 + 8 + 2`, `"Leech and Cannons"` = `1056` =
-/// `1024 + 32`, `"EliminatorWeapons"` = `1959` = `1024 + 512 + 256 + 128 +
-/// 32 + 4 + 2 + 1` (every one of these eight plus [`MINES_BITS`], and
-/// neither [`MINES_BITS`]'s sibling bit 4 nor bits 3/6 - see that constant's
-/// own doc comment for why that is itself evidence).
+/// **Confidence 95 for eight of these** (`Rocket`, `Missile`, `Quake`,
+/// `Turbo`, `Cannon`, `Autopilot`, `Plasma`, `LeachBeam`): each is the sole
+/// bit set on a `"<Weapon> Only"`-named `SP.xml` instance (`"Rockets Only"` =
+/// `1`, `"Missile Only"` = `2`, ... `"Leech Beam Only"` = `1024`), every
+/// multi-weapon instance's value is the sum of its members' bits with no
+/// residue across all 20 named instances, and `WeaponType`'s own ordinals
+/// match every one of those eight bit positions exactly - two independent
+/// sources agreeing is what licenses reading the enum directly for the rest.
+///
+/// **Confidence 95 for `Shield`** (bit 4): unpinned by `SP.xml`'s data alone
+/// (suggestive only - the one bit `SP.xml` sets that the other eight didn't
+/// account for), settled by `WeaponType`'s own declaration naming ordinal 4
+/// `SHIELD`.
+///
+/// **Confidence 90 for `Bomb` (bit 8) and `Mine` (bit 9) individually**: read
+/// directly off `WeaponType`'s own declaration (`BOMB` = 8, `MINE` = 9), one
+/// tier below the other nine because `SP.xml`'s 20 instances never set one of
+/// the pair without the other, so nothing in the shipped data has exercised
+/// the split independently. A prior pass read these two as one joint
+/// `Mine`+`Bomb` gate at confidence 75, unable to split them from data alone;
+/// superseded by this reading. Order here does **not** match
+/// `docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`'s
+/// `Hud_UpdatePickupIcon` *held-weapon id* table, where id 8 is `FE_MINES`
+/// and 9 is `FE_BOMB` - a different, unrelated 2048 enum whose ordering
+/// already disagreed with `WeaponType`'s from bit/id 5 onward (`WeaponType`
+/// bit 5 is `Cannon`, held-id 5 is `Shield`).
 pub const WEAPON_BITS: &[(u32, crate::weapons::Weapon)] = &[
     (0, crate::weapons::Weapon::Rocket),
     (1, crate::weapons::Weapon::Missile),
     (2, crate::weapons::Weapon::Quake),
     (3, crate::weapons::Weapon::Turbo),
+    (4, crate::weapons::Weapon::Shield),
     (5, crate::weapons::Weapon::Cannon),
     (6, crate::weapons::Weapon::Autopilot),
     (7, crate::weapons::Weapon::Plasma),
+    (8, crate::weapons::Weapon::Bomb),
+    (9, crate::weapons::Weapon::Mine),
     (10, crate::weapons::Weapon::LeachBeam),
 ];
 
-/// Bits 8 and 9 (`256 | 512` = `768`), confidence 75 as a **pair**, read
-/// jointly as one gate for [`Weapon::Mine`](crate::weapons::Weapon::Mine)
-/// and [`Weapon::Bomb`](crate::weapons::Weapon::Bomb) together.
-///
-/// Across all 20 `WeaponSetDefinition` instances, bits 8 and 9 are always
-/// both set or both clear - never one without the other (`"Mines Only"` =
-/// `768`, `"Cannons and Mines"` = `800` = `32 + 768`, `"DemoWeapons"` =
-/// `1023` includes both, `"EliminatorWeapons"` = `1959` includes both) -
-/// so this project reads the pair as a single joint flag rather than as two
-/// independent bits. **Which individual bit is `Mine` and which is `Bomb`
-/// is not determined**, and enforcement never needs it, since the two never
-/// appear apart in the shipped data; both weapons are gated identically by
-/// whether the pair is present. `Mines`' name is corroborated by
-/// `docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`'s own
-/// `Hud_UpdatePickupIcon` reading, which carries the *held-weapon* id `8` as
-/// `FE_MINES` and `9` as `FE_BOMB` - a different, unrelated 2048 enum from
-/// this bitmask's own `WeaponType` (their orderings disagree from bit/id 5
-/// on: `WeaponType`'s bit `5` is `Cannon`, held-id `5` is `Shield`), but
-/// independent confirmation that 2048 tracks `Mine` and `Bomb` as two real,
-/// distinct pickups either way.
-pub const MINES_BITS: i64 = 0b11_0000_0000;
-
 impl WeaponSet {
-    /// The weapons `M_WEAPONAVAILABLEBITS` allows, decoded from [`WEAPON_BITS`]
-    /// and [`MINES_BITS`] alone - the bits this project has pinned at
-    /// confidence >= 70. Empty when [`Self::available_bits`] is `None`, or
-    /// when the value sets none of the bits above.
-    ///
-    /// **Bit 4 (`16`) is deliberately left out**, even though it is set on
-    /// `"DemoWeapons"` (`1023`) and cleared on every named single-weapon
-    /// instance and on `"EliminatorWeapons"`/both `"Combat*"` sets - a
-    /// pattern that fits `Weapon::Shield` (2048's `HUD` table names exactly
-    /// one held-weapon id, `5` (`FE_SHIELD`), that this reading's eight
-    /// confirmed bits plus [`MINES_BITS`] do not already account for, and
-    /// bit 4 is the one `WeaponType` bit this reading does not already
-    /// account for either) but is not a direct read of either enum's
-    /// declaration, so it stays under the 70 threshold - see
-    /// `docs/formats/2048-campaign.md`.
+    /// The weapons `M_WEAPONAVAILABLEBITS` allows, decoded from
+    /// [`WEAPON_BITS`] - all eleven of `WeaponType`'s own members. Empty when
+    /// [`Self::available_bits`] is `None`, or when the value sets none of the
+    /// bits above.
     #[must_use]
     pub fn allowed_weapons(&self) -> Vec<crate::weapons::Weapon> {
         let Some(bits) = self.available_bits else {
             return Vec::new();
         };
-        let mut out: Vec<crate::weapons::Weapon> = WEAPON_BITS
+        WEAPON_BITS
             .iter()
             .filter(|&&(bit, _)| bits & (1_i64 << bit) != 0)
             .map(|&(_, weapon)| weapon)
-            .collect();
-        if bits & MINES_BITS != 0 {
-            out.push(crate::weapons::Weapon::Mine);
-            out.push(crate::weapons::Weapon::Bomb);
-        }
-        out
+            .collect()
     }
 }
 

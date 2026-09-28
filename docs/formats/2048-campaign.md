@@ -623,7 +623,7 @@ package.
 
 ## The weapon set gate: `WeaponType`'s bit layout, decoded where the data pins it
 
-2026-09-28. `WeaponSetDefinition`'s own `M_WEAPONAVAILABLEBITS` (typedef
+2026-09-28, updated same day. `WeaponSetDefinition`'s own `M_WEAPONAVAILABLEBITS` (typedef
 `2139957613`, named `WeaponType` in-file, confidence 95) carries one raw
 value per instance - 20 instances in `SP.xml`, each with a descriptive
 `name=` (`"Rockets Only"`, `"Cannons, Missile, Plasma"`, `"EliminatorWeapons"`,
@@ -675,25 +675,24 @@ Plasma"` = `162` = `128 + 32 + 2`, `"Can, Mis, Plas, Turbo"` = `170` = `128 +
 | 7 (`128`) | Plasma | 95 |
 | 10 (`1024`) | LeachBeam | 95 |
 
-**Bits 8 and 9 (`256`/`512`), confidence 75 as a pair.** Across all 20
-instances the two are always both set or both clear - `"Mines Only"` =
-`768` = `256 + 512`, and every composite that includes it (`"Cannons and
-Mines"` = `800`, `"DemoWeapons"` = `1023`, `"EliminatorWeapons"` = `1959`)
-carries the full pair, never one half. Read as one joint gate for
-`Weapon::Mine` and `Weapon::Bomb` together rather than as two independent
-bits - which individual bit is which weapon is not determined, and
-enforcement never needs it, since the two never appear apart in the shipped
-data.
+**Bits 8 and 9 (`256`/`512`) travel together in every instance, confidence 75
+as a pair from the data alone.** Across all 20 instances the two are always
+both set or both clear - `"Mines Only"` = `768` = `256 + 512`, and every
+composite that includes it (`"Cannons and Mines"` = `800`, `"DemoWeapons"` =
+`1023`, `"EliminatorWeapons"` = `1959`) carries the full pair, never one
+half. Data alone could not split them into two independent bits. **Resolved
+below**: `WeaponType`'s own declaration names them individually, `BOMB` = 8
+and `MINE` = 9.
 
-**Bit 4 (`16`) is not pinned, and stays unnamed.** It is set on
-`"DemoWeapons"` (`1023`) and clear on every one of the eight singleton-named
-instances and on `"EliminatorWeapons"`/both `"Combat*"` sets - a pattern
-that would fit a third non-damaging pickup alongside Turbo (bit 3) and
-Autopilot (bit 6), and `Weapon::Shield` is specifically the only one of
-2048's eleven real, distinct pickups (see below) this reading's eight
-confirmed bits plus the mines pair do not already account for. That is
-suggestive, not a read of the enum's own declaration, so it stays under the
-70 threshold this project enforces at and this pass does not rename it.
+**Bit 4 (`16`) was not pinned by data alone, and stayed unnamed.** It is set
+on `"DemoWeapons"` (`1023`) and clear on every one of the eight
+singleton-named instances and on `"EliminatorWeapons"`/both `"Combat*"`
+sets - a pattern that would fit a third non-damaging pickup alongside Turbo
+(bit 3) and Autopilot (bit 6), and `Weapon::Shield` is specifically the only
+one of 2048's eleven real, distinct pickups (see below) this reading's eight
+confirmed bits plus the mines pair do not already account for. That was
+suggestive, not a read of the enum's own declaration, so it stayed under the
+70 threshold. **Resolved below**: bit 4 is `SHIELD`.
 
 **`"NoQuake"` (`32`) is an authored anomaly, not evidence either way.** Its
 value is identical to `"Cannons Only"`'s, which contradicts what the name
@@ -707,7 +706,46 @@ flags the mismatch here rather than guessing at repair.
 `Weapon::Shuriken` have no bit at all in this reading - consistent with
 `docs/gameplay/pickups.md` recording neither as implemented on any title.
 
-**Step 2, corroboration rather than resolution: `eboot.elf`'s own
+**Step 2: `WeaponType`'s own declaration in `eboot.elf`, chased once data
+alone hit its ceiling on bit 4 and the 8/9 split.** Rather than a runtime
+consumer of `m_weaponAvailableBits` (none was found - see the wiring
+paragraph below), the field's own reflection metadata gives a stronger
+source: `WeaponType_RegisterValues` (`0x8100e650`,
+[weapon-type-bits.md](../ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md))
+is the enum's own name/ordinal registration, called from
+`WeaponType_RegisterEnum` (`0x8101291a`), and `m_weaponAvailableBits`'s own
+field registration (`FUN_812b4f00`) declares its type as literally
+`"WeaponType"`. The eleven pairs it registers:
+
+| Bit | Weapon | Confidence |
+| ---: | --- | ---: |
+| 0 | Rocket | 95 |
+| 1 | Missile | 95 |
+| 2 | Quake | 95 |
+| 3 | Turbo | 95 |
+| 4 | Shield | 95 |
+| 5 | Cannon | 95 |
+| 6 | Autopilot | 95 |
+| 7 | Plasma | 95 |
+| 8 | Bomb | 90 |
+| 9 | Mine | 90 |
+| 10 | LeachBeam | 95 |
+
+All eight bits `SP.xml`'s own data already pinned at confidence 95 match
+these ordinals exactly, zero exceptions - the cross-check that licenses
+reading the remaining three (`Shield`, `Bomb`, `Mine`) at the same tier as
+the eight, modulo `Bomb`/`Mine` sitting one tier lower (90, not 95) because
+the shipped `SP.xml` data never actually exercises the two apart, so the
+split is read directly off the enum but not independently corroborated by
+data. **`Weapon::Shield` is bit 4** - resolving the suggestive-only reading
+above to a direct declaration read. **`Weapon::Bomb` is bit 8, `Weapon::Mine`
+is bit 9** - the *opposite* order from `pickup-icon-uv-table.md`'s
+held-weapon id table (id 8 `FE_MINES`, id 9 `FE_BOMB`), a transposition trap
+this page's own doc comment flags explicitly. See
+[weapon-type-bits.md](../ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md)
+for the full decompile and reasoning.
+
+**Step 3, corroboration rather than resolution: `eboot.elf`'s own
 held-weapon id order is a *different* enum from this one.**
 [`pickup-icon-uv-table.md`](../ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md)'s
 `Hud_UpdatePickupIcon` reading already recovered 2048's *held-weapon* id
@@ -719,29 +757,34 @@ onward** (held-id `5` is Shield, `WeaponType` bit `5` is Cannon; held-id
 `6` is Autopilot, `WeaponType` bit `6` is Autopilot too, but the two only
 agree there by coincidence, since held-id `10` is Cannon, not bit 10's
 LeachBeam) - so this is independent confirmation that 2048 ships these
-eleven weapons as real, separately-tracked pickups, and nothing more; it
-does not resolve `WeaponType`'s own bit assignment for bit 4 or the
-Mine/Bomb split, because the two enums are declared in different orders.
-Checked directly: `Data\XML\weaponstats_Race_2048.xml` weights all
-thirteen of Pulse's pool (Shield included) for all four classes, so
-`Weapon::Shield` is a real, weighted 2048 pickup either way - whether or not
-bit 4 is ever confirmed to be its `WeaponType` flag.
+eleven weapons as real, separately-tracked pickups, and nothing more; **it
+is not what resolves `WeaponType`'s own bit assignment for bit 4 or the
+Mine/Bomb split** - Step 2 above does that, off the enum's own declaration,
+precisely because this table's ordering cannot be trusted to carry over (the
+two enums already disagree from position 5 on). Checked directly:
+`Data\XML\weaponstats_Race_2048.xml` weights all thirteen of Pulse's pool
+(Shield included) for all four classes, so `Weapon::Shield` was already a
+real, weighted 2048 pickup regardless of whether `WeaponType` bit 4 was
+ever confirmed to be its flag - Step 2 now confirms it is.
 
 **Wiring**: `WeaponSet::allowed_weapons` (`crates/tables/src/mjolnir/
-campaign.rs`) decodes exactly the bits above (the eight singletons plus the
-mines pair) and nothing else - `oag_gameplay::pickup::draw`'s own `allowed`
-parameter gates a `Weapon Pad`'s draw to that list, wired from the event's
-own `M_WEAPONSET` in `race::load_event`
-(`crates/game/src/race/load/campaign.rs`) onto `Setup::allowed_weapons`.
-An event whose weapon set decodes to nothing recognised (only bit 4, or no
-weapon set authored at all) races unrestricted rather than this project
-guessing - the report says which. **AI slots are gated the same as the
-player's - chosen, not measured**, since no consumer of this mask has been
-found in `eboot.elf` to read otherwise (see "Step 2" above: the one runtime
-reference to `m_weaponAvailableBits`'s own field registration found by
-string cross-reference is the schema registration itself, not a consumer -
-the same "string only at registration, reader unfound" wall
-`frontend-campaign-map.md`'s own `m_x`/`m_y` chase already hit).
+campaign.rs`) decodes all eleven bits above (`WEAPON_BITS`) and nothing
+else - `oag_gameplay::pickup::draw`'s own `allowed` parameter gates a
+`Weapon Pad`'s draw to that list, wired from the event's own `M_WEAPONSET`
+in `race::load_event` (`crates/game/src/race/load/campaign.rs`) onto
+`Setup::allowed_weapons`. An event whose weapon set decodes to nothing
+recognised (no weapon set authored at all, or `available_bits` sets no bit
+in `WEAPON_BITS`) races unrestricted rather than this project guessing - the
+report says which. **AI slots are gated the same as the player's - chosen,
+not measured**, since no runtime consumer of this mask was found in
+`eboot.elf` to read otherwise (see the wiring note in Step 2's own page,
+[weapon-type-bits.md](../ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md):
+the only runtime reference to `m_weaponAvailableBits`'s own field
+registration found by string cross-reference is the schema registration
+itself, and the enum's own declaration - the field/type reflection link -
+is what settles the bits instead, the same "string only at registration,
+reader unfound" wall `frontend-campaign-map.md`'s own `m_x`/`m_y` chase
+already hit).
 
 ## What is not determined
 
@@ -753,10 +796,11 @@ the same "string only at registration, reader unfound" wall
 - **Which `GameMode_*` C++ class each of the four event typedefs
   instantiates.** See [Four more typedefs carry no name in the file at
   all](#four-more-typedefs-carry-no-name-in-the-file-at-all).
-- **`WeaponType` bit 4, and which of bits 8/9 is `Mine` versus `Bomb`.**
-  See "The weapon set gate" above - eight bits plus the 8/9 pair are
-  decoded and wired; bit 4 stays under this project's 70-confidence
-  threshold and is not enforced.
+- **2026-09-28: closed.** `WeaponType` bit 4 (`Shield`) and the `Mine`/`Bomb`
+  split (bit 8 `Bomb`, bit 9 `Mine`) are resolved off `WeaponType`'s own enum
+  declaration in `eboot.elf` - see "The weapon set gate" above, Step 2, and
+  [weapon-type-bits.md](../ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md).
+  All eleven bits are now decoded and wired.
 - **`WOShipCreatorParams`.** Referenced by every event's
   `M_PGridShipCreatorParams`/`M_PPlayerShipCreatorParams`, never itself seen
   as an instance in `SP.xml` - confirmed **zero** authored references across

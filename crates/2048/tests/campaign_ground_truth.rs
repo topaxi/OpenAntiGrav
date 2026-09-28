@@ -178,7 +178,9 @@ fn an_elimination_event_maps_to_the_eliminator_mode() {
 /// [`oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`] against a
 /// handful of the real file's 20 named sets - see
 /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section for the
-/// full 20-set census this reading was pinned against.
+/// full 20-set census this reading was pinned against, and
+/// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md` for
+/// `WeaponType`'s own declaration this now decodes all eleven bits from.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn a_named_weapon_set_decodes_to_what_its_own_name_says() {
@@ -205,19 +207,35 @@ fn a_named_weapon_set_decodes_to_what_its_own_name_says() {
         named("Leech Beam Only").allowed_weapons(),
         vec![Weapon::LeachBeam]
     );
-    // Bits 8 and 9 together - see `WeaponSet::allowed_weapons`'s own doc
-    // comment on why this is one joint gate for two weapons rather than one.
+    // Bits 8 (`Bomb`) and 9 (`Mine`) together, in `WeaponType`'s own
+    // declaration order - see `WeaponSet::allowed_weapons`'s own doc comment.
     assert_eq!(
         named("Mines Only").allowed_weapons(),
-        vec![Weapon::Mine, Weapon::Bomb]
+        vec![Weapon::Bomb, Weapon::Mine]
     );
     assert_eq!(
         named("Cannons, Missile, Plasma").allowed_weapons(),
         vec![Weapon::Missile, Weapon::Cannon, Weapon::Plasma]
     );
-    // 1959 = every confidence->=70 bit plus the mines pair, and not bit 4
-    // (16) even though the real instance sets it - the one bit this reading
-    // leaves unpinned. See `docs/formats/2048-campaign.md`.
+    // 1023 sets bit 4 (`Shield`) alongside every other bit below LeachBeam's
+    // (10) - the discriminating case against the prior reading, which left
+    // bit 4 out entirely.
+    assert_eq!(
+        named("DemoWeapons").allowed_weapons(),
+        vec![
+            Weapon::Rocket,
+            Weapon::Missile,
+            Weapon::Quake,
+            Weapon::Turbo,
+            Weapon::Shield,
+            Weapon::Cannon,
+            Weapon::Autopilot,
+            Weapon::Plasma,
+            Weapon::Bomb,
+            Weapon::Mine,
+        ]
+    );
+    // 1959 = every bit except Turbo (3), Shield (4) and Autopilot (6).
     assert_eq!(
         named("EliminatorWeapons").allowed_weapons(),
         vec![
@@ -226,9 +244,9 @@ fn a_named_weapon_set_decodes_to_what_its_own_name_says() {
             Weapon::Quake,
             Weapon::Cannon,
             Weapon::Plasma,
-            Weapon::LeachBeam,
-            Weapon::Mine,
             Weapon::Bomb,
+            Weapon::Mine,
+            Weapon::LeachBeam,
         ]
     );
 }

@@ -69,3 +69,5 @@
 0x810f2164	function	CampaignEventCard_HandleInput	75	campaign-event-card.md
 0x810f1196	function	CampaignEventCard_Draw	75	campaign-event-card.md
 0x8111eb74	function	PostRace_ShipCategoryTip	70	campaign-event-card.md
+0x8101291a	function	WeaponType_RegisterEnum	90	weapon-type-bits.md
+0x8100e650	function	WeaponType_RegisterValues	95	weapon-type-bits.md
