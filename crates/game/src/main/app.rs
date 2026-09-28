@@ -438,6 +438,7 @@ impl App {
                 .and_then(crate::session::LoadProbe::new),
             suspended_race: None,
             campaign_cell: None,
+            campaign_difficulty: None,
             tournament: None,
             awaiting_binding: None,
             // A load failure here is not fatal - it is the same "corrupt

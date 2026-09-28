@@ -337,9 +337,9 @@ impl Session {
                 // so a second launch with nothing set here would lose the
                 // medal evaluation and `EndRace Rewards`' own `campaign`
                 // flag on the replay.
-                self.campaign_cell = match &self.stage {
-                    Stage::Race(stage) => stage.campaign_cell.clone(),
-                    _ => None,
+                (self.campaign_cell, self.campaign_difficulty) = match &self.stage {
+                    Stage::Race(stage) => (stage.campaign_cell.clone(), stage.campaign_difficulty),
+                    _ => (None, None),
                 };
                 self.finish_launch();
             }

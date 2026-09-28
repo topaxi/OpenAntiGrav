@@ -145,6 +145,90 @@ including the `~50` confidence still open on `up`/`l1`/`r1`.
   (`campaign_grids_ground_truth.rs`) - a 7-cell gap. This build draws only
   the earned numerator, no denominator, rather than guess at the 87.
 
+## 2026-09-28: medals are per difficulty, with a per-difficulty icon shape - confirmed
+
+The maintainer's own play observation (HD medals reflect three
+difficulties, and each difficulty's own medal has a different icon shape)
+is confirmed, not falsified. Full writeup:
+`docs/ui/campaign-screens.md`'s "One shape per difficulty" section (the
+texture/render evidence) and `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
+"The medal-evaluate function is found" section (the executable side).
+
+**What landed, player-facing**: `Data\FE\Images\Hexmedal_HD.gtf`'s live
+copy is `DATA04`'s `1024x768` atlas (three per-difficulty blocks), not
+`DATA02`'s `1024x256` one archive precedence used to read for both
+`Medal_{x}_{y}` (the grid overview badge) and `Target0/1/2 Medal` (the
+Cell Selection target row) - two different widget-name shelvings of the
+same file, both needed the fix (`oag_game::campaign::read_hd_texture`).
+`oag_ui::campaign::hd::hd_medal_frame` now crops the block matching a
+difficulty, not always block 0. `oag_game::records::CampaignRecord` gained
+`best_difficulty`/`last_difficulty` (backward compatible, `#[serde(default)]`);
+`Store::record_campaign` tie-breaks a harder rung over a better medal at an
+easier one - **chosen, not measured**, see that function's own doc for the
+reasoning and its limits. `oag_tables::race_campaign::Difficulty` replaces
+the bare `u8` difficulty-index convention across the tables/ui crates
+(`Cell::skill_for_difficulty`/`targets_for_difficulty`/
+`evaluate_medal_for_difficulty`, `CellSelection::difficulty`) - a
+same-session refactor, not a separate pass, since it was small and the
+codebase already has the identical duplicated-enum idiom for `Medal`
+(`oag_tables::race_campaign::Medal` vs `oag_game::records::Medal`) to
+follow for the new persisted field.
+
+**What is measured versus chosen, stated once here so it does not drift
+across the two doc pages**:
+
+- **Measured**: the atlas is genuinely `3x` taller on the per-difficulty
+  archive and holds three different icon *shapes*, not just three colours.
+  `DATA02`'s only shape is the swirl.
+- **Measured**: every medal-evaluate function this pass found in the
+  executable (`0x001e25c0`, `0x001e1028`) reads one shared
+  `GameState+0xdc`-held difficulty, not a per-cell stored one - so the
+  original engine's own "current difficulty" concept is (at least for
+  evaluation) global/browsed, not frozen per earned medal.
+- **Chosen, not measured**: which atlas block is which difficulty
+  (`easy=plain hex`, `medium=cane`, `hard=swirl` - reasoned from the swirl
+  being `DATA02`'s only shape plus the migration crediting old medals at
+  Hard, not read off a live capture toggling `DifficultyButton`).
+- **Chosen, not measured**: that this project's own persistence stores a
+  per-cell "earned at" difficulty at all, and that a harder rung should
+  outright beat a better medal at an easier one. `SaveData_MigrateCellMedalsToHardElite`
+  writes a per-cell record byte that is consistent with "the rung this
+  cell's value should be judged against" (only touches modes whose value
+  doesn't depend on AI skill), but no evaluator this pass found reads that
+  byte back - see the Ghidra page's own account of what would settle this
+  and was not attempted (the `Medal_%d_%d` widget-name strings have only
+  `[DATA]` xrefs, the same reflection-bound shape `PI_Cell`'s own attribute
+  table already has).
+
+**Also found, not chased**: `0x0001c6d0` builds a 192-bit per-cell medal
+mask by calling the evaluator on a whole cell list - plausibly a
+profile-wide "has any medal" aggregate (unlock/stats), not the grid-badge
+draw itself. Its own caller and the list it walks are unidentified.
+
+**Confirmed by direct check, cheaply**: no other title has this. Pulse
+never authors a per-difficulty target triple at all. Pure's own campaign
+was not reachable (this build never gets past a Time Trial boot on Pure).
+2048's `Pass`/`Elite` is a two-rung score bar, not a selectable-difficulty
+medal law - see `docs/formats/race-campaign.md`'s own new section for the
+citations.
+
+**Left open, in priority order**:
+1. An RPCS3 capture toggling `DifficultyButton` on a fresh (unearned)
+   profile, reading which icon shape the `Target0/1/2 Medal` row shows at
+   each of the three rungs - the single check that would upgrade the
+   block-to-difficulty mapping from chosen to measured. No campaign
+   navigation recipe for reaching Fury's own `Cell Selection` on RPCS3 is
+   written down anywhere this pass found; whoever does this first should
+   record the `--nav` sequence for the next one.
+2. The saved-record struct's own field layout, precisely enough to settle
+   whether `SaveData_MigrateCellMedalsToHardElite`'s own `+0x6c` write and
+   `0x001e1138`/`0x001e1188`'s own `+8`/`+9` reads are the same field -
+   would settle whether a per-cell "earned at" difficulty is real in the
+   original at all, which is this project's whole storage model's own open
+   assumption.
+3. `0x0001c6d0`'s own caller and the list `FUN_0015e638` returns - would
+   likely explain what the 192-bit mask is actually for.
+
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 2026-09-14. `oag_tables::race_campaign` reads all 32 `plugins/grids/grid_*.xml` across HD's four archives, additively: flat-schema grids parse unchanged, per-difficulty grids (Fury's `grid8-15`, `DATA04`/`06`'s own `grid0-7`) land in `Cell::difficulty_targets`/`nitro_elimination_targets`, `Mode::Other` holds `NitroBattle`/`Detonator`. 157 cells over 16 grids under the archives' own precedence, ground-truthed against the EU disc (`crates/hd/tests/campaign_grids_ground_truth.rs`, [race-campaign.md](../../docs/formats/race-campaign.md)). `grid_04.xml`'s `<Values>` tag is malformed on disc in all three copies and reads zero cells - documented, not patched. Open: which target triple the medal law reads per mode (an HD-executable question), whether the real game tolerates `grid_04`'s tag, base-HD pressing unmeasured. Next: draw HD's `Grid Selection` off `Data\Plugins\Frontend\Gui\CellMode_Definition.xml` on `DATA02` - the thread inventories its widgets and textures

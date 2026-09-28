@@ -101,13 +101,13 @@ fn difficulty_button_rect_is_found_by_name() {
 #[test]
 fn cell_selection_difficulty_starts_at_medium_and_wraps() {
     let mut model = CellSelection::new(vec![cell(Mode::TimeTrial, Some("16_Track"))]);
-    assert_eq!(model.difficulty(), 1);
+    assert_eq!(model.difficulty(), Difficulty::Medium);
     model.cycle_difficulty();
-    assert_eq!(model.difficulty(), 2);
+    assert_eq!(model.difficulty(), Difficulty::Hard);
     model.cycle_difficulty();
-    assert_eq!(model.difficulty(), 0);
+    assert_eq!(model.difficulty(), Difficulty::Easy);
     model.cycle_difficulty();
-    assert_eq!(model.difficulty(), 1);
+    assert_eq!(model.difficulty(), Difficulty::Medium);
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn square_on_the_pad_cycles_difficulty_and_emits_the_event() {
     input.begin_frame(1 << Button::Square as u32);
     let events = model.update(&mut input);
     assert_eq!(events, vec![Event::DifficultyChanged]);
-    assert_eq!(model.difficulty(), 2);
+    assert_eq!(model.difficulty(), Difficulty::Hard);
 }
 
 fn medal_image(name: &str) -> Image {
@@ -160,9 +160,37 @@ fn medal_atlas_placed() -> Placed {
 /// a 60x60 frame at `u=0`. See that function's doc for the measurement.
 #[test]
 fn hd_medal_frame_matches_the_discs_own_target_medal_widget_crop() {
-    assert_eq!(hd_medal_frame(Medal::Gold), [0.0, 0.0, 60.0, 60.0]);
-    assert_eq!(hd_medal_frame(Medal::Silver), [0.0, 61.0, 60.0, 60.0]);
-    assert_eq!(hd_medal_frame(Medal::Bronze), [0.0, 122.0, 60.0, 60.0]);
+    assert_eq!(
+        hd_medal_frame(Medal::Gold, Difficulty::Easy),
+        [0.0, 0.0, 60.0, 60.0]
+    );
+    assert_eq!(
+        hd_medal_frame(Medal::Silver, Difficulty::Easy),
+        [0.0, 61.0, 60.0, 60.0]
+    );
+    assert_eq!(
+        hd_medal_frame(Medal::Bronze, Difficulty::Easy),
+        [0.0, 122.0, 60.0, 60.0]
+    );
+}
+
+/// The taller, per-difficulty atlas's own block pitch - see
+/// [`hd_medal_frame`]'s own doc for the measurement and the block/rung
+/// mapping this pins.
+#[test]
+fn hd_medal_frame_selects_a_block_per_difficulty() {
+    assert_eq!(
+        hd_medal_frame(Medal::Gold, Difficulty::Medium),
+        [0.0, 183.0, 60.0, 60.0]
+    );
+    assert_eq!(
+        hd_medal_frame(Medal::Gold, Difficulty::Hard),
+        [0.0, 366.0, 60.0, 60.0]
+    );
+    assert_eq!(
+        hd_medal_frame(Medal::Bronze, Difficulty::Hard),
+        [0.0, 488.0, 60.0, 60.0]
+    );
 }
 
 /// The regression this pass fixes: `Medal_{x}_{y}` used to draw the whole
@@ -178,7 +206,7 @@ fn hd_medal_frame_matches_the_discs_own_target_medal_widget_crop() {
 fn hd_tinted_medal_draw_crops_one_frame_of_the_right_tier_at_its_own_authored_position() {
     let image = medal_image("Medal_0_0");
     let placed = medal_atlas_placed();
-    let draw = hd_tinted_medal_draw(&image, placed, Medal::Silver);
+    let draw = hd_tinted_medal_draw(&image, placed, Medal::Silver, Difficulty::Easy);
     let Draw::Sprite { rect, uv, color } = draw else {
         panic!("expected a plain Sprite, not a tiled or rotated one");
     };
@@ -249,7 +277,10 @@ fn target_title_reads_a_plain_target_with_the_difficulty_in_parens_for_race() {
     });
     cell.nitro_elimination_targets = Some((1, 1, 1));
     let strings = StringTable::default();
-    assert_eq!(hd_target_title(&cell, &strings, 0), "IG_HUD_TARGET (Easy)");
+    assert_eq!(
+        hd_target_title(&cell, &strings, Difficulty::Easy),
+        "IG_HUD_TARGET (Easy)"
+    );
 }
 
 #[test]
@@ -262,7 +293,10 @@ fn target_title_uses_its_own_idstring_for_speed_lap() {
     });
     cell.nitro_elimination_targets = Some((1, 1, 1));
     let strings = StringTable::default();
-    assert_eq!(hd_target_title(&cell, &strings, 0), "FE_TLTIME (Easy)");
+    assert_eq!(
+        hd_target_title(&cell, &strings, Difficulty::Easy),
+        "FE_TLTIME (Easy)"
+    );
 }
 
 #[test]
@@ -276,7 +310,7 @@ fn target_title_inserts_the_nitro_target_only_for_elimination() {
     cell.nitro_elimination_targets = Some((200, 200, 200));
     let strings = StringTable::default();
     assert_eq!(
-        hd_target_title(&cell, &strings, 0),
+        hd_target_title(&cell, &strings, Difficulty::Easy),
         "IG_HUD_TARGET 200 (Easy)"
     );
 }
@@ -299,7 +333,7 @@ fn target_title_extends_the_nitro_target_to_nitrobattle_but_not_detonator() {
     nitro_battle.nitro_elimination_targets = Some((12, 15, 20));
     let strings = StringTable::default();
     assert_eq!(
-        hd_target_title(&nitro_battle, &strings, 0),
+        hd_target_title(&nitro_battle, &strings, Difficulty::Easy),
         "IG_HUD_TARGET 12 (Easy)"
     );
 
@@ -315,7 +349,7 @@ fn target_title_extends_the_nitro_target_to_nitrobattle_but_not_detonator() {
     });
     detonator.nitro_elimination_targets = Some((1, 1, 1));
     assert_eq!(
-        hd_target_title(&detonator, &strings, 0),
+        hd_target_title(&detonator, &strings, Difficulty::Easy),
         "IG_HUD_TARGET (Easy)"
     );
 }
@@ -324,7 +358,10 @@ fn target_title_extends_the_nitro_target_to_nitrobattle_but_not_detonator() {
 fn target_title_has_no_difficulty_suffix_when_the_cell_authors_no_rung() {
     let cell = cell(Mode::Race, Some("17_Track"));
     let strings = StringTable::default();
-    assert_eq!(hd_target_title(&cell, &strings, 1), "IG_HUD_TARGET");
+    assert_eq!(
+        hd_target_title(&cell, &strings, Difficulty::Medium),
+        "IG_HUD_TARGET"
+    );
 }
 
 /// `hd_target_value`'s three arms - the ordinal reading (measured for
@@ -369,7 +406,7 @@ fn target_value_reads_nitrobattle_as_an_ordinal_too_but_a_big_detonator_score_st
 
 #[test]
 fn difficulty_id_maps_the_three_rungs_in_order() {
-    assert_eq!(hd_difficulty_id(0), "Easy");
-    assert_eq!(hd_difficulty_id(1), "Medium");
-    assert_eq!(hd_difficulty_id(2), "Hard");
+    assert_eq!(hd_difficulty_id(Difficulty::Easy), "Easy");
+    assert_eq!(hd_difficulty_id(Difficulty::Medium), "Medium");
+    assert_eq!(hd_difficulty_id(Difficulty::Hard), "Hard");
 }

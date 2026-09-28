@@ -77,6 +77,12 @@ pub(crate) struct RaceStage {
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// [`Self::campaign_cell`]'s own difficulty rung - `None` on every
+    /// non-campaign launch, same as that field, and also `None` on a
+    /// campaign cell with no rung to run at, per
+    /// `Session::launch_campaign_cell`'s own doc. Read by
+    /// [`RaceStage::campaign_medal`] alone.
+    pub(crate) campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
     /// The final standings rank this leg earns against
     /// [`Session::tournament`], or `None` on every leg but a Tournament
     /// cell's own last one - see that field's own doc.
@@ -241,6 +247,7 @@ impl RaceStage {
             campaign_medal: self
                 .campaign_medal(finished, standing.best_lap_ticks)
                 .or_else(|| self.campaign_2048_medal(finished)),
+            campaign_difficulty: self.campaign_difficulty.map(Self::to_campaign_difficulty),
         }
     }
 
@@ -347,12 +354,37 @@ impl RaceStage {
             | CampaignMode::AiRace
             | CampaignMode::Other(_) => None,
         }?;
-        let medal = cell.evaluate_medal(value)?;
+        // Evaluated against whichever rung the cell was actually launched
+        // at (`Session::launch_campaign_cell`'s own doc), falling back to
+        // `Medium` - the same rung `Cell::evaluate_medal` itself always
+        // used - for the cells `Self::campaign_difficulty` is `None` on:
+        // Pulse, and any flat-schema HD cell, both of which
+        // `Cell::targets_for_difficulty` already answers identically for
+        // every rung.
+        let difficulty = self
+            .campaign_difficulty
+            .unwrap_or(oag_tables::race_campaign::Difficulty::Medium);
+        let medal = cell.evaluate_medal_for_difficulty(value, difficulty)?;
         Some(match medal {
             oag_tables::race_campaign::Medal::Gold => oag_game::records::Medal::Gold,
             oag_tables::race_campaign::Medal::Silver => oag_game::records::Medal::Silver,
             oag_tables::race_campaign::Medal::Bronze => oag_game::records::Medal::Bronze,
         })
+    }
+
+    /// [`oag_tables::race_campaign::Difficulty`] -> `oag_game::records::Difficulty`,
+    /// the same shape the inline `Medal` match just above takes, restated
+    /// as its own function only because it has two call sites
+    /// ([`Self::observation`] and `Self::campaign_medal`'s own fallback
+    /// would make a third inline copy read oddly next to each other).
+    fn to_campaign_difficulty(
+        difficulty: oag_tables::race_campaign::Difficulty,
+    ) -> oag_game::records::Difficulty {
+        match difficulty {
+            oag_tables::race_campaign::Difficulty::Easy => oag_game::records::Difficulty::Easy,
+            oag_tables::race_campaign::Difficulty::Medium => oag_game::records::Difficulty::Medium,
+            oag_tables::race_campaign::Difficulty::Hard => oag_game::records::Difficulty::Hard,
+        }
     }
 
     /// Draws the HUD, or the results table once the race has one.

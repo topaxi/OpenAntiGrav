@@ -526,6 +526,11 @@ pub(crate) struct Session {
     /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// [`Self::campaign_cell`]'s own difficulty rung, draining into
+    /// [`RaceStage::campaign_difficulty`] the identical way and at the
+    /// identical moment - see [`Session::launch_campaign_cell`]'s own doc
+    /// for when this is `None` even with a cell in play.
+    pub(crate) campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
     /// A Tournament cell's own leg list and running standings, from the
     /// moment `Session::launch_campaign_cell` starts one to the moment its
     /// last leg's `EndRace Menu` is left (`RETURN TO GRID`/`RETURN TO MENU`).

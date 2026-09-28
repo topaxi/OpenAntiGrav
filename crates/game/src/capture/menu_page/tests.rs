@@ -144,6 +144,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
             tick: 6042,
             best_lap_ticks: Some(1987),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
 

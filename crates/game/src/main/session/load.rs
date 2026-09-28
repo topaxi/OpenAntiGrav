@@ -530,6 +530,7 @@ impl Session {
                 // `RaceStage::campaign_cell`'s own doc. `.take()` leaves
                 // `self.campaign_cell` empty for whatever races next.
                 race_stage.campaign_cell = self.campaign_cell.take();
+                race_stage.campaign_difficulty = self.campaign_difficulty.take();
             }
             if let Some(probe) = self.load_probe.as_mut() {
                 probe.span("race-build thread: build_race_stage", built.build);

@@ -794,6 +794,7 @@ pub fn capture(
                     // No campaign cell is selected for a headless capture
                     // either - see `RaceStage::observation`'s own doc.
                     campaign_medal: None,
+                    campaign_difficulty: None,
                 };
                 let personal_best = crate::records::PersonalBest::compare(
                     options.previous_best.as_ref(),

@@ -434,6 +434,7 @@ impl Session {
                 // track outright - so this reopens `Grid Selection` instead
                 // and drops the abandoned cell rather than let it leak into
                 // whatever race is launched next.
+                self.campaign_difficulty = None;
                 if self.campaign_cell.take().is_some() {
                     self.open_campaign();
                 } else {

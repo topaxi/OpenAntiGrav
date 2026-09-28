@@ -131,7 +131,7 @@
 //!   this build keeps no saved record for, the same absence
 //!   `crate::campaign::draw::cell_draw_list`'s own `Line5`/`Line8` leave.
 
-use oag_tables::race_campaign::{Cell, Medal, Mode};
+use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
 
 use crate::frontend::{Draw, Placed};
 use crate::language::{CircuitNames, StringTable};
@@ -141,13 +141,22 @@ use crate::screen::Image;
 
 use super::draw::{
     cell_title, centred_selector_draw, fill_draw, hex_slot_xy, image_draw, laps_line, medal_line,
-    sprite_draw, text_draw,
+    text_draw,
 };
 use super::pointer::{Target, What};
 use super::{CellSelection, Event, GridSelection, GridSummary, Layout, hex_rect};
 
 #[cfg(test)]
 mod tests;
+
+mod medal;
+// `hd_target_title`/`hd_tinted_medal_draw` are called below; `hd_medal_frame`/
+// `hd_difficulty_id` are not called directly here (only from inside `medal`
+// itself) but need to be in scope for `mod tests`' own `use super::*` to
+// reach them, the same way every other private helper this file declares
+// directly already is.
+#[allow(unused_imports)]
+use medal::{hd_difficulty_id, hd_medal_frame, hd_target_title, hd_tinted_medal_draw};
 
 /// HD's own page title idstring - `<Text name="ScreenTitle"><Values idstring="FE_RC">`,
 /// distinct from Pulse's `FE_RACE_CAM` (`crate::campaign::draw::grid_draw_list`'s
@@ -414,7 +423,22 @@ pub fn hd_cell_draw_list(
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
             if let Some(medal) = model.medal_at(x, y) {
-                out.push(hd_tinted_medal_draw(image, placed, medal));
+                // **Falls back to `Medium`, not `Hard`.** A medal with no
+                // recorded difficulty was evaluated by the pre-per-difficulty
+                // path (`Cell::evaluate_medal`, always against the medium
+                // rung - `Cell::gold`/`silver`/`bronze` alias it), so
+                // crediting it at Hard here would show a harder badge than
+                // the disc's own `SaveData_MigrateCellMedalsToHardElite`
+                // would for a `Race`/`Elimination` result: that migration
+                // only touches `TimeTrial`/`SpeedLap`/`Zone`, the three
+                // modes whose raw value does not depend on AI skill - an
+                // AI-independent time can honestly be credited at Hard, a
+                // placement against Hard's own tougher AI cannot. `Medium`
+                // is the rung the value was actually judged against, not a
+                // guess. See [`super::CellSelection::difficulty_at`]'s own
+                // doc for when this triggers.
+                let difficulty = model.difficulty_at(x, y).unwrap_or(Difficulty::Medium);
+                out.push(hd_tinted_medal_draw(image, placed, medal, difficulty));
             }
             continue;
         }
@@ -524,217 +548,43 @@ pub fn hd_cell_draw_list(
         let Some(name) = image.name.as_deref() else {
             continue;
         };
-        let is_target_widget = matches!(name, "Target0 Medal" | "Target1 Medal" | "Target2 Medal")
-            || name == "Target Title Arrow";
+        let target_medal_tier = match name {
+            "Target0 Medal" => Some(Medal::Gold),
+            "Target1 Medal" => Some(Medal::Silver),
+            "Target2 Medal" => Some(Medal::Bronze),
+            _ => None,
+        };
+        let is_target_widget = target_medal_tier.is_some() || name == "Target Title Arrow";
         if is_target_widget && targets_visible {
             let Some(placed) = sprites(&image.src) else {
                 continue;
             };
-            // `Target{n} Medal` already authors its own `width`/`height`/
-            // `u`/`v`/`TxtrWidth`/`TxtrHeight` crop of `Hexmedal_HD.gtf`
-            // (measured directly off `DATA06`'s own XML - see the module
-            // doc's medal-widget table) - unlike `Medal_{x}_{y}`, which
-            // authors none and needs `hd_tinted_medal_draw`'s own crop, this
-            // one needs no help: `image_draw` already reads those fields
-            // through `sprite_draw`.
-            out.push(image_draw(image, placed));
+            match target_medal_tier {
+                // `Target{n} Medal` authors its own `width`/`height`/`u`/`v`/
+                // `TxtrWidth`/`TxtrHeight` crop of `Hexmedal_HD.gtf`
+                // (measured directly off `DATA06`'s own XML - see the module
+                // doc's medal-widget table), but only for the `v=0` (easy/
+                // novice) block - it never varies by [`super::CellSelection::difficulty`],
+                // because the widget is static XML and the difficulty rung
+                // it shows is runtime state. [`hd_medal_frame`]'s own crop,
+                // computed for whichever rung is currently browsed, replaces
+                // it the same way [`hd_tinted_medal_draw`] already replaces
+                // `Medal_{x}_{y}`'s own unauthored one - see that function's
+                // doc for why this needs no tint either.
+                Some(tier) => out.push(hd_tinted_medal_draw(
+                    image,
+                    placed,
+                    tier,
+                    model.difficulty(),
+                )),
+                // `Target Title Arrow` carries no tier of its own - draws at
+                // its authored crop unchanged.
+                None => out.push(image_draw(image, placed)),
+            }
         }
     }
     layers.body = out;
     layers
-}
-
-/// Where one medal tier's own static icon sits in `Hexmedal_HD.mip`/`.gtf` -
-/// **measured off the disc's own authored crop, not eyeballed**:
-/// `DATA06.PSARC`'s own copy of `CellMode_Definition.xml` (`data/fe/frontend/gui/cellmode_definition.xml`)
-/// draws the same shared atlas a third way, on `Cell Selection`'s
-/// `Target0/1/2 Medal` widgets, and *those* author the crop this build never
-/// had for `Medal_{x}_{y}`: `width="60" height="60" u="0" v="0"` for
-/// `Target0 Medal`, `v="61"` for `Target1`, `v="122"` for `Target2`,
-/// `TxtrWidth`/`TxtrHeight` both `60` on all three. `Target0`/`Target1`/
-/// `Target2` are already gold/silver/bronze elsewhere on this same screen
-/// (`hd_cell_draw_list`'s own `"Target0" => hd_target_value(targets.gold, ..)`
-/// arm and siblings, and `docs/ui/campaign-screens.md`'s note that this
-/// widget family replaces the disc's own `IG_HUD_GOLD`/`SILVER`/`BRONZE`
-/// labels), so the atlas reads **gold at the top, descending** - confidence
-/// 90: a real widget's own authored attributes, for the identical texture,
-/// on the same title's own screen family, not a decompile or a capture.
-///
-/// **`Target0/1/2 Medal` stopped being evidence-only and started being
-/// drawn, 2026-09-27**, when `hd_cell_draw_list`'s own screen source switched
-/// from `DATA02` to `DATA06` (see the module doc's "the winning archive"
-/// section) - before that switch this doc's own numbers were read off
-/// `DATA06` but the running screen still drew `DATA02`'s plain grey
-/// `Target0/1/2 Image` arrow instead. `image_draw` draws the widget's own
-/// authored crop directly now (`hd_medal_frame`'s numbers below still cover
-/// `Medal_{x}_{y}`, the unauthored hex-grid badge, which is a different
-/// widget on a different atlas placement rule).
-///
-/// **Cross-checked against the raw texel data independently**, and the two
-/// disagree on which end is "top" until the discrepancy itself is
-/// explained: decoding `data/fe/images/hexmedal_hd.gtf` directly
-/// (`oag_texture::gtf::Gtf::parse`, `crates/texture/examples/scratch_hexmedal.rs`,
-/// not committed) shows a 1024x256 DXT5 atlas whose *raster* row order is
-/// the authored one upside down - the band this decode puts at
-/// `y=196..256` (reaching the texture's own bottom edge exactly) is the one
-/// whose mean RGB reads warm yellow-gold, matching `Target0`'s own gold at
-/// `v=0`. That is consistent with a Y-flip between this decoder's raster
-/// order and the GPU's own `V` convention (unmeasured *which* of the two is
-/// "backwards" - nothing here decodes a second, independently-written GTF
-/// reader to settle it) rather than two different textures: the row order,
-/// the row height (60, matching `TxtrHeight`) and the per-row colour (one
-/// warm, one neutral grey, one warm) all agree once the flip is accounted
-/// for. The authored numbers below are what a caller already trusts
-/// elsewhere in this same file (`Target0 Medal`'s own widget, wired as
-/// ordinary XML), so they are used verbatim rather than the raster reading.
-///
-/// **Which column is "the" icon is not independently measured, and says
-/// so** - `Target0 Medal`'s own `u="0"` picks the same first frame this
-/// function already uses, but nothing pins whether the real screen holds
-/// still on it or animates a spin through the rest of the row (the atlas
-/// is far wider than one 60px frame). No earned-medal capture exists to
-/// check either way - the same gap `medal_argb`'s own doc already records.
-/// `u=0` is used because it is what the disc's own comparable widget uses,
-/// not a guess.
-fn hd_medal_frame(medal: Medal) -> [f32; 4] {
-    const FRAME: f32 = 60.0;
-    let v = match medal {
-        Medal::Gold => 0.0,
-        Medal::Silver => 61.0,
-        Medal::Bronze => 122.0,
-    };
-    [0.0, v, FRAME, FRAME]
-}
-
-/// `Medal_{x}_{y}`'s own draw: [`hd_medal_frame`]'s crop, drawn at its own
-/// native 60x60 size, **at the widget's own authored `image.x`/`image.y`** -
-/// unchanged from the pre-fix code, which already drew there (the size and
-/// crop were the only things wrong - see the module's own bug writeup in
-/// `docs/ui/campaign-screens.md`). **Deliberately not `hex_rect`-centred**,
-/// an earlier draft of this fix tried: `CellMode_Definition.xml`'s own
-/// `<Item>` grouping shows every `Medal_{x}_{y}` sits in its own item,
-/// offset a constant `(+7, +2)` from `Bg_{x}_{y}`/`Outline_{x}_{y}`'s own
-/// item at the same grid slot - checked across all seven columns
-/// (`(7,2)`/`(67,36)`/`(127,2)`/`(187,36)`/`(247,2)`/`(307,36)`/`(367,2)`
-/// against `Bg`'s own `(0,0)`/`(60,34)`/`(120,0)`/`(180,34)`/`(240,0)`/
-/// `(300,34)`/`(360,0)`, the same `+7,+2` every time). That is the disc's
-/// own registration between the medal layer and the hex layer, authored
-/// once and not a per-column tune - a runtime centring formula would only
-/// coincidentally reproduce it, and does not: it was tried, produced a
-/// visibly-offset badge on every column, and was reverted in favour of
-/// this, the simpler and disc-measured choice. **No tint**: unlike Pulse's
-/// `hex_filled.mip` (a plain white hex [`super::draw::tinted_medal_draw`]
-/// still colours with [`super::draw::medal_argb`] - that path is
-/// untouched, and still correct for Pulse), HD's own atlas frame already
-/// carries the tier's colour baked into its texels, so multiplying a flat
-/// swatch over it a second time was the other half of the bug this
-/// replaces.
-fn hd_tinted_medal_draw(image: &Image, placed: Placed, medal: Medal) -> Draw {
-    let [u, v, frame_width, frame_height] = hd_medal_frame(medal);
-    let cropped = Image {
-        width: Some(frame_width),
-        height: Some(frame_height),
-        u: Some(u),
-        v: Some(v),
-        texture_width: Some(frame_width),
-        texture_height: Some(frame_height),
-        ..image.clone()
-    };
-    sprite_draw(&cropped, placed, image.x, image.y, 0xffff_ffff)
-}
-
-/// `Target Title`'s own text - `DATA06`'s single shared header replacing
-/// `DATA02`'s per-target `IG_HUD_GOLD`/`SILVER`/`BRONZE` labels (see
-/// [`hd_medal_frame`]'s own doc). **Composed, not read verbatim from the
-/// widget's own `idstring="IG_HUD_TARGET"`** - three live RPCS3 frames on
-/// this exact widget (`data/scratch/drive-2026-09-27/hd-targets/`,
-/// `fury-race-3-1.png`/`fury-speedlap-4-2.png`, plus
-/// `data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png` for `Elimination`)
-/// show text the bare idstring alone cannot produce:
-///
-/// | Cell | Mode | Frame reads |
-/// | --- | --- | --- |
-/// | `grid8_3_1` | `Race` | `"TARGET (NOVICE)"` |
-/// | `grid8_4_2` | `Speed Lap` | `"TARGET LAP TIME (NOVICE)"` |
-/// | `grid8_3_2` | `Elimination` | `"TARGET 200 (NOVICE)"` |
-///
-/// Three parts, each independently evidenced:
-/// - **The base label is mode-dependent.** `Race`'s own is `IG_HUD_TARGET`
-///   (`"TARGET"`) unchanged; `Speed Lap`'s is a different idstring entirely,
-///   `FE_TLTIME` (`"TARGET LAP TIME"`,
-///   `data/scratch/lane-hd-sel/english-entries-data06.xml`). `Time
-///   Trial`'s own case is inferred, not captured: `FE_TARGTIME` (`"TARGET
-///   TIME"`) is the only other `FE_TARG*`/`FE_TL*` idstring on the disc,
-///   named for exactly the mode this function has no frame for -
-///   confidence 60. Every other mode falls back to the widget's own
-///   `IG_HUD_TARGET`, measured for `Race`, chosen by elimination for
-///   `Zone`/`Tournament`/`Head2Head`/`Mode::Other`.
-/// - **A number is inserted for `Elimination` and `NitroBattle` alike -
-///   `"the elimination family"`.** `grid8_3_2`'s own `NitroElimNovice="200"`
-///   (`grid_08.xml`) matches the captured `200` exactly; `grid8_3_1`/`grid8_4_2`
-///   (`Race`/`Speed Lap`) both author the same field too, always dummy `1`s,
-///   and neither frame shows a number - confirming the insert is mode-gated,
-///   not "whenever the field parses". `NitroBattle` (`grid8_2_1`) has no
-///   frame of its own, but is included on stronger evidence than a guess:
-///   `campaign_grids_ground_truth.rs`'s own
-///   `eliminationfamily_cells_carry_a_real_nitro_triple_and_a_dummy_flat_one`
-///   ground-truths, against the real disc, that `Elimination` and
-///   `Mode::Other("NitroBattle")` are exactly the two modes whose
-///   `nitro_elimination_targets` is real (non-`(1, 1, 1)`) while
-///   `difficulty_targets` is the dummy flat `1`/`2`/`3` - the same pairing
-///   this function's own condition below tests for. `Detonator`
-///   (`Mode::Other("Detonator")`) is the disc's own mirror image of that
-///   (real `difficulty_targets`, dummy nitro triple) and is correctly left
-///   out by the same test.
-/// - **The `(DIFFICULTY)` suffix is unconditional across all three
-///   captures.** Gated here on the cell carrying a difficulty rung at all
-///   (`difficulty_targets`/`nitro_elimination_targets` `Some`) since every
-///   captured cell is Fury's own (`grid8`, always per-difficulty) - a
-///   base-`Wipeout HD` cell reached through this project's own `DATA02`
-///   grid precedence parses neither field, so this degrades to no suffix
-///   there rather than a guessed difficulty name. Not independently
-///   captured either way for a base-HD cell.
-fn hd_target_title(cell: &Cell, strings: &StringTable, difficulty: u8) -> String {
-    let base = match cell.mode {
-        Mode::TimeTrial => strings.get_or_id("FE_TARGTIME"),
-        Mode::SpeedLap => strings.get_or_id("FE_TLTIME"),
-        _ => strings.get_or_id("IG_HUD_TARGET"),
-    };
-    let mut title = base.to_string();
-    let is_elimination_family = matches!(cell.mode, Mode::Elimination)
-        || matches!(&cell.mode, Mode::Other(name) if name == "NitroBattle");
-    if is_elimination_family
-        && let Some(target) = cell.nitro_elimination_target_for_difficulty(difficulty)
-    {
-        title.push(' ');
-        title.push_str(&target.to_string());
-    }
-    if cell.difficulty_targets.is_some() || cell.nitro_elimination_targets.is_some() {
-        title.push_str(" (");
-        title.push_str(strings.get_or_id(hd_difficulty_id(difficulty)));
-        title.push(')');
-    }
-    title
-}
-
-/// `Easy`/`Medium`/`Hard`'s own idstring names, `0` through `2` - the same
-/// three ids this disc's own difficulty rungs resolve
-/// (`data/scratch/lane-hd-sel/english-entries-data06.xml`: `<entry
-/// id="Easy" string="NOVICE">`, `id="Medium" string="SKILLED">`, `id="Hard"
-/// string="ELITE">`), this title's own words for the same rung
-/// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s own
-/// `Novice`/`Skilled`/`Elite` measurement, the same one
-/// [`Cell::nitro_elimination_target_for_difficulty`]'s doc already cites).
-/// Confidence 85: the id spelling is a direct disc read; matching it to
-/// [`CellSelection::difficulty`]'s own `0`/`1`/`2` reuses the same rung
-/// order [`Cell::targets_for_difficulty`] already assumes, not
-/// independently re-verified here.
-fn hd_difficulty_id(difficulty: u8) -> &'static str {
-    match difficulty {
-        0 => "Easy",
-        1 => "Medium",
-        _ => "Hard",
-    }
 }
 
 /// `Target0`/`Target1`/`Target2`'s own value text - widened from the shared

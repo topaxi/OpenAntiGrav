@@ -26,6 +26,17 @@ fn to_campaign_medal(medal: oag_game::records::Medal) -> race_campaign::Medal {
     }
 }
 
+/// [`to_campaign_medal`]'s own sibling, for
+/// `oag_game::records::CampaignRecord::best_difficulty` - **HD only**;
+/// every Pulse cell's own row never has one to convert.
+fn to_campaign_difficulty(difficulty: oag_game::records::Difficulty) -> race_campaign::Difficulty {
+    match difficulty {
+        oag_game::records::Difficulty::Easy => race_campaign::Difficulty::Easy,
+        oag_game::records::Difficulty::Medium => race_campaign::Difficulty::Medium,
+        oag_game::records::Difficulty::Hard => race_campaign::Difficulty::Hard,
+    }
+}
+
 /// One open campaign screen: `Campaign Selection` (HD only), `Grid
 /// Selection`, or `Cell Selection` over one of its tiers.
 pub(crate) enum Screen {
@@ -479,7 +490,13 @@ impl CampaignStage {
                         .map(to_campaign_medal)
                 },
                 &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
-            ),
+            )
+            .with_difficulty(&|name| {
+                records
+                    .campaign_medal(title, name)?
+                    .best_difficulty
+                    .map(to_campaign_difficulty)
+            }),
             which,
         };
         true

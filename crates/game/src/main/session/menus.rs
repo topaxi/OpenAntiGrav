@@ -701,6 +701,7 @@ impl Session {
         // launch can never inherit a stale cell whatever path reached this
         // function.
         self.campaign_cell = None;
+        self.campaign_difficulty = None;
         let Some(mut race_options) = self.race_options.take() else {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;

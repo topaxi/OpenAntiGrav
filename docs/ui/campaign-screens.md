@@ -1428,17 +1428,137 @@ directory with its own `oag/records.toml` (`dirs::config_dir()` honours it)
 rather than editing the real, shared `~/.config/oag/records.toml` - e.g.:
 
 ```sh
-mkdir -p /tmp/oag-scratch-cfg/oag
-cat > /tmp/oag-scratch-cfg/oag/records.toml <<'EOF'
+mkdir -p data/scratch/hd-medals/scratch-cfg/oag
+cat > data/scratch/hd-medals/scratch-cfg/oag/records.toml <<'EOF'
 [[campaign]]
 title = "wipeout hd"
 cell = "grid8_2_1"
 best_medal = "gold"
+best_difficulty = "hard"
 EOF
-XDG_CONFIG_HOME=/tmp/oag-scratch-cfg cargo run -q -p oag-game -- \
+XDG_CONFIG_HOME=data/scratch/hd-medals/scratch-cfg cargo run -q -p oag-game -- \
   data/images/hdfury-ps3-eu-dec.iso --menu-page cell-select --no-audio \
-  --screenshot /tmp/cell-select.png
+  --screenshot data/scratch/hd-medals/cell-select.png
 ```
+
+## One shape per difficulty, not just one colour per tier - confirmed 2026-09-28
+
+**The maintainer's own play observation - HD medals reflect three
+difficulties, and each difficulty's own medal has a different icon shape -
+is confirmed, measured directly off the disc's own texture data, not
+inferred from play alone.**
+
+### The atlas itself: two archives, two different heights
+
+`Data\FE\Images\Hexmedal_HD.gtf` (and its `.mip`-spelled sibling
+`Medal_{x}_{y}` sources - see [`hd_medal_frame`](../../crates/ui/src/campaign/hd.rs)'s
+own doc) exists on two archives that disagree, the same shape
+`CellMode_Definition.xml`'s own `DATA02`/`DATA06` split already established
+for the screen XML:
+
+| Archive | Size | Decodes to | Content |
+| --- | --- | --- | --- |
+| `DATA02.PSARC` | 262,272 bytes | `1024x256` | One icon shape (a swirl/spiral emblem), three tier rows (gold/silver/bronze, `v=0/61/122`, `TxtrHeight=60`) - the flat-schema archive's own copy. |
+| `DATA04.PSARC` | 786,560 bytes | `1024x768` - **exactly 3x** | Three `1024x256`-shaped blocks stacked, each with its own three tier rows at the same `v=0/61/122` spacing *within its own block* - the per-difficulty archive's own copy, carried alongside its `grid_00.xml`..`grid_07.xml` (`docs/formats/race-campaign.md`'s HD archive table). |
+
+Measured directly: `oag-unpack extract` off `hdfury-ps3-eu-dec.iso`, then
+`oag-assets`' own `psarc_cat` example against each archive's
+`/data/fe/images/hexmedal_hd.gtf`, then `oag-texture`'s own `gtf_to_png`
+example to decode and view both. `DATA00`/`DATA06` carry **no** copy of
+this file at all - only `DATA02` and `DATA04` do, which is what makes
+`oag_assets::Archives::read_name`'s ordinary precedence (searches the bulk
+archive first) matter: it lands on `DATA02`'s shorter copy, not `DATA04`'s.
+
+The three blocks hold visibly different icon **shapes**, not only colour -
+read off `DATA04`'s own decoded atlas, row-content bands measured
+programmatically (alpha-per-row) rather than eyeballed:
+
+- A **plain, unadorned hex** - the block nearest the raster's own bottom
+  edge, `v=0..182` after the Y-flip `hd_medal_frame`'s own doc already
+  reconciles for the shorter atlas.
+- A **hook/"cane"-shaped emblem** - the middle block, `v=183..365`.
+- A **swirl/spiral emblem** - the block farthest from the raster's bottom
+  edge, `v=366..548`. This is the *only* shape `DATA02`'s shorter, flat
+  atlas carries.
+
+Block pitch (`183` - three `60`px tier rows at `61`-pitch each, `3*61 =
+183`) is measured off the decoded atlas's own content bands, not an
+authored crop: no widget on either archive's `CellMode_Definition.xml`
+sources a `v` past `122`, so there is nothing to cross-check this specific
+number against the way the `61` tier spacing is already cross-checked
+(`Target0/1/2 Medal`'s own authored `width="60" height="60" u="0"
+v="0"/"61"/"122"`). Confidence 60 on the `183` pitch itself.
+
+### Which block is which difficulty: chosen from convergent evidence, not measured
+
+**Falsifier check, explicit**: the observation would be falsified if the
+atlas held only three frames (it holds many more - see the existing
+"many-frame rotation strip" finding below) or if a live screen showed the
+same icon at every difficulty. Neither happened - the atlas genuinely
+carries three shapes, and this project's own render (below) shows three
+different shapes drawn for three different stored difficulties. What is
+**not yet independently confirmed on a live RPCS3 frame** is *which* shape
+goes with *which* difficulty:
+
+`easy/novice = plain hex (v-block 0)`, `medium/skilled = cane (v-block 1)`,
+`hard/elite = swirl (v-block 2)` is the reading two independent facts
+agree on:
+
+1. `DATA02`'s shorter, flat-schema copy - the one every pre-Fury cell
+   effectively used before per-difficulty targets existed - carries *only*
+   the swirl shape.
+2. `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
+   `SaveData_MigrateCellMedalsToHardElite` credits exactly that
+   pre-existing, difficulty-less medal at `HARD`/`ELITE` when migrating an
+   old save.
+
+The swirl icon and the hardest rung are the two things that pre-existed the
+difficulty split, and the migration equates them - not proof, but not a
+coin flip either. See `hd_medal_frame`'s own doc comment for the full
+statement and its own confidence accounting; no confidence score is given
+for the mapping itself, since neither fact above is a pixel on a live
+screen. A capture toggling `DifficultyButton` on RPCS3 and reading which
+shape the target row shows at each rung would settle it in one pass - not
+done this session.
+
+### The fix, and this project's own render as an internal consistency check
+
+Two bugs, both in `oag_game::campaign::load_hd` (`crates/game/src/campaign.rs`),
+kept this build drawing `DATA02`'s shorter atlas everywhere despite the
+taller one being on disc:
+
+1. **`Target0/1/2 Medal`** (spelled `.gtf`, read through `OTHER_TEXTURES`)
+   and **`Medal_{x}_{y}`** (spelled `.mip`, read through `HEX_TEXTURES`) are
+   two different shelvings of the *same* archive file, in two different
+   loops - fixing the archive precedence in one and not the other still
+   left one of the two widgets drawing off the wrong copy. Both loops now
+   share one `read_hd_texture` helper that asks `DATA04` for this one path
+   by name (`Archives::read_every_name`, filtered by archive label) rather
+   than taking whichever archive `read_name`'s ordinary "bulk archive
+   first" precedence happens to try first.
+2. `oag_ui::campaign::hd::hd_medal_frame` took only a medal tier, always
+   cropping `v-block 0` - the atlas's *height* changed but nothing selected
+   a different block. It now takes a [`Difficulty`](../../crates/tables/src/race_campaign.rs)
+   too: the currently-browsed one for `Target0/1/2 Medal`'s own crop (that
+   row is a live target-threshold indicator, not a saved result), and the
+   cell's own earned difficulty for `Medal_{x}_{y}`'s (the grid overview
+   badge, keyed on `oag_game::records::CampaignRecord::best_difficulty` -
+   see that field's own doc for the storage model this project chose, and
+   why it is chosen rather than measured).
+
+**Not independent confirmation of the mapping** - this project's own crop
+math matching the atlas's own content bands proves the *code* is internally
+consistent, not that the original draws Easy as the plain hex - but it is a
+useful end-to-end check that the archive fix, the block arithmetic and the
+difficulty plumbing agree with each other. Seeding
+`data/scratch/hd-medals/scratch-cfg/oag/records.toml` with
+`best_difficulty = "easy"`/`"medium"`/`"hard"` on `grid8_2_1` and rendering
+`--menu-page cell-select` (recipe above) drew the plain hex, the cane and
+the swirl respectively, on both the `Target0/1/2 Medal` row (keyed on
+`model.difficulty()`, cycled via the in-screen `DifficultyButton`) and the
+`Medal_{x}_{y}` grid badge (keyed on the seeded `best_difficulty`) - not
+committed (game content, `data/scratch/` is gitignored), reproducible with
+the recipe above.
 
 ## Wipeout HD/Fury: the TARGET block reads `DATA06` too, 2026-09-27
 
