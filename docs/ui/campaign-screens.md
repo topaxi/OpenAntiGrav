@@ -1575,17 +1575,22 @@ swirl icon and the hardest rung were the two things that pre-existed the
 difficulty split, and the migration equates them - a reading two independent
 facts agreed on, now corroborated rather than merely argued for.
 
-**Not itself re-confirmed this pass**: the fresh-profile default rung. This
-boot ran on an existing (non-fresh) save - moving it aside was refused by
-this session's own permission classifier as an edit to the user's real
-`~/.config/rpcs3` outside the repo - so `00.png` (before any `DifficultyButton`
-press, and itself a comb-artifact frame per the note above) is not evidence
-of a *fresh* default, only of whatever rung that save already held, and its
-own pre-press rung is not read at all this pass (not inferred from the
-cycle's periodicity either - see the note above on why that would be
-press-count reasoning). `CellSelection::difficulty`'s own `Difficulty::Medium`
-(`SKILLED`) default versus RPCS3's `NOVICE` stays open, per the 2026-09-25
-section above - not this pass's to fix.
+**This pass's own boot did not run on a fresh profile and says nothing about
+the default rung.** An existing (non-fresh) save was on disk - moving it
+aside was refused by this session's own permission classifier as an edit to
+the user's real `~/.config/rpcs3` outside the repo - and `00.png` (before
+any `DifficultyButton` press) is a comb-artifact frame per the note above,
+unreadable regardless of the profile. A separate, pre-existing capture does
+carry a clean arrival reading of this same cell: `data/reference/hd-capture/talons-matched/screen-Cell-Selection.png`
+(2026-09-13, a settled `--nav-shots` frame taken before any
+`DifficultyButton` press) reads `AI DIFFICULTY (NOVICE)` on `grid8_3_1` -
+see `docs/reverse-engineering/rpcs3-capture.md`'s own account for why that
+frame is trustworthy where this pass's `00.png` is not. Whether *that*
+profile was itself fresh is unverified, so this corroborates rather than
+settles the earlier "fresh-profile default reads `NOVICE`" finding.
+`CellSelection::difficulty`'s own `Difficulty::Medium` (`SKILLED`) default
+versus RPCS3's `NOVICE` stays open, per the 2026-09-25 section below - not
+this pass's to fix.
 
 ### The fix, and this project's own render as an internal consistency check
 
@@ -2703,9 +2708,12 @@ and its own "what is not determined" section.
   frames (`00.png`-`03.png`) whose own `NN.json` carries
   `"track": "Data\\Environments\\Talons_Junction\\track.rcsmodel"` - read
   from `TTY.log`'s own `Loading track model` line inside the *started*
-  race, not the pre-launch screen - and whose HUD reads `LAP 1/3`. So the
-  RPCS3 side of "same track, mode, laps, class" is itself measured from a
-  launched race, not only inferred from the selection screen's own text.
+  race, not the pre-launch screen - and whose HUD reads `LAP 1/3` and `POS
+  x/8` (matching `grid8_3_1`'s own authored `AICount="7"` plus the player).
+  So two of the four fields - **track and laps** - are measured from a
+  launched race on the RPCS3 side, not only inferred from the selection
+  screen's own text; **mode and class still come only from the selection
+  screen** on both sides (the in-race HUD does not label either directly).
   On this project's own side, rather than drive a second race build (the
   slow path measured above), this pass read `launch_campaign_cell`
   (`crates/game/src/main/session/campaign.rs:287`, read-only - a different
@@ -2960,18 +2968,61 @@ read `⬜ DIFFICULTY (NOVICE)` and, after a `Triangle` press,
 rung, not the literal `string="Change Difficulty"`
 `DifficultyButton` authors in `CellMode_Definition.xml`. The rung words
 themselves are disc strings (`Easy`→`"NOVICE"`, `Medium`→`"SKILLED"`,
-`Hard`→`"ELITE"`, `entries.xml`), but the bare word `"DIFFICULTY"` and the
-`"(<rung>)"` composition are not authored as a string-table entry anywhere
-this build has read - runtime UI text, not disc data, the same shape
-`docs/formats/hd-endrace-screens.md`'s `Endrace Difficulty` idstring
-mismatch is. **Not implemented this pass**: this build's own
-`CellSelection::difficulty` also defaults to rung `1` (`SKILLED`) where
+`Hard`→`"ELITE"`, `entries.xml`). **Not implemented this pass**: this build's
+own `CellSelection::difficulty` also defaults to rung `1` (`SKILLED`) where
 RPCS3's own fresh-profile default reads `NOVICE` (rung `0`) in the same
 captures - two open mismatches on the same widget, named together rather
 than fixing the text and leaving the default silently wrong, or vice versa.
 `Cell Selection` still draws the disc's own authored `"Change Difficulty"`
 string in the meantime, which is honest disc content, just not what RPCS3
 shows at runtime.
+
+**Correction, 2026-09-28, two parts.**
+
+First: this reading holds for `grid8_3_2` (`Eliminator`, The Amphiseum)
+specifically, not every cell. The cell this section's own captures used
+authors an `Elimination`-family target triple (`TARGET 200 (<rung>)`); a
+`Race`-mode cell reads differently. `grid8_3_1` (Fury's default cell, Single
+Race, Talon's Junction) reads **`AI DIFFICULTY (<rung>)`** - the extra `AI`
+confirmed across two independent boots, this project's own 2026-09-28 pass
+and a pre-existing 2026-09-13 capture
+(`data/reference/hd-capture/talons-matched/screen-Cell-Selection.png`) - not
+a clipped crop of this section's own frames (re-checked at a wider crop
+directly). See `docs/ui/campaign-screens.md`'s "Which block is which
+difficulty" section (2026-09-28, above this page) for the full three-boot
+account.
+
+Second, and this corrects the paragraph above rather than just extending
+it: **both `"DIFFICULTY"` and `"AI DIFFICULTY"` are authored string-table
+entries, not runtime-only text.** `psarc_grep`-ing `DATA04.PSARC`'s
+`/data/plugins/languages/american/entries.xml` directly turns up
+`<entry id="RB_DIF" string="DIFFICULTY">` and `<entry id="RB_AI_DIF"
+string="AI DIFFICULTY">` as two distinct idstrings - so the earlier claim
+that the bare word was "not authored as a string-table entry anywhere this
+build has read" was wrong; only the `"(<rung>)"` suffix composition is
+runtime text, not the words themselves. `DifficultyButton`'s own widget in
+`CellMode_Definition.xml` still authors one unconditional literal
+(`string="Change Difficulty"`, checked directly on `DATA06`'s copy, no
+`<Entry>` redirect near it) - so the choice between `RB_DIF`/`RB_AI_DIF` is
+made by the executable at draw time, keyed on something this pass did not
+trace, not by an XML-authored per-mode string swap the way `hd_target_title`
+already is for the `TARGET` header.
+
+The same `entries.xml` also carries `UPDATE_ANNOUNCEMENT`'s own text, which
+plausibly explains the split rather than just describing it: `"Update 1.20
+introduces new Novice, Skilled and Elite difficulty options to the campaign
+for all Time Trial, Speed Lap & Zone events... Rather than having difficulty
+options for just Single Race and Tournament events in campaign, it is now
+possible... to select Novice, Skilled or Elite difficulty options for all
+events"` - i.e. `AI DIFFICULTY` (opponent skill, `MAN_1_CAM_4`: `"press the
+Square button to adjust the difficulty level of your opponents"`) is the
+original, `Single Race`/`Tournament`-only mechanic, and bare `DIFFICULTY`
+is the later addition covering every other mode's own target-threshold
+rung. `Eliminator`/`NitroBattle` reading bare `DIFFICULTY` fits this reading
+(not itself named in that announcement string, but sharing the
+target-threshold shape with `TimeTrial`/`SpeedLap`/`Zone`) rather than
+contradicting it - not confirmed against a `TimeTrial`/`SpeedLap`/`Zone`
+capture this pass, which would be the direct check.
 
 **The `GOLD MEDALS` denominator is closed - `87` for `Wipeout HD`, `80` for
 `Fury`, both exactly a campaign's own total cell count.** RPCS3 reads

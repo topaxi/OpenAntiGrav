@@ -233,11 +233,22 @@ citations.
    own `DIFFICULTY (<rung>)` prompt reads `AI DIFFICULTY (<rung>)` on this
    cell (`Race`) but bare `DIFFICULTY (<rung>)` on `grid8_3_2` (`Eliminator`,
    the cell the 2026-09-25 section's own capture used) - a real,
-   cross-checked-against-a-third-boot mismatch, not a crop artifact. Bears
+   cross-checked-against-a-third-boot mismatch, not a crop artifact. **Both
+   words are genuine disc strings**: `DATA04.PSARC`'s own `entries.xml`
+   carries `RB_DIF="DIFFICULTY"` and `RB_AI_DIF="AI DIFFICULTY"` as two
+   distinct idstrings (`psarc_grep`, direct read) - correcting the
+   2026-09-25 section's own claim that the bare word was unauthored runtime
+   text - though which idstring a given mode picks is chosen by the
+   executable at draw time, not by an XML-authored redirect near
+   `DifficultyButton`'s own widget. The same `entries.xml`'s
+   `UPDATE_ANNOUNCEMENT` string plausibly explains the split: `AI
+   DIFFICULTY` is the original `Single Race`/`Tournament`-only "adjust your
+   opponents' skill" mechanic, bare `DIFFICULTY` the Update 1.20 addition
+   giving every other mode its own selectable target-threshold rung. Bears
    directly on `pulse-cellsel`'s own runtime-prompt work; see
    `docs/ui/campaign-screens.md`'s "Which block is which difficulty" section
-   for the full three-boot account. Not this thread's/lane's to fix - for
-   the lead to route.
+   for the full three-boot account and the correction's own full text. Not
+   this thread's/lane's to fix - for the lead to route.
 2. The saved-record struct's own field layout, precisely enough to settle
    whether `SaveData_MigrateCellMedalsToHardElite`'s own `+0x6c` write and
    `0x001e1138`/`0x001e1188`'s own `+8`/`+9` reads are the same field -

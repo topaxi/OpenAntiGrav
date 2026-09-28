@@ -611,36 +611,49 @@ walk loop breaks out the moment `current_screen() == args.screen`, before
 `Novice`/`Skilled`/`Elite`-named target triple reads the same icon-shape
 mapping) needs a different driver, not an extra `--nav` flag on this one.
 
-Once at `Cell Selection`, `--button triangle` cycles `AI DIFFICULTY
-(NOVICE/SKILLED/ELITE)` one rung per press, wrapping `NOVICE -> SKILLED ->
-ELITE -> NOVICE`; `square`/`l1`/`r1` were no-ops on this rig on an earlier
-pass (2026-09-21) despite the footer's own icon reading `Square` - not
-re-tested this pass since `triangle` worked cleanly. `--steps 6` gives two
-full cycles, two frames per rung, past the atlas's own "many-frame rotation
-strip" shape (a single frame can catch an odd phase).
+Once at `Cell Selection`, `--button triangle` cycles the footer's own rung
+one step per press, wrapping `NOVICE -> SKILLED -> ELITE -> NOVICE`;
+`square`/`l1`/`r1` were no-ops on this rig on an earlier pass (2026-09-21)
+despite the footer's own icon reading `Square` - not re-tested this pass
+since `triangle` worked cleanly. `--steps 6` gives two full cycles, two
+frames per rung, past the atlas's own "many-frame rotation strip" shape (a
+single frame can catch an odd phase).
 
-**Pair each frame to the rung by its own `AI DIFFICULTY (<rung>)` footer
-text, never by press count.** Face-button presses drop at HD's own ~9 fps
-here and produce no `TTY.log` line to re-synchronise against, unlike a
-screen transition. `00.png` - the unpressed frame, taken immediately on
-reaching the screen with no settle - is reliably a comb-artifact mid-transition
-capture (the same defect `rpcs3-capture.md`'s "A screen must settle before
-it is photographed" section already names for a screen *change*; `browse`'s
-own `00.png` has no such settle at all, only `--settle-step` between
-*subsequent* presses) - do not rely on it; infer the pre-press rung from the
-cycle's own periodicity against `01.png` instead.
+**Pair each frame to the rung by its own footer text, never by press
+count.** Face-button presses drop at HD's own ~9 fps here and produce no
+`TTY.log` line to re-synchronise against, unlike a screen transition.
+`00.png` - the unpressed frame, taken immediately on reaching the screen
+with no settle at all (`browse`'s own `--settle-step` only applies between
+*subsequent* presses, unlike `capture --nav-shots`'s `photograph()`, which
+does sleep `SCREEN_SETTLE` before its shot - see "A screen must settle
+before it is photographed" above) - is a comb-artifact mid-transition
+capture on this boot and unreadable. **Its pre-press rung is unknown; do not
+infer it from the triangle-cycle's own periodicity against `01.png`** -
+that assumes the first press did not drop, which is exactly the reasoning
+this paragraph's own first sentence rules out.
 
 **This boot did not run on a fresh profile.** An existing save
 (`BCES00664-AUTO-` under `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/`,
 left by an earlier HD lane) was on disk, and moving it aside - the
 `justfile:700`-documented recipe - was refused by this session's own
 permission classifier as a write outside the repository. This turned out not
-to matter for *this* measurement: `Target0/1/2 Medal`'s row is a live
-target-threshold indicator keyed on the currently-browsed rung
-(`model.difficulty()`), not on any earned/saved state, so the icon-shape
-reading is save-independent. It does mean this pass is not independent
-confirmation of the fresh-profile default rung (`NOVICE`, per the
-2026-09-25 section above) - only consistent with it.
+to matter for the icon-shape measurement above: `Target0/1/2 Medal`'s row is
+a live target-threshold indicator keyed on the currently-browsed rung
+(`model.difficulty()`), not on any earned/saved state, so that reading is
+save-independent - but it does mean `00.png` (unreadable regardless, see
+above) says nothing about the fresh-profile default rung either way.
+
+**A separate, pre-existing capture does carry that arrival rung, cleanly.**
+`data/reference/hd-capture/talons-matched/screen-Cell-Selection.png`
+(2026-09-13, `cmd_capture`'s own `--nav-shots`, which *does* sleep
+`SCREEN_SETTLE` before its shot and involves no `DifficultyButton` press at
+all on the way in) is the settled arrival state of this exact cell
+(`grid8_3_1`) on whatever profile that boot ran on, and it reads `AI
+DIFFICULTY (NOVICE)` - see `docs/ui/campaign-screens.md`'s "Which block is
+which difficulty" section for the full comparison against this project's
+own `Difficulty::Medium` (`SKILLED`) default. Whether *that* profile was
+itself fresh is not established either, so this is corroborating rather
+than dispositive, but it is a real settled reading, unlike `00.png` above.
 
 ## See also
 
