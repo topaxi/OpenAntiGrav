@@ -1117,3 +1117,10 @@
 0x0888d8e4	function	Widget_UpdateTransitionFraction	80	race-box-screens.md
 0x0889050c	function	Widget_SubtreeTransitionFraction	75	race-box-screens.md
 0x08890358	function	Widget_DestroyIfTransitionSettled	72	race-box-screens.md
+0x088b7c8c	function	Mode3D_ReadValues	85	race-box-screens.md
+0x088b7f24	function	Mode3D_EnterView	75	race-box-screens.md
+0x088b8488	function	Mode3D_LeaveView	75	race-box-screens.md
+0x088b8548	function	Mode3D_DrawQueued	78	race-box-screens.md
+0x08811220	function	Gu_SetOffset	85	race-box-screens.md
+0x088b8cf4	function	Model_ReadValues	85	race-box-screens.md
+0x088b98b4	function	Model_BuildTransform	78	race-box-screens.md

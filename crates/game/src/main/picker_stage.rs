@@ -220,6 +220,15 @@ impl PickerStage {
         })
     }
 
+    /// The selected circuit's own `<Mode3D><Model>` pose, when its
+    /// `screen.xml` authors one - see
+    /// [`oag_game::preview::mode3d_view_projection`]. `None` on `Team
+    /// Selection` (Pulse's craft `screen.xml` authors no `Mode3D`) and on any
+    /// circuit missing one, so a caller falls back to [`oag_game::preview::orbit_for`].
+    pub(crate) fn mode3d_model(&self) -> Option<&oag_ui::picker::slideshow::Model> {
+        self.slideshow.as_ref()?.model.as_ref()
+    }
+
     /// Loads the selected entry's preview, in the selected livery, if it is
     /// not the one already built.
     pub(crate) fn refresh_preview(&mut self, gpu: &Gpu) {

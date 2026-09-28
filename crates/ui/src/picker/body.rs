@@ -252,11 +252,15 @@ pub(super) fn body(
 /// A widget with no `transition` (the screen's title bar, `<LeftLayer
 /// transition="0">` on both selection screens) draws at once, exactly as
 /// before this existed. One with a `transition` ramps linearly from
-/// invisible to its own alpha over that many seconds - **the ramp's shape is
-/// chosen, not measured**: a live PPSSPP capture
-/// (`docs/ui/selection-screens.md`) pins the *duration* against the
-/// authored `0.5`, settled by frame 15 of a 60 Hz walk, but four screenshots
-/// a tenth of a second apart cannot tell a linear ramp from an eased one.
+/// invisible to its own alpha over that many seconds - **measured, not
+/// chosen**: `Widget_UpdateTransitionFraction` (`0x0888d8e4`, confidence 80,
+/// `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`), the generic
+/// per-widget fade every widget kind's own `Update` calls, is `elapsed /
+/// duration` on both its enable and disable branches with no curve anywhere,
+/// confirmed live across several thousand breakpoint hits. A live PPSSPP
+/// capture (`docs/ui/selection-screens.md`) independently pins the
+/// *duration* against the authored `0.5`, settled by frame 15 of a 60 Hz
+/// walk.
 fn fade_in(transition: f32, seconds: f32) -> f32 {
     if transition <= 0.0 {
         1.0

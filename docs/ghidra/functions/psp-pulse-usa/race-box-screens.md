@@ -451,6 +451,128 @@ would trade one unverified guess for another; the project's own rule against
 tuning a curve to look right cuts against doing that on the strength of "linear
 elsewhere in this engine" alone.
 
+## `Mode3D`'s own fixed camera, and the child `Model`'s own pose, 2026-09-28
+
+Chasing this thread's own open item - the race-box outline was framed by a
+capture-read orbit (`oag_game::preview::orbit_for`), not by
+`Track Creation`'s `screen.xml` own `<Screen name="Top"><Mode3D><Model>`
+(`docs/ui/selection-screens.md`: `x=0 y=-300 z=-3700 RotX=1.5 RotY=0.1` on
+the `Model`, `OriginX=-145 OriginY=13 nearZ=1000 farZ=5000` on the `Mode3D`
+around it). The camera is now read from the disc and drawn from
+(`oag_game::preview::mode3d_view_projection`, `crates/game/src/preview.rs`).
+
+**The `Mode3D` widget's own attribute set is `Mode3D_ReadValues`**
+(`0x088b7c8c`, confidence 85: exact attribute-name strings - `OriginX`,
+`OriginY`, `nearZ`, `farZ`, `mirror`, `mode` (compared against the literal
+string `orthographic`), `FirstPass` - plus a live capture at `Track
+Creation` reading the exact authored values, `0.0/0/0/-145.0/13.0/1000.0
+/5000.0` for `mode`/`FirstPass`/`mirror`/`OriginX`/`OriginY`/`nearZ`/`farZ`,
+off the widget `Mode3D_EnterView` and `Mode3D_DrawQueued` both hit on
+`0x08fcd150`, `data/scratch/pulse-mode3d/mode3d_capture.json`). The widget's
+own constructor (`FUN_088b7a04`, not renamed - clear from context but no
+attribute strings of its own to anchor a name to) defaults `OriginX`/
+`OriginY` to `0`, `nearZ`/`farZ` to `20.0`/`100.0` and `mode`/`mirror` to
+false, matching `Mode3D_ReadValues`'s own field offsets exactly.
+
+**No camera position or rotation exists on the `Mode3D` widget at all** -
+only `Origin`/`nearZ`/`farZ`. The camera sits at the origin, always looking
+down `-Z`; what moves is the child `Model`'s own authored pose.
+
+**Two functions build the projection matrix from `nearZ`/`farZ`, and only one
+of them is the one that actually reaches the polygons.** Both read cleanly as
+a standard symmetric perspective frustum - `Y`-scale `1/tan(halfFovY)`,
+`X`-scale that divided by a hardcoded `1.7647059` (`480/272`, the PSP's own
+screen shape, not the panel's), the usual near/far terms - and both are
+reached only through the widget's own `+0x38` class-info block, never called
+directly (`get_xrefs_to` on either address returns nothing):
+
+- **`Mode3D_EnterView`** (`0x088b7f24`, confidence 75) runs from
+  `FUN_08944160`, the generic widget-tree draw traversal (`(**(vtable+0x34))
+  (...)` on every visible widget), with a fixed half-FOV `0x3f11361e`
+  (`FUN_0897e414`, a range-reduced `tanf` - confirmed by its call into
+  `__rem_pio2f` - so this is the input angle, not its tangent) - `0.566896`
+  rad, `~64.97 deg` full FOV. It never touches the GE viewport offset, and
+  ends by calling `Gfx_Enqueue` to submit the widget for a **deferred** draw.
+- **`Mode3D_DrawQueued`** (`0x088b8548`, confidence 78) runs from
+  `Gfx_FlushRenderManager`'s own queue-replay loop (`(**(vtable+0x44))(item,
+  manager, sort_key)`, the callback every queued `Gfx_Enqueue`d item gets at
+  actual polygon-submission time, after the queue's own sort) - the return
+  address sits right after that indirect call. Its own half-FOV is a fixed
+  `0.5` rad exactly, `~57.30 deg` full FOV - **not** the same number
+  `Mode3D_EnterView` computes. It also calls `Gu_SetOffset` (`0x08811220`,
+  confidence 85: its own default-argument call passes `0x710, 0x778` =
+  `1808, 1912` = `2048 - 240, 2048 - 136`, the PSP's screen half-extents
+  subtracted from the GE's `2048` viewport-centre convention exactly) with
+  `OriginX + 1808, OriginY + 1912` - i.e. `OriginX`/`OriginY` are a plain
+  screen-pixel shift of the viewport's own centre. `Mode3D_LeaveView`
+  (`0x088b8488`, confidence 75, the matrix-stack pop paired with
+  `Mode3D_EnterView`) restores the same default `1808, 1912` on its own way
+  out, corroborating the pair.
+
+  Because the deferred callback is the one still running when the GE
+  actually consumes the vertex buffer, **`Mode3D_DrawQueued`'s numbers -
+  `0.5` rad and the `Origin` shift - are read as the ones that reach the
+  screen**, and `Mode3D_EnterView`'s own `0.566896` rad is superseded before
+  that happens. Not single-stepped through an entire frame to watch the
+  supersession directly, so this is a call-graph reading, not a breakpoint on
+  the rasteriser itself.
+
+**The child `Model`'s own attribute set is `Model_ReadValues`** (`0x088b8cf4`,
+confidence 85: exact attribute-name strings again - `X`, `Y`, `Z`, `RotX`,
+`RotY`, `RotZ`, `orthoScale`, `orthoScaleX/Y/Z`, `colour`, `src`,
+`startPaused`, `Ztest` - matching the disc's own `x y z RotX RotY` on this
+circuit's `Model` element letter for letter). Loading a mesh
+(`Model_SetSrc`-shaped, `0x088b9200`, not renamed: it calls `Vex_LoadModel`
+with the read `src` and, at its own end, calls the transform builder below)
+and every `Values` read both end by calling **`Model_BuildTransform`**
+(`0x088b98b4`, confidence 78): builds a `4x4` from `X/Y/Z` as a translation,
+then composes `RotX`, `RotY`, `RotZ` in that order via three `vmmul_q`s, each
+overwriting the running matrix - `M := RotAxis * M` - then applies
+`orthoScale`/`orthoScaleX/Y/Z` as a per-axis scale, then commits the result
+through `FUN_08945284` (not renamed - it just copies 16 floats into the
+node's own transform slot, no attribute strings of its own).
+
+**Confirms radians, not degrees, for `RotX`/`RotY`/`RotZ`.** Each rotation's
+own sine/cosine comes from `vcos_s`/`vsin_s` fed `angle * vcst_s(5)` -
+`vcst_s(5)` is the Allegrex VFPU's `2/pi` constant, the standard
+pre-multiply the PSP's own trig microcode needs because it treats its input
+as a fraction of a half-turn rather than a plain radian - so the value
+multiplied in is the angle already in ordinary radians, exactly what
+`RotX="1.5" RotY="0.1"` on the disc read as.
+
+**What this pass did not settle: the rotation's own composition order in
+this renderer's convention.** `Model_BuildTransform`'s own matrix ends up
+`RotZ * RotY * RotX * T` as a literal left-to-right product (`RotZ` was the
+*last* `vmmul_q`, so it sits leftmost). Read as PSP code's own row-vector
+convention (translation sits in the matrix's last row, the row-vector
+signature), a point transforms as `v * RotZ * RotY * RotX * T` - `RotZ`
+applied first, `T` last. `oag_game::preview::mode3d_view_projection` instead
+builds `T * RotX * RotY` in this renderer's column-vector convention (`RotZ`
+dropped, since this circuit authors none) - a plausible transpose of the
+row-vector reading, not one confirmed by stepping through an actual frame.
+A live PSP screenshot at this reading looks right against a live PPSSPP
+capture of `Track Creation`
+(`data/scratch/pulse-mode3d/shots/track-select-psp.png`
+against a live capture of the same panel) - the ribbon sits in the right
+place, at the right scale, right-side up - but `RotY` on this circuit is a
+small `0.1` rad, small enough that a wrong composition order would be hard
+to see on this circuit alone. Left open for whoever picks up a circuit with
+a larger `RotY`, or a breakpoint on `FUN_08945284` dumping the matrix it
+commits.
+
+**The PS2's own `OriginX`/`OriginY` sign was not read from `psp-pulse-eu`'s
+PS2 sibling, and is inferred instead.** This circuit's two pressings author
+`OriginX=-145 OriginY=13` (PSP) against `OriginX=193 OriginY=-21` (PS2) -
+within rounding of `-(-145, 13) * (640/480, 448/272)`, i.e. the PS2's own
+values read as the PSP's own, negated, scaled to the PS2's `640x448` grid.
+Applying the PSP's own sign to the PS2's raw values landed the outline
+bottom-left of the panel instead of inside it
+(confirmed live, `data/scratch/pulse-mode3d/shots/track-select-ps2.png`
+before the flip, `track-select-ps2-fixed.png` after); `oag_game::preview`
+negates `OriginX`/`OriginY` on the PS2's own grid to match. No PS2 Ghidra
+program was consulted for this pass - the sign comes from the two pressings'
+own authored numbers agreeing on a scale factor, not from PS2 code.
+
 ## What is still open after this pass
 
 - The nine unlock-predicate functions inside `Definition_IsUnlocked` are
@@ -526,6 +648,18 @@ whoever picks EU coverage of this area up next.
   [menus-original.md](../../../ui/menus-original.md)'s page-transition-curve
   item; did not close it - the page-level zoom-and-crossfade curve is still
   unlocated, see "What is still open" above.
+- 2026-09-28, `pulse-mode3d` lane: `Mode3D_ReadValues` (`0x088b7c8c`),
+  `Mode3D_EnterView` (`0x088b7f24`), `Mode3D_LeaveView` (`0x088b8488`),
+  `Mode3D_DrawQueued` (`0x088b8548`), `Gu_SetOffset` (`0x08811220`),
+  `Model_ReadValues` (`0x088b8cf4`) and `Model_BuildTransform` (`0x088b98b4`)
+  named - the race box's fixed `Mode3D` camera and the child `Model`'s own
+  pose, closing this thread's own "outline framed off the capture" item. See
+  "`Mode3D`'s own fixed camera, and the child `Model`'s own pose" above and
+  `oag_game::preview::mode3d_view_projection`. Left open: which of the two
+  projection functions actually reaches the rasteriser is a call-graph
+  reading, not a breakpoint on the draw itself; the rotation composition
+  order is a plausible transpose; the PS2's `Origin` sign is inferred from
+  the two pressings' own numbers, not read off `psp-pulse-eu`.
 - 2026-09-28: `Widget_CreateFromElement` (`0x088920fc`) named - the generic
   XML-element-to-widget constructor every front-end screen's tree goes
   through, and the one that reads `LeftLayer`'s own `transition` attribute

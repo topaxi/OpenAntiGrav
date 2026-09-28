@@ -581,7 +581,7 @@ pub fn run(
                         .and_then(|blob| race::circuit_length(&blob).ok()),
                     _ => None,
                 };
-                let stills = picker_stills(
+                let (stills, mode3d_model) = picker_stills(
                     kind,
                     &options.settings,
                     selected,
@@ -610,6 +610,13 @@ pub fn run(
                     options.menu_picker_seconds,
                 );
                 list.extend(stills);
+                // Same disc read `picker_stills` already made for the
+                // hexagonal window's cards - reused here rather than read
+                // twice, since the two share one `screen.xml`.
+                let request = request.map(|r| PreviewRequest {
+                    mode3d: mode3d_model,
+                    ..r
+                });
                 // A title that previews with stills alone has no mesh to
                 // ask for, and asking would log a miss for a file that is
                 // not supposed to be there - see

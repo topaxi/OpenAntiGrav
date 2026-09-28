@@ -99,10 +99,17 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
 
 ## Open
 
-- **The outline is framed off the capture rather than off `screen.xml`'s
-  own `Mode3D` pose** - read (`slideshow::Model`), not acted on. The pose
-  needs the `Mode3D` projection understood (`OriginX/OriginY` are in an
-  unmeasured space: `-145,13` on the PSP, `193,-21` on the PS2).
+- ~~The outline is framed off the capture rather than off `screen.xml`'s
+  own `Mode3D` pose~~ **2026-09-28: closed.** `Mode3D` has no camera
+  position or rotation of its own, only `Origin`/`nearZ`/`farZ`; the child
+  `Model` is what moves. `Origin` is a plain screen-pixel shift of the
+  viewport's own centre, `-145,13` (PSP) reading as `-(193,-21)` scaled to
+  the PS2's own `640x448` grid rather than measured there directly. See
+  `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md#mode3ds-own-fixed-camera-and-the-child-models-own-pose-2026-09-28`
+  and `oag_game::preview::mode3d_view_projection`. Left open there: the
+  `Model`'s own rotation order in this renderer's convention is a plausible
+  transpose of the PSP's row-vector one, not breakpoint-confirmed, and the
+  PS2's `Origin` sign is inferred rather than read off `psp-pulse-eu`.
   ~~The cards arrive without their transition~~ **2026-09-28: closed.**
   `LeftLayer`'s own `transition` attribute is a per-widget fade-in/fade-out
   duration in seconds - not a slide, not a scale - read off the generic

@@ -511,8 +511,10 @@ impl MenuStage {
                 picker.model.seconds(),
                 picker.layout.preview,
             );
+            // `Track Creation`'s own `<Mode3D>` camera, when authored.
+            let mode3d_model = picker.mode3d_model().cloned();
             if let Some(preview) = picker.preview.as_mut() {
-                preview.draw(
+                preview.draw_auto(
                     &gpu.device,
                     &gpu.queue,
                     encoder,
@@ -520,6 +522,7 @@ impl MenuStage {
                     viewport,
                     target_size,
                     self.skin.space(),
+                    mode3d_model.as_ref(),
                     rect,
                     orbit,
                     seconds,
