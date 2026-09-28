@@ -117,8 +117,14 @@ actually scored in `evaluate_medal`'s own terms, is
 
 ## Wipeout HD and Fury: the same schema, extended, split across four archives
 
-**Status: understood, for the schema; the medal law's difficulty axis is
-unmeasured.** Measured 2026-09-14 against `hdfury-ps3-eu-dec.iso`
+**Status: understood, for the schema. The medal *icon* is confirmed
+per-difficulty (2026-09-28, see "One shape per difficulty" in
+`docs/ui/campaign-screens.md`); the *evaluate/award* law's difficulty axis
+is still open past "every evaluator reads one `GameState`-held rung, not a
+per-cell stored one" -
+`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s "The medal-evaluate
+function is found" section has the full account, including what stays
+unsettled.** Measured 2026-09-14 against `hdfury-ps3-eu-dec.iso`
 (EU, decrypted) in
 `crates/hd/tests/campaign_grids_ground_truth.rs` (`#[ignore]`d, `just
 test-data`), with HD's own entry names and archive facts in
@@ -275,6 +281,29 @@ so `oag_tables::fexml::tag_end` now recovers the same way: an unquoted `<`
 missing `>` should have been. `the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema`
 and `every_grid_file_on_every_archive_parses` both assert the corrected
 counts (`grid4` = 10, `DATA02`/`04`/`06` = 87 each) against the real disc.
+
+### Does any other title have a per-difficulty medal? No - checked directly, 2026-09-28
+
+**Pulse**: no. Every Pulse cell authors exactly one `<Gold>`/`<Silver>`/
+`<Bronze>` triple - `Cell::difficulty_targets` is `None` on every row this
+crate has ever parsed off a Pulse disc, and `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`
+never found a difficulty-rung attribute on `PI_Cell` at all. There is
+nothing for a per-difficulty icon to key on.
+
+**Pure**: not reachable to check. This project's own Pure build boots to a
+Time Trial and never reaches a campaign screen at all
+(`docs/overview/status.md`'s M8 row), and no `race_campaign` parse exists
+for it in this crate. Absence of evidence, not evidence of absence - Pure's
+own disc was not read for this question.
+
+**2048**: no, and not the same *shape* of law even where it might look
+similar. `oag_2048::campaign::evaluate_tier` is a two-rung `Pass`/`Elite`
+**score bar**, not a three-rung `Easy`/`Medium`/`Hard` **difficulty** -
+`Tier::Elite` maps to `Medal::Gold` and `Tier::Pass` to `Medal::Bronze`
+purely for this project's own `records.rs` bookkeeping
+(`docs/architecture/persistence.md`'s 2048 paragraph), not because 2048's
+own objective law has a middle rung or a selectable AI difficulty to earn
+either bar against.
 
 ### What this section does not resolve
 

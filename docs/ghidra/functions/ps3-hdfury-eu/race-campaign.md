@@ -230,3 +230,78 @@ evidence HD's own consumer routes through the same function at all.
 (priority 3 of this lane) was not reached this pass - see
 `docs/ui/campaign-screens.md`'s HD section for the RPCS3-side half of that open
 question.
+
+## The medal-evaluate function is found, and it always reads one shared rung - 2026-09-28
+
+The player-facing observation this pass started from - HD's medals are earned
+per difficulty, and each difficulty's medal has a different icon shape - is
+confirmed on the icon-shape half (see `docs/ui/campaign-screens.md`'s "One
+shape per difficulty" section for the texture evidence). This section covers
+the executable side: the comparison consumer the section above left
+unfound, and what it does and does not settle about *storage*.
+
+`get_xrefs_to` on `PTR_DAT_008ae894` (the lookup table `SaveData_MigrateCellMedalsToHardElite`
+reads through) turns up a small, closed family of accessors, all at
+`0x001e1xxx`/`0x001e2xxx`:
+
+| Address | What it does |
+| --- | --- |
+| `0x001e1138`/`0x001e1188` | `TryGetValue`-shaped: fetch a cell's own saved record by its `+0x58` id, copy `0x48` bytes to the stack, return one byte of it (`+9` and `+8` respectively - adjacent fields, not independently confirmed as *which* two fields). |
+| `0x001e11e0` | Same fetch; returns the record's raw first field (a `u32`) for `Mode::Elimination`/`3`/`9`/`0xd`, else `0xffffffff`/`0xffffffff`-shaped sentinel through a different arm. Not fully read this pass. |
+| `0x001e25c0` | **`Cell_EvaluateMedal`'s own HD analogue.** Fetches the record, reads its raw `u32` value, then compares it against `param_1 + (*(GameState+0xdc) * 0xc) + {0xb0,0xb4,0xb8}` - three `u32` targets `0xc` (12) bytes apart, exactly [`oag_tables::race_campaign::MedalTargets`]'s own three-field-per-rung shape - returning tier `0`/`1`/`2` (gold/silver/bronze) or `0xff`. The comparison flips (`>=` instead of `<=`) for `*(cell+0x110) == 6` (`Mode::Zone`) or `== 0xe` (14 - not `Mode::Elimination`'s own `8`; unidentified, possibly `NitroBattle`/`Detonator`, not chased further). |
+| `0x001e1028` | The same compare, `param_2` (a raw value) in place of the record fetch - a "what would this score earn" pure function, same `GameState+0xdc` selector. |
+| `0x0001c6d0` | Walks a whole cell list, calls `0x001e25c0` on each, and OR's a per-cell bit into a six-word, 192-bit mask (`param_1+0x434..+0x448`) wherever the result is not `0xff`. Read directly against `FUN_0015e638`'s own list, not yet confirmed as *which* list (a whole campaign profile's cells fit the bit count; a single grid's own cell count does not need 192 bits) or what the mask itself feeds - not the medal *tier*, only "has one".
+
+None of these five is named or entered in `names.tsv` this pass: `0x001e25c0`
+is legible enough to describe with confidence, but naming it
+`Cell_EvaluateMedal` invites conflating it with the identically-named
+Pulse function at a different address on a different binary, and the other
+four turned up answering a narrower question (see below) than the one this
+section opened with, not a clean enough read of their own purpose to commit
+a name past `_q`. Flagged for whoever next has Ghidra time on this program.
+
+**What this settles: every medal evaluation this pass found reads one
+GameState-held difficulty (`PTR_g_GameState_008ae88c + 0xdc`), not a
+per-cell stored one.** Both `0x001e25c0` (record-backed) and `0x001e1028`
+(value-backed) multiply the *same* field by `0xc` and add it to the *cell's*
+own base pointer - a single scalar, read fresh each call, not indexed by
+which cell is being evaluated. Confidence 75 that this field is HD's own
+`CellSelection::difficulty`-equivalent (a currently-browsed/selected rung,
+not a per-profile setting) - consistent with, but not independently
+confirmed against, a live capture of `DifficultyButton` changing what a
+fresh, unearned target row shows.
+
+**What this does not settle, and why this pass stops here rather than
+picking a side.** `SaveData_MigrateCellMedalsToHardElite` writes a specific
+per-cell record *byte* (`piVar6+0x6c` relative to its own found-record base,
+adjacent to but not confirmed identical in addressing to the `+8`/`+9`
+bytes `0x001e1138`/`0x001e1188` read) only for `TimeTrial`/`SpeedLap`/`Zone`
+cells that already have a medal - modes whose raw value does not depend on
+AI skill, unlike a `Race`/`Elimination` placement, which is consistent with
+that byte meaning "the rung this stored value should be judged against" (a
+real per-cell field, worth keeping). But no function this pass found *reads*
+that byte to select a rung the way [`oag_tables::race_campaign::Cell::evaluate_medal_for_difficulty`]
+does - every evaluator instead reads the one shared `GameState+0xdc` value.
+Reconciling "a migration writes a per-record rung byte" with "no evaluator
+reads a per-record rung byte" needs the saved-record struct's own field
+layout pinned down past what `0x48`-byte blind copies give here - specifically
+whether `0x001e1138`'s `+9` and the migration's `+0x6c` (relative to a
+*different* found-record base - a linked-list node, not the hashmap
+`TryGetValue` these accessors use) are the same field at all. **Not
+attempted further this pass** - the check that would settle it (five Ghidra
+calls: the `Medal_%d_%d`/`Medal_%d` widget-name strings at `0x0078b138`/
+`0x00797b70` have only `[DATA]` xrefs, so the draw site is reflection-bound
+the same way `PI_Cell`'s own attribute table is, and neither string search
+nor `GameState+0xdc`'s own two readers led to a badge-draw or
+`DifficultyButton`-handler function within that budget) is flagged here for
+whoever picks this up with more Ghidra time.
+
+**Consequence for this project's own implementation, stated plainly**:
+`oag_game::records::CampaignRecord::best_difficulty` (a per-cell stored
+rung, never downgraded, tie-breaking a harder rung over a better medal at
+an easier one) and `oag_ui::campaign::hd::hd_medal_frame`'s own
+earned-difficulty keying for `Medal_{x}_{y}` are this project's own
+**chosen, not measured** design - plausible, and not contradicted by
+anything found this pass, but not read off a confirmed original consumer
+either. See that struct's and that function's own doc comments for the
+full reasoning `docs/ui/campaign-screens.md` and this page together give.
