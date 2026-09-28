@@ -66,6 +66,9 @@ pub(crate) enum Screen {
 /// its first-visit default if never entered), and forgetting everything
 /// once the campaign screens close (`CampaignStage` is rebuilt on every
 /// `RACE CAMPAIGN` entry) - neither case was observed on the original.
+/// Also chosen, not measured: that HD/Fury's own `Cell Selection` (which
+/// shares this stage) persists its cursor the same way - only Pulse PSP
+/// was observed.
 #[derive(Debug, Default)]
 pub(crate) struct CellCursors(Vec<(usize, String)>);
 

@@ -2361,7 +2361,9 @@ unit tests only check the *draw*, never how a caller clips it.
   measured**: that the memory is keyed per grid (a grid never entered keeps
   its own first-visit default) and that it is forgotten once the campaign
   screens close - the original was only observed backing out of and
-  re-entering the same grid.
+  re-entering the same grid. Also chosen, not measured: HD/Fury share
+  `CampaignStage`, so their `Cell Selection` now persists the cursor too,
+  though only Pulse PSP was observed doing it.
 - ~~The scrolling tip ticker and the button-legend footer row are still not
   drawn.~~ **Both draw, 2026-09-21** - see "The tip ticker, the Confirm/Back
   legend, `Cell Help` and a podium" above. The scroll speed itself is still
