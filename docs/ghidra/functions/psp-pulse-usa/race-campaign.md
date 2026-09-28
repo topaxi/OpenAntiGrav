@@ -361,8 +361,10 @@ For every mode with a campaign cell in play (`DAT_08b30ffc != 0`) it then:
    `<` for time/position modes, `>` for `Zone`/`Elimination`,
 2. computes `medal = Cell_EvaluateMedal(cell, value)`,
 3. keeps the **better** of the new and stored medal in `record+9`, and stores the
-   difficulty alongside it in `record+8`, preferring the higher difficulty on a
-   tie,
+   difficulty alongside it in `record+8` under the exact rule "The `record+8`/
+   `record+9` write, decompiled in full" below (2026-09-28) settles precisely -
+   preferring the higher difficulty on a tie, but **unconditionally overwriting
+   the stored difficulty on a strict medal improvement, even downward**,
 4. sets the profile's dirty flag (`+0x45e`) so the campaign autosaves - the
    mechanism behind `TournamentLoad`'s `MSC_MSG_AUTOSAVE3` dialog, and
 5. increments the profile's gold/silver/bronze counters at `+0x160`/`+0x164`/
@@ -392,6 +394,128 @@ concrete starting point for it.
 `DAT_08b31158` fully fielded, the per-leg points table, and what value the
 medal above actually compares for a Tournament cell (the final standings
 rank by total points, not the last leg's own position).
+
+### The `record+8`/`record+9` write, decompiled in full, 2026-09-28
+
+`Race_RecordResult`'s own tail, common to every mode, once `uVar8` (the
+medal `Cell_EvaluateMedal` just computed, `0` gold .. `2` bronze, `0xff` for
+none) is in hand:
+
+```
+record = FUN_088085d0(profile, hash(cell.name), 0, 1)
+stored_medal = record+9        // 0xff on a fresh record
+stored_difficulty = record+8   // 0xff on a fresh record
+if stored_medal == 0xff or uVar8 <= stored_medal:   // no downgrade
+    if stored_difficulty == 0xff or uVar8 < stored_medal:
+        record+8 = g_skill_level     // unconditional overwrite
+    elif uVar8 == stored_medal and stored_difficulty < g_skill_level:
+        record+8 = g_skill_level     // tie: harder rung wins
+    record+9 = uVar8
+```
+
+Two consequences neither this page nor `oag_game::records::Store::record_campaign`
+previously carried, both confidence **88** (a direct read of the byte
+comparisons, no inference beyond the ordinal convention `Cell_EvaluateMedal`
+already established):
+
+- **A strict medal improvement overwrites `record+8` unconditionally**, even
+  to an *easier* rung than what was stored - there is no comparison against
+  the old difficulty in that branch at all. A bronze medal stored at `Hard`
+  becomes silver-at-`Easy` if that is what the very next, easier run scores,
+  because silver beats bronze outright; the difficulty stamped is simply
+  whatever `g_skill_level` (see below) was on the run that produced the
+  improvement, full stop.
+- **Only an exact tie in medal tier compares difficulty at all**, and even
+  then only ever *raises* the stored rung, never lowers it. This is the one
+  branch the previous read of this function ("preferring the higher
+  difficulty on a tie") had right; the "unconditional on improvement" branch
+  was not read before this pass.
+
+`oag_game::records::Store::record_campaign`'s own `improves` match arm
+previously implemented neither of these - it treated *any* difficulty
+mismatch as difficulty-dominant ("the harder rung wins outright, whatever
+either medal is"), reasoned from HD's `SaveData_MigrateCellMedalsToHardElite`
+grandfather clause with no comparison function found to check it against.
+This decompile is that comparison function, on Pulse; `Store::record_campaign`
+now matches it exactly. HD's own equivalent was not decompiled this pass -
+applying Pulse's now-measured algorithm there is still the same
+generalisation as before, just resting on a real decompile from the same
+codebase lineage rather than an inference from a migration routine.
+
+### The `DifficultyRC` persisted rung and Cell Selection's own square button, 2026-09-28
+
+`g_skill_level` above is a global `int`, not this cell's own state - it is
+the same **"AI difficulty"** rung `Single Player`'s own `Difficulty` row
+persists under the global key `SkillLevel` (`docs/formats/race-setup.md`'s
+`RB_AI_DIF` row), and Cell Selection's square button browses and commits the
+identical value through a second, independent path:
+
+- **`Profile_DifficultyRC` (`0x08809980`)**/**`Profile_SetDifficultyRC`**
+  (`0x088098f0`) are a plain getter/setter pair over one more hashed record
+  in the same per-profile record store `Cell_SavedDifficulty`/`Cell_SavedMedal`
+  read - keyed on the literal string `"DifficultyRC"` (`Libc_HashString`),
+  not a cell name. `CellSelection_OnEnter` loads it into the screen's own
+  `+0xf0` byte on every entry; `FUN_08808300` (the profile object's own
+  constructor - offsets `+0x43c`/`+0x45d..f`/`+0x160/164/168` match the
+  documented record-list head, dirty flag and medal counters above, so this
+  reads as `Profile_Construct`, left `FUN_`-prefixed pending a fuller check)
+  seeds it to `1` (Medium) for a fresh profile - matching this build's own
+  `CellSelection::difficulty` default and the PPSSPP capture below, which
+  never observed anything but `"AI difficulty (Medium)"` on a fresh entry.
+  Confidence **85** on both - clean decompilation, the hashed-key idiom
+  already established for every other per-profile record on this page.
+- **`CellSelection_Update` (`0x088d6430`, vtable word 9, cited by address
+  since 2026-09-14 and decompiled and named this pass)** rebuilds the
+  `DifficultyButton` widget's own text every frame:
+  `sprintf("%s (%s)", resolve("RB_AI_DIF"), resolve(rung))`, where `rung` is
+  `"Easy"`/`"Medium"`/`"Hard"` (bare idstrings, no `MSC_`/`FE_` prefix - the
+  same three strings `Cell_SavedDifficulty`'s own three callers already use)
+  keyed on the screen's own `+0xf0` byte, **not** `Cell_SavedDifficulty` -
+  this is the *browsed* rung, unrelated to any medal already banked on the
+  selected cell. `Square` (`Input_IsPressed(g_input, 7, 0)`) steps that byte
+  `(+1) % 3` every press - wrapping, no upper/lower clamp. Confidence **85**.
+- **`CellSelection_CommitSelection` (`0x088d6138`, already named, confidence
+  93) is where the browsed rung actually takes effect**: on `Confirm` it
+  writes the RaceBox's own `SkillLevel` global to `"Easy"`/`"Medium"`/`"Hard"`
+  off the identical `+0xf0` byte (the same `%s (%s)`-adjacent string table at
+  `0x08a826e4`), **and** calls `Profile_SetDifficultyRC` to persist that byte
+  back to the profile - so the rung browsed on Cell Selection is what both
+  drives the race's own AI skill (`AI_ResolveSkillScale`, reading the
+  `SkillLevel` global `Single Player`'s own Difficulty row also writes) and
+  survives to be read back next visit.
+- **Line7's own difficulty suffix, `CellSelection_PopulateDetail`
+  (`0x088d68d8`)**: when `Cell_SavedMedal` is not `0xff` (a medal is banked),
+  it resolves `Cell_SavedDifficulty`'s own rung through the identical three
+  bare idstrings and appends it with the identical `"%s (%s)"` format -
+  `"Gold (Medium)"`, not a bare medal word - confirmed against
+  `CellSelection_PopulateDetail`'s own raw decompile, confidence **88**.
+  No medal (`0xff`) draws `MSC_NONE` alone, no suffix.
+
+Measured live, PPSSPP, `pulse-psp-usa.chd`, Xvfb (`docs/ui/campaign-screens.md`'s
+"AI difficulty (square) cycles" finding, 2026-09-25): `Square` on Cell
+Selection changes only the bottom-bar label, `"AI difficulty (Medium)"` ->
+`"(Hard)"` - matching this decompile's "browsed rung only, no other panel
+change" reading exactly.
+
+**The mechanism is shared with Wipeout HD/Fury, not Pulse-specific**:
+`/hdfury/EBOOT-ps3-hdfury-eu.elf` carries the identical literal string
+`"DifficultyRC"` (`0x0077a5a0`), the same PI001-lineage `DifficultyButton`/
+`DifficultyButtonIcon` widget pair `docs/ui/campaign-screens.md`'s HD
+section already documents. Not decompiled on HD this pass - see that
+section's own note on what is and is not shared between the two titles'
+exact wording and defaults.
+
+**What recording a browsed rung does *not* mean, worth stating plainly
+rather than leaving implicit**: `g_skill_level` never reaches this
+project's own AI at all - `AI_ResolveSkillScale`
+(`docs/ui/campaign-screens.md`'s "Not launched from a cell" note) is not
+implemented, so a race launched from Cell Selection at any on-screen rung
+still runs against whatever the ordinary `[ai] difficulty` setting has
+opponents flying at. A player can browse `Hard`, race against
+`[ai] difficulty`-scaled opponents regardless, and bank `"Gold (Hard)"` on
+`Line7` - correct per the measured mechanism above (the rung recorded is
+the screen's own browsed selection, not opponent strength), but worth
+knowing before reading a banked `(Hard)` medal as "beat hard AI".
 
 ## The mode and class enumerations, read off their own tables
 
@@ -1264,6 +1388,29 @@ what is missing: not necessarily the literal `"SelectorGlow"` widget this
 function's own lookup names, but *some* phase-synced soft-edged draw the
 burst makes undeniable.
 
+**`pulse-cellsel` lane, 2026-09-28: confirmed absent from both files this
+screen is built from, not merely unreferenced in code.** `oag-wad cat
+--expand` on `Data.wad`'s own copies of `Data\Plugins\PI001\GUI\CellMode_Definition.xml`
+(826 lines, both `Grid Selection` and `Cell Selection`, no `LoadXML`
+include) and `Data\Plugins\PI001\GUI\Skin.xml` (468 lines, the shared
+front-end root every screen inherits from) - the two files this project's
+own `crate::campaign::load` reads for Race Campaign, in full - contain the
+literal string `"SelectorGlow"` **zero times**; the file's only near-miss is
+an unrelated `RealGlow="128"` attribute on a different, unrelated `<Values>`
+node. `GridController_UpdateSelectorPulse`'s own lookup
+(`FUN_088906b0(screen, "SelectorGlow", 0)`, the identical null-checked
+by-name lookup `"Selector"` itself resolves through, `if (widget != 0)`
+guarding the whole block) therefore always returns null on this screen and
+this function's own `SelectorGlow` branch is confirmed dead code for Race
+Campaign specifically - not "not yet located", but "not present in the data
+this code path reads at all". The burst's own visible halo has to come from
+somewhere this pass did not chase: `Selector`'s own XML (`<Image name="Selector">`,
+all three copies in `CellMode_Definition.xml`) authors no `blend=`/`additive=`
+attribute either, so if the bleed is a blend-mode effect on the already-
+implemented colour pulse rather than a second widget at all, it is an engine
+default this project has not read, not disc-authored data - the next
+concrete lead for whoever picks this up, not a decided explanation.
+
 **`GridSelection_UpdatePageTransition` (`0x088de9bc`, renamed this pass,
 confidence 85)**, called at the end of every `GridSelection_Update`, is
 mostly the `Grid`/`Grid1` crossfade easing (`fVar4 = 1.0 - elapsed/0.3`,
@@ -1933,3 +2080,6 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 | `0x088de180` | `GridSelection_CommitSelection` | 82 |
 | `0x088de630` | `GridSelection_PopulateTiles` | 82 |
 | `0x088de320` | `GridSelection_FindTileAt` | 80 |
+| `0x08809980` | `Profile_DifficultyRC` | 85 |
+| `0x088098f0` | `Profile_SetDifficultyRC` | 85 |
+| `0x088d6430` | `CellSelection_Update` | 85 |

@@ -5,7 +5,7 @@
 //! `CellSelection`, `Layout`, `GridSummary`) stay in the parent module;
 //! this file only turns one into a [`crate::menu::Layers`].
 
-use oag_tables::race_campaign::{Cell, Medal, Mode};
+use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
 
 use crate::frontend::{Align, Draw, Placed};
 use crate::language::StringTable;
@@ -347,8 +347,16 @@ pub fn cell_draw_list(
                 model.selected_medal().map_or(0, Medal::points),
                 Medal::Gold.points()
             )),
-            "Line7" if !targets_visible => Some(medal_line(model.selected_medal(), strings)),
+            "Line7" if !targets_visible => Some(medal_line(
+                model.selected_medal(),
+                model.selected_difficulty(),
+                strings,
+            )),
             "Line7" => None,
+            // The square-button prompt, `CellSelection_Update`'s own
+            // `sprintf("%s (%s)", RB_AI_DIF, rung)` rebuilt every frame -
+            // see `difficulty_button_line`'s own doc.
+            "DifficultyButton" => Some(difficulty_button_line(model.difficulty(), strings)),
             "Target0 Title" | "Target1 Title" | "Target2 Title" if targets_visible => {
                 Some(strings.get_or_id("IG_HUD_TARGET").to_string())
             }
@@ -491,18 +499,73 @@ fn track_line(cell: &Cell, strings: &StringTable) -> String {
 }
 
 /// `Line7`'s own resolution: `Cell_SavedMedal` maps onto `IG_HUD_GOLD`/
-/// `SILVER`/`BRONZE`, `MSC_NONE` for no saved medal.
-/// `race-campaign.md` records this table but not the difficulty suffix
-/// `CellSelection_PopulateDetail` appends (`Cell_SavedDifficulty`) - not
-/// drawn here, since this build keeps no per-cell saved difficulty at all.
-pub(super) fn medal_line(medal: Option<Medal>, strings: &StringTable) -> String {
+/// `SILVER`/`BRONZE`, `MSC_NONE` for no saved medal - suffixed with
+/// `Cell_SavedDifficulty`'s own rung when `medal` is `Some` and
+/// `difficulty` answers one, `"Gold (Medium)"` rather than a bare medal
+/// word. `CellSelection_PopulateDetail`'s own `"%s (%s)"` format, decompiled
+/// in full 2026-09-28 - see
+/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+/// `DifficultyRC` persisted rung" section. `difficulty` is `None` on HD's
+/// own call site (`hd.rs`'s `"Best"` widget): HD draws its own per-cell
+/// rung through a hex medal icon (`hd_medal_frame`), not this text suffix,
+/// which is unmeasured there - not invented onto a screen this build has
+/// not seen show it.
+pub(super) fn medal_line(
+    medal: Option<Medal>,
+    difficulty: Option<Difficulty>,
+    strings: &StringTable,
+) -> String {
     let id = match medal {
         Some(Medal::Gold) => "IG_HUD_GOLD",
         Some(Medal::Silver) => "IG_HUD_SILVER",
         Some(Medal::Bronze) => "IG_HUD_BRONZE",
         None => "MSC_NONE",
     };
+    if let (Some(_), Some(difficulty)) = (medal, difficulty) {
+        return format!(
+            "{} ({})",
+            strings.get_or_id(id),
+            strings.get_or_id(difficulty_rung_id(difficulty))
+        );
+    }
     strings.get_or_id(id).to_string()
+}
+
+/// The bare idstring `Cell_SavedDifficulty`/`CellSelection_Update` both key
+/// on for a rung's own display name - `"Easy"`/`"Medium"`/`"Hard"`, no
+/// `MSC_`/`FE_` prefix, read directly off the executable's own string table
+/// at `0x08a826e4` (confidence 85). Not [`Difficulty`]'s own Rust
+/// `Debug`/variant spelling reused as an idstring by convention - a
+/// coincidence of English, confirmed by `read_memory` on the literal bytes,
+/// not assumed from the enum's own name.
+fn difficulty_rung_id(difficulty: Difficulty) -> &'static str {
+    match difficulty {
+        Difficulty::Easy => "Easy",
+        Difficulty::Medium => "Medium",
+        Difficulty::Hard => "Hard",
+    }
+}
+
+/// `DifficultyButton`'s own text, Pulse's `Cell Selection`: the disc
+/// authors the static `string="Change Difficulty"`, but `CellSelection_Update`
+/// (`0x088d6430`) overwrites it every frame with `sprintf("%s (%s)",
+/// resolve("RB_AI_DIF"), resolve(rung))` off the screen's own browsed
+/// rung (`CellSelection::difficulty`, cycled on `Square`) - `"AI difficulty
+/// (Medium)"`, matching the live PPSSPP capture
+/// (`docs/ui/campaign-screens.md`'s "AI difficulty (square) cycles"
+/// finding: `"AI difficulty (Medium)"` -> `"(Hard)"` on a `Square` press,
+/// nothing else in the panel). `RB_AI_DIF` is the same idstring `Single
+/// Player`'s own `Difficulty` row authors (`docs/formats/race-setup.md`),
+/// resolved here rather than hardcoded so a non-English table changes this
+/// widget's word too. See
+/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+/// `DifficultyRC` persisted rung" section. Confidence 85.
+pub(super) fn difficulty_button_line(difficulty: Difficulty, strings: &StringTable) -> String {
+    format!(
+        "{} ({})",
+        strings.get_or_id("RB_AI_DIF"),
+        strings.get_or_id(difficulty_rung_id(difficulty))
+    )
 }
 
 pub(super) fn laps_line(cell: &Cell, strings: &StringTable) -> String {

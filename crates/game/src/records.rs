@@ -619,25 +619,31 @@ impl Store {
     /// never-downgraded rule [`Self::record`] applies to
     /// [`Record::best_medal`].
     ///
-    /// **`difficulty` breaks a tie against [`Medal::better`], chosen rather
-    /// than measured.** `None` on every Pulse call (that title never has
-    /// one), which makes this identical to the pre-2026-09-28 behaviour:
-    /// falls straight through to comparing `medal` alone. On Wipeout HD,
-    /// when both the stored and the new result know their own rung and the
-    /// rungs differ, the **harder** rung wins outright, whatever either
-    /// medal is - a bronze just earned at `Hard` replaces a stored `Gold`
-    /// earned at `Easy`. This is not read off a found comparison function
+    /// **`difficulty`'s own write rule is measured, not chosen** -
+    /// `Race_RecordResult`'s own `record+8`/`record+9` tail, decompiled in
+    /// full 2026-09-28
+    /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+    /// `record+8`/`record+9` write" section, confidence 88): a **strict**
+    /// medal improvement overwrites the stored difficulty unconditionally,
+    /// even to an *easier* rung than what was stored (a bronze just earned
+    /// at `Easy` replaces a stored `Gold`'s own difficulty if the run
+    /// improves the medal - silver would, bronze would not, since neither
+    /// beats a stored `Gold`); an **exact tie** in medal tier only ever
+    /// *raises* the stored rung, never lowers it. `None` on the pre-2026-09-28
+    /// Pulse call sites, and on 2048's own campaign progress, which has no
+    /// difficulty concept to record - falls straight through to comparing
+    /// `medal` alone, the same as before this field existed. Previously
+    /// implemented as "the harder rung always wins outright, whatever either
+    /// medal is", reasoned from Wipeout HD's own
+    /// `SaveData_MigrateCellMedalsToHardElite` one-time grandfather clause
+    /// with no comparison function found to check it against
     /// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s medal-law
-    /// section explicitly did not find one); it generalises
-    /// `SaveData_MigrateCellMedalsToHardElite`'s own one-time "credit
-    /// existing medals at the hardest rung" grandfather clause into an
-    /// ongoing rule, on the reasoning that a game which upgrades old medals
-    /// to look as good as possible at the hardest difficulty is unlikely to
-    /// then let an easier medal outrank a harder one during ordinary play -
-    /// but that reasoning is this project's, not the executable's. When the
-    /// stored row predates this field (`best_difficulty: None`) or a rung
-    /// genuinely is not known for one side, this falls back to comparing
-    /// `medal` alone, the same as before this field existed.
+    /// section) - that reading is wrong on the strict-improvement branch
+    /// (confirmed unconditional, not difficulty-gated) and right only on the
+    /// tie branch. HD's own equivalent function was not decompiled this
+    /// pass; applying Pulse's now-measured algorithm there is still a
+    /// generalisation, just one resting on a real decompile from the same
+    /// codebase lineage rather than an inference from a migration routine.
     pub fn record_campaign(
         &mut self,
         title: &str,
@@ -665,14 +671,24 @@ impl Store {
             }
         };
         if let Some(medal) = medal {
-            let improves = match (row.best_medal, row.best_difficulty, difficulty) {
-                (None, ..) => true,
-                (Some(_), Some(best), Some(new)) if new != best => new > best,
-                (Some(best_medal), _, _) => medal < best_medal,
-            };
-            if improves {
+            // `Race_RecordResult`'s own gate: no stored medal yet, or the new
+            // one is same-or-better - never downgrade `best_medal`.
+            let applies = row.best_medal.is_none_or(|stored| medal <= stored);
+            if applies {
+                if let Some(new_difficulty) = difficulty {
+                    let overwrite_difficulty = match (row.best_medal, row.best_difficulty) {
+                        // No stored medal, or a stored medal with no rung
+                        // recorded yet (a pre-2026-09-28 row): unconditional.
+                        (None, _) | (_, None) => true,
+                        (Some(stored_medal), Some(stored_difficulty)) => {
+                            medal < stored_medal || new_difficulty > stored_difficulty
+                        }
+                    };
+                    if overwrite_difficulty {
+                        row.best_difficulty = Some(new_difficulty);
+                    }
+                }
                 row.best_medal = Some(medal);
-                row.best_difficulty = difficulty;
                 row.best_points = row.best_medal.map(Medal::points);
             }
         }

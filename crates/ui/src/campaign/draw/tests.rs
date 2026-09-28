@@ -143,6 +143,7 @@ const XML: &str = r#"
 <Text name="Target0 Title" idstring="IG_HUD_TARGET" font="default" x="30" y="0" color="0xff34ACC2"></Text>
 <Text name="Target0" String="value" font="default" x="110" y="0" color="0xffffffff"></Text>
 </Item>
+<Text name="DifficultyButton" String="Change Difficulty" font="default" x="270" y="240" color="0xffffffff"></Text>
 </LeftLayer>
 </Screen>
 </Screen>
@@ -167,6 +168,10 @@ fn strings() -> StringTable {
 <Entry ID="MSC_EVENT_TT" String="Time Trial: beat the clock in this solo race."></Entry>
 <Entry ID="MSC_EVENT_TOURN" String="Tournament: take part in a series of single races."></Entry>
 <Entry ID="16_Track" String="Talon's Junction White"></Entry>
+<Entry ID="RB_AI_DIF" String="AI difficulty"></Entry>
+<Entry ID="Easy" String="Easy"></Entry>
+<Entry ID="Medium" String="Medium"></Entry>
+<Entry ID="Hard" String="Hard"></Entry>
 <Entry ID="Grid0" String="Grid 1"></Entry>
 <Entry ID="Grid4" String="Grid 5"></Entry>
 <Entry ID="Grid11" String="Grid 12"></Entry>
@@ -835,6 +840,93 @@ fn a_cells_saved_medal_reaches_line6_and_line7() {
         texts.contains(&&"IG_HUD_SILVER".to_string()),
         "unresolved id falls back to itself, the same as every other label \
          this test file's own `strings()` does not carry: {texts:?}"
+    );
+}
+
+/// `Line7`'s own difficulty suffix - `CellSelection_PopulateDetail`'s
+/// `"%s (%s)"`, `"IG_HUD_SILVER (Medium)"` here since this test's own
+/// `strings()` carries no `IG_HUD_SILVER` entry to fold the medal word
+/// itself through (the same "unresolved id falls back to itself" shape
+/// `a_cells_saved_medal_reaches_line6_and_line7` already exercises) but does
+/// carry `"Medium"`.
+#[test]
+fn a_cells_saved_medal_with_a_known_difficulty_suffixes_line7() {
+    let layout = cell_layout();
+    let model = CellSelection::with_medals(vec![race_cell("grid0_0_0", "16_Track")], &|_| {
+        Some(Medal::Silver)
+    })
+    .with_difficulty(&|_| Some(Difficulty::Medium));
+    let layers = cell_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+        &[],
+    );
+    let texts = texts(&layers);
+    assert!(
+        texts.contains(&&"IG_HUD_SILVER (Medium)".to_string()),
+        "{texts:?}"
+    );
+}
+
+/// No saved medal at all draws `Line7` as `MSC_NONE` alone, no suffix -
+/// `Cell_SavedDifficulty` is not meaningful on a cell never raced.
+#[test]
+fn a_cell_with_no_medal_draws_line7_with_no_difficulty_suffix() {
+    let layout = cell_layout();
+    let model = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    let layers = cell_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+        &[],
+    );
+    let texts = texts(&layers);
+    // Exactly "NONE", not "NONE (...)" - `DifficultyButton`'s own text is a
+    // separate widget and carries a `(...)` of its own regardless, so this
+    // checks `Line7` specifically rather than scanning every text on screen.
+    assert!(texts.contains(&&"NONE".to_string()), "{texts:?}");
+}
+
+/// The `DifficultyButton` widget's own disc-authored `"Change Difficulty"`
+/// is overwritten every frame with the runtime template
+/// `CellSelection_Update` builds - `"AI difficulty (Medium)"`, the browsed
+/// rung [`CellSelection::difficulty`] starts at, matching the live PPSSPP
+/// capture (`docs/ui/campaign-screens.md`'s "AI difficulty (square) cycles"
+/// finding).
+#[test]
+fn the_difficulty_button_shows_the_runtime_template_not_the_authored_string() {
+    let layout = cell_layout();
+    let model = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    let layers = cell_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+        &[],
+    );
+    let texts = texts(&layers);
+    assert!(
+        texts.contains(&&"AI difficulty (Medium)".to_string()),
+        "{texts:?}"
+    );
+    assert!(
+        !texts.contains(&&"Change Difficulty".to_string()),
+        "the authored string must not survive the runtime overwrite: {texts:?}"
     );
 }
 

@@ -251,7 +251,7 @@ unlike Wipeout HD's (see `oag_ui::language::CircuitNames`'s own doc).
 | `Line3 Title` | `RB_WEAP` (`"Weapons"`) | same as `Line3` |
 | `Line6` | the selected cell's own saved points over `Medal::Gold.points()`, `"0/3"` with no saved medal | always |
 | `Line6 Title` | `ER_POINTS` (`"Points"`) | always |
-| `Line7` | `IG_HUD_GOLD`/`SILVER`/`BRONZE` for a saved medal, `MSC_NONE` otherwise | only when `Target0..2` are not (see below) |
+| `Line7` | `IG_HUD_GOLD`/`SILVER`/`BRONZE` for a saved medal, suffixed `"(<rung>)"` when the medal's own difficulty is known, `MSC_NONE` otherwise | only when `Target0..2` are not (see below) |
 | `Line7 Title` | `IG_HUD_BEST` (`"Best"`) | same as `Line7` |
 | `Target0..2` | `cell.gold`/`silver`/`bronze`, formatted as `M:SS.CC` for Time Trial/Speed Lap, a plain number otherwise | Time Trial / Zone / Elimination / Speed Lap only |
 | `Target0..2 Title` | `IG_HUD_TARGET`, resolved | same as `Target0..2` |
@@ -262,6 +262,26 @@ see "A cell's detail panel: `Best`/`Target` looks mutually exclusive" below,
 whose finding this now implements: `Line7`/`Line7 Title` draw only when
 `targets_visible` is false, sharing the row `Target0..2` would otherwise
 sit in.
+
+**`Line7`'s difficulty suffix, `pulse-cellsel` lane, 2026-09-28.** Pulse
+cells never author `PI_Cell.difficulty_targets`, so this build's own
+`Store::record_campaign` used to gate recording a difficulty on that field
+existing at all - `None` on every Pulse cell by construction, since the
+medal a Pulse cell earns never varies by difficulty. `CellSelection_CommitSelection`
+(`0x088d6138`) decompiles to something narrower and unconditional: it
+persists the screen's own *browsed* rung (`Profile_SetDifficultyRC`) on every
+Confirm, on every cell, as metadata alongside whichever medal that race
+earns - never a gate on the medal itself. `Session::handle_campaign` no
+longer filters on `difficulty_targets`, and `CellSelection_PopulateDetail`'s
+own `"%s (%s)"` format (`0x088d68d8`) is reproduced by
+`oag_ui::campaign::draw::medal_line` - `"Gold (Medium)"`, not a bare medal
+word, once the saved row knows its own rung. See
+`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+`record+8`/`record+9` write" and "The `DifficultyRC` persisted rung"
+sections for the full decompile, including the corrected tie-break
+(`Store::record_campaign`'s own "harder rung wins outright" reading was
+wrong on a strict medal improvement, which overwrites the stored difficulty
+unconditionally - even downward - rather than comparing it at all).
 
 **The row dividers (`line bg1`/`2`/`3`, drawn as a `Fill` pair per stripe)
 draw one per *visible* row, not four unconditionally, 2026-09-14** - a
@@ -2167,15 +2187,17 @@ is the `Title` role, not a body face. Two consequences, both left open:
   `data/scratch/lane-hd-sel/shots/pulse-cellselect-after-facerouting.png`
   (`pulse-psp-eu.chd`, French: `Catégorie`/`Tours`/`Armes`/`Points`/
   `Meilleur` all read mixed-case where they read upper-case before).
-- **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** on this build - a
-  pre-existing label (`DifficultyButton`'s own authored `string="Change
-  Difficulty"` in `CellMode_Definition.xml`, drawn through
-  `oag_ui::campaign::draw`'s generic `_ => text.string.clone()` fallback
-  that predates this lane) rather than the original's own template showing
-  the current rung. Left as-is on the team lead's own instruction; the
-  string and its mechanism are named here for whoever picks up the atlas
-  work above, since fixing the case issue would make this one legible
-  without also fixing the missing rung substitution.
+- ~~`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`~~ - **fixed,
+  `pulse-cellsel` lane, 2026-09-28.** `CellSelection_Update`
+  (`0x088d6430`, decompiled and named this pass) rebuilds `DifficultyButton`'s
+  text every frame with `sprintf("%s (%s)", resolve("RB_AI_DIF"),
+  resolve(rung))` - `oag_ui::campaign::draw::difficulty_button_line`
+  reproduces it exactly, matching `data/reference/psp-campaign-screens/
+  cell-selection-difficulty-hard.png`'s own `"AI difficulty (Hard)"` digit
+  for digit (rung word for rung word). See
+  `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+  `DifficultyRC` persisted rung and Cell Selection's own square button"
+  section.
 
 ### The same unclipped-ticker defect recurred in a new capture path, 2026-09-27
 
@@ -2856,6 +2878,25 @@ than fixing the text and leaving the default silently wrong, or vice versa.
 `Cell Selection` still draws the disc's own authored `"Change Difficulty"`
 string in the meantime, which is honest disc content, just not what RPCS3
 shows at runtime.
+
+**Pulse's own sibling mechanism is fixed, `pulse-cellsel` lane, 2026-09-28 -
+a related but not identical fix, not reusable here as-is.** Pulse's
+`CellSelection_Update` (`0x088d6430`) builds an analogous runtime template
+for the identical `DifficultyButton` widget, but the wording differs on
+every axis this HD reading names as open: the label reads `"AI difficulty"`
+(`RB_AI_DIF`, the bare-lowercase idstring `Single Player`'s own `Difficulty`
+row already authors), not `"DIFFICULTY"`; the rung words are Pulse's own
+bare `"Easy"`/`"Medium"`/`"Hard"` idstrings, not HD's `entries.xml`
+`Novice`/`Skilled`/`Elite`; and Pulse's own fresh-profile default is
+measured at rung `1` (`Medium`) via `Profile_SetDifficultyRC(profile, 1)`, not
+`0`. See
+`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The `DifficultyRC`
+persisted rung" section - a real decompile now exists for the *shape* of
+this mechanism (a getter/setter pair over a hashed profile record, a
+`CellSelection_CommitSelection`-time persist), which the next HD pass on
+this widget's own bare `"DIFFICULTY"` idstring and default-rung mismatch can
+use as a structural reference without assuming either title's exact wording
+or default carries over.
 
 **The `GOLD MEDALS` denominator is closed - `87` for `Wipeout HD`, `80` for
 `Fury`, both exactly a campaign's own total cell count.** RPCS3 reads

@@ -538,7 +538,7 @@ pub fn hd_cell_draw_list(
                 model.selected_medal().map_or(0, |m| m.points()),
                 oag_tables::race_campaign::Medal::Gold.points()
             )),
-            "Best" => Some(medal_line(model.selected_medal(), strings)),
+            "Best" => Some(medal_line(model.selected_medal(), None, strings)),
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };

@@ -1125,3 +1125,6 @@
 0x08811220	function	Gu_SetOffset	85	race-box-screens.md
 0x088b8cf4	function	Model_ReadValues	85	race-box-screens.md
 0x088b98b4	function	Model_BuildTransform	78	race-box-screens.md
+0x08809980	function	Profile_DifficultyRC	85	race-campaign.md
+0x088098f0	function	Profile_SetDifficultyRC	85	race-campaign.md
+0x088d6430	function	CellSelection_Update	85	race-campaign.md
