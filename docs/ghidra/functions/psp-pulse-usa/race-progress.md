@@ -109,27 +109,35 @@ fields, up from 82: a PPSSPP write watchpoint on all three, armed live off
 `g_hud` (`0x08ab0838`) -> `+0x3c` (the registered `"PLAYER_HUD"` pointer,
 `self+0x48`) -> `+0x30`/`+0x34`/`+0x38`, logged every write's own PC across
 an eight-second drive of a real Venom Time Trial on Talon's Junction
-(`pulse-psp-usa.chd`). **Checked against the log's full 4,724 hits, not a
-tail sample** - `grep -a 'CHK Write' ppsspp.log | grep -E
-'09a4a7(28|2c|30)' | grep -o 'PC=[0-9a-f]*' | sort | uniq -c`:
+(`pulse-psp-usa.chd`). **Checked against a full re-scan of the raw PPSSPP
+log, not a `tail` sample** (an earlier revision of this page read only the
+tail and undercounted, both the number of hits and the number of distinct
+PCs) - `grep -a 'CHK Write' ppsspp.log | grep -oE 'at 09a4a7(28|2c|30)
+\(\(09a4a7(28|2c|30)\)\), PC=[0-9a-f]+' | sed -E 's/ \(\(.*\)\),/ /' | sort
+| uniq -c`, keyed by address as well as PC:
 
 ```text
-   8373 PC=0883b800
-   8374 PC=0883b808
-   8374 PC=0883ba38
-   4153 PC=0883bad8
-   8374 PC=0883baf0
+   8373 at 09a4a728  PC=0883b800
+   8374 at 09a4a728  PC=0883baf0
+   8374 at 09a4a72c  PC=0883ba38
+   8374 at 09a4a730  PC=0883b808
+   4153 at 09a4a730  PC=0883bad8
 ```
 
-(the counts above 4,724 are `memory.breakpoint.list`'s own hit tally at a
-different, later poll than the log dump - both a live count and a log
-recount, not a single unverified number). Five distinct write sites, not
-four as an earlier revision of this page said after reading only the log's
-own tail - `0x0883bad8` is the fifth, not individually attributed to one
-branch of the decompile below. All five fall inside `PlayerStatus_Update`'s
-real body, `0x0883b3b8`-`0x0883c0cb` (`get_function_by_address`); no address
-outside that range ever wrote any of the three fields in this run. This is
-what closes
+Five distinct write sites, not four as an earlier revision of this page
+said. Two of them share `0x09a4a730` (`+0x38`, the redden bool):
+`0x0883b808` at the same per-tick rate as every other write (the
+unconditional `redden = false` reset at the top of the block), and
+`0x0883bad8` at roughly half that rate - consistent with the conditional
+`redden = true` store inside the tier comparison (`bVar1`'s own branch in
+the decompile below), which only fires on a subset of ticks, though this
+particular 8-second window's own field reads (taken before and after, not
+continuously through it) never confirmed `redden` actually flipped during
+it - an address-level correlation, not a behaviourally confirmed one. All
+five write sites fall inside `PlayerStatus_Update`'s real body,
+`0x0883b3b8`-`0x0883c0cb` (`get_function_by_address`); no address outside
+that range ever wrote any of the three fields in this run. This is what
+closes
 [`hud-time-caption-substitution.md`](hud-time-caption-substitution.md)'s own
 "what the tier itself is" gap - see that page for the reader
 (`Hud_UpdateTimeCluster`) and the caption table.

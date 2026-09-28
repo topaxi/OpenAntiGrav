@@ -73,20 +73,32 @@ impl TimeTrialPace {
     /// decompile this argument is checked against.
     ///
     /// **`elapsed_ticks` inherits `TotalTime`/`CurrentTime`'s own existing
-    /// clock-start convention, not a newly-checked one.** The caller passes
-    /// `Readout::race_ticks` (Time Trial) or `Readout::lap_ticks` (Speed
-    /// Lap) - the same fields `TotalTime`/`CurrentTime` were already
-    /// formatting before this pass, both counting from the standing start
-    /// (`World::tick == 0`), before the green flag. Whether the
-    /// *original's* own `craft+0x920` clock also starts there, or only once
-    /// the countdown releases thrust, is a still-open question this pass
-    /// did not settle - see
+    /// clock-start conventions, not newly-checked ones, and the two are not
+    /// the same convention.** `Race_ticks` (Time Trial) is `World::tick`,
+    /// counting from the standing start (`tick == 0`), before the green
+    /// flag - matching `race-progress.md`'s own reading of the original's
+    /// `craft+0x920`, which "is only reset by a *lap* completion" and so
+    /// "is timed from whenever `Race_UpdatePositions` starts stepping
+    /// crafts", i.e. the same standing start, not the green flag either.
+    /// `Readout::lap_ticks` (Speed Lap) is different: `RaceState`
+    /// deliberately resets `lap_start_tick` at the *first* line crossing,
+    /// not at the standing start, to compensate for this build's own grid
+    /// spawn sitting further back from the line than the original's
+    /// (`crates/race/src/state.rs`'s own `advance_progress`, "Start lap 1's
+    /// clock here rather than at the standing start... the original does
+    /// *not* restart its lap clock at the first crossing"). So a Speed Lap
+    /// pace here starts its own clock at the first crossing while the
+    /// original's `craft+0x920` keeps running from the standing start
+    /// through it - a real, if usually small (`Course::START_LINE_ADVANCE`
+    /// at Speed Lap velocity, a few tenths of a second on most circuits),
+    /// divergence this function inherits rather than introduces. Whether
+    /// the original's own clock is also offset from the *countdown's* own
+    /// start (before `RaceState::thrust_gated` releases thrust) is a
+    /// separate, still-open question neither `race_ticks` nor `lap_ticks`
+    /// answers - see
     /// `docs/ghidra/functions/psp-pulse-usa/race-progress.md`'s own "The
     /// first crossing starts the race but not the clock" bullet, open since
-    /// before this pass. If the original excludes the countdown, every
-    /// boundary this function reports is early by `RaceState::COUNTDOWN_TICKS`
-    /// (272 ticks, ~4.5 s) - a pre-existing uncertainty this function shares
-    /// with every other clock this HUD already draws, not a new one.
+    /// before this pass.
     #[must_use]
     pub fn from_elapsed(elapsed_ticks: u64, cell: &oag_tables::race_campaign::Cell) -> Self {
         let elapsed_centis = i64::try_from(elapsed_ticks * 100 / 60).unwrap_or(i64::MAX);
