@@ -640,10 +640,15 @@ impl Store {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s medal-law
     /// section) - that reading is wrong on the strict-improvement branch
     /// (confirmed unconditional, not difficulty-gated) and right only on the
-    /// tie branch. HD's own equivalent function was not decompiled this
-    /// pass; applying Pulse's now-measured algorithm there is still a
-    /// generalisation, just one resting on a real decompile from the same
-    /// codebase lineage rather than an inference from a migration routine.
+    /// tie branch. **This one function has no title branch, so the
+    /// correction applies to HD's own recorded medals too** - there was
+    /// never a separate HD rule here to leave alone. HD's own equivalent
+    /// function was not decompiled this pass, so whether this is *literally*
+    /// right for HD remains unconfirmed, but it rests on stronger evidence
+    /// than the rule it replaces: a real decompile from a title sharing HD's
+    /// own profile-record primitives (and even the literal `"DifficultyRC"`
+    /// string - present in HD's own EBOOT too), not an inference from a
+    /// one-time migration routine with no comparison function found.
     pub fn record_campaign(
         &mut self,
         title: &str,

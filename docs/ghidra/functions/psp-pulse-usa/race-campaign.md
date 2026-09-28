@@ -437,10 +437,28 @@ mismatch as difficulty-dominant ("the harder rung wins outright, whatever
 either medal is"), reasoned from HD's `SaveData_MigrateCellMedalsToHardElite`
 grandfather clause with no comparison function found to check it against.
 This decompile is that comparison function, on Pulse; `Store::record_campaign`
-now matches it exactly. HD's own equivalent was not decompiled this pass -
-applying Pulse's now-measured algorithm there is still the same
-generalisation as before, just resting on a real decompile from the same
-codebase lineage rather than an inference from a migration routine.
+now matches it exactly.
+
+**This is one function with no title branch, so the corrected rule applies
+to HD's own recorded medals too - not a Pulse-only fix left sitting beside
+an untouched HD one.** There never was a separate HD rule in the code:
+`record_campaign`'s `applies`/`overwrite_difficulty` logic is the single
+shared implementation both titles' campaign launches call into, and always
+was. HD's own equivalent to `Race_RecordResult` was **not decompiled this
+pass**, so whether the corrected algorithm is *literally* right for HD
+specifically remains unconfirmed - but it now rests on materially stronger
+evidence than the rule it replaced, which was never HD-measured either:
+`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s own medal-law
+section records "no comparison function found to check it against" for the
+old "harder wins outright" reading. The new rule *is* that comparison
+function, just read off Pulse rather than HD - on a title confirmed to
+share HD's own profile-record primitives and even the literal
+`"DifficultyRC"` string (present in `/hdfury/EBOOT-ps3-hdfury-eu.elf` too,
+`0x0077a5a0`, the same PI001-lineage `DifficultyButton` mechanism
+`docs/ui/campaign-screens.md`'s HD section documents). A follow-up
+decompile of HD's own `Race_RecordResult`-equivalent would either confirm
+the shared rule outright, or, if HD genuinely diverges, be the evidence
+`record_campaign` would need to branch by title on.
 
 ### The `DifficultyRC` persisted rung and Cell Selection's own square button, 2026-09-28
 
