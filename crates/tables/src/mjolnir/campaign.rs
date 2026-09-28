@@ -56,52 +56,85 @@ pub mod typedef {
     /// explicitly. See [`ShipModel`] and `oag_2048::campaign` for what
     /// forcing a craft this way means for a launch.
     pub const SHIP_MODEL_DATA: i64 = 520725191;
-    /// One of two "lap race" typedefs, measured, **not named in the file**
-    /// (see [`super::super`]'s doc comment on why). 53 instances. The only
-    /// typedef whose instances ever carry a non-empty `M_MAXGHOSTSHIPS`
-    /// field (all 53 do; neither [`RACE_B`] nor [`ELIMINATION`] nor [`ZONE`]
-    /// carries that field at all) - a real, checkable discriminator, not a
-    /// name. Also the only typedef carrying `laps == 0`: all 40 of the
-    /// `SP.xml` instances literally named `"<Track> Speed Lap - <Class>"`
-    /// are `RACE_A` with `M_NUMOFLAPS` absent/zero; `RACE_A`'s other 13
-    /// instances are ordinary 2-3 lap `"20XX - Event N"` nodes. See
-    /// [`EventKind::Race`] and [`Event::laps`].
+    /// One of two "lap race" typedefs. **2026-09-28: this is
+    /// `GameMode_ArcadeRace`'s and `GameMode_SpeedLapRace`'s own typedef,
+    /// confirmed at confidence 92** - `oag_formats::wad::hash_name` of the
+    /// literal string `"GameMode_ArcadeRace"` hashes to `-1353052320`
+    /// ([`RACE_B`]) and `"GameMode_SpeedLapRace"` to `-1915183557` (this
+    /// one), the same case-folded-CRC-32 convention every other named
+    /// typedef in this module's own census already matches, zero exceptions
+    /// across ten names checked - see `docs/formats/2048-campaign.md`'s
+    /// "Craft choice"-adjacent typedef table for the full cross-reference.
+    /// This is `GameMode_SpeedLapRace`: 53 instances, the only typedef whose
+    /// instances ever carry a non-empty `M_MAXGHOSTSHIPS` field (all 53 do;
+    /// neither [`RACE_B`] nor [`ELIMINATION`] nor [`ZONE`] carries that field
+    /// at all) - a real, checkable discriminator that now has a name to
+    /// match it: a dedicated Speed Lap class plausibly needs its own ghost
+    /// capacity where an ordinary race does not. Also the only typedef
+    /// carrying `laps == 0`: all 40 of the `SP.xml` instances literally named
+    /// `"<Track> Speed Lap - <Class>"` are `RACE_A` with `M_NUMOFLAPS`
+    /// absent/zero; `RACE_A`'s other 13 instances are ordinary 2-3 lap
+    /// `"20XX - Event N"` nodes. See [`EventKind::Race`] and [`Event::laps`].
     pub const RACE_A: i64 = -1915183557;
-    /// The other "lap race" typedef. 52 instances, laps always >= 1 (never a
-    /// Speed Lap sentinel), no `M_MAXGHOSTSHIPS`. Its instance names include
+    /// The other "lap race" typedef - `GameMode_ArcadeRace`, per [`RACE_A`]'s
+    /// own doc comment. 52 instances, laps always >= 1 (never a Speed Lap
+    /// sentinel), no `M_MAXGHOSTSHIPS`. Its instance names include
     /// `E3_Demo_*` builds, `MP_*_Race_flash` templates and ten-lap
-    /// `"* Ship Challenge"` events alongside ordinary numbered ones.
+    /// `"* Ship Challenge"` events alongside ordinary numbered ones - the
+    /// generic race class's own shape, corroborating the hash match from the
+    /// data side.
     ///
-    /// **`RACE_A` and `RACE_B` are not split by game mode** - `M_PNEXTEVENT`
+    /// **`RACE_A` and `RACE_B` are two different concrete classes, but this
+    /// project still does not split them by game mode.** `M_PNEXTEVENT`
     /// chains cross freely between them (`"2048 - Event 3"`, `RACE_A`, its
-    /// own `M_PNEXTEVENT` names `"2048 - Event 4"`, `RACE_B`), which is why
-    /// [`EventKind::Race`] does not distinguish them; [`Event::typedef_id`]
-    /// keeps the raw id for a caller that wants to re-split later.
+    /// own `M_PNEXTEVENT` names `"2048 - Event 4"`, `RACE_B`) - resolving the
+    /// class names shows this was never evidence the two typedefs were the
+    /// *same* mode, only that the unlock graph chains across concrete
+    /// classes freely (an ordinary race unlocking a Speed Lap attraction is
+    /// unremarkable). [`EventKind::Race`] still does not distinguish them,
+    /// because `oag_2048::campaign::engine_mode` already derives
+    /// `"speed_lap"` vs `"single_race"` independently off the `laps ==
+    /// Some(0)` sentinel - the class name adds understanding, not a gate this
+    /// project's own mode resolution needs; [`Event::typedef_id`] keeps the
+    /// raw id for a caller that wants it.
+    ///
+    /// The remaining two `GameMode_*` names in `eboot.elf`'s string table,
+    /// `GameMode_CheckPointRace` (hash `375161732`) and `GameMode_ZombieRace`
+    /// (hash `-1251488984`), match **no** typedef id `SP.xml` carries - both
+    /// classes ship in the executable but no campaign event in this file
+    /// instantiates either.
     pub const RACE_B: i64 = -1353052320;
-    /// Elimination-shaped, measured, not named in the file. 26 instances,
-    /// the only typedef carrying `M_ELIMINATENUMOFOPPONENTS`/
-    /// `M_SCORETARGET`/`M_SURVIVEFORNUMOFLAPS`/`M_TIMELIMIT`/
-    /// `M_BSEEKANDDESTROYTARGETID`/`M_BSOLOSCORING`, and instance names
-    /// spelling `"Elim"`/`"Eliminator"` explicitly (`"MPElimination"`,
-    /// `"MP_Arena_Eliminator_flash"`). This engine does not run Elimination
-    /// races yet - see `oag_2048::campaign`.
+    /// Elimination-shaped. 26 instances, the only typedef carrying
+    /// `M_ELIMINATENUMOFOPPONENTS`/`M_SCORETARGET`/`M_SURVIVEFORNUMOFLAPS`/
+    /// `M_TIMELIMIT`/`M_BSEEKANDDESTROYTARGETID`/`M_BSOLOSCORING`, and
+    /// instance names spelling `"Elim"`/`"Eliminator"` explicitly
+    /// (`"MPElimination"`, `"MP_Arena_Eliminator_flash"`). **2026-09-28:
+    /// confirmed structurally, not just by instance-name resemblance** -
+    /// `hash_name("GameMode_EliminatorRace")` equals this id exactly, same
+    /// evidence as [`RACE_A`]/[`RACE_B`]'s own confirmation. Confidence
+    /// raised to 92.
     pub const ELIMINATION: i64 = 1311982788;
-    /// Zone-shaped, measured, not named in the file. 10 instances, the only
-    /// typedef carrying `M_ZONETIMECOUNTER`/`M_ZONETOADDMINES`/
-    /// `M_STARTZONENUMBER`/`M_ENDZONENUMBER`/`M_NUMBEROFMINES`, and the only
-    /// one whose `M_SPEEDCLASS` is always empty (Zone has no speed class).
+    /// Zone-shaped. 10 instances, the only typedef carrying
+    /// `M_ZONETIMECOUNTER`/`M_ZONETOADDMINES`/`M_STARTZONENUMBER`/
+    /// `M_ENDZONENUMBER`/`M_NUMBEROFMINES`, and the only one whose
+    /// `M_SPEEDCLASS` is always empty (Zone has no speed class).
+    /// **2026-09-28: confirmed structurally** - `hash_name("GameMode_ZoneRace")`
+    /// equals this id exactly, same evidence as [`RACE_A`]/[`RACE_B`]'s own
+    /// confirmation. Confidence raised to 92.
     pub const ZONE: i64 = 1018671239;
 }
 
 /// Which of the four concrete event shapes an [`Event`] is.
 ///
-/// **Not a binding to any of the six `GameMode_*` C++ classes**
-/// `eboot.elf`'s own string table carries (`GameMode_ArcadeRace`,
-/// `GameMode_CheckPointRace`, `GameMode_EliminatorRace`,
-/// `GameMode_SpeedLapRace`, `GameMode_ZombieRace`, `GameMode_ZoneRace`) -
-/// see [`super::super`]'s own doc comment and [`typedef::RACE_A`]/
-/// [`typedef::RACE_B`] for why that binding is left unresolved rather than
-/// guessed at (confidence would be under 50 for any specific pairing).
+/// **Deliberately coarser than the four `GameMode_*` C++ classes `SP.xml`'s
+/// typedefs actually bind to**, now that binding is resolved (confidence 92 -
+/// see [`typedef::RACE_A`]'s own doc comment for the hash cross-reference):
+/// `GameMode_SpeedLapRace`, `GameMode_ArcadeRace`, `GameMode_EliminatorRace`
+/// and `GameMode_ZoneRace`. [`Self::Race`] still merges the first two, since
+/// nothing this project does needs them apart - `oag_2048::campaign::
+/// engine_mode` derives `"speed_lap"` vs `"single_race"` independently off
+/// [`Event::laps`]'s own sentinel, not off which class an event's typedef
+/// names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventKind {
     /// [`typedef::RACE_A`] or [`typedef::RACE_B`]. A lap race, including the

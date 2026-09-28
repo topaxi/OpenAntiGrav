@@ -169,3 +169,49 @@ fn tracks_and_weapon_sets_are_found_by_typedef_not_by_field_shape() {
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].name, "Rockets Only");
 }
+
+/// `RACE_A`/`RACE_B`/`ELIMINATION`/`ZONE` are `GameMode_SpeedLapRace`/
+/// `GameMode_ArcadeRace`/`GameMode_EliminatorRace`/`GameMode_ZoneRace`'s own
+/// typedef ids, not four IDs whose class this pass had to guess -
+/// `oag_formats::wad::hash_name` of each class name matches exactly, the
+/// same case-folded-CRC-32 convention the five in-file names below
+/// corroborate on the same test. See `typedef::RACE_A`'s own doc comment.
+#[test]
+fn typedef_ids_are_hash_name_of_the_class_they_are() {
+    let hash = |name: &str| i64::from(oag_formats::wad::hash_name(name) as i32);
+
+    assert_eq!(hash("GameMode_SpeedLapRace"), typedef::RACE_A);
+    assert_eq!(hash("GameMode_ArcadeRace"), typedef::RACE_B);
+    assert_eq!(hash("GameMode_EliminatorRace"), typedef::ELIMINATION);
+    assert_eq!(hash("GameMode_ZoneRace"), typedef::ZONE);
+
+    // The five typedefs SP.xml already names in-file corroborate the same
+    // hash convention from the opposite direction.
+    assert_eq!(hash("GameModeObjective"), typedef::GAME_MODE_OBJECTIVE);
+    assert_eq!(hash("GameModeBase"), typedef::GAME_MODE_BASE);
+    assert_eq!(hash("WOShipModelData"), typedef::SHIP_MODEL_DATA);
+    assert_eq!(hash("TrackDefinition"), typedef::TRACK_DEFINITION);
+    assert_eq!(hash("WeaponSetDefinition"), typedef::WEAPON_SET_DEFINITION);
+
+    // The other two `GameMode_*` names `eboot.elf`'s string table carries
+    // match no typedef id `SP.xml` authors at all - shipped classes this
+    // file's own campaign never instantiates.
+    assert!(
+        ![
+            typedef::RACE_A,
+            typedef::RACE_B,
+            typedef::ELIMINATION,
+            typedef::ZONE
+        ]
+        .contains(&hash("GameMode_CheckPointRace"))
+    );
+    assert!(
+        ![
+            typedef::RACE_A,
+            typedef::RACE_B,
+            typedef::ELIMINATION,
+            typedef::ZONE
+        ]
+        .contains(&hash("GameMode_ZombieRace"))
+    );
+}

@@ -119,15 +119,61 @@ corroborating instance names, still short of a runtime trace):
 **`eboot.elf`'s own string table names six `GameMode_*` C++ classes**
 (`GameMode_ArcadeRace`, `GameMode_CheckPointRace`, `GameMode_EliminatorRace`,
 `GameMode_SpeedLapRace`, `GameMode_ZombieRace`, `GameMode_ZoneRace`), found
-with plain `strings` over `data/extracted/vita/PCSF00007/patch-v104/eboot.elf`
-(no Ghidra opened for this pass, per this lane's own scope). **None of the
-six is bound to a typedef here, and that is deliberate rather than an
-oversight**: `M_PNEXTEVENT` chains cross the two `Race` typedefs freely -
-`"2048 - Event 3"` (`-1915183557`) names `"2048 - Event 4"` (`-1353052320`)
-as its own next event - which argues against the two typedefs being a mode
-distinction at all, and confidence for any specific class-to-typedef pairing
-would sit under 50 (a guess) with the evidence gathered so far. Recorded as
-open, not resolved by the shape of the six names alone.
+with `search_strings` in Ghidra over `eboot-vita-2048-eu-v104.elf`.
+
+**2026-09-28: resolved, all four - the typedef ids are hashes of the type's
+own name, the same convention `oag_formats::wad::hash_name` already
+implements for this disc family.** Every one of the eight typedef ids
+`SP.xml` carries - including the five already named in-file by their own
+`type=`/`typedefid=` attribute - equals `oag_formats::wad::hash_name`
+(case-folded CRC-32, `\` normalised to `/`) of the class's own name,
+zero exceptions across all ten names checked:
+
+| Name | `hash_name(name)` | Matches |
+| --- | --- | --- |
+| `GameModeBase` | `366306753` | the abstract typedef, already named in-file |
+| `GameModeObjective` | `380278911` | already named in-file |
+| `WOShipModelData` | `520725191` | already named in-file |
+| `TrackDefinition` | `205052969` | already named in-file |
+| `WeaponSetDefinition` | `-966434245` | already named in-file |
+| `WOShipCreatorParams` | `-92967649` | already named in-file (a field's own declared type) |
+| `GameMode_SpeedLapRace` | `-1915183557` | **[`typedef::RACE_A`]** |
+| `GameMode_ArcadeRace` | `-1353052320` | **[`typedef::RACE_B`]** |
+| `GameMode_EliminatorRace` | `1311982788` | [`typedef::ELIMINATION`], already suspected by instance names - now confirmed structurally |
+| `GameMode_ZoneRace` | `1018671239` | [`typedef::ZONE`], likewise now confirmed structurally |
+
+Confidence **92**: six already-named typedefs (in-file text) and four
+previously-unnamed ones all land on their expected id through the identical,
+already-implemented hash function, with zero collisions and zero misses -
+not a single coincidental match, a closed cross-reference. The remaining two
+class names, `GameMode_CheckPointRace` (hashes to `375161732`) and
+`GameMode_ZombieRace` (hashes to `-1251488984`), match **no** typedef id
+`SP.xml` carries - both classes ship in the executable but no campaign event
+in this file instantiates either. Not chased into `MP.xml`, which carries
+none of these four typedefs at all (see below) and is therefore not where
+either would surface either.
+
+**This settles the `M_PNEXTEVENT`-crosses-typedefs observation too, and
+corrects the reading of it.** `"2048 - Event 3"` (`RACE_A` =
+`GameMode_SpeedLapRace`) naming `"2048 - Event 4"` (`RACE_B` =
+`GameMode_ArcadeRace`) as its own next event was read as evidence *against* a
+mode split; it is not - it only shows the unlock graph chains across concrete
+classes freely, which is unremarkable (finishing an ordinary race can
+unlock a Speed Lap attraction and vice versa). The two typedefs really are
+two different C++ classes, and the shape each carries in `SP.xml`
+(`RACE_A`'s `M_MAXGHOSTSHIPS` and Speed Lap sentinel, `RACE_B`'s ordinary
+1-plus-lap events) is exactly what a dedicated Speed Lap class versus a
+generic Arcade Race class would author. `EventKind::from_typedef` still
+merges both into `EventKind::Race` deliberately - `engine_mode` already
+derives `"speed_lap"` vs `"single_race"` independently off the `laps ==
+Some(0)` sentinel, so the concrete class name adds understanding, not new
+gating logic this project needs to add.
+
+**The technique is reusable**: any mjolnir typedef id can be checked against
+a candidate name by hashing it with `oag_formats::wad::hash_name`, no Ghidra
+session required once a candidate name is in hand (from a string search, a
+header, or a guess worth testing) - useful for `MP.xml`'s own unnamed
+typedefs or any future schema this project reads the same way.
 
 ## The event fields a caller needs to launch one
 
@@ -432,6 +478,27 @@ names but no prior pass had read at runtime:
   themselves (structural: four boolean fields, offsets `0x80`-`0x83`,
   authored on a small, coherent subset of events); confidence under 50 for
   how the original enforces them, so nothing is guessed there.
+
+  **2026-09-28: settled why no enforcement site was found - the campaign
+  launch path never reaches `team` at all.** `NEW_FE_SHELL`'s
+  `<TouchCampaign>`/`<FE3DCanvas>` tap redirects straight to `Launch 2048`,
+  and `Launch 2048` (`InGame_Definition.xml`) is "nothing but a
+  `<BackendController task="Launch">` straight through to `InGame2048`, no
+  confirm screen in between" (`2048-frontend.md`'s own "Launch 2048" row,
+  confidence 85, read off the disc's own XML). `team` (`Team_Definition.xml`'s
+  `teamshell->team`) is reached by exactly one authored edge in the whole
+  front end: `HOME`'s own `ER_TEAM` tile (`oag_2048::frontend::states::TEAM`'s
+  own doc comment). **The original has no craft-selection step on the
+  campaign path at all** - a campaign race, forced-craft events aside, flies
+  whatever the player last set at `Home -> Team`, a global choice RACE
+  BOX/REMIX share, invisibly overridden or (for the 6 restricted events) not
+  actually gated at the UI at all. This project's own `oag_ui::frontend::team`
+  screen is therefore correctly scoped as-is: there is no picker to add
+  on the campaign launch path, and adding one would be inventing a step the
+  disc's own screen graph does not author. The restriction stays reported,
+  not enforced, for exactly the reason above - not for lack of finding the
+  right function, but because the function this project looked for does not
+  exist on this path.
 - **`M_PGRIDSHIPMODELDATA`** (capacity 7) sizes the AI grid explicitly on most
   numbered events - a second, larger finding this pass surfaced but did not
   wire: it would replace `oag_game::livery::teams_for_slots`' own "chosen, not

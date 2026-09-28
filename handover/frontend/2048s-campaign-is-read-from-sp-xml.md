@@ -52,8 +52,9 @@ restricts choice to a subset (6 events, all "2050" bar one). `oag_2048::
 campaign::craft` resolves the first onto `race::Options::team` and
 `race::load_event` applies it, verified live (`--race --event "2048 - Event
 4-2"` -> `Qirex2048\1`). The restriction mask is read and reported but **not
-enforced** - which native screen applies it was not found this pass; see
-"Open" below. Full write-up: `docs/formats/2048-campaign.md`'s "Craft choice"
+enforced, because the original has no craft-selection step on the campaign
+launch path at all** to enforce it against - see "Open" below, closed
+negative. Full write-up: `docs/formats/2048-campaign.md`'s "Craft choice"
 section. Also surfaced, not chased: `M_PGRIDSHIPMODELDATA` authors the AI
 grid explicitly on most events (a `teams_for_slots` replacement, unwired) and
 the five/ten Ship/Phantom Challenge side events - "open on a fresh save" by
@@ -61,17 +62,21 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
 
 ## Open
 
-- **Which native screen enforces `M_bPrevent{Combat,Agility,Speed,Proto}Ships`.**
-  `Frontend/Screens/TeamSelection_Screen.cpp`'s own constructor and every
-  vtable method decompiled this pass (`0x8113b4dc`, `0x8113b668`,
-  `0x8113b77e`, `0x8113bec8`) touch neither these four byte offsets nor
-  `GameModeBase+0x3c`; the two screens naming `"TeamSelectRedirectPlayer1"`
-  as a tick target (`0x811410e6`, `0x81143efc`) are a track/course carousel
-  transitioning *into* Team Selection, not the enforcement site. The read is
-  somewhere else on that screen's own remaining vtable slots, not all
-  decompiled this pass, or in a different class - confidence under 50 for any
-  specific site, so nothing is wired. See `docs/formats/2048-campaign.md`'s
-  "Craft choice" section.
+- **Closed 2026-09-28, negative result: the 2048 campaign launch path has no
+  craft-selection step at all, in the original.** `NEW_FE_SHELL`'s campaign
+  tap redirects straight to `Launch 2048`, which `2048-frontend.md` already
+  measures as "nothing but a `<BackendController task="Launch">` ... no
+  confirm screen in between"; `team` (`Team_Definition.xml`) is reached by
+  exactly one authored edge, `HOME`'s own `ER_TEAM` tile. So a campaign race
+  flies whatever the player last set at `Home -> Team` (forced-craft events
+  aside), and `M_bPrevent{Combat,Agility,Speed,Proto}Ships` has no UI to
+  enforce it against on this path - not a function this pass failed to find,
+  but one that does not exist here. `TeamSelection_Screen.cpp`'s own
+  constructor and three vtable methods (`0x8113b4dc`, `0x8113b668`,
+  `0x8113b77e`, `0x8113bec8`) were decompiled looking for it anyway and, as
+  expected, touch neither `GameModeBase+0x80..0x83` nor `+0x3c`. No picker was
+  added - inventing one the disc does not author would violate this project's
+  own rule. See `docs/formats/2048-campaign.md`'s "Craft choice" section.
 - **`M_PGRIDSHIPMODELDATA`'s authored grid vs. `oag_game::livery::
   teams_for_slots`'s own "chosen, not measured" one.** Most numbered events
   author all 7 grid slots explicitly; wiring it would replace a guess with
@@ -82,20 +87,29 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   events.** This engine has no player rank at all; live verification needs a
   progressed save, which `data/extracted/vita/PCSF00007/base/savedata` does
   not ship (empty).
-- **Which `GameMode_*` C++ class each of the two `Race`-kind typedefs
-  (`-1915183557`, `-1353052320`) actually instantiates is not resolved.**
-  `eboot.elf`'s own string table names six classes
-  (`GameMode_ArcadeRace`/`CheckPointRace`/`EliminatorRace`/`SpeedLapRace`/
-  `ZombieRace`/`ZoneRace`); `Zone` and `Elimination` bind cleanly to two of
-  them by field shape and corroborating instance names, but the two `Race`
-  typedefs do not - their own `M_PNEXTEVENT` chains cross freely between
-  them (`"2048 - Event 3"`, one typedef, names `"2048 - Event 4"`, the
-  other, as its own next event), which argues against a mode split rather
-  than for one. No Ghidra session was opened this pass, per this lane's own
-  scope - a decompile of `GameModeFactory::OnNewInst` (the string
-  `"GameModeFactory::OnNewInst %s: %s - %s"` is in the binary) is the
-  concrete next step if this is worth resolving, since it likely names the
-  concrete class per instance at construction time.
+- **Closed 2026-09-28 (Q2): which `GameMode_*` C++ class each of the four
+  event typedefs instantiates.** Not by decompiling a factory dispatch
+  function (the string `"GameModeFactory::OnNewInst %s: %s - %s"` this
+  thread's own earlier note named as the way in does not exist in this
+  binary - searched, zero hits) but by hash: `oag_formats::wad::hash_name`
+  of each of the six `GameMode_*` class names `eboot.elf`'s string table
+  carries lands exactly on four of `SP.xml`'s own typedef ids, the same
+  case-folded-CRC-32 convention this module's own five in-file names already
+  confirm these ids use, zero misses across all ten names checked.
+  `RACE_A` is `GameMode_SpeedLapRace`, `RACE_B` is `GameMode_ArcadeRace`,
+  `ELIMINATION` is `GameMode_EliminatorRace`, `ZONE` is `GameMode_ZoneRace` -
+  confidence 92, pinned in a new test
+  (`crates/tables/src/mjolnir/campaign/tests.rs::
+  typedef_ids_are_hash_name_of_the_class_they_are`). `GameMode_CheckPointRace`
+  and `GameMode_ZombieRace` hash to ids `SP.xml` does not carry at all -
+  shipped classes the campaign never instantiates. The `M_PNEXTEVENT`
+  cross-chaining between `RACE_A`/`RACE_B` this thread's own earlier note
+  read as evidence against a mode split was never that - it only shows the
+  unlock graph chains across concrete classes freely; `EventKind::Race` still
+  merges them, correctly, since `engine_mode` already derives the Speed
+  Lap/ordinary split off `laps == Some(0)` independently. See
+  `docs/formats/2048-campaign.md`'s typedef table and
+  `crates/tables/src/mjolnir.rs`'s own updated module doc.
 - **`GameModeObjective`'s own semantics: closed 2026-09-21, mostly.** See
   `docs/formats/2048-campaign.md`'s "The objective law" section -
   `M_OBJECTIVETYPE`'s four real ordinals (`FINISH`/`POSITION`/`KILLS`/
@@ -193,12 +207,13 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    own campaign map the way the DLC tiers' `FE3DCanvas` hotspots are already
    understood to place), a Ghidra pass over the base-campaign refresh path is
    the way in - out of this lane's own scope entirely this time.
-6. Decompile `TeamSelection_Screen`'s remaining vtable methods (beyond the
-   constructor and the three found this pass) to find where
-   `M_bPrevent{Combat,Agility,Speed,Proto}Ships` is actually enforced, then
-   wire the restriction into that screen the way `forced_craft` is already
-   wired into `race::load_event` - if a caller wants the restricted six
-   events to actually restrict the player rather than only report the flags.
+6. **Superseded 2026-09-28**: the 2048 campaign launch path has no
+   craft-selection step to wire a restriction into (see "Open" above) - this
+   is closed negative, not merely deferred. If `M_bPrevent*Ships` is ever
+   enforced by *some* other path (multiplayer's own team select, perhaps -
+   `TeamSelection_Screen.cpp`'s "Team Selection Player 2" branch was seen but
+   not chased), that would need its own investigation from scratch rather
+   than continuing this one.
 7. Wire `M_PGRIDSHIPMODELDATA` into the AI grid assignment (replacing
    `oag_game::livery::teams_for_slots`'s own "chosen" pool for every event
    that authors all 7 slots), if a caller wants the opponent roster to match

@@ -99,12 +99,23 @@
 //! typedefid="-1353052320"/>` on `2048 - Event 3`'s own `M_PNEXTEVENT` names
 //! the *referenced* instance's real typedef even though the field's
 //! declaration cannot - so [`Reference::typedef_id`] recovers this for every
-//! edge in the event graph without needing to look the target up. See
-//! [`campaign`] for what these four typedefs' own field shapes say, and for
-//! why this module stops short of naming them after any of the six
-//! `GameMode_*` C++ classes `eboot.elf`'s own string table carries
+//! edge in the event graph without needing to look the target up.
+//!
+//! **2026-09-28: named after all, by hash rather than by in-file text.**
+//! `eboot.elf`'s string table carries six `GameMode_*` C++ class names
 //! (`GameMode_ArcadeRace`, `GameMode_CheckPointRace`, `GameMode_EliminatorRace`,
-//! `GameMode_SpeedLapRace`, `GameMode_ZombieRace`, `GameMode_ZoneRace`).
+//! `GameMode_SpeedLapRace`, `GameMode_ZombieRace`, `GameMode_ZoneRace`), and
+//! `oag_formats::wad::hash_name` of each one - the same case-folded CRC-32
+//! convention this module's own five in-file names already confirm these ids
+//! use - lands exactly on four of `SP.xml`'s own typedef ids with zero
+//! misses across all ten names checked (the five in-file ones plus these
+//! four): `GameMode_SpeedLapRace` is `-1915183557`, `GameMode_ArcadeRace` is
+//! `-1353052320`, `GameMode_EliminatorRace` is `1311982788` and
+//! `GameMode_ZoneRace` is `1018671239`. `GameMode_CheckPointRace` and
+//! `GameMode_ZombieRace` hash to ids `SP.xml` does not carry at all - shipped
+//! classes this file's campaign never instantiates. See [`campaign`]'s own
+//! `typedef` module for the full table and what each typedef's field shape
+//! independently corroborates.
 //!
 //! # `288` total, one file, one measurement
 //!
