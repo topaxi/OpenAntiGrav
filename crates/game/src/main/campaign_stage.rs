@@ -480,25 +480,33 @@ impl CampaignStage {
         let title = &self.title;
         let records = &self.records;
         let by_name = cells.clone();
-        self.screen = Screen::Cell {
-            model: oag_ui::campaign::CellSelection::with_medals_and_records(
-                cells,
-                &|name| {
-                    records
-                        .campaign_medal(title, name)?
-                        .best_medal
-                        .map(to_campaign_medal)
-                },
-                &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
-            )
-            .with_difficulty(&|name| {
+        let mut model = oag_ui::campaign::CellSelection::with_medals_and_records(
+            cells,
+            &|name| {
                 records
                     .campaign_medal(title, name)?
-                    .best_difficulty
-                    .map(to_campaign_difficulty)
-            }),
-            which,
-        };
+                    .best_medal
+                    .map(to_campaign_medal)
+            },
+            &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
+        )
+        .with_difficulty(&|name| {
+            records
+                .campaign_medal(title, name)?
+                .best_difficulty
+                .map(to_campaign_difficulty)
+        });
+        // HD/Fury's own fresh-profile default rung is `Easy`, not Pulse's
+        // `Medium` - see `oag_ui::campaign::CellSelection::difficulty`'s own
+        // doc for the RPCS3 measurement. This only sets the *starting*
+        // browsed rung; a `records.campaign_medal` hit for the currently
+        // selected cell (not modelled here at all - this is the initial
+        // arrival value, not per-cell) would still need its own reading, the
+        // same way `with_difficulty` above is per-cell already.
+        if self.is_hd() {
+            model = model.with_default_difficulty(race_campaign::Difficulty::Easy);
+        }
+        self.screen = Screen::Cell { model, which };
         true
     }
 

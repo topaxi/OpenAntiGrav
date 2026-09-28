@@ -865,3 +865,13 @@ fn hex_rect_prefers_outline_over_an_oversized_medal_atlas() {
         "must resolve to Outline_0_0's own 32x32 hex, not Medal_0_0's 1024x256 atlas"
     );
 }
+
+#[test]
+fn with_default_difficulty_overrides_pulses_own_medium_default() {
+    let pulse_default = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    assert_eq!(pulse_default.difficulty(), Difficulty::Medium);
+
+    let hd_default = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")])
+        .with_default_difficulty(Difficulty::Easy);
+    assert_eq!(hd_default.difficulty(), Difficulty::Easy);
+}

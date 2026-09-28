@@ -766,9 +766,7 @@ fn hd_difficulty_button_line(
 ) -> Option<String> {
     let ai_difficulty = match mode {
         Mode::Race | Mode::Head2Head => true,
-        Mode::TimeTrial | Mode::Zone | Mode::Elimination | Mode::SpeedLap | Mode::Other(_) => {
-            false
-        }
+        Mode::TimeTrial | Mode::Zone | Mode::Elimination | Mode::SpeedLap | Mode::Other(_) => false,
         Mode::Tournament | Mode::CustomGrid | Mode::AiRace => return None,
     };
     let id = if ai_difficulty { "RB_AI_DIF" } else { "RB_DIF" };

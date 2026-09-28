@@ -655,6 +655,36 @@ own `Difficulty::Medium` (`SKILLED`) default. Whether *that* profile was
 itself fresh is not established either, so this is corroborating rather
 than dispositive, but it is a real settled reading, unlike `00.png` above.
 
+**The fresh-profile default is now settled directly, `hd-difficulty` lane,
+2026-09-28.** `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/` was
+verified empty (`ls -la`, zero entries) immediately before this boot - the
+lead moved the existing `BCES00664-AUTO-` save aside for this pass
+specifically, so unlike every capture above this one is not merely
+"unread", it ran on a save file that did not exist yet:
+
+```sh
+OAG_RPCS3_DISPLAY=96 uv run --with evdev python3 scripts/rpcs3-drive.py \
+  --image data/images/hdfury-ps3-eu-dec.iso \
+  capture --nav-shots --shots 1 --timeout 300 \
+  --out data/scratch/hd-difficulty/rpcs3-fresh-default
+```
+
+`--nav-shots` walks the identical default path (`Main Menu` -> `Campaign
+Selection` -> `Grid Selection Fury` -> `Cell Selection`, landing on
+`grid8_3_1`) and photographs each screen's own *settled* arrival state -
+`SCREEN_SETTLE` sleep included, unlike `browse`'s unpressed `00.png` above -
+before pressing on toward the race the rest of `--nav-shots`' own walk
+enters. `screen-Cell-Selection.png` reads `AI DIFFICULTY (NOVICE)` and
+`TARGET (NOVICE)`, both, with no `DifficultyButton` press anywhere on the
+way in - confidence 90 for the default rung (`Difficulty::Easy`), and
+independent corroboration of the `Race`-mode `RB_AI_DIF` reading this
+section's own icon-shape measurement above already had, from a genuinely
+different boot. This project's own `CellSelection::difficulty` now defaults
+to `Difficulty::Easy` on HD/Fury to match (`with_default_difficulty`,
+Pulse's `Medium` untouched) - see
+`docs/ui/campaign-screens.md`'s "Which block is which difficulty" section
+for the implementation.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

@@ -258,6 +258,64 @@ citations.
 3. `0x0001c6d0`'s own caller and the list `FUN_0015e638` returns - would
    likely explain what the 192-bit mask is actually for.
 
+## 2026-09-28, later the same day: the square-button prompt and the fresh-profile default, both closed
+
+Routed here from the "Left open" item 1 above: HD Cell Selection's
+`DifficultyButton` now draws computed `AI DIFFICULTY (<rung>)`/`DIFFICULTY
+(<rung>)` text instead of the disc's static `"Change Difficulty"`, and this
+project's own default rung changed from `Difficulty::Medium` to
+`Difficulty::Easy` on HD (Pulse's own `Medium` default is untouched - it was
+already correct, `Profile_SetDifficultyRC(profile, 1)`).
+
+**What landed, player-facing**: `oag_ui::campaign::hd::hd_difficulty_button_line`
+(new) picks `RB_AI_DIF` for `Race`/`Head2Head`, `RB_DIF` for
+`TimeTrial`/`Zone`/`Elimination`/`SpeedLap`/`Mode::Other` (`NitroBattle`/
+`Detonator`), and returns `None` (disc's static string stays) for
+`Tournament`/`CustomGrid`/`AiRace`. `oag_ui::campaign::CellSelection` gained
+`with_default_difficulty`, called with `Difficulty::Easy` from both
+`oag_game`'s live session (`CampaignStage::open_cell_selection`, gated on
+`is_hd()`) and the `--menu-page cell-select` still capture path
+(`crate::capture::campaign_page`), so a still and a live session agree.
+
+**Measured, confidence 90, on a genuinely fresh profile** - not merely
+unread this time: `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/` was
+verified empty before boot (the lead moved the existing `BCES00664-AUTO-`
+save aside for this pass specifically). `scripts/rpcs3-drive.py capture
+--nav-shots` walks the same default path every earlier pass used (`Main
+Menu` -> `Campaign Selection` -> `Grid Selection Fury` -> `Cell Selection`,
+landing on `grid8_3_1`) and photographs the *settled* arrival frame - no
+`DifficultyButton` press, no comb-artifact risk the way `browse`'s own
+unpressed frame carried on every earlier attempt. That frame reads `AI
+DIFFICULTY (NOVICE)` and `TARGET (NOVICE)` both - settling the fresh-profile
+default (`Easy`) and independently corroborating the `Race`-mode
+`RB_AI_DIF` reading the 2026-09-28 "Which block is which difficulty"
+section above already had at the same confidence from a *different*
+(non-fresh) boot. See `docs/reverse-engineering/rpcs3-capture.md`'s same
+section, updated, and `docs/ui/campaign-screens.md`.
+
+**What the Ghidra side settles and does not**: `CellSelection_UpdateDifficultyButton_q`
+(`0x0021db80`, found through a real `bl` xref to the newly-named
+`Profile_SetDifficultyRC`/`Profile_GetDifficultyRC` pair) confirms the mode
+set where `DifficultyButton` cycles at all on `Cell Selection` -
+`{Race, TimeTrial, Zone, Elimination, Head2Head, SpeedLap, 0xd, 0xe}`, **not**
+`Tournament` - which is what `hd_difficulty_button_line`'s own `None` cases
+are grounded in. It does **not** settle which idstring gets chosen: that
+call site was hunted for and not found this pass, `RB_AI_DIF`/`RB_DIF`'s own
+choice therefore extended by capture + `UPDATE_ANNOUNCEMENT` reasoning
+alone. **A real, binary-specific Ghidra trap was hit and documented**:
+`get_xrefs_to` on this ABI (`PowerPC:BE:64:A2ALT-32addr`) can resolve to a
+wholly unrelated function when a TOC-relative load's real per-function `r2`
+differs from whatever base the reference analyzer assumed - see
+`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s "The TOC-xref trap"
+section for the full account and what to do instead.
+
+**Still open**: the `RB_AI_DIF`/`RB_DIF` call site itself (see above);
+`Profile_GetDifficultyRC`'s own fallback global's initializer (would be a
+second, independent line of evidence for the default rung, not read this
+pass); and everything `Tournament`-shaped this rung's own gate excludes -
+whether `Tournament` cells author a working `DifficultyButton` at all, on
+some other screen this pass never read.
+
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 2026-09-14. `oag_tables::race_campaign` reads all 32 `plugins/grids/grid_*.xml` across HD's four archives, additively: flat-schema grids parse unchanged, per-difficulty grids (Fury's `grid8-15`, `DATA04`/`06`'s own `grid0-7`) land in `Cell::difficulty_targets`/`nitro_elimination_targets`, `Mode::Other` holds `NitroBattle`/`Detonator`. 157 cells over 16 grids under the archives' own precedence, ground-truthed against the EU disc (`crates/hd/tests/campaign_grids_ground_truth.rs`, [race-campaign.md](../../docs/formats/race-campaign.md)). `grid_04.xml`'s `<Values>` tag is malformed on disc in all three copies and reads zero cells - documented, not patched. Open: which target triple the medal law reads per mode (an HD-executable question), whether the real game tolerates `grid_04`'s tag, base-HD pressing unmeasured. Next: draw HD's `Grid Selection` off `Data\Plugins\Frontend\Gui\CellMode_Definition.xml` on `DATA02` - the thread inventories its widgets and textures
