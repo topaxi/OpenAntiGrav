@@ -120,7 +120,11 @@ pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHI
 /// of its seven slots (measured: two of `SP.xml`'s own events author only
 /// their first) overrides only those, and the fallback still answers for
 /// the rest, labelled here rather than left to look like measured data.
-fn apply_grid_teams(slot_teams: &mut [String], grid_teams: &[Option<String>], report: &mut Vec<String>) {
+fn apply_grid_teams(
+    slot_teams: &mut [String],
+    grid_teams: &[Option<String>],
+    report: &mut Vec<String>,
+) {
     if grid_teams.is_empty() {
         return;
     }

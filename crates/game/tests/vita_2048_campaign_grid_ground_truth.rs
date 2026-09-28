@@ -88,8 +88,7 @@ fn load_event_places_event_6s_authored_roster_on_the_ai_grid() {
         team: Some(r"Qirex2048\2".to_string()),
         ..oag_game::race::Options::default()
     };
-    let loaded =
-        oag_game::race::load_event(&options, "2048 - Event 6").expect("the event loads");
+    let loaded = oag_game::race::load_event(&options, "2048 - Event 6").expect("the event loads");
 
     assert!(
         loaded
