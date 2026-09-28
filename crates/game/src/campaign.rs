@@ -299,14 +299,13 @@ fn read_hd_texture(
     archives: &mut oag_assets::Archives,
     path: &str,
 ) -> Result<Vec<u8>, oag_assets::Error> {
-    if path == r"Data\FE\Images\Hexmedal_HD.gtf" {
-        if let Some((_, blob)) = archives
+    if path == r"Data\FE\Images\Hexmedal_HD.gtf"
+        && let Some((_, blob)) = archives
             .read_every_name(path)
             .into_iter()
             .find(|(label, _)| label.ends_with(oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE))
-        {
-            return Ok(blob);
-        }
+    {
+        return Ok(blob);
     }
     archives.read_name(path)
 }
