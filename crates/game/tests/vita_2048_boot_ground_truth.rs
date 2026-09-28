@@ -413,6 +413,45 @@ fn a_press_on_the_map_asks_for_the_first_events_race() {
     assert_eq!(resolved.setup.class, "FLASH");
 }
 
+/// **`M_PPLAYERSHIPMODELDATA` forces the player's own craft on some events -
+/// `WOShipCreatorParams` is never authored anywhere in `SP.xml` and is not
+/// the mechanism.** `"2048 - Event 4-2"` names `Qirex_Combat`
+/// (`M_TEAM="Qirex2048"`, `M_LIVERY="combat"`); `"combat"` is
+/// [`oag_2048::race::SHIP_TYPES`]'s own `"fighter"` slot (see that constant's
+/// doc comment on the two teams spelling it differently), suffix `"1"`. An
+/// ordinary event with no `M_PPLAYERSHIPMODELDATA` (`"2048 - Event 1"`, the
+/// test above) leaves the caller's own team choice untouched - `load_event`
+/// never reports a forced craft for it. See `docs/formats/2048-campaign.md`'s
+/// "Craft choice" section.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn ship_model_data_forces_the_player_craft_on_some_events() {
+    let Some(source) = source() else { return };
+    let race = oag_game::race::Options {
+        source: source.display().to_string(),
+        ..oag_game::race::Options::default()
+    };
+    let forced = oag_game::race::load_event(&race, "2048 - Event 4-2").expect("the event loads");
+    assert!(
+        forced
+            .report
+            .iter()
+            .any(|line| line.contains(r"forces the player craft: Qirex2048\1")),
+        "report: {:?}",
+        forced.report
+    );
+
+    let open = oag_game::race::load_event(&race, "2048 - Event 1").expect("the event loads");
+    assert!(
+        !open
+            .report
+            .iter()
+            .any(|line| line.contains("forces the player craft")),
+        "report: {:?}",
+        open.report
+    );
+}
+
 /// This build's two tiles are on the grid, after the authored four and the
 /// tick, and ask for this build's own pages.
 #[test]

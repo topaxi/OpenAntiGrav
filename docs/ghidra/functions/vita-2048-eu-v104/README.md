@@ -88,6 +88,10 @@ full comparison.
   `PickupIcon` widget gets its per-weapon look from a 12-slot UV table, not
   thirteen named widgets; found alongside the shield fill's own update
   function, which corrects two claims about `EnergyBg`/`EnergyBarDelay`.
+- [game-mode-base-fields.md](game-mode-base-fields.md) - `GameModeBase`'s own
+  field table: `M_PPLAYERSHIPMODELDATA`/`M_bPrevent*Ships` are the real
+  craft-restriction mechanism `docs/formats/2048-campaign.md` had expected
+  `WOShipCreatorParams` to be (authored on zero events).
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name
