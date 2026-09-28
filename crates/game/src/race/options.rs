@@ -97,6 +97,25 @@ pub struct Options {
     /// Which of them ends up in which slot is [`crate::livery::teams_for_slots`],
     /// and is this project's rule rather than the original's.
     pub opponent_teams: Vec<String>,
+    /// A per-AI-slot team override, index `0` being grid slot `1` (slot `0`
+    /// is always the player) - **what authored data replaces
+    /// [`crate::livery::teams_for_slots`]'s own "chosen, not measured"
+    /// placement with**, where a caller has one to offer.
+    ///
+    /// `None` at an index leaves that slot exactly what
+    /// [`crate::livery::teams_for_slots`] would already give it; an index
+    /// past the end of this list is the same as `None` there. Empty
+    /// (`Vec::new()`, [`Default`]'s own value) changes nothing anywhere -
+    /// every caller outside the one below.
+    ///
+    /// **The one caller today is Wipeout 2048's own campaign**:
+    /// `race::load_event` (`crates/game/src/race/load/campaign.rs`) sets
+    /// this from `oag_2048::campaign::craft::grid_craft`'s own reading of an
+    /// event's `M_PGRIDSHIPMODELDATA` - the disc's own AI grid, when it
+    /// authors one, in place of this project's own placement rule. See that
+    /// module's doc comment for what fraction of `SP.xml`'s events author it
+    /// and how fully.
+    pub grid_teams: Vec<Option<String>>,
     /// Speed class the handling parameters are read for, spelled the way the
     /// disc spells it.
     ///
@@ -314,6 +333,9 @@ impl Default for Options {
             // player's own disc, and `load` may not invent one. The
             // composition root fills it from the catalogue.
             opponent_teams: Vec::new(),
+            // Empty is "no override anywhere" - see the field's own doc
+            // comment. Only `race::load_event` ever sets this.
+            grid_teams: Vec::new(),
             // The rung every measured title shares, named rather than
             // defaulted from an enum: a title whose ladder was never read must
             // not silently inherit one that was.

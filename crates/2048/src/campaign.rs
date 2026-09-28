@@ -177,12 +177,17 @@ pub fn event_class(event: &Event) -> Option<EClass> {
 ///   (no Combat/Speed). None of these 6 also forces a craft. [`craft_restriction`]
 ///   reads the four flags into a mask.
 ///
-/// **Not wired into a launch.** [`forced_craft`]'s override lands in
-/// `race::load_event` (`crates/game/src/race/load/campaign.rs`); the
-/// restriction mask does not, because which native screen would enforce it
-/// (grey a tile, clamp the cursor, refuse the launch) was not found in
-/// `eboot.elf` this pass - see `docs/formats/2048-campaign.md`'s "What is not
-/// determined" section. Reported by the loader instead of silently ignored.
+/// **[`forced_craft`] and [`grid_craft`] are both wired into a launch,
+/// `restriction` is not.** Both land in `race::load_event`
+/// (`crates/game/src/race/load/campaign.rs`): `forced_craft` overrides
+/// `race::Options::team`, `grid_craft` overrides `race::Options::grid_teams`,
+/// which `oag_game::race::load::roster::grid` applies over
+/// `oag_game::livery::teams_for_slots`'s own chosen placement, per AI slot.
+/// The restriction mask does not enforce anywhere in this crate, because
+/// which native screen would enforce it (grey a tile, clamp the cursor,
+/// refuse the launch) was not found in `eboot.elf` this pass - see
+/// `docs/formats/2048-campaign.md`'s "What is not determined" section.
+/// Reported by the loader instead of silently ignored.
 pub mod craft {
     use super::{Document, Instance, Reference, ship_model_for};
 
@@ -234,6 +239,55 @@ pub mod craft {
         let reference: Reference = event.field("M_PPLAYERSHIPMODELDATA")?.reference()?;
         let model = ship_model_for(document, reference)?;
         team_id(&model)
+    }
+
+    /// `event`'s own `M_PGRIDSHIPMODELDATA`, resolved slot-by-slot onto
+    /// `race::Options::grid_teams` - `oag_game::race::load_event`'s own
+    /// per-AI-slot override of `oag_game::livery::teams_for_slots`'s
+    /// "chosen, not measured" placement. One entry per `<ARRAY>` child the
+    /// field carries, in document order; `None` at an index whose slot is
+    /// unauthored (an empty `value=`) or whose [`super::ShipModel`]
+    /// reference does not resolve to a `(team, livery)` [`team_id`]
+    /// recognises - a caller applies this as a **per-slot** overlay, so a
+    /// `None` leaves that one slot exactly what it would have been anyway,
+    /// rather than forcing anything.
+    ///
+    /// **Not [`super::Field::references`]**, which drops an unauthored
+    /// slot's own position along with its empty value - the wrong shape
+    /// here, where slot 3's team must stay slot 3's answer even when slot 1
+    /// authors nothing. This reads `Instance::field`'s own `values` directly
+    /// to keep every position.
+    ///
+    /// Empty when the field itself is entirely unauthored - 84 of `SP.xml`'s
+    /// 141 events, measured directly against the real EU v1.04 file. Of the
+    /// other 57: 55 author all 7 slots, each one resolving to a real craft;
+    /// 2 (`"2050 - Event 3-4"`/`"2050 - Event 6-4"`) author only their own
+    /// single `<ARRAY>` child (slot 0), the same "most fields carry exactly
+    /// one even when `length` says more" shape `oag_tables::mjolnir`'s own
+    /// module doc comment already records for other fields - no event
+    /// measured leaves a *gap* inside an otherwise-full 7-array, but nothing
+    /// in the schema forbids one, so this handles that shape too rather than
+    /// assuming the measured cases are the only ones.
+    #[must_use]
+    pub fn grid_craft(document: &Document, event: &Instance) -> Vec<Option<String>> {
+        let Some(field) = event.field("M_PGRIDSHIPMODELDATA") else {
+            return Vec::new();
+        };
+        field
+            .values
+            .iter()
+            .map(|value| {
+                if value.value.is_empty() {
+                    return None;
+                }
+                let reference = Reference {
+                    instance_id: value.value.trim().parse().ok()?,
+                    typedef_id: value.typedef_id,
+                };
+                let model = ship_model_for(document, reference)?;
+                team_id(&model)
+            })
+            .collect()
     }
 
     /// Which of [`crate::race::SHIP_TYPES`] `event`'s own four

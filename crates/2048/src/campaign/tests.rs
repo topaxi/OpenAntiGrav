@@ -369,6 +369,76 @@ fn a_prototype_craft_is_checked_by_what_it_counts_as() {
     );
 }
 
+/// Three events shaped after the real `SP.xml` census `grid_craft`'s own
+/// doc comment cites: one authoring all 7 `M_PGRIDSHIPMODELDATA` slots (with
+/// one deliberately empty slot and one deliberately dangling reference,
+/// neither observed on the real file but not assumed away either - see that
+/// function's own doc comment), one authoring only its first slot (the
+/// `"2050 - Event 3-4"`/`"6-4"` shape) and one authoring the field not at
+/// all.
+const GRID_FIXTURE: &str = r#"<mjolnir>
+<instance instanceid="1" typedefid="-1915183557" name="Full Grid Event"><DATA>
+<M_PGRIDSHIPMODELDATA name="m_pGridShipModelData" type="WOShipModelData" length="7" typedefid="520725191">
+<ARRAY value="10" typedefid="520725191"/>
+<ARRAY value="" typedefid="520725191"/>
+<ARRAY value="11" typedefid="520725191"/>
+<ARRAY value="999" typedefid="520725191"/>
+<ARRAY value="10" typedefid="520725191"/>
+<ARRAY value="11" typedefid="520725191"/>
+<ARRAY value="10" typedefid="520725191"/>
+</M_PGRIDSHIPMODELDATA>
+</DATA></instance>
+<instance instanceid="2" typedefid="-1915183557" name="Only Slot Zero"><DATA>
+<M_PGRIDSHIPMODELDATA name="m_pGridShipModelData" type="WOShipModelData" length="7" typedefid="520725191">
+<ARRAY value="11" typedefid="520725191"/>
+</M_PGRIDSHIPMODELDATA>
+</DATA></instance>
+<instance instanceid="3" typedefid="-1915183557" name="No Grid At All"><DATA>
+</DATA></instance>
+<instance instanceid="10" typedefid="520725191" name="Feisar_Combat"><DATA>
+<M_TEAM name="m_team" type="char" length="32" typedefid="0"><ARRAY value="Feisar2048" typedefid="0"/></M_TEAM>
+<M_LIVERY name="m_livery" type="char" length="32" typedefid="0"><ARRAY value="combat" typedefid="0"/></M_LIVERY>
+</DATA></instance>
+<instance instanceid="11" typedefid="520725191" name="Qirex_Agility"><DATA>
+<M_TEAM name="m_team" type="char" length="32" typedefid="0"><ARRAY value="Qirex2048" typedefid="0"/></M_TEAM>
+<M_LIVERY name="m_livery" type="char" length="32" typedefid="0"><ARRAY value="agility" typedefid="0"/></M_LIVERY>
+</DATA></instance>
+</mjolnir>"#;
+
+#[test]
+fn grid_craft_resolves_each_slot_independently() {
+    let doc = parse(GRID_FIXTURE);
+
+    let full = restriction_event(&doc, "Full Grid Event");
+    assert_eq!(
+        craft::grid_craft(&doc, full),
+        vec![
+            Some("Feisar2048\\1".to_string()),
+            None, // an authored but empty slot
+            Some("Qirex2048\\2".to_string()),
+            None, // a dangling reference - id 999 names no instance
+            Some("Feisar2048\\1".to_string()),
+            Some("Qirex2048\\2".to_string()),
+            Some("Feisar2048\\1".to_string()),
+        ]
+    );
+
+    let partial = restriction_event(&doc, "Only Slot Zero");
+    assert_eq!(
+        craft::grid_craft(&doc, partial),
+        vec![Some("Qirex2048\\2".to_string())],
+        "the field carries only its own single <ARRAY> child on this shape - \
+         see the doc comment's own '2050 - Event 3-4' case"
+    );
+
+    let none = restriction_event(&doc, "No Grid At All");
+    assert_eq!(
+        craft::grid_craft(&doc, none),
+        Vec::<Option<String>>::new(),
+        "no M_PGRIDSHIPMODELDATA field at all: nothing to override with"
+    );
+}
+
 #[test]
 fn a_guest_team_id_is_never_refused() {
     let doc = parse(RESTRICTION_FIXTURE);

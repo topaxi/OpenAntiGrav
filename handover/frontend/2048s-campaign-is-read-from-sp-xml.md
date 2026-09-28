@@ -77,12 +77,22 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   expected, touch neither `GameModeBase+0x80..0x83` nor `+0x3c`. No picker was
   added - inventing one the disc does not author would violate this project's
   own rule. See `docs/formats/2048-campaign.md`'s "Craft choice" section.
-- **`M_PGRIDSHIPMODELDATA`'s authored grid vs. `oag_game::livery::
-  teams_for_slots`'s own "chosen, not measured" one.** Most numbered events
-  author all 7 grid slots explicitly; wiring it would replace a guess with
-  real data for every event that carries it. Not attempted this pass -
-  `Options::opponent_teams` is a pool, not per-slot, so this needs its own
-  design rather than a drop-in.
+- **Closed 2026-09-28: `M_PGRIDSHIPMODELDATA`'s authored grid is wired against
+  `oag_game::livery::teams_for_slots`'s own "chosen, not measured" one.**
+  `oag_2048::campaign::craft::grid_craft` resolves the field slot-by-slot
+  (not `Field::references`, which drops an unauthored slot's own position);
+  `race::Options::grid_teams` (new, per-slot, defaults to "no override" so
+  only one exhaustive `Options` call site needed a line) carries it into
+  `crates/game/src/race/load/roster.rs::apply_grid_teams`, which overlays it
+  onto `teams_for_slots`' own placement one slot at a time rather than
+  replacing the whole grid - the "own design rather than a drop-in" this
+  entry used to call for. Measured against the real EU v1.04 `SP.xml`: 55 of
+  141 events author all 7 slots, 2 author only their first, 84 resolve none.
+  Verified live and against a headless `--screenshot`: `--race --event
+  "2048 - Event 6"` reports `"grid: 7 of 7 AI slot(s) authored..."` and the
+  exact authored roster (three Feisar, two Auricom, two AG_Systems). See
+  `docs/formats/2048-campaign.md`'s "Craft choice" section and
+  `crates/game/tests/vita_2048_campaign_grid_ground_truth.rs`.
 - **The rank gate (`M_RankRequired`) on the Ship/Phantom Challenge side
   events.** This engine has no player rank at all; live verification needs a
   progressed save, which `data/extracted/vita/PCSF00007/base/savedata` does
@@ -220,10 +230,9 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    rects, so building that screen for real is still its own, separate piece
    of work - see `campaign-event-card.md`'s own "not chased" note on the
    `M_X`/`M_Y` projection its draw call also computes.
-7. Wire `M_PGRIDSHIPMODELDATA` into the AI grid assignment (replacing
-   `oag_game::livery::teams_for_slots`'s own "chosen" pool for every event
-   that authors all 7 slots), if a caller wants the opponent roster to match
-   the disc rather than this project's own placement rule.
+7. **Closed 2026-09-28** - see the "Open" section's own entry above for what
+   landed (`grid_craft`, `Options::grid_teams`, `apply_grid_teams`) and where
+   it is measured and verified.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

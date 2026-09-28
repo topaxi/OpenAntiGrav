@@ -149,6 +149,10 @@ impl Pending {
             laps_override: None,
             zone_stage: self.cli.zone_stage,
             opponent_teams,
+            // No CLI flag or menu screen offers a per-slot override; only
+            // `race::load_event`'s own 2048-campaign resolution sets this.
+            // See `race::Options::grid_teams`.
+            grid_teams: Vec::new(),
             ribbon: self.cli.ribbon,
             collision: self.cli.collision,
             // **From the settings here, not only in the menu path.** `--race`
