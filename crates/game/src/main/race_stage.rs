@@ -442,7 +442,14 @@ impl RaceStage {
         // such screen, or whose read failed, draws exactly what it always
         // did.
         if let Some(endrace) = &mut self.endrace {
-            endrace.draw(gpu.device(), gpu.queue(), encoder, view, viewport);
+            endrace.draw(
+                gpu.device(),
+                gpu.queue(),
+                encoder,
+                view,
+                viewport,
+                target_size,
+            );
             return;
         }
         match self.race.results() {

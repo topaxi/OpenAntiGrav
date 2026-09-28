@@ -127,12 +127,32 @@ attempted again this pass. Kept under `data/scratch/pulse-tourney/shots/`
 | `RewardLine1` (medal-award phrase) | Yes | `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA` off `Rewards::medal` |
 | `MedalImg` (hex-dash glyph) | Yes, campaign + no medal only | the one measured case (`results-02.png`) |
 | `MedalImg` under an earned trophy | **No** | confidence 55 on whether it stays visible - not determined by any capture this project holds |
-| trophy (`TrophyPanel`, `g_trophy`/`s_trophy`/`b_trophy`) | **No, this pass** | not wired - see [Open](#open) |
+| trophy (`TrophyPanel`, `g_trophy`/`s_trophy`/`b_trophy`) | **Yes, 2026-09-28**, on a campaign race that earned a medal | the medal's own model, `oag_game::endrace::Trophy`, drawn with the disc's `Mode3D` camera - see "The trophy" below |
 | `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum` (the loyalty row) | **Yes, 2026-09-14** | `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal` landed in main (confidence 95/90) - see [`oag_ui::endrace::Loyalty`](../../crates/ui/src/endrace.rs) and `crate::race_stage::endrace::loyalty_award`. `None` (nothing draws) only when a launch names no team at all |
 | `loyaltybg`/`loyaltybar` | Yes, alongside the row | `loyaltybar`'s own fill width scales by `total * 0.00124` - see [Open](#open) for a visual mismatch against the reference frame this pass found and did not resolve |
 | `LoyaltyImg` | Yes, alongside the row | |
 | `BigPos` | **No** | a finishing-position figure this model carries no place for - would need threading a `place` into `Rewards` that nothing else on this screen needs |
 | `ContinueButton` etc. | Yes | direct |
+
+### The trophy (2026-09-28)
+
+`oag_ui::screen` collects every `<Mode3D>`'s `<Model>`s
+(`Screen::models`, `oag_ui::screen::Mode3dModel`), `oag_game::endrace::load`
+decodes `TrophyPanel`'s three through `oag_game::preview::model`, and
+`EndRaceRuntime` draws the one the campaign medal names with
+`Preview::draw_mode3d` after the screen's own widgets.
+
+| Claim | Status | Basis |
+| --- | --- | --- |
+| which model is which medal | decompiled, 80 | the widget names, the switch `EndRaceRewards_OnEnter` makes on the ordinal (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`) |
+| camera and pose | measured | `Mode3D_ReadValues`' camera law and its `nearZ`/`farZ` defaults `20`/`100` (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`), `TrophyPanel`'s authored origin, the model's `z="-75"` |
+| where it lands | **cross-checked** | `OriginX/Y = 145/60` puts each model's origin inside `MedalImg`'s own 32x32 square - two widgets the file places independently agreeing. Pinned by `crates/game/tests/endrace_trophy_ground_truth.rs` |
+| held at its first frame | **chosen** | every model authors `StartPaused="yes"`; the `\|= 4` `OnEnter` sets on the chosen one reads as the widget's visible bit, not an animation release. Whether the original spins it is unmeasured |
+| `Enabletransition="2.0"` | **not applied** | the fade/grow this names is not read; the trophy appears at once |
+
+Captures: `--menu-page endrace-rewards-gold`/`-silver`/`-bronze` (new page
+names), and a live campaign race that earned bronze -
+`data/scratch/drive-2026-09-28/erp/shots/p11a.png`/`p11b.png` (gitignored).
 
 ### `EndRace Menu`
 
@@ -150,7 +170,7 @@ attempted again this pass. Kept under `data/scratch/pulse-tourney/shots/`
 | --- | --- | --- |
 | Widget positions, idstrings, per-mode option list | Measured, per `docs/formats/endrace-screens.md`'s own table | direct XML/decompile read |
 | The totals-row highlight's own position | **Chosen** | no decompile of the row-highlight positioning; matched to the row visually |
-| Medal-earned trophy placement/size | **Not attempted** | see Open |
+| Medal-earned trophy placement/size | Measured camera law, cross-checked against `MedalImg` | see "The trophy" above; its first-frame hold is chosen |
 | `MedalImg` under an earned trophy | **Not drawn either way** | confidence 55, undetermined |
 | Loyalty award/total (the numbers) | Measured, confidence 95/90 | `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal`, confirmed on two live Time Trial races - `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md` |
 | Loyalty award/total, `SingleRace`/`Zone`/`Eliminator` branches | Decompiled, **not independently live-verified** | same page's own "Still open"; drawn under the same law regardless |
@@ -221,7 +241,9 @@ still.
   question, not a drawing-code one - `crate::race_stage::endrace`'s own
   fraction is a direct, documented read of the one number
   `endrace-screens.md` gives.
-- **The trophy model is not wired this pass.** `oag_game::preview::model` can
+- ~~**The trophy model is not wired this pass.**~~ **Wired 2026-09-28** -
+  see "The trophy" above; the struck text is kept for its history.
+  `oag_game::preview::model` can
   load an arbitrary `.vex` by path the same way a picker's own ship preview
   does (`Data\FE\trophies\gold.vex`/`silver.vex`/`bronze.vex`), and
   `TrophyPanel`'s own `OriginX="145.0" OriginY="60.0"` is a real, measured
@@ -232,7 +254,10 @@ still.
   the row is simply absent for a medal-earning race, which this project's own
   zero-medal profile cannot exercise to check against anyway (see the next
   point).
-- **Nothing here was checked against a medal-earning run.** Every capture
+- **A medal-earning run exists now, of this build only** (2026-09-28: a
+  live Pulse campaign race, 3rd, bronze, trophy drawn). No capture of the
+  *original* earning a medal exists, so the trophy's animation and
+  `MedalImg`'s state under it are still unmeasured. The older text: Every capture
   this pass has - live and headless alike - is a zero-medal profile, the
   same limitation `docs/ui/campaign-screens.md` already records for the hex
   swatch colours. `MedalImg`'s own state under an earned trophy (see the
@@ -404,6 +429,50 @@ XML fixture) and
 which asserts the `ER_{n}PLACE`-not-`ER_{n}STP` divergence directly against
 the disc's own string table - the test that would have caught bug 1 before
 a screenshot did.
+
+### 2026-09-28: the Menu's cursor, and a Results grid that fits eight rows
+
+A live HD campaign walk (`data/scratch/drive-2026-09-28/campaign-launch-walk.md`)
+found two things wrong, both fixed from the executable rather than chosen:
+
+- **`EndRace Menu` had no visible cursor** - white rows on the light panel,
+  the selected one only brightened. The option Blocks author their own look
+  and `Block_Update` says how a focused one draws: its `ActiveColor`
+  (`0xff8ac0ca`, the constructor's, since the screen authors none) over the
+  grey `Color`, sixty units wider at a sixth per tick, with a 32x32
+  `HD_options_arrow.gtf` blinking eight ticks on, nine off, at `X + 8`; the
+  label sits at `X + 40` in `TextColor`. See
+  [menu-blocks.md](../ghidra/functions/ps3-hdfury-eu/menu-blocks.md#a-standalone-block-parse-selectable-update-2026-09-28).
+  **On the Fury style the cursor stays light blue while `Results`'
+  `GridHighlight` is red, and that is right**: the highlight authors
+  `FEGlobals->HD_Blue`, which the served Fury archive resolves to red, and
+  the Block's focus colour is a compiled-in literal, not that global (the
+  constructors set no "is a global" bit for it). Do not "fix" one to match
+  the other.
+  The walk that verified it found a third bug: Up moved the cursor *down*,
+  because the shared option list is Pulse's order (`RETURN TO GRID` first)
+  while HD draws each option at its own Block's `y`.
+  `oag_ui::endrace::hd::hd_screen_order` now steps them in screen order and
+  keeps the default focus.
+- **The 8th Results row sat on the footer bar.** The file's frame is the
+  Time Trial layout; on a race `EndRaceResults_LayoutGrid` hides
+  `GridBottomBlock` and stretches the frame to a `487` bottom bar, and rows
+  sit at `96 + 45 r`, not the `347 / 8` pitch this page used to call chosen.
+  The time column is `x = 545` (`Grid2`), captioned by `GridHead2`'s label
+  at its Block's `X + 40` - and the headers now draw as their grey Blocks,
+  which is what makes the white `POS`/`TIME` legible. See
+  [endrace-results-grid.md](../ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md).
+  Time Trial / Speed Lap keep the file's frame and the older chosen pitch:
+  their fillers were not read.
+
+**Live**, Xvfb `:95`, `hdfury-ps3-eu-dec.iso`, Fury campaign, Talon's
+Junction, autopilot 4th: Results with all eight rows inside the frame
+(`erp/shots/h05.png`, `h12.png`); Menu with the blue focused block and the
+arrow on its lit phase in one of four consecutive frames (`h06-crops.png`);
+Up, Down Down stepping top-to-bottom (`h13-15-crops.png`); pointer hover
+moving the focus and a click on `RETURN TO GRID` landing on Cell Selection
+(`h16-hover-crop.png`, `h17-after-click.png`). All under
+`data/scratch/drive-2026-09-28/erp/` (gitignored).
 
 ### Captures
 

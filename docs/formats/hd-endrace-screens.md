@@ -90,9 +90,19 @@ Unlike Pulse's own per-lap table, which authors each `lap{n}.{c}` at its own
 real `x`/`y`, none of HD's forty grid cells carries a position at all. The
 frame around them **is** measured (`GridSideBarL`'s own `y="44" height="347"`,
 inside the `Item` that offsets the whole block by `375, 368`), so the row
-geometry this project's own drawing uses is derived from that frame divided
-by a row count this file does not itself state - see the implementation doc
-for the exact number and why it is chosen rather than measured.
+geometry this project's own drawing uses was first derived from that frame
+divided by a row count this file does not itself state.
+
+**2026-09-28: the positions are the code's, and now read.** The screen's own
+code lays the grid out per mode, and the frame this file authors is the Time
+Trial / Speed Lap one: on a race, `EndRaceResults_LayoutGrid` (`0x0022c068`)
+stretches the side bars to `443`, drops the bottom bar to `487` and hides
+`GridBottomBlock`, and `EndRaceResults_FillRaceRows` (`0x0022b688`) puts row
+`r` at `y = 96 + 45 r` with columns at `x = 40`/`200`/`545` - so the time
+is `Grid2`, not `Grid1`, and `Grid1` is a per-racer string not yet
+identified. Confidence 75 for "mode 3 is a single race", 78-80 for the
+numbers. Full reading:
+[endrace-results-grid.md](../ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md).
 
 ### `Line1` carries no idstring - the headline is a runtime fill
 
@@ -234,6 +244,15 @@ section.
 | `view_MP_again` | `<Block>`, `IDString="ER_VIEW_AGAIN"`, `x="375" y="235" width="520"` | 95 - multiplayer-only, unreachable |
 | `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 |
 | `<Redirect>` table | `next_race`->`Load Next Race`, `race_again`->`InGame Restart Transition`, `return_to_grid`/`return_to_menu`->`Kill Game Transition`, `quit_tournament`/`return_to_lobby`->`Kill Game Multiplayer`, `view_again`/`view_MP_again`->`EndRace Results`, `Endrace Difficulty`->`InGame Restart Transition` | 95 - direct read |
+
+**Every option Block also authors its own look**, which a first read of
+this table left out: `selectable="true" arrowcolor="0xffffffff"
+shaped="true" Color="0xff646464" textcolor="FEGlobals->HD_White"`. What those
+mean - a grey box that turns `ActiveColor` (unauthored here, so the
+constructor's `0xff8ac0ca`) when focused, grows sixty units, and blinks a
+32x32 arrow - is `Block_ParseXml`/`Block_Update`, on
+[menu-blocks.md](../ghidra/functions/ps3-hdfury-eu/menu-blocks.md#a-standalone-block-parse-selectable-update-2026-09-28).
+Confidence 80.
 
 Five of these eight idstrings (`ER_NEXT_RACE`, `ER_RACE_AGAIN`,
 `ER_RETURN_GRID`, `ER_RETURN_MENU`, `ER_VIEW_AGAIN`) are **byte-identical**

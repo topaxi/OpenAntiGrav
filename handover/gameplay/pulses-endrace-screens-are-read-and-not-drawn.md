@@ -159,7 +159,15 @@ Results` draws correctly over a real, just-finished race. What is left:
   reference frame's own bar shows at the same total (`90`) - see
   `docs/ui/endrace-screens.md`'s Open section, a rendering-law question for
   whoever next has a Ghidra bridge on this screen.
-- **The trophy model is not wired.** `oag_game::preview::model` can load an
+- ~~**The trophy model is not wired.**~~ **Wired 2026-09-28**: `Screen::models`
+  collects `<Mode3D><Model>`, `oag_game::endrace::Trophy` decodes the three,
+  and `EndRaceRuntime` draws the earned one with the disc's `Mode3D` camera,
+  which lands it inside `MedalImg`'s square (cross-checked by
+  `endrace_trophy_ground_truth`). Live: a bronze campaign race drew it.
+  **Still open**: held at its first frame (`StartPaused="yes"`, chosen - the
+  original's animation is unmeasured), `Enabletransition="2.0"` not applied,
+  and no capture of the *original* earning a medal. The old text:
+  `oag_game::preview::model` can load an
   arbitrary `.vex` the same way a picker's own ship preview does, and
   `TrophyPanel`'s own `OriginX="145.0" OriginY="60.0"` is a real number
   `EndRace_Definition.xml` authors - but `Mode3D`/`Model` widgets are not yet

@@ -242,6 +242,7 @@ impl Session {
             results,
             rewards,
             menu,
+            self.anisotropy,
         ) {
             Ok(runtime) => {
                 if let Stage::Race(stage) = &mut self.stage {
@@ -293,6 +294,11 @@ impl Session {
                         Event::Moved | Event::Back => {}
                     }
                 }
+                // After this tick's move, so a newly focused option starts
+                // easing and blinking on the same tick it is picked - the
+                // order `Block_Update` sees focus in. Wipeout HD/Fury's
+                // option blocks draw it; Pulse's list ignores it.
+                endrace.menu_mut().tick();
             } else {
                 // `Results`/`Rewards` answer only a confirm - cross, start
                 // or a click anywhere, the same `ContinueButton` press

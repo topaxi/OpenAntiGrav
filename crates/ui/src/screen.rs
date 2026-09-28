@@ -29,13 +29,17 @@ mod fade;
 mod movie;
 #[cfg(test)]
 use movie::has_movie_extension;
+mod block;
+mod mode3d;
 mod reveal;
 mod settings;
 mod tag_input;
 mod touch;
 mod widgets;
+pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
 pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
+pub use mode3d::Mode3dModel;
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
 pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
@@ -318,6 +322,10 @@ pub struct Screen {
     pub movies: Vec<Movie>,
     /// `Text` widgets in document order.
     pub texts: Vec<Text>,
+    /// The box half of every `<Block>` (label in [`Self::texts`]).
+    pub blocks: Vec<BlockWidget>,
+    /// Every `<Mode3D>`'s `<Model>`s, in document order.
+    pub models: Vec<Mode3dModel>,
     /// `Redirect` widgets in document order.
     pub redirects: Vec<Redirect>,
     /// `TouchButton` widgets in document order - Wipeout 2048's icon tiles,
@@ -705,9 +713,10 @@ impl Screens {
             // A `Block` is HD's own menu/table box - `Block_Item.cpp`
             // (`docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md`), a
             // bordered, filled rect the engine draws off a shared nine-patch
-            // and colours/positions per widget. That render is not
-            // reproduced here (no consumer needs the border/fill yet) - only
-            // the label a `Block` carries is, collected as a [`Text`] the
+            // and colours/positions per widget. The box half lands in
+            // [`Screen::blocks`] ([`BlockWidget`], for a screen that draws
+            // it through `crate::menu::block`); the label half is
+            // collected as a [`Text`] the
             // same idstring-resolution pass every other text already gets
             // (`crate::campaign::Layout::read_authored`), so a caller reading
             // `screen.texts` finds `GridHead1`'s `IG_HUD_POS` or `EndRace
@@ -720,7 +729,11 @@ impl Screens {
                 let mut text = self.block_from_node(child, viewport_width, inner);
                 text.transition = transition;
                 screen.texts.push(text);
+                screen
+                    .blocks
+                    .push(self.block_widget_from_node(child, inner));
             }
+            "mode3d" => screen.models.extend(self.mode3d_models_from_node(child)),
             "redirect" => screen.redirects.push(widgets::redirect_from_node(child)),
             "touchbutton" => screen
                 .touch_buttons

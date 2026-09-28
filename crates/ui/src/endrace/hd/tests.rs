@@ -5,6 +5,8 @@ use crate::language::StringTable;
 use crate::menu::Frame;
 use crate::screen::Screens;
 
+mod cursor;
+
 /// `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` in miniature - the
 /// same container shape the real file authors (`<Block>` headers/options,
 /// `Grid{col}.{row}` cells at `x="0" y="0"`), trimmed to two rows and four

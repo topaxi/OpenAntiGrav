@@ -708,7 +708,7 @@ pub fn run(
                 // and faces/skin/globals setup `campaign_kind`'s own arm
                 // keeps inline lives in `endrace_page::capture` instead -
                 // see that function's own doc for why.
-                let list = endrace_page::capture(
+                let (list, trophy) = endrace_page::capture(
                     kind,
                     options.race.as_ref(),
                     menu_font.as_ref(),
@@ -722,6 +722,7 @@ pub fn run(
                     &mut sprites,
                     title,
                 )?;
+                preview_request = trophy;
                 (backdrop, video_format, list, space)
             } else {
                 // Read-only, off whatever `<config dir>/oag/records.toml`
