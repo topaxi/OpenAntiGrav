@@ -1489,37 +1489,70 @@ number against the way the `61` tier spacing is already cross-checked
 (`Target0/1/2 Medal`'s own authored `width="60" height="60" u="0"
 v="0"/"61"/"122"`). Confidence 60 on the `183` pitch itself.
 
-### Which block is which difficulty: chosen from convergent evidence, not measured
+### Which block is which difficulty: measured on RPCS3, 2026-09-28
 
 **Falsifier check, explicit**: the observation would be falsified if the
 atlas held only three frames (it holds many more - see the existing
 "many-frame rotation strip" finding below) or if a live screen showed the
 same icon at every difficulty. Neither happened - the atlas genuinely
 carries three shapes, and this project's own render (below) shows three
-different shapes drawn for three different stored difficulties. What is
-**not yet independently confirmed on a live RPCS3 frame** is *which* shape
-goes with *which* difficulty:
+different shapes drawn for three different stored difficulties.
 
-`easy/novice = plain hex (v-block 0)`, `medium/skilled = cane (v-block 1)`,
-`hard/elite = swirl (v-block 2)` is the reading two independent facts
-agree on:
+**Confirmed on a live RPCS3 frame.** `easy/novice = plain hex (v-block 0)`,
+`medium/skilled = cane (v-block 1)`, `hard/elite = swirl (v-block 2)` - the
+mapping this section previously reasoned to from convergent evidence alone -
+is now a direct capture read: `browse --screen "Cell Selection" --button
+triangle --steps 6` (recipe and full navigation notes in
+`docs/reverse-engineering/rpcs3-capture.md`'s "Cell Selection:
+`DifficultyButton` toggle, per-rung icon shape" section) landed on `grid8_3_1`
+(`Fury`, `Race`, Talon's Junction, Venom, weapons on, 3 laps - the
+first-reached cell on a default `Main Menu` -> `Cell Selection` walk with no
+d-pad input) and cycled its `Target0/1/2 Medal` row through two full
+`NOVICE -> SKILLED -> ELITE` cycles. Reading is by the frame's own `AI
+DIFFICULTY (<rung>)` footer text, not press count (face-button presses drop
+at ~9 fps and leave no `TTY.log` line):
 
-1. `DATA02`'s shorter, flat-schema copy - the one every pre-Fury cell
-   effectively used before per-difficulty targets existed - carries *only*
-   the swirl shape.
-2. `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
-   `SaveData_MigrateCellMedalsToHardElite` credits exactly that
-   pre-existing, difficulty-less medal at `HARD`/`ELITE` when migrating an
-   old save.
+| Rung (footer text) | Icon shape | Frames |
+| --- | --- | --- |
+| `NOVICE` | plain hex | `03.png`, `06.png` |
+| `SKILLED` | cane/hook | `01.png`, `04.png` |
+| `ELITE` | swirl | `02.png`, `05.png` |
 
-The swirl icon and the hardest rung are the two things that pre-existed the
-difficulty split, and the migration equates them - not proof, but not a
-coin flip either. See `hd_medal_frame`'s own doc comment for the full
-statement and its own confidence accounting; no confidence score is given
-for the mapping itself, since neither fact above is a pixel on a live
-screen. A capture toggling `DifficultyButton` on RPCS3 and reading which
-shape the target row shows at each rung would settle it in one pass - not
-done this session.
+Two independent frames per rung, one boot, one cell, one mode (`Race`) -
+confidence 90, not higher, per `hd_medal_frame`'s own doc comment. This
+project's own render of the identical cell at its fixed default browsed rung
+(`--menu-page cell-select`, `CellSelection::new`'s `Difficulty::Medium`
+default) draws the same cane shape at `TARGET (SKILLED)` - an internal
+consistency check, not a second independent capture. **Not reproduced this
+pass**: a second boot, or an `Elimination`/`NitroBattle` cell (whose own
+target triple is separately named `Novice`/`Skilled`/`Elite` rather than
+`1st`/`2nd`/`3rd` - see "measured on RPCS3" above); `browse`'s own `--nav`
+plan is dead once `--screen` is reached (breaks the walk loop before
+`navigate()` fires), so reaching a *different* cell than the default needs a
+different driver than the one used here.
+
+The convergent-evidence reasoning that predicted this mapping before any
+capture existed: `DATA02`'s shorter, flat-schema copy - the one every
+pre-Fury cell effectively used before per-difficulty targets existed -
+carries *only* the swirl shape, and
+`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
+`SaveData_MigrateCellMedalsToHardElite` credits exactly that pre-existing,
+difficulty-less medal at `HARD`/`ELITE` when migrating an old save. The
+swirl icon and the hardest rung were the two things that pre-existed the
+difficulty split, and the migration equates them - a reading two independent
+facts agreed on, now corroborated rather than merely argued for.
+
+**Not itself re-confirmed this pass**: the fresh-profile default rung. This
+boot ran on an existing (non-fresh) save - moving it aside was refused by
+this session's own permission classifier as an edit to the user's real
+`~/.config/rpcs3` outside the repo - so `00.png` (before any `DifficultyButton`
+press) is not evidence of a *fresh* default, only of whatever rung that save
+already held. It is consistent with the earlier "fresh-profile default reads
+`NOVICE`" finding (the three-rung cycle's own periodicity places the
+unpressed state one step before `01.png`'s `SKILLED`, i.e. `NOVICE`), not an
+independent re-measurement of it. `CellSelection::difficulty`'s own
+`Difficulty::Medium` (`SKILLED`) default versus RPCS3's `NOVICE` stays open,
+per the 2026-09-25 section above - not this pass's to fix.
 
 ### The fix, and this project's own render as an internal consistency check
 
@@ -2614,6 +2647,30 @@ and its own "what is not determined" section.
   not spent this pass. `session::campaign::handle_campaign`/
   `launch_campaign_cell` received no HD-specific edit, confirmed once more
   by this walk working unmodified.
+  **2026-09-28, `grid8_3_1` specifically checked, headlessly rather than by
+  a second live drive**: a full race build/tick cost two orders of
+  magnitude more wall clock than a menu screen here (this section's own
+  measurement above), so this pass read `launch_campaign_cell`
+  (`crates/game/src/main/session/campaign.rs:287`, read-only - a different
+  lane's own file) rather than drive a second race. Its own mapping is
+  field-for-field: `race_mode_for_cell(cell.mode)` sends the authored string
+  `"Race"` straight to `oag_race::Mode::SingleRace` (unit-tested,
+  `crates/game/src/campaign.rs`'s own `the_seven_implemented_modes_map_onto_their_oag_race_mode`),
+  `race_options.class = cell.class.clone()` keeps `"Venom"` verbatim, and
+  `laps_override = cell.laps` carries `3` through unmodified for
+  `SingleRace`. `race_options.track` resolves `"17_Track"` through
+  `shell.track` to the same circuit `docs/formats/hd-frontend.md`'s own
+  `17_Track -> Talons_Junction` measurement already names. Every one of
+  those four values (`Race`/`Venom`/`3`/`Talon's Junction`) already reads
+  identically on both sides at the *selection* screen - this pass's own
+  `ours-cellselect-default.png` next to the RPCS3 `01.png`/`04.png` frames
+  above, all four fields matching pixel-for-text. What this does **not**
+  re-confirm is that `finish_launch`/`open_ship_picker` carry those same
+  `race_options` through into a *started* race unmodified for this specific
+  cell - only that the values reaching `race_options` are right; the
+  2026-09-21 walk already showed a *different* HD cell's launch reaching a
+  genuinely ticking race with correct HUD/opponents/track, and nothing in
+  the code path between the two cells differs.
 - **The `Required`/`Required Previous`/`NextPoints` unlock-reason
   predicates are chosen, not measured**, on both which text shows and
   what number a raw `%d` template should carry - see the two sections
