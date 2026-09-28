@@ -73,10 +73,25 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   unexplained** - see the formats page's own confidence-60 row. Left
   undrawn; whoever next opens this screen with more time or a capture is
   the one to settle what subset of columns it is for.
-- **Row geometry is chosen, not measured** - the disc authors ten row slots
-  and every `Grid{col}.{row}` cell at `x="0" y="0"`, so this build divides
-  the grid's own measured frame by `oag_gameplay::MAX_SHIPS` (eight) rather
-  than ten. See `oag_ui::endrace::hd::row_y`'s own doc.
+- ~~**Row geometry is chosen, not measured**~~ **Read, 2026-09-28, for the
+  race family**: `EndRaceResults_LayoutGrid`/`_FillRaceRows` (`0x0022c068`/
+  `0x0022b688`) put row `r` at `96 + 45 r`, columns at `40`/`200`/`545`,
+  stretch the frame to a `487` bottom bar and hide `GridBottomBlock` - the
+  file's frame is the Time Trial layout, which is why the 8th row used to sit
+  on the footer. See
+  [endrace-results-grid.md](../../docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md).
+  **Still open under it**: Time Trial / Speed Lap rows keep the chosen
+  `row_y` (fillers `0x002239a8`/`0x00227b30` unread); `Grid1.r` (`x = 200`)
+  is a per-racer string off the record's `+0x50`, unidentified and undrawn.
+- **2026-09-28: `EndRace Menu` draws its cursor the executable's way** - the
+  focused option Block turns `ActiveColor` (`0xff8ac0ca`), eases 60 wider and
+  blinks a 32x32 arrow (`Block_Update`, `0x0018d588`,
+  [menu-blocks.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md)),
+  and the options step in screen order. Live-verified on Xvfb with pad and
+  pointer; see `docs/ui/endrace-screens.md`'s HD section. **Open**: the
+  original's default focus on HD is unmeasured (this build keeps
+  `RETURN TO GRID`); the `Endrace Difficulty` `<List>` at the same `y` as
+  `race_again` is still undriven.
 
 ## Next Steps
 

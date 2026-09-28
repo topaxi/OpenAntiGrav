@@ -25,19 +25,22 @@
 //!   (`235`/`285`/`335`) and [`super::menu_options`] never asks for more than
 //!   one per `y`, so drawing each option at its own Block's position
 //!   reproduces the stacking with no synthetic pitch of this crate's own.
+//!   Each option draws as the Block it is - box, focus colour, blinking
+//!   arrow - per [`hd_menu_draw_list`], and steps in screen order
+//!   ([`hd_screen_order`]).
 //!
 //! # What does not, and why
 //!
 //! - **The forty `Grid{col}.{row}` cells author no real position at all** -
 //!   every one reads `x="0" y="0"` in the file, a template the original
-//!   fills in at layout time. This module computes its own row geometry
-//!   instead, off the grid's own measured frame
-//!   (`GridSideBarL`'s `y="44" height="347"`, within the `Item` that offsets
-//!   the whole block by `375, 368`) divided by [`oag_gameplay::MAX_SHIPS`]
-//!   rows - **chosen, not measured**: the disc authors ten row slots, not
-//!   eight, and no capture pins the real row pitch. Column `x` is not
-//!   chosen, though - it is read straight off `GridHead1`/`GridHead2`'s own
-//!   resolved position at draw time, never hand-transcribed.
+//!   fills in at layout time. **On a race the layout is the executable's**
+//!   ([`RaceGrid`]: rows at `96 + 45 r`, columns at `40`/`200`/`545`, the
+//!   frame stretched to a `487` bottom bar and the footer block hidden -
+//!   `docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`). On Time
+//!   Trial / Speed Lap, whose fillers are unread, the rows keep this
+//!   module's older geometry: the file's frame divided by
+//!   [`oag_gameplay::MAX_SHIPS`] rows, **chosen, not measured**, with
+//!   column `x` read off `GridHead1`/`GridHead2`.
 //! - **The ship-badge column (`Gridi.{row}`, `.tga`) never draws.** Every
 //!   copy of the file names the same one or two teams' badges for every
 //!   race regardless of who is actually on the grid (`Data\Ships\Feisar\fe\miniBW.tga`
