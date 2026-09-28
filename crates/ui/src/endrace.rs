@@ -59,7 +59,9 @@ pub mod draw;
 pub mod hd;
 pub mod pointer;
 
-pub use draw::{endrace_menu_draw_list, results_draw_list, rewards_draw_list};
+pub use draw::{
+    endrace_menu_draw_list, results_draw_list, rewards_draw_list, tournament_results_draw_list,
+};
 
 #[cfg(test)]
 mod tests;
@@ -122,6 +124,131 @@ pub struct Results {
     /// call to make.
     pub laps: Vec<LapSplit>,
     pub total_ticks: u64,
+}
+
+/// One row of Pulse's own Tournament standings table - see
+/// [`TournamentResults`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TournamentRow {
+    /// `ER_TEAM`'s own value for this row - `None` when this project cannot
+    /// resolve a team name for the slot (a `--race` launch that named no
+    /// team at all; a real tournament, reached through `Team Selection`,
+    /// always names one). `None` draws the cell absent rather than a
+    /// placeholder like `"SLOT 3"`, the same rule every other unresolved
+    /// label on this screen follows.
+    pub team_name: Option<String>,
+    /// This row's own points: this leg's
+    /// (`oag_race::tournament::points_for_finish`, [`TournamentResults::leg`])
+    /// or the running total across every leg so far
+    /// (`crate::race::tournament::Progress::points`,
+    /// [`TournamentResults::standings`]) - which one depends on which table
+    /// the row is on, not on the row itself.
+    pub points: u32,
+    /// Whether this is the player's own row - `tablehighlight`'s own
+    /// condition, `g_endrace_result`'s per-craft player flag
+    /// (`+0x34`/`+0x8b4`).
+    pub player: bool,
+}
+
+/// Pulse's own Tournament `EndRace Results`: cycles every 3 seconds between
+/// this leg's own placings (`ER_RACE_STAN`, this leg's own finish order and
+/// points) and the running standings (`ER_TOUR_STAN`, ranked by cumulative
+/// points) - `EndRaceResults_PopulateTournamentTable` (`0x088dad90`,
+/// confidence 82) and `EndRaceResults_Update`'s (`0x088da530`, confidence
+/// 85) own 3-second toggle. See
+/// `docs/ghidra/functions/psp-pulse-usa/tournament.md`'s
+/// `EndRaceResults_PopulateTournamentTable` section for the full decompile
+/// this reimplements, and `docs/ui/endrace-screens.md` for what draws.
+///
+/// **Every leg shows this**, not only the last - `EndRaceResults_OnEnter`'s
+/// own `case 4: case 0x10:` runs on every Tournament leg's own results
+/// screen; only `BigTopText` (`last_leg`/`leg_number`/`leg_count`) differs
+/// between a mid-tournament leg and the last one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TournamentResults {
+    /// `BigTopText` reads `ER_END_TOUR` when `true`, otherwise `"%s %d/%d"`
+    /// of `ER_RES`, `leg_number` and `leg_count`.
+    pub last_leg: bool,
+    /// This leg's own 1-based index.
+    pub leg_number: u32,
+    /// The tournament's own leg count.
+    pub leg_count: u32,
+    /// `ER_RACE_STAN`'s own rows: this leg's own finish order (unsorted by
+    /// `EndRaceResults_PopulateTournamentTable` itself - the row order is
+    /// simply the order the field already finished in).
+    pub leg: Vec<TournamentRow>,
+    /// `ER_TOUR_STAN`'s own rows: ranked by cumulative points, descending -
+    /// `crate::race::tournament::Progress::rank`'s own order.
+    pub standings: Vec<TournamentRow>,
+    /// Seconds since this screen was entered or last toggled - advanced by
+    /// [`Self::tick`]. Starts at `0.0`, matching `EndRaceResults_OnEnter`'s
+    /// own `*(param_1+0xdc) = 0`.
+    elapsed: f32,
+    /// Which page is current - starts `false` (the leg table draws first,
+    /// the same table `EndRaceResults_OnEnter`'s own initial
+    /// `EndRaceResults_PopulateTournamentTable(param_1, 0)` call populates).
+    showing_standings: bool,
+}
+
+impl TournamentResults {
+    #[must_use]
+    pub fn new(
+        last_leg: bool,
+        leg_number: u32,
+        leg_count: u32,
+        leg: Vec<TournamentRow>,
+        standings: Vec<TournamentRow>,
+    ) -> Self {
+        Self {
+            last_leg,
+            leg_number,
+            leg_count,
+            leg,
+            standings,
+            elapsed: 0.0,
+            showing_standings: false,
+        }
+    }
+
+    /// One tick of the 3-second leg/standings toggle -
+    /// `EndRaceResults_Update`'s own law: accumulate, and past `3.0` seconds
+    /// reset to `0.0` and flip the page. `seconds` is this project's own
+    /// fixed 60 Hz tick (`1.0 / 60.0`) - see
+    /// [`docs::determinism`](../../../docs/architecture/determinism.md).
+    pub fn tick(&mut self, seconds: f32) {
+        self.elapsed += seconds;
+        if self.elapsed > 3.0 {
+            self.elapsed = 0.0;
+            self.showing_standings = !self.showing_standings;
+        }
+    }
+
+    /// Whether the standings page (`ER_TOUR_STAN`) is current, rather than
+    /// the leg page (`ER_RACE_STAN`).
+    #[must_use]
+    pub fn showing_standings(&self) -> bool {
+        self.showing_standings
+    }
+
+    /// The current page's own rows.
+    #[must_use]
+    pub fn current(&self) -> &[TournamentRow] {
+        if self.showing_standings {
+            &self.standings
+        } else {
+            &self.leg
+        }
+    }
+
+    /// `Line1`'s own idstring for the current page.
+    #[must_use]
+    pub fn line1_id(&self) -> &'static str {
+        if self.showing_standings {
+            "ER_TOUR_STAN"
+        } else {
+            "ER_RACE_STAN"
+        }
+    }
 }
 
 /// One craft's own row on Wipeout HD/Fury's `EndRace Results` - the whole
@@ -226,9 +353,9 @@ impl Rewards {
 /// `SaveGhost`/`DeleteData` are not modelled - see the module doc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuOption {
-    /// Mid-Tournament only - not reachable by this engine, which implements
-    /// no Tournament mode, but named for completeness against the disc's own
-    /// list.
+    /// Mid-Tournament only, offered in place of `RaceAgain` on every leg but
+    /// a Tournament cell's own last - see `crate::race_stage::endrace::menu_options`'s
+    /// own `tournament_next_leg` doc.
     NextRace,
     ReturnToGrid,
     ReturnToMenu,

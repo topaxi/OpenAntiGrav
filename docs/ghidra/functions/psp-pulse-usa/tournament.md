@@ -244,6 +244,88 @@ points and not on the last leg's own placing.** Confidence **85** - direct
 decompilation of both the value computed and the value consumed, though
 not runtime-verified (see below).
 
+### Correction, 2026-09-28: the "scratch per-craft row" above is `g_endrace_result` itself, and it is one of two rows this block writes
+
+A later pass re-decompiled this exact block (`0x0882a498`) alongside
+`EndRaceResults_PopulateTournamentTable` (`0x088dad90`, below) and
+`EndRaceResults_Update` (`0x088da530`, new this pass) to close the "copy
+into `g_endrace_result`'s own `+0x35`/`+0x134`... not located" item this
+page's own "What is not determined" section carried since the pass above.
+It is located, and the pseudocode above undersells what the block does:
+**it writes two separate per-craft rows, both inside `g_endrace_result`
+(`param_1+0x7d8`, `endrace-screens.md`'s own base), not one scratch row
+outside it:**
+
+```
+iVar13 = param_1 + 0x80d          # g_endrace_result + 0x35 (name, row n at +n*0x110)
+iVar9  = param_1 + 0x108d         # g_endrace_result + 0x8b5 (name, row n at +n*0x110)
+iVar15 = param_1                  # g_endrace_result + 0    (row n at +n*0x110)
+for each craft in the grid (0 .. DAT_08b30f90 - 1), in `param_1+0x98`'s own order:
+    slot        <- craft->0x360
+    g_team_points[slot].previous (+0xb0) <- g_team_points[slot].total (+0x90)   # snapshot before this leg
+    legPoints   <- Tournament_PointsForCraft(craft, false)
+    g_team_points[slot].total (+0x90) += legPoints
+    *iVar13 (+0x35  this row) <- craft's own name string           # ER_TEAM/PRO_NAME column, table A
+    *(iVar15 + 0x90c) (+0x134 this row) <- legPoints                # ER_POINTS column, table A - THIS LEG's points, not the running total
+    *iVar9  (+0x8b5 this row) <- craft's own name string           # table B, same name, second copy
+    *(iVar15 + 0x118c) (+0x9b4 this row) <- g_team_points[slot].total (+0x90, post-increment)  # table B - the CUMULATIVE total
+    if craft == the currently-tracked race object:
+        thisCraftRank <- current row index (1-based)                # provisional, before table B's own sort below
+    iVar13 += 0x110; iVar9 += 0x110; iVar15 += 0x110
+```
+
+Then the bubble sort this section already documented (line 207 above) sorts
+**table B only** (the `+0x8b5`/`+0x9b4` rows, via the `+0x118c` alias) by its
+own now-cumulative `+0x9b4` field, descending, stable on a tie. **Table A
+(`+0x35`/`+0x134`) is never sorted by this function at all** - its own row
+order is simply whatever order `param_1+0x98`'s craft-pointer array already
+holds.
+
+This is the same struct, and the same two field pairs,
+`EndRaceResults_PopulateTournamentTable` (below) reads: table A is its
+`param_2 == 0` argument (`ER_RACE_STAN`, "this leg's own placings"), table B
+is `param_2 == 1` (`ER_TOUR_STAN`, "the tournament standings"). **The
+previous pass's own reading of `+0x9b4` as a split-screen variant of
+`+0x134` (this page's line 303 as it stood before this correction, and
+`endrace-screens.md`'s mirror of it) is wrong** - split-screen is a
+*different* field, `screen+0xe9` (`0xd < g_game_mode`), which only ever
+picks the header idstring (`ER_TEAM` vs `PRO_NAME`) and gates the
+`ER_DNF`/`ER_RACING` substitution, and is `false` for Tournament's own mode
+`4` regardless of which of these two tables is showing. `+0x9b4` is real,
+and it is the **standings** table's own points column, not a split-screen
+echo of the leg table's.
+
+**`EndRaceResults_Update` (`0x088da530`, confidence 85 - full decompile, not
+independently live-verified) is `EndRace Results`' own per-frame handler,
+and for Tournament (`g_game_mode` 4 or 16) it is what actually chooses
+between table A and table B: a three-second timer
+(`screen+0xdc`/`screen+0xe0`) that alternates
+`EndRaceResults_PopulateTournamentTable(screen, 0)` (`Line1` ->
+`ER_RACE_STAN`) with `EndRaceResults_PopulateTournamentTable(screen, 1)`
+(`Line1` -> `ER_TOUR_STAN`), starting on table A the instant the screen is
+entered** (`EndRaceResults_OnEnter`'s own `case 4: case 0x10:` populates
+table A once immediately, then sets the same timer/flag pair so the first
+toggle - three seconds later - is to table B). **This runs on every
+Tournament leg's own `EndRace Results`, not only the last** - the gate is
+`g_game_mode`, not the leg index; only `BigTopText` (`ER_END_TOUR` on the
+last leg, `"%s %d/%d"` of `ER_RES` and the leg counter otherwise, read off
+`DAT_08b30f90+0x10`/`+0x14` the same function reads for the last-leg
+check on line 216 above) differs between a mid-tournament leg and the
+final one. The same handler also drives the unrelated "1ST/2ND/3RD PLACE"
+fanfare line for the `Race`/`Head2Head`/`Time Trial`/`Speed Lap` family
+(`g_game_mode` 3 or 8) - a second, independent gate in the same function,
+not touched by this correction.
+
+**What this closes, from "What is not determined" below:** the copy into
+`g_endrace_result`'s `+0x35`/`+0x134` fields (table A, closed - it is this
+block, written unsorted). **What stays open:** the exact writer/order of
+`param_1+0x98`'s own craft-pointer array, which fixes table A's own row
+order (and therefore what `PRO_POS` reads on that page) - not traced this
+pass either, though the fact that a leg's points column reads `8, 6, 5,
+4, ...` top-to-bottom on every capture this pass took is strong behavioural
+evidence it is finish order, not grid-slot order; see "What is not
+determined" for the caveat.
+
 ## `Tournament_SaveProgress` (`0x0880b488`) / `Tournament_LoadProgress_q` (`0x088ec350`)
 
 The mechanism behind `MSC_EVENT_TOURN`'s "you can also save your tournament
@@ -314,6 +396,29 @@ pass; the standings-sort in `Race_BuildEndRaceResult` operates on a
 `Race_BuildEndRaceResult`'s own sorted scratch rows into
 `g_endrace_result`'s `+0x35`/`+0x134` fields was not located.
 
+> **Correction, 2026-09-28** (see `Race_BuildEndRaceResult`'s own section
+> above, "the scratch per-craft row above is `g_endrace_result` itself"):
+> every claim in this section's table and prose above is confirmed
+> *except* two. First, `+0x9b4` is **not** a split-screen variant of
+> `+0x134` - it is the **standings** table's own points column (`param_2 ==
+> 1`, cumulative total), where `+0x134` is the **leg** table's (`param_2 ==
+> 0`, this leg's own points); `param_2` is the argument that picks the
+> table, a totally different axis from the `ER_TEAM`/`PRO_NAME`/`ER_DNF`
+> split-screen flag (`screen+0xe9`) this section's own table correctly
+> names for the *name* column, just mislabelled onto the *points* column
+> too. Second, the "copy... not located" line is now closed: it is
+> `Race_BuildEndRaceResult`'s own tournament block, which writes both
+> tables (unsorted `+0x35`/`+0x134` in `param_1+0x98`'s own order; sorted
+> `+0x8b5`/`+0x9b4`, by the bubble sort this page already had). The
+> "`param_1+0x108d`/`+0x118c`... a *different* scratch array, not on
+> `g_endrace_result` directly" line above is also corrected by the same
+> finding: `param_1+0x108d` **is** `g_endrace_result+0x8b5` (`param_1 ==
+> g_endrace_result - 0x7d8`), not a separate array - see the corrected
+> pseudocode. `ER_TOUR_STAN`'s own consumer, left "unfound" above, is this
+> function's `param_2 == 1` call from `EndRaceResults_Update`
+> (`0x088da530`, new this pass) - see that section for the three-second
+> toggle between the two.
+
 ## Custom Race's own `Tournament C` writes the identical `DAT_08b31158` the campaign does
 
 This was the open question a runtime verification pass most needed settled
@@ -378,9 +483,23 @@ write-up) and the live verification below rather than a second mode. See
 - **`DAT_08b34320`'s own identity, and the reset of its `+0x90` field**
   between tournaments - the persistent points-total array's write site
   (`FUN_08820d78`) was found but not decompiled.
-- **The copy into `g_endrace_result`'s own `+0x35`/`+0x134` per-craft
-  fields** that `EndRaceResults_PopulateTournamentTable` reads - the sort
-  in `Race_BuildEndRaceResult` operates on a different scratch array.
+- ~~The copy into `g_endrace_result`'s own `+0x35`/`+0x134` per-craft
+  fields...~~ **Closed 2026-09-28**: `Race_BuildEndRaceResult`'s own
+  tournament block writes it, unsorted, in `param_1+0x98`'s own order -
+  see that section's own dated correction.
+- **`param_1+0x98`'s own craft-pointer array: what order it holds, and who
+  writes it.** New this pass, and the one piece the correction above did
+  not close: `Race_BuildEndRaceResult`'s tournament block walks it to fill
+  the leg table (`g_endrace_result+0x35`/`+0x134`), and that walk is never
+  sorted by anything this pass decompiled, so the leg table's own `PRO_POS`
+  is exactly that array's own order. Every `--menu-page
+  endrace-results-tournament-leg` capture this pass took shows points
+  strictly decreasing top-to-bottom (`8, 6, 5, 4...`), which only happens
+  if the array is already in finish-position order - behavioural evidence,
+  not a traced writer. If it is finish order (not grid-slot order), a
+  drawing pass should order the leg table by this leg's own finishing
+  place, not by `oag_race::tournament::Standings`' own rank - flagged for
+  whoever draws this, not answered here.
 - **`Tournament_LoadProgress_q`'s own trigger** (which screen's `OnEnter`
   calls it) was not positionally confirmed.
 - **Head2Head** entirely - see above.
@@ -478,6 +597,7 @@ a committed reference trace already) when re-attempting.
 | `0x0880b488` | `Tournament_SaveProgress` | 76 |
 | `0x088ec350` | `Tournament_LoadProgress_q` | 65 |
 | `0x088dad90` | `EndRaceResults_PopulateTournamentTable` | 82 |
+| `0x088da530` | `EndRaceResults_Update` | 85 |
 
 `FUN_0883e64c` (craft race-state accessor, confidence 60), `FUN_08826b18`
 (split-screen lap-completion check, confidence 55), `FUN_08823dbc` (a
@@ -494,9 +614,20 @@ stated inline above rather than renamed.
 2. Decompile `FUN_08820d78` to confirm `DAT_08b34320+0x90`'s reset
    condition (does a fresh tournament actually zero it, or does it carry
    over from an unrelated prior race).
-3. Locate the copy into `g_endrace_result`'s own per-craft `+0x35`/`+0x134`
-   fields, to close the "table is pre-sorted, but by what" gap in
-   `EndRaceResults_PopulateTournamentTable`.
+3. ~~Locate the copy into `g_endrace_result`'s own per-craft `+0x35`/`+0x134`
+   fields...~~ **Done 2026-09-28** - `Race_BuildEndRaceResult`'s own
+   tournament block. What is left of this item: trace `param_1+0x98`'s own
+   writer, to confirm the leg table's own row order is finish order (see
+   "What is not determined").
 4. Head2Head's own `Race_RecordResult` arm and launch globals - deliverable
    4, not attempted this pass.
 5. Cross-check this page's addresses against `psp-pulse-eu`.
+6. **Draw the tournament standings table for real** - `oag_ui::endrace`
+   now has both pages (`crates/ui/src/endrace.rs`'s `TournamentResults`),
+   fed by `oag_race::tournament`/`crate::race::tournament::Progress`
+   (`crates/game/src/main/race_stage/endrace.rs`'s `tournament_results`).
+   Not yet checked against a live PPSSPP capture of a real tournament leg
+   ending - see `docs/ui/endrace-screens.md`'s own Open section for why a
+   live capture through to a finished leg was not attempted this pass
+   either (same autopilot cost the "Live verification" section below
+   names).
