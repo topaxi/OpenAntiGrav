@@ -312,10 +312,19 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
         // standings rank... not the last leg's own finishing position"
         // distinction: that distinction is about what earns the medal, not
         // about what this headline reports.
-        oag_race::Mode::SingleRace | oag_race::Mode::Tournament => match place {
-            Some(place) => Headline::Position(place),
-            None => Headline::NoPosition,
-        },
+        // `Head2Head` groups with `Race`/`Tournament` here too -
+        // `EndRaceResults_OnEnter`'s own mode-shaped switch puts mode `9` in
+        // the same `{3,4,9,0x10}`-adjacent family this project's
+        // `campaign_medal` already reads a finishing position for, and
+        // `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`'s
+        // `lapTerm`/`difficultyMult` grouping names `Race,Tournament,Head2Head`
+        // outright.
+        oag_race::Mode::SingleRace | oag_race::Mode::Tournament | oag_race::Mode::Head2Head => {
+            match place {
+                Some(place) => Headline::Position(place),
+                None => Headline::NoPosition,
+            }
+        }
         // `Zone`/`Eliminator` go through a populate helper this project has
         // not decompiled - see `oag_ui::endrace::Headline::Unresolved`'s own
         // doc.
@@ -494,7 +503,9 @@ pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
     let (lap_rate, perfect_lap_rate) = match inputs.mode {
         // The same branch the original's own decompile puts Head2Head in
         // too - see this function's own doc comment.
-        oag_race::Mode::SingleRace | oag_race::Mode::Tournament => (15, 25),
+        oag_race::Mode::SingleRace | oag_race::Mode::Tournament | oag_race::Mode::Head2Head => {
+            (15, 25)
+        }
         oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap => (30, 50),
         oag_race::Mode::Zone | oag_race::Mode::Eliminator => (10, 20),
     };
@@ -510,7 +521,7 @@ pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
     let mut multiplier = 1;
     if matches!(
         inputs.mode,
-        oag_race::Mode::SingleRace | oag_race::Mode::Tournament
+        oag_race::Mode::SingleRace | oag_race::Mode::Tournament | oag_race::Mode::Head2Head
     ) {
         multiplier = match inputs.difficulty {
             Some(0) => 2,

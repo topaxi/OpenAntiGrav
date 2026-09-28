@@ -362,10 +362,14 @@ impl Session {
         // `SpeedLap`/`Zone` must never take their own `laps` attribute this
         // way. Tournament included: its own cell carries the identical
         // 3/4/4/5 census every leg races under - see `Mode::Tournament`'s
-        // own doc comment.
+        // own doc comment. Head2Head included too, on the same census -
+        // `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
         race_options.laps_override = matches!(
             mode,
-            oag_race::Mode::TimeTrial | oag_race::Mode::SingleRace | oag_race::Mode::Tournament
+            oag_race::Mode::TimeTrial
+                | oag_race::Mode::SingleRace
+                | oag_race::Mode::Tournament
+                | oag_race::Mode::Head2Head
         )
         .then_some(cell.laps)
         .flatten();

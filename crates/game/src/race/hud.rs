@@ -38,8 +38,12 @@ pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'stati
         // of `docs/ui/hud.md`'s five-layout census finds no
         // `Tournament_HUD.xml` at all, and cites `Arcade_HUD.xml` as "the
         // single-race and tournament layout" - see `Mode::Tournament`'s own
-        // doc comment.
-        Mode::SingleRace | Mode::Tournament => title.hud.arcade,
+        // doc comment. `Head2Head` shares it too - no `Head2Head_HUD.xml`
+        // exists either, and `Hud_BindWidgets` reaches the disc's own
+        // `HeadToHeadBar` widget through this same layout by branching on
+        // the live game mode rather than loading a different file - see
+        // `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
+        Mode::SingleRace | Mode::Tournament | Mode::Head2Head => title.hud.arcade,
         Mode::Eliminator => title.hud.elimination,
     }
 }

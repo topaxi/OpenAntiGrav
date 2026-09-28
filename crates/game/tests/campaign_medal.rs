@@ -48,6 +48,35 @@ fn zone_cell() -> Cell {
     }
 }
 
+/// A `Head2Head` cell - win or nothing, the flat law all 23 authored cells
+/// carry (`docs/ghidra/functions/psp-pulse-usa/head2head.md`): gold target
+/// `1`, silver and bronze both `0`.
+fn head2head_cell() -> Cell {
+    Cell {
+        name: "gridX_5_2".to_string(),
+        track: Some("18_Track".to_string()),
+        mode: Mode::Head2Head,
+        class: "Flash".to_string(),
+        weapons: false,
+        damage: true,
+        locked: None,
+        status: None,
+        ai_count: Some(1),
+        skill: None,
+        skill_easy: None,
+        skill_hard: None,
+        laps: Some(4),
+        ship: Some("None".to_string()),
+        ship_choice: Some(true),
+        gold: 1,
+        silver: 0,
+        bronze: 0,
+        tournament_tracks: Vec::new(),
+        difficulty_targets: None,
+        nitro_elimination_targets: None,
+    }
+}
+
 /// Converts `oag_tables::race_campaign::Medal` to `oag_game::records::Medal`,
 /// a plain match rather than a shared type or a trait impl on purpose: see
 /// `records.rs`'s own module doc for why it stays free of an `oag-formats`
@@ -106,6 +135,24 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
     let round_tripped = parsed.get(&key).expect("survives the round trip");
     assert_eq!(round_tripped.best_medal, Some(Medal::Bronze));
     assert_eq!(round_tripped.best_points, Some(1));
+}
+
+/// Win or nothing, exercised through the same `evaluate_medal` path every
+/// other campaign mode uses: 1st earns gold, 2nd earns no medal at all -
+/// silver and bronze targets of `0` can never match a finishing position,
+/// which is always `>= 1`.
+#[test]
+fn a_head2head_cells_medal_is_win_or_nothing() {
+    let cell = head2head_cell();
+
+    let first = cell.evaluate_medal(1).expect("1st place earns a medal");
+    assert_eq!(first, oag_tables::race_campaign::Medal::Gold);
+
+    assert_eq!(
+        cell.evaluate_medal(2),
+        None,
+        "2nd place in a two-craft race earns nothing"
+    );
 }
 
 /// A gold Zone run must not read as bronze - the mirror of the guard test

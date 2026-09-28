@@ -129,12 +129,20 @@ impl Race {
         // from here (`oag_physics::damage`), and Zone's perfect-zone recharge
         // adds back to it.
         oag_physics::damage::reset(&mut ship.physics, &handling.dimensions);
-        // Whether this race fields the full eight-slot grid at all: the mode's
-        // own answer, or the `--opponents` escape hatch that measurement's own
-        // ground-truth tests use to force it. Read once, because both the
-        // player's own pose below and the opponent loop further down have to
-        // agree on it.
+        // Whether this race fields a grid at all: the mode's own answer, or
+        // the `--opponents` escape hatch that measurement's own ground-truth
+        // tests use to force it. Read once, because both the player's own
+        // pose below and the opponent loop further down have to agree on it.
         let full_grid = start_position.is_some() && (mode.has_opponents() || opponents);
+        // How many of the grid's other seven slots are actually driven.
+        // Every opponent-fielding mode except Head2Head fields all seven;
+        // Head2Head fields exactly one - see [`Mode::opponent_count`]'s own
+        // doc for the measurement. The `--opponents` escape hatch always
+        // asks for the full seven, matching what it did before this field
+        // existed.
+        let field_opponents = mode
+            .opponent_count()
+            .max(if opponents { GRID_SLOTS - 1 } else { 0 });
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.
@@ -234,8 +242,24 @@ impl Race {
             && let Some(base) = base
         {
             let poses = grid_poses(base, &spline, &collision, spawn_height(&handling));
-            for (index, pose) in poses.iter().enumerate().take(GRID_SLOTS as usize - 1) {
-                let opponent = &mut world.ships[index + 1];
+            // **A short field packs to the back**, mirroring the original's
+            // own compaction rule for a field smaller than the grid
+            // (`grid.md`'s "a short grid packs to the back", confidence 82,
+            // composed with "the local player is forced to the back",
+            // confidence 75) - so `field_opponents < 7` takes the poses
+            // nearest the player (the high end of this slice, e.g. slot 7
+            // alone for Head2Head's field of one) rather than the front of
+            // the grid. Not independently measured for `g_racer_count == 2`
+            // specifically - see `docs/ghidra/functions/psp-pulse-usa
+            // /head2head.md`'s own "grid placement... is extrapolated" note.
+            let pose_start = (GRID_SLOTS as usize - 1) - field_opponents as usize;
+            for (slot_index, pose) in poses
+                .iter()
+                .enumerate()
+                .take(GRID_SLOTS as usize - 1)
+                .skip(pose_start)
+            {
+                let opponent = &mut world.ships[slot_index - pose_start + 1];
                 opponent.active = true;
                 opponent.handling = handling;
                 opponent.physics.body.mass = handling.physical.mass;
@@ -246,7 +270,7 @@ impl Race {
                 // the same eight characters on every replay and the next race
                 // fields eight others. Nothing here reads a clock or the
                 // world's generator - see `oag_ai::Driver::for_slot`.
-                let slot = index as u32 + 1;
+                let slot = slot_index as u32 + 1;
                 opponent.driver = oag_ai::Driver::for_slot(seed, slot);
                 // **Where on the line this craft actually is**, found once with
                 // a search over the whole line rather than left at zero.
@@ -281,7 +305,7 @@ impl Race {
                 opponent.driver.pilot = entry.digest;
                 opponent.place_at(*pose);
             }
-            world.ship_count = GRID_SLOTS;
+            world.ship_count = field_opponents + 1;
             // **What was loaded, and who is flying what, once per race.** The
             // digests are the point of the first line: thirty-two bits cannot
             // be inverted, so when two machines disagree on a world hash this
@@ -290,7 +314,7 @@ impl Race {
             // are about to race. A `*` marks a pilot that came from a file.
             info!("pilots loaded: {}", roster.summary());
             info!("ai difficulty: {}", difficulty.name());
-            let grid: Vec<String> = (1..GRID_SLOTS as usize)
+            let grid: Vec<String> = (pose_start + 1..GRID_SLOTS as usize)
                 .map(|slot| format!("{slot}:{}", pilot_names[slot]))
                 .collect();
             info!("pilots on the grid: {}", grid.join(" "));

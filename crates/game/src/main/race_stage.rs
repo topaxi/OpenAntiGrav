@@ -320,8 +320,15 @@ impl RaceStage {
     ///   standings rank... only on the tournament's last leg" law. `None` on
     ///   every earlier leg, which this method reads as "no medal yet" the
     ///   same way an unfinished `Race` does.
+    /// - `Head2Head` - the finishing place, exactly like `Race`, gated on
+    ///   `finished` the same way. Confirmed by the census, not merely
+    ///   inferred from the shared value shape: all 23 authored cells carry
+    ///   `Gold Target="1"`/`Silver Target="0"`/`Bronze Target="0"` - win or
+    ///   nothing - and `evaluate_medal`'s own three-way compare against a
+    ///   finishing position (always `>= 1`) can never satisfy a `0` target
+    ///   by accident. See `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
     ///
-    /// Everything else - `Head2Head`, `Custom Grid`, `AI Race` - is `None`:
+    /// Everything else - `Custom Grid`, `AI Race` - is `None`:
     /// `Self::campaign_cell` never carries one of those, since
     /// `oag_game::campaign::race_mode_for_cell` refuses to map them onto a
     /// launch in the first place.
@@ -333,7 +340,9 @@ impl RaceStage {
         use oag_tables::race_campaign::Mode as CampaignMode;
         let cell = self.campaign_cell.as_ref()?;
         let value = match cell.mode {
-            CampaignMode::Race if finished => Some(i64::from(self.race.player_place())),
+            CampaignMode::Race | CampaignMode::Head2Head if finished => {
+                Some(i64::from(self.race.player_place()))
+            }
             CampaignMode::TimeTrial if finished => {
                 let tick = self
                     .race
@@ -342,17 +351,14 @@ impl RaceStage {
                     .unwrap_or(self.race.sim.world.tick);
                 Some(ticks_to_centiseconds(tick))
             }
-            CampaignMode::Race | CampaignMode::TimeTrial => None,
+            CampaignMode::Race | CampaignMode::Head2Head | CampaignMode::TimeTrial => None,
             CampaignMode::SpeedLap => {
                 best_lap_ticks.map(|ticks| ticks_to_centiseconds(u64::from(ticks)))
             }
             CampaignMode::Zone => Some(i64::from(self.race.sim.world.primary_race().zone)),
             CampaignMode::Elimination => Some(i64::from(self.race.player_standing().kills)),
             CampaignMode::Tournament => self.tournament_final_rank.map(i64::from),
-            CampaignMode::Head2Head
-            | CampaignMode::CustomGrid
-            | CampaignMode::AiRace
-            | CampaignMode::Other(_) => None,
+            CampaignMode::CustomGrid | CampaignMode::AiRace | CampaignMode::Other(_) => None,
         }?;
         // Evaluated against whichever rung the cell was actually launched
         // at (`Session::launch_campaign_cell`'s own doc), falling back to

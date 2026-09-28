@@ -1,4 +1,4 @@
-# Tournament is built; Head2Head and five RE gaps are still open
+# Tournament and Head2Head are built; four RE gaps are still open
 
 2026-09-23. The mode this thread's own implementation brief asked for is
 built: `oag_race::Mode::Tournament`, `oag_race::tournament` (the points
@@ -56,15 +56,40 @@ was leaking through on **every** `EndRace Results` capture, tournament or
 not - a faint "TP" past every row. Fixed in the same pass, both tables -
 see `docs/ui/endrace-screens.md`'s own updated row for the ordinary table.
 
+## Update, 2026-09-28: Head2Head plays
+
+Deliverable 4, the one item this thread's own "Open" list carried since it
+opened, is closed: `oag_race::Mode::Head2Head` exists, `oag_game::campaign
+::race_mode_for_cell` maps a campaign cell's own `Head2Head` onto it, and a
+Head2Head cell now launches a two-craft field (the player plus one AI
+opponent - measured off `AICount="1"` on all 23 authored cells, not
+designed), weapons locked off, the cell's own laps, and the campaign's
+ordinary win-or-nothing medal (`1`/`0`/`0`, also flat across all 23 cells).
+See [`head2head.md`](../../docs/ghidra/functions/psp-pulse-usa/head2head.md)
+for the law and [`docs/gameplay/race-modes.md#head2head`](../../docs/gameplay/race-modes.md#head2head)
+for what implements it - `oag_race::tournament`'s points/standings
+machinery was not reusable, since a two-craft single leg needs none of it;
+the mode piggybacks on the same `Race_SpawnGrid`-descended field-size
+machinery `SingleRace`/`Tournament`/`Eliminator` already use, parametrised
+by a new `Mode::opponent_count` rather than the old all-or-nothing
+`has_opponents` boolean.
+
+**Chosen, not measured, same footing as Tournament's own gaps above:**
+which team the AI opponent flies (`crates/game/src/livery.rs`'s
+`teams_for_slots`, the identical open question `Single Race`'s own seven
+opponents already carry), and the sole opponent's grid slot (extrapolated
+by composing two separately-measured rules, not independently captured for
+a two-craft field).
+
+**Read but not wired**, unlike everything above: the disc's own HUD swap
+for this mode - `MSC_EVENT_HTH`'s "track the distance between you and your
+opponent", a `HeadToHeadBar` widget both `Hud_BindWidgets` and its per-tick
+updater are now fully decompiled - is not drawn by this build. See
+`head2head.md`'s own HUD section for the addresses; a player racing a
+Head2Head cell today gets no gap readout.
+
 ## Open
 
-Unchanged by this pass - none of them was forced by the implementation, so
-none was answered on a guess:
-
-- **Head2Head entirely.** Deliverable 4 of the pass that read the
-  Tournament law was never attempted, and this pass did not touch it
-  either - it is a separate, unread question (a two-craft race's own
-  opponent count and HUD), not an extension of Tournament's own law.
 - **`DAT_08b30fa0`'s write site** - narrowed to the `Team Selection`
   confirm -> `Launch Game` window, not pinned to a function.
 - **`DAT_08b31158+0xdc`'s exact meaning** - a "live tournament in progress"
@@ -79,9 +104,6 @@ none was answered on a guess:
 
 ## Next Steps
 
-- Whoever reads Head2Head's own law should check whether any of
-  `oag_race::tournament`'s points/standings machinery is reusable, or
-  whether a two-craft mode needs its own from scratch.
 - If a live Ghidra pass ever pins `DAT_08b30fa0`'s writer or
   `DAT_08b31158+0xdc`'s meaning, neither changes this build's own behaviour
   - both are read-only facts about the original nothing here depends on.
@@ -93,6 +115,17 @@ none was answered on a guess:
   determined", new 2026-09-28) - the leg table's own row order depends on
   it, and this pass drew it as finish order on behavioural evidence, not a
   traced one.
+- **Draw Head2Head's own `HeadToHeadBar` HUD swap.** `head2head.md`
+  decompiles both the bind site and the per-tick updater in full; what is
+  missing is the widget-struct field semantics (`craft+0x48`/`+0xad0`,
+  widget `+0xa0`/`+0xe8`/`+0xec`) needed to wire it into `oag_ui`/
+  `crates/game/src/hud` honestly rather than on a guess.
+- **A live capture (this engine's own front end, or PPSSPP) of an actual
+  Head2Head cell launch** - field size, opponent identity, grid slot - was
+  not done this pass; the in-process `Race::start` unit test
+  (`crates/game/src/race/tests/spawn.rs`) is the verification this pass
+  has, the same "synthetic, not live" shape the standings-table item above
+  already carried until its own live check.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

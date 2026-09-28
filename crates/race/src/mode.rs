@@ -86,6 +86,50 @@ pub enum Mode {
     /// `tournament_tracks`, which already names every leg
     /// (`Session::launch_campaign_cell`).
     Tournament,
+    /// A two-craft race: the player against exactly one AI opponent.
+    ///
+    /// **Field size is measured, not designed.** Every one of the 23
+    /// authored `Head2Head` campaign cells carries `AICount="1"`, and the
+    /// per-mode grid-size table read off `FUN_0880502c` gives mode `9`
+    /// (`Head2Head`) a field of `2` against the eight-craft default every
+    /// other opponent-fielding mode uses - see
+    /// `docs/ghidra/functions/psp-pulse-usa/head2head.md`. [`Self::opponent_count`]
+    /// is `1` for exactly this reason, not [`Self::SingleRace`]'s `7`.
+    ///
+    /// **Weapons are off and locked, measured two ways.** `shield.md`'s
+    /// `g_weapons_enabled` switch puts mode `9` in both its default-off set
+    /// and its no-override set, and all 23 authored cells carry
+    /// `Weapons="off"` with no exception - so [`Self::weapons_enabled`] is
+    /// `false` here, unlike [`Self::SingleRace`]/[`Self::Tournament`].
+    ///
+    /// **Laps follow the same per-class census as [`Self::SingleRace`]** -
+    /// every authored cell's own `laps` attribute is `4` (Flash, Rapier) or
+    /// `5` (Phantom); no Venom-class cell exists, so [`Self::laps_target`]
+    /// falls back to [`Self::SINGLE_RACE_LAPS_BY_CLASS`]'s `3` for that rung
+    /// on the same "chosen, not measured" footing every other unauthored
+    /// combination in this crate already carries.
+    ///
+    /// **The medal law is win-or-nothing, flat across all 23 cells**: gold
+    /// target `1`, silver and bronze both `0` - `oag_tables::race_campaign
+    /// ::Cell::evaluate_medal` already handles this correctly, since a
+    /// finishing position is always `>= 1` and can never satisfy a `0`
+    /// target by accident.
+    ///
+    /// **Which team the opponent flies is not measured**, and deliberately
+    /// not chased further - it is the same open question
+    /// `crate::livery::teams_for_slots` already carries for
+    /// [`Self::SingleRace`]'s own seven opponents (`docs/ghidra/functions
+    /// /psp-pulse-usa/grid.md`'s "which team flies which slot"). This build
+    /// answers it the same way: `teams_for_slots`'s own cyclic assignment,
+    /// labelled chosen rather than measured at its own call site.
+    ///
+    /// **Deliberately absent from [`Self::ALL`]**, like [`Self::Tournament`],
+    /// reachable only through a campaign cell
+    /// (`oag_game::campaign::race_mode_for_cell`). Unlike Tournament this is
+    /// not a leg-list problem; it is kept out to keep this mode's field-size
+    /// axis off the RACE page's one-track launch, which has no way to ask
+    /// for "one opponent" today.
+    Head2Head,
 }
 
 impl Mode {
@@ -223,6 +267,7 @@ impl Mode {
             Self::SingleRace => "single_race",
             Self::Eliminator => "eliminator",
             Self::Tournament => "tournament",
+            Self::Head2Head => "head_to_head",
         }
     }
 
@@ -304,8 +349,12 @@ impl Mode {
             // A tournament leg races the same table `Single Race` does - see
             // `Self::Tournament`'s own doc. The census `race-setup.md` reads
             // (3/4/4/5, no exception across all 236 `PI_Cell` records) covers
-            // every mode's cells, `Tournament`'s 27 included.
-            Self::SingleRace | Self::Tournament => {
+            // every mode's cells, `Tournament`'s 27 and `Head2Head`'s 23
+            // included - no Venom-class `Head2Head` cell is authored, so
+            // that rung falls back to the same table's `3` on this crate's
+            // usual "chosen, not measured" footing for an unauthored
+            // combination.
+            Self::SingleRace | Self::Tournament | Self::Head2Head => {
                 Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class as usize])
             }
             Self::SpeedLap | Self::Zone | Self::Eliminator => None,
@@ -334,6 +383,7 @@ impl Mode {
             Self::SingleRace => "MSC_EVENT_SR",
             Self::Eliminator => "MSC_EVENT_ELIM",
             Self::Tournament => "MSC_EVENT_TOURN",
+            Self::Head2Head => "MSC_EVENT_HTH",
         }
     }
 
@@ -351,6 +401,7 @@ impl Mode {
             Self::SingleRace => "SINGLE RACE",
             Self::Eliminator => "ELIMINATOR",
             Self::Tournament => "TOURNAMENT",
+            Self::Head2Head => "HEAD TO HEAD",
         }
     }
 
@@ -395,9 +446,31 @@ impl Mode {
     /// **`true` for Tournament, mirroring [`Self::SingleRace`]** - see
     /// [`Self::Tournament`]'s own doc for the evidence that a leg is raced
     /// exactly like an ordinary single race.
+    ///
+    /// **`true` for Head2Head too, with a field of one rather than seven** -
+    /// see [`Self::opponent_count`], which this delegates to.
     #[must_use]
     pub const fn has_opponents(self) -> bool {
-        matches!(self, Self::SingleRace | Self::Eliminator | Self::Tournament)
+        self.opponent_count() > 0
+    }
+
+    /// How many AI opponents this mode fields, `0` for every single-ship
+    /// mode.
+    ///
+    /// **Not the same axis as [`Self::has_opponents`] used to be** - every
+    /// mode that fields opponents at all fielded a full eight-craft grid
+    /// until [`Self::Head2Head`] existed. `AICount="1"` on all 23 authored
+    /// `Head2Head` cells, and mode `9`'s own row in the grid-size table read
+    /// off `FUN_0880502c`, agree: a field of the player plus exactly one AI
+    /// opponent, not seven. See
+    /// `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
+    #[must_use]
+    pub const fn opponent_count(self) -> u8 {
+        match self {
+            Self::SingleRace | Self::Eliminator | Self::Tournament => 7,
+            Self::Head2Head => 1,
+            Self::TimeTrial | Self::SpeedLap | Self::Zone => 0,
+        }
     }
 
     /// Whether the original arms `Weapon Pad`s for this mode.
@@ -437,6 +510,16 @@ impl Mode {
     ///
     /// **`true` for Tournament, mirroring [`Self::SingleRace`]** - see
     /// [`Self::Tournament`]'s own doc.
+    ///
+    /// **`false` for Head2Head, and it is locked off the same way the three
+    /// single-ship modes are - not merely defaulted off.** `shield.md`'s own
+    /// `g_weapons_enabled` switch (`FUN_08896b84`) puts mode `9` in *both*
+    /// the default-off set (`5`/`9`/`10`/`15`/`17`) and the no-override set
+    /// (`5`/`8`/`9`/`10`/`15`/`17`), and all 23 authored cells carry
+    /// `Weapons="off"` with no exception - checked live on the Custom Race
+    /// screen too, 2026-08-10: "Head to Head" shows `WEAPONS: Off`, greyed,
+    /// unlike Tournament's editable row. See
+    /// `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
     #[must_use]
     pub const fn weapons_enabled(self) -> bool {
         matches!(self, Self::SingleRace | Self::Eliminator | Self::Tournament)
@@ -466,178 +549,4 @@ impl Mode {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Mode, SpeedClass};
-
-    #[test]
-    fn every_mode_round_trips_through_its_token() {
-        for mode in Mode::ALL {
-            assert_eq!(Mode::from_name(mode.name()), Some(mode));
-        }
-    }
-
-    /// See [`Mode::ALL`]'s own doc for why: a one-track launch cannot run
-    /// what the disc's own `Tournament C` needs, a leg list.
-    #[test]
-    fn tournament_is_not_in_all() {
-        assert!(!Mode::ALL.contains(&Mode::Tournament));
-    }
-
-    /// A leg races exactly like a single race - see [`Mode::Tournament`]'s
-    /// own doc for the evidence.
-    #[test]
-    fn tournament_mirrors_single_race() {
-        for class in SpeedClass::ALL {
-            assert_eq!(
-                Mode::Tournament.laps_target(class),
-                Mode::SingleRace.laps_target(class),
-                "{class} disagrees with single race"
-            );
-        }
-        assert!(Mode::Tournament.has_opponents());
-        assert!(Mode::Tournament.weapons_enabled());
-        assert!(Mode::Tournament.pickups_absorb());
-        assert_eq!(Mode::Tournament.string_id(), "MSC_EVENT_TOURN");
-    }
-
-    #[test]
-    fn tokens_are_distinct() {
-        let mut names: Vec<&str> = Mode::ALL.iter().map(|mode| mode.name()).collect();
-        names.sort_unstable();
-        let count = names.len();
-        names.dedup();
-        assert_eq!(names.len(), count, "two modes share a token");
-    }
-
-    #[test]
-    fn an_unknown_token_is_none_rather_than_a_default() {
-        // `eliminator` is a real mode from 2026-09-08 and belongs in
-        // `every_mode_round_trips_through_its_token` instead - kept here as
-        // `elimination` (Eliminator's own descriptive token in the disc's
-        // string table is `MSC_EVENT_ELIM`, not this crate's `name()`) so
-        // the "unknown token" shape this test checks is not lost.
-        assert_eq!(Mode::from_name("elimination"), None);
-        assert_eq!(Mode::from_name(""), None);
-        assert_eq!(Mode::from_name("TIME_TRIAL"), None);
-    }
-
-    #[test]
-    fn the_default_is_the_time_trial() {
-        assert_eq!(Mode::default(), Mode::TimeTrial);
-        assert_eq!(Mode::ALL[0], Mode::TimeTrial);
-    }
-
-    #[test]
-    fn only_the_two_unlimited_modes_never_end_on_laps() {
-        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Venom), Some(3));
-        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Venom), Some(3));
-        // Speed Lap's HUD does show a lap count (`7`, live-confirmed on
-        // Venom) - it just never turns into an ending. See `laps_target`'s
-        // own docs for the pause-menu evidence.
-        assert_eq!(Mode::SpeedLap.laps_target(SpeedClass::Venom), None);
-        assert_eq!(Mode::Zone.laps_target(SpeedClass::Venom), None);
-        // Eliminator has no lap target either, and for a different reason
-        // from Speed Lap's or Zone's: it has one, a kill count, that this
-        // method does not report. See `Mode::ELIMINATOR_KILL_TARGET_DEFAULT`.
-        assert_eq!(Mode::Eliminator.laps_target(SpeedClass::Venom), None);
-    }
-
-    /// The census, reproduced as an assertion: 3 Venom, 4 Flash, 4 Rapier, 5
-    /// Phantom across all 236 authored `PI_Cell` records. The whole point of
-    /// the change that introduced it is that three of these four are *not* 3.
-    #[test]
-    fn a_single_race_runs_the_campaigns_own_per_class_lap_count() {
-        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Venom), Some(3));
-        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Flash), Some(4));
-        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Rapier), Some(4));
-        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Phantom), Some(5));
-    }
-
-    /// The same table, live-confirmed rather than census-only: one Custom
-    /// Race Time Trial per rung under PPSSPP read `Lap 1 of 3`/`4`/`4`/`5`,
-    /// 2026-09-09, `pulse-psp-usa.chd`, Talon's Junction White.
-    #[test]
-    fn a_time_trial_runs_the_same_per_class_lap_count() {
-        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Venom), Some(3));
-        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Flash), Some(4));
-        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Rapier), Some(4));
-        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Phantom), Some(5));
-    }
-
-    /// Every rung the enum has must have a row, in both tables, or a class
-    /// would index past one. Cheap here, and the alternative is a panic
-    /// mid-race.
-    #[test]
-    fn every_speed_class_has_a_lap_count() {
-        for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
-            assert_eq!(index, class as usize, "{class} is not at its own index");
-            assert_eq!(
-                Mode::SingleRace.laps_target(class),
-                Some(Mode::SINGLE_RACE_LAPS_BY_CLASS[index]),
-            );
-            assert_eq!(
-                Mode::TimeTrial.laps_target(class),
-                Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[index]),
-            );
-        }
-    }
-
-    /// The class parameter is taken and ignored by every mode except the two
-    /// that field a real per-class table - see `laps_target`'s own docs for
-    /// Speed Lap's `7`, which is real but does not end the race.
-    #[test]
-    fn only_time_trial_and_single_race_vary_with_the_speed_class() {
-        for class in SpeedClass::ALL {
-            assert_eq!(Mode::SpeedLap.laps_target(class), None);
-            assert_eq!(Mode::Zone.laps_target(class), None);
-            assert_eq!(Mode::Eliminator.laps_target(class), None);
-        }
-    }
-
-    #[test]
-    fn only_zone_drives_its_own_throttle() {
-        assert!(Mode::Zone.is_auto_throttle());
-        assert!(!Mode::TimeTrial.is_auto_throttle());
-        assert!(!Mode::SpeedLap.is_auto_throttle());
-        assert!(!Mode::SingleRace.is_auto_throttle());
-    }
-
-    /// The three single-ship modes are the original's own answer, measured on
-    /// the running game; single race and Eliminator are the two that field a
-    /// grid.
-    #[test]
-    fn single_race_and_eliminator_field_a_grid() {
-        assert!(Mode::SingleRace.has_opponents());
-        assert!(Mode::Eliminator.has_opponents());
-        assert!(!Mode::TimeTrial.has_opponents());
-        assert!(!Mode::SpeedLap.has_opponents());
-        assert!(!Mode::Zone.has_opponents());
-    }
-
-    /// The switch the pickup system hangs off. It is the *only* mode-dependent
-    /// thing about a weapon pad in the original: a weapons-off race hides the
-    /// pads and empties the trigger list rather than ignoring a crossing.
-    #[test]
-    fn single_race_and_eliminator_are_the_only_modes_that_arm_weapon_pads() {
-        assert!(Mode::SingleRace.weapons_enabled());
-        assert!(Mode::Eliminator.weapons_enabled());
-        for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
-            assert!(
-                !mode.weapons_enabled(),
-                "{mode:?} should race with weapons off"
-            );
-        }
-    }
-
-    /// The mechanic `MSC_EVENT_ELIM` states outright: Eliminator is the one
-    /// mode where a crossed pickup pad cannot be absorbed for health.
-    #[test]
-    fn only_eliminator_refuses_pickup_absorption() {
-        assert!(!Mode::Eliminator.pickups_absorb());
-        for mode in Mode::ALL {
-            if mode != Mode::Eliminator {
-                assert!(mode.pickups_absorb(), "{mode:?} should absorb pickups");
-            }
-        }
-    }
-}
+mod tests;
