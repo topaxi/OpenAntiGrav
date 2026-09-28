@@ -87,8 +87,9 @@ per-frame cost.
 `iVar3` selects the string; **what makes it `0`..`3` is now read, at
 `PlayerStatus_Update`'s own campaign branch** -
 [race-progress.md](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28)
-carries the full law, the live write-watchpoint evidence (four PCs, all
-inside `PlayerStatus_Update`, `0x0883b3b8`), and the two reference frames
+carries the full law, the live write-watchpoint evidence (five PCs, all
+inside `PlayerStatus_Update`'s real body, `0x0883b3b8`-`0x0883c0cb`), and
+the two reference frames
 this page's own confidence section above cites. Summary: `param_1+0x3c` is
 the `"PLAYER_HUD"` `PlayerStatus` object (`self+0x48`, per
 [race-progress.md](race-progress.md#from-the-hud-to-the-counter)), and its
@@ -97,8 +98,16 @@ the `"PLAYER_HUD"` `PlayerStatus` object (`self+0x48`, per
 "missed it" redden bool - compared, for a campaign Time Trial or Speed Lap
 cell, against that cell's own `gold`/`silver`/`bronze` fields
 (`oag_tables::race_campaign::Cell`, `DAT_08b30ffc+0xa0/0xa4/0xa8`) rather
-than anything invented. `oag_game::hud::TimeTrialPace` reimplements it -
-see [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
+than anything invented, **except when the player's own stored personal
+best for the cell already beats gold and the live pace beats that too**, in
+which case the original shows `RECORD` instead - a second, still-unread
+source (`FUN_088091a0`), which `oag_game::hud::TimeTrialPace` does not
+reproduce. Otherwise (no campaign cell) the tier is always `RECORD`,
+compared against that same personal-best store narrowed by the track's own
+`RaceTimes` record - see
+[race-progress.md](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28)
+for the full branch structure and what `oag_game::hud::TimeTrialPace`
+does and does not carry forward.
 
 What race-progress.md leaves open, restated here since this page named it
 first: `param_1 + 0x30` (`iVar5` above, `-1` hides both the numeric and
@@ -143,10 +152,12 @@ under the fix that page describes before spending more time on this by hand.
 **Settled:** the substitution is a real, single, table-driven mechanism keyed
 on an ordinal state - not five independent code paths, not a per-mode
 `match`. `oag_game::hud::draw::caption`'s fallback, resolving `TotalTimeTxt`
-straight off the layout's own `idstring` (the `name => ... caption(label,
-strings)` catch-all in [`draw.rs`](../../../../crates/game/src/hud/draw.rs)),
-is correct for every tier this table maps back to `IG_HUD_TOTAL` - the whole
-of a non-Time-Trial/Speed-Lap race, and a non-campaign one of either.
+straight off the layout's own `idstring`, is correct only for every tier
+this table maps back to `IG_HUD_TOTAL`: the whole of a race in a mode
+outside `{5, 0x11, 10, 7}` (every mode but Time Trial/Speed Lap/the two
+unnamed ones), plus `DAT_08ab0de0 == 0`. **Not** a non-campaign Time
+Trial/Speed Lap - the reference frame this page opened with is exactly that
+case, reading `record`, not `Total`.
 
 **Settled and implemented, 2026-09-28:** `IG_HUD_BRONZE`/`SILVER`/`GOLD`
 wired for a campaign Time Trial/Speed Lap cell -
@@ -157,8 +168,11 @@ section forbade. `draw.rs`'s `TotalTime`/`TotalTimeTxt` arms now check
 [`Readout::time_trial_pace`](../../../../crates/game/src/hud.rs) first and
 fall back to the plain reading above when it is `None`.
 
-**Still not settled:** `IG_HUD_RECORD` for a non-campaign Time Trial/Speed
-Lap/`0x11` race - `FUN_088091a0`'s own per-team split-time record store,
-which this project has no equivalent of. See
+**Still not settled:** `IG_HUD_RECORD`, on both paths - `FUN_088091a0`'s own
+per-team split-time record store, which this project has no equivalent of.
+Not only the non-campaign Time Trial/Speed Lap/`0x11` case: a campaign cell
+whose player has a personal best already faster than gold shows `RECORD`
+too, and `oag_game::hud::TimeTrialPace` does not produce it - it shows
+`GOLD` there instead, a known, documented gap rather than a silent one. See
 [race-progress.md](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28)'s
 own "What stays open".

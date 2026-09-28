@@ -162,7 +162,7 @@ Anything else falls through to `Definition_ParseUnlock` (`0x0888f094`).
 corroborations: `Elimination`'s gold `10` matches `FEData`'s
 `Targets Elimination="10"` exactly, and `Zone`'s `20` would be `32` read as hex,
 which no `Zone` record supports. Times are **centiseconds** - the same unit
-`Hud_UpdateTimeCluster_q` feeds `FUN_088196e4` after multiplying a float
+`Hud_UpdateTimeCluster` feeds `FUN_088196e4` after multiplying a float
 seconds value by `100.0`, and the same formatter (`FUN_08819878`) `Cell
 Selection` uses on a `Time Trial`/`Speed Lap` target.
 
@@ -1916,12 +1916,14 @@ unconfirmed `+0xbe` flag were.
   `Cell_EvaluateMedal`'s `0 = gold, 1 = silver, 2 = bronze` by `2 - medal` on
   the three tiers they share - evaluated live, every tick, against **this
   same cell's own** `gold`/`silver`/`bronze` fields (`cell + 0xa0/0xa4/0xa8`,
-  exactly `Target0..2` above) for a campaign Time Trial/Speed Lap cell, or a
-  separate per-track ghost/record store otherwise (always `RECORD` on that
-  second path). Full law and the live evidence:
+  exactly `Target0..2` above) for a campaign Time Trial/Speed Lap cell,
+  **except that `RECORD` can still win there** when the player's own stored
+  personal best beats gold and the live pace beats that too; or a separate
+  personal-best/track-record pair otherwise (always `RECORD` on that second
+  path). Full law and the live evidence:
   [`race-progress.md`](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28).
-  Wired into the HUD for the campaign branch,
-  `oag_game::hud::TimeTrialPace`; the non-campaign ghost/record branch stays
+  Wired into the HUD for the campaign branch's gold/silver/bronze ladder,
+  `oag_game::hud::TimeTrialPace`; `RECORD` on either path stays
   unimplemented - see that page's own "What stays open".
 - **`Locked` on both `PI_Cell` (`+0xb9`) and `PI_Grid` (`+0xa0`) is now
   settled, 2026-09-14** - see

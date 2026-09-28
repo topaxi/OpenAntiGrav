@@ -109,18 +109,34 @@ fields, up from 82: a PPSSPP write watchpoint on all three, armed live off
 `g_hud` (`0x08ab0838`) -> `+0x3c` (the registered `"PLAYER_HUD"` pointer,
 `self+0x48`) -> `+0x30`/`+0x34`/`+0x38`, logged every write's own PC across
 an eight-second drive of a real Venom Time Trial on Talon's Junction
-(`pulse-psp-usa.chd`). Every hit - `Write32` at `+0x30`, `Write32` at
-`+0x34`, `Write8` at `+0x38` - carries `PC=0883ba38`, `PC=0883baf0`,
-`PC=0883b800` or `PC=0883b808`, all inside `PlayerStatus_Update`
-(`0x0883b3b8`-`0x0883b9xx`); no other address ever wrote any of the three.
-This is what closes
+(`pulse-psp-usa.chd`). **Checked against the log's full 4,724 hits, not a
+tail sample** - `grep -a 'CHK Write' ppsspp.log | grep -E
+'09a4a7(28|2c|30)' | grep -o 'PC=[0-9a-f]*' | sort | uniq -c`:
+
+```text
+   8373 PC=0883b800
+   8374 PC=0883b808
+   8374 PC=0883ba38
+   4153 PC=0883bad8
+   8374 PC=0883baf0
+```
+
+(the counts above 4,724 are `memory.breakpoint.list`'s own hit tally at a
+different, later poll than the log dump - both a live count and a log
+recount, not a single unverified number). Five distinct write sites, not
+four as an earlier revision of this page said after reading only the log's
+own tail - `0x0883bad8` is the fifth, not individually attributed to one
+branch of the decompile below. All five fall inside `PlayerStatus_Update`'s
+real body, `0x0883b3b8`-`0x0883c0cb` (`get_function_by_address`); no address
+outside that range ever wrote any of the three fields in this run. This is
+what closes
 [`hud-time-caption-substitution.md`](hud-time-caption-substitution.md)'s own
 "what the tier itself is" gap - see that page for the reader
 (`Hud_UpdateTimeCluster`) and the caption table.
 
 This is the one block of `PlayerStatus_Update`'s own decompile that reads
-`g_game_mode` (`DAT_08ab10ec`'s neighbour, not itself named here) rather than
-`craft`, gated on it reading `5`, `0x11` or `10` - a different ordinal space
+`g_game_mode` rather than `craft`, gated on it reading `5`, `0x11` or `10` -
+a different ordinal space
 from [`race-campaign.md`](race-campaign.md)'s `PI_Cell.mode` (which also
 uses `5` for `Time Trial` and `10` for `Speed Lap`, coincidentally or not;
 `0x11` is not one of that enum's nine documented values, so this block's own
@@ -140,7 +156,9 @@ redden[0x80] = false;
 if DAT_08ab0de0 != 0 {                      // a global gate, unread past this
     ghost = FUN_088091a0(DAT_08b31774);     // per-team, per-track split-time
                                              // record store - a separate,
-                                             // unread format, see below
+                                             // unread format, see below.
+                                             // Read unconditionally, campaign
+                                             // cell or not.
     if campaign_cell := DAT_08b30ffc; campaign_cell != 0 {
         gold   = campaign_cell->0xa0;       // == Cell::gold, `<Gold Target=>`
         silver = campaign_cell->0xa4;       // == Cell::silver
@@ -149,20 +167,26 @@ if DAT_08ab0de0 != 0 {                      // a global gate, unread past this
         // `oag_tables::race_campaign::Cell`'s own three fields -
         // race-campaign.md's own Target0..2 table confirms the offsets
         // independently, off the XML parser rather than off this function.
-        if      uVar14 <= gold:   tier[0x7c] = 2  // GOLD
-        elif    uVar14 <= silver: tier[0x7c] = 1  // SILVER
-        elif    uVar14 <= bronze: tier[0x7c] = 0  // BRONZE
-        else: /* tier left at its previous value - see below */
-        target[0x78] = tier's own threshold - uVar14, or 0 + redden=true
-                        once uVar14 exceeds bronze too
     } else {
-        // No campaign cell: compare against `ghost` (the per-track/per-class
+        gold = silver = bronze = 0;         // forces the branch below
+        // ghost is replaced with min(ghost, the per-track/per-class
         // `RaceTimes` record read off `DAT_08b310b4`, confirmed live at
-        // 117.0 s for Venom/Talon's Junction - `race-campaign.md`'s own
-        // `<RaceTimes>` table) instead of gold/silver/bronze. tier is
-        // *always* 3 (RECORD) on this path; target/redden follow the same
-        // "threshold - elapsed, or 0 + redden" rule against `ghost` alone.
+        // 117.0 s for Venom/Talon's Junction - race-campaign.md's own
+        // `<RaceTimes>` table) here, non-campaign only.
     }
+    if      gold == 0:                  tier[0x7c] = 3            // RECORD - always true, non-campaign
+    elif    ghost < gold && uVar14 < ghost: tier[0x7c] = 3         // RECORD - a campaign cell too, when
+                                                                    // the player's own stored best already
+                                                                    // beats gold and current pace beats it.
+                                                                    // oag_game::hud::TimeTrialPace does not
+                                                                    // reproduce this branch - see its own doc.
+    elif    uVar14 <= gold:   tier[0x7c] = 2  // GOLD
+    elif    uVar14 <= silver: tier[0x7c] = 1  // SILVER
+    elif    uVar14 <= bronze: tier[0x7c] = 0  // BRONZE
+    else: /* tier left at its previous value - see below */
+    target[0x78] = the winning branch's own threshold - uVar14 (ghost for
+                    RECORD, gold/silver/bronze otherwise), or 0 + redden=true
+                    once uVar14 exceeds it
 }
 ```
 
@@ -189,18 +213,35 @@ carries it, computed at `RaceStage::draw_hud` (where the campaign cell
 lives) and consumed by `oag_game::hud::draw`'s `TotalTime`/`TotalTimeTxt`
 arms - see [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
 
-**What stays open**: the non-campaign `ghost`/`FUN_088091a0` branch. That
-function reads a per-team, per-track record keyed by `DAT_08b31774` (the
-same store [`race-campaign.md`](race-campaign.md)'s loyalty section already
-names) and sums up to five `ushort` split times per lap from an offset this
-page has not chased (`param_1+0x460`/`+0x464` select which track/class row).
-This project's own `oag_game::records` has no split-time equivalent, so a
-non-campaign Time Trial still draws the plain elapsed `TotalTime` it always
-has - a known, documented divergence now, not an unexamined default. Also
-open: `g_game_mode`'s own full enum (what `0x11` and `7` are called), and
+**What stays open**: the `ghost`/`FUN_088091a0` branch, on both paths, not
+only the non-campaign one - see the pseudocode above. That function reads a
+per-team, per-track record keyed by `DAT_08b31774` (the same store
+[`race-campaign.md`](race-campaign.md)'s loyalty section already names) and
+sums up to five `ushort` split times per lap from an offset this page has
+not chased (`param_1+0x460`/`+0x464` select which track/class row). This
+project's own `oag_game::records` has no split-time equivalent, so:
+
+- a non-campaign Time Trial still draws the plain elapsed `TotalTime` it
+  always has - a known, documented divergence now, not an unexamined
+  default;
+- a campaign Time Trial/Speed Lap cell where the player's own stored
+  personal best already beats gold shows `GOLD` where the original would
+  show `RECORD` - `oag_game::hud::TimeTrialPace::from_elapsed` implements
+  the `gold`/`silver`/`bronze` ladder alone, not this branch, and says so in
+  its own doc comment.
+
+Also open: `g_game_mode`'s own full enum (what `0x11` and `7` are called),
 `DAT_08ab0de0`'s own meaning (confirmed non-zero on a fresh profile, gating
 the whole block; `0` forces tier `4`, the layout's own default "Total"
-caption).
+caption), and **whether this build's own `TotalTime`/`TotalTimeTxt` should
+be hidden on Zone/Elimination at all**: `g_game_mode` for those two modes is
+outside `{5, 0x11, 10, 7}`, so the original leaves `+0x78 = -1` on them,
+which `Hud_UpdateTimeCluster`'s own `iVar6 == -1` check hides both widgets
+for - but `Zone_HUD.xml`/`Elimination_HUD.xml` both author `TotalTime`
+(`hud.md`'s "place and the total time" section), and this build draws it
+unconditionally whenever no place is shown, which is every tick of both
+modes. Pre-existing (not introduced by this pass, and not fixed by it) -
+noticed while reading this decompile, not chased further.
 
 ## The counter: `Craft_UpdateLapProgress` (`0x08842a18`)
 

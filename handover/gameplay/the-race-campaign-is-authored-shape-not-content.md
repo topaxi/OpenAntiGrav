@@ -69,20 +69,28 @@ The law, all decompiled and all in `race-campaign.md`:
 
 - ~~The in-race HUD medal tier is still unread...~~ **Closed 2026-09-28.**
   The writer is `PlayerStatus_Update` (`0x0883b3b8`), runtime-verified with a
-  PPSSPP write watchpoint (all four write PCs land inside it, across an
-  eight-second drive of a real Venom Time Trial). The field is genuinely a
-  different ordinal from `Cell_EvaluateMedal`'s, as suspected - `0 = BRONZE`
-  up to `3 = RECORD`, related to `Cell_EvaluateMedal`'s `0 = gold, 1 = silver,
+  PPSSPP write watchpoint (five distinct write PCs, all inside it, across an
+  eight-second drive of a real Venom Time Trial - `grep -c` on the raw
+  PPSSPP log, not a `tail` sample). The field is genuinely a different
+  ordinal from `Cell_EvaluateMedal`'s, as suspected - `0 = BRONZE` up to
+  `3 = RECORD`, related to `Cell_EvaluateMedal`'s `0 = gold, 1 = silver,
   2 = bronze` by exactly `2 - medal` on the three tiers they share - and it
   is evaluated live, every tick, against the same cell's `gold`/`silver`/
-  `bronze` fields for a campaign Time Trial/Speed Lap cell, or against a
-  separate, still-unread per-track ghost/record store (`FUN_088091a0`)
-  otherwise, always showing `RECORD` on that second path. Wired into the HUD
-  for the campaign branch: `oag_game::hud::TimeTrialPace`. Full law:
+  `bronze` fields for a campaign Time Trial/Speed Lap cell, **except that
+  `RECORD` can still win there** when the player's own stored personal best
+  beats gold and the live pace beats that too, or against a separate,
+  still-unread personal-best/track-record pair otherwise (always `RECORD`
+  on that second path). Wired into the HUD for the campaign branch's
+  gold/silver/bronze ladder alone: `oag_game::hud::TimeTrialPace`. Full law:
   [`docs/ghidra/functions/psp-pulse-usa/race-progress.md`](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28).
-  Still open, and out of this pass's scope: the non-campaign ghost/record
-  branch, which needs a split-time record store this project's own
-  `oag_game::records` has no equivalent of.
+  Still open, and out of this pass's scope: `RECORD` on either path, which
+  needs a split-time record store (`FUN_088091a0`) this project's own
+  `oag_game::records` has no equivalent of; and whether this build's own
+  `race_ticks`/`lap_ticks` (already used for `TotalTime`/`CurrentTime`
+  before this pass, reused here rather than newly introduced) start at the
+  same instant the original's own lap clock does - see
+  `race-progress.md`'s "The first crossing starts the race but not the
+  clock", open since before this pass.
 - **`FUN_088085d0` and `FUN_08808624` are deliberately unnamed.** Ghidra
   recovers three parameters where every call site passes four; the fourth reads
   as create-if-missing but that is inference. Fixing the prototype in Ghidra and

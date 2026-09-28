@@ -1,8 +1,24 @@
 //! [`super::Readout::time_trial_pace`]: the campaign Time Trial/Speed Lap
-//! "pacing" indicator - `Hud_UpdateTimeCluster_q`'s tier/target/redden
-//! triple (`*(hud+0x3c)+0x34`/`+0x30`/`+0x38`), for the campaign branch
-//! alone. Split out of `hud.rs` for `scripts/check-file-size.py`'s 1,000-line
-//! ratchet, the same reason [`super::lap_splits`] has its own file.
+//! "pacing" indicator - `Hud_UpdateTimeCluster`'s tier/target/redden
+//! triple (`*(hud+0x3c)+0x34`/`+0x30`/`+0x38`), for the gold/silver/bronze
+//! branch of the campaign case alone. Split out of `hud.rs` for
+//! `scripts/check-file-size.py`'s 1,000-line ratchet, the same reason
+//! [`super::lap_splits`] has its own file.
+//!
+//! **Deliberately incomplete, and the gap is not hidden.**
+//! `PlayerStatus_Update`'s own decompile
+//! (`docs/ghidra/functions/psp-pulse-usa/race-progress.md`'s "The
+//! target-time readout" section) has a second `RECORD` path even on a
+//! campaign cell: if the player's own stored personal best for this track
+//! (`FUN_088091a0`, keyed by team) beats the cell's own gold target *and*
+//! the live pace is currently beating that personal best too, the original
+//! shows `RECORD` instead of `GOLD`. `FUN_088091a0`'s own record format is
+//! unread - this project has nothing to feed that branch - so
+//! [`TimeTrialPace::from_elapsed`] never produces [`Medal::Gold`]'s
+//! `RECORD` upgrade. A campaign cell run on a personal best already faster
+//! than gold shows `GOLD` here where the original would show `RECORD`;
+//! everything else the original's own ladder does for a campaign cell is
+//! reproduced.
 
 use oag_tables::race_campaign::Medal;
 
@@ -22,9 +38,11 @@ pub struct TimeTrialPace {
 }
 
 impl TimeTrialPace {
-    /// `Hud_UpdateTimeCluster_q`'s tier ladder (`0x0881c9d0`), fed by
+    /// `Hud_UpdateTimeCluster`'s tier ladder (`0x0881c9d0`), fed by
     /// `PlayerStatus_Update`'s own campaign branch (`0x0883b3b8`),
-    /// collapsed to a pure function of the elapsed tick count.
+    /// collapsed to a pure function of the elapsed tick count - the
+    /// gold/silver/bronze ladder only; see this module's own doc for the
+    /// `RECORD`-via-personal-best branch this deliberately omits.
     ///
     /// **The original's own tier field is stateful**: written once a tick,
     /// and left untouched once the elapsed value has passed every target,
@@ -51,8 +69,24 @@ impl TimeTrialPace {
     /// is always `false` on a fresh assignment and `true` only in the
     /// untouched branch, i.e. exactly `elapsed > bronze`. See
     /// `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`'s
-    /// "The live tier is a pure function of elapsed time" section for the
-    /// full decompile this argument is checked against.
+    /// "What the tier itself is, closed 2026-09-28" section for the full
+    /// decompile this argument is checked against.
+    ///
+    /// **`elapsed_ticks` inherits `TotalTime`/`CurrentTime`'s own existing
+    /// clock-start convention, not a newly-checked one.** The caller passes
+    /// `Readout::race_ticks` (Time Trial) or `Readout::lap_ticks` (Speed
+    /// Lap) - the same fields `TotalTime`/`CurrentTime` were already
+    /// formatting before this pass, both counting from the standing start
+    /// (`World::tick == 0`), before the green flag. Whether the
+    /// *original's* own `craft+0x920` clock also starts there, or only once
+    /// the countdown releases thrust, is a still-open question this pass
+    /// did not settle - see
+    /// `docs/ghidra/functions/psp-pulse-usa/race-progress.md`'s own "The
+    /// first crossing starts the race but not the clock" bullet, open since
+    /// before this pass. If the original excludes the countdown, every
+    /// boundary this function reports is early by `RaceState::COUNTDOWN_TICKS`
+    /// (272 ticks, ~4.5 s) - a pre-existing uncertainty this function shares
+    /// with every other clock this HUD already draws, not a new one.
     #[must_use]
     pub fn from_elapsed(elapsed_ticks: u64, cell: &oag_tables::race_campaign::Cell) -> Self {
         let elapsed_centis = i64::try_from(elapsed_ticks * 100 / 60).unwrap_or(i64::MAX);
@@ -78,11 +112,13 @@ impl TimeTrialPace {
 }
 
 /// [`super::Readout::time_trial_pace`]'s own caption -
-/// `Hud_UpdateTimeCluster_q`'s `IG_HUD_GOLD`/`SILVER`/`BRONZE` arm of its
-/// five-way table. `RECORD` and the layout's own default `TOTAL` are the
-/// other two branches of that table and are not reachable from a campaign
-/// cell's gold/silver/bronze targets, so [`Medal`] has no case for either -
-/// see
+/// `Hud_UpdateTimeCluster`'s `IG_HUD_GOLD`/`SILVER`/`BRONZE` arm of its
+/// five-way table. `RECORD` **is** reachable on a campaign cell too (see
+/// this module's own top-level doc) but is not produced by
+/// [`TimeTrialPace::from_elapsed`], so there is nothing here to map it
+/// from; the layout's own default `TOTAL` likewise has no [`Medal`] value
+/// to represent "no pace" or "not a Time Trial/Speed Lap cell" - both stay
+/// `None` upstream instead. See
 /// `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`.
 pub(super) fn medal_caption(medal: Medal, strings: &oag_ui::language::StringTable) -> String {
     let id = match medal {
@@ -93,7 +129,7 @@ pub(super) fn medal_caption(medal: Medal, strings: &oag_ui::language::StringTabl
     strings.get_or_id(id).to_string()
 }
 
-/// `TotalTime`'s own colour override - `Hud_UpdateTimeCluster_q`'s literal
+/// `TotalTime`'s own colour override - `Hud_UpdateTimeCluster`'s literal
 /// `0xffff0000` (pure red) when [`super::Readout::time_trial_pace`] reads
 /// [`TimeTrialPace::missed`]. Never `TotalTimeTxt`: the original's own
 /// `FUN_088cd290` recolour call is issued once, against the numeric widget
