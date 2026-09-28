@@ -68,9 +68,9 @@ fn a_race_cell_carries_track_class_and_skill() {
     assert_eq!(race.laps, Some(3));
     assert_eq!((race.gold, race.silver, race.bronze), (1, 2, 3));
     assert_eq!(race.grid_coords(), Some((1, 1)));
-    assert_eq!(race.skill_for_difficulty(0), Some(1.1));
-    assert_eq!(race.skill_for_difficulty(1), Some(1.75));
-    assert_eq!(race.skill_for_difficulty(2), Some(2.5));
+    assert_eq!(race.skill_for_difficulty(Difficulty::Easy), Some(1.1));
+    assert_eq!(race.skill_for_difficulty(Difficulty::Medium), Some(1.75));
+    assert_eq!(race.skill_for_difficulty(Difficulty::Hard), Some(2.5));
 }
 
 /// A `Tournament` cell names no `track` at all - its legs come from
@@ -89,8 +89,14 @@ fn a_tournament_cell_has_no_track_and_defaults_its_skill_spread() {
     assert_eq!(tournament.skill, Some(1.8));
     assert_eq!(tournament.skill_easy, None);
     // The documented default: skillEasy = skill - 1.0, skillHard = skill + 1.0.
-    assert_eq!(tournament.skill_for_difficulty(0), Some(1.8 - 1.0));
-    assert_eq!(tournament.skill_for_difficulty(2), Some(1.8 + 1.0));
+    assert_eq!(
+        tournament.skill_for_difficulty(Difficulty::Easy),
+        Some(1.8 - 1.0)
+    );
+    assert_eq!(
+        tournament.skill_for_difficulty(Difficulty::Hard),
+        Some(1.8 + 1.0)
+    );
 }
 
 /// `Elimination` authors no `laps` attribute whatsoever - not `"0"`, absent.
@@ -114,7 +120,7 @@ fn zone_class_is_not_a_speed_class() {
     assert_eq!(zone.laps, Some(0));
     assert_eq!(zone.ai_count, None);
     assert_eq!(zone.skill, None);
-    assert_eq!(zone.skill_for_difficulty(0), None);
+    assert_eq!(zone.skill_for_difficulty(Difficulty::Easy), None);
 }
 
 /// **Changed 2026-09-14**: an unrecognised `mode=` used to be a hard parse
@@ -382,9 +388,18 @@ fn nitro_elimination_target_reads_by_rung() {
     let grid = parse(NITRO_FIXTURE).expect("parses");
     let elim = &grid.cells[0];
     assert_eq!(elim.nitro_elimination_targets, Some((200, 200, 200)));
-    assert_eq!(elim.nitro_elimination_target_for_difficulty(0), Some(200));
-    assert_eq!(elim.nitro_elimination_target_for_difficulty(1), Some(200));
-    assert_eq!(elim.nitro_elimination_target_for_difficulty(2), Some(200));
+    assert_eq!(
+        elim.nitro_elimination_target_for_difficulty(Difficulty::Easy),
+        Some(200)
+    );
+    assert_eq!(
+        elim.nitro_elimination_target_for_difficulty(Difficulty::Medium),
+        Some(200)
+    );
+    assert_eq!(
+        elim.nitro_elimination_target_for_difficulty(Difficulty::Hard),
+        Some(200)
+    );
 }
 
 /// A cell with no `<NitroElimNovice>` at all - every cell in `FIXTURE` above
@@ -394,7 +409,7 @@ fn nitro_elimination_target_is_none_without_the_triple() {
     let grid = parse(FIXTURE).expect("parses");
     assert_eq!(grid.cells[0].nitro_elimination_targets, None);
     assert_eq!(
-        grid.cells[0].nitro_elimination_target_for_difficulty(1),
+        grid.cells[0].nitro_elimination_target_for_difficulty(Difficulty::Medium),
         None
     );
 }

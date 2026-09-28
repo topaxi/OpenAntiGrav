@@ -44,6 +44,20 @@ fn to_campaign_medal(medal: crate::records::Medal) -> oag_tables::race_campaign:
     }
 }
 
+/// [`to_campaign_medal`]'s own sibling, for
+/// [`crate::records::CampaignRecord::best_difficulty`] - **HD only**, redone
+/// here rather than shared for the identical reason `to_campaign_medal`'s
+/// own doc gives.
+fn to_campaign_difficulty(
+    difficulty: crate::records::Difficulty,
+) -> oag_tables::race_campaign::Difficulty {
+    match difficulty {
+        crate::records::Difficulty::Easy => oag_tables::race_campaign::Difficulty::Easy,
+        crate::records::Difficulty::Medium => oag_tables::race_campaign::Difficulty::Medium,
+        crate::records::Difficulty::Hard => oag_tables::race_campaign::Difficulty::Hard,
+    }
+}
+
 /// Draws `Campaign Selection`, `Grid Selection` on its first tier, or `Cell
 /// Selection` on that tier's own cells - the same shape
 /// [`super::menu_page::picker_page`] draws the race box's two screens in,
@@ -116,6 +130,16 @@ pub(super) fn campaign_page(
             .campaign_medal(title.name, cell_name)?
             .best_medal
             .map(to_campaign_medal)
+    };
+    // [`medal_of`]'s own sibling for `oag_ui::campaign::CellSelection::with_difficulty`
+    // - **HD only**, per that method's own doc; read unconditionally here
+    // the same way `medal_of` is, since it answers `None` on every non-HD
+    // row regardless.
+    let difficulty_of = |cell_name: &str| {
+        records
+            .campaign_medal(title.name, cell_name)?
+            .best_difficulty
+            .map(to_campaign_difficulty)
     };
     // See `entries_path`'s own doc: HD only, and only when the chosen
     // language actually has an `entries.xml` to overlay `DATA06`'s copy of
@@ -242,7 +266,8 @@ pub(super) fn campaign_page(
                 // this module follows.
                 let grid = hd_grids.first();
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
-                let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of);
+                let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of)
+                    .with_difficulty(&difficulty_of);
                 let grid_summary = grid.map_or(
                     oag_ui::campaign::GridSummary {
                         name: String::new(),

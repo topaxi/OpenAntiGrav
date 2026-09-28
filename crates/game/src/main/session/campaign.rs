@@ -172,6 +172,7 @@ impl Session {
         // needs `&mut self` for `self.race_options`/`self.shell`/`self.records`,
         // which cannot start while `stage`/`campaign` still borrow `self.stage`.
         let mut confirmed_cell = None;
+        let mut confirmed_difficulty = None;
         {
             let Stage::Menu(stage) = &mut self.stage else {
                 return;
@@ -228,7 +229,21 @@ impl Session {
                                 .map_or_else(|| "no cell".to_string(), |cell| cell.name.clone())
                         );
                     } else {
+                        let difficulty = model.difficulty();
                         confirmed_cell = model.selected().cloned();
+                        // Only recorded for a cell that actually authors a
+                        // difficulty rung - `None` for every Pulse cell and
+                        // every flat-schema HD cell alike, the same cells
+                        // `Cell::targets_for_difficulty` itself answers
+                        // identically for any rung asked. Recording a rung
+                        // that changed nothing about the race just played
+                        // would misrepresent `CellSelection::difficulty`'s
+                        // own screen-local default as a real game mechanic
+                        // on a cell that has none.
+                        confirmed_difficulty = confirmed_cell
+                            .as_ref()
+                            .filter(|cell| cell.difficulty_targets.is_some())
+                            .map(|_| difficulty);
                     }
                 }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
@@ -241,7 +256,7 @@ impl Session {
             }
         }
         if let Some(cell) = confirmed_cell {
-            self.launch_campaign_cell(cell);
+            self.launch_campaign_cell(cell, confirmed_difficulty);
         }
     }
 
@@ -253,6 +268,9 @@ impl Session {
     /// (`Self::open_ship_picker`) follows because every authored cell
     /// carries `ShipChoice="Yes"`, and `self.campaign_cell` carries the cell
     /// itself through to `RaceStage::observation` for the medal.
+    /// `difficulty` rides alongside it the same way, `None` on every cell
+    /// with no rung to be run at - see the caller's own doc for when that
+    /// is.
     ///
     /// A cell whose mode this engine cannot run, or whose track this source
     /// does not offer, logs why and leaves `Cell Selection` on screen -
@@ -266,7 +284,11 @@ impl Session {
     /// anything launches: a tournament that started on a shorter leg list
     /// than the cell authors, because a later leg's own track turned out
     /// missing, would be a silent truncation rather than an honest refusal.
-    fn launch_campaign_cell(&mut self, cell: oag_tables::race_campaign::Cell) {
+    fn launch_campaign_cell(
+        &mut self,
+        cell: oag_tables::race_campaign::Cell,
+        difficulty: Option<oag_tables::race_campaign::Difficulty>,
+    ) {
         let Some(mode) = oag_game::campaign::race_mode_for_cell(cell.mode.clone()) else {
             warn!(
                 "{} is {} - not one of the modes this engine can run yet, so {} cannot launch",
@@ -349,6 +371,7 @@ impl Session {
         .flatten();
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
+        self.campaign_difficulty = difficulty;
         // `None` for every ordinary cell, clearing whatever a previous
         // tournament (finished or abandoned) left behind - see
         // `Self::tournament`'s own doc for why nothing else has to clear it

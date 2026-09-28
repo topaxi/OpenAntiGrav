@@ -256,6 +256,44 @@ pub const OTHER_TEXTURES: [&str; 4] = [
     r"Data\FE\Images\Hexmedal_HD.gtf",
 ];
 
+/// **`Hexmedal_HD.gtf` itself has two disagreeing copies - measured
+/// 2026-09-28, the same shape [`SELECTION_SCREEN_ARCHIVE`]'s own doc already
+/// found for `CellMode_Definition.xml`.** `DATA02`'s copy decodes to
+/// `1024x256` (`oag_texture::gtf::Gtf::parse`, confirmed directly against
+/// `hdfury-ps3-eu-dec.iso`): one icon shape, the swirl/spiral
+/// `docs/ui/campaign-screens.md`'s "one shape per difficulty" section
+/// decodes and names. `DATA04`'s copy - carried alongside its own
+/// per-difficulty `grid_00.xml`..`grid_07.xml`, per
+/// `docs/formats/race-campaign.md`'s HD archive table - decodes to
+/// `1024x768`, exactly three `1024x256` blocks stacked: the same swirl at
+/// the bottom (nearest `v=0`, after the raster/`V` flip
+/// [`crate::campaign`]'s medal-frame doc already reconciles), a second,
+/// hook/"cane"-shaped icon in the middle block, and a third, unadorned flat
+/// hex in the top block. `DATA02` carries no XML screen at all beyond
+/// `CellMode_Definition.xml`'s own flat-schema use, so it is read here only
+/// as the fallback [`oag_assets::Archives::read_name`]'s ordinary
+/// precedence already reaches, not the one a caller should prefer.
+///
+/// **This is the copy a real PS3 draws.** `docs/formats/hd-frontend.md`'s
+/// "`DATA00`'s copy is the live one" section measures `TTY.log`'s own
+/// archive load order directly (`data01, data02, data03, data04, data05,
+/// data06, data00`) as a last-wins overlay, not merely a discovery order -
+/// the same rule [`SELECTION_SCREEN_ARCHIVE`] already relies on for
+/// `DATA06` over `DATA02`. `DATA04` loads after `DATA02` in that same list,
+/// so its copy of this path wins the same way. `oag_assets::Archives::read_name`
+/// searches the bulk archive first rather than replaying that load order,
+/// so a caller after the live copy has to ask by archive explicitly, via
+/// `read_every_name` - `oag_game::campaign::load_hd` does, for this one
+/// path only; every other [`OTHER_TEXTURES`] entry has no known second copy
+/// to disagree with `read_name` about.
+///
+/// Confidence 80: the same converging "general overlay rule plus a direct,
+/// per-file confirmation" shape [`SELECTION_SCREEN_ARCHIVE`]'s own doc
+/// reasons from, not (yet) an RPCS3 frame showing the taller atlas in use -
+/// see `docs/ui/campaign-screens.md`'s "one shape per difficulty" section
+/// for what would raise or lower this.
+pub const PER_DIFFICULTY_MEDAL_ARCHIVE: &str = crate::archives::DATA04;
+
 #[cfg(test)]
 mod tests {
     use super::*;

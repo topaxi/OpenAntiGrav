@@ -131,7 +131,7 @@
 //!   this build keeps no saved record for, the same absence
 //!   `crate::campaign::draw::cell_draw_list`'s own `Line5`/`Line8` leave.
 
-use oag_tables::race_campaign::{Cell, Medal, Mode};
+use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
 
 use crate::frontend::{Draw, Placed};
 use crate::language::{CircuitNames, StringTable};
@@ -414,7 +414,22 @@ pub fn hd_cell_draw_list(
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
             if let Some(medal) = model.medal_at(x, y) {
-                out.push(hd_tinted_medal_draw(image, placed, medal));
+                // **Falls back to `Medium`, not `Hard`.** A medal with no
+                // recorded difficulty was evaluated by the pre-per-difficulty
+                // path (`Cell::evaluate_medal`, always against the medium
+                // rung - `Cell::gold`/`silver`/`bronze` alias it), so
+                // crediting it at Hard here would show a harder badge than
+                // the disc's own `SaveData_MigrateCellMedalsToHardElite`
+                // would for a `Race`/`Elimination` result: that migration
+                // only touches `TimeTrial`/`SpeedLap`/`Zone`, the three
+                // modes whose raw value does not depend on AI skill - an
+                // AI-independent time can honestly be credited at Hard, a
+                // placement against Hard's own tougher AI cannot. `Medium`
+                // is the rung the value was actually judged against, not a
+                // guess. See [`super::CellSelection::difficulty_at`]'s own
+                // doc for when this triggers.
+                let difficulty = model.difficulty_at(x, y).unwrap_or(Difficulty::Medium);
+                out.push(hd_tinted_medal_draw(image, placed, medal, difficulty));
             }
             continue;
         }
@@ -524,20 +539,39 @@ pub fn hd_cell_draw_list(
         let Some(name) = image.name.as_deref() else {
             continue;
         };
-        let is_target_widget = matches!(name, "Target0 Medal" | "Target1 Medal" | "Target2 Medal")
-            || name == "Target Title Arrow";
+        let target_medal_tier = match name {
+            "Target0 Medal" => Some(Medal::Gold),
+            "Target1 Medal" => Some(Medal::Silver),
+            "Target2 Medal" => Some(Medal::Bronze),
+            _ => None,
+        };
+        let is_target_widget = target_medal_tier.is_some() || name == "Target Title Arrow";
         if is_target_widget && targets_visible {
             let Some(placed) = sprites(&image.src) else {
                 continue;
             };
-            // `Target{n} Medal` already authors its own `width`/`height`/
-            // `u`/`v`/`TxtrWidth`/`TxtrHeight` crop of `Hexmedal_HD.gtf`
-            // (measured directly off `DATA06`'s own XML - see the module
-            // doc's medal-widget table) - unlike `Medal_{x}_{y}`, which
-            // authors none and needs `hd_tinted_medal_draw`'s own crop, this
-            // one needs no help: `image_draw` already reads those fields
-            // through `sprite_draw`.
-            out.push(image_draw(image, placed));
+            match target_medal_tier {
+                // `Target{n} Medal` authors its own `width`/`height`/`u`/`v`/
+                // `TxtrWidth`/`TxtrHeight` crop of `Hexmedal_HD.gtf`
+                // (measured directly off `DATA06`'s own XML - see the module
+                // doc's medal-widget table), but only for the `v=0` (easy/
+                // novice) block - it never varies by [`super::CellSelection::difficulty`],
+                // because the widget is static XML and the difficulty rung
+                // it shows is runtime state. [`hd_medal_frame`]'s own crop,
+                // computed for whichever rung is currently browsed, replaces
+                // it the same way [`hd_tinted_medal_draw`] already replaces
+                // `Medal_{x}_{y}`'s own unauthored one - see that function's
+                // doc for why this needs no tint either.
+                Some(tier) => out.push(hd_tinted_medal_draw(
+                    image,
+                    placed,
+                    tier,
+                    model.difficulty(),
+                )),
+                // `Target Title Arrow` carries no tier of its own - draws at
+                // its authored crop unchanged.
+                None => out.push(image_draw(image, placed)),
+            }
         }
     }
     layers.body = out;
@@ -596,14 +630,56 @@ pub fn hd_cell_draw_list(
 /// check either way - the same gap `medal_argb`'s own doc already records.
 /// `u=0` is used because it is what the disc's own comparable widget uses,
 /// not a guess.
-fn hd_medal_frame(medal: Medal) -> [f32; 4] {
+///
+/// **`difficulty` (`0` easy/novice .. `2` hard/elite, [`super::CellSelection::difficulty`]'s
+/// own convention) selects one of three vertical blocks, not just a row.**
+/// Measured 2026-09-28, against `DATA04.PSARC`'s own `1024x768` copy of this
+/// texture (see [`oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE`]'s doc for
+/// why that is the copy loaded): three `1024x256`-shaped bands, each holding
+/// its own gold/silver/bronze row at the *same* `61`-pitch spacing the
+/// authored `v=0/61/122` numbers above already give, separated by an
+/// **unauthored** measured pitch of `183` (`60 + 1` gap, three rows, `3*61
+/// = 183`) - read directly off the decoded atlas's own content bands
+/// (alpha-per-row), not an authored crop; no widget on either archive's
+/// `CellMode_Definition.xml` sources a `v` past `122`, so there is nothing
+/// to cross-check this pitch against the way [`super::hd`]'s own doc
+/// cross-checks the `61` spacing. Confidence 60 on the pitch number itself,
+/// still measured rather than guessed.
+///
+/// **Block-to-difficulty mapping is chosen from convergent evidence, not an
+/// authored crop or a live capture.** The three blocks hold visibly
+/// different icon *shapes*, not only colour - a plain, unadorned hex
+/// (bottom of the raster, nearest `v=0`), a hook/"cane"-shaped emblem
+/// (middle), and a swirl/spiral emblem (top of the raster, farthest from
+/// `v=0`), after the same raster/`V`-flip this file's own crop-reconciliation
+/// paragraph above already establishes. `DATA02`'s shorter, flat-schema
+/// copy (the one every pre-Fury cell effectively used before per-difficulty
+/// targets existed) carries *only* the swirl shape, and
+/// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
+/// `SaveData_MigrateCellMedalsToHardElite` credits exactly that
+/// pre-existing, single-tier medal at `HARD`/`ELITE` when migrating an old
+/// save: the swirl icon and the hardest rung are the two things that
+/// pre-existed the difficulty split, and the migration equates them. That
+/// makes `easy/novice = plain hex = v-block 0`, `medium/skilled =
+/// cane = v-block 1`, `hard/elite = swirl = v-block 2` the reading two
+/// independent facts agree on, not a coin flip, but neither fact is a
+/// pixel on a live screen, so this stays a **chosen** mapping (no
+/// confidence score) until an RPCS3 capture toggling `DifficultyButton`
+/// confirms which shape actually draws at which rung.
+fn hd_medal_frame(medal: Medal, difficulty: Difficulty) -> [f32; 4] {
     const FRAME: f32 = 60.0;
-    let v = match medal {
+    const BLOCK_PITCH: f32 = 183.0;
+    let tier_v = match medal {
         Medal::Gold => 0.0,
         Medal::Silver => 61.0,
         Medal::Bronze => 122.0,
     };
-    [0.0, v, FRAME, FRAME]
+    let block = match difficulty {
+        Difficulty::Easy => 0.0,
+        Difficulty::Medium => 1.0,
+        Difficulty::Hard => 2.0,
+    };
+    [0.0, block * BLOCK_PITCH + tier_v, FRAME, FRAME]
 }
 
 /// `Medal_{x}_{y}`'s own draw: [`hd_medal_frame`]'s crop, drawn at its own
@@ -629,8 +705,13 @@ fn hd_medal_frame(medal: Medal) -> [f32; 4] {
 /// carries the tier's colour baked into its texels, so multiplying a flat
 /// swatch over it a second time was the other half of the bug this
 /// replaces.
-fn hd_tinted_medal_draw(image: &Image, placed: Placed, medal: Medal) -> Draw {
-    let [u, v, frame_width, frame_height] = hd_medal_frame(medal);
+fn hd_tinted_medal_draw(
+    image: &Image,
+    placed: Placed,
+    medal: Medal,
+    difficulty: Difficulty,
+) -> Draw {
+    let [u, v, frame_width, frame_height] = hd_medal_frame(medal, difficulty);
     let cropped = Image {
         width: Some(frame_width),
         height: Some(frame_height),
@@ -694,7 +775,7 @@ fn hd_tinted_medal_draw(image: &Image, placed: Placed, medal: Medal) -> Draw {
 ///   grid precedence parses neither field, so this degrades to no suffix
 ///   there rather than a guessed difficulty name. Not independently
 ///   captured either way for a base-HD cell.
-fn hd_target_title(cell: &Cell, strings: &StringTable, difficulty: u8) -> String {
+fn hd_target_title(cell: &Cell, strings: &StringTable, difficulty: Difficulty) -> String {
     let base = match cell.mode {
         Mode::TimeTrial => strings.get_or_id("FE_TARGTIME"),
         Mode::SpeedLap => strings.get_or_id("FE_TLTIME"),
@@ -726,14 +807,14 @@ fn hd_target_title(cell: &Cell, strings: &StringTable, difficulty: u8) -> String
 /// `Novice`/`Skilled`/`Elite` measurement, the same one
 /// [`Cell::nitro_elimination_target_for_difficulty`]'s doc already cites).
 /// Confidence 85: the id spelling is a direct disc read; matching it to
-/// [`CellSelection::difficulty`]'s own `0`/`1`/`2` reuses the same rung
-/// order [`Cell::targets_for_difficulty`] already assumes, not
-/// independently re-verified here.
-fn hd_difficulty_id(difficulty: u8) -> &'static str {
+/// [`Difficulty`]'s own rung order reuses the same one
+/// [`Cell::targets_for_difficulty`] already assumes, not independently
+/// re-verified here.
+fn hd_difficulty_id(difficulty: Difficulty) -> &'static str {
     match difficulty {
-        0 => "Easy",
-        1 => "Medium",
-        _ => "Hard",
+        Difficulty::Easy => "Easy",
+        Difficulty::Medium => "Medium",
+        Difficulty::Hard => "Hard",
     }
 }
 

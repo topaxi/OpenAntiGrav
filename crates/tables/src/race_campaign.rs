@@ -456,6 +456,51 @@ pub struct DifficultyTargets {
     pub hard: MedalTargets,
 }
 
+/// The rung [`Cell::skill_for_difficulty`]/[`Cell::targets_for_difficulty`]/
+/// [`Cell::evaluate_medal_for_difficulty`] all key on - Wipeout HD/Fury's
+/// own `Easy`/`Medium`/`Hard` ≡ `Novice`/`Skilled`/`Elite` pairing, measured
+/// in `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s "`HARD` ≡
+/// `ELITE`" section. Replaces a bare `u8` index across this crate and
+/// `oag-ui`'s own HD campaign draw code - the same "a bare ordinal is a
+/// standing invitation to misread it" reasoning `oag_game::records::Medal`'s
+/// own doc already gives, applied here rather than left as a convention
+/// three call sites each restate in a doc comment (`0` easy .. `2` hard).
+///
+/// **A third, separate type from [`oag_game::records::Difficulty`]**, not
+/// reused - the same duplication `oag_game::records::Medal` already carries
+/// against this module's own [`Medal`], and for the identical reason:
+/// `oag_game::records` stays free of this crate so its own store logic
+/// keeps testing with no disc, no GPU and no simulation step. A caller
+/// crossing the boundary converts explicitly (`crate::main::campaign_stage`'s
+/// own `to_campaign_difficulty` and its inverse), the same shape
+/// `to_campaign_medal` already gives [`Medal`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Difficulty {
+    /// Novice, on `Elimination`/`NitroBattle` cells. Declared first so
+    /// `Ord`'s derived direction already makes `Hard` the hardest
+    /// [`Difficulty`] with no inversion trick, unlike [`Medal`].
+    Easy,
+    /// Skilled. Also what [`Cell::gold`]/[`Cell::silver`]/[`Cell::bronze`]
+    /// themselves mean on a cell with no [`Cell::difficulty_targets`] at
+    /// all - see those fields' own docs.
+    Medium,
+    /// Elite.
+    Hard,
+}
+
+impl Difficulty {
+    /// Cycles `Easy -> Medium -> Hard -> Easy` -
+    /// `oag_ui::campaign::CellSelection::cycle_difficulty`'s own step.
+    #[must_use]
+    pub fn next(self) -> Self {
+        match self {
+            Self::Easy => Self::Medium,
+            Self::Medium => Self::Hard,
+            Self::Hard => Self::Easy,
+        }
+    }
+}
+
 impl Cell {
     /// [`Cell::class`], mapped onto [`crate::handling::SpeedClass`] when it is
     /// one of the four rungs the physics side knows. `None` for `Zone`'s own
@@ -482,22 +527,22 @@ impl Cell {
         Some((x, y))
     }
 
-    /// The skill position for a difficulty, `0` easy through `2` hard,
-    /// applying the original's own documented defaults
-    /// (`skillEasy = skill - 1.0`, `skillHard = skill + 1.0`) when the
-    /// specific attribute is absent. `None` when [`Cell::skill`] itself is
-    /// absent - a solo-mode cell has no AI to scale.
+    /// The skill position for a [`Difficulty`], applying the original's own
+    /// documented defaults (`skillEasy = skill - 1.0`, `skillHard = skill +
+    /// 1.0`) when the specific attribute is absent. `None` when
+    /// [`Cell::skill`] itself is absent - a solo-mode cell has no AI to
+    /// scale.
     #[must_use]
-    pub fn skill_for_difficulty(&self, difficulty: u8) -> Option<f32> {
+    pub fn skill_for_difficulty(&self, difficulty: Difficulty) -> Option<f32> {
         let skill = self.skill?;
         Some(match difficulty {
-            0 => self.skill_easy.unwrap_or(skill - 1.0),
-            1 => skill,
-            _ => self.skill_hard.unwrap_or(skill + 1.0),
+            Difficulty::Easy => self.skill_easy.unwrap_or(skill - 1.0),
+            Difficulty::Medium => skill,
+            Difficulty::Hard => self.skill_hard.unwrap_or(skill + 1.0),
         })
     }
 
-    /// The medal-target triple for a difficulty, `0` easy through `2` hard:
+    /// The medal-target triple for a [`Difficulty`]:
     /// [`Cell::difficulty_targets`]'s matching rung when the cell authors
     /// one, else [`Cell::gold`]/[`Cell::silver`]/[`Cell::bronze`]
     /// unconditionally - which is every Pulse cell, and every Wipeout HD
@@ -505,12 +550,12 @@ impl Cell {
     /// `grid_00.xml`..`grid_07.xml`. The mirror of [`Cell::skill_for_difficulty`]
     /// for the target side of a cell rather than the AI side.
     #[must_use]
-    pub fn targets_for_difficulty(&self, difficulty: u8) -> MedalTargets {
+    pub fn targets_for_difficulty(&self, difficulty: Difficulty) -> MedalTargets {
         match &self.difficulty_targets {
             Some(dt) => match difficulty {
-                0 => dt.easy,
-                1 => dt.medium,
-                _ => dt.hard,
+                Difficulty::Easy => dt.easy,
+                Difficulty::Medium => dt.medium,
+                Difficulty::Hard => dt.hard,
             },
             None => MedalTargets {
                 gold: self.gold,
@@ -521,7 +566,7 @@ impl Cell {
     }
 
     /// The single per-rung target [`Cell::nitro_elimination_targets`]
-    /// carries, `0` easy through `2` hard (`novice`/`skilled`/`elite`, the
+    /// carries, for a [`Difficulty`] (`novice`/`skilled`/`elite`, the
     /// same rung words this title's own screens and executable use in place
     /// of Pulse's `Easy`/`Medium`/`Hard` - see
     /// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s medal-law
@@ -540,12 +585,12 @@ impl Cell {
     /// that question first, not assume [`Cell::evaluate_medal`] already
     /// does - see its own doc comment.
     #[must_use]
-    pub fn nitro_elimination_target_for_difficulty(&self, difficulty: u8) -> Option<i64> {
+    pub fn nitro_elimination_target_for_difficulty(&self, difficulty: Difficulty) -> Option<i64> {
         let (novice, skilled, elite) = self.nitro_elimination_targets?;
         Some(match difficulty {
-            0 => novice,
-            1 => skilled,
-            _ => elite,
+            Difficulty::Easy => novice,
+            Difficulty::Medium => skilled,
+            Difficulty::Hard => elite,
         })
     }
 
@@ -598,14 +643,38 @@ impl Cell {
     /// negative "time" a gold).
     #[must_use]
     pub fn evaluate_medal(&self, value: i64) -> Option<Medal> {
+        self.evaluate_medal_for_difficulty(value, Difficulty::Medium)
+    }
+
+    /// [`Cell::evaluate_medal`], against one rung of
+    /// [`Cell::targets_for_difficulty`] rather than always the medium one -
+    /// `evaluate_medal(value)` is exactly
+    /// `evaluate_medal_for_difficulty(value, Difficulty::Medium)`,
+    /// since [`Cell::gold`]/[`silver`]/[`bronze`] already alias the medium
+    /// rung on a cell that authors [`Cell::difficulty_targets`]. **Not
+    /// independently measured which difficulty an executable's own award
+    /// path compares against for a given race** - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s medal-law
+    /// section, which finds the *targets* selected by a `GameState`-held
+    /// difficulty index at evaluation time but not the comparison
+    /// consumer itself; this method assumes the caller already knows which
+    /// rung a race was run at, the same way [`Cell::evaluate_medal`] already
+    /// assumed "the only one there is" before per-difficulty cells existed.
+    #[must_use]
+    pub fn evaluate_medal_for_difficulty(
+        &self,
+        value: i64,
+        difficulty: Difficulty,
+    ) -> Option<Medal> {
         if value <= 0 || value == 0xFFFF_FFFF {
             return None;
         }
+        let targets = self.targets_for_difficulty(difficulty);
         let flipped = matches!(self.mode, Mode::Zone | Mode::Elimination);
         for (tier, target) in [
-            (Medal::Gold, self.gold),
-            (Medal::Silver, self.silver),
-            (Medal::Bronze, self.bronze),
+            (Medal::Gold, targets.gold),
+            (Medal::Silver, targets.silver),
+            (Medal::Bronze, targets.bronze),
         ] {
             let met = if flipped {
                 value >= target

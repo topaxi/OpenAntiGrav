@@ -686,6 +686,7 @@ impl Session {
                         &key.title,
                         &cell.name,
                         observation.campaign_medal,
+                        observation.campaign_difficulty,
                     );
                 }
                 if let Some(progress) = stage.campaign_2048_event.as_ref() {
@@ -693,6 +694,7 @@ impl Session {
                         &key.title,
                         &progress.name,
                         observation.campaign_medal,
+                        None,
                     );
                 }
                 self.records.record(key, observation);

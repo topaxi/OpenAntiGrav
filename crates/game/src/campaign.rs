@@ -277,6 +277,40 @@ pub fn load(
     })
 }
 
+/// Reads one HD campaign texture by archive path, `Data\FE\Images\Hexmedal_HD.gtf`
+/// alone routed through [`oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE`]'s
+/// copy rather than [`oag_assets::Archives::read_name`]'s ordinary
+/// precedence.
+///
+/// **Both of [`load_hd`]'s own texture loops need this, not just one.**
+/// `Medal_{x}_{y}` and `Target0/1/2 Medal` name the identical archive file
+/// two different ways (`oag_hd::campaign::HEX_TEXTURES`'s own `.mip`
+/// rewrite versus `oag_hd::campaign::OTHER_TEXTURES`'s literal `.gtf`) -
+/// missing either loop here would leave one of the two widgets drawing off
+/// `DATA02`'s shorter, flat atlas while the other correctly draws off
+/// `DATA04`'s taller, per-difficulty one, exactly the split outcome a live
+/// `--menu-page cell-select` capture caught: the `Target0/1/2 Medal` row
+/// showed the right per-difficulty icon shape while `Medal_{x}_{y}` drew
+/// nothing at all, `v` past the shorter atlas's own edge. Falls back to
+/// [`oag_assets::Archives::read_name`]'s own copy for every other path,
+/// and for this one too if `DATA04` somehow lacks the entry - the same
+/// honest-absence shape every texture read in [`load_hd`] already takes.
+fn read_hd_texture(
+    archives: &mut oag_assets::Archives,
+    path: &str,
+) -> Result<Vec<u8>, oag_assets::Error> {
+    if path == r"Data\FE\Images\Hexmedal_HD.gtf" {
+        if let Some((_, blob)) = archives
+            .read_every_name(path)
+            .into_iter()
+            .find(|(label, _)| label.ends_with(oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE))
+        {
+            return Ok(blob);
+        }
+    }
+    archives.read_name(path)
+}
+
 /// [`load`]'s Wipeout HD/Fury branch - the same shape, off
 /// [`oag_hd::campaign`]'s own entry names, HD's own authored grid
 /// ([`oag_hd::campaign::AUTHORED_GRID`], not the PSP's `PSP_GRID`
@@ -356,7 +390,7 @@ fn load_hd(
     // `image.src` carries at draw time. See that constant's own doc for why
     // the two differ.
     for (widget_src, archive_path) in oag_hd::campaign::HEX_TEXTURES {
-        match archives.read_name(archive_path) {
+        match read_hd_texture(archives, archive_path) {
             Ok(blob) => blobs.push((widget_src.to_string(), blob)),
             Err(error) => {
                 log::warn!("{archive_path}: {error:#} - the widget it is for draws nothing");
@@ -364,7 +398,7 @@ fn load_hd(
         }
     }
     for src in oag_hd::campaign::OTHER_TEXTURES {
-        match archives.read_name(src) {
+        match read_hd_texture(archives, src) {
             Ok(blob) => blobs.push((src.to_string(), blob)),
             Err(error) => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
         }

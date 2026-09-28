@@ -82,6 +82,7 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
             tick: 4000,
             best_lap_ticks: None,
             campaign_medal: Some(to_records_medal(medal)),
+            campaign_difficulty: None,
         },
     );
 
@@ -126,6 +127,7 @@ fn a_gold_zone_run_persists_as_gold_not_bronze() {
             tick: 4000,
             best_lap_ticks: None,
             campaign_medal: Some(to_records_medal(medal)),
+            campaign_difficulty: None,
         },
     );
 

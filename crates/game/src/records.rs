@@ -233,6 +233,72 @@ impl Medal {
     }
 }
 
+/// **Wipeout HD/Fury only.** The rung a [`CampaignRecord::best_medal`] was
+/// earned at - `oag_tables::race_campaign::Cell::targets_for_difficulty`'s
+/// own three rungs, restated here for the same reason [`Medal`] is: this
+/// module stays free of `oag-tables`, and a caller converts at the boundary
+/// (`crate::main::campaign_stage::to_campaign_difficulty` and its own
+/// inverse), the same shape `to_campaign_medal` already gives [`Medal`].
+///
+/// **Serialized as a lowercase word for the identical reason [`Medal`]'s
+/// own doc gives, not merely by analogy**: `Cell::targets_for_difficulty`'s
+/// own index convention (`0` easy .. `2` hard) is a plain `u8` everywhere
+/// else in this codebase (`CellSelection::difficulty`,
+/// `Cell::skill_for_difficulty`, `oag_ui::campaign::hd::hd_medal_frame`) -
+/// deliberately left that way there, since changing an established,
+/// widely-used index convention to chase type safety in code that already
+/// bounds-checks it (`difficulty.min(2)`) would be exactly the abstraction
+/// this project's own house rules say not to add. A saved file is a
+/// different case: nothing bounds-checks a hand-edited `records.toml`
+/// against a comment, and this project already has one HUD ordinal that
+/// runs a different direction from the one this rung's own name suggests
+/// (see [`Medal`]'s own doc) - a bare `0`/`1`/`2` here would be the same
+/// standing invitation to misread it, for a file meant to outlive any one
+/// session's memory of which convention was live when it was written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Difficulty {
+    /// `0` - Novice on `Elimination`/`NitroBattle` cells.
+    Easy,
+    /// `1` - Skilled. Also what [`oag_tables::race_campaign::Cell::gold`]/
+    /// `silver`/`bronze` themselves mean on a cell with no per-difficulty
+    /// targets at all - see that field's own doc.
+    Medium,
+    /// `2` - Elite. What
+    /// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
+    /// `SaveData_MigrateCellMedalsToHardElite` credits a pre-existing,
+    /// difficulty-less medal at.
+    Hard,
+}
+
+impl Difficulty {
+    /// `Cell::targets_for_difficulty`'s own index, `0` easy .. `2` hard -
+    /// the inverse of [`Self::from_index`]. Declared in ascending
+    /// easy-to-hard order, so `Ord`'s derived direction already makes
+    /// `Hard` the greatest [`Difficulty`] with no inversion trick - unlike
+    /// [`Medal::better`], which needs one.
+    #[must_use]
+    pub fn index(self) -> u8 {
+        match self {
+            Self::Easy => 0,
+            Self::Medium => 1,
+            Self::Hard => 2,
+        }
+    }
+
+    /// [`Self::index`]'s own inverse, clamping `2` and up to [`Self::Hard`]
+    /// the same way `Cell::targets_for_difficulty` itself clamps any index
+    /// past its own three rungs.
+    #[must_use]
+    pub fn from_index(index: u8) -> Self {
+        match index {
+            0 => Self::Easy,
+            1 => Self::Medium,
+            _ => Self::Hard,
+        }
+    }
+}
+
 /// One race's outcome, read off [`crate::race::Race`]'s already-public state
 /// from *outside* the tick - see the module doc's "where this is captured"
 /// section for why there are exactly two call sites and no others.
@@ -278,6 +344,13 @@ pub struct Observation {
     /// RACE REMIX, `--race`), since none of those set `RaceStage::campaign_cell`
     /// at all. See the module doc's "where a career system attaches" section.
     pub campaign_medal: Option<Medal>,
+    /// **Wipeout HD/Fury only.** The rung [`Self::campaign_medal`] was
+    /// evaluated against - `RaceStage::campaign_difficulty`'s own doc names
+    /// when this is `None` even with a campaign cell in play. Independent
+    /// of whether [`Self::campaign_medal`] itself is `Some`: a run that
+    /// scored no tier still ran at a real difficulty, and
+    /// [`CampaignRecord::last_difficulty`] wants that regardless.
+    pub campaign_difficulty: Option<Difficulty>,
 }
 
 /// Laps completed, for the `laps_completed` field of an [`Observation`].
@@ -491,11 +564,26 @@ pub struct CampaignRecord {
     /// career total would sum without also knowing the medal-to-points law.
     #[serde(default)]
     pub best_points: Option<u32>,
+    /// **Wipeout HD/Fury only.** The rung [`Self::best_medal`] was earned
+    /// at - `#[serde(default)]`, so a file [`Self::best_medal`] already
+    /// existed in before this field did (every pre-2026-09-28 row, and
+    /// every Pulse row forever) loads as `None` rather than refusing to
+    /// parse. `oag_ui::campaign::hd::hd_medal_frame`'s own doc names the
+    /// default it falls back to when a saved medal carries no difficulty at
+    /// all. See [`Store::record_campaign`] for how the two are kept
+    /// together.
+    #[serde(default)]
+    pub best_difficulty: Option<Difficulty>,
     /// The most recent race run against this cell's own medal - `None` both
     /// for a cell never raced and for a run that scored no tier at all,
     /// which is what "the most recent race scored nothing" means here.
     #[serde(default)]
     pub last_medal: Option<Medal>,
+    /// [`Self::last_medal`]'s own difficulty - `None` under the identical
+    /// two conditions [`Self::best_difficulty`]'s own doc gives, plus
+    /// whenever [`Self::last_medal`] itself is `None`.
+    #[serde(default)]
+    pub last_difficulty: Option<Difficulty>,
 }
 
 impl CampaignRecord {
@@ -647,7 +735,33 @@ impl Store {
     /// [`CampaignRecord::best_medal`] is left untouched, the same
     /// never-downgraded rule [`Self::record`] applies to
     /// [`Record::best_medal`].
-    pub fn record_campaign(&mut self, title: &str, cell: &str, medal: Option<Medal>) {
+    ///
+    /// **`difficulty` breaks a tie against [`Medal::better`], chosen rather
+    /// than measured.** `None` on every Pulse call (that title never has
+    /// one), which makes this identical to the pre-2026-09-28 behaviour:
+    /// falls straight through to comparing `medal` alone. On Wipeout HD,
+    /// when both the stored and the new result know their own rung and the
+    /// rungs differ, the **harder** rung wins outright, whatever either
+    /// medal is - a bronze just earned at `Hard` replaces a stored `Gold`
+    /// earned at `Easy`. This is not read off a found comparison function
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s medal-law
+    /// section explicitly did not find one); it generalises
+    /// `SaveData_MigrateCellMedalsToHardElite`'s own one-time "credit
+    /// existing medals at the hardest rung" grandfather clause into an
+    /// ongoing rule, on the reasoning that a game which upgrades old medals
+    /// to look as good as possible at the hardest difficulty is unlikely to
+    /// then let an easier medal outrank a harder one during ordinary play -
+    /// but that reasoning is this project's, not the executable's. When the
+    /// stored row predates this field (`best_difficulty: None`) or a rung
+    /// genuinely is not known for one side, this falls back to comparing
+    /// `medal` alone, the same as before this field existed.
+    pub fn record_campaign(
+        &mut self,
+        title: &str,
+        cell: &str,
+        medal: Option<Medal>,
+        difficulty: Option<Difficulty>,
+    ) {
         let title = title.trim().to_ascii_lowercase();
         let cell = cell.trim().to_ascii_lowercase();
         let row = match self
@@ -668,10 +782,19 @@ impl Store {
             }
         };
         if let Some(medal) = medal {
-            row.best_medal = Some(row.best_medal.map_or(medal, |best| best.better(medal)));
-            row.best_points = row.best_medal.map(Medal::points);
+            let improves = match (row.best_medal, row.best_difficulty, difficulty) {
+                (None, ..) => true,
+                (Some(_), Some(best), Some(new)) if new != best => new > best,
+                (Some(best_medal), _, _) => medal < best_medal,
+            };
+            if improves {
+                row.best_medal = Some(medal);
+                row.best_difficulty = difficulty;
+                row.best_points = row.best_medal.map(Medal::points);
+            }
         }
         row.last_medal = medal;
+        row.last_difficulty = difficulty;
 
         // Stable, for the same reason `Self::record` sorts `self.records`.
         self.campaign

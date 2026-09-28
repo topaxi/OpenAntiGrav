@@ -183,6 +183,7 @@ fn passing_2048_event_1_opens_2048_event_2_on_the_map() {
         "wipeout 2048",
         "2048 - Event 1",
         Some(records::Medal::Bronze),
+        None,
     );
     fe.refresh_campaign_progress(|name| {
         store

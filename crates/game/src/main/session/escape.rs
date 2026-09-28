@@ -127,14 +127,19 @@ impl Session {
             let key = stage.result_key.clone();
             let observation = stage.observation();
             if let Some(cell) = stage.campaign_cell.as_ref() {
-                self.records
-                    .record_campaign(&key.title, &cell.name, observation.campaign_medal);
+                self.records.record_campaign(
+                    &key.title,
+                    &cell.name,
+                    observation.campaign_medal,
+                    observation.campaign_difficulty,
+                );
             }
             if let Some(progress) = stage.campaign_2048_event.as_ref() {
                 self.records.record_campaign(
                     &key.title,
                     &progress.name,
                     observation.campaign_medal,
+                    None,
                 );
             }
             self.records.record(key, observation);

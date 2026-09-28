@@ -73,6 +73,7 @@ fn the_first_race_on_a_key_seeds_every_field_from_itself() {
             tick: 6000,
             best_lap_ticks: Some(1900),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     let row = store.get(&key("16_track")).expect("just recorded");
@@ -99,6 +100,7 @@ fn a_slower_race_does_not_erase_the_standing_best() {
             tick: 6000,
             best_lap_ticks: Some(1900),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     store.record(
@@ -110,6 +112,7 @@ fn a_slower_race_does_not_erase_the_standing_best() {
             tick: 6500,
             best_lap_ticks: Some(2100),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     let row = store.get(&key("16_track")).expect("still there");
@@ -139,6 +142,7 @@ fn a_faster_race_improves_both_bests() {
             tick: 6500,
             best_lap_ticks: Some(2100),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     store.record(
@@ -150,6 +154,7 @@ fn a_faster_race_improves_both_bests() {
             tick: 6000,
             best_lap_ticks: Some(1900),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     let row = store.get(&key("16_track")).expect("still there");
@@ -171,6 +176,7 @@ fn an_unfinished_race_can_still_set_a_best_lap_but_never_a_best_total() {
             tick: 9000,
             best_lap_ticks: Some(1800),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     let row = store.get(&key("06_track")).expect("just recorded");
@@ -193,6 +199,7 @@ fn different_tracks_do_not_share_a_row() {
             tick: 6000,
             best_lap_ticks: Some(1900),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     store.record(
@@ -204,6 +211,7 @@ fn different_tracks_do_not_share_a_row() {
             tick: 5000,
             best_lap_ticks: Some(1600),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     assert_eq!(store.rows().len(), 2);
@@ -232,6 +240,7 @@ fn rows_stay_sorted_regardless_of_insertion_order() {
                 tick: 6000,
                 best_lap_ticks: Some(1900),
                 campaign_medal: None,
+                campaign_difficulty: None,
             },
         );
     }
@@ -254,6 +263,7 @@ fn a_store_round_trips_through_its_own_written_text() {
             tick: 6042,
             best_lap_ticks: Some(1987),
             campaign_medal: None,
+            campaign_difficulty: None,
         },
     );
     let text = toml::to_string_pretty(&store).expect("serialises");
@@ -364,6 +374,7 @@ fn observation_with_medal(medal: Option<Medal>) -> Observation {
         tick: 6000,
         best_lap_ticks: Some(1900),
         campaign_medal: medal,
+        campaign_difficulty: None,
     }
 }
 
@@ -462,6 +473,7 @@ fn personal_best_does_not_credit_a_slower_race() {
         tick: 6500,
         best_lap_ticks: Some(2100),
         campaign_medal: None,
+        campaign_difficulty: None,
     };
     let pb = PersonalBest::compare(Some(&previous), &obs);
     assert_eq!(pb.best_lap_ticks, Some(1900), "the standing lap survives");
@@ -490,6 +502,7 @@ fn personal_best_credits_a_faster_race() {
         tick: 6000,
         best_lap_ticks: Some(1900),
         campaign_medal: None,
+        campaign_difficulty: None,
     };
     let pb = PersonalBest::compare(Some(&previous), &obs);
     assert_eq!(pb.best_lap_ticks, Some(1900));
@@ -514,6 +527,7 @@ fn personal_best_never_credits_an_unfinished_race_with_the_total() {
         tick: 3000,
         best_lap_ticks: Some(1800),
         campaign_medal: None,
+        campaign_difficulty: None,
     };
     let pb = PersonalBest::compare(Some(&previous), &obs);
     assert_eq!(pb.best_lap_ticks, Some(1800));
@@ -604,11 +618,11 @@ best_lap_ticks = 1987
 #[test]
 fn a_campaign_cells_medal_is_never_downgraded_and_round_trips() {
     let mut store = Store::default();
-    store.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Silver));
-    store.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Gold));
+    store.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Silver), None);
+    store.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Gold), None);
     // A later run that scores no tier at all must not erase the standing
     // gold - `last_medal` takes it, `best_medal` does not.
-    store.record_campaign("wipeout pulse", "grid0_2_1", None);
+    store.record_campaign("wipeout pulse", "grid0_2_1", None, None);
 
     let row = store
         .campaign_medal("Wipeout Pulse", "GRID0_2_1")
@@ -624,6 +638,109 @@ fn a_campaign_cells_medal_is_never_downgraded_and_round_trips() {
         "a clean write should need no notes: {notes:?}"
     );
     assert_eq!(parsed.campaign_rows(), store.campaign_rows());
+}
+
+/// **Wipeout HD/Fury only.** [`Store::record_campaign`]'s own difficulty
+/// tie-break: a harder rung wins outright even against a better medal at an
+/// easier one, and a tie in rung falls back to [`Medal::better`] exactly as
+/// it did before this field existed. See that function's own doc for the
+/// reasoning this is chosen, not measured, from.
+#[test]
+fn a_harder_difficulty_wins_outright_even_with_a_worse_medal() {
+    let mut store = Store::default();
+    store.record_campaign(
+        "wipeout hd",
+        "grid8_2_1",
+        Some(Medal::Gold),
+        Some(Difficulty::Easy),
+    );
+    // A bronze at Hard still replaces the standing gold at Easy.
+    store.record_campaign(
+        "wipeout hd",
+        "grid8_2_1",
+        Some(Medal::Bronze),
+        Some(Difficulty::Hard),
+    );
+    let row = store
+        .campaign_medal("wipeout hd", "grid8_2_1")
+        .expect("just recorded");
+    assert_eq!(row.best_medal, Some(Medal::Bronze));
+    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
+
+    // A gold at Medium does not unseat the bronze at Hard - Hard still wins.
+    store.record_campaign(
+        "wipeout hd",
+        "grid8_2_1",
+        Some(Medal::Gold),
+        Some(Difficulty::Medium),
+    );
+    let row = store
+        .campaign_medal("wipeout hd", "grid8_2_1")
+        .expect("just recorded");
+    assert_eq!(row.best_medal, Some(Medal::Bronze));
+    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
+
+    // A silver also at Hard is a same-rung tie, so `Medal::better` decides -
+    // silver *does* beat the standing bronze there (a better medal at the
+    // same difficulty).
+    store.record_campaign(
+        "wipeout hd",
+        "grid8_2_1",
+        Some(Medal::Silver),
+        Some(Difficulty::Hard),
+    );
+    let row = store
+        .campaign_medal("wipeout hd", "grid8_2_1")
+        .expect("just recorded");
+    assert_eq!(row.best_medal, Some(Medal::Silver));
+
+    // A bronze, back at Hard, does not downgrade the standing silver - the
+    // same-rung tie-break is still `Medal::better`, never a plain overwrite.
+    store.record_campaign(
+        "wipeout hd",
+        "grid8_2_1",
+        Some(Medal::Bronze),
+        Some(Difficulty::Hard),
+    );
+    let row = store
+        .campaign_medal("wipeout hd", "grid8_2_1")
+        .expect("just recorded");
+    assert_eq!(row.best_medal, Some(Medal::Silver));
+
+    // A gold, still at Hard, does win on the same tie-break.
+    store.record_campaign(
+        "wipeout hd",
+        "grid8_2_1",
+        Some(Medal::Gold),
+        Some(Difficulty::Hard),
+    );
+    let row = store
+        .campaign_medal("wipeout hd", "grid8_2_1")
+        .expect("just recorded");
+    assert_eq!(row.best_medal, Some(Medal::Gold));
+    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
+}
+
+/// A stored row with no [`CampaignRecord::best_difficulty`] at all (every
+/// row written before this field existed) falls back to comparing the medal
+/// alone, exactly the pre-existing behaviour - not the harder-wins rule,
+/// which needs both sides to know their own rung.
+#[test]
+fn an_undifferenced_stored_row_falls_back_to_plain_medal_comparison() {
+    let mut store = Store::default();
+    store.record_campaign("wipeout hd", "grid8_2_1", Some(Medal::Gold), None);
+    // Even at Hard, a worse medal does not overwrite a better one when the
+    // stored row's own rung is unknown.
+    store.record_campaign(
+        "wipeout hd",
+        "grid8_2_1",
+        Some(Medal::Bronze),
+        Some(Difficulty::Hard),
+    );
+    let row = store
+        .campaign_medal("wipeout hd", "grid8_2_1")
+        .expect("just recorded");
+    assert_eq!(row.best_medal, Some(Medal::Gold));
 }
 
 /// [`Store::record_loyalty`] accumulates rather than overwrites, caps at

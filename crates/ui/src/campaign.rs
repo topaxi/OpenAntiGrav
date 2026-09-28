@@ -79,7 +79,7 @@
 //! documents for `Single Player`'s `Zone`/`DifficultyNaText`).
 
 use oag_gameplay::input::{Button, Input};
-use oag_tables::race_campaign::{Cell, Grid, Medal};
+use oag_tables::race_campaign::{Cell, Difficulty, Grid, Medal};
 
 use crate::frontend::Placed;
 use crate::language::StringTable;
@@ -401,18 +401,28 @@ pub struct CellSelection {
     /// pass for either - see `crate::main::campaign_stage::CampaignStage`'s
     /// own construction of the closure.
     records: Vec<Option<i64>>,
+    /// Parallel to [`Self::cells`] - `difficulties[i]` is `cells[i]`'s own
+    /// medal's earned [`Difficulty`]. **HD only**, and only ever set via
+    /// [`Self::with_difficulty`] - `None` for every cell on a build that
+    /// never calls it (every Pulse construction site), and for any HD cell
+    /// whose saved medal predates
+    /// `oag_game::records::CampaignRecord::best_difficulty` existing at
+    /// all. See [`Self::difficulty_at`]'s own doc for how a caller reads
+    /// this.
+    difficulties: Vec<Option<Difficulty>>,
     index: usize,
     help_open: bool,
     /// **HD only.** Which of [`Cell::targets_for_difficulty`]'s three rungs
-    /// (`0` easy .. `2` hard) HD's own `DifficultyButton` widget currently
-    /// shows - `docs/ui/campaign-screens.md`'s HD section: the target row is
-    /// "three wide, not nine", one triple on screen at a time. Starts at `1`
-    /// (medium), the rung [`Cell::gold`]/[`silver`]/[`bronze`] themselves
-    /// already mean on a cell with no [`Cell::difficulty_targets`] at all -
-    /// so a Pulse cell, which never authors one, draws identically whatever
-    /// this holds. Never read by [`draw::grid_draw_list`]/[`cell_draw_list`],
-    /// only by [`crate::campaign::hd`]'s own draw.
-    difficulty: u8,
+    /// HD's own `DifficultyButton` widget currently shows -
+    /// `docs/ui/campaign-screens.md`'s HD section: the target row is "three
+    /// wide, not nine", one triple on screen at a time. Starts at
+    /// [`Difficulty::Medium`], the rung [`Cell::gold`]/[`silver`]/[`bronze`]
+    /// themselves already mean on a cell with no [`Cell::difficulty_targets`]
+    /// at all - so a Pulse cell, which never authors one, draws identically
+    /// whatever this holds. Never read by
+    /// [`draw::grid_draw_list`]/[`cell_draw_list`], only by
+    /// [`crate::campaign::hd`]'s own draw.
+    difficulty: Difficulty,
 }
 
 impl CellSelection {
@@ -445,33 +455,53 @@ impl CellSelection {
     ) -> Self {
         let medals = cells.iter().map(|cell| medal_of(&cell.name)).collect();
         let records = cells.iter().map(|cell| record_of(&cell.name)).collect();
+        let difficulties = vec![None; cells.len()];
         Self {
             cells,
             medals,
             records,
+            difficulties,
             index: 0,
             help_open: false,
-            difficulty: 1,
+            difficulty: Difficulty::Medium,
         }
     }
 
-    /// **HD only.** The rung [`Self::difficulty`] currently holds, `0` easy
-    /// through `2` hard - see that field's own doc.
+    /// **HD only.** Attaches each cell's own earned medal difficulty
+    /// alongside [`Self::medals`] - see [`Self::difficulty_at`]. A separate
+    /// builder rather than a fourth closure on
+    /// [`Self::with_medals_and_records`]: every Pulse call site would have
+    /// to pass `&|_| None` for a rung that field never has, the same reason
+    /// [`Self::difficulty`] itself (a different, browsed-not-earned
+    /// difficulty) is a plain field rather than threaded through the
+    /// constructor.
     #[must_use]
-    pub fn difficulty(&self) -> u8 {
+    pub fn with_difficulty(mut self, difficulty_of: &dyn Fn(&str) -> Option<Difficulty>) -> Self {
+        self.difficulties = self
+            .cells
+            .iter()
+            .map(|cell| difficulty_of(&cell.name))
+            .collect();
+        self
+    }
+
+    /// **HD only.** The rung [`Self::difficulty`] currently holds - see that
+    /// field's own doc.
+    #[must_use]
+    pub fn difficulty(&self) -> Difficulty {
         self.difficulty
     }
 
     /// **HD only.** Steps [`Self::difficulty`] to the next rung, wrapping
-    /// `easy -> medium -> hard -> easy`. Always available, even on a cell
-    /// with no [`Cell::difficulty_targets`] - `DifficultyButton` is authored
-    /// unconditionally on HD's own screen (see
-    /// `docs/ui/campaign-screens.md`'s HD section), and stepping it there is
-    /// inert rather than refused, since [`Cell::targets_for_difficulty`]
-    /// already falls back to the one triple such a cell has regardless of
-    /// which rung is asked for.
+    /// `easy -> medium -> hard -> easy` ([`Difficulty::next`]). Always
+    /// available, even on a cell with no [`Cell::difficulty_targets`] -
+    /// `DifficultyButton` is authored unconditionally on HD's own screen
+    /// (see `docs/ui/campaign-screens.md`'s HD section), and stepping it
+    /// there is inert rather than refused, since
+    /// [`Cell::targets_for_difficulty`] already falls back to the one
+    /// triple such a cell has regardless of which rung is asked for.
     pub fn cycle_difficulty(&mut self) {
-        self.difficulty = (self.difficulty + 1) % 3;
+        self.difficulty = self.difficulty.next();
     }
 
     #[must_use]
@@ -530,6 +560,23 @@ impl CellSelection {
             .zip(&self.medals)
             .find(|(cell, _)| cell.grid_coords() == Some((x, y)))
             .and_then(|(_, medal)| *medal)
+    }
+
+    /// **HD only.** [`Self::medal_at`]'s own cell's earned [`Difficulty`],
+    /// only meaningful once [`Self::with_difficulty`] has been called -
+    /// `None` on every Pulse build (that constructor is never reached
+    /// there) and on any cell [`Self::with_difficulty`]'s own closure
+    /// answered `None` for, unlike-or-not it has a medal at all. A caller
+    /// drawing a medal icon with no difficulty to key on picks its own
+    /// fallback - see `oag_ui::campaign::hd::hd_medal_frame`'s own doc for
+    /// what it uses.
+    #[must_use]
+    pub fn difficulty_at(&self, x: u32, y: u32) -> Option<Difficulty> {
+        self.cells
+            .iter()
+            .zip(&self.difficulties)
+            .find(|(cell, _)| cell.grid_coords() == Some((x, y)))
+            .and_then(|(_, difficulty)| *difficulty)
     }
 
     /// Whether the selected cell still shows its `Lock_x_y` glyph -

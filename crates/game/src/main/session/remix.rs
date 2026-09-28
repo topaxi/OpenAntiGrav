@@ -325,6 +325,7 @@ impl Session {
         // cell abandoned mid-`Team Selection` must never leak its own
         // eliminator target or lap override into an unrelated launch.
         self.campaign_cell = None;
+        self.campaign_difficulty = None;
         let Some(mut race_options) = self.race_options.take() else {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;

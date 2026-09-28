@@ -329,6 +329,7 @@ fn class_table_observation(
         tick,
         best_lap_ticks,
         campaign_medal: None,
+        campaign_difficulty: None,
     }
 }
 
