@@ -266,8 +266,14 @@ pub(super) fn campaign_page(
                 // this module follows.
                 let grid = hd_grids.first();
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
+                // HD/Fury's own fresh-profile default rung is `Easy`, not
+                // Pulse's `Medium` - see
+                // `oag_ui::campaign::CellSelection::difficulty`'s own doc for
+                // the RPCS3 measurement. Already inside `is_hd` here, so
+                // unconditional.
                 let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of)
-                    .with_difficulty(&difficulty_of);
+                    .with_difficulty(&difficulty_of)
+                    .with_default_difficulty(oag_tables::race_campaign::Difficulty::Easy);
                 let grid_summary = grid.map_or(
                     oag_ui::campaign::GridSummary {
                         name: String::new(),

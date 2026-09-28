@@ -421,11 +421,24 @@ pub struct CellSelection {
     /// shows (`docs/ui/campaign-screens.md`'s HD section: "three wide, not
     /// nine", one triple on screen at a time); on Pulse, whose cells never
     /// author [`Cell::difficulty_targets`], the target row draws identically
-    /// whatever this holds. Starts at [`Difficulty::Medium`] - the
-    /// original's own fresh-profile default (`Profile_SetDifficultyRC(profile,
-    /// 1)`, the same section above). Read by [`crate::campaign::hd`]'s own
-    /// draw and by [`draw::cell_draw_list`]'s `DifficultyButton` text, never
-    /// by [`draw::grid_draw_list`].
+    /// whatever this holds. Starts at [`Difficulty::Medium`] - Pulse's own
+    /// fresh-profile default (`Profile_SetDifficultyRC(profile,
+    /// 1)`, the same section above) - unless overridden by
+    /// [`Self::with_default_difficulty`]: **HD/Fury's own fresh-profile
+    /// default is `Difficulty::Easy`, not `Medium`**, measured directly on a
+    /// genuinely fresh RPCS3 profile (`~/.config/rpcs3/dev_hdd0/home/00000001/savedata/`
+    /// empty before boot, not merely unread) - `grid8_3_1` (`Cell Selection`'s
+    /// own default cell) reads `AI DIFFICULTY (NOVICE)` on arrival, no
+    /// `DifficultyButton` press. Confidence 90: one settled `--nav-shots`
+    /// frame (no comb-artifact risk, no `Square` press to mis-pair), one
+    /// title, one campaign (`Fury`) - `docs/reverse-engineering/rpcs3-capture.md`'s
+    /// "Cell Selection: `DifficultyButton` toggle" section carries the
+    /// capture. `Profile_GetDifficultyRC`'s own fallback global
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`) was not
+    /// traced to its initializer, so this is the RPCS3 reading, not an
+    /// independent Ghidra one. Read by [`crate::campaign::hd`]'s own draw and
+    /// by [`draw::cell_draw_list`]'s `DifficultyButton` text, never by
+    /// [`draw::grid_draw_list`].
     difficulty: Difficulty,
 }
 
@@ -507,6 +520,21 @@ impl CellSelection {
             .iter()
             .map(|cell| difficulty_of(&cell.name))
             .collect();
+        self
+    }
+
+    /// Overrides [`Self::difficulty`]'s own starting rung - the browsed one
+    /// the `DifficultyButton` prompt shows on arrival, not a per-cell earned
+    /// one. A separate builder rather than a constructor parameter for the
+    /// same reason [`Self::with_difficulty`] is: this field's own doc names
+    /// the default ([`Difficulty::Medium`]) as Pulse's, measured; a caller on
+    /// HD/Fury needs this to reach that title's own different measured
+    /// default ([`Difficulty::Easy`]) without every other caller (every
+    /// existing Pulse one, and every test not about this specifically)
+    /// having to name a rung it does not care about.
+    #[must_use]
+    pub fn with_default_difficulty(mut self, difficulty: Difficulty) -> Self {
+        self.difficulty = difficulty;
         self
     }
 

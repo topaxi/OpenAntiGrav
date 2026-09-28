@@ -2999,6 +2999,24 @@ than fixing the text and leaving the default silently wrong, or vice versa.
 string in the meantime, which is honest disc content, just not what RPCS3
 shows at runtime.
 
+**Both open mismatches fixed, `hd-difficulty` lane, 2026-09-28 (later the
+same day).** `oag_ui::campaign::hd::hd_difficulty_button_line` now computes
+`RB_AI_DIF`/`RB_DIF (<rung>)` the same way `crate::campaign::draw::difficulty_button_line`
+already does for Pulse, mode-gated per `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
+`CellSelection_UpdateDifficultyButton_q` finding; `CellSelection::difficulty`
+now defaults to `Difficulty::Easy` on HD (`with_default_difficulty`, wired
+from both the live session and the `--menu-page cell-select` still), Pulse's
+own `Medium` default untouched. **The default is now measured on a
+genuinely fresh profile**, not the non-fresh one every earlier pass on this
+page had: `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/` verified empty
+before boot, `scripts/rpcs3-drive.py capture --nav-shots`' settled arrival
+frame (no `DifficultyButton` press, no comb-artifact risk) reads `AI
+DIFFICULTY (NOVICE)` on `grid8_3_1` - confidence 90, corroborating rather
+than superseding the `Race`-mode `RB_AI_DIF` reading above. See
+`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s "The TOC-xref trap"
+section for the Ghidra side, including why the `RB_AI_DIF`/`RB_DIF` call
+site itself was not found this pass.
+
 **Pulse's own sibling mechanism is fixed, `pulse-cellsel` lane, 2026-09-28 -
 a related but not identical fix, not reusable here as-is.** Pulse's
 `CellSelection_Update` (`0x088d6430`) builds an analogous runtime template
