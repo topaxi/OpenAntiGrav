@@ -395,8 +395,25 @@ impl Session {
             stage.campaign = None;
         }
         if !self.open_ship_picker() {
-            self.finish_launch();
+            self.launch_campaign_race();
         }
+    }
+
+    /// The campaign's own launch tail, once `Team Selection` is settled (or
+    /// skipped, on a source with no ship picker): the cell already built
+    /// `self.race_options` in full, so only the team, variant and livery
+    /// that screen picked are copied in before the load. Both campaign exits
+    /// come through here - `Session::handle_picker`'s `Kind::Ship` Confirm
+    /// and [`Self::launch_campaign_cell`]'s own no-picker fallback - so
+    /// neither can race without the team the player picked, which is what
+    /// the EndRace loyalty row is keyed on. See
+    /// `docs/ui/endrace-screens.md`.
+    pub(crate) fn launch_campaign_race(&mut self) {
+        if let Some(mut race_options) = self.race_options.take() {
+            self.apply_race_team(&mut race_options);
+            self.race_options = Some(race_options);
+        }
+        self.finish_launch();
     }
 
     /// `AI_ResolveSkillScale`'s campaign-cell branch

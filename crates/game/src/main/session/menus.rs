@@ -129,6 +129,9 @@ pub(crate) fn backdrop_seed(
 mod variant;
 pub(crate) use variant::{combine_variant, variant_choices};
 
+#[path = "menus/team.rs"]
+mod team;
+
 impl Session {
     /// Replaces the front end with the menus, seeded from the settings.
     ///
@@ -758,36 +761,9 @@ impl Session {
         // team and the race would attempt another - failing at the
         // archive with a message naming a team that is not on screen.
         // `team` and `title` together, in the same call: VARIANT
-        // combines with whichever title's own axis this is.
-        let resolved_team = self.shell.as_ref().and_then(|shell| {
-            shell
-                .team(&self.settings.race.team)
-                .map(|team| (shell.title, team.to_string()))
-        });
-        match resolved_team {
-            Some((title, team)) => {
-                let (combined, hull_variant, warning) =
-                    combine_variant(title, &team, &self.settings.race.variant);
-                if let Some(warning) = warning {
-                    warn!("{warning}");
-                }
-                race_options.team = Some(combined);
-                race_options.hull_variant = hull_variant.map(str::to_string);
-                // The livery Ship Select picked, by the skin's declared
-                // name - what `--skin` takes, resolved against the team's
-                // own `PI_ModelSkin`s at load. Empty is the baseline paint.
-                race_options.skin =
-                    Some(self.settings.race.skin.clone()).filter(|skin| !skin.trim().is_empty());
-            }
-            None => warn!(
-                "this source does not offer team {:?}, racing as {} instead",
-                self.settings.race.team,
-                race_options
-                    .team
-                    .as_deref()
-                    .unwrap_or("this source's own default"),
-            ),
-        }
+        // combines with whichever title's own axis this is. Shared with the
+        // campaign's own launch - see `team::apply_race_team`.
+        self.apply_race_team(&mut race_options);
         // Carried as a **name**, and checked against this page's own
         // row - see [`resolve_race_page_class`] for why: `race.class`
         // is one setting shared with RACE REMIX, so a class settled
@@ -817,6 +793,22 @@ impl Session {
         // Back before the load, which reads it.
         self.race_options = Some(race_options);
         self.finish_launch();
+    }
+
+    /// Writes the team, variant and livery `Team Selection` last picked
+    /// (`settings.race`) into `race_options`, and logs why when this source
+    /// does not offer that team. A no-op with no shell (the `--race` path,
+    /// which has no menus to have picked anything). See
+    /// [`team::apply_race_team`].
+    pub(crate) fn apply_race_team(&self, race_options: &mut oag_game::race::Options) {
+        let Some(shell) = self.shell.as_ref() else {
+            return;
+        };
+        for warning in
+            team::apply_race_team(shell.title, &shell.teams, &self.settings.race, race_options)
+        {
+            warn!("{warning}");
+        }
     }
 
     /// [`Self::launch_race`], plus the same hand-off report on success and
