@@ -30,6 +30,7 @@ fn geometry(length: u32) -> Geometry {
                 height: Some(25.0),
                 color: 0x2fff_ffff,
                 gradient: None,
+                reveal: Vec::new(),
             })
             .collect(),
         title: None,

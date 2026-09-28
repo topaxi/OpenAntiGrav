@@ -584,6 +584,7 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
                     height: Some(1.0),
                     color,
                     gradient: None,
+                    reveal: Vec::new(),
                 },
                 oag_ui::screen::Fill {
                     name: None,
@@ -593,6 +594,7 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
                     height: Some(1.0),
                     color,
                     gradient: None,
+                    reveal: Vec::new(),
                 },
             ],
             "{label}: two thin stripes, not a 480x272 wash"
@@ -630,15 +632,28 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             oag_ui::screen::parse_argb("0xFE99C9D8").unwrap(),
             "{label}: Data\\Skins\\Default\\Skin.xml declares FrameLineColor"
         );
-        let rect = |x: f32, y: f32, width: f32, height: f32| oag_ui::screen::Fill {
-            name: None,
-            x,
-            y,
-            width: Some(width),
-            height: Some(height),
-            color,
-            gradient: None,
+        // `reveal` keys read straight off this same parse, not hand-typed:
+        // every one of the sixteen brackets `TextureWidth` between its own
+        // negated width (fully hidden) and `0` (fully shown) - the reveal
+        // convention `docs/ghidra/functions/psp-pure-eu/title-screen.md`
+        // documents, now pinned per-widget rather than only described.
+        let key = |time: f32, texture_width: f32| oag_ui::screen::RevealKey {
+            time,
+            texture_width,
         };
+        let rect =
+            |x: f32, y: f32, width: f32, height: f32, reveal: Vec<oag_ui::screen::RevealKey>| {
+                oag_ui::screen::Fill {
+                    name: None,
+                    x,
+                    y,
+                    width: Some(width),
+                    height: Some(height),
+                    color,
+                    gradient: None,
+                    reveal,
+                }
+            };
         let white_background = oag_ui::screen::Fill {
             name: None,
             x: 0.0,
@@ -647,30 +662,128 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             height: Some(272.0),
             color: 0xffff_ffff,
             gradient: None,
+            reveal: Vec::new(),
         };
         assert_eq!(
             screen.fills,
             vec![
                 white_background,
-                rect(14.0, 240.0, 1.0, 16.0),
-                rect(14.0, 240.0, 235.0, 1.0),
-                rect(184.0, 240.0, 1.0, 8.0),
-                rect(241.0, 240.0, 1.0, 11.0),
-                rect(249.0, 232.0, 3.0, 1.0),
-                rect(249.0, 232.0, 1.0, 3.0),
-                rect(249.0, 250.0, 3.0, 1.0),
-                rect(249.0, 247.0, 1.0, 3.0),
-                rect(249.0, 237.0, 1.0, 8.0),
-                rect(283.0, 237.0, 1.0, 8.0),
-                rect(280.0, 232.0, 3.0, 1.0),
-                rect(283.0, 232.0, 1.0, 3.0),
-                rect(280.0, 250.0, 4.0, 1.0),
-                rect(283.0, 247.0, 1.0, 3.0),
-                rect(419.0, 240.0, 1.0, 10.0),
-                rect(283.0, 240.0, 136.0, 1.0),
-                rect(286.0, 250.0, 133.0, 1.0),
+                rect(14.0, 240.0, 1.0, 16.0, vec![key(0.0, -1.0), key(0.1, 0.0)]),
+                rect(
+                    14.0,
+                    240.0,
+                    235.0,
+                    1.0,
+                    vec![key(0.0, -235.0), key(0.2, 0.0)]
+                ),
+                rect(
+                    184.0,
+                    240.0,
+                    1.0,
+                    8.0,
+                    vec![key(0.0, -1.0), key(0.1, -1.0), key(0.15, 0.0)],
+                ),
+                rect(
+                    241.0,
+                    240.0,
+                    1.0,
+                    11.0,
+                    vec![key(0.0, -1.0), key(0.16, -1.0), key(0.2, 0.0)],
+                ),
+                rect(
+                    249.0,
+                    232.0,
+                    3.0,
+                    1.0,
+                    vec![key(0.0, -3.0), key(0.63, -3.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    249.0,
+                    232.0,
+                    1.0,
+                    3.0,
+                    vec![key(0.0, -1.0), key(0.63, -1.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    249.0,
+                    250.0,
+                    3.0,
+                    1.0,
+                    vec![key(0.0, -3.0), key(0.63, -3.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    249.0,
+                    247.0,
+                    1.0,
+                    3.0,
+                    vec![key(0.0, -1.0), key(0.63, -1.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    249.0,
+                    237.0,
+                    1.0,
+                    8.0,
+                    vec![key(0.0, -1.0), key(0.63, -1.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    283.0,
+                    237.0,
+                    1.0,
+                    8.0,
+                    vec![key(0.0, -1.0), key(0.63, -1.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    280.0,
+                    232.0,
+                    3.0,
+                    1.0,
+                    vec![key(0.0, -3.0), key(0.63, -3.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    283.0,
+                    232.0,
+                    1.0,
+                    3.0,
+                    vec![key(0.0, -1.0), key(0.63, -1.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    280.0,
+                    250.0,
+                    4.0,
+                    1.0,
+                    vec![key(0.0, -4.0), key(0.63, -4.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    283.0,
+                    247.0,
+                    1.0,
+                    3.0,
+                    vec![key(0.0, -1.0), key(0.63, -1.0), key(0.65, 0.0)],
+                ),
+                rect(
+                    419.0,
+                    240.0,
+                    1.0,
+                    10.0,
+                    vec![key(0.0, -1.0), key(0.35, -1.0), key(0.36, 0.0)],
+                ),
+                rect(
+                    283.0,
+                    240.0,
+                    136.0,
+                    1.0,
+                    vec![key(0.0, -136.0), key(0.25, -136.0), key(0.35, 0.0)],
+                ),
+                rect(
+                    286.0,
+                    250.0,
+                    133.0,
+                    1.0,
+                    vec![key(0.0, -133.0), key(0.25, -133.0), key(0.35, 0.0)],
+                ),
             ],
-            "{label}: every frame line at its own rect, none of them a wash"
+            "{label}: every frame line at its own rect, none of them a wash, and each \
+             carries the reveal timeline its own <Animation><Key> authors"
         );
     }
 }

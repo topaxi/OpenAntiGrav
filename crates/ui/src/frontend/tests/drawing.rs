@@ -279,6 +279,56 @@ fn a_colour_only_image_draws_its_own_rect_and_falls_back_to_the_whole_screen() {
     );
 }
 
+/// An `<Animation>`-wrapped `Fill` grows from hidden to its own authored
+/// width as `elapsed` advances past its own `<Key>` timeline - Pure's
+/// `Title Screen` wraps its frame lines this way, and this pins the wipe
+/// `docs/ghidra/functions/psp-pure-eu/title-screen.md` reads off a live
+/// capture: `TextureWidth` interpolates from `-width` (fully hidden) to `0`
+/// (fully shown), added straight onto the rect this build already draws.
+#[test]
+fn an_animation_wrapped_fill_grows_from_hidden_to_its_own_width_over_its_keys() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Animation name="Anim">
+      <Values></Values>
+      <Key Time="0" TextureWidth="-100"></Key>
+      <Key Time="1" TextureWidth="0"></Key>
+      <Image><Values x="10" y="20" width="100" height="1" color="0xff3abcf2"></Values></Image>
+    </Animation>
+  </Screen>
+</Screen>
+"#,
+    );
+    let frontend = Frontend::new(
+        screens,
+        StringTable::default(),
+        Vec::new(),
+        Vec::new(),
+        0,
+        false,
+    );
+    let width_at = |elapsed: f64| {
+        frontend
+            .draw_screen_at("Loose", elapsed)
+            .into_iter()
+            .find_map(|d| match d {
+                Draw::Fill { rect, .. } if rect[2] <= 100.0 => Some(rect[2]),
+                _ => None,
+            })
+            .expect("the wrapped Fill must still reach the draw list")
+    };
+    assert_eq!(width_at(0.0), 0.0, "at the first key: fully hidden");
+    assert_eq!(width_at(0.5), 50.0, "halfway between the two keys");
+    assert_eq!(width_at(1.0), 100.0, "at the final key: fully shown");
+    assert_eq!(
+        width_at(f64::INFINITY),
+        100.0,
+        "settled, the same as draw_screen's own public INFINITY"
+    );
+}
+
 #[test]
 fn circle_does_not_select() {
     let mut frontend = frontend(300);

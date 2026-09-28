@@ -420,12 +420,12 @@ fn an_image_wrapped_in_an_animation_is_still_collected() {
 }
 
 #[test]
-fn a_colour_only_image_inside_an_animation_keeps_its_own_rect() {
+fn a_colour_only_image_inside_an_animation_keeps_its_own_rect_and_carries_the_reveal() {
     // `Demo_Definition.xml`'s own shape, shared by both Pulse's and Pure's
     // disc: a decorative underline, not a backdrop - `width="347" height="1"`
     // at `x="133" y="262"`. `Fill` carries its own rect precisely so this
     // draws as a thin line rather than washing the whole screen in its
-    // colour.
+    // colour, and now its own `<Key>` timeline too - see [`RevealKey`].
     let screens = Screens::from_xml(
         r#"
 <Screen>
@@ -453,6 +453,16 @@ fn a_colour_only_image_inside_an_animation_keeps_its_own_rect() {
             height: Some(1.0),
             color: 0xff3a_bcf2,
             gradient: None,
+            reveal: vec![
+                RevealKey {
+                    time: 0.0,
+                    texture_width: -347.0,
+                },
+                RevealKey {
+                    time: 0.5,
+                    texture_width: 0.0,
+                },
+            ],
         }]
     );
     assert!(
@@ -493,6 +503,7 @@ fn an_animation_wrapped_fill_resolves_a_feglobals_colour() {
             height: Some(16.0),
             color: 0xffff_ffff,
             gradient: None,
+            reveal: Vec::new(),
         }]
     );
 }
@@ -531,6 +542,7 @@ fn collects_solid_colour_backdrops() {
             height: Some(272.0),
             color: 0xff00_0000,
             gradient: None,
+            reveal: Vec::new(),
         }]
     );
 }
@@ -834,4 +846,55 @@ fn reads_the_touch_front_ends_own_attributes() {
     assert_eq!(tick.string, None, "an empty `string` is no label");
     assert_eq!(tick.redirect.as_deref(), Some("newFEshell"));
     assert!(!tick.toggle);
+}
+
+/// [`interpolate_reveal`]'s own shape, off `Animation_InterpolateKeys`
+/// (`docs/ghidra/functions/psp-pure-eu/title-screen.md`): linear between the
+/// two keys bracketing `elapsed`, holding the boundary key's own value
+/// before the first and after the last, and `0.0` with no keys at all - the
+/// pre-existing "no `<Animation>` wraps this widget" case, unchanged.
+#[test]
+fn interpolate_reveal_holds_at_the_ends_and_is_linear_between_keys() {
+    let keys = [
+        RevealKey {
+            time: 0.0,
+            texture_width: -100.0,
+        },
+        RevealKey {
+            time: 0.63,
+            texture_width: -100.0,
+        },
+        RevealKey {
+            time: 0.65,
+            texture_width: 0.0,
+        },
+    ];
+    assert_eq!(
+        interpolate_reveal(&[], 0.0),
+        0.0,
+        "no keys: no widget wraps"
+    );
+    assert_eq!(
+        interpolate_reveal(&keys, -1.0),
+        -100.0,
+        "before the first key"
+    );
+    assert_eq!(interpolate_reveal(&keys, 0.0), -100.0, "at the first key");
+    assert_eq!(
+        interpolate_reveal(&keys, 0.3),
+        -100.0,
+        "the held middle span"
+    );
+    assert_eq!(
+        interpolate_reveal(&keys, 0.63),
+        -100.0,
+        "at the hold's own end"
+    );
+    assert_eq!(
+        interpolate_reveal(&keys, 0.64),
+        -50.0,
+        "halfway through the fast final transition"
+    );
+    assert_eq!(interpolate_reveal(&keys, 0.65), 0.0, "at the final key");
+    assert_eq!(interpolate_reveal(&keys, 10.0), 0.0, "after the final key");
 }
