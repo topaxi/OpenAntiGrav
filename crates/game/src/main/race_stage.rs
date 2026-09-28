@@ -464,6 +464,21 @@ impl RaceStage {
                     readout.zone_next_in = self
                         .scene
                         .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
+                    // Campaign Time Trial/Speed Lap only - see
+                    // `oag_game::hud::Readout::time_trial_pace`'s own doc for
+                    // why a non-campaign Time Trial is deliberately left
+                    // alone here.
+                    readout.time_trial_pace = self.campaign_cell.as_ref().and_then(|cell| {
+                        let elapsed_ticks = match cell.mode {
+                            oag_tables::race_campaign::Mode::TimeTrial => readout.race_ticks,
+                            oag_tables::race_campaign::Mode::SpeedLap => readout.lap_ticks,
+                            _ => return None,
+                        };
+                        Some(oag_game::hud::TimeTrialPace::from_elapsed(
+                            elapsed_ticks,
+                            cell,
+                        ))
+                    });
                     hud.draw(gpu.device(), gpu.queue(), encoder, view, &readout, viewport);
                     // The countdown, for exactly the measured start-line gate's
                     // span and no other window - see `oag_game::hud::countdown`

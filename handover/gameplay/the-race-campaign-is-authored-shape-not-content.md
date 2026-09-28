@@ -67,14 +67,22 @@ The law, all decompiled and all in `race-campaign.md`:
 
 ## Open
 
-- **The in-race HUD medal tier is still unread, and it is a different number
-  from the campaign's.** `hud.md`'s five-way caption table runs `0 = BRONZE` up
-  to `3 = RECORD`; `Cell_EvaluateMedal` runs `0 = gold` and has no `RECORD`
-  tier. The field is `*(hud + 0x3c) + 0x34`, cached against `hud + 0x190`,
-  siblings `+0x30` (target value) and `+0x38` (redden bool). Ruled out as its
-  writer: `Hud_BindWidgets`' `DAT_08b30ffc` reads at `0x088207d8`/`0x088207e4`,
-  `Eliminator_UpdateKillTarget`, `AI_ResolveSkillScale`. Confidence 50, not
-  renamed. This is the one item `hud.md` is still explicitly blocked on.
+- ~~The in-race HUD medal tier is still unread...~~ **Closed 2026-09-28.**
+  The writer is `PlayerStatus_Update` (`0x0883b3b8`), runtime-verified with a
+  PPSSPP write watchpoint (all four write PCs land inside it, across an
+  eight-second drive of a real Venom Time Trial). The field is genuinely a
+  different ordinal from `Cell_EvaluateMedal`'s, as suspected - `0 = BRONZE`
+  up to `3 = RECORD`, related to `Cell_EvaluateMedal`'s `0 = gold, 1 = silver,
+  2 = bronze` by exactly `2 - medal` on the three tiers they share - and it
+  is evaluated live, every tick, against the same cell's `gold`/`silver`/
+  `bronze` fields for a campaign Time Trial/Speed Lap cell, or against a
+  separate, still-unread per-track ghost/record store (`FUN_088091a0`)
+  otherwise, always showing `RECORD` on that second path. Wired into the HUD
+  for the campaign branch: `oag_game::hud::TimeTrialPace`. Full law:
+  [`docs/ghidra/functions/psp-pulse-usa/race-progress.md`](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28).
+  Still open, and out of this pass's scope: the non-campaign ghost/record
+  branch, which needs a split-time record store this project's own
+  `oag_game::records` has no equivalent of.
 - **`FUN_088085d0` and `FUN_08808624` are deliberately unnamed.** Ghidra
   recovers three parameters where every call site passes four; the fourth reads
   as create-if-missing but that is inference. Fixing the prototype in Ghidra and
@@ -311,10 +319,10 @@ The law, all decompiled and all in `race-campaign.md`:
   called by the newly-named `Libc_HashString` but not itself decompiled)
   would still be needed the day a save has to round-trip through the
   original's own format, which nothing in this project does.
-- **Close the HUD tier.** Find the writer of `*(hud + 0x3c) + 0x34` - the
-  in-race structure the HUD mirrors. Everything ruled out is listed above, so a
-  next pass starts from a shorter list. Closing it unblocks `hud.md`'s medal
-  target item, which has been blocked on RE since the HUD work.
+- ~~Close the HUD tier...~~ **Done, 2026-09-28** - see the `Open` entry
+  above. The next step this opens, if anyone picks it up: `FUN_088091a0`'s
+  own per-team, per-track split-time record store, for the non-campaign
+  `RECORD` branch this pass left unimplemented.
 - ~~Parse the grid files properly rather than by hand.~~ **Done, 2026-09-08.**
   `oag_tables::race_campaign` parses `PI_Grid`/`PI_Cell` off the existing
   `fexml` reader, `oag_pulse::campaign` carries the sixteen entry names, and

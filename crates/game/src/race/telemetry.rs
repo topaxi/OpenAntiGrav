@@ -171,6 +171,11 @@ impl Race {
             shield_blink_phase: self.view.shield_blink_timer,
             energy_bar_delay_fraction: self.view.energy_bar_delay_fraction,
             mode: self.sim.world.mode(),
+            // Not this struct's to know: it needs the campaign cell, which
+            // lives on `RaceStage`, one level up - `RaceStage::draw_hud`
+            // fills it in after this method returns, the same seam
+            // `zone_stage`/`zone_next_in` already use above.
+            time_trial_pace: None,
         }
     }
 

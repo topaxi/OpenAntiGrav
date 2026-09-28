@@ -197,10 +197,23 @@ pub(super) fn text_for(
         // The total time and its caption yield the top-right anchor to the
         // place only when the two actually coincide - see
         // [`place_owns_the_anchor`], `false` throughout on 2048.
-        "TotalTime" => {
-            (!place_shown).then(|| format_lap_time(readout.race_ticks, Precision::Tenths))
-        }
-        "TotalTimeTxt" => (!place_shown).then(|| caption(label, strings)).flatten(),
+        //
+        // **A campaign Time Trial/Speed Lap cell substitutes a countdown to
+        // the next medal for the plain elapsed clock** -
+        // [`Readout::time_trial_pace`], `Hud_UpdateTimeCluster_q`'s own law.
+        // `0` once [`super::TimeTrialPace::missed`], which is what a missed
+        // bronze target shows alongside `TotalTime`'s own reddened colour -
+        // see [`time_trial_colour`].
+        "TotalTime" => (!place_shown).then(|| match readout.time_trial_pace {
+            Some(pace) => format_lap_time(u64::from(pace.remaining_ticks), Precision::Tenths),
+            None => format_lap_time(readout.race_ticks, Precision::Tenths),
+        }),
+        "TotalTimeTxt" => (!place_shown)
+            .then(|| match readout.time_trial_pace {
+                Some(pace) => Some(super::time_trial_pace::medal_caption(pace.medal, strings)),
+                None => caption(label, strings),
+            })
+            .flatten(),
         // **Its own value, not `place_shown`**, which now answers "does the
         // place win a *shared* anchor" - a question about `TotalTime`, not
         // about whether `POS` itself has anything to show. A `POS` with
@@ -920,7 +933,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             // so it takes it unconverted rather than through `top_edge`.
             y: placed.map_or_else(|| top_edge(label, line_height), |(_, text)| text[1]),
             scale: label.scale,
-            color: super::runtime::colour(cx, readout, &label.name).unwrap_or(label.color),
+            color: super::time_trial_pace::time_trial_colour(readout, &label.name)
+                .or_else(|| super::runtime::colour(cx, readout, &label.name))
+                .unwrap_or(label.color),
             // The layout's own `BorderColor`, which is what makes the HUD fonts'
             // baked outline visible as an outline rather than as more glyph. The
             // 57 widgets that name none still get one - the original draws it -

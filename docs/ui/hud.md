@@ -520,7 +520,7 @@ reachable only from code. This build resolves the layout's own key and therefore
 shows `Total` where a time trial shows `Record`.
 
 **The rule behind this one pair is now read, confidence 84 for the mapping
-itself.** `Hud_UpdateTimeCluster_q` (`0x0881c9d0`) picks `TotalTimeTxt`'s caption
+itself.** `Hud_UpdateTimeCluster` (`0x0881c9d0`) picks `TotalTimeTxt`'s caption
 key from a five-way table keyed on an ordinal "tier" value, re-resolving the
 localised string only on a transition rather than every tick:
 
@@ -966,25 +966,9 @@ Recorded so none of this reads as undiscovered work.
   Unread on HD's own executable and undrawn here rather than forced onto the
   Pulse-shaped `"Zone"` match arm, which would be wrong for what this widget
   set actually is.
-- **Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need progression
-  data. The selection *mechanism* for these four against `TotalTimeTxt` is now
-  read - see the structural finding above and
-  [hud-time-caption-substitution.md](../ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md)
-  - what remains open is what feeds the ordinal tier that table switches on.
-  **The progression data itself now exists** - a campaign cell authors its
-  gold/silver/bronze targets and `Cell_EvaluateMedal` (`0x088bf620`) turns a
-  result into a tier, all in
-  [race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md). **That
-  is not this tier and does not close this item**: `Cell_EvaluateMedal` numbers
-  the tiers `0 = gold, 1 = silver, 2 = bronze` and has no `RECORD` tier at all,
-  while the table above runs `0 = BRONZE` up to `3 = RECORD`. Two different
-  ordinals. What the campaign pass did pin down for whoever picks this up: the
-  field is `*(hud + 0x3c) + 0x34`, cached against `hud + 0x190`; its siblings
-  are `+0x30` (the target value) and `+0x38` (a bool that reddens it); and its
-  writer is **not** `Hud_BindWidgets`' two `DAT_08b30ffc` reads at `0x088207d8`/
-  `0x088207e4` (a results-screen `sprintf` of the cell's gold target), not
-  `Eliminator_UpdateKillTarget` (`0x0882ce18`) and not `AI_ResolveSkillScale`
-  (`0x08834df4`). Still confidence 50, still deliberately not renamed.
+- ~~**Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need
+  progression data...~~ **Closed 2026-09-28** - see "Medal targets, closed
+  2026-09-28" below.
 - **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather
   than suspending it.
 - **26 unreferenced `Data\HUD\*.vex` models.** `Bar_1`, `Speed`, `Shield`, `Lap`,
@@ -995,6 +979,50 @@ Recorded so none of this reads as undiscovered work.
   `vex::CLASS_NAMES` does not know. A separate open thread; the 2D HUD is complete
   without them.
 - **Text outlines** (`BorderColor`) and **`CalcBlur`**.
+
+### Medal targets, closed 2026-09-28
+
+**The tier `TotalTimeTxt`'s caption table switches on is read, and it is
+honest against data this build already has.**
+[`hud-time-caption-substitution.md`](../ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md)
+found the selection *mechanism* first; what fed its ordinal tier stayed open
+until a PPSSPP write watchpoint on `*(hud+0x3c)+0x30/+0x34/+0x38` (armed live
+off `g_hud`, `0x08ab0838`) caught every write inside `PlayerStatus_Update`
+(`0x0883b3b8`), across an eight-second drive of a real Venom Time Trial on
+Talon's Junction, `pulse-psp-usa.chd`. Full law, the four write PCs and the
+two reference frames this closes on:
+[race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28).
+
+**It is a different tier from `Cell_EvaluateMedal`'s, as this section
+suspected, and the two are related by exactly `2 - medal`.**
+`Cell_EvaluateMedal` (`race-campaign.md`) numbers `0 = gold, 1 = silver,
+2 = bronze`, evaluated once, at the end of a race; `PlayerStatus_Update`'s
+own tier - `0 = BRONZE` up to `3 = RECORD`, matching this page's caption
+table - is evaluated **every tick**, live, against the *same* cell's
+`gold`/`silver`/`bronze` fields for a campaign Time Trial or Speed Lap cell,
+and against a separate, unread per-track ghost/record time store
+(`FUN_088091a0`) otherwise - always reading `RECORD` on that second path,
+which is what the frame `hud.md`'s own "structural finding" first noticed
+(`record` where the layout authors `Total`) turns out to be: a non-campaign
+Time Trial, comparing against the track's own best time rather than a
+medal at all.
+
+**Implemented for the campaign branch.**
+[`oag_game::hud::TimeTrialPace`](../../crates/game/src/hud/time_trial_pace.rs)
+reimplements the live ladder as a pure function of the elapsed tick count
+(`Race_ticks` for Time Trial, `lap_ticks` for Speed Lap) against
+`oag_tables::race_campaign::Cell::gold`/`silver`/`bronze` - already-parsed
+fields, no new RE needed to reach them. `RaceStage::draw_hud` computes it
+(the campaign cell lives on `RaceStage`, not on `Race`) and
+`oag_game::hud::draw`'s `TotalTime`/`TotalTimeTxt` arms substitute it for
+the plain elapsed clock and the layout's own caption whenever it is `Some`.
+**Not implemented, and not a gap in this pass**: the non-campaign
+`RECORD`-vs-ghost-time branch, `FUN_088091a0`'s own per-team, per-track
+split-time record store, which this project's `oag_game::records` has no
+equivalent of - a non-campaign Time Trial keeps drawing plain elapsed
+`TotalTime`, a known divergence now rather than an unexamined default. See
+`hud-time-caption-substitution.md`'s own "What this does and does not
+settle" for the same split.
 
 ## Lap counting was the one real blocker
 
