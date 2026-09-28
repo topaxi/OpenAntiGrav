@@ -61,6 +61,14 @@ use super::*;
 ///   restricted event's own track/mode/objective data too, which is not what
 ///   `load_event`'s contract has ever promised. See
 ///   `docs/formats/2048-campaign.md`.
+/// - **AI grid**: [`Options::grid_teams`] is always set from
+///   `oag_2048::campaign::craft::grid_craft`'s reading of the event's own
+///   `M_PGRIDSHIPMODELDATA`, per AI slot - overwriting the caller's, since
+///   this is the one field [`Options::opponent_teams`] itself never was: a
+///   pool `teams_for_slots` places, not a per-slot pick. An event that
+///   authors nothing here sets every entry `None`/leaves the list empty,
+///   which changes nothing at [`roster::grid`]'s own overlay - see that
+///   function's doc comment for the fallback.
 /// - Everything else on [`Options`] (source, DLC, difficulty, ...) is the
 ///   caller's, untouched.
 ///
@@ -145,6 +153,16 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     if let Some(forced) = &forced_craft {
         resolved.team = Some(forced.clone());
     }
+
+    // **Overrides the caller's own `opponent_teams` pool per AI slot**, on
+    // the same "authored data wins" footing as `forced_craft` above - see
+    // `race::Options::grid_teams`'s own doc comment and
+    // `oag_2048::campaign::craft::grid_craft`'s for what fraction of
+    // `SP.xml`'s events author this and how fully. A slot this does not
+    // resolve keeps `roster::grid`'s own fallback, so an event authoring
+    // fewer than all seven still gets the rest filled in rather than left
+    // empty.
+    resolved.grid_teams = oag_2048::campaign::craft::grid_craft(&doc, instance);
 
     let restriction = oag_2048::campaign::craft::restriction(instance);
     let restricted: Vec<&str> = ["combat", "agility", "speed", "prototype"]

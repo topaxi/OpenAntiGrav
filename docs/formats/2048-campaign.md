@@ -517,12 +517,45 @@ names but no prior pass had read at runtime:
   in-window refusal itself was verified through `oag-ui`'s own unit tests
   (`crates/ui/src/frontend/tests/wipeout2048.rs`) rather than a live capture.
 - **`M_PGRIDSHIPMODELDATA`** (capacity 7) sizes the AI grid explicitly on most
-  numbered events - a second, larger finding this pass surfaced but did not
-  wire: it would replace `oag_game::livery::teams_for_slots`' own "chosen, not
-  measured" grid assignment with authored data for every event that carries
-  it. Left as a next step. One event, `"Pirhana P Ship Challenge"`
-  (`RACE_A`, 2 laps), authors an **empty** grid alongside its forced player
-  craft - a solo or ghost run, not measured further this pass.
+  numbered events. **2026-09-28: wired.** `oag_2048::campaign::craft::grid_craft`
+  resolves the field slot-by-slot (not through `Field::references`, which
+  drops an unauthored slot's own position along with its empty value) onto
+  `race::Options::grid_teams`, a **per-slot** override
+  `crates/game/src/race/load/roster.rs::apply_grid_teams` overlays onto
+  `oag_game::livery::teams_for_slots`' own "chosen, not measured" placement -
+  slot by slot, not all-or-nothing: a slot this does not resolve (unauthored,
+  or a dangling `WOShipModelData` reference - neither observed on the real
+  file) keeps whatever `teams_for_slots` already gave it, and the loader's own
+  report (`"grid: N of 7 AI slot(s) authored by the event's own
+  M_PGRIDSHIPMODELDATA; ... left on the chosen, not measured, fallback"`)
+  says which. Measured directly against the real EU v1.04 file: 55 of
+  `SP.xml`'s 141 events author all 7 slots (every reference resolving to a
+  real craft), 2 more (`"2050 - Event 3-4"`/`"2050 - Event 6-4"`) author only
+  their own first slot, and 84 author no slot that resolves at all (most name
+  no `M_PGRIDSHIPMODELDATA` field whatsoever, and `grid_craft` returns `[]`
+  for those; one, `"Pirhana P Ship Challenge"` below, authors the field with
+  a single empty slot instead) - either shape changes nothing at the overlay.
+  Verified live: `--race --event "2048 - Event 6"` (all 7 slots authored)
+  reports `"grid: 7 of 7 AI slot(s) authored..."` and `"grid liveries:
+  feisar2048\3, Feisar2048\1, Feisar2048\1, Feisar2048\1, Auricom2048\1,
+  Auricom2048\1, AG_Systems2048\1, AG_Systems2048\1"` - three Feisar, two
+  Auricom, two AG_Systems, exactly `SP.xml`'s own authored roster; a
+  `--screenshot` of the same run shows `POS 1/8` and multiple opponent craft
+  on Mall's own grid. Pinned end to end by
+  `crates/game/tests/vita_2048_campaign_grid_ground_truth.rs` (disc-backed,
+  `#[ignore]`d) and by synthetic-fixture unit tests in
+  `crates/2048/src/campaign/tests.rs` and
+  `crates/game/src/race/load/roster.rs`. One event, `"Pirhana P Ship
+  Challenge"` (`RACE_A`, 2 laps), authors an **empty** grid alongside its
+  forced player craft - a solo or ghost run, not measured further this pass.
+  **Not the same shape as an unauthored field**: its own `M_PGRIDSHIPMODELDATA`
+  is present (`length="7"`) but carries a single `<ARRAY value=""/>` child, so
+  `grid_craft` returns `[None]` rather than `[]` - `apply_grid_teams` still
+  overrides nothing (a `None` never overwrites a slot), but the loader's own
+  report now names this event too (`"grid: 0 of 7 AI slot(s) authored..."`)
+  where a genuinely field-free event stays silent about the grid entirely.
+  The race itself plays exactly as it did before this pass either way, on
+  `teams_for_slots`' own fallback.
 
 This falsifies neither half of the user's own observation: the disc really
 does both force a specific craft on some events and restrict the category on
@@ -547,10 +580,15 @@ the five) needs playing through the campaign, out of this pass's scope.
 `race::load_event(options, event_name)` resolves `event_name` against
 `SP.xml`, overrides `options.track`/`class`/`mode`/`laps_override` on a clone
 of `options`, and calls the existing `race::load` unchanged. **A second entry
-point rather than a new `Options` field** - `Options` is built exhaustively
-(every field named, no `..Default::default()`) at dozens of call sites across
-this workspace, and a new required field would have touched every one of
-them. `oag-game`'s own `--event <NAME>` flag drives it through the one call
+point rather than a new required `Options` field for any of those** - most
+call sites across this workspace build `Options` through `..Options::default()`
+rather than exhaustively today, but a handful (measured 2026-09-28: one,
+`crates/game/src/main/prepare.rs`) still name every field, and a *required*
+new one would have touched every one of them for a feature only this
+campaign needs. `Options::grid_teams` (below) is the one field this pass did
+add - safe as an addition precisely because it defaults to "no override" and
+so only that one exhaustive call site needed a line naming it explicitly, not
+dozens. `oag-game`'s own `--event <NAME>` flag drives it through the one call
 site that runs `--race`'s headless load
 (`crates/game/src/main/headless.rs::run_race`).
 
@@ -608,8 +646,8 @@ package.
 - **The `M_X`/`M_Y` -> screen projection for a native event.** See
   [above](#what-m_xm_y-project-to-on-screen-is-not-in-spxml-and-is-left-open).
 - **`MP.xml`'s season/level ladder.** See [above](#dataxmlmpxml-is-not-spxmls-schema).
-- **`M_PGRIDSHIPMODELDATA`'s own authored grid, against `teams_for_slots`.**
-  See "Craft choice" above - not wired into the AI grid assignment this pass.
+- **2026-09-28: closed** - `M_PGRIDSHIPMODELDATA` is wired into the AI grid
+  assignment. See "Craft choice" above.
 
 ## See also
 

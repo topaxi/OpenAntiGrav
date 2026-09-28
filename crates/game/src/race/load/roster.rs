@@ -109,6 +109,39 @@ pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHI
     })
 }
 
+/// Overlays [`crate::race::Options::grid_teams`] onto `slot_teams` - the
+/// disc's own authored AI grid, where an event carries one, in place of
+/// [`crate::livery::teams_for_slots`]'s "chosen, not measured" placement.
+///
+/// **Per-slot, not all-or-nothing.** `grid_teams[i]` is grid slot `i + 1`
+/// (slot `0` stays the player's, always); a `None` entry, or an index past
+/// what `grid_teams` carries, leaves that one slot exactly what
+/// `teams_for_slots` already gave it - so an event that authors only some
+/// of its seven slots (measured: two of `SP.xml`'s own events author only
+/// their first) overrides only those, and the fallback still answers for
+/// the rest, labelled here rather than left to look like measured data.
+fn apply_grid_teams(slot_teams: &mut [String], grid_teams: &[Option<String>], report: &mut Vec<String>) {
+    if grid_teams.is_empty() {
+        return;
+    }
+    let ai_slots = oag_gameplay::MAX_SHIPS - 1; // slot 0 is always the player's own.
+    let mut overridden = 0usize;
+    for (offset, over) in grid_teams.iter().enumerate() {
+        let slot = offset + 1;
+        let Some(team_id) = over else { continue };
+        let Some(dest) = slot_teams.get_mut(slot) else {
+            continue;
+        };
+        *dest = team_id.clone();
+        overridden += 1;
+    }
+    report.push(format!(
+        "grid: {overridden} of {ai_slots} AI slot(s) authored by the event's own \
+         M_PGRIDSHIPMODELDATA; {} left on the chosen, not measured, fallback",
+        ai_slots - overridden,
+    ));
+}
+
 /// Everything the grid's own slot list decides: who flies where, what each
 /// one draws, and HD's per-slot trail flag.
 pub(super) struct Grid {
@@ -160,7 +193,8 @@ pub(super) fn grid(
         options.mode,
         report,
     );
-    let slot_teams = crate::livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS);
+    let mut slot_teams = crate::livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS);
+    apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
     let liveries = crate::livery::load(
         archives,
         &slot_teams,
@@ -186,4 +220,72 @@ pub(super) fn grid(
         slot_teams,
         liveries,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_grid_teams;
+
+    fn slots(teams: &[&str]) -> Vec<String> {
+        teams.iter().map(|t| (*t).to_string()).collect()
+    }
+
+    #[test]
+    fn empty_grid_teams_changes_nothing() {
+        let mut slot_teams = slots(&["a", "b", "c"]);
+        let mut report = Vec::new();
+        apply_grid_teams(&mut slot_teams, &[], &mut report);
+        assert_eq!(slot_teams, slots(&["a", "b", "c"]));
+        assert!(report.is_empty(), "no line when there is nothing to say");
+    }
+
+    /// The full-grid case: every AI slot (index 0 of `grid_teams` is grid
+    /// slot 1 - slot 0 is always the player) gets overwritten, in order.
+    #[test]
+    fn every_authored_slot_overrides_its_own_ai_slot() {
+        let mut slot_teams = slots(&["player", "x", "x", "x", "x", "x", "x", "x"]);
+        let grid_teams = vec![
+            Some("Feisar2048\\1".to_string()),
+            Some("Qirex2048\\2".to_string()),
+            Some("Feisar2048\\1".to_string()),
+            Some("Qirex2048\\2".to_string()),
+            Some("Feisar2048\\1".to_string()),
+            Some("Qirex2048\\2".to_string()),
+            Some("Feisar2048\\1".to_string()),
+        ];
+        let mut report = Vec::new();
+        apply_grid_teams(&mut slot_teams, &grid_teams, &mut report);
+        assert_eq!(
+            slot_teams,
+            slots(&[
+                "player",
+                "Feisar2048\\1",
+                "Qirex2048\\2",
+                "Feisar2048\\1",
+                "Qirex2048\\2",
+                "Feisar2048\\1",
+                "Qirex2048\\2",
+                "Feisar2048\\1",
+            ])
+        );
+        assert!(report[0].contains("7 of 7"));
+    }
+
+    /// A `None` slot, and a slot the caller's `grid_teams` does not reach at
+    /// all, both keep whatever `teams_for_slots` already placed there -
+    /// never overwritten with anything invented.
+    #[test]
+    fn unresolved_and_unauthored_slots_keep_the_fallback() {
+        let mut slot_teams = slots(&["player", "fallback-1", "fallback-2", "fallback-3"]);
+        let grid_teams = vec![None, Some("Qirex2048\\2".to_string())];
+        let mut report = Vec::new();
+        apply_grid_teams(&mut slot_teams, &grid_teams, &mut report);
+        assert_eq!(
+            slot_teams,
+            slots(&["player", "fallback-1", "Qirex2048\\2", "fallback-3"]),
+            "slot 1 stayed on the fallback (None), slot 2 was overridden, \
+             slot 3 was never named by grid_teams at all"
+        );
+        assert!(report[0].contains("1 of 7"), "{}", report[0]);
+    }
 }
