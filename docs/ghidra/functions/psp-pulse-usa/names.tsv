@@ -1114,3 +1114,6 @@
 0x088f8ec0	function	ParticleSystem_EvalChannel	85	particle-system.md
 0x088f3b68	function	ParticleSystem_PrepareResource	65	particle-system.md
 0x088920fc	function	Widget_CreateFromElement	72	race-box-screens.md
+0x0888d8e4	function	Widget_UpdateTransitionFraction	80	race-box-screens.md
+0x0889050c	function	Widget_SubtreeTransitionFraction	75	race-box-screens.md
+0x08890358	function	Widget_DestroyIfTransitionSettled	72	race-box-screens.md
