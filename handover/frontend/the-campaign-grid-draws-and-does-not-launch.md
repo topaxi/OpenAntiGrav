@@ -1,5 +1,67 @@
 # The campaign grid draws and does not launch
 
+**Update, 2026-09-28, `pulse-cellsel` lane: the two live capture findings
+below settled, plus a full decompile of the medal/difficulty write this
+thread's own item 1/2 needed.** `Race_RecordResult`'s own `record+8`/
+`record+9` tail, `Profile_DifficultyRC`/`Profile_SetDifficultyRC`
+(`0x08809980`/`0x088098f0`, renamed and named this pass) and
+`CellSelection_Update` (`0x088d6430`, decompiled and named this pass) are
+all now read in full - see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+"The `record+8`/`record+9` write" and "The `DifficultyRC` persisted rung"
+sections for the decompile itself.
+
+1. **Fixed: the medal now remembers its difficulty, on every title.**
+   `Session::handle_campaign` (`crates/game/src/main/session/campaign.rs`)
+   used to gate recording a difficulty on `cell.difficulty_targets.is_some()`
+   - `None` for every Pulse cell by construction, since a Pulse cell's own
+   medal never varies by difficulty. The decompile shows the original does
+   not gate on that at all: `CellSelection_CommitSelection` persists the
+   screen's own browsed rung on every `Confirm`, on every cell, as metadata
+   alongside whichever medal the race earns. The gate is gone;
+   `oag_game::records::Store::record_campaign`'s own tie-break logic is
+   rewritten to match the decompile exactly (a strict medal improvement
+   overwrites the stored difficulty unconditionally, even *downward* - the
+   previous "harder rung always wins outright" implementation was wrong on
+   this branch, right only on an exact-tie branch); and
+   `oag_ui::campaign::draw::medal_line` now appends `"(<rung>)"` to `Line7`
+   exactly the way `CellSelection_PopulateDetail`'s own `"%s (%s)"` format
+   does, `"Gold (Medium)"` rather than a bare medal word. Verified by new
+   unit tests (`crates/game/src/records/tests.rs`,
+   `crates/ui/src/campaign/draw/tests.rs`) reproducing the decompiled
+   branches directly, and a live `--menu-page cell-select` capture of a
+   worktree-local `records.toml` row predating this fix (`Best: Gold`, no
+   suffix - correct, since that row's own `best_difficulty` is `None`).
+   **Not verified this pass**: a full interactive Confirm -> race -> finish
+   -> re-entry loop producing a *new* difficulty-tagged medal live - the
+   write path is unit-tested against the decompile directly rather than
+   played end to end.
+2. **Fixed: the square-button prompt now reads the runtime template, not
+   the disc's authored `"Change Difficulty"`.** `CellSelection_Update`
+   rebuilds `DifficultyButton`'s text every frame,
+   `sprintf("%s (%s)", resolve("RB_AI_DIF"), resolve(rung))` off the
+   screen's own browsed rung (`Easy`/`Medium`/`Hard`, bare idstrings, no
+   `MSC_`/`FE_` prefix) - `oag_ui::campaign::draw::difficulty_button_line`
+   reproduces it. Verified against `data/reference/psp-campaign-screens/
+   cell-selection-difficulty-hard.png` (`"AI difficulty (Hard)"`) and a live
+   `--menu-page cell-select` capture of this build reading `"AI difficulty
+   (Medium)"` at its own measured default rung. **HD's own analogous
+   `"DIFFICULTY (<rung>)"` mismatch is a related but not identical gap, not
+   touched this pass** - see `docs/ui/campaign-screens.md`'s own note on why
+   the two titles' wording differs on every axis (label text, rung-word
+   idstrings, default rung).
+3. **Refined again, still open: `SelectorGlow` is confirmed absent from
+   both files this screen is built from, not merely unreferenced in code.**
+   `oag-wad cat --expand` on `Data.wad`'s own `CellMode_Definition.xml` and
+   `Skin.xml` - the two files `crate::campaign::load` reads, in full -
+   contain the literal string `"SelectorGlow"` zero times. The burst's own
+   visible halo (still real, still phase-correlated, per the prior pass) has
+   to come from somewhere this pass did not chase - a blend-mode effect on
+   `Selector`'s own already-implemented colour pulse is the next lead, not a
+   decided explanation. Left undrawn, per this project's own rule against a
+   stand-in shape with no located geometry. See
+   `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s own section for
+   the full extraction detail.
+
 **Update, 2026-09-28, `pulse-campaign` lane: the first live PPSSPP capture of
 this leg, and four of the open items above/below settled by it - two closed,
 one refined, one found new.** Walked `Main Menu` -> `Grid Selection` ->
@@ -294,13 +356,16 @@ read), `crates/game/src/main/campaign_stage.rs` and
   confirmed names" claim was stale against the code the day it was written.
   Confirmed against a fresh live PPSSPP capture, not just static reading -
   see this file's own 2026-09-28 update paragraph above.
-- **`SelectorGlow` is not drawn - refined, not closed, `pulse-campaign`
-  lane, 2026-09-28.** An eight-frame burst confirms a real, phase-synced
-  halo the sprite's own zero-alpha padding cannot explain by itself, but
-  still no located creation site (`get_xrefs_to` on the string: one hit,
-  the lookup itself). See this file's own 2026-09-28 update paragraph
-  above and `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
-  matching section.
+- **`SelectorGlow` is not drawn - refined twice, still open,
+  `pulse-cellsel` lane, 2026-09-28.** An eight-frame burst confirms a real,
+  phase-synced halo the sprite's own zero-alpha padding cannot explain by
+  itself; direct extraction of `CellMode_Definition.xml` and `Skin.xml`
+  (`oag-wad cat --expand`) now confirms the literal string `"SelectorGlow"`
+  appears in neither file at all, so the lookup's own null-guard always
+  fails here and this is dead code for Race Campaign, not an unlocated but
+  real widget. See this file's own 2026-09-28 update paragraph above and
+  `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s matching
+  section.
 - ~~The detail panel's `default`-role text may be undersized.~~ **Fixed,
   `pulse-campaign` lane, 2026-09-28** - a real bug, not too broad a
   constant to touch: `crates/ui/src/campaign.rs`'s own `Layout::face_scale`
@@ -451,12 +516,10 @@ read), `crates/game/src/main/campaign_stage.rs` and
   through it. See `docs/ui/campaign-screens.md`'s own "upper-case label
   note", confirmed still fixed by this pass's own fresh
   `--menu-page grid-select` capture.
-- **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** - a pre-existing
-  label (`DifficultyButton`'s own `string="Change Difficulty"`, predating
-  this lane) rather than the original's own template showing the current
-  rung. Left as-is on the team lead's own instruction pending the atlas fix
-  above, which would make the original's own wording legible in the first
-  place.
+- ~~`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`~~ - **fixed,
+  `pulse-cellsel` lane, 2026-09-28.** `oag_ui::campaign::draw::difficulty_button_line`
+  reproduces `CellSelection_Update`'s own runtime template - see this
+  file's own 2026-09-28 update paragraph above.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

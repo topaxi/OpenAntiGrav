@@ -402,26 +402,30 @@ pub struct CellSelection {
     /// own construction of the closure.
     records: Vec<Option<i64>>,
     /// Parallel to [`Self::cells`] - `difficulties[i]` is `cells[i]`'s own
-    /// medal's earned [`Difficulty`]. **HD only**, and only ever set via
-    /// [`Self::with_difficulty`] - `None` for every cell on a build that
-    /// never calls it (every Pulse construction site), and for any HD cell
-    /// whose saved medal predates
-    /// `oag_game::records::CampaignRecord::best_difficulty` existing at
-    /// all. See [`Self::difficulty_at`]'s own doc for how a caller reads
-    /// this.
+    /// medal's earned [`Difficulty`], only ever set via
+    /// [`Self::with_difficulty`] - `None` for any cell whose saved medal
+    /// predates `oag_game::records::CampaignRecord::best_difficulty`
+    /// existing at all (every pre-2026-09-28 row, on any title). See
+    /// [`Self::difficulty_at`]/[`Self::selected_difficulty`]'s own docs for
+    /// how a caller reads this.
     difficulties: Vec<Option<Difficulty>>,
     index: usize,
     help_open: bool,
-    /// **HD only.** Which of [`Cell::targets_for_difficulty`]'s three rungs
-    /// HD's own `DifficultyButton` widget currently shows -
-    /// `docs/ui/campaign-screens.md`'s HD section: the target row is "three
-    /// wide, not nine", one triple on screen at a time. Starts at
-    /// [`Difficulty::Medium`], the rung [`Cell::gold`]/[`silver`]/[`bronze`]
-    /// themselves already mean on a cell with no [`Cell::difficulty_targets`]
-    /// at all - so a Pulse cell, which never authors one, draws identically
-    /// whatever this holds. Never read by
-    /// [`draw::grid_draw_list`]/[`cell_draw_list`], only by
-    /// [`crate::campaign::hd`]'s own draw.
+    /// The rung the `DifficultyButton` widget's square-button prompt
+    /// currently shows (built by [`draw::cell_draw_list`]), and what
+    /// `crate::main::session::campaign` (`oag_game`) records alongside a
+    /// confirmed cell's own medal on every title - see
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+    /// `DifficultyRC` persisted rung" section. On HD it also selects which
+    /// of [`Cell::targets_for_difficulty`]'s three rungs the target row
+    /// shows (`docs/ui/campaign-screens.md`'s HD section: "three wide, not
+    /// nine", one triple on screen at a time); on Pulse, whose cells never
+    /// author [`Cell::difficulty_targets`], the target row draws identically
+    /// whatever this holds. Starts at [`Difficulty::Medium`] - the
+    /// original's own fresh-profile default (`Profile_SetDifficultyRC(profile,
+    /// 1)`, the same section above). Read by [`crate::campaign::hd`]'s own
+    /// draw and by [`draw::cell_draw_list`]'s `DifficultyButton` text, never
+    /// by [`draw::grid_draw_list`].
     difficulty: Difficulty,
 }
 
@@ -490,14 +494,12 @@ impl CellSelection {
         }
     }
 
-    /// **HD only.** Attaches each cell's own earned medal difficulty
-    /// alongside [`Self::medals`] - see [`Self::difficulty_at`]. A separate
-    /// builder rather than a fourth closure on
-    /// [`Self::with_medals_and_records`]: every Pulse call site would have
-    /// to pass `&|_| None` for a rung that field never has, the same reason
-    /// [`Self::difficulty`] itself (a different, browsed-not-earned
-    /// difficulty) is a plain field rather than threaded through the
-    /// constructor.
+    /// Attaches each cell's own earned medal difficulty alongside
+    /// [`Self::medals`] - see [`Self::difficulty_at`]/[`Self::selected_difficulty`].
+    /// A separate builder rather than a fourth closure on
+    /// [`Self::with_medals_and_records`]: [`Self::difficulty`] itself (a
+    /// different, browsed-not-earned difficulty) is a plain field rather
+    /// than threaded through the constructor either, for the same reason.
     #[must_use]
     pub fn with_difficulty(mut self, difficulty_of: &dyn Fn(&str) -> Option<Difficulty>) -> Self {
         self.difficulties = self
@@ -508,21 +510,23 @@ impl CellSelection {
         self
     }
 
-    /// **HD only.** The rung [`Self::difficulty`] currently holds - see that
-    /// field's own doc.
+    /// The rung [`Self::difficulty`] currently holds - see that field's own
+    /// doc.
     #[must_use]
     pub fn difficulty(&self) -> Difficulty {
         self.difficulty
     }
 
-    /// **HD only.** Steps [`Self::difficulty`] to the next rung, wrapping
-    /// `easy -> medium -> hard -> easy` ([`Difficulty::next`]). Always
-    /// available, even on a cell with no [`Cell::difficulty_targets`] -
-    /// `DifficultyButton` is authored unconditionally on HD's own screen
-    /// (see `docs/ui/campaign-screens.md`'s HD section), and stepping it
-    /// there is inert rather than refused, since
-    /// [`Cell::targets_for_difficulty`] already falls back to the one
-    /// triple such a cell has regardless of which rung is asked for.
+    /// Steps [`Self::difficulty`] to the next rung, wrapping `easy -> medium
+    /// -> hard -> easy` ([`Difficulty::next`]) - `CellSelection_Update`'s own
+    /// `(+0xf0 + 1) % 3` on a `Square` press, on both titles
+    /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+    /// `DifficultyRC` persisted rung" section). Always available, even on a
+    /// cell with no [`Cell::difficulty_targets`] - `DifficultyButton` is
+    /// authored unconditionally on both titles' own screens, and stepping it
+    /// there is inert rather than refused on HD, since
+    /// [`Cell::targets_for_difficulty`] already falls back to the one triple
+    /// such a cell has regardless of which rung is asked for.
     pub fn cycle_difficulty(&mut self) {
         self.difficulty = self.difficulty.next();
     }
@@ -564,6 +568,20 @@ impl CellSelection {
         self.records.get(self.index).copied().flatten()
     }
 
+    /// [`Self::selected_medal`]'s own earned [`Difficulty`] - `Line7`'s
+    /// suffix (`CellSelection_PopulateDetail`, `"Gold (Medium)"` rather than
+    /// a bare medal word). `None` on a cell with no medal, and on any row
+    /// [`Self::with_difficulty`]'s own closure answered `None` for. Not
+    /// title-gated: `oag_game::records::Store::record_campaign` now writes
+    /// [`CampaignRecord::best_difficulty`] on every title, matching
+    /// `Race_RecordResult`'s own unconditional write. See
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+    /// `DifficultyRC` persisted rung" section.
+    #[must_use]
+    pub fn selected_difficulty(&self) -> Option<Difficulty> {
+        self.difficulties.get(self.index).copied().flatten()
+    }
+
     #[must_use]
     pub fn help_open(&self) -> bool {
         self.help_open
@@ -585,14 +603,16 @@ impl CellSelection {
             .and_then(|(_, medal)| *medal)
     }
 
-    /// **HD only.** [`Self::medal_at`]'s own cell's earned [`Difficulty`],
-    /// only meaningful once [`Self::with_difficulty`] has been called -
-    /// `None` on every Pulse build (that constructor is never reached
-    /// there) and on any cell [`Self::with_difficulty`]'s own closure
-    /// answered `None` for, unlike-or-not it has a medal at all. A caller
+    /// [`Self::medal_at`]'s own cell's earned [`Difficulty`], by hex
+    /// position - `None` on any cell [`Self::with_difficulty`]'s own closure
+    /// answered `None` for, whether or not it has a medal at all. Consumed
+    /// only by [`crate::campaign::hd`]'s own medal-icon draw today (a caller
     /// drawing a medal icon with no difficulty to key on picks its own
     /// fallback - see `oag_ui::campaign::hd::hd_medal_frame`'s own doc for
-    /// what it uses.
+    /// what it uses); Pulse's own equivalent is
+    /// [`Self::selected_difficulty`], keyed by the current selection rather
+    /// than a hex position, since Pulse never draws more than one cell's own
+    /// difficulty suffix at a time (`Line7`, not a hex icon).
     #[must_use]
     pub fn difficulty_at(&self, x: u32, y: u32) -> Option<Difficulty> {
         self.cells

@@ -640,85 +640,103 @@ fn a_campaign_cells_medal_is_never_downgraded_and_round_trips() {
     assert_eq!(parsed.campaign_rows(), store.campaign_rows());
 }
 
-/// **Wipeout HD/Fury only.** [`Store::record_campaign`]'s own difficulty
-/// tie-break: a harder rung wins outright even against a better medal at an
-/// easier one, and a tie in rung falls back to [`Medal::better`] exactly as
-/// it did before this field existed. See that function's own doc for the
-/// reasoning this is chosen, not measured, from.
+/// [`Store::record_campaign`]'s own difficulty write, matching
+/// `Race_RecordResult`'s own `record+8`/`record+9` tail decompiled in full
+/// 2026-09-28 (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
+/// `record+8`/`record+9` write" section): a strict medal improvement
+/// overwrites the stored difficulty unconditionally, even *down* to an
+/// easier rung than what was stored; a worse medal never applies at all,
+/// regardless of difficulty; and only an exact tie in medal tier compares
+/// difficulty, and even then only ever raises it. Not title-gated - this is
+/// Pulse's own measured mechanism, generalised to every title the same way
+/// the pre-2026-09-28 "harder wins outright" guess was, but now resting on a
+/// decompile rather than an inference from HD's migration routine.
 #[test]
-fn a_harder_difficulty_wins_outright_even_with_a_worse_medal() {
+fn a_strict_medal_improvement_overwrites_difficulty_even_downward() {
     let mut store = Store::default();
     store.record_campaign(
-        "wipeout hd",
-        "grid8_2_1",
-        Some(Medal::Gold),
-        Some(Difficulty::Easy),
-    );
-    // A bronze at Hard still replaces the standing gold at Easy.
-    store.record_campaign(
-        "wipeout hd",
-        "grid8_2_1",
+        "wipeout pulse",
+        "grid0_2_1",
         Some(Medal::Bronze),
         Some(Difficulty::Hard),
     );
-    let row = store
-        .campaign_medal("wipeout hd", "grid8_2_1")
-        .expect("just recorded");
-    assert_eq!(row.best_medal, Some(Medal::Bronze));
-    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
-
-    // A gold at Medium does not unseat the bronze at Hard - Hard still wins.
+    // Silver beats the standing bronze outright - the difficulty stamped is
+    // simply whatever this run was played at, `Easy`, even though that is
+    // *easier* than the `Hard` it replaces.
     store.record_campaign(
-        "wipeout hd",
-        "grid8_2_1",
-        Some(Medal::Gold),
-        Some(Difficulty::Medium),
+        "wipeout pulse",
+        "grid0_2_1",
+        Some(Medal::Silver),
+        Some(Difficulty::Easy),
     );
     let row = store
-        .campaign_medal("wipeout hd", "grid8_2_1")
+        .campaign_medal("wipeout pulse", "grid0_2_1")
         .expect("just recorded");
-    assert_eq!(row.best_medal, Some(Medal::Bronze));
-    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
+    assert_eq!(row.best_medal, Some(Medal::Silver));
+    assert_eq!(row.best_difficulty, Some(Difficulty::Easy));
+}
 
-    // A silver also at Hard is a same-rung tie, so `Medal::better` decides -
-    // silver *does* beat the standing bronze there (a better medal at the
-    // same difficulty).
+/// The one branch `Race_RecordResult` does compare difficulty in: an exact
+/// tie in medal tier only ever *raises* the stored rung, never lowers it.
+#[test]
+fn a_tied_medal_only_ever_raises_the_stored_difficulty() {
+    let mut store = Store::default();
     store.record_campaign(
-        "wipeout hd",
-        "grid8_2_1",
+        "wipeout pulse",
+        "grid0_2_1",
+        Some(Medal::Silver),
+        Some(Difficulty::Easy),
+    );
+    // Silver again, now at Hard - a tie in medal, so the harder rung wins.
+    store.record_campaign(
+        "wipeout pulse",
+        "grid0_2_1",
         Some(Medal::Silver),
         Some(Difficulty::Hard),
     );
     let row = store
-        .campaign_medal("wipeout hd", "grid8_2_1")
+        .campaign_medal("wipeout pulse", "grid0_2_1")
         .expect("just recorded");
     assert_eq!(row.best_medal, Some(Medal::Silver));
+    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
 
-    // A bronze, back at Hard, does not downgrade the standing silver - the
-    // same-rung tie-break is still `Medal::better`, never a plain overwrite.
+    // Silver again, at Easy - still a tie in medal, but Easy does not beat
+    // the stored Hard, so the difficulty stays put.
     store.record_campaign(
-        "wipeout hd",
-        "grid8_2_1",
+        "wipeout pulse",
+        "grid0_2_1",
+        Some(Medal::Silver),
+        Some(Difficulty::Easy),
+    );
+    let row = store
+        .campaign_medal("wipeout pulse", "grid0_2_1")
+        .expect("just recorded");
+    assert_eq!(row.best_medal, Some(Medal::Silver));
+    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
+}
+
+/// A worse medal never applies at all - `best_medal`/`best_difficulty` both
+/// stay put, regardless of what difficulty the worse run was played at.
+#[test]
+fn a_worse_medal_never_applies_regardless_of_its_own_difficulty() {
+    let mut store = Store::default();
+    store.record_campaign(
+        "wipeout pulse",
+        "grid0_2_1",
+        Some(Medal::Gold),
+        Some(Difficulty::Easy),
+    );
+    store.record_campaign(
+        "wipeout pulse",
+        "grid0_2_1",
         Some(Medal::Bronze),
         Some(Difficulty::Hard),
     );
     let row = store
-        .campaign_medal("wipeout hd", "grid8_2_1")
-        .expect("just recorded");
-    assert_eq!(row.best_medal, Some(Medal::Silver));
-
-    // A gold, still at Hard, does win on the same tie-break.
-    store.record_campaign(
-        "wipeout hd",
-        "grid8_2_1",
-        Some(Medal::Gold),
-        Some(Difficulty::Hard),
-    );
-    let row = store
-        .campaign_medal("wipeout hd", "grid8_2_1")
+        .campaign_medal("wipeout pulse", "grid0_2_1")
         .expect("just recorded");
     assert_eq!(row.best_medal, Some(Medal::Gold));
-    assert_eq!(row.best_difficulty, Some(Difficulty::Hard));
+    assert_eq!(row.best_difficulty, Some(Difficulty::Easy));
 }
 
 /// A stored row with no [`CampaignRecord::best_difficulty`] at all (every

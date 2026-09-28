@@ -229,21 +229,18 @@ impl Session {
                                 .map_or_else(|| "no cell".to_string(), |cell| cell.name.clone())
                         );
                     } else {
-                        let difficulty = model.difficulty();
                         confirmed_cell = model.selected().cloned();
-                        // Only recorded for a cell that actually authors a
-                        // difficulty rung - `None` for every Pulse cell and
-                        // every flat-schema HD cell alike, the same cells
-                        // `Cell::targets_for_difficulty` itself answers
-                        // identically for any rung asked. Recording a rung
-                        // that changed nothing about the race just played
-                        // would misrepresent `CellSelection::difficulty`'s
-                        // own screen-local default as a real game mechanic
-                        // on a cell that has none.
-                        confirmed_difficulty = confirmed_cell
-                            .as_ref()
-                            .filter(|cell| cell.difficulty_targets.is_some())
-                            .map(|_| difficulty);
+                        // Recorded for every cell, not only one whose own
+                        // `difficulty_targets` vary the medal. Pulse's own
+                        // `CellSelection_CommitSelection` (`0x088d6138`)
+                        // unconditionally persists the screen's own browsed
+                        // rung on every Confirm, on every cell - the rung
+                        // played at is metadata banked alongside the medal
+                        // (`Cell_SavedDifficulty`), never a gate on which
+                        // medal is earned. See
+                        // `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+                        // "The `DifficultyRC` persisted rung" section.
+                        confirmed_difficulty = confirmed_cell.as_ref().map(|_| model.difficulty());
                     }
                 }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
