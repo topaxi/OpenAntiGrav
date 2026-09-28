@@ -137,9 +137,36 @@ the capture-read orbit in `oag_game::preview::orbit_for`, because turning
 those numbers into a camera needs the `Mode3D` projection understood
 first. Open, below.
 
-**The cards slide in on the original and appear here.** Every `LeftLayer`
-on the screen carries a `transition`, and the second capture shows a card
-mid-arrival; nothing here reads that attribute yet. Open, below.
+**The cards fade in on the original, and now here too.** Every `LeftLayer`
+on the screen carries a `transition` - a fade-in/fade-out duration in
+seconds, on the generic widget class every XML element goes through
+(`Widget_CreateFromElement`,
+[race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#leftlayers-own-transition-attribute-is-a-fade-duration)),
+not a slide or a scale as the earlier reading of "the second capture shows a
+card mid-arrival" left open. Confirmed against a live capture: the panel
+(`transition="0.5"`) and the hexagonal window's own first card are both
+faint at 130ms into `Track Creation` and settled by 320-480ms, while the
+title bar's own `transition="0"` group is solid from the first frame.
+
+Read into `Text`/`Image`/`Fill::transition` by `oag_ui::screen`'s
+`LeftLayer` container (inherited by everything nested under it, the same
+way `OffsetX`/`OffsetY` already thread down) and applied in
+`oag_ui::picker::body` as a linear alpha ramp against
+`Picker::seconds()` - **the ramp's own shape is chosen, not measured**: a
+capture a tenth of a second apart cannot tell linear from eased. The
+hexagonal window's own stills author no `transition` of their own (the
+per-circuit `screen.xml` has no `LeftLayer`), so their fade
+(`oag_game::preview::CARD_FADE_SECONDS`) reuses the panel's own measured
+`0.5`s against `Picker::since_selection()` rather than inventing an
+unrelated number - it restarts with the slideshow itself, on every
+selection, matching "the slideshow restarts on every selection" above.
+
+**Verify with `--menu-page track-select`/`ship-select --menu-picker-seconds
+<seconds>`** - `--ticks` and `--menu-anim-phase` both reach no clock this
+screen runs (see the CLI flag's own docs), so this is what stands in for
+"play it and watch": `0.0` is the instant the screen opens, and it is
+settled by `0.5`. The flag omitted draws it settled, so no still capture
+this build already had changes appearance.
 
 ### What this build draws differently, and why
 
@@ -256,8 +283,15 @@ keeps all three rows and launches from `START` as before.
 
 ## Open
 
-- The cards' arrival transition, and the `Mode3D` pose of the outline -
-  both authored in the circuit's `screen.xml` and read, neither acted on.
+- ~~The cards' arrival transition, and the `Mode3D` pose of the outline -
+  both authored in the circuit's `screen.xml` and read, neither acted
+  on.~~ **2026-09-28: the transition half is closed** - see "The cards fade
+  in on the original, and now here too" above and
+  [race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#leftlayers-own-transition-attribute-is-a-fade-duration).
+  **The `Mode3D` pose stays open**: the outline is still framed by the
+  capture-read orbit in `oag_game::preview::orbit_for`, because turning
+  those numbers into a camera needs the `Mode3D` projection understood
+  first (`OriginX`/`OriginY` are in an unmeasured space).
 - ~~The PS2 screens are captured headlessly against the PSP's live capture
   only: no PCSX2 walk of the PS2's own race box exists yet~~ **2026-09-27:
   walked.** `pulse-ps2-eu.chd` on PCSX2 (`SCES-54748`), `RACEBOX` -> `TRACK

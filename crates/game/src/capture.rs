@@ -125,6 +125,11 @@ pub struct Options {
     ///
     /// See the CLI flag's own docs for why a still needs this at all.
     pub menu_anim_phase: Option<f32>,
+    /// With `--menu-page track-select`/`ship-select`, seconds since the
+    /// screen opened - `None` draws it settled. See the CLI flag's own docs;
+    /// `--menu-anim-phase`'s equivalent for the race box's own two screens,
+    /// which are not `assets/ui/menu.toml` pages and so do not reach it.
+    pub menu_picker_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -580,6 +585,7 @@ pub fn run(
                     frontend.screens(),
                     &strings,
                     &mut sprites,
+                    options.menu_picker_seconds,
                 );
                 let (mut list, request) = picker_page(
                     kind,
@@ -595,6 +601,7 @@ pub fn run(
                     &sprites,
                     &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                     distance,
+                    options.menu_picker_seconds,
                 );
                 list.extend(stills);
                 // A title that previews with stills alone has no mesh to

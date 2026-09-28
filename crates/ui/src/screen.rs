@@ -88,6 +88,18 @@ pub struct Text {
     /// `delay` is parsed and otherwise unused, the same trade `Image::auto_load`
     /// already makes for a flag this crate reads but does not yet act on.
     pub delay: f32,
+    /// Seconds the widget takes to fade in when its enclosing `LeftLayer`
+    /// first shows, from that container's own `transition` attribute -
+    /// zero for a widget with no such ancestor, which fades over no time at
+    /// all (drawn at once, exactly as before this field existed). See
+    /// [`crate::picker::body`], the one reader: `Data\Plugins\PI001\GUI\
+    /// Selection_Definition.xml`'s `<LeftLayer transition="0.5">` groups
+    /// are `Track Creation`'s and `Team Selection`'s info panel, and a live
+    /// PPSSPP capture (`docs/ui/selection-screens.md`) shows exactly that
+    /// panel fading in over about half a second on screen entry while the
+    /// title bar's own `<LeftLayer transition="0">` group is solid from the
+    /// first frame - the two data points this field is read against.
+    pub transition: f32,
     /// The pixel width to wrap at, when `widthlimited="true"` is set.
     ///
     /// Taken from the nearest enclosing `Viewport`'s own `width` - the only
@@ -185,6 +197,10 @@ pub struct Image {
     /// front, so there is nothing yet for a load-on-demand flag to change. It is
     /// parsed rather than dropped because the attribute is real.
     pub auto_load: bool,
+    /// Seconds this widget takes to fade in - see [`Text::transition`],
+    /// which this mirrors for the same reason: `LeftLayer` wraps `Image`
+    /// widgets alongside `Text` ones on both selection screens.
+    pub transition: f32,
 }
 
 /// A solid-colour `Image` widget: no `src`, so nothing to sample.
@@ -233,6 +249,8 @@ pub struct Fill {
     /// the capture shows. Which of the pair is top and which bottom is
     /// unmeasured: no authored widget gives them different values.
     pub gradient: Option<[u32; 4]>,
+    /// Seconds this fill takes to fade in - see [`Text::transition`].
+    pub transition: f32,
 }
 
 /// A `Menu` widget: a named, selectable list, and where/how its rows draw.
@@ -468,7 +486,7 @@ impl Screens {
         };
 
         for child in &node.children {
-            self.collect_widgets(&mut screen, child, None, (0.0, 0.0), fallback_images);
+            self.collect_widgets(&mut screen, child, None, (0.0, 0.0), 0.0, fallback_images);
         }
 
         self.screens.push(screen);
@@ -541,6 +559,7 @@ impl Screens {
         child: &Node,
         viewport_width: Option<f32>,
         offset: (f32, f32),
+        transition: f32,
         fallback_images: &[(&str, &str)],
     ) {
         let inner = (
@@ -592,9 +611,14 @@ impl Screens {
                     // no `OffsetX`/`OffsetY` of its own (every one measured
                     // before this) resolves `inner == offset`, so this is a
                     // no-op everywhere that shape is absent.
-                    Some(src) => screen.images.push(self.image_from_node(child, src, inner)),
+                    Some(src) => {
+                        let mut image = self.image_from_node(child, src, inner);
+                        image.transition = transition;
+                        screen.images.push(image);
+                    }
                     None => {
-                        if let Some(fill) = self.fill_from_node(child, offset) {
+                        if let Some(mut fill) = self.fill_from_node(child, offset) {
+                            fill.transition = transition;
                             screen.fills.push(fill);
                         }
                     }
@@ -613,6 +637,7 @@ impl Screens {
                         grandchild,
                         viewport_width,
                         inner,
+                        transition,
                         fallback_images,
                     );
                 }
@@ -643,9 +668,9 @@ impl Screens {
                 // a no-op wherever that pair is absent (`inner == offset`
                 // then, since `self.number(None).unwrap_or(0.0)` is `0.0`),
                 // which is every widget measured before this file.
-                screen
-                    .texts
-                    .push(self.text_from_node(child, viewport_width, inner));
+                let mut text = self.text_from_node(child, viewport_width, inner);
+                text.transition = transition;
+                screen.texts.push(text);
                 // A `Text` can hold widgets of its own: `Team Selection`'s
                 // `skin` label carries its two livery arrows as child
                 // `Image`s. Its `Values` child is its own attributes, not a
@@ -656,6 +681,7 @@ impl Screens {
                         grandchild,
                         viewport_width,
                         inner,
+                        transition,
                         fallback_images,
                     );
                 }
@@ -674,9 +700,11 @@ impl Screens {
             // on `CellMode_Definition.xml`'s own two screens (`grep -c
             // "<Block" desktop-read, zero), so this is additive: no screen
             // this build already draws gains a new widget from it.
-            "block" => screen
-                .texts
-                .push(self.block_from_node(child, viewport_width, inner)),
+            "block" => {
+                let mut text = self.block_from_node(child, viewport_width, inner);
+                text.transition = transition;
+                screen.texts.push(text);
+            }
             "redirect" => screen.redirects.push(redirect_from_node(child)),
             "touchbutton" => screen
                 .touch_buttons
@@ -693,7 +721,14 @@ impl Screens {
             "viewport" => {
                 let width = self.number(child.value("width"));
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild, width, inner, fallback_images);
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        width,
+                        inner,
+                        transition,
+                        fallback_images,
+                    );
                 }
             }
             // None carries a `width` of its own to pass down - whatever the
@@ -702,10 +737,6 @@ impl Screens {
             // in one (`<BackgroundController><Image name="BackgroundImage">...`),
             // and before this arm existed nothing walked through it either - the
             // same silent drop `Screen` below has, just one container earlier.
-            // `LeftLayer` is Pulse's selection screens' own: `Track Creation`
-            // and `Team Selection` author every widget but the footer under
-            // one, each with its own `transition`, and until 2026-09-09 all
-            // of them were dropped the same silent way.
             // `Item` is the same idiom again - the selection screens' info
             // panel groups every stat row as `<Item OffsetY="59">` - and
             // carries the offsets that make its children's positions mean
@@ -728,6 +759,7 @@ impl Screens {
                         grandchild,
                         viewport_width,
                         inner,
+                        transition,
                         fallback_images,
                     );
                 }
@@ -774,17 +806,39 @@ impl Screens {
             // `oag_ui::campaign::footer` - is read directly off the raw
             // parse tree instead, unconditionally rather than gated on this
             // arm, so nothing here duplicates that read.
-            "navigationcontroller"
-            | "animation"
-            | "backgroundcontroller"
-            | "leftlayer"
-            | "item" => {
+            // `LeftLayer` is also the one container that authors a
+            // `transition`: how many seconds its own children fade in over
+            // when the screen first shows them, read here and inherited by
+            // every widget nested under it - `Text::transition`'s own doc has
+            // the mechanism and the capture it is read against. A `LeftLayer`
+            // with no `transition` of its own inherits whatever enclosed it,
+            // the same fallback the executable's own attribute reader uses
+            // (`FUN_088920fc`, `docs/ghidra/functions/psp-pulse-usa/
+            // race-box-screens.md`) - `EnableTransition`/`DisableTransition`
+            // exist there too, as per-direction overrides, but neither is
+            // authored on either selection screen, so only the plain
+            // `transition` name is read here.
+            "leftlayer" => {
+                let transition = self.number(child.value("transition")).unwrap_or(transition);
                 for grandchild in &child.children {
                     self.collect_widgets(
                         screen,
                         grandchild,
                         viewport_width,
                         inner,
+                        transition,
+                        fallback_images,
+                    );
+                }
+            }
+            "navigationcontroller" | "animation" | "backgroundcontroller" | "item" => {
+                for grandchild in &child.children {
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        transition,
                         fallback_images,
                     );
                 }
@@ -819,6 +873,7 @@ impl Screens {
                         grandchild,
                         viewport_width,
                         inner,
+                        transition,
                         fallback_images,
                     );
                 }

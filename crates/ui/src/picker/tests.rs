@@ -196,7 +196,11 @@ fn the_body_names_the_selected_entry_and_counts_the_list() {
         PSP,
     )
     .unwrap();
-    let picker = Picker::new(Kind::Track, entries(), Some("18_Track"), None);
+    let mut picker = Picker::new(Kind::Track, entries(), Some("18_Track"), None);
+    // Well past every `LeftLayer`'s own `transition` (0.5s at most here), so
+    // this checks the panel's settled content rather than its arrival -
+    // that fade has its own tests, below.
+    picker.tick(2.0);
     let skin = Skin::new(
         oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
@@ -250,6 +254,83 @@ fn the_body_names_the_selected_entry_and_counts_the_list() {
             .any(|draw| matches!(draw, Draw::Sprite { .. })),
         "no sheet, no arrow: an image with no placement is left out, not boxed"
     );
+}
+
+#[test]
+fn the_panel_fades_in_over_its_leftlayers_own_transition_and_the_title_bar_does_not() {
+    // `Selection_Definition.xml`'s own shape (`XML`, above): the title bar's
+    // `LeftLayer` carries `transition="0"`, the panel's carries `0.5` -
+    // matching a live PPSSPP capture where the title bar is solid from the
+    // first frame and the panel is still arriving at 0.5s
+    // (`docs/ui/selection-screens.md`).
+    let screens = Screens::from_xml(XML);
+    let layout = Layout::read(
+        &screens,
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
+    let mut picker = Picker::new(Kind::Track, entries(), Some("18_Track"), None);
+    let skin = Skin::new(
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let draw_at = |picker: &Picker| {
+        draw_list(
+            picker,
+            &layout,
+            &skin,
+            &Frame::default(),
+            None,
+            false,
+            &|_| None,
+            &|text| text.len() as f32 * 8.0,
+        )
+        .body
+    };
+    let distance_alpha = |layers: &[Draw]| {
+        layers
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text { text, color, .. } if text == "5178" => Some(color[3]),
+                _ => None,
+            })
+            .expect("the distance row draws at every tick checked here")
+    };
+    // The screen chrome pushes its own title text - `draw_list` always adds
+    // one - so check that one's alpha directly rather than through `body`.
+    let title_alpha = |layers_full: &Layers| match &layers_full.chrome[..] {
+        [Draw::Text { color, .. }, ..] => color[3],
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(distance_alpha(&draw_at(&picker)), 0.0, "not yet enabled");
+    let full = draw_list(
+        &picker,
+        &layout,
+        &skin,
+        &Frame::default(),
+        None,
+        false,
+        &|_| None,
+        &|text| text.len() as f32 * 8.0,
+    );
+    assert_eq!(title_alpha(&full), 1.0, "transition=\"0\" is instant");
+
+    picker.tick(0.25);
+    assert_eq!(
+        distance_alpha(&draw_at(&picker)),
+        0.5,
+        "halfway through 0.5s"
+    );
+
+    picker.tick(0.25);
+    assert_eq!(distance_alpha(&draw_at(&picker)), 1.0, "settled at 0.5s");
+
+    picker.tick(10.0);
+    assert_eq!(distance_alpha(&draw_at(&picker)), 1.0, "stays settled");
 }
 
 #[test]

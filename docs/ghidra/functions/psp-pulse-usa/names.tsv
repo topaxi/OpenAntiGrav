@@ -1113,3 +1113,4 @@
 0x088f9024	function	ParticleSystem_BakeChannels	82	particle-system.md
 0x088f8ec0	function	ParticleSystem_EvalChannel	85	particle-system.md
 0x088f3b68	function	ParticleSystem_PrepareResource	65	particle-system.md
+0x088920fc	function	Widget_CreateFromElement	72	race-box-screens.md

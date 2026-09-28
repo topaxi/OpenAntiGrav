@@ -11,6 +11,12 @@ use oag_render::mesh_render::Anisotropy;
 /// so the return type below reads rather than counting parentheses.
 type TickerClip = Option<(usize, f32, f32)>;
 
+/// What `--menu-picker-seconds` defaults to when absent: past every
+/// `LeftLayer transition` the race box's two selection screens author
+/// (measured at up to `0.5`s, `docs/ui/selection-screens.md`), so the
+/// default capture reads exactly as it did before that flag existed.
+const SETTLED_SECONDS: f32 = 1.0;
+
 /// Draws one page of our own menus, with the source's own lists supplied.
 ///
 /// The lists matter even for a still: a circuit row with nothing in it and one
@@ -650,6 +656,9 @@ pub(super) fn picker_page(
     // The selected circuit's lap length, measured by the caller off the
     // disc - `None` draws the dash an unmeasured one draws live.
     distance: Option<f32>,
+    // `--menu-picker-seconds` - `None` draws the screen settled, past every
+    // `LeftLayer transition` it authors. See [`SETTLED_SECONDS`].
+    seconds: Option<f32>,
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui::picker::{Details, Entry, Kind, Picker};
     let (entries, previews): (Vec<Entry>, Vec<String>) = match kind {
@@ -750,7 +759,8 @@ pub(super) fn picker_page(
             Some(settings.race.variant.as_str()),
         ),
     };
-    let picker = Picker::new(kind, entries, Some(selected), variant);
+    let mut picker = Picker::new(kind, entries, Some(selected), variant);
+    picker.tick(seconds.unwrap_or(SETTLED_SECONDS));
     let skin_entry = match kind {
         Kind::Ship => teams
             .get(picker.index())
@@ -866,6 +876,11 @@ pub(super) fn picker_stills(
     screens: &oag_ui::screen::Screens,
     strings: &oag_ui::language::StringTable,
     sprites: &mut crate::sprite::Sheet,
+    // `--menu-picker-seconds` - `None` draws the first card, fully arrived
+    // (`SETTLED_SECONDS`). `Some` also advances which card is stacked up, so
+    // a low value shows both effects the screen's own arrival authors: the
+    // fade in and the first card sliding under a second.
+    seconds: Option<f32>,
 ) -> Vec<oag_ui::frontend::Draw> {
     // The entry the *picker* selects, which falls back to the first when the
     // setting names none this source offers - `Picker::new`'s own rule. A
@@ -904,7 +919,12 @@ pub(super) fn picker_stills(
     ) {
         Ok((show, blobs)) => {
             *sprites = sprites.extended(&blobs, &mut report);
-            show.draws(0.0, &|src| sprites.get(src))
+            let alpha = (seconds.unwrap_or(SETTLED_SECONDS) / crate::preview::CARD_FADE_SECONDS)
+                .clamp(0.0, 1.0);
+            show.draws(seconds.unwrap_or(0.0), &|src| sprites.get(src))
+                .into_iter()
+                .map(|draw| crate::preview::fade_draw(draw, alpha))
+                .collect()
         }
         Err(error) => {
             log::info!("{error:#} - {location} shows no stills");

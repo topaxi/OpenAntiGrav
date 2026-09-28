@@ -790,6 +790,7 @@ fn hex_rect_prefers_outline_over_an_oversized_medal_atlas() {
         texture_width: None,
         texture_height: None,
         auto_load: false,
+        transition: 0.0,
     };
     let medal = Image {
         name: Some("Medal_0_0".to_string()),
