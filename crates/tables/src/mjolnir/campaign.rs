@@ -41,9 +41,10 @@ pub mod typedef {
     /// field-type pairs settle it either way.
     pub const TRACK_DEFINITION: i64 = 205052969;
     /// `WeaponSetDefinition`, confidence 95 (named in-file). 20 instances,
-    /// each one `M_WEAPONAVAILABLEBITS` field carrying a single value this
-    /// module does not decode - `WeaponType`'s own bit meanings are
-    /// unresolved. See [`WeaponSet`].
+    /// each one `M_WEAPONAVAILABLEBITS` field carrying a single value.
+    /// **2026-09-28: `WeaponType`'s bit meanings are decoded for the bits
+    /// pinned at confidence >= 70** - see [`WeaponSet::allowed_weapons`] and
+    /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section.
     pub const WEAPON_SET_DEFINITION: i64 = -966434245;
     /// `WOShipModelData`, confidence 95 (named in-file). 21 instances: a
     /// team+livery craft catalogue (`M_TEAM`/`M_LIVERY`, e.g.
@@ -383,10 +384,10 @@ pub struct WeaponSet {
     /// The instance's own `name=`, e.g. `"Rockets Only"`,
     /// `"Cannons, Missile, Plasma"`.
     pub name: String,
-    /// `M_WEAPONAVAILABLEBITS`'s raw value. **Unresolved**: `WeaponType`'s
-    /// own bit-to-weapon mapping was not chased this pass - the name alone
-    /// (`"Rockets Only"` carries `1`, for instance) is the only evidence
-    /// recorded, not a decoded mask.
+    /// `M_WEAPONAVAILABLEBITS`'s raw value, undecoded. See
+    /// [`Self::allowed_weapons`] for the decode of the bits this project has
+    /// pinned, and `docs/formats/2048-campaign.md`'s "The weapon set gate"
+    /// section for the ones it has not.
     pub available_bits: Option<i64>,
 }
 
@@ -422,6 +423,90 @@ pub fn weapon_sets(document: &Document) -> Vec<WeaponSet> {
 #[must_use]
 pub fn weapon_set_for(document: &Document, reference: Reference) -> Option<WeaponSet> {
     WeaponSet::from_instance(document.instance(reference.instance_id)?)
+}
+
+/// `(bit index, weapon)` for every `M_WEAPONAVAILABLEBITS` bit this project
+/// has pinned at confidence >= 70, from `SP.xml`'s own 20
+/// `WeaponSetDefinition` instances alone - no executable needed. See
+/// `docs/formats/2048-campaign.md`'s "The weapon set gate" section for the
+/// full table, including the bits this leaves out.
+///
+/// **Confidence 95 for all eight.** Each is the sole bit set on a
+/// `"<Weapon> Only"`-named instance (`"Rockets Only"` = `1`, `"Missile
+/// Only"` = `2`, ... `"Leech Beam Only"` = `1024`), and every multi-weapon
+/// instance's value is the sum of its members' bits with no residue,
+/// checked across all 20: `"Cannons and Missile"` = `34` = `32 + 2`,
+/// `"Cannons, Missile, Plasma"` = `162` = `128 + 32 + 2`, `"Can, Mis, Plas,
+/// Turbo"` = `170` = `128 + 32 + 8 + 2`, `"Leech and Cannons"` = `1056` =
+/// `1024 + 32`, `"EliminatorWeapons"` = `1959` = `1024 + 512 + 256 + 128 +
+/// 32 + 4 + 2 + 1` (every one of these eight plus [`MINES_BITS`], and
+/// neither [`MINES_BITS`]'s sibling bit 4 nor bits 3/6 - see that constant's
+/// own doc comment for why that is itself evidence).
+pub const WEAPON_BITS: &[(u32, crate::weapons::Weapon)] = &[
+    (0, crate::weapons::Weapon::Rocket),
+    (1, crate::weapons::Weapon::Missile),
+    (2, crate::weapons::Weapon::Quake),
+    (3, crate::weapons::Weapon::Turbo),
+    (5, crate::weapons::Weapon::Cannon),
+    (6, crate::weapons::Weapon::Autopilot),
+    (7, crate::weapons::Weapon::Plasma),
+    (10, crate::weapons::Weapon::LeachBeam),
+];
+
+/// Bits 8 and 9 (`256 | 512` = `768`), confidence 75 as a **pair**, read
+/// jointly as one gate for [`Weapon::Mine`](crate::weapons::Weapon::Mine)
+/// and [`Weapon::Bomb`](crate::weapons::Weapon::Bomb) together.
+///
+/// Across all 20 `WeaponSetDefinition` instances, bits 8 and 9 are always
+/// both set or both clear - never one without the other (`"Mines Only"` =
+/// `768`, `"Cannons and Mines"` = `800` = `32 + 768`, `"DemoWeapons"` =
+/// `1023` includes both, `"EliminatorWeapons"` = `1959` includes both) -
+/// so this project reads the pair as a single joint flag rather than as two
+/// independent bits. **Which individual bit is `Mine` and which is `Bomb`
+/// is not determined**, and enforcement never needs it, since the two never
+/// appear apart in the shipped data; both weapons are gated identically by
+/// whether the pair is present. `Mines`' name is corroborated by
+/// `docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`'s own
+/// `Hud_UpdatePickupIcon` reading, which carries the *held-weapon* id `8` as
+/// `FE_MINES` and `9` as `FE_BOMB` - a different, unrelated 2048 enum from
+/// this bitmask's own `WeaponType` (their orderings disagree from bit/id 5
+/// on: `WeaponType`'s bit `5` is `Cannon`, held-id `5` is `Shield`), but
+/// independent confirmation that 2048 tracks `Mine` and `Bomb` as two real,
+/// distinct pickups either way.
+pub const MINES_BITS: i64 = 0b11_0000_0000;
+
+impl WeaponSet {
+    /// The weapons `M_WEAPONAVAILABLEBITS` allows, decoded from [`WEAPON_BITS`]
+    /// and [`MINES_BITS`] alone - the bits this project has pinned at
+    /// confidence >= 70. Empty when [`Self::available_bits`] is `None`, or
+    /// when the value sets none of the bits above.
+    ///
+    /// **Bit 4 (`16`) is deliberately left out**, even though it is set on
+    /// `"DemoWeapons"` (`1023`) and cleared on every named single-weapon
+    /// instance and on `"EliminatorWeapons"`/both `"Combat*"` sets - a
+    /// pattern that fits `Weapon::Shield` (2048's `HUD` table names exactly
+    /// one held-weapon id, `5` (`FE_SHIELD`), that this reading's eight
+    /// confirmed bits plus [`MINES_BITS`] do not already account for, and
+    /// bit 4 is the one `WeaponType` bit this reading does not already
+    /// account for either) but is not a direct read of either enum's
+    /// declaration, so it stays under the 70 threshold - see
+    /// `docs/formats/2048-campaign.md`.
+    #[must_use]
+    pub fn allowed_weapons(&self) -> Vec<crate::weapons::Weapon> {
+        let Some(bits) = self.available_bits else {
+            return Vec::new();
+        };
+        let mut out: Vec<crate::weapons::Weapon> = WEAPON_BITS
+            .iter()
+            .filter(|&&(bit, _)| bits & (1_i64 << bit) != 0)
+            .map(|&(_, weapon)| weapon)
+            .collect();
+        if bits & MINES_BITS != 0 {
+            out.push(crate::weapons::Weapon::Mine);
+            out.push(crate::weapons::Weapon::Bomb);
+        }
+        out
+    }
 }
 
 /// One `GameModeObjective`: what [`Event::pass_objective`]/

@@ -142,9 +142,28 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   opens the next event - `SP.xml` does not say, and this build reads
   `Store::campaign_medal`'s own `best_medal` (any earned tier) as the
   gating signal.
-- **`WeaponType`'s bit layout is unread.** `WeaponSetDefinition`'s
-  `M_WEAPONAVAILABLEBITS` is a raw per-instance value; which bit is which
-  weapon is not decoded.
+- **Closed 2026-09-28, mostly.** `WeaponType`'s bit layout: eight bits
+  (Rocket/Missile/Quake/Turbo/Cannon/Autopilot/Plasma/LeachBeam) pinned at
+  confidence 95 from the 20 `WeaponSetDefinition` names alone, plus bits 8/9
+  read as one joint gate for Mine+Bomb at confidence 75 - `eboot.elf`'s own
+  held-weapon id order (`pickup-icon-uv-table.md`) corroborates that these
+  are eleven real, distinct 2048 pickups but uses a different bit/id order
+  past position 5, so it does not resolve the assignment further. Bit 4
+  (`16`) stays unpinned and unnamed - under the 70-confidence threshold this
+  project enforces at - and `"NoQuake"` (`32`, identical to `"Cannons
+  Only"`'s value) is flagged as an authored anomaly rather than resolved.
+  `WeaponSet::allowed_weapons` (`crates/tables/src/mjolnir/campaign.rs`)
+  decodes the pinned bits and `race::load_event` wires the result onto
+  `Setup::allowed_weapons`, which `oag_gameplay::pickup::draw`'s own
+  `allowed` parameter gates a `Weapon Pad`'s draw by - an event whose set
+  decodes to nothing recognised races unrestricted rather than guessing. See
+  `docs/formats/2048-campaign.md`'s "The weapon set gate" section,
+  `crates/tables/src/mjolnir/campaign/tests.rs::
+  allowed_weapons_decodes_the_confidence_70_bits_and_no_others`,
+  `crates/2048/tests/campaign_ground_truth.rs::
+  a_named_weapon_set_decodes_to_what_its_own_name_says` and
+  `crates/game/tests/vita_2048_campaign_progress_ground_truth.rs::
+  load_event_wires_2048_event_6s_own_weapon_set_onto_setup`.
 - **The `M_X`/`M_Y` -> screen-pixel projection for a native event is not in
   the data anywhere this pass checked.** The DLC tiers' own scale/bias
   table (`docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`)
@@ -203,10 +222,15 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    question above, if a caller ever needs to tell 2048's own Arcade/
    CheckPoint/SpeedLap/Zombie races apart rather than treating them all as
    `EventKind::Race` the way this pass does.
-2. Read `WeaponSetDefinition`'s `M_WEAPONAVAILABLEBITS` bit layout against
-   `WeaponType`'s own enum, if a caller wants an event's weapon set to
-   actually gate which pickups spawn rather than being carried as an
-   unresolved reference.
+2. **Closed 2026-09-28** - see the "Open" section's own entry above for what
+   landed (`WeaponSet::allowed_weapons`, `Setup::allowed_weapons`,
+   `pickup::draw`'s `allowed` parameter) and where it is measured and
+   verified. Still open within it: `WeaponType` bit 4 and which of bits 8/9
+   is `Mine` versus `Bomb`, both under this project's 70-confidence
+   enforcement threshold - a Ghidra pass over whatever reads
+   `m_weaponAvailableBits`'s own struct offset (unfound this pass; only its
+   field-registration call was located by string cross-reference) is the
+   way in if either is ever needed.
 3. Read `Data\xml\MP.xml`'s season/level schema, if multiplayer's own
    progression ever needs the same treatment this pass gave `SP.xml`.
 4. Chase the 68-vs-69 `CanvasLabel` discrepancy against

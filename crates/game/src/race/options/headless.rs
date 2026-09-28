@@ -111,6 +111,7 @@ impl Setup {
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,
+            allowed_weapons: Vec::new(),
             weapon_pad_refresh: 0.0,
             pose_override: None,
             camera_override: None,

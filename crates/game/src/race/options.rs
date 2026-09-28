@@ -605,6 +605,19 @@ pub struct Setup {
     /// nothing out rather than handing out an invented weapon - the same choice
     /// [`Setup::speedup_pads`]' tunables make. See `docs/formats/weapon-stats.md`.
     pub weapons: Option<oag_tables::weapons::WeaponStats>,
+    /// Restricts which weapons a `Weapon Pad` may hand out to exactly this
+    /// list, or does not restrict at all when empty - the same "empty is no
+    /// override" convention [`Options::grid_teams`] uses.
+    ///
+    /// **Nothing sets this except `race::load::campaign::load_event`**, off
+    /// the 2048 campaign event's own `M_WEAPONSET` -
+    /// `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`, the bits
+    /// that project has pinned at confidence >= 70 (see
+    /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section).
+    /// Every non-2048 race, and a 2048 event whose weapon set decodes to
+    /// nothing recognised, draws exactly as it always did - see
+    /// [`oag_gameplay::pickup::draw`]'s own `allowed` parameter.
+    pub allowed_weapons: Vec<oag_tables::weapons::Weapon>,
     /// Seconds a weapon pad is inert for after it is crossed, for this race's
     /// speed class.
     ///

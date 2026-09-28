@@ -279,7 +279,17 @@ impl Race {
             oag_gameplay::pickup::Driver::Ai
         };
         let last = self.sim.world.ships[slot].pickup.last;
-        let drawn = oag_gameplay::pickup::draw(&mut self.sim.world.rng, table, who, last);
+        // `None` for every non-2048 race and for a 2048 event whose weapon
+        // set decodes to nothing recognised - the same "empty is no
+        // restriction" reading `Setup::allowed_weapons`'s own doc comment
+        // gives. AI slots are gated the same as the player's: which weapons
+        // an event's own `WeaponSetDefinition` allows is stated about the
+        // pads, not about who crosses them - **chosen, not measured**, since
+        // no consumer of this mask has been found in `eboot.elf` to read
+        // otherwise.
+        let allowed =
+            (!self.sim.allowed_weapons.is_empty()).then_some(self.sim.allowed_weapons.as_slice());
+        let drawn = oag_gameplay::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
             self.sim.world.ships[slot].pickup.grant(weapon);
         }

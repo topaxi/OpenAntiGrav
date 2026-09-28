@@ -170,6 +170,68 @@ fn tracks_and_weapon_sets_are_found_by_typedef_not_by_field_shape() {
     assert_eq!(sets[0].name, "Rockets Only");
 }
 
+/// [`WeaponSet::allowed_weapons`] against the values `SP.xml`'s real 20
+/// `WeaponSetDefinition` instances actually carry - see
+/// `docs/formats/2048-campaign.md`'s "The weapon set gate" section for the
+/// full census this pins these against.
+#[test]
+fn allowed_weapons_decodes_the_confidence_70_bits_and_no_others() {
+    use crate::weapons::Weapon;
+
+    let of = |bits: i64| WeaponSet {
+        instance_id: 0,
+        name: String::new(),
+        available_bits: Some(bits),
+    };
+
+    // A single named bit each, the way `"Rockets Only"`/`"Missile
+    // Only"`/... author them.
+    assert_eq!(of(1).allowed_weapons(), vec![Weapon::Rocket]);
+    assert_eq!(of(2).allowed_weapons(), vec![Weapon::Missile]);
+    assert_eq!(of(1024).allowed_weapons(), vec![Weapon::LeachBeam]);
+
+    // `"Cannons, Missile, Plasma"` = 162 = 128 + 32 + 2, in `WEAPON_BITS`'s
+    // own bit order.
+    assert_eq!(
+        of(162).allowed_weapons(),
+        vec![Weapon::Missile, Weapon::Cannon, Weapon::Plasma]
+    );
+
+    // `"Mines Only"` = 768 = bits 8 and 9 together - one joint gate for two
+    // weapons, per `MINES_BITS`'s own doc comment.
+    assert_eq!(of(768).allowed_weapons(), vec![Weapon::Mine, Weapon::Bomb]);
+
+    // `"EliminatorWeapons"` = 1959 = every confidence-95 bit plus the mines
+    // pair - and, critically, bit 4 (16) does **not** turn into a weapon:
+    // this reading leaves it out even though the real instance sets it.
+    assert_eq!(
+        of(1959).allowed_weapons(),
+        vec![
+            Weapon::Rocket,
+            Weapon::Missile,
+            Weapon::Quake,
+            Weapon::Cannon,
+            Weapon::Plasma,
+            Weapon::LeachBeam,
+            Weapon::Mine,
+            Weapon::Bomb,
+        ]
+    );
+
+    // No bits at all, and no `available_bits` at all, both decode to
+    // nothing rather than to every weapon.
+    assert_eq!(of(0).allowed_weapons(), Vec::<Weapon>::new());
+    assert_eq!(
+        WeaponSet {
+            instance_id: 0,
+            name: String::new(),
+            available_bits: None,
+        }
+        .allowed_weapons(),
+        Vec::<Weapon>::new()
+    );
+}
+
 /// `RACE_A`/`RACE_B`/`ELIMINATION`/`ZONE` are `GameMode_SpeedLapRace`/
 /// `GameMode_ArcadeRace`/`GameMode_EliminatorRace`/`GameMode_ZoneRace`'s own
 /// typedef ids, not four IDs whose class this pass had to guess -
