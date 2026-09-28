@@ -53,7 +53,7 @@ trade against a `Stage::Menu`-based design.
 | `lap{n}.2` | **No, any row** | same reason as the header |
 | totals row (`PRO_STATS_TOT` + `tablebg{n+1}`) | Yes | `Results::total_ticks`, the player's own finish tick |
 | `tablehighlight` | Yes, repositioned onto the totals row | **chosen, not measured** - no decompile of this screen's own row-highlight positioning exists; see the doc on `results_draw_list` |
-| `perfectlap{n}` | **No** | the flag's own direction (does nonzero mean "perfect" or the reverse) is unread |
+| `perfectlap{n}` | **No** | the flag's own direction (does nonzero mean "perfect" or the reverse) is unread. **Its own `idstring="MSC_PL"` text overlay used to leak through regardless** - found and fixed 2026-09-28: the overlay is a nested, unnamed `<Text>` inside the `<Image name="perfectlap{n}">` element (`docs/formats/endrace-screens.md`), so the by-`name` skip this row already gave the image half never caught the text half; `results_draw_list` now also skips any text whose `idstring` is `MSC_PL`. Visible as a faint "TP" (this source's own French) past each row in a pre-fix capture. |
 | `boostimg` | **No** | the decompile's own "hidden unconditionally on every single-player path" reading - see [Open](#open) for why this project's one capture disagrees |
 | `ContinueButton`/`ControlTextConfirm` | Yes | direct idstrings |
 
@@ -66,6 +66,58 @@ constant's own doc). This project's own `EndRace Results` table can show at
 most four real rows for that reason, regardless of how many the disc's own
 XML authors slots for (eight). Not this pass's call to widen - see that
 constant's doc for why.
+
+### `EndRace Results`, on a Tournament leg: two cycling pages, not the per-lap table
+
+**Status: draws, 2026-09-28.** A Tournament leg does not show the per-lap
+table above at all - `EndRaceResults_OnEnter`'s own `case 4: case 0x10:`
+(`docs/ghidra/functions/psp-pulse-usa/tournament.md`) replaces it with a
+per-craft table that cycles, every three seconds, between this leg's own
+placings (`ER_RACE_STAN`) and the running tournament standings
+(`ER_TOUR_STAN`) - two genuinely different pages, not one table shown two
+ways. This build reuses the same three shared table widgets
+(`lap0.0`..`lap8.2`, `tablehighlight`) the per-lap table above draws,
+through a new model, [`oag_ui::endrace::TournamentResults`]
+(`oag_ui::endrace::tournament_results_draw_list`), built in
+[`crate::race_stage::endrace::tournament_results`](../../crates/game/src/main/race_stage/endrace.rs)
+off this build's own [`oag_race::tournament`]/[`crate::race::tournament::Progress`]
+(established, not re-derived by this pass) and the leg's own grid roster
+(`crate::race::slot_teams`, recomputed at EndRace-build time - see that
+function's own doc for why it is a second call rather than a threaded-through
+field).
+
+[`oag_ui::endrace::TournamentResults`]: ../../crates/ui/src/endrace.rs
+[`oag_race::tournament`]: ../../crates/race/src/tournament.rs
+
+| Widget | Draws | Why |
+| --- | --- | --- |
+| `BigTopText` | Yes | `ER_END_TOUR` on the last leg, otherwise `"%s %d/%d"` of `ER_RES` and the leg counter - `Progress::leg_number`/`leg_count` |
+| `Line1` | Yes | `ER_RACE_STAN`/`ER_TOUR_STAN`, whichever page is current |
+| `lap0.0`/`lap0.1`/`lap0.2` (header) | Yes | `PRO_POS`/`ER_TEAM`/`ER_POINTS` |
+| `lap{n}.0` | Yes, one row per grid slot | the row's own 1-based index - `EndRaceResults_PopulateTournamentTable` does not sort, so this is simply which row a craft's own data landed on |
+| `lap{n}.1` | Yes, when a team is known | the craft's own team name - `None` (this project keeps no per-slot team name past the race that just finished, unlike a live `Race`) draws the cell absent, never a guessed `"SLOT n"` |
+| `lap{n}.2` | Yes | this leg's own points (leg page) or the running total (standings page) - `oag_race::tournament::points_for_finish`/`Progress::points` |
+| `tablehighlight` | Yes, on the player's own row | measured at a different `y` pitch than the per-lap table's own (`93 + 20*row`, not `92 + 20*row`) - see `tournament_highlight_y`'s own doc |
+| `perfectlap{n}`/`boostimg` | **No** | per-lap concepts, no reading on a per-craft table |
+| `ContinueButton`/`ControlTextConfirm` | Yes | direct idstrings, unchanged |
+
+**The leg page's own row order is this leg's finish order**
+(`oag_game::scoreboard::Board::rows`, already ordered by place), **not**
+`oag_race::tournament::Standings`' own rank - `tournament.md`'s own "What is
+not determined" names the behavioural evidence for this (every capture's
+points column reads strictly decreasing top-to-bottom) without a traced
+writer for the original's own equivalent array. The standings page's own
+order **is** `Progress`' rank (cumulative points, descending, slot-order
+tie-break) - the two pages are ordered by two different things, matching
+what each is showing.
+
+**No live capture of this page exists yet** - `--menu-page
+endrace-results-tournament-leg`/`endrace-results-tournament-standings` draws
+it off a synthetic four-team field (`crates/game/src/capture/endrace_page.rs`),
+since a real tournament leg run to a finish is the same multi-minute
+autopilot cost `tournament.md`'s own "Live verification" section names, not
+attempted again this pass. Kept under `data/scratch/pulse-tourney/shots/`
+(gitignored - game content).
 
 ### `EndRace Rewards`
 

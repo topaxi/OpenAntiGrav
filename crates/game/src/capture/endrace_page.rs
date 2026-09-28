@@ -25,6 +25,19 @@ pub(super) enum EndRaceKind {
     Menu {
         tournament_next_leg: bool,
     },
+    /// A Tournament leg's own `EndRace Results` - the table
+    /// `EndRaceResults_PopulateTournamentTable` (`0x088dad90`) draws in
+    /// place of the ordinary per-lap table, cycling every three seconds
+    /// between this leg's own placings and the running standings. `true`
+    /// picks the standings page (`ER_TOUR_STAN`), `false` the leg page
+    /// (`ER_RACE_STAN`) - see [`oag_ui::endrace::TournamentResults`]'s own
+    /// doc. A capture-only knob, the same reason `Menu`'s own
+    /// `tournament_next_leg` is one: driving a real tournament leg to a
+    /// finish is not (`docs/ghidra/functions/psp-pulse-usa/tournament.md`'s
+    /// own "live verification" names the autopilot cost this would take).
+    TournamentResults {
+        standings: bool,
+    },
 }
 
 #[must_use]
@@ -38,6 +51,12 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
         "endrace-menu-tournament" | "endrace_menu_tournament" => Some(EndRaceKind::Menu {
             tournament_next_leg: true,
         }),
+        "endrace-results-tournament-leg" | "endrace_results_tournament_leg" => {
+            Some(EndRaceKind::TournamentResults { standings: false })
+        }
+        "endrace-results-tournament-standings" | "endrace_results_tournament_standings" => {
+            Some(EndRaceKind::TournamentResults { standings: true })
+        }
         _ => None,
     }
 }
@@ -227,6 +246,54 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
+        EndRaceKind::TournamentResults { standings } => {
+            // A synthetic four-craft field, points consistent with
+            // `oag_race::tournament::POINTS_BY_POSITION` (8/6/5/4/...): the
+            // leg page shows this leg's own finish order and points, the
+            // standings page a plausible running total after an earlier
+            // leg, ranked descending - the same shape
+            // `EndRaceResults_PopulateTournamentTable` draws, with numbers
+            // chosen for legibility rather than measured (no live capture
+            // of this screen exists yet - see the module's own doc).
+            let row = |team: &str, points: u32, player: bool| oag_ui::endrace::TournamentRow {
+                team_name: Some(team.to_string()),
+                points,
+                player,
+            };
+            let mut model = oag_ui::endrace::TournamentResults::new(
+                false,
+                2,
+                3,
+                vec![
+                    row("Assegai", 8, true),
+                    row("Feisar", 6, false),
+                    row("Qirex", 5, false),
+                    row("AG-Systems", 0, false),
+                ],
+                vec![
+                    row("Feisar", 14, false),
+                    row("Assegai", 12, true),
+                    row("Qirex", 9, false),
+                    row("AG-Systems", 4, false),
+                ],
+            );
+            if standings {
+                // `TournamentResults` starts on the leg page - one tick
+                // past its own 3-second threshold flips it, the same
+                // `EndRaceResults_Update` toggle `tick` reimplements.
+                model.tick(3.1);
+            }
+            oag_ui::endrace::tournament_results_draw_list(
+                &model,
+                &screens.results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
         EndRaceKind::Menu {
             tournament_next_leg,
         } => {
@@ -341,6 +408,16 @@ fn hd_endrace_page(
                 backdrop,
                 false,
                 &|src| sprites.get(src),
+            )
+        }
+        // Tournament's own standings table is Pulse's own `EndRace_Definition.xml`
+        // (`docs/formats/endrace-screens.md`) - HD's own copy
+        // (`docs/formats/hd-endrace-screens.md`) authors no equivalent, and
+        // this build implements no HD Tournament mode to draw one for
+        // anyway.
+        EndRaceKind::TournamentResults { standings: _ } => {
+            anyhow::bail!(
+                "Wipeout HD/Fury's own EndRace Results authors no Tournament standings table"
             )
         }
         // Tournament is Pulse-only in this build so far - `tournament_next_leg`

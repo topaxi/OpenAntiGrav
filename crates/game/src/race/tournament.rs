@@ -47,6 +47,20 @@ impl Progress {
         }
     }
 
+    /// This leg's own 1-based index - `BigTopText`'s own `"%s %d/%d"` leg
+    /// counter on every leg but the last (`EndRaceResults_OnEnter`'s
+    /// `local_48[5] + 1`, `docs/ghidra/functions/psp-pulse-usa/tournament.md`).
+    #[must_use]
+    pub fn leg_number(&self) -> u32 {
+        (self.current_leg + 1) as u32
+    }
+
+    /// The tournament's own leg count - the same counter's own denominator.
+    #[must_use]
+    pub fn leg_count(&self) -> u32 {
+        self.legs.len() as u32
+    }
+
     /// The track this leg races, or `None` on a malformed (empty) leg list -
     /// never observed, but `Session::launch_campaign_cell` checks before
     /// this is ever constructed rather than relying on this alone.

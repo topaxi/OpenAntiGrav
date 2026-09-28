@@ -27,6 +27,35 @@ site too:
   own `PRO_POS`/`ER_TEAM`/`ER_POINTS` columns are not drawn, because the
   copy into their fields was never located in the decompile either.
 
+## Update, 2026-09-28: the standings table now draws
+
+The one open item that "would change what a player sees" (see Next Steps
+below, as this thread stood before this update) is closed:
+`EndRaceResults_PopulateTournamentTable`'s own `PRO_POS`/`ER_TEAM`/
+`ER_POINTS` columns are read for real now - the copy site
+(`Race_BuildEndRaceResult`'s own tournament block) was found, and it turned
+out to write **two** tables, not one: the leg's own placings and the
+cumulative standings, which the original cycles between every three
+seconds (`EndRaceResults_Update`, new this pass). See
+[`tournament.md`](../../docs/ghidra/functions/psp-pulse-usa/tournament.md)'s
+own dated correction for the decompile and
+[`docs/ui/endrace-screens.md`](../../docs/ui/endrace-screens.md)'s new
+Tournament section for what draws
+(`oag_ui::endrace::TournamentResults`/`tournament_results_draw_list`,
+`crate::race_stage::endrace::tournament_results`). **Not yet checked
+against a live PPSSPP capture of a real tournament leg ending** - the same
+autopilot cost `tournament.md`'s own "Live verification" section
+documents, not spent again this pass; `--menu-page
+endrace-results-tournament-leg`/`-standings` exercises the drawing code off
+a synthetic field instead.
+
+A second, unrelated bug was found while reading this screen's own widgets
+closely enough to draw a new table over them: `perfectlap{n}`'s own
+`idstring="MSC_PL"` text overlay (nested, unnamed, inside the `<Image>`)
+was leaking through on **every** `EndRace Results` capture, tournament or
+not - a faint "TP" past every row. Fixed in the same pass, both tables -
+see `docs/ui/endrace-screens.md`'s own updated row for the ordinary table.
+
 ## Open
 
 Unchanged by this pass - none of them was forced by the implementation, so
@@ -56,11 +85,14 @@ none was answered on a guess:
 - If a live Ghidra pass ever pins `DAT_08b30fa0`'s writer or
   `DAT_08b31158+0xdc`'s meaning, neither changes this build's own behaviour
   - both are read-only facts about the original nothing here depends on.
-- The authored standings table is the one open item that *would* change
-  what a player sees: locating the copy into `g_endrace_result`'s own
-  `+0x35`/`+0x134` fields is what unblocks drawing `PRO_POS`/`ER_TEAM`/
-  `ER_POINTS` for real, in `oag_ui::endrace`, rather than reusing the
-  ordinary results screen.
+- ~~The authored standings table is the one open item that *would* change
+  what a player sees...~~ **Done 2026-09-28** - see the dated update above.
+  A live PPSSPP capture of the drawn table (this pass used a synthetic
+  field) is what is left of this item.
+- Trace `param_1+0x98`'s own writer (`tournament.md`'s own "What is not
+  determined", new 2026-09-28) - the leg table's own row order depends on
+  it, and this pass drew it as finish order on behavioural evidence, not a
+  traced one.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

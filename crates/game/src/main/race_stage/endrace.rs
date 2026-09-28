@@ -20,7 +20,10 @@
 use anyhow::Result;
 
 use oag_tables::race_campaign::Medal;
-use oag_ui::endrace::{EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards};
+use oag_ui::endrace::{
+    EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards, TournamentResults,
+    TournamentRow,
+};
 
 use oag_game::render::Renderer;
 
@@ -42,6 +45,11 @@ enum Which {
 #[derive(Debug)]
 pub(crate) enum ResultsModel {
     Pulse(Results),
+    /// A Tournament leg's own results - Pulse only, off
+    /// `EndRaceResults_OnEnter`'s `case 4: case 0x10:` block, cycling every
+    /// three seconds between this leg's own placings and the running
+    /// standings. See [`oag_ui::endrace::TournamentResults`].
+    PulseTournament(TournamentResults),
     Hd(FieldResults),
 }
 
@@ -156,12 +164,27 @@ impl EndRaceRuntime {
     #[must_use]
     pub(crate) fn menu_targets(&self) -> Vec<oag_ui::endrace::pointer::Target> {
         match &self.results {
-            ResultsModel::Pulse(_) => {
+            ResultsModel::Pulse(_) | ResultsModel::PulseTournament(_) => {
                 oag_ui::endrace::pointer::menu_targets(&self.menu, &self.screens.menu)
             }
             ResultsModel::Hd(_) => {
                 oag_ui::endrace::hd::hd_menu_targets(&self.menu, &self.screens.menu)
             }
+        }
+    }
+
+    /// One tick of the Tournament leg/standings toggle -
+    /// [`TournamentResults::tick`], a no-op unless [`Which::Results`] is
+    /// current and [`ResultsModel::PulseTournament`] is the model, driven
+    /// once a tick from `Session::tick_endrace` the same way
+    /// `EndRaceResults_Update`'s own per-frame toggle runs only while that
+    /// screen is on top.
+    pub(crate) fn tick_tournament_table(&mut self) {
+        if self.which != Which::Results {
+            return;
+        }
+        if let ResultsModel::PulseTournament(results) = &mut self.results {
+            results.tick(1.0 / 60.0);
         }
     }
 
@@ -200,6 +223,18 @@ impl EndRaceRuntime {
                 true,
                 &|src| sprites.get(src),
             ),
+            (Which::Results, ResultsModel::PulseTournament(results)) => {
+                oag_ui::endrace::tournament_results_draw_list(
+                    results,
+                    &self.screens.results,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
             (Which::Results, ResultsModel::Hd(results)) => {
                 oag_ui::endrace::hd::hd_results_draw_list(
                     results,
@@ -235,16 +270,18 @@ impl EndRaceRuntime {
                     &|src| sprites.get(src),
                 )
             }
-            (Which::Menu, ResultsModel::Pulse(_)) => oag_ui::endrace::endrace_menu_draw_list(
-                &self.menu,
-                &self.screens.menu,
-                &self.skin,
-                &self.frame,
-                &self.strings,
-                None,
-                true,
-                &|src| sprites.get(src),
-            ),
+            (Which::Menu, ResultsModel::Pulse(_) | ResultsModel::PulseTournament(_)) => {
+                oag_ui::endrace::endrace_menu_draw_list(
+                    &self.menu,
+                    &self.screens.menu,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
             (Which::Menu, ResultsModel::Hd(_)) => oag_ui::endrace::hd::hd_menu_draw_list(
                 &self.menu,
                 &self.screens.menu,
@@ -342,6 +379,58 @@ pub(crate) fn hd_field_rows(
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Pulse's own Tournament standings, off this project's `oag_race::tournament`
+/// law: [`Board`](oag_game::scoreboard::Board) for this leg's own finish
+/// order and leg points (`oag_race::tournament::points_for_finish`, the same
+/// law already folded into the running totals a moment earlier -
+/// `crate::main::session::tournament::record_finished_leg` runs before
+/// `Session::build_endrace` in the same frame), and
+/// `crate::race::tournament::Progress` for the cumulative totals and rank.
+/// `slot_teams` is this leg's own grid roster, in slot order -
+/// `crate::main::session::endrace::build_endrace` recomputes it off
+/// `crate::race::slot_teams`, since which team flew which slot is not
+/// carried on `Board`/`Progress` themselves. `None` team entries draw the
+/// name absent rather than a placeholder - see
+/// [`oag_ui::endrace::TournamentRow::team_name`]'s own doc.
+#[must_use]
+pub(crate) fn tournament_results(
+    board: Option<&oag_game::scoreboard::Board>,
+    progress: &crate::race::tournament::Progress,
+    slot_teams: Option<&[String]>,
+    last_leg: bool,
+) -> Option<TournamentResults> {
+    let board = board?;
+    let team_name = |slot: u8| slot_teams.and_then(|teams| teams.get(usize::from(slot)).cloned());
+    let leg: Vec<TournamentRow> = board
+        .rows
+        .iter()
+        .map(|row| TournamentRow {
+            team_name: team_name(row.slot),
+            points: oag_race::tournament::points_for_finish(row.place, row.finished()),
+            player: row.player,
+        })
+        .collect();
+
+    let mut slots: Vec<u8> = board.rows.iter().map(|row| row.slot).collect();
+    slots.sort_by_key(|&slot| progress.rank(usize::from(slot)));
+    let standings: Vec<TournamentRow> = slots
+        .into_iter()
+        .map(|slot| TournamentRow {
+            team_name: team_name(slot),
+            points: progress.points(usize::from(slot)),
+            player: slot == 0,
+        })
+        .collect();
+
+    Some(TournamentResults::new(
+        last_leg,
+        progress.leg_number(),
+        progress.leg_count(),
+        leg,
+        standings,
+    ))
 }
 
 /// `oag_game::records::Medal` restated as `oag_tables::race_campaign::Medal` -

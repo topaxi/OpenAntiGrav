@@ -17,7 +17,7 @@ use crate::language::StringTable;
 use crate::menu::{Frame, Layers, Picture, Skin};
 use crate::screen::{Fill, Image, Text, argb_to_rgba};
 
-use super::{EndRaceMenu, Headline, Layout, Results, Rewards};
+use super::{EndRaceMenu, Headline, Layout, Results, Rewards, TournamentResults, TournamentRow};
 
 #[cfg(test)]
 mod tests;
@@ -127,11 +127,130 @@ pub fn results_draw_list(
     }
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
-        let content = if name.starts_with("lap") {
+        let content = if text.idstring.as_deref() == Some("MSC_PL") {
+            // `perfectlap{n}`'s own overlay: `<Text idstring="MSC_PL">`
+            // nested *inside* `<Image name="perfectlap{n}">`
+            // (`docs/formats/endrace-screens.md`), so it carries no `name`
+            // of its own - `name.starts_with("perfectlap")` (which the
+            // image loop above uses, on the `Image` that does carry the
+            // name) cannot catch it. Found by looking: every row drew a
+            // faint "TP" (this source's own French for `MSC_PL`) past the
+            // totals row - `perfectlap{n}`'s own direction being unread is
+            // exactly why the image half is already skipped above; this is
+            // that same skip, keyed on the one field this nested text does
+            // carry, for the half that was still leaking through.
+            None
+        } else if name.starts_with("lap") {
             lap_cell_text(name, model, strings)
         } else {
             match name {
                 "Line1" => headline_text(model.headline, strings),
+                _ => text.string.clone(),
+            }
+        };
+        let Some(content) = content else { continue };
+        out.push(text_draw(text, &content, layout));
+    }
+    layers.body = out;
+    layers
+}
+
+/// Pulse's own Tournament `EndRace Results`' draw list: `BigTopText` (the
+/// leg counter or `ER_END_TOUR`), `Line1` (`ER_RACE_STAN`/`ER_TOUR_STAN`,
+/// whichever page is current) and the table - `PRO_POS`/`ER_TEAM`/
+/// `ER_POINTS`, off [`TournamentResults::current`]. See the module doc on
+/// [`super::TournamentResults`] for the law this reimplements.
+///
+/// **No `ER_DNF`/`ER_RACING`, ever.** `EndRaceResults_PopulateTournamentTable`
+/// only shows either in place of the points column when the screen's own
+/// `+0xe9` flag is set, and that flag is `0xd < g_game_mode` -
+/// `EndRaceResults_OnEnter` - which is false for Tournament's own mode `4`
+/// (only `16`, an unimplemented sibling this project has no evidence is
+/// reachable through any launch path it drives, sets it true). A
+/// non-finisher's own points read `0` (`oag_race::tournament::points_for_finish`)
+/// exactly as the original's own unsorted leg row would, with no DNF text
+/// standing in for it.
+#[must_use]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same eight facts a menu page or a picker takes"
+)]
+pub fn tournament_results_draw_list(
+    model: &TournamentResults,
+    layout: &Layout,
+    skin: &Skin,
+    frame: &Frame,
+    strings: &StringTable,
+    backdrop: Option<Picture>,
+    race_behind: bool,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Layers {
+    let mut layers = Layers {
+        backdrop: frame.backdrops(
+            skin.space(),
+            skin.background(),
+            backdrop.map(Picture::draw),
+            race_behind,
+        ),
+        ..Layers::default()
+    };
+    let screen = &layout.screen;
+    let rows = model.current();
+    let player_row = rows
+        .iter()
+        .position(|row| row.player)
+        .map(|index| index + 1);
+    let mut out = Vec::new();
+    for fill in &screen.fills {
+        if fill.name.as_deref() == Some("tablehighlight") {
+            // Measured, not chosen, unlike the ordinary per-lap table's own
+            // `tablebg_y`: `EndRaceResults_PopulateTournamentTable`'s own
+            // `iVar7` starts at `0x5d` (93) for row 1 and steps `0x14` (20)
+            // a row, one pixel below the per-lap table's `92` - a real,
+            // small divergence between the two tables' own row pitch, not a
+            // rounding artefact of this reimplementation.
+            let Some(row) = player_row else { continue };
+            out.push(Draw::Fill {
+                rect: [
+                    0.0,
+                    tournament_highlight_y(row),
+                    fill.width.unwrap_or(0.0),
+                    fill.height.unwrap_or(0.0),
+                ],
+                color: argb_to_rgba(fill.color),
+            });
+            continue;
+        }
+        out.push(fill_draw(fill));
+    }
+    for image in &screen.images {
+        let name = image.name.as_deref().unwrap_or("");
+        // Per-lap concepts that do not apply to a per-craft table:
+        // `perfectlap{n}`'s own direction is unread even on the ordinary
+        // table ([`results_draw_list`]'s own doc), and `boostimg` is a
+        // single header-row glyph, not a per-row one - neither has a
+        // reading on this screen at all.
+        if name.starts_with("perfectlap") || name == "boostimg" {
+            continue;
+        }
+        let Some(placed) = sprites(&image.src) else {
+            continue;
+        };
+        out.push(image_draw(image, placed));
+    }
+    for text in &screen.texts {
+        let name = text.name.as_deref().unwrap_or("");
+        let content = if text.idstring.as_deref() == Some("MSC_PL") {
+            // `perfectlap{n}`'s own overlay - see [`results_draw_list`]'s
+            // own doc on why this is keyed on `idstring`, not `name`. Per-lap,
+            // not per-craft: nothing on this table either way.
+            None
+        } else if name.starts_with("lap") {
+            tournament_lap_cell_text(name, rows, strings)
+        } else {
+            match name {
+                "BigTopText" => Some(tournament_big_top_text(model, strings)),
+                "Line1" => Some(strings.get_or_id(model.line1_id()).to_string()),
                 _ => text.string.clone(),
             }
         };
@@ -420,6 +539,60 @@ fn lap_cell_text(name: &str, model: &Results, strings: &StringTable) -> Option<S
 /// `EndRace_Definition.xml`.
 fn tablebg_y(row: usize) -> f32 {
     92.0 + (row.saturating_sub(1)) as f32 * 20.0
+}
+
+/// `BigTopText`'s own text on Pulse's Tournament results screen -
+/// `EndRaceResults_OnEnter`'s `case 4: case 0x10:` block: `ER_END_TOUR` on
+/// the last leg, `"%s %d/%d"` of `ER_RES` and the leg counter otherwise.
+fn tournament_big_top_text(model: &TournamentResults, strings: &StringTable) -> String {
+    if model.last_leg {
+        strings.get_or_id("ER_END_TOUR").to_string()
+    } else {
+        format!(
+            "{} {}/{}",
+            strings.get_or_id("ER_RES"),
+            model.leg_number,
+            model.leg_count
+        )
+    }
+}
+
+/// A `lap{n}.{c}` cell's own content on Pulse's Tournament standings table -
+/// the header row (`PRO_POS`/`ER_TEAM`/`ER_POINTS`), or `rows[n - 1]`'s own
+/// position/name/points. `rows` is already in the table's own display
+/// order - [`TournamentResults::current`] - so this draws row `n` as-is,
+/// the same "this function does not sort" reading
+/// `EndRaceResults_PopulateTournamentTable`'s own doc gives.
+fn tournament_lap_cell_text(
+    name: &str,
+    rows: &[TournamentRow],
+    strings: &StringTable,
+) -> Option<String> {
+    let (n, c) = lap_slot(name)?;
+    if n == 0 {
+        return match c {
+            0 => Some(strings.get_or_id("PRO_POS").to_string()),
+            1 => Some(strings.get_or_id("ER_TEAM").to_string()),
+            2 => Some(strings.get_or_id("ER_POINTS").to_string()),
+            _ => None,
+        };
+    }
+    let row = rows.get(n - 1)?;
+    match c {
+        0 => Some(n.to_string()),
+        1 => row.team_name.clone(),
+        2 => Some(row.points.to_string()),
+        _ => None,
+    }
+}
+
+/// `tablehighlight`'s own `y` on Pulse's Tournament standings table - one
+/// pixel below the ordinary per-lap table's own [`tablebg_y`]:
+/// `EndRaceResults_PopulateTournamentTable`'s own `iVar7` starts at `0x5d`
+/// (93) for row 1 and steps `0x14` (20) a row. Measured, not chosen - see
+/// the draw list's own doc.
+fn tournament_highlight_y(row: usize) -> f32 {
+    93.0 + (row.saturating_sub(1)) as f32 * 20.0
 }
 
 /// Ticks (this project's own fixed 60 Hz timestep - see

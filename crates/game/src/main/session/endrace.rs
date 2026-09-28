@@ -9,7 +9,7 @@ use oag_ui::endrace::{Event, MenuOption};
 
 use crate::race_stage::endrace::{
     EndRaceRuntime, LoyaltyInputs, ResultsModel, hd_field_rows, headline, loyalty_award,
-    menu_options, to_campaign_medal,
+    menu_options, to_campaign_medal, tournament_results,
 };
 use crate::stage::Stage;
 
@@ -47,6 +47,7 @@ impl Session {
         let source = race_options.source.clone();
         let dlc = race_options.dlc.clone();
         let team = race_options.team.clone();
+        let opponent_teams = race_options.opponent_teams.clone();
         let campaign = stage.campaign_cell.is_some();
         let title = stage.result_key.title.clone();
         // The actual title package, not the display name above - what
@@ -169,7 +170,7 @@ impl Session {
             // (a `--race` run with no `--team`), which draws the row absent
             // rather than a blank name. A real launch through `Team
             // Selection` always names one.
-            let loyalty = team.map(|team| {
+            let loyalty = team.clone().map(|team| {
                 let total = self.records.record_loyalty(&title, &team, award);
                 if let Err(e) = oag_game::records::save(&self.records) {
                     warn!("could not save the loyalty total: {e:#}");
@@ -187,7 +188,32 @@ impl Session {
             })
         };
 
-        let results = if is_hd {
+        // A Tournament leg's own standings, off `self.tournament` (already
+        // folded with this leg's own points -
+        // `Session::record_finished_leg` runs before `build_endrace` in the
+        // same frame, see `tournament_results`'s own doc) and this leg's
+        // grid roster, recomputed via `crate::race::slot_teams` since which
+        // team flew which slot is not carried past the `Race` that just
+        // finished. `None` (no team named at all) draws every row's own
+        // name absent rather than invented.
+        let pulse_tournament = (!is_hd && mode == oag_race::Mode::Tournament)
+            .then_some(self.tournament.as_ref())
+            .flatten()
+            .and_then(|progress| {
+                let slot_teams = team.as_deref().map(|team| {
+                    crate::race::slot_teams(&mut archives, title_ref, team, &opponent_teams)
+                });
+                tournament_results(
+                    board.as_ref(),
+                    progress,
+                    slot_teams.as_deref(),
+                    progress.is_last_leg(),
+                )
+            });
+
+        let results = if let Some(tournament) = pulse_tournament {
+            ResultsModel::PulseTournament(tournament)
+        } else if is_hd {
             ResultsModel::Hd(oag_ui::endrace::FieldResults {
                 headline: headline(mode, observation.place),
                 rows: hd_field_rows(board.as_ref()),
@@ -250,6 +276,7 @@ impl Session {
             let Some(endrace) = stage.endrace.as_mut() else {
                 return;
             };
+            endrace.tick_tournament_table();
             if endrace.is_menu() {
                 let mut events = endrace.menu_mut().update(self.controls.buttons_mut());
                 // No pointer-target list here: `EndRace Menu`'s own row
