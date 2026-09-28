@@ -404,12 +404,24 @@ Two structural points, because both are easy to get wrong later:
 `just appimage-portable`, then rsyncs (falling back to `scp` if the remote has
 no rsync) the AppImage onto the Deck's `~/Desktop`, whatever's under
 `data/images/`/`data/dlc/`/`data/extracted/vita/` onto
-`<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita}` there, and, if present,
+`<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita}` there, the `.psarc` archives
+under `data/extracted/ps4/` (Wipeout: Omega Collection's extract, about 48 GB)
+onto `<XDG_DATA_HOME>/oag/extracted/ps4`, and, if present,
 `data/keys/pure-dlc-keys.txt` onto `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
 - the same places
 [`crates/game/src/source.rs`](../../crates/game/src/source.rs) and
 [`crates/game/src/dlc.rs`](../../crates/game/src/dlc.rs) already search, so
 nothing needs setting on the Deck side to find them.
+
+It copies only what `oag-game` reads, because a Deck's disk is small. Raw
+packages (`*.pkg`, and their `*.sha256`) stay behind in both `data/images/` and
+`data/dlc/`, since the game reads the extracts and never a package; so do the
+encrypted `hdfury-ps3-eu.iso` and its `.dkey`. From the Omega extract only the
+nine `.psarc` archives `oag_omega` mounts go over, not `eboot.bin`,
+`sce_sys/`, `sce_module/` or the disc maps. A Deck that has none of Omega's
+archives does not list Omega in the launcher: `ps4_search_path()` in
+`crates/game/src/source.rs` offers it only when
+`extracted/ps4/omega-eu-patch/uroot/data09.psarc` exists.
 
 ```sh
 just deploy-deck                    # deck@steamdeck, or $OAG_DECK_HOST

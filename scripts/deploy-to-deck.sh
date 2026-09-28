@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
 # Builds the portable AppImage and copies it, plus whatever's under
-# data/images/, data/dlc/, data/extracted/vita/ and Pure's DLC key table,
-# onto a Steam Deck (or any Linux box reachable over ssh).
+# data/images/, data/dlc/, data/extracted/vita/, the .psarc archives under
+# data/extracted/ps4/ and Pure's DLC key table, onto a Steam Deck (or any
+# Linux box reachable over ssh). Only what oag-game reads is copied: no
+# .pkg, no checksum, no key the game does not use.
 #
 # The AppImage lands on the remote user's Desktop, ready to double-click or run
 # from a terminal. The data lands where `oag-game`'s own search path already
 # looks without any flag: `<XDG_DATA_HOME>/oag/images`, `<XDG_DATA_HOME>/oag/dlc`,
-# `<XDG_DATA_HOME>/oag/extracted/vita` and `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
+# `<XDG_DATA_HOME>/oag/extracted/vita`, `<XDG_DATA_HOME>/oag/extracted/ps4` and
+# `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
 # (see crates/game/src/source.rs, crates/game/src/dlc.rs's
 # `default_pure_dlc_keys_path` and docs/tools/packaging.md#where-the-disc-image-comes-from)
 # - so a fresh Deck needs nothing set to find them.
@@ -20,7 +23,8 @@
 #   --skip-build  Don't rebuild; sync whatever is already in data/appimage/
 #                 OpenAntiGrav-x86_64-portable.AppImage.
 #   --no-data     Only sync the AppImage; skip data/images, data/dlc,
-#                 data/extracted/vita and the DLC key table.
+#                 data/extracted/vita, data/extracted/ps4 and the DLC key
+#                 table.
 #   --dry-run     Pass --dry-run to rsync, or print what scp would copy.
 #                 Touches nothing, locally or on the remote, beyond the ssh
 #                 probes needed to resolve paths.
@@ -72,17 +76,19 @@ desktop_dir="$remote_home/Desktop"
 images_dir="$remote_data_home/oag/images"
 dlc_dir="$remote_data_home/oag/dlc"
 vita_dir="$remote_data_home/oag/extracted/vita"
+ps4_dir="$remote_data_home/oag/extracted/ps4"
 keys_dir="$remote_data_home/oag/keys"
 echo "AppImage -> $desktop_dir/"
 echo "images   -> $images_dir/"
 echo "dlc      -> $dlc_dir/"
 echo "2048     -> $vita_dir/"
+echo "omega    -> $ps4_dir/"
 echo "keys     -> $keys_dir/"
 
 if (( dry_run )); then
     echo "(--dry-run: not creating remote directories or transferring anything)"
 else
-    ssh "$host" mkdir -p "$desktop_dir" "$images_dir" "$dlc_dir" "$vita_dir" "$keys_dir"
+    ssh "$host" mkdir -p "$desktop_dir" "$images_dir" "$dlc_dir" "$vita_dir" "$ps4_dir" "$keys_dir"
 fi
 
 use_rsync=0
@@ -104,8 +110,8 @@ sync_file() {
     fi
 }
 
-# $1 src dir, $2 remote dest dir, then any number of basenames to leave behind
-# (see the hdfury exclusion below for why).
+# $1 src dir, $2 remote dest dir, then any number of basename globs to leave
+# behind (see the exclusions below for why).
 sync_dir() {
     local src="$1" dest_dir="$2"
     shift 2
@@ -127,7 +133,9 @@ sync_dir() {
             name="$(basename "$entry")"
             skip=0
             for e in "${excludes[@]}"; do
-                [[ $name == "$e" ]] && { skip=1; break; }
+                # Unquoted on purpose: $e is a glob, the same as rsync's --exclude.
+                # shellcheck disable=SC2053
+                [[ $name == $e ]] && { skip=1; break; }
             done
             if (( skip )); then
                 echo "skipping $name (excluded)"
@@ -139,6 +147,39 @@ sync_dir() {
                 scp -r "$entry" "$host:$dest_dir/"
             fi
         done
+    fi
+}
+
+# $1 src dir, $2 remote dest dir: only the `.psarc` files under it, keeping
+# their relative paths. Wipeout: Omega Collection's extract is a base package
+# and a patch, each a `uroot/` holding the archives oag-game mounts
+# (`oag_omega`'s `DATA_CANDIDATES`/`EXTRA_CANDIDATES`, all nine) next to an
+# `eboot.bin`, `sce_sys/`, `sce_module/` and disc maps nothing reads.
+sync_psarcs() {
+    local src="$1" dest_dir="$2"
+
+    if [[ ! -d $src ]] || [[ -z "$(find "$src" -name '*.psarc' -print -quit)" ]]; then
+        echo "skipping $src: no .psarc archives there yet"
+        return
+    fi
+
+    if (( use_rsync )); then
+        # No -z: a .psarc is already compressed, and compressing ~48 GB again
+        # costs CPU on both ends for nothing.
+        rsync -av --progress "${dry_flag[@]}" --prune-empty-dirs \
+            --include '*/' --include '*.psarc' --exclude '*' \
+            "$src/" "$host:$dest_dir/"
+    else
+        local file rel
+        while IFS= read -r -d '' file; do
+            rel="${file#"$src"/}"
+            if (( dry_run )); then
+                echo "would run: scp '$file' '$host:$dest_dir/$rel'"
+            else
+                ssh "$host" mkdir -p "$dest_dir/$(dirname "$rel")"
+                scp "$file" "$host:$dest_dir/$rel"
+            fi
+        done < <(find "$src" -name '*.psarc' -print0 | sort -z)
     fi
 }
 
@@ -157,13 +198,16 @@ if (( sync_data )); then
     step "Copying data/images"
     # hdfury-ps3-eu.iso is the still-encrypted disc image and hdfury-ps3-eu.dkey
     # its decryption key - dead weight here: only hdfury-ps3-eu-dec.iso is
-    # openable, and HD/Fury isn't played past its menus yet either way (see
-    # data/README.md and docs/formats/ps3-disc.md). The key also has no reason
-    # to leave this machine.
+    # openable (see data/README.md and docs/formats/ps3-disc.md). The key also
+    # has no reason to leave this machine. `*.pkg` and `*.sha256` are the raw
+    # Vita and PS4 packages and their checksums: oag-game never reads a
+    # package, only the extracts synced below (the Omega pair alone is 27 GB).
     sync_dir "$project_root/data/images" "$images_dir" \
-        "hdfury-ps3-eu.iso" "hdfury-ps3-eu.dkey"
+        "hdfury-ps3-eu.iso" "hdfury-ps3-eu.dkey" "*.pkg" "*.sha256"
     step "Copying data/dlc"
-    sync_dir "$project_root/data/dlc" "$dlc_dir"
+    # The 2048 DLC `.pkg`s are not read either: crates/game/src/dlc.rs mounts
+    # Pulse's and Pure's zips only.
+    sync_dir "$project_root/data/dlc" "$dlc_dir" "*.pkg"
     step "Copying data/extracted/vita (Wipeout 2048)"
     # Not a disc image, so it lives outside data/images/ - an extracted PKG
     # directory, one subdirectory per package (see data/README.md). Synced
@@ -171,6 +215,11 @@ if (( sync_data )); then
     # for it at $vita_dir on a machine with no OAG_IMAGE and no data/ beside
     # the AppImage, which is exactly the Deck's own layout.
     sync_dir "$project_root/data/extracted/vita" "$vita_dir"
+
+    step "Copying data/extracted/ps4's .psarc archives (Wipeout: Omega Collection)"
+    # oag-game's ps4_search_path() looks for `omega-eu-patch/uroot/data09.psarc`
+    # under $ps4_dir, the same "no data/ beside the AppImage" layout as 2048.
+    sync_psarcs "$project_root/data/extracted/ps4" "$ps4_dir"
 
     step "Copying data/keys/pure-dlc-keys.txt"
     # Only this one file, not the whole data/keys/ directory: Wipeout Pure's
@@ -195,6 +244,7 @@ echo "AppImage: $desktop_dir/$(basename "$appimage")"
 echo "images:   $images_dir"
 echo "dlc:      $dlc_dir"
 echo "2048:     $vita_dir"
+echo "omega:    $ps4_dir"
 echo "keys:     $keys_dir"
 echo
 echo "Run it: ssh $host '$desktop_dir/$(basename "$appimage")'"
