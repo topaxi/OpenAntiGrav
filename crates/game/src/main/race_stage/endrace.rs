@@ -538,6 +538,27 @@ pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
     multiplier * (lap_term + kill_term + zone_term)
 }
 
+/// Whether a Cross/Start press on a finished race belongs to the built-in
+/// results table (`oag_game::scoreboard`), whose only answer is to leave the
+/// race - `Session::escape`, straight to `Main Menu`.
+///
+/// **`false` once the EndRace flow is built**, because that flow owns the
+/// same two buttons (`Session::tick_endrace`: a confirm advances `Results`
+/// to `Rewards` to `Menu`). `Session::frame` checks this *before* its
+/// finished-race arm reaches `tick_endrace`, so without this guard the table
+/// swallowed the press first and one confirm at `EndRace Results` left a
+/// campaign race for `Main Menu`, skipping `Rewards` and `RETURN TO GRID`
+/// entirely - on every race with a built flow, campaign or not. The pointer
+/// path already had this guard (`pointer::press_for_click` is skipped when
+/// `endrace` is `Some`); only the pad path lacked it.
+///
+/// Not gated on `RaceStage::endrace_unavailable`: `Session::build_endrace`
+/// returns before setting it on a run with no shell or no race options (a
+/// `--race` run), and such a run still needs the table's own way out.
+pub(crate) fn results_table_takes_confirm(finished: bool, endrace_built: bool) -> bool {
+    finished && !endrace_built
+}
+
 #[cfg(test)]
 mod tests {
     use super::{LoyaltyInputs, hd_field_rows, loyalty_award};
@@ -674,5 +695,20 @@ mod tests {
             suggested_ship: false,
         });
         assert_eq!(eliminator, 2 * 10 + 3 * 30);
+    }
+
+    /// **The regression this pins**: a confirm on a finished race with a
+    /// built EndRace flow must reach `Session::tick_endrace`, not the
+    /// built-in table's escape to `Main Menu`. See
+    /// `results_table_takes_confirm`'s own doc.
+    #[test]
+    fn a_built_endrace_flow_keeps_the_confirm_from_the_results_table() {
+        use super::results_table_takes_confirm;
+        assert!(!results_table_takes_confirm(true, true));
+        // No flow (a `--race` run, or a title whose screens do not read):
+        // the table still answers, or the run has no way off it.
+        assert!(results_table_takes_confirm(true, false));
+        // A race still running is never the table's.
+        assert!(!results_table_takes_confirm(false, false));
     }
 }
