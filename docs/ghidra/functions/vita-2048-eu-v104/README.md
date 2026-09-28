@@ -92,6 +92,10 @@ full comparison.
   field table: `M_PPLAYERSHIPMODELDATA`/`M_bPrevent*Ships` are the real
   craft-restriction mechanism `docs/formats/2048-campaign.md` had expected
   `WOShipCreatorParams` to be (authored on zero events).
+- [weapon-type-bits.md](weapon-type-bits.md) - `WeaponType`'s own enum
+  declaration, found by chasing the field-to-enum reflection link rather than
+  a runtime consumer: settles `M_WEAPONAVAILABLEBITS` bit 4 as `Shield` and
+  splits the prior joint `Mine`+`Bomb` pair into `Bomb`=8, `Mine`=9.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name
