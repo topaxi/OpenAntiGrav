@@ -443,6 +443,12 @@ found two things wrong, both fixed from the executable rather than chosen:
   `HD_options_arrow.gtf` blinking eight ticks on, nine off, at `X + 8`; the
   label sits at `X + 40` in `TextColor`. See
   [menu-blocks.md](../ghidra/functions/ps3-hdfury-eu/menu-blocks.md#a-standalone-block-parse-selectable-update-2026-09-28).
+  **On the Fury style the cursor stays light blue while `Results`'
+  `GridHighlight` is red, and that is right**: the highlight authors
+  `FEGlobals->HD_Blue`, which the served Fury archive resolves to red, and
+  the Block's focus colour is a compiled-in literal, not that global (the
+  constructors set no "is a global" bit for it). Do not "fix" one to match
+  the other.
   The walk that verified it found a third bug: Up moved the cursor *down*,
   because the shared option list is Pulse's order (`RETURN TO GRID` first)
   while HD draws each option at its own Block's `y`.

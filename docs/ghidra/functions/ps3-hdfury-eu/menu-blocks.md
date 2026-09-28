@@ -374,8 +374,10 @@ through the function's own TOC (`-0xeb8` .. `-0xe58`):
 | `TextScale` | `+0xec` |
 
 Unauthored, the defaults are `Block_Construct`'s: height `40.0`, `Color`
-`0xffffffff`, **`ActiveColor` the literal `0xff8ac0ca`** (`+0xc0`; the
-constructor sets no "is a global" bit for it), `TextScale` `0x3f4ccccd` =
+`0xffffffff`, **`ActiveColor` the literal `0xff8ac0ca`** (`+0xc0`; neither
+`Block_Construct` nor the widget base constructor it calls first,
+`0x00165ba8`, sets an "is a global" bit - the base one zeroes the whole
+`+0x80` flag word), `TextScale` `0x3f4ccccd` =
 `0.8`. `EndRace Menu` authors `Color="0xff646464"` and no `ActiveColor`, so
 its focused option is `0xff8ac0ca`. A `selectable="true"` block calls
 `Block_MakeSelectable` with its `ArrowColor`.
