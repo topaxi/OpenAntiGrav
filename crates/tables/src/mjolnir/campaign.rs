@@ -41,9 +41,14 @@ pub mod typedef {
     /// field-type pairs settle it either way.
     pub const TRACK_DEFINITION: i64 = 205052969;
     /// `WeaponSetDefinition`, confidence 95 (named in-file). 20 instances,
-    /// each one `M_WEAPONAVAILABLEBITS` field carrying a single value this
-    /// module does not decode - `WeaponType`'s own bit meanings are
-    /// unresolved. See [`WeaponSet`].
+    /// each one `M_WEAPONAVAILABLEBITS` field carrying a single value.
+    /// **2026-09-28: `WeaponType`'s bit meanings are decoded for the bits
+    /// pinned at confidence >= 70** - see [`WeaponSet::allowed_weapons`] and
+    /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section.
+    /// **2026-09-28: all eleven bits now pinned**, including bit 4
+    /// (`Shield`) and the `Mine`/`Bomb` split, from `WeaponType`'s own enum
+    /// declaration in `eboot.elf` -
+    /// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md`.
     pub const WEAPON_SET_DEFINITION: i64 = -966434245;
     /// `WOShipModelData`, confidence 95 (named in-file). 21 instances: a
     /// team+livery craft catalogue (`M_TEAM`/`M_LIVERY`, e.g.
@@ -383,10 +388,10 @@ pub struct WeaponSet {
     /// The instance's own `name=`, e.g. `"Rockets Only"`,
     /// `"Cannons, Missile, Plasma"`.
     pub name: String,
-    /// `M_WEAPONAVAILABLEBITS`'s raw value. **Unresolved**: `WeaponType`'s
-    /// own bit-to-weapon mapping was not chased this pass - the name alone
-    /// (`"Rockets Only"` carries `1`, for instance) is the only evidence
-    /// recorded, not a decoded mask.
+    /// `M_WEAPONAVAILABLEBITS`'s raw value, undecoded. See
+    /// [`Self::allowed_weapons`] for the decode of the bits this project has
+    /// pinned, and `docs/formats/2048-campaign.md`'s "The weapon set gate"
+    /// section for the ones it has not.
     pub available_bits: Option<i64>,
 }
 
@@ -422,6 +427,72 @@ pub fn weapon_sets(document: &Document) -> Vec<WeaponSet> {
 #[must_use]
 pub fn weapon_set_for(document: &Document, reference: Reference) -> Option<WeaponSet> {
     WeaponSet::from_instance(document.instance(reference.instance_id)?)
+}
+
+/// `(bit index, weapon)` for every `M_WEAPONAVAILABLEBITS` bit - all eleven
+/// of `WeaponType`'s own members, from `WeaponType`'s own enum declaration in
+/// `eboot.elf`. See
+/// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md` for the
+/// decompiled registration this reads, and `docs/formats/2048-campaign.md`'s
+/// "The weapon set gate" section for the full history, including the earlier,
+/// data-only pass this superseded.
+///
+/// **Confidence 95 for eight of these** (`Rocket`, `Missile`, `Quake`,
+/// `Turbo`, `Cannon`, `Autopilot`, `Plasma`, `LeachBeam`): each is the sole
+/// bit set on a `"<Weapon> Only"`-named `SP.xml` instance (`"Rockets Only"` =
+/// `1`, `"Missile Only"` = `2`, ... `"Leech Beam Only"` = `1024`), every
+/// multi-weapon instance's value is the sum of its members' bits with no
+/// residue across all 20 named instances, and `WeaponType`'s own ordinals
+/// match every one of those eight bit positions exactly - two independent
+/// sources agreeing is what licenses reading the enum directly for the rest.
+///
+/// **Confidence 95 for `Shield`** (bit 4): unpinned by `SP.xml`'s data alone
+/// (suggestive only - the one bit `SP.xml` sets that the other eight didn't
+/// account for), settled by `WeaponType`'s own declaration naming ordinal 4
+/// `SHIELD`.
+///
+/// **Confidence 90 for `Bomb` (bit 8) and `Mine` (bit 9) individually**: read
+/// directly off `WeaponType`'s own declaration (`BOMB` = 8, `MINE` = 9), one
+/// tier below the other nine because `SP.xml`'s 20 instances never set one of
+/// the pair without the other, so nothing in the shipped data has exercised
+/// the split independently. A prior pass read these two as one joint
+/// `Mine`+`Bomb` gate at confidence 75, unable to split them from data alone;
+/// superseded by this reading. Order here does **not** match
+/// `docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`'s
+/// `Hud_UpdatePickupIcon` *held-weapon id* table, where id 8 is `FE_MINES`
+/// and 9 is `FE_BOMB` - a different, unrelated 2048 enum whose ordering
+/// already disagreed with `WeaponType`'s from bit/id 5 onward (`WeaponType`
+/// bit 5 is `Cannon`, held-id 5 is `Shield`).
+pub const WEAPON_BITS: &[(u32, crate::weapons::Weapon)] = &[
+    (0, crate::weapons::Weapon::Rocket),
+    (1, crate::weapons::Weapon::Missile),
+    (2, crate::weapons::Weapon::Quake),
+    (3, crate::weapons::Weapon::Turbo),
+    (4, crate::weapons::Weapon::Shield),
+    (5, crate::weapons::Weapon::Cannon),
+    (6, crate::weapons::Weapon::Autopilot),
+    (7, crate::weapons::Weapon::Plasma),
+    (8, crate::weapons::Weapon::Bomb),
+    (9, crate::weapons::Weapon::Mine),
+    (10, crate::weapons::Weapon::LeachBeam),
+];
+
+impl WeaponSet {
+    /// The weapons `M_WEAPONAVAILABLEBITS` allows, decoded from
+    /// [`WEAPON_BITS`] - all eleven of `WeaponType`'s own members. Empty when
+    /// [`Self::available_bits`] is `None`, or when the value sets none of the
+    /// bits above.
+    #[must_use]
+    pub fn allowed_weapons(&self) -> Vec<crate::weapons::Weapon> {
+        let Some(bits) = self.available_bits else {
+            return Vec::new();
+        };
+        WEAPON_BITS
+            .iter()
+            .filter(|&&(bit, _)| bits & (1_i64 << bit) != 0)
+            .map(|&(_, weapon)| weapon)
+            .collect()
+    }
 }
 
 /// One `GameModeObjective`: what [`Event::pass_objective`]/

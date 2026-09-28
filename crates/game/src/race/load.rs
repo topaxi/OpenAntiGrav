@@ -868,6 +868,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
             speedup_pads,
             weapon_pads,
             weapons,
+            // No caller of the general `load` sets this - only
+            // `race::load::campaign::load_event` does, on the `Loaded` this
+            // returns, after this whole function has already run. See
+            // `Setup::allowed_weapons`'s own doc comment.
+            allowed_weapons: Vec::new(),
             weapon_pad_refresh,
             class_gravity_scale,
             pose_override,

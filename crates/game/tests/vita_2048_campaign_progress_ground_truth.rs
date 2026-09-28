@@ -264,3 +264,41 @@ fn load_event_resolves_event_1s_own_pass_and_elite_objectives() {
         "never finished: not even the pass bar is decidable"
     );
 }
+
+/// `race::load_event` wires a decoded weapon set through to
+/// `Loaded::setup::allowed_weapons`, gating `race::pads` at runtime - see
+/// `crates/game/src/race/load/campaign.rs` and
+/// `docs/formats/2048-campaign.md`'s "The weapon set gate" section.
+///
+/// Checked against a direct decode off the same document rather than a
+/// hard-coded weapon list, so this does not go stale the moment a future
+/// patch or region reshapes which `WeaponSetDefinition` `"2048 - Event 6"`
+/// points at - only that `load_event` carries through whatever that
+/// resolves to today, and that today it resolves to something.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn load_event_wires_2048_event_6s_own_weapon_set_onto_setup() {
+    let Some(source) = source() else { return };
+    let doc = sp_xml(&source);
+    let event = oag_2048::campaign::events(&doc)
+        .into_iter()
+        .find(|event| event.name == "2048 - Event 6")
+        .expect("\"2048 - Event 6\" is not in SP.xml");
+    let expected = event
+        .weapon_set
+        .and_then(|reference| oag_2048::campaign::weapon_set_for(&doc, reference))
+        .map(|set| set.allowed_weapons())
+        .unwrap_or_default();
+    assert!(
+        !expected.is_empty(),
+        "\"2048 - Event 6\"'s own weapon set decoded to nothing recognised - pick a \
+         different pinned event so this test still exercises the gate"
+    );
+
+    let options = race::Options {
+        source: source.display().to_string(),
+        ..race::Options::default()
+    };
+    let resolved = race::load_event(&options, "2048 - Event 6").expect("\"2048 - Event 6\" loads");
+    assert_eq!(resolved.setup.allowed_weapons, expected);
+}

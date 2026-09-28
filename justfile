@@ -547,8 +547,8 @@ appimage-portable *ARGS:
 install-desktop-file *ARGS:
     ./scripts/install-desktop-file.sh "$@"
 
-# Build the portable AppImage and copy it, plus any data/images and data/dlc
-# you have, onto the Steam Deck (or any host reachable over ssh) - see
+# Build the portable AppImage and copy it, plus what oag-game reads out of
+# data/images, data/dlc, data/extracted/{vita,ps4} (no raw .pkg), onto the Steam Deck (or any host reachable over ssh) - see
 # docs/tools/packaging.md#steam-deck and scripts/deploy-to-deck.sh
 deploy-deck *ARGS:
     ./scripts/deploy-to-deck.sh "$@"

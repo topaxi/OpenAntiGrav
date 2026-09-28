@@ -182,6 +182,43 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
             restricted.join(", ")
         ));
     }
+
+    // **Set on `loaded.setup` rather than threaded through `Options`/`load`**,
+    // the way `campaign_2048_event` below already is - a new required
+    // `Options` field would have touched every exhaustive call site across
+    // this workspace for a feature only this campaign needs (see this
+    // module's own doc comment on why `load_event` is a second entry point
+    // rather than that). `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`
+    // only decodes the bits this project has pinned at confidence >= 70 - see
+    // `docs/formats/2048-campaign.md`'s "The weapon set gate" section - so an
+    // event whose set authors only low-confidence bits races unrestricted,
+    // the same "an empty `Setup::allowed_weapons` is no override" reading
+    // every other race is already in, rather than this project guessing at
+    // the bits it could not pin.
+    if let Some(weapon_set) = event
+        .weapon_set
+        .and_then(|reference| oag_2048::campaign::weapon_set_for(&doc, reference))
+    {
+        let allowed = weapon_set.allowed_weapons();
+        if allowed.is_empty() {
+            loaded.report.push(format!(
+                "{event_name:?}'s weapon set {:?} decodes to no weapon this project has pinned at \
+                 confidence >= 70; racing unrestricted rather than guessing",
+                weapon_set.name
+            ));
+        } else {
+            loaded.report.push(format!(
+                "{event_name:?} restricts weapon pads to {:?}'s own set: {}",
+                weapon_set.name,
+                allowed
+                    .iter()
+                    .map(|weapon| format!("{weapon:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        loaded.setup.allowed_weapons = allowed;
+    }
     // Resolved here, where the parsed `Document` is already in hand, rather
     // than re-opened later at grading time - see `Loaded::campaign_2048_event`'s
     // own doc for why this rides on `Loaded` instead of through `Session` the
