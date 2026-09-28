@@ -434,6 +434,15 @@ fn hd_endrace_page(
                 ],
                 Some(seconds_to_ticks(49.34)),
             );
+            // Two whole blink periods: the focused block has eased to its
+            // full width and its arrow is on its lit phase, so a still
+            // shows the cursor a player sees most of the time rather than
+            // the first frame's narrow box. The tick count is this
+            // capture's choice; the ease and blink are `Block_Update`'s.
+            let mut model = model;
+            for _ in 0..34 {
+                model.tick();
+            }
             oag_ui::endrace::hd::hd_menu_draw_list(
                 &model,
                 menu,

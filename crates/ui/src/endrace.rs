@@ -397,10 +397,14 @@ impl MenuOption {
 }
 
 /// `EndRace Menu`: the option list and the just-driven run's own best lap.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EndRaceMenu {
     options: Vec<MenuOption>,
     index: usize,
+    /// Each option's own `Block_Update` state, index for index with
+    /// `options` - drawn by Wipeout HD/Fury, whose options are free-standing
+    /// `<Block>`s ([`hd`]); Pulse's `<Menu>` list ignores it.
+    focus: Vec<crate::menu::block::Focus>,
     /// `GhostLine2`/`GhostTime2`'s own `ER_NEW_GHOST` row - this run's own
     /// best lap, in ticks. `None` when no lap was ever completed, which
     /// draws the row absent rather than a formatted zero.
@@ -410,11 +414,30 @@ pub struct EndRaceMenu {
 impl EndRaceMenu {
     #[must_use]
     pub fn new(options: Vec<MenuOption>, new_best_lap_ticks: Option<u32>) -> Self {
+        let focus = vec![crate::menu::block::Focus::default(); options.len()];
         Self {
             options,
             index: 0,
+            focus,
             new_best_lap_ticks,
         }
+    }
+
+    /// One tick of every option block's own focus state - see
+    /// [`crate::menu::block::Focus`]. Called once a tick while the screen is
+    /// up, the way `Block_Update` runs once a frame.
+    pub fn tick(&mut self) {
+        let index = self.index;
+        for (row, focus) in self.focus.iter_mut().enumerate() {
+            focus.tick(row == index);
+        }
+    }
+
+    /// Option `row`'s own focus state; the default (unfocused, never
+    /// ticked) for a row past the end.
+    #[must_use]
+    pub fn focus(&self, row: usize) -> crate::menu::block::Focus {
+        self.focus.get(row).copied().unwrap_or_default()
     }
 
     #[must_use]

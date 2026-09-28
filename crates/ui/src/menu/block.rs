@@ -347,3 +347,66 @@ fn patch_uv(frame: Placed, uv: [f32; 4]) -> [f32; 4] {
 fn alpha(color: [f32; 4], alpha: f32) -> [f32; 4] {
     [color[0], color[1], color[2], alpha]
 }
+
+/// One standalone `<Block>`'s focus state, as `Block_Update` (`0x0018d588`)
+/// keeps it for a block parsed with `selectable="true"`: the eased focus
+/// fraction (`+0x15c`) that grows the block's width, and the 17-tick counter
+/// (`+0x158`) that blinks its marker arrow. Both start at zero, which is what
+/// `Block_Construct` writes.
+///
+/// A strip tab or a settings row eases the same way through its parent menu
+/// (`HorizMenu_LayoutBlocks`, `List_Update`); this is the block doing it for
+/// itself, which is what `EndRace Menu`'s free-standing option blocks do.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Focus {
+    fraction: f32,
+    blink: u8,
+}
+
+/// How far a focused standalone block grows: `60.0`, TOC `0x008ac60c` in
+/// `Block_Update`. The width drawn is the authored one plus this times the
+/// focus fraction.
+pub const FOCUS_GROWTH: f32 = 60.0;
+/// The share of the remaining distance the focus fraction closes each tick:
+/// `0x3e2aaaab = 1/6`, TOC `0x008ac608`.
+const FOCUS_EASE: f32 = 1.0 / 6.0;
+/// The blink counter wraps past this, `0x11`.
+const BLINK_PERIOD: u8 = 17;
+/// Counter values from this one up draw the arrow hidden: `7 < counter`.
+const BLINK_OFF_FROM: u8 = 8;
+
+impl Focus {
+    /// One tick of `Block_Update`. A focused block counts its blink and eases
+    /// toward `1.0`; an unfocused one eases toward `0.0` and leaves its
+    /// counter where it was, as the original does.
+    pub fn tick(&mut self, focused: bool) {
+        let target = if focused { 1.0 } else { 0.0 };
+        if focused {
+            self.blink += 1;
+            if self.blink >= BLINK_PERIOD {
+                self.blink = 0;
+            }
+        }
+        let step = (target - self.fraction).abs() * FOCUS_EASE;
+        if target > self.fraction {
+            self.fraction = (self.fraction + step).min(target);
+        } else if target < self.fraction {
+            self.fraction = (self.fraction - step).max(target);
+        }
+    }
+
+    /// The eased focus fraction, `0.0..=1.0`.
+    #[must_use]
+    pub fn fraction(&self) -> f32 {
+        self.fraction
+    }
+
+    /// Whether the marker arrow is lit this tick - eight ticks on, nine off,
+    /// the same duty cycle `HorizMenu_LayoutBlocks`' underline and
+    /// `List_Update`'s marker run on. Only meaningful for the focused block;
+    /// an unfocused one hides its arrow outright.
+    #[must_use]
+    pub fn arrow_lit(&self) -> bool {
+        self.blink < BLINK_OFF_FROM
+    }
+}

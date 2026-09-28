@@ -380,3 +380,110 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
         "{bare:?}"
     );
 }
+
+/// A full eight-craft field on the real disc's own `EndRace Results`, laid
+/// out as `0x0022c068`'s race branch and `0x0022b688` lay it out
+/// (`docs/formats/hd-endrace-screens.md`): row `r` at the grid's `96 + 45 r`,
+/// so the eighth row ends above the `487` bottom bar, and the file's own
+/// Time-Trial footer block (`GridBottomBlock`, `y="357"` inside the grid)
+/// is not drawn at all. The regression this pins: the eighth row sitting on
+/// that footer, seen on a live HD campaign walk.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
+    let Some(source) = image() else {
+        return;
+    };
+    let source = source.display().to_string();
+    let mut archives = open_hd_archives(&source);
+    let strings = oag_ui::language::StringTable::default();
+    let screens = oag_game::endrace::load(
+        &mut archives,
+        &strings,
+        oag_ui::picker::FaceScales::default(),
+        oag_hd::endrace::AUTHORED_GRID,
+        &oag_game::sprite::Sheet::default(),
+        &[],
+        oag_hd::TITLE,
+    )
+    .expect("HD's own EndRace Results read off the real disc");
+    let screen = &screens.results.screen;
+    let fill = |name: &str| {
+        screen
+            .fills
+            .iter()
+            .find(|fill| fill.name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name} is on the real screen"))
+            .clone()
+    };
+    let footer = fill("GridBottomBlock");
+    let side = fill("GridSideBarL");
+    // The grid's own origin: `GridSideBarL` sits at `y = 44` inside it.
+    let origin_y = side.y - 44.0;
+
+    let rows: Vec<oag_ui::endrace::FieldRow> = (1..=8u8)
+        .map(|place| oag_ui::endrace::FieldRow {
+            place,
+            time_ticks: Some(6000 + u64::from(place) * 60),
+            player: place == 5,
+        })
+        .collect();
+    let model = oag_ui::endrace::FieldResults {
+        headline: oag_ui::endrace::Headline::Position(5),
+        rows,
+    };
+    let skin = oag_ui::menu::Skin::new(
+        oag_hd::frontend::FRONT_END
+            .menu
+            .expect("HD authors a MenuSkin"),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let layers = oag_ui::endrace::hd::hd_results_draw_list(
+        &model,
+        &screens.results,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    );
+    let place_y = |place: &str| {
+        layers
+            .body
+            .iter()
+            .find_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { text, y, .. } if text == place => Some(*y),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("place {place} drew"))
+    };
+    for place in 1..=8u8 {
+        let expected = origin_y + 96.0 + f32::from(place - 1) * 45.0;
+        assert!(
+            (place_y(&place.to_string()) - expected).abs() < 0.01,
+            "row {place} at {} not {expected}",
+            place_y(&place.to_string())
+        );
+    }
+    let bottom_bar = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            oag_ui::frontend::Draw::Fill { rect, .. } => Some(*rect),
+            _ => None,
+        })
+        .find(|rect| (rect[1] - (origin_y + 487.0)).abs() < 0.01)
+        .expect("GridBottomBar moves to the race layout's y = 487");
+    // The eighth row's own 38-unit highlight band ends above the bar.
+    assert!(place_y("8") - 2.0 + 38.0 <= bottom_bar[1], "{bottom_bar:?}");
+    assert!(
+        !layers.body.iter().any(|draw| matches!(
+            draw,
+            oag_ui::frontend::Draw::Fill { rect, .. }
+                if (rect[1] - footer.y).abs() < 0.01 && (rect[3] - 38.0).abs() < 0.01
+        )),
+        "GridBottomBlock is hidden on a race"
+    );
+}
