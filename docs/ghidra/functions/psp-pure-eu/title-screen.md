@@ -150,9 +150,9 @@ the same string table:
 
 **The `Animation` object's own field layout**, read off its constructor
 (`Animation_ConstructFromNode`, `FUN_088b9854` EU only - the USA twin was not
-located this pass): `+0x3c` is the parse-time tag-dispatch table pointer
-(`0x2b50f8`, the table `Animation_ParseValuesOrKey` and
-`Animation_ConstructFromNode` are both entries of); `+0x9c` the key list head;
+located this pass): `+0x3c` is the object's own vtable pointer (see the
+2026-09-28 section below for the correction - it is not merely a parse-time
+tag-dispatch table); `+0x9c` the key list head;
 `+0xa0`/`+0xa4` the `IncButton`/`DecButton` names resolved to ids; `+0xa8`/
 `+0xa9`/`+0xaa` the three `<Values>` booleans (`FixedFrames`, `Loop`,
 `Active` - `Active` defaults **true**, the other two **false**); `+0xac` a
@@ -175,27 +175,9 @@ negative value at an intermediate `Time` before the final `Time` snaps it to
 `0` (e.g. `TitleAnim13`: `-3` at `0`, `-3` at `0.63`, `0` at `0.65`) - a hold
 then a fast transition, not a `Time`-`0`-to-final linear ramp throughout.
 
-**What is not settled: how `TextureWidth` maps to a rendered pixel.** Whether
-the widget's own displayed width is `authored_width + TextureWidth` (reading
-`0` at the negative end, growing to the full width by the final key), whether
-it crops a texture-space sample instead of the render rect, and which screen
-edge stays anchored while the other moves, are none of them read from a draw
-call - only the authoring convention above is read. The consuming
-update/draw pair was searched for (the parse-time table at `+0x3c` is
-confirmed to hold `Animation_ParseValuesOrKey` as a *parse*-time entry, not a
-runtime behaviour vtable - it mixes function pointers with what look like
-further nested tables, e.g. `FUN_088b9ca8` alongside data-shaped entries in
-the 0x234000-0x237000 range) but not found: the object's own real leading
-vtable (C++ ABI offset `+0x00`, never written by either constructor this page
-decompiled) is the more likely location for `Update`/`Draw` and was not
-reached this pass. **Do not implement a reveal animation from the negative
-convention alone** - it is a strong authoring pattern, not a read of what the
-renderer does with it.
-
 Confidence **80** for the `<Key>`/`<Values>` struct layout and the authoring
-convention (both read directly and cross-checked against the shipped XML);
-**no confidence claimed** for the render mapping, which is unread. Named
-`Animation_ParseValuesOrKey` (EU and USA) and `Animation_ConstructFromNode`
+convention (both read directly and cross-checked against the shipped XML).
+Named `Animation_ParseValuesOrKey` (EU and USA) and `Animation_ConstructFromNode`
 (EU only) in `names.tsv`.
 
 ## Applied names
@@ -209,6 +191,13 @@ convention (both read directly and cross-checked against the shipped XML);
 | `0x088b9f28` | `Animation_ParseValuesOrKey` | 80 | Pure EU |
 | `0x088ba694` | `Animation_ParseValuesOrKey` | 80 | Pure USA |
 | `0x088b9854` | `Animation_ConstructFromNode` | 80 | Pure EU (USA twin not located this pass) |
+| `0x088b9a80` | `Animation_Update` | 90 | Pure EU |
+| `0x088b9dd0` | `Animation_InterpolateKeys` | 90 | Pure EU |
+| `0x088b9d0c` | `Animation_JumpToTime` | 80 | Pure EU |
+| `0x088b9ca8` | `Animation_ComputeRect` | 85 | Pure EU |
+| `0x0889300c` | `Element_UpdateTree` | 85 | Pure EU |
+| `0x088b38b4` | `Element_UpdateFade` | 85 | Pure EU |
+| `0x088b5010` | `Element_ComputeRect` | 80 | Pure EU |
 
 ## 2026-09-26: the reveal's `TextureWidth` is write-once, not re-read - a live watchpoint, not a guess
 
@@ -226,37 +215,21 @@ reused "current parse-tag-dispatch table" slot, not a vtable, matching what the
 explicitly zeroes `+0x00`** (`*param_1 = 0;`) and nothing later in the chain writes it
 again. So the "find the real vtable" plan in the old Next Steps here rests on a field
 that is deliberately zero at construction and never assigned by any constructor this or
-the prior pass decompiled - either it is written far later (post-construction, at first
-use) by a function neither pass has reached, or this class does not use a leading vtable
-at all and dispatches some other way (a type tag plus a switch, most likely, given the
-engine already reuses `+0x3c` as a manually-maintained table elsewhere).
+the prior pass decompiled.
+
+**This section's own reading of `+0x3c` as "not a vtable" is corrected below (2026-09-28):
+`+0x3c`, not `+0x00`, is the real vtable pointer.** The observation here (three levels,
+three table pointers) is still accurate; the *interpretation* - that this rules `+0x3c`
+out as a vtable - does not survive a live read. Left in place rather than deleted, since
+the arithmetic slip that caused the miss (below) is itself worth keeping visible.
 
 **`FUN_088b9ca8`, the one candidate the 2026-09-23 pass flagged from the `+0x3c` table's
-neighbourhood, is retracted - decompiled this pass, and it is unrelated:**
-
-```c
-void FUN_088b9ca8(int param_1)
-{
-  FUN_088b5010();
-  *(float *)(param_1 + 0x48) = *(float *)(param_1 + 0x48) + *(float *)(param_1 + 0xbc);
-  *(float *)(param_1 + 0x4c) = *(float *)(param_1 + 0x4c) + *(float *)(param_1 + 0xc0);
-  *(float *)(param_1 + 0x50) = *(float *)(param_1 + 0x50) + *(float *)(param_1 + 0xc4);
-  *(float *)(param_1 + 0x54) = *(float *)(param_1 + 0x54) + *(float *)(param_1 + 200);
-  return;
-}
-```
-
-A four-field `position += velocity` integrator at offsets `+0x48..0x54`/`+0xbc..0xc8` -
-nothing in `Animation`'s own mapped layout (`+0x9c` key list, `+0xa8..0xd8` bools/counts)
-lines up with those offsets. It is a different class entirely; the two other data-shaped
-entries decompiled from the same table (`0x08826428`, `0x088267d0`, reached by applying
-this project's documented "`+0x08804000`" decompiler-constant correction to the table's
-own raw words) are 3D mesh/vertex-sort code, not UI. **The correction that page's own
-banner names is verified only for `lui`/`addiu`-embedded `.rodata` addresses inside a
-decompiled function body** - applying it blindly to raw data words read out of a table
-at runtime is not the same claim, and this pass's result is exactly the kind of false
-lead that mixing the two produces. Retracting the candidate rather than leaving it
-findable and untested.
+neighbourhood, was retracted here as "an unrelated position += velocity integrator" - that
+retraction is itself wrong, and is corrected in the 2026-09-28 section below as
+`Animation_ComputeRect`.** The decompile quoted in that retraction is accurate; what was
+wrong was the claim that its offsets don't line up with `Animation`'s own layout, which
+rested on applying the `+0x08804000` correction to the *wrong* neighbouring table
+(`0x08ab50f8`, an arithmetic error - the correct sum is `0x08ab90f8`).
 
 **A live, non-halting memory watchpoint answers a narrower but real question: nothing
 reads `Key.TextureWidth` through a normal CPU load, ever, across a full boot-to-reveal
@@ -271,7 +244,9 @@ both while `Language Selection` was still showing and again once `Title Screen` 
 was on screen and fully settled - the front end's screen-definition parse tree lives at
 a fixed location (`0x08b32460`-`0x08b3722c` this build) regardless of which screen is
 currently active, not a per-navigation heap allocation the way the `TitleFrame`/
-`BackgroundController` texture assignments are.
+`BackgroundController` texture assignments are. **Confirmed still true, live, in the
+2026-09-28 pass**: a real `Animation`'s own `+0x9c` key-list head resolves inside this
+same range, so the watchpoints were armed on the right memory.
 
 Scripted the whole way from a cold boot - `Language Selection` (cross) ->
 `Developer Publisher Screen` (auto) -> `MemoryStickWarning` (cross) -> `FMV Intro`
@@ -283,31 +258,20 @@ lines:
 - **Every one of the twelve fired exactly once, a `Write32`, all at the same PC**
   (`0x08899318`, PPSSPP's own auto-symbol `z_un_088992f4`) - the parse-time write that
   populates the `Key` from the authored XML attribute, matching
-  `Animation_ParseValuesOrKey`'s already-documented behaviour. `0x08899318` is a
-  low-level "write a parsed float into a struct field" helper reused across many parsers
-  in this binary, not Animation-specific, so it is not named in `names.tsv` here -
-  confidence in what it does (evidenced by this one call site) is fine, confidence that
-  it deserves a `Subsystem_VerbNoun` identity of its own is not.
+  `Animation_ParseValuesOrKey`'s already-documented behaviour.
 - **Zero reads, on any of the twelve, across the whole window** - including the roughly
   0.65-1.5 s the authored `Key` data itself says the reveal should be actively
   interpolating in. The watchpoint mechanism itself is demonstrably alive for this
   exact window (it caught all twelve writes, correctly timestamped and PC-tagged), so
   this is not the "watchpoint never armed" failure `ppsspp-debugger.md` warns about.
+  **Resolved in the 2026-09-28 section below**: `Animation_InterpolateKeys` does read
+  each `Key` field, once per `Animation_Update` call - this window's own zero-hits
+  result is not explained by this pass, only superseded by a direct read of the
+  consuming function.
 
-**Reading, not certain: this is most consistent with the consumer using an Allegrex
-VFPU quad-load (`lv.q`) rather than a scalar `lw`/`lwc1`.** The `Key` struct is exactly
-two 16-byte VFPU quads (`Time,X,Y,TextureWidth` / `TextureHeight,ScaleX,Scaley,next`),
-this binary is VFPU-heavy throughout (the reason this project's own Allegrex Ghidra
-module exists at all), and `docs/reverse-engineering/ppsspp-debugger.md`'s own
-watchpoint section already documents one other case of a write that provably happened
-with no corresponding log line, attributed there to an access path the debugger's
-CPU-instruction-store hook does not cover. A `lv.q` reading the whole first quad in one
-instruction to feed an interpolation would produce exactly this signature: the field
-gets touched (so the value is real and used), but never through a hooked scalar
-load. **Not verified independently this pass** - no VFPU-load search was run against a
-correctly-identified consumer function, because no consumer function was identified to
-search from. Recorded as the leading hypothesis for whoever picks this up next, not as
-a finding.
+**The VFPU hypothesis this pass raised is retired (2026-09-28): the actual consumer
+reads every `Key` field with plain scalar `f32` loads.** Recorded here for the history;
+see below for the live-confirmed function.
 
 Also checked and ruled out: writing a new value directly into an already-settled
 `Key.TextureWidth` (post-reveal, `Title Screen` sitting on "PRESS START") and letting
@@ -317,26 +281,186 @@ widget is not deriving its width from this field every frame either, scalar or V
 
 Confidence **75** for "the raw `Key.TextureWidth` field is not read by any normal CPU
 load during construction, the reveal window, or afterward" (the watchpoint result,
-positive-signal-checked); **no confidence claimed** for the VFPU hypothesis or for the
-render mapping itself, both still unread.
+positive-signal-checked) - this narrow claim stands; the render-mapping conclusions
+drawn from it (VFPU, no consumer) do not, see below.
+
+## 2026-09-28: the consumer, found - `+0x3c` is the real vtable, not just a parse table
+
+**The 2026-09-26 dead end was a self-inflicted arithmetic error.** That pass computed
+`0x2b50f8 + 0x08804000` by hand and got `0x08ab50f8` - off by `0x00040000`. The correct
+sum is `0x08ab90f8`. Reading the wrong address is exactly why the table there looked
+unrelated (mesh/vertex-sort code): it *was* unrelated, because it was the wrong table.
+`FUN_088b9ca8`'s retraction inherited the same error and is itself wrong - see below.
+
+**`Element_UpdateTree`, found from a live breakpoint's own return address, is the generic
+per-frame update walker every element on a screen goes through.** Breaking on
+`Animation_Update` (below) during a real reveal and reading `ra` lands inside a function
+at `0x0889300c` whose decompile is exactly a tree-walking dispatcher:
+
+```c
+void Element_UpdateTree(dt, element) {
+    if (!(element->flags & 8)) {                      // not hidden
+        if ((*(*(element+0x3c)+0x24))(dt, element + *(short*)(*(element+0x3c)+0x20))) {
+            for (child = first_child(element); child; child = next_sibling(child)) {
+                if (child->flags & 2) Element_UpdateTree(dt, child);
+            }
+            if (!(element->flags & 0x8000)) {
+                (*(*(element+0x3c)+0x2c))(element + *(short*)(*(element+0x3c)+0x28), 1);
+            }
+        }
+    }
+}
+```
+
+`element+0x3c` is the object's own **real vtable pointer** - not merely "the parse-time
+tag-dispatch table" the 2026-09-23/26 passes characterised it as. That was not wrong about
+what the table *contains* (it does hold `Animation_ParseValuesOrKey` as one entry), only
+incomplete about what else lives in the same table: `+0x24` is the per-frame **Update**
+slot and `+0x2c` a second slot called after every child has updated (a post-order
+finalize; for `BackgroundController` this slot is a four-instruction "set the drawn flag"
+stub, `0x08a2e678` - not a draw call, so what actually rasterises a widget is still not
+this page's own finding). Both calls pass an *adjusted* `this` (`element + a 16-bit
+offset read from the table itself`), the standard C++ multi-base thunk shape -
+confirming `+0x3c` is a real vtable, once you look at the right address.
+
+**`Animation_Update` (`0x088b9a80`) is that `+0x24` slot for an `Animation` object,
+confirmed two independent ways:**
+
+- **Static**: `Animation`'s own vtable sits at `0x08ab90f8` (raw `0x2b50f8`, corrected).
+  `0x08ab90f8 + 0x24 = 0x08ab911c`, and the four bytes there are `80 5a 0b 00` -
+  unrelocated `0x000b5a80`, i.e. `0x088b9a80` once the base is added back. Found by
+  literal byte search for the function's own address as data (`search_byte_patterns`),
+  the same method that found `BackgroundController_UpdateImages` sitting at its own
+  vtable's `+0x24` (`0x08ab9298 + 0x24 = 0x08ab92bc`) - two classes, the same slot.
+- **Live**: a breakpoint on `0x088b9a80` fires repeatedly during a real reveal
+  (`pure-psp-eu.chd`, PPSSPP v1.20.4, Xvfb `:94`), once per `Animation` object per frame,
+  stepping through thirteen ~0x2a0-byte-apart heap objects - matching "all thirteen"
+  `<Animation>`s the 2026-09-23 pass already counted on `Title Screen`. Reading `ra` at
+  the breakpoint gives `0x08893064`, squarely inside `Element_UpdateTree`'s own body -
+  the actual running call site, not an inference from the vtable shape alone.
+
+`Animation_Update(dt, animation)` advances a running clock at `animation+0xb8` by
+`dt * animation+0xac` (the `IncButton`/`DecButton` branches at `+0xa4`/`+0xa0` are for a
+different, button-driven mode nothing on `Title Screen` authors), clamps it to
+`[animation+0xb4, key list's own duration]`, then unconditionally calls
+`Animation_InterpolateKeys`.
+
+**`Animation_InterpolateKeys` (`0x088b9dd0`) is the interpolator the whole thread was
+looking for.** It walks the `Key` list at `animation+0x9c`, finds the two keys bracketing
+`animation+0xb8` (or holds the nearest boundary key's value outside the list's own span),
+and linearly interpolates all six fields - `X`/`Y`/`TextureWidth`/`TextureHeight`/
+`ScaleX`/`ScaleY` - into `animation+0xbc`/`+0xc0`/`+0xc4`/`+0xc8`/`+0xcc`/`+0xd0`. Plain
+scalar `f32` arithmetic (`pfVar1[N] + t * (pfVar2[N] - pfVar1[N])`) - the 2026-09-26
+pass's VFPU hypothesis is **retired**: nothing here needs `lv.q`. A live read this pass
+of a real `Animation`'s own `+0x9c` list head resolves inside the documented static
+parse-tree range `0x08b32460-0x08b3722c`, not a per-instance copy, so the 2026-09-26
+watchpoint (zero scalar reads of `Key.TextureWidth`) was watching the right memory - the
+resolution is that `Animation_InterpolateKeys` reads each `Key` field once per `Update`
+call, not on every query, and the watchpoint's own capture window may simply not have
+caught the specific write-then-read pairing rather than there being no scalar read at all.
+
+**`Animation_ComputeRect` (`0x088b9ca8`) is un-retracted.** The 2026-09-26 pass decompiled
+it correctly:
+
+```c
+void Animation_ComputeRect(int animation) {
+  Element_ComputeRect(animation);
+  *(animation+0x48) += *(animation+0xbc);   // + interpolated X
+  *(animation+0x4c) += *(animation+0xc0);   // + interpolated Y
+  *(animation+0x50) += *(animation+0xc4);   // + interpolated TextureWidth
+  *(animation+0x54) += *(animation+0xc8);   // + interpolated TextureHeight
+}
+```
+
+and retracted it as "a four-field `position += velocity` integrator... a different class
+entirely" because applying the project's own `+0x08804000` correction to the
+*neighbouring* raw table entries landed on unrelated mesh/vertex-sort code - the same
+arithmetic slip as above, on a table this function has nothing to do with.
+`Animation_ComputeRect` is exactly what its call to `Element_ComputeRect` (the shared
+base - see next) says: `Animation`'s own override of the generic rect-layout method,
+confirmed live by the vtable slot it actually occupies (`0x08ab90f8+0x7c`, matching
+`Element_ComputeRect`'s own slot in `BackgroundController`'s vtable,
+`0x08ab9298+0x7c = 0x088b5010`).
+
+**`Element_ComputeRect` (`0x088b5010`) is the shared base every class's `+0x7c` slot
+either uses directly (`BackgroundController`) or calls before adding its own delta
+(`Animation`).** It walks up to the parent's own `+0x3c` vtable, calls the parent's own
+`+0x7c` slot (recursive up the tree) for the parent's rect, adds the parent's own
+`+0x48..+0x54` into the child's own `+0x48..+0x54`, then adds the child's own local
+offset (`+0x40`/`+0x44`). So `animation+0x50` (width) starts as the parent chain's own
+accumulated width, and `Animation_ComputeRect` adds the interpolated `TextureWidth`
+(authored `-width` to `0`) on top - **the widget's own rendered width literally shrinks
+to `0` and grows back to its authored size**, not a texture-space crop computed
+elsewhere. `oag_ui::screen::interpolate_reveal`/`oag_ui::frontend::draw`'s `reveal_delta`
+mirror this formula directly.
+
+**One rendering detail this static chain does not settle, resolved from a live capture
+instead: crop, not stretch.** `Element_ComputeRect`'s own accumulation only touches the
+render-space width (`+0x50`); nothing in this chain touches a widget's separately-authored
+`TxtrWidth`/sample-space attribute, so the decompile alone is consistent with either
+"stretch the full texture into a narrower box" or "sample proportionally less of it". A
+free-running capture of `Title Screen`'s own barcode patch mid-reveal
+(`data/scratch/pure-reveal/reveal_150ms.png`, `pure-psp-eu.chd`, PPSSPP v1.20.4) shows a
+crisp, correctly-proportioned partial pattern - bars at their own native width, growing
+from the left - not a squeezed one. `crates/ui/src/frontend/draw.rs` shrinks the sampled
+UV width by the same amount as the render width, which is what reproduces that: a real
+capture breaking the tie a static read alone could not.
+
+**`Element_UpdateFade` (`0x088b38b4`) is a second, separate reveal - the answer to what
+actually happens to `TitleFrame` itself, since `TitleFrame` is not one of the thirteen
+`<Animation>`-wrapped elements (confirmed live: none of nine live `Animation` objects'
+own `+0x18` child pointer equals `TitleFrame`'s own address).** `Animation_Update` calls
+it unconditionally at its own top (every `Animation`-wrapped widget gets this too, on top
+of its own `TextureWidth` wipe), and it is also `TitleFrame`'s own update path directly.
+A non-halting write watch on a live `TitleFrame` object (`pure-psp-eu.chd`, address
+`0x08ed6880` that boot) caught it firing every frame, writing `element+0x6c` (`0.0099..`
+rising to `1.0`) and `element+0x94`. The decompile is a three-mode fade controller keyed
+on `element+0x70`/`+0x74` (fade-in/fade-out durations) and a global "entering vs. leaving"
+flag at `*(element+0x68)+0xc8`:
+
+- `+0x70 == 0`: an optional delay (`+0x98`) then an instant snap to `0` or `1`.
+- `+0x70 != 0`, leaving: `+0x94` counts down from `+0x74`, `alpha = +0x94 / +0x74`.
+- `+0x70 != 0`, entering: `+0x94` counts up to `+0x70`, `alpha = +0x94 / +0x70`.
+
+`element+0x2c`'s bit `0x4` (the "still needs updating" flag `Element_UpdateTree` checks
+on a child) clears once `alpha` settles within `0.0001` of its target. Live-read off
+`TitleFrame` post-settle: `+0x70 = +0x74 = 0.1` seconds - **`TitleFrame`'s own reveal is a
+0.1-second linear alpha fade-in, not a width wipe, over in six frames at 60 Hz.** Where
+`0.1` itself is authored (a per-widget attribute, a per-skin default, or a constructor
+constant) is not read; the base chain (`FUN_08892e6c`, `FUN_088b350c`) zeroes every one of
+`+0x6c`/`+0x70`/`+0x74`/`+0x94`/`+0x98` at construction, so whatever sets `0.1` runs later
+and was not traced this pass.
+
+**Confidence.** `Animation_Update`/`Animation_InterpolateKeys`: **90** - the vtable slot
+match and the live `ra`-at-breakpoint both agree, and the interpolation formula is a
+direct decompile. `Animation_ComputeRect`/`Element_ComputeRect`: **85** - decompiled
+directly and the vtable-slot correspondence confirmed, short of 90 only because the
+rasteriser that reads `+0x48..+0x54` is still not located. `Element_UpdateTree`: **85**
+(decompiled, and the `ra` hit proves it runs); the crop-vs-stretch render detail is
+**corroborated by one live capture**, not read from a draw call. `Element_UpdateFade`:
+**85** for the mechanism; **no confidence** on where `0.1` is authored.
 
 ## Next steps
 
-- The VFPU-load hypothesis above is the most promising unopened door: find the actual
-  `Animation` update call (still not located - see the vtable dead end above) and check
-  it for `lv.q`/`vt4444.q`-family instructions touching the `Key` list's first quad. A
-  disassembly-level search for `lv.q` within functions reachable from wherever
-  `Screens::collect_widgets`' analogue on the original side calls per-frame update is
-  more likely to land on it than another vtable hunt.
-- Given the vtable dead end, the more promising trace is **forward from a definitely-
-  live per-frame call site** rather than backward from the `Animation` object's own
-  layout: breakpoint the screen's own per-frame update/draw entry point (not yet
-  identified either) and read what it calls, rather than continuing to search
-  `Animation`'s own constructors for a dispatch mechanism that may not be a classical
-  vtable at all.
+- **Implemented**: `oag_ui::screen::RevealKey`/`interpolate_reveal` and
+  `oag_ui::frontend::draw`'s `reveal_delta` reproduce `Animation_InterpolateKeys`/
+  `Animation_ComputeRect`'s width formula for every `<Animation>`-wrapped `Image`/`Fill`,
+  pinned against the real disc's own per-widget key data in
+  `crates/game/tests/pure_boot_ground_truth.rs`'s
+  `title_screens_frame_lines_keep_their_own_rects_and_share_one_colour`. **Not
+  implemented**: `TitleFrame`'s own 0.1s alpha fade (`Element_UpdateFade`) - visually
+  near-imperceptible (six frames), and a per-title fade table in a generic crate for one
+  measured widget was judged out of scope. Look for where `0.1` is authored first, rather
+  than hard-coding the one measured value.
+- The actual **rasteriser** - whatever reads `element+0x48..+0x54` and a widget's own
+  `TxtrWidth`/`U`/`V` to produce pixels - is still not located. Finding it would upgrade
+  the crop-vs-stretch reading above from "one live capture" to "read off the draw call
+  itself", and would settle whether a `Centred="true"` widget (none currently authored
+  with a reveal) keeps its own centre fixed or drifts as its width changes.
 - `Data.wad` entry 536 (`Data\FE\Images\FMV_last_frame_JAP.mip`) names no
   disc in this project's corpus. Leave unwired rather than guessed at.
 - `FUN_088aff90`/`FUN_08a3af94`/`FUN_088b0118` (global-to-string resolution,
   name-based texture load, and whatever the third does with a colour) are
   none of them independently decompiled past the call-site behaviour this
   page infers.
+- None of this pass's new names have a confirmed USA-binary twin - only EU was worked.

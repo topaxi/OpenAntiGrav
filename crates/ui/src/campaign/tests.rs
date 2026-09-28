@@ -790,6 +790,7 @@ fn hex_rect_prefers_outline_over_an_oversized_medal_atlas() {
         texture_width: None,
         texture_height: None,
         auto_load: false,
+        reveal: Vec::new(),
         transition: 0.0,
     };
     let medal = Image {

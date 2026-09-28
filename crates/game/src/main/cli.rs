@@ -312,6 +312,19 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) screen: Option<String>,
 
+    /// With `--screen`, draw it this many seconds after it appeared, instead
+    /// of settled.
+    ///
+    /// The live boot order's own clock - `Show Logo`'s `pulse="true"` throb
+    /// and `Title Screen`'s `<Animation><Key>` wipe both need it, since
+    /// `--screen` otherwise calls the public `draw_screen`, which reads as
+    /// `f64::INFINITY` and freezes every one of those at its own settled
+    /// end state. `None` keeps that settled behaviour, the same rule
+    /// `--menu-anim-phase`/`--menu-picker-seconds` follow for the menu
+    /// pages `--screen` does not reach.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) screen_seconds: Option<f32>,
+
     /// With `--screenshot`, capture the frame the way a window presents it:
     /// through the render scale, the upscaler, the brightness/gamma grade and
     /// the aspect bars.

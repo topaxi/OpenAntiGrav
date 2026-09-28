@@ -423,11 +423,17 @@ impl Frontend {
         }
 
         if self.machine.is(pure_states::TITLE_SCREEN) {
-            // Pure's own counterpart to `Show Logo` above, and drawn the same
-            // way: its widgets and nothing else. See
+            // Pure's own counterpart to `Show Logo` above: its widgets and
+            // nothing else, and `draw_screen_at`/`self.on_screen_for` for
+            // the same reason - its thirteen `<Animation>`-wrapped frame-line/
+            // bracket/patch widgets wipe in over their own key timeline
+            // (`docs/ghidra/functions/psp-pure-eu/title-screen.md`) and only
+            // the live boot order has a clock to give them. `self.advance`
+            // resets `on_screen_for` to `0.0` on every transition, this one
+            // included, so the reveal starts clean. See
             // [`pure_states::TITLE_SCREEN`] for what advancing past it would
             // need that is not yet evidenced.
-            let mut out = self.draw_screen(pure_states::TITLE_SCREEN);
+            let mut out = self.draw_screen_at(pure_states::TITLE_SCREEN, self.on_screen_for);
             self.insert_backdrop(&mut out);
             return out;
         }
@@ -587,11 +593,18 @@ impl Frontend {
 
     /// [`Self::draw_screen`], with `elapsed` seconds of wall clock since the
     /// screen appeared - the one piece of state that lets a `pulse="true"`
-    /// widget's alpha move. `f64::INFINITY` (what the public method passes)
-    /// reads as "settled": every pulsing widget's alpha lands on the ceiling
-    /// [`pulse_alpha`] converges to, which is its own authored colour, so
-    /// nothing here changes for a caller that never had a clock to give.
-    pub(super) fn draw_screen_at(&self, name: &str, elapsed: f64) -> Vec<Draw> {
+    /// widget's alpha move, or a `<Animation><Key>`-wrapped widget wipe in.
+    /// `f64::INFINITY` (what the public method passes) reads as "settled":
+    /// every pulsing widget's alpha lands on the ceiling [`pulse_alpha`]
+    /// converges to and every reveal lands on its own final key, so nothing
+    /// here changes for a caller that never had a clock to give.
+    ///
+    /// `pub`, not `pub(super)`, since `--screen-seconds` needs it from
+    /// `oag_game::capture` to show a mid-reveal still without moving the
+    /// screen into the live boot order - the same reason `--menu-anim-phase`/
+    /// `--menu-picker-seconds` exist for the menu pages this does not reach.
+    #[must_use]
+    pub fn draw_screen_at(&self, name: &str, elapsed: f64) -> Vec<Draw> {
         let (width, height) = self.space.size;
         let mut out = vec![Draw::Fill {
             rect: [0.0, 0.0, width, height],
@@ -607,7 +620,7 @@ impl Frontend {
             return out;
         };
 
-        self.draw_backdrops(screen, &mut out);
+        self.draw_backdrops_at(screen, elapsed, &mut out);
         for text in &screen.texts {
             let Some(id) = text.idstring.as_deref().or(text.string.as_deref()) else {
                 continue;
@@ -636,11 +649,25 @@ impl Frontend {
         out
     }
 
-    /// A screen's solid backdrops and its images, in that order.
+    /// A screen's solid backdrops and its images, in that order, settled -
+    /// see [`Self::draw_backdrops_at`] for the one that can reveal.
     fn draw_backdrops(&self, screen: &Screen, out: &mut Vec<Draw>) {
+        self.draw_backdrops_at(screen, f64::INFINITY, out);
+    }
+
+    /// [`Self::draw_backdrops`], with `elapsed` seconds since the screen
+    /// appeared - the same clock [`pulse_alpha`] reads, so a widget wrapped
+    /// in an `<Animation>` can wipe in alongside a `pulse="true"` text
+    /// throbbing. `f64::INFINITY` reads as fully revealed: every wrapped
+    /// widget's own `TextureWidth` interpolation lands on its final key
+    /// (`0.0`, added to the authored width unchanged), matching this
+    /// function's own settled behaviour before `reveal` existed.
+    fn draw_backdrops_at(&self, screen: &Screen, elapsed: f64, out: &mut Vec<Draw>) {
         for fill in &screen.fills {
+            let mut rect = self.fill_rect(fill);
+            rect[2] += reveal_delta(&fill.reveal, elapsed);
             out.push(Draw::Fill {
-                rect: self.fill_rect(fill),
+                rect,
                 color: argb_to_rgba(fill.color),
             });
         }
@@ -694,12 +721,25 @@ impl Frontend {
             // Pure's `Title Screen`) need their own patch of it rather than
             // all drawing its top-left corner. Absent means the whole placed
             // texture, exactly as it did before. See [`crate::screen::Image::u`].
-            let uv = [
+            let mut uv = [
                 placed.x as f32 + image.u.unwrap_or(0.0),
                 placed.y as f32 + image.v.unwrap_or(0.0),
                 image.texture_width.unwrap_or(placed.width as f32),
                 image.texture_height.unwrap_or(placed.height as f32),
             ];
+
+            // A wrapped `<Animation>`'s own `TextureWidth` shrinks both the
+            // sampled and the rendered width by the same amount, rather than
+            // stretching the full texture into a narrower box - a live
+            // capture of `Title Screen`'s own barcode patch mid-reveal shows
+            // a crisp, undistorted partial pattern growing from the left
+            // (`docs/ghidra/functions/psp-pure-eu/title-screen.md`'s own
+            // reveal section), not a squeezed one, which is what pins this
+            // over the equally-decompiled alternative of leaving the sample
+            // full and shrinking only the render rect.
+            let delta = reveal_delta(&image.reveal, elapsed);
+            let w = w + delta;
+            uv[2] += delta;
 
             out.push(Draw::Sprite {
                 rect: [x, y, w, h],
@@ -943,6 +983,13 @@ fn pulse_alpha(text: &Text, elapsed: f64) -> f32 {
     let wave = (cycles.fract() * std::f32::consts::TAU).sin();
     let settled = PULSE_FLOOR + (1.0 - PULSE_FLOOR) * (wave + 1.0) / 2.0;
     settled * cycles.min(1.0)
+}
+
+/// [`crate::screen::interpolate_reveal`] at `elapsed`, `0.0` for a widget no
+/// `<Animation>` wraps (`keys` empty) - the same "no clock, no motion" shape
+/// [`pulse_alpha`] gives an unpulsed `Text`.
+fn reveal_delta(keys: &[crate::screen::RevealKey], elapsed: f64) -> f32 {
+    crate::screen::interpolate_reveal(keys, elapsed as f32)
 }
 
 mod storage_warning;

@@ -110,6 +110,12 @@ pub struct Options {
     /// order does not reach yet - most of them - can still be looked at. See
     /// [`oag_ui::frontend::Frontend::draw_screen`].
     pub screen: Option<String>,
+    /// With [`Options::screen`], seconds since it appeared - `None` draws it
+    /// settled. `Title Screen`'s own `<Animation><Key>` wipe and `Show
+    /// Logo`'s `pulse="true"` throb both need a clock to show anything but
+    /// their own settled end state; see
+    /// [`oag_ui::frontend::Frontend::draw_screen_at`].
+    pub screen_seconds: Option<f32>,
     /// Anisotropic filtering level, only relevant if the handoff to
     /// [`Options::race`] happens.
     pub anisotropy: Anisotropy,
@@ -761,7 +767,10 @@ pub fn run(
             }
         }
         (None, Some(name)) => {
-            let list = frontend.draw_screen(name);
+            let list = match options.screen_seconds {
+                Some(seconds) => frontend.draw_screen_at(name, f64::from(seconds)),
+                None => frontend.draw_screen(name),
+            };
             (movie, video_format, list, frontend.space())
         }
         (None, None) => {

@@ -142,6 +142,25 @@
 0x088b9854	function	Animation_ConstructFromNode	80	title-screen.md
 0x088ca968	function	Movie_ParseAttributes	85	movie-localised-suffix.md
 
+# 2026-09-28: the reveal's own consumer, found live (see title-screen.md's
+# own dated section). `Animation_Update` is confirmed as the real vtable
+# dispatch target by its own `ra` register at a live breakpoint hit, landing
+# inside `Element_UpdateTree` exactly where the decompile's own indirect call
+# through `*(obj+0x3c)+0x24` sits - not inferred from the table alone.
+0x088b9a80	function	Animation_Update	90	title-screen.md
+0x088b9dd0	function	Animation_InterpolateKeys	90	title-screen.md
+0x088b9d0c	function	Animation_JumpToTime	80	title-screen.md
+0x0889300c	function	Element_UpdateTree	85	title-screen.md
+0x088b38b4	function	Element_UpdateFade	85	title-screen.md
+0x088b5010	function	Element_ComputeRect	80	title-screen.md
+# Un-retracted from the 2026-09-26 pass's "unrelated position += velocity
+# integrator, not an Animation method" - it is Animation's own vtable+0x7c
+# override of `Element_ComputeRect`, confirmed by the vtable slot match
+# (`0x08ab90f8+0x7c` holds this address) and by the field semantics
+# (`+0xbc.. +0xc8`, Animation's own interpolated X/Y/TextureWidth/
+# TextureHeight, added onto the base rect `Element_ComputeRect` computes).
+0x088b9ca8	function	Animation_ComputeRect	85	title-screen.md
+
 # The dev/pub reel's hold duration (2026-09-23): a live PPSSPP breakpoint
 # during a real cold boot confirmed both the call path and the 2.0s span
 # directly. See devpub-reel-hold.md; the sibling init function and the

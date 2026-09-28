@@ -88,35 +88,68 @@ Leading hypothesis, unverified: the real consumer reads the `Key`'s first
 debugger's watchpoints do not appear to hook. Full method and evidence:
 `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s "2026-09-26" section.
 
+**2026-09-28: the consumer is found, live-confirmed, and the wipe is
+implemented for the thirteen decorative elements - but the wordmark itself
+turns out not to be one of them.** The 2026-09-26 "vtable dead end" was a
+hand-arithmetic slip (`0x2b50f8 + 0x08804000` computed as `0x08ab50f8`
+instead of the correct `0x08ab90f8`), and `FUN_088b9ca8`'s retraction
+inherited the same error. `+0x3c` is a real vtable after all - a live
+breakpoint on `Animation_Update` (`0x088b9a80`, found at that vtable's own
+`+0x24` slot both statically and by its `ra` register landing inside the
+generic per-frame walker, `Element_UpdateTree`) confirmed it running during
+a real reveal, calling `Animation_InterpolateKeys` (`0x088b9dd0`) to
+linearly interpolate `Key.TextureWidth` and `Animation_ComputeRect`
+(`0x088b9ca8`, un-retracted) to add the result into the wrapped widget's own
+computed render width - the "authored_width + TextureWidth" hypothesis this
+thread carried since 2026-09-08, now read off the decompile and confirmed
+live rather than inferred from the authoring convention alone. Full
+mechanism, all four functions, and the crop-vs-stretch resolution (a real
+capture of the barcode patch mid-reveal, not a squish):
+`docs/ghidra/functions/psp-pure-eu/title-screen.md`'s own 2026-09-28 section.
+
+**The wordmark's own reveal is a separate, 0.1-second alpha fade
+(`Element_UpdateFade`), not a width wipe - `TitleFrame` is not one of the
+thirteen `<Animation>`-wrapped elements** (confirmed live: none of nine live
+`Animation` objects' own child pointer names it). This corrects this
+thread's own framing, carried since 2026-09-23, that the wordmark's "~0.7s
+wipe" and the `<Animation><Key>` TextureWidth reveal were the same effect -
+they are not. The wordmark fades in over six frames, barely perceptibly; the
+`~0.6-0.7s` visible "revealing" impression a player gets is entirely the
+thirteen decorative frame-line/bracket/patch elements wiping in around it.
+
+**Implemented**: `oag_ui::screen::RevealKey`/`interpolate_reveal` and
+`oag_ui::frontend::draw`'s `reveal_delta`, wired through `Screens::
+collect_widgets`'s `"animation"` arm, reproduce the width wipe for every
+`<Animation>`-wrapped `Image`/`Fill` - pinned against the real disc's own
+per-widget key data (not hand-transcribed) in `crates/game/tests/
+pure_boot_ground_truth.rs`. **Not implemented**: the wordmark's own 0.1s
+fade - visually near-imperceptible and out of scope for what this pass
+needed to unblock; see the evidence page's own Next Steps for where to
+pick it up (starting with where `0.1` itself is authored, which is unread).
+
 ## Open
 
-- The actual reveal consumer is still not located. Static: the vtable-chase
-  approach is a dead end (see above); the more promising static route is
-  forward from a definitely-live per-frame screen update/draw entry point,
-  not backward from `Animation`'s own constructors. Dynamic: a VFPU `lv.q`
-  disassembly search, once a real candidate function is in hand - no
-  consumer function has been found yet to search from.
+- `TitleFrame`'s own `Element_UpdateFade` reveal is measured but not wired
+  into `oag_ui`/`oag_pure` - see above.
+- The actual **rasteriser** - whatever reads a widget's own computed rect
+  and `TxtrWidth`/`U`/`V` to produce pixels - is still not located; the
+  crop-vs-stretch reading behind the wipe's own UV-width handling rests on
+  one live capture, not a read of that draw call.
 - `Data.wad` entry 536 (`Data\FE\Images\FMV_last_frame_JAP.mip` by hash) is
   unwired - no Japanese-region Pure disc is in this project's corpus.
 - Whether some skin *other than* `Data\Skins\Default` (none seen activated on
   either disc this project holds) declares a non-empty `BackgroundTexture` is
   unread - only the one active skin was.
+- None of this pass's new function names (`Animation_Update` and siblings)
+  have a confirmed USA-binary twin - only Pure EU was worked.
 
 ## Next Steps
 
-- Find the screen's own per-frame update/draw entry point (not `Animation`'s
-  constructors) and read what it calls each frame - the 2026-09-26 pass's
-  vtable-chase and its one flagged candidate (`FUN_088b9ca8`) are both
-  retracted as dead ends now, so the next attempt should start from a
-  confirmed-live call site rather than `Animation`'s own layout.
-- Once a candidate consumer is found, check its disassembly for `lv.q`/
-  `vt4444.q`-family VFPU instructions touching the `Key` list's first quad -
-  the 2026-09-26 pass's live watchpoint proved no *scalar* load ever reads
-  `Key.TextureWidth`, which is the concrete reason to suspect VFPU rather
-  than the next reason to suspect the field is simply unused.
-- Once read: implement the reveal in `oag_ui::screen`, verified against a
-  PPSSPP capture of `Title Screen` mid-reveal (not just its settled state) -
-  breakpoint-driven per-frame reads, not timed screenshots racing a 0.7s
-  window; a first attempt at timed screenshots this pass landed on frames
-  already fully revealed, which is why this is called out rather than
-  assumed easy.
+- Wire `TitleFrame`'s own 0.1s fade-in, once its authoring source (XML
+  attribute vs. skin default vs. constructor constant) is read - see
+  `Element_UpdateFade`'s own confidence note in the evidence page.
+- Find the actual rasteriser (whatever reads a widget's own `+0x48..+0x54`
+  rect and `TxtrWidth`/`U`/`V`) to move the crop-vs-stretch reading from "one
+  live capture" to "read off the draw call itself", and to settle whether a
+  `Centred="true"` widget (none currently authored with a reveal) would keep
+  its own centre fixed as its width changes.

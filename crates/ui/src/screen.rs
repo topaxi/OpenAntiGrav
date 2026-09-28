@@ -29,11 +29,13 @@ pub use oag_tables::fexml::{Node, parse};
 mod movie;
 #[cfg(test)]
 use movie::has_movie_extension;
+mod reveal;
 mod settings;
 mod tag_input;
 mod touch;
 mod widgets;
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
+pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
 pub use touch::{Include, TouchButton};
@@ -191,12 +193,13 @@ pub struct Image {
     pub texture_width: Option<f32>,
     /// The `TxtrHeight` attribute, likewise.
     pub texture_height: Option<f32>,
-    /// The `AutoLoad` attribute.
-    ///
-    /// Recorded but not acted on: this build loads every referenced texture up
-    /// front, so there is nothing yet for a load-on-demand flag to change. It is
-    /// parsed rather than dropped because the attribute is real.
+    /// The `AutoLoad` attribute. Recorded but not acted on: this build loads
+    /// every referenced texture up front, so there is nothing yet for a
+    /// load-on-demand flag to change.
     pub auto_load: bool,
+    /// The wrapping `<Animation>`'s own `<Key>` timeline - empty for a widget
+    /// the XML does not wrap this way. See [`RevealKey`].
+    pub reveal: Vec<RevealKey>,
     /// Seconds this widget takes to fade in - see [`Text::transition`],
     /// which this mirrors for the same reason: `LeftLayer` wraps `Image`
     /// widgets alongside `Text` ones on both selection screens.
@@ -249,6 +252,9 @@ pub struct Fill {
     /// the capture shows. Which of the pair is top and which bottom is
     /// unmeasured: no authored widget gives them different values.
     pub gradient: Option<[u32; 4]>,
+    /// The wrapping `<Animation>`'s own `<Key>` timeline - empty for a widget
+    /// the XML does not wrap this way. See [`RevealKey`].
+    pub reveal: Vec<RevealKey>,
     /// Seconds this fill takes to fade in - see [`Text::transition`].
     pub transition: f32,
 }
@@ -520,21 +526,12 @@ impl Screens {
     /// `Viewport`'s own `width` down for [`Self::text_from_node`] to read.
     /// `None` outside any `Viewport`. See [`Text::wrap_width`].
     ///
-    /// **`Animation`'s own `Key` timeline is discarded, not modelled.** An
-    /// `<Animation><Key Time="0" TextureWidth="-1"/><Key Time="0.1"
-    /// TextureWidth="0"/><Image>...</Image></Animation>` is a reveal - Pure's
-    /// `Title Screen` wraps every one of its frame-line decorations this way -
-    /// and what `TextureWidth` on a `Key` means is unread (it is not the same
-    /// attribute `hud.rs`'s own `<Animation><Key>` reading covers: that one is
-    /// `x`/`y` as a travel, this is a texture-space size on a widget that
-    /// carries its own `TxtrWidth` already). Recursing into `Animation` at all
-    /// used to drop its widgets outright - nothing drew rather than something
-    /// drawing at the wrong time - and dropping the timeline while keeping the
-    /// widget is the same trade this front end already makes for every other
-    /// widget's `delay`/`transition` attribute, neither of which is read
-    /// anywhere in this crate either. `<Key>` itself is inert here: it has no
-    /// case of its own, so it falls through the same as any other tag this
-    /// function does not recognise.
+    /// **`Animation`'s own `Key` timeline is read and stamped onto whatever
+    /// widget it wraps** - a texture-space width delta (not the `x`/`y`
+    /// travel `hud.rs`'s own `<Animation><Key>` reading covers), confirmed
+    /// live in `docs/ghidra/functions/psp-pure-eu/title-screen.md`. See the
+    /// `"animation"` arm's own doc and [`RevealKey`]; `<Key>` has no case of
+    /// its own here since that arm consumes it directly.
     ///
     /// **A colour-only `Image` inside an `Animation` is collected exactly
     /// like a top-level one.** It was not always: recursing into `Animation`
@@ -831,7 +828,7 @@ impl Screens {
                     );
                 }
             }
-            "navigationcontroller" | "animation" | "backgroundcontroller" | "item" => {
+            "navigationcontroller" | "backgroundcontroller" | "item" => {
                 for grandchild in &child.children {
                     self.collect_widgets(
                         screen,
@@ -841,6 +838,44 @@ impl Screens {
                         transition,
                         fallback_images,
                     );
+                }
+            }
+            // `<Animation>` wraps exactly one real widget - its own `<Key>`
+            // children are collected here and stamped onto whatever that
+            // widget turns out to be. See [`RevealKey`].
+            "animation" => {
+                let reveal: Vec<RevealKey> = child
+                    .children
+                    .iter()
+                    .filter(|key| key.name.eq_ignore_ascii_case("key"))
+                    .filter_map(|key| {
+                        Some(RevealKey {
+                            time: self.number(key.value("Time"))?,
+                            texture_width: self.number(key.value("TextureWidth")).unwrap_or(0.0),
+                        })
+                    })
+                    .collect();
+                let (images_from, fills_from) = (screen.images.len(), screen.fills.len());
+                for grandchild in &child.children {
+                    if grandchild.name.eq_ignore_ascii_case("key") {
+                        continue;
+                    }
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        transition,
+                        fallback_images,
+                    );
+                }
+                if !reveal.is_empty() {
+                    for image in &mut screen.images[images_from..] {
+                        image.reveal = reveal.clone();
+                    }
+                    for fill in &mut screen.fills[fills_from..] {
+                        fill.reveal = reveal.clone();
+                    }
                 }
             }
             // An anonymous `Screen` is a grouping container, not a navigable

@@ -279,6 +279,101 @@ fn a_colour_only_image_draws_its_own_rect_and_falls_back_to_the_whole_screen() {
     );
 }
 
+/// An `<Animation>`-wrapped `Fill` grows from hidden to its own authored
+/// width as `elapsed` advances past its own `<Key>` timeline - Pure's
+/// `Title Screen` wraps its frame lines this way, and this pins the wipe
+/// `docs/ghidra/functions/psp-pure-eu/title-screen.md` reads off a live
+/// capture: `TextureWidth` interpolates from `-width` (fully hidden) to `0`
+/// (fully shown), added straight onto the rect this build already draws.
+#[test]
+fn an_animation_wrapped_fill_grows_from_hidden_to_its_own_width_over_its_keys() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Animation name="Anim">
+      <Values></Values>
+      <Key Time="0" TextureWidth="-100"></Key>
+      <Key Time="1" TextureWidth="0"></Key>
+      <Image><Values x="10" y="20" width="100" height="1" color="0xff3abcf2"></Values></Image>
+    </Animation>
+  </Screen>
+</Screen>
+"#,
+    );
+    let frontend = Frontend::new(
+        screens,
+        StringTable::default(),
+        Vec::new(),
+        Vec::new(),
+        0,
+        false,
+    );
+    let width_at = |elapsed: f64| {
+        frontend
+            .draw_screen_at("Loose", elapsed)
+            .into_iter()
+            .find_map(|d| match d {
+                Draw::Fill { rect, .. } if rect[2] <= 100.0 => Some(rect[2]),
+                _ => None,
+            })
+            .expect("the wrapped Fill must still reach the draw list")
+    };
+    assert_eq!(width_at(0.0), 0.0, "at the first key: fully hidden");
+    assert_eq!(width_at(0.5), 50.0, "halfway between the two keys");
+    assert_eq!(width_at(1.0), 100.0, "at the final key: fully shown");
+    assert_eq!(
+        width_at(f64::INFINITY),
+        100.0,
+        "settled, the same as draw_screen's own public INFINITY"
+    );
+}
+
+/// The live boot order actually reveals `Title Screen`'s own `<Animation>`-
+/// wrapped widgets - not just `Frontend::draw_screen_at` in isolation above.
+/// `Frontend::draw`'s own `pure_states::TITLE_SCREEN` arm used to call the
+/// public `draw_screen` (`elapsed = f64::INFINITY`), so a player watching a
+/// real boot never saw the wipe at all, the same gap `Show Logo`'s own pulse
+/// closed by taking `self.on_screen_for` instead.
+#[test]
+fn titles_screen_reveals_over_a_live_boot_not_just_settled() {
+    let mut frontend = pure(60);
+    let mut input = Input::new();
+    reach_the_second_movie(&mut frontend, &mut input);
+    run_until(&mut frontend, &mut input, 600, |f| {
+        f.machine().is(pure_states::TITLE_SCREEN)
+    });
+
+    // The fixture's own `TitleAnimTest`-wrapped `Fill`, at `x=14 y=240
+    // width=100 height=1`, brackets `TextureWidth` between `-100` (hidden)
+    // at `Time=0` and `0` (shown) at `Time=0.2` - see `PURE_XML`.
+    let underline_width = |draws: &[Draw]| {
+        draws.iter().find_map(|d| match d {
+            Draw::Fill { rect, .. } if rect[0] == 14.0 && rect[1] == 240.0 && rect[3] == 1.0 => {
+                Some(rect[2])
+            }
+            _ => None,
+        })
+    };
+
+    // `self.advance` resets `on_screen_for` to `0.0` on every transition,
+    // `Title Screen`'s own included - read it back rather than assuming
+    // exactly zero, the same caution `pulse_below_its_delay...` above takes.
+    let already = frontend.on_screen_for;
+    let early = underline_width(&frontend.draw_list())
+        .expect("the wrapped Fill must reach the live draw list, not just draw_screen_at");
+    assert_eq!(
+        early, 0.0,
+        "on entry: fully hidden, not already drawn settled"
+    );
+
+    input.begin_frame(0);
+    frontend.update(0.3 - already, &mut input, None);
+    let late = underline_width(&frontend.draw_list())
+        .expect("the wrapped Fill must still reach the live draw list");
+    assert_eq!(late, 100.0, "0.3s in, past the 0.2s key: fully revealed");
+}
+
 #[test]
 fn circle_does_not_select() {
     let mut frontend = frontend(300);

@@ -649,7 +649,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/rendering/task-31-residual-the-unguarded-slice-in-the.md)
 - [MONITOR has only ever run on a one-screen machine](handover/tooling/monitor-has-only-ever-run-on-a-one.md)
 - [Where Pulse's language picker belongs is unevidenced](handover/frontend/where-pulses-language-picker-belongs-is-unevidenced.md)
-- [Pure's `Title Screen` logo wordmark is found; `FE Screen`'s own backdrop is not](handover/frontend/pures-title-screen-is-missing-its-own-logo.md)
+- [Pure's `Title Screen` reveal wipe is implemented; the wordmark's own separate 0.1s fade is not](handover/frontend/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/tooling/a-slot-resolved-records-own-field-layout.md)
 - [Pure's DLC trailer is RSA-shaped and holds the per-pack key at a fixed offset; not yet runnable end-to-end](handover/tooling/pure-dlc-trailer-key-and-testbin-unknowns.md)
 - [A model built from several small pieces sharing one atlas](handover/rendering/a-model-built-from-several-small-pieces-sharing.md)
