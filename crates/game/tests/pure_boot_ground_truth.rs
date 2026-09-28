@@ -837,6 +837,19 @@ fn title_screens_own_wordmark_gets_the_measured_texture() {
             (title_frame.width, title_frame.height),
             (Some(480.0), Some(128.0))
         );
+        // `StartEnabled="false"` in the XML, and no `EnableTransition`/
+        // `Transition` authored anywhere on it - so it resolves to the
+        // measured class-wide default, not `0.0`. See
+        // `oag_ui::screen::resolve_fade_in`'s own doc and
+        // `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s
+        // `Element_UpdateFade` section, which reads this widget's own
+        // `+0x70`/`+0x74` as `0.1`/`0.1` live on `pure-psp-eu.chd`.
+        assert!(!title_frame.start_enabled, "{label}");
+        assert_eq!(
+            title_frame.transition,
+            oag_ui::screen::MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS,
+            "{label}: TitleFrame's own fade-in duration"
+        );
         let placed = loaded
             .sprites
             .get(&title_frame.src)

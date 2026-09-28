@@ -127,10 +127,57 @@ fade - visually near-imperceptible and out of scope for what this pass
 needed to unblock; see the evidence page's own Next Steps for where to
 pick it up (starting with where `0.1` itself is authored, which is unread).
 
+**2026-09-28: `TitleFrame`'s own 0.1s fade is wired, and where `0.1` comes
+from is read - a class-wide default, not an attribute.** Full mechanism and
+evidence: `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s own
+2026-09-28 section (the second one, after the one already cited above).
+Short version: neither `Data\Plugins\PI001\GUI\Skin.xml` nor the activated
+style skin authors any `Fade*`/`Transition*` attribute or global anywhere -
+confirmed by a full-text search of both expanded files, not just a grep near
+`TitleFrame`'s own node. The real source is `Widget_CreateFromElement`
+(`0x088b73c4`, newly named - the same generic node-to-widget constructor
+Pulse's own already-named twin, `docs/ghidra/functions/psp-pulse-usa/
+race-box-screens.md`, reads `Transition`/`EnableTransition`/
+`DisableTransition` off): a freshly-allocated widget already carries `0.1`
+in both `+0x70`/`+0x74` before this function's own attribute read runs, and
+`TitleScreen_AssignWordmarkTexture` (which runs after it, for `TitleFrame`
+specifically) never touches either field - only the flag that arms the fade,
+not its duration.
+
+**General, not `TitleFrame`-specific**, confirmed by walking `Title
+Screen->Viewport`'s own child list live at the same breakpoint: the
+colour-only "White Background" `Fill`, `PRESS START`/`StartCursor`/`HOLD
+ON!` `Text` widgets and `TitleFrame` itself all read the identical `0.1`/
+`0.1` default, while every `<Animation>` object reads `0.0`/`0.0`
+(`Animation_ConstructFromNode` deliberately overwrites the inherited
+default). The Viewport's own `<Viewport enabletransition="0.7">` does
+**not** cascade to `TitleFrame` - it only sets the Viewport's own `+0x70`,
+settling that "inherited" here means "whatever this widget's own class
+default already was", not "whatever the parent currently holds" (unlike
+`LeftLayer`'s confirmed-cascading `transition`, a different mechanism).
+
+Implemented as `oag_ui::screen::resolve_fade_in`/
+`MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS` (parse time) and
+`oag_ui::frontend::draw`'s `fade_alpha` (draw time, a linear ramp matching
+`Element_UpdateFade`'s entering branch and Pulse's own confirmed-linear
+`Widget_UpdateTransitionFraction`) - **scoped to `Image` widgets with
+`StartEnabled="false"`, not applied unconditionally**, even though the live
+data above shows the real engine does not gate the default that way at all.
+That narrowing is deliberate: `Screens::from_xml_with_fallbacks` is the one
+generic parser both Pulse's and Pure's front ends run through, and only Pure
+EU was live-measured, so applying the default to every already-visible
+widget on every screen of every title on the strength of one capture was
+judged too broad - see `resolve_fade_in`'s own doc comment for the full
+reasoning and the one known sentinel gap it leaves open. Pinned against both
+pressings in `crates/game/tests/pure_boot_ground_truth.rs`'s
+`title_screens_own_wordmark_gets_the_measured_texture`; checked by eye with
+`--screen "Title Screen" --screen-seconds 0.0/0.03/0.06/0.1/0.5` on
+`pure-psp-eu.chd` and `pure-psp-usa.chd` - invisible at `0.0`, partway
+faded at `0.03`/`0.06`, fully settled by `0.1`, each pressing's own
+colourway intact.
+
 ## Open
 
-- `TitleFrame`'s own `Element_UpdateFade` reveal is measured but not wired
-  into `oag_ui`/`oag_pure` - see above.
 - The actual **rasteriser** - whatever reads a widget's own computed rect
   and `TxtrWidth`/`U`/`V` to produce pixels - is still not located; the
   crop-vs-stretch reading behind the wipe's own UV-width handling rests on
@@ -140,16 +187,28 @@ pick it up (starting with where `0.1` itself is authored, which is unread).
 - Whether some skin *other than* `Data\Skins\Default` (none seen activated on
   either disc this project holds) declares a non-empty `BackgroundTexture` is
   unread - only the one active skin was.
-- None of this pass's new function names (`Animation_Update` and siblings)
-  have a confirmed USA-binary twin - only Pure EU was worked.
+- None of this pass's new function names (`Animation_Update` and siblings,
+  plus `Widget_CreateFromElement`) have a confirmed USA-binary twin - only
+  Pure EU was worked.
+- `Widget_CreateFromElement`'s own allocator (`FUN_08a3a928`, which resolves
+  a tag name to its class's own prototype before the attribute read runs)
+  is read only at the call site, not independently decompiled - finding it
+  would show exactly where `0.1` is first written into a fresh widget.
+- The measured `0.1`s default is not applied to `Text`/`Fill` widgets that
+  start enabled, even though the live data shows they get it too in the
+  original - see `resolve_fade_in`'s own doc for why, and consider revisiting
+  once Pulse's own unauthored-default value is independently read (not just
+  its attribute-reading mechanism, which is already confirmed shared).
 
 ## Next Steps
 
-- Wire `TitleFrame`'s own 0.1s fade-in, once its authoring source (XML
-  attribute vs. skin default vs. constructor constant) is read - see
-  `Element_UpdateFade`'s own confidence note in the evidence page.
 - Find the actual rasteriser (whatever reads a widget's own `+0x48..+0x54`
   rect and `TxtrWidth`/`U`/`V`) to move the crop-vs-stretch reading from "one
   live capture" to "read off the draw call itself", and to settle whether a
   `Centred="true"` widget (none currently authored with a reveal) would keep
   its own centre fixed as its width changes.
+- Read `Widget_CreateFromElement`'s own allocator (`FUN_08a3a928`) to find
+  where the `0.1`s class default is first written, and check whether Pulse's
+  own binary shares the identical value - if it does, the `StartEnabled`
+  scoping this pass chose could widen to match the original's own
+  unconditional behaviour.

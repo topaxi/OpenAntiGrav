@@ -140,7 +140,7 @@ ALLOWED = {
         "no simulation crate names `oag_ui::backdrop`, and the menus draw "
         "nothing the tick reads"
     ),
-    "crates/ui/src/frontend/draw.rs": (
+    "crates/ui/src/frontend/draw/widget_alpha.rs": (
         "`pulse_alpha`'s `sin` shapes the PRESS START text's fade-in/pulse "
         "curve, and `menu/skin.rs`'s `cos` (below) shapes a selected row's "
         "highlight the same way. Both return an `f32` alpha or colour channel "
@@ -150,7 +150,10 @@ ALLOWED = {
         "appears in `oag-core`, `oag-physics`, `oag-gameplay`, `oag-race` or "
         "`oag-ai`, and both are downstream of the tick rather than an input "
         "to it. Surfaced when `oag-ui` joined `SCANNED_CRATES` on extraction "
-        "from `oag-game`, which this scan never covered"
+        "from `oag-game`, which this scan never covered. Moved out of "
+        "`draw.rs` itself into this sibling file (`pure-titlefade`'s own "
+        "`fade_alpha`, a plain linear ramp with no transcendental, joined it) "
+        "under the 1,000-line rule - same function, same reasoning, new path"
     ),
     "crates/ui/src/menu/skin.rs": (
         "See `crates/ui/src/frontend/draw.rs`'s entry above - `Skin::selected`'s "

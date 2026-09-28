@@ -17,8 +17,6 @@
 
 use std::collections::HashMap;
 
-use oag_gameplay::input::button_from_name;
-
 // The XML tree parser itself is a format concern and lives in `oag-formats`
 // next to the dictionary expander, so the front end and the handling-stats
 // decoder share one copy rather than growing two. Re-exported because this
@@ -26,6 +24,8 @@ use oag_gameplay::input::button_from_name;
 use oag_gameplay::input::Button;
 pub use oag_tables::fexml::{Node, parse};
 
+mod color;
+mod fade;
 mod movie;
 #[cfg(test)]
 use movie::has_movie_extension;
@@ -34,6 +34,8 @@ mod settings;
 mod tag_input;
 mod touch;
 mod widgets;
+pub use color::{argb_to_rgba, parse_argb};
+pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
 pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
@@ -201,9 +203,17 @@ pub struct Image {
     /// the XML does not wrap this way. See [`RevealKey`].
     pub reveal: Vec<RevealKey>,
     /// Seconds this widget takes to fade in - see [`Text::transition`],
-    /// which this mirrors for the same reason: `LeftLayer` wraps `Image`
-    /// widgets alongside `Text` ones on both selection screens.
+    /// which this mirrors. Resolved by [`fade::resolve_fade_in`]: authored
+    /// `EnableTransition`/`Transition` wins, else a hidden widget
+    /// ([`Self::start_enabled`] false) gets the measured class-wide
+    /// default rather than `0.0` - see that function's own doc.
     pub transition: f32,
+    /// Whether the widget starts hidden - see [`Text::start_enabled`].
+    /// `Image` gained this for `Title Screen->TitleFrame`
+    /// (`StartEnabled="false"`), which gates [`Self::transition`]'s own
+    /// default - `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s
+    /// `Element_UpdateFade` section.
+    pub start_enabled: bool,
 }
 
 /// A solid-colour `Image` widget: no `src`, so nothing to sample.
@@ -610,7 +620,16 @@ impl Screens {
                     // no-op everywhere that shape is absent.
                     Some(src) => {
                         let mut image = self.image_from_node(child, src, inner);
-                        image.transition = transition;
+                        // The widget's own `EnableTransition`/`Transition`,
+                        // read directly off this node rather than only
+                        // inherited - Pulse's `GameShareBackdrop` authors
+                        // its own literal `transition="0"`. See
+                        // [`fade::resolve_fade_in`].
+                        let own = self
+                            .number(child.value("EnableTransition"))
+                            .or_else(|| self.number(child.value("Transition")));
+                        image.transition =
+                            fade::resolve_fade_in(own, transition, image.start_enabled);
                         screen.images.push(image);
                     }
                     None => {
@@ -702,7 +721,7 @@ impl Screens {
                 text.transition = transition;
                 screen.texts.push(text);
             }
-            "redirect" => screen.redirects.push(redirect_from_node(child)),
+            "redirect" => screen.redirects.push(widgets::redirect_from_node(child)),
             "touchbutton" => screen
                 .touch_buttons
                 .push(self.touch_button_from_node(child, inner)),
@@ -960,39 +979,6 @@ impl Screens {
     pub fn with_movies(&self) -> impl Iterator<Item = &Screen> {
         self.screens.iter().filter(|s| !s.movies.is_empty())
     }
-}
-
-fn redirect_from_node(node: &Node) -> Redirect {
-    Redirect {
-        name: node.attr("name").map(str::to_string),
-        forward: node.value("forward").and_then(button_from_name),
-        backward: node.value("backward").and_then(button_from_name),
-        goto: node
-            .children_named("Default")
-            .find_map(|d| d.attr("goto"))
-            .map(str::to_string),
-        delay: node.value("delay").and_then(|d| d.trim().parse().ok()),
-    }
-}
-
-/// Parses `0xAARRGGBB`, as every colour in the XML is written.
-#[must_use]
-pub fn parse_argb(value: &str) -> Option<u32> {
-    let text = value.trim();
-    let hex = text
-        .strip_prefix("0x")
-        .or_else(|| text.strip_prefix("0X"))?;
-    u32::from_str_radix(hex, 16).ok()
-}
-
-/// Splits ARGB into linear-ish RGBA floats for the renderer.
-#[must_use]
-pub fn argb_to_rgba(argb: u32) -> [f32; 4] {
-    let a = ((argb >> 24) & 0xff) as f32 / 255.0;
-    let r = ((argb >> 16) & 0xff) as f32 / 255.0;
-    let g = ((argb >> 8) & 0xff) as f32 / 255.0;
-    let b = (argb & 0xff) as f32 / 255.0;
-    [r, g, b, a]
 }
 
 #[cfg(test)]
