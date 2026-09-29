@@ -346,9 +346,9 @@ impl Bank<'_> {
                     walk.out.bends.push((word & 0xff) as u8 as i8);
                     frame.bend = Some(walk.out.bends.len() - 1);
                 }
-            } else if PASS_THROUGH.contains(&opcode) {
-                walk.out.passed.push(opcode);
-            } else if walk.model.goto_markers && opcode == MARKER {
+            } else if PASS_THROUGH.contains(&opcode)
+                || (walk.model.goto_markers && opcode == MARKER)
+            {
                 walk.out.passed.push(opcode);
             } else if walk.model.goto_markers && opcode == GOTO {
                 gotos_this_tick += 1;
@@ -400,7 +400,7 @@ impl Bank<'_> {
     /// The first marker (`0x23`) of `cue` whose operand byte 1 is `id`, as an
     /// index into the cue's own commands.
     fn marker_of(&self, cue: &Cue, id: u8) -> Option<i32> {
-        (0..cue.commands as usize).find_map(|k| {
+        (0..cue.commands).find_map(|k| {
             let at = (cue.first_command + k) * COMMAND_LEN;
             let word = self.order.u32(self.commands.get(at..at + COMMAND_LEN)?, 0);
             ((word >> 24) as u8 == MARKER && ((word >> 16) & 0xff) as u8 == id).then_some(k as i32)
