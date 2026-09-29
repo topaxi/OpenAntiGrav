@@ -784,7 +784,12 @@ Three consequences, and the first is the interesting one:
   lateral grip while it runs. A leap, a respawn and a race start are all plausible.
 
 - **A craft already under a floor face falls through in ours and is recovered by the
-  original.** Measured 2026-09-29 on `03_Track`; the mechanism is not read. See
+  original.** Read 2026-09-29: the hull narrowphase makes contacts against floors,
+  `Collision_AddContact` keeps one only if the sample projects into the crossed
+  triangle, and `Body_StepWorld`'s pass 1 clips the body back along its velocity.
+  All three are read and measured and **none is merged**: the first alone strands a
+  craft, the player included, on its flank below the holes in `01_Track`'s and
+  `06_Track`'s racing lines. See
   [leaving the track](../gameplay/leaving-the-track.md#the-one-divergence-the-original-recovers-a-craft-that-has-sunk-into-the-floor-and-ours-does-not).
 
 ## A dead branch not to port

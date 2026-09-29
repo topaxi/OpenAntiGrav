@@ -60,6 +60,16 @@
 //!
 //! # Only non-hoverable surfaces respond
 //!
+//! **A known divergence from the original, kept on purpose (2026-09-29).**
+//! The original's narrowphase reads no surface type - `Collision_BoxAgainstMesh`
+//! (`0x08815cd4`) makes contacts against floors as against walls, which is half
+//! of how it recovers a craft whose hull has sunk into a floor. Porting it
+//! (branch `sunk-craft-floors`) turns the AI's fall through the holes under
+//! `01_Track`'s line (samples 31-42) and `06_Track`'s (1196-1200) into a craft
+//! beached on its flank for good, the player included, where before it fell on
+//! through (into a `Reset` volume on `01_Track`). See `docs/gameplay/leaving-the-track.md`. The
+//! reasoning below is this crate's, not the original's.
+//!
 //! [`Surface::Floor`] and [`Surface::MagFloor`] are skipped, because the hover
 //! spring already owns them and a lateral probe that fired on a floor would fight
 //! it - a hard-banked ship's own right axis points partly downwards, and the

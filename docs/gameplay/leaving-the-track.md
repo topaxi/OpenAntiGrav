@@ -4,8 +4,10 @@
 **it is easier to fall off the track here than in the original (Pulse PSP)**,
 no specific circuit, with "flying too high?" and "collision less forgiving?" as
 the guesses. This page is the measurement pass. **Nothing was tuned and no
-physics changed**; the one candidate fix that was tried broke the regression
-gate and was reverted (see [the sunk craft](#the-one-divergence-the-original-recovers-a-craft-that-has-sunk-into-the-floor-and-ours-does-not)).
+physics is changed on `main`.** The one divergence it found, a craft sunk into
+the floor, was read out of the binary afterwards, ported on a branch, and held
+back because the port strands a craft below two holes in the AI's racing line
+(see [the sunk craft](#the-one-divergence-the-original-recovers-a-craft-that-has-sunk-into-the-floor-and-ours-does-not)).
 
 Every number below is reproducible from `crates/game/tests/falloff_survey_ground_truth.rs`
 and three files in `crates/trace/tests/` (all `#[ignore]`d, `OAG_SWEEP`-gated where
@@ -114,50 +116,119 @@ first order: it is the edge, not the approach.
 ## The one divergence: the original recovers a craft that has sunk into the floor, and ours does not
 
 Found while trying to get an original-side shove on `03_Track` (Moa Therma), the
-open-edge spot the sweep flagged (spline index 1780, 12 of 12 trials leave, no wall
-touched). Placing our craft there with `psp-drive.py place` put it in a pose whose
-centre is 0.48 above a `Floor` face (the spline runs 2.4 below the floor there), the
-probes are under the surface, and:
+open-edge spot the sweep flagged (spline index 1780). A craft whose centre is
+above a floor but whose hull is through it - probes under the surface, so the
+downward hover rays find nothing - **fell through the floor in ours** (y -155)
+and was **pushed back to rest height in the original**.
 
-- **ours** free-falls through the floor for the rest of the run (the downward hover
-  ray starts below the surface and finds nothing; `hover::sweep` needs a segment that
-  crosses a face);
-- **the original** is pushed up 9.3 and back at 74 u/s within 60 ticks.
+### What the original does (2026-09-29, read and measured)
 
-Made clean by a control pair on `03_Track` index 200 (level `Floor`, speed 0, 60-tick
-settle, same pose fed to both): the un-sunk pose settles at y 5.11 in the original and
-hovers in ours; the same pose **sunk 3.6 units** settles at **y 4.64 in the original**
-(speed 0.5, back at rest height) and falls to y -155 in ours.
+Three mechanisms, all read out of the binary; the addresses and confidences are
+on [collision.md](../ghidra/functions/psp-pulse-usa/collision.md#every-mesh-surface-reaches-the-hull-narrowphase-2026-09-29):
 
-`hover::sweep`'s own doc says "Nothing in the original does this". The original does
-recover this state, by some mechanism. The ray in `Ship_CastHoverProbes` starts at the
-probe in the original as in ours (`engine.md`), so it is not a lifted ray.
+1. **The hull's ten-ray star makes contacts against every mesh surface**, floors
+   included (`Collision_BoxAgainstMesh` `0x08815cd4` reads no surface type;
+   confidence 88). A floor contact translates the body out by its depth and
+   applies the restitution impulse, but **never damages**: `FUN_088418e0` charges
+   only a positive-friction contact (`0x08842648`, confidence 90), and a floor's
+   friction is the `-1.0` sentinel.
+2. **`Collision_AddContact` keeps a contact only when the sample point's
+   perpendicular projection lands in the same triangle** the centre segment
+   crossed (`0x08816864` into `Collision_SegmentTriangle` `0x08818bdc`,
+   confidence 90).
+3. **`Body_StepWorld`'s pass 1** clips the body back along its velocity by 0.9 of
+   the overshoot when a segment from the centre to the box face, plus this frame's
+   travel, meets any mesh surface (`0x0884f70c`, confidence 85).
 
-A candidate was tried: letting the hull's ten-ray star respond to `Floor` and
-`MagFloor` as well (`wall::responds` returning true). It recovers the sunk craft **to
-y 4.65 by tick 5** (the original's 4.64) and then follows the un-sunk trajectory. It
-**also fails the gate**: `01_Track` loses its clean lap (lost at `[794, 71, 72, 72, 75]`),
-so the real mechanism is narrower than "the hull responds to every floor". Reverted,
-not shipped. The address to start from: `Collision_BoxAgainstMesh` (`0x08815cd4`) and
-`Collision_StepNarrowphase` (`0x088159c0`) for whether and how the ship's box collider
-is filtered by surface type, `contact-response.md` (a floor contact takes friction
-`0.0`, which says floor contacts reach the resolver), and `Ship_HoverTwoPoint`
-(`0x0884a658`) for a recovery at `h < 1.0` with a probe already below the face. That is
-deep Ghidra work and is the follow-up this pass recommends.
+Measured by placing the same pose in both engines (the clean placement method is
+below), coasting, 200 ticks:
 
-Whether this is what a human feels is **unmeasured**. It fits the report only if craft
-ever get a probe under a floor face in normal play (a steep landing, a crest lip) and the
-original holds them where ours drops them.
+| case | original | ours (main) | (1) only, `sunk-craft-floors` | prototype (1+2+3) |
+| --- | --- | --- | --- | --- |
+| `16_Track` idx 200, 3.6 into the floor | +1.81 on the first tick (two corners), then climbs; rest y -39.60 | falls through | +3.54 in one tick, rest -39.61 | tick for tick (first tick -41.26 vs -41.28, tick 30 -39.17 vs -39.16) |
+| `03_Track` idx 200, 3.6 into the floor | pass 1 lifts +0.757 (predicted 0.752), probe escapes +1.82, rest y 4.67 | falls through | +3.75 in one tick, rest 4.66 | rest 4.663; the gate alone (no pass 1) falls through |
+| `16_Track` idx 200, on its flank on the floor | **stays on its flank** and slides; tick 199 (323.57, -47.49, -140.96) | 1.6 lower than the original by tick 60, tick 199 (323.31, -45.15, -143.92) | tick 199 (323.63, -47.50, -140.95) | tick 199 (323.42, -47.51, -141.05) |
+| unsunk controls, both circuits | hovers still | hovers | hovers | hovers |
 
-## What was tried on the original and did not give a clean answer
+**Nothing of it is merged.** (1) alone is on branch `sunk-craft-floors`; (2) and
+(3) are a prototype on `sunk-craft-parked`. The reasons, measured:
 
-`psp-drive.py place` teleports a craft with a heading and a speed, and `psp-trace.py`
-records it. A **shove** by that route (a craft placed at an angle to a wall at 110 u/s)
-is not usable: on both `16_Track` (control) and `03_Track` the original's craft is
-already upside down (`up.y` -0.9) by the first recorded tick, so what follows is a
-tumble and not a wall test. A placement **at rest with a 60-tick settle** is clean, and
-is how the sunk-craft result above was obtained. Only `16_Track`, `03_Track` and
-`18_Track` (Metropia reversed) are reachable from the front end (`race-setup.md`).
+- **(1) alone strands a craft, the player included.** `01_Track`'s racing line
+  drops through the hole under samples 31-42 and `06_Track`'s through the one
+  under 1196-1200 (`race_ground_truth.rs`'s "nothing under the line" table). A
+  craft falling through rolls onto its flank on the way down and lands on the
+  floor below. Before, it sank on through that floor (into a `Reset` volume on
+  `01_Track`); with (1) it is held there on its flank - which is what the original
+  does to a flank-down craft, measured above - and nothing rights it. An opponent
+  is freed after 20 s by this project's invented `Stalled` dwell. **The player has
+  no such dwell and stays there**: the player's autopilot on `01_Track` completes
+  1 lap in 18,000 ticks instead of 4, airborne 15,946 of them, and a scripted
+  escape attempt from the beached pose (900 ticks each of throttle, throttle with
+  full left or right, both airbrakes, and left-right-left / right-left-right roll
+  taps with and without throttle) never rights it; holding a steer only scoots it
+  along its flank at 4-13 u/s. That is a softlock on a selectable circuit.
+- **(2) without (3)** strips wall contacts that the original covers with pass 1
+  (`05_Track`'s lone Ace: 60 wall-contact ticks to 2,475, airborne 782 ticks to
+  7,365) and leaves `03_Track`'s sunk craft falling.
+- **(1)+(2)+(3)** matches every placement trial but costs `01_Track` its clean lap
+  in the regression gate, for the same beaching.
+
+So the prerequisite for any of it is the two holes under the line: an AI line
+that no longer drops into them, or whatever the original does there (it is not
+known whether the original's craft rolls onto its flank at that lip). Whether to
+add a player-side rescue is a design decision for the maintainer, not a port -
+the original has none.
+
+### What (1) did, measured on `sunk-craft-floors`
+
+- **Regression gate**, all twelve clean. `01_Track`: before
+  `respawns 1 lost at [794]`, with (1) `respawns 3 lost at [794, 72, 71]`. 794 is
+  the grid-slot spawn fall; 72 and 71 are the `Stalled` dwell after about 20 s
+  beached. `07_Track`'s one respawn moved from index 687 to 696.
+- **Survey** (`VENOM`, lone AI, Ace and Novice, all 24 circuit-directions,
+  18,000 ticks, `--release`): rescue events 583 to 267. `13_Track` Novice
+  345 to 26 (a craft that lands short of the jump now has its hull held by the
+  far floor's lip), `06_Track` Novice 2 to 0, `01_Track` Ace 1 to 3 (the two
+  `Stalled`), `17_Track` Novice 2 to 4, `05_Track` Novice 3 to 4, `29_Track`
+  Novice 214 to 216.
+- **Shield**, clean-lap board (`VENOM`, lone Ace), end-of-run pool and per-lap
+  charge: identical on ten circuits; `01_Track` end 70.62 to 73.48, per-lap
+  4.0/4.2/3.3 to 3.5/4.2/12.4 (the beached lap); `10_Track` end 87.40 to 94.24;
+  `06_Track` 78.81 to 77.89; `07_Track` 79.94 to 78.46.
+- **`ai_clean_lap_gate`** (48 rows, all classes): `01_Track` FLASH `CleanLap` to
+  `NoCleanLap` (beached every lap), `06_Track` PHANTOM contact ticks 493 to 1,586
+  (beached four times in its hole), `05_Track` FLASH `Died` to `CleanLap`,
+  `10_Track` VENOM 0 to 5 contact ticks, the rest within a few ticks.
+- **`off_track_rescue_ground_truth`** loses its subject: the player's autopilot
+  no longer leaves `05_Track` at index ~1225, and no forward circuit sends it off
+  through `OffTrack` any more. Not re-pointed.
+
+## Placing a craft in the original: the clean method
+
+`psp-drive.py place` writes the body once at a `Ship_UpdateCraft` breakpoint and
+resumes, and `psp-trace.py` attaches afterwards. **Both halves corrupt a
+placement trial**, and every original-side result above this section's date
+that used them is confounded:
+
+- the emulator runs free between the two, so the first recorded tick is several
+  frames after the write (the sunk `16_Track` trial's first record was already
+  5 units up and upside down);
+- one write leaves per-craft state derived from the old pose (the hover probes'
+  cached hits among it): on an **unsunk** control at rest the first frame after
+  the write kicks the craft **76 u/s upward** and rolls it.
+
+So the survey's "a teleported shove tumbles the original's craft (`up.y` -0.9)"
+is this artefact, not the original's response to a shove, and its sunk-craft
+"y 4.64 after a 60-tick settle" was only confirmed by the clean method below.
+
+**The clean method**: write the pose on four consecutive hits of the followed
+craft (so the cached state re-derives at the new pose, with the velocity zeroed
+each time), then log every following hit inside the same breakpoint session. The
+unsunk control then hovers perfectly still (y -39.55 for 60 ticks). The scratch
+script was `data/scratch/sunk-craft/place_trace.py`; folding a `--rewrites` and a
+per-tick log into `psp-drive.py place` is the obvious follow-up. Even so, the
+sunk `03_Track` trial showed one unexplained frame of upward velocity (+1.9) on
+the first free tick; compare from the first frame whose velocity points down.
 
 ## Ruled out
 
@@ -171,8 +242,8 @@ is how the sunk-craft result above was obtained. Only `16_Track`, `03_Track` and
 
 ## Next measurements
 
-1. The sunk craft: which original mechanism recovers it (Ghidra, addresses above),
-   then the narrowest port that also keeps `01_Track` clean. *Opus follow-up.*
+1. The sunk craft: land the projection gate and pass 1 together (above), once
+   `01_Track`'s line stops dropping into the hole at samples 31-42.
 2. An original-side approach on an open edge, driven rather than teleported: scripted
    steering out of the line at `03_Track` spline index 1780 or `18_Track` index 73/2044,
    through `just scripted-emu`, replayed through `oag-trace run` for the pair.
