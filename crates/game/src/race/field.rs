@@ -454,7 +454,7 @@ impl Race {
             // 95.00. Both are the wreck, not the driving.
             if was_racing {
                 self.sim.wall_racing_ticks[slot] += 1;
-                if evaluated.wall.contacts > evaluated.wall.floor_contacts {
+                if evaluated.wall.contacts > 0 {
                     self.sim.wall_contact_ticks[slot] += 1;
                     if evaluated.wall.impact {
                         self.sim.wall_inbound_ticks[slot] += 1;
