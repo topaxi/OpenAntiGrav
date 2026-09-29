@@ -691,6 +691,7 @@ pub fn run(
                     kind,
                     &mut archives,
                     &strings,
+                    &circuit_names,
                     entries_path.as_deref(),
                     faces,
                     [space.size.0, space.size.1],

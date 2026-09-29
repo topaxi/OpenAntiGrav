@@ -247,15 +247,17 @@ impl Session {
             Some(PreviewSource::Ship { skins, .. }) if !skins.is_empty() => LiveryAxis::Skin,
             _ => LiveryAxis::Variant,
         };
+        // A profile that has not picked a model opens on the title's own
+        // fresh-profile row - `Race::opening_variant`.
         let livery = match axis {
-            LiveryAxis::Skin => self.settings.race.skin.as_str(),
-            LiveryAxis::Variant => self.settings.race.variant.as_str(),
+            LiveryAxis::Skin => self.settings.race.skin.clone(),
+            LiveryAxis::Variant => self.settings.race.opening_variant(title).to_string(),
         };
         let model = Picker::new(
             Kind::Ship,
             entries,
             Some(self.settings.race.team.as_str()),
-            Some(livery),
+            Some(livery.as_str()),
         );
         // HD's screen lays the teams out across - see
         // `Picker::with_entries_across`.
@@ -271,6 +273,13 @@ impl Session {
         {
             self.settings.race.team = entry.id.clone();
             self.resupply_race_variant();
+        }
+        // What the screen opened on is what a bare Confirm races.
+        if axis == LiveryAxis::Variant
+            && let Some((id, _)) = model.variant()
+            && !self.settings.race.variant_chosen
+        {
+            self.settings.race.variant = id.clone();
         }
         self.open_picker(model, layout, axis, sources, None)
     }
@@ -422,9 +431,16 @@ impl Session {
                     let axis = picker.livery_axis;
                     picker.refresh_preview(&self.gpu);
                     self.settings.race.team = team;
-                    match axis {
-                        LiveryAxis::Skin => self.settings.race.skin = String::new(),
-                        LiveryAxis::Variant => self.settings.race.variant = String::new(),
+                    // Wipeout HD/Fury's screen keeps the model row across a
+                    // team step (`Picker::land_on`); every other picker
+                    // restarts the livery.
+                    let kept = picker.model.variant().map(|(id, _)| id.clone());
+                    match (axis, kept) {
+                        (LiveryAxis::Skin, _) => self.settings.race.skin = String::new(),
+                        (LiveryAxis::Variant, Some(id)) if layout_is_hd => {
+                            self.settings.race.variant = id;
+                        }
+                        (LiveryAxis::Variant, _) => self.settings.race.variant = String::new(),
                     }
                     self.resupply_race_variant();
                 }
@@ -434,7 +450,10 @@ impl Session {
                     let id = id.clone();
                     match picker.livery_axis {
                         LiveryAxis::Skin => self.settings.race.skin = id,
-                        LiveryAxis::Variant => self.settings.race.variant = id,
+                        LiveryAxis::Variant => {
+                            self.settings.race.variant = id;
+                            self.settings.race.variant_chosen = true;
+                        }
                     }
                 }
                 picker.refresh_preview(&self.gpu);
@@ -448,6 +467,7 @@ impl Session {
             }
             (Kind::Ship, Event::Confirmed) => {
                 stage.picker = None;
+                self.settings.race.variant_chosen = true;
                 // A campaign cell already built `self.race_options` in full
                 // (`Session::launch_campaign_cell`) - `launch_from_settings`
                 // would overwrite the cell's own track/mode/class with

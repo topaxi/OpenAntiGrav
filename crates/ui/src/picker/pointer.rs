@@ -283,7 +283,13 @@ impl Picker {
 
     fn land_on(&mut self, index: usize) {
         self.index = index;
-        self.variant = 0;
+        // Wipeout HD/Fury's team screen keeps the model row across a team
+        // step - measured on RPCS3 2026-09-29: `Right` from `concept1` lands on
+        // the next team's `concept1` (Qirex `085`/`080`), from `normal` on its
+        // `normal`. Every other picker restarts the livery.
+        if !self.across || self.variant >= self.variants().len() {
+            self.variant = 0;
+        }
         self.since_selection = 0.0;
     }
 

@@ -126,6 +126,23 @@ pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
     join: oag_title::VariantJoin::Suffix,
 };
 
+/// The model row Ship Select opens on for a profile that has never chosen
+/// one - the `_c1` directory, the `concept1` model.
+///
+/// **Measured on RPCS3, 2026-09-29, confidence 90**: with `savedata` empty
+/// (the first-boot dialogs `EpilepsyWarning` and `FirstPlay` answered), both
+/// the Fury campaign's `Team Selection` and Racebox's open on the third
+/// `HexSelection` row with `Feisar` reading `080`/`085`/`*`/`080`, which is
+/// `concept1`'s `8/8.5/10/8` and not `normal`'s `7/8/10/8`. Two routes, one
+/// boot each, on top of the earlier fresh-profile frame. **What is not
+/// measured**: a profile that already holds a save opened on `normal` on the
+/// same disc, so the original remembers something - what, and where, is
+/// unread - and the classic hull cannot be the default everywhere.
+/// `oag_game::settings::Race::opening_variant` applies this to a profile
+/// that has not picked a model yet, which is **chosen, not measured** as the
+/// definition of "fresh" here.
+pub const FRESH_PROFILE_VARIANT: &str = "_c1";
+
 /// Wipeout HD/Fury's zone-number to speed-class ladder, read out of the
 /// executable.
 ///
