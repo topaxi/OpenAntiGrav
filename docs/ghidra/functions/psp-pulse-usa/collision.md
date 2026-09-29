@@ -533,6 +533,91 @@ scrape is one contact per frame**, consistent with a craft leaning on a wall
 with one flank point. A square-on impact would generate five (four corners and a
 flank point) and scrub `1 - 0.965^5 = 16.3 %`.
 
+### Every mesh surface reaches the hull narrowphase, 2026-09-29
+
+**Read end to end for the sunk-craft divergence** (`docs/gameplay/leaving-the-track.md`).
+Nothing between the pair list and the resolver reads a collider's surface
+type (`collider+0x6c`):
+
+- `Collision_DispatchPair` (`0x08816eac`) switches on the shape classifier
+  (`collider+0x78`, kind 1 mesh / kind 3 box) and nothing else.
+- `Collision_BoxAgainstMesh` (`0x08815cd4`) walks every candidate triangle of
+  the mesh with no read of `+0x6c`.
+- `Collision_AddContact` (`0x08816864`) reads the two colliders' friction
+  (`+0x64`) and owner (`+0x60`) and nothing else.
+
+So a craft's box makes contacts against `Floor`, `MagFloor` and `Reset` exactly
+as against `Wall`. The ring consumer proves non-wall contacts arrive:
+`FUN_088418e0`, at `0x088426e8`-`0x08842728`, looks each ring record's mesh
+proxy up through `world+0x2454` and calls `FUN_08844100(craft, 3)` when that
+collider's `+0x6c` is `2` - a **`Reset` contact** reaching the gameplay loop.
+Confidence **88**. `crates/physics/src/wall.rs` had filtered the hull to `Wall`
+alone on its own reasoning ("the hover spring owns floors"); it now takes every
+surface but `Reset`, which `crates/physics/src/reset.rs` handles.
+
+### `Collision_AddContact` has a second test: the projection must land in the same triangle
+
+`0x088168e4` onward, after the `(-2.0, 0)` plane-distance gate: with
+`d = dot(n, sample - v0)`, it builds `p1 = sample - n * (d - 0.01)` - the sample
+carried along the normal to `0.01` in front of the plane - and calls
+`Collision_SegmentTriangle` (`0x08818bdc`) with `(5.0, sample, p1, v0, v1, v2)`.
+The contact is written only if that returns `1`. `Collision_SegmentTriangle` is
+a plane sign change plus three edge half-space tests (`>= 0`, inclusive) on the
+crossing point, so **the sample point's perpendicular projection has to lie
+inside the same triangle the centre-to-sample segment crossed**. The `5.0` is a
+maximum start distance and is unreachable behind the `-2.0` gate. Confidence
+**90**, decompiled and read against the call's argument order (`0x08815cd4`
+passes `v0, v1, v2` to `Collision_AddContact` and `v0, v2, v1` to
+`Collision_SegmentHitsTriangle`; both tests are winding-consistent).
+
+Measured: placed 3.6 units into `16_Track`'s floor at spline index 200, the
+original's first free tick moves the craft **1.81** along the normal - two
+corners' depth - where four ungated contacts give about **3.5**. A prototype of
+the gate reproduces the original tick for tick there (y `-41.26` vs `-41.28` on
+the first tick, overshoot `-39.17` vs `-39.16` at tick 30, rest `-39.65` vs
+`-39.60`). **Not ported**: on `03_Track` the same gate rejects all four corners
+(the centre segments cross a long sliver triangle whose neighbour holds the
+projections), and the original gets out through pass 1 below instead. Without
+pass 1 the gate also strips wall contacts: `05_Track`'s lone Ace went from 60
+wall-contact ticks to 2,475. The two land together or not at all.
+
+### `Body_StepWorld`'s pass 1 is a clip along the velocity to the box face
+
+The first per-body loop of `Body_StepWorld` (`0x0884f70c`), before any force
+is evaluated:
+
+```text
+v = body+0x140
+if v != 0:
+    probe = normalise(v) * 10.0                  ; 0x41200000
+    half  = FUN_0884dcec(body) * 0.5             ; the box (w, h, l) / 2
+    du = dot(probe, row1); dr = dot(probe, row0); df = dot(probe, row2)
+    if du >  half.h: probe *= half.h /  du       ; each factor from the unscaled
+    if du < -half.h: probe *= half.h / -du       ; dot, applied multiplicatively,
+    if dr >  half.w: probe *= half.w /  dr       ; in this order
+    if dr < -half.w: probe *= half.w / -dr
+    if df >  half.l: probe *= half.l /  df
+    if df < -half.l: probe *= half.l / -df
+    end = body+0x30 + v * dt + probe
+    if Collision_RaycastWorld(world, body+0x30, end, &hit, body+0x3a8, 1, 2):
+        Body_SetPosition(body+0x30 - normalise(probe) * 0.9 * |end - hit|)
+```
+
+`Collision_RaycastWorld`'s `1` is "do not skip `Reset`" and its `2` is "skip box
+colliders" (read off its own `param_6`/`param_7` handling), so the clip runs
+against every mesh surface. The `0.9` is `0x3f666666`. No velocity is touched.
+Confidence **85**.
+
+Measured on `03_Track` spline index 200, 3.6 units into the floor, with the
+craft's centre 0.50 above the floor: the first frame whose velocity points down
+lifts the original **0.757**, against `0.9 * (1.3125 + 0.024 - 0.50) = 0.752`
+from the reading; the next frame its two hover probes are above the floor and
+their penetration escapes lift it **1.82**. A prototype of pass 1 plus the gate
+recovers ours to the same rest height (`4.663` vs `4.67`). **Not ported**: with
+it, `01_Track`'s lone Ace loses its clean lap (the regression gate) - see
+`docs/gameplay/leaving-the-track.md`. Replacing this crate's swept guard with it
+did not close the `orig16` shove replay's tick-9 wall stop either.
+
 ## Surface types in practice
 
 **Mag Floor** is byte-identical to Floor at load apart from the type field. Both

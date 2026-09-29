@@ -403,6 +403,15 @@ correction below the list, which replaces an earlier wrong reading of what
    pair documented above. Gated on the per-contact scalar at
    `record + 0x1a0` (the friction field `Body_RecordContact` stores) being
    positive, and on a per-frame arm check (`FUN_0883e64c(param_2) == 1`).
+   **The friction gate read at instruction level, 2026-09-29:** `lwc1
+   f12,0x30(s0)` at `0x08842648` (the loop's `s0` is `body + 0x170 + n*0x40`,
+   so this is `record + 0x1a0`), `c.le.s f12,f20` against `0.0`, and `bc1t
+   0x088426e8` past the `Ship_Damage` call at `0x088426ac`. A contact against a
+   `Floor`, `MagFloor` or `Reset` collider carries the `-1.0` sentinel and so
+   combines to `0.0`: **those contacts never damage** (confidence **90**). The
+   same loop's tail (`0x088426e8`-`0x08842728`) looks the record's mesh collider
+   up and calls `FUN_08844100(craft, 3)` when its surface type is `2`, a `Reset`
+   contact. See [collision.md](collision.md#every-mesh-surface-reaches-the-hull-narrowphase-2026-09-29).
    Confidence **80**: an unambiguous, branch-clear decompile, but a single
    static reading with no runtime trace corroborating it. Left as
    `FUN_088439ac` for now rather than renamed - see the open thread on

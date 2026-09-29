@@ -3,7 +3,7 @@
 2026-09-29, from a maintainer report made by feel ("easier to fall off than in the
 original", no circuit named). Full write-up with tables:
 [docs/gameplay/leaving-the-track.md](../../docs/gameplay/leaving-the-track.md). A
-measurement pass; **no physics changed**.
+measurement pass, then (same day) a partial port of the one divergence it found.
 
 **Ruled out, with numbers**: flying too high (rest ride height 2.888 vs 2.888,
 0.015 apart at speed on the straight; airtime 14 vs 14 and 13 vs 13 ticks, apex
@@ -22,14 +22,22 @@ driving fall, and slot 0 is unaffected**; and open edges on `04`, `05`, `07`, `1
 `20r`, `23r`, `26r`, `30r`, where 12-21% of shoves leave and the wall-less stretch is
 in the collision data itself.
 
-**The divergence**: placed 3.6 units below its rest height on level `Floor`
-(`03_Track` index 200), the original **pushes the craft back to y 4.64** (its rest
-height) within 60 ticks and ours **falls through the floor** (y -155). The ray in
-`Ship_CastHoverProbes` starts at the probe in both, so it is not a lifted ray;
-`hover::sweep`'s doc says "nothing in the original does this", which this contradicts.
-Letting `wall::responds` accept `Floor`/`MagFloor` reproduces the recovery (y 4.65 at
-tick 5) **and breaks the regression gate** (`01_Track` lost at `[794, 71, 72, 72, 75]`,
-no clean lap), so it was reverted.
+**The divergence, now read and partly ported (2026-09-29)**: a craft whose hull
+is through a floor fell through in ours and is recovered in the original. The
+original has three mechanisms, all read with addresses on
+[collision.md](../../docs/ghidra/functions/psp-pulse-usa/collision.md#every-mesh-surface-reaches-the-hull-narrowphase-2026-09-29):
+(1) the hull narrowphase reads no surface type, so floors make contacts (which
+never damage, `0x08842648`); (2) `Collision_AddContact` keeps a contact only if
+the sample's projection is in the crossed triangle; (3) `Body_StepWorld`'s
+pass 1 clips the body back along its velocity (0.9 of the overshoot). **(1) is
+shipped**: sunk craft recover on `16_Track` and `03_Track`, the gate stays clean
+(`01_Track` `[794]` to `[794, 72, 71]`, the craft now beached on its flank below
+the hole at samples 31-42 - which the original also does to a flank-down craft,
+measured), and the survey's rescues drop 583 to 267 (`13_Track` Novice 345 to 26).
+**(2)+(3)** match every placement trial tick for tick but cost `01_Track` its clean
+lap, and (2) alone wrecks `05_Track`'s walls; parked on local branch
+`sunk-craft-parked` (patch in `data/scratch/sunk-craft/gate-pass1.patch`).
+Full tables: [leaving-the-track.md](../../docs/gameplay/leaving-the-track.md).
 
 Instruments left behind, all `#[ignore]`d/`OAG_SWEEP`-gated: `falloff_survey_ground_truth.rs`
 (survey, grid, shove sweep, edge profile, single-trial trace with a `place` line and
@@ -40,25 +48,35 @@ Instruments left behind, all `#[ignore]`d/`OAG_SWEEP`-gated: `falloff_survey_gro
 
 ## Open
 
-- Which original mechanism recovers a sunk craft (`Collision_BoxAgainstMesh`
-  `0x08815cd4`, `Collision_StepNarrowphase` `0x088159c0`, `Ship_HoverTwoPoint`
-  `0x0884a658`), and whether it matters in play: a probe under a face needs a steep
-  landing or a crest lip. Deep Ghidra work.
-- What the original does at an open edge: unmeasured; only `16`, `03` and `18r` are
-  reachable from the front end. A teleported shove tumbles the original's craft (up.y
-  -0.9 by the first recorded tick), so it is not a usable test.
-- The `01_Track` odd-column grid: `Race_ComputeGridLayout` (`0x0882b3b0`) may clamp or
-  scale the stagger by width; read the original's eight slots on that circuit. It
-  changes the number the gate quotes, so it is a separate change.
-- `17_Track` index ~909 and `01_Track` index ~31: the racing line drops through a hole
-  under samples 31-42 into a `Reset` volume, and the craft arrives at 16-30 u/s. An AI
-  line question (the driver ignores speed pads), not a physics one; not chased.
+- **Land the projection gate and pass 1 together** once `01_Track`'s AI line
+  stops dropping into the hole under samples 31-42 (the craft rolls onto its
+  flank falling through it and, faithfully, stays there). Re-run the gate,
+  `05_Track`'s wall-contact count, and the placement trials in
+  `leaving-the-track.md`. Pass 1 would replace `wall::swept_contact` and may make
+  `hover::sweep` redundant; neither was checked.
+- `05_Track` under the gate: 60 wall-contact ticks to 2,475 without pass 1, 2,696
+  with it (maxlat 8.53). One seed, one tier; unexplained.
+- The hover penetration escape: at `03_Track` the original's two probes each
+  translate by `1 - h` in one frame (+1.82); ours gave +0.81 in the matching
+  prototype frame. Check that `HoverProbe::escape` sums both probes and gates on
+  a mesh hit rather than on `Surface::Floor` (`craft+0x208 == 1`, engine.md).
+- The original's first free frame after a clean placement at `03_Track` carries
+  +1.9 u/s upward from nowhere; unexplained, likely placement residue.
+- What the original does at an open edge: still unmeasured. The survey's
+  "a teleported shove tumbles the original" was a placement artefact (a single
+  write plus a late-attaching `psp-trace`); use the four-write method described
+  in `leaving-the-track.md` and repeat the shove.
+- The `01_Track` odd-column grid (`grid-stagger` lane).
+- `17_Track` index ~909 and `01_Track` index ~31: the racing line drops through a
+  hole into a `Reset` volume or onto the floor below. An AI line question.
 
 ## Next Steps
 
-1. Read the sunk-craft recovery out of the PSP binary, then port the narrowest
-   version that keeps `01_Track` clean (an opus follow-up).
-2. Drive, not teleport, an original craft out of the line at `03_Track` index 1780 with
-   `just scripted-emu` and replay the same script through `oag-trace run`.
-3. Add the reversed circuits to the regression gate's lone-craft test, so `17_Track`
-   is seen.
+1. Fold the four-write placement and a per-tick log into `scripts/psp-drive.py
+   place` (`--rewrites N --log out.csv`), so the trials are reproducible from
+   the repository.
+2. Fix or reroute `01_Track`'s line past samples 31-42, then land the parked
+   gate + pass 1 and re-measure.
+3. Repeat the open-edge shove at `03_Track` index 1780 with the clean placement.
+4. Add the reversed circuits to the regression gate's lone-craft test, so
+   `17_Track` is seen.

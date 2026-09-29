@@ -922,8 +922,8 @@ fn probe_pair<R: Raycaster + ?Sized>(
 ///
 /// # This one is ours
 ///
-/// **Nothing in the original does this**, and the reason to add it anyway is
-/// that the original's contact test - and therefore this crate's - can only
+/// **Nothing in the original does this in this form** (its analogue, pass 1,
+/// is in `crate::wall`'s docs); the original's contact test - and so ours - can only
 /// ever look *one way*. [`probe`] casts down from the hull along `-up` for
 /// `target_height`. Once the surface is above the hull no cast of any length
 /// finds it, penetration escape has no downward hit to measure, and the craft
