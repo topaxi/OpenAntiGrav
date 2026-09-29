@@ -582,6 +582,50 @@ whoever picks this up next should either retune the autopilot's steering
 for a junction-laden track or pick a simpler circuit (`Venom Straight` has
 a committed reference trace already) when re-attempting.
 
+## Live capture of the drawn standings table (PPSSPP v1.20.4, 2026-09-29)
+
+`pulse-psp-usa.chd`, Xvfb, own profile. Racebox `Tournament` -> `Tournament C`
+with **one** slot (Talon's Junction White) -> `Team Selection` (Assegai) ->
+`InGame` (a full grid of eight, the player 8th). The leg was ended by writing
+`g_race_laps` (`0x08b30f9c`) = 1 at run time and holding thrust across the
+start line, so the first crossing finished it - a **shortcut to reach the
+screen, not a race**: the player finished 8th of 8, which is exactly the
+point of interest (the law gives 8th place 0). Flow after the finish:
+`EndRace Rewards` (`Tournament complete - 8th place`, `Assegai Loyalty: 0
+Points`) -> `EndRace Menu` (`RETURN TO MAIN MENU`, `VIEW RESULTS AGAIN`, no
+`RACE AGAIN`/`NEXT RACE` on the last leg) -> `EndRace Results` via `VIEW
+RESULTS AGAIN`. Frames: `data/reference/psp-tournament/er1.png`, `er2.png`,
+`er4.png`, `er7.png`, `er10.png` (a 16-frame burst at 0.6 s), `fz1.png`
+(Rewards), `em1.png` (Menu), and `cmp_tournament_orig_vs_ours_synthetic.png`.
+
+| Claim | Result | Conf |
+| --- | --- | --- |
+| Points by finish place are 8/6/5/4/3/2/1/0 | **confirmed**: rows read Feisar 8, EG-X 6, Triakis 5, Piranha 4, AG Systems 3, Goteki 45 2, Qirex 1, Assegai 0 - the eight-craft table, with the player (last) on 0 | 92 |
+| Columns `PRO_POS`/`ER_TEAM`/`ER_POINTS`, header `Pos`/`Team`/`Points` | **confirmed** | 92 |
+| Layout: columns at x = 280/440/640 (960x544), header y 168, rows at y = 206 + 40n | **confirmed**: ours (synthetic field) lands on the same x and y | 90 |
+| Two pages cycling, subtitle `ER_RACE_STAN` / `ER_TOUR_STAN` | **confirmed**: the subtitle alternates `Race Standings` / `Tournament Standings` with a fade, and the rows are identical on a one-leg tournament | 88 |
+| Cycle period 3 s | **consistent** (subtitle flips about every 5 frames of a 0.6 s burst, so 3 s; not timed to better than 0.3 s) | 70 |
+| `BigTopText` = `ER_END_TOUR` on the last leg | **confirmed**: `End of Tournament` | 90 |
+| Player's row highlighted (`tablehighlight`) | **confirmed**, blue, over the player's row (last here) | 90 |
+| Row order = descending points, both pages | **confirmed for a one-leg field** (both pages are the same order). The leg page's finish-order reading and the standings page's rank order cannot be told apart by one leg | 75 |
+| Backdrop is the race scene, darkened | **observed**: the running race behind the table, not this project's plain backdrop | 90 |
+
+**Differences from our draw, found by the comparison** (not changed here):
+
+- Team cells show the team's **display name**, mixed case: `AG Systems`,
+  `Goteki 45`, `EG-X`. Ours prints the grid roster's folder id upper-cased
+  (`AG-SYSTEMS`), because `crate::race::slot_teams` returns ids.
+- Every table cell and header draws in the mixed-case `Default` font. Ours
+  uses the upper-case front-end font, exactly as it already does on the
+  ordinary per-lap `EndRace Results` table (`results-01.png` shows the same
+  difference), so this is the shared table's font, not a tournament fault.
+- Row background bars and the race backdrop: the original draws translucent
+  dark bars over the live scene.
+
+**Still open:** a two-leg tournament (which page order the running totals
+give, the `NEXT RACE` menu row, the leg counter `Results n/m`); a
+non-8th finish; the `param_1+0x98` row order.
+
 ## Names recovered
 
 | Address | Name | Conf |
