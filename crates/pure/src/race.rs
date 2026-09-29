@@ -136,6 +136,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
 pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
     bank: r"Data\Sound\speech_zone.bnk",
     milestones: &[5, 10, 15, 20, 25, 30, 40, 50, 75, 100],
+    tick: oag_title::SequenceTick::Unknown,
 };
 
 /// The five models a Pure craft is built from, as leaf names under a team's own

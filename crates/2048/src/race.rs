@@ -180,6 +180,7 @@ pub const ZONE_STAGES: &oag_title::ZoneStages = &oag_title::ZoneStages {
 pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
     bank: r"Data\audio\sound\speech_zone_NGP.bnk",
     milestones: &[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100],
+    tick: oag_title::SequenceTick::Unknown,
 };
 
 /// Where this title keeps the **tuning** for the roster [`SHIP_DIR`] holds the

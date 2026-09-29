@@ -39,28 +39,16 @@
 //! runs the master tick three times per two 256-frame mixer grains at 44,100
 //! Hz, and a live count against the PSP's own cycle counter agreed (257.7,
 //! 259.7 and 258.3 ticks per emulated second over three 6 s windows).
-//! Wipeout HD's engine is a different build and its tick is **not measured**,
-//! so [`tick_seconds`] answers `None` for its byte order rather than lending it
-//! the PSP's rate.
+//! **The tick belongs to a build, not to a byte order**: PS2, Wipeout HD and the
+//! Vita are not measured, and this module does not decide which build a bank
+//! came from - the caller does, from the title's own data
+//! (`oag_title::SequenceTick`).
 
 use super::child::{CHILD_INDEX_AT, CHILD_RECORD_LEN, MAX_CHILD_DEPTH};
 use super::{Bank, COMMAND_LEN, Cue, KEY_ON_OPCODES, Sound};
-use crate::byte_order::ByteOrder;
 
 /// Master ticks per second of the PSP's SCREAM, `44100 * 3 / 512`.
 pub const TICKS_PER_SECOND: f64 = 44_100.0 * 3.0 / 512.0;
-
-/// Seconds per master tick for a bank of this byte order, when it is known.
-///
-/// Little-endian banks are the PSP/PS2 family and Pure; the rate was measured
-/// on Pulse's PSP build only. Big-endian (HD) is not measured.
-#[must_use]
-pub fn tick_seconds(order: ByteOrder) -> Option<f64> {
-    match order {
-        ByteOrder::Little => Some(1.0 / TICKS_PER_SECOND),
-        ByteOrder::Big => None,
-    }
-}
 
 /// The opcode that starts a child cue in parallel.
 const PLAY_CHILD: u8 = 0x05;

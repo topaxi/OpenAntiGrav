@@ -26,7 +26,8 @@ use std::sync::Arc;
 use oag_audio::Sound;
 use oag_audio::spatial::{pan_gains, pan_of_angle, pan_volume_gain};
 use oag_formats::sblk::Bank;
-use oag_formats::sblk::timeline::tick_seconds;
+use oag_formats::sblk::timeline::TICKS_PER_SECOND;
+use oag_title::SequenceTick;
 
 use super::banks::decode_waveform;
 
@@ -41,7 +42,8 @@ pub(super) struct Sequence {
 ///
 /// `Ok(None)` means "not this shape" and the caller keeps its flat pick: the
 /// cue is not a complete timeline (an opcode the walk does not model, an
-/// unresolved child), the bank's tick is not measured (Wipeout HD), the cue
+/// unresolved child), the title's tick is [unknown](SequenceTick::Unknown)
+/// (Wipeout HD, 2048, Pure), the cue
 /// reaches a single word (Pure's announcer lines are one grain each, and those
 /// keep the level they always played at), a grain loops, its angle is in the
 /// rear half the pan law here does not model, or its rate differs from the
@@ -50,12 +52,17 @@ pub(super) struct Sequence {
 /// # Errors
 ///
 /// A waveform the timeline reaches does not decode.
-pub(super) fn compose_sequence(bank: &Bank, name: &str) -> anyhow::Result<Option<Sequence>> {
+pub(super) fn compose_sequence(
+    bank: &Bank,
+    name: &str,
+    tick: SequenceTick,
+) -> anyhow::Result<Option<Sequence>> {
     let Some(cue) = bank.cue_named(name) else {
         return Ok(None);
     };
-    let Some(tick_seconds) = tick_seconds(bank.order) else {
-        return Ok(None);
+    let tick_seconds = match tick {
+        SequenceTick::Psp => 1.0 / TICKS_PER_SECOND,
+        SequenceTick::Unknown => return Ok(None),
     };
     let timeline = bank.cue_timeline(&cue);
     if !timeline.is_complete() || timeline.grains.is_empty() {

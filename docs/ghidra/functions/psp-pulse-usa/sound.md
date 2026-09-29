@@ -1057,9 +1057,10 @@ a wait, not a position).
 
 **What is not read.** The phase of the tick against the moment a cue is
 started (up to one tick, 3.9 ms, either way); `FUN_0898dc4c`, the sibling that
-seeks the list to a marker; and whether Wipeout HD's tick is the same - its
-build is not read for this, and `oag_formats::sblk::timeline::tick_seconds`
-answers `None` for its byte order rather than lend it this rate.
+seeks the list to a marker; and whether any other build's tick is the same - Wipeout HD, Pulse's PS2 pressing
+and the Vita are not measured. The tick belongs to a build rather than to a bank's
+byte order, so `oag_title::SequenceTick` carries it per title: `Psp` for Pulse
+(lent, and labelled chosen, to its PS2 pressing) and `Unknown` for the rest.
 
 ## Not determined
 

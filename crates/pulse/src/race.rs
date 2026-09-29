@@ -85,6 +85,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
 pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
     bank: r"Data\Sound\speech_zone.bnk",
     milestones: &[5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100],
+    tick: oag_title::SequenceTick::Psp,
 };
 
 /// Where each race cue lives.

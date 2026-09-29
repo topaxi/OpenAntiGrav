@@ -4,13 +4,12 @@
 //! `speech_zone.bnk`, where the shape was found - is
 //! `crates/formats/tests/sblk_timeline_ground_truth.rs`.
 
-use crate::byte_order::ByteOrder;
 use crate::sblk::{
     Bank, COMMAND_LEN, CUE_LEN, HAS_NAME_TABLE, HEADER_LEN, MAGIC, NAME_BUCKETS_AT, NAME_ENTRY_LEN,
     SBLK_HEADER_LEN, SECTION_LEN, VERSION,
 };
 
-use super::{TICKS_PER_SECOND, tick_seconds};
+use super::TICKS_PER_SECOND;
 
 const RECORD_LEN: usize = 32;
 
@@ -278,9 +277,8 @@ fn a_cycle_terminates() {
 }
 
 #[test]
-fn only_the_little_endian_tick_is_measured() {
-    let little = tick_seconds(ByteOrder::Little).expect("measured");
-    assert!((1.0 / little - TICKS_PER_SECOND).abs() < 1e-9);
-    assert!((250.0..270.0).contains(&TICKS_PER_SECOND));
-    assert_eq!(tick_seconds(ByteOrder::Big), None);
+fn the_tick_is_the_psp_s_measured_rate() {
+    // 44,100 Hz, three ticks per two 256-frame grains, checked live at 257.7,
+    // 259.7 and 258.3.
+    assert!((TICKS_PER_SECOND - 258.398_437_5).abs() < 1e-6);
 }

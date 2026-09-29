@@ -15,9 +15,10 @@
 //! regression reads as a changed grain list rather than as a voice that sounds
 //! slightly wrong.
 
-use oag_formats::sblk::timeline::{Timeline, tick_seconds};
+use oag_formats::sblk::timeline::Timeline;
 use oag_formats::sblk::{Bank, Sound};
 use oag_game::audio::sfx::Announcer;
+use oag_title::SequenceTick;
 
 /// The milestone numbers Pulse's own ladder names.
 const PULSE_MILESTONES: [u16; 13] = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100];
@@ -138,13 +139,51 @@ fn the_announcer_plays_the_whole_line_as_one_voice() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_tick_is_only_claimed_for_the_bank_it_was_measured_on() {
-    let Some(mut opened) = open("pulse-psp-usa.chd") else {
+fn a_tick_is_only_claimed_for_the_builds_it_was_measured_on() {
+    // Pulse is the PSP measurement (lent to its PS2 pressing); nothing else.
+    let Some(opened) = open("pulse-psp-usa.chd") else {
+        return;
+    };
+    assert_eq!(
+        opened.title.race.zone_announcer.expect("a ladder").tick,
+        SequenceTick::Psp
+    );
+    for (image, title) in [
+        ("pure-psp-usa.chd", "Pure"),
+        ("hdfury-ps3-eu-dec.iso", "HD"),
+    ] {
+        let Some(opened) = open(image) else {
+            continue;
+        };
+        assert_eq!(
+            opened.title.race.zone_announcer.expect("a ladder").tick,
+            SequenceTick::Unknown,
+            "{title}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_ps2_pressing_is_lent_the_psp_rate_and_says_it_is_the_same_shape() {
+    let Some(mut opened) = open("pulse-ps2-eu.chd") else {
         return;
     };
     let blob = bank_of(&mut opened);
-    let bank = Bank::parse(&blob).expect("parse");
-    assert!(tick_seconds(bank.order).is_some());
+    let bank = Bank::parse(&blob).expect("bank parses");
+    let cue = bank.cue_named("zone_5").expect("zone_5");
+    let timeline = bank.cue_timeline(&cue);
+    assert!(timeline.is_complete());
+    assert_eq!(timeline.grains.len(), 6);
+    let announcer = Announcer::load(&mut opened.archives, opened.title.race.zone_announcer);
+    assert!(
+        announcer
+            .report
+            .iter()
+            .any(|l| l.starts_with("announcer: zone_5 -> sequence of 6 grain(s)")),
+        "{:?}",
+        announcer.report
+    );
 }
 
 #[test]
@@ -180,7 +219,6 @@ fn hd_s_milestones_are_left_on_the_flat_pick_until_its_tick_is_measured() {
     };
     let blob = bank_of(&mut opened);
     let bank = Bank::parse(&blob).expect("parse");
-    assert_eq!(tick_seconds(bank.order), None);
     // HD's `zone_5` is the number twice and a child, `c_CLEAR`, whose own two
     // grains are a goto and a marker: no waveform to lay down, and opcodes this
     // walk reports rather than skips.

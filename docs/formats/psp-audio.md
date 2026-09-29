@@ -349,7 +349,13 @@ hard-coded anywhere).
   that command runs, and a child starts in parallel - see
   [`sound.md`](../ghidra/functions/psp-pulse-usa/sound.md#the-master-tick-and-the-delay-word-2026-09-29).
   Confidence **88**.
-- **One master tick is 258.4 Hz** on the PSP, measured live. Confidence **90**.
+- **One master tick is 258.4 Hz** on the PSP, measured live. Confidence **90**
+  for Pulse's PSP build. **Lent, chosen, not measured, for Pulse's PS2 pressing**
+  (its `zone_N` cues have the same four grains and the same six key-ons):
+  `oag_title::SequenceTick::Psp` is per title, so both pressings play the
+  timeline at the PSP's rate, because the words and their order are authored
+  and the alternative is playing one of them at random. No confidence score
+  for the PS2 rate.
 - **The pan angle is the descriptor's `+0x04`**, degrees, mapped by
   `Scream_PanVolumePair`'s law: 30 is left 0.5 and right 0.866, 330 the mirror
   image (`oag_audio::spatial::pan_of_angle`). The left and right copies are ten
@@ -387,7 +393,8 @@ wrong.
 
 | Bank | `zone_N` shape | Played as |
 | --- | --- | --- |
-| Pulse (PSP USA and EU) | 4 grains, 6 key-ons, three words | the timeline |
+| Pulse (PSP USA and EU) | 4 grains, 6 key-ons, three words | the timeline at the measured 258.4 Hz |
+| Pulse (PS2 EU) | the same four grains | the timeline at the PSP's rate, lent and labelled chosen |
 | Pure (PSP USA and EU) | 1 grain, one waveform, the whole line | the flat pick (one waveform; unchanged) |
 | Wipeout HD | number twice (delay 5), then a child `c_CLEAR` after 240-350 | the flat pick |
 
@@ -396,20 +403,25 @@ marker, and **no waveform** - so the bank plays no "clear" at all, which is
 either carried by a cross-bank cue the goto reaches or absent, and is
 **unread**. HD's tick is not measured (a different build), so its delays cannot
 be converted to time without lending it the PSP's rate; the timeline is
-therefore not used for a big-endian bank, and the two identical key-ons keep
-playing as one number, as before. `zone_35` and `zone_45` on HD have no child
+therefore not used (`SequenceTick::Unknown`, as for Pure and 2048), and the two
+identical key-ons keep playing as one number, as before. `zone_35` and `zone_45` on HD have no child
 at all.
 
-**The flat pick is wrong in a wider place, and this lane did not fix it.** A
-survey of every playing cue on the five PSP/PS2 discs and HD (2026-09-29)
-finds 2,168 with fewer than two key-ons of their own, 385 with a `0x19` alternate group, **910 with
-several key-ons of one waveform and no `0x19`** (a left/right pair like this
-one) and **683 with several distinct waveforms and no `0x19`** (a layer or a
-sequence). `Banks::pick` draws uniformly among a cue's waveforms, which is
-right for the first two groups and, for the last two, plays one layer or one
-word of something authored to play together. Pulse's `~SHIELD` (0.501 s and
-1.087 s) is in that population. Which of those 1,593 cues are audible in play,
-and which are layers rather than sequences, is not established here.
+**The flat pick is wrong in a wider place, and this lane did not fix it.**
+`cargo run --release -p oag-formats --example sblk_layer_census -- SHIELD`
+(about 30 s, reads every bank on the five PSP/PS2 discs and HD, 2026-09-29)
+counts every playing cue by how its own key-ons relate: **2,168** with fewer
+than two key-ons of their own, **385** with a `0x19` alternate group, **910**
+with one waveform keyed on several times and no `0x19` (a left/right pair like
+this one; sampling one is harmless), and **683** with several distinct
+waveforms and no `0x19` - of which **262** are a complete timeline
+(`Bank::cue_timeline` walks them with nothing unread) and **421** carry opcodes
+that walk does not model (guards, random delays, branches). `Banks::pick` draws
+uniformly among a cue's waveforms, which for those 683 plays one layer or one
+word of something authored to play together. Pulse's `~SHIELD` is one: its run
+is `[0x1b, 0x01, 0x01, 0x2b]`, two distinct waveforms (0.501 s and 1.087 s)
+and no alternate group. Which of the 683 are audible in play, and which are
+layers rather than sequences, is not established here.
 
 Ported as [`crate::audio::sfx::Announcer`](../../crates/game/src/audio/sfx/announcer.rs):
 one bank loaded per race, the numbered cues decoded by name, and a cue fires

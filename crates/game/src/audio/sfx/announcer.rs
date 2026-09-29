@@ -84,7 +84,7 @@ impl Announcer {
             // **A sequence is played as one, not sampled.** Pulse's `zone_N`
             // is the words ZONE, the number and CLEAR on authored delays; see
             // `super::compose`. Any other shape keeps the flat pick below.
-            match compose_sequence(&bank, &name) {
+            match compose_sequence(&bank, &name, table.tick) {
                 Ok(Some(line)) => {
                     report.push(format!(
                         "announcer: {name} -> sequence of {} grain(s), {:.2}s",
