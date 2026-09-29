@@ -488,22 +488,33 @@ impl Sheet {
         if below.placed.is_empty() {
             return self.clone();
         }
-        let width = self.width.max(below.width);
-        let height = self.height + below.height;
+        // Stacked under this sheet while that stays within `MAX_SIDE`, the
+        // same texture limit `Self::build` wraps its own columns at;
+        // otherwise the new images go in a column of their own to the right.
+        // Either way every placement this sheet already holds keeps its
+        // rectangle.
+        let (at_x, at_y) = if self.height + below.height <= MAX_SIDE {
+            (0, self.height)
+        } else {
+            (self.width, 0)
+        };
+        let width = self.width.max(at_x + below.width);
+        let height = self.height.max(at_y + below.height);
         let mut rgba = vec![0u8; (width * height * 4) as usize];
-        let copy_rows = |rgba: &mut Vec<u8>, from: &Self, at: u32| {
+        let copy_rows = |rgba: &mut Vec<u8>, from: &Self, x: u32, y: u32| {
             for row in 0..from.height {
                 let src = (row * from.width * 4) as usize;
-                let dst = ((at + row) * width * 4) as usize;
+                let dst = (((y + row) * width + x) * 4) as usize;
                 rgba[dst..dst + (from.width * 4) as usize]
                     .copy_from_slice(&from.rgba[src..src + (from.width * 4) as usize]);
             }
         };
-        copy_rows(&mut rgba, self, 0);
-        copy_rows(&mut rgba, &below, self.height);
+        copy_rows(&mut rgba, self, 0, 0);
+        copy_rows(&mut rgba, &below, at_x, at_y);
         let mut placed = self.placed.clone();
         placed.extend(below.placed.into_iter().map(|(src, mut at)| {
-            at.y += self.height;
+            at.x += at_x;
+            at.y += at_y;
             (src, at)
         }));
         Self {
@@ -690,6 +701,27 @@ mod tests {
             (same.width, same.height, same.len()),
             (8, extended.height, 2)
         );
+    }
+
+    #[test]
+    fn an_extension_past_a_texture_s_height_goes_in_a_column_of_its_own() {
+        // The crash this guards: Wipeout HD's campaign screens extend the
+        // front end's sheet with their stills, and a stack under it reached
+        // 8747 rows, past wgpu's 8192.
+        let mut report = Vec::new();
+        let base = Sheet::build(&[("a".to_string(), mip(4, 5000, 10))], &mut report);
+        let extended = base.extended(&[("b".to_string(), mip(6, 5000, 20))], &mut report);
+        assert!(extended.height <= MAX_SIDE, "{} rows", extended.height);
+        assert_eq!(base.get("a"), extended.get("a"), "a keeps its rectangle");
+        let b = extended.get("b").expect("b");
+        assert_eq!((b.x, b.y, b.width, b.height), (base.width, 0, 6, 5000));
+        assert_eq!(extended.width, base.width + 6);
+        let texel = |sheet: &Sheet, x: u32, y: u32| {
+            let at = ((y * sheet.width + x) * 4) as usize;
+            sheet.rgba[at..at + 4].to_vec()
+        };
+        assert_eq!(texel(&extended, 0, 4999), texel(&base, 0, 4999));
+        assert_eq!(texel(&extended, b.x, 4999), vec![20, 20, 20, 255]);
     }
 
     #[test]
