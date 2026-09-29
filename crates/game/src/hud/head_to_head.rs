@@ -33,7 +33,7 @@
 //!   team's display name (`Goteki 45` live), the player's is the profile tag
 //!   (`AAA` live). This engine carries neither into the readout, so a row
 //!   shows its ordinal alone.
-//! - The player's row throbs between its colour and white (`0x200`), period
+//! - The player's row throbs between its colour and white (observed live; `0x200` is inferred to be the cause), period
 //!   about 3.1 s. The law is unread, so it is a steady colour here.
 
 use super::draw::{Context, Frame, top_edge};
