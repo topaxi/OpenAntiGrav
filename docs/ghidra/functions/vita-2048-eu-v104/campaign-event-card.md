@@ -81,6 +81,114 @@ shape for `y` with `+0x2c8`/`+0x318`, projected through the matrix at
 are recorded here so a second pass does not have to re-find this function to
 get them.
 
+## The card's layout, recovered 2026-09-29
+
+The 2026-09-28 pass above located the card's code and stopped at its three
+buttons. This pass followed `CampaignEventCard_Draw`'s call into the shared
+panel painter and read the layout out of it, then checked every number against
+the live Vita3K frame
+`data/reference/2048-frontend/14-campaign-map-event-card-unity-square.png`
+(pixel-measured, not eyeballed). **The card is not a `NEWGUI` screen and no XML
+authors it**: an archive-wide search of every `.xml` in `data.psarc` for
+`trackscreens`, `num_laps`, `callout\play` and `callout\cross` finds nothing,
+which is why it was "unlocated" - its art was never named by a widget. It is in
+the archive all the same (`data/FE/NewImages/trackscreens/*.gxt`,
+`tracks/*.gxt`, `callout/*.gxt`, `speedclass/*.gxt`, `medals/*.gxt`), and the
+executable names it in string tables.
+
+### `CampaignEventCard_DrawPanel` - `0x81055a16`
+
+**Confidence: 75.** `void (float slide, GameModeBase *event)`. The shared
+painter `CampaignEventCard_Draw` (`0x810f1196`) calls as
+`FUN_81055a16(slide, event)`; it is also the pre-race callout's
+panel (its `param_2 == 0` branch is the tournament header, not read). For an
+event it draws, with `x` the slide-in offset (`0` at rest) - every literal
+below is in the decompile and matches frame 14 to the pixel:
+
+| Piece | Where | Evidence |
+| --- | --- | --- |
+| Photo | `x=16`, 404 wide, 334 tall (`y=92`); texture UV `0..404/512` | `FUN_81060744(x, trackName, isZone)` builds the quad `x..x+404`, `u1 = 0x3f4a0000 = 0.789 = 404/512`; the texture is a 512x512 `PVRTII4bpp` whose photo fills the top-left 404x334 (decoded: `trackscreens/Square.gxt`) |
+| Header panel | `x=420` `y=92` 524x86, opaque white | two `0x18`-stride quad writes, `y` `92`..`178` |
+| Body panel | `x=420` `y=182` 524x244 | second quad, `y` `182`..`426` |
+| Emblem | centre `(463, 134)`, 64 square (`+/-32`) | `FUN_81060584(x, y, trackName, colour)`; a white-glyph-on-alpha `tracks/<name>.gxt` over a Blue2048 square |
+| Title | centre `x=682`, `y=100`, font `default`, scale `0.82` | `DAT_819488ec = 0x3f51eb85` |
+| Kind line | centre `x=682`, `y=140`, `NEOSANS` | |
+| Mode icon | centre `(902, 134)`, 64 square | `FUN_81061040(x, y, 1.0, event+0x190, colour)` picks one of four textures (`DAT_816c87e0`..`ec`) by the event's mode ordinal |
+| Page arrows | `32x32` at `(445, 282)` and `(920, 282)`, right one the same texture mirrored | `FUN_8105c5dc` with swapped `u`; tap regions `x=420` and `x=682`, 262 wide (`FUN_8105b54c`), plus a swipe path; each step plays the `NGP_Change` cue |
+| Page dots | centre `x=682`, spaced 18, the current one Orange2048, the rest Blue2048 | `(682 - (n-1)*9) + i*18`, drawn only when the page count exceeds 1 |
+
+**The arrows are page arrows, not lap-count arrows.** The task brief and the
+2026-09-21 frame note both read them as lap-count arrows; they step
+`DAT_816c782c` (the page index) by `+/-1` and wrap. The lap count is the
+`num_laps` glyph in the objective page, with the number drawn on it.
+
+Not renamed higher: 75, because this function is shared with the pre-race
+callout and only its event branch was read.
+
+### `CampaignEventCard_BuildPageList` - `0x8105114a`
+
+**Confidence: 70.** Fills `DAT_816c7804[]` (page kind per page) and
+`DAT_816c7830` (the count) for an event. Single-player (`event+0x1a0 & 4 == 0`):
+kind `0` (the objective page) first **when `event+0x1b0` is set** - the resolved
+`M_PASSOBJECTIVE` - then kind `1` always; kinds `2` (event mode ordinals
+`1`/`2`/`9`/`10`/`11`), `3` (`event+0x7c`) and `4` (any of: mode `!= 0`,
+`event+0x18c`, a restriction) are appended by predicates over fields this build
+does not read. Frame 14 shows three dots. **This build shows the pages it can
+count: kind `0` when the event authors a pass objective, and kind `1`.** Kind
+`1` (`FUN_810540c4`, three 142-wide tap zones at `x=471`/`613`/`755`, a
+leaderboard-shaped row) is unread and is drawn blank.
+
+### `CampaignEventCard_DrawObjectivePage` - `0x81055150`
+
+**Confidence: 75.** Page kind `0`. `FE_PASS` (`NEOSANS_LARGE`) at `y=229`, the
+objective's own wording at `y=256`, both centred on `x=702` and wrapped at
+345 wide; a medal glyph (`FUN_81061344`) at the left; a rule at `y=329`
+(`x=482..882`); then a row of 44.8-unit glyphs at `y=370`: the speed class
+(`FUN_81061274`, `param_3[0x65]`) and, for event modes `1`/`2`/`9`/`10`/`11`,
+`callout/num_laps` with the count; then the three restriction glyphs
+(`FUN_81061db6`, `"combat"`/`"agility"`/`"speed"`) when the event restricts
+craft. For event modes `3`/`4` (`param_3[0xb6]`) it adds an `FE_ELITE_PASS`
+row. Not drawn by this build, by name: the elite row and the restriction
+glyphs.
+
+### `GameModeObjective_FormatText` - `0x812b671a`
+
+**Confidence: 85.** The ordinal-to-wording table for `M_OBJECTIVETYPE`,
+switch on the ordinal: `1` -> `SP_Objective_Finish` (`MP_Objective_Finish` on a
+multiplayer event), `2` -> `FE_SCORE_POINTS`, `4` -> `ER_FINISH_1ST`/
+`ER_FINISH_2ND`/`ER_FINISH_3RD`/`ER_FINISH_IN_POS` (`FINISH AT LEAST %dTH`),
+`7` -> `FE_ELIMINATE_OPP`, `3`/`5`/`6`/`8`/`0xb`/`0xc` the multiplayer
+wordings. It first offers the event a per-mode override (`vtable+0x6c`), and
+that is what the `BEAT_VALUE` (`2`) events would use; the override is unread and
+`FE_SCORE_POINTS` is **not in the disc's string table**, so this build words
+`FINISH`, `POSITION` and `KILLS` and draws nothing for `BEAT_VALUE`.
+
+### `CampaignEventCard_DrawTrackPhoto` - `0x81060744`
+
+**Confidence: 85.** `void (float x, char *trackName, char isZone)`. Matches
+`M_TRACKNAME` against `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
+`subway`, `cathedral`, `sol`, `altima`, then the DLC circuits and their `_R`
+reverses, then `Zone_1`..`Zone_4`, and indexes two 36-entry string-pointer
+tables at `0x8151cc68`: the plain `data/fe/newimages/trackscreens/<Name>.gtf`
+(`Square`, `Park`, ...) and, when `isZone`, `Zone<Name>.gtf` for the ten base
+circuits (`event+0x190 == 0`). The names in those tables (read from `0x814292ac`)
+are exactly the files in the archive, so the circuit-to-file map is data, not
+a guess. `SP.xml`'s Zone events author no circuit, so this build draws no photo
+for them: the zone photo would need the circuit a Zone run uses, which is a
+title fact not found.
+
+### Button glyphs and texts
+
+The three buttons are 122x96 at `x=562`/`692`/`822`, `y=432`, Blue2048, with a
+64-unit glyph, `FUN_8106202a(x, y, 122, 96, 64, 64, ...)` (`CampaignEventCard_Draw`).
+Hit rects are 142x116 at `x=552`/`682`/`812`, `y=422`
+(`CampaignEventCard_HandleInput`); Back is tested before Launch before Change
+craft, so Back owns the 12 units it shares with each neighbour. Glyphs, by
+decoded image: Launch is `callout/play`, Back is `callout/cross`, Change craft is
+the ship silhouette that is `Icon_Team_HomeBut` (matched by eye against frame
+14; the texture handles are stored by the card's constructor, not found, so this
+one is confidence 65).
+
 ## `PostRace_ShipCategoryTip` - `0x8111eb74`
 
 **Confidence: 70.** A post-race "try a different ship class" tip picker -

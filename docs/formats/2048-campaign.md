@@ -575,6 +575,41 @@ Live verification of the rank gate was not attempted:
 profile), and reaching rank 10 (Feisar's own Ship Challenge, the lowest of
 the five) needs playing through the campaign, out of this pass's scope.
 
+## The event card (2026-09-29)
+
+Tapping an unlocked node on the campaign map opens the original's per-event
+card before anything launches. **Evidence and every measured rectangle:
+[campaign-event-card.md](../ghidra/functions/vita-2048-eu-v104/campaign-event-card.md)**,
+checked against `data/reference/2048-frontend/14-campaign-map-event-card-unity-square.png`.
+`oag_ui::frontend::event_card` builds it; `oag_game::boot::campaign2048`
+resolves what it says. Every word and picture comes off the disc:
+
+| On the card | From | Confidence |
+| --- | --- | --- |
+| Circuit name (`UNITY SQUARE`) | `TrackDefinition`'s `M_DISPLAYNAME` | 90 |
+| Photo | `NewImages\trackscreens\<Name>.gxt`, `Name` the capitalised `M_TRACKNAME` (10 base circuits); decompile table `0x8151cc68` | 85 |
+| Emblem | `NewImages\tracks\<track>.gxt` | 80 |
+| `PASS` + objective line | `FE_PASS` and `M_PASSOBJECTIVE`'s type/target through `GameModeObjective_FormatText`: `FINISH` -> `SP_Objective_Finish`, `POSITION` -> `ER_FINISH_1ST/2ND/3RD/IN_POS`, `KILLS` -> `FE_ELIMINATE_OPP` | 85 |
+| Lap glyph with the count | `callout/num_laps.gxt`, `M_NUMOFLAPS` | 80 |
+| Class glyph | `speedclass/{d,c,b,a,ap}_class.gxt` by `M_SPEEDCLASS` ordinal `0`-`4` | 60 (`d,c,b,a,ap` read as the ordinals' slowest-first order; frame 14 shows the C glyph, but not which ordinal that event authors) |
+| Three buttons | Launch, Back, Change craft (only when `M_PPLAYERSHIPMODELDATA` is unset) | 75 |
+
+**Not drawn, on purpose, with where to pick it up:** the `BEAT_VALUE`
+objective line (the event's per-mode override of `GameModeObjective_FormatText`
+at `vtable+0x6c`, and `FE_SCORE_POINTS` is not in the string table); page
+kinds `1`-`4` (`FUN_810540c4`, `FUN_81052fb4`, `FUN_81052810`, `FUN_810535fe`) -
+kind `1` is on every single-player card and is drawn blank; the elite-pass row
+and the restriction glyphs; the photo of a Zone event (no authored circuit).
+The original shows three page dots on the reference frame; this build counts the
+pages it can (`CampaignEventCard_BuildPageList`'s first two rules), so a card
+with an objective shows two. **The `<` / `>` arrows are page arrows, not lap
+arrows** - the earlier frame note said otherwise.
+
+**Chosen, not measured (no confidence):** the kind line's wording (`RACE`,
+`Speed Lap`, `Zone`, `ELIMINATION` from the language table - the function that
+words it, `FUN_812b021a`, is unread), which medal glyph an earned tier draws,
+square as the pad's Change craft key, and the panels' opaque white.
+
 ## The launch: `crates/game/src/race/load/campaign.rs`
 
 `race::load_event(options, event_name)` resolves `event_name` against

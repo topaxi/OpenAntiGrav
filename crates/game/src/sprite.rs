@@ -693,6 +693,36 @@ mod tests {
     }
 
     #[test]
+    fn a_stack_taller_than_a_texture_continues_in_a_second_column() {
+        let tall = |src: &str| DecodedImage {
+            src: src.to_string(),
+            width: 4,
+            height: 5000,
+            rgba: vec![255; 4 * 5000 * 4],
+            quad_extent: None,
+            blend: None,
+        };
+        let mut report = Vec::new();
+        let sheet = Sheet::build_with(&[], vec![tall("a"), tall("b"), tall("c")], &mut report);
+        assert!(sheet.height <= MAX_SIDE, "{} rows", sheet.height);
+        let (a, b, c) = (
+            sheet.get("a").unwrap(),
+            sheet.get("b").unwrap(),
+            sheet.get("c").unwrap(),
+        );
+        assert_eq!((a.x, a.y), (0, 0));
+        assert_eq!(
+            (b.x, b.y),
+            (4, 0),
+            "b would end at 10001 rows, so it starts a column"
+        );
+        assert_eq!((c.x, c.y), (8, 0));
+        assert_eq!(sheet.width, 12);
+        let at = ((b.y * sheet.width + b.x) * 4) as usize;
+        assert_eq!(sheet.rgba[at..at + 4], [255, 255, 255, 255]);
+    }
+
+    #[test]
     fn an_image_that_does_not_decode_is_reported_and_skipped() {
         let mut report = Vec::new();
         let sheet = Sheet::build(

@@ -203,7 +203,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1098 (976 fn, 122 data) | 26 (2%) | 62 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-29, [head2head.md](../ghidra/functions/psp-pulse-usa/head2head.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 75 (74 fn, 1 data) | 3 (4%) | 8 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-28, [title-screen.md](../ghidra/functions/psp-pure-eu/title-screen.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 71 (70 fn, 1 data) | 2 (2%) | 9 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-23, [exhaust-sound.md](../ghidra/functions/psp-pure-usa/exhaust-sound.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 60 (52 fn, 8 data) | 0 (0%) | 12 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-09-28, [game-mode-base-fields.md](../ghidra/functions/vita-2048-eu-v104/game-mode-base-fields.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 65 (57 fn, 8 data) | 0 (0%) | 12 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-09-29, [campaign-event-card.md](../ghidra/functions/vita-2048-eu-v104/campaign-event-card.md) |
 
 <!-- re-coverage:end -->
 
