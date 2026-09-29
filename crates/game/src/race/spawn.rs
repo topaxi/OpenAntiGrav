@@ -244,32 +244,54 @@ pub(super) fn grid_poses(
     let forward = base.orientation * Vec3::NEG_Z;
     let anchor = spline.nearest(base.position).map(|(index, _, _)| index);
     let walk = anchor.and_then(|index| walk_direction(spline, index, forward));
-    // `base` itself sits off the spline's own centreline - every authored
-    // `Start Position` does, by 3.2 to 20.5 units (`docs/formats/track.md`) -
-    // and that offset is carried through the walk rather than discarded, or
-    // every slot but 8 would snap onto the bare centreline instead of staying
-    // in `base`'s own lane. Measured once, along the anchor sample's own
-    // `lateral` axis, and re-applied along each walked sample's own axis below -
-    // an approximation that degrades gracefully on a tight curve rather than
-    // being exact there, but is exact on anything close to straight, which is
-    // what every measured grid so far has been.
-    let bias = anchor.and_then(|index| spline.sample(index)).map(|sample| {
+    // `base` sits off the spline's own centreline - every authored `Start
+    // Position` does, by 3.2 to 20.5 units (`docs/formats/track.md`). What the
+    // original keeps of that is only *which side of the AI corridor's midpoint*
+    // the node is on (`Race_ComputeGridLayout`, `grid.md`): every slot is then
+    // laid `GRID_COLUMN_OFFSET / 2` from the midpoint at its own sample, the
+    // node's side first and alternating per slot. Carrying the node's own
+    // lateral offset down the grid and adding the stagger on one fixed side, as
+    // this did until 2026-09-29, put the odd column 30 units off the track on
+    // `01_Track` and `17_Track`, whose node is on the *left* of the midpoint.
+    let anchor_sample = anchor.and_then(|index| spline.sample(index));
+    let midpoint =
+        |sample: &oag_vex::track::Sample| 0.5 * (sample.ai_bound_left + sample.ai_bound_right);
+    let node_lateral = anchor_sample.map(|sample| {
         let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
         (base.position - Vec3::from_array(sample.pos)).dot(lateral)
     });
+    // `+1` when the node is nearer the right edge of the corridor, `-1` when
+    // nearer the left: the sign of the first `10.0` in the original.
+    let side = match (anchor_sample, node_lateral) {
+        (Some(sample), Some(lateral)) if lateral < midpoint(sample) => -1.0,
+        _ => 1.0,
+    };
+    let half_column = 0.5 * oag_gameplay::GRID_COLUMN_OFFSET;
+    let lateral_target = |sample: &oag_vex::track::Sample, slot: u8| {
+        let sign = if slot % 2 == 0 { side } else { -side };
+        midpoint(sample) + sign * half_column
+    };
 
     core::array::from_fn(|index| {
         let slot = u8::try_from(index + 1).unwrap_or(GRID_SLOTS);
         let back = GRID_SLOTS - slot;
-        let mut pose = match (anchor, walk, bias) {
-            // `back == 0` is slot 8, `base` itself - walking zero distance and
-            // re-deriving it from a resampled centreline point would only add
-            // floating-point noise to a value that is already exact.
-            (Some(anchor), Some(direction), Some(bias)) if back > 0 => {
+        let mut pose = match (anchor, walk, anchor_sample, node_lateral) {
+            // `back == 0` is slot 8, `base` itself: it keeps its own place along
+            // the track and only its lateral position is re-derived, from the
+            // corridor midpoint rather than from where the node was authored.
+            (Some(_), Some(_), Some(sample), Some(node_lateral)) if back == 0 => {
+                let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
+                Pose {
+                    position: base.position
+                        + lateral * (lateral_target(sample, slot) - node_lateral),
+                    orientation: base.orientation,
+                }
+            }
+            (Some(anchor), Some(direction), Some(_), Some(_)) => {
                 let target = f32::from(back) * oag_gameplay::GRID_ROW_PITCH;
-                let (_, sample_pos, sample_lateral, ran_off_the_end) =
+                let (walked, sample_pos, sample_lateral, ran_off_the_end) =
                     walk_along(spline, anchor, direction, target);
-                if ran_off_the_end {
+                match spline.sample(walked) {
                     // The walk hit the end of the path (or a path boundary)
                     // before covering the full distance - a track shorter than
                     // one grid's worth of spline, which no shipped circuit is
@@ -278,31 +300,19 @@ pub(super) fn grid_poses(
                     // the honest fallback here rather than a slot left standing
                     // wherever the walk ran out.
                     //
-                    // **Not a distance check against `target`.** A walk that
-                    // covers the full distance still stops short of it by up to
-                    // one sample's own spacing, because it never interpolates
-                    // past the last sample it can still afford - see
-                    // `walk_along`. Samples run wider than a couple of units
-                    // apart on some circuits, so a fixed distance tolerance
-                    // here read that quantisation as "ran off the end" and
-                    // fell back to the straight line on slots that had plenty
-                    // of path left, undoing the fix on exactly the reversed
-                    // grids it exists for.
-                    oag_gameplay::grid_pose(base, slot)
-                } else {
-                    let stagger = if slot % 2 == 1 {
-                        oag_gameplay::GRID_COLUMN_OFFSET
-                    } else {
-                        0.0
-                    };
-                    // `sample_lateral` points to the driver's right (see
-                    // `Pose::from_sample`); `bias` restores `base`'s own lane and
-                    // the column stagger goes further left again, so it
-                    // subtracts where `bias` adds.
-                    Pose {
-                        position: sample_pos + sample_lateral * (bias - stagger),
+                    // **A flag, not a distance check against `target`.** A walk
+                    // that covers the full distance still stops short of it by
+                    // up to one sample's own spacing (see `walk_along`), and
+                    // samples run wider than a couple of units apart on some
+                    // circuits, so a fixed tolerance read that quantisation as
+                    // "ran off the end" and undid the fix on exactly the
+                    // reversed grids it exists for.
+                    _ if ran_off_the_end => oag_gameplay::grid_pose(base, slot),
+                    Some(sample) => Pose {
+                        position: sample_pos + sample_lateral * lateral_target(sample, slot),
                         orientation: base.orientation,
-                    }
+                    },
+                    None => oag_gameplay::grid_pose(base, slot),
                 }
             }
             _ => oag_gameplay::grid_pose(base, slot),
