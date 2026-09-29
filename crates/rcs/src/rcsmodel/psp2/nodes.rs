@@ -57,26 +57,84 @@
 
 use super::container::u32_at as u32_or_err;
 
-/// Where the node count sits in the file header.
+/// Where the node count sits in the file header, on both widths.
 const NODE_COUNT: usize = 0x10;
-/// Where the count of written bind matrices sits.
+/// Where the count of written bind matrices sits, on both widths.
 const BIND_COUNT: usize = 0x12;
-/// Where the offset of the node name-hash array sits.
-const NODE_NAME_HASHES: usize = 0x18;
-/// Where the offset of the node id array sits.
-const NODE_IDS: usize = 0x1c;
-/// Where the offset of the node bind-matrix array sits.
-const NODE_BINDS: usize = 0x20;
-/// Where the mesh object count sits.
-const MESH_COUNT: usize = 0x28;
-/// Where the offset of the mesh object offset table sits.
-const MESH_TABLE: usize = 0x2c;
 /// A mesh object's node index when it has none.
 pub const NO_NODE: u16 = 0xffff;
-/// How far into a submesh object its record starts - the same
-/// [`super::MATERIAL_INDEX_BEFORE_RECORD`] the material index was found by,
-/// approached from the other side.
-const RECORD_IN_SUBMESH_OBJECT: usize = super::MATERIAL_INDEX_BEFORE_RECORD;
+/// Where a mesh object's node index and flags sit, on both widths.
+const MESH_NODE: usize = 0x08;
+/// See [`MESH_NODE`].
+const MESH_FLAGS: usize = 0x0a;
+
+/// Where each field of the table sits, for one pointer width.
+///
+/// The two shipped shapes are [`Layout::VITA`] and [`Layout::PS4`]; a caller
+/// picks by [`super::is_ps4`]. Every offset here is a place in the CPU
+/// section, and every pointer they name is read `pointer` bytes wide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Layout {
+    /// Bytes per pointer: 4 on the Vita, 8 on the PS4.
+    pub pointer: usize,
+    /// File header: the offset of the node name-hash array.
+    pub node_name_hashes: usize,
+    /// File header: the offset of the node id array.
+    pub node_ids: usize,
+    /// File header: the offset of the node bind-matrix array.
+    pub node_binds: usize,
+    /// File header: the mesh object count (a `u16`).
+    pub mesh_count: usize,
+    /// File header: the offset of the mesh object offset table.
+    pub mesh_table: usize,
+    /// Mesh object: the offset of the shape's name.
+    pub mesh_name: usize,
+    /// Mesh object: the submesh count (a `u32`).
+    pub mesh_submesh_count: usize,
+    /// Mesh object: the offset of the submesh object offset table.
+    pub mesh_submesh_list: usize,
+    /// How far into a submesh object its record starts - the same
+    /// [`super::MATERIAL_INDEX_BEFORE_RECORD`] (or its PS4 counterpart) the
+    /// material index was found by, approached from the other side.
+    pub record_in_submesh_object: usize,
+}
+
+impl Layout {
+    /// Wipeout 2048 on the Vita, 32-bit pointers.
+    pub const VITA: Self = Self {
+        pointer: 4,
+        node_name_hashes: 0x18,
+        node_ids: 0x1c,
+        node_binds: 0x20,
+        mesh_count: 0x28,
+        mesh_table: 0x2c,
+        mesh_name: 0x10,
+        mesh_submesh_count: 0x14,
+        mesh_submesh_list: 0x1c,
+        record_in_submesh_object: super::MATERIAL_INDEX_BEFORE_RECORD,
+    };
+
+    /// The PS4 Omega Collection, 64-bit pointers. See the module doc for the
+    /// evidence and [`Layout::VITA`] for the shape it widens.
+    pub const PS4: Self = Self {
+        pointer: 8,
+        node_name_hashes: 0x18,
+        node_ids: 0x20,
+        node_binds: 0x28,
+        mesh_count: 0x38,
+        mesh_table: 0x40,
+        mesh_name: 0x18,
+        mesh_submesh_count: 0x20,
+        mesh_submesh_list: 0x28,
+        record_in_submesh_object: super::PS4_MATERIAL_INDEX_BEFORE_RECORD,
+    };
+
+    /// The layout a file of this pointer width uses.
+    #[must_use]
+    pub const fn for_ps4(ps4: bool) -> Self {
+        if ps4 { Self::PS4 } else { Self::VITA }
+    }
+}
 
 /// One node of the model's own table.
 #[derive(Debug, Clone, PartialEq)]
@@ -144,19 +202,21 @@ impl Scene {
     }
 }
 
-/// Reads the node table and mesh objects out of the CPU section.
+/// Reads the node table and mesh objects out of the CPU section, in the
+/// pointer width `layout` names.
 ///
 /// `None` when the header does not check out - a count that runs past the
-/// section, an offset that does not resolve - which is reported by the
-/// caller as "no node table" rather than as a decode error, on the same terms
-/// [`super::material::read`] returns an empty table.
+/// section, an offset that does not resolve, a 64-bit pointer with its high
+/// half set - which is reported by the caller as "no node table" rather than
+/// as a decode error, on the same terms [`super::material::read`] returns an
+/// empty table.
 #[must_use]
-pub fn read(cpu: &[u8]) -> Option<Scene> {
+pub fn read(cpu: &[u8], layout: Layout) -> Option<Scene> {
     let node_count = usize::from(u16_at(cpu, NODE_COUNT)?);
     let bind_count = usize::from(u16_at(cpu, BIND_COUNT)?);
-    let hashes_at = u32_at(cpu, NODE_NAME_HASHES)? as usize;
-    let ids_at = u32_at(cpu, NODE_IDS)? as usize;
-    let binds_at = u32_at(cpu, NODE_BINDS)? as usize;
+    let hashes_at = pointer_at(cpu, layout.node_name_hashes, layout)?;
+    let ids_at = pointer_at(cpu, layout.node_ids, layout)?;
+    let binds_at = pointer_at(cpu, layout.node_binds, layout)?;
     let mut nodes = Vec::with_capacity(node_count);
     for i in 0..node_count {
         let name_hash = u32_at(cpu, hashes_at.checked_add(i * 4)?)?;
@@ -174,21 +234,21 @@ pub fn read(cpu: &[u8]) -> Option<Scene> {
         });
     }
 
-    let mesh_count = usize::from(u16_at(cpu, MESH_COUNT)?);
-    let table = u32_at(cpu, MESH_TABLE)? as usize;
+    let mesh_count = usize::from(u16_at(cpu, layout.mesh_count)?);
+    let table = pointer_at(cpu, layout.mesh_table, layout)?;
     let mut meshes = Vec::with_capacity(mesh_count);
     for m in 0..mesh_count {
-        let at = u32_at(cpu, table.checked_add(m * 4)?)? as usize;
+        let at = pointer_at(cpu, table.checked_add(m * layout.pointer)?, layout)?;
         let name_hash = u32_at(cpu, at)?;
-        let node = u16_at(cpu, at + 0x08)?;
-        let flags = u16_at(cpu, at + 0x0a)?;
-        let name = cstr_at(cpu, u32_at(cpu, at + 0x10)? as usize)?;
-        let submesh_count = u32_at(cpu, at + 0x14)? as usize;
-        let list = u32_at(cpu, at + 0x1c)? as usize;
+        let node = u16_at(cpu, at + MESH_NODE)?;
+        let flags = u16_at(cpu, at + MESH_FLAGS)?;
+        let name = cstr_at(cpu, pointer_at(cpu, at + layout.mesh_name, layout)?)?;
+        let submesh_count = u32_at(cpu, at + layout.mesh_submesh_count)? as usize;
+        let list = pointer_at(cpu, at + layout.mesh_submesh_list, layout)?;
         let mut submesh_records = Vec::with_capacity(submesh_count.min(cpu.len() / 4));
         for s in 0..submesh_count {
-            let object = u32_at(cpu, list.checked_add(s * 4)?)? as usize;
-            submesh_records.push(object.checked_add(RECORD_IN_SUBMESH_OBJECT)?);
+            let object = pointer_at(cpu, list.checked_add(s * layout.pointer)?, layout)?;
+            submesh_records.push(object.checked_add(layout.record_in_submesh_object)?);
         }
         let node = if node == NO_NODE {
             None
@@ -208,6 +268,20 @@ pub fn read(cpu: &[u8]) -> Option<Scene> {
         });
     }
     Some(Scene { nodes, meshes })
+}
+
+/// An offset stored at `at`, `layout.pointer` bytes wide.
+///
+/// A 64-bit pointer whose high half is set is refused, not truncated: on the
+/// Omega files every one of these is a small offset within the section.
+fn pointer_at(cpu: &[u8], at: usize, layout: Layout) -> Option<usize> {
+    if layout.pointer == 8 {
+        let bytes = cpu.get(at..at.checked_add(8)?)?;
+        let value = u64::from_le_bytes(bytes.try_into().expect("eight bytes"));
+        usize::try_from(value).ok()
+    } else {
+        u32_at(cpu, at).map(|v| v as usize)
+    }
 }
 
 fn u32_at(cpu: &[u8], at: usize) -> Option<u32> {

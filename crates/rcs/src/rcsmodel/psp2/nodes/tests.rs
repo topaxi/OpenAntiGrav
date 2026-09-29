@@ -3,7 +3,8 @@
 //! to its mesh object and node.
 
 use super::super::{
-    DESCRIPTOR_BASE, DESCRIPTOR_LEN, INDEX_POINTER, MAGIC, RELOCATION_LEN, VERTEX_POINTER, parse,
+    DESCRIPTOR_BASE, DESCRIPTOR_LEN, INDEX_POINTER, KNOWN_BUFFER_POINTER_GAPS, MAGIC,
+    PS4_BUFFER_POINTER_GAP, PS4_HEADER_WORD, RELOCATION_LEN, parse,
 };
 use super::*;
 use crate::rcsskeleton::tests::Section;
@@ -16,14 +17,35 @@ struct Shape {
     submeshes: Vec<usize>,
 }
 
+/// Writes `value` at `at` in the pointer width `layout` names.
+fn put_pointer(s: &mut Section, at: usize, value: usize, layout: Layout) {
+    s.0[at..at + layout.pointer].copy_from_slice(&(value as u64).to_le_bytes()[..layout.pointer]);
+}
+
+/// Appends `n` zero bytes and returns where they start.
+fn reserve(s: &mut Section, n: usize) -> usize {
+    let at = s.0.len();
+    s.0.resize(at + n, 0);
+    at
+}
+
 /// An image with `nodes` nodes (ids `100 + i`, name hashes `200 + i`, bind
 /// translation `i` in x) and these mesh objects, whose submesh records sit
-/// in a GPU section exactly as the disc packs them.
-fn image(nodes: usize, shapes: &[Shape]) -> Vec<u8> {
+/// in a GPU section exactly as the disc packs them, in `layout`'s pointer
+/// width. Every field goes where `layout` says, so the same builder writes the
+/// Vita's file and the PS4's.
+fn image(layout: Layout, nodes: usize, shapes: &[Shape]) -> Vec<u8> {
+    let ps4 = layout.pointer == 8;
+    let gap = if ps4 {
+        PS4_BUFFER_POINTER_GAP
+    } else {
+        KNOWN_BUFFER_POINTER_GAPS[0]
+    };
     let mut s = Section(vec![0u8; 0x60]);
-    s.0[0x10..0x12].copy_from_slice(&(nodes as u16).to_le_bytes());
+    s.0[NODE_COUNT..NODE_COUNT + 2].copy_from_slice(&(nodes as u16).to_le_bytes());
     // All but the last node get a written bind matrix.
-    s.0[0x12..0x14].copy_from_slice(&(nodes.saturating_sub(1) as u16).to_le_bytes());
+    s.0[BIND_COUNT..BIND_COUNT + 2]
+        .copy_from_slice(&(nodes.saturating_sub(1) as u16).to_le_bytes());
     let hashes_at = s.0.len();
     for i in 0..nodes {
         s.u32(200 + i as u32);
@@ -38,70 +60,59 @@ fn image(nodes: usize, shapes: &[Shape]) -> Vec<u8> {
         m[12] = i as f32;
         s.f32s(&m);
     }
-    s.patch(NODE_NAME_HASHES, hashes_at as u32);
-    s.patch(NODE_IDS, ids_at as u32);
-    s.patch(NODE_BINDS, binds_at as u32);
+    put_pointer(&mut s, layout.node_name_hashes, hashes_at, layout);
+    put_pointer(&mut s, layout.node_ids, ids_at, layout);
+    put_pointer(&mut s, layout.node_binds, binds_at, layout);
 
     let mut gpu = Vec::new();
     let mut relocations = Vec::new();
     let submesh_count: usize = shapes.iter().map(|sh| sh.submeshes.len()).sum();
-    s.0[MESH_COUNT..MESH_COUNT + 2].copy_from_slice(&(shapes.len() as u16).to_le_bytes());
-    s.0[MESH_COUNT + 2..MESH_COUNT + 4].copy_from_slice(&(submesh_count as u16).to_le_bytes());
-    let table_at = s.0.len();
-    let mut table_sites = Vec::new();
-    for _ in shapes {
-        table_sites.push(s.u32(0));
-    }
-    s.patch(MESH_TABLE, table_at as u32);
+    let mesh_count = layout.mesh_count;
+    s.0[mesh_count..mesh_count + 2].copy_from_slice(&(shapes.len() as u16).to_le_bytes());
+    s.0[mesh_count + 2..mesh_count + 4].copy_from_slice(&(submesh_count as u16).to_le_bytes());
+    let table_at = reserve(&mut s, shapes.len() * layout.pointer);
+    put_pointer(&mut s, layout.mesh_table, table_at, layout);
     for (m, shape) in shapes.iter().enumerate() {
-        let object_at = s.0.len();
-        s.u32(0xaaaa_0000 + m as u32);
-        s.u32(0xbbbb_0000 + m as u32);
+        let object_at = reserve(&mut s, 0x30);
+        s.0[object_at..object_at + 4].copy_from_slice(&(0xaaaa_0000 + m as u32).to_le_bytes());
+        s.0[object_at + 4..object_at + 8].copy_from_slice(&(0xbbbb_0000 + m as u32).to_le_bytes());
         let node = shape.node.unwrap_or(NO_NODE);
-        s.0.extend_from_slice(&node.to_le_bytes());
-        s.0.extend_from_slice(&0x0101u16.to_le_bytes());
-        s.u32(0);
-        let name_site = s.u32(0);
-        s.u32(shape.submeshes.len() as u32);
-        s.u32(0);
-        let list_site = s.u32(0);
+        s.0[object_at + MESH_NODE..object_at + MESH_NODE + 2].copy_from_slice(&node.to_le_bytes());
+        s.0[object_at + MESH_FLAGS..object_at + MESH_FLAGS + 2]
+            .copy_from_slice(&0x0101u16.to_le_bytes());
+        let count_at = object_at + layout.mesh_submesh_count;
+        s.0[count_at..count_at + 4].copy_from_slice(&(shape.submeshes.len() as u32).to_le_bytes());
+        put_pointer(&mut s, table_at + m * layout.pointer, object_at, layout);
+
         let name_at = s.0.len();
         s.0.extend_from_slice(shape.name.as_bytes());
         s.0.push(0);
-        while !s.0.len().is_multiple_of(4) {
-            s.0.push(0);
-        }
-        s.patch(name_site, name_at as u32);
-        let list_at = s.0.len();
-        let mut object_sites = Vec::new();
-        for _ in &shape.submeshes {
-            object_sites.push(s.u32(0));
-        }
-        s.patch(list_site, list_at as u32);
+        put_pointer(&mut s, object_at + layout.mesh_name, name_at, layout);
+        let list_at = reserve(&mut s, shape.submeshes.len() * layout.pointer);
+        put_pointer(
+            &mut s,
+            object_at + layout.mesh_submesh_list,
+            list_at,
+            layout,
+        );
         for (k, &vertex_count) in shape.submeshes.iter().enumerate() {
             let submesh_object = s.0.len();
-            s.patch(object_sites[k], submesh_object as u32);
-            // The material index and the words beside it.
-            s.u32(0);
-            s.u32(0);
-            s.u32(0xffff_ffff);
-            s.u32(0);
-            s.u32(0);
-            s.u32(2);
-            let record = s.0.len();
-            assert_eq!(record - submesh_object, RECORD_IN_SUBMESH_OBJECT);
-            s.u32(3);
-            s.u32(vertex_count as u32);
-            s.u32(0);
-            s.u32(0);
-            let index_at = gpu.len() as u32;
+            put_pointer(&mut s, list_at + k * layout.pointer, submesh_object, layout);
+            // The material index and the words beside it, then the record.
+            let head = reserve(&mut s, layout.record_in_submesh_object);
+            s.0[head + 8..head + 12].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
+            let record = reserve(&mut s, INDEX_POINTER + gap + layout.pointer);
+            assert_eq!(record - submesh_object, layout.record_in_submesh_object);
+            s.0[record..record + 4].copy_from_slice(&3u32.to_le_bytes());
+            s.0[record + 4..record + 8].copy_from_slice(&(vertex_count as u32).to_le_bytes());
+            let index_at = gpu.len();
             for k in 0..3u16 {
                 gpu.extend_from_slice(&(k % vertex_count as u16).to_le_bytes());
             }
             while gpu.len() % 4 != 0 {
                 gpu.push(0);
             }
-            let vertex_at = gpu.len() as u32;
+            let vertex_at = gpu.len();
             for v in 0..vertex_count {
                 for a in 0..3 {
                     gpu.extend_from_slice(&((v * 3 + a) as f32).to_le_bytes());
@@ -109,22 +120,19 @@ fn image(nodes: usize, shapes: &[Shape]) -> Vec<u8> {
                 gpu.extend_from_slice(&[0u8; 4]);
             }
             relocations.push((record + INDEX_POINTER) as u32);
-            relocations.push((record + VERTEX_POINTER) as u32);
-            let index_site = s.u32(index_at);
-            assert_eq!(index_site, record + INDEX_POINTER);
-            while s.0.len() < record + VERTEX_POINTER {
-                s.u32(0);
-            }
-            let vertex_site = s.u32(vertex_at);
-            assert_eq!(vertex_site, record + VERTEX_POINTER);
+            relocations.push((record + INDEX_POINTER + gap) as u32);
+            put_pointer(&mut s, record + INDEX_POINTER, index_at, layout);
+            put_pointer(&mut s, record + INDEX_POINTER + gap, vertex_at, layout);
         }
-        s.patch(table_sites[m], object_at as u32);
     }
     let cpu = s.0;
 
     let header_len = DESCRIPTOR_BASE + 2 * DESCRIPTOR_LEN + relocations.len() * RELOCATION_LEN;
     let mut out = vec![0u8; header_len];
     out[0..4].copy_from_slice(&MAGIC.to_le_bytes());
+    if ps4 {
+        out[4..8].copy_from_slice(&PS4_HEADER_WORD.to_le_bytes());
+    }
     out[0x08..0x0c].copy_from_slice(&2u32.to_le_bytes());
     out[0x0c..0x10].copy_from_slice(&(header_len as u32).to_le_bytes());
     out[0x24..0x28].copy_from_slice(&(cpu.len() as u32).to_le_bytes());
@@ -140,9 +148,9 @@ fn image(nodes: usize, shapes: &[Shape]) -> Vec<u8> {
     out
 }
 
-#[test]
-fn reads_the_node_table_and_links_every_submesh_to_its_mesh_and_node() {
+fn reads_the_node_table_and_links_every_submesh(layout: Layout) {
     let file = image(
+        layout,
         3,
         &[
             Shape {
@@ -187,8 +195,43 @@ fn reads_the_node_table_and_links_every_submesh_to_its_mesh_and_node() {
 }
 
 #[test]
-fn a_node_index_past_the_table_refuses_the_whole_table() {
+fn reads_the_node_table_and_links_every_submesh_to_its_mesh_and_node() {
+    reads_the_node_table_and_links_every_submesh(Layout::VITA);
+}
+
+/// The same table in the PS4's pointer width: every offset a `u64`, the
+/// fields in the places [`Layout::PS4`] names, and [`parse`] choosing it off
+/// the header word alone.
+#[test]
+fn reads_the_ps4_node_table_and_links_every_submesh_to_its_mesh_and_node() {
+    reads_the_node_table_and_links_every_submesh(Layout::PS4);
+}
+
+/// The PS4 layout is the Vita's with widened offsets, so reading a PS4 file
+/// through the Vita layout is a refusal or a wrong table and never a right
+/// one - the reason [`Layout::for_ps4`] exists and is keyed on
+/// [`super::super::is_ps4`].
+#[test]
+fn the_vita_layout_does_not_read_a_ps4_table() {
     let file = image(
+        Layout::PS4,
+        3,
+        &[Shape {
+            name: "ns:boatShape",
+            node: Some(2),
+            submeshes: vec![3],
+        }],
+    );
+    let cpu_start = u32::from_le_bytes(file[0x0c..0x10].try_into().unwrap()) as usize;
+    let cpu = &file[cpu_start..];
+    let right = read(cpu, Layout::PS4).expect("the PS4 layout reads it");
+    assert_eq!(right.meshes.len(), 1);
+    assert_ne!(read(cpu, Layout::VITA), Some(right));
+}
+
+fn a_node_index_past_the_table_refuses_the_whole_table(layout: Layout) {
+    let file = image(
+        layout,
         1,
         &[Shape {
             name: "x",
@@ -204,4 +247,29 @@ fn a_node_index_past_the_table_refuses_the_whole_table() {
             .iter()
             .all(|s| s.mesh.is_none() && s.node.is_none())
     );
+}
+
+#[test]
+fn a_node_index_past_the_table_refuses_the_whole_table_on_both_widths() {
+    a_node_index_past_the_table_refuses_the_whole_table(Layout::VITA);
+    a_node_index_past_the_table_refuses_the_whole_table(Layout::PS4);
+}
+
+/// A 64-bit pointer with its high half set is not an offset into a section.
+#[test]
+fn a_ps4_pointer_with_a_high_half_is_refused_not_truncated() {
+    let file = image(
+        Layout::PS4,
+        1,
+        &[Shape {
+            name: "x",
+            node: None,
+            submeshes: vec![3],
+        }],
+    );
+    let cpu_start = u32::from_le_bytes(file[0x0c..0x10].try_into().unwrap()) as usize;
+    let mut cpu = file[cpu_start..].to_vec();
+    let at = Layout::PS4.mesh_table + 4;
+    cpu[at..at + 4].copy_from_slice(&1u32.to_le_bytes());
+    assert_eq!(read(&cpu, Layout::PS4), None);
 }

@@ -584,7 +584,8 @@ pub fn parse(file: &[u8]) -> Result<Model> {
     let Some(&gpu) = sections.get(1) else {
         let cpu = sections[0];
         let materials = read_materials(&file[cpu.at..cpu.at + cpu.len]);
-        let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len]).unwrap_or_default();
+        let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len], nodes::Layout::for_ps4(ps4))
+            .unwrap_or_default();
         return Ok(Model {
             sections,
             submeshes: Vec::new(),
@@ -596,7 +597,8 @@ pub fn parse(file: &[u8]) -> Result<Model> {
     let cpu = sections[0];
     let (mut submeshes, unpaired_pointers) = submeshes(file, cpu, gpu, ps4)?;
     let materials = read_materials(&file[cpu.at..cpu.at + cpu.len]);
-    let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len]).unwrap_or_default();
+    let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len], nodes::Layout::for_ps4(ps4))
+        .unwrap_or_default();
     // Each record back to the mesh object that lists it, and through that
     // to the node whose space its positions are in.
     let by_record = scene.mesh_by_record();

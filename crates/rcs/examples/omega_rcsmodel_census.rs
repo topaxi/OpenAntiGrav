@@ -20,6 +20,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (mut files, mut magic, mut ok, mut unpaired, mut submeshes) = (0, 0, 0, 0, 0);
         let (mut with_geometry, mut with_materials, mut refused) = (0, 0, 0);
         let (mut bound, mut unbound, mut textured_materials, mut materials_total) = (0, 0, 0, 0);
+        let (mut scenes, mut nodes_total, mut meshes_total) = (0, 0, 0);
+        let (mut linked, mut unlinked, mut node_bound, mut unwritten_binds) = (0, 0, 0, 0);
         let mut word4: BTreeMap<u32, usize> = BTreeMap::new();
         let mut failures = Vec::new();
         for name in names {
@@ -53,6 +55,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .filter(|s| s.material.is_none())
                         .count();
                     materials_total += model.materials.len();
+                    scenes += usize::from(!model.scene.nodes.is_empty());
+                    nodes_total += model.scene.nodes.len();
+                    meshes_total += model.scene.meshes.len();
+                    unwritten_binds += model
+                        .scene
+                        .nodes
+                        .iter()
+                        .filter(|n| n.bind.is_none())
+                        .count();
+                    linked += model.submeshes.iter().filter(|s| s.mesh.is_some()).count();
+                    unlinked += model.submeshes.iter().filter(|s| s.mesh.is_none()).count();
+                    node_bound += model.submeshes.iter().filter(|s| s.node.is_some()).count();
                     textured_materials += model
                         .materials
                         .iter()
@@ -73,6 +87,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "  material index: {bound} submeshes name a material, {unbound} name none; \
              {textured_materials} of {materials_total} materials resolve a texture path"
+        );
+        println!(
+            "  node table: {scenes} files read one ({nodes_total} nodes, {unwritten_binds} without a \
+             written bind matrix, {meshes_total} mesh objects); {linked} submeshes reach a mesh \
+             object, {unlinked} reach none, {node_bound} are node-bound"
         );
         for f in failures {
             println!("  {f}");
