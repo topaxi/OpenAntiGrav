@@ -89,10 +89,10 @@ fn windows(trace: &Trace) -> Vec<(u64, u64)> {
             if f.grounded == 0.0 {
                 full += 1;
             }
-        } else if let Some(s) = start.take() {
-            if full >= MIN {
-                out.push((trace.frames[s].tick, trace.frames[i - 1].tick));
-            }
+        } else if let Some(s) = start.take()
+            && full >= MIN
+        {
+            out.push((trace.frames[s].tick, trace.frames[i - 1].tick));
         }
     }
     out

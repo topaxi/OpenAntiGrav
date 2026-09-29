@@ -166,6 +166,7 @@ fn main_walk(
     let mut pitch_rate = 0.0f32;
     let mut height_front = 0.0f32;
     let mut height_rear = 0.0f32;
+    #[allow(clippy::needless_range_loop)]
     for index in SETTLED..trace.frames.len() - 1 {
         let frame = &trace.frames[index];
         let next = &trace.frames[index + 1];

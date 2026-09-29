@@ -547,16 +547,18 @@ fn shove_sweep() {
                                 let delta = now - previous;
                                 let length = delta.length();
                                 // A respawn teleports the craft; that is not a crossing.
-                                if length > 1e-3 && length < 20.0 {
-                                    if let Some(hit) = race.collision().raycast(
-                                        Ray::new(previous, delta / length, length),
-                                        None,
-                                        false,
-                                    ) {
-                                        if hit.surface == Surface::Wall {
-                                            crossed += 1;
-                                        }
-                                    }
+                                if length > 1e-3
+                                    && length < 20.0
+                                    && race
+                                        .collision()
+                                        .raycast(
+                                            Ray::new(previous, delta / length, length),
+                                            None,
+                                            false,
+                                        )
+                                        .is_some_and(|hit| hit.surface == Surface::Wall)
+                                {
+                                    crossed += 1;
                                 }
                                 previous = now;
                             }

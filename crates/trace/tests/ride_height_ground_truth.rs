@@ -221,12 +221,12 @@ fn paired(original: &[Row], ours: &[Row], reseed: usize) {
             if off < lo || off >= hi || u.speed < 90.0 || !u.both_contact {
                 continue;
             }
-            if let Some(o) = by_tick.get(&u.tick) {
-                if o.both_contact {
-                    n += 1;
-                    f += u.front - o.front;
-                    r += u.rear - o.rear;
-                }
+            if let Some(o) = by_tick.get(&u.tick)
+                && o.both_contact
+            {
+                n += 1;
+                f += u.front - o.front;
+                r += u.rear - o.rear;
             }
         }
         if n > 0 {
