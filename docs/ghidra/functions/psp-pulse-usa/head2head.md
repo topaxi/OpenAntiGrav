@@ -130,36 +130,82 @@ if (mode == 9 || mode == 0xf) {
 }
 ```
 
-**Read in full, both functions, this pass - not renamed.** The branch structure,
-the field-comparison logic and the `60.0`/`180.0` clamp (`0x42700000`/`0x43340000`,
-confirmed by hand-decoding the IEEE-754 bit patterns rather than trusting
-Ghidra's float literal rendering) are unambiguous. What is not chased: the exact
-semantics of craft`+0x48` (the flag `FUN_0881d458` reads to decide which of the
-pair is "ahead" for colour purposes), craft`+0xad0` (read as a race-progress/
-distance value, consistent with its use in a "how far apart are these two"
-computation, but not cross-checked against another consumer), and the widget
-struct's `+0xa0`/`+0xe8`/`+0xec` vtable-slot semantics (position offset and a
-"get width" accessor, by convention with other widget code on this page's own
-neighbours, not independently confirmed). That is below this project's naming
-floor for *meaning*, even though the *mechanics* are confidence ~90 - the same
-distinction [grid.md](grid.md#which-team-flies-which-slot-the-id-is-a-real-field-on-a-struct-of-eight)
-draws for its own six unnamed functions. `FUN_0881d458`'s `else` branch (HUD flag
-`0x800` set, a different bit) is the ordinary multi-racer position-list updater
-and is unrelated to Head2Head; only the `0x40`-branch's mode check is.
+**Read in full, both functions - not renamed** (`FUN_0881d458` also carries the
+ordinary `0x800` position-list branch, so no single `Head2Head` name fits it).
 
-**Not implemented this pass.** A player racing a Head2Head cell today gets no
-gap readout - the "1ST"/"2ND" plus "+123m" HUD swap above is read but not wired
-into `oag_ui`/`crates/game/src/hud`. `MSC_EVENT_HTH`'s own text - *"Track the
-distance between you and your opponent on the HUD"* - is exactly this widget,
-so building it is a player-visible follow-up, not a cosmetic one; see the
-handover thread's Next Steps. Left unbuilt rather than approximated, per
-`CLAUDE.md`'s "never invent what the assets already author": guessing at the
-bar's fill algorithm without the vtable slot's confirmed contract would be
-exactly that.
+### Field semantics pinned 2026-09-29 (h2h-hud)
+
+Static only; **no live PPSSPP measurement of the original's bar was taken** (the
+walk to a Head2Head cell in a fresh profile was not attempted this pass). Each
+row says what the claim rests on.
+
+| Field | Meaning | Evidence | Conf |
+| --- | --- | --- | --- |
+| `craft+0xad0` | unwrapped arc progress, the same number `Standing::distance` ports | [race-progress.md](race-progress.md) `Craft_UpdateLapProgress` writes it (`0x08842b8c`..`0x08842c14`); the gap is `abs(a - b)` printed with `%3.0fm` | 90 |
+| `craft+0x48` | "is the non-player craft of the pair" (an is-AI byte): `iVar3 = pair[0]` if it is set, else `pair[1]`, and `iVar3+0x798` becomes the *opponent's* name in both branches | decompile only, one consumer | 60 |
+| `craft+0x798` | the model id `Ship_LoadModel` stores (`0x08843298`), run through the string table for the row's name | `search_instructions` on `0x798(`: three hits, one writer | 65 |
+| `<Image>` `+0x94/+0x98/+0x9c/+0xa0` | `x`, `y`, **`Width`, `Height`** | the Image `<Values>` loader `FUN_088a6f38` (`0x088a6f38`, reads `CalcBlur`/`Color1-4`/`TxtrWidth`): attribute strings at `0x08a7f220..0x08a7f230` write `+0x94,+0x98,+0x9c,+0xa0` in that order | 92 |
+| Image vtable slot `+0xec` | **`GetY`** (returns `+0x98`); `+0xe8` is its this-adjust | the class's vtable at `0x08acce34`: consecutive methods `0x088a682c/34/3c/44` are `SetX/GetX/SetY/GetY`, `0x088a684c/5c` are `GetWidth/GetHeight` (`+0x9c`/`+0xa0` times `+0xe8`), and `Hud_BindWidgets` reads slot `+0xbc` (width) and `+0xdc` (x) on `SpeedBarBg`/`SpeedBarMark` consistently | 85 |
+| Text widget `+0x9c/+0xa0` | `x`, `y` (the PosTag branch writes `480 - w - ...` into `+0x9c`; `Position Outof`'s `+0x9c` is copied from `Position`'s) | decompile only | 75 |
+| Text widget `+0x168/+0x16c` | align / vertalign (`0/1/2` = left-top / centre-middle / right-bottom): the bind copies `Position`'s `+0x168` onto `Position Outof` and `PositionOf`, and sets `+0x16c` to `0` (top) on the second row and `1` (middle) on the gap label | decompile only; the values fit the layout, the enum was not read | 65 |
+| Text widget flag `+0x2c & 0x200` | set on the **player's** row, cleared on the other; what it changes on screen was not read | decompile only | 40 |
+
+**What the swap draws** (all inside `<Item OffsetX="445" OffsetY="5">`, so every
+`y` below is local to it):
+
+- `half = clamp(gap * 0.5, 60, 180)`.
+- `Position` (`hud+0x240`) keeps its authored anchor (`y = 30`, right-aligned,
+  bottom-aligned) and shows the **leader**: `IG_HUD_1ST` + a name.
+- `Position Outof` (`hud+0x244`) becomes the second row: `IG_HUD_2ND` + a name,
+  scale `0.8` (`0x3f4ccccd`), `y = half`, top-aligned.
+- `HeadToHeadBar` (`hud+0x22c`): authored `x=15 y=30 width=5 height=0`. Its
+  runtime `Height = half - GetY() = half - 30`, so it is a vertical connector from
+  the first row's baseline to the second row's top. This is why the authored
+  height is `0`. Its colour is never touched, so it stays the authored
+  `HudColour2`.
+- `PositionOf` (`hud+0x228`), authored as the `"/"`, becomes the gap label
+  `"%s%3.0fm"` at `y = (GetY + half) / 2`, middle-aligned, right-aligned at the
+  same `x` as `Position`. The sign string is `-` (`0x08a79e84`) when the player's
+  place is 1 and `+` (`0x08a79e88`) otherwise - the strings were read from
+  memory, not inferred. The number is the *full* gap, not the halved one.
+- Colours (ARGB, the same packing as an authored `Color`): player leading -
+  the player's row and the gap label `0xff30ff30` (green), the other row white;
+  player trailing - the player's row (now the second) and the gap label
+  `0xffff3030` (red), the other row white.
+- `PositionTxt` (`POS`) is hidden (flag bit 4 cleared).
+- Single-player names: the opponent's row is `craft+0x798` through the string
+  table, the player's is the profile's pilot name at `DAT_08b31774+0x457`.
+  Multiplayer (`g_game_mode >= 0xe`) uses `FUN_08966848`/`FUN_0895ebf0`
+  (network names), not read further.
+
+**An earlier reading on this page called the bar a horizontal width/fill.** It is
+vertical; `+0xa0` on an `<Image>` is `Height`.
+
+### Implemented
+
+`crates/game/src/hud/head_to_head.rs` draws exactly the above from the layout's
+own widgets (`Layout::fill("HeadToHeadBar")`, `label("Position")` etc.), fed by
+`Race::head_to_head` in `crates/game/src/race/telemetry.rs`
+(`|Standing::distance(player) - Standing::distance(opponent)|`, and
+`player_place() == 1`). `--mode head_to_head` on `oag-game --race` now reaches it
+headlessly (a verification aid; a player reaches the mode through a campaign
+cell). Checked with a headless screenshot, `--autopilot --ticks 900`: `1.` at the
+top-right anchor, a red `+ 3m`, the mint 5-px bar, `2.` below it, `POS` gone.
+
+**Not drawn, each with its address:**
+
+- The two **names** (`craft+0x798`, `DAT_08b31774+0x457`): this engine has no
+  source for either string; each row shows its ordinal alone. Would need a live
+  capture to see what the original prints there.
+- The `0x200` highlight bit on the player's row (`FUN_088cd290` / the flag at
+  widget `+0x2c`): effect unread.
+- The multiplayer branch (`g_game_mode == 0xf`).
+- **Unmeasured against the original:** the bar's pixel size at a known gap, and
+  the colours, were not compared with a PPSSPP frame.
 
 ## Names landed
 
-None. See "not renamed" above for both HUD functions; the grid-compaction and
+None. See "not renamed" above for the HUD function; the grid-compaction and
 skill-formula functions this page leans on were already named by
 [grid.md](grid.md) and [race-campaign.md](race-campaign.md) respectively.
 
@@ -173,3 +219,8 @@ skill-formula functions this page leans on were already named by
 - `get_xrefs_to 0x08a7a0ac` -> one xref, `Hud_BindWidgets` at `0x08820748`.
 - `decompile_function 0x08820748` (`Hud_BindWidgets`), `0x0881bf50` (`Hud_Update`),
   `0x0881d458`, `0x08826d80` - all four read in full this pass.
+- 2026-09-29: `Hud_BindWidgets` `0x0881fbec` (Head2Head branch), `FUN_0881d458`,
+  `FUN_088a6f38` (Image `<Values>` loader), the Image vtable at `0x08acce34`
+  (`disassemble_bytes` `0x088a6820..0x088a686f`, `0x088a6274..0x088a629b`),
+  `search_instructions` `0xad0(` and `0x798(`, `read_memory 0x08a79e50` (format
+  and sign strings).

@@ -231,9 +231,14 @@ fn main() -> Result<()> {
     // Parsed here for the same reason as the speed class: `--race` goes straight
     // to a track, so a misspelled mode has to be a message about the command
     // line rather than a race that quietly runs under different rules.
-    let mode = oag_race::Mode::from_name(&cli.mode).with_context(|| {
+    // `head_to_head` is outside `Mode::ALL` (the RACE page has no row for it),
+    // so a campaign cell is the only way a player reaches it. It is accepted
+    // here as a verification aid, so a headless capture can exercise the mode.
+    let mode = oag_race::Mode::from_name(&cli.mode)
+        .or_else(|| (cli.mode == oag_race::Mode::Head2Head.name()).then_some(oag_race::Mode::Head2Head))
+        .with_context(|| {
         format!(
-            "{:?} is not a race mode; try time_trial, speed_lap, zone or single_race",
+            "{:?} is not a race mode; try time_trial, speed_lap, zone, single_race or head_to_head",
             cli.mode
         )
     })?;

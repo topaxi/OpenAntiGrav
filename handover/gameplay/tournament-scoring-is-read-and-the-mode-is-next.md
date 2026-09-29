@@ -115,11 +115,13 @@ Head2Head cell today gets no gap readout.
   determined", new 2026-09-28) - the leg table's own row order depends on
   it, and this pass drew it as finish order on behavioural evidence, not a
   traced one.
-- **Draw Head2Head's own `HeadToHeadBar` HUD swap.** `head2head.md`
-  decompiles both the bind site and the per-tick updater in full; what is
-  missing is the widget-struct field semantics (`craft+0x48`/`+0xad0`,
-  widget `+0xa0`/`+0xe8`/`+0xec`) needed to wire it into `oag_ui`/
-  `crates/game/src/hud` honestly rather than on a guess.
+- ~~**Draw Head2Head's own `HeadToHeadBar` HUD swap.**~~ **Done 2026-09-29**
+  (`crates/game/src/hud/head_to_head.rs`, fed by `Race::head_to_head`); the
+  field semantics are pinned in `head2head.md` (the bar is a vertical
+  connector, `+0xa0` is `Height`, vtable `+0xec` is `GetY`). Static evidence
+  only. Still open from it: the two row **names** (`craft+0x798`,
+  `DAT_08b31774+0x457`), the player-row `0x200` highlight bit, the multiplayer
+  branch, and a PPSSPP frame at a known gap to check the bar's size and colours.
 - **A live capture (this engine's own front end, or PPSSPP) of an actual
   Head2Head cell launch** - field size, opponent identity, grid slot - was
   not done this pass; the in-process `Race::start` unit test

@@ -897,8 +897,13 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // size in - see `text_for`'s own doc comment.
     let position_combined = cx.layout.label("Position Outof").is_none();
 
+    // Head2Head's own gap readout replaces the place widgets wholesale.
+    let head_to_head = super::head_to_head::draws(cx, readout, &mut frame);
+
     for label in &cx.layout.labels {
-        if !is_screen_positioned(&label.name) {
+        if !is_screen_positioned(&label.name)
+            || (head_to_head && super::head_to_head::owns(&label.name))
+        {
             continue;
         }
         let Some(text) = text_for(
