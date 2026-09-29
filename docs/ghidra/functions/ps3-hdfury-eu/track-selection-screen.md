@@ -1,5 +1,11 @@
 # TrackSelection_Screen: the `Track Creation` screen's class, and no mode filter found in it
 
+> **Correction, 2026-09-29:** the `Track Creation` screen this page attributes to
+> `racebox_definition.xml` is authored in `DATA06`'s `Track_Selection_Definition.xml`;
+> `racebox_definition.xml` only names it as `Single Player`'s `goto`. The class
+> reading below is unaffected. See `docs/ui/campaign-screens.md`, "Wipeout HD/Fury:
+> `Track Creation`".
+
 2026-09-03. First dig into this binary's front-end/GUI layer - before this page the only
 named front-end function anywhere in this Ghidra project was `FrontendRoot_Construct`
 (`game-boot.md`). Landed by the same `.cpp`-filename-tag trick `memory.md` and

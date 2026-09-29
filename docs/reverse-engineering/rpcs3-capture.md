@@ -55,8 +55,11 @@ The first eleven base-game entries, `N` presses from the default highlight:
 | 10 | Modesto Heights |
 | 11 | Tech De Ra |
 
-Not walked further this session (12-24 is the reverse-direction half of the
-same 24-entry wrap `hd-frontend.md`'s own carousel read already measured).
+Not walked further this session. **Corrected 2026-09-29**: presses 12-24
+repeat the same twelve names with the cursor still on the top hex row, so
+`right` wraps at twelve and the second pass is not a reverse-direction half -
+the reverse circuits are the grid's second row (see `docs/ui/campaign-screens.md`,
+"Wipeout HD/Fury: `Track Creation`").
 **Moa Therma appears in this list** despite no `Data/Environments/*` folder
 on this disc naming it and no `.envsettings` file for it anywhere across all
 seven `DATAxx.PSARC` archives (checked: the disc's `.envsettings` count is
