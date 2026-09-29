@@ -278,23 +278,7 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
     let mut waveforms = Vec::with_capacity(sounds.len());
     let mut skipped = 0;
     for sound in &sounds {
-        let data = bank
-            .waveform(sound)
-            .ok_or_else(|| anyhow::anyhow!("{name} reaches outside the waveform section"))?;
-        // **Not every waveform is PS-ADPCM, and the descriptor says which.**
-        // On Wipeout HD about a third set `+0x0e`'s `0x80`: SCREAM's second
-        // voice type, 16-bit PCM behind a 16-byte header. See
-        // `oag_formats::sblk::{NOT_ADPCM_FLAG, decode_pcm16}`.
-        let pcm = if sound.is_adpcm() {
-            // **The span's run-out block is not played.** The encoder appends
-            // one past the block it flagged as the end, and the hardware stops
-            // at the flag; a looping voice that decodes the whole span replays
-            // that block once per loop instead of never. See
-            // `oag_formats::sblk::adpcm_played`.
-            sblk::decode_adpcm(sblk::adpcm_played(data))
-        } else {
-            sblk::decode_pcm16(data)
-        };
+        let pcm = decode_waveform(bank, sound, name)?;
         if pcm.is_empty() {
             skipped += 1;
             continue;
@@ -324,6 +308,33 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
         "all {skipped} of {name}'s waveforms decoded to nothing"
     );
     Ok((Loaded { waveforms }, skipped))
+}
+
+/// Decodes one waveform a bank binds, in the codec its descriptor names.
+///
+/// `name` is only for the error: the cue the waveform was reached from.
+pub(super) fn decode_waveform(
+    bank: &sblk::Bank,
+    sound: &sblk::Sound,
+    name: &str,
+) -> anyhow::Result<Vec<i16>> {
+    let data = bank
+        .waveform(sound)
+        .ok_or_else(|| anyhow::anyhow!("{name} reaches outside the waveform section"))?;
+    // **Not every waveform is PS-ADPCM, and the descriptor says which.**
+    // On Wipeout HD about a third set `+0x0e`'s `0x80`: SCREAM's second
+    // voice type, 16-bit PCM behind a 16-byte header. See
+    // `oag_formats::sblk::{NOT_ADPCM_FLAG, decode_pcm16}`.
+    Ok(if sound.is_adpcm() {
+        // **The span's run-out block is not played.** The encoder appends
+        // one past the block it flagged as the end, and the hardware stops
+        // at the flag; a looping voice that decodes the whole span replays
+        // that block once per loop instead of never. See
+        // `oag_formats::sblk::adpcm_played`.
+        sblk::decode_adpcm(sblk::adpcm_played(data))
+    } else {
+        sblk::decode_pcm16(data)
+    })
 }
 
 /// The opcode byte of each command in a cue's own run, in command order.

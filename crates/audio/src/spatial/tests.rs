@@ -354,3 +354,29 @@ fn a_listener_that_jumped_more_than_the_threshold_is_a_cut() {
     after.position = [25.0, 0.0, 0.0];
     assert!(after.jumped_from(&before));
 }
+
+#[test]
+fn a_pan_angle_maps_onto_the_equal_power_law_the_original_tabulates() {
+    // 0 is dead centre: the table's a' = 90 entry, cos 45 and sin 45.
+    let centre = pan_gains(pan_of_angle(0).unwrap());
+    assert!(
+        (centre[0] - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6
+            && (centre[1] - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6
+    );
+
+    // 30 degrees is a' = 120: (cos 60, sin 60) = (0.5, 0.866). 330 mirrors it.
+    let right = pan_gains(pan_of_angle(30).unwrap());
+    assert!((right[0] - 0.5).abs() < 1e-6 && (right[1] - 0.866_025_4).abs() < 1e-6);
+    let left = pan_gains(pan_of_angle(330).unwrap());
+    assert!((left[0] - 0.866_025_4).abs() < 1e-6 && (left[1] - 0.5).abs() < 1e-6);
+    // The wrap: -30 is 330.
+    assert_eq!(pan_of_angle(-30), pan_of_angle(330));
+}
+
+#[test]
+fn the_rear_half_is_refused_rather_than_guessed() {
+    for degrees in [90, 180, 269] {
+        assert_eq!(pan_of_angle(degrees), None, "{degrees}");
+    }
+    assert!(pan_of_angle(89).is_some() && pan_of_angle(270).is_some());
+}

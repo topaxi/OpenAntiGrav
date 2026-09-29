@@ -93,6 +93,7 @@ use super::{Audio, TICK_HZ};
 
 mod announcer;
 mod banks;
+mod compose;
 mod cue;
 mod engine;
 mod track;

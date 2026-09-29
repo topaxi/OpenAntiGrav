@@ -293,6 +293,7 @@ pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneS
 pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer {
     bank: r"Data\Sound\speech_zone.bnk",
     milestones: &[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100],
+    tick: oag_title::SequenceTick::Unknown,
 };
 
 /// Wipeout HD/Fury's Zone **speed-class** announcer - the voice line called

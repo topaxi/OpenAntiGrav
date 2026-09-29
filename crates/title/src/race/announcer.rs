@@ -50,6 +50,29 @@ pub struct ZoneAnnouncer {
     pub bank: &'static str,
     /// The zone numbers this title's bank names a `zone_<n>` cue for, ascending.
     pub milestones: &'static [u16],
+    /// What a cue's per-grain delays are counted in. See [`SequenceTick`].
+    pub tick: SequenceTick,
+}
+
+/// The unit a SCREAM cue's delay words are counted in, as far as it is known
+/// for a title.
+///
+/// A cue such as Pulse's `zone_5` is a timeline of words on authored delays,
+/// and turning a delay into time needs the engine's master tick. It is a
+/// property of the *build*, not of the bank's byte order: the PSP's is
+/// 258.4 Hz, measured live (`docs/ghidra/functions/psp-pulse-usa/sound.md`,
+/// "The master tick and the delay word"); nothing else has been measured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SequenceTick {
+    /// Not measured for this title's build. A sequence cue is not laid out on
+    /// a timeline; the flat pick is kept rather than lend another build's rate.
+    Unknown,
+    /// The PSP's 258.4 Hz master tick (`44100 * 3 / 512`). **Measured** on
+    /// Pulse's PSP build; for a title that ships the same cue on another
+    /// platform (Pulse's PS2 pressing) it is **lent, chosen, not measured** -
+    /// the words and their order are authored either way, and the alternative
+    /// is playing one of them at random.
+    Psp,
 }
 
 impl ZoneAnnouncer {

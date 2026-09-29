@@ -363,6 +363,30 @@ pub fn pan_gains(pan: f32) -> [f32; 2] {
     [((1.0 - pan) * 0.5).sqrt(), ((1.0 + pan) * 0.5).sqrt()]
 }
 
+/// The [`Play::pan`](crate::mixer::Play::pan) position of a voice authored at a
+/// pan angle in degrees, when the angle is in the front half.
+///
+/// `Scream_PanVolumePair` turns `a = wrap360(angle)` into
+/// `a' = a < 270 ? a + 90 : a - 270` and, for `a' <= 179`, reads
+/// `(cos(a' / 2 degrees), sin(a' / 2 degrees))` off its table. With
+/// `a' = angle + 90` that is `cos(45 + angle / 2)` on the left, which is
+/// exactly [`pan_gains`] at `pan = sin(angle)`. So `0` is dead centre, `30` is
+/// `0.5` (left `0.5`, right `0.866`) and `330` is `-0.5`.
+///
+/// `None` for `a' >= 180`, the rear half, where the original takes a different
+/// branch (the table swapped with one term negated) that this port does not
+/// model - a caller must not pretend it does.
+#[must_use]
+pub fn pan_of_angle(degrees: i32) -> Option<f32> {
+    let wrapped = degrees.rem_euclid(360);
+    let shifted = if wrapped < 270 {
+        wrapped + 90
+    } else {
+        wrapped - 270
+    };
+    (shifted <= 179).then(|| (wrapped as f32).to_radians().sin())
+}
+
 /// The rightward component of the direction to a source, in `-1..=1`.
 fn pan_of(to_source: [f32; 3], right: [f32; 3]) -> f32 {
     let length = dot(to_source, to_source).sqrt();

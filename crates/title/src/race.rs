@@ -92,7 +92,7 @@ mod announcer;
 mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;
-pub use announcer::{ZoneAnnouncer, ZoneClassAnnouncer};
+pub use announcer::{SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 

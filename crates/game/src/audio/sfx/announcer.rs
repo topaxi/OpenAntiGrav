@@ -34,6 +34,7 @@ use oag_audio::Sound;
 use oag_core::Rng;
 use oag_formats::sblk;
 
+use super::compose::compose_sequence;
 use super::{Loaded, load_named_cue};
 
 /// One title's decoded Zone announcer: every milestone its ladder names that
@@ -80,6 +81,30 @@ impl Announcer {
 
         for &milestone in table.milestones {
             let name = oag_title::ZoneAnnouncer::cue_name(milestone);
+            // **A sequence is played as one, not sampled.** Pulse's `zone_N`
+            // is the words ZONE, the number and CLEAR on authored delays; see
+            // `super::compose`. Any other shape keeps the flat pick below.
+            match compose_sequence(&bank, &name, table.tick) {
+                Ok(Some(line)) => {
+                    report.push(format!(
+                        "announcer: {name} -> sequence of {} grain(s), {:.2}s",
+                        line.grains,
+                        line.sound.seconds()
+                    ));
+                    lines.insert(
+                        milestone,
+                        Loaded {
+                            waveforms: vec![(line.sound, false)],
+                        },
+                    );
+                    continue;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    report.push(format!("announcer: {name} not composed: {e}"));
+                    continue;
+                }
+            }
             match load_named_cue(&bank, &name) {
                 Ok((loaded, skipped)) => {
                     let undecoded = if skipped == 0 {

@@ -1,0 +1,19 @@
+# Pulse's Zone announcer is a sequence; a wider set of cues is still sampled instead of played
+
+2026-09-29. The maintainer heard "clear" alone at zone 5 (other milestones: "zone" alone, or a bare number). **Cause found and fixed**: each `zone_N` cue is a timeline - child `ZONE`, the number, child `CLEAR` on authored delays, every word a left/right pair of one waveform at pan angles 30/330 - and `load_named_cue` flattened it to six leaves that `Announcer::pick` drew from at random. `oag_formats::sblk::timeline` now walks it and `oag_game::audio::sfx::compose` lays it down as one stereo `Bus::Speech` voice. Evidence, delay word, and the live-measured 258.4 Hz master tick: [psp-audio.md](../../docs/formats/psp-audio.md#a-cue-can-be-a-sequence-and-zone_n-is-one) and [sound.md](../../docs/ghidra/functions/psp-pulse-usa/sound.md#the-master-tick-and-the-delay-word-2026-09-29). Pulse has no class announcer, so the "voice stolen on the same tick" idea does not apply to it.
+
+## Open
+
+- **`Banks::pick` still samples where the disc plays.** `cargo run --release -p oag-formats --example sblk_layer_census -- SHIELD` over every playing cue on the five PSP/PS2 discs and HD: 2,168 with fewer than two own key-ons, 385 with a `0x19` group, **910 with one waveform keyed on several times and no `0x19`** (left/right pairs, harmless to sample), **683 with several distinct waveforms and no `0x19`** - **262** a complete timeline `Bank::cue_timeline` can walk, **421** with guards, random delays or branches it cannot. Pulse's `~SHIELD` (`[0x1b, 0x01, 0x01, 0x2b]`, 0.501 s and 1.087 s) is in the 683. Which are audible in play, and layers versus sequences, is not established. The fix here was deliberately not applied globally.
+- **Not confirmed live in the original**: the order and timing of the three words. The delay-word reading is from three decompiled functions and the tick rate is measured, but no breakpoint on `Scream_KeyOnVoice` while crossing zone 6 has been taken. The phase of the tick against the cue start (up to 3.9 ms) is taken as zero.
+- **PS2 is lent the PSP's rate** (`SequenceTick::Psp` is per title; chosen, not measured, no confidence score). **HD, Pure and 2048 keep the flat pick** (`SequenceTick::Unknown`). HD's tick is not measured, and its `c_CLEAR` (cue 21) is a goto and a marker with no waveform, so HD's bank carries no audible "clear" at all - carried by a cross-bank cue, or absent. Unread.
+- **The composite's volume**: per grain `scale * 2 * cue_volume^2 * sound_volume^2`, with a child taking its record's volume and its parent's scale. A child is 0.5 dB louder than the root key-on; read from `Scream_OpPlayChild`'s decompile, confidence 75, uncaptured.
+- **Rear-half pan angles** (`a' >= 180` in `Scream_PanVolumePair`) are refused by `oag_audio::spatial::pan_of_angle`, so a cue with one falls back to the flat pick.
+
+- **HD's `HBEAT_ZCHANGE`**: a probe of HD's `speech_zone.bnk` through `sound_names()` listed cue 42 `HBEAT_ZCHANGE`, while psp-audio.md says the bank names exactly 42 cues (0-41) and no such string. One reading is wrong (a different archive copy is one possibility); noted, not chased.
+
+## Next Steps
+
+1. Take the live check: break on `Scream_KeyOnVoice` (`0x0899456c`) in PPSSPP, cross zone 6, record the descriptor address and the tick counter at `0x08ac35e0` per hit. Expect ZONE at 0, the number at 105, CLEAR at 255 ticks, each doubled 10 ticks later.
+2. The census already splits the 683: 262 are a complete timeline, 421 carry opcodes the walk does not model. Wire `compose` into `Banks` for the complete ones a title actually fires (start with the ones `Cue::ALL` names), and read the missing opcodes (`0x1b`, `0x2b`, `0x04`) for the 421.
+3. Measure HD's tick (RPCS3 debugger, `scripts/rpcs3_debugger.py`) and read `c_CLEAR`'s goto, then let HD's zone lines use the same path.
