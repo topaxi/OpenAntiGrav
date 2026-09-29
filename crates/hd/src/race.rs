@@ -46,6 +46,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    countdown_voice: None,
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
     // One title-wide table, layered over whichever circuit races - the shape
     // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary

@@ -10,61 +10,7 @@
 
 use oag_audio::Bus;
 
-use super::Placement;
-
-/// Which bank a cue lives in.
-///
-/// The paths are literal strings in the PSP executable, every one of which
-/// hashes to a real archive entry on the PSP *and* the PS2 disc - see
-/// `docs/formats/psp-audio.md`'s table. The PS2 build ships the same banks
-/// under the same names in `WADS2.WAD`, which is why nothing here branches on
-/// the platform: `Archives::read_name` searches whichever archives the source
-/// turned out to have.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BankName {
-    /// `Data\Sound\hud.bnk`.
-    Hud,
-    /// `Data\Sound\ship.bnk`, or `ship_zone.bnk` in Zone mode.
-    Ship,
-    /// `Data\Sound\weapons.bnk`.
-    Weapons,
-    /// `Data\Sound\speech.bnk` - the announcer.
-    ///
-    /// The executable also carries `Data\Sound\speech_%s.bnk` and
-    /// `speech_zone_%s.bnk` templates formatted with a language at runtime, and
-    /// **no expansion of either resolves on the EU disc** - twelve language
-    /// names were tried and every one missed. So this port reads the unsuffixed
-    /// bank, which both discs do carry, and the localised path stays open. See
-    /// `docs/formats/psp-audio.md`.
-    Speech,
-}
-
-impl BankName {
-    /// The archive entry to read, given a title's own table and whether this is
-    /// a Zone race.
-    ///
-    /// **Which file a cue is in is a per-title fact and the cue's name is not.**
-    /// All three titles spell `SPEEDUPPAD` and `.COLLISIONS` identically; HD
-    /// keeps the first in `weapons.bnk` because it has no `hud.bnk` at all, and
-    /// the second in `shiphd.bnk`. See [`oag_title::SoundBanks`].
-    ///
-    /// Only [`Self::Ship`] moves with `zone`, and on Pulse and Pure that is
-    /// load-bearing: `SHIP_ZM` is a different bank with the same cue names and
-    /// different audio - a nine-layer `~ENGINE` against one, ten collision
-    /// alternates against fifteen - so a Zone race reading `ship.bnk` would be
-    /// quietly playing the wrong craft. HD ships no separate Zone bank and its
-    /// table says so by repeating itself.
-    #[must_use]
-    pub fn entry(self, banks: &oag_title::SoundBanks, zone: bool) -> &'static str {
-        match self {
-            Self::Hud => banks.hud,
-            Self::Ship if zone => banks.ship_zone,
-            Self::Ship => banks.ship,
-            Self::Weapons => banks.weapons,
-            Self::Speech => banks.speech,
-        }
-    }
-}
+use super::{BankName, Placement};
 
 /// A sound the simulation asks for, by the name the original passes to
 /// `Sound_Play`.
@@ -651,9 +597,40 @@ pub enum Cue {
     /// same silent drop [`super::place`] already gives any craft-placed cue
     /// on an empty slot.
     ShurikenTravel,
+    /// The start-of-race voice: `"ready"`, a timeline of several waveforms.
+    ///
+    /// `RaceMode_SetState` (`0x08827350`) plays it when it enters state 1, the
+    /// state `RaceMode_UpdateIntro_q` (`0x08829e6c`) hands the race to at the
+    /// end of its intro substates - `Sound_PlayNamedInSlot(..., "ready", 0x400,
+    /// 0, 0, 0)`, the dry, no-emitter path [`Self::Disengaging`] takes. Measured
+    /// live on Pulse (PSP), Time Trial, a single race and Eliminator: it starts
+    /// **180 ticks before [`Self::Go`]** (see `crate::race::countdown` for the
+    /// ticks), with no other cue started between the two. What its words say is
+    /// not identified, and the gantry's `3`, `2`, `1` start no cue of their own.
+    ///
+    /// **The bank is the mode's speech bank**, which `World_LoadTrack` picked:
+    /// `speech.bnk` (cue 11, six waveforms, 3.73 s), `speech_elim.bnk`
+    /// (Eliminator, cue 19, 3.00 s) or `speech_zone.bnk` (Zone, cue 15, 2.48
+    /// s). Not one of [`Self::ALL`]: it loads only on a title whose
+    /// [`oag_title::RaceDefaults::countdown_voice`] is measured, into the same
+    /// maps, through [`super::Banks::load_countdown`].
+    /// `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md`.
+    Ready,
+    /// The voice that says go: `"go"`, 0.80 s in every speech bank.
+    ///
+    /// `RaceMode_UpdateCountdown` (`0x088274b4`) plays it in the same call that
+    /// runs `Race_StartRacing` and `RaceMode_SetState(2)`, when the state's
+    /// timer reaches zero. Measured live: **the frame before the first craft
+    /// update that applies thrust**, which is the last gated tick here. See
+    /// [`Self::Ready`] for the bank and the trigger's home.
+    Go,
 }
 
 impl Cue {
+    /// The two start-of-race cues, loaded on their own because their bank is
+    /// the mode's and not the title's. See [`Self::Ready`].
+    pub const COUNTDOWN: [Self; 2] = [Self::Ready, Self::Go];
+
     /// Every cue this port fires, which is every one it knows how to load.
     pub const ALL: [Self; 33] = [
         Self::SpeedupPad,
@@ -721,7 +698,9 @@ impl Cue {
             | Self::LeachEnergy
             | Self::ShurikenHit
             | Self::ShurikenTravel => BankName::Weapons,
-            Self::ShieldActive | Self::Engaging | Self::Disengaging => BankName::Speech,
+            Self::ShieldActive | Self::Engaging | Self::Disengaging | Self::Ready | Self::Go => {
+                BankName::Speech
+            }
         }
     }
 
@@ -783,6 +762,8 @@ impl Cue {
             Self::Autopilot => "~AUTOPILOT",
             Self::Engaging => "autopilot_eng",
             Self::Disengaging => "disengaging",
+            Self::Ready => "ready",
+            Self::Go => "go",
             Self::Blowup => "~BLOWUP",
             Self::LockOn => "~ROCKLOCK",
             Self::MineLaunch => "MINELAUNCH",
@@ -924,6 +905,10 @@ impl Cue {
             // read, and it is `FUN_0883e9b0` -> `FUN_0893a768`, the path that
             // takes no emitter at all.
             Self::ShieldActive | Self::Disengaging => Placement::Unplaced,
+            // `RaceMode_SetState` and `RaceMode_UpdateCountdown` both call
+            // `Sound_PlayNamedInSlot` with no emitter and `0x400`: a voice in
+            // the player's ear, the same shape as `Disengaging` above.
+            Self::Ready | Self::Go => Placement::Unplaced,
             // Read, not assumed: case 4 hands it to the path that takes no
             // emitter and a volume of `0x400`.
             Self::Blowup => Placement::Unplaced,

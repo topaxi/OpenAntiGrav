@@ -92,7 +92,7 @@ mod announcer;
 mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;
-pub use announcer::{SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
+pub use announcer::{CountdownVoice, SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 
@@ -170,6 +170,8 @@ pub struct RaceDefaults {
     /// `None` rather than a guessed ladder for a title whose bank has not been
     /// read - see [`ZoneAnnouncer`]'s own docs for which that is today.
     pub zone_announcer: Option<&'static ZoneAnnouncer>,
+    /// Measured `ready`/`go` start-voice banks, or `None` (plays nothing): [`CountdownVoice`].
+    pub countdown_voice: Option<&'static CountdownVoice>,
     /// The Zone-mode **speed-class** announcer this title ships, when it has
     /// been read off the disc. See [`ZoneClassAnnouncer`].
     ///

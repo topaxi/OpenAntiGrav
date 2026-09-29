@@ -206,7 +206,7 @@ than one shared table:
 
 | Title | Numbered cues | Extra cues |
 | --- | --- | --- |
-| Pulse (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `60`, `70`, `80`, `90`, `100` | - |
+| Pulse (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `60`, `70`, `80`, `90`, `100` | `ready` (cue 15, 2.48 s), `go` (cue 16, 0.80 s) - the Zone start voice, see [the countdown voice](#the-countdown-voice-ready-and-go) |
 | Pure (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `75`, `100` | `zone_bronze`/`silver`/`gold`, `bronze_med`/`silver_med`/`gold_med`, `ship_destroyed`, `ready`, `go` |
 | Wipeout HD/Fury (`DATA01.PSARC`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `35`, `40`, `45`, `50`, `60`, `70`, `80`, `90`, `100` | `ready`, `321_GO`, `go`, `RS_1_READY`, `RS_2_GO`, `energycritical`, `c_CLEAR`, `PERFECT_LAP`, `NEW_LAP_REC`, `ZONEMALE`, fourteen `MR_*` speed-class names (`MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`, `MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP`), `HBEAT`/`HBEAT_GO` |
 
@@ -488,6 +488,35 @@ on purpose: Zone's is nine loops at tick zero, but the engine law drives one
 voice's pitch and volume per tick and how it spreads over layers is unread.
 Still unmodelled and flat: **`~BLOWUP`** (`0x15`/`0x1a`/`0x16`, a repeat) and
 **`~ROCKLOCK`** (guards `0x22`).
+
+### The countdown voice: `ready` and `go`
+
+**2026-09-29, Pulse (PSP), measured live.** A race start plays exactly two cues,
+`ready` and, 180.0 ticks later, `go`, and nothing else - no beep, no per-digit
+cue started between them. `go` is voiced on the
+last tick the thrust gate holds and `ready` 180 ticks before it (`World::tick`
+271 and 91; the docs' axis 270 and 90). Trigger, ticks and the capture method are
+on [countdown-voice.md](../ghidra/functions/psp-pulse-usa/countdown-voice.md).
+
+**The bank is the mode's speech bank**, which `World_LoadTrack` opens:
+
+| Mode | Bank | `ready` | `go` |
+| --- | --- | --- | --- |
+| Time Trial, single race, every other mode | `speech.bnk` (`SPEECH`) | cue 11, six waveforms, 3.73 s | cue 12, 0.80 s |
+| Eliminator | `speech_elim.bnk` (`elim_vo`) | cue 19, two waveforms, 3.00 s | cue 20, 0.80 s |
+| Zone | `speech_zone.bnk` (`zone_vo`) | cue 15, two waveforms, 2.48 s | cue 16, 0.80 s |
+
+Time Trial, a single race and Eliminator were captured (`SPEECH` 11/12 and
+`elim_vo` 19/20 named live); Zone is read from the loader and not captured.
+`speech.bnk`'s `ready` is a timeline whose first word sounds **22.5 ticks after
+the cue starts** in the original (first `Scream_KeyOnVoice` after it) and 23.3 in
+this port's render; the other two banks' `ready` speaks from the cue's own start.
+
+`oag_game::audio::sfx::Cue::{Ready, Go}` play them through the timeline path,
+loaded by `Banks::load_countdown` from the mode's bank on a title whose
+`RaceDefaults::countdown_voice` is measured (Pulse only), and raised by
+`oag_game::race::countdown`. Pinned per mode, with a speech-only WAV render, by
+`crates/game/tests/countdown_voice_ground_truth.rs`.
 
 **Chosen, not measured (no confidence score).** A placed cue's emitter pan and
 a voice's authored angle are combined as `sin(asin(pan) + angle)`, which

@@ -94,3 +94,46 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
         );
     }
 }
+
+/// Every `ready` and `go` a race raises across its first 400 ticks, with the
+/// tick each was raised on.
+fn voiced_start(countdown_voice: bool) -> Vec<(u64, crate::audio::sfx::Cue)> {
+    let mut setup = setup(hulled_handling());
+    setup.countdown_voice = countdown_voice;
+    let mut race = without_player_rescue(Race::start(setup));
+    let mut raised = Vec::new();
+    for _ in 0..400 {
+        race.tick(&PlayerInputs::none());
+        let stepped = race.sim.world.tick - 1;
+        for event in race.drain_cues() {
+            if matches!(
+                event.cue,
+                crate::audio::sfx::Cue::Ready | crate::audio::sfx::Cue::Go
+            ) {
+                raised.push((stepped, event.cue));
+            }
+        }
+    }
+    raised
+}
+
+/// The measured shape, as literals so `race::countdown`'s own constants cannot
+/// agree with themselves: `ready`, then `go` 180 ticks later on the last tick
+/// the thrust gate holds, and nothing else.
+#[test]
+fn a_voiced_start_raises_ready_then_go_on_the_measured_ticks() {
+    use crate::audio::sfx::Cue;
+    assert_eq!(voiced_start(true), vec![(91, Cue::Ready), (271, Cue::Go)]);
+    assert_eq!(
+        271,
+        oag_race::COUNTDOWN_TICKS - 1,
+        "go is the last gated tick"
+    );
+}
+
+/// A title whose start has not been measured plays nothing rather than borrow
+/// Pulse's ticks.
+#[test]
+fn an_unmeasured_title_raises_no_start_voice() {
+    assert!(voiced_start(false).is_empty());
+}

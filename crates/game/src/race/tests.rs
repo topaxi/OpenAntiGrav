@@ -232,6 +232,7 @@ fn setup(handling: Handling) -> Setup {
         // class announcer against - the same "not this title" reason `zone`
         // above is `None`.
         zone_stages: None,
+        countdown_voice: false,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),
