@@ -114,31 +114,29 @@ impl Banks {
                     } else {
                         format!(", {skipped} skipped: decoded to no samples")
                     };
-                    report.push(format!(
+                    // One line per cue: the timeline note rides on it.
+                    let mut line = format!(
                         "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
                         cue.name(),
                         loaded.waveforms.len()
-                    ));
+                    );
+                    let mut extra = None;
                     match timeline {
                         Ok(Some(t)) => {
-                            report.push(format!(
-                                "sfx: {} -> plays its timeline: {} variant(s) of {} voice(s)",
-                                cue.name(),
+                            line.push_str(&format!(
+                                "; plays its timeline: {} variant(s) of {} voice(s)",
                                 t.len(),
                                 t.iter().map(|v| v.layers.len()).max().unwrap_or(0)
                             ));
                             timelines.insert(cue, t);
                         }
-                        Ok(None) => {
-                            if let Some(line) = not_one_event(cue, &loaded) {
-                                report.push(line);
-                            }
+                        Ok(None) => extra = not_one_event(cue, &loaded),
+                        Err(e) => {
+                            line.push_str(&format!("; timeline not built, flat pick kept: {e}"))
                         }
-                        Err(e) => report.push(format!(
-                            "sfx: {} timeline not built, flat pick kept: {e}",
-                            cue.name()
-                        )),
                     }
+                    report.push(line);
+                    report.extend(extra);
                     sounds.insert(cue, loaded);
                 }
                 // Deliberately a report line and not a fallback. Nothing is
