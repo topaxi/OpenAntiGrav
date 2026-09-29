@@ -670,69 +670,17 @@ pub(super) fn picker_page(
     let mut grid_columns = 0;
     let (entries, previews): (Vec<Entry>, Vec<String>) = match kind {
         Kind::Track => {
-            let labelled: Vec<(crate::catalogue::Track, String)> = tracks
-                .iter()
-                .map(|track| {
-                    (
-                        track.clone(),
-                        crate::catalogue::label(track, circuit_names, strings, tracks),
-                    )
-                })
-                .collect();
-            // HD's grid: the same order and columns the live screen uses.
-            let (labelled, columns) = if layout.hd_track.is_some() {
-                crate::catalogue::direction_rows(
-                    title,
-                    oag_race::Mode::from_name(&settings.race.mode).unwrap_or_default(),
-                    &labelled,
-                )
-            } else {
-                (labelled, 0)
-            };
+            let (entries, previews, columns) = track_entries::track_entries(
+                title,
+                settings,
+                circuit_names,
+                strings,
+                tracks,
+                layout,
+                distance,
+            );
             grid_columns = columns;
-            labelled
-                .iter()
-                .map(|(track, label)| {
-                    (
-                        Entry {
-                            id: track.id.clone(),
-                            label: label.clone(),
-                            details: Details::Track {
-                                emblem: crate::catalogue::track_emblem(title, track),
-                                reversed: track.reversed,
-                                // A capture keeps no records store; the
-                                // distance is the caller's, for the selected
-                                // circuit only.
-                                info: {
-                                    let measured =
-                                        distance.filter(|_| track.id == settings.race.track);
-                                    let laps = crate::catalogue::race_laps(
-                                        oag_race::Mode::from_name(&settings.race.mode)
-                                            .unwrap_or_default(),
-                                        settings.race.class.trim(),
-                                    );
-                                    match (measured, layout.hd_track.is_some()) {
-                                        (Some(d), true) => {
-                                            let [length, race] =
-                                                oag_ui::picker::hd::track::length_rows(d, laps);
-                                            [length, race, "-".into()]
-                                        }
-                                        (Some(d), false) => {
-                                            [format!("{d:.0}"), "-".into(), "-".into()]
-                                        }
-                                        (None, _) => ["-".into(), "-".into(), "-".into()],
-                                    }
-                                },
-                            },
-                        },
-                        format!(
-                            r"{}\FE\{}.vex",
-                            track.location,
-                            if track.reversed { "reverse" } else { "forward" }
-                        ),
-                    )
-                })
-                .unzip()
+            (entries, previews)
         }
         Kind::Ship => teams
             .iter()
@@ -1036,5 +984,7 @@ pub(super) fn fury_picture(
 // the *file* - code plus inline tests together - one line over
 // `scripts/check-file-size.py`'s separate 1,000-line cap on the file
 // itself, and moving the tests out is the same fix either cap asks for.
+mod track_entries;
+
 #[cfg(test)]
 mod tests;
