@@ -989,6 +989,78 @@ physics hold or a stall state - at a fixed tick count; see `crates/race/src/`
 for the current implementation and whether it has grown per-mode or per-title
 values since this was written.
 
+## The race clock starts at the release
+
+**Measured 2026-09-29, Pulse (PSP), Time Trial, Talon's Junction - four
+captures, the same ticks each time.** The maintainer's report from play was that
+the timer ran during the countdown and that "GO" showed well before the craft
+answered. Both are real, and this is what the original does instead. Method: a
+breakpoint in `Ship_UpdateCraft` counts ticks, and each tick reads `throttleState`
+(`craft+0x2b8`), the racer's lap clock (`racer+0x920`), the race manager's race
+time (`manager+0x2b8`) and the front-end state name; the frames come from
+one screenshot per tick with the CPU held at the breakpoint (the presented frame
+is within a tick or two of the row, per
+[`ppsspp-debugger.md`](../reverse-engineering/ppsspp-debugger.md#screenshots-at-the-breakpoint-and-the-clipboards-one-shot-lag)).
+Counting from the first `InGame` tick after the track description screen, so the
+thrust release is tick 272:
+
+| what | tick | evidence |
+| --- | --- | --- |
+| `throttleState` steps `0.0` -> `100.0` | **272** | the earlier three captures, and these four |
+| lap clock `racer+0x920` and race time `manager+0x2b8` leave `0.0` | **272**, first value one `dt` (0.0166 s) | flat `0.000000` for ticks 0-271 on all four runs |
+| HUD `CurrentTime` | reads `0.00.0` for the whole countdown, `0.00.1` by tick ~284 | screenshots, ticks 68-288 |
+| gantry `3` first reads white | 132 | 1-tick screenshot series, white-pixel count in the digit's third of the board |
+| gantry `2` / `1` first read white | 178 / 222 | same - 46 and 44 ticks apart, the asset's own 45 |
+| the board turns green and shows `GO` | **273** | the same series: a step from 611 to 38,234 green pixels between two consecutive ticks |
+| Time Trial's top-right slot (a record to beat, `1.57.0`) starts counting down | 274-275 | screenshots |
+
+So **the original's clocks are zero through the whole countdown and start on the
+release tick**, and `GO` is drawn on that same tick, **not** the second before it
+that this page's gantry section had assumed. Confidence 90 for the clock start
+(read from memory on four runs, no inference), 85 for `GO` on the release (a
+screenshot series, one tick of presentation lag in it).
+
+`craft+0x920` is also what a Time Trial's `TotalTime` reads (plus the completed
+laps' splits, `race-progress.md`), so **every time the player is shown or scored
+excludes the countdown**. Zone is the one mode read only statically: its state
+machine leaves the countdown into a state that resets the dwell timer, the dirty
+flag and the score (`zone-mode.md`, state 1), so nothing accrues on the grid -
+confidence 65, not measured live.
+
+What `oag_race` does with it:
+
+- [`oag_race::race_clock_ticks`](../../crates/race/src/state.rs) is
+  `tick - COUNTDOWN_TICKS`, saturating. The HUD's `TotalTime`, the campaign medal
+  pace, the results board's times, a finish time handed to the records and a
+  campaign medal all read it; the raw `World::tick` is still what the thrust gate
+  and the animations ride.
+- `RaceState::lap_ticks` floors the lap's start at the release. The stored
+  `lap_start_tick` is untouched, so no state hash moves for it.
+- Zone's score and dwell timer are held through the countdown.
+- **Lap 1's clock still restarts at the first line crossing**, the documented
+  divergence in [lap counting](lap-counting.md), because our spawn is further
+  behind the line than the original's. `CurrentTime` therefore runs from the
+  release to the first crossing, resets there, and runs on - the reset is that
+  divergence, not the countdown.
+
+**The start gantry rides its own clock, 92 ticks in.** The board's timeline is not
+zero at the race start: fitting its authored keys (the `TEXOFFSET` walk of 8
+texels over 180 frames past the palette's white rows, and the `u` step at frame 181
+that hands the board to `GO`) to the six digit edges and the green step above puts
+frame 0 at **tick 92, within about 3 ticks** - `272 - 180`. The countdown's
+`GO` is therefore the timeline's own handover frame landing on the release, and
+the "about a second of `GO` before the craft can move" the gantry docs recorded
+was our clock starting at tick 0, not the original's behaviour.
+`crates/game/src/race/gantry.rs::CLOCK_START_TICK`. The cockpit-view overlay
+(`Cockpit_321GO.vex`, only drawn where no gantry is) was **not** measured in the
+original and still runs off `world.tick / 60`.
+
+**Still open:** steering, braking and the airbrakes through the countdown
+(unmeasured, left live in ours); any other mode or title's countdown length;
+whether the `go` voice line fires at the release like the board (not measured -
+it needs audio; ours has no countdown voice yet, and its trigger belongs on
+[`oag_race::COUNTDOWN_TICKS`](../../crates/race/src/state.rs) when it is wired).
+
 ## See also
 
 - [lap counting](lap-counting.md)

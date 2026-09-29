@@ -136,6 +136,13 @@ already a wrong-way situation the HUD warns about.
 
 ## The lap clock starts at the line
 
+**Never before the release, though.** The original's lap clock reads `0.0`
+through the whole start-line countdown and takes its first `dt` on the tick thrust
+is released (measured 2026-09-29, four captures - see
+[race-modes.md](race-modes.md#the-race-clock-starts-at-the-release)), so a lap's
+clock here is floored at `oag_race::COUNTDOWN_TICKS`: `RaceState::lap_ticks`. What
+follows is about the *first crossing* on top of that.
+
 Lap 1 is timed from the first crossing, not from the standing start, because our
 ship spawns on the slot, further behind the line than the original's own craft.
 Timing from the standing start would make lap 1 longer than every other lap by
@@ -167,7 +174,8 @@ for the original in full; the divergences that remain are these, each a choice:
   different instrument; a lap is a wrap in ours and an integer crossing count
   in theirs, and both re-earn a lap after a reversal.
 - **Lap 1's clock.** The original does **not** restart its clock at the first
-  crossing: lap 1 runs from whenever the race update starts stepping crafts.
+  crossing: lap 1 runs from the thrust release, which is when the race update
+  starts stepping crafts and the lap clock leaves `0.0` (measured, see above).
   Ours starts at the line, because our spawn is on the slot rather than the
   original's 16.5 units short of the line, and a slot-timed lap 1 would be
   wrong by a different amount per grid slot.

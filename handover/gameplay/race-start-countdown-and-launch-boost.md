@@ -783,17 +783,50 @@ states have to be clipped or lap one opens with a full-size legible
 draws where no gantry does and nowhere else. It is not deleted - a circuit with
 no mount, and every title whose gantry is unplaced, still needs it.
 
-**Still open and player-visible:** the board says `GO` about a second before the
-craft can move (the asset's 3.03-3.6 s against the measured 4.533 s thrust
-gate). That gap is reproduced rather than papered over, exactly as this thread's
-timing section asks; nothing measures it yet.
+**This was the maintainer's "delay after GO", and it is fixed** - see the
+2026-09-29 pass below: the gantry ran off `world.tick / 60` from tick 0 and drew
+`GO` 60-90 ticks before the release; the original draws it on the release.
+
+## 2026-09-29: the race clock starts at the release, and the gantry's GO lands on it
+
+The maintainer's report from play: the timer runs during the countdown, and there
+is a delay after `GO` before the craft answers. Both were ours, both are measured
+against the original and fixed. Full method and table:
+[`docs/gameplay/race-modes.md#the-race-clock-starts-at-the-release`](../../docs/gameplay/race-modes.md#the-race-clock-starts-at-the-release);
+the fit is in [`docs/rendering/start-gantry.md`](../../docs/rendering/start-gantry.md#timing-against-the-measured-countdown).
+
+- **Clock start, measured (90).** `racer+0x920` (the HUD's `CurrentTime`, and
+  `TotalTime` with the splits) and `manager+0x2b8` are `0.0` through the whole
+  countdown and take their first `dt` on the tick `throttleState` leaves zero -
+  tick 272 in the four captures. Ours counted from tick 0. Now
+  `oag_race::race_clock_ticks`; the HUD, medal pace, results times and records
+  read it, and `RaceState::lap_ticks` floors at the release.
+- **`GO`, measured (85).** The original's board turns green with `GO` on tick 273,
+  one tick after the release; ours was green from ~tick 182-216. The gantry's
+  timeline starts at tick 92 in the original (`272 - 180`, the authored `u` step
+  frame), now `CLOCK_START_TICK`.
+- **Zone (65, static only).** Its score and dwell timer are held through the
+  countdown, from `Zone_UpdateState` state 1's reset.
+
+Retires the "share a zero, confidence 82" answer in Next Steps 0 below: the
+original does not light `GO` 0.93 s early, and `g_ingame->0x40` is not reset by a
+restart.
+
+**Still open from this pass:** what starts the gantry's timeline at tick 92
+(the gated accumulator at `0x0890cf34` or a per-state write - only the result is
+measured); steering/brake/airbrake gating through the countdown; whether the `go`
+voice fires on the release (needs audio, ours has no countdown voice yet - wire
+its trigger to `COUNTDOWN_TICKS`); the cockpit overlay's own timing
+(`Cockpit_321GO.vex`, unmeasured, still `world.tick / 60`); other modes' and
+titles' countdown length.
 
 ## Next Steps
 
 **Display/logic, current focus:**
 
-0. ~~Close the `GO`-to-green gap~~ **Answered, and the answer is that there is
-   no gap to close - confidence 82.** The asset's clock and the thrust gate
+0. ~~Close the `GO`-to-green gap~~ **Answered 2026-09-29 by measurement, and this
+   older answer (the two share a zero, 82) is wrong - see the section above.**
+   Kept for the evidence trail: The asset's clock and the thrust gate
    share a zero. `g_ingame->0x40` is the one clock every in-race animation path
    reads (`anim-transform.md`, 85), and it is **not** free-running across a
    session the way this thread and `start-gantry.md` both had it: it is zeroed
