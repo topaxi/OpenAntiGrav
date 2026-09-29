@@ -17,6 +17,7 @@ use crate::render::{Renderer, VideoFormat};
 use oag_ui::frontend::Draw;
 
 mod campaign_page;
+mod card;
 mod endrace_page;
 mod loading;
 mod menu_page;
@@ -284,24 +285,7 @@ pub fn run(
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
     // somewhere the capture then ignores.
-    // `--until card`, `--until card:N` or `--until card:N:EVENT NAME`: stop
-    // with 2048's event card open on page `N` (default `0`) - of the named
-    // event, if any - rather than on a state-machine state, since the card is
-    // a sub-state of `newFEshell`.
-    let card_target = options.until.as_deref().and_then(|name| {
-        let rest = name.strip_prefix("card")?;
-        if rest.is_empty() {
-            return Some((0, None));
-        }
-        let rest = rest.strip_prefix(':')?;
-        let (page, event) = match rest.split_once(':') {
-            Some((page, event)) => (page, Some(event.to_string())),
-            None => (rest, None),
-        };
-        Some((page.parse().ok()?, event))
-    });
-    let card_page = card_target.as_ref().map(|(page, _)| *page);
-    let mut card_event = card_target.and_then(|(_, event)| event);
+    let mut card = card::CardTarget::parse(options.until.as_deref());
     while options.screen.is_none() && options.menu_page.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
@@ -310,8 +294,8 @@ pub fn run(
             break;
         }
 
-        let reached = match card_page {
-            Some(page) => frontend.event_card_page() == Some(page),
+        let reached = match &card {
+            Some(card) => card.reached(&frontend),
             None => options
                 .until
                 .as_deref()
@@ -333,28 +317,11 @@ pub fn run(
             break;
         }
 
-        if let Some(name) = &card_event
-            && frontend
-                .machine()
-                .is(oag_2048::frontend::states::NEW_FE_SHELL)
-            && !frontend.event_card_open()
-        {
-            if !frontend.select_campaign_event(name) {
-                anyhow::bail!("--until card: no campaign event named {name:?}");
-            }
-            card_event = None;
-        }
-        let pulse = if ticks.is_multiple_of(2) {
-            // With `--until card:N` the pressed buttons open the card, and
-            // once it is open the pulse turns its page instead.
-            if card_page.is_some() && frontend.event_card_open() {
-                oag_gameplay::input::Button::Right.bit()
-            } else {
-                options.pressed
-            }
-        } else {
-            0
+        let pressed = match card.as_mut() {
+            Some(card) => card.step(&mut frontend, options.pressed)?,
+            None => options.pressed,
         };
+        let pulse = if ticks.is_multiple_of(2) { pressed } else { 0 };
         input.begin_frame(options.held | pulse);
         // The playhead is read **before** the mixer is advanced, so it is where
         // the sound had got to at the end of the previous tick - the last
