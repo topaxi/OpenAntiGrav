@@ -420,7 +420,7 @@ fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
 /// `glass_texture`, `FlashyFlashyShape` with `emissive_bloom` and the body
 /// shapes with `diffuse_with_specular_from_alpha_n_vcol` - and, corpus-wide,
 /// the index lands inside the table on every submesh
-/// (`crates/rcs/tests/ps4_rcsmodel_ground_truth.rs`). **Confidence 75**: the
+/// (`crates/game/tests/omega_race_ground_truth.rs`). **Confidence 75**: the
 /// closure is exact and the semantic check is real, but neither the count
 /// field nor the table that would state the order outright is located, and
 /// which texture of several a material binds is ordinal, as it is on Vita.

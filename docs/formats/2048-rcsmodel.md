@@ -556,6 +556,23 @@ almost everything is compressed in.
 92, validated against Wipeout HD's own `.gtf` copies of 2,284 shared textures -
 see [gxt.md](gxt.md).
 
+## The PS4 Omega Collection reads through this module
+
+Added 2026-09-29 (`omega-race`). Omega's `.rcsmodel` is this container with
+**64-bit pointers** and `0x100` in header word `+0x04` (0 on all 953 of 2048's
+base package, `0x100` on all 1,272 PS4 entries). Everything above holds with
+three changes, each measured on Omega's corrected extraction: the submesh
+record's vertex pointer sits 32 bytes past its index pointer
+(`PS4_BUFFER_POINTER_GAP`, confidence 90; on `ag_systems\ship.rcsmodel` 9 of the
+12 records), its material index sits 0x28 bytes before the record (not 0x18),
+and the material table is found by the 64-bit pointers to its `.rcsmaterial`
+paths (confidence 75) with each texture ranked by the sampler-name hash 0x18
+bytes before its `.gnf` pointer (confidence 85). Positions, triangles and the
+three-signed-byte normal decode at the same offsets: unit length, mean 0.994.
+Omega's Feisar and Qirex hulls agree with 2048's ports on submeshes,
+triangles and materials. The node table is **not** read on PS4. Evidence and
+counts: [omega-status.md](omega-status.md#racing-a-race-starts-on-this-titles-own-data).
+
 ## What is not decoded
 
 Named here rather than left to be rediscovered:

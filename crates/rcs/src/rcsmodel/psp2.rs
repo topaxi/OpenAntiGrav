@@ -226,7 +226,7 @@ pub const MATERIAL_INDEX_BEFORE_RECORD: usize = 0x18;
 pub const PS4_MATERIAL_INDEX_BEFORE_RECORD: usize = 0x28;
 
 /// The header word at `+0x04` on a PS4 file: `0x100`, where every Vita file
-/// has `0`. **1,271 of 1,271** PS4 `.rcsmodel` files carry it and **953 of
+/// has `0`. **1,272 of 1,272** PS4 `.rcsmodel` entries carry it and **953 of
 /// 953** Vita ones do not (`crates/rcs/examples/omega_rcsmodel_census.rs`), so
 /// it is a discriminator on everything measured; what the word *means* - a
 /// pointer size in bits is the reading its value invites - is not established.

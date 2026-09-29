@@ -13,11 +13,14 @@ boot chain, `mainmenu_definition.xml`'s `<HorizMenu>`, `CellMode_Definition.xml`
 *plumbing* - `oag-omega` as a title package, a nine-archive candidate list
 where the patch's own front-end-complete archive has to win a name collision
 with the base package's older, incomplete copies - and one thing that is
-**not** carried forward at all: the circuit files are a mix of plain `.vex`
-and an unread `.final.*` family. Front-end images are Sony's PS4 `.gnf`
+**not** carried forward unchanged: the circuit files ship every one of HD's
+files under new spellings (`track.final.rcsmodel`, a 19-byte collision node, a
+64-bit `.rcsmodel`) that this project's 2048 readers turn out to read after
+three small changes - see "Racing" below.
+Front-end images are Sony's PS4 `.gnf`
 container, which [`gnf.md`](gnf.md) now decodes for most of the sprite sheet
-(219 of 289 front-end/campaign `.gnf` files draw). Racing is out of scope
-for this crate; see [`omega-frontend.md`](omega-frontend.md) for the frontend
+(219 of 289 front-end/campaign `.gnf` files draw). **A race starts** - see
+"Racing" below - and [`omega-frontend.md`](omega-frontend.md) is the frontend
 census this page builds on.
 
 ## What reads unchanged
@@ -83,20 +86,24 @@ corrupt here), not a decoder gap.
 name checked this lane; whether Omega ships a font under a different name or
 a different container was not searched.
 
-**Circuits are a mix of plain `.vex` and an unread `.final.*` family, per
-environment, not title-wide.** `Data\environments\talons_junction\` ships
-`TrackStartup.xml`, `track.final.audio` and `track.final.rcsskeleton` in
-place of a `track.vex`; `Data\environments\tech_de_ra\`, `zone_4\` and the
-four `environments2048\*` circuits (`sol`, `square`, `mall`, `subway`,
-`cathedral`) do ship a plain `track.vex`. Which environments are which was
-not surveyed exhaustively - `tech_de_ra\track.vex` is confirmed present and
-is `oag_omega::race::DEFAULTS.track`'s value, chosen for existing rather than
-measured as any kind of default. **It is confirmed to have no readable `WO
-Track` node** - a clean negative result, not a gap: `oag_render::track`'s own
-reader refused it outright (`Data\environments\tech_de_ra\track.vex has no
-WO Track node`), hit directly by the headless-capture crash below. Whether
-that is this one file, or every plain-`.vex` circuit on this title, was not
-surveyed past this one instance.
+**Circuits: every one ships a `track.vex` with a readable `WO Track`, and its
+baked outputs under a `.final` infix.** Across the whole package pair, **39 of
+39** `track.vex`/`track_reversed.vex` files carry a `WO Track` node that
+`oag_vex::track::parse` reads unmodified with `encoded_len()` equal to the
+payload's length to the byte (`tech_de_ra`: 2 paths, 2 junctions, 835 points;
+`environments2048\altima`: 6 paths, 4 junctions, 2,029 points, 195,104 bytes,
+the same numbers 2048's own file has, at the same 96-byte point
+[`track.md`](track.md) measured there). Beside each sit `track.final.rcsmodel`,
+`track.final.rcsskeleton`, `track.final.rcsanimclip`, `track.final.pvs`,
+`track.final.audio`, `track.final.checkpoint` and `track_col.col`; the four
+`zone_N` circuits use the plain `track.rcsmodel`-style spelling instead, and
+**no directory ships both**. This page's earlier revision said the opposite
+(`talons_junction` "ships `.final.*` in place of a `track.vex`", `tech_de_ra`'s
+`track.vex` "confirmed to have no readable `WO Track` node - a clean negative
+result") and **both claims were the extraction bug**, below: on the short-read
+copy `tech_de_ra\track.vex` has 278 nodes and no `WO Track`, on the corrected
+one 458 nodes and one (60,151 of its 133,888 bytes differ, 110,298 of them
+zero against 50,172).
 
 **The in-race HUD has no per-mode composition this lane found.** No
 `arcade_hud.xml`/`timetrial_hud.xml`/`speedlap_hud.xml`/`zone_hud.xml` at
@@ -214,25 +221,127 @@ in the corrected extraction, across all nine archives - not a reading
 artefact. See `data/scratch/drive-2026-09-27/omega-psarc.md` for the exact
 decode results and the full census.
 
-## Racing: out of scope, and why nothing crashes
+## Racing: a race starts, on this title's own data
 
-No CLI path in this lane starts a race. `oag_title::RaceDefaults`'s otherwise
--mandatory fields are real, archive-confirmed placeholders documented as
-chosen-not-measured (`crates/omega/src/race.rs`); the interactive session's
-own generic recovery (`Session::finish_race_loading`) reports a failed race
-load by name and returns to the menu rather than crashing, for every title,
-not something added for Omega.
+**Try:** `oag-game data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed --race
+--hold cross --no-audio --screenshot out.png` (any directory holding both
+packages' `uroot/dataNN.psarc`; they are found by name). `just play omega`
+reads `data/extracted/ps4`, which is the short-read copy above, so it does not
+get this far until that directory is replaced by a corrected extraction - the
+maintainer's call, because it shifts every census figure on this page.
 
-**One crash this lane did find, and left alone.** `--screenshot --press
-start,cross` (any title) skips the language picker and drives straight
-through to a `Launch Game` hand-off; the headless capture path
-(`crates/game/capture.rs`) always races once the front end finishes, with no
-interactive menu to stop at - so on Omega it attempted
-`oag_omega::race::DEFAULTS.track` (`tech_de_ra\track.vex`) and the process
-exited with `Error: Data\environments\tech_de_ra\track.vex has no WO Track
-node` rather than reporting and stopping. This is a property of the headless
-capture path shared by every title, not something Omega's own data
-introduced - the brief for this lane says not to chase it, and it was not.
+`omega-race`, 2026-09-29. On the corrected extraction a race loads the real
+spline, the real collision, the real craft and the real circuit geometry with
+its textures, the craft rides the circuit (`grounded 1.0`, 27 units/s after 300
+ticks with accelerate held, 58 units along the spline by tick 900), and the
+frame is legible: an AG Systems hull on Tech De Ra's start gantry with the
+circuit's road, barriers and banners behind it
+(`data/scratch/omega-race/j300.png`). Nothing here is a stand-in for an asset
+the disc authors except what "What does not draw right" lists.
+
+### What loads, from what, through which reader
+
+| Layer | Omega file | Reader | Measured |
+| --- | --- | --- | --- |
+| Spline | `track.vex`, `WO Track` | `oag_vex::track`, **unchanged** | 39 of 39 files, `encoded_len` = payload length |
+| Start position, pads | `track.vex` nodes | unchanged | `tech_de_ra`: 15 speedup and 11 weapon pad volumes |
+| Collision | `track_col.col` | `oag_vex::kdcol`, **19-byte node** | 38 of 38 decode; `tech_de_ra` 12,894 vertices, 20,777 triangles |
+| Circuit geometry | `track.final.rcsmodel` | `oag_rcs::rcsmodel::psp2`, **third pointer gap** | `tech_de_ra` 3,186 submeshes, 2,379,040 triangles, 0 unpaired |
+| Materials | same file | `psp2::material::read_ps4` | 461 materials; 453 resolve a texture, 3,155 of 3,186 draws textured |
+| Textures | `.gnf` | `oag_texture::gnf`, unchanged | as [`gnf.md`](gnf.md) |
+| Craft hull | `hdships\<team>\Ship.vex` + `ship.rcsmodel` | `psp2` | `ag_systems` 12 submeshes, 22,666 triangles, 4 of 4 materials textured |
+| Handling | `hdships\<team>\handlingstats.xml` | `oag_tables::handling`, unchanged | `ag_systems`: team "AG Systems", class `venom` |
+
+The three changes, each with what it rests on:
+
+1. **A collision node is 19 bytes, not 24 - confidence 85.** All 38
+   `track_col.col` files state stride 19, and in every one the next `"----"`
+   sits at exactly `0x14 + 19 * N`. `environments2048\altima` is 2048's own file
+   with the node array re-encoded: past it, 415,286 bytes (leaf indices, bounds,
+   triangle soup, final tag) are **byte-identical**, and the file is smaller by
+   exactly `5 * 27,199`. The packed node is the wide one with the constant
+   `0x000b` half-word dropped and the axis narrowed to a byte; against 2048's
+   nodes on altima the children, axis, count and leaf start agree on all
+   27,199, the split on 22,582 exactly and on 4,617 to one ulp. All 38 files'
+   leaf runs tile their leaf array. `oag_vex::kdcol::NodeLayout::Packed`;
+   [`2048-collision.md`](2048-collision.md).
+2. **A circuit's model is `track.final.rcsmodel` - confidence 95, a counted
+   fact.** 22 circuits use the `.final` spelling for the model, skeleton, clip,
+   `.pvs`, audio and checkpoint files, four (`zone_1`..`zone_4`) use the plain
+   one, and none ships both. The game tries the plain sibling first and the
+   `.final` one only when it is absent (`oag_render::mesh::rcs::sibling_name_cooked`),
+   so no other title's lookup changes.
+3. **A PS4 `.rcsmodel` is 2048's container with 64-bit pointers.**
+   - *Same container, told apart by header word `+0x04` - confidence 95:* 0 on
+     all 953 of 2048's base package, `0x100` on all 1,272 of Omega's (entries,
+     a few paths repeat across archives)
+     (`crates/rcs/examples/omega_rcsmodel_census.rs`).
+   - *Submesh record: vertex pointer 32 bytes past the index pointer, not 28 -
+     confidence 90.* Twelve records on `ag_systems\ship.rcsmodel`: three in the
+     Vita's 184-byte shape (a mirrored twin, 710 triangles, all a reader
+     without the new gap found) and nine in the new one (the body alone is
+     10,486 triangles). Every pair clears the reader's arithmetic and the
+     position and 3-signed-byte normal decode at the Vita's offsets to unit
+     normals (mean 0.994). Cross-title: Omega's Feisar and Qirex hulls decode to
+     17 / 22,527 triangles / 5 materials and 15 / 29,643 / 4, **identical** to
+     2048's ports of them (vertex counts differ - Omega re-welded them). All
+     the 1,272 Omega `.rcsmodel` entries all decode, with 90 unpaired pointers in total
+     (82 in the crowd rigs, 2 on `sol`, 6 in the front-end scenes). The Vita
+     corpus is unaffected by construction: a gap is only consulted for a site
+     no known gap paired, and no Vita site goes unpaired.
+   - *Materials, by their name pointers - confidence 75.* The Vita's file-level
+     count and table are not where a PS4 file keeps them; the `.rcsmaterial`
+     paths sit in the clear, and a material is a 64-bit word pointing at one.
+     A submesh names its material 0x28 bytes before its record, and all
+     239,108 submeshes in the package name one inside the table. On
+     `ag_systems` `GlassShape` gets `glass_texture` and `FlashyFlashyShape` gets
+     `emissive_bloom`.
+   - *A sampler entry is 0x28 bytes, the name hash first and the texture
+     pointer 0x18 in - confidence 85.* On `tech_de_ra` the hashes resolve to
+     `lightmap` (291 entries, every one an `-lmap.gnf`), `Texture1`,
+     `DiffuseTexture`, `Diffuse`, `Normal` and so on. **This is what picks the
+     diffuse:** the road, `track_surface_displacement2out`, lists
+     `track_de_ra_displacement_df2.gnf` first and read in address order the
+     first frame drew the road as a white sheet; ranked by sampler role its
+     `Diffuse` (`track_de_ra.gnf`) comes first.
+
+**The mount order is chosen, not measured.** 10,921 of the 27,077 distinct
+paths are named by more than one archive (the patch repacks most of the base)
+and where the copies differ the patch's is the larger, newer one - 29 of 40
+sampled race-relevant collisions differ, and every `.EnvSettings` is ~4.8 KB in
+the base and ~5.6 KB in the patch. `oag_omega::EXTRA_CANDIDATES` therefore
+searches `data08`, `data07`, `data05` before `data00`-`data04`. Nobody watched
+a PS4 mount them.
+
+### What does not draw right, or at all
+
+- **The node table is not read on PS4.** Omega's header is 2048's with 8-byte
+  pointers (17 nodes and their bind matrices at `+0x120` on `ag_systems`, 12
+  meshes, a table at `+0x40`) but `psp2::nodes` reads none of it, so
+  node-bound scenery is drawn at its node-local position: on the first frame a
+  prop sits under the camera. **Next, and the most visible defect.**
+- **Skeleton and clip do not decode** (`property tag ends at 3496925615 but the
+  file is 57856 bytes`): nothing animates.
+- **Lightmaps are not bound**, though 291 materials name one on `tech_de_ra`.
+- **`track.final.pvs` is not read**, so every chunk draws: 2.38M triangles, and
+  a debug build spends about three minutes decoding the 453 textures.
+- **`.EnvSettings` is read through 2048's reader** and its sun (`[4.00, 2.33,
+  0.82]` over an ambient of `1.0`) is not checked against PS4's schema. The
+  patch's copy carries no HDR/bloom block, so the read bloom chain is off.
+- **Silent:** Omega's `.bnk` banks carry a version word `1145588546` where the
+  reader expects `3`; `Data\Psys\*.POB` particle effects are not in this
+  archive set under those names; the blob shadow is this project's generated
+  falloff, not the disc's.
+- **Reversed circuits do not get collision:** `kdcol::sibling_name` pairs only
+  `track.vex`, and Omega's reversed one is `track_col_reversed.col`.
+- **Defaults are chosen, not measured:** `tech_de_ra` and `ag_systems`. Zone,
+  boost, speed classes and every per-team variant table stay `None`.
+
+Reproducers: `crates/vex/examples/omega_track_probe.rs`, `omega_col_probe.rs`;
+`crates/rcs/examples/omega_rcsmodel_probe.rs`, `omega_rcsmodel_census.rs`,
+`omega_materials_probe.rs`; and the ground-truth suite
+`crates/game/tests/omega_race_ground_truth.rs`, which skips (loudly, even under
+`OAG_REQUIRE_GAME_DATA`) on the short-read extraction.
 
 ## See also
 

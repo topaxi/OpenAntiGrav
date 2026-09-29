@@ -87,7 +87,10 @@ fn psarc_files(source: &str) -> Vec<PathBuf> {
 fn archive(source: &str, number: &str) -> oag_assets::psarc::Archive {
     let path = psarc_files(source)
         .into_iter()
-        .find(|p| p.file_name().is_some_and(|n| *n == *format!("data{number}.psarc")))
+        .find(|p| {
+            p.file_name()
+                .is_some_and(|n| *n == *format!("data{number}.psarc"))
+        })
         .unwrap_or_else(|| panic!("no data{number}.psarc under {source}"));
     oag_assets::psarc::Archive::open(&path.display().to_string())
         .unwrap_or_else(|e| panic!("opening {}: {e}", path.display()))
@@ -112,7 +115,10 @@ fn tech_de_ra_authors_a_spline_this_project_already_reads() {
     assert_eq!(ai.junctions.len(), 2);
     assert_eq!(ai.point_count(), 835);
     assert_eq!(ai.encoded_len(), payload.len());
-    assert_eq!(track::byte_order(payload), Some(oag_formats::ByteOrder::Little));
+    assert_eq!(
+        track::byte_order(payload),
+        Some(oag_formats::ByteOrder::Little)
+    );
 }
 
 /// All 38 `track_col.col` files decode as the packed tree, each with its leaf
@@ -209,7 +215,9 @@ fn omegas_hd_hulls_match_2048s_ports_on_submeshes_triangles_and_materials() {
         [("Feisar", 17, 22_527, 5), ("Qirex", 15, 29_643, 4)]
     {
         let read = |archive: &mut oag_assets::psarc::Archive, path: String| {
-            let blob = archive.read_path(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+            let blob = archive
+                .read_path(&path)
+                .unwrap_or_else(|e| panic!("{path}: {e}"));
             oag_rcs::rcsmodel::psp2::parse(&blob).unwrap_or_else(|e| panic!("{path}: {e}"))
         };
         let theirs = read(
@@ -250,8 +258,7 @@ fn census(number: &str, files: usize, submeshes: usize, unpaired: usize) {
     for name in &names {
         let blob = archive.read_path(name).expect("read");
         assert!(oag_rcs::rcsmodel::psp2::is_ps4(&blob), "{name}: not PS4's");
-        let model =
-            oag_rcs::rcsmodel::psp2::parse(&blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let model = oag_rcs::rcsmodel::psp2::parse(&blob).unwrap_or_else(|e| panic!("{name}: {e}"));
         seen += 1;
         found += model.submeshes.len();
         leftover += model.unpaired_pointers;
@@ -259,7 +266,11 @@ fn census(number: &str, files: usize, submeshes: usize, unpaired: usize) {
             assert!(s.material.is_some(), "{name}: a submesh names no material");
         }
     }
-    assert_eq!((seen, found, leftover), (files, submeshes, unpaired), "data{number}");
+    assert_eq!(
+        (seen, found, leftover),
+        (files, submeshes, unpaired),
+        "data{number}"
+    );
 }
 
 #[test]
@@ -334,9 +345,15 @@ fn an_omega_race_loads_its_spline_collision_and_craft() {
     .unwrap_or_else(|e| panic!("loading {source}: {e:#}"));
     let said = |needle: &str| loaded.report.iter().any(|line| line.contains(needle));
 
-    assert!(said("racing on Wipeout: Omega Collection"), "{:#?}", loaded.report);
     assert!(
-        said(r"Data\environments\tech_de_ra\track.vex: 2 path(s), 2 junction(s), 835 control point(s)"),
+        said("racing on Wipeout: Omega Collection"),
+        "{:#?}",
+        loaded.report
+    );
+    assert!(
+        said(
+            r"Data\environments\tech_de_ra\track.vex: 2 path(s), 2 junction(s), 835 control point(s)"
+        ),
         "{:#?}",
         loaded.report
     );
@@ -346,7 +363,9 @@ fn an_omega_race_loads_its_spline_collision_and_craft() {
         loaded.report
     );
     assert!(
-        said(r"hdships\ag_systems\Ship.vex: 22666 triangle(s) over 12 submesh(es), 12/12 draw(s) textured from 4 of 4 material(s)"),
+        said(
+            r"hdships\ag_systems\Ship.vex: 22666 triangle(s) over 12 submesh(es), 12/12 draw(s) textured from 4 of 4 material(s)"
+        ),
         "{:#?}",
         loaded.report
     );

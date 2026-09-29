@@ -47,7 +47,7 @@
 //! **byte-identical** to 2048's own Vita file (415,286 bytes of leaf indices,
 //! bounds and triangle soup), and the file is smaller by exactly `5 * N`
 //! (`1,068,082 - 932,087 = 135,995 = 5 * 27,199`). The packed node is the
-//! wide one with the constant `0x000b` half-word dropped and the axis
+//! wide one with its per-file `unknown` half-word dropped and the axis
 //! narrowed to a byte - see [`NodeLayout::Packed`] for the field order and the
 //! evidence.
 //!
@@ -250,12 +250,13 @@ pub struct Node {
     /// The upper half of the word [`triangle_count`](Self::triangle_count) is
     /// the lower half of, or `None` in a layout that has no such word.
     ///
-    /// `0x000b` on **every node of every altima file measured** (2048's
-    /// own), internal and leaf alike, so nothing there distinguishes a field
-    /// from a constant and it is carried rather than named. It varies by
-    /// circuit - `0x0033` on `arena`, `0x0084` on `mall`, `0x001c` on `subway` -
-    /// and is always `None` for [`NodeLayout::Packed`], which does not store
-    /// it.
+    /// **One value per file**, the same on every node of it, internal and leaf
+    /// alike, so nothing distinguishes a field from a constant and it is
+    /// carried rather than named. `0x000b` on altima, `0x0033` on arena, park
+    /// and square, `0x0084` on mall, `0x001c` on subway, and so on across the
+    /// ten base-package circuits - an earlier revision of this comment said
+    /// `0x000b` everywhere, which is altima's value only. Always `None` for
+    /// [`NodeLayout::Packed`], which does not store it.
     pub unknown: Option<u16>,
 }
 
