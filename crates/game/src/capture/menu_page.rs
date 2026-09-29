@@ -681,7 +681,11 @@ pub(super) fn picker_page(
                 .collect();
             // HD's grid: the same order and columns the live screen uses.
             let (labelled, columns) = if layout.hd_track.is_some() {
-                crate::catalogue::direction_rows(&labelled)
+                crate::catalogue::direction_rows(
+                    title,
+                    oag_race::Mode::from_name(&settings.race.mode).unwrap_or_default(),
+                    &labelled,
+                )
             } else {
                 (labelled, 0)
             };

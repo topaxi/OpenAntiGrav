@@ -45,7 +45,7 @@ impl Session {
         let hd = layout.hd_track.is_some();
         let zone = mode == oag_race::Mode::Zone;
         let (listed, columns) = if hd {
-            catalogue::direction_rows(shell.tracks_for(mode))
+            catalogue::direction_rows(title, mode, shell.tracks_for(mode))
         } else {
             (shell.tracks_for(mode).to_vec(), 0)
         };

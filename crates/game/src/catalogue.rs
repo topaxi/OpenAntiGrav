@@ -69,9 +69,37 @@ pub fn race_laps(mode: oag_race::Mode, class: &str) -> Option<u32> {
 /// Junction, The Amphiseum, Modesto Heights, Tech De Ra, then Vineta K again
 /// at twelve presses); the reverse half's is **chosen** to be the same.
 #[must_use]
-pub fn direction_rows(tracks: &[(Track, String)]) -> (Vec<(Track, String)>, usize) {
-    let forward: Vec<&(Track, String)> = tracks.iter().filter(|(t, _)| !t.reversed).collect();
-    let reverse: Vec<&(Track, String)> = tracks.iter().filter(|(t, _)| t.reversed).collect();
+pub fn direction_rows(
+    title: &oag_title::Title,
+    mode: oag_race::Mode,
+    tracks: &[(Track, String)],
+) -> (Vec<(Track, String)>, usize) {
+    // Outside Zone the carousel shows the ordinary circuits only: the walk
+    // that measured it found 24 entries (twelve circuits, two rows), and HD's
+    // four Zone-exclusive environments are not among them.
+    let zone_only: &[&str] = match title.race.zone {
+        oag_title::ZoneCircuit::Separate(list, _) if mode != oag_race::Mode::Zone => list,
+        _ => &[],
+    };
+    let is_zone_only = |track: &Track| {
+        let folder = track
+            .location
+            .rsplit('\\')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        zone_only
+            .iter()
+            .any(|entry| entry.to_ascii_lowercase().contains(&format!("/{folder}/")))
+    };
+    let forward: Vec<&(Track, String)> = tracks
+        .iter()
+        .filter(|(t, _)| !t.reversed && !is_zone_only(t))
+        .collect();
+    let reverse: Vec<&(Track, String)> = tracks
+        .iter()
+        .filter(|(t, _)| t.reversed && !is_zone_only(t))
+        .collect();
     let mut out: Vec<(Track, String)> = forward.iter().map(|&pair| pair.clone()).collect();
     for (track, label) in reverse.iter().copied() {
         let twin = forward
