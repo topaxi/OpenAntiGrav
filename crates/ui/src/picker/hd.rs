@@ -539,3 +539,6 @@ fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
         wrap_width: text.wrap_width,
     }
 }
+
+#[cfg(test)]
+mod tests;
