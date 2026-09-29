@@ -258,6 +258,21 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    rects, so building that screen for real is still its own, separate piece
    of work - see `campaign-event-card.md`'s own "not chased" note on the
    `M_X`/`M_Y` projection its draw call also computes.
+   **Card pages finished 2026-09-29** (branch `2048-card-pages`): the
+   `BEAT_VALUE` wording is read (per-mode `vtable+0x6c` slot: SpeedLapRace
+   `BEAT M:SS`, Zone `ZONE TARGET : n`, the rest `SCORE n POINTS`, which is
+   in the string table after all), page kinds `1` (leaderboard tabs) and `4`
+   (rules) draw, `BuildPageList` is mapped field by field, the kind line
+   and mode icon follow the class (`GameMode_GetKindLabel`: the 13 timed races
+   are `TIME TRIAL`), and Zone cards do have title, `Zone<Name>` photo and
+   emblem (`M_TRACKDEF` is authored on them). **Still open**: page kind `2`
+   (trophy and cup art, `FUN_81052fb4`: find where `DAT_816c76fc..` are loaded
+   and the ten named events' images), the weapon callout of the rules page
+   (`FUN_810626ce`), the elite-pass row of the objective page, the record row
+   of the leaderboard (needs a per-event result store), and the placement of
+   the forced craft's two quads (`FUN_81061808`). Capture a card with
+   `--until card:N:EVENT NAME` (unlocked events only). The map draws the
+   whole timed class (53 events, 13 of them laps races) with `speed_mode`.
    **Card built 2026-09-29** (branch `2048-event-card`): layout recovered from
    `CampaignEventCard_DrawPanel` and friends, the photo/emblem/glyph art found
    in `NewImages` (no XML names it), and `oag_ui::frontend::event_card` draws

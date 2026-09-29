@@ -300,6 +300,12 @@ pub(crate) struct Cli {
     pub(crate) size: String,
 
     /// With `--screenshot`, run until this state is current before capturing.
+    ///
+    /// Wipeout 2048 also takes `card`, `card:N` or `card:N:EVENT NAME`: stop
+    /// with the campaign map's event card open on page `N` (default `0`), of
+    /// the named event if one is given. The pulsed `--press` buttons open the
+    /// card, then the right button turns its pages. A locked event's card
+    /// never opens, so name an unlocked one.
     #[arg(long)]
     pub(crate) until: Option<String>,
 

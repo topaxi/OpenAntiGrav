@@ -24,26 +24,30 @@
 //! arrows and the dot row - are literals in those functions, and the frame
 //! agrees with them to the pixel.
 //!
-//! **Chosen, not measured - no confidence score**: the mode subtitle's
-//! wording (the function that words it, `FUN_812b021a`, is unread), which
-//! medal glyph an earned tier draws, which key the pad uses for the
-//! change-craft button, the orange a refused craft turns Change craft (the
-//! original pulses orange/blue), and where the objective text starts (see
-//! [`Frontend::draw_objective_page`]). The panels are `Transparent2048` and
-//! the glyphs `White2048`, both authored.
+//! **Chosen, not measured - no confidence score**: which medal glyph an
+//! earned tier draws, which key the pad uses for the change-craft button, the
+//! orange a refused craft turns Change craft (the original pulses
+//! orange/blue), where the objective text starts (see
+//! [`Frontend::draw_objective_page`]), and where a forced craft's team logo
+//! and class icon sit relative to their item's centre. The panels are
+//! `Transparent2048` and the glyphs `White2048`, both authored.
 //!
-//! **Not drawn, by name**: page kinds `1`-`4` (`FUN_810540c4`,
-//! `FUN_81052fb4`, `FUN_81052810`, `FUN_810535fe`) - kind `1` is on every
-//! single-player card (`FUN_8105114a`), so it is a page the player can reach
-//! and it is blank; the elite-pass row (drawn only for two objective
-//! kinds, `FUN_81055150`'s `param_3[0xb6]`, unread); the weapon and craft
-//! class restriction icons (`FUN_81061db6`); the objective line of a
-//! `BEAT_VALUE` event, whose text is either a per-mode override
-//! (`vtable+0x6c` of the event, unread) or `FE_SCORE_POINTS`, which is not
-//! in the disc's string table. The page count the original shows (three on
-//! the reference frame) comes from predicates over fields this build does
-//! not read, so this build shows the pages it can count: the objective page
-//! when the event authors a pass objective, and kind `1`.
+//! # Pages
+//!
+//! The card has the pages `CampaignEventCard_BuildPageList` (`0x8105114a`)
+//! builds, of which this build draws three: kind `0`, the pass objective
+//! (`FUN_81055150`); kind `1`, the leaderboard (`FUN_810540c4`), as it draws
+//! with no network - Personal tab selected, Friends and Global greyed; kind
+//! `4`, the rules (`FUN_810535fe`): class, laps, a forced craft and the craft
+//! classes the event allows, at the positions of the executable's own table.
+//! The card opens on the rules page when the player's craft is refused.
+//!
+//! **Not drawn, by name**: page kind `2` (trophy and cup art,
+//! `FUN_81052fb4`, image handles not located) and `3` (`FUN_81052810`, a
+//! runtime field, probably unreachable); the weapon callout of the rules page
+//! (`FUN_810626ce`); the elite-pass row of the objective page
+//! (`FUN_81055150`'s `param_3[0xb6]`); the personal record row of the
+//! leaderboard (this build keeps no per-event result beyond the medal).
 
 use crate::pointer::{Pointer, contains};
 
@@ -66,8 +70,8 @@ pub struct EventCard {
     pub pass_label: Option<String>,
     /// The event authors an `M_PASSOBJECTIVE` - page kind `0` exists.
     pub has_objective: bool,
-    /// The pass objective's worded line, `None` when its wording is not
-    /// recovered (`BEAT_VALUE`).
+    /// The pass objective's worded line, `None` when the type is not one the
+    /// original words.
     pub objective: Option<String>,
     /// `M_NUMOFLAPS`, when a lap race authors one above zero.
     pub laps: Option<u32>,
@@ -77,6 +81,48 @@ pub struct EventCard {
     pub photo: Option<String>,
     /// The circuit emblem's texture name.
     pub emblem: Option<String>,
+    /// The speed class's caption (`Speed_Class_C_0` and so on, resolved),
+    /// under the class glyph on the rules page.
+    pub class_label: Option<String>,
+    /// `Callout_Lap`/`Callout_Laps` with the count filled in.
+    pub lap_label: Option<String>,
+    /// The craft the event forces (`M_PPLAYERSHIPMODELDATA`), if any.
+    pub forced_craft: Option<CardCraft>,
+    /// One glyph and caption per craft class the event still allows, when it
+    /// restricts the choice at all (`FE_SHIP_*_ONLY`).
+    pub allowed_classes: Vec<CardRestriction>,
+    /// The leaderboard page's own words.
+    pub tabs: CardTabs,
+}
+
+/// A forced craft on the rules page.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardCraft {
+    /// The team logo's texture name (`Team_Logos/Icon_Team_*`).
+    pub logo: Option<String>,
+    /// The craft class's icon (`Icon_Ship_*`, the `_proto` one for a
+    /// prototype), drawn beside the logo.
+    pub type_icon: Option<String>,
+    /// The team's name as the language table words it.
+    pub caption: String,
+}
+
+/// One allowed craft class on the rules page.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardRestriction {
+    /// `Team_Logos/Icon_Ship_{Combat,Agility,Racer}_1col`.
+    pub icon: String,
+    /// `FE_SHIP_COMBAT_ONLY` and its siblings, resolved.
+    pub label: String,
+}
+
+/// The words of page kind `1`, resolved once by the caller.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardTabs {
+    /// `FE_PERSONAL`, `FE_FRIENDS`, `FE_GLOBAL`.
+    pub tabs: [String; 3],
+    /// `FE_CURRENT_BEST`.
+    pub current_best: String,
 }
 
 /// Where the card is: which page it shows.
@@ -91,8 +137,10 @@ pub struct CardState {
 enum Page {
     /// Kind `0`: the pass objective (`FUN_81055150`).
     Objective,
-    /// Kind `1`: unread, drawn blank.
-    Unread,
+    /// Kind `1`: the leaderboard tabs (`FUN_810540c4`).
+    Leaderboard,
+    /// Kind `4`: the event's rules (`FUN_810535fe`).
+    Rules,
 }
 
 /// The card's own textures, spelled the way every front-end `Src=` is.
@@ -111,6 +159,9 @@ pub const CARD_TEXTURES: &[&str] = &[
     r"Data\FE\NewImages\speedclass\b_class.gtf",
     r"Data\FE\NewImages\speedclass\a_class.gtf",
     r"Data\FE\NewImages\speedclass\ap_class.gtf",
+    r"Data\FE\NewImages\Team_Logos\Icon_Ship_Combat_1col.gtf",
+    r"Data\FE\NewImages\Team_Logos\Icon_Ship_Agility_1col.gtf",
+    r"Data\FE\NewImages\Team_Logos\Icon_Ship_Racer_1col.gtf",
 ];
 
 const PLAY: &str = CARD_TEXTURES[0];
@@ -164,12 +215,38 @@ impl Frontend {
         self.campaign.card.is_some()
     }
 
+    /// Puts the campaign map's cursor on the event called `name`. `false`
+    /// when there is none. A capture-harness hook (`--until card:N:NAME`).
+    pub fn select_campaign_event(&mut self, name: &str) -> bool {
+        match self
+            .campaign
+            .events
+            .iter()
+            .position(|event| event.name == name)
+        {
+            Some(index) => {
+                self.campaign.selected = index;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Which page the card shows, `None` while it is closed.
+    #[must_use]
+    pub fn event_card_page(&self) -> Option<usize> {
+        self.campaign.card.map(|card| card.page)
+    }
+
     fn card_pages(event: &MapEvent) -> Vec<Page> {
         let mut pages = Vec::new();
         if event.card.has_objective {
             pages.push(Page::Objective);
         }
-        pages.push(Page::Unread);
+        pages.push(Page::Leaderboard);
+        if Self::rules_items(&event.card) > 0 {
+            pages.push(Page::Rules);
+        }
         pages
     }
 
@@ -190,7 +267,17 @@ impl Frontend {
             ));
             return;
         }
-        self.campaign.card = Some(CardState::default());
+        // `CampaignEventCard_BuildPageList` opens the card on the rules page
+        // when the player's current craft is refused (`DAT_816c782c`).
+        let page = if self.card_launch_allowed() {
+            0
+        } else {
+            Self::card_pages(event)
+                .iter()
+                .position(|page| *page == Page::Rules)
+                .unwrap_or(0)
+        };
+        self.campaign.card = Some(CardState { page });
     }
 
     /// Whether the player's current craft may fly the selected event - the
@@ -407,7 +494,9 @@ impl Frontend {
 
         match pages.get(card_state.page) {
             Some(Page::Objective) => self.draw_objective_page(event, out),
-            Some(Page::Unread) | None => {}
+            Some(Page::Leaderboard) => self.draw_leaderboard_page(event, out),
+            Some(Page::Rules) => self.draw_rules_page(event, out),
+            None => {}
         }
 
         if pages.len() > 1 {
@@ -519,6 +608,199 @@ impl Frontend {
             let x = CENTRE_X - (count - 1) as f32 * 9.0 + at as f32 * 18.0;
             let color = if at == page { orange } else { blue };
             self.card_sprite(DOT, [x - 8.0, 405.0, 16.0, 16.0], color, out);
+        }
+    }
+}
+
+/// `FUN_810535fe`'s placement table (`0x8151c9c8`): for `n` items, the
+/// centres of item `0..n`, row `n - 1`. Copied as authored, including the
+/// five-item row that leaves the lower left empty.
+const RULES_LAYOUT: [[(f32, f32); 6]; 6] = [
+    [
+        (682.0, 277.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+    ],
+    [
+        (602.0, 277.0),
+        (762.0, 277.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+    ],
+    [
+        (582.0, 234.0),
+        (682.0, 340.0),
+        (782.0, 234.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+    ],
+    [
+        (602.0, 234.0),
+        (762.0, 234.0),
+        (602.0, 340.0),
+        (762.0, 340.0),
+        (0.0, 0.0),
+        (0.0, 0.0),
+    ],
+    [
+        (562.0, 234.0),
+        (682.0, 234.0),
+        (802.0, 234.0),
+        (682.0, 340.0),
+        (802.0, 340.0),
+        (0.0, 0.0),
+    ],
+    [
+        (562.0, 234.0),
+        (682.0, 234.0),
+        (802.0, 234.0),
+        (562.0, 340.0),
+        (682.0, 340.0),
+        (802.0, 340.0),
+    ],
+];
+
+/// Page kind `1`'s three tabs (`FUN_810540c4`): `x` of each, then the shared
+/// `y`, width and height.
+const TAB_X: [f32; 3] = [471.0, 613.0, 755.0];
+const TAB_RECT: (f32, f32, f32) = (186.0, 138.0, 44.0);
+
+impl Frontend {
+    /// How many icons page kind `4` would draw for `card` - the count
+    /// `CampaignEventCard_BuildPageList` gates the page on. The weapon
+    /// callout (`FUN_810626ce`) is an item in the original and is not read
+    /// here, so an event that only has weapons to say gets no rules page.
+    fn rules_items(card: &EventCard) -> usize {
+        usize::from(card.class_icon.is_some())
+            + usize::from(card.lap_label.is_some())
+            + usize::from(card.forced_craft.is_some())
+            + card.allowed_classes.len()
+    }
+
+    /// Page kind `1`, as the original draws it with no network: the Personal
+    /// tab selected (`FUN_81258f8e` is `0`, so `DAT_816c7840 = 1`), Friends
+    /// and Global greyed out. The record row (the player's best result and
+    /// XP, `FUN_8106ed02`) is not drawn: this build keeps no per-event
+    /// result beyond the medal.
+    pub(super) fn draw_leaderboard_page(&self, event: &MapEvent, out: &mut Vec<Draw>) {
+        let blue = self.global_colour("Blue2048");
+        let orange = self.global_colour("Orange2048");
+        let grey = self.global_colour("Grey2048");
+        let white = self.global_colour("White2048");
+        let dim = [white[0], white[1], white[2], 0.25];
+        let tabs = &event.card.tabs;
+        for (index, x) in TAB_X.into_iter().enumerate() {
+            let (fill, ink) = match index {
+                0 => (orange, white),
+                _ => (grey, dim),
+            };
+            out.push(Draw::Fill {
+                rect: [x, TAB_RECT.0, TAB_RECT.1, TAB_RECT.2],
+                color: fill,
+            });
+            out.push(Self::card_text(
+                &tabs.tabs[index],
+                x + TAB_RECT.1 * 0.5,
+                TAB_RECT.0 + 13.0,
+                0.7,
+                ink,
+                None,
+            ));
+        }
+        out.push(Draw::Fill {
+            rect: [471.0, 234.0, 422.0, 37.0],
+            color: grey,
+        });
+        out.push(Self::card_text(
+            &tabs.current_best,
+            CENTRE_X,
+            243.0,
+            0.7,
+            white,
+            None,
+        ));
+        if matches!(
+            self.campaign.state_of(self.campaign.selected),
+            ProgressState::Open | ProgressState::Locked
+        ) {
+            out.push(Self::card_text("--", CENTRE_X, 332.0, 1.0, blue, None));
+        }
+    }
+
+    /// Page kind `4` (`FUN_810535fe`): what the event asks of the player,
+    /// as icons with a caption each - class, laps, a forced craft, then the
+    /// craft classes it still allows. The weapon callout is not drawn.
+    pub(super) fn draw_rules_page(&self, event: &MapEvent, out: &mut Vec<Draw>) {
+        let blue = self.global_colour("Blue2048");
+        let card = &event.card;
+        let n = Self::rules_items(card).clamp(1, 6);
+        let row = RULES_LAYOUT[n - 1];
+        let mut slot = 0;
+        let mut place = || {
+            let at = row[slot.min(5)];
+            slot += 1;
+            at
+        };
+        let caption = |text: &str, at: (f32, f32), out: &mut Vec<Draw>| {
+            out.push(Self::card_text(
+                text,
+                at.0,
+                at.1 + 38.0,
+                0.6,
+                blue,
+                Some(140.0),
+            ));
+        };
+        if let Some(class) = card.class_icon.as_deref() {
+            let at = place();
+            self.card_sprite(class, [at.0 - 32.0, at.1 - 32.0, 64.0, 64.0], blue, out);
+            if let Some(label) = &card.class_label {
+                caption(label, at, out);
+            }
+        }
+        if let (Some(laps), Some(label)) = (card.laps, &card.lap_label) {
+            let at = place();
+            self.card_sprite(NUM_LAPS, [at.0 - 32.0, at.1 - 32.0, 64.0, 64.0], blue, out);
+            out.push(Self::card_text(
+                &laps.to_string(),
+                at.0,
+                at.1 - 10.0,
+                0.6,
+                blue,
+                None,
+            ));
+            caption(label, at, out);
+        }
+        if let Some(craft) = &card.forced_craft {
+            let at = place();
+            // `FUN_81061808` draws the team logo and the class icon as two 64
+            // unit quads in white (`0xffffffff`). **Chosen, not measured**:
+            // side by side around the item's centre - the quad offsets are
+            // in vector-register arithmetic that was not decoded.
+            let white = [1.0, 1.0, 1.0, 1.0];
+            if let Some(logo) = craft.logo.as_deref() {
+                self.card_sprite(logo, [at.0 - 64.0, at.1 - 32.0, 64.0, 64.0], white, out);
+            }
+            if let Some(icon) = craft.type_icon.as_deref() {
+                self.card_sprite(icon, [at.0, at.1 - 32.0, 64.0, 64.0], white, out);
+            }
+            caption(&craft.caption, at, out);
+        }
+        for allowed in &card.allowed_classes {
+            let at = place();
+            self.card_sprite(
+                &allowed.icon,
+                [at.0 - 32.0, at.1 - 32.0, 64.0, 64.0],
+                blue,
+                out,
+            );
+            caption(&allowed.label, at, out);
         }
     }
 }

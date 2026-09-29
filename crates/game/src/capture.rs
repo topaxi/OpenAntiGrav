@@ -17,6 +17,7 @@ use crate::render::{Renderer, VideoFormat};
 use oag_ui::frontend::Draw;
 
 mod campaign_page;
+mod card;
 mod endrace_page;
 mod loading;
 mod menu_page;
@@ -285,6 +286,7 @@ pub fn run(
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
     // somewhere the capture then ignores.
+    let mut card = card::CardTarget::parse(options.until.as_deref());
     while options.screen.is_none() && options.menu_page.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
@@ -293,10 +295,13 @@ pub fn run(
             break;
         }
 
-        let reached = options
-            .until
-            .as_deref()
-            .is_some_and(|name| frontend.machine().is(name));
+        let reached = match &card {
+            Some(card) => card.reached(&frontend),
+            None => options
+                .until
+                .as_deref()
+                .is_some_and(|name| frontend.machine().is(name)),
+        };
         if reached && ticks >= options.ticks {
             break;
         }
@@ -313,11 +318,11 @@ pub fn run(
             break;
         }
 
-        let pulse = if ticks.is_multiple_of(2) {
-            options.pressed
-        } else {
-            0
+        let pressed = match card.as_mut() {
+            Some(card) => card.step(&mut frontend, options.pressed)?,
+            None => options.pressed,
         };
+        let pulse = if ticks.is_multiple_of(2) { pressed } else { 0 };
         input.begin_frame(options.held | pulse);
         // The playhead is read **before** the mixer is advanced, so it is where
         // the sound had got to at the end of the previous tick - the last

@@ -80,14 +80,18 @@ pub(super) fn map_events(
             .map(|class| class.as_str());
         let mode = oag_2048::campaign::engine_mode(event).unwrap_or("unknown mode");
         // The disc's own four mode icons - see `EventIcon`'s own doc
-        // comment. Mirrors `oag_2048::campaign::engine_mode`'s own
-        // `laps == Some(0)` Speed Lap split rather than re-deriving it, so
-        // the two never disagree about which events are Speed Lap.
-        let kind = match event.kind {
-            oag_2048::campaign::EventKind::Zone => EventIcon::Zone,
-            oag_2048::campaign::EventKind::Elimination => EventIcon::Elimination,
-            oag_2048::campaign::EventKind::Race if event.laps == Some(0) => EventIcon::SpeedLap,
-            oag_2048::campaign::EventKind::Race => EventIcon::Race,
+        // comment. Chosen by the event's class the way the executable does:
+        // each `GameMode_*` constructor writes its own icon ordinal
+        // (`FUN_81061040`), `GameMode_SpeedLapRace` `3` - the stopwatch. That
+        // takes all 53 of its events, the 13 timed races (`"2048 - Event 3"`,
+        // laps and a `BEAT M:SS` pass) as well as the 40 with `laps == 0`.
+        let kind = match event.typedef_id {
+            oag_tables::mjolnir::campaign::typedef::RACE_A => EventIcon::SpeedLap,
+            _ => match event.kind {
+                oag_2048::campaign::EventKind::Zone => EventIcon::Zone,
+                oag_2048::campaign::EventKind::Elimination => EventIcon::Elimination,
+                oag_2048::campaign::EventKind::Race => EventIcon::Race,
+            },
         };
         let mut detail = format!("{circuit} / {}", mode.replace('_', " "));
         if let Some(class) = class {
@@ -182,14 +186,37 @@ const CARD_TRACKS: [&str; 10] = [
     "altima",
 ];
 
-/// `FUN_812b671a`'s ordinal-to-wording table, for the ordinals the campaign
-/// authors and whose wording is recovered: `FINISH`, `POSITION` and `KILLS`.
-/// `BEAT_VALUE` (`2`) is left unworded on purpose - its text is a per-mode
-/// override of the event or `FE_SCORE_POINTS`, and the disc's table has no
-/// such entry (`docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`).
-fn objective_text(strings: &StringTable, objective_type: i64, target: i64) -> Option<String> {
+/// `GameModeObjective_FormatText` (`FUN_812b671a`)'s ordinal-to-wording table
+/// plus the per-mode override it offers first (`vtable+0x6c`; eight
+/// `GameMode_*` vtables share the slot). The override matters for
+/// `BEAT_VALUE` (`2`) only. Of the eight, `GameMode_ZoneRace`'s (mode icon
+/// ordinal `0`) is `FUN_812c4a2a` (`"%s : %d"` over `FE_ZONE_TARGET`),
+/// `GameMode_SpeedLapRace`'s (ordinal `3`) is `FUN_812c1011`
+/// (`MP-Objective_Beat_1` over the target as `M:SS`, `FUN_8114f252`), and the
+/// other six keep the base class's `return 0` (`0x813ea238`), so their
+/// `BEAT_VALUE` falls through to `FE_SCORE_POINTS` (`SCORE %d POINTS`) -
+/// Elimination (ordinal `1`) among them. The class of an event is its
+/// typedef, not its [`EventKind`], which merges the two race typedefs.
+fn objective_text(
+    strings: &StringTable,
+    typedef_id: i64,
+    objective_type: i64,
+    target: i64,
+) -> Option<String> {
+    use oag_tables::mjolnir::campaign::typedef;
+    if objective_type == 2 {
+        if typedef_id == typedef::ZONE {
+            let head = strings.get("FE_ZONE_TARGET")?;
+            return Some(format!("{head} : {target}"));
+        }
+        if typedef_id == typedef::RACE_A {
+            let beat = strings.get("MP-Objective_Beat_1")?;
+            return Some(beat.replace("%s", &centiseconds_as_clock(target)));
+        }
+    }
     let id = match (objective_type, target) {
         (1, _) => "SP_Objective_Finish",
+        (2, _) => "FE_SCORE_POINTS",
         (4, 1) => "ER_FINISH_1ST",
         (4, 2) => "ER_FINISH_2ND",
         (4, 3) => "ER_FINISH_3RD",
@@ -199,6 +226,56 @@ fn objective_text(strings: &StringTable, objective_type: i64, target: i64) -> Op
     };
     let text = strings.get(id)?;
     Some(text.replace("%d", &target.to_string()))
+}
+
+/// `FUN_8114f252`: hundredths of a second as `M:SS`, saturating at `9:59`,
+/// with `0xffff` (the "no time" sentinel) reading as zero.
+fn centiseconds_as_clock(centiseconds: i64) -> String {
+    let centiseconds = if centiseconds == 0xffff {
+        0
+    } else {
+        centiseconds.max(0)
+    };
+    let seconds = centiseconds / 100;
+    let (minutes, seconds) = if seconds / 60 > 9 {
+        (9, 59)
+    } else {
+        (seconds / 60, seconds % 60)
+    };
+    format!("{minutes}:{seconds:02}")
+}
+
+/// `FUN_8105dcb8` loads one `Team_Logos` texture per native team; `FUN_81061808`
+/// picks it by the team's own string. Piranha's file is spelt `Pirhana` on the
+/// disc, and AG Systems' `AG-SYS`.
+fn team_logo(team: &str) -> Option<&'static str> {
+    Some(match team {
+        "Feisar2048" => r"Data\FE\NewImages\Team_Logos\Icon_Team_Feisar.gtf",
+        "AG_Systems2048" => r"Data\FE\NewImages\Team_Logos\Icon_Team_AG-SYS.gtf",
+        "Qirex2048" => r"Data\FE\NewImages\Team_Logos\Icon_Team_Qirex.gtf",
+        "Auricom2048" => r"Data\FE\NewImages\Team_Logos\Icon_Team_Auricom.gtf",
+        "Piranha2048" => r"Data\FE\NewImages\Team_Logos\Icon_Team_Pirhana.gtf",
+        _ => return None,
+    })
+}
+
+/// `FUN_81061808`'s class icon for a `(team, variant)` id: variants `1`-`3`
+/// are combat, agility and speed (`Icon_Ship_Combat`, `_Agility`, `_Racer`),
+/// `4` is the prototype, whose icon depends on which class the team's
+/// prototype is (AG Systems agility, Qirex and Auricom combat, the rest
+/// speed).
+fn ship_class_icon(team: &str, variant: &str) -> Option<&'static str> {
+    Some(match (variant, team) {
+        ("1", _) => r"Data\FE\NewImages\Team_Logos\Icon_Ship_Combat.gtf",
+        ("2", _) => r"Data\FE\NewImages\Team_Logos\Icon_Ship_Agility.gtf",
+        ("3", _) => r"Data\FE\NewImages\Team_Logos\Icon_Ship_Racer.gtf",
+        ("4", "AG_Systems2048") => r"Data\FE\NewImages\Team_Logos\Icon_Ship_Agility_proto.gtf",
+        ("4", "Qirex2048" | "Auricom2048") => {
+            r"Data\FE\NewImages\Team_Logos\Icon_Ship_Combat_proto.gtf"
+        }
+        ("4", _) => r"Data\FE\NewImages\Team_Logos\Icon_Ship_Racer_proto.gtf",
+        _ => return None,
+    })
 }
 
 /// What one event's card says, off the same instances the map already read.
@@ -222,8 +299,11 @@ fn event_card(
             .into_iter()
             .flat_map(char::to_uppercase)
             .collect();
+        // `FUN_81060744`'s `isZone` (`event+0x190 == 0`, the Zone class) picks
+        // the `Zone<Name>` file of the same circuit.
+        let zone = if kind == EventIcon::Zone { "Zone" } else { "" };
         format!(
-            r"Data\FE\NewImages\trackscreens\{head}{}.gtf",
+            r"Data\FE\NewImages\trackscreens\{zone}{head}{}.gtf",
             chars.as_str()
         )
     });
@@ -242,13 +322,82 @@ fn event_card(
                 .nth(class)
         })
         .map(str::to_string);
+    // `FUN_812b021a`: the line under the title, by the same ordinal. The
+    // timed class says `SPEED LAP` when `M_BUTTONSHAPE` is `5` or `6` and
+    // `TIME TRIAL` otherwise; Elimination's own word is `FE_GAMEMODE_ELIM`
+    // (`COMBAT`).
+    let shape = doc
+        .instance(event.instance_id)
+        .and_then(|instance| instance.field("M_BUTTONSHAPE"))
+        .and_then(oag_2048::campaign::Field::int);
     let kind_id = match kind {
         EventIcon::Race => "IG_HUD_RACE",
-        EventIcon::SpeedLap => "Speed Lap",
+        EventIcon::SpeedLap if matches!(shape, Some(5 | 6)) => "Speed Lap",
+        EventIcon::SpeedLap => "Time Trial",
         EventIcon::Zone => "Zone",
-        EventIcon::Elimination => "ER_ELIM",
+        EventIcon::Elimination => "FE_GAMEMODE_ELIM",
     };
+    let instance = doc.instance(event.instance_id);
+    let class_label = event.speed_class.and_then(|class| {
+        // `FUN_812b26cc`: ordinals `0` and `1` both read `Speed_Class_C_0`.
+        let id = match class {
+            0 | 1 => "Speed_Class_C_0",
+            2 => "Speed_Class_B_0",
+            3 => "Speed_Class_A_0",
+            4 => "Speed_Class_A_Plus_0",
+            _ => return None,
+        };
+        strings.get(id).map(str::to_string)
+    });
+    let lap_label = event.laps.filter(|&laps| laps > 0).and_then(|laps| {
+        let id = if laps == 1 {
+            "Callout_Lap"
+        } else {
+            "Callout_Laps"
+        };
+        Some(strings.get(id)?.replace("%d", &laps.to_string()))
+    });
+    let forced_craft = instance
+        .and_then(|instance| oag_2048::campaign::craft::forced_craft(doc, instance))
+        .map(|id| {
+            let (team, variant) = id.split_once(['\\', '/']).unwrap_or((&id, ""));
+            let team = team.to_string();
+            oag_ui::frontend::CardCraft {
+                logo: team_logo(&team).map(str::to_string),
+                type_icon: ship_class_icon(&team, variant).map(str::to_string),
+                caption: strings.get(&team).map(str::to_string).unwrap_or(team),
+            }
+        });
+    // `FUN_810535fe` draws a glyph for each class `GameModeBase_IsShipTypeAllowed`
+    // still allows, but only when any of the four prevent flags is set.
+    let restriction = instance.map(oag_2048::campaign::craft::restriction);
+    let allowed_classes = match restriction {
+        Some(flags) if flags.iter().any(|&flag| flag) => [
+            ("Icon_Ship_Combat_1col", "FE_SHIP_COMBAT_ONLY", flags[0]),
+            ("Icon_Ship_Agility_1col", "FE_SHIP_AGILITY_ONLY", flags[1]),
+            ("Icon_Ship_Racer_1col", "FE_SHIP_SPEED_ONLY", flags[2]),
+        ]
+        .into_iter()
+        .filter(|(_, _, prevented)| !prevented)
+        .filter_map(|(icon, id, _)| {
+            Some(oag_ui::frontend::CardRestriction {
+                icon: format!(r"Data\FE\NewImages\Team_Logos\{icon}.gtf"),
+                label: strings.get(id)?.to_string(),
+            })
+        })
+        .collect(),
+        _ => Vec::new(),
+    };
+    let word = |id: &str| strings.get(id).map(str::to_string).unwrap_or_default();
     EventCard {
+        class_label,
+        lap_label,
+        forced_craft,
+        allowed_classes,
+        tabs: oag_ui::frontend::CardTabs {
+            tabs: [word("FE_PERSONAL"), word("FE_FRIENDS"), word("FE_GLOBAL")],
+            current_best: word("FE_CURRENT_BEST"),
+        },
         title: track.map(|track| track.display_name).unwrap_or_default(),
         kind_label: strings.get(kind_id).map(str::to_string),
         pass_label: strings.get("FE_PASS").map(str::to_string),
@@ -256,6 +405,7 @@ fn event_card(
         objective: objective.and_then(|objective| {
             objective_text(
                 strings,
+                event.typedef_id,
                 objective.objective_type?,
                 objective.target.unwrap_or(0),
             )
@@ -271,7 +421,13 @@ fn event_card(
 pub(super) fn card_textures(events: &[MapEvent]) -> Vec<&str> {
     let mut names: Vec<&str> = oag_ui::frontend::CARD_TEXTURES.to_vec();
     for card in events.iter().map(|event| &event.card) {
-        for name in [&card.photo, &card.emblem].into_iter().flatten() {
+        let craft = card.forced_craft.as_ref();
+        let logo = craft.map(|c| &c.logo).unwrap_or(&None);
+        let icon = craft.map(|c| &c.type_icon).unwrap_or(&None);
+        for name in [&card.photo, &card.emblem, logo, icon]
+            .into_iter()
+            .flatten()
+        {
             if !names.contains(&name.as_str()) {
                 names.push(name);
             }

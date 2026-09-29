@@ -72,6 +72,26 @@ fn every_photo_emblem_and_class_glyph_a_card_names_is_in_the_sprite_sheet() {
                 event.name
             );
         }
+        for name in event
+            .card
+            .forced_craft
+            .iter()
+            .flat_map(|craft| [&craft.logo, &craft.type_icon])
+            .flatten()
+            .chain(
+                event
+                    .card
+                    .allowed_classes
+                    .iter()
+                    .map(|allowed| &allowed.icon),
+            )
+        {
+            assert!(
+                shell.sprites.get(name).is_some(),
+                "{}: rules page names {name}, not in the sheet",
+                event.name
+            );
+        }
         photos += usize::from(event.card.photo.is_some());
     }
     assert!(
@@ -149,4 +169,91 @@ fn the_first_events_card_is_the_reference_frames_and_draws_its_photo_and_buttons
         )
         .count();
     assert_eq!(buttons, 3, "Change craft, Back, Launch");
+}
+
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn every_event_that_authors_a_pass_objective_words_it() {
+    let Some(source) = source() else { return };
+    let (shell, _archives, _title) = boot::load_shell(&options(&source)).expect("the shell");
+    let mut worded = 0;
+    for event in &shell.campaign_events {
+        if event.card.has_objective {
+            let text = event.card.objective.as_deref();
+            assert!(
+                text.is_some_and(|text| !text.contains('%')),
+                "{}: pass objective is {text:?}",
+                event.name
+            );
+            worded += 1;
+        }
+    }
+    assert!(worded >= 60, "got {worded} worded objectives");
+    let by = |name: &str| {
+        shell
+            .campaign_events
+            .iter()
+            .find(|event| event.name == name)
+            .and_then(|event| event.card.objective.clone())
+    };
+    // `SpeedLapRace`'s override: the target (13000 centiseconds) as M:SS.
+    assert_eq!(by("2048 - Event 3").as_deref(), Some("BEAT 2:10"));
+    // `ZoneRace`'s override.
+    assert_eq!(by("2048 - Event 3-2").as_deref(), Some("ZONE TARGET : 15"));
+    // Every other class falls through to `FE_SCORE_POINTS`.
+    assert!(
+        shell
+            .campaign_events
+            .iter()
+            .filter_map(|event| event.card.objective.as_deref())
+            .any(|text| text.starts_with("SCORE ") && text.ends_with(" POINTS")),
+        "an Elimination BEAT_VALUE event words its target as points"
+    );
+}
+
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_kind_line_and_photo_follow_the_class_the_way_the_executable_does() {
+    let Some(source) = source() else { return };
+    let (shell, _archives, _title) = boot::load_shell(&options(&source)).expect("the shell");
+    let find = |name: &str| {
+        shell
+            .campaign_events
+            .iter()
+            .find(|event| event.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+    };
+    // `GameMode_SpeedLapRace` with a lap count and a `BEAT M:SS` pass: the
+    // stopwatch icon and `TIME TRIAL` (`FUN_812b021a`, `M_BUTTONSHAPE` 0).
+    let timed = find("2048 - Event 3");
+    assert_eq!(timed.kind, frontend::EventIcon::SpeedLap);
+    assert_eq!(timed.card.kind_label.as_deref(), Some("TIME TRIAL"));
+    assert_eq!(
+        find("2048 - Event 1").card.kind_label.as_deref(),
+        Some("RACE")
+    );
+    let zone = find("2048 - Event 3-2");
+    assert_eq!(zone.card.kind_label.as_deref(), Some("ZONE"));
+    assert!(
+        zone.card
+            .photo
+            .as_deref()
+            .is_some_and(|photo| photo.ends_with(r"trackscreens\ZoneTower.gtf")),
+        "{:?}",
+        zone.card.photo
+    );
+    assert!(
+        shell
+            .campaign_events
+            .iter()
+            .any(|event| event.card.kind_label.as_deref() == Some("SPEED LAP")),
+        "the 40 shape-5/6 events"
+    );
+    assert!(
+        shell
+            .campaign_events
+            .iter()
+            .any(|event| event.card.kind_label.as_deref() == Some("COMBAT")),
+        "Elimination's own word"
+    );
 }
