@@ -140,7 +140,7 @@ below), coasting, 200 ticks:
 | --- | --- | --- | --- | --- |
 | `16_Track` idx 200, 3.6 into the floor | +1.81 on the first tick (two corners), then climbs; rest y -39.60 | falls through | +3.54 in one tick, rest -39.61 | tick for tick (first tick -41.26 vs -41.28, tick 30 -39.17 vs -39.16) |
 | `03_Track` idx 200, 3.6 into the floor | pass 1 lifts +0.757 (predicted 0.752), probe escapes +1.82, rest y 4.67 | falls through | +3.75 in one tick, rest 4.66 | rest 4.663; the gate alone (no pass 1) falls through |
-| `16_Track` idx 200, on its flank on the floor | **stays on its flank** and slides; tick 199 (323.57, -47.49, -140.96) | - | tick 199 (323.63, -47.50, -140.95) | tick 199 (323.42, -47.51, -141.05) |
+| `16_Track` idx 200, on its flank on the floor | **stays on its flank** and slides; tick 199 (323.57, -47.49, -140.96) | 1.6 lower than the original by tick 60, tick 199 (323.31, -45.15, -143.92) | tick 199 (323.63, -47.50, -140.95) | tick 199 (323.42, -47.51, -141.05) |
 | unsunk controls, both circuits | hovers still | hovers | hovers | hovers |
 
 **Nothing of it is merged.** (1) alone is on branch `sunk-craft-floors`; (2) and
