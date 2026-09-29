@@ -54,7 +54,16 @@ fn banks(image: &Path, zone: bool) -> Banks {
         .expect("opening the source");
     let sounds = opened.title.race.sounds;
     let mut archives = opened.archives;
-    Banks::load(&mut archives, sounds, zone)
+    Banks::load(
+        &mut archives,
+        sounds,
+        zone,
+        opened
+            .title
+            .race
+            .zone_announcer
+            .map_or(oag_title::SequenceTick::Unknown, |z| z.tick),
+    )
 }
 
 /// Plays one sound through a real mixer and reports what came out.

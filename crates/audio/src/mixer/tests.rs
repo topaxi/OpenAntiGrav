@@ -670,3 +670,34 @@ fn a_cue_that_ends_quietly_is_unchanged_by_the_fade() {
     assert_eq!(mixer.active_voices(), 0);
     assert!(out.iter().all(|s| *s == 0.0));
 }
+
+#[test]
+fn a_delayed_voice_is_silent_until_its_delay_runs_out_then_plays_from_its_start() {
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 2], 1, 8).unwrap());
+    let id = mixer.play(Play::once(sound, Bus::Sfx)).unwrap();
+    mixer.delay_start(id, 0.5);
+    assert!(
+        mixer.is_playing(id),
+        "a delayed voice already holds its slot"
+    );
+    let mut out = vec![0.0; 6 * CHANNELS];
+    mixer.render(&mut out);
+    let frames: Vec<f32> = out.chunks(CHANNELS).map(|f| f[0]).collect();
+    assert!(frames[..4].iter().all(|&x| x == 0.0), "{frames:?}");
+    assert!(frames[4] > 0.9 && frames[5] > 0.9, "{frames:?}");
+}
+
+#[test]
+fn a_delay_carries_across_render_calls() {
+    let mut mixer = Mixer::new(8);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 2], 1, 8).unwrap());
+    let id = mixer.play(Play::once(sound, Bus::Sfx)).unwrap();
+    mixer.delay_start(id, 0.5);
+    let mut out = vec![0.0; 3 * CHANNELS];
+    mixer.render(&mut out);
+    assert!(out.iter().all(|&x| x == 0.0));
+    mixer.render(&mut out);
+    assert_eq!(out[0], 0.0, "one frame of delay was left");
+    assert!(out[CHANNELS] > 0.9);
+}

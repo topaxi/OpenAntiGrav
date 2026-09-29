@@ -290,6 +290,9 @@ struct Voice {
     /// Output frames left of the fade a stopped voice goes out on, or `None`
     /// while it is sounding normally. See [`RELEASE_FRAMES`].
     release: Option<u32>,
+    /// Output frames of silence left before the voice starts. See
+    /// [`Mixer::delay_start`].
+    delay: u32,
 }
 
 impl Voice {
@@ -495,11 +498,25 @@ impl Mixer {
             looping: play.looping,
             generation,
             release: None,
+            delay: 0,
         };
         Some(VoiceId {
             slot: slot as u16,
             generation,
         })
+    }
+
+    /// Holds a just-started voice silent for `seconds` before it begins.
+    ///
+    /// For a cue whose command list starts a grain some master ticks after the
+    /// cue itself: the voice exists (and counts against the pool) from now, and
+    /// its playhead does not move until the delay has run out. Converted to
+    /// whole output frames, rounded to nearest. A stale handle does nothing.
+    pub fn delay_start(&mut self, id: VoiceId, seconds: f64) {
+        let frames = (seconds.max(0.0) * f64::from(self.sample_rate)).round();
+        if let Some(voice) = self.voice_mut(id) {
+            voice.delay = frames.min(f64::from(u32::MAX)) as u32;
+        }
     }
 
     /// Stops a voice. A stale handle does nothing.
@@ -713,7 +730,12 @@ impl Mixer {
             // ...and never more than a quarter of the source, so that a cue
             // shorter than the fade is shortened rather than swallowed.
             let closing = (f64::from(RELEASE_FRAMES) * step.abs()).min(frames as f64 / 4.0);
+            let mut delay = voice.delay;
             for chunk in out.as_chunks_mut::<CHANNELS>().0 {
+                if delay > 0 {
+                    delay -= 1;
+                    continue;
+                }
                 if frames == 0 {
                     finished = true;
                     break;
@@ -782,6 +804,7 @@ impl Mixer {
                 *voice = Voice::default();
             } else {
                 voice.release = release;
+                voice.delay = delay;
             }
         }
 

@@ -21,7 +21,13 @@ pub(super) fn banks_and_announcers(
     // Adding a cue is adding its name and its trigger, never a loader. Zone
     // races read `ship_zone.bnk` instead of `ship.bnk` - a different bank
     // with the same cue names.
-    let sounds = crate::audio::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone);
+    let sounds = crate::audio::sfx::Banks::load(
+        archives,
+        race.sounds,
+        mode == Mode::Zone,
+        race.zone_announcer
+            .map_or(oag_title::SequenceTick::Unknown, |z| z.tick),
+    );
     report.extend(sounds.report.iter().cloned());
 
     // Loaded regardless of mode, on the same terms `sounds` is: an announcer
