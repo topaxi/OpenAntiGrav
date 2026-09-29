@@ -78,6 +78,9 @@ pub fn targets(
     skin: &Skin,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Vec<Target> {
+    if let Some(extra) = layout.hd.as_deref() {
+        return hd_targets(picker, layout, extra);
+    }
     let screen = &layout.screen;
     let mut out = Vec::new();
     let variants = picker.variants().len();
@@ -116,6 +119,44 @@ pub fn targets(
         what: What::Confirm,
         rect: layout.panel,
     });
+    out.push(Target {
+        what: What::Confirm,
+        rect: layout.preview,
+    });
+    out
+}
+
+/// Wipeout HD/Fury's `Team Selection` targets, off its own `Bracket` rects,
+/// since the screen authors no arrows to click. **Chosen, not measured**, like
+/// every pointer target on a console screen: the `CHOOSE TEAM` frame's left
+/// half steps to the previous team and its right half to the next, the
+/// way left/right do on the pad there; the `NAVIGATE TEAM` frame's top half
+/// steps the livery back and its bottom half forward, as up/down do; the
+/// `SHIP MODEL` frame confirms.
+fn hd_targets(picker: &Picker, layout: &Layout, extra: &super::hd::TeamScreen) -> Vec<Target> {
+    let mut out = Vec::new();
+    let [x, y, w, h] = layout.panel;
+    out.push(Target {
+        what: What::Previous,
+        rect: [x, y, w / 2.0, h],
+    });
+    out.push(Target {
+        what: What::Next,
+        rect: [x + w / 2.0, y, w / 2.0, h],
+    });
+    if picker.variants().len() > 1
+        && let Some(grid) = extra.brackets.get(1).filter(|bracket| !bracket.middle)
+    {
+        let [x, y, w, h] = grid.rect;
+        out.push(Target {
+            what: What::PreviousVariant,
+            rect: [x, y, w, h / 2.0],
+        });
+        out.push(Target {
+            what: What::NextVariant,
+            rect: [x, y + h / 2.0, w, h / 2.0],
+        });
+    }
     out.push(Target {
         what: What::Confirm,
         rect: layout.preview,

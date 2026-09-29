@@ -409,11 +409,17 @@ pub struct FrontEnd {
     /// path on both discs (`docs/formats/race-setup.md`) - Pure's own
     /// confirmed 2026-09-10, not assumed from Pulse's, despite Pure
     /// otherwise splitting its race box into a chain of screens the rest of
-    /// which are not read. HD authors
-    /// `track_selection_definition.xml`/`team_selection_definition.xml` in a
-    /// dialect this build's picker does not yet read - `None`, a gap rather
-    /// than a measurement.
+    /// which are not read. HD authors its two in separate files, in its own
+    /// dialect - `None` here, see [`Self::team_select`].
     pub race_box: Option<&'static str>,
+    /// A standalone `Team Selection` definition, for a title that authors
+    /// its ship screen in a file of its own rather than in [`Self::race_box`]:
+    /// Wipeout HD/Fury's `Team_Selection_Definition.xml`, which its live
+    /// skin includes and its `Cell Selection` redirects to. `None` on every
+    /// other title. **Only the ship screen**: a title naming this and no
+    /// race box keeps its RACE page's own TRACK row, since nothing reads a
+    /// track screen for it.
+    pub team_select: Option<&'static str>,
     /// Whether this title's race-setup screens preview an entry with a
     /// rendered mesh.
     ///

@@ -364,11 +364,15 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     touch: None,
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
-    // HD authors `track_selection_definition.xml` and
-    // `team_selection_definition.xml` as `<Model>` widgets in its own
-    // dialect, which `oag_ui::picker::Layout::read` does not yet read.
+    // HD authors its track and ship screens in two files of their own, in
+    // its own dialect. Only the ship screen is read - see `team_select`.
     race_box: None,
-    // Inert: `race_box` is `None`, so no picker opens to read this.
+    team_select: Some(names::TEAM_SELECTION_DEFINITION),
+    // `false`, and not because HD has no 3-D craft on this screen - it
+    // does (`ShipModel`). The one preview path this build has reads
+    // `<team>\ship_FE.vex`, which HD's own per-team `screen.xml` names and
+    // no HD archive carries; the race hull is a `.vex`/`.rcsmodel` pair the
+    // preview does not load yet. See `oag_ui::picker::hd`.
     preview_meshes: false,
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence
@@ -489,6 +493,15 @@ pub mod names {
     /// than a measurement of what a PS3 loads. All six agree on every layout
     /// global; they do not agree on the screen list. See `hd-frontend.md`.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+
+    /// HD's own `Team Selection` - see `oag_ui::picker::hd` for the screen.
+    /// **`DATA06` alone carries it**, and `DATA00`'s live [`FRONTEND_ROOT`]
+    /// includes it by `SrcRel="Team_Selection_Definition.xml"` - so there is
+    /// no precedence question for this file, unlike most of HD's front end.
+    /// The older `Selection_Definition.xml` on `DATA02`/`03`/`05`, which
+    /// also authors a `Team Selection`, is included by no live skin.
+    pub const TEAM_SELECTION_DEFINITION: &str =
+        r"Data\Plugins\Frontend\Gui\Team_Selection_Definition.xml";
 
     /// The three screens a race ends on - `EndRace Results`/`EndRace
     /// Rewards`/`EndRace Menu` - HD's own copy, at a named plugin path like

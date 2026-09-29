@@ -193,9 +193,18 @@ pub fn draw(block: &Block, art: &BlockArt, scale: (f32, f32), out: &mut Vec<Draw
     if block.width <= 0.0 || block.height <= 0.0 {
         return;
     }
-    let (sx, sy) = scale;
-    let color = block.color;
+    draw_fill(block, art, scale, out);
+    draw_border(block, art, scale, out);
+}
 
+/// [`draw`]'s two fill passes alone, with no border - for a caller that
+/// composes one block's inside out of more than one colour, as HD's `Team
+/// Selection` stat bars do (`crate::picker::hd`).
+pub fn draw_fill(block: &Block, art: &BlockArt, scale: (f32, f32), out: &mut Vec<Draw>) {
+    if block.width <= 0.0 || block.height <= 0.0 {
+        return;
+    }
+    let color = block.color;
     // Pass one: the swatch's own alpha, whichever style.
     fill(block, art, scale, alpha(color, art.fill_alpha), out);
     // Pass two: the swatch again on Fury, the outline's texel on HD.
@@ -205,6 +214,15 @@ pub fn draw(block: &Block, art: &BlockArt, scale: (f32, f32), out: &mut Vec<Draw
         art.solid_alpha
     };
     fill(block, art, scale, alpha(color, second), out);
+}
+
+/// [`draw`]'s border alone: four corner pieces and four edges.
+pub fn draw_border(block: &Block, art: &BlockArt, scale: (f32, f32), out: &mut Vec<Draw>) {
+    if block.width <= 0.0 || block.height <= 0.0 {
+        return;
+    }
+    let (sx, sy) = scale;
+    let color = block.color;
 
     // The border: four corner pieces and four edges, all cut from the
     // nine-patch and tinted the block's colour. The texture is white, so
@@ -312,6 +330,81 @@ fn fill(block: &Block, art: &BlockArt, scale: (f32, f32), color: [f32; 4], out: 
             rect: [band_x, fill_y, band_w, band_h],
             chamfer: [left_cut, cut],
             color,
+        });
+    }
+}
+
+/// A block's inside in two colours, split at `split` (a drawing-grid `x`):
+/// `block.color` left of it, `right` after it - HD's `Team Selection` stat
+/// bars (`crate::picker::hd`). **The composition is this build's**; each
+/// half is [`fill`]'s own shape and its own two passes, collapsed into the
+/// one alpha those two passes leave over whatever is below
+/// (`1 - (1 - a1)(1 - a2)`), so the two halves can meet without either
+/// being drawn over the other. The left half's top band ends in the landing
+/// a shaped block has, and the right half's band runs from under that
+/// landing's cut to the block's own right end.
+pub fn draw_split_fill(
+    block: &Block,
+    split: f32,
+    right: [f32; 4],
+    art: &BlockArt,
+    out: &mut Vec<Draw>,
+) {
+    let second = if art.fury {
+        art.fill_alpha
+    } else {
+        art.solid_alpha
+    };
+    let coverage = 1.0 - (1.0 - art.fill_alpha) * (1.0 - second);
+    let fill_x = block.x + FILL_INSET;
+    let fill_y = block.y + FILL_INSET;
+    let fill_right = block.x + block.width - FILL_INSET;
+    let body_y = fill_y + BAND_HEIGHT;
+    let body_h = block.height - 2.0 * FILL_INSET - BAND_HEIGHT;
+    let split = split.clamp(fill_x, fill_right);
+    let left = alpha(block.color, coverage);
+    let right = alpha(right, coverage);
+    if body_h > 0.0 {
+        out.push(Draw::Fill {
+            rect: [fill_x, body_y, split - fill_x, body_h],
+            color: left,
+        });
+        out.push(Draw::Fill {
+            rect: [split, body_y, fill_right - split, body_h],
+            color: right,
+        });
+    }
+    let (band_x, left_cut) = if art.fury {
+        (fill_x - BAND_OVERHANG, BAND_HEIGHT)
+    } else {
+        (fill_x, 0.0)
+    };
+    // The left band's landing, capped so it never runs past the block's
+    // own - a full bar is the ordinary shaped block.
+    let landing = (split - LANDING).min(fill_right - LANDING);
+    if landing > band_x {
+        out.push(Draw::ChamferedFill {
+            rect: [band_x, fill_y, landing - band_x, BAND_HEIGHT],
+            chamfer: [left_cut, BAND_HEIGHT],
+            color: left,
+        });
+    }
+    let right_band_x = landing.max(band_x) - BAND_HEIGHT;
+    let right_band_end = if block.landing {
+        fill_right - LANDING
+    } else {
+        fill_right + BAND_OVERHANG
+    };
+    if split < fill_right && right_band_end > right_band_x {
+        out.push(Draw::ChamferedFill {
+            rect: [
+                right_band_x.max(band_x),
+                fill_y,
+                right_band_end - right_band_x.max(band_x),
+                BAND_HEIGHT,
+            ],
+            chamfer: [0.0, BAND_HEIGHT],
+            color: right,
         });
     }
 }

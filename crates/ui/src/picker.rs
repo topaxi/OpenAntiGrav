@@ -33,6 +33,7 @@ use crate::screen::{Fill, Image, Screen, Screens, Text, argb_to_rgba};
 use oag_gameplay::input::{Button, Input};
 
 mod body;
+pub mod hd;
 pub mod pointer;
 pub mod slideshow;
 
@@ -92,9 +93,14 @@ pub enum Details {
     /// A team: its ratings, when the definition authors them, and its
     /// selectable liveries as `(id, label)` pairs - empty for a team that
     /// offers none, which draws no livery row rather than a fixed word.
+    ///
+    /// `stats` is parallel to `variants`: each livery's own ratings, where
+    /// the title authors them per model rather than per team - Wipeout
+    /// HD/Fury's shape, see [`hd::Stats`]. Empty on every other title.
     Ship {
         rating: Option<Rating>,
         variants: Vec<(String, String)>,
+        stats: Vec<Option<hd::Stats>>,
     },
 }
 
@@ -136,6 +142,9 @@ pub struct Picker {
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
     since_selection: f32,
+    /// Whether the entries move left/right and the livery up/down - see
+    /// [`Self::with_entries_across`].
+    across: bool,
 }
 
 impl Picker {
@@ -159,11 +168,24 @@ impl Picker {
             variant: 0,
             seconds: 0.0,
             since_selection: 0.0,
+            across: false,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))
             .unwrap_or(0);
         out
+    }
+
+    /// Swaps the two axes: left/right steps the entry and up/down the
+    /// livery - Wipeout HD/Fury's `Team Selection`, whose `HexSelection`
+    /// grid lays the teams out as columns (the selected one is the
+    /// `SelectedColumnCol` column, centred) and each team's models as rows.
+    /// **Chosen, not measured**: read off the grid's own shape on an RPCS3
+    /// frame; no capture has pressed a direction on that screen.
+    #[must_use]
+    pub fn with_entries_across(mut self) -> Self {
+        self.across = true;
+        self
     }
 
     #[must_use]
@@ -243,16 +265,21 @@ impl Picker {
     /// this build does not have. Cross or Start confirms; Circle backs out.
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
-        if input.take(Button::Down) {
+        let (next, previous, next_variant, previous_variant) = if self.across {
+            (Button::Right, Button::Left, Button::Down, Button::Up)
+        } else {
+            (Button::Down, Button::Up, Button::Right, Button::Left)
+        };
+        if input.take(next) {
             out.extend(self.step_entry(1));
         }
-        if input.take(Button::Up) {
+        if input.take(previous) {
             out.extend(self.step_entry(-1));
         }
-        if input.take(Button::Right) {
+        if input.take(next_variant) {
             out.extend(self.step_variant(1));
         }
-        if input.take(Button::Left) {
+        if input.take(previous_variant) {
             out.extend(self.step_variant(-1));
         }
         if input.take(Button::Cross) || input.take(Button::Start) {
@@ -319,6 +346,10 @@ pub struct Layout {
     /// `[1, 1]` on the PSP, `[4/3, 448/272]` on the PS2. Every number this
     /// module measured off the PSP capture is multiplied by it.
     pub scale: [f32; 2],
+    /// Wipeout HD/Fury's own widgets, on a layout [`hd::read`] built -
+    /// `None` on every layout [`Self::read`] builds. Its presence is what
+    /// sends [`draw_list`] and [`pointer::targets`] down HD's own path.
+    pub hd: Option<Box<hd::TeamScreen>>,
 }
 
 impl Layout {
@@ -451,6 +482,7 @@ impl Layout {
             panel,
             faces,
             scale,
+            hd: None,
         })
     }
 
@@ -502,7 +534,10 @@ pub fn draw_list(
         skin.title_color(frame.ink),
         layout.title.clone(),
     ));
-    layers.body = body::body(picker, layout, skin, sprites, measure);
+    layers.body = match layout.hd.as_deref() {
+        Some(extra) => hd::body(picker, layout, extra, frame, sprites),
+        None => body::body(picker, layout, skin, sprites, measure),
+    };
     layers
 }
 

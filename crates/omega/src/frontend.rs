@@ -161,6 +161,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu_frame: Some(states::FE_SCREEN),
     // See this module's own "What is not here" section.
     race_box: None,
+    team_select: None,
     preview_meshes: false,
     // Not checked this pass - a gap, not a measurement that Omega ships no
     // such screen. Racing is out of this title's scope anyway - see the

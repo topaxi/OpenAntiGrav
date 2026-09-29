@@ -331,6 +331,33 @@ pub struct Team {
     /// `HandlingStats.xml`: these are the *advertised* ratings, not the
     /// physics.
     pub rating: Option<Rating>,
+    /// Every `PI_TeamModel` that authors its own `<FE>` ratings, in file
+    /// order - Wipeout HD/Fury's shape, where the four front-end ratings sit
+    /// on each **model** rather than on the team (`Data\Plugins\Frontend\Definition.xml`
+    /// on `DATA00`: Feisar's `normal` authors `7/8/10/8`, its `concept1`
+    /// `8/8.5/10/8`). Empty on Pulse and Pure, whose `PI_TeamModel`s author
+    /// no `<FE>` and whose ratings are [`Self::rating`]. See [`TeamModel`].
+    pub models: Vec<TeamModel>,
+}
+
+/// One `PI_TeamModel` that authors its own front-end ratings - see
+/// [`Team::models`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TeamModel {
+    /// The declared name, e.g. `normal`, `concept1`, `chrome_c1`.
+    pub name: String,
+    /// The `modellocation` directory, e.g. `Data\Ships\Feisar_c1` - the
+    /// hull this model races with.
+    pub model_location: String,
+    /// The four ratings, in **tenths** of the authored `0..=10` scale - HD
+    /// authors half points (`thrust="8.5"`), and its `Team Selection` prints
+    /// each as three digits (`085`), which is the same number. `None`
+    /// unless all four are there.
+    pub rating_tenths: Option<Rating>,
+    /// Whether the model carries an `<Unlock>` child at all - a model with
+    /// none is available from a fresh profile. What each unlock condition
+    /// means is not read here.
+    pub has_unlock: bool,
 }
 
 /// The disc's own string id for a team's baseline paint - `Classic` on
@@ -467,7 +494,95 @@ fn read_team(node: &Node) -> Option<Team> {
         help_text: values.attr("helpText").map(str::to_string),
         skins: read_skins(node),
         rating: read_rating(node),
+        models: read_models(node),
     })
+}
+
+/// Every `PI_TeamModel` under `team` that authors an `<FE>` - see
+/// [`Team::models`].
+fn read_models(team: &Node) -> Vec<TeamModel> {
+    team.children_named("PI_TeamModel")
+        .filter(|model| model.children_named("FE").next().is_some())
+        .filter_map(|model| {
+            let fe = model.children_named("FE").next()?;
+            let tenths = |attr: &str| {
+                let value = fe.attr(attr)?.trim().parse::<f32>().ok()?;
+                let scaled = (value * 10.0).round();
+                (0.0..=255.0).contains(&scaled).then_some(scaled as u8)
+            };
+            let rating_tenths = (|| {
+                Some(Rating {
+                    speed: tenths("speed")?,
+                    thrust: tenths("thrust")?,
+                    handling: tenths("handling")?,
+                    shield: tenths("shield")?,
+                })
+            })();
+            Some(TeamModel {
+                name: model.attr("name")?.to_string(),
+                model_location: model.value("modellocation")?.to_string(),
+                rating_tenths,
+                has_unlock: model.children_named("Unlock").next().is_some(),
+            })
+        })
+        .collect()
+}
+
+impl Team {
+    /// Each of `variant_ids`' own ratings, for a title whose ratings sit on
+    /// the model rather than the team ([`Self::models`]): a variant id is a
+    /// directory suffix on such a title (`""`, `"_c1"`, `"_n1"` on HD - see
+    /// `oag_hd::race::TEAM_VARIANTS`), so its model is the one racing out of
+    /// [`Self::location`] plus that suffix. Empty when the team has no
+    /// per-model ratings at all.
+    #[must_use]
+    pub fn variant_stats<'a>(
+        &self,
+        variant_ids: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<Option<oag_ui::picker::hd::Stats>> {
+        if self.models.is_empty() {
+            return Vec::new();
+        }
+        variant_ids
+            .into_iter()
+            .map(|suffix| {
+                let rating = self
+                    .model_for_directory(&format!("{}{suffix}", self.location))?
+                    .rating_tenths?;
+                Some(oag_ui::picker::hd::Stats {
+                    speed: rating.speed,
+                    thrust: rating.thrust,
+                    handling: rating.handling,
+                    shield: rating.shield,
+                })
+            })
+            .collect()
+    }
+
+    /// The model a race directory `directory` (a [`Self::location`] plus a
+    /// title's variant suffix, e.g. `Data\Ships\Feisar_c1`) races as,
+    /// among [`Self::models`]: the one whose `modellocation` names that
+    /// directory, case-insensitively, preferring one with no `<Unlock>` -
+    /// `Feisar_c1` is both `chrome_c1` (locked) and `concept1` (not), and
+    /// only the second is on a fresh profile's grid. **Chosen, not
+    /// measured**: which of two models sharing a directory the original
+    /// means is decided by its unlock state, which this build does not keep.
+    #[must_use]
+    pub fn model_for_directory(&self, directory: &str) -> Option<&TeamModel> {
+        let leaf = |path: &str| {
+            path.rsplit(['\\', '/'])
+                .next()
+                .unwrap_or(path)
+                .to_ascii_lowercase()
+        };
+        let want = leaf(directory);
+        let mut matching = self
+            .models
+            .iter()
+            .filter(|model| leaf(&model.model_location) == want);
+        let first = matching.clone().next();
+        matching.find(|model| !model.has_unlock).or(first)
+    }
 }
 
 /// The `<FE>` child's four ratings, or `None` unless all four are there.

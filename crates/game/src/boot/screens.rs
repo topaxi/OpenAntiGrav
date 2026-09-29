@@ -59,6 +59,67 @@ pub(super) fn load_included_screens(
     name: &str,
     skin: &Screens,
 ) -> Result<Screens> {
+    load_included(archives, name, skin).map(|(screens, _)| screens)
+}
+
+/// A title's standalone `Team Selection` definition
+/// ([`oag_title::FrontEnd::team_select`]), parsed with the skin's globals
+/// and kept beside its own text - `oag_ui::picker::hd::read` walks the tree
+/// again for the widgets [`Screens`] does not collect - and the strings its
+/// `idstring`s resolve to in `entries`' own `DATA06` copy, the archive the
+/// file itself is on (see `crate::campaign::hd_data06_strings`).
+pub(super) struct TeamBox {
+    pub(super) screens: Screens,
+    pub(super) xml: String,
+    pub(super) strings: std::collections::HashMap<String, String>,
+}
+
+/// Reads [`TeamBox`]. `None` on a title naming no file, and on one whose
+/// file will not read, which is reported.
+pub(super) fn load_team_select(
+    archives: &mut oag_assets::Archives,
+    name: Option<&str>,
+    entries: Option<&str>,
+    skin: &Screens,
+    report: &mut Vec<String>,
+) -> Option<TeamBox> {
+    let name = name?;
+    let (screens, xml) = load_included(archives, name, skin)
+        .inspect_err(|error| report.push(format!("{name}: {error:#} - no ship screen")))
+        .ok()?;
+    let ids: Vec<&str> = xml
+        .split("idstring=\"")
+        .skip(1)
+        .filter_map(|rest| rest.split('"').next())
+        .collect();
+    let strings = entries
+        .map(|path| crate::campaign::hd_data06_strings(archives, path, &ids))
+        .unwrap_or_default();
+    Some(TeamBox {
+        screens,
+        xml,
+        strings,
+    })
+}
+
+/// Every team's own `FE\Logo.gtf`, for a source whose ship screen draws
+/// one - asked for by name alongside what the screens name, since the
+/// `Logo` widget authors no `src`. See `oag_ui::picker::hd::logo_src`.
+pub(super) fn team_logos(team_box: bool, teams: &[crate::catalogue::Team]) -> Vec<String> {
+    if !team_box {
+        return Vec::new();
+    }
+    teams
+        .iter()
+        .map(|team| oag_ui::picker::hd::logo_src(&team.id))
+        .collect()
+}
+
+fn load_included(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    skin: &Screens,
+) -> Result<(Screens, String)> {
     let blob = archives
         .read_name(name)
         .with_context(|| format!("reading {name} out of {}", archives.layout.describe()))?;
@@ -72,7 +133,7 @@ pub(super) fn load_included_screens(
         .iter()
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
-    Ok(Screens::from_xml_with_fallback_globals(&xml, &globals))
+    Ok((Screens::from_xml_with_fallback_globals(&xml, &globals), xml))
 }
 
 /// The globals every *activated* style skin declares, sorted by name.
@@ -240,6 +301,7 @@ pub(super) fn load_screens(
 /// is not. See [`oag_ui::picker::FaceScales`].
 pub(super) fn selection_layouts(
     race_box: Option<&Screens>,
+    team_box: Option<&TeamBox>,
     strings: &oag_ui::language::StringTable,
     font: &oag_ui::font::Atlas,
     menu_font: Option<&oag_ui::font::Atlas>,
@@ -264,15 +326,32 @@ pub(super) fn selection_layouts(
             [space.size.0, space.size.1],
         )
     });
-    let ship_select = race_box.and_then(|included| {
-        oag_ui::picker::Layout::read(
-            included,
-            oag_ui::picker::Kind::Ship,
-            strings,
-            faces,
-            [space.size.0, space.size.1],
-        )
-    });
+    let ship_select = race_box
+        .and_then(|included| {
+            oag_ui::picker::Layout::read(
+                included,
+                oag_ui::picker::Kind::Ship,
+                strings,
+                faces,
+                [space.size.0, space.size.1],
+            )
+        })
+        .or_else(|| {
+            let team_box = team_box?;
+            // Only what the served table lacks - an id both copies carry
+            // keeps the served copy's text, as every other screen does.
+            let mut strings = strings.clone();
+            strings.merge(
+                team_box
+                    .strings
+                    .iter()
+                    .filter(|(id, _)| strings.get(id).is_none())
+                    .map(|(id, text)| (id.clone(), text.clone()))
+                    .collect(),
+            );
+            let grid = [space.size.0, space.size.1];
+            oag_ui::picker::hd::read(&team_box.xml, &team_box.screens, &strings, faces, grid)
+        });
     report.push(format!(
         "selection screens: track {}, ship {}",
         track_select.as_ref().map_or("unread", |_| "read"),
