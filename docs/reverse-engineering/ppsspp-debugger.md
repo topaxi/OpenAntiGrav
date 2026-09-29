@@ -608,6 +608,42 @@ The first-boot dialogs are handled too, from the sequence below, so a fresh
 memory stick needs no hand-holding either - though the SDL build persists the
 profile, so that path runs once per install.
 
+### Every circuit, not three: the dev-unlock byte (2026-09-29)
+
+A fresh profile offers three circuits, but `Definition_IsUnlocked`
+(`0x0888e29c`, [race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md))
+passes everything when a byte of the profile object is set:
+`*(u32 *)0x08b31774 + 0x45f` (or `sceKernelGetGPI() & 1`, a devkit pin that
+PPSSPP reads as zero). **Confirmed live**: write `1` there while the game runs,
+any time after `Main Menu` and before Track Select builds its list, and Track
+Select reads `1 / 24`. A plain `memory.write` works without stepping the CPU. The
+byte is in the loaded profile, so a reboot or a profile reload clears it.
+
+With it set, Track Select's order from Talon's Junction White, pressing `down`,
+is the definition's order with each Black/White pair adjacent:
+
+| Downs | Circuit | | Downs | Circuit |
+| ---: | --- | --- | ---: | --- |
+| 0 | Talon's Junction White (`16_Track`) | | 12 | The Amphiseum White |
+| 1 | Talon's Junction Black | | 13 | The Amphiseum Black |
+| 2 | Moa Therma White | | 14 | Fort Gale White |
+| 3 | Moa Therma Black | | 15 | Fort Gale Black |
+| 4 | Metropia White | | 16 | Basilico White |
+| 5 | Metropia Black | | 17 | **Basilico Black (`01_Track`)** |
+| 6 | Arc Prime White | | 18 | Platinum Rush White |
+| 7 | Arc Prime Black | | 19 | Platinum Rush Black |
+| 8 | De Konstruct White | | 20 | Vertica White |
+| 9 | De Konstruct Black | | 21 | Vertica Black |
+| 10 | Tech De Ra White | | 22 | Outpost 7 White |
+| 11 | Tech De Ra Black | | 23 | Outpost 7 Black |
+
+Identified by screenshot of each entry's title; only Basilico Black was also
+matched to its `NN_Track` by where the race starts (the field's grid sits at
+racing-line samples 685-777 of this project's `01_Track`). Which of each other
+pair is the forward direction was not checked. The working scripts
+(`unlock.py`, `to_track_select.py`, `race_log.py`, `place_trace.py`) were
+scratch, under `data/scratch/sunk-craft-2/`.
+
 ### Stopping *at* `Track Creation` or `Team Selection`, instead of walking through them
 
 **Scripted since 2026-09-09: `scripts/psp-frontend-capture.py`.** It does
