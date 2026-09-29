@@ -376,9 +376,9 @@ Writeup: `docs/ui/campaign-screens.md`, "Wipeout HD/Fury: `Track Creation`,
 2026-09-29"; code in `oag_ui::picker::hd::track`, `Picker::with_rows`,
 `oag_game::catalogue::direction_rows`.
 
-**Corrections it made**: the carousel is 12 wide with two direction rows, not a
-24-entry list (`right` at press 12 is Vineta K again, cursor still on the top
-row); `Track Creation` is not in `racebox_definition.xml`, which only names it.
+**Corrections it made**: `right` most likely wraps at twelve (confidence 80:
+press 12 is Vineta K again, cursor on the same top hex row, no reverse glyph in
+13-24), with the two rows as directions chosen, not the 24-entry list; `Track Creation` is not in `racebox_definition.xml`, which only names it.
 
 ## Open
 

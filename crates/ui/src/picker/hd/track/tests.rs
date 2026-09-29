@@ -189,4 +189,21 @@ fn pointer_halves_step_and_the_model_frame_confirms() {
     assert_eq!(at(200.0, 300.0), Some(What::Previous));
     assert_eq!(at(800.0, 300.0), Some(What::Next));
     assert_eq!(at(1200.0, 400.0), Some(What::Confirm));
+    // The hex frame: top half is the row above, bottom half the row below.
+    assert_eq!(at(400.0, 500.0), Some(What::PreviousVariant));
+    assert_eq!(at(400.0, 640.0), Some(What::NextVariant));
+    // And a click there moves the cursor to the other direction's row.
+    let mut picker = grid();
+    let pointer = crate::pointer::Pointer {
+        at: Some((400.0, 640.0)),
+        moved: true,
+        clicked: true,
+        ..crate::pointer::Pointer::default()
+    };
+    assert_eq!(picker.pointer(&pointer, &found), vec![Event::Moved]);
+    assert_eq!(picker.index(), 3);
+    // A single row has no such target.
+    let single = Picker::new(Kind::Track, vec![circuit("a", false)], None, None).with_rows(1);
+    let found = targets(&single, &layout, &skin, &|_| None);
+    assert!(found.iter().all(|t| t.what != What::NextVariant));
 }

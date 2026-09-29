@@ -294,6 +294,17 @@ impl Session {
             self.settings.race.class.trim(),
         );
         let record = self.records.get(&key);
+        // HD's screen has no record rows in this slot: its two info rows
+        // are the length and the race distance, both filled once the
+        // circuit is measured, so they hold the dash until then.
+        if self.shell.as_ref().is_some_and(|shell| {
+            shell
+                .track_select
+                .as_ref()
+                .is_some_and(|l| l.hd_track.is_some())
+        }) {
+            return ["-".into(), "-".into(), "-".into()];
+        }
         [
             "-".to_string(),
             oag_game::scoreboard::record_table_value(record, false),

@@ -255,10 +255,10 @@ measured against the real front end, not only inferred from archive
 geometry.** `scripts/rpcs3-drive.py browse` (added for this) walks Racebox's
 `Track Creation` carousel with no button but `right`, screenshotting every
 step. Across all 24 presses the carousel exposes (12 environments, seen twice -
-**corrected 2026-09-29: the second pass is the same top-row cursor wrapping at
-twelve, not a reverse half; the two direction rows are the `TrackHexSelection`
-grid's, see `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Track
-Creation`"**), the drawn name **never once carries a `REVERSE` suffix
+**qualified 2026-09-29: frames 13-24 repeat frames 1-12 with the cursor on the
+same top hex row and no reverse glyph, so `right` most likely wraps at twelve
+rather than walking a forward-then-reverse half; see `docs/ui/campaign-screens.md`'s
+"Wipeout HD/Fury: `Track Creation`"**), the drawn name **never once carries a `REVERSE` suffix
 or any other direction text** - forward and reverse read identically, exactly
 as `DATA06`'s table does and the served `DATA02` table does not. The specific
 pairing this page's geometry argument turns on is directly confirmed: both of

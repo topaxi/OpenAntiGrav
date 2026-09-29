@@ -35,7 +35,7 @@ use crate::language::StringTable;
 use crate::menu::Frame;
 use crate::screen::{Screens, argb_to_rgba};
 
-use super::{Bracket, TeamScreen, draw_labels, find_screen, find_text, sprite, text_draw, walk};
+use super::{TeamScreen, draw_labels, find_screen, find_text, sprite, text_draw, walk};
 use crate::picker::{Details, FaceScales, Layout, Picker};
 
 /// The screen every widget is authored on.
@@ -423,15 +423,19 @@ fn records(
 
 /// Pointer targets, **chosen, not measured**: the `CHOOSE CIRCUIT` frame's
 /// left and right halves step the circuit back and forward as left/right do
-/// on the pad there, and the circuit model's frame confirms.
+/// on the pad there, the hex frame's top and bottom halves switch the
+/// direction row as up/down do (only where there are two rows), and the
+/// circuit model's frame confirms.
 pub(in crate::picker) fn targets(
+    picker: &Picker,
     layout: &Layout,
     extra: &TrackScreen,
 ) -> Vec<crate::picker::pointer::Target> {
     use crate::picker::pointer::{Target, What};
     let mut out = Vec::new();
-    let mut halves = |bracket: &Bracket| {
-        let [x, y, w, h] = bracket.rect;
+    let mut brackets = extra.common.brackets.iter().filter(|b| !b.middle);
+    if let Some(choose) = brackets.next() {
+        let [x, y, w, h] = choose.rect;
         out.push(Target {
             what: What::Previous,
             rect: [x, y, w / 2.0, h],
@@ -440,9 +444,19 @@ pub(in crate::picker) fn targets(
             what: What::Next,
             rect: [x + w / 2.0, y, w / 2.0, h],
         });
-    };
-    for bracket in extra.common.brackets.iter().filter(|b| !b.middle).take(2) {
-        halves(bracket);
+    }
+    if picker.has_rows()
+        && let Some(hexes) = brackets.next()
+    {
+        let [x, y, w, h] = hexes.rect;
+        out.push(Target {
+            what: What::PreviousVariant,
+            rect: [x, y, w, h / 2.0],
+        });
+        out.push(Target {
+            what: What::NextVariant,
+            rect: [x, y + h / 2.0, w, h / 2.0],
+        });
     }
     out.push(Target {
         what: What::Confirm,

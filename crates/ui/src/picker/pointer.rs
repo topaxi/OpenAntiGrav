@@ -82,7 +82,7 @@ pub fn targets(
         return hd_targets(picker, layout, extra);
     }
     if let Some(extra) = layout.hd_track.as_deref() {
-        return super::hd::track::targets(layout, extra);
+        return super::hd::track::targets(picker, layout, extra);
     }
     let screen = &layout.screen;
     let mut out = Vec::new();
@@ -218,8 +218,8 @@ impl Picker {
             match target.what {
                 What::Previous => out.extend(self.step_entry(-1)),
                 What::Next => out.extend(self.step_entry(1)),
-                What::PreviousVariant => out.extend(self.step_variant(-1)),
-                What::NextVariant => out.extend(self.step_variant(1)),
+                What::PreviousVariant => out.extend(self.step_vertical(-1)),
+                What::NextVariant => out.extend(self.step_vertical(1)),
                 What::Entry(index) if index == was => out.push(Event::Confirmed),
                 What::Entry(index) => out.extend(self.select(index)),
                 What::Confirm => out.push(Event::Confirmed),

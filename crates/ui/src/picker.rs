@@ -222,6 +222,13 @@ impl Picker {
         self
     }
 
+    /// Whether the entries are laid out as more than one row - see
+    /// [`Self::with_rows`].
+    #[must_use]
+    pub fn has_rows(&self) -> bool {
+        self.columns > 0 && self.entries.len() > self.columns
+    }
+
     #[must_use]
     pub fn kind(&self) -> Kind {
         self.kind

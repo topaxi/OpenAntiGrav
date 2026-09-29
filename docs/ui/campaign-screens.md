@@ -3428,14 +3428,22 @@ campaign path; this build reads it off the disc and walks it there.**
 `Tournament C`, in the same file, is a separate screen (`TrackNumber0..11`,
 `SelectedTrack0..11`, add/remove/randomise buttons) and is **not read**.
 
-### The carousel is twelve wide with two direction rows, confidence 85
+### `right` wraps at twelve, confidence 80; the rows being directions is chosen
 
-The 27 frames of the `right`-only walk show Vineta K at press 0, 12 and 24 and
-the same name at no other count, with the highlight staying on the top hex of
-the `TrackHexSelection` grid (`columns="9" rows="2"`). `right` therefore wraps
-along a row of **twelve circuits**, not through a 24-entry list; the two rows
-are the two directions, so the earlier "24 entries, forward then reverse" reading
-(`rpcs3-capture.md`) counted the same names twice. The forward order is measured
+**Measured**: the 27 frames of the `right`-only walk show Vineta K at press 0,
+12 and 24, and every frame from 13 to 24 repeats the frame twelve earlier - the
+highlight on the same top hex of the `TrackHexSelection` grid
+(`columns="9" rows="2"`) and no `ReverseIcon`/`REVERSE` text in the circuit model
+frame, where this build draws it for a reversed circuit. Names alone would not
+tell a 24-entry list from a 12-wide wrap (the original never spells a direction
+in a name), so the score rests on the cursor and the missing glyph, not on the
+repeat.
+
+**Chosen, no score**: that the grid's two rows are the two directions. It is
+read off the two rows under the `CIRCUIT DIRECTION` heading and the authored
+`ReverseIcon` art; no capture pressed `down`. The earlier "24 entries, forward
+then reverse" reading (`rpcs3-capture.md`) is therefore not disproved, only no
+longer the one this build follows. The forward order is measured
 (Vineta K, Anulpha Pass, Moa Therma, Chenghou Project, Metropia, Sebenco Climb,
 Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
 `Zone`'s four environments are not among them.
@@ -3476,9 +3484,10 @@ original fills them from code. That id choice is **chosen, not measured**.
 - **The order of the reverse row** is the forward order.
 - **A reverse circuit is labelled with its forward twin's name**: the frame
   never spells a direction in the name.
-- **Pointer**: the `CHOOSE CIRCUIT` frame's and the hex frame's left/right halves
-  step the circuit, the circuit model frame confirms, the secondary button backs
-  out (`oag_ui::picker::hd::track::targets`).
+- **Pointer**: the `CHOOSE CIRCUIT` frame's left/right halves step the circuit,
+  the hex frame's top/bottom halves switch the direction row, the circuit model
+  frame confirms, the secondary button backs out
+  (`oag_ui::picker::hd::track::targets`).
 - **Confirm** opens `Team Selection` (the redirect's default), except in Zone,
   which forces its own hull as on Pulse. **Back** reopens the RACE page; Back from
   `Team Selection` returns here on the same circuit and direction.
