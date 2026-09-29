@@ -570,7 +570,8 @@ paths (confidence 75) with each texture ranked by the sampler-name hash 0x18
 bytes before its `.gnf` pointer (confidence 85). Positions, triangles and the
 three-signed-byte normal decode at the same offsets: unit length, mean 0.994.
 Omega's Feisar and Qirex hulls agree with 2048's ports on submeshes,
-triangles and materials. The node table is **not** read on PS4. Evidence and
+triangles and materials. The node table is read on PS4 with 8-byte pointers
+([`2048-animation.md`](2048-animation.md#the-models-node-table)). Evidence and
 counts: [omega-status.md](omega-status.md#racing-a-race-starts-on-this-titles-own-data).
 
 ## What is not decoded

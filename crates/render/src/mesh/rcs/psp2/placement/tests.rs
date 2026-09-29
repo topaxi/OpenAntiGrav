@@ -63,6 +63,43 @@ fn without_a_skeleton_every_node_bakes_through_its_bind_matrix() {
     assert_eq!(plan.placements[0].to_world[12], 1000.0);
 }
 
+/// A node with no written matrix, in a model with no skeleton (or one that
+/// does not name it), has nothing authored to place it by: not drawn, and
+/// counted apart from a node the file authors invisible.
+#[test]
+fn a_node_with_no_matrix_and_no_skeleton_entry_is_unplaced_not_left_at_its_origin() {
+    let mut scene = scene(&[1, 2]);
+    scene.nodes[1].bind = None;
+
+    let bare = plan(&scene, None);
+    assert!(!bare.placements[0].unplaced);
+    assert_eq!(bare.placements[0].to_world[12], 1000.0);
+    assert!(bare.placements[1].unplaced && bare.placements[1].hidden);
+
+    // A skeleton that names neither node changes nothing about the second.
+    let animation = Animation {
+        skeleton: Skeleton {
+            nodes: vec![node(50, None, 0.0, true)],
+        },
+        clip: None,
+    };
+    let unmatched = plan(&scene, Some(&animation));
+    assert_eq!(unmatched.unmatched, 2);
+    assert!(!unmatched.placements[0].unplaced);
+    assert!(unmatched.placements[1].unplaced && unmatched.placements[1].hidden);
+
+    // Named by the skeleton, the same node is placed by it, bind or not.
+    let named = Animation {
+        skeleton: Skeleton {
+            nodes: vec![node(2, None, 3.0, true)],
+        },
+        clip: None,
+    };
+    let placed = plan(&scene, Some(&named));
+    assert!(!placed.placements[1].unplaced && !placed.placements[1].hidden);
+    assert_eq!(placed.placements[1].to_world[12], 3.0);
+}
+
 #[test]
 fn moving_nodes_take_slots_and_static_ones_bake_through_the_skeleton() {
     // 0: a tracked root; 1: its untracked child (moves with it); 2: a static

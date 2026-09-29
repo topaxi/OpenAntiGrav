@@ -173,15 +173,12 @@ about a second, decompression-shaped problem on top of it.
 
 ## Open
 
-- **Racing starts, and the node table is the next thing to read (2026-09-29,
-  `omega-race`).** On a corrected extraction `oag-game <dir> --race` loads
+- **Racing starts, and the node table now reads (2026-09-29, `omega-race`,
+  `omega-nodes`).** On a corrected extraction `oag-game <dir> --race` loads
   Omega's own spline (39 of 39 `track.vex` files), collision (a 19-byte k-d node,
   38 of 38), hull and circuit geometry (2048's `.rcsmodel` with 64-bit pointers,
   all 1,272 entries) and textures, and the craft drives the circuit. What it
-  does **not** read: the PS4 node table (node-bound scenery is drawn at its
-  node-local position - a prop sits under the camera on the first frame; the
-  header is the Vita's with 8-byte pointers, 17 nodes and their bind matrices
-  at `+0x120` on `ag_systems\ship.rcsmodel`), the skeleton and clip
+  does **not** read: the skeleton and clip
   (`property tag ends at 3496925615 but the file is 57856 bytes`), lightmaps
   (291 materials name one on `tech_de_ra`), `track.final.pvs`, Omega's `.bnk`
   banks (version word `1145588546`, the reader expects `3`), and the
@@ -190,8 +187,7 @@ about a second, decompression-shaped problem on top of it.
   [`omega-status.md`](../../docs/formats/omega-status.md#racing-a-race-starts-on-this-titles-own-data).
 - **The block-data-location questions below were an extraction bug, not a
   format.** A short read in the extraction tool zeroed most of every entry
-  (`omega-status.md`, "An extraction-tool bug"); the corrected copy at
-  the corrected copy has 60,151 of
+  (`omega-status.md`, "An extraction-tool bug"); the corrected copy has 60,151 of
   `tech_de_ra\track.vex`'s 133,888 bytes different from the short-read one's.
   **Promoted 2026-09-29**: `data/extracted/ps4` is the corrected extraction (the
   short-read one is `data/extracted/ps4.bak`), `omega_psarc_ground_truth` was
@@ -199,38 +195,17 @@ about a second, decompression-shaped problem on top of it.
   extraction"), and `crates/game/tests/omega_race_ground_truth.rs` skips only
   on a short-read copy, `OAG_OMEGA_SOURCE=<dir>` overriding the directory.
 
-- **Block data location - corrected and narrower, still not closed.** The
-  "roughly a third to a half" figure this section used to carry was itself
-  measured wrong: `psarc_sweep`'s first-byte check counted several real,
-  correctly-located `.gnf` entries as fake because their pixel payload does
-  not start at byte zero (a dedup group of eleven `ShieldHexagonal_ALPHA.gnf`
-  liveries on `data03.psarc` is the worked example - 15,616 zero bytes then
-  real tiled-texture content). `crates/assets/examples/psarc_oracle.rs`
-  replaces it with a magic-based check (`VEXX`/`GNF `) and reports three
-  buckets instead of two: valid, all-zero, and **"garbage"** - real,
-  substantial bytes present but not the claimed magic, the population the
-  old oracle could not see at all. One genuine reader bug was found and
-  fixed along the way (a short stored block whose first byte coincidentally
-  matches zlib's marker no longer raises `Error::BadBlock`, the same
-  coincidence already known for full-size blocks). What is now settled:
-  `entry.offset` is not a location bug - a small sample rules out a constant
-  per-entry offset error, and the PS4 executable itself has no PSARC reader
-  of its own to compare against; it mounts every archive through Sony's
-  FIOS2 (`sceFiosArchiveMountSync`) behind a PlayGo chunk-locus poll, see
-  [`docs/ghidra/functions/ps4-omega-eu/psarc-mount.md`](../../docs/ghidra/functions/ps4-omega-eu/psarc-mount.md).
-  **What remains open**: why a substantial "garbage" population exists at
-  all - real bytes, wrong format, at an offset with no arithmetic problem.
-  Full numbers: [`docs/formats/psarc.md`](../../docs/formats/psarc.md)'s
-  "Block data location" section. **The extraction-provenance lead (whether
-  the base `.pkg` extraction had silently absorbed, or needed, patch
-  content) is closed, negative, 2026-09-15**: `PkgTool.Core pkg_extract` has
-  no base/patch merge logic at all (checked directly against its source),
-  the patch's own archives are four names (`data05`/`07`/`08`/`09`) the base
-  `.pkg` doesn't have rather than replacements for `data00`-`04`, and the
-  same split reproduces at similar magnitude on those four, freshly
-  extracted this session - see
-  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md),
-  split out to hold that finding.
+- **Block data location: closed - it was the extraction tool (2026-09-29).**
+  Every "garbage", "all-zero" and "roughly a third to a half real" figure
+  this thread carried came from the short-read extraction. On the whole one,
+  all nine archives are a bijection between manifest paths and entries
+  (46,005 of 46,005), every entry reads, and every entry with a magic carries
+  it (26 `.vex` in the big-endian spelling, `XXEV`). The patch's four archives
+  are names the base `.pkg` does not have, and nothing was merged or absorbed.
+  Numbers and the list of retired claims:
+  [`docs/formats/psarc.md`](../../docs/formats/psarc.md#block-data-location-and-the-short-read-extraction);
+  the patch finding:
+  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md).
 - **Closed, negative, 2026-09-16 (`lane/omega-rcs`): PS4 `.rcsmodel`/
   `.rcsmaterial` are not this format stored little-endian.** The byte-order
   hypothesis this bullet used to carry is withdrawn: every real sample opens
@@ -279,13 +254,13 @@ about a second, decompression-shaped problem on top of it.
 
 ## Next Steps
 
-- **Read the PS4 node table** (`oag_rcs::rcsmodel::psp2::nodes` with `u64`
-  offsets: node count `u16` at `+0x10`, name hashes at the pointer in `+0x18`,
-  ids at `+0x20`, bind matrices at `+0x28`, mesh count `u16` at `+0x38`, mesh
-  table at `+0x40` - all read off `ag_systems\ship.rcsmodel`, none coded), then
-  the skeleton and clip, so scenery is placed and moves. 3-4 hours if the mesh
-  objects are the Vita's with wider pointers, a day if not. The most visible
-  defect in an Omega race today.
+- **Read the PS4 skeleton and clip** (`oag_rcs::rcsskeleton`/`rcsanimclip` fail
+  with `property tag ends at 3496925615 but the file is 57856 bytes`; the node
+  table reads since 2026-09-29, and the model's ids appear verbatim in the
+  skeleton in 61 files, so the container is there). That moves the droid, the
+  crowd and the rotors, and places the 18,255 submeshes on 2048's Zone models
+  that have no matrix of their own (now not drawn, `Report::unplaced`). 3-4
+  hours if it is the Vita's layout with wider pointers, as the node table was.
 - **Bind the `lightmap` sampler** (`oag_rcs::rcsmodel::psp2::material::read_ps4`
   already ranks it last; the mesh's second UV set carries its coordinate).
 - **Pair the reversed circuits' collision**: `kdcol::sibling_name` matches only

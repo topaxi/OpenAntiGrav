@@ -109,6 +109,11 @@ pub struct Report {
     /// Submeshes under a node authored invisible that nothing ever shows,
     /// not emitted.
     pub hidden: usize,
+    /// Submeshes on a node the file gives no transform - no written bind
+    /// matrix, no skeleton entry - not emitted, since nothing authored says
+    /// where they go. Counted apart from [`Self::hidden`], which is the
+    /// file's own choice. See [`placement::Placement::unplaced`].
+    pub unplaced: usize,
     /// Model nodes the skeleton did not name, placed by the model's own bind
     /// matrix - see [`placement::Plan::unmatched`].
     pub unmatched_nodes: usize,
@@ -164,8 +169,16 @@ impl Report {
             } else {
                 format!(", {} hidden", self.hidden)
             };
+            let unplaced = if self.unplaced == 0 {
+                String::new()
+            } else {
+                format!(
+                    ", {} on a node with no matrix and no skeleton entry, not drawn",
+                    self.unplaced
+                )
+            };
             format!(
-                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{frozen}{unmatched}",
+                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{unplaced}{frozen}{unmatched}",
                 self.node_bound, self.moving, self.anim_nodes
             )
         };
@@ -300,7 +313,8 @@ pub fn build(
             .unwrap_or(placement::Placement::STATIC);
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
-        report.hidden += usize::from(place.hidden);
+        report.hidden += usize::from(place.hidden && !place.unplaced);
+        report.unplaced += usize::from(place.unplaced);
         let to_world = Mat4::from_cols_array(&place.to_world);
         let at_zero = Mat4::from_cols_array(&place.world_at_zero);
         // Normals through the bake's inverse transpose: 166 skeleton nodes

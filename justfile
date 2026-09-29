@@ -339,8 +339,8 @@ hash-images:
 #         just play omega --race --no-audio --screenshot out.png
 #
 # A debug build spends about three minutes decoding the circuit's ~460 textures.
-# Not read: the node table (scenery drawn at its node-local position),
-# lightmaps, the sound banks.
+# The node table is read (scenery is placed by its bind matrix); not read:
+# the skeleton and clip, lightmaps, the sound banks.
 #
 # RACE REMIX itself - track from one title, craft from another, picked live
 # ([ADR-0034](docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md)) -

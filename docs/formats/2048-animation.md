@@ -101,7 +101,8 @@ tracks, 10,160 channels, 2,776,975 keys.
 ```c
 file header (section B, from its own start):
   +0x10  u16   node count
-  +0x12  u16   bind matrices written; the rest of the array is zeros
+  +0x12  u16   bind matrices written; the array ends there and other data
+               follows (not zeros - see below)
   +0x18  u32   offset of u32[node count]  name hash: ~crc32 of the node's
                                           full Maya path, HD's own hash
   +0x1c  u32   offset of u32[node count]  node id, shared with the skeleton
@@ -123,6 +124,42 @@ one mesh object:
   +0x1c  u32   offset of u32[submesh count]: submesh object offsets; the
                record `psp2::SubMesh::record` names starts 0x18 bytes in
 ```
+
+**The PS4 layout is the same table with 8-byte pointers, confidence 90.**
+Every offset a pointer names is a `u64`; the two counts stay `u16` at `+0x10`
+and `+0x12`, and the rest moves:
+
+```c
+Vita header offset -> PS4:   name hashes +0x18 -> +0x18   ids +0x1c -> +0x20
+                             binds +0x20 -> +0x28         mesh count +0x28 -> +0x38
+                             mesh table +0x2c -> +0x40
+mesh object:                 +0x00 hash, +0x08 node, +0x0a flags unchanged;
+                             name +0x10 -> +0x18, submesh count +0x14 -> +0x20,
+                             submesh list +0x1c -> +0x28, record 0x18 -> 0x28
+                             bytes into the submesh object
+```
+
+Read by `oag_rcs::rcsmodel::psp2::nodes::Layout::PS4`, chosen by header word
+`+0x04`. Evidence, over all 124,709 mesh objects of Omega's five base archives
+(`crates/rcs/tests/omega_nodes_ground_truth.rs`) - one invariant per
+pointer, because the census "every submesh reaches a mesh object" only
+validates the mesh table, the submesh list and the record offset:
+
+- **name pointer and hash**: each mesh object's `+0x00` is `~crc32` of the
+  string its name pointer reaches, on **all 124,709**;
+- **node-hash array and node index**: `~crc32("X:Thing")` is the name hash of
+  the node a shape `X:ThingShape` is bound to, on 4,972 of 7,557 bound meshes
+  on `data00` (66 %; the Vita's own rate is 12,556 of 23,326, 54 % - the rest
+  are shapes not named after their transform);
+- **bind array**: every written matrix is affine (`0 0 0 1` in the last
+  column), 7,678 of 7,678 on `data00`, and the written ones are exactly the
+  first `+0x12` nodes;
+- **id array**: it appears verbatim, in order, in the sibling `.rcsskeleton`
+  in 61 files (45 of `data00`'s 50 skeletons; the Vita's 35 of 49);
+- **record walk**: the records the mesh objects list are exactly the submeshes
+  the reader found plus one per two unpaired pointers, in every file - the 90
+  "unpaired pointers" of the census are 45 real submesh records the
+  relocation search could not pair, not noise.
 
 **Confidence 92.** Found by walking the header rather than by pattern: the
 skeleton's 165 ids turned up verbatim and contiguous in `altima`'s CPU
@@ -150,9 +187,18 @@ was traced back from there. The invariants that make it a reading:
 
 **`+0x12` is how many bind matrices the exporter wrote.** It equals the node
 count on 35 of 49 base-package files and on every craft; a `trackZone` writes
-103 of `altima`'s 966 and the remaining 863 slots are zero. A zero matrix
-would collapse a mesh to the origin, so `psp2::nodes::Node::bind` is `None`
-past the count and the placement falls back to the identity there.
+103 of `altima`'s 966. **The remaining 863 slots are not zero, and not
+matrices**: 860 of them hold small integers read as denormal floats
+(`4.085e-41`, `4.128e-41`, rising - the next table's `u32`s), so past the
+count the array has simply ended (re-measured 2026-09-29, on `altima`'s
+`trackZone` and on Omega's `tower`, where 776 of 1,009 slots follow the same
+pattern). `psp2::nodes::Node::bind` is `None` past the count, and a node with
+no matrix and no skeleton entry has nothing authored to place it by: the
+render draws its submeshes nowhere and counts them
+(`psp2::Report::unplaced`) rather than leaving them at the node's own origin.
+On the Vita this changes nothing - every such node is in a skeleton (18,255
+submeshes, all with a sibling skeleton); it matters on PS4, where the
+skeleton is not read yet.
 
 **The craft's airbrakes were the visible casualty.** `feisar2048/1/ship.rcsmodel`
 binds all 18 of its meshes to nodes; sixteen have the identity, and
