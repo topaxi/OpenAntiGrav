@@ -523,11 +523,14 @@ impl Race {
             let alive =
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
             let reset = self.reset_zone_touched(slot, &env, position);
-            if alive && (lost || stalled || reset) {
+            let airborne = self.airborne_too_long(slot);
+            if alive && (lost || stalled || airborne || reset) {
                 self.sim.last_respawn_cause[slot] = Some(if lost {
                     respawn::RespawnCause::LostCircuit
                 } else if stalled {
                     respawn::RespawnCause::Stalled
+                } else if airborne {
+                    respawn::RespawnCause::Airborne
                 } else {
                     respawn::RespawnCause::ResetZone
                 });

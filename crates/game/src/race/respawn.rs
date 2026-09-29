@@ -27,6 +27,10 @@ pub enum RespawnCause {
     Stalled,
     /// The player stayed far from the nearest spline sample - invented.
     OffTrack,
+    /// No hover probe touched anything for [`oag_race::recovery::AIRBORNE_RESET_SECONDS`]:
+    /// the original's own rescue for a craft beached upside down or on its
+    /// flank, `FUN_088418e0` at `0x08841d30`.
+    Airborne,
     /// The craft was wrecked and is being brought back by the destroyed-craft
     /// pass, not rescued from anywhere: a shield running out is not a fall.
     Destroyed,
@@ -179,6 +183,19 @@ impl Race {
             before,
         )
         .is_some()
+    }
+
+    /// Whether this craft has gone longer without a hover contact than the
+    /// original allows, `FUN_088418e0`'s `*(craft+0x94)+0x284 > 4.0` at
+    /// `0x08841d30`. See [`oag_race::recovery::AIRBORNE_RESET_SECONDS`].
+    ///
+    /// No dwell counter of its own: the clock is the physics state's, and
+    /// [`Self::respawn`] rebuilds that state, so a craft put back starts again
+    /// from zero.
+    pub(super) fn airborne_too_long(&self, slot: usize) -> bool {
+        !self.sim.respawn_disabled[slot]
+            && self.sim.world.ships[slot].physics.time_airborne
+                > oag_race::recovery::AIRBORNE_RESET_SECONDS
     }
 
     /// Puts the ship back on the track after a `Reset` contact.

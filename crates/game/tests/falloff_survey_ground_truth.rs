@@ -204,6 +204,7 @@ fn measure(
                 Some(RespawnCause::LostCircuit) => "lost",
                 Some(RespawnCause::Stalled) => "stalled",
                 Some(RespawnCause::OffTrack) => "offtrack",
+                Some(RespawnCause::Airborne) => "airborne",
                 Some(RespawnCause::Destroyed) => "wrecked",
                 None => "?",
             };

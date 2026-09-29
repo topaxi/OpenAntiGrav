@@ -421,9 +421,12 @@ impl Race {
         let alive =
             self.sim.world.ships[player].physics.craft_state == oag_physics::CraftState::Racing;
         let reset = self.reset_zone_touched(player, &env, before);
-        if alive && (off_the_track || reset) {
+        let airborne = self.airborne_too_long(player);
+        if alive && (off_the_track || airborne || reset) {
             self.sim.last_respawn_cause[player] = Some(if off_the_track {
                 respawn::RespawnCause::OffTrack
+            } else if airborne {
+                respawn::RespawnCause::Airborne
             } else {
                 respawn::RespawnCause::ResetZone
             });
