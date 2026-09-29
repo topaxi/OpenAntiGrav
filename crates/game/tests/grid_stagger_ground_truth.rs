@@ -158,8 +158,12 @@ fn lone_craft_respawns() {
             let ship = &race.sim.world.ships[1];
             let position = ship.physics.body.position;
             println!(
-                "RESPAWN tick {tick} pos ({:.1}, {:.1}, {:.1}) index {}",
-                position.x, position.y, position.z, ship.driver.index
+                "RESPAWN tick {tick} cause {:?} pos ({:.1}, {:.1}, {:.1}) index {}",
+                race.last_respawn_cause_of(1),
+                position.x,
+                position.y,
+                position.z,
+                ship.driver.index
             );
         }
         if tick < 400 && tick % 50 == 0 {
