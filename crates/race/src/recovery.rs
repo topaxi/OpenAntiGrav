@@ -171,3 +171,22 @@ pub const STALL_SPEED: f32 = 1.0;
 /// enough that a player watching would already call the craft stuck, and there is
 /// no evidence pulling it either way.
 pub const STALL_TICKS: u32 = 120;
+
+/// Seconds a craft may go without any hover probe touching before it is reset.
+///
+/// **The original's, read and measured (2026-09-29).** `FUN_088418e0`, the
+/// per-craft race update, calls `Ship_SetState(craft, 3)` - the same reset state
+/// a `Reset` contact enters - when `*(craft+0x94)+0x284 > 4.0` and the craft is
+/// not wrecked (`craft+0x860 & 0x1000` clear), at `0x08841d30`. Nothing gates
+/// it on the player/AI flag, so it applies to every craft. `+0x284` is the
+/// airborne clock `Ship_UpdateCraft` keeps (`0x08849e08` zeroes it on a tick any
+/// probe touched, `0x08849e28` adds `dt` otherwise), which this project already
+/// carries as `oag_physics::ShipState::time_airborne`.
+///
+/// Measured in PPSSPP on `01_Track` (Basilico Black, reached with the dev-unlock
+/// byte): a craft coasted off the lip at samples 31-42 at 20 u/s landed
+/// upside down on the floor below, its probes pointing at the sky; the clock ran
+/// from the tick it left the deck, read 3.99 on the tick before, and the craft
+/// was relocated upright on the tick it passed 4.0. See
+/// `docs/gameplay/leaving-the-track.md`. Confidence **90**.
+pub const AIRBORNE_RESET_SECONDS: f32 = 4.0;

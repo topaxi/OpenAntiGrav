@@ -204,13 +204,7 @@ fn first_contact_on_the_recorded_line(
                 Basis::LeftUpForward,
                 AngularReading::NegatedLocal,
             );
-            let response = wall::resolve(
-                &mut state,
-                handling,
-                &environment,
-                collision,
-                pair[0].position,
-            );
+            let response = wall::resolve(&mut state, handling, &environment, collision);
             assert!(
                 !response.hull_degenerate,
                 "the hull has no usable extent, so this test measures nothing"
@@ -235,7 +229,10 @@ fn firing_probe_index(
     trace: &Trace,
 ) -> Option<usize> {
     let environment = Environment::default();
-    let previous = trace.frames.get(tick.checked_sub(1)?)?;
+    // The first frame has no step into it to attribute a contact to.
+    if tick == 0 {
+        return None;
+    }
     let frame = trace.frames.get(tick)?;
     let mut state = initial_state(
         frame,
@@ -244,13 +241,7 @@ fn firing_probe_index(
         AngularReading::NegatedLocal,
     );
     let points = wall::hull_sample_points(&state.body, handling);
-    let response = wall::resolve(
-        &mut state,
-        handling,
-        &environment,
-        collision,
-        previous.position,
-    );
+    let response = wall::resolve(&mut state, handling, &environment, collision);
     let contact = response.resolved?;
     points
         .iter()

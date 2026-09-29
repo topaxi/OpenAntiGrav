@@ -145,7 +145,6 @@ fn a_ship_driven_into_a_wall_is_pushed_out_and_bounces_back() {
         &handling(),
         &Environment::default(),
         &narrow_wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
 
     assert!(!response.hull_degenerate);
@@ -183,7 +182,6 @@ fn an_inbound_contact_reports_impact_and_its_speed() {
         &handling(),
         &Environment::default(),
         &narrow_wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
     assert!(response.impact);
     assert!((response.impact_speed - 10.0).abs() < 1e-2, "{response:?}");
@@ -202,7 +200,6 @@ fn an_outbound_contact_reports_no_impact() {
         &handling(),
         &Environment::default(),
         &narrow_wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
     assert!(!response.impact, "{response:?}");
     assert_eq!(response.impact_speed, 0.0);
@@ -253,7 +250,6 @@ fn a_pure_scrape_costs_exactly_the_contact_friction_per_frame() {
             &handling(),
             &Environment::default(),
             &narrow_wall(1.6, Surface::Wall),
-            Vec3::new(1.0, 0.0, 0.0),
         );
 
         assert_eq!(response.contacts, 1, "{response:?}");
@@ -290,7 +286,6 @@ fn every_penetrating_sample_point_is_resolved_not_just_the_deepest() {
         &handling(),
         &Environment::default(),
         &wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
 
     assert_eq!(response.contacts, 5, "{response:?}");
@@ -345,7 +340,6 @@ fn a_contact_off_the_centre_of_mass_yaws_the_ship() {
         &handling(),
         &Environment::default(),
         &narrow_wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
 
     assert_eq!(response.contacts, 1, "{response:?}");
@@ -397,7 +391,6 @@ fn the_point_velocity_of_a_yawing_craft_is_textbook_and_that_is_the_originals() 
         &handling(),
         &Environment::default(),
         &narrow_wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
 
     assert_eq!(response.contacts, 1, "{response:?}");
@@ -438,7 +431,6 @@ fn a_sample_point_too_far_behind_a_surface_makes_no_contact() {
         // The right flank point is at x = 1.75; a plane at x = -0.4 leaves
         // it 2.15 behind, still past MAX_CONTACT_DEPTH.
         &narrow_wall(-0.4, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
     assert_eq!(response.contacts, 0, "{response:?}");
     assert_eq!(state.body, before);
@@ -481,35 +473,43 @@ fn the_ten_sample_points_are_the_hull_corners_plus_two_flank_points() {
     assert_eq!(points.len(), HULL_PROBES);
 }
 
-/// The tunnelling case, which the hull probes cannot see: the ship starts in
-/// front of the wall and ends far behind it, so no probe from the end
-/// position reaches back to a zero-thickness shell.
+/// The tunnelling case, which the hull probes cannot see: at 300 u/s a ship
+/// half a unit short of a zero-thickness wall shell travels five units in one
+/// frame and would end 3.5 past it, beyond any hull probe's reach.
+///
+/// [`resolve`] alone would miss it - no probe from the far side reaches back
+/// to a single-sided shell - so this goes through the whole step, where
+/// `Body_StepWorld`'s pass 1 ([`pre_integration_clip`], `0x0884f70c`) clips
+/// the body back along its velocity before it integrates, as the original
+/// does.
 #[test]
-fn a_ship_that_crossed_the_wall_within_one_frame_is_caught_by_the_sweep() {
-    let mut state = ship_at(20.0, 200.0);
-    let response = resolve(
+fn a_ship_fast_enough_to_cross_the_wall_within_one_frame_is_clipped_before_it() {
+    let mut state = ship_at(3.5, 300.0);
+    crate::integrate::step(
         &mut state,
+        &crate::ShipControls::default(),
         &handling(),
         &Environment::default(),
         &wall(5.0, Surface::Wall),
-        Vec3::new(-5.0, 0.0, 0.0),
+        1.0 / 60.0,
     );
-
-    assert!(response.swept, "{response:?}");
-    // Pushed back to one half-width (0.75) in front of the wall.
     assert!(
-        (state.body.position.x - 4.25).abs() < 1e-3,
-        "{:?}",
+        state.body.position.x < 5.0,
+        "the ship tunnelled through the wall: {:?}",
         state.body
     );
-    assert!(state.body.linear_velocity.x < 0.0);
+    assert!(
+        state.body.linear_velocity.x < 300.0,
+        "the wall took nothing off the ship: {:?}",
+        state.body
+    );
 }
 
 /// A floor standing in front of a wall used to hide the wall entirely.
 ///
 /// [`Raycaster::raycast`] returns the nearest hit of *any* surface, so the
-/// old probe took the floor, found [`responds`] false and gave up - even
-/// though the wall two tenths of a unit further on was penetrating.
+/// old probe took the floor, found the surface filter false and gave up -
+/// even though the wall two tenths of a unit further on was penetrating.
 /// `Collision_BoxAgainstMesh` has no such coupling: every triangle is its own
 /// test, and a surface the response ignores simply produces no contact rather
 /// than suppressing one.
@@ -523,15 +523,12 @@ fn a_floor_in_front_of_a_wall_no_longer_hides_it() {
     push_quad(&mut world, 1.6, Surface::Wall, 1);
 
     let mut state = ship_at(1.0, 40.0);
-    let response = resolve(
-        &mut state,
-        &handling(),
-        &Environment::default(),
-        &world,
-        Vec3::new(1.0, 0.0, 0.0),
-    );
+    let response = resolve(&mut state, &handling(), &Environment::default(), &world);
 
-    assert_eq!(response.contacts, 5, "{response:?}");
+    // Five against the floor and five against the wall: the floor now makes
+    // its own contacts too, and still does not hide the wall.
+    assert_eq!(response.contacts, 10, "{response:?}");
+    assert_eq!(response.floor_contacts, 5, "{response:?}");
     assert!(
         response
             .resolved
@@ -561,13 +558,7 @@ fn a_sample_point_behind_two_walls_is_scrubbed_twice() {
     let mut state = ship_at(1.0, 0.0);
     state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
 
-    let response = resolve(
-        &mut state,
-        &handling(),
-        &Environment::default(),
-        &world,
-        Vec3::new(1.0, 0.0, 0.0),
-    );
+    let response = resolve(&mut state, &handling(), &Environment::default(), &world);
 
     // Five right-hand sample points, each behind both planes.
     assert_eq!(response.contacts, 10, "{response:?}");
@@ -616,13 +607,7 @@ fn a_wall_wound_away_from_the_ship_is_a_back_face() {
 
         let mut state = ship_at(1.0, 0.0);
         state.body.linear_velocity = Vec3::new(0.0, 0.0, 40.0);
-        let response = resolve(
-            &mut state,
-            &handling(),
-            &Environment::default(),
-            &world,
-            Vec3::new(1.0, 0.0, 0.0),
-        );
+        let response = resolve(&mut state, &handling(), &Environment::default(), &world);
         (response.contacts, state.body.linear_velocity.z)
     };
 
@@ -638,22 +623,32 @@ fn a_wall_wound_away_from_the_ship_is_a_back_face() {
     assert_eq!(back_speed, 40.0, "and must not touch the body");
 }
 
-/// The hover spring owns floors. A lateral probe that fired on one would
-/// shove a banked ship off a surface it is meant to be resting on.
+/// A floor inside the hull pushes it out, and drives nothing else.
+///
+/// `Collision_BoxAgainstMesh` (`0x08815cd4`) reads no surface type, so the
+/// original's hull makes contacts against `Floor` and `MagFloor` exactly as
+/// against `Wall` - one half of how it recovers a craft sunk into the floor. What
+/// the floor does **not** do is damage: `FUN_088418e0` charges a ring record
+/// only when its friction is positive (`0x08842648`), and a floor's is the
+/// `-1.0` sentinel. The swept guard stays wall-only; see [`responds`].
 #[test]
-fn hoverable_surfaces_never_produce_a_wall_contact() {
+fn a_floor_inside_the_hull_pushes_it_out_and_drives_no_reaction() {
     for surface in [Surface::Floor, Surface::MagFloor] {
         let mut state = ship_at(1.0, 10.0);
-        let before = state.body;
         let response = resolve(
             &mut state,
             &handling(),
             &Environment::default(),
             &wall(1.6, surface),
-            Vec3::new(1.0, 0.0, 0.0),
         );
+        assert_eq!(response.contacts, 5, "{surface:?}: {response:?}");
+        assert_eq!(response.floor_contacts, 5, "{surface:?}");
+        assert!(state.body.position.x < 1.0, "{surface:?}: {:?}", state.body);
+        assert!(state.body.linear_velocity.x < 10.0, "{surface:?}");
+        assert_eq!(response.impulse_sum, 0.0, "{surface:?}: no damage");
+        assert!(!response.impact, "{surface:?}: no impact edge");
         assert_eq!(response.resolved, None, "{surface:?}");
-        assert_eq!(state.body, before, "{surface:?}");
+        assert!(!state.wall_contact_prev, "{surface:?}");
         assert!(!responds(surface));
     }
 }
@@ -681,7 +676,6 @@ fn no_amount_of_track_contact_arms_the_collision_stun() {
         &handling(),
         &Environment::default(),
         &wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
     assert!(response.resolved.is_some());
     assert_ne!(response.velocity_delta, Vec3::ZERO);
@@ -701,7 +695,6 @@ fn no_amount_of_track_contact_arms_the_collision_stun() {
             &handling(),
             &Environment::default(),
             &wall(1.6, Surface::Wall),
-            Vec3::new(1.0, 0.0, 0.0),
         );
     }
 
@@ -727,7 +720,6 @@ fn a_scrape_along_a_wall_does_not_arm_the_stun() {
         // original's and is pinned elsewhere; here the question is only
         // whether *leaving* a surface counts as a hit.
         &narrow_wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
     assert_eq!(state.stun_timer, 0.0);
 }
@@ -754,7 +746,6 @@ fn a_ship_leaving_a_wall_it_still_overlaps_is_pulled_back() {
         &handling(),
         &Environment::default(),
         &narrow_wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
     assert!(response.resolved.is_some());
     // `3.909`, not `4.00`, for the angular-denominator reason spelled out on
@@ -788,7 +779,6 @@ fn a_degenerate_hull_reports_itself_instead_of_failing_silently() {
         &Handling::ZERO,
         &Environment::default(),
         &wall(1.6, Surface::Wall),
-        Vec3::new(1.0, 0.0, 0.0),
     );
     assert!(response.hull_degenerate);
     assert_eq!(response.resolved, None);
@@ -805,7 +795,6 @@ fn open_space_is_left_alone() {
         &handling(),
         &Environment::default(),
         &CollisionWorld::new(),
-        Vec3::ZERO,
     );
     assert_eq!(response, WallResponse::default());
     assert_eq!(state.body, before);
@@ -895,7 +884,6 @@ fn a_28_degree_graze_bleeds_the_recovered_friction_and_nothing_else() {
             &handling(),
             &Environment::default(),
             &narrow_wall(1.6, Surface::Wall),
-            Vec3::new(1.0, 0.0, 0.0),
         );
         let after = state.body.linear_velocity;
 
@@ -970,7 +958,6 @@ fn a_held_heading_makes_the_bounce_the_cost_not_the_friction() {
             &handling(),
             &Environment::default(),
             &narrow_wall(1.6, Surface::Wall),
-            Vec3::new(1.0, 0.0, 0.0),
         );
         speed = state.body.linear_velocity.length();
 

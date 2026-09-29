@@ -247,7 +247,7 @@ fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
     let handling = hulled_handling();
     let setup = setup_with(
         handling,
-        vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+        vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
     let mut race = Race::start(setup);
 
@@ -257,6 +257,8 @@ fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
         let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+        body.orientation = oag_core::math::Quat::IDENTITY;
+        body.angular_velocity = Vec3::ZERO;
     };
 
     push_toward_wall(&mut race);
@@ -297,7 +299,7 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
     let handling = hulled_handling();
     let setup = setup_with(
         handling,
-        vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+        vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
     let mut race = Race::start(setup);
     let dt = race.dt();
@@ -306,6 +308,8 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
         let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+        body.orientation = oag_core::math::Quat::IDENTITY;
+        body.angular_velocity = Vec3::ZERO;
     };
 
     push_toward_wall(&mut race);
@@ -424,7 +428,7 @@ pub(super) fn one_emitter_pob(name: &str, flags: u32) -> Vec<u8> {
 fn race_with_spark_effect(blob: &[u8]) -> Race {
     let mut setup = setup_with(
         hulled_handling(),
-        vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+        vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
     let effect = oag_render::psys::Effect::parse(blob, oag_render::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
@@ -438,6 +442,8 @@ fn push_toward_wall(race: &mut Race) {
     let body = &mut race.sim.world.ships[0].physics.body;
     body.position = Vec3::new(20.0, -39.7, 0.0);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+    body.orientation = oag_core::math::Quat::IDENTITY;
+    body.angular_velocity = Vec3::ZERO;
 }
 
 /// **Wipeout HD's shape of this effect, and the bug it caused.** HD authors
@@ -540,7 +546,7 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
     let handling = hulled_handling();
     let setup = setup_with(
         handling,
-        vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+        vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
     let mut race = Race::start(setup);
 
@@ -551,6 +557,8 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
     let body = &mut race.sim.world.ships[0].physics.body;
     body.position = Vec3::new(20.0, -39.7, 0.0);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+    body.orientation = oag_core::math::Quat::IDENTITY;
+    body.angular_velocity = Vec3::ZERO;
     let evaluated = race.tick(&PlayerInputs::none());
 
     assert!(

@@ -551,10 +551,11 @@ as against `Wall`. The ring consumer proves non-wall contacts arrive:
 `FUN_088418e0`, at `0x088426e8`-`0x08842728`, looks each ring record's mesh
 proxy up through `world+0x2454` and calls `FUN_08844100(craft, 3)` when that
 collider's `+0x6c` is `2` - a **`Reset` contact** reaching the gameplay loop.
-Confidence **88**. `crates/physics/src/wall.rs` filters the hull to `Wall` alone
-on its own reasoning ("the hover spring owns floors"). Taking every surface but
-`Reset` is ported on the unmerged branch `sunk-craft-floors` and held back: see
-`docs/gameplay/leaving-the-track.md` for why.
+Confidence **88**. `crates/physics/src/wall.rs` used to filter the hull to
+`Wall` alone on its own reasoning ("the hover spring owns floors"); since
+2026-09-29 it takes every surface but `Reset`, together with the projection gate
+and pass 1 below and the original's airborne reset - see
+`docs/gameplay/leaving-the-track.md`.
 
 ### `Collision_AddContact` has a second test: the projection must land in the same triangle
 
@@ -576,11 +577,11 @@ original's first free tick moves the craft **1.81** along the normal - two
 corners' depth - where four ungated contacts give about **3.5**. A prototype of
 the gate reproduces the original tick for tick there (y `-41.26` vs `-41.28` on
 the first tick, overshoot `-39.17` vs `-39.16` at tick 30, rest `-39.65` vs
-`-39.60`). **Not ported**: on `03_Track` the same gate rejects all four corners
-(the centre segments cross a long sliver triangle whose neighbour holds the
-projections), and the original gets out through pass 1 below instead. Without
-pass 1 the gate also strips wall contacts: `05_Track`'s lone Ace went from 60
-wall-contact ticks to 2,475. The two land together or not at all.
+`-39.60`). On `03_Track` the same gate rejects all four corners (the centre
+segments cross a long sliver triangle whose neighbour holds the projections),
+and the original gets out through pass 1 below instead. Without pass 1 the gate
+also strips wall contacts: `05_Track`'s lone Ace went from 60 wall-contact ticks
+to 2,475. **Ported 2026-09-29 together with pass 1** (`wall::hull_contacts`).
 
 ### `Body_StepWorld`'s pass 1 is a clip along the velocity to the box face
 
@@ -614,10 +615,11 @@ craft's centre 0.50 above the floor: the first frame whose velocity points down
 lifts the original **0.757**, against `0.9 * (1.3125 + 0.024 - 0.50) = 0.752`
 from the reading; the next frame its two hover probes are above the floor and
 their penetration escapes lift it **1.82**. A prototype of pass 1 plus the gate
-recovers ours to the same rest height (`4.663` vs `4.67`). **Not ported**: with
-it, `01_Track`'s lone Ace loses its clean lap (the regression gate) - see
-`docs/gameplay/leaving-the-track.md`. Replacing this crate's swept guard with it
-did not close the `orig16` shove replay's tick-9 wall stop either.
+recovers ours to the same rest height (`4.663` vs `4.67`). **Ported 2026-09-29**
+(`wall::pre_integration_clip`), replacing this crate's swept guard, once the
+original's airborne reset and a gap-aware AI brake kept `01_Track`'s lone Ace
+clean - see `docs/gameplay/leaving-the-track.md`. It did not close the `orig16`
+shove replay's tick-9 wall stop.
 
 ## Surface types in practice
 

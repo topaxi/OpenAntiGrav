@@ -2055,6 +2055,16 @@ Three things that follows from this, and one that does not:
   running `-23.3` to `0.0`. 06's authored AI corridor there is entirely to the
   *left* of the line, and the craft is marginally outside its right bound.
 
+**2026-09-29: the driver reads a bend over one of these runs as straight.**
+Chosen, not measured (maintainer decision: opponents obey the player's physics
+and drive smarter). `oag_ai::Line::with_unsupported` carries the same cast as a
+per-sample mask, and `Line::curvature` returns zero for a chord touching a masked
+sample: over a gap the craft is flying, not steering. It was `01_Track`'s lip
+(samples 31-42) that asked for it - read in 3D its 60-degree pitch was a
+0.075 rad/unit corner and the Ace crawled off it at 20 u/s every lap, where the
+original's field flies it at 69-111. See
+[leaving-the-track.md](leaving-the-track.md#what-landed-2026-09-29-branch-sunk-craft-2).
+
 #### The decoder drops nothing, and the spline is above the track
 
 Two measurements settle it, and the second retracts the retraction above.

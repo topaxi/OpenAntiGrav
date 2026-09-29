@@ -526,6 +526,68 @@ still needed: what the ~19-entry mode-class value at `0x08aae7e3`/global
 `+0xb8` actually enumerates, and what `FUN_0003c7b0` does - both would turn
 state 7's "two groups of modes" reading into a named one.
 
+### State 3 is the reset, and four things enter it (2026-09-29)
+
+Read while chasing a craft that falls off `01_Track`'s lip and beaches, and the
+airborne trigger was then **watched firing in PPSSPP**. All four callers are in
+`FUN_088418e0`, the per-craft race update (see
+[contact-response.md](contact-response.md) for its contact loop), and all four
+call `Ship_SetState(craft, 3)`:
+
+| Call | Condition | Confidence |
+| --- | --- | --- |
+| `0x08841cec` | `craft+0x788 > 0.5`, where `+0x788` accumulates `dt` while `\|body.pos - craft+0xaf0\|^2 > 40000` (more than **200 units** from `+0xaf0`) and is zeroed otherwise; skipped when the destroyed bit `0x1000` is set | 80 (decompile) |
+| `0x08841d30` | `*(craft+0x94)+0x284 > 4.0`, the craft's **airborne clock**; skipped when the destroyed bit is set | 90 (decompile + live) |
+| `0x0884239c` | `DAT_08ab0c8c != 0 && FUN_0883191c(body+0x3bc, body, craft+0xad8) == 2`, only for a craft whose `+0x368` is `0` or `2` and whose state is not `6` | 50 - what `FUN_0883191c` tests is not read |
+| `0x08842724` | a hull contact against a `Reset` mesh collider ([collision.md](collision.md#every-mesh-surface-reaches-the-hull-narrowphase-2026-09-29)) | 86, as recorded there |
+
+`craft+0xaf0` is the position `AiTrack_LocatePosition` maintains for the craft
+(the same address the relocation below reads); read here, not traced.
+
+The airborne clock is `Ship_UpdateCraft`'s pair at `0x08849df0`: when any hover
+probe touched this tick (`craft+0x1c0 & 1`) it stores `0` to `+0x284`
+(`0x08849e08`) and adds `dt` to `+0x288`; otherwise it zeroes `+0x288` and adds
+`dt` to `+0x284` (`0x08849e28`). An upside-down craft's probes point at the sky,
+so it counts as airborne.
+
+**`Ship_SetState(3)`** (`0x08844100`, arm 3): only on entry from another state,
+saves the current state to `+0x40`, zeroes `+0x79c`, and **for the player**
+(`+0x368 == 0`) plays `RESET` and sets `+0x44 = min(5, shield - 1)`, floored at
+`0`, or `10` in mode `6`. Every entry clears flag bits `0x80`/`0x100` and the
+`+0x87c`/`+0x88c`-`+0x898` fields.
+
+**The state-3 update, `FUN_0883ff6c`**: `+0x79c -= dt`; while it is under `0.3`
+it relocates the craft - `AiTrack_LocatePosition(500.0, track, craft+0xaf0,
+..)` from `+0xaf0`, five units up, facing forty units down the tangent, then
+`FUN_0883db20(+0x78c * 0.25 + 50, craft, pose)` - and once it reaches `0`
+returns to the saved state and, if `+0x44 > 0`, calls
+`Ship_Damage(+0x44, craft, 0, 0, 0)`. So **a reset costs the player up to five
+shield** and costs an AI craft nothing. Since `+0x79c` starts at `0`, the
+relocation happens on the entry tick.
+
+**Measured** (`01_Track`, Basilico Black, Time Trial, reached with the
+dev-unlock byte in [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md)):
+the player's craft placed on the upper deck at sample 10 and coasted off the
+lip at 20 u/s landed upside down on the floor below. `+0x284` was `0` until the
+tick it left the deck (133), counted `0.0167` a tick, read `3.99` on tick 371,
+and on tick 372 the craft was relocated upright at sample 50 on the lower
+floor, five units up and 12.5 off the line, moving at **53.5 u/s** along the
+track. The same trial at 30 and 45 u/s never reached the clock's limit: the
+craft rights itself (30) or lands upright (45). **What the `53.5` means** is
+read but not settled: it matches `FUN_0883db20`'s first argument if `+0x78c`
+was `14`, and `+0x78c` is written from `body+0x398` in `FUN_088418e0`, which
+reads as a launch speed - not the "hover height" `Ship_UpdateRespawn`'s row
+above calls the same expression. Confidence **50** on that reading; nothing
+renamed.
+
+**Ported** (the airborne trigger only): `oag_race::recovery::AIRBORNE_RESET_SECONDS`
+and `RespawnCause::Airborne`, through the same `Race::respawn` a `Reset`
+contact uses. Three departures, recorded rather than fixed: that respawn puts
+the craft at rest on the racing line rather than at the corridor midpoint at
+`FUN_0883db20`'s speed, charges the player no shield, and the `200`-unit
+distance trigger at `0x08841cec` is not ported - this project's invented
+`LostCircuit`/`OffTrack` dwells stand where it would.
+
 ## The runtime leg, and what it did not reach
 
 Measured 2026-08-10 against the USA disc in PPSSPP, `steer-left.inputs`

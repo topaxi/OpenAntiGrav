@@ -126,6 +126,14 @@ pub struct RaycastHit {
     pub vertex_scalar: f32,
     /// Index of the collider within the world, for self-skipping.
     pub collider: u32,
+    /// The hit triangle's three vertices, in their stored winding, or `None`
+    /// from a raycaster that has no triangles (an infinite test plane).
+    ///
+    /// For [`crate::wall`]'s contact gate: `Collision_AddContact`
+    /// (`0x08816864`) takes a contact only when the sample point's
+    /// perpendicular projection lands inside the **same** triangle the
+    /// centre-to-sample segment crossed, which needs the triangle itself.
+    pub triangle: Option<[Vec3; 3]>,
 }
 
 /// Answers segment queries against collision geometry.
@@ -546,6 +554,7 @@ impl Raycaster for TriangleSoup {
                     surface: self.surface,
                     vertex_scalar: self.triangle_scalar(*tri),
                     collider: self.collider,
+                    triangle: Some([a, b, c]),
                 },
             ));
         }
@@ -610,6 +619,7 @@ impl Raycaster for TriangleSoup {
                 surface: self.surface,
                 vertex_scalar: self.triangle_scalar(*tri),
                 collider: self.collider,
+                triangle: Some([a, b, c]),
             });
             found += 1;
         }
