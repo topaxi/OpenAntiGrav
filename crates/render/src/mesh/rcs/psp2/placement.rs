@@ -58,6 +58,12 @@ pub struct Placement {
     /// Whether the node is hidden and never shown - its geometry is not
     /// emitted at all.
     pub hidden: bool,
+    /// Whether the file gives this node no transform at all - no written bind
+    /// matrix and no skeleton entry - so nothing authored says where its
+    /// geometry goes. Such a node is [`Self::hidden`] too: drawn nowhere and
+    /// counted, rather than left at its node-local position, which is where
+    /// the file does *not* put it.
+    pub unplaced: bool,
 }
 
 impl Placement {
@@ -67,6 +73,7 @@ impl Placement {
         xform: 0,
         world_at_zero: IDENTITY,
         hidden: false,
+        unplaced: false,
     };
 }
 
@@ -95,17 +102,25 @@ pub struct Plan {
 /// skeleton disagree - see `oag_rcs::rcsskeleton::Node::local`.
 #[must_use]
 pub fn plan(scene: &psp2::nodes::Scene, animation: Option<&Animation>) -> Plan {
-    // A node past the model's written bind count has no matrix of its own;
-    // the identity leaves its geometry where the file authored it, which
-    // for a model with no skeleton is the only honest answer.
-    let by_bind = |n: &psp2::nodes::Node| {
-        let bind = n.bind.unwrap_or(IDENTITY);
-        Placement {
+    // A node past the model's written bind count has no matrix of its own,
+    // and with no skeleton entry either nothing authored says where its
+    // vertices - which are in the node's space - belong. Not drawn, and
+    // counted as unplaced: an identity there would draw the geometry at the
+    // node's own origin, which is the one place the file does not put it (on
+    // Omega's first frame that was a prop under the camera).
+    let by_bind = |n: &psp2::nodes::Node| match n.bind {
+        Some(bind) => Placement {
             to_world: bind,
             xform: 0,
             world_at_zero: bind,
             hidden: false,
-        }
+            unplaced: false,
+        },
+        None => Placement {
+            hidden: true,
+            unplaced: true,
+            ..Placement::STATIC
+        },
     };
     let Some(animation) = animation else {
         return Plan {
@@ -192,12 +207,14 @@ pub fn plan(scene: &psp2::nodes::Scene, animation: Option<&Animation>) -> Plan {
                     xform: u32::try_from(s + 1).unwrap_or(0),
                     world_at_zero: world[i],
                     hidden: false,
+                    unplaced: false,
                 },
                 None => Placement {
                     to_world: world[i],
                     xform: 0,
                     world_at_zero: world[i],
                     hidden: hidden[i],
+                    unplaced: false,
                 },
             }
         })

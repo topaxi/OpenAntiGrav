@@ -1857,9 +1857,9 @@ name hash first and its `.gnf` pointer 0x18 in, confidence 85). The `+0x08`
 count, the `+0x10` table base, the `+0x20` and `+0x40` tags below are that
 container's own header and descriptors, and the "table of ascending 8-byte values" at `+0x60` is the
 relocation table. The paragraph "No parser exists for this container" below is
-**withdrawn**. Not read on PS4: the node table (its header is the Vita's with
-8-byte pointers - 17 nodes and their bind matrices at `+0x120` on
-`ag_systems\ship.rcsmodel`).
+**withdrawn**. **The node table is read on PS4 too** (2026-09-29,
+`omega-nodes`): the Vita's, with 8-byte pointers - see
+[`2048-animation.md`](2048-animation.md#the-models-node-table).
 
 **2026-09-16, `lane/omega-rcs`.** The prior session's own open item asked
 whether PS4's `.rcsmodel` was this format stored little-endian, the way

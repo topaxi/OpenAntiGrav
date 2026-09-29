@@ -1,5 +1,9 @@
 //! Wipeout 2048's node table and mesh objects: what places a submesh, and
-//! what a `.rcsskeleton` beside the model animates.
+//! what a `.rcsskeleton` beside the model animates. The Omega Collection's PS4
+//! files carry the same table with 8-byte pointers - [`Layout::PS4`], with
+//! the evidence in `docs/formats/2048-animation.md` and
+//! `crates/rcs/tests/omega_nodes_ground_truth.rs`. The offsets below are the
+//! Vita's; [`Layout`] holds both sets.
 //!
 //! **Found by walking the file header rather than by pattern**, once the
 //! sibling `.rcsskeleton`'s 32-bit node ids turned up verbatim inside the
@@ -10,8 +14,9 @@
 //! ```text
 //! file header (section B, from its own start):
 //!   +0x10  u16   node count
-//!   +0x12  u16   how many of the bind matrices below are written; the
-//!                rest are all zeros. Equal to the node count on 35 of the
+//!   +0x12  u16   how many of the bind matrices below are written; past
+//!                them the array has ended and other data follows (small
+//!                integers, not matrices). Equal to the node count on 35 of the
 //!                49 skeleton-bearing files and on every craft; a
 //!                `trackZone` writes 103 of `altima`'s 966
 //!   +0x18  u32   offset of u32[node count]: `~crc32` of each node's full
@@ -145,7 +150,8 @@ pub struct Node {
     pub id: u32,
     /// The node's world matrix at bind, row-major with the translation in
     /// row 3 (`oag_vex::vex::transform`'s convention), or `None` for a node
-    /// past the header's written count, whose slot is all zeros.
+    /// past the header's written count, whose slot is other data and not a
+    /// matrix.
     ///
     /// Composed by the exporter from the skeleton's scale, rotation and
     /// translation alone - a node with a pivot lands somewhere else at
