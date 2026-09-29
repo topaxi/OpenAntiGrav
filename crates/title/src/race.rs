@@ -89,12 +89,10 @@ pub struct ShipPaths {
 }
 
 mod announcer;
-mod countdown;
 mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;
-pub use announcer::{SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
-pub use countdown::CountdownVoice;
+pub use announcer::{CountdownVoice, SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 
@@ -172,13 +170,7 @@ pub struct RaceDefaults {
     /// `None` rather than a guessed ladder for a title whose bank has not been
     /// read - see [`ZoneAnnouncer`]'s own docs for which that is today.
     pub zone_announcer: Option<&'static ZoneAnnouncer>,
-    /// The banks this title's `ready` and `go` start-of-race voice is read from
-    /// when they differ by mode, when it has been measured. See
-    /// [`CountdownVoice`].
-    ///
-    /// `None` is "not measured", not "silent": on a title that has it the race
-    /// plays the two cues, and on one that has not it plays nothing rather than
-    /// borrow Pulse's ticks.
+    /// Measured `ready`/`go` start-voice banks, or `None` (plays nothing): [`CountdownVoice`].
     pub countdown_voice: Option<&'static CountdownVoice>,
     /// The Zone-mode **speed-class** announcer this title ships, when it has
     /// been read off the disc. See [`ZoneClassAnnouncer`].
