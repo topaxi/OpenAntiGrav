@@ -13,7 +13,7 @@
 //! a race tick, and leaves the mixer untouched.
 //!
 //! **What is authored and what is chosen.** Authored: which waveform, when (in
-//! master ticks, converted at [`oag_formats::sblk::timeline::TICKS_PER_SECOND`]),
+//! master ticks, converted at the build's [`SequenceTick::ticks_per_second`]),
 //! at which pan angle, at which volume terms. Chosen: a grain lands on the
 //! nearest sample of the composite, and the master tick's phase against the
 //! moment the cue was started is taken as zero (the original starts a cue
@@ -26,7 +26,7 @@ use std::sync::Arc;
 use oag_audio::Sound;
 use oag_audio::spatial::{pan_gains, pan_of_angle, pan_volume_gain};
 use oag_formats::sblk::Bank;
-use oag_formats::sblk::timeline::TICKS_PER_SECOND;
+use oag_formats::sblk::timeline::WalkModel;
 use oag_title::SequenceTick;
 
 use super::banks::decode_waveform;
@@ -43,9 +43,9 @@ pub(super) struct Sequence {
 /// `Ok(None)` means "not this shape" and the caller keeps its flat pick: the
 /// cue is not a complete timeline (an opcode the walk does not model, an
 /// unresolved child), the title's tick is [unknown](SequenceTick::Unknown)
-/// (Wipeout HD, 2048, Pure), the cue
-/// reaches a single word (Pure's announcer lines are one grain each, and those
-/// keep the level they always played at), a grain loops, its angle is in the
+/// (2048, Pure), the cue
+/// is a single grain (Pure's announcer lines, which keep the level they always
+/// played at), a grain loops, its angle is in the
 /// rear half the pan law here does not model, or its rate differs from the
 /// others'.
 ///
@@ -60,18 +60,22 @@ pub(super) fn compose_sequence(
     let Some(cue) = bank.cue_named(name) else {
         return Ok(None);
     };
-    let tick_seconds = match tick {
-        SequenceTick::Psp => 1.0 / TICKS_PER_SECOND,
-        SequenceTick::Unknown => return Ok(None),
+    let Some(ticks_per_second) = tick.ticks_per_second() else {
+        return Ok(None);
     };
-    let timeline = bank.cue_timeline(&cue);
+    let tick_seconds = 1.0 / ticks_per_second;
+    let model = WalkModel {
+        goto_markers: tick.follows_gotos(),
+    };
+    let timeline = bank.cue_timeline_modelled(&cue, &[], model);
     if !timeline.is_complete() || timeline.grains.is_empty() {
         return Ok(None);
     }
-    let mut words: Vec<u32> = timeline.grains.iter().map(|g| g.sound.offset).collect();
-    words.sort_unstable();
-    words.dedup();
-    if words.len() < 2 {
+    // One grain is the whole line already (Pure's announcer lines), so a flat
+    // pick plays it at the level it always had. Two grains of *one* word are
+    // not: Wipeout HD's `zone_N` is the number keyed at +30 degrees and again at
+    // -30 degrees five ticks later, which a flat pick would collapse to one.
+    if timeline.grains.len() < 2 {
         return Ok(None);
     }
     let rate = timeline.grains[0].sound.sample_rate();

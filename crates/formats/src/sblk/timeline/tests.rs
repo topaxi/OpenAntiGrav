@@ -9,7 +9,7 @@ use crate::sblk::{
     SBLK_HEADER_LEN, SECTION_LEN, VERSION,
 };
 
-use super::TICKS_PER_SECOND;
+use super::{TICKS_PER_SECOND, WalkModel};
 
 const RECORD_LEN: usize = 32;
 
@@ -416,4 +416,80 @@ fn a_bend_after_a_key_on_is_not_modelled() {
     let bank = Bank::parse(&data).expect("parse");
     let t = bank.cue_timeline(&bank.cue_named("A").expect("cue"));
     assert_eq!(t.unread, vec![0x1b]);
+}
+
+const GOTO_MODEL: WalkModel = WalkModel { goto_markers: true };
+
+/// Wipeout HD's `c_CLEAR`: a goto and the marker it lands on, nothing else.
+fn goto_and_marker() -> Vec<u8> {
+    build(&[Spec("c_CLEAR", 85, vec![raw(0x24, 0, 0), raw(0x23, 0, 0)])])
+}
+
+#[test]
+fn a_goto_and_its_marker_are_unread_unless_the_walk_is_asked_to_follow_them() {
+    let data = goto_and_marker();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("c_CLEAR").expect("cue");
+    assert_eq!(bank.cue_timeline(&cue).unread, vec![0x24, 0x23]);
+    let followed = bank.cue_timeline_modelled(&cue, &[], GOTO_MODEL);
+    assert!(followed.is_complete());
+    assert!(followed.grains.is_empty(), "a silent cue, by construction");
+    assert_eq!(followed.passed, vec![0x23]);
+}
+
+#[test]
+fn a_goto_skips_to_the_marker_with_its_id_and_counts_the_markers_own_delay() {
+    // key at 0; goto #1 after 3; a key that is jumped over; marker #2 (not
+    // ours); marker #1 after 2 more; a key after 4 more.
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            key(0, 0, 0),
+            raw(0x24, 0x01_0000, 3),
+            key(16, 0, 0),
+            raw(0x23, 0x02_0000, 0),
+            raw(0x23, 0x01_0000, 2),
+            key(32, 0, 4),
+        ],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let t = bank.cue_timeline_modelled(&cue, &[], GOTO_MODEL);
+    assert!(t.is_complete());
+    assert_eq!(ticks(&t), vec![(0, 0), (9, 32)]);
+}
+
+#[test]
+fn a_goto_with_no_marker_ends_the_cue() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![key(0, 0, 0), raw(0x24, 0x07_0000, 1), key(16, 0, 1)],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let t = bank.cue_timeline_modelled(&bank.cue_named("A").expect("cue"), &[], GOTO_MODEL);
+    assert_eq!(ticks(&t), vec![(0, 0)]);
+    assert!(t.is_complete());
+}
+
+#[test]
+fn a_ninth_goto_within_one_tick_is_refused_and_a_waited_loop_terminates() {
+    // The marker is above the goto, so it loops. With no delay the depth guard
+    // refuses the ninth pass.
+    let tight = build(&[Spec("A", 100, vec![raw(0x23, 0, 0), raw(0x24, 0, 0)])]);
+    let bank = Bank::parse(&tight).expect("parse");
+    let t = bank.cue_timeline_modelled(&bank.cue_named("A").expect("cue"), &[], GOTO_MODEL);
+    assert_eq!(t.unread, vec![0x24]);
+    // With a wait each pass the guard resets; the step bound ends the walk and
+    // says so.
+    let waited = build(&[Spec(
+        "A",
+        100,
+        vec![raw(0x23, 0, 0), key(0, 0, 1), raw(0x24, 0, 1)],
+    )]);
+    let bank = Bank::parse(&waited).expect("parse");
+    let t = bank.cue_timeline_modelled(&bank.cue_named("A").expect("cue"), &[], GOTO_MODEL);
+    assert_eq!(t.unread, vec![0xff]);
+    assert!(!t.is_complete());
 }

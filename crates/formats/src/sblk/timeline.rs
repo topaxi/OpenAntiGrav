@@ -47,6 +47,13 @@
 //!   all return zero. With no guard (`0x22`) or parameter sentinel to read a
 //!   register they change nothing this walk reports, and a cue that *does*
 //!   read one is incomplete anyway. Recorded in [`Timeline::passed`].
+//! - `0x24` is a **goto** and `0x23` its **marker**, walked only when the
+//!   caller asks ([`WalkModel::goto_markers`]). The goto scans its own cue's
+//!   commands from the first for a marker (`0x23`) whose operand byte 1 equals
+//!   its own, sets the program counter to that marker and runs on from there;
+//!   the marker itself is a no-op that returns zero. No marker is an error that
+//!   ends the cue, and the handler refuses a ninth goto within one tick. Read on
+//!   both binaries (`Scream_DoGrainGoto` on HD, `Scream_OpGoto` on Pulse's).
 //! - Every other opcode is not walked and is reported in
 //!   [`Timeline::unread`] rather than skipped silently: `0x1a` adds a random
 //!   wait, `0x08` replaces the voice's own playback state, `0x04` starts an
@@ -59,10 +66,10 @@
 //! runs the master tick three times per two 256-frame mixer grains at 44,100
 //! Hz, and a live count against the PSP's own cycle counter agreed (257.7,
 //! 259.7 and 258.3 ticks per emulated second over three 6 s windows).
-//! **The tick belongs to a build, not to a byte order**: PS2, Wipeout HD and the
-//! Vita are not measured, and this module does not decide which build a bank
-//! came from - the caller does, from the title's own data
-//! (`oag_title::SequenceTick`).
+//! **The tick belongs to a build, not to a byte order**: Wipeout HD's PS3 build
+//! runs 240 Hz, and PS2 and the Vita are not measured. This module does not
+//! decide which build a bank came from - the caller does, from the title's own
+//! data (`oag_title::SequenceTick`).
 
 use super::child::{CHILD_INDEX_AT, CHILD_RECORD_LEN, MAX_CHILD_DEPTH};
 use super::{Bank, COMMAND_LEN, Cue, KEY_ON_OPCODES, Sound};
@@ -78,6 +85,12 @@ const ALTERNATE: u8 = 0x19;
 const RANDOM_BEND: u8 = 0x1b;
 /// The opcode that ends the command list.
 const END: u8 = 0x2b;
+/// The opcode that jumps to a marker of the same cue.
+const GOTO: u8 = 0x24;
+/// The opcode a goto lands on; a no-op.
+const MARKER: u8 = 0x23;
+/// Gotos one tick may run before `Scream_DoGrainGoto` refuses (its depth guard).
+const MAX_GOTOS_PER_TICK: u32 = 8;
 /// Opcodes that return zero and change nothing this walk reports.
 const PASS_THROUGH: [u8; 5] = [0x14, 0x1e, 0x1f, 0x20, 0x21];
 
@@ -89,6 +102,17 @@ pub const MAX_COMBINATIONS: usize = 64;
 
 /// Steps one walk may take, so a hostile command table terminates.
 const MAX_STEPS: usize = 4096;
+
+/// Which opcodes beyond the always-modelled set a walk follows.
+///
+/// The default is the walk every caller had before HD's tick was measured, so a
+/// title opts in rather than having its cue census move under it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WalkModel {
+    /// Follow `0x24` to its `0x23` marker within the cue, instead of reporting
+    /// both as unread.
+    pub goto_markers: bool,
+}
 
 /// One waveform started at one moment.
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +177,7 @@ impl Timeline {
 
 /// Where a walk is: shared state that threads through children.
 struct Walk<'a> {
+    model: WalkModel,
     sounds: &'a [Sound],
     picks: &'a [u8],
     path: Vec<u16>,
@@ -186,8 +211,15 @@ impl Bank<'_> {
     /// group met (reduced modulo the group's count; the first when absent).
     #[must_use]
     pub fn cue_timeline_with(&self, cue: &Cue, picks: &[u8]) -> Timeline {
+        self.cue_timeline_modelled(cue, picks, WalkModel::default())
+    }
+
+    /// [`Self::cue_timeline_with`] under an explicit [`WalkModel`].
+    #[must_use]
+    pub fn cue_timeline_modelled(&self, cue: &Cue, picks: &[u8], model: WalkModel) -> Timeline {
         let sounds = self.sounds();
         let mut walk = Walk {
+            model,
             sounds: &sounds,
             picks,
             path: vec![cue.index],
@@ -215,7 +247,13 @@ impl Bank<'_> {
     /// this does not enumerate.
     #[must_use]
     pub fn cue_timelines(&self, cue: &Cue) -> Option<Vec<Timeline>> {
-        let first = self.cue_timeline(cue);
+        self.cue_timelines_modelled(cue, WalkModel::default())
+    }
+
+    /// [`Self::cue_timelines`] under an explicit [`WalkModel`].
+    #[must_use]
+    pub fn cue_timelines_modelled(&self, cue: &Cue, model: WalkModel) -> Option<Vec<Timeline>> {
+        let first = self.cue_timeline_modelled(cue, &[], model);
         let counts: Vec<u8> = first.groups.iter().map(|g| g.count.max(1)).collect();
         let total = counts
             .iter()
@@ -234,7 +272,7 @@ impl Bank<'_> {
                     pick
                 })
                 .collect();
-            let timeline = self.cue_timeline_with(cue, &picks);
+            let timeline = self.cue_timeline_modelled(cue, &picks, model);
             if timeline.groups != first.groups {
                 return None;
             }
@@ -253,6 +291,7 @@ impl Bank<'_> {
         // (`+0x52`) and the skip when it runs out (`+0x54`).
         let mut repeat: Option<(i32, i32)> = None;
         let mut started = false;
+        let mut gotos_this_tick = 0_u32;
         let count = cue.commands as i32;
         let mut pc: i32 = 0;
         while (0..count).contains(&pc) {
@@ -272,6 +311,9 @@ impl Bank<'_> {
             // positive runs in the same tick.
             let delay = self.order.u32(grain, 4) as u16 as i16;
             tick = tick.saturating_add(u32::try_from(delay).unwrap_or(0));
+            if delay > 0 {
+                gotos_this_tick = 0;
+            }
 
             if KEY_ON_OPCODES.contains(&opcode) {
                 if let Some(sound) = walk.sounds.iter().find(|s| s.command == command) {
@@ -306,6 +348,22 @@ impl Bank<'_> {
                 }
             } else if PASS_THROUGH.contains(&opcode) {
                 walk.out.passed.push(opcode);
+            } else if walk.model.goto_markers && opcode == MARKER {
+                walk.out.passed.push(opcode);
+            } else if walk.model.goto_markers && opcode == GOTO {
+                gotos_this_tick += 1;
+                let id = ((word >> 16) & 0xff) as u8;
+                let target = self.marker_of(cue, id);
+                match target {
+                    // The handler refuses a ninth goto in one tick.
+                    Some(_) if gotos_this_tick > MAX_GOTOS_PER_TICK => {
+                        walk.out.unread.push(opcode);
+                        return;
+                    }
+                    Some(marker) => pc = marker - 1,
+                    // No marker is an error return: the cue ends.
+                    None => return,
+                }
             } else if opcode == END {
                 return;
             } else if opcode == ALTERNATE {
@@ -337,6 +395,16 @@ impl Bank<'_> {
             }
             pc += 1;
         }
+    }
+
+    /// The first marker (`0x23`) of `cue` whose operand byte 1 is `id`, as an
+    /// index into the cue's own commands.
+    fn marker_of(&self, cue: &Cue, id: u8) -> Option<i32> {
+        (0..cue.commands as usize).find_map(|k| {
+            let at = (cue.first_command + k) * COMMAND_LEN;
+            let word = self.order.u32(self.commands.get(at..at + COMMAND_LEN)?, 0);
+            ((word >> 24) as u8 == MARKER && ((word >> 16) & 0xff) as u8 == id).then_some(k as i32)
+        })
     }
 
     fn walk_child(&self, operand: u32, tick: u32, frame: Frame, walk: &mut Walk) {
