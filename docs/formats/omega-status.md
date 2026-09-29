@@ -322,16 +322,23 @@ a PS4 mount them.
   (Vita layout, 8-byte pointers; one invariant per header pointer over all
   124,709 mesh objects, [`2048-animation.md`](2048-animation.md#the-models-node-table)),
   and a race now draws `tech_de_ra`'s 1,684 node-bound submeshes at their
-  nodes: the camera droid `CamBot_New2` hovers over the stands at
-  `(-73, -1, 89)` where it drew at the world origin, the crowd entities sit
-  in the stands, and the craft's airbrake flaps are back on their hinges at
-  `(±2.16, -0.05, -4.47)` instead of under the cockpit. **The box at the
-  bottom of `final_300_close.png` is not node-bound and did not move**: it is
-  static circuit geometry (`node None`), under the start grid, drawn
-  identically with and without the table - the earlier note that a node-bound
-  prop sat under the camera was an inference that the render does not bear
-  out. Nothing within 25 units of the craft at tick 300 is node-bound except
-  the droid. A node with no written matrix and no skeleton entry is not drawn
+  nodes. Before, all of them drew in node space, a clump inside the box
+  `(-87, -25, -46)..(25, 25, 23)` around the world origin - visible from the
+  start looking toward -z as a grey blob of legs and pods beside the AG
+  banner (17,446 pixels differ, all inside that blob); now the camera droid
+  `CamBot_New2` hovers over the stands at `(-73, -1, 89)`, the crowd entities
+  stand at their nodes' translations (placed box `(-1275, -79, -1097)..(1402,
+  566, 508)`), and the craft's airbrake flaps are back on their hinges at
+  `(±2.16, -0.05, -4.47)` instead of under the cockpit
+  (`data/scratch/omega-nodes-2/omega-{before,after2}-clump.png`,
+  `omega-{before,after1}-t300.png`). **The box at the bottom of
+  `final_300_close.png` is not node-bound and did not move**: it is static
+  circuit geometry (`node None`, road level under the start position; the 56-
+  and 228-vertex `wohdtrack_0021Shape`/`SFLine_003Shape` boxes contain the
+  point), drawn identically with and without the table - the earlier note that
+  a node-bound prop sat under the camera was an inference that the render does
+  not bear out. Nothing within 25 units of the craft at tick 300 is node-bound
+  except the droid. A node with no written matrix and no skeleton entry is not drawn
   and is counted (`Report::unplaced`): 3,220 submeshes on `data00` and 15,035
   on `data04`, all in 2048's `trackZone` (Zone mode) models and a few props on
   `cathedral`/`mall`/`tower`; a race on `tech_de_ra` has none.
