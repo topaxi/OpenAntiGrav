@@ -27,8 +27,10 @@
 //! **Chosen, not measured - no confidence score**: the mode subtitle's
 //! wording (the function that words it, `FUN_812b021a`, is unread), which
 //! medal glyph an earned tier draws, which key the pad uses for the
-//! change-craft button, and the two panels' opaque white (the frame reads
-//! `254,254,254`; the original's alpha ramp is unread).
+//! change-craft button, the orange a refused craft turns Change craft (the
+//! original pulses orange/blue), and where the objective text starts (see
+//! [`Frontend::draw_objective_page`]). The panels are `Transparent2048` and
+//! the glyphs `White2048`, both authored.
 //!
 //! **Not drawn, by name**: page kinds `1`-`4` (`FUN_810540c4`,
 //! `FUN_81052fb4`, `FUN_81052810`, `FUN_810535fe`) - kind `1` is on every
@@ -328,6 +330,19 @@ impl Frontend {
         }
     }
 
+    fn left_text(text: &str, x: f32, y: f32, scale: f32, color: [f32; 4], wrap: f32) -> Draw {
+        Draw::Text {
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align: Align::Left,
+            text: text.to_string(),
+            wrap_width: Some(wrap),
+        }
+    }
+
     /// The card, over the map.
     pub(super) fn draw_event_card(&self, out: &mut Vec<Draw>) {
         let (Some(card_state), Some(event)) = (
@@ -349,26 +364,26 @@ impl Frontend {
                 color: white,
             });
         }
+        // `Transparent2048` (`0xc0ffffff`) is the vertex colour
+        // `CampaignEventCard_DrawPanel` writes into both panel quads.
+        let panel = self.global_colour("Transparent2048");
         out.push(Draw::Fill {
             rect: HEADER,
-            color: white,
+            color: panel,
         });
         out.push(Draw::Fill {
             rect: BODY,
-            color: white,
+            color: panel,
         });
         if let Some(emblem) = card
             .emblem
             .as_deref()
             .filter(|src| self.placed(src).is_some())
         {
-            // The texture is a white glyph on alpha: the navy square behind it
-            // is the panel's own.
-            out.push(Draw::Fill {
-                rect: [432.0, 103.0, 62.0, 62.0],
-                color: blue,
-            });
-            self.card_sprite(emblem, [432.0, 103.0, 62.0, 62.0], white, out);
+            // One textured quad in `Blue2048` (`FUN_81060584`'s colour
+            // argument): the texture is a white square with the glyph cut
+            // out as alpha, so the tint makes the square navy.
+            self.card_sprite(emblem, [432.0, 103.0, 62.0, 62.0], blue, out);
         }
         if !card.title.is_empty() {
             out.push(Self::card_text(
@@ -381,7 +396,7 @@ impl Frontend {
             ));
         }
         if let Some(kind) = &card.kind_label {
-            out.push(Self::card_text(kind, CENTRE_X, 140.0, 0.6, blue, None));
+            out.push(Self::card_text(kind, CENTRE_X, 140.0, 0.54, blue, None));
         }
         self.card_sprite(
             event.kind.texture_name(),
@@ -431,8 +446,7 @@ impl Frontend {
             64.0,
             64.0,
         ];
-        let tinted = [white[0], white[1], white[2], tint[3]];
-        self.card_sprite(icon, icon_rect, tinted, out);
+        self.card_sprite(icon, icon_rect, white, out);
     }
 
     fn draw_objective_page(&self, event: &MapEvent, out: &mut Vec<Draw>) {
@@ -445,11 +459,16 @@ impl Frontend {
             ProgressState::Locked | ProgressState::Open => MEDAL_NONE,
         };
         self.card_sprite(medal, [488.0, 235.0, 52.0, 52.0], white, out);
+        // Both lines start at `x=552` in frame 14 (bounding boxes 552 and
+        // 553). The original centres a block of the text's own width plus the
+        // medal on `x=682`; the frontend has no glyph metrics, so this
+        // left-aligns at the frame's own edge and a wider or narrower wording
+        // sits off by half the difference (open).
         if let Some(label) = &card.pass_label {
-            out.push(Self::card_text(label, 702.0, 229.0, 0.6, blue, Some(345.0)));
+            out.push(Self::left_text(label, 552.0, 229.0, 0.66, blue, 345.0));
         }
         if let Some(text) = &card.objective {
-            out.push(Self::card_text(text, 702.0, 256.0, 0.9, blue, Some(345.0)));
+            out.push(Self::left_text(text, 552.0, 256.0, 0.8, blue, 345.0));
         }
         out.push(Draw::Fill {
             rect: [482.0, 329.0, 400.0, 1.0],

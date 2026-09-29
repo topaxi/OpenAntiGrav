@@ -6,7 +6,9 @@ base `0x81000000`. Found chasing the same lead as
 `GameModeBase_IsShipTypeAllowed` (`0x812b41da`). Both names here are
 applied, from [names.tsv](names.tsv).
 
-This is the screen `docs/formats/2048-frontend.md`'s campaign-map module doc
+**2026-09-29: the layout is recovered - see [the card's layout](#the-cards-layout-recovered-2026-09-29)
+below; the paragraph that follows is the 2026-09-28 state, and its "lap-count
+arrows" are page arrows.** This is the screen `docs/formats/2048-frontend.md`'s campaign-map module doc
 comment says a live capture shows (frame `14`,
 `data/reference/2048-frontend/14-campaign-map-event-card-unity-square.png`: a
 photo backdrop, the event's name and kind, a `PASS`/objective line, a pair of
@@ -108,9 +110,9 @@ below is in the decompile and matches frame 14 to the pixel:
 | Piece | Where | Evidence |
 | --- | --- | --- |
 | Photo | `x=16`, 404 wide, 334 tall (`y=92`); texture UV `0..404/512` | `FUN_81060744(x, trackName, isZone)` builds the quad `x..x+404`, `u1 = 0x3f4a0000 = 0.789 = 404/512`; the texture is a 512x512 `PVRTII4bpp` whose photo fills the top-left 404x334 (decoded: `trackscreens/Square.gxt`) |
-| Header panel | `x=420` `y=92` 524x86, opaque white | two `0x18`-stride quad writes, `y` `92`..`178` |
+| Header panel | `x=420` `y=92` 524x86, `Transparent2048` (`0xc0ffffff`) | two `0x18`-stride quad writes, `y` `92`..`178` |
 | Body panel | `x=420` `y=182` 524x244 | second quad, `y` `182`..`426` |
-| Emblem | centre `(463, 134)`, 64 square (`+/-32`) | `FUN_81060584(x, y, trackName, colour)`; a white-glyph-on-alpha `tracks/<name>.gxt` over a Blue2048 square |
+| Emblem | centre `(463, 134)`, 64 square (`+/-32`) | `FUN_81060584(x, y, trackName, colour)`; one textured quad tinted Blue2048 (the texture is a white square with the glyph as alpha) |
 | Title | centre `x=682`, `y=100`, font `default`, scale `0.82` | `DAT_819488ec = 0x3f51eb85` |
 | Kind line | centre `x=682`, `y=140`, `NEOSANS` | |
 | Mode icon | centre `(902, 134)`, 64 square | `FUN_81061040(x, y, 1.0, event+0x190, colour)` picks one of four textures (`DAT_816c87e0`..`ec`) by the event's mode ordinal |

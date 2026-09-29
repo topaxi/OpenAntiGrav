@@ -1,6 +1,6 @@
 //! Wipeout 2048's campaign map: `SP.xml`'s events, on the `newFEshell`
 //! screen the disc's own `<TouchCampaign>` and `<FE3DCanvas>` live on, each
-//! a tap away from `Launch 2048`.
+//! a tap away from its card (`event_card`), and from `Launch 2048` past that.
 //!
 //! # What is authored, and what is not
 //!
@@ -526,7 +526,7 @@ impl Frontend {
     }
 
     /// The pad on the map: the d-pad moves to the nearest event that way,
-    /// cross or start launches the one under the cursor.
+    /// cross or start opens the card of the one under the cursor.
     pub(super) fn update_campaign_map(&mut self, input: &mut Input) {
         if self.campaign.events.is_empty() {
             return;
@@ -634,7 +634,7 @@ impl Frontend {
     }
 
     /// The pointer on the map: hovering selects, a click on the selected
-    /// event launches it, a click elsewhere selects.
+    /// event opens its card, a click elsewhere selects.
     pub(super) fn campaign_map_pointer(&mut self, pointer: &Pointer) -> bool {
         if self.campaign.card.is_some() {
             return self.event_card_pointer(pointer);
