@@ -72,6 +72,10 @@ pub(super) fn campaign_page(
     kind: CampaignKind,
     archives: &mut oag_assets::Archives,
     strings: &oag_ui::language::StringTable,
+    // The boot's own circuit-name column - the one `crate::main::session::campaign::open_campaign`
+    // hands the live session - so `Track` on HD's `Cell Selection` names
+    // the circuit rather than falling back to its raw id.
+    circuit_names: &oag_ui::language::CircuitNames,
     // **HD/Fury only, `None` on every other title.** The chosen language's
     // own `entries.xml` path - resolves `Campaign Selection`'s own four
     // idstrings off `DATA06`'s copy, the same overlay
@@ -151,16 +155,6 @@ pub(super) fn campaign_page(
         merged
     });
     let strings = overlaid_strings.as_ref().unwrap_or(strings);
-    // **HD's own `Track Line` fold is not built here.** `CircuitNames::choose`
-    // needs every copy of the track-name table across the source's own
-    // archives, which this still has no ready list of - see
-    // `oag_ui::campaign::hd::hd_track_line`'s own doc for the plain fallback
-    // this leaves a captured HD `Cell Selection` with (the raw track id, the
-    // same gap `picker_page`'s own RACE-page capture already has). The live
-    // session's `crate::main::session::campaign::open_campaign` does carry
-    // one (`Shell::circuit_names`) and is the path that matters for a
-    // player.
-    let circuit_names = oag_ui::language::CircuitNames::default();
     // **HD/Fury only.** A still has no `Campaign Selection` step to narrow
     // `campaign.grids` the way `CampaignStage::open_grid_selection` always
     // does before a live session ever draws `Grid Selection`/`Cell
@@ -292,7 +286,7 @@ pub(super) fn campaign_page(
                     skin,
                     frame,
                     strings,
-                    &circuit_names,
+                    circuit_names,
                     0,
                     hd_grids.len().max(1),
                     &grid_summary,
