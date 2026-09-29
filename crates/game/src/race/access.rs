@@ -178,6 +178,13 @@ impl Race {
         self.sim.respawns.get(slot).copied().unwrap_or(0)
     }
 
+    /// Which trigger fired this craft's most recent respawn, `None` if it has
+    /// not had one. See [`respawn::RespawnCause`](super::respawn::RespawnCause).
+    #[must_use]
+    pub fn last_respawn_cause_of(&self, slot: usize) -> Option<RespawnCause> {
+        self.sim.last_respawn_cause.get(slot).copied().flatten()
+    }
+
     /// How many barrel rolls an **opponent** has armed this race.
     ///
     /// Counted for the deviation our AI carries and the original's does not -
