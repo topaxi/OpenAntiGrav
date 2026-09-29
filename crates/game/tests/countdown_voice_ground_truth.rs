@@ -87,7 +87,10 @@ fn runs(pcm: &[u8]) -> Vec<Run> {
 
 /// Runs a race from its first tick and returns `(tick, cue)` for every
 /// `Ready`/`Go` raised, plus the speech-only WAV's runs.
-fn countdown(mode: oag_race::Mode, name: &str) -> Option<(Vec<(u64, Cue)>, Vec<Run>)> {
+/// What one rendered start raised, and the runs of speech it produced.
+type Rendered = (Vec<(u64, Cue)>, Vec<Run>);
+
+fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
