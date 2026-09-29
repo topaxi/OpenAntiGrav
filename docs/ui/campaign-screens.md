@@ -1061,16 +1061,17 @@ for: HD's circuit name table is a different archive copy from its circuit
 *list* (`docs/formats/hd-frontend.md`), so `strings.get_or_id(&cell.track)`
 alone would show the wrong name on eight circuits. `hd_track_line` folds
 through `CircuitNames::get`, falling back to `strings.get_or_id` and then
-the raw id - **simplified from `oag_game::catalogue::label`**: that function
-also appends `FE_REVERSE` where a reversed circuit shares its forward
-twin's own name, which needs the full circuit catalogue this module has no
-access to at draw time, so a reversed HD circuit whose name collides with
-its forward twin is not disambiguated here. The live session
-(`session::campaign::open_campaign`) passes the real
-`Shell::circuit_names`; the headless `--menu-page cell-select` capture
-passes `CircuitNames::default()` (a no-op fold, same gap `picker_page`'s own
-RACE-page capture already has) - see `oag_game::campaign::menu_page`'s own
-doc for why building one there was out of scope this pass.
+the raw id. It is **not** `oag_game::catalogue::label`: that function
+appends `FE_REVERSE` where a reversed circuit shares its forward twin's name,
+which the original never does on HD (`docs/formats/hd-frontend.md`: the drawn
+name never carries a direction, and Track Select here draws the bare name
+plus a `ReverseIcon`), so a reversed Fury cell (`grid9`..`grid14` carry
+dozens) reads `TALON'S JUNCTION`, not `TALON'S JUNCTION REVERSE` - checked
+2026-09-29 by comparing `label` with the bare fold over every cell's track
+ids. The live session (`session::campaign::open_campaign`) and the headless
+`--menu-page cell-select` capture both pass `Shell::circuit_names` (the
+capture passed `CircuitNames::default()` until 2026-09-29 and so drew the raw
+`17_Track` where the disc names `TALON'S JUNCTION`).
 
 **A three-rung difficulty toggle, `DifficultyButton` - new state, backed by
 an existing function.** `oag_tables::race_campaign::Cell::targets_for_difficulty`
