@@ -633,15 +633,15 @@ fn controls_bindings_round_trips_through_a_real_toml_file() {
 #[test]
 fn hd_opens_ship_select_on_concept1_until_a_model_is_picked() {
     let mut race = Race::default();
-    assert_eq!(race.opening_variant(&oag_hd::TITLE), "_c1");
-    assert_eq!(race.opening_variant(&oag_pulse::TITLE), "");
+    assert_eq!(race.opening_variant(oag_hd::TITLE), "_c1");
+    assert_eq!(race.opening_variant(oag_pulse::TITLE), "");
 
     race.variant_chosen = true;
-    assert_eq!(race.opening_variant(&oag_hd::TITLE), "");
+    assert_eq!(race.opening_variant(oag_hd::TITLE), "");
 
     let stored = Race {
         variant: "_n1".to_string(),
         ..Race::default()
     };
-    assert_eq!(stored.opening_variant(&oag_hd::TITLE), "_n1");
+    assert_eq!(stored.opening_variant(oag_hd::TITLE), "_n1");
 }
