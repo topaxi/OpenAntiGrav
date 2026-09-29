@@ -3,9 +3,10 @@
 2026-09-29. Started from a maintainer report, made by feel and unmeasured:
 **it is easier to fall off the track here than in the original (Pulse PSP)**,
 no specific circuit, with "flying too high?" and "collision less forgiving?" as
-the guesses. This page is the measurement pass. **Nothing was tuned.** The one
-divergence it found, a craft sunk into the floor, was read out of the binary
-afterwards and the narrowest part of the original's mechanism is now ported
+the guesses. This page is the measurement pass. **Nothing was tuned and no
+physics is changed on `main`.** The one divergence it found, a craft sunk into
+the floor, was read out of the binary afterwards, ported on a branch, and held
+back because the port strands a craft below two holes in the AI's racing line
 (see [the sunk craft](#the-one-divergence-the-original-recovers-a-craft-that-has-sunk-into-the-floor-and-ours-does-not)).
 
 Every number below is reproducible from `crates/game/tests/falloff_survey_ground_truth.rs`
@@ -135,44 +136,65 @@ on [collision.md](../ghidra/functions/psp-pulse-usa/collision.md#every-mesh-surf
 Measured by placing the same pose in both engines (the clean placement method is
 below), coasting, 200 ticks:
 
-| case | original | ours before | ours now (1 only) | prototype (1+2+3) |
+| case | original | ours (main) | (1) only, `sunk-craft-floors` | prototype (1+2+3) |
 | --- | --- | --- | --- | --- |
 | `16_Track` idx 200, 3.6 into the floor | +1.81 on the first tick (two corners), then climbs; rest y -39.60 | falls through | +3.54 in one tick, rest -39.61 | tick for tick (first tick -41.26 vs -41.28, tick 30 -39.17 vs -39.16) |
 | `03_Track` idx 200, 3.6 into the floor | pass 1 lifts +0.757 (predicted 0.752), probe escapes +1.82, rest y 4.67 | falls through | +3.75 in one tick, rest 4.66 | rest 4.663; the gate alone (no pass 1) falls through |
 | `16_Track` idx 200, on its flank on the floor | **stays on its flank** and slides; tick 199 (323.57, -47.49, -140.96) | - | tick 199 (323.63, -47.50, -140.95) | tick 199 (323.42, -47.51, -141.05) |
 | unsunk controls, both circuits | hovers still | hovers | hovers | hovers |
 
-**What shipped is (1) alone.** (2) without (3) strips wall contacts that the
-original covers with pass 1 (`05_Track`'s lone Ace: 60 wall-contact ticks to
-2,475, airborne 782 ticks to 7,365) and leaves `03_Track`'s sunk craft falling.
-(1)+(2)+(3) matches every trial above but costs `01_Track` its clean lap in the
-regression gate: the Ace's line drops through the hole under samples 31-42, the
-craft rolls onto its flank on the way down, lands on the floor below and - held
-there now, as the original holds a flank-down craft - stays beached at index
-71 every lap. So (2) and (3) are read, measured and **parked**, to land together
-once the `01_Track` line no longer drops into that hole. Ungated, (1) makes more
-floor contacts than the original, which errs in the forgiving direction.
+**Nothing of it is merged.** (1) alone is on branch `sunk-craft-floors`; (2) and
+(3) are a prototype on `sunk-craft-parked`. The reasons, measured:
 
-### What (1) changed, measured
+- **(1) alone strands a craft, the player included.** `01_Track`'s racing line
+  drops through the hole under samples 31-42 and `06_Track`'s through the one
+  under 1196-1200 (`race_ground_truth.rs`'s "nothing under the line" table). A
+  craft falling through rolls onto its flank on the way down and lands on the
+  floor below. Before, it sank on through that floor (into a `Reset` volume on
+  `01_Track`); with (1) it is held there on its flank - which is what the original
+  does to a flank-down craft, measured above - and nothing rights it. An opponent
+  is freed after 20 s by this project's invented `Stalled` dwell. **The player has
+  no such dwell and stays there**: the player's autopilot on `01_Track` completes
+  1 lap in 18,000 ticks instead of 4, airborne 15,946 of them, and a scripted
+  escape attempt from the beached pose (900 ticks each of throttle, throttle with
+  full left or right, both airbrakes, and left-right-left / right-left-right roll
+  taps with and without throttle) never rights it; holding a steer only scoots it
+  along its flank at 4-13 u/s. That is a softlock on a selectable circuit.
+- **(2) without (3)** strips wall contacts that the original covers with pass 1
+  (`05_Track`'s lone Ace: 60 wall-contact ticks to 2,475, airborne 782 ticks to
+  7,365) and leaves `03_Track`'s sunk craft falling.
+- **(1)+(2)+(3)** matches every placement trial but costs `01_Track` its clean lap
+  in the regression gate, for the same beaching.
 
-- **Regression gate**, all twelve clean before and after. `01_Track`: before
-  `respawns 1 lost at [794]`, after `respawns 3 lost at [794, 72, 71]`. 794 is
-  the grid-slot spawn fall; 72 and 71 are this project's invented `Stalled`
-  dwell firing after the craft sat beached on its flank for about 20 s (see
-  above). 07_Track's one respawn moved from index 687 to 696.
+So the prerequisite for any of it is the two holes under the line: an AI line
+that no longer drops into them, or whatever the original does there (it is not
+known whether the original's craft rolls onto its flank at that lip). Whether to
+add a player-side rescue is a design decision for the maintainer, not a port -
+the original has none.
+
+### What (1) did, measured on `sunk-craft-floors`
+
+- **Regression gate**, all twelve clean. `01_Track`: before
+  `respawns 1 lost at [794]`, with (1) `respawns 3 lost at [794, 72, 71]`. 794 is
+  the grid-slot spawn fall; 72 and 71 are the `Stalled` dwell after about 20 s
+  beached. `07_Track`'s one respawn moved from index 687 to 696.
 - **Survey** (`VENOM`, lone AI, Ace and Novice, all 24 circuit-directions,
   18,000 ticks, `--release`): rescue events 583 to 267. `13_Track` Novice
-  345 to 26 (the known jump pathology: a craft that lands short now has its hull
-  held by the far floor's lip rather than dropping through it), `06_Track` Novice
-  2 to 0, `01_Track` Ace 1 to 3 (the two `Stalled` above), `17_Track` Novice 2 to
-  4, `05_Track` Novice 3 to 4, `29_Track` Novice 214 to 216. Whether the
-  original holds a short landing on `13_Track` the same way is unmeasured.
+  345 to 26 (a craft that lands short of the jump now has its hull held by the
+  far floor's lip), `06_Track` Novice 2 to 0, `01_Track` Ace 1 to 3 (the two
+  `Stalled`), `17_Track` Novice 2 to 4, `05_Track` Novice 3 to 4, `29_Track`
+  Novice 214 to 216.
 - **Shield**, clean-lap board (`VENOM`, lone Ace), end-of-run pool and per-lap
-  charge, before and after: identical on ten circuits; `01_Track` end 70.62 to
-  73.48, per-lap 4.0/4.2/3.3 to 3.5/4.2/12.4 (the beached lap); `10_Track` end
-  87.40 to 94.24; `06_Track` 78.81 to 77.89; `07_Track` 79.94 to 78.46.
-- A player sees one thing: a craft that drops through `01_Track`'s hole now lies
-  on its flank on the floor below instead of sinking through it. Not captured.
+  charge: identical on ten circuits; `01_Track` end 70.62 to 73.48, per-lap
+  4.0/4.2/3.3 to 3.5/4.2/12.4 (the beached lap); `10_Track` end 87.40 to 94.24;
+  `06_Track` 78.81 to 77.89; `07_Track` 79.94 to 78.46.
+- **`ai_clean_lap_gate`** (48 rows, all classes): `01_Track` FLASH `CleanLap` to
+  `NoCleanLap` (beached every lap), `06_Track` PHANTOM contact ticks 493 to 1,586
+  (beached four times in its hole), `05_Track` FLASH `Died` to `CleanLap`,
+  `10_Track` VENOM 0 to 5 contact ticks, the rest within a few ticks.
+- **`off_track_rescue_ground_truth`** loses its subject: the player's autopilot
+  no longer leaves `05_Track` at index ~1225, and no forward circuit sends it off
+  through `OffTrack` any more. Not re-pointed.
 
 ## Placing a craft in the original: the clean method
 

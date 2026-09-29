@@ -22,22 +22,21 @@ driving fall, and slot 0 is unaffected**; and open edges on `04`, `05`, `07`, `1
 `20r`, `23r`, `26r`, `30r`, where 12-21% of shoves leave and the wall-less stretch is
 in the collision data itself.
 
-**The divergence, now read and partly ported (2026-09-29)**: a craft whose hull
-is through a floor fell through in ours and is recovered in the original. The
+**The divergence, now read (2026-09-29); nothing merged**: a craft whose hull is
+through a floor falls through in ours and is recovered in the original. The
 original has three mechanisms, all read with addresses on
 [collision.md](../../docs/ghidra/functions/psp-pulse-usa/collision.md#every-mesh-surface-reaches-the-hull-narrowphase-2026-09-29):
 (1) the hull narrowphase reads no surface type, so floors make contacts (which
 never damage, `0x08842648`); (2) `Collision_AddContact` keeps a contact only if
 the sample's projection is in the crossed triangle; (3) `Body_StepWorld`'s
-pass 1 clips the body back along its velocity (0.9 of the overshoot). **(1) is
-shipped**: sunk craft recover on `16_Track` and `03_Track`, the gate stays clean
-(`01_Track` `[794]` to `[794, 72, 71]`, the craft now beached on its flank below
-the hole at samples 31-42 - which the original also does to a flank-down craft,
-measured), and the survey's rescues drop 583 to 267 (`13_Track` Novice 345 to 26).
-**(2)+(3)** match every placement trial tick for tick but cost `01_Track` its clean
-lap, and (2) alone wrecks `05_Track`'s walls; parked on local branch
-`sunk-craft-parked` (patch in `data/scratch/sunk-craft/gate-pass1.patch`).
-Full tables: [leaving-the-track.md](../../docs/gameplay/leaving-the-track.md).
+pass 1 clips the body back along its velocity (0.9 of the overshoot). (1) alone
+is on local branch `sunk-craft-floors` (with the regenerated `ai_clean_lap_gate`
+baseline); (2)+(3) are a prototype behind `OAG_PASS1` on `sunk-craft-parked`
+(patch `data/scratch/sunk-craft/gate-pass1.patch`). **Held back because (1)
+strands a craft on its flank below the holes in `01_Track`'s (samples 31-42) and
+`06_Track`'s (1196-1200) racing lines** - the original also holds a flank-down
+craft (measured) - and the player has no rescue from that and no input that
+rights it: a softlock. Full tables: [leaving-the-track.md](../../docs/gameplay/leaving-the-track.md).
 
 Instruments left behind, all `#[ignore]`d/`OAG_SWEEP`-gated: `falloff_survey_ground_truth.rs`
 (survey, grid, shove sweep, edge profile, single-trial trace with a `place` line and
@@ -48,12 +47,17 @@ Instruments left behind, all `#[ignore]`d/`OAG_SWEEP`-gated: `falloff_survey_gro
 
 ## Open
 
-- **Land the projection gate and pass 1 together** once `01_Track`'s AI line
-  stops dropping into the hole under samples 31-42 (the craft rolls onto its
-  flank falling through it and, faithfully, stays there). Re-run the gate,
-  `05_Track`'s wall-contact count, and the placement trials in
-  `leaving-the-track.md`. Pass 1 would replace `wall::swept_contact` and may make
-  `hover::sweep` redundant; neither was checked.
+- **Decision for the maintainer**: the floor contacts (branch
+  `sunk-craft-floors`) are faithful and fix the sunk craft, but softlock a player
+  who drops through `01_Track`'s hole at samples 31-42. Options: fix the AI line
+  and accept the player case, add a player-side rescue (an invention; the
+  original has none), or find out what the original does at that lip (whether
+  its craft rolls onto its flank there at all).
+- Then land (1), and (2)+(3) together, re-running the gate, `ai_clean_lap_gate`,
+  `05_Track`'s wall-contact count and the placement trials. `off_track_rescue`
+  needs a new subject on that branch (a placed shove off an open edge; no forward
+  circuit sends the autopilot off through `OffTrack` any more). Pass 1 would
+  replace `wall::swept_contact` and may make `hover::sweep` redundant.
 - `05_Track` under the gate: 60 wall-contact ticks to 2,475 without pass 1, 2,696
   with it (maxlat 8.53). One seed, one tier; unexplained.
 - The hover penetration escape: at `03_Track` the original's two probes each
@@ -75,8 +79,8 @@ Instruments left behind, all `#[ignore]`d/`OAG_SWEEP`-gated: `falloff_survey_gro
 1. Fold the four-write placement and a per-tick log into `scripts/psp-drive.py
    place` (`--rewrites N --log out.csv`), so the trials are reproducible from
    the repository.
-2. Fix or reroute `01_Track`'s line past samples 31-42, then land the parked
-   gate + pass 1 and re-measure.
+2. Settle the maintainer decision above, fix or reroute the AI line past
+   `01_Track` 31-42 and `06_Track` 1196-1200, then land (1)-(3) and re-measure.
 3. Repeat the open-edge shove at `03_Track` index 1780 with the clean placement.
 4. Add the reversed circuits to the regression gate's lone-craft test, so
    `17_Track` is seen.

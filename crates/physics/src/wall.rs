@@ -66,8 +66,8 @@
 //! of how it recovers a craft whose hull has sunk into a floor. Porting it
 //! (branch `sunk-craft-floors`) turns the AI's fall through the holes under
 //! `01_Track`'s line (samples 31-42) and `06_Track`'s (1196-1200) into a craft
-//! beached on its flank for good, the player included, where it used to drop
-//! into a `Reset` volume. See `docs/gameplay/leaving-the-track.md`. The
+//! beached on its flank for good, the player included, where before it fell on
+//! through (into a `Reset` volume on `01_Track`). See `docs/gameplay/leaving-the-track.md`. The
 //! reasoning below is this crate's, not the original's.
 //!
 //! [`Surface::Floor`] and [`Surface::MagFloor`] are skipped, because the hover

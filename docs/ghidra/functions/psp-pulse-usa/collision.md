@@ -551,9 +551,10 @@ as against `Wall`. The ring consumer proves non-wall contacts arrive:
 `FUN_088418e0`, at `0x088426e8`-`0x08842728`, looks each ring record's mesh
 proxy up through `world+0x2454` and calls `FUN_08844100(craft, 3)` when that
 collider's `+0x6c` is `2` - a **`Reset` contact** reaching the gameplay loop.
-Confidence **88**. `crates/physics/src/wall.rs` had filtered the hull to `Wall`
-alone on its own reasoning ("the hover spring owns floors"); it now takes every
-surface but `Reset`, which `crates/physics/src/reset.rs` handles.
+Confidence **88**. `crates/physics/src/wall.rs` filters the hull to `Wall` alone
+on its own reasoning ("the hover spring owns floors"). Taking every surface but
+`Reset` is ported on the unmerged branch `sunk-craft-floors` and held back: see
+`docs/gameplay/leaving-the-track.md` for why.
 
 ### `Collision_AddContact` has a second test: the projection must land in the same triangle
 
