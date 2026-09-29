@@ -356,8 +356,44 @@ and the picked livery reaches the race. Full writeup:
 4. **Pulse's own `Team Selection` Back** still reopens `Grid Selection`;
    whether Pulse's original returns to `Cell Selection` the way HD's
    `goto`-less `TeamRedirectBack` does was not checked.
-5. **HD's track screen** (`Track_Selection_Definition.xml`, `DATA06`) is
-   still unread; the RACE page keeps its TRACK row.
+5. **HD's track screen** (`Track_Selection_Definition.xml`, `DATA06`) was
+   read and wired on 2026-09-29 (next section); the RACE page's TEAM,
+   VARIANT and TRACK rows are dropped for it.
 6. **The default livery**: the original's fresh-profile campaign opens this
    screen on `concept1`; this build opens on `settings.race.variant`, the
    classic hull by default. Measured divergence, left in place.
+
+## 2026-09-29: HD's `Track Creation` (track screen) read, drawn and walked
+
+The circuit screen sits on the RACEBOX path only (`Single Player` ->
+`Track Creation` -> `Team Selection` -> race; the campaign skips it, confidence
+90). It draws the title, headings, emblem frame, each circuit's own
+`TrackSelectEmblem_Fury.gtf`, the name, `CIRCUIT LENGTH`/`RACE DISTANCE`, the
+RECORDS table (`---` cells) and, on a reverse circuit, the authored
+`ReverseIcon`s. Left/right wrap along twelve circuits, up/down switch
+direction; pointer and Back work; Back from `Team Selection` returns here.
+Writeup: `docs/ui/campaign-screens.md`, "Wipeout HD/Fury: `Track Creation`,
+2026-09-29"; code in `oag_ui::picker::hd::track`, `Picker::with_rows`,
+`oag_game::catalogue::direction_rows`.
+
+**Corrections it made**: `right` most likely wraps at twelve (confidence 80:
+press 12 is Vineta K again, cursor on the same top hex row, no reverse glyph in
+13-24), with the two rows as directions chosen, not the 24-entry list; `Track Creation` is not in `racebox_definition.xml`, which only names it.
+
+## Open
+
+1. **The three things the frame shows that this build does not**: the circuit
+   wireframe (`TrackModel`; HD ships no `FE\forward.vex`, so it must come from
+   the racing circuit's own geometry), the fly-by (`preview.bik`, Bink), and the
+   `TrackHexSelection` grid (per-circuit emblems in dim hexes, selected red with
+   a white outline; cell pitch unmeasured). The hex grid is the largest empty
+   area; measuring its pitch off `track-carousel/*.png` and drawing the
+   authored `Hexagon_HD*.gtf` cells is about an afternoon.
+2. **Up/down = direction** and the **reverse row's order** are chosen. One
+   `scripts/rpcs3-drive.py browse` walk with `--button down` on `Track Creation`
+   settles both (15 minutes of RPCS3).
+3. **RECORDS cells**: no per-circuit record in (name, team, time) shape.
+4. **The `Squares` page dots** (12, first red) are code-filled.
+5. **Zone**: Zone skips the ship screen here as on Pulse, but HD's
+   `TrackRedirect` sends it to `Team Selection` like every other mode; unmeasured
+   whether the original does too.

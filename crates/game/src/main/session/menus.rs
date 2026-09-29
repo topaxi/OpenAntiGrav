@@ -619,10 +619,12 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
                 // Through the race box's own screens first - Track Select,
                 // then Ship Select - and only straight to the race on a title
-                // that authors neither. See `session::picker`. A title with
-                // a ship screen and no track screen - Wipeout HD/Fury, see
-                // `oag_title::FrontEnd::team_select` - opens the ship screen
-                // alone, except in Zone, which forces its own hull.
+                // that authors neither. See `session::picker`. Wipeout
+                // HD/Fury authors both, in files of their own
+                // (`oag_title::FrontEnd::track_select`/`team_select`), and
+                // takes the same path: `Track Creation` redirects to `Team
+                // Selection` by default. Zone skips the ship screen either
+                // way, since it forces its own hull.
                 let zone = self.race_mode() == oag_race::Mode::Zone;
                 if self.open_track_picker() || (!zone && self.open_ship_picker()) {
                     return;

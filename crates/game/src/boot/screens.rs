@@ -62,8 +62,8 @@ pub(super) fn load_included_screens(
     load_included(archives, name, skin).map(|(screens, _)| screens)
 }
 
-/// A title's standalone `Team Selection` definition
-/// ([`oag_title::FrontEnd::team_select`]), parsed with the skin's globals
+/// A title's standalone `Team Selection` or `Track Creation` definition
+/// ([`oag_title::FrontEnd::team_select`], [`oag_title::FrontEnd::track_select`]), parsed with the skin's globals
 /// and kept beside its own text - `oag_ui::picker::hd::read` walks the tree
 /// again for the widgets [`Screens`] does not collect - and the strings its
 /// `idstring`s resolve to in `entries`' own `DATA06` copy, the archive the
@@ -83,14 +83,48 @@ pub(super) fn load_team_select(
     skin: &Screens,
     report: &mut Vec<String>,
 ) -> Option<TeamBox> {
+    load_hd_selection(archives, name, entries, skin, &[], "ship", report)
+}
+
+/// Reads [`TeamBox`] for the track screen. `extra_ids` are strings the
+/// screen's code looks up that no `idstring` in the file names - the RECORDS
+/// table's row labels.
+pub(super) fn load_track_select(
+    archives: &mut oag_assets::Archives,
+    name: Option<&str>,
+    entries: Option<&str>,
+    skin: &Screens,
+    report: &mut Vec<String>,
+) -> Option<TeamBox> {
+    load_hd_selection(
+        archives,
+        name,
+        entries,
+        skin,
+        &oag_ui::picker::hd::track::RECORD_ROW_IDS,
+        "track",
+        report,
+    )
+}
+
+fn load_hd_selection(
+    archives: &mut oag_assets::Archives,
+    name: Option<&str>,
+    entries: Option<&str>,
+    skin: &Screens,
+    extra_ids: &[&str],
+    which: &str,
+    report: &mut Vec<String>,
+) -> Option<TeamBox> {
     let name = name?;
     let (screens, xml) = load_included(archives, name, skin)
-        .inspect_err(|error| report.push(format!("{name}: {error:#} - no ship screen")))
+        .inspect_err(|error| report.push(format!("{name}: {error:#} - no {which} screen")))
         .ok()?;
     let ids: Vec<&str> = xml
         .split("idstring=\"")
         .skip(1)
         .filter_map(|rest| rest.split('"').next())
+        .chain(extra_ids.iter().copied())
         .collect();
     let strings = entries
         .map(|path| crate::campaign::hd_data06_strings(archives, path, &ids))
@@ -113,6 +147,22 @@ pub(super) fn team_logos(team_box: bool, teams: &[crate::catalogue::Team]) -> Ve
         .iter()
         .map(|team| oag_ui::picker::hd::logo_src(&team.id))
         .collect()
+}
+
+/// Every circuit's own emblem, for a source whose track screen draws one -
+/// asked for by name, since the `Emblem` widget authors no `src`. See
+/// `oag_ui::picker::hd::track::emblem_src`.
+pub(super) fn track_emblems(track_box: bool, tracks: &[crate::catalogue::Track]) -> Vec<String> {
+    if !track_box {
+        return Vec::new();
+    }
+    let mut out: Vec<String> = tracks
+        .iter()
+        .map(|track| oag_ui::picker::hd::track::emblem_src(&track.location))
+        .collect();
+    out.sort_unstable();
+    out.dedup();
+    out
 }
 
 fn load_included(
@@ -299,9 +349,14 @@ pub(super) fn load_screens(
 /// The face ratios are measured off the faces actually loaded where both
 /// are - `default` against `menu` - and Pulse's own `small` where the third
 /// is not. See [`oag_ui::picker::FaceScales`].
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is a separate fact of the two screens: the three files, the strings and faces, the grid"
+)]
 pub(super) fn selection_layouts(
     race_box: Option<&Screens>,
     team_box: Option<&TeamBox>,
+    track_box: Option<&TeamBox>,
     strings: &oag_ui::language::StringTable,
     font: &oag_ui::font::Atlas,
     menu_font: Option<&oag_ui::font::Atlas>,
@@ -317,15 +372,28 @@ pub(super) fn selection_layouts(
         }),
         ..oag_ui::picker::FaceScales::default()
     };
-    let track_select = race_box.and_then(|included| {
-        oag_ui::picker::Layout::read(
-            included,
-            oag_ui::picker::Kind::Track,
-            strings,
-            faces,
-            [space.size.0, space.size.1],
-        )
-    });
+    let track_select = race_box
+        .and_then(|included| {
+            oag_ui::picker::Layout::read(
+                included,
+                oag_ui::picker::Kind::Track,
+                strings,
+                faces,
+                [space.size.0, space.size.1],
+            )
+        })
+        .or_else(|| {
+            let track_box = track_box?;
+            let strings = with_served_gaps(strings, track_box);
+            let grid = [space.size.0, space.size.1];
+            oag_ui::picker::hd::track::read(
+                &track_box.xml,
+                &track_box.screens,
+                &strings,
+                faces,
+                grid,
+            )
+        });
     let ship_select = race_box
         .and_then(|included| {
             oag_ui::picker::Layout::read(
@@ -338,17 +406,7 @@ pub(super) fn selection_layouts(
         })
         .or_else(|| {
             let team_box = team_box?;
-            // Only what the served table lacks - an id both copies carry
-            // keeps the served copy's text, as every other screen does.
-            let mut strings = strings.clone();
-            strings.merge(
-                team_box
-                    .strings
-                    .iter()
-                    .filter(|(id, _)| strings.get(id).is_none())
-                    .map(|(id, text)| (id.clone(), text.clone()))
-                    .collect(),
-            );
+            let strings = with_served_gaps(strings, team_box);
             let grid = [space.size.0, space.size.1];
             oag_ui::picker::hd::read(&team_box.xml, &team_box.screens, &strings, faces, grid)
         });
@@ -358,4 +416,22 @@ pub(super) fn selection_layouts(
         ship_select.as_ref().map_or("unread", |_| "read")
     ));
     (track_select, ship_select)
+}
+
+/// `strings` with what the served table lacks filled in from `file`'s own
+/// `DATA06` copy. An id both copies carry keeps the served copy's text, as
+/// every other screen does.
+fn with_served_gaps(
+    strings: &oag_ui::language::StringTable,
+    file: &TeamBox,
+) -> oag_ui::language::StringTable {
+    let mut strings = strings.clone();
+    strings.merge(
+        file.strings
+            .iter()
+            .filter(|(id, _)| strings.get(id).is_none())
+            .map(|(id, text)| (id.clone(), text.clone()))
+            .collect(),
+    );
+    strings
 }

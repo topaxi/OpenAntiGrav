@@ -777,8 +777,10 @@ fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
 /// already ask. Pure's own `Track Selection`/`Team Selection` picked up the
 /// same treatment 2026-09-10, once `oag_pure::FRONT_END.race_box` was wired
 /// (`docs/formats/race-setup.md`); it never authored a VARIANT row to begin
-/// with (`RaceDefaults::has_team_variants`). HD has no such screens read yet
-/// and keeps all three rows.
+/// with (`RaceDefaults::has_team_variants`). HD authors its two screens in
+/// files of their own (`FrontEnd::track_select`/`team_select`, read
+/// 2026-09-29) and drops the same rows; Wipeout 2048, which reads neither,
+/// keeps all three.
 #[test]
 fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
     let settings_on_race = |definition: &Definition| -> Vec<String> {
@@ -834,11 +836,21 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
 
     let mut hd = built_in();
     hd.drop_rows_picked_on_screen(oag_hd::TITLE);
-    for stays in ["race.team", "race.track", "race.variant"] {
+    let kept = settings_on_race(&hd);
+    for gone in ["race.team", "race.track", "race.variant"] {
         assert!(
-            settings_on_race(&hd).contains(&stays.to_string()),
-            "{stays} dropped on HD: {:?}",
-            settings_on_race(&hd)
+            !kept.contains(&gone.to_string()),
+            "{gone} stays on HD: {kept:?}"
+        );
+    }
+
+    let mut vita = built_in();
+    vita.drop_rows_picked_on_screen(oag_2048::TITLE);
+    for stays in ["race.team", "race.track"] {
+        assert!(
+            settings_on_race(&vita).contains(&stays.to_string()),
+            "{stays} dropped on 2048: {:?}",
+            settings_on_race(&vita)
         );
     }
 }

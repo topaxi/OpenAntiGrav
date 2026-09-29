@@ -73,6 +73,8 @@ pub struct Boot {
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
+    /// The circuit names, for a capture's circuit labels.
+    pub circuit_names: oag_ui::language::CircuitNames,
     /// The row face and the title's own - see [`Shell::menu_font`]/[`Shell::title_font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
     pub title_font: Option<oag_ui::font::Atlas>,
@@ -515,6 +517,13 @@ pub fn load_shell(
         &screens,
         &mut report,
     );
+    let track_box = screens::load_track_select(
+        &mut archives,
+        front_end.track_select,
+        preferred_language.and_then(|language| language.entries.as_deref()),
+        &screens,
+        &mut report,
+    );
     let strings = load_strings(
         &mut archives,
         &languages,
@@ -625,11 +634,14 @@ pub fn load_shell(
     }
     let logos = screens::team_logos(team_box.is_some(), &teams);
     block_textures.extend(logos.iter().map(String::as_str));
+    let emblems = screens::track_emblems(track_box.is_some(), &tracks);
+    block_textures.extend(emblems.iter().map(String::as_str));
     let sprites = sprites::load(
         &mut archives,
         &std::iter::once(&screens)
             .chain(race_box.as_ref())
             .chain(team_box.as_ref().map(|team_box| &team_box.screens))
+            .chain(track_box.as_ref().map(|track_box| &track_box.screens))
             .collect::<Vec<_>>(),
         &block_textures,
         &mut report,
@@ -784,6 +796,7 @@ pub fn load_shell(
     let (track_select, ship_select) = selection_layouts(
         race_box.as_ref(),
         team_box.as_ref(),
+        track_box.as_ref(),
         &strings,
         &font,
         menu_font.as_ref(),
@@ -1106,7 +1119,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         strings,
         tracks,
         zone_tracks: _,
-        circuit_names: _,
+        circuit_names,
         teams,
         font,
         sprites,
@@ -1324,6 +1337,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         fury_backdrop,
         track_select,
         ship_select,
+        circuit_names,
         menu_font,
         title_font,
         buttons_font,

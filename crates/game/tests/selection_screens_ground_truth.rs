@@ -188,6 +188,8 @@ fn the_track_picker_draws_the_discs_own_rows() {
             label: shell.strings.get_or_id(&track.id).to_string(),
             details: Details::Track {
                 info: ["-".into(), "-".into(), "-".into()],
+                emblem: None,
+                reversed: false,
             },
         })
         .collect();
@@ -566,17 +568,16 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
 /// `Team_Selection_Definition.xml` (`oag_ui::picker::hd`), with the parent
 /// `Team Selection Top Level`'s widgets under the child's name, every
 /// heading resolved - `RC_NAV_TEAM` only through `DATA06`'s own
-/// `entries.xml` - and each team's per-model ratings in tenths. No track
-/// screen: HD's is not read. See `docs/ui/campaign-screens.md`'s "Wipeout
-/// HD/Fury: `Team Selection`" section.
+/// `entries.xml` - and each team's per-model ratings in tenths. HD's track
+/// screen is read too, see the next test. See `docs/ui/campaign-screens.md`'s
+/// "Wipeout HD/Fury: `Team Selection`" section.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn hd_reads_its_own_team_selection_and_no_track_screen() {
+fn hd_reads_its_own_team_selection() {
     let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
     let shell = shell(&path);
-    assert!(shell.track_select.is_none());
     let ship = shell.ship_select.as_ref().expect("Team Selection reads");
     assert_eq!(ship.title, "SHIP SELECT");
     let extra = ship.hd.as_deref().expect("HD's own layout");
@@ -631,4 +632,57 @@ fn hd_reads_its_own_team_selection_and_no_track_screen() {
         let src = oag_ui::picker::hd::logo_src(&team.id);
         assert!(shell.sprites.get(&src).is_some(), "{src}");
     }
+}
+
+/// Wipeout HD/Fury: `Track Creation` reads off `DATA06`'s own
+/// `Track_Selection_Definition.xml` (`oag_ui::picker::hd::track`), merged
+/// under the child's name with none of `Tournament C`'s widgets, every
+/// heading and the RECORDS row labels resolved, and every circuit's own
+/// `TrackSelectEmblem_Fury.gtf` on the sheet. See `docs/ui/campaign-screens.md`'s
+/// "Wipeout HD/Fury: `Track Creation`" section.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_reads_its_own_track_creation() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let shell = shell(&path);
+    let track = shell.track_select.as_ref().expect("Track Creation reads");
+    assert_eq!(track.title, "TRACK SELECT");
+    assert!(track.hd.is_none() && track.is_hd());
+    let extra = track.hd_track.as_deref().expect("HD's own track layout");
+    let labels: Vec<(&str, f32, f32)> = extra
+        .common
+        .labels
+        .iter()
+        .map(|label| (label.text.as_str(), label.x, label.y))
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            ("CHOOSE CIRCUIT", 160.0, 140.0),
+            ("CIRCUIT MODEL", 857.0, 140.0),
+            ("CIRCUIT DIRECTION", 160.0, 422.0),
+            ("RACE INFORMATION", 160.0, 690.0),
+        ]
+    );
+    assert_eq!(track.panel, [160.0, 170.0, 680.0, 242.0]);
+    assert_eq!(track.preview, [856.0, 170.0, 900.0, 565.0]);
+    assert_eq!(extra.emblem, Some([270.0, 178.0, 192.0, 192.0]));
+    assert_eq!(extra.model.map(|model| model.origin), Some([1308.0, 440.0]));
+    let grid = extra.hex_grid.expect("TrackHexSelection");
+    assert_eq!((grid.columns, grid.rows), (9, 2));
+    assert_eq!(extra.row_labels, ["PERSONAL", "FRIENDS", "GLOBAL"]);
+    assert!(
+        track.screen.texts.iter().all(|text| !text
+            .name
+            .as_deref()
+            .is_some_and(|n| n.starts_with("TrackNumber"))),
+        "Tournament C's widgets are not merged in"
+    );
+    // The screen's own path is live: `racebox_definition.xml` only names it.
+    assert!(shell.tracks.iter().all(|track| {
+        let src = oag_ui::picker::hd::track::emblem_src(&track.location);
+        shell.sprites.get(&src).is_some()
+    }));
 }

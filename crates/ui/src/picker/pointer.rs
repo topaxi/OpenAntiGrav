@@ -81,6 +81,9 @@ pub fn targets(
     if let Some(extra) = layout.hd.as_deref() {
         return hd_targets(picker, layout, extra);
     }
+    if let Some(extra) = layout.hd_track.as_deref() {
+        return super::hd::track::targets(picker, layout, extra);
+    }
     let screen = &layout.screen;
     let mut out = Vec::new();
     let variants = picker.variants().len();
@@ -215,8 +218,8 @@ impl Picker {
             match target.what {
                 What::Previous => out.extend(self.step_entry(-1)),
                 What::Next => out.extend(self.step_entry(1)),
-                What::PreviousVariant => out.extend(self.step_variant(-1)),
-                What::NextVariant => out.extend(self.step_variant(1)),
+                What::PreviousVariant => out.extend(self.step_vertical(-1)),
+                What::NextVariant => out.extend(self.step_vertical(1)),
                 What::Entry(index) if index == was => out.push(Event::Confirmed),
                 What::Entry(index) => out.extend(self.select(index)),
                 What::Confirm => out.push(Event::Confirmed),
@@ -237,7 +240,32 @@ impl Picker {
         if count == 0 {
             return None;
         }
-        let index = (self.index as i64 + i64::from(step)).rem_euclid(count as i64) as usize;
+        let index = match self.columns {
+            0 => (self.index as i64 + i64::from(step)).rem_euclid(count as i64) as usize,
+            columns => {
+                // Along the row, wrapping at its end.
+                let row = self.index / columns;
+                let width = columns.min(count - row * columns);
+                let column = (self.index % columns) as i64 + i64::from(step);
+                row * columns + column.rem_euclid(width as i64) as usize
+            }
+        };
+        self.land_on(index);
+        Some(Event::Moved)
+    }
+
+    /// What up and down do: the other row of a grid, or the livery on a list.
+    pub(super) fn step_vertical(&mut self, step: i32) -> Option<Event> {
+        if self.columns == 0 {
+            return self.step_variant(step);
+        }
+        let rows = self.entries.len().div_ceil(self.columns);
+        let (row, column) = (self.index / self.columns, self.index % self.columns);
+        let target = (row as i64 + i64::from(step)).rem_euclid(rows as i64) as usize;
+        let index = target * self.columns + column;
+        if rows < 2 || index >= self.entries.len() {
+            return None;
+        }
         self.land_on(index);
         Some(Event::Moved)
     }

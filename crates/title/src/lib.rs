@@ -420,6 +420,12 @@ pub struct FrontEnd {
     /// race box keeps its RACE page's own TRACK row, since nothing reads a
     /// track screen for it.
     pub team_select: Option<&'static str>,
+    /// A standalone `Track Creation` definition, the track screen's
+    /// counterpart to [`Self::team_select`]: Wipeout HD/Fury's
+    /// `Track_Selection_Definition.xml`, which its live skin includes and
+    /// which only `DATA06` carries. `None` on every other title, whose
+    /// track screen is in [`Self::race_box`] or unread.
+    pub track_select: Option<&'static str>,
     /// Whether this title's race-setup screens preview an entry with a
     /// rendered mesh.
     ///
@@ -435,8 +441,9 @@ pub struct FrontEnd {
     /// stills?" cannot stand in for this, which is why it is stated here
     /// rather than inferred from the data.
     ///
-    /// `false` for HD, where it is inert: HD's [`Self::race_box`] is `None`,
-    /// so no picker opens and nothing reads this. HD authors `<Model
+    /// `false` for HD, where the screens preview with stills and widgets of
+    /// their own (its track screen's emblem, see [`Self::track_select`]) and
+    /// no mesh is loaded. HD authors `<Model
     /// name="TrackModel">` / `<Model name="ShipModel">` widgets with a camera
     /// stated, which is a third convention again, and reading it is what
     /// would set this to `true`.

@@ -365,9 +365,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
     // HD authors its track and ship screens in two files of their own, in
-    // its own dialect. Only the ship screen is read - see `team_select`.
+    // its own dialect - see `track_select` and `team_select`.
     race_box: None,
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
+    track_select: Some(names::TRACK_SELECTION_DEFINITION),
     // `false`, and not because HD has no 3-D craft on this screen - it
     // does (`ShipModel`). The one preview path this build has reads
     // `<team>\ship_FE.vex`, which HD's own per-team `screen.xml` names and
@@ -502,6 +503,14 @@ pub mod names {
     /// also authors a `Team Selection`, is included by no live skin.
     pub const TEAM_SELECTION_DEFINITION: &str =
         r"Data\Plugins\Frontend\Gui\Team_Selection_Definition.xml";
+
+    /// HD's own `Track Creation` - see `oag_ui::picker::hd::track`. Like
+    /// [`TEAM_SELECTION_DEFINITION`], **`DATA06` alone carries it** and
+    /// `DATA00`'s live skin includes it by `SrcRel`. `racebox_definition.xml`
+    /// only *names* `Track Creation` as a `goto` target; the screen is not in
+    /// it, on any of the five archives that carry that file.
+    pub const TRACK_SELECTION_DEFINITION: &str =
+        r"Data\Plugins\Frontend\Gui\Track_Selection_Definition.xml";
 
     /// The three screens a race ends on - `EndRace Results`/`EndRace
     /// Rewards`/`EndRace Menu` - HD's own copy, at a named plugin path like

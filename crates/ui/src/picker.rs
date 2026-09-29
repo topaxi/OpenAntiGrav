@@ -89,7 +89,18 @@ pub enum Details {
     /// `Info2`, `Info3` widgets draw them - distance, lap record, race
     /// record. Already formatted; an unknown value is whatever the caller
     /// chose to say for one (the original's own is `-.--.--`).
-    Track { info: [String; 3] },
+    ///
+    /// `emblem` is the sheet name of the circuit's own emblem texture, on a
+    /// title whose track screen draws one (Wipeout HD/Fury's `Emblem`
+    /// widget, [`hd::track::emblem_src`]) and `None` on every other.
+    ///
+    /// `reversed` is whether this is the circuit run the other way round,
+    /// which HD's screen shows with its own `ReverseIcon` widgets.
+    Track {
+        info: [String; 3],
+        emblem: Option<String>,
+        reversed: bool,
+    },
     /// A team: its ratings, when the definition authors them, and its
     /// selectable liveries as `(id, label)` pairs - empty for a team that
     /// offers none, which draws no livery row rather than a fixed word.
@@ -145,6 +156,9 @@ pub struct Picker {
     /// Whether the entries move left/right and the livery up/down - see
     /// [`Self::with_entries_across`].
     across: bool,
+    /// Entries per row on a screen that lays them out as a grid whose rows
+    /// are directions - see [`Self::with_rows`]. `0` for a plain list.
+    columns: usize,
 }
 
 impl Picker {
@@ -169,6 +183,7 @@ impl Picker {
             seconds: 0.0,
             since_selection: 0.0,
             across: false,
+            columns: 0,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))
@@ -186,6 +201,32 @@ impl Picker {
     pub fn with_entries_across(mut self) -> Self {
         self.across = true;
         self
+    }
+
+    /// Lays the entries out as rows of `columns`, the way Wipeout HD/Fury's
+    /// `Track Creation` does with its `TrackHexSelection` of two rows: left
+    /// and right step along the row and wrap at its end, up and down move to
+    /// the same column of the other row. The rows are the two directions of
+    /// each circuit, so the entries must be ordered every forward circuit,
+    /// then every reverse one, in the same circuit order.
+    ///
+    /// **The wrap at the row's end is measured** - `right` pressed twelve
+    /// times from Vineta K lands on Vineta K again on an RPCS3 walk, the
+    /// cursor still on the top row - **and up/down for the row is chosen**:
+    /// no capture has pressed it, and it is read off the grid's two rows
+    /// under the `CIRCUIT DIRECTION` heading.
+    #[must_use]
+    pub fn with_rows(mut self, columns: usize) -> Self {
+        self.across = true;
+        self.columns = columns;
+        self
+    }
+
+    /// Whether the entries are laid out as more than one row - see
+    /// [`Self::with_rows`].
+    #[must_use]
+    pub fn has_rows(&self) -> bool {
+        self.columns > 0 && self.entries.len() > self.columns
     }
 
     #[must_use]
@@ -247,7 +288,7 @@ impl Picker {
     /// a row the panel has no widget for, is left alone.
     pub fn set_track_info(&mut self, index: usize, row: usize, value: String) {
         if let Some(Entry {
-            details: Details::Track { info },
+            details: Details::Track { info, .. },
             ..
         }) = self.entries.get_mut(index)
             && let Some(slot) = info.get_mut(row)
@@ -277,10 +318,10 @@ impl Picker {
             out.extend(self.step_entry(-1));
         }
         if input.take(next_variant) {
-            out.extend(self.step_variant(1));
+            out.extend(self.step_vertical(1));
         }
         if input.take(previous_variant) {
-            out.extend(self.step_variant(-1));
+            out.extend(self.step_vertical(-1));
         }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
@@ -350,6 +391,19 @@ pub struct Layout {
     /// `None` on every layout [`Self::read`] builds. Its presence is what
     /// sends [`draw_list`] and [`pointer::targets`] down HD's own path.
     pub hd: Option<Box<hd::TeamScreen>>,
+    /// Wipeout HD/Fury's own `Track Creation`, on a layout
+    /// [`hd::track::read`] built - `None` on every other. The track
+    /// screen's counterpart to [`Self::hd`]; at most one is set.
+    pub hd_track: Option<Box<hd::track::TrackScreen>>,
+}
+
+impl Layout {
+    /// Whether this is one of Wipeout HD/Fury's own two selection screens,
+    /// which share the footer's navigation legend.
+    #[must_use]
+    pub fn is_hd(&self) -> bool {
+        self.hd.is_some() || self.hd_track.is_some()
+    }
 }
 
 impl Layout {
@@ -483,6 +537,7 @@ impl Layout {
             faces,
             scale,
             hd: None,
+            hd_track: None,
         })
     }
 
@@ -534,9 +589,10 @@ pub fn draw_list(
         skin.title_color(frame.ink),
         layout.title.clone(),
     ));
-    layers.body = match layout.hd.as_deref() {
-        Some(extra) => hd::body(picker, layout, extra, frame, sprites),
-        None => body::body(picker, layout, skin, sprites, measure),
+    layers.body = match (layout.hd.as_deref(), layout.hd_track.as_deref()) {
+        (Some(extra), _) => hd::body(picker, layout, extra, frame, sprites),
+        (None, Some(extra)) => hd::track::body(picker, layout, extra, frame, sprites),
+        (None, None) => body::body(picker, layout, skin, sprites, measure),
     };
     layers
 }

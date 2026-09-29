@@ -3356,8 +3356,9 @@ fills the two halves side by side and draws the border once over both
   the `NAVIGATE TEAM` frame's top/bottom halves the livery, the `SHIP MODEL`
   frame confirms, the secondary button backs out
   (`oag_ui::picker::pointer`'s `hd_targets`).
-- **The RACE page's START** opens this screen too, alone, on a title with a
-  ship screen and no track screen (not in Zone).
+- **The RACE page's START** opens `Track Creation` first and this screen
+  after it (not in Zone), see "Wipeout HD/Fury: `Track Creation`, 2026-09-29"
+  below.
 - **The heading scale** (`0.45` of the menu face, a 14-unit bullet, text 20
   units right of it) is read off the frame by eye.
 
@@ -3393,3 +3394,127 @@ table's classic-hull suffix also is, so `_c1`/`_n1` were written to
 `race.skin` and the race flew the classic hull. It now keys on whether the
 team declares skins.
 
+## Wipeout HD/Fury: `Track Creation`, 2026-09-29
+
+**The original shows a circuit screen on the RACEBOX path, and never on the
+campaign path; this build reads it off the disc and walks it there.**
+
+### Where it is shown, confidence 90
+
+1. **Not on the campaign path.** `Cell Selection` redirects straight to
+   `Team Selection`, and `TTY.log`'s cold-boot table
+   (`docs/reverse-engineering/rpcs3-debugger.md`) reads `Cell Selection` ->
+   `Team Selection` -> `Launch Game` with no circuit screen between. Confidence
+   95, the same evidence the "Team Selection" section above rests on.
+2. **On the RACEBOX path.** `racebox_definition.xml`'s `Single Player` screen
+   redirects everything but `Tournament` to `goto="Track Creation"` (all five
+   archives carrying the file agree; `hd-frontend.md`, confidence 94), and
+   `scripts/rpcs3-drive.py browse --nav "Main Menu=right" --nav "Track
+   Creation=right"` photographed the screen 27 times
+   (`data/reference/hd-capture/track-carousel/`, `racebox/screen-Track-Creation.png`).
+3. **Its own redirects.** `TrackRedirect`: `Main Menu->Mode == FE_ONLINE` goes to
+   `CreateMPGame`; `Single Player->Mode == ai race` or `Ghost Viewer` goes to
+   `Launch Game` (neither mode is enabled in `Single Player`'s mode list); every
+   other case goes to `Team Selection`. `TrackRedirectBack` authors
+   `forward="none"` and no `goto`: Back returns to the RACE page.
+4. **Which file is live, and a correction.** `DATA00`'s served `skin.xml`
+   includes `SrcRel="Track_Selection_Definition.xml"`, which only `DATA06`
+   carries. **`racebox_definition.xml` does not author the screen** - it only
+   names `Track Creation` as a `goto` target. The Ghidra page
+   `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md` says the
+   screen is in that file; it is not, and none of the five copies contains a
+   `Track Creation` screen.
+
+`Tournament C`, in the same file, is a separate screen (`TrackNumber0..11`,
+`SelectedTrack0..11`, add/remove/randomise buttons) and is **not read**.
+
+### `right` wraps at twelve, confidence 80; the rows being directions is chosen
+
+**Measured**: the 27 frames of the `right`-only walk show Vineta K at press 0,
+12 and 24, and every frame from 13 to 24 repeats the frame twelve earlier - the
+highlight on the same top hex of the `TrackHexSelection` grid
+(`columns="9" rows="2"`) and no `ReverseIcon`/`REVERSE` text in the circuit model
+frame, where this build draws it for a reversed circuit. Names alone would not
+tell a 24-entry list from a 12-wide wrap (the original never spells a direction
+in a name), so the score rests on the cursor and the missing glyph, not on the
+repeat.
+
+**Chosen, no score**: that the grid's two rows are the two directions. It is
+read off the two rows under the `CIRCUIT DIRECTION` heading and the authored
+`ReverseIcon` art; no capture pressed `down`. The earlier "24 entries, forward
+then reverse" reading (`rpcs3-capture.md`) is therefore not disproved, only no
+longer the one this build follows. The forward order is measured
+(Vineta K, Anulpha Pass, Moa Therma, Chenghou Project, Metropia, Sebenco Climb,
+Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
+`Zone`'s four environments are not among them.
+
+### What the file authors, and what is drawn
+
+| Widget | Where (1920x1080) | Drawn here |
+| --- | --- | --- |
+| Title `RB_TRACK_SEL` | the skin's title position | yes |
+| `MiniText` x3 (`CHOOSE CIRCUIT`, `CIRCUIT MODEL`, `CIRCUIT DIRECTION`) and `RACE INFORMATION` | (160,140) / (857,140) / (160,422) / (160,690) | yes |
+| `EmblemOutline` images and fills | around (160,170) | yes |
+| `Emblem` (no `src`) | (270,178) 192x192 | yes: `<environment>\FE\TrackSelectEmblem_Fury.gtf`, one per circuit on `DATA00` |
+| `TrackName` (`idstring` a placeholder) | (500,370) centred | yes, the circuit's name |
+| `Info1`/`Info2` `CIRCUIT LENGTH`/`RACE DISTANCE` | (880,680)/(880,705) | yes: `4.4KM` / `13.2KM` on Vineta K, length x the race's lap count |
+| RECORDS heading, header row, 3x4 cells | from (160,744) | yes: `PERSONAL`/`FRIENDS`/`GLOBAL` and `---` |
+| `ReverseIcon1..3` + `FE_REVERSE` text | (860,175) | yes, on a reverse circuit only (**chosen**: no frame has the cursor on the second row) |
+| `Infinity` | (1080,705) | yes, where the race has no lap count |
+| `Bracket` x3 | (160,170) 680x242 / (160,452) 680x230 / (856,170) 900x565 | rects only, for layout and pointer |
+| `FlyByMovie` (`preview.bik`, Bink) | (660,360) 260x170 | no |
+| `Model name="TrackModel"` | `OriginX=1308 OriginY=440 z=-180` | no (read, not drawn) |
+| `TrackHexSelection` | (210,500), 9x2 | no |
+| `Squares` page dots, `Padlock`, `Unlockcondition`, `furyship1..3` | - | no |
+
+The numbers above use the circuit's own spline for the length
+(`oag_game::race::circuit_length`, measured on a worker); the lap count is the
+race's own setting (`oag_game::catalogue::race_laps`), so the frame's `13.2KM`
+is three laps and the number here follows the speed class. The PERSONAL, FRIENDS
+and GLOBAL ids (`FE_PERSONAL`/`FE_FRIENDS`/`FE_GLOBAL`) are the string table's
+own entries with that text, looked up through `DATA06`'s `entries.xml` where the
+served table lacks them; the widgets author `string="16"`, a width, and the
+original fills them from code. That id choice is **chosen, not measured**.
+
+### Chosen, not measured
+
+- **Axes**: left/right steps along a row (measured), up/down switches
+  direction (read off the grid's two rows, no capture pressed it).
+  `oag_ui::picker::Picker::with_rows`.
+- **The order of the reverse row** is the forward order.
+- **A reverse circuit is labelled with its forward twin's name**: the frame
+  never spells a direction in the name.
+- **Pointer**: the `CHOOSE CIRCUIT` frame's left/right halves step the circuit,
+  the hex frame's top/bottom halves switch the direction row, the circuit model
+  frame confirms, the secondary button backs out
+  (`oag_ui::picker::hd::track::targets`).
+- **Confirm** opens `Team Selection` (the redirect's default), except in Zone,
+  which forces its own hull as on Pulse. **Back** reopens the RACE page; Back from
+  `Team Selection` returns here on the same circuit and direction.
+- **The three RACE page rows** (`TEAM`, `VARIANT`, `TRACK`) are dropped: both
+  screens exist now, and HD's `Single Player` page carries none of them.
+
+### Not drawn, and why
+
+- **The circuit wireframe** (`TrackModel`): HD ships no `FE\forward.vex`; the
+  folder holds only `fe_grad.gtf`, the emblem and `preview.bik`. The pose is read.
+- **The fly-by** (`FlyByMovie`): `preview.bik` per environment is Bink; the
+  screen has no video widget yet.
+- **The hex grid** (`TrackHexSelection`): its art and cell pitch are the widget
+  class's own and unread; the frames show per-circuit emblems in dim hexes, the
+  selected one red with a white outline.
+- **The page squares** (`Squares`, top right of the circuit model frame): empty
+  container filled by code.
+- **The RECORDS cells**: this build keeps no per-circuit record in the shape
+  (name, team, time) the table wants, so every cell reads `---`.
+
+### Walked live, 2026-09-29
+
+Xvfb `:94`, debug build, `--autopilot --no-audio`, isolated `XDG_CONFIG_HOME`,
+`xdotool`: `Main Menu` -> `RACEBOX` -> START -> `TRACK SELECT` on Vineta K;
+`Right` -> Anulpha Pass (`5.1KM`); `Down` -> Vineta K reversed with the REVERSE
+glyph; `Right` twice -> Moa Therma reversed; Enter -> `SHIP SELECT`; Escape ->
+`TRACK SELECT` still on Moa Therma reversed; Enter, Enter -> the race loads
+`Data\Environments\03_Track\track_reversed.vex`. Mouse: a click on the
+frame's right half stepped, the left half stepped back, a right click
+returned to the RACE page. Shots in `data/scratch/hd-track-select/live/`.
