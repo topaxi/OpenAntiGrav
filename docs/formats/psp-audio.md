@@ -435,6 +435,83 @@ not extracted in this tree, so unlike the other three the bank's actual
 contents have not been checked against the reading. See
 [zone-audio.md](../ghidra/functions/vita-2048-eu-v104/zone-audio.md).
 
+### Every Pulse cue plays its timeline, 2026-09-29
+
+The Zone announcer was the first cue found played as one random leaf of a
+sequence. The same is true of any cue whose command list keys several waveforms
+on, and `Banks::pick` did it for the weapon and pickup cues too. **Pulse cues
+now play as the list authors them** (`oag_game::audio::sfx::layers`), on the
+PSP tick, with nothing changed for Pure, Wipeout HD or 2048 (their tick is
+unmeasured, so their `SequenceTick` is `Unknown` and `Banks::voices` falls back
+to the flat pick).
+
+**How a cue plays**, per `Scream_StepCommandList` (see
+[sound.md](../ghidra/functions/psp-pulse-usa/sound.md#how-a-cues-list-runs-alternates-end-bend-and-loop-2026-09-29)):
+
+- A key-on is one SAS voice, keyed after its command's delay in master ticks.
+  Voices differ in rate, in whether they loop and in how far they are bent, so
+  a cue is played as **several mixer voices** (`Mixer::delay_start` gives the
+  start offset), not as one pre-mixed buffer.
+- `0x19` is a choice in the middle of a list: one block of `stride` commands
+  runs and the rest of the group is skipped, then **the commands after the
+  group run**. The pick is the same never-repeat draw `Banks::pick` always made,
+  now over whole timelines (`Bank::cue_timelines` enumerates one per
+  combination; at most 64, else the flat pick).
+- `0x2b` ends the list. `~AUTOPILOT` is `[key-on, key-on (loop) at 60 ticks,
+  0x2b, key-on]`: its fourth waveform is after the end and is not played.
+- `0x1b` is a random detune drawn once per play and shared by the voices after
+  it, within each descriptor's own bend range (`+0x08`/`+0x09`, semitones).
+  Where the range is zero it is inaudible: `~SHIELD`, `ROCKET`.
+- `0x14`, `0x1e`, `0x1f`, `0x20` and `0x21` return zero and add no time.
+
+**What changed in play** (Pulse; 18 of the 33 wired cues, checked headlessly by
+`crates/game/examples/sfx_timeline_render.rs` and pinned by
+`crates/game/tests/sfx_timeline_ground_truth.rs`):
+
+| Cue | Before | Now |
+| --- | --- | --- |
+| `PLASMA` | one of two waveforms | shot at +30 deg, again at -30 deg 58 ms later, and a tail 0.832 s in: 2.34 s |
+| `PLASMAHITSHIP`, `PLASMAHITWALL` | one of four | three layers together and a tail at 0.774 s / 0.097 s, detuned by one draw |
+| `ROCKEXPLSHIP`, `MISSILE`, `QUAKELAUNCH`, `SHURIKENHIT` | one layer | all layers (ROCKEXPLSHIP's third at 0.193 s) |
+| `CANNON`, `QUAKEHIT`, `.COLLISIONS` | the bare waveform | the waveform detuned within its authored range |
+| `~SHIELD` | one of two loops | both loops held together |
+| `~AUTOPILOT` | any of three, a one-shot dropped | the blip, then the loop at 0.232 s |
+| `~LEACHATTACH` | a loop only half the draws, never the one-shot | the one-shot once and the loop held |
+| `shieldactive`, `autopilot_eng`, `disengaging` | one copy | the +30/-30 deg pair 39 ms apart, as `zone_N`'s words |
+| `CANNONEXPLSHIP` | one of nine | one of nine (unchanged), through its child's volume |
+| `LEACHENERGY` | at the parent's volume | at the child's volume (scale 0.59) |
+
+Unchanged because the flat pick is already what the list plays: `SPEEDUPPAD`,
+`ABSORB`, `ROCKET`, `MISSILEEXPWALL`, `CANNONEXPLWALL` (a group and nothing
+else), `LEACH`, `MINELAUNCH` and the four travel loops. `~ENGINE` is left flat
+on purpose: Zone's is nine loops at tick zero, but the engine law drives one
+voice's pitch and volume per tick and how it spreads over layers is unread.
+Still unmodelled and flat: **`~BLOWUP`** (`0x15`/`0x1a`/`0x16`, a repeat) and
+**`~ROCKLOCK`** (guards `0x22`).
+
+**Chosen, not measured (no confidence score).** A placed cue's emitter pan and
+a voice's authored angle are combined as `sin(asin(pan) + angle)`, which
+assumes a front-half emitter; a dry cue with any off-centre voice pans every
+voice by its angle (a centred voice is 0.707 each side, as
+`Scream_PanVolumePair` gives it) and one with none keeps no pan, as before;
+delays round to a whole output frame; the bend's pitch is linear in semitones
+across the descriptor's range; PS2 Pulse borrows the PSP tick.
+
+**Census, Pulse EU only** (`cargo run --release -p oag-formats --example
+sblk_cue_audit -- census`; the thread's 683/262/421 covered five discs and HD).
+Cues reaching audio: 605. Before this change the walk completed 260; **now 366
+(alternate groups included)**, 177 blocked. Blocking opcodes among the 177, by
+cues that carry them: `0x22`/`0x23`/`0x24` guards, markers and gotos (90-96
+each, always together), `0x1a` random wait 84, `0x29` key-off 84, `0x04` LFO 75,
+`0x15`/`0x16` loop 61, `0x25` 40. Blocked by exactly one opcode: `0x04` 30,
+`0x29` 3, `0x0a` 2, `0x1b` 2 (a bend after a key-on), `0x06`/`0x1c`/`0x22` 1.
+Before the change the single biggest unblocker was `0x1b` (95 cues blocked by it
+alone) then `0x14` (38), `0x04` (28) and `0x1e` (20); the first, second and
+fourth are now modelled. `0x04` is next but its LFO is unread (`_q`); the
+`[0x15, 0x16, 0x1a]` loop is the next audible one (`~BLOWUP`).
+**Not covered:** the circuit's authored sound emitters
+(`sfx::track`) still pick one waveform, and their cues are not routed.
+
 ## Where each sound starts
 
 `Scream_OpKeyOn` is the opcode handler that hands a waveform to the hardware

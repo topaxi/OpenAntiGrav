@@ -353,7 +353,7 @@ mod tests {
             highest = highest.max(voices[0].pitch);
         }
         // Two semitones either way is a factor of 2^(2/12) = 1.1225.
-        assert!(lowest >= 0.890 && lowest < 0.93, "{lowest}");
+        assert!((0.890..0.93).contains(&lowest), "{lowest}");
         assert!(highest <= 1.1225 && highest > 1.08, "{highest}");
     }
 

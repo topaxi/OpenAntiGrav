@@ -316,7 +316,7 @@ fn alternates() -> Vec<u8> {
         "A",
         100,
         vec![
-            raw(0x19, 0x0001_03, 0),
+            raw(0x19, 0x0000_0103, 0),
             key(0, 0, 0),
             key(16, 0, 0),
             key(32, 0, 0),
@@ -357,7 +357,7 @@ fn a_stride_of_two_takes_both_commands_of_the_alternate() {
         "A",
         100,
         vec![
-            raw(0x19, 0x0002_02, 0),
+            raw(0x19, 0x0000_0202, 0),
             key(0, 0, 0),
             key(16, 0, 7),
             key(32, 0, 0),

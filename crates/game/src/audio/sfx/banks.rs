@@ -234,12 +234,16 @@ impl Banks {
     }
 }
 
+/// What building a cue's timeline came to: none worth having, or a failure that
+/// leaves the flat pick in place.
+type TimelineResult = anyhow::Result<Option<Vec<Timeline>>>;
+
 /// Resolves one cue in one bank blob and decodes what it binds.
 fn load_cue(
     blob: &[u8],
     cue: Cue,
     tick: oag_title::SequenceTick,
-) -> anyhow::Result<(Loaded, usize, anyhow::Result<Option<Vec<Timeline>>>)> {
+) -> anyhow::Result<(Loaded, usize, TimelineResult)> {
     let bank = sblk::Bank::parse(blob)?;
     let (loaded, skipped) = load_named_cue(&bank, cue.name())?;
     // The engine is driven by one voice's per-tick pitch and volume, and how

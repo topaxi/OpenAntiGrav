@@ -166,10 +166,16 @@ fn main() {
             );
             let mut a: Vec<_> = any.iter().collect();
             a.sort_by_key(|(_, n)| std::cmp::Reverse(**n));
-            println!("blocked cues per opcode (any): {a:02x?}");
+            let show = |v: &[(&u8, &usize)]| {
+                v.iter()
+                    .map(|(o, n)| format!("0x{o:02x}:{n}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            println!("blocked cues per opcode (any): {}", show(&a));
             let mut a: Vec<_> = alone.iter().collect();
             a.sort_by_key(|(_, n)| std::cmp::Reverse(**n));
-            println!("blocked cues whose ONLY unread opcode is X: {a:02x?}");
+            println!("blocked cues whose ONLY unread opcode is X: {}", show(&a));
             let mut s: Vec<_> = sets.iter().collect();
             s.sort_by_key(|(_, n)| std::cmp::Reverse(**n));
             for (set, n) in s.iter().take(25) {
