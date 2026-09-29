@@ -143,12 +143,12 @@ row says what the claim rests on.
 | --- | --- | --- | --- |
 | `craft+0xad0` | unwrapped arc progress, the same number `Standing::distance` ports | [race-progress.md](race-progress.md) `Craft_UpdateLapProgress` writes it (`0x08842b8c`..`0x08842c14`); the gap is `abs(a - b)` printed with `%3.0fm` | 90 |
 | `craft+0x48` | "is the non-player craft of the pair" (an is-AI byte): `iVar3 = pair[0]` if it is set, else `pair[1]`, and `iVar3+0x798` becomes the *opponent's* name in both branches | decompile only, one consumer | 60 |
-| `craft+0x798` | the model id `Ship_LoadModel` stores (`0x08843298`), run through the string table for the row's name | `search_instructions` on `0x798(`: three hits, one writer | 65 |
+| `craft+0x798` | the model id `Ship_LoadModel` stores (`0x08843298`), run through the string table for the row's name | `search_instructions` on `0x798(`: three hits, one writer; live, the opponent row reads `Goteki 45`, its own hull's team (id not read at a breakpoint) | 75 |
 | `<Image>` `+0x94/+0x98/+0x9c/+0xa0` | `x`, `y`, **`Width`, `Height`** | the Image `<Values>` loader `FUN_088a6f38` (`0x088a6f38`, reads `CalcBlur`/`Color1-4`/`TxtrWidth`): attribute strings at `0x08a7f220..0x08a7f230` write `+0x94,+0x98,+0x9c,+0xa0` in that order | 92 |
 | Image vtable slot `+0xec` | **`GetY`** (returns `+0x98`); `+0xe8` is its this-adjust | the class's vtable at `0x08acce34`: consecutive methods `0x088a682c/34/3c/44` are `SetX/GetX/SetY/GetY`, `0x088a684c/5c` are `GetWidth/GetHeight` (`+0x9c`/`+0xa0` times `+0xe8`), and `Hud_BindWidgets` reads slot `+0xbc` (width) and `+0xdc` (x) on `SpeedBarBg`/`SpeedBarMark` consistently | 85 |
 | Text widget `+0x9c/+0xa0` | `x`, `y` (the PosTag branch writes `480 - w - ...` into `+0x9c`; `Position Outof`'s `+0x9c` is copied from `Position`'s) | decompile only | 75 |
 | Text widget `+0x168/+0x16c` | align / vertalign (`0/1/2` = left-top / centre-middle / right-bottom): the bind copies `Position`'s `+0x168` onto `Position Outof` and `PositionOf`, and sets `+0x16c` to `0` (top) on the second row and `1` (middle) on the gap label | decompile only; the values fit the layout, the enum was not read | 65 |
-| Text widget flag `+0x2c & 0x200` | set on the **player's** row, cleared on the other; what it changes on screen was not read | decompile only | 40 |
+| Text widget flag `+0x2c & 0x200` | set on the **player's** row, cleared on the other; **live, the player's row throbs** (see "Live measurement"); that the flag causes it is inferred from which row carries it | decompile plus live frames | 70 |
 
 **What the swap draws** (all inside `<Item OffsetX="445" OffsetY="5">`, so every
 `y` below is local to it):
@@ -194,14 +194,58 @@ top-right anchor, a red `+ 3m`, the mint 5-px bar, `2.` below it, `POS` gone.
 
 **Not drawn, each with its address:**
 
-- The two **names** (`craft+0x798`, `DAT_08b31774+0x457`): this engine has no
-  source for either string; each row shows its ordinal alone. Would need a live
-  capture to see what the original prints there.
-- The `0x200` highlight bit on the player's row (`FUN_088cd290` / the flag at
-  widget `+0x2c`): effect unread.
+- The two **names** - measured live to be `Goteki 45` (the opponent team's
+  display name) and `AAA` (the profile tag). A source exists for the opponent
+  (the opponent slot's team, resolved to its display name as the tournament
+  table's `ER_TEAM` column needs); none is persisted here for the player's tag
+  (`oag_ui::screen::tag_input` edits one but nothing stores it in `Readout`
+  or settings). Deliberately **not wired**: without the `Default` font the row
+  in the HUD font runs 2-3x wider, so names and font belong together.
+- The rows' font: the original uses `Default` (`pulse_text.fnt`) for both; ours
+  uses the HUD font.
+- The `0x200` throb on the player's row (a live observation; law unread).
 - The multiplayer branch (`g_game_mode == 0xf`).
-- **Unmeasured against the original:** the bar's pixel size at a known gap, and
-  the colours, were not compared with a PPSSPP frame.
+- ~~Unmeasured against the original: the bar's pixel size at a known gap, and
+  the colours~~ - measured 2026-09-29, see "Live measurement".
+
+## Live measurement (PPSSPP v1.20.4, 2026-09-29)
+
+`pulse-psp-usa.chd`, Xvfb :95, own profile, **Racebox `Head to Head`, Talon's
+Junction White, Assegai, Venom** (not a campaign cell: both reach the same
+`mode == 9` branch in `Hud_BindWidgets`/`FUN_0881d458`). Frames are under
+`data/reference/psp-head2head/` (gitignored): `r3.png` (gap 62, trailing),
+`z.png`/`g1.png`/`g2.png`/`g4.png`/`g6.png` (gap 780 to 2700, trailing),
+`ld3.png`/`ld4.png` (player leading, produced by teleporting the player 45
+units ahead of the opponent's body with the debugger, so the pose is
+artificial and the HUD is the original's own), `blink.png` (40 frames of the
+player row). Screen is 960x544 (2x native), offset (160, 88) in the capture.
+
+| Claim | Result | Evidence | Conf |
+| --- | --- | --- | --- |
+| Bar is a vertical mint connector, 5 native px wide | **confirmed** | 10 px wide at 2x, x = 920 local (460 native), top y = 70 local (35 native), colour the layout's `HudColour2` | 90 |
+| Height `clamp(gap/2, 60, 180) - 30` | **confirmed at both ends** | gap 62 (and 20, on the grid): 60 px = 30 native; gap 780 to 6700: 300 px = 150 native. Intermediate value not sampled | 90 |
+| Gap label `"%s%3.0fm"`, `+` red when trailing | **confirmed** | `+ 62m`, `+ 20m` in red (the padding space is visible); label centred on the bar's midpoint, right edge about 8 px past the rows' | 92 |
+| `-` and green when leading | **confirmed** | `- 42m`, `- 35m`, `- 8m` in green `0xff30ff30`-like, and the rows swap: `1st AAA` (green) on top, `2nd Goteki 45` (white) below | 90 |
+| `POS` hidden | **confirmed** | no `POS` caption in any frame | 90 |
+| Second row at scale 0.8, y = `half` | **confirmed** (bind sets `+0xa4/+0xa8 = 0.8`; second row sits about 6 native px below the bar's bottom) | frames above; scale itself is not separable from the font change below | 75 |
+| Row texts `"%s %s"` = ordinal + name | **confirmed** | `1st Goteki 45` / `2nd AAA` | 92 |
+| Opponent name = `craft+0x798` through the string table | **consistent, value read**: the display name of the opponent's team, `Goteki 45` | the opponent flies Goteki 45 (visible on its hull); the id at `+0x798` was not read at a breakpoint | 75 |
+| Player name = `DAT_08b31774+0x457` | **consistent**: the profile tag typed at first boot, `AAA` | first-boot `TagSetup2FromBoot` left the default | 80 |
+| `0x200` flag on the player's row | **observed: a throb**, not a static highlight (that `0x200` causes it is inferred from which row carries the flag). The player's row cycles between its colour and white, about 3.1 s per cycle (red minima at 1.9, 5.2, 8.5, 11.4, 14.5, 17.5 s of wall clock, emulator at 100%); the other row stays white | `blink.png`, a timed pixel count of the row | 80 for "throbs", period unmeasured to better than 0.1 s; the waveform is not read |
+| Both rows use the `Default` font | **new**: `Hud_BindWidgets` calls `FUN_088cd3b4(row, NULL)` on both, which stores `"Default"` (`0x08a81c7c`) and looks the font up; digits are 14 px tall against 16 px for the gap label at HUD scale 0.6 | decompile plus `z.png` | 85 |
+| Rows right-align at the same x | **new**: the bind copies `Position`'s `+0x9c`/`+0x168` onto `Position Outof`; right edges at 888 and 891 local | `z.png` | 88 |
+
+**Code changed by this pass:** the second row now uses `Position`'s `x` (it
+used its own authored 16, which drew it right of the leader row). Not changed:
+the `Default` font (no text bucket for it), the names (the readout carries no
+team or tag), the throb (law unread). `oag-game --race --mode head_to_head --ticks 600`
+at 960x544, before (`ours_e_600.png`) and after (`ours_after_600.png`) under
+`data/reference/psp-head2head/`: after the fix `1st` and `2nd` end within 1 px
+of each other and the gap label sits about 3 native px past them, as live.
+
+**Still open:** the id at `craft+0x798` was not read at a breakpoint; the
+`0x200` throb's law (phase, waveform, whether it is a generic Text-widget
+behaviour); the multiplayer branch; the campaign-cell launch itself.
 
 ## Names landed
 

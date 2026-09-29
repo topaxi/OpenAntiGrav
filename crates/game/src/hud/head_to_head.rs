@@ -20,12 +20,21 @@
 //!   bar's top and the second row.
 //! - `PositionTxt` (`POS`) is hidden.
 //!
-//! **Not drawn, and why.** The original appends a name to each row
-//! (`"%s %s"`): the opponent's is `craft+0x798` (the model id `Ship_LoadModel`
-//! stores, run through the string table) and the player's is the profile's
-//! pilot name at `DAT_08b31774+0x457`. Neither has a source in this engine, so
-//! each row carries its ordinal alone. The player's row also sets bit `0x200`
-//! in the widget flags; what that bit changes was not read.
+//! **Measured live 2026-09-29** (PPSSPP, `data/reference/psp-head2head/`): the bar's
+//! size, x, width and both clamps, the `"%3.0fm"` label, both colours and the
+//! leading swap all match. See `head2head.md` "Live measurement".
+//!
+//! **Not drawn, and why.**
+//!
+//! - The rows draw in the HUD font; the original switches both to the `Default`
+//!   font (`FUN_088cd3b4(widget, NULL)`, `pulse_text.fnt`, about half the glyph
+//!   height). This engine has no `Default` text bucket yet.
+//! - Each row is `"%s %s"`, the ordinal then a name: the opponent's is the
+//!   team's display name (`Goteki 45` live), the player's is the profile tag
+//!   (`AAA` live). This engine carries neither into the readout, so a row
+//!   shows its ordinal alone.
+//! - The player's row throbs between its colour and white (observed live; `0x200` is inferred to be the cause), period
+//!   about 3.1 s. The law is unread, so it is a steady colour here.
 
 use super::draw::{Context, Frame, top_edge};
 use super::{Draw, Readout, argb_to_rgba};
@@ -45,7 +54,7 @@ pub struct HeadToHead {
 const LEADING: u32 = 0xFF30_FF30;
 /// `0xffff3030`, the trailing player's row and gap label.
 const TRAILING: u32 = 0xFFFF_3030;
-/// White, the other row.
+/// White, the other row (`0xffffffff`, confirmed live).
 const WHITE: [f32; 4] = [1.0; 4];
 /// `0x3f4ccccd`, the second row's scale.
 const SECOND_ROW_SCALE: f32 = 0.8;
@@ -104,6 +113,14 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
         rect: [bar.rect[0], bar.rect[1], bar.rect[2], half - y_authored],
         color: bar.color,
     });
+    // The bind copies `Position`'s `x` (`+0x9c`) and align (`+0x168`) onto
+    // `Position Outof`, so the two rows share one right edge (measured live
+    // 2026-09-29: within 3 px). `PositionOf` keeps its own `x`: the gap label's
+    // right edge sat about 8 px past the rows'.
+    let second = &super::Label {
+        x: first.x,
+        ..second.clone()
+    };
     let ordinal = |id: &str| cx.strings.get_or_id(id).to_string();
     frame.hud_text.push(text(
         first,

@@ -111,7 +111,7 @@ order **is** `Progress`' rank (cumulative points, descending, slot-order
 tie-break) - the two pages are ordered by two different things, matching
 what each is showing.
 
-**No live capture of this page exists yet** - `--menu-page
+**A live capture now exists (2026-09-29)** - layout, columns, points and page cycle match, see `tournament.md`'s "Live capture of the drawn standings table"; the display-name and font differences listed there are open. The rest of this paragraph predates it: **No live capture of this page exists yet** - `--menu-page
 endrace-results-tournament-leg`/`endrace-results-tournament-standings` draws
 it off a synthetic four-team field (`crates/game/src/capture/endrace_page.rs`),
 since a real tournament leg run to a finish is the same multi-minute
