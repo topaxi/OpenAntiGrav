@@ -365,7 +365,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
     // HD authors its track and ship screens in two files of their own, in
-    // its own dialect. Only the ship screen is read - see `team_select`.
+    // its own dialect - see `track_select` and `team_select`.
     race_box: None,
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
