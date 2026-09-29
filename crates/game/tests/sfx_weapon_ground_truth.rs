@@ -172,7 +172,9 @@ fn the_four_travel_voices_open_together_and_close_together() {
     audio.tick();
     assert_eq!(
         voices(&audio),
-        idle + 4,
+        // Plus one: `~LEACHATTACH` keys a one-shot (0.6 s) beside its held
+        // loop, and it is still sounding a tick later.
+        idle + 4 + 1,
         "the Rocket/Missile/Shuriken travel loops and the LeachBeam's own \
          body did not all open"
     );
@@ -189,7 +191,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
     audio.tick();
     assert_eq!(
         voices(&audio),
-        idle + 3,
+        idle + 3 + 1,
         "ShurikenTravel kept sounding with nowhere to be heard from"
     );
 
@@ -202,7 +204,8 @@ fn the_four_travel_voices_open_together_and_close_together() {
     audio.tick();
     assert_eq!(
         voices(&audio),
-        idle,
+        // The attach one-shot is not held and runs out on its own.
+        idle + 1,
         "a held travel voice outlived the projectile or beam that opened it"
     );
 }

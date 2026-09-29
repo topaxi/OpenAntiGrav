@@ -552,6 +552,8 @@ impl<'a> Bank<'a> {
                 volume: record[0x01] as i8,
                 centre_note: record[0x02] as i8,
                 centre_fine: record[0x03] as i8,
+                bend_down: record[0x08] as i8,
+                bend_up: record[0x09] as i8,
                 mode: self.order.u16(record, 0x0e),
                 offset: self.order.u32(record, 0x10),
                 length: self.order.u32(record, 0x14),
@@ -653,6 +655,15 @@ pub struct Sound {
     /// with `127` in tune. `66` on almost every descriptor, `0` on the ones
     /// that play at 48 kHz.
     pub centre_fine: i8,
+    /// The descriptor's pitch-bend range downwards, `+0x08`, in semitones.
+    ///
+    /// `Scream_ComputeVoiceNote` scales a negative bend by this byte and a
+    /// positive one by [`Self::bend_up`]; `0` on most descriptors, so a random
+    /// bend (`0x1b`) is inaudible on those. See
+    /// `docs/ghidra/functions/psp-pulse-usa/sound.md`.
+    pub bend_down: i8,
+    /// The descriptor's pitch-bend range upwards, `+0x09`, in semitones.
+    pub bend_up: i8,
     /// The descriptor's `+0x0e` flags word.
     ///
     /// `Scream_KeyOnVoice` passes `0x40` to `sceSasSetVoice` as its loop mode,

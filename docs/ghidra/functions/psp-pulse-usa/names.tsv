@@ -1134,3 +1134,5 @@
 0x08993eb4	function	Scream_MasterTick	88	sound.md
 0x08993124	function	Scream_TickHandlers	80	sound.md
 0x0898db80	function	Scream_TickCommandList	88	sound.md
+0x0898eaa8	function	Scream_OpEnd	85	sound.md
+0x0898dfe0	function	Scream_OpLoopBack	65	sound.md

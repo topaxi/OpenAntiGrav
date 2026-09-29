@@ -539,6 +539,27 @@ The descriptor's remaining fields, from this function and
 `+0x01` is a note, and `+0x04` is reduced modulo `0x168` (360) both here and in
 the voice record, so it is an **angle in degrees** - a pan position.
 
+## How a cue's list runs: alternates, end, bend and loop, 2026-09-29
+
+Read to play every Pulse cue as the timeline it authors (see
+[psp-audio.md](../../../formats/psp-audio.md#every-pulse-cue-plays-its-timeline-2026-09-29)).
+`Scream_StepCommandList` (`0x0898efd8`, decompiled again this session) runs the
+handler at the program counter `+0x4a`, then - for a non-negative return - does
+the **repeat step**, increments the counter, ends the list when it passes
+`cue[4] - 1`, and otherwise stores `handler + 0x48 = (s16)next.word1 + return`.
+
+| Address | Name | Confidence | What it does |
+| --- | --- | --- | --- |
+| `0x0898e178` | `Scream_OpAlternate` (existing row) | 88 | Operand byte 0 is the count `N`, byte 1 the stride `S`, byte 2 the last pick. Draws `rand % N`, and if it equals the last pick advances one, wrapping. Then `pc += pick * S`, `+0x50 = 1` (repeat armed), `+0x52 = S + 1`, `+0x54 = (N - pick - 1) * S`; returns 0. The stepper's repeat step decrements `+0x52` after every command and, at zero, clears `+0x50` and adds `+0x54` to the counter. So **one block of `S` commands runs and everything after the whole group of `N * S` commands runs after it** - a group in the middle of a list is a choice, not the end of the cue. All 3 Pulse groups checked read `N` equal to the number of key-ons that follow (`.COLLISIONS` 15, its Zone bank 10, `CANNONEXPLWALL` 9). A second `0x19` while the repeat is armed prints an error and returns `-1` |
+| `0x0898eaa8` | `Scream_OpEnd` | 85 | `pc = cue[4] - 1`, returns 0. The stepper's own increment then runs off the end, so **the list ends here** and later commands are not reached by it. Table entry only; Ghidra had no function there (created 2026-09-29). Reading the code is 95; that nothing else reaches the commands after it (a marker seek by `FUN_0898dc4c` is unread) is why 85 |
+| `0x0898e2b0` | `Scream_OpRandomBend` (existing row) | 85 | Returns 0, so it adds no delay. `Scream_SetSoundBend(handler, ((rand % 0x7fff) * 0xffff / 0x7fff - 0x8000) * (s8)operand / 100)`: one draw per execution, applied to the handler and its children. Through `Scream_ComputeVoiceNote` a negative bend scales the descriptor's `+0x08`, a positive one its `+0x09` (semitones), so the audible detune is at most that range - and **zero on a descriptor whose range bytes are zero**: `~SHIELD`, `ROCKET`, `MISSILEEXPWALL` are unaffected, `PLASMAHITSHIP`'s three layers span 5/2, 1/1 and 3/3 |
+| `0x0898dfd0` | `Scream_OpNop14` (existing row) | 82 | `jr ra; li v0,0`. Adds nothing |
+| `0x0898dfe0` | `Scream_OpLoopBack_q` | 65 | Scans backward from the counter for the nearest `0x15`, sets the counter to just before it (the stepper's increment lands on the `0x15`), sets flag `0x40` at `+0x16` the first time and returns 1 the later times (one extra tick on the next delay). A loop with no exit in the list, so it runs until the handler is killed. `_q`: the flag's other users and any exit are unread. `~BLOWUP` is `[key-on loop, 0x15, key-on, 0x1a 0, 0x16]` - the second waveform re-keyed every 43-44 ticks (0.17 s) for as long as the explosion holds the handler - and 20 Pulse cues carry the `[0x15, 0x16, 0x1a]` shape. **Not modelled by the timeline walk** |
+
+`0x1e`/`0x1f`/`0x20`/`0x21` return 0 (`0x1e` disassembled: two stores and
+`li v0,0`), so they add no time either; they matter only to a guard (`0x22`) or
+a `-1..-4` parameter sentinel, and a cue with either is left to the flat pick.
+
 ## The command list is a 45-entry jump table
 
 `Scream_StepCommandList` (`0x0898efd8`) is the interpreter `Scream_StartSound`
@@ -1071,10 +1092,12 @@ byte order, so `oag_title::SequenceTick` carries it per title: `Psp` for Pulse
   `0x16`'s handler is decompiled (a backward scan for `0x15`, see
   [above](#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08)) but its
   *purpose* is not established well enough to name past the rubric's
-  50-confidence floor, so it stays `FUN_0898dfe0`. The rest are not read, and
+  50-confidence floor... **update 2026-09-29: named `Scream_OpLoopBack_q`**
+  ([above](#how-a-cues-list-runs-alternates-end-bend-and-loop-2026-09-29)).
+  The rest are not read, and
   eight of the 45 share one handler. Of the 27 opcodes the Pulse banks
-  actually use, seven (`0x0a`, `0x16`, `0x17`, `0x18`, `0x1c`, `0x28`,
-  `0x2b`) have no named handler, and together they are 65 of the 2,881 commands in `Data.wad`.
+  actually use, five (`0x0a`, `0x17`, `0x18`, `0x1c`, `0x28`)
+  have no named handler, and together they are 65 of the 2,881 commands in `Data.wad`.
 - **Whether `0x01` and `0x09` differ.** They share a handler, so any difference
   must come from the command word rather than the dispatch.
 - ~~**The extraction itself.**~~ **Done.** Both rules are implemented in

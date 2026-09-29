@@ -96,6 +96,7 @@ mod banks;
 mod compose;
 mod cue;
 mod engine;
+mod layers;
 mod track;
 mod travel;
 pub use announcer::{Announcer, ClassAnnouncer};
@@ -103,6 +104,7 @@ use banks::load_named_cue;
 pub use banks::{Banks, Loaded};
 pub use cue::{BankName, Cue};
 pub use engine::Engine;
+pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
 pub use track::TrackEmitters;
 use travel::TravelVoices;
 
@@ -138,7 +140,7 @@ pub(super) struct SfxVoices {
     /// What the lock-on reticle was doing last frame, so its two blips fire on
     /// the transitions rather than every frame. See [`Cue::LockOn`].
     sight: oag_race::sight::State,
-    shield: Option<VoiceId>,
+    shield: Vec<VoiceId>,
     /// Whether the shield has already been responded to for this activation.
     ///
     /// The latch, kept apart from [`Self::shield`] because "a voice is held"
@@ -146,13 +148,13 @@ pub(super) struct SfxVoices {
     /// second one may gate the trigger.
     shield_open: bool,
     /// `~BLOWUP`'s held voice, while the player's craft is mid-explosion.
-    blowup: Option<VoiceId>,
+    blowup: Vec<VoiceId>,
     /// Whether this explosion has already been responded to, for the same
     /// reason [`Self::shield_open`] exists: the level must arm the voice once.
     blowup_open: bool,
     /// `~AUTOPILOT`'s held voice, while the player's own Autopilot pickup is
     /// active. See [`Cue::Autopilot`].
-    autopilot: Option<VoiceId>,
+    autopilot: Vec<VoiceId>,
     /// Whether this activation has already opened [`Self::autopilot`] (and,
     /// on the same edge, played [`Cue::Engaging`]) - the same latch shape
     /// [`Self::blowup_open`] carries, for the same reason.
@@ -239,11 +241,11 @@ impl Audio {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
                 last_listener: None,
                 sight: oag_race::sight::State::Absent,
-                shield: None,
+                shield: Vec::new(),
                 shield_open: false,
-                blowup: None,
+                blowup: Vec::new(),
                 blowup_open: false,
-                autopilot: None,
+                autopilot: Vec::new(),
                 autopilot_open: false,
                 ambience: track::Ambience::default(),
                 plasma_travel: TravelVoices::new(),
@@ -294,23 +296,21 @@ impl Audio {
                     // *not started* rather than started silent.
                     continue;
                 };
-                let Some((sound, looping)) = banks.pick(event.cue, &mut voices.rng) else {
+                let Some(started) = banks.voices(event.cue, &mut voices.rng) else {
                     continue;
                 };
-                let bus = event.cue.bus();
-                let play = if looping {
-                    Play::looping(sound, bus)
-                } else {
-                    Play::once(sound, bus)
-                };
-                // The return is dropped deliberately: a one-shot is fired and
+                // The handles are dropped deliberately: a one-shot is fired and
                 // forgotten, and a refused voice is already counted by
                 // `Mixer::starved`.
-                let _ = mixer.play(Play {
-                    gain: pan.gain,
-                    pan: pan.pan,
-                    ..play
-                });
+                let _ = layers::start(
+                    mixer,
+                    &started,
+                    event.cue.bus(),
+                    VoicePlace {
+                        gain: pan.gain,
+                        pan: pan.pan,
+                    },
+                );
             }
 
             // The Zone announcer: one voice line per milestone this tick
@@ -375,18 +375,14 @@ impl Audio {
                     // Pulse's `~SHIELD` is two waveforms and both loop; Pure's
                     // is four of which only two do, so forcing `Play::looping`
                     // here would loop a one-shot on about half the draws.
-                    if let Some((sound, looping)) = banks.pick(Cue::Shield, &mut voices.rng) {
-                        voices.shield = if looping {
-                            mixer.play(Play::looping(sound, Cue::Shield.bus()))
-                        } else {
-                            let _ = mixer.play(Play::once(sound, Cue::Shield.bus()));
-                            None
-                        };
+                    if let Some(started) = banks.voices(Cue::Shield, &mut voices.rng) {
+                        voices.shield =
+                            layers::start(mixer, &started, Cue::Shield.bus(), VoicePlace::DRY);
                     }
                 }
                 (false, true) => {
                     voices.shield_open = false;
-                    if let Some(id) = voices.shield.take() {
+                    for id in voices.shield.drain(..) {
                         mixer.stop(id);
                     }
                 }
@@ -436,18 +432,14 @@ impl Audio {
             match (exploding, voices.blowup_open) {
                 (true, false) => {
                     voices.blowup_open = true;
-                    if let Some((sound, looping)) = banks.pick(Cue::Blowup, &mut voices.rng) {
-                        voices.blowup = if looping {
-                            mixer.play(Play::looping(sound, Cue::Blowup.bus()))
-                        } else {
-                            let _ = mixer.play(Play::once(sound, Cue::Blowup.bus()));
-                            None
-                        };
+                    if let Some(started) = banks.voices(Cue::Blowup, &mut voices.rng) {
+                        voices.blowup =
+                            layers::start(mixer, &started, Cue::Blowup.bus(), VoicePlace::DRY);
                     }
                 }
                 (false, true) => {
                     voices.blowup_open = false;
-                    if let Some(id) = voices.blowup.take() {
+                    for id in voices.blowup.drain(..) {
                         mixer.stop(id);
                     }
                 }
@@ -463,26 +455,18 @@ impl Audio {
             match (autopilot_active, voices.autopilot_open) {
                 (true, false) => {
                     voices.autopilot_open = true;
-                    if let Some((sound, looping)) = banks.pick(Cue::Autopilot, &mut voices.rng) {
-                        voices.autopilot = if looping {
-                            mixer.play(Play::looping(sound, Cue::Autopilot.bus()))
-                        } else {
-                            let _ = mixer.play(Play::once(sound, Cue::Autopilot.bus()));
-                            None
-                        };
+                    if let Some(started) = banks.voices(Cue::Autopilot, &mut voices.rng) {
+                        voices.autopilot =
+                            layers::start(mixer, &started, Cue::Autopilot.bus(), VoicePlace::DRY);
                     }
-                    if let Some((sound, looping)) = banks.pick(Cue::Engaging, &mut voices.rng) {
-                        let play = if looping {
-                            Play::looping(sound, Cue::Engaging.bus())
-                        } else {
-                            Play::once(sound, Cue::Engaging.bus())
-                        };
-                        let _ = mixer.play(play);
+                    if let Some(started) = banks.voices(Cue::Engaging, &mut voices.rng) {
+                        let _ =
+                            layers::start(mixer, &started, Cue::Engaging.bus(), VoicePlace::DRY);
                     }
                 }
                 (false, true) => {
                     voices.autopilot_open = false;
-                    if let Some(id) = voices.autopilot.take() {
+                    for id in voices.autopilot.drain(..) {
                         mixer.stop(id);
                     }
                 }
@@ -572,8 +556,7 @@ impl Audio {
                 .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked);
             match (leach_locked, voices.leach_attach) {
                 (Some(beam), None) => {
-                    if let Some((sound, looping)) = banks.pick(Cue::LeachAttach, &mut voices.rng)
-                        && looping
+                    if let Some(started) = banks.voices(Cue::LeachAttach, &mut voices.rng)
                         && let Some(at) = leach_attach_point(&craft, beam)
                     {
                         let placed = oag_audio::Emitter {
@@ -583,11 +566,21 @@ impl Audio {
                         }
                         .place(&listener, 1.0);
                         let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
-                        voices.leach_attach = mixer.play(Play {
-                            gain,
-                            pan,
-                            ..Play::looping(sound, Cue::LeachAttach.bus())
-                        });
+                        // The cue keys a one-shot and a loop together. The loop is
+                        // the held voice this arm steers; the one-shot is fired
+                        // once, where the beam attached.
+                        let place = VoicePlace { gain, pan };
+                        let (held, once): (Vec<_>, Vec<_>) =
+                            started.into_iter().partition(|v| v.looping);
+                        let _ = layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
+                        voices.leach_attach = layers::start(
+                            mixer,
+                            &held[..held.len().min(1)],
+                            Cue::LeachAttach.bus(),
+                            place,
+                        )
+                        .first()
+                        .copied();
                     }
                 }
                 (Some(beam), Some(id)) if mixer.is_playing(id) => {
@@ -679,15 +672,15 @@ impl Audio {
                 for engine in &mut voices.engines {
                     engine.stop(mixer);
                 }
-                if let Some(id) = voices.shield.take() {
+                for id in voices.shield.drain(..) {
                     mixer.stop(id);
                 }
                 voices.shield_open = false;
-                if let Some(id) = voices.blowup.take() {
+                for id in voices.blowup.drain(..) {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
-                if let Some(id) = voices.autopilot.take() {
+                for id in voices.autopilot.drain(..) {
                     mixer.stop(id);
                 }
                 voices.autopilot_open = false;

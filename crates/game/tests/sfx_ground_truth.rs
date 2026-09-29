@@ -54,7 +54,16 @@ fn banks(image: &Path, zone: bool) -> Banks {
         .expect("opening the source");
     let sounds = opened.title.race.sounds;
     let mut archives = opened.archives;
-    Banks::load(&mut archives, sounds, zone)
+    Banks::load(
+        &mut archives,
+        sounds,
+        zone,
+        opened
+            .title
+            .race
+            .zone_announcer
+            .map_or(oag_title::SequenceTick::Unknown, |z| z.tick),
+    )
 }
 
 /// Plays one sound through a real mixer and reports what came out.
@@ -849,7 +858,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
 
     // Held across ticks rather than re-triggered - it is a `~` cue. The
     // shield coming up also fires `shieldactive`, a one-shot voice line, so
-    // the pool is walked until that has ended and only the loop is left over
+    // the pool is walked until that has ended and only the two loops are left over
     // idle: 60 ticks used to be enough at the placeholder 44,100 Hz, and at
     // the 18,002 Hz its descriptor keys it on with the line runs past a
     // second. Three seconds is longer than any effect on the disc, so a pool
@@ -870,13 +879,15 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
             voices(&audio) <= held,
             "the shield loop is being re-triggered every tick"
         );
-        if voices(&audio) == idle + 1 {
+        // Two loops now: Pulse's `~SHIELD` keys both of its waveforms at
+        // tick zero and both loop, where the flat pick held one of them.
+        if voices(&audio) == idle + 2 {
             settled = Some(tick);
             break;
         }
     }
     let settled =
-        settled.expect("the shield's one-shot line never ended, or the loop is not one voice");
+        settled.expect("the shield's one-shot line never ended, or the loops are not two voices");
     println!("shield held with only its loop open after {settled} ticks");
 
     race.sim.world.ships[0].physics.shield_pickup_timer = 0.0;

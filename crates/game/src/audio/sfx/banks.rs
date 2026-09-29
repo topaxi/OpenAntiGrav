@@ -18,6 +18,7 @@ use oag_audio::Sound;
 use oag_core::Rng;
 use oag_formats::sblk;
 
+use super::layers::{self, CueVoice, Timeline};
 use super::{BankName, Cue};
 
 /// One cue's decoded audio: every waveform its command run binds.
@@ -64,6 +65,10 @@ pub struct Banks {
     /// because that is what the byte's storage location implies, not because
     /// a multi-voice case was traced.
     pub(super) last_pick: RefCell<BTreeMap<Cue, usize>>,
+    /// Cues that play as the timeline they author, one entry per alternate
+    /// combination. Absent for a cue whose flat [`Self::pick`] is what it
+    /// plays; see [`super::layers`].
+    pub(super) timelines: BTreeMap<Cue, Vec<Timeline>>,
 }
 
 impl Banks {
@@ -79,8 +84,14 @@ impl Banks {
     /// A race that refused to start because a bank was missing would make the
     /// audio work a precondition for every other kind of work in the tree.
     #[must_use]
-    pub fn load(archives: &mut Archives, banks: &oag_title::SoundBanks, zone: bool) -> Self {
+    pub fn load(
+        archives: &mut Archives,
+        banks: &oag_title::SoundBanks,
+        zone: bool,
+        tick: oag_title::SequenceTick,
+    ) -> Self {
         let mut sounds = BTreeMap::new();
+        let mut timelines = BTreeMap::new();
         let mut report = Vec::new();
         let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
 
@@ -96,21 +107,36 @@ impl Banks {
                     }
                 },
             };
-            match load_cue(blob, cue) {
-                Ok((loaded, skipped)) => {
+            match load_cue(blob, cue, tick) {
+                Ok((loaded, skipped, timeline)) => {
                     let undecoded = if skipped == 0 {
                         String::new()
                     } else {
                         format!(", {skipped} skipped: decoded to no samples")
                     };
-                    report.push(format!(
+                    // One line per cue: the timeline note rides on it.
+                    let mut line = format!(
                         "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
                         cue.name(),
                         loaded.waveforms.len()
-                    ));
-                    if let Some(line) = not_one_event(cue, &loaded) {
-                        report.push(line);
+                    );
+                    let mut extra = None;
+                    match timeline {
+                        Ok(Some(t)) => {
+                            line.push_str(&format!(
+                                "; plays its timeline: {} variant(s) of {} voice(s)",
+                                t.len(),
+                                t.iter().map(|v| v.layers.len()).max().unwrap_or(0)
+                            ));
+                            timelines.insert(cue, t);
+                        }
+                        Ok(None) => extra = not_one_event(cue, &loaded),
+                        Err(e) => {
+                            line.push_str(&format!("; timeline not built, flat pick kept: {e}"))
+                        }
                     }
+                    report.push(line);
+                    report.extend(extra);
                     sounds.insert(cue, loaded);
                 }
                 // Deliberately a report line and not a fallback. Nothing is
@@ -125,6 +151,7 @@ impl Banks {
         Self {
             sounds,
             report,
+            timelines,
             ..Default::default()
         }
     }
@@ -154,18 +181,26 @@ impl Banks {
         Some((Arc::clone(sound), *looping))
     }
 
-    /// One waveform for a cue, chosen by `rng` when the cue has alternates.
+    /// Everything one play of a cue starts, drawn by `rng`.
     ///
-    /// `None` when the cue did not load. Opcode `0x19` is decoded now (see
-    /// [`Self::last_pick`]): a uniform draw that never repeats the
-    /// immediately previous pick for the same cue, re-rolled by advancing one
-    /// alternate and wrapping rather than by drawing again - matching the
-    /// original's own shape rather than a naive reject-and-retry, which would
-    /// bias a small `count` differently.
+    /// A cue with a [timeline](super::layers) gives its voices for one
+    /// alternate combination (chosen with the same never-repeat rule as
+    /// [`Self::pick`]) and one shared bend draw per `0x1b`; any other cue gives
+    /// the single waveform [`Self::pick`] would. `None` when the cue did not
+    /// load. **Not for [`Cue::Engine`]**, whose layers one voice drives.
     #[must_use]
-    pub fn pick(&self, cue: Cue, rng: &mut Rng) -> Option<(Arc<Sound>, bool)> {
-        let loaded = self.sounds.get(&cue)?;
-        let index = match u32::try_from(loaded.waveforms.len()) {
+    pub fn voices(&self, cue: Cue, rng: &mut Rng) -> Option<Vec<CueVoice>> {
+        let Some(variants) = self.timelines.get(&cue) else {
+            let (sound, looping) = self.pick(cue, rng)?;
+            return Some(vec![CueVoice::plain(sound, looping)]);
+        };
+        let index = self.draw(cue, variants.len(), rng);
+        Some(variants[index].voices(rng))
+    }
+
+    /// The uniform, never-repeating draw among `len` alternates of `cue`.
+    fn draw(&self, cue: Cue, len: usize, rng: &mut Rng) -> usize {
+        match u32::try_from(len) {
             Ok(len) if len > 1 => {
                 let draw = rng.below(len) as usize;
                 let mut last_pick = self.last_pick.borrow_mut();
@@ -177,16 +212,46 @@ impl Banks {
                 index
             }
             _ => 0,
-        };
+        }
+    }
+
+    /// One waveform for a cue, chosen by `rng` when the cue has alternates.
+    ///
+    /// `None` when the cue did not load. Opcode `0x19` is decoded now (see
+    /// [`Self::last_pick`]): a uniform draw that never repeats the
+    /// immediately previous pick for the same cue, re-rolled by advancing one
+    /// alternate and wrapping rather than by drawing again - matching the
+    /// original's own shape rather than a naive reject-and-retry, which would
+    /// bias a small `count` differently.
+    #[must_use]
+    pub fn pick(&self, cue: Cue, rng: &mut Rng) -> Option<(Arc<Sound>, bool)> {
+        let loaded = self.sounds.get(&cue)?;
+        let index = self.draw(cue, loaded.waveforms.len(), rng);
         let (sound, looping) = &loaded.waveforms[index];
         Some((Arc::clone(sound), *looping))
     }
 }
 
+/// What building a cue's timeline came to: none worth having, or a failure that
+/// leaves the flat pick in place.
+type TimelineResult = anyhow::Result<Option<Vec<Timeline>>>;
+
 /// Resolves one cue in one bank blob and decodes what it binds.
-fn load_cue(blob: &[u8], cue: Cue) -> anyhow::Result<(Loaded, usize)> {
+fn load_cue(
+    blob: &[u8],
+    cue: Cue,
+    tick: oag_title::SequenceTick,
+) -> anyhow::Result<(Loaded, usize, TimelineResult)> {
     let bank = sblk::Bank::parse(blob)?;
-    load_named_cue(&bank, cue.name())
+    let (loaded, skipped) = load_named_cue(&bank, cue.name())?;
+    // The engine is driven by one voice's per-tick pitch and volume, and how
+    // that law spreads over layers is unread: it keeps its flat set.
+    let timeline = if cue == Cue::Engine {
+        Ok(None)
+    } else {
+        layers::timelines(&bank, cue.name(), tick)
+    };
+    Ok((loaded, skipped, timeline))
 }
 
 /// The length ratio past which a cue's waveforms cannot all be alternates of

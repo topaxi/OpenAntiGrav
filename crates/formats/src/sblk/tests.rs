@@ -260,6 +260,8 @@ fn pitch_and_sample_rate_switch_on_byte_order() {
         volume: 127,
         centre_note: -60,
         centre_fine: 0,
+        bend_down: 0,
+        bend_up: 0,
         mode: 0,
         offset: 0,
         length: 0,

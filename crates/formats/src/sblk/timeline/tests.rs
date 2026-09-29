@@ -21,6 +21,12 @@ enum Grain {
     Child { cue: u32, delay: u32, volume: u32 },
     /// Any other opcode, after `delay` ticks.
     Other { opcode: u32, delay: u32 },
+    /// An opcode with its own operand word, after `delay` ticks.
+    Raw {
+        opcode: u32,
+        operand: u32,
+        delay: u32,
+    },
 }
 
 struct Spec(&'static str, i8, Vec<Grain>);
@@ -59,7 +65,7 @@ fn build(specs: &[Spec]) -> Vec<u8> {
         block[cue + 0x08..cue + 0x0c].copy_from_slice(&byte_offset.to_le_bytes());
         for grain in &spec.2 {
             let record = parameter_offset + command * RECORD_LEN;
-            let operand = u32::try_from(command * RECORD_LEN).unwrap();
+            let mut operand = u32::try_from(command * RECORD_LEN).unwrap();
             let (opcode, delay) = match *grain {
                 Grain::KeyOn {
                     offset,
@@ -78,6 +84,14 @@ fn build(specs: &[Spec]) -> Vec<u8> {
                     (0x05, delay)
                 }
                 Grain::Other { opcode, delay } => (opcode, delay),
+                Grain::Raw {
+                    opcode,
+                    operand: raw,
+                    delay,
+                } => {
+                    operand = raw;
+                    (opcode, delay)
+                }
             };
             let at = command_offset + command * COMMAND_LEN;
             block[at..at + 4].copy_from_slice(&(opcode << 24 | operand).to_le_bytes());
@@ -281,4 +295,125 @@ fn the_tick_is_the_psp_s_measured_rate() {
     // 44,100 Hz, three ticks per two 256-frame grains, checked live at 257.7,
     // 259.7 and 258.3.
     assert!((TICKS_PER_SECOND - 258.398_437_5).abs() < 1e-6);
+}
+
+fn raw(opcode: u32, operand: u32, delay: u32) -> Grain {
+    Grain::Raw {
+        opcode,
+        operand,
+        delay,
+    }
+}
+
+fn ticks(t: &super::Timeline) -> Vec<(u32, u32)> {
+    t.grains.iter().map(|g| (g.tick, g.sound.offset)).collect()
+}
+
+/// `.COLLISIONS`' shape with a tail: a group of three single-command
+/// alternates, then a key-on that always runs.
+fn alternates() -> Vec<u8> {
+    build(&[Spec(
+        "A",
+        100,
+        vec![
+            raw(0x19, 0x0000_0103, 0),
+            key(0, 0, 0),
+            key(16, 0, 0),
+            key(32, 0, 0),
+            key(48, 0, 20),
+        ],
+    )])
+}
+
+#[test]
+fn an_alternate_group_runs_one_block_and_then_what_follows() {
+    let data = alternates();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    for (pick, offset) in [(0u8, 0u32), (1, 16), (2, 32)] {
+        let t = bank.cue_timeline_with(&cue, &[pick]);
+        assert!(t.is_complete(), "{:?}", t.unread);
+        assert_eq!(ticks(&t), vec![(0, offset), (20, 48)], "pick {pick}");
+        assert_eq!(t.groups.len(), 1);
+        assert_eq!((t.groups[0].count, t.groups[0].stride), (3, 1));
+    }
+    // A pick past the count wraps rather than running off the group.
+    assert_eq!(ticks(&bank.cue_timeline_with(&cue, &[4]))[0], (0, 16));
+}
+
+#[test]
+fn every_combination_of_alternates_is_enumerated() {
+    let data = alternates();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let all = bank.cue_timelines(&cue).expect("enumerable");
+    let firsts: Vec<u32> = all.iter().map(|t| t.grains[0].sound.offset).collect();
+    assert_eq!(firsts, vec![0, 16, 32]);
+}
+
+#[test]
+fn a_stride_of_two_takes_both_commands_of_the_alternate() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            raw(0x19, 0x0000_0202, 0),
+            key(0, 0, 0),
+            key(16, 0, 7),
+            key(32, 0, 0),
+            key(48, 0, 9),
+        ],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    assert_eq!(
+        ticks(&bank.cue_timeline_with(&cue, &[0])),
+        vec![(0, 0), (7, 16)]
+    );
+    assert_eq!(
+        ticks(&bank.cue_timeline_with(&cue, &[1])),
+        vec![(0, 32), (9, 48)]
+    );
+}
+
+#[test]
+fn the_end_opcode_stops_the_list() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![key(0, 0, 0), raw(0x2b, 0, 0), key(16, 0, 30)],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let t = bank.cue_timeline(&bank.cue_named("A").expect("cue"));
+    assert!(t.is_complete());
+    assert_eq!(ticks(&t), vec![(0, 0)]);
+}
+
+#[test]
+fn a_random_bend_is_shared_by_the_key_ons_after_it_and_adds_no_time() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            raw(0x14, 0, 0),
+            raw(0x1b, 100, 0),
+            key(0, 0, 0),
+            key(16, 0, 12),
+        ],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let t = bank.cue_timeline(&bank.cue_named("A").expect("cue"));
+    assert!(t.is_complete());
+    assert_eq!(t.bends, vec![100]);
+    assert_eq!(t.passed, vec![0x14]);
+    assert_eq!(ticks(&t), vec![(0, 0), (12, 16)]);
+    assert!(t.grains.iter().all(|g| g.bend == Some(0)));
+}
+
+#[test]
+fn a_bend_after_a_key_on_is_not_modelled() {
+    let data = build(&[Spec("A", 100, vec![key(0, 0, 0), raw(0x1b, 100, 0)])]);
+    let bank = Bank::parse(&data).expect("parse");
+    let t = bank.cue_timeline(&bank.cue_named("A").expect("cue"));
+    assert_eq!(t.unread, vec![0x1b]);
 }
