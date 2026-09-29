@@ -8,6 +8,30 @@
 use super::*;
 use log::warn;
 
+/// Which of the four triggers put a craft back, for a caller measuring where
+/// craft leave the track.
+///
+/// Bookkeeping only, outside [`Race::state_hash`](super::Race): it records
+/// what already fired and changes nothing about whether it does. Each variant
+/// names one guard in this file, so a survey can tell a craft that fell
+/// through authored `Reset` geometry from one that one of this project's own
+/// invented dwells (see [`RESCUE_HALF_WIDTHS`], [`PLAYER_RESCUE_HALF_WIDTHS`],
+/// [`STALL_SPEED`]) caught.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RespawnCause {
+    /// An authored `Reset` volume was touched. The original's own mechanism.
+    ResetZone,
+    /// An opponent stayed far from its driver's sample - invented.
+    LostCircuit,
+    /// An opponent stayed stopped while asking to move - invented.
+    Stalled,
+    /// The player stayed far from the nearest spline sample - invented.
+    OffTrack,
+    /// The craft was wrecked and is being brought back by the destroyed-craft
+    /// pass, not rescued from anywhere: a shield running out is not a fall.
+    Destroyed,
+}
+
 impl Race {
     /// Whether this opponent has been away from its own driver's idea of where
     /// it is for long enough to count as lost.

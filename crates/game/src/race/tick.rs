@@ -418,7 +418,13 @@ impl Race {
         // with an empty pool. In a single race the ending has already fired.
         let alive =
             self.sim.world.ships[player].physics.craft_state == oag_physics::CraftState::Racing;
-        if alive && (off_the_track || self.reset_zone_touched(player, &env, before)) {
+        let reset = self.reset_zone_touched(player, &env, before);
+        if alive && (off_the_track || reset) {
+            self.sim.last_respawn_cause[player] = Some(if off_the_track {
+                respawn::RespawnCause::OffTrack
+            } else {
+                respawn::RespawnCause::ResetZone
+            });
             // The last sample the craft was *on the track* at, which for a reset
             // contact is where it was a tick or two ago and for the off-track
             // trigger is where it left. `index` - the nearest sample to wherever

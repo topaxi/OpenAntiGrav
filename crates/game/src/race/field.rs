@@ -522,7 +522,15 @@ impl Race {
             // so a craft that comes back stalled is rescued on time.
             let alive =
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
-            if alive && (lost || stalled || self.reset_zone_touched(slot, &env, position)) {
+            let reset = self.reset_zone_touched(slot, &env, position);
+            if alive && (lost || stalled || reset) {
+                self.sim.last_respawn_cause[slot] = Some(if lost {
+                    respawn::RespawnCause::LostCircuit
+                } else if stalled {
+                    respawn::RespawnCause::Stalled
+                } else {
+                    respawn::RespawnCause::ResetZone
+                });
                 self.respawn(slot, last_good);
             } else if self.sim.respawn_cooldown[slot] == 0 {
                 self.sim.respawns_in_a_row[slot] = 0;
