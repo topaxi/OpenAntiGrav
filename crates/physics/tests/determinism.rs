@@ -295,6 +295,17 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   d-pad fields, the input mapping - left in place, the three constants from
 ///   2026-09-05 reproduce bit for bit. A script that pushed the axis past `0.9`
 ///   in an alternation would move these for a real reason, and should.
+/// - **Regenerated 2026-09-29, a real change of behaviour.** The hull port of
+///   the original's sunk-craft recovery landed: floor contacts
+///   (`Collision_BoxAgainstMesh`), `Collision_AddContact`'s projection gate and
+///   `Body_StepWorld`'s pass 1, the pre-integration clip along the velocity
+///   (`crate::wall::pre_integration_clip`, `0x0884f70c`). Only the
+///   3,600-tick `Aerobatic` entry moved; both `Corridor` entries are
+///   untouched. Checked: with the one `pre_integration_clip` call removed and
+///   the floor contacts, the gate and the swept ray's removal all left in, the
+///   old `Aerobatic` pair reproduces bit for bit, so pass 1 is the whole
+///   movement - its clip fires on the script's wall runs, where the swept ray
+///   it replaced never did.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
@@ -311,8 +322,8 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         3_600,
         Script::Aerobatic,
-        0x117e_e9f0_1891_e853,
-        0xec97_f321_86e5_2cde,
+        0xeafa_de52_6f41_07bb,
+        0xa720_c7d1_acce_fd9d,
     ),
 ];
 
