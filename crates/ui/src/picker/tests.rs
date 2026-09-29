@@ -868,7 +868,8 @@ fn a_team_step_keeps_the_model_row_only_on_the_across_layout() {
         },
     };
     let entries = || vec![team("a"), team("b")];
-    let mut across = Picker::new(Kind::Ship, entries(), Some("a"), Some("_c1")).with_entries_across();
+    let mut across =
+        Picker::new(Kind::Ship, entries(), Some("a"), Some("_c1")).with_entries_across();
     assert_eq!(across.step_entry(1), Some(Event::Moved));
     assert_eq!(across.variant().map(|(id, _)| id.as_str()), Some("_c1"));
 
