@@ -182,14 +182,37 @@ const CARD_TRACKS: [&str; 10] = [
     "altima",
 ];
 
-/// `FUN_812b671a`'s ordinal-to-wording table, for the ordinals the campaign
-/// authors and whose wording is recovered: `FINISH`, `POSITION` and `KILLS`.
-/// `BEAT_VALUE` (`2`) is left unworded on purpose - its text is a per-mode
-/// override of the event or `FE_SCORE_POINTS`, and the disc's table has no
-/// such entry (`docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`).
-fn objective_text(strings: &StringTable, objective_type: i64, target: i64) -> Option<String> {
+/// `GameModeObjective_FormatText` (`FUN_812b671a`)'s ordinal-to-wording table
+/// plus the per-mode override it offers first (`vtable+0x6c`; eight
+/// `GameMode_*` vtables share the slot). The override matters for
+/// `BEAT_VALUE` (`2`) only. Of the eight, `GameMode_ZoneRace`'s (mode icon
+/// ordinal `0`) is `FUN_812c4a2a` (`"%s : %d"` over `FE_ZONE_TARGET`),
+/// `GameMode_SpeedLapRace`'s (ordinal `3`) is `FUN_812c1011`
+/// (`MP-Objective_Beat_1` over the target as `M:SS`, `FUN_8114f252`), and the
+/// other six keep the base class's `return 0` (`0x813ea238`), so their
+/// `BEAT_VALUE` falls through to `FE_SCORE_POINTS` (`SCORE %d POINTS`) -
+/// Elimination (ordinal `1`) among them. The class of an event is its
+/// typedef, not its [`EventKind`], which merges the two race typedefs.
+fn objective_text(
+    strings: &StringTable,
+    typedef_id: i64,
+    objective_type: i64,
+    target: i64,
+) -> Option<String> {
+    use oag_tables::mjolnir::campaign::typedef;
+    if objective_type == 2 {
+        if typedef_id == typedef::ZONE {
+            let head = strings.get("FE_ZONE_TARGET")?;
+            return Some(format!("{head} : {target}"));
+        }
+        if typedef_id == typedef::RACE_A {
+            let beat = strings.get("MP-Objective_Beat_1")?;
+            return Some(beat.replace("%s", &centiseconds_as_clock(target)));
+        }
+    }
     let id = match (objective_type, target) {
         (1, _) => "SP_Objective_Finish",
+        (2, _) => "FE_SCORE_POINTS",
         (4, 1) => "ER_FINISH_1ST",
         (4, 2) => "ER_FINISH_2ND",
         (4, 3) => "ER_FINISH_3RD",
@@ -199,6 +222,23 @@ fn objective_text(strings: &StringTable, objective_type: i64, target: i64) -> Op
     };
     let text = strings.get(id)?;
     Some(text.replace("%d", &target.to_string()))
+}
+
+/// `FUN_8114f252`: hundredths of a second as `M:SS`, saturating at `9:59`,
+/// with `0xffff` (the "no time" sentinel) reading as zero.
+fn centiseconds_as_clock(centiseconds: i64) -> String {
+    let centiseconds = if centiseconds == 0xffff {
+        0
+    } else {
+        centiseconds.max(0)
+    };
+    let seconds = centiseconds / 100;
+    let (minutes, seconds) = if seconds / 60 > 9 {
+        (9, 59)
+    } else {
+        (seconds / 60, seconds % 60)
+    };
+    format!("{minutes}:{seconds:02}")
 }
 
 /// What one event's card says, off the same instances the map already read.
@@ -256,6 +296,7 @@ fn event_card(
         objective: objective.and_then(|objective| {
             objective_text(
                 strings,
+                event.typedef_id,
                 objective.objective_type?,
                 objective.target.unwrap_or(0),
             )

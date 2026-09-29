@@ -160,10 +160,33 @@ switch on the ordinal: `1` -> `SP_Objective_Finish` (`MP_Objective_Finish` on a
 multiplayer event), `2` -> `FE_SCORE_POINTS`, `4` -> `ER_FINISH_1ST`/
 `ER_FINISH_2ND`/`ER_FINISH_3RD`/`ER_FINISH_IN_POS` (`FINISH AT LEAST %dTH`),
 `7` -> `FE_ELIMINATE_OPP`, `3`/`5`/`6`/`8`/`0xb`/`0xc` the multiplayer
-wordings. It first offers the event a per-mode override (`vtable+0x6c`), and
-that is what the `BEAT_VALUE` (`2`) events would use; the override is unread and
-`FE_SCORE_POINTS` is **not in the disc's string table**, so this build words
-`FINISH`, `POSITION` and `KILLS` and draws nothing for `BEAT_VALUE`.
+wordings. It first offers the event a per-mode override
+(`vtable+0x6c`, arguments `(event, type, target, buf)`, returns non-zero when
+it wrote the text). **Read 2026-09-29.** Eight `GameMode_*` vtables carry the
+slot; six keep the base class's stub at `0x813ea238` (`movs r0,#0; bx lr`,
+disassembled), two override it, and each vtable is pinned to its class by the
+mode-icon ordinal its constructor writes to `+0x190` (`FUN_81061040` maps
+`0` zone, `1` elimination, `2` race, `3` speed) - the class hash in
+`oag_tables::mjolnir::campaign::typedef` agrees:
+
+| Vtable base | Constructor | `+0x190` | Class | `+0x6c` |
+| --- | --- | --- | --- | --- |
+| `0x81516568` | `FUN_812c3d00` | `0` | `GameMode_ZoneRace` | `FUN_812c4a2a` (`0x812c4a2a`): type `2` -> `"%s : %d"` over `FE_ZONE_TARGET` (`ZONE TARGET : 15`) |
+| `0x815163f0` | `FUN_812bfe14` | `3` | `GameMode_SpeedLapRace` | `FUN_812c1011` (`0x812c1010`): type `2` -> `MP-Objective_Beat_1` (`BEAT %s`) over the target as `M:SS` from `FUN_8114f252` (centiseconds, saturating at `9:59`) |
+| `0x81516340` | `FUN_812be628` | `1` | `GameMode_EliminatorRace` | default (`return 0`) |
+| `0x8151611c`, `0x815161cc`, `0x815164b8` | `FUN_812bb914`, `FUN_812bd128`, `FUN_812c377a` | `2`, `2`, `4` | the other race classes | default |
+
+So `BEAT_VALUE` (`2`) is worded three ways: SpeedLapRace as a time, Zone as a
+count, and everything else - Elimination in particular - falls through to
+`FE_SCORE_POINTS` (`SCORE %d POINTS`, which **is** in the disc's English table
+in both `data.psarc` and the patch's `entries.xml`; the previous pass's "not in
+the string table" was wrong). The three classes' `SP.xml` typedefs carry every
+`BEAT_VALUE` event: 13 on `-1915183557` (SpeedLapRace), 10 on `1018671239`
+(Zone), 15 on `1311982788` (Elimination). The Elimination wording is evidence
+for the metric `2048-campaign.md` had left unidentified: the original words its
+`25`-`100` targets as **points scored**, confidence 80 (the class was pinned by
+its constructor and the vtable stub was disassembled; what the sim counts as a
+point is still unread). Confidence for the wording table: 85.
 
 ### `CampaignEventCard_DrawTrackPhoto` - `0x81060744`
 

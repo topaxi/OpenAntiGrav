@@ -329,11 +329,11 @@ of the 80 fully-authored events, no exception found either way):
 
 | `EventKind` | Metric | Direction | Confidence | Sample |
 | --- | --- | --- | --- | --- |
-| `Race` (13 instances) | Total race time, in centiseconds | Lower is better (`elite < pass` on all 13) | 80 | `"2048 - Event 3"`: pass `13000` (130 s), elite `11000` (110 s) |
+| `Race` (13 instances, all `GameMode_SpeedLapRace`) | Total race time, in centiseconds | Lower is better (`elite < pass` on all 13) | 80 | `"2048 - Event 3"`: pass `13000` (130 s), elite `11000` (110 s) |
 | `Zone` (10 instances) | The zone counter reached | Higher is better (`elite > pass` on all 10) | 80 | `"Zone Pass"`/`"Zone Elite"`: `10`/`20` |
-| `Elimination` (15 instances) | **Not identified** | Higher is better (`elite > pass` on all 15), but by what metric is unknown | Under 50 - not guessed |
+| `Elimination` (15 instances) | **Points scored** - the original's own card words it `SCORE %d POINTS` (`FE_SCORE_POINTS`); what earns a point in the sim is not read | Higher is better (`elite > pass` on all 15) | 80 for the wording (2026-09-29: `GameModeObjective_FormatText`'s fall-through for a class with no override, `campaign-event-card.md`); the gameplay metric is still unimplemented |
 
-**Why Elimination's own `BEAT_VALUE` metric is left unread.** Its targets
+**Why Elimination's own `BEAT_VALUE` metric is still not graded.** (2026-09-29: the wording says points, above.) Its targets
 run `25`-`100`; `oag_race::Standing::kills` (the only per-race count this
 engine's own Eliminator mode tracks) never approaches those numbers in a
 real match, and nothing else - a damage total, a points score - is tracked
@@ -594,9 +594,9 @@ resolves what it says. Every word and picture comes off the disc:
 | Class glyph | `speedclass/{d,c,b,a,ap}_class.gxt` by `M_SPEEDCLASS` ordinal `0`-`4` | 70 (`d,c,b,a,ap` read as the ordinals' slowest-first order; frame 14 shows the C glyph and this build reads the same glyph and three laps for the one event with that title and a top-5 pass, so the mapping is right for whichever ordinal that event authors; the other four are unverified) |
 | Three buttons | Launch, Back, Change craft (only when `M_PPLAYERSHIPMODELDATA` is unset) | 75 |
 
-**Not drawn, on purpose, with where to pick it up:** the `BEAT_VALUE`
-objective line (the event's per-mode override of `GameModeObjective_FormatText`
-at `vtable+0x6c`, and `FE_SCORE_POINTS` is not in the string table); page
+**Not drawn, on purpose, with where to pick it up:** (the `BEAT_VALUE`
+objective line is drawn since 2026-09-29 - see `campaign-event-card.md`'s
+`GameModeObjective_FormatText`); page
 kinds `1`-`4` (`FUN_810540c4`, `FUN_81052fb4`, `FUN_81052810`, `FUN_810535fe`) -
 kind `1` is on every single-player card and is drawn blank; the elite-pass row
 and the restriction glyphs; the photo of a Zone event (no authored circuit).
@@ -605,9 +605,8 @@ pages it can (`CampaignEventCard_BuildPageList`'s first two rules), so a card
 with an objective shows two. **The `<` / `>` arrows are page arrows, not lap
 arrows** - the earlier frame note said otherwise.
 
-**Scale of the gaps:** 38 of the 80 events that author objectives are
-`BEAT_VALUE` (13 Race + 10 Zone + 15 Elimination), so their card shows `PASS`
-over an empty line; Zone events show no title, photo or emblem. **Locked
+**Scale of the gaps:** (the 38 `BEAT_VALUE` events, 13 SpeedLapRace + 10 Zone +
+15 Elimination, are worded since 2026-09-29;) Zone events show no title, photo or emblem. **Locked
 nodes:** frame 14's README note says tapping a locked node opens its card, and
 `CampaignEventCard_HandleInput`'s map-tap branch gates only on `event+0x2d8 != 0`
 (`0x810f2164`); this build keeps refusing a locked event at the map. Reading

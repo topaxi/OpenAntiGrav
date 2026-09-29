@@ -284,6 +284,17 @@ pub fn run(
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
     // somewhere the capture then ignores.
+    // `--until card` or `--until card:N`: stop with 2048's event card open on
+    // page `N` (default `0`) rather than on a state-machine state, since the
+    // card is a sub-state of `newFEshell`.
+    let card_page = options.until.as_deref().and_then(|name| {
+        let rest = name.strip_prefix("card")?;
+        match rest.strip_prefix(':') {
+            Some(page) => page.parse().ok(),
+            None if rest.is_empty() => Some(0),
+            None => None,
+        }
+    });
     while options.screen.is_none() && options.menu_page.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
@@ -292,10 +303,13 @@ pub fn run(
             break;
         }
 
-        let reached = options
-            .until
-            .as_deref()
-            .is_some_and(|name| frontend.machine().is(name));
+        let reached = match card_page {
+            Some(page) => frontend.event_card_page() == Some(page),
+            None => options
+                .until
+                .as_deref()
+                .is_some_and(|name| frontend.machine().is(name)),
+        };
         if reached && ticks >= options.ticks {
             break;
         }
@@ -313,7 +327,13 @@ pub fn run(
         }
 
         let pulse = if ticks.is_multiple_of(2) {
-            options.pressed
+            // With `--until card:N` the pressed buttons open the card, and
+            // once it is open the pulse turns its page instead.
+            if card_page.is_some() && frontend.event_card_open() {
+                oag_gameplay::input::Button::Right.bit()
+            } else {
+                options.pressed
+            }
         } else {
             0
         };

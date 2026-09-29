@@ -37,10 +37,7 @@
 //! single-player card (`FUN_8105114a`), so it is a page the player can reach
 //! and it is blank; the elite-pass row (drawn only for two objective
 //! kinds, `FUN_81055150`'s `param_3[0xb6]`, unread); the weapon and craft
-//! class restriction icons (`FUN_81061db6`); the objective line of a
-//! `BEAT_VALUE` event, whose text is either a per-mode override
-//! (`vtable+0x6c` of the event, unread) or `FE_SCORE_POINTS`, which is not
-//! in the disc's string table. The page count the original shows (three on
+//! class restriction icons (`FUN_81061db6`). The page count the original shows (three on
 //! the reference frame) comes from predicates over fields this build does
 //! not read, so this build shows the pages it can count: the objective page
 //! when the event authors a pass objective, and kind `1`.
@@ -66,8 +63,8 @@ pub struct EventCard {
     pub pass_label: Option<String>,
     /// The event authors an `M_PASSOBJECTIVE` - page kind `0` exists.
     pub has_objective: bool,
-    /// The pass objective's worded line, `None` when its wording is not
-    /// recovered (`BEAT_VALUE`).
+    /// The pass objective's worded line, `None` when the type is not one the
+    /// original words.
     pub objective: Option<String>,
     /// `M_NUMOFLAPS`, when a lap race authors one above zero.
     pub laps: Option<u32>,
@@ -162,6 +159,12 @@ impl Frontend {
     #[must_use]
     pub fn event_card_open(&self) -> bool {
         self.campaign.card.is_some()
+    }
+
+    /// Which page the card shows, `None` while it is closed.
+    #[must_use]
+    pub fn event_card_page(&self) -> Option<usize> {
+        self.campaign.card.map(|card| card.page)
     }
 
     fn card_pages(event: &MapEvent) -> Vec<Page> {
