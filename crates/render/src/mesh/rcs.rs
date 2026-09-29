@@ -68,6 +68,25 @@ pub fn sibling_name(vex_name: &str) -> Option<String> {
     Some(format!("{stem}.rcsmodel"))
 }
 
+/// The Omega Collection's spelling of [`sibling_name`]: `<stem>.final.rcsmodel`.
+///
+/// **Its circuits ship their baked outputs under a `.final` infix** -
+/// `Data\environments\tech_de_ra\track.vex` sits beside
+/// `track.final.rcsmodel`, `track.final.rcsskeleton`, `track.final.rcsanimclip`
+/// and `track.final.pvs`, and `track.rcsmodel` does not exist. Measured over
+/// the whole PS4 package pair: all 22 of its own and 2048-derived circuits
+/// (and every `track_reversed` one) use the `.final` spelling, and the four
+/// `zone_N` circuits use the plain one - never both in one directory. So a
+/// caller that tries [`sibling_name`] first and this second can never read the
+/// wrong file, and every other title, none of which ships a `.final` name, is
+/// untouched.
+#[must_use]
+pub fn sibling_name_cooked(vex_name: &str) -> Option<String> {
+    let plain = sibling_name(vex_name)?;
+    let stem = plain.strip_suffix(".rcsmodel")?;
+    Some(format!("{stem}.final.rcsmodel"))
+}
+
 /// The `.rcsmodel` beside `name`, when this `.vex` needs one and the archive
 /// carries it.
 ///

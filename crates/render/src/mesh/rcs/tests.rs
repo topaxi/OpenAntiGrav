@@ -20,6 +20,37 @@ fn a_sibling_is_the_same_path_with_the_other_extension() {
     assert_eq!(sibling_name(".vex").as_deref(), Some(".rcsmodel"));
 }
 
+/// The Omega Collection's circuits spell the pairing with a `.final` infix.
+/// Both spellings are a rewrite of the same `.vex` name, and the skeleton and
+/// clip follow whichever `.rcsmodel` was actually found.
+#[test]
+fn a_cooked_sibling_carries_the_final_infix_and_its_animation_follows() {
+    let track = r"Data\environments\tech_de_ra\track.vex";
+    assert_eq!(
+        sibling_name_cooked(track).as_deref(),
+        Some(r"Data\environments\tech_de_ra\track.final.rcsmodel")
+    );
+    assert_eq!(
+        sibling_name_cooked(r"Data\environments\tech_de_ra\track_reversed.vex").as_deref(),
+        Some(r"Data\environments\tech_de_ra\track_reversed.final.rcsmodel")
+    );
+    assert_eq!(sibling_name_cooked("Data\\Tex\\thing.mip"), None);
+    assert_eq!(
+        psp2::animation_names_beside(r"Data\environments\tech_de_ra\track.final.rcsmodel"),
+        Some((
+            r"Data\environments\tech_de_ra\track.final.rcsskeleton".to_string(),
+            r"Data\environments\tech_de_ra\track.final.rcsanimclip".to_string()
+        ))
+    );
+    // The plain spelling is untouched, which is what keeps every other title's
+    // lookup exactly what it was.
+    assert_eq!(
+        psp2::animation_names(track),
+        psp2::animation_names_beside(&sibling_name(track).unwrap())
+    );
+    assert_eq!(psp2::animation_names_beside("track.vex"), None);
+}
+
 /// An empty model frames at the origin rather than dividing by zero.
 #[test]
 fn a_model_with_no_vertices_still_has_a_usable_radius() {

@@ -17,37 +17,30 @@
 //! # Why first-byte-nonzero was misleading
 //!
 //! `psarc_sweep` (this crate's other example) checks only whether an
-//! entry's first byte is nonzero, which `docs/formats/psarc.md`'s "Block
-//! data location" section already uses to report "30-54% real" per
-//! archive. That undercounts: several of this family's real, correctly
-//! located `.gnf` entries store a long run of zero bytes before their pixel
-//! payload (measured directly - see the module docs on the dedup case
-//! below), so "first byte zero" catches real content and calls it fake.
+//! entry's first byte is nonzero. A real `.gnf` can store a run of zeros
+//! before its pixel payload, so "first byte zero" calls real content fake.
+//! Both tools were written against a **short-read extraction** whose zeroed
+//! sectors looked like a property of the archives; see
+//! `docs/formats/psarc.md`'s "Block data location and the short-read
+//! extraction". On a whole extraction the split is gone: every entry with a
+//! magic carries it.
 //!
 //! This tool checks the format's own magic instead, where one exists:
-//! `.vex` (`VEXX` at `+0x0c`, `docs/formats/vex.md`), `.gnf` (`GNF ` at
-//! `+0x00`, `docs/formats/README.md`'s Omega rows), and - **new**, the
-//! `lane/omega-rcs` session that read the container underneath `.rcsmodel`/
-//! `.rcsmaterial` - `ED AD 5C CA`/`E5 AD 5C CA` at `+0x00` on this PS4
-//! family only (`docs/formats/rcsmodel.md`'s PS4 section; PS3 genuinely has
-//! no magic, per `crates/rcs/src/rcsmodel.rs`'s own module docs, and that is
-//! unchanged). Any extension without a known magic is still reported
-//! "unvalidated" rather than forced into a bucket the format gives no way to
-//! check.
+//! `.vex` (`VEXX` at `+0x0c`, or `XXEV` there in the big-endian spelling -
+//! reported apart as `valid_big_endian`; `docs/formats/vex.md`), `.gnf`
+//! (`GNF ` at `+0x00`), and `ED AD 5C CA`/`E5 AD 5C CA` at `+0x00` on
+//! `.rcsmodel`/`.rcsmaterial` on this PS4 family only
+//! (`docs/formats/rcsmodel.md`'s PS4 section; PS3 genuinely has no magic).
+//! Any extension without a known magic is reported "unvalidated" rather than
+//! forced into a bucket the format gives no way to check.
 //!
 //! # The dedup finding
 //!
 //! Eleven different ship liveries' `ShieldHexagonal_ALPHA.gnf` on
 //! `data03.psarc` share one identical `(offset, size)` pair - the packer
-//! deduplicated byte-identical content rather than storing eleven copies.
-//! Two adjacent, differently-named `Holographic_02_GLOW.gnf` entries at the
-//! immediately preceding offset are genuinely real (`GNF ` at their very
-//! first byte) - so a shared offset is not itself a sign of anything wrong.
-//! The `ShieldHexagonal_ALPHA.gnf` group itself, though, is all zero for its
-//! first 15,616 bytes, has no `GNF ` anywhere in its declared range, and its
-//! nonzero middle (bytes 15,616-38,739) does not decode as anything -
-//! genuinely missing content at a genuinely-correct-looking offset, not a
-//! location bug. See `docs/formats/psarc.md`.
+//! stores one copy of identical content and points every name at it - and
+//! all eleven read as `GNF ` on a whole extraction. A shared offset is not a
+//! sign of anything wrong.
 //!
 //! `cargo run -p oag-assets --release --example psarc_oracle -- <path.psarc> [--verbose]`
 //!
@@ -61,6 +54,10 @@ use std::collections::BTreeMap;
 enum Bucket {
     /// Magic checked and matched: this is the format it claims to be.
     Valid,
+    /// A `.vex` in the other byte order: `XXEV` at `+0x0c`, the spelling the
+    /// PS3 files carry. Real content, counted apart so the little-endian
+    /// `valid` count stays a count of one spelling.
+    ValidBigEndian,
     /// The format has a known magic, and every byte in the declared range
     /// failed to show it - the manifest-path digest case, not a content
     /// digest: this is "genuinely stores nothing" as far as this tool can
@@ -68,8 +65,8 @@ enum Bucket {
     /// stub for an unused variant.
     AllZero,
     /// Neither all-zero nor the expected magic: bytes are present but do not
-    /// decode as the format the extension claims. The population this
-    /// project has not explained yet.
+    /// decode as the format the extension claims. Empty on a whole
+    /// extraction; on a short-read one this was thousands of entries.
     Garbage,
     /// The format (`.rcsmodel`) carries no magic to check by design, so
     /// "valid" cannot be asserted - only zero vs. nonzero.
@@ -83,6 +80,7 @@ impl Bucket {
     fn label(self) -> &'static str {
         match self {
             Self::Valid => "valid",
+            Self::ValidBigEndian => "valid_big_endian",
             Self::AllZero => "all_zero",
             Self::Garbage => "garbage",
             Self::UnvalidatedNonZero => "unvalidated_nonzero",
@@ -131,6 +129,8 @@ fn classify(ext: &str, bytes: &[u8]) -> Bucket {
             let matches = bytes.len() >= at + magic.len() && &bytes[at..at + magic.len()] == magic;
             if matches {
                 Bucket::Valid
+            } else if ext == "vex" && bytes.get(0x0c..0x10) == Some(b"XXEV".as_slice()) {
+                Bucket::ValidBigEndian
             } else if all_zero {
                 Bucket::AllZero
             } else {

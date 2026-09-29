@@ -44,28 +44,21 @@
 //! see below for why this holds even here, not just on the archive family
 //! that needs it.
 //!
-//! **The PS4 Omega Collection family (`omega-ps4-eu`'s five `dataNN.psarc`
+//! **The PS4 Omega Collection family (`omega-ps4-eu`'s `dataNN.psarc`
 //! archives) breaks both halves of that, and the header's declared version
-//! does not say so.** All five declare version 1.4. Their manifest is
-//! NUL-delimited, not newline-delimited - confirmed on `data00.psarc`: its
-//! manifest carries zero `\n` bytes and splits into well-formed paths only
-//! on `\x00`. And entry order carries no relationship to manifest order at
-//! all: the entry table is a concatenation of several separately
-//! digest-sorted runs (one descent in the ascending sequence per extra run -
-//! data00 has four, data01 two, data02/data04 one, data03 none), interleaved
-//! with thousands of fully-zeroed placeholder rows for manifest paths this
-//! particular archive does not store. A fourth row shape exists too, one per
-//! archive on data00/01/02/04, always at index 2183: a digest that is
-//! fourteen zero bytes and two real ones - not the all-zero placeholder
-//! shape, but not a real path's MD5 either - alongside plausible-looking
-//! geometry; handled the same way an unmatched real digest is:
-//! [`match_paths_to_entries`] finds no manifest path whose digest matches,
-//! and drops it. On `data00.psarc`, 10,714 non-empty manifest paths name
-//! only 1,533 real (non-zero-digest) entries; the other ~86% are dead text -
-//! verified *not* to be files that live in a sibling `dataNN.psarc` instead
-//! (at most 2 of 9,222 orphaned `data00.psarc` paths turn up as a real entry
-//! anywhere else in the five-archive family, statistical noise rather than a
-//! split namespace).
+//! does not say so.** All five base archives declare version 1.4. Their
+//! manifest is NUL-delimited, not newline-delimited - confirmed on
+//! `data00.psarc`: its manifest carries zero `\n` bytes and 10,925 `\x00`
+//! bytes, exactly the separators between its 10,926 paths. And entry order
+//! carries no relationship to manifest order: the entry table is the manifest
+//! followed by every file sorted by path digest, one ascending run, while the
+//! manifest itself is unsorted (entry `n + 1` is manifest line `n` for 3 of
+//! `data00`'s 10,926). Every entry behind the manifest names exactly one
+//! manifest path and the reverse - 46,005 of 46,005 across the base and patch
+//! archives - so matching by digest loses nothing. (An earlier reading of this
+//! family saw placeholder rows, several descending runs and a mostly-dead
+//! manifest; all of that was a short-read extraction's zero-padding, see
+//! `docs/formats/psarc.md`.)
 //!
 //! **`version_minor >= 4` is not the signal for any of this - it is not
 //! reliable at all, measured directly.** Vita `2048`'s `data.psarc` also
@@ -388,11 +381,11 @@ impl Directory {
 
         let (blocks, block_width) = read_block_table(&toc[entries_end..toc_len], &entries)?;
 
-        // **Not validated per-entry here.** A single corrupt row (real digest,
+        // **Not validated per-entry here.** A single damaged row (real digest,
         // `first_block` past the block table - see `read_block_table`'s own
         // doc comment) used to fail the whole directory, which meant two of
-        // `omega-ps4-eu`'s five archives could not be opened over one bad row
-        // apiece out of several thousand good ones. `Directory::entry_range`
+        // `omega-ps4-eu`'s five archives could not be opened, on a short-read
+        // extraction, over one bad row apiece. `Directory::entry_range`
         // already carries this exact check - `Error::BlockOutOfRange` - and
         // runs it lazily, per entry, so a bad row surfaces as a read error on
         // the one path that names it instead of refusing every other path in
@@ -646,13 +639,10 @@ pub struct PathEntry {
 ///
 /// A zero digest marks a placeholder row with no path, the same way it
 /// marks the manifest entry itself, and is skipped. A manifest path with no
-/// matching entry (the large majority, on every `omega-ps4-eu` archive
-/// measured; none, on a well-behaved one) and an entry whose digest matches
-/// no manifest path (41 of 1,533 on `data00.psarc`, 3 of 894 on
-/// `data01.psarc`) are both silently dropped rather than guessed at - the
-/// caller sees only the entries this archive both names and locates in the
-/// directory - not a promise that reading one back gives its real content,
-/// see `docs/formats/psarc.md`'s "Block data location" section. A
+/// matching entry and an entry whose digest matches no manifest path (none
+/// of either on a whole Omega extraction, `docs/formats/psarc.md`) are both
+/// silently dropped rather than guessed at - the caller sees only the
+/// entries this archive both names and locates in the directory. A
 /// `first_block` too large for any block table to hold (see
 /// [`read_block_table`]) still produces a [`PathEntry`]: its path is known,
 /// [`Directory::entry_range`] is what reports it unreadable.
@@ -691,38 +681,32 @@ pub fn path_digest(path: &str) -> [u8; 16] {
 
 /// Probes the block-size width and reads the table.
 ///
-/// A zero-size entry needs no block and its `first_block` is unspecified -
-/// confirmed against `omega-ps4-eu`'s `data00.psarc`, entry 9042, whose
-/// `first_block` reads `0x960c4925` (2,517,387,557) with `size` and `offset`
-/// both `0`. Folded into the probe's own `highest` unconditionally, that
-/// sentinel forced every width in [`BLOCK_WIDTHS`] to fail (no real block
-/// table is ever that large), which reads as "this archive uses an
-/// unrecognised layout" when the layout is actually identical to the PS3
-/// archives this parser was written against. See
-/// `docs/formats/psarc.md`.
+/// A zero-size entry needs no block and its `first_block` is unspecified.
+/// Folded into the probe's own `highest` unconditionally, an implausible
+/// `first_block` on such a row forces every width in [`BLOCK_WIDTHS`] to fail
+/// (no real block table is ever that large), which reads as "this archive
+/// uses an unrecognised layout" when the layout is the PS3 one.
 ///
-/// **A non-zero size does not make `first_block` trustworthy either.** Three
-/// of `omega-ps4-eu`'s five archives (`data00.psarc` entry 9042 above,
-/// `data02.psarc` entry 4676, `data04.psarc` entry 318) each carry exactly
-/// one row - a real, non-zero digest alongside a `first_block` in the
-/// billions and, on the latter two, a `size` past the archive's own length
-/// (56.5 GB and 740 GB respectively, inside 9.1 GB and 6.0 GB files) - a
-/// single torn write each, not a systematic layout. No candidate width can
-/// ever cover a `first_block` past `rest.len() / 2` (2 is the narrowest
-/// width [`BLOCK_WIDTHS`] tries), so that bound excludes a row like this from
-/// `highest` the same way a zero size already did, rather than letting one
-/// corrupt row make the whole archive unreadable. The row itself stays in
-/// [`Directory::entries`] - [`Directory::entry_range`] reports it unreadable
-/// when something actually asks for it, rather than this probe refusing the
-/// other several thousand rows on its behalf.
+/// **A non-zero size does not make `first_block` trustworthy either.** An
+/// entry can carry a real digest alongside a `first_block` in the billions -
+/// this was measured on `omega-ps4-eu`'s `data00`/`data02`/`data04` (entries
+/// 9042, 4676, 318) on a short-read extraction of that disc, and **does not
+/// occur on a whole extraction** (`docs/formats/psarc.md`, "No corrupt row").
+/// No candidate width can ever cover a `first_block` past `rest.len() / 2`
+/// (2 is the narrowest width [`BLOCK_WIDTHS`] tries), so that bound excludes
+/// such a row from `highest` the same way a zero size already did, rather
+/// than letting one damaged row make the whole archive unreadable. The row
+/// itself stays in [`Directory::entries`] - [`Directory::entry_range`]
+/// reports it unreadable when something actually asks for it, rather than
+/// this probe refusing every other row on its behalf.
 ///
 /// **This is sound for one bad row among many good ones, not for a table
 /// where every row is implausible.** Excluding every entry from `highest`
 /// leaves it at its `unwrap_or(0)` floor, which any non-trivial even-length
 /// table then satisfies at the narrowest width - a false "this looks like a
 /// valid width 2 table" rather than [`Error::NoBlockWidth`], because nothing
-/// is left to contradict it. Not a real case on `omega-ps4-eu` (never more
-/// than one such row per archive, of several thousand), so left as the
+/// is left to contradict it. Not a real case on `omega-ps4-eu` (no such row
+/// on a whole extraction, one per archive on a short-read one), so left as the
 /// simpler bound rather than adding a "how many rows were excluded" check
 /// this family has never needed.
 fn read_block_table(rest: &[u8], entries: &[Entry]) -> Result<(Vec<u32>, usize)> {

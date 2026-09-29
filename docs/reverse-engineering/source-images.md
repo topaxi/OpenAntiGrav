@@ -254,7 +254,7 @@ bytes it actually returned - `Stream.Read` is never guaranteed to fill the
 requested count in one call, and here it routinely does not, leaving the
 untouched remainder of the sector as zero. This is the root cause of the
 "garbage"/"all-zero" split
-[`psarc.md`](../formats/psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+[`psarc.md`](../formats/psarc.md#block-data-location-and-the-short-read-extraction)
 documents on every archive extracted this way, confirmed by patching
 `ReadSector` to loop the `Read` call to completion, rebuilding, and
 re-reading the same bytes straight out of `omega-ps4-eu.pkg` - full detail
@@ -263,7 +263,9 @@ and the exact patch in
 Apply that patch to the `LibOrbisPkg` checkout before the `dotnet build` step
 below and both `pkg_extract` invocations on this page recover real content
 that the unpatched tool silently zeroed - re-extraction with the fix landed
-in `data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/{omega-eu-fixed,omega-eu-patch-fixed}` 2026-09-27; see
+2026-09-27 under `data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/` and
+became `data/extracted/ps4/{omega-eu,omega-eu-patch}` 2026-09-29 (the short-read
+copy is `data/extracted/ps4.bak`; the old scratch paths are symlinks now); see
 `data/scratch/drive-2026-09-27/omega-psarc.md` for the before/after numbers.
 
 **`omega-ps4-eu-patch.pkg` extracts separately and adds content, rather than
@@ -285,7 +287,7 @@ Its `uroot/` holds `eboot.bin` (a newer build than the base `.pkg`'s),
 asset namespace is at least nine named archives across the two packages, not
 the five the base `.pkg` alone suggests; what `data08` (by far the largest of
 the four) actually holds is not yet surveyed.
-[`psarc.md`'s](../formats/psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+[`psarc.md`'s](../formats/psarc.md#block-data-location-and-the-short-read-extraction)
 "Block data location" section has the full account of why this closes the
 extraction-provenance question for the base archives' still-open real/zero
 split, rather than answering it.

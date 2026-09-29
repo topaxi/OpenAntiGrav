@@ -1,45 +1,49 @@
-//! Where a race would look for its craft and circuit, if this lane read one.
+//! Where a race looks for its craft and circuit, and which of that is measured.
 //!
-//! **Racing is out of scope for this crate.** Omega's circuit files are not
-//! `oag_vex`-shaped the way every other title's are: `Data\environments\
-//! talons_junction\` ships `TrackStartup.xml`, `track.final.audio` and
-//! `track.final.rcsskeleton` in place of a `track.vex` - a `.final.*`
-//! extension family this project has never seen and has not opened. Most
-//! other environments (`tech_de_ra`, `zone_4`, the `environments2048\*`
-//! set) *do* still ship a plain `track.vex`, so the format split is per
-//! circuit rather than title-wide, and which is which needs a real survey
-//! this lane did not run. Ship geometry is behind the same wall from the
-//! other side: `.rcsmodel` bodies sit beside `.gnf` textures this project has
-//! no PS4 texture reader for (see `docs/formats/omega-frontend.md`'s note on
-//! `.gnf`).
+//! **A race starts on this title's own data**, given archives that were
+//! extracted whole - see `docs/formats/omega-status.md`'s "Racing". Nothing
+//! here is machinery of its own; every reader was already in the workspace and
+//! Omega needed a change to the *shape* it accepts, not a new format:
 //!
-//! So nothing here is a claim about what Omega's race path looks like -
-//! [`oag_title::RaceDefaults`]'s mandatory fields are filled with real,
-//! archive-confirmed entries chosen for existing rather than for being
-//! correct, and every field that has an honest "unmeasured" state
-//! ([`Option`], or a zero-fabrication enum variant) takes it. **This is
-//! provably safe**: `crates/game/src/title.rs`'s Omega branch (once wired)
-//! refuses `--race`/a cell confirm by name before any of this is read, the
-//! same way `hud`'s own placeholders are inert - see `crate::hud`'s doc
-//! comment for the one place `Title::race` and `Title::hud` are actually
-//! consumed.
+//! - the circuit is a version-6 little-endian `track.vex` whose `WO Track` node
+//!   [`oag_vex::track`] reads unmodified (`tech_de_ra`: 2 paths, 2 junctions,
+//!   835 points, and `encoded_len` equals the payload's length to the byte);
+//! - its collision is a `track_col.col` in 2048's container with a 19-byte
+//!   k-d node in place of 24 ([`oag_vex::kdcol::NodeLayout::Packed`]);
+//! - its geometry is a `track.final.rcsmodel` (the `.final` infix is Omega's;
+//!   `oag_render::mesh::rcs::sibling_name_cooked`) in 2048's `.rcsmodel`
+//!   container with 64-bit pointers, whose materials name `.gnf` textures;
+//! - a craft is `hdships\<team>\Ship.vex` beside `ship.rcsmodel` and
+//!   `handlingstats.xml`, the same three files 2048's HD-derived roster has.
+//!
+//! **What this module still does not know**, and fills with an honest
+//! "unmeasured" (`None`, or a variant that names no path) rather than a
+//! guess: Zone mode, the boost plume, every per-team variant table, the
+//! speed classes, and the announcer. Racing is not *complete* on this title
+//! - see the report in `omega-status.md` for what is drawn and what is not.
 
 /// The HD-derived ship directory, lowercase, confirmed by direct listing on
 /// `data00.psarc` (`Data/art/published/hdships/ag_systems/...`). 2048's own
 /// scheme for its HD-derived roster, not HD's `Data\Ships`.
 pub const SHIP_DIR: &str = r"Data\art\published\hdships";
 
-/// Real-but-unverified race defaults - see the module doc for why nothing
-/// here is more than "confirmed present in the archive".
+/// Race defaults: two chosen entries, the directories, and unmeasured
+/// placeholders where nothing has been read.
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
-    // Confirmed present as a plain `track.vex` (not the `.final.*` family
-    // some other environments ship) in `data02.psarc`'s listing. Chosen for
-    // existing, not for being any kind of "first" or default circuit - no
-    // menu order was read.
+    // **Chosen, not measured.** `tech_de_ra` is a real circuit whose `WO Track`
+    // reads, whose collision decodes and whose geometry draws (all measured);
+    // that it is *this* title's default is not - no menu order or track
+    // plugin definition was read to say which circuit is "first". It was
+    // picked because it is the value this constant already held, and
+    // `--track` names any other of the 22.
     track: r"Data\environments\tech_de_ra\track.vex",
-    // Confirmed present: `Data\art\published\hdships\ag_systems\` is a real
-    // directory in `data00.psarc`'s listing (two `.gnf` thumbnails, no
-    // `.rcsmodel`/handling file located this lane). Chosen for existing.
+    // **Chosen, not measured.** `ag_systems` is a real team whose `Ship.vex`,
+    // `ship.rcsmodel` and `handlingstats.xml` all read (the last as team "AG
+    // Systems", class `venom`); which team this title defaults to is not
+    // something any table read here says. (An earlier revision of this
+    // comment recorded "no `.rcsmodel`/handling file located" - that was a
+    // listing of an extraction with most entries missing from its manifest,
+    // see `omega-status.md`.)
     team: "ag_systems",
     // **2048's ship-directory scheme, not HD's `Data\Ships\<Team>\`** -
     // confirmed by direct listing: Omega's HD-derived roster lives at
@@ -51,12 +55,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // tree. **Not [`oag_title::race::SHIP_DIR`]** - that constant is
     // `Data\Ships`, the path Pulse/Pure/HD share and Omega does not.
     ship_dir: SHIP_DIR,
-    // **Not independently confirmed.** No `handlingstats.xml` turned up
-    // under `hdships\ag_systems\` in this lane's (partial) listing - it may
-    // sit elsewhere, the way 2048's own non-HD roster splits models and
-    // tuning into two trees. Equal to `ship_dir` is the same-directory guess
-    // every title but 2048's native roster gets right, carried here as the
-    // more likely of two unverified answers rather than as a measurement.
+    // **Measured.** `hdships\ag_systems\handlingstats.xml` is there and
+    // `oag_tables::handling` reads it unmodified, so the handling file sits
+    // beside the hull, as it does for every title but 2048's native roster.
     handling_dir: SHIP_DIR,
     // **Zero-fabrication placeholder, not a finding.** `SameCircuit` is the
     // one `ZoneCircuit` variant that names no path at all - 2048's own shape,
@@ -66,8 +67,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Same reasoning as `zone` above: `PlayerShip` is the one `ZoneCraft`
     // variant that names no model stem or directory. Not a finding.
     zone_craft: oag_title::ZoneCraft::PlayerShip,
-    // Not searched for this lane, on the same footing as everything else in
-    // this module doc's opening paragraph: `None` is silence, not a finding.
+    // Not searched for: `None` is silence, not a finding.
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: None,

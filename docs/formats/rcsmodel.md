@@ -1838,6 +1838,29 @@ was what made the shader the only place left to look.
 
 ## The PS4 Omega Collection: a different container, not a byte-swap of this one
 
+**Updated 2026-09-29 (`omega-race`) - most of what follows was measured on a
+short-read extraction, and the container is read now.** Two corrections carry
+everything below. First, `omega-ps4-eu{,-patch}.pkg` had been extracted with a
+tool that dropped most of every entry's bytes (see
+[`omega-status.md`](omega-status.md#why-so-much-of-this-is-missing-an-extraction-tool-bug-not-this-builds-data));
+on the corrected copy **all 1,272 `.rcsmodel` entries carry the tag**, not 77 of
+250. Second, it *is* a format this project reads: the [Vita
+container](2048-rcsmodel.md) - same `0xca5caded` magic, same header walk, same
+relocation tables - **with 64-bit pointers**, told apart by header word `+0x04`
+(`0x100` on all 1,272 PS4 entries, `0` on all 953 of 2048's base package).
+[`oag_rcs::rcsmodel::psp2`](2048-rcsmodel.md) reads it after two additions: a
+third submesh-record shape (the vertex pointer 32 bytes past the index pointer,
+`PS4_BUFFER_POINTER_GAP`, confidence 90) and a material reader that finds a
+material by the 64-bit pointer to its `.rcsmaterial` path
+(`material::read_ps4`, confidence 75; a sampler entry is 0x28 bytes with its
+name hash first and its `.gnf` pointer 0x18 in, confidence 85). The `+0x08`
+count, the `+0x10` table base, the `+0x20` and `+0x40` tags below are that
+container's own header and descriptors, and the "table of ascending 8-byte values" at `+0x60` is the
+relocation table. The paragraph "No parser exists for this container" below is
+**withdrawn**. Not read on PS4: the node table (its header is the Vita's with
+8-byte pointers - 17 nodes and their bind matrices at `+0x120` on
+`ag_systems\ship.rcsmodel`).
+
 **2026-09-16, `lane/omega-rcs`.** The prior session's own open item asked
 whether PS4's `.rcsmodel` was this format stored little-endian, the way
 [`.gnf`](gnf.md) and [`.vex`](vex.md#the-omega-collections-ps4-build-reads-the-same-version-6-vex-unmodified)
@@ -1881,7 +1904,7 @@ tree tag given [`.vex`'s own description](vex.md) of 2048's collision format
 this way) to check for the tag turns the PS4 `.rcsmodel`/`.rcsmaterial`
 population from "no magic, zero-vs-nonzero only" into the same three-bucket
 read the other two formats get - see
-[psarc.md](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)'s
+[psarc.md](psarc.md#block-data-location-and-the-short-read-extraction)'s
 table. Disc-wide: **77 of 250 `.rcsmodel` entries and 439 of 1,270
 `.rcsmaterial` entries carry the tag**; most of the remainder is the same
 unresolved PSARC block-data-location population that bucket already

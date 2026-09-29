@@ -34,7 +34,7 @@ use anyhow::Result;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel::psp2;
-use oag_texture::gxt;
+use oag_texture::{gnf, gxt};
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
@@ -185,8 +185,16 @@ impl Report {
 /// resolve and passes `None` where they do not.
 #[must_use]
 pub fn animation_names(vex_name: &str) -> Option<(String, String)> {
-    let model = super::sibling_name(vex_name)?;
-    let stem = model.strip_suffix(".rcsmodel")?;
+    animation_names_beside(&super::sibling_name(vex_name)?)
+}
+
+/// The `.rcsskeleton` and `.rcsanimclip` that sit beside an `.rcsmodel`
+/// already found, whatever its spelling - `track.rcsmodel` gives
+/// `track.rcsskeleton`, and the Omega Collection's `track.final.rcsmodel`
+/// gives `track.final.rcsskeleton`. See [`super::sibling_name_cooked`].
+#[must_use]
+pub fn animation_names_beside(model_name: &str) -> Option<(String, String)> {
+    let stem = model_name.strip_suffix(".rcsmodel")?;
     Some((format!("{stem}.rcsskeleton"), format!("{stem}.rcsanimclip")))
 }
 
@@ -217,6 +225,33 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
         rgba.into_iter().flatten().collect(),
         None,
     ))
+}
+
+/// Decodes one material's diffuse `.gnf` - the PS4 Omega Collection's texture
+/// container, which its `.rcsmodel` names where 2048's names a `.gxt`.
+///
+/// **The same rule as [`decode_gxt_texture`]**: a `.gnf` that will not parse,
+/// or that [`oag_texture::gnf`] refuses (a corrupt base level, a format with no
+/// block decoder), draws nothing rather than something.
+fn decode_gnf_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
+    let parsed = gnf::Texture::parse(blob).ok()?;
+    let rgba = parsed.decode(blob).ok()?;
+    Some(ModelTexture::rgba8(
+        label.to_string(),
+        parsed.width,
+        parsed.height,
+        rgba.into_iter().flatten().collect(),
+        None,
+    ))
+}
+
+/// Decodes a material's diffuse texture in whichever container its path names.
+fn decode_material_texture(path: &str, blob: &[u8]) -> Option<ModelTexture> {
+    if path.to_ascii_lowercase().ends_with(".gnf") {
+        decode_gnf_texture(path, blob)
+    } else {
+        decode_gxt_texture(path, blob)
+    }
 }
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
@@ -421,7 +456,7 @@ fn bind_textures(
         let resolved = *slot.get_or_insert_with(|| {
             let path = decoded.materials[index].diffuse_texture()?;
             let blob = textures(path)?;
-            let texture = decode_gxt_texture(path, &blob)?;
+            let texture = decode_material_texture(path, &blob)?;
             let at = model.textures.len();
             model.textures.push(Some(std::sync::Arc::new(texture)));
             if report.diffuse_texture.is_none() {

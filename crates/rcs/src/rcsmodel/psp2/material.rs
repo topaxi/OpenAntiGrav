@@ -312,3 +312,150 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
         })
         .collect()
 }
+
+/// Bytes from the start of a PS4 sampler entry to its texture pointer.
+const PS4_SAMPLER_POINTER: usize = 0x18;
+/// Bytes per PS4 sampler entry. Consecutive entries of one material sit this
+/// far apart (`ag_systems\ship.rcsmodel`'s three at `0x1570`, `0x1598` and
+/// `0x15c0`), which is what says the layout above is a record and not a
+/// coincidence of one pointer's position. Nothing reads it - the scan looks at
+/// every eighth byte - so it is a fact for the tests to build fixtures by.
+#[cfg(test)]
+pub(super) const PS4_SAMPLER_STRIDE: usize = 0x28;
+
+/// The sampler names that mean "this is the surface's own colour", in the
+/// project's recovered `~crc32` preimages (`crate::rcsmaterial::names`).
+///
+/// `Texture1` is the first numbered slot, which is what every material that
+/// names only one texture uses (`diffuse.rcsmaterial`: `hull_girder.gnf` under
+/// `Texture1`); the rest are the diffuse spellings the same table carries.
+const DIFFUSE_SAMPLERS: &[&str] = &[
+    "Texture1",
+    "DiffuseTexture",
+    "DiffuseTexture1",
+    "diffuseTexture",
+    "diffuseTexture1",
+    "Diffuse",
+    "diffuse",
+    "Colour",
+    "Colour1",
+];
+
+/// Where a sampler ranks when a material names several textures: the diffuse
+/// spellings first, then a hash nothing has named, then every role that is
+/// known *not* to be the surface's colour (a normal, a specular, a lightmap).
+///
+/// **The unnamed rank sits above the known-other one on purpose**: 4 of the 5
+/// entries of `ag_systems\ship.rcsmodel` and most of a circuit's props carry a
+/// hash no preimage has been recovered for, and the texture they bind is the
+/// colour map. Preferring a named non-diffuse role over an unnamed one would
+/// bind a normal map where a diffuse belongs.
+fn sampler_rank(hash: u32) -> u8 {
+    match crate::rcsmaterial::names::sampler_name(hash) {
+        Some(name) if DIFFUSE_SAMPLERS.contains(&name) => 0,
+        None => 1,
+        Some(_) => 2,
+    }
+}
+
+/// Every distinct `.gnf` path an 8-byte-aligned 64-bit pointer inside
+/// `[from, to)` resolves to, **diffuse-first** rather than in address order:
+/// ranked by [`sampler_rank`] of the sampler-name hash the entry carries
+/// [`PS4_SAMPLER_POINTER`] bytes before its pointer, and by address within a
+/// rank.
+///
+/// **Why the order needs a rank at all:** address order is what the Vita
+/// reading uses, and on a PS4 circuit it binds the wrong map on the road -
+/// `track_surface_displacement2out` lists `track_de_ra_displacement_df2.gnf`
+/// (a displacement map) ahead of `track_de_ra.gnf` (the `Diffuse` entry), and
+/// the first frame drew the road as a white sheet with rainbow banding. Read
+/// against the entry's own sampler hash the same material gives `Diffuse` ->
+/// `track_de_ra.gnf`, `Normal` -> `ds_track_n.gnf` and `lightmap` -> the
+/// per-object `-lmap.gnf`, which is the role a person would give each.
+fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
+    let to = to.min(cpu.len());
+    let mut found: Vec<(u8, usize, String)> = Vec::new();
+    let mut at = from.next_multiple_of(8).max(PS4_SAMPLER_POINTER);
+    while at + 8 <= to {
+        if let Some(target) = u64_at(cpu, at)
+            && let Ok(target) = usize::try_from(target)
+            && target > 0
+            && cpu.get(target - 1) == Some(&0)
+            && let Some(path) = cstr_at(cpu, target)
+            && ends_with_ci(&path, ".gnf")
+            && !found.iter().any(|(_, _, p)| *p == path)
+        {
+            let rank = u32_at(cpu, at - PS4_SAMPLER_POINTER).map_or(1, sampler_rank);
+            found.push((rank, at, path));
+        }
+        at += 8;
+    }
+    found.sort_by_key(|&(rank, at, _)| (rank, at));
+    found.into_iter().map(|(_, _, path)| path).collect()
+}
+
+fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
+    cpu.get(at..at + 8)
+        .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+}
+
+/// The PS4 Omega Collection's material table, found by its name pointers.
+///
+/// **The same container with 64-bit pointers, and a different header.** The
+/// Vita's file-level count and offset table ([`FILE_MATERIAL_COUNT`],
+/// [`FILE_MATERIAL_TABLE`]) are not where a PS4 file keeps them, and this
+/// reading did not find where it does. What it found instead is the thing
+/// that made the Vita reading possible in the first place: the ASCII paths sit
+/// in the clear inside section B, and a pointer reaches each. So a material is
+/// **an 8-aligned 64-bit word that points at a NUL-preceded string ending in
+/// `.rcsmaterial`**, materials are taken in ascending address order, and a
+/// material's own extent runs to the next one's pointer. Its textures are
+/// every `.gnf` path an 8-aligned pointer in that extent resolves to, which is
+/// the scan [`textures_in`] does for the Vita's `.gxt`.
+///
+/// **Why the order is table order: the index that follows it.** A PS4 submesh
+/// record carries a material index at [`super::PS4_MATERIAL_INDEX_BEFORE_RECORD`]
+/// bytes before it, and read against this order it names the material a
+/// person would pick on `ag_systems\ship.rcsmodel` - `GlassShape` draws with
+/// `glass_texture`, `FlashyFlashyShape` with `emissive_bloom` and the body
+/// shapes with `diffuse_with_specular_from_alpha_n_vcol` - and, corpus-wide,
+/// the index lands inside the table on every submesh
+/// (`crates/game/tests/omega_race_ground_truth.rs`). **Confidence 75**: the
+/// closure is exact and the semantic check is real, but neither the count
+/// field nor the table that would state the order outright is located, and
+/// which texture of several a material binds is ordinal, as it is on Vita.
+///
+/// The technique name is not read: no pointer to it has been placed.
+#[must_use]
+pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
+    let mut sites: Vec<(usize, String)> = Vec::new();
+    let mut at = 0usize;
+    while at + 8 <= cpu.len() {
+        if let Some(target) = u64_at(cpu, at)
+            && let Ok(target) = usize::try_from(target)
+            && target > 0
+            && cpu.get(target - 1) == Some(&0)
+            && let Some(name) = cstr_at(cpu, target)
+            && ends_with_ci(&name, ".rcsmaterial")
+        {
+            sites.push((at, name));
+        }
+        at += 8;
+    }
+    let starts: Vec<usize> = sites.iter().map(|(site, _)| *site).collect();
+    sites
+        .into_iter()
+        .enumerate()
+        .map(|(i, (site, name))| {
+            let next = starts
+                .get(i + 1)
+                .copied()
+                .unwrap_or_else(|| site.saturating_add(TAIL_SCAN_LIMIT));
+            Material {
+                name,
+                technique: None,
+                textures: gnf_textures_in(cpu, site + 8, next),
+            }
+        })
+        .collect()
+}

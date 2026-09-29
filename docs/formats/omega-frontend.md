@@ -93,7 +93,7 @@ pairs, and one `Zone` ship model fix.
 
 ### Which files read clean, per the documented block-data-location trap
 
-[`psarc.md`'s "Block data location"](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+[`psarc.md`'s "Block data location"](psarc.md#block-data-location-and-the-short-read-extraction)
 already established a three-way split (valid / all-zero / garbage-with-real-
 bytes-elsewhere) for `.gnf`/`.vex`/`.rcsmodel`/`.rcsmaterial` on the five base
 archives. The same trap applies to these XML entries, checked directly by
