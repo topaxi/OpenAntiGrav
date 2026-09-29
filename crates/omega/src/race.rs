@@ -71,6 +71,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: None,
+    countdown_voice: None,
     zone_class_announcer: None,
     zone_palette: None,
     zone_stages: None,

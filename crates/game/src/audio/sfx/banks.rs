@@ -107,43 +107,15 @@ impl Banks {
                     }
                 },
             };
-            match load_cue(blob, cue, tick) {
-                Ok((loaded, skipped, timeline)) => {
-                    let undecoded = if skipped == 0 {
-                        String::new()
-                    } else {
-                        format!(", {skipped} skipped: decoded to no samples")
-                    };
-                    // One line per cue: the timeline note rides on it.
-                    let mut line = format!(
-                        "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
-                        cue.name(),
-                        loaded.waveforms.len()
-                    );
-                    let mut extra = None;
-                    match timeline {
-                        Ok(Some(t)) => {
-                            line.push_str(&format!(
-                                "; plays its timeline: {} variant(s) of {} voice(s)",
-                                t.len(),
-                                t.iter().map(|v| v.layers.len()).max().unwrap_or(0)
-                            ));
-                            timelines.insert(cue, t);
-                        }
-                        Ok(None) => extra = not_one_event(cue, &loaded),
-                        Err(e) => {
-                            line.push_str(&format!("; timeline not built, flat pick kept: {e}"))
-                        }
-                    }
-                    report.push(line);
-                    report.extend(extra);
-                    sounds.insert(cue, loaded);
-                }
-                // Deliberately a report line and not a fallback. Nothing is
-                // substituted for a cue that will not resolve; it stays silent
-                // and says so.
-                Err(e) => report.push(format!("sfx: {} not loaded: {e}", cue.name())),
-            }
+            load_one(
+                blob,
+                entry,
+                cue,
+                tick,
+                &mut sounds,
+                &mut timelines,
+                &mut report,
+            );
         }
         for line in &report {
             info!("{line}");
@@ -154,6 +126,48 @@ impl Banks {
             timelines,
             ..Default::default()
         }
+    }
+
+    /// Loads the start-of-race voice, [`Cue::COUNTDOWN`], from `entry` - the
+    /// speech bank the mode opened - into this table, beside what
+    /// [`Self::load`] already decoded.
+    ///
+    /// A separate pass because the bank is not the title's but the mode's:
+    /// `speech.bnk` for most, `speech_elim.bnk` for Eliminator, `speech_zone.bnk`
+    /// for Zone (see [`oag_title::CountdownVoice`]). **Never fails**, on
+    /// [`Self::load`]'s own terms: a bank that will not read, or a cue it does
+    /// not name, is a report line and silence.
+    pub fn load_countdown(
+        &mut self,
+        archives: &mut Archives,
+        entry: &str,
+        tick: oag_title::SequenceTick,
+    ) {
+        let blob = match archives.read_name(entry) {
+            Ok(blob) => blob,
+            Err(e) => {
+                let line = format!("sfx: {entry} not read: {e}");
+                info!("{line}");
+                self.report.push(line);
+                return;
+            }
+        };
+        let mut report = Vec::new();
+        for cue in Cue::COUNTDOWN {
+            load_one(
+                &blob,
+                entry,
+                cue,
+                tick,
+                &mut self.sounds,
+                &mut self.timelines,
+                &mut report,
+            );
+        }
+        for line in &report {
+            info!("{line}");
+        }
+        self.report.extend(report);
     }
 
     /// Whether anything at all decoded.
@@ -229,6 +243,57 @@ impl Banks {
         let index = self.draw(cue, loaded.waveforms.len(), rng);
         let (sound, looping) = &loaded.waveforms[index];
         Some((Arc::clone(sound), *looping))
+    }
+}
+
+/// Decodes one cue out of an already-read bank blob into the maps [`Banks`]
+/// keeps, one report line either way.
+///
+/// The body of [`Banks::load`]'s loop, lifted so [`Banks::load_countdown`] can
+/// load a cue from the *mode's* speech bank on the same terms.
+fn load_one(
+    blob: &[u8],
+    entry: &str,
+    cue: Cue,
+    tick: oag_title::SequenceTick,
+    sounds: &mut BTreeMap<Cue, Loaded>,
+    timelines: &mut BTreeMap<Cue, Vec<Timeline>>,
+    report: &mut Vec<String>,
+) {
+    match load_cue(blob, cue, tick) {
+        Ok((loaded, skipped, timeline)) => {
+            let undecoded = if skipped == 0 {
+                String::new()
+            } else {
+                format!(", {skipped} skipped: decoded to no samples")
+            };
+            // One line per cue: the timeline note rides on it.
+            let mut line = format!(
+                "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
+                cue.name(),
+                loaded.waveforms.len()
+            );
+            let mut extra = None;
+            match timeline {
+                Ok(Some(t)) => {
+                    line.push_str(&format!(
+                        "; plays its timeline: {} variant(s) of {} voice(s)",
+                        t.len(),
+                        t.iter().map(|v| v.layers.len()).max().unwrap_or(0)
+                    ));
+                    timelines.insert(cue, t);
+                }
+                Ok(None) => extra = not_one_event(cue, &loaded),
+                Err(e) => line.push_str(&format!("; timeline not built, flat pick kept: {e}")),
+            }
+            report.push(line);
+            report.extend(extra);
+            sounds.insert(cue, loaded);
+        }
+        // Deliberately a report line and not a fallback. Nothing is
+        // substituted for a cue that will not resolve; it stays silent
+        // and says so.
+        Err(e) => report.push(format!("sfx: {} not loaded: {e}", cue.name())),
     }
 }
 

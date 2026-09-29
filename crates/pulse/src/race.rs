@@ -35,6 +35,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: Some(ships::BOOST),
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    countdown_voice: Some(COUNTDOWN_VOICE),
     // Pulse's own `speech_zone.bnk` was listed alongside Pure's and HD's -
     // see `docs/formats/psp-audio.md`'s bank table - and names no `MR_*`-shaped
     // speed-class cues at all, only the numbered ladder.
@@ -103,6 +104,21 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // A literal string in the executable too, at the same confidence as the
     // five above, and the bank 568 of the 1,164 authored `sound` nodes name.
     track_general: Some(r"Data\Sound\generaltrack.bnk"),
+};
+
+/// The banks Pulse's `ready` and `go` are read from in the two modes that do
+/// not use `speech.bnk`.
+///
+/// Read out of `World_LoadTrack` (`0x08883fa0`): the Zone branch opens
+/// `Data\Sound\speech_zone.bnk`, the Eliminator branch
+/// `Data\Sound\speech_elim.bnk`, and each stores the opened bank's slot where
+/// `RaceMode_SetState` and `RaceMode_UpdateCountdown` read it back. Eliminator
+/// confirmed live (the cue-start log names `elim_vo` at the countdown's two
+/// cues); Zone from the loader alone. See
+/// `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md`.
+pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
+    eliminator_bank: r"Data\Sound\speech_elim.bnk",
+    zone_bank: r"Data\Sound\speech_zone.bnk",
 };
 
 /// What Pulse puts on the front of a circuit's file name to reach the Zone

@@ -524,6 +524,8 @@ def menu(args):
 
     tap(dbg, "left", SATURATE, wait=0.3)  # RACE TYPE -> SINGLE RACE
     presses = RACE_TYPE_SINGLE_RACE if args.single_race else RACE_TYPE_TIME_TRIAL
+    if args.race_type is not None:
+        presses = args.race_type
     if presses:
         tap(dbg, "right", presses, wait=0.4)  # -> TIME TRIAL
     tap(dbg, "down")  # SPEED CLASS
@@ -868,6 +870,14 @@ def main():
         help="walk into SINGLE RACE instead of TIME TRIAL, which is the only "
         "reachable race type with a full grid. Not the reference scenario: "
         "weapons and AI difficulty are left at whatever the profile holds.",
+    )
+    p.add_argument(
+        "--race-type",
+        type=int,
+        metavar="N",
+        help="press right N times from SINGLE RACE (0), overriding the above: "
+        "1 HEAD TO HEAD, 2 TIME TRIAL, 3 SPEED LAP, 4 TOURNAMENT, 5 ZONE, "
+        "6 ELIMINATOR. Only the seven-entry list's reachable ones.",
     )
     p.set_defaults(run=menu)
 

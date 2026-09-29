@@ -651,9 +651,41 @@ pub enum Cue {
     /// same silent drop [`super::place`] already gives any craft-placed cue
     /// on an empty slot.
     ShurikenTravel,
+    /// The voice that counts the start in: `"ready"`, then the three, two, one
+    /// its own timeline speaks.
+    ///
+    /// `RaceMode_SetState` (`0x08827350`) plays it when it enters state 1, the
+    /// state `RaceMode_UpdateIntro_q` (`0x08829e6c`) hands the race to at the
+    /// end of its intro substates - `Sound_PlayNamedInSlot(..., "ready", 0x400,
+    /// 0, 0, 0)`, the dry, no-emitter path [`Self::Disengaging`] takes. Measured
+    /// live on Pulse (PSP), Time Trial, a single race and Eliminator: it starts
+    /// **180 ticks before [`Self::Go`]** (see `crate::race::countdown` for the
+    /// ticks), with no other cue between the two - the 3, 2, 1 are inside this
+    /// one cue's own timeline, not separate starts.
+    ///
+    /// **The bank is the mode's speech bank**, which `World_LoadTrack` picked:
+    /// `speech.bnk` (cue 11, six waveforms, 3.73 s), `speech_elim.bnk`
+    /// (Eliminator, cue 19, 3.00 s) or `speech_zone.bnk` (Zone, cue 15, 2.48
+    /// s). Not one of [`Self::ALL`]: it loads only on a title whose
+    /// [`oag_title::RaceDefaults::countdown_voice`] is measured, into the same
+    /// maps, through [`super::Banks::load_countdown`].
+    /// `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md`.
+    Ready,
+    /// The voice that says go: `"go"`, 0.80 s in every speech bank.
+    ///
+    /// `RaceMode_UpdateCountdown` (`0x088274b4`) plays it in the same call that
+    /// runs `Race_StartRacing` and `RaceMode_SetState(2)`, when the state's
+    /// timer reaches zero. Measured live: **the frame before the first craft
+    /// update that applies thrust**, which is the last gated tick here. See
+    /// [`Self::Ready`] for the bank and the trigger's home.
+    Go,
 }
 
 impl Cue {
+    /// The two start-of-race cues, loaded on their own because their bank is
+    /// the mode's and not the title's. See [`Self::Ready`].
+    pub const COUNTDOWN: [Self; 2] = [Self::Ready, Self::Go];
+
     /// Every cue this port fires, which is every one it knows how to load.
     pub const ALL: [Self; 33] = [
         Self::SpeedupPad,
@@ -721,7 +753,9 @@ impl Cue {
             | Self::LeachEnergy
             | Self::ShurikenHit
             | Self::ShurikenTravel => BankName::Weapons,
-            Self::ShieldActive | Self::Engaging | Self::Disengaging => BankName::Speech,
+            Self::ShieldActive | Self::Engaging | Self::Disengaging | Self::Ready | Self::Go => {
+                BankName::Speech
+            }
         }
     }
 
@@ -783,6 +817,8 @@ impl Cue {
             Self::Autopilot => "~AUTOPILOT",
             Self::Engaging => "autopilot_eng",
             Self::Disengaging => "disengaging",
+            Self::Ready => "ready",
+            Self::Go => "go",
             Self::Blowup => "~BLOWUP",
             Self::LockOn => "~ROCKLOCK",
             Self::MineLaunch => "MINELAUNCH",
@@ -924,6 +960,10 @@ impl Cue {
             // read, and it is `FUN_0883e9b0` -> `FUN_0893a768`, the path that
             // takes no emitter at all.
             Self::ShieldActive | Self::Disengaging => Placement::Unplaced,
+            // `RaceMode_SetState` and `RaceMode_UpdateCountdown` both call
+            // `Sound_PlayNamedInSlot` with no emitter and `0x400`: a voice in
+            // the player's ear, the same shape as `Disengaging` above.
+            Self::Ready | Self::Go => Placement::Unplaced,
             // Read, not assumed: case 4 hands it to the path that takes no
             // emitter and a volume of `0x400`.
             Self::Blowup => Placement::Unplaced,

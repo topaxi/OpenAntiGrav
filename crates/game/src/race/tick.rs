@@ -104,6 +104,8 @@ impl Race {
         // than a tick less, and so the cancel-on-fire branch inside
         // `spend_pickup` is not immediately undone by a decrement.
         self.tick_autopilot(player);
+        // The start-of-race voice, on the ticks the original plays it.
+        self.tick_countdown_voice();
         // Immediately after both, so the first mine of a cluster is laid on the
         // tick the button was pressed and from where the craft was when it was
         // pressed. A mine never moves again, so this is the only tick that can

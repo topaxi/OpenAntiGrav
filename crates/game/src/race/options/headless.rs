@@ -108,6 +108,7 @@ impl Setup {
             announcer: crate::audio::sfx::Announcer::default(),
             class_announcer: crate::audio::sfx::ClassAnnouncer::default(),
             zone_stages: None,
+            countdown_voice: false,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,

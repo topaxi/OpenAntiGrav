@@ -249,6 +249,8 @@ pub struct RaceSim {
     /// This title's own zone-to-speed-class ladder, straight out of
     /// [`Setup::zone_stages`] - what [`RaceView::class_announcer`] fires against.
     pub(super) zone_stages: Option<&'static oag_title::ZoneStages>,
+    /// Whether the race voices its start - see [`Setup::countdown_voice`].
+    pub(super) countdown_voice: bool,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].

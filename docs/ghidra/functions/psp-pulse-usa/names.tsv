@@ -1136,3 +1136,6 @@
 0x0898db80	function	Scream_TickCommandList	88	sound.md
 0x0898eaa8	function	Scream_OpEnd	85	sound.md
 0x0898dfe0	function	Scream_OpLoopBack	65	sound.md
+0x088274b4	function	RaceMode_UpdateCountdown	80	countdown-voice.md
+0x0893a768	function	Sound_PlayNamedInSlot	75	countdown-voice.md
+0x08829e6c	function	RaceMode_UpdateIntro	65	countdown-voice.md
