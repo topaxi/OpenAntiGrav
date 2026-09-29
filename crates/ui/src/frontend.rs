@@ -95,6 +95,7 @@ use oag_hd::frontend::states as hd_states;
 /// redirects, `touch.rs` the two icon grids after them, `campaign_map.rs`
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
+mod event_card;
 mod faces;
 mod options2048;
 mod team;
@@ -104,6 +105,7 @@ pub use campaign_map::{
     CampaignMap, EarnedTier, EventIcon, HEX_FILLED, HEX_OUTLINE, HEX_SELECT, MapEvent,
     ProgressState,
 };
+pub use event_card::{CARD_TEXTURES, CardState, EventCard};
 pub(crate) use faces::{font_line_height, lighten};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
 ///

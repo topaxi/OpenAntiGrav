@@ -614,6 +614,7 @@ pub fn load_shell(
             oag_ui::frontend::EventIcon::Zone.texture_name(),
             oag_ui::frontend::EventIcon::Elimination.texture_name(),
         ]);
+        block_textures.extend(campaign2048::card_textures(&campaign_events));
     }
     let sprites = sprites::load(
         &mut archives,

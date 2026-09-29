@@ -289,6 +289,10 @@ impl Frontend {
         // two targets are on the pad instead. **Which buttons is chosen,
         // not measured**: the widget names no button at all.
         if current == w2048::NEW_FE_SHELL {
+            if self.event_card_open() {
+                self.update_event_card(input);
+                return;
+            }
             for (button, target) in [
                 (Button::Triangle, w2048::HOME),
                 (Button::Circle, w2048::GAME_MODE_CHOICE),

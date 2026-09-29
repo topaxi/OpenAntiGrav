@@ -337,6 +337,8 @@ pub struct MapEvent {
     /// alongside [`Self::forced_craft`], which never coexists with a
     /// restriction on the real file.
     pub refused_craft: Vec<String>,
+    /// What the event's own card says - see [`super::event_card`].
+    pub card: super::event_card::EventCard,
 }
 
 /// A finished attempt's own two-tier result - this crate's copy of
@@ -372,14 +374,14 @@ pub enum ProgressState {
 /// scrolled.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CampaignMap {
-    events: Vec<MapEvent>,
+    pub(super) events: Vec<MapEvent>,
     /// [`EarnedTier`] per event, indexed the same as `events` - `None`
     /// until [`Frontend::refresh_campaign_progress`] runs, and for every
     /// event a save has no result for yet. Absence here reads exactly like
     /// "never played", which is correct both before the first refresh and
     /// after it.
     earned: Vec<Option<EarnedTier>>,
-    selected: usize,
+    pub(super) selected: usize,
     scroll: (f32, f32),
     /// The craft a fresh boot is about to race, before the player ever
     /// touches `Team` this session - `settings.race.team`/`variant`,
@@ -393,7 +395,9 @@ pub struct CampaignMap {
     /// [`Frontend::refresh_campaign_progress`] (`Session::finish_loading`'s
     /// own call site) since both need the save/settings a fresh boot has
     /// just read.
-    craft_seed: Option<String>,
+    pub(super) craft_seed: Option<String>,
+    /// The per-event card, when one is open over the map.
+    pub(super) card: Option<super::event_card::CardState>,
 }
 
 impl CampaignMap {
@@ -424,7 +428,7 @@ impl CampaignMap {
     /// (an unknown name, e.g. one filtered out of the map entirely, reads as
     /// not passed rather than as open by default - see this module's own
     /// "Never invent" rule), the tier `earned` carries otherwise.
-    fn state_of(&self, index: usize) -> ProgressState {
+    pub(super) fn state_of(&self, index: usize) -> ProgressState {
         let Some(event) = self.events.get(index) else {
             return ProgressState::Locked;
         };
@@ -545,7 +549,7 @@ impl Frontend {
         if input.is_pressed(Button::Cross) || input.is_pressed(Button::Start) {
             input.consume_press(Button::Cross);
             input.consume_press(Button::Start);
-            self.launch_selected_event();
+            self.open_event_card();
         }
     }
 
@@ -573,7 +577,20 @@ impl Frontend {
             .map(|(at, _)| at)
     }
 
-    fn launch_selected_event(&mut self) {
+    /// The current craft when `event` forbids it, `None` when it may fly.
+    /// Nothing to check reads as allowed - see [`Self::launch_selected_event`].
+    pub(super) fn craft_refused_for(&self, event: &MapEvent) -> Option<String> {
+        if event.forced_craft.is_some() || event.refused_craft.is_empty() {
+            return None;
+        }
+        let current = self
+            .team_choice()
+            .map(|(team, suffix)| TEAM_VARIANTS.join.combine(team, suffix))
+            .or_else(|| self.campaign.craft_seed.clone())?;
+        event.refused_craft.contains(&current).then_some(current)
+    }
+
+    pub(super) fn launch_selected_event(&mut self) {
         let Some(event) = self.campaign.events.get(self.campaign.selected) else {
             return;
         };
@@ -598,21 +615,13 @@ impl Frontend {
         // all, so it launches rather than refusing on missing data - the
         // same "never guess" rule [`MapEvent::refused_craft`]'s own
         // construction already follows.
-        if event.forced_craft.is_none() && !event.refused_craft.is_empty() {
-            let current = self
-                .team_choice()
-                .map(|(team, suffix)| TEAM_VARIANTS.join.combine(team, suffix))
-                .or_else(|| self.campaign.craft_seed.clone());
-            if let Some(current) = current
-                && event.refused_craft.contains(&current)
-            {
-                self.notes.push(format!(
-                    "{}: {:?} forbids {current:?}, refusing to launch - change craft at Team",
-                    w2048::NEW_FE_SHELL,
-                    event.name
-                ));
-                return;
-            }
+        if let Some(current) = self.craft_refused_for(event) {
+            self.notes.push(format!(
+                "{}: {:?} forbids {current:?}, refusing to launch - change craft at Team",
+                w2048::NEW_FE_SHELL,
+                event.name
+            ));
+            return;
         }
         self.notes.push(format!(
             "{}: {:?} tapped, firing {}",
@@ -627,6 +636,9 @@ impl Frontend {
     /// The pointer on the map: hovering selects, a click on the selected
     /// event launches it, a click elsewhere selects.
     pub(super) fn campaign_map_pointer(&mut self, pointer: &Pointer) -> bool {
+        if self.campaign.card.is_some() {
+            return self.event_card_pointer(pointer);
+        }
         if pointer.is_idle() {
             return true;
         }
@@ -652,7 +664,7 @@ impl Frontend {
             && let Some(hit) = hit
         {
             if hit == was {
-                self.launch_selected_event();
+                self.open_event_card();
             } else {
                 self.campaign.selected = hit;
                 self.campaign.follow(self.space.size);
@@ -665,7 +677,7 @@ impl Frontend {
     /// never loaded - every `oag-ui` unit test in this crate boots with an
     /// empty sheet, which is what makes the hex art in [`Self::draw_campaign_map`]
     /// optional rather than assumed).
-    fn placed(&self, src: &str) -> Option<Placed> {
+    pub(super) fn placed(&self, src: &str) -> Option<Placed> {
         self.placements
             .iter()
             .find(|(name, _)| name == src)
@@ -675,7 +687,7 @@ impl Frontend {
     /// A sprite of `placed`'s own texture, stretched to `rect` and tinted
     /// `color` - the shared shape [`Self::draw_campaign_map`]'s three hex
     /// layers and its mode icon all draw with.
-    fn sprite_at(rect: [f32; 4], placed: Placed, color: [f32; 4]) -> Draw {
+    pub(super) fn sprite_at(rect: [f32; 4], placed: Placed, color: [f32; 4]) -> Draw {
         Draw::Sprite {
             rect,
             uv: [
