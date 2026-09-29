@@ -948,6 +948,7 @@ use crate::byte_order::ByteOrder;
 pub mod child;
 pub mod cue;
 pub mod pitch;
+pub mod timeline;
 pub use child::Child;
 pub use cue::Cue;
 
