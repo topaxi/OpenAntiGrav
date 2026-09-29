@@ -508,6 +508,13 @@ pub fn load_shell(
             }
         }
     });
+    let team_box = screens::load_team_select(
+        &mut archives,
+        front_end.team_select,
+        preferred_language.and_then(|language| language.entries.as_deref()),
+        &screens,
+        &mut report,
+    );
     let strings = load_strings(
         &mut archives,
         &languages,
@@ -615,10 +622,13 @@ pub fn load_shell(
             oag_ui::frontend::EventIcon::Elimination.texture_name(),
         ]);
     }
+    let logos = screens::team_logos(team_box.is_some(), &teams);
+    block_textures.extend(logos.iter().map(String::as_str));
     let sprites = sprites::load(
         &mut archives,
         &std::iter::once(&screens)
             .chain(race_box.as_ref())
+            .chain(team_box.as_ref().map(|team_box| &team_box.screens))
             .collect::<Vec<_>>(),
         &block_textures,
         &mut report,
@@ -772,6 +782,7 @@ pub fn load_shell(
     }
     let (track_select, ship_select) = selection_layouts(
         race_box.as_ref(),
+        team_box.as_ref(),
         &strings,
         &font,
         menu_font.as_ref(),

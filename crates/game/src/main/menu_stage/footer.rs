@@ -10,6 +10,26 @@ use oag_ui::{font, picker};
 
 use super::MenuStage;
 
+/// The front-end root's `Confirm`/`Back` legend under Wipeout HD/Fury's own
+/// `Team Selection` - `Back` shown, since the screen is always reached from
+/// another. An RPCS3 frame of the screen shows both under it
+/// (`screen-Team-Selection.png`, `racebox` walk). Empty on every other
+/// title's picker, whose screens author their own footer text.
+pub(super) fn hd_nav(
+    legend: &Option<oag_ui::campaign::footer::NavigationLegend>,
+    atlas: &font::Atlas,
+    picker: &crate::picker_stage::PickerStage,
+) -> Vec<Draw> {
+    match legend {
+        Some(legend) if picker.layout.hd.is_some() => legend.draw_gated(
+            &picker::FaceScales::default(),
+            &|text: &str| font::measure(atlas, text),
+            true,
+        ),
+        _ => Vec::new(),
+    }
+}
+
 /// The ticker's own clip candidate: the draw's index in a flattened list,
 /// plus its viewport's `(left, right)` in screen space - unresolved against
 /// the value marquee's own clip until [`resolve_clip`] combines the two.

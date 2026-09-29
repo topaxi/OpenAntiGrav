@@ -730,6 +730,7 @@ pub(super) fn picker_page(
                             .map(|variant| (variant.stem.to_string(), variant.label.to_string()))
                             .collect()
                     };
+                let stats = team.variant_stats(variants.iter().map(|(id, _)| id.as_str()));
                 (
                     Entry {
                         id: team.id.clone(),
@@ -742,6 +743,7 @@ pub(super) fn picker_page(
                                 shield: rating.shield,
                             }),
                             variants,
+                            stats,
                         },
                     },
                     format!(r"{}\ship_FE.vex", team.location),

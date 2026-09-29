@@ -545,6 +545,13 @@ impl CellSelection {
         self.difficulty
     }
 
+    /// Puts [`Self::difficulty`] back on `difficulty` - a screen reopened on
+    /// the rung the player had left it at, see
+    /// `oag_game`'s `Session::reopen_cell_selection`.
+    pub fn set_difficulty(&mut self, difficulty: Difficulty) {
+        self.difficulty = difficulty;
+    }
+
     /// Steps [`Self::difficulty`] to the next rung, wrapping `easy -> medium
     /// -> hard -> easy` ([`Difficulty::next`]) - `CellSelection_Update`'s own
     /// `(+0xf0 + 1) % 3` on a `Square` press, on both titles

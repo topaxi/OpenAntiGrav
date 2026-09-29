@@ -433,6 +433,7 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         help_text: None,
         skins: Vec::new(),
         rating: None,
+        models: Vec::new(),
     };
 
     // In the table and also carrying a declared name: the table still wins, or
@@ -449,4 +450,38 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
     // Neither: the folder, which is what a team with no table entry already
     // fell back to.
     assert_eq!(team("Feisar", None).label(&strings), "Feisar");
+}
+
+/// Wipeout HD/Fury's shape: `<FE>` on each `PI_TeamModel`, half points
+/// included, and two models sharing a hull directory told apart by their
+/// `<Unlock>`. Trimmed from `DATA00`'s own `Data\Plugins\Frontend\Definition.xml`.
+#[test]
+fn hd_ratings_are_per_model_in_tenths() {
+    let xml = r#"<PI_Team name="Feisar">
+    <Values type="Race" location="Data\Ships\Feisar"></Values>
+    <PI_TeamModel name="chrome_c1"><Values modellocation="Data\Ships\Feisar_c1"></Values><FE speed="8" thrust="8.5" handling="10" shield="8"></FE><Unlock locked="true"></Unlock></PI_TeamModel>
+    <PI_TeamModel name="concept1"><Values modellocation="Data\Ships\Feisar_c1"></Values><FE speed="8" thrust="8.5" handling="10" shield="8"></FE></PI_TeamModel>
+    <PI_TeamModel name="normal"><Values modellocation="Data\Ships\Feisar"></Values><FE speed="7" thrust="8" handling="10" shield="8"></FE></PI_TeamModel>
+    <PI_TeamModel name="zone"><Values modellocation="Data\Ships\Zone"></Values></PI_TeamModel>
+  </PI_Team>"#;
+    let teams = teams(xml);
+    let team = &teams[0];
+    assert!(team.rating.is_none());
+    assert_eq!(team.models.len(), 3, "zone authors no FE");
+    let concept = team.model_for_directory(r"Data\Ships\feisar_c1").unwrap();
+    assert_eq!(concept.name, "concept1");
+    assert_eq!(
+        concept.rating_tenths,
+        Some(Rating {
+            speed: 80,
+            thrust: 85,
+            handling: 100,
+            shield: 80
+        })
+    );
+    assert_eq!(
+        team.model_for_directory(r"Data\Ships\Feisar").unwrap().name,
+        "normal"
+    );
+    assert!(team.model_for_directory(r"Data\Ships\Feisar_n1").is_none());
 }

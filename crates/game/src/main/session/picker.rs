@@ -193,6 +193,9 @@ impl Session {
                         }))
                         .collect()
                     };
+                let stats = details
+                    .map(|team| team.variant_stats(variants.iter().map(|(id, _)| id.as_str())))
+                    .unwrap_or_default();
                 (
                     Entry {
                         id: choice.value.clone(),
@@ -207,6 +210,7 @@ impl Session {
                                 }
                             }),
                             variants,
+                            stats,
                         },
                     },
                     PreviewSource::Ship {
@@ -221,18 +225,16 @@ impl Session {
             .unzip();
         // One axis per screen, decided by the selected team's own entry so
         // the row and the setting it writes agree: every Pulse team
-        // declares skins, no HD or 2048 team does.
-        let axis = match entries
+        // declares skins, no HD or 2048 team does. Keyed on the skins
+        // themselves, not on the row's first id being empty - HD's own
+        // variant table opens on the classic hull's empty suffix too, which
+        // read as a skin row and sent `_c1`/`_n1` to `race.skin`.
+        let selected = entries
             .iter()
-            .find(|entry| entry.id == self.settings.race.team)
-            .or_else(|| entries.first())
-            .map(|entry| &entry.details)
-        {
-            Some(Details::Ship { variants, .. })
-                if variants.first().is_some_and(|(id, _)| id.is_empty()) =>
-            {
-                LiveryAxis::Skin
-            }
+            .position(|entry| entry.id == self.settings.race.team)
+            .unwrap_or(0);
+        let axis = match sources.get(selected) {
+            Some(PreviewSource::Ship { skins, .. }) if !skins.is_empty() => LiveryAxis::Skin,
             _ => LiveryAxis::Variant,
         };
         let livery = match axis {
@@ -245,6 +247,13 @@ impl Session {
             Some(self.settings.race.team.as_str()),
             Some(livery),
         );
+        // HD's screen lays the teams out across - see
+        // `Picker::with_entries_across`.
+        let model = if layout.hd.is_some() {
+            model.with_entries_across()
+        } else {
+            model
+        };
         // As `open_track_picker` does for the circuit: the screen's own
         // selection is the setting, from the first frame.
         if let Some(entry) = model.selected()
@@ -376,6 +385,7 @@ impl Session {
             return;
         };
         let kind = picker.model.kind();
+        let layout_is_hd = picker.layout.hd.is_some();
         match (kind, event) {
             (Kind::Track, Event::Moved) => {
                 if let Some(entry) = picker.model.selected() {
@@ -435,12 +445,24 @@ impl Session {
                 // track outright - so this reopens `Grid Selection` instead
                 // and drops the abandoned cell rather than let it leak into
                 // whatever race is launched next.
-                self.campaign_difficulty = None;
+                let difficulty = self.campaign_difficulty.take();
                 self.campaign_ai_skill_scale = None;
-                if self.campaign_cell.take().is_some() {
-                    self.open_campaign();
-                } else {
-                    self.open_track_picker();
+                // A Tournament cell set up its legs before this screen
+                // opened (`Session::launch_campaign_cell`); backing out
+                // abandons them, or the RACE page's next launch would run
+                // as that tournament's first leg.
+                self.abandon_tournament();
+                // Wipeout HD/Fury's `TeamRedirectBack` authors no `goto`, so
+                // its Back returns to the screen `Team Selection` came from:
+                // `Cell Selection`, on the same cell and rung. Pulse keeps
+                // its earlier `Grid Selection` - nothing measured there.
+                let hd = layout_is_hd;
+                match self.campaign_cell.take() {
+                    Some(cell) if hd => self.reopen_cell_selection(&cell.name, difficulty),
+                    Some(_) => self.open_campaign(),
+                    None => {
+                        self.open_track_picker();
+                    }
                 }
             }
         }

@@ -96,6 +96,7 @@ fn left_and_right_move_the_livery_only_when_there_is_one_to_move_to() {
         details: Details::Ship {
             rating: None,
             variants,
+            stats: Vec::new(),
         },
     };
     let mut picker = Picker::new(
@@ -506,6 +507,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             details: Details::Ship {
                 rating: None,
                 variants: Vec::new(),
+                stats: Vec::new(),
             },
         },
         Entry {
@@ -514,6 +516,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             details: Details::Ship {
                 rating: None,
                 variants: Vec::new(),
+                stats: Vec::new(),
             },
         },
         Entry {
@@ -522,6 +525,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             details: Details::Ship {
                 rating: None,
                 variants: Vec::new(),
+                stats: Vec::new(),
             },
         },
     ];
@@ -716,6 +720,7 @@ fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
             details: Details::Ship {
                 rating: None,
                 variants: Vec::new(),
+                stats: Vec::new(),
             },
         })
         .collect();
@@ -782,6 +787,7 @@ fn the_wheel_steps_the_entry_and_livery_arrows_step_the_livery() {
         details: Details::Ship {
             rating: None,
             variants,
+            stats: Vec::new(),
         },
     };
     let mut picker = Picker::new(

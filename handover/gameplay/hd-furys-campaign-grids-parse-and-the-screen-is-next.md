@@ -99,9 +99,9 @@ including the `~50` confidence still open on `up`/`l1`/`r1`.
   `Grid Selection` -> `Cell Selection` -> race -> `EndRace Results` ->
   `EndRace Menu` -> `RETURN TO GRID` -> `Cell Selection`. See
   `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: walked live, end to
-  end, 2026-09-28". Found on that walk and still open: no `Team Selection`
-  on HD (the ship screen is unread, so the race flies the RACE page's
-  team), `EndRace Menu`'s rows have no visible cursor on the light panel,
+  end, 2026-09-28". Found on that walk and still open: ~~no `Team Selection`
+  on HD~~ (**closed 2026-09-29**, see the section at the end of this file),
+  `EndRace Menu`'s rows have no visible cursor on the light panel,
   and the 8th Results row overlaps the panel's footer bar. The earlier
   note follows. `Main
   Menu` -> `RACE CAMPAIGN` -> pick a campaign -> `Cell Selection` is proven
@@ -328,3 +328,36 @@ some other screen this pass never read.
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 2026-09-14. `oag_tables::race_campaign` reads all 32 `plugins/grids/grid_*.xml` across HD's four archives, additively: flat-schema grids parse unchanged, per-difficulty grids (Fury's `grid8-15`, `DATA04`/`06`'s own `grid0-7`) land in `Cell::difficulty_targets`/`nitro_elimination_targets`, `Mode::Other` holds `NitroBattle`/`Detonator`. 157 cells over 16 grids under the archives' own precedence, ground-truthed against the EU disc (`crates/hd/tests/campaign_grids_ground_truth.rs`, [race-campaign.md](../../docs/formats/race-campaign.md)). `grid_04.xml`'s `<Values>` tag is malformed on disc in all three copies and reads zero cells - documented, not patched. Open: which target triple the medal law reads per mode (an HD-executable question), whether the real game tolerates `grid_04`'s tag, base-HD pressing unmeasured. Next: draw HD's `Grid Selection` off `Data\Plugins\Frontend\Gui\CellMode_Definition.xml` on `DATA02` - the thread inventories its widgets and textures
+
+## 2026-09-29: `Team Selection` is read, drawn and walked on HD
+
+The original shows a ship screen between `Cell Selection` and the race
+(confidence 95: `TTY.log`'s cold-boot sequence, `screen-Team-Selection.png`
+on three RPCS3 boots, both `CellMode` copies' `Cell Mode Redirect Team`, and
+`DATA00`'s live skin including `DATA06`'s `Team_Selection_Definition.xml`).
+It now opens on HD from `Cell Selection` and from the RACE page's START:
+title, headings, team logo, per-model stat bars, Confirm/Back legend,
+left/right team, up/down livery, pointer, Back to the same cell and rung,
+and the picked livery reaches the race. Full writeup:
+`docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Team Selection`,
+2026-09-29"; code in `oag_ui::picker::hd`.
+
+**Left open, in priority order**:
+1. **The 3-D ship in the `SHIP MODEL` frame.** The `ShipModel` pose is read
+   (`oag_ui::picker::hd::ShipModel`); HD ships no `ship_FE.vex` (its own
+   per-team `screen.xml` names one), so the preview needs the race's
+   `ship.vex` + `ship.rcsmodel` path. An afternoon if the race loader's
+   model build can be called with an archive and an entry name alone.
+2. **The `HexSelection` grid** - the per-team `FE\thumb0..3.gtf` look like
+   its ship icons; the hex art itself is the widget class's own, unread.
+3. **Which direction moves what** - chosen off the grid's shape, not
+   pressed on RPCS3. One `scripts/rpcs3-drive.py` walk pressing `right` and
+   `down` on `Team Selection` would settle it.
+4. **Pulse's own `Team Selection` Back** still reopens `Grid Selection`;
+   whether Pulse's original returns to `Cell Selection` the way HD's
+   `goto`-less `TeamRedirectBack` does was not checked.
+5. **HD's track screen** (`Track_Selection_Definition.xml`, `DATA06`) is
+   still unread; the RACE page keeps its TRACK row.
+6. **The default livery**: the original's fresh-profile campaign opens this
+   screen on `concept1`; this build opens on `settings.race.variant`, the
+   classic hull by default. Measured divergence, left in place.

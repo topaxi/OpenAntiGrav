@@ -3206,9 +3206,9 @@ reproduce. What a player sees, screen by screen (two or more frames each):
    logs `selection screens: track unread, ship unread` on HD, so
    `Session::open_ship_picker` returns `false` and `launch_campaign_cell`
    takes its no-picker fallback. The race flies `settings.race.team`
-   (`Assegai` here), which the RACE page's TEAM row sets. Whether HD's
-   original shows a ship screen between `Cell Selection` and the race is
-   not measured here.
+   (`Assegai` here), which the RACE page's TEAM row sets. **Closed
+   2026-09-29**: the original does show one, and this build now does too -
+   see "Wipeout HD/Fury: `Team Selection`, 2026-09-29" below.
 6. **The race**: 8 craft on Vineta K, the HD HUD, 60 ticks a second. The
    autopilot finished 5th.
 7. **`EndRace Results`**: `RESULTS`, `5TH PLACE`, the standings grid
@@ -3240,4 +3240,156 @@ Screenshots are under `data/scratch/drive-2026-09-28/clw/shots/h*.png`
 (gitignored, game content). Left open by this walk: the `EndRace Menu`
 cursor's visibility on HD, the 8th Results row overlapping the footer bar,
 and whether HD's original has a ship screen on the campaign path.
+
+## Wipeout HD/Fury: `Team Selection`, 2026-09-29
+
+**The original shows a ship screen between `Cell Selection` and the race,
+and this build now reads it off the disc and walks it.** Confidence **95**
+that the screen is on the campaign path, from four independent lines:
+
+1. **`TTY.log`'s own screen sequence.** `docs/reverse-engineering/rpcs3-debugger.md`'s
+   cold-boot table (measured 2026-08-19, every step the default row) reads
+   `Cell Selection` -> `Team Selection` -> `Launch Game`.
+2. **Captures of the screen itself on that path.**
+   `scripts/rpcs3-drive.py capture --nav-shots` photographs each screen
+   `TTY.log` names; the Fury-campaign default walk left a
+   `screen-Team-Selection.png` on two cold boots
+   (`data/reference/hd-capture/talons-matched/`, see
+   `docs/reverse-engineering/rpcs3-capture.md`) and on the fresh-profile
+   boot (`data/scratch/hd-difficulty/rpcs3-fresh-default/`).
+3. **The authored redirect.** Both copies of `CellMode_Definition.xml`
+   (`DATA02`, `DATA06`) give `Cell Selection` a `Cell Mode Redirect Team`
+   whose `Default` is `goto="Team Selection"`; the `Launch Game` redirect
+   beside it is disabled (spelled `<aRedirect>`) under the comment "removed
+   this since we're not having forced or suggested ship anymore, so always go
+   to the team selection screen after grid select".
+4. **Which file is live.** `DATA00`'s `skin.xml` - the served front-end
+   root (`docs/formats/hd-frontend.md`) - includes
+   `SrcRel="Team_Selection_Definition.xml"`, which only `DATA06` carries,
+   and does not include the older `Selection_Definition.xml` that
+   `DATA02`/`DATA03`/`DATA05` carry (whose own `Team Selection` is therefore
+   dead data on this pressing).
+
+### What the file authors
+
+`Team_Selection_Definition.xml` nests three single-screen children
+(`Team Selection`, `Team Selection Player 1`/`Player 2`) inside `Team
+Selection Top Level`, which holds every widget. The single-player child holds
+only the `RC_SHIPSEL` title ("SHIP SELECT") and two redirects: `TeamRedirect`
+(`Main Menu->Mode == FE_ONLINE` goes to `GameLobby`, else `Team Launch
+Transition`, which goes to `Launch Game` after 0.7 s) and `TeamRedirectBack`
+with no `goto`. The parent's widgets, with their `Item` offsets folded:
+
+| Widget | Where (1920x1080) | Drawn here |
+| --- | --- | --- |
+| `MiniText` `RC_CHOOSE_TEAM` / `RC_NAV_TEAM` / `RC_SHIP_MODEL` / `OPT_STATS` | (160,140) / (160,336) / (705,140) / (705,833) | yes, bullet and text |
+| `Bracket` x3 (team, hex grid, ship model with `middle`) | (160,170) 506x156 / (160,366) 506x600 / (705,170) 1052x650 | no - rects only, for layout and pointer |
+| `LogoOutline` images and fills | around (160,170) | yes |
+| `Logo` (no `src`) | (160,185) 512x128 | yes, the team's own `Data\Ships\<team>\FE\Logo.gtf` |
+| `HexSelection` 5 cols x 7 rows | offset (272,395) | no |
+| `Model name="ShipModel"` | `OriginX=1220 OriginY=412 z=-24 RotX=0.4 RotY=-0.5` | no (read, not drawn) |
+| `Block` `Slide_0..3` (`RC_SPEED`/`RC_THRUST`/`RC_HANDLING`/`RC_SHIELD`) with `Nobble_N`, `Label_N` | from (705,858) | yes, the stat bars |
+| `Block` `Slide_4` `ER_LOY` with nobbles | (1250,770) | box and label only |
+| `Padlock`, `Unlockcondition`, `LiveryString`, `netLobby*` | - | `LiveryString` only, see below |
+
+`RC_NAV_TEAM` ("NAVIGATE TEAM") is in `DATA06`'s English `entries.xml` and
+in none of `DATA02`..`DATA05`'s, so the reader overlays the file's own ids
+from `DATA06`'s copy where the served table lacks them
+(`oag_game::campaign::hd_data06_strings`), the same shape `Campaign
+Selection`'s overlay already takes.
+
+### The ratings are per model, confidence 90
+
+HD authors `<FE speed thrust handling shield>` on each `PI_TeamModel`
+(`DATA00`'s `Data\Plugins\Frontend\Definition.xml`), in half points, not
+on the team the way Pulse does. The screen prints each as tenths, three
+digits: the settled `racebox` frame reads Feisar `070`/`080`/`100`/`080`,
+which is its `normal` model's `7/8/10/8`, and the fresh-profile campaign
+frame reads `080`/`085`/`080` for speed, thrust and shield, which is its
+`concept1`'s `8/8.5/8` and not `normal`'s. So the ratings follow the
+selected model, and the fresh-profile campaign default is `concept1` -
+consistent with `rpcs3-capture.md`'s own finding that a Fury-campaign race
+flies the `concept1` livery. Two frames, one team: 90, not higher. **What
+this does not show** is that the original always races what its screen
+selects: `rpcs3-capture.md` records a `racebox` walk whose screen showed the
+classic hull while the race flew `concept1`. And a divergence is left in
+place: the original's fresh-profile campaign opens this screen on
+`concept1`, this build on `settings.race.variant` (the classic hull by
+default).
+
+The seven `HexSelection` rows match `PI_TeamModel` file order (`chrome_c1`,
+`nitro`, `concept1`, `normal`, `SKIN1`, `SKIN2`, `chrome`): on the
+fresh-profile frame the only two rows with a ship icon rather than a padlock
+are the third and fourth, the two models with no `<Unlock>`. Confidence
+**70** (one frame, and the icon art is the widget's own). This build keeps
+its own three-variant axis (`""`, `_c1`, `_n1`, `oag_hd::race::TEAM_VARIANTS`)
+rather than widening to seven; each variant's stats come off the model racing
+out of that directory, preferring one with no `<Unlock>` - `Feisar_c1` is
+both `chrome_c1` and `concept1` - which is **chosen, not measured**
+(`oag_game::catalogue::Team::model_for_directory`).
+
+**The stat bar, measured off the settled frame**: each block is split where
+its nobble sits (`0.69`, `0.79`, `1.0` of the block for `070`, `080`, `100`);
+left of it the inside is `102/255`, right of it `65/255` over the black page.
+Those are `HD_Grey`'s `150` and the block's own `AlwaysSolidColor`'s `100`
+each through `Block_Render`'s translucent two-pass fill (`x 0.676`, see
+`crate::menu::block`). How the widget composes the two is unread; this build
+fills the two halves side by side and draws the border once over both
+(`oag_ui::menu::block::draw_split_fill`, chosen).
+
+### Chosen, not measured
+
+- **Axes**: left/right steps the team, up/down the livery
+  (`oag_ui::picker::Picker::with_entries_across`), read off the hex grid's
+  shape - the selected team is the centred `SelectedColumnCol` column and a
+  team's models are its rows. No capture has pressed a direction on this
+  screen.
+- **`LiveryString`** shows the selected variant's label (`HD`, `Fury
+  Concept`, `Fury Nitro`) when the team offers more than one. The widget is
+  authored empty and filled by code this build has not read; it stands in
+  for the hex row the original highlights, which is not drawn.
+- **Back** returns to `Cell Selection` on the same cell and difficulty rung
+  (`Session::reopen_cell_selection`) - `TeamRedirectBack` authors no
+  `goto`, which reads as "back to the screen it came from". Pulse's own
+  ship-screen Back still reopens `Grid Selection`, unchanged.
+- **Pointer**: the `CHOOSE TEAM` frame's left/right halves step the team,
+  the `NAVIGATE TEAM` frame's top/bottom halves the livery, the `SHIP MODEL`
+  frame confirms, the secondary button backs out
+  (`oag_ui::picker::pointer`'s `hd_targets`).
+- **The RACE page's START** opens this screen too, alone, on a title with a
+  ship screen and no track screen (not in Zone).
+- **The heading scale** (`0.45` of the menu face, a 14-unit bullet, text 20
+  units right of it) is read off the frame by eye.
+
+### Not drawn, and why
+
+- **The 3-D ship.** The `ShipModel` pose is read. HD's per-team `screen.xml`
+  names `<team>\ship_FE.vex`, which no HD archive carries; the race hull
+  (`ship.vex` + `ship.rcsmodel`) is not reachable from the preview path, so
+  the `SHIP MODEL` frame is empty. The biggest thing still missing.
+- **The hex grid** (`HexSelection`): colours authored, hex art the widget
+  class's own and unread. The per-team `FE\thumb0..3.gtf` are candidates
+  for the ship icons in it, not checked.
+- **The bracket corner marks, the padlock, the unlock condition text and
+  the loyalty value** - no unlock or loyalty state is kept.
+
+### Walked live, 2026-09-29
+
+Xvfb `:94`, debug build, `--autopilot --no-audio`, isolated
+`XDG_CONFIG_HOME`, keyboard through `xdotool`: `Main Menu` -> `Campaign
+Selection` -> `Grid Selection` -> `Cell Selection` -> Enter -> `SHIP SELECT`
+(Feisar logo, `070 080 100 080`, footer `CONFIRM`/`BACK`). `Right` -> Qirex;
+`Down` -> `Fury Concept` with Qirex `concept1`'s `085 080 085 090`. `Escape`
+-> `Cell Selection`, same cell. `C` to `SKILLED`, Enter, `Escape` -> still
+`TARGET (SKILLED)`. Mouse: a click on the team frame's right half -> the next
+team, on the hex frame's top half -> the previous livery, on the ship frame
+-> the race loads. Enter on `Fury Concept` flies `Data\Ships\Feisar_c1`.
+`RACEBOX` -> START -> `SHIP SELECT` -> `Escape` -> the RACE page. Shots in
+`data/scratch/hd-team-select/live/`.
+
+That walk found a real bug, fixed in the same change: the ship picker chose
+its livery axis by whether the row's first id was empty, which HD's variant
+table's classic-hull suffix also is, so `_c1`/`_n1` were written to
+`race.skin` and the race flew the classic hull. It now keys on whether the
+team declares skins.
 

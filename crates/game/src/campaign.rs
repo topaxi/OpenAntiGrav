@@ -469,6 +469,30 @@ pub fn hd_selection_string_overlay(
     archives: &mut oag_assets::Archives,
     entries_path: &str,
 ) -> std::collections::HashMap<String, String> {
+    hd_data06_strings(
+        archives,
+        entries_path,
+        &[
+            oag_ui::campaign::selection::TITLE_ID,
+            oag_ui::campaign::selection::SUBTITLE_ID,
+            oag_ui::campaign::selection::Campaign::Fury.entry_id(),
+            oag_ui::campaign::selection::Campaign::Hd.entry_id(),
+        ],
+    )
+}
+
+/// `ids`, resolved off `entries_path`'s own `DATA06` copy - the general form
+/// of [`hd_selection_string_overlay`], for another `DATA06`-only screen with
+/// ids of its own the precedence-served table lacks: `Team Selection`'s
+/// `RC_NAV_TEAM` ("NAVIGATE TEAM") is in `DATA06`'s English `entries.xml`
+/// and in none of `DATA02`..`DATA05`'s, confirmed directly against
+/// `hdfury-ps3-eu-dec.iso`. An id the copy lacks is left out.
+#[must_use]
+pub fn hd_data06_strings(
+    archives: &mut oag_assets::Archives,
+    entries_path: &str,
+    ids: &[&str],
+) -> std::collections::HashMap<String, String> {
     archives
         .read_every_name(entries_path)
         .into_iter()
@@ -476,19 +500,13 @@ pub fn hd_selection_string_overlay(
         .and_then(|(_, blob)| oag_tables::fexml::text(&blob).ok())
         .map(|xml| {
             let table = StringTable::from_xml(&xml);
-            [
-                oag_ui::campaign::selection::TITLE_ID,
-                oag_ui::campaign::selection::SUBTITLE_ID,
-                oag_ui::campaign::selection::Campaign::Fury.entry_id(),
-                oag_ui::campaign::selection::Campaign::Hd.entry_id(),
-            ]
-            .into_iter()
-            .filter_map(|id| {
-                table
-                    .get(id)
-                    .map(|value| (id.to_string(), value.to_string()))
-            })
-            .collect()
+            ids.iter()
+                .filter_map(|id| {
+                    table
+                        .get(id)
+                        .map(|value| ((*id).to_string(), value.to_string()))
+                })
+                .collect()
         })
         .unwrap_or_default()
 }

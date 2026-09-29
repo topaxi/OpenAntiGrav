@@ -561,3 +561,74 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
             .is_err()
     );
 }
+
+/// Wipeout HD/Fury: `Team Selection` reads off `DATA06`'s own
+/// `Team_Selection_Definition.xml` (`oag_ui::picker::hd`), with the parent
+/// `Team Selection Top Level`'s widgets under the child's name, every
+/// heading resolved - `RC_NAV_TEAM` only through `DATA06`'s own
+/// `entries.xml` - and each team's per-model ratings in tenths. No track
+/// screen: HD's is not read. See `docs/ui/campaign-screens.md`'s "Wipeout
+/// HD/Fury: `Team Selection`" section.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_reads_its_own_team_selection_and_no_track_screen() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let shell = shell(&path);
+    assert!(shell.track_select.is_none());
+    let ship = shell.ship_select.as_ref().expect("Team Selection reads");
+    assert_eq!(ship.title, "SHIP SELECT");
+    let extra = ship.hd.as_deref().expect("HD's own layout");
+    let labels: Vec<(&str, f32, f32)> = extra
+        .labels
+        .iter()
+        .map(|label| (label.text.as_str(), label.x, label.y))
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            ("CHOOSE TEAM", 160.0, 140.0),
+            ("NAVIGATE TEAM", 160.0, 336.0),
+            ("SHIP MODEL", 705.0, 140.0),
+            ("STATISTICS", 705.0, 833.0),
+        ]
+    );
+    assert_eq!(ship.panel, [160.0, 170.0, 506.0, 156.0]);
+    assert_eq!(ship.preview, [705.0, 170.0, 1052.0, 650.0]);
+    assert_eq!(extra.logo, Some([160.0, 185.0, 512.0, 128.0]));
+    let model = extra.ship_model.expect("ShipModel");
+    assert_eq!(model.origin, [1220.0, 412.0]);
+    for name in ["Slide_0", "Slide_1", "Slide_2", "Slide_3", "Slide_4"] {
+        assert!(
+            ship.screen
+                .blocks
+                .iter()
+                .any(|block| block.name.as_deref() == Some(name)),
+            "{name}"
+        );
+    }
+
+    // Feisar's own `<FE>`s: `normal` for the classic hull, `concept1` for
+    // `_c1` - the two numbers two RPCS3 frames of this screen print.
+    let feisar = shell
+        .teams
+        .iter()
+        .find(|team| team.id == "Feisar")
+        .expect("Feisar");
+    let stats = feisar.variant_stats(["", "_c1", "_n1"]);
+    let values: Vec<Option<[u8; 4]>> = stats.iter().map(|s| s.map(|s| s.values())).collect();
+    assert_eq!(
+        values,
+        vec![
+            Some([70, 80, 100, 80]),
+            Some([80, 85, 100, 80]),
+            Some([80, 85, 100, 80]),
+        ]
+    );
+    // And every team's logo is on the sheet.
+    for team in &shell.teams {
+        let src = oag_ui::picker::hd::logo_src(&team.id);
+        assert!(shell.sprites.get(&src).is_some(), "{src}");
+    }
+}

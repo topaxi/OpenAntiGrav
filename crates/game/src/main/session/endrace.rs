@@ -368,6 +368,19 @@ impl Session {
         let Some(cell) = cell else {
             return;
         };
+        self.reopen_cell_selection(&cell.name, None);
+    }
+
+    /// Opens the campaign and lands `Cell Selection` on the cell named
+    /// `cell`, on `difficulty` where one is given - `RETURN TO GRID`'s
+    /// half, and Wipeout HD/Fury's `Team Selection` Back
+    /// (`Session::handle_picker`), whose `TeamRedirectBack` authors no
+    /// `goto` and so returns to the screen it came from.
+    pub(crate) fn reopen_cell_selection(
+        &mut self,
+        cell: &str,
+        difficulty: Option<oag_tables::race_campaign::Difficulty>,
+    ) {
         self.open_campaign();
         let Stage::Menu(menu_stage) = &mut self.stage else {
             return;
@@ -378,18 +391,20 @@ impl Session {
         let Some(which) = campaign
             .grids()
             .iter()
-            .position(|grid| grid.cells.iter().any(|c| c.name == cell.name))
+            .position(|grid| grid.cells.iter().any(|c| c.name == cell))
         else {
             warn!(
-                "{} is not on any of this source's own grids any more - staying on Grid Selection",
-                cell.name
+                "{cell} is not on any of this source's own grids any more - staying on Grid Selection"
             );
             return;
         };
         if campaign.open_cell_selection(which)
             && let crate::campaign_stage::Screen::Cell { model, .. } = &mut campaign.screen
         {
-            model.select_by_name(&cell.name);
+            model.select_by_name(cell);
+            if let Some(difficulty) = difficulty {
+                model.set_difficulty(difficulty);
+            }
         }
     }
 
