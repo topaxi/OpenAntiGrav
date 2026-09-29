@@ -74,12 +74,27 @@
 //! [`hull_contacts`] now takes every surface the raycaster returns, which is
 //! everything but `Reset` (handled by [`crate::reset`]). Confidence **88**.
 //!
-//! It is what recovers a craft whose hull has sunk into a floor: the lower
-//! corners are behind the floor's plane by less than [`MAX_CONTACT_DEPTH`],
-//! each makes a contact, and each translates the body out by its own depth.
-//! Placed 3.6 units below rest height on `03_Track`'s level floor, the original
-//! is back at its rest height and ours now is too; before this, ours fell
-//! through. See `docs/gameplay/leaving-the-track.md`.
+//! Two things it is **not yet**, both read and both measured, and both left
+//! out on purpose (see `docs/gameplay/leaving-the-track.md`):
+//!
+//! - **`Collision_AddContact`'s projection gate.** The original takes a
+//!   contact only when the sample point's perpendicular projection lands inside
+//!   the same triangle the centre segment crossed (`Collision_SegmentTriangle`,
+//!   `0x08818bdc`, called from `0x08816864` on `sample -> sample + n * (depth +
+//!   0.01)`). Without it this crate makes *more* floor contacts than the
+//!   original: placed 3.6 units into `16_Track`'s floor, ours rises 3.5 in one
+//!   tick where the original rises 1.8 (two corners) and then climbs on its
+//!   hover. Both come to rest at the same height.
+//! - **`Body_StepWorld`'s pass 1**, the pre-integration clip along the velocity
+//!   to the box face (`0x0884f70c`, `Collision_RaycastWorld(.., 1, 2)`, backing
+//!   off `0.9` of the overshoot). On `03_Track` the gate rejects every corner and
+//!   it is pass 1 that lifts the original out (`0.757` measured, `0.752`
+//!   predicted).
+//!
+//! The two have to land together: the gate alone strips wall contacts that the
+//! original covers with pass 1. Until then the ungated contacts stand in for
+//! both, which recovers a sunk craft on both circuits, in the forgiving
+//! direction.
 //!
 //! A floor contact **moves the body and drives nothing else** - see [`reacts`]:
 //! the original charges no damage for it (its friction combines to `0.0`, and
@@ -88,8 +103,6 @@
 //! makes one: its box sits above the surface it hovers over, so in ordinary
 //! running the only surface that responds is still `Wall`, at the combined
 //! friction `(0.05 + 0.02) / 2 = 0.035`.
-//!
-//! The swept guard in [`resolve`] keeps a wall-only filter ([`responds`]).
 //!
 //! # Known limits
 //!

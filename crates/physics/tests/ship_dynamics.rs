@@ -1201,29 +1201,14 @@ fn a_ship_flown_at_a_wall_ends_up_on_the_near_side_of_it_and_turns_round() {
     assert!(reversed, "the ship never bounced back off the wall");
 }
 
-/// A hoverable surface **inside the hull** pushes the craft, and costs it no
-/// shield.
-///
-/// This used to assert the opposite - that a floor in reach of a lateral probe
-/// is ignored, so a hard-banked ship is not shoved off the surface it rests on.
-/// That was this crate's own reasoning, and the original does not share it:
-/// `Collision_BoxAgainstMesh` (`0x08815cd4`) reads no surface type, so a floor
-/// inside the box makes contacts like any wall (see `oag_physics::wall`'s module
-/// docs). What the original does gate is damage - `FUN_088418e0` charges a
-/// contact only when its friction is positive (`0x08842648`), and a floor's is
-/// the `-1.0` sentinel - so the shield is the half of the old contract that
-/// survives.
-///
-/// The quad sits half a unit to the ship's right, well inside the one-unit
-/// half-width, and the hover probes cast straight down from `x = 0` and never
-/// reach it, so any difference is the hull's.
+/// A floor inside the hull pushes it and charges no shield: the original's
+/// narrowphase reads no surface type and damages only a positive-friction
+/// contact (`0x08815cd4`, `0x08842648`; see `oag_physics::wall`). The quad is
+/// inside the hull and out of the hover probes' reach.
 #[test]
 fn a_hoverable_surface_inside_the_hull_pushes_it_and_charges_no_shield() {
     let mut handling = fixture();
-    // A pool to charge against: the fixture's is zero, which clamps every run
-    // to the same empty bar and would pass the shield assertion vacuously.
-    handling.dimensions.shield = 100.0;
-
+    handling.dimensions.shield = 100.0; // the fixture's zero pool is vacuous
     let run = |beside: Option<Surface>| {
         let mut world = flat_floor(Surface::Floor);
         if let Some(surface) = beside {
@@ -1247,18 +1232,14 @@ fn a_hoverable_surface_inside_the_hull_pushes_it_and_charges_no_shield() {
     let alone = run(None);
     for surface in [Surface::Floor, Surface::MagFloor] {
         let beside = run(Some(surface));
-        assert_ne!(alone.body, beside.body, "{surface:?} did not push the hull");
-        assert_eq!(
-            alone.shield, beside.shield,
-            "{surface:?} charged the shield: a frictionless contact must not"
-        );
+        assert_ne!(alone.body, beside.body, "{surface:?} did not push");
+        assert_eq!(alone.shield, beside.shield, "{surface:?} charged");
     }
 
-    // The control: the identical quad tagged `Wall` both pushes and charges,
-    // or the shield assertion above is passing because nothing charges at all.
+    // The control: tagged `Wall`, the same quad pushes and charges.
     let walled = run(Some(Surface::Wall));
     assert_ne!(alone.body, walled.body);
-    assert!(walled.shield < alone.shield, "{} vs {}", walled.shield, alone.shield);
+    assert!(walled.shield < alone.shield, "{}", walled.shield);
 }
 
 /// The suspension carries `normal_gravity + track_gravity`, not `normal_gravity`.

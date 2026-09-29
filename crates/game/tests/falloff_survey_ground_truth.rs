@@ -298,7 +298,12 @@ fn report_event(
         tick - d.tick,
     );
     if std::env::var_os("OAG_TRACE_EVENT").is_some() {
-        let from = recs.len().saturating_sub(std::env::var("OAG_TRACE_LEN").ok().and_then(|v| v.parse().ok()).unwrap_or(120));
+        let from = recs.len().saturating_sub(
+            std::env::var("OAG_TRACE_LEN")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(120),
+        );
         for rec in &recs[from..] {
             println!(
                 "TR|{label}|{level}|{population}|rescue {tick}|t {}|idx {}|sec {}|lat {:.2}|g {:.1}|\
@@ -818,6 +823,16 @@ fn shove_trial_trace() {
     let up = pose.orientation * oag_core::math::Vec3::Y;
     pose.orientation =
         oag_core::math::Quat::from_axis_angle(up, side * angle.to_radians()) * pose.orientation;
+    // `OAG_ROLL=<degrees>` rolls the craft about its own forward axis, so a
+    // craft lying on its flank can be placed in both engines.
+    if let Some(roll) = std::env::var("OAG_ROLL")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+    {
+        let forward = pose.orientation * oag_core::math::Vec3::NEG_Z;
+        pose.orientation =
+            oag_core::math::Quat::from_axis_angle(forward, roll.to_radians()) * pose.orientation;
+    }
     if let Some(sink) = std::env::var("OAG_SINK")
         .ok()
         .and_then(|v| v.parse::<f32>().ok())
@@ -825,6 +840,7 @@ fn shove_trial_trace() {
         pose.position -= up * sink;
     }
     let forward = pose.orientation * oag_core::math::Vec3::NEG_Z;
+    let up = pose.orientation * oag_core::math::Vec3::Y;
     println!(
         "PLACE|{:.4},{:.4},{:.4}|{:.5},{:.5},{:.5}|{:.5},{:.5},{:.5}|{speed}",
         pose.position.x,
@@ -865,6 +881,20 @@ fn shove_trial_trace() {
     }
     race.sim.world.ships[0].place_at(pose);
     race.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
+    // `OAG_VEL=x,y,z` overrides the initial velocity outright, to seed a state
+    // read off the original's first recorded tick.
+    if let Ok(v) = std::env::var("OAG_VEL") {
+        let v: Vec<f32> = v.split(',').map(|c| c.parse().expect("OAG_VEL")).collect();
+        race.sim.world.ships[0].physics.body.linear_velocity =
+            oag_core::math::Vec3::new(v[0], v[1], v[2]);
+    }
+    // `OAG_COAST=1` releases the throttle, for comparison with a placement in
+    // the original that presses nothing.
+    let input = if std::env::var_os("OAG_COAST").is_some() {
+        oag_gameplay::InputSnapshot::default()
+    } else {
+        throttle
+    };
     for tick in 0..200 {
         let ship = &race.sim.world.ships[0];
         let position = ship.physics.body.position;
@@ -879,14 +909,17 @@ fn shove_trial_trace() {
             lat / half.max(1e-3)
         });
         println!(
-            "TRACE|{tick}|{:.3},{:.3},{:.3}|{:.1}|{lat:+.2}|air {:.2}",
+            "TRACE|{tick}|{:.3},{:.3},{:.3}|{:.1}|{lat:+.2}|air {:.2}|up {:.2},{:.2},{:.2}",
             position.x,
             position.y,
             position.z,
             ship.physics.body.linear_velocity.length(),
-            ship.physics.time_airborne
+            ship.physics.time_airborne,
+            ship.physics.body.up().x,
+            ship.physics.body.up().y,
+            ship.physics.body.up().z,
         );
-        race.tick(&PlayerInputs::single(throttle));
+        race.tick(&PlayerInputs::single(input));
     }
 }
 

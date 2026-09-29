@@ -645,7 +645,7 @@ fn a_wall_wound_away_from_the_ship_is_a_back_face() {
 ///
 /// `Collision_BoxAgainstMesh` (`0x08815cd4`) reads no surface type, so the
 /// original's hull makes contacts against `Floor` and `MagFloor` exactly as
-/// against `Wall` - which is how it recovers a craft sunk into the floor. What
+/// against `Wall` - one half of how it recovers a craft sunk into the floor. What
 /// the floor does **not** do is damage: `FUN_088418e0` charges a ring record
 /// only when its friction is positive (`0x08842648`), and a floor's is the
 /// `-1.0` sentinel. The swept guard stays wall-only; see [`responds`].
