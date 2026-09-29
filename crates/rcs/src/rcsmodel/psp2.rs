@@ -217,6 +217,29 @@ pub const VERTEX_POINTER: usize = INDEX_POINTER + BUFFER_POINTER_GAP;
 /// and `-0x08` is `0x00010001` on every file sampled).
 pub const MATERIAL_INDEX_BEFORE_RECORD: usize = 0x18;
 
+/// How far **before** a PS4 submesh record its material index sits.
+///
+/// The same field as [`MATERIAL_INDEX_BEFORE_RECORD`], `0x10` further back,
+/// which is what 64-bit pointers in the fields between them do to the
+/// distance. Read against [`material::read_ps4`]'s order it is exact - see
+/// there for the evidence and the confidence.
+pub const PS4_MATERIAL_INDEX_BEFORE_RECORD: usize = 0x28;
+
+/// The header word at `+0x04` on a PS4 file: `0x100`, where every Vita file
+/// has `0`. **1,271 of 1,271** PS4 `.rcsmodel` files carry it and **953 of
+/// 953** Vita ones do not (`crates/rcs/examples/omega_rcsmodel_census.rs`), so
+/// it is a discriminator on everything measured; what the word *means* - a
+/// pointer size in bits is the reading its value invites - is not established.
+pub const PS4_HEADER_WORD: u32 = 0x100;
+
+/// Whether `file` is a PS4 `.rcsmodel` rather than a Vita one. See
+/// [`PS4_HEADER_WORD`].
+#[must_use]
+pub fn is_ps4(file: &[u8]) -> bool {
+    file.get(4..8)
+        .is_some_and(|b| u32::from_le_bytes(b.try_into().expect("four bytes")) == PS4_HEADER_WORD)
+}
+
 /// Bytes a vertex's position occupies - three little-endian `f32`.
 pub const POSITION_LEN: usize = 12;
 
@@ -550,9 +573,17 @@ impl Model {
 pub fn parse(file: &[u8]) -> Result<Model> {
     let sections = container::read(file)?.sections;
 
+    let ps4 = is_ps4(file);
+    let read_materials = |cpu: &[u8]| {
+        if ps4 {
+            material::read_ps4(cpu)
+        } else {
+            material::read(cpu)
+        }
+    };
     let Some(&gpu) = sections.get(1) else {
         let cpu = sections[0];
-        let materials = material::read(&file[cpu.at..cpu.at + cpu.len]);
+        let materials = read_materials(&file[cpu.at..cpu.at + cpu.len]);
         let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len]).unwrap_or_default();
         return Ok(Model {
             sections,
@@ -563,8 +594,8 @@ pub fn parse(file: &[u8]) -> Result<Model> {
         });
     };
     let cpu = sections[0];
-    let (mut submeshes, unpaired_pointers) = submeshes(file, cpu, gpu)?;
-    let materials = material::read(&file[cpu.at..cpu.at + cpu.len]);
+    let (mut submeshes, unpaired_pointers) = submeshes(file, cpu, gpu, ps4)?;
+    let materials = read_materials(&file[cpu.at..cpu.at + cpu.len]);
     let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len]).unwrap_or_default();
     // Each record back to the mesh object that lists it, and through that
     // to the node whose space its positions are in.
@@ -612,7 +643,7 @@ pub fn parse(file: &[u8]) -> Result<Model> {
 /// something that was not a submesh - true of both known gaps, tried in the
 /// same pass rather than one after the other, so a gap that does not check out
 /// costs one step (`i += 1`) rather than desynchronising the sites after it.
-fn submeshes(file: &[u8], cpu: Section, gpu: Section) -> Result<(Vec<SubMesh>, usize)> {
+fn submeshes(file: &[u8], cpu: Section, gpu: Section, ps4: bool) -> Result<(Vec<SubMesh>, usize)> {
     let declarations_by_stride = vertex_decl::find_by_stride(&file[cpu.at..cpu.at + cpu.len]);
     let mut sites: Vec<usize> = (0..gpu.entries)
         .map(|e| u32_at(file, gpu.table + e * RELOCATION_LEN, "relocation entry"))
@@ -652,8 +683,7 @@ fn submeshes(file: &[u8], cpu: Section, gpu: Section) -> Result<(Vec<SubMesh>, u
             file,
             cpu,
             gpu,
-            record,
-            gap,
+            (record, gap, ps4),
             &length_of,
             &declarations_by_stride,
         ) else {
@@ -677,8 +707,7 @@ fn one(
     file: &[u8],
     cpu: Section,
     gpu: Section,
-    record: usize,
-    gap: usize,
+    (record, gap, ps4): (usize, usize, bool),
     length_of: &impl Fn(u32) -> Option<usize>,
     declarations_by_stride: &std::collections::HashMap<usize, vertex_decl::VertexDecl>,
 ) -> Option<SubMesh> {
@@ -727,7 +756,11 @@ fn one(
     // Read raw here and validated against the material table in `parse`,
     // which is the only place that knows how many entries the table has.
     let material = record
-        .checked_sub(MATERIAL_INDEX_BEFORE_RECORD)
+        .checked_sub(if ps4 {
+            PS4_MATERIAL_INDEX_BEFORE_RECORD
+        } else {
+            MATERIAL_INDEX_BEFORE_RECORD
+        })
         .and_then(|at| u32_at(file, cpu.at + at, "material index").ok())
         .and_then(|value| usize::try_from(value).ok());
 

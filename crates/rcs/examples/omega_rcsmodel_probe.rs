@@ -29,6 +29,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         *acc.entry(s.stride).or_default() += 1;
                         acc
                     });
+                println!(
+                    "  scene: {} node(s), {} mesh object(s), {} submesh(es) node-bound, {} with a mesh",
+                    m.scene.nodes.len(),
+                    m.scene.meshes.len(),
+                    m.submeshes.iter().filter(|s| s.node.is_some()).count(),
+                    m.submeshes.iter().filter(|s| s.mesh.is_some()).count()
+                );
                 println!();
                 println!(
                     "  strides {strides:?}, {with_uv} submesh(es) with a uv set, {with_tangent} with a tangent"

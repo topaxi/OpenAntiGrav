@@ -312,3 +312,91 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
         })
         .collect()
 }
+
+/// Every distinct `.gnf` path an 8-byte-aligned 64-bit pointer inside
+/// `[from, to)` resolves to, in ascending address order.
+fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
+    let to = to.min(cpu.len());
+    let mut out = Vec::new();
+    let mut at = from.next_multiple_of(8);
+    while at + 8 <= to {
+        if let Some(target) = u64_at(cpu, at)
+            && let Ok(target) = usize::try_from(target)
+            && target > 0
+            && cpu.get(target - 1) == Some(&0)
+            && let Some(path) = cstr_at(cpu, target)
+            && ends_with_ci(&path, ".gnf")
+            && !out.contains(&path)
+        {
+            out.push(path);
+        }
+        at += 8;
+    }
+    out
+}
+
+fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
+    cpu.get(at..at + 8)
+        .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+}
+
+/// The PS4 Omega Collection's material table, found by its name pointers.
+///
+/// **The same container with 64-bit pointers, and a different header.** The
+/// Vita's file-level count and offset table ([`FILE_MATERIAL_COUNT`],
+/// [`FILE_MATERIAL_TABLE`]) are not where a PS4 file keeps them, and this
+/// reading did not find where it does. What it found instead is the thing
+/// that made the Vita reading possible in the first place: the ASCII paths sit
+/// in the clear inside section B, and a pointer reaches each. So a material is
+/// **an 8-aligned 64-bit word that points at a NUL-preceded string ending in
+/// `.rcsmaterial`**, materials are taken in ascending address order, and a
+/// material's own extent runs to the next one's pointer. Its textures are
+/// every `.gnf` path an 8-aligned pointer in that extent resolves to, which is
+/// the scan [`textures_in`] does for the Vita's `.gxt`.
+///
+/// **Why the order is table order: the index that follows it.** A PS4 submesh
+/// record carries a material index at [`super::PS4_MATERIAL_INDEX_BEFORE_RECORD`]
+/// bytes before it, and read against this order it names the material a
+/// person would pick on `ag_systems\ship.rcsmodel` - `GlassShape` draws with
+/// `glass_texture`, `FlashyFlashyShape` with `emissive_bloom` and the body
+/// shapes with `diffuse_with_specular_from_alpha_n_vcol` - and, corpus-wide,
+/// the index lands inside the table on every submesh
+/// (`crates/rcs/tests/ps4_rcsmodel_ground_truth.rs`). **Confidence 75**: the
+/// closure is exact and the semantic check is real, but neither the count
+/// field nor the table that would state the order outright is located, and
+/// which texture of several a material binds is ordinal, as it is on Vita.
+///
+/// The technique name is not read: no pointer to it has been placed.
+#[must_use]
+pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
+    let mut sites: Vec<(usize, String)> = Vec::new();
+    let mut at = 0usize;
+    while at + 8 <= cpu.len() {
+        if let Some(target) = u64_at(cpu, at)
+            && let Ok(target) = usize::try_from(target)
+            && target > 0
+            && cpu.get(target - 1) == Some(&0)
+            && let Some(name) = cstr_at(cpu, target)
+            && ends_with_ci(&name, ".rcsmaterial")
+        {
+            sites.push((at, name));
+        }
+        at += 8;
+    }
+    let starts: Vec<usize> = sites.iter().map(|(site, _)| *site).collect();
+    sites
+        .into_iter()
+        .enumerate()
+        .map(|(i, (site, name))| {
+            let next = starts
+                .get(i + 1)
+                .copied()
+                .unwrap_or_else(|| site.saturating_add(TAIL_SCAN_LIMIT));
+            Material {
+                name,
+                technique: None,
+                textures: gnf_textures_in(cpu, site + 8, next),
+            }
+        })
+        .collect()
+}
