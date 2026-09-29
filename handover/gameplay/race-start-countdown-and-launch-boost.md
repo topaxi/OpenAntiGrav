@@ -821,6 +821,30 @@ its trigger to `COUNTDOWN_TICKS`); the cockpit overlay's own timing
 (`Cockpit_321GO.vex`, unmeasured, still `world.tick / 60`); other modes' and
 titles' countdown length.
 
+## 2026-09-29: the countdown voice is two cues, `ready` and `go`, and now plays
+
+Measured and wired the same day (a `countdown-voice` lane). A live
+`Scream_StartSound` log on Pulse (PSP) shows the start plays **`ready` at tick
+90 and `go` at tick 270 on this thread's axis, 180.0 ticks apart, nothing else** -
+no beeps, no per-digit cue. `go` is between the craft-update entries 270 and 271,
+two entries before the throttle reads 100: it is the state change that lifts the
+gate. `ready` is `RaceMode_SetState(1)`, `go` is `RaceMode_UpdateCountdown` beside
+`Race_StartRacing`; the bank is the mode's speech bank (`SPEECH`, `elim_vo`,
+`zone_vo`). Evidence page: `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md`;
+three names (`RaceMode_UpdateCountdown` 80, `Sound_PlayNamedInSlot` 75,
+`RaceMode_UpdateIntro_q` 65).
+
+- **Zone was not captured live** - not menu-reachable on a fresh profile (greyed),
+  and forcing `g_game_mode = 6` on a normal circuit hung on the loading screen.
+  Static: the same two functions, `zone_vo` cues 15 and 16. A save with Zone
+  unlocked closes it: `scripts/psp-countdown-cues.py --cues-only 300`.
+- **`ready` is 1-2 ticks before the gantry's derived start (92)**, probably one
+  event seen through screenshot lag. Not measured further; `gantry.rs` untouched.
+- The Pure, HD and 2048 start voices are unmeasured (`countdown_voice: None`).
+  HD's `321_GO` is a longer cue than Pulse's `go`.
+- `zone-mode.md`'s "sound cue at tick 40" starts no cue; the call
+  (`FUN_0893a958`, 0.02f) is unread.
+
 ## Next Steps
 
 **Display/logic, current focus:**

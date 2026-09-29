@@ -182,7 +182,9 @@ scratch space). Read at instruction/branch level, not runtime-verified:
   offset above - by one every call, plays a sound cue
   (`func_0x00136958(0x3ca3d70a, ...)`, the float bit-pattern is roughly `0.02`,
   read as a pitch or volume argument rather than a duration) at the exact tick
-  it crosses **40**, and once the counter reaches **0**, additionally requires
+  it crosses **40** (**2026-09-29: no cue starts on that tick** - a live
+  `Scream_StartSound` log shows none; it is a fade-shaped call, see
+  [countdown-voice.md](countdown-voice.md#corrections)), and once the counter reaches **0**, additionally requires
   a second float-valued gate (`fVar17`, read off a call this session could not
   resolve to a real function - see Open) to clear before it advances the
   *substate* to 2. So the countdown is not purely tick-driven: a tick count
