@@ -27,6 +27,9 @@ pub enum RespawnCause {
     Stalled,
     /// The player stayed far from the nearest spline sample - invented.
     OffTrack,
+    /// The craft was wrecked and is being brought back by the destroyed-craft
+    /// pass, not rescued from anywhere: a shield running out is not a fall.
+    Destroyed,
 }
 
 impl Race {

@@ -204,6 +204,7 @@ fn measure(
                 Some(RespawnCause::LostCircuit) => "lost",
                 Some(RespawnCause::Stalled) => "stalled",
                 Some(RespawnCause::OffTrack) => "offtrack",
+                Some(RespawnCause::Destroyed) => "wrecked",
                 None => "?",
             };
             // The tick that fired the respawn also teleported the craft, so the
@@ -534,10 +535,31 @@ fn shove_sweep() {
                         let respawns_before = race.respawns_of(0);
                         let (mut max_lat, mut out_run, mut worst_run, mut wall_ticks) =
                             (0.0f32, 0u32, 0u32, 0u32);
+                        let mut crossed = 0u32;
+                        let mut previous = race.sim.world.ships[0].physics.body.position;
                         for _ in 0..200 {
                             race.tick(&PlayerInputs::single(throttle));
                             let ship = &race.sim.world.ships[0];
                             wall_ticks += u32::from(ship.physics.wall_contact_prev);
+                            {
+                                use oag_physics::{Ray, Raycaster, Surface};
+                                let now = ship.physics.body.position;
+                                let delta = now - previous;
+                                let length = delta.length();
+                                // A respawn teleports the craft; that is not a crossing.
+                                if length > 1e-3 && length < 20.0 {
+                                    if let Some(hit) = race.collision().raycast(
+                                        Ray::new(previous, delta / length, length),
+                                        None,
+                                        false,
+                                    ) {
+                                        if hit.surface == Surface::Wall {
+                                            crossed += 1;
+                                        }
+                                    }
+                                }
+                                previous = now;
+                            }
                             if let Some((_, s, _)) =
                                 race.spline().nearest(ship.physics.body.position)
                             {
@@ -560,13 +582,18 @@ fn shove_sweep() {
                             }
                         }
                         let respawned = race.respawns_of(0) - respawns_before;
-                        let left = respawned > 0 || worst_run >= 30;
+                        let far = worst_run >= 30;
+                        let left = respawned > 0 || far;
+                        let gave_up = race.respawn_given_up_of(0);
                         println!(
                             "SHOVE|{label}|idx {index}|sec {}|side {}|ang {angle:.0}|spd {speed:.0}|\
-                             left {}|wall {wall_ticks}|maxlat {max_lat:.2}|resp {respawned}|hw {:.0}",
+                             left {}|wall {wall_ticks}|maxlat {max_lat:.2}|resp {respawned}|far {}|\
+                             crossed {crossed}|gaveup {}|hw {:.0}",
                             sample.section_id,
                             if side < 0.0 { "L" } else { "R" },
                             u8::from(left),
+                            u8::from(far),
+                            u8::from(gave_up),
                             sample.half_width_left.min(sample.half_width_right),
                         );
                         // Let any respawn cooldown drain and the ship settle.
@@ -737,5 +764,126 @@ fn track_definition_attributes() {
     for (at, _) in text.match_indices("collisionCageEnabled") {
         let from = at.saturating_sub(160);
         println!("CAGE|{}", &text[from..(at + 40).min(text.len())]);
+    }
+}
+
+/// One shove trial, replayed with per-tick output, plus the pose it starts from
+/// in the form `scripts/psp-drive.py place` takes, so the same trial can be
+/// run in the original.
+///
+/// `OAG_SHOVE_TRIAL=<circuit id, r suffix for reversed>:<spline index>:<L|R>:<angle>:<speed>`.
+/// Prints `PLACE|pos|tangent|up|speed` and then one `TRACE|tick|x,y,z|speed|lat`
+/// line per tick of the same 200-tick run `shove_sweep` does.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1 and OAG_SHOVE_TRIAL"]
+fn shove_trial_trace() {
+    let Ok(spec) = std::env::var("OAG_SHOVE_TRIAL") else {
+        return;
+    };
+    let parts: Vec<&str> = spec.split(':').collect();
+    let (wanted, index, side, angle, speed): (&str, usize, f32, f32, f32) = (
+        parts[0],
+        parts[1].parse().expect("index"),
+        if parts[2] == "L" { -1.0 } else { 1.0 },
+        parts[3].parse().expect("angle"),
+        parts[4].parse().expect("speed"),
+    );
+    let Some(image) = image() else { return };
+    let circuit = circuits_all()
+        .into_iter()
+        .find(|c| format!("{}{}", c.id, if c.reversed { "r" } else { "" }) == wanted)
+        .expect("no such circuit");
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Ace,
+        track: Some(circuit.entry.clone()),
+        ..race::Options::default()
+    })
+    .expect("loading");
+    let mut race = race::Race::start(loaded.setup);
+    for other in 1..8 {
+        race.sim.world.ships[other].active = false;
+    }
+    let throttle = throttle_held();
+    for _ in 0..600 {
+        race.tick(&PlayerInputs::single(throttle));
+    }
+    let height = oag_gameplay::spawn::spawn_height(&race.sim.world.ships[0].handling);
+    let sample = race.spline().sample(index).copied().expect("sample");
+    let mut pose = oag_gameplay::Pose::from_sample(&sample, sample.racing_line, height);
+    let up = pose.orientation * oag_core::math::Vec3::Y;
+    pose.orientation =
+        oag_core::math::Quat::from_axis_angle(up, side * angle.to_radians()) * pose.orientation;
+    if let Some(sink) = std::env::var("OAG_SINK")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+    {
+        pose.position -= up * sink;
+    }
+    let forward = pose.orientation * oag_core::math::Vec3::NEG_Z;
+    println!(
+        "PLACE|{:.4},{:.4},{:.4}|{:.5},{:.5},{:.5}|{:.5},{:.5},{:.5}|{speed}",
+        pose.position.x,
+        pose.position.y,
+        pose.position.z,
+        forward.x,
+        forward.y,
+        forward.z,
+        up.x,
+        up.y,
+        up.z
+    );
+    {
+        use oag_physics::{Ray, Raycaster};
+        let right = pose.orientation * oag_core::math::Vec3::X;
+        for (name, direction) in [
+            ("down", -up),
+            ("up", up),
+            ("fwd", forward),
+            ("back", -forward),
+            ("right", right),
+            ("left", -right),
+        ] {
+            for include_reset in [false, true] {
+                match race.collision().raycast(
+                    Ray::new(pose.position, direction, 120.0),
+                    None,
+                    include_reset,
+                ) {
+                    Some(h) => println!(
+                        "SURF|{name}|reset {include_reset}|{:?}|d {:.2}|n {:.2},{:.2},{:.2}",
+                        h.surface, h.distance, h.normal.x, h.normal.y, h.normal.z
+                    ),
+                    None => println!("SURF|{name}|reset {include_reset}|nothing within 120"),
+                }
+            }
+        }
+    }
+    race.sim.world.ships[0].place_at(pose);
+    race.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
+    for tick in 0..200 {
+        let ship = &race.sim.world.ships[0];
+        let position = ship.physics.body.position;
+        let lat = race.spline().nearest(position).map_or(0.0, |(_, s, _)| {
+            let lat = (position - oag_core::math::Vec3::from_array(s.pos))
+                .dot(oag_core::math::Vec3::from_array(s.lateral));
+            let half = if lat >= 0.0 {
+                s.half_width_right
+            } else {
+                s.half_width_left
+            };
+            lat / half.max(1e-3)
+        });
+        println!(
+            "TRACE|{tick}|{:.3},{:.3},{:.3}|{:.1}|{lat:+.2}|air {:.2}",
+            position.x,
+            position.y,
+            position.z,
+            ship.physics.body.linear_velocity.length(),
+            ship.physics.time_airborne
+        );
+        race.tick(&PlayerInputs::single(throttle));
     }
 }

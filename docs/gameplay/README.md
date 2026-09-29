@@ -23,6 +23,11 @@
   rubberbanding: the original spreads the player coupling across *two* blocks
   and only one of them is called `RubberBanding`.
 
+- [leaving the track](leaving-the-track.md) - where craft leave the circuit in this
+  engine, and the discriminating measurements against the original (ride height,
+  airtime, walls, edges). Read it before tuning anything because "it is easier to
+  fall off".
+
 ## Scope
 
 - [x] Laps and finishing conditions, for the single-ship modes
