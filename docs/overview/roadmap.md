@@ -852,8 +852,10 @@ spline's tangent, `+/-10` to either side of the AI corridor's midpoint, each
 slot re-located on the spline - first measured off eight craft read out of
 the running original while the countdown held them in place, and since
 2026-09-16 read as the literals in `Race_ComputeGridLayout`
-([grid.md](../ghidra/functions/psp-pulse-usa/grid.md)), which also walks the
-other way on a reversed circuit. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
+([grid.md](../ghidra/functions/psp-pulse-usa/grid.md)), whose
+reversed-circuit branch a live capture on Metropia reversed refuted (the node is
+still slot 8 there), and whose stagger is about the AI corridor's midpoint, not
+the node. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
 is a shipped permutation table, and a short field packs to the *back*. See
 [grid](../ghidra/functions/psp-pulse-usa/grid.md).
 

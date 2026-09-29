@@ -217,10 +217,17 @@ fn face_the_way_the_track_runs(pose: Pose, slot: &StartPosition, spline: &Spline
 /// So each slot's raw position now comes from walking `spline` itself, in
 /// `base`'s own forward direction, [`oag_gameplay::GRID_ROW_PITCH`] units per
 /// step back from `base`'s nearest sample - the same measured constant, applied
-/// along the track instead of along a straight line - and the column stagger
-/// uses that sample's own `lateral` axis rather than `base`'s fixed one, for the
-/// same reason [`Pose::from_sample`] does: a curve turns the two axes apart
-/// exactly where a straight-line stagger would start missing the road.
+/// along the track instead of along a straight line.
+///
+/// **Laterally, every slot sits `GRID_COLUMN_OFFSET / 2` from the AI corridor's
+/// midpoint at its own sample** (2026-09-29, `Race_ComputeGridLayout`): the even
+/// slots on the side of the midpoint `base` is on, the odd slots on the other.
+/// This replaced carrying `base`'s own lateral offset down the grid and adding
+/// the stagger on one fixed side, which put the odd column 30 units off the
+/// track on `01_Track` and `17_Track`, whose node is on the left. Slot 8 keeps
+/// `base`'s place along the track and is moved laterally onto the same rule -
+/// the original does not use the raw node either, and it is 1.68 units nearer
+/// the original's eighth craft on `16_Track` for it.
 /// **Heading is untouched** - every slot still shares `base`'s own orientation,
 /// which is the part grid.md's live capture actually confirmed, to four decimal
 /// places, and nothing here re-opens that.
@@ -268,7 +275,7 @@ pub(super) fn grid_poses(
     };
     let half_column = 0.5 * oag_gameplay::GRID_COLUMN_OFFSET;
     let lateral_target = |sample: &oag_vex::track::Sample, slot: u8| {
-        let sign = if slot % 2 == 0 { side } else { -side };
+        let sign = if slot.is_multiple_of(2) { side } else { -side };
         midpoint(sample) + sign * half_column
     };
 
