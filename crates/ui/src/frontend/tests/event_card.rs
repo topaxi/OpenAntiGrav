@@ -3,7 +3,7 @@
 
 use super::wipeout2048::{a_forced_event, a_restricted_event, boot, press, reach_the_shell, tick};
 use super::*;
-use crate::frontend::EventCard;
+use crate::frontend::{CardTabs, EventCard};
 use crate::pointer::Pointer;
 
 fn tap(x: f32, y: f32) -> Pointer {
@@ -233,4 +233,110 @@ fn the_secondary_pointer_button_goes_back() {
     assert!(frontend.pointer(&back));
     tick(&mut frontend, &mut input, 0);
     assert!(!frontend.event_card_open());
+}
+
+fn texts(frontend: &Frontend) -> Vec<String> {
+    frontend
+        .draw_list()
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn with_pages() -> Vec<MapEvent> {
+    let mut events = card_event();
+    events[0].card.class_label = Some("C CLASS".to_string());
+    events[0].card.class_icon = Some(r"Data\FE\NewImages\speedclass\c_class.gtf".to_string());
+    events[0].card.lap_label = Some("3 LAPS".to_string());
+    events[0].card.tabs = CardTabs {
+        tabs: [
+            "PERSONAL".to_string(),
+            "FRIENDS".to_string(),
+            "GLOBAL".to_string(),
+        ],
+        current_best: "CURRENT BEST".to_string(),
+    };
+    events
+}
+
+#[test]
+fn a_card_has_the_objective_the_leaderboard_and_the_rules_page() {
+    let (mut frontend, mut input) = on_the_card(with_pages());
+    assert!(texts(&frontend).contains(&"PASS".to_string()));
+    press(&mut frontend, &mut input, Button::Right);
+    let leaderboard = texts(&frontend);
+    for wanted in ["PERSONAL", "FRIENDS", "GLOBAL", "CURRENT BEST", "--"] {
+        assert!(leaderboard.contains(&wanted.to_string()), "{leaderboard:?}");
+    }
+    let tabs = frontend
+        .draw_list()
+        .iter()
+        .filter(
+            |draw| matches!(draw, Draw::Fill { rect, .. } if rect[1] == 186.0 && rect[3] == 44.0),
+        )
+        .count();
+    assert_eq!(tabs, 3, "FUN_810540c4's three 138x44 tabs at y=186");
+    press(&mut frontend, &mut input, Button::Right);
+    let rules = texts(&frontend);
+    assert!(rules.contains(&"C CLASS".to_string()), "{rules:?}");
+    assert!(rules.contains(&"3 LAPS".to_string()), "{rules:?}");
+    assert!(!rules.contains(&"PERSONAL".to_string()));
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.event_card_page(),
+        Some(0),
+        "three pages, so three dots and a wrap"
+    );
+}
+
+#[test]
+fn an_event_with_nothing_to_say_about_its_rules_has_no_rules_page() {
+    let (mut frontend, mut input) = on_the_card(card_event());
+    press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.event_card_page(),
+        Some(0),
+        "objective and leaderboard only"
+    );
+}
+
+#[test]
+fn a_refused_craft_opens_the_card_on_its_rules_page() {
+    let mut events = with_pages();
+    let restricted = a_restricted_event();
+    events[0].refused_craft = restricted[0].refused_craft.clone();
+    let mut frontend = boot(0);
+    frontend.set_campaign(events);
+    frontend.seed_craft("Feisar2048\\3".to_string());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert_eq!(
+        frontend.event_card_page(),
+        Some(2),
+        "DAT_816c782c is set to the kind-4 page"
+    );
+}
+
+#[test]
+fn the_rules_layout_is_the_executables_table() {
+    // Two items sit side by side at y=277; three make the inverted triangle.
+    let (mut frontend, mut input) = on_the_card(with_pages());
+    press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Right);
+    let captions: Vec<(f32, f32)> = frontend
+        .draw_list()
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, x, y, .. } if text.ends_with("LAPS") || text.ends_with("CLASS") => {
+                Some((*x, *y))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(captions, vec![(602.0, 315.0), (762.0, 315.0)]);
 }

@@ -72,6 +72,26 @@ fn every_photo_emblem_and_class_glyph_a_card_names_is_in_the_sprite_sheet() {
                 event.name
             );
         }
+        for name in event
+            .card
+            .forced_craft
+            .iter()
+            .flat_map(|craft| [&craft.logo, &craft.type_icon])
+            .flatten()
+            .chain(
+                event
+                    .card
+                    .allowed_classes
+                    .iter()
+                    .map(|allowed| &allowed.icon),
+            )
+        {
+            assert!(
+                shell.sprites.get(name).is_some(),
+                "{}: rules page names {name}, not in the sheet",
+                event.name
+            );
+        }
         photos += usize::from(event.card.photo.is_some());
     }
     assert!(
