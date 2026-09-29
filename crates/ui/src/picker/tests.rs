@@ -848,3 +848,31 @@ fn the_wheel_steps_the_entry_and_livery_arrows_step_the_livery() {
             .all(|target| target.what != pointer::What::NextVariant)
     );
 }
+
+/// Wipeout HD/Fury's team screen keeps the model row when the team steps -
+/// measured on RPCS3, 2026-09-29: `Right` from `concept1` lands on the next
+/// team's `concept1`. Every other picker restarts the livery on a new entry.
+#[test]
+fn a_team_step_keeps_the_model_row_only_on_the_across_layout() {
+    let team = |id: &str| Entry {
+        id: id.to_string(),
+        label: id.to_uppercase(),
+        details: Details::Ship {
+            rating: None,
+            variants: vec![
+                ("".into(), "HD".into()),
+                ("_c1".into(), "Fury Concept".into()),
+                ("_n1".into(), "Fury Nitro".into()),
+            ],
+            stats: Vec::new(),
+        },
+    };
+    let entries = || vec![team("a"), team("b")];
+    let mut across = Picker::new(Kind::Ship, entries(), Some("a"), Some("_c1")).with_entries_across();
+    assert_eq!(across.step_entry(1), Some(Event::Moved));
+    assert_eq!(across.variant().map(|(id, _)| id.as_str()), Some("_c1"));
+
+    let mut list = Picker::new(Kind::Ship, entries(), Some("a"), Some("_c1"));
+    assert_eq!(list.step_entry(1), Some(Event::Moved));
+    assert_eq!(list.variant().map(|(id, _)| id.as_str()), Some(""));
+}

@@ -748,7 +748,7 @@ pub(super) fn picker_page(
         ),
         Kind::Ship => (
             settings.race.team.as_str(),
-            Some(settings.race.variant.as_str()),
+            Some(settings.race.opening_variant(title)),
         ),
     };
     let mut picker = Picker::new(kind, entries, Some(selected), variant);

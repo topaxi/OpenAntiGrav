@@ -626,3 +626,22 @@ fn controls_bindings_round_trips_through_a_real_toml_file() {
     );
     assert_eq!(round_tripped.controls.bindings, settings.controls.bindings);
 }
+
+/// A Wipeout HD/Fury profile that has never picked a model opens Ship Select
+/// on `concept1` (measured on RPCS3 with an empty `savedata`, 2026-09-29); a
+/// stored variant, or a deliberate classic-hull pick, wins over that.
+#[test]
+fn hd_opens_ship_select_on_concept1_until_a_model_is_picked() {
+    let mut race = Race::default();
+    assert_eq!(race.opening_variant(&oag_hd::TITLE), "_c1");
+    assert_eq!(race.opening_variant(&oag_pulse::TITLE), "");
+
+    race.variant_chosen = true;
+    assert_eq!(race.opening_variant(&oag_hd::TITLE), "");
+
+    let stored = Race {
+        variant: "_n1".to_string(),
+        ..Race::default()
+    };
+    assert_eq!(stored.opening_variant(&oag_hd::TITLE), "_n1");
+}
