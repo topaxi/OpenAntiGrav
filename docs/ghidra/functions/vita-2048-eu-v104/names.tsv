@@ -72,7 +72,16 @@
 0x8101291a	function	WeaponType_RegisterEnum	90	weapon-type-bits.md
 0x8100e650	function	WeaponType_RegisterValues	95	weapon-type-bits.md
 0x81055a16	function	CampaignEventCard_DrawPanel	75	campaign-event-card.md
-0x8105114a	function	CampaignEventCard_BuildPageList	70	campaign-event-card.md
+0x8105114a	function	CampaignEventCard_BuildPageList	80	campaign-event-card.md
 0x81055150	function	CampaignEventCard_DrawObjectivePage	75	campaign-event-card.md
 0x812b671a	function	GameModeObjective_FormatText	85	campaign-event-card.md
 0x81060744	function	CampaignEventCard_DrawTrackPhoto	85	campaign-event-card.md
+0x812c4a2a	function	GameModeZoneRace_FormatObjective	85	campaign-event-card.md
+0x812c1010	function	GameModeSpeedLapRace_FormatObjective	85	campaign-event-card.md
+0x810540c4	function	CampaignEventCard_DrawLeaderboardPage	75	campaign-event-card.md
+0x810535fe	function	CampaignEventCard_DrawRulesPage	75	campaign-event-card.md
+0x8105dcb8	function	FrontEnd_LoadCardTextures	80	campaign-event-card.md
+0x81052fb4	function	CampaignEventCard_DrawTrophyPage	65	campaign-event-card.md
+0x81052810	function	CampaignEventCard_DrawUnlockPage	60	campaign-event-card.md
+0x812b021a	function	GameMode_GetKindLabel	85	campaign-event-card.md
+0x8114f252	function	Time_SplitCentiseconds	85	campaign-event-card.md

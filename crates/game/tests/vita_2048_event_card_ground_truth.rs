@@ -210,3 +210,50 @@ fn every_event_that_authors_a_pass_objective_words_it() {
         "an Elimination BEAT_VALUE event words its target as points"
     );
 }
+
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_kind_line_and_photo_follow_the_class_the_way_the_executable_does() {
+    let Some(source) = source() else { return };
+    let (shell, _archives, _title) = boot::load_shell(&options(&source)).expect("the shell");
+    let find = |name: &str| {
+        shell
+            .campaign_events
+            .iter()
+            .find(|event| event.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+    };
+    // `GameMode_SpeedLapRace` with a lap count and a `BEAT M:SS` pass: the
+    // stopwatch icon and `TIME TRIAL` (`FUN_812b021a`, `M_BUTTONSHAPE` 0).
+    let timed = find("2048 - Event 3");
+    assert_eq!(timed.kind, frontend::EventIcon::SpeedLap);
+    assert_eq!(timed.card.kind_label.as_deref(), Some("TIME TRIAL"));
+    assert_eq!(
+        find("2048 - Event 1").card.kind_label.as_deref(),
+        Some("RACE")
+    );
+    let zone = find("2048 - Event 3-2");
+    assert_eq!(zone.card.kind_label.as_deref(), Some("ZONE"));
+    assert!(
+        zone.card
+            .photo
+            .as_deref()
+            .is_some_and(|photo| photo.ends_with(r"trackscreens\ZoneTower.gtf")),
+        "{:?}",
+        zone.card.photo
+    );
+    assert!(
+        shell
+            .campaign_events
+            .iter()
+            .any(|event| event.card.kind_label.as_deref() == Some("SPEED LAP")),
+        "the 40 shape-5/6 events"
+    );
+    assert!(
+        shell
+            .campaign_events
+            .iter()
+            .any(|event| event.card.kind_label.as_deref() == Some("COMBAT")),
+        "Elimination's own word"
+    );
+}

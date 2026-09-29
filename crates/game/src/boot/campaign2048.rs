@@ -80,14 +80,18 @@ pub(super) fn map_events(
             .map(|class| class.as_str());
         let mode = oag_2048::campaign::engine_mode(event).unwrap_or("unknown mode");
         // The disc's own four mode icons - see `EventIcon`'s own doc
-        // comment. Mirrors `oag_2048::campaign::engine_mode`'s own
-        // `laps == Some(0)` Speed Lap split rather than re-deriving it, so
-        // the two never disagree about which events are Speed Lap.
-        let kind = match event.kind {
-            oag_2048::campaign::EventKind::Zone => EventIcon::Zone,
-            oag_2048::campaign::EventKind::Elimination => EventIcon::Elimination,
-            oag_2048::campaign::EventKind::Race if event.laps == Some(0) => EventIcon::SpeedLap,
-            oag_2048::campaign::EventKind::Race => EventIcon::Race,
+        // comment. Chosen by the event's class the way the executable does:
+        // each `GameMode_*` constructor writes its own icon ordinal
+        // (`FUN_81061040`), `GameMode_SpeedLapRace` `3` - the stopwatch. That
+        // takes all 53 of its events, the 13 timed races (`"2048 - Event 3"`,
+        // laps and a `BEAT M:SS` pass) as well as the 40 with `laps == 0`.
+        let kind = match event.typedef_id {
+            oag_tables::mjolnir::campaign::typedef::RACE_A => EventIcon::SpeedLap,
+            _ => match event.kind {
+                oag_2048::campaign::EventKind::Zone => EventIcon::Zone,
+                oag_2048::campaign::EventKind::Elimination => EventIcon::Elimination,
+                oag_2048::campaign::EventKind::Race => EventIcon::Race,
+            },
         };
         let mut detail = format!("{circuit} / {}", mode.replace('_', " "));
         if let Some(class) = class {
@@ -295,8 +299,11 @@ fn event_card(
             .into_iter()
             .flat_map(char::to_uppercase)
             .collect();
+        // `FUN_81060744`'s `isZone` (`event+0x190 == 0`, the Zone class) picks
+        // the `Zone<Name>` file of the same circuit.
+        let zone = if kind == EventIcon::Zone { "Zone" } else { "" };
         format!(
-            r"Data\FE\NewImages\trackscreens\{head}{}.gtf",
+            r"Data\FE\NewImages\trackscreens\{zone}{head}{}.gtf",
             chars.as_str()
         )
     });
@@ -315,11 +322,20 @@ fn event_card(
                 .nth(class)
         })
         .map(str::to_string);
+    // `FUN_812b021a`: the line under the title, by the same ordinal. The
+    // timed class says `SPEED LAP` when `M_BUTTONSHAPE` is `5` or `6` and
+    // `TIME TRIAL` otherwise; Elimination's own word is `FE_GAMEMODE_ELIM`
+    // (`COMBAT`).
+    let shape = doc
+        .instance(event.instance_id)
+        .and_then(|instance| instance.field("M_BUTTONSHAPE"))
+        .and_then(oag_2048::campaign::Field::int);
     let kind_id = match kind {
         EventIcon::Race => "IG_HUD_RACE",
-        EventIcon::SpeedLap => "Speed Lap",
+        EventIcon::SpeedLap if matches!(shape, Some(5 | 6)) => "Speed Lap",
+        EventIcon::SpeedLap => "Time Trial",
         EventIcon::Zone => "Zone",
-        EventIcon::Elimination => "ER_ELIM",
+        EventIcon::Elimination => "FE_GAMEMODE_ELIM",
     };
     let instance = doc.instance(event.instance_id);
     let class_label = event.speed_class.and_then(|class| {

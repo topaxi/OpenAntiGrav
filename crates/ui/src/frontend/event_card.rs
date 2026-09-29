@@ -24,23 +24,30 @@
 //! arrows and the dot row - are literals in those functions, and the frame
 //! agrees with them to the pixel.
 //!
-//! **Chosen, not measured - no confidence score**: the mode subtitle's
-//! wording (the function that words it, `FUN_812b021a`, is unread), which
-//! medal glyph an earned tier draws, which key the pad uses for the
-//! change-craft button, the orange a refused craft turns Change craft (the
-//! original pulses orange/blue), and where the objective text starts (see
-//! [`Frontend::draw_objective_page`]). The panels are `Transparent2048` and
-//! the glyphs `White2048`, both authored.
+//! **Chosen, not measured - no confidence score**: which medal glyph an
+//! earned tier draws, which key the pad uses for the change-craft button, the
+//! orange a refused craft turns Change craft (the original pulses
+//! orange/blue), where the objective text starts (see
+//! [`Frontend::draw_objective_page`]), and where a forced craft's team logo
+//! and class icon sit relative to their item's centre. The panels are
+//! `Transparent2048` and the glyphs `White2048`, both authored.
 //!
-//! **Not drawn, by name**: page kinds `1`-`4` (`FUN_810540c4`,
-//! `FUN_81052fb4`, `FUN_81052810`, `FUN_810535fe`) - kind `1` is on every
-//! single-player card (`FUN_8105114a`), so it is a page the player can reach
-//! and it is blank; the elite-pass row (drawn only for two objective
-//! kinds, `FUN_81055150`'s `param_3[0xb6]`, unread); the weapon and craft
-//! class restriction icons (`FUN_81061db6`). The page count the original shows (three on
-//! the reference frame) comes from predicates over fields this build does
-//! not read, so this build shows the pages it can count: the objective page
-//! when the event authors a pass objective, and kind `1`.
+//! # Pages
+//!
+//! The card has the pages `CampaignEventCard_BuildPageList` (`0x8105114a`)
+//! builds, of which this build draws three: kind `0`, the pass objective
+//! (`FUN_81055150`); kind `1`, the leaderboard (`FUN_810540c4`), as it draws
+//! with no network - Personal tab selected, Friends and Global greyed; kind
+//! `4`, the rules (`FUN_810535fe`): class, laps, a forced craft and the craft
+//! classes the event allows, at the positions of the executable's own table.
+//! The card opens on the rules page when the player's craft is refused.
+//!
+//! **Not drawn, by name**: page kind `2` (trophy and cup art,
+//! `FUN_81052fb4`, image handles not located) and `3` (`FUN_81052810`, a
+//! runtime field, probably unreachable); the weapon callout of the rules page
+//! (`FUN_810626ce`); the elite-pass row of the objective page
+//! (`FUN_81055150`'s `param_3[0xb6]`); the personal record row of the
+//! leaderboard (this build keeps no per-event result beyond the medal).
 
 use crate::pointer::{Pointer, contains};
 

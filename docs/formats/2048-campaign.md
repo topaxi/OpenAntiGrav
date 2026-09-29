@@ -591,31 +591,63 @@ resolves what it says. Every word and picture comes off the disc:
 | Emblem | `NewImages\tracks\<track>.gxt` | 80 |
 | `PASS` + objective line | `FE_PASS` and `M_PASSOBJECTIVE`'s type/target through `GameModeObjective_FormatText`: `FINISH` -> `SP_Objective_Finish`, `POSITION` -> `ER_FINISH_1ST/2ND/3RD/IN_POS`, `KILLS` -> `FE_ELIMINATE_OPP` | 85 |
 | Lap glyph with the count | `callout/num_laps.gxt`, `M_NUMOFLAPS` | 80 |
-| Class glyph | `speedclass/{d,c,b,a,ap}_class.gxt` by `M_SPEEDCLASS` ordinal `0`-`4` | 70 (`d,c,b,a,ap` read as the ordinals' slowest-first order; frame 14 shows the C glyph and this build reads the same glyph and three laps for the one event with that title and a top-5 pass, so the mapping is right for whichever ordinal that event authors; the other four are unverified) |
+| Class glyph | `speedclass/{d,c,b,a,ap}_class.gxt` by `M_SPEEDCLASS` ordinal `0`-`4` | 85 (2026-09-29: `FUN_81061274` maps ordinals `0`-`4` to the handles `FrontEnd_LoadCardTextures` fills with exactly `d`, `c`, `b`, `a`, `ap`; the caption `FUN_812b26cc` reads ordinals `0` and `1` both as `C CLASS`) |
 | Three buttons | Launch, Back, Change craft (only when `M_PPLAYERSHIPMODELDATA` is unset) | 75 |
 
-**Not drawn, on purpose, with where to pick it up:** (the `BEAT_VALUE`
-objective line is drawn since 2026-09-29 - see `campaign-event-card.md`'s
-`GameModeObjective_FormatText`); page
-kinds `1`-`4` (`FUN_810540c4`, `FUN_81052fb4`, `FUN_81052810`, `FUN_810535fe`) -
-kind `1` is on every single-player card and is drawn blank; the elite-pass row
-and the restriction glyphs; the photo of a Zone event (no authored circuit).
-The original shows three page dots on the reference frame; this build counts the
-pages it can (`CampaignEventCard_BuildPageList`'s first two rules), so a card
-with an objective shows two. **The `<` / `>` arrows are page arrows, not lap
-arrows** - the earlier frame note said otherwise.
+**What is drawn (2026-09-29, second pass):** the objective page (kind `0`), the
+leaderboard page (kind `1`: three tabs and the no-network Personal panel,
+`FUN_810540c4`) and the rules page (kind `4`: class, laps, forced craft and
+the allowed craft classes, `FUN_810535fe`), in the order
+`CampaignEventCard_BuildPageList` puts them, so a card with an objective, a
+class and laps has the three dots of frame 14. The objective line is worded for
+all 80 events that author one (`BEAT M:SS` for `GameMode_SpeedLapRace`,
+`ZONE TARGET : n` for Zone, `SCORE n POINTS` for the rest - see
+`campaign-event-card.md`'s `GameModeObjective_FormatText`). The kind line
+under the title is the executable's (`GameMode_GetKindLabel`): `ZONE`,
+`COMBAT` for Elimination, `RACE`, and for the timed class `SPEED LAP` on
+button shapes `5`/`6` and `TIME TRIAL` otherwise - the 13 events with laps and
+a `BEAT M:SS` pass are `TIME TRIAL` with the stopwatch icon (the map draws
+`speed_mode` for the whole class, 53 events). Zone events draw the
+`Zone<Name>` photo of their circuit: they do author `M_TRACKDEF` (all ten
+resolve to a base circuit), so the earlier "Zone events author no circuit"
+claim was wrong. The card opens on the rules page when the current craft is
+refused.
 
-**Scale of the gaps:** (the 38 `BEAT_VALUE` events, 13 SpeedLapRace + 10 Zone +
-15 Elimination, are worded since 2026-09-29;) Zone events show no title, photo or emblem. **Locked
-nodes:** frame 14's README note says tapping a locked node opens its card, and
-`CampaignEventCard_HandleInput`'s map-tap branch gates only on `event+0x2d8 != 0`
-(`0x810f2164`); this build keeps refusing a locked event at the map. Reading
-what `event+0x2d8` is would settle which is right.
+**Not drawn, on purpose, with where to pick it up:** page kind `2` (trophy
+and cup art: the image handles behind `FUN_81052fb4` are not located; button
+shapes `1`, `2`, `9`-`11` and ten named events) and kind `3` (`FUN_81052810`,
+`FE_PASS_TO_UNLOCK`; its `event+0x7c` is a runtime field, probably
+unreachable); the weapon callout on the rules page (`FUN_810626ce`, so an
+event with weapons has its icons laid out a row short); the elite-pass row
+(`FUN_81055150`, event modes `3`/`4`) and the personal record row of kind `1`
+(no per-event result is kept beyond the medal). The `<` / `>` arrows are page
+arrows, not lap arrows.
 
-**Chosen, not measured (no confidence):** the kind line's wording (`RACE`,
-`Speed Lap`, `Zone`, `ELIMINATION` from the language table - the function that
-words it, `FUN_812b021a`, is unread), which medal glyph an earned tier draws,
-square as the pad's Change craft key, and the panels' opaque white.
+**Panel opacity and the PASS medal need no change.** Frame 14's body panel
+over the map's green blur reads `(219, 246, 212)` at `x=436`: the panels are
+translucent white (`Transparent2048`, `0xc0ffffff`) in the original too, and
+look opaque because the map behind them is blurred and paler than ours. The
+first dot is `Orange2048` `(221, 88, 11)` and the others `Blue2048` on both. The
+medal of an event not yet passed is the grey `Icon_no_pass_medal`; an earned
+one draws the pass or elite medal.
+
+**Locked nodes:** frame 14's README note says tapping a locked node opens its
+card, and `CampaignEventCard_HandleInput`'s map-tap branch gates only on
+`event+0x2d8 != 0` (`0x810f2164`); this build keeps refusing a locked event at
+the map. Reading what `event+0x2d8` is would settle which is right.
+
+**Chosen, not measured (no confidence):** the mode icon and kind line follow
+the class ordinal recovered from the constructors, but which of the two
+timed-class words shows is `M_BUTTONSHAPE`-driven and was only read, not
+watched; which medal glyph an earned tier draws; square as the pad's Change
+craft key; where the forced craft's team logo and class icon sit relative to
+the item centre; the `--` on the personal panel of an event with no result
+yet (drawn for every open or locked event, and not for a passed one, whose
+best result this build does not keep).
+
+**Capture a card:** `just play 2048 --until card:N:EVENT NAME --press cross
+--ticks 2 --screenshot out.png` opens the named event's card on page `N`
+(`--until card` alone is the selected event's first page).
 
 ## The launch: `crates/game/src/race/load/campaign.rs`
 

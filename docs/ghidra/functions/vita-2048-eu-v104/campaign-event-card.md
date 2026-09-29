@@ -129,16 +129,33 @@ callout and only its event branch was read.
 
 ### `CampaignEventCard_BuildPageList` - `0x8105114a`
 
-**Confidence: 70.** Fills `DAT_816c7804[]` (page kind per page) and
-`DAT_816c7830` (the count) for an event. Single-player (`event+0x1a0 & 4 == 0`):
-kind `0` (the objective page) first **when `event+0x1b0` is set** - the resolved
-`M_PASSOBJECTIVE` - then kind `1` always; kinds `2` (event mode ordinals
-`1`/`2`/`9`/`10`/`11`), `3` (`event+0x7c`) and `4` (any of: mode `!= 0`,
-`event+0x18c`, a restriction) are appended by predicates over fields this build
-does not read. Frame 14 shows three dots. **This build shows the pages it can
-count: kind `0` when the event authors a pass objective, and kind `1`.** Kind
-`1` (`FUN_810540c4`, three 142-wide tap zones at `x=471`/`613`/`755`, a
-leaderboard-shaped row) is unread and is drawn blank.
+**Confidence: 80** (raised 2026-09-29, when every field it reads was mapped
+against `GameModeBase_RegisterFields`, `0x812b0e2a`). Fills `DAT_816c7804[]`
+(page kind per page) and `DAT_816c7830` (the count) for an event, in this
+order for a single-player event (`event+0x1a0 & 4 == 0`, `m_options`):
+
+| Kind | When | The field it tests |
+| --- | --- | --- |
+| `0` objective | `event+0x1b0 != 0` | `m_PassObjective` (`SP.xml` `M_PASSOBJECTIVE`) |
+| `1` leaderboard | always | - |
+| `2` trophy or cup | `event+0x19c` is `1`, `2`, `9`, `10` or `11` | `m_buttonShape` (`M_BUTTONSHAPE`, `CanvasButtonShape`) - **not** a mode ordinal; the earlier "mode ordinal" reading was wrong |
+| `3` pass-to-unlock | `event+0x7c != 0` | not a registered field: a runtime `WOShipModelData*` (`FE_PASS_TO_UNLOCK` names its team and livery), so probably the resolved unlock reward. `M_PUNLOCKDATA` (`+0x310`) is authored on none of `SP.xml`'s 141 events, so **kind 3 is probably unreachable** - confidence under 50 |
+| `4` rules | the count of rule icons is non-zero | `+0x190 != 0` (class), `+0x18c` (`m_numOfLaps`), the weapon callout (`FUN_810626ce`), `+0x3c` (forced craft), and the class glyphs `GameModeBase_IsShipTypeAllowed` still allows when any of `+0x80..+0x83` is set |
+
+Frame 14 shows three dots on a card with an objective, a race class and three
+laps: kinds `0`, `1` and `4`. **This build builds `0`, `1` and `4`.** Kind `2`
+draws art this build has no handle for, so it is left out (the ten
+`"... - Event N-2/3"` trophy events and the cup shapes `9`-`11`); kind `3` is
+left out for the reason above. The card opens on the rules page when the
+player's current craft is refused (`DAT_816c782c`, `PlayerLivery` not
+allowed, no forced craft).
+
+Field offsets, from `GameModeBase_RegisterFields`: `+0x18c` `m_numOfLaps`,
+`+0x194` `m_speedClass`, `+0x198` `m_weaponSet`, `+0x19c` `m_buttonShape`,
+`+0x1a0` `m_options`, `+0x1b0` `m_PassObjective`, `+0x1c8` `m_EliteObjective`,
+`+0x1f0` `m_activeWeaponPads`, `+0x310` `m_pUnlockData`. `+0x190` is not
+registered: each `GameMode_*` constructor writes it (the mode-icon ordinal,
+`0` zone, `1` elimination, `2` race, `3` speed, see the vtable table below).
 
 ### `CampaignEventCard_DrawObjectivePage` - `0x81055150`
 
@@ -171,8 +188,8 @@ mode-icon ordinal its constructor writes to `+0x190` (`FUN_81061040` maps
 
 | Vtable base | Constructor | `+0x190` | Class | `+0x6c` |
 | --- | --- | --- | --- | --- |
-| `0x81516568` | `FUN_812c3d00` | `0` | `GameMode_ZoneRace` | `FUN_812c4a2a` (`0x812c4a2a`): type `2` -> `"%s : %d"` over `FE_ZONE_TARGET` (`ZONE TARGET : 15`) |
-| `0x815163f0` | `FUN_812bfe14` | `3` | `GameMode_SpeedLapRace` | `FUN_812c1011` (`0x812c1010`): type `2` -> `MP-Objective_Beat_1` (`BEAT %s`) over the target as `M:SS` from `FUN_8114f252` (centiseconds, saturating at `9:59`) |
+| `0x81516568` | `FUN_812c3d00` | `0` | `GameMode_ZoneRace` | `GameModeZoneRace_FormatObjective` (`0x812c4a2a`): type `2` -> `"%s : %d"` over `FE_ZONE_TARGET` (`ZONE TARGET : 15`) |
+| `0x815163f0` | `FUN_812bfe14` | `3` | `GameMode_SpeedLapRace` | `GameModeSpeedLapRace_FormatObjective` (`0x812c1010`): type `2` -> `MP-Objective_Beat_1` (`BEAT %s`) over the target as `M:SS` from `Time_SplitCentiseconds` (centiseconds, saturating at `9:59`) |
 | `0x81516340` | `FUN_812be628` | `1` | `GameMode_EliminatorRace` | default (`return 0`) |
 | `0x8151611c`, `0x815161cc`, `0x815164b8` | `FUN_812bb914`, `FUN_812bd128`, `FUN_812c377a` | `2`, `2`, `4` | the other race classes | default |
 
@@ -187,6 +204,88 @@ for the metric `2048-campaign.md` had left unidentified: the original words its
 `25`-`100` targets as **points scored**, confidence 80 (the class was pinned by
 its constructor and the vtable stub was disassembled; what the sim counts as a
 point is still unread). Confidence for the wording table: 85.
+
+### `CampaignEventCard_DrawLeaderboardPage` - `0x810540c4`
+
+**Confidence: 75.** Page kind `1`, `void (float dx, float dy, event)`. Three
+tabs of 138x44 at `x=471`/`613`/`755`, `y=186` (`FE_PERSONAL`, `FE_FRIENDS`,
+`FE_GLOBAL`, `NEOSANS_BOLD` at `0.7`, centred, `y+13`); the selected tab is
+`Orange2048`, the others `Blue2048`, or `Grey2048` when
+`FUN_81258f8e` (the network check `BuildPageList` also uses) is `0`, with the
+label dimmed to `0x40ffffff`. With no network `BuildPageList` forces the
+Personal tab (`DAT_816c7840 = 1`), whose body is a `Grey2048` bar
+(`x=471..893`, `y=234..271`) with `FE_CURRENT_BEST` in white at `(682, 243)`,
+and, when the event has no record, `"--"` (`0x814274d4`) centred at
+`(682, 332)`. With a record it draws the player's best (`FUN_8106ed02`
+fields: name, time or count, XP) - **not drawn by this build**: it keeps no
+per-event result beyond the medal. The online tabs draw `FE_NO_RECORDS` or a
+row list (`x=511..893`, rows 21 apart, up to eight) - not drawn: no network.
+
+### `CampaignEventCard_DrawRulesPage` - `0x810535fe`
+
+**Confidence: 75.** Page kind `4`. Up to six items placed by a table at
+`0x8151c9c8` (copied into a local; item `k` of `n` is at row `n-1`, column
+`k`, `(x, y)` pairs; the five-item row leaves the lower left empty as
+authored): class glyph (`FUN_81061274`, 64 unit quad, caption
+`Speed_Class_{C,C,B,A,A_Plus}_0` for ordinals `0`-`4` by `FUN_812b26cc`),
+laps (`FUN_81061102`, `Callout_Lap`/`Callout_Laps`), the weapon callout
+(`FUN_810626ce`, weapon icons composed from `m_weaponSet` and
+`m_activeWeaponPads`: **not drawn by this build**, so an event with weapons
+gets the rest of its icons in a different row), the forced craft
+(`FUN_81061808`: team logo and class icon, caption `"%s %s"` of team and
+livery labels), then a glyph and `FE_SHIP_COMBAT_ONLY`/`_AGILITY_ONLY`/
+`_SPEED_ONLY` for each class still allowed when any prevent flag is set
+(`FUN_81061db6`). Captions are `NEOSANS_BOLD` at `0.6`, centred at `y+38`,
+140 wide. The glyphs are `Team_Logos/Icon_Ship_{Combat,Agility,Racer}_1col`
+(`FUN_81061db6`; `Icon_Ship_Racer_1col` for speed), the class glyphs
+`speedclass/{d,c,b,a,ap}_class` (`FUN_81061274`, confirming the ordinal order),
+the team logos `Team_Logos/Icon_Team_{Feisar,AG-SYS,Qirex,Auricom,Pirhana}`
+and the class icons `Icon_Ship_{Combat,Agility,Racer}` with `_proto` variants
+(`FUN_81061808`). **Chosen, not measured**: where `FUN_81061808`'s two quads
+sit relative to the item centre (vector-register arithmetic, not decoded);
+this build places the logo left and the class icon right of it.
+
+### `FrontEnd_LoadCardTextures` - `0x8105dcb8`
+
+**Confidence: 80.** Loads every texture the card and the HD-era glyph helpers
+draw with, into the `DAT_816c87xx`/`DAT_816c88xx` handles. The class glyphs at
+`0x816c87c8..d8` are `d_class`, `c_class`, `b_class`, `a_class`, `ap_class`
+in that order; the four mode icons at `0x816c87e0..ec` are `combat_mode`,
+`speed_mode`, `race_mode`, `zone_mode`; `0x816c8770..80` the five native team
+logos, `0x816c8784/88/8c` the `_1col` class glyphs and `0x816c8790/94/98` the
+coloured class icons.
+
+### `CampaignEventCard_DrawTrophyPage_q` - `0x81052fb4`
+
+**Confidence: 65.** Page kind `2`. For the ten events named
+`"2048 - Event 2-2"`, `"2048 - Event 3-2"`, `"2048 - Event 5-2"`,
+`"2049 - Event 2-3"`, `"2049 - Event 5-3"`, `"2049 - Event 6-3"`,
+`"2050 - Event 2-4"`, `"2050 - Event 5-4"`, `"2050 - Event 6-4"` it draws
+`TROPHY_<year>_<n>_1` (header) and `TROPHY_<year>_<n>_2` (callout) with a
+trophy image handle (`DAT_816c76fc..`), and for button shapes `9`/`10`/`11`
+`Cup_Name_<year>`/`Cup_Callout_<year>`. For every other event it draws
+nothing. **Not drawn by this build**: the trophy image handles are not
+located, and the page is left out of the page list.
+
+### `CampaignEventCard_DrawUnlockPage_q` - `0x81052810`
+
+**Confidence: 60.** Page kind `3`: `FE_PASS_TO_UNLOCK` and a panel naming the
+craft `event+0x7c` points at. Left out, see `BuildPageList`.
+
+### `GameMode_GetKindLabel` - `0x812b021a`
+
+**Confidence: 85.** The line under the card's title, by `event+0x190`: `0`
+the literal key `ZONE`, `1` `FE_GAMEMODE_ELIM` (`COMBAT` in English), `2`
+`IG_HUD_RACE`, `3` `SPEED LAP` when `event+0x19c` (`m_buttonShape`) is `5` or
+`6` and `TIME TRIAL` otherwise, anything else empty. So `GameMode_SpeedLapRace`'s
+53 events are 40 `SPEED LAP` (shapes `5`, `6`) and 13 `TIME TRIAL`, and
+Elimination's line reads `COMBAT`, not `ELIMINATION`.
+
+### `Time_SplitCentiseconds` - `0x8114f252`
+
+**Confidence: 85.** `(centiseconds, char *m_ss, char *cc)`: writes `M:SS` and
+the hundredths, saturating at `9:59` and reading the `0xffff` "no time"
+sentinel as zero.
 
 ### `CampaignEventCard_DrawTrackPhoto` - `0x81060744`
 
