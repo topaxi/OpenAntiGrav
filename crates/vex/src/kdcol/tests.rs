@@ -5,12 +5,17 @@
 
 use super::*;
 
+/// [`build_with`] in 2048's own 24-byte node layout.
+fn build(surfaces: &[u8]) -> Vec<u8> {
+    build_with(surfaces, NodeLayout::Wide)
+}
+
 /// Builds a file with one internal node, two leaves and `surfaces` triangles.
 ///
 /// The geometry is a fan around the origin, which is enough for the reader:
 /// nothing here checks that a triangle is well formed, only that every index
 /// names something and every section closes.
-fn build(surfaces: &[u8]) -> Vec<u8> {
+fn build_with(surfaces: &[u8], layout: NodeLayout) -> Vec<u8> {
     let triangles = surfaces.len();
     let vertices = triangles + 2;
     let mut out = Vec::new();
@@ -20,15 +25,24 @@ fn build(surfaces: &[u8]) -> Vec<u8> {
     // Two leaves under one root, splitting the leaf index array in half.
     let split = triangles / 2;
     out.extend_from_slice(SECTION_TAG);
-    out.extend_from_slice(&(NODE_LEN as u32).to_le_bytes());
+    out.extend_from_slice(&(layout.len() as u32).to_le_bytes());
     out.extend_from_slice(&3u32.to_le_bytes());
     let node = |low: i32, high: i32, axis: u32, at: f32, count: usize, first: usize| {
         let mut n = Vec::new();
         n.extend_from_slice(&low.to_le_bytes());
         n.extend_from_slice(&high.to_le_bytes());
-        n.extend_from_slice(&axis.to_le_bytes());
-        n.extend_from_slice(&at.to_bits().to_le_bytes());
-        n.extend_from_slice(&(0x000b_0000u32 | count as u32).to_le_bytes());
+        match layout {
+            NodeLayout::Wide => {
+                n.extend_from_slice(&axis.to_le_bytes());
+                n.extend_from_slice(&at.to_bits().to_le_bytes());
+                n.extend_from_slice(&(0x000b_0000u32 | count as u32).to_le_bytes());
+            }
+            NodeLayout::Packed => {
+                n.push(axis as u8);
+                n.extend_from_slice(&(count as u16).to_le_bytes());
+                n.extend_from_slice(&at.to_bits().to_le_bytes());
+            }
+        }
         n.extend_from_slice(&(first as u32).to_le_bytes());
         n
     };
@@ -79,6 +93,68 @@ fn it_reads_a_tree_a_leaf_array_and_a_soup() {
     assert_eq!(decoded.mesh.triangles.len(), 4);
     assert_eq!(decoded.mesh.vertices.len(), 6);
     assert_eq!(decoded.mesh.surfaces, vec![2, 4, 7, 2]);
+}
+
+/// The Omega Collection's 19-byte node decodes to the same tree as 2048's
+/// 24-byte one: the same children, axes, split positions, runs and leaf
+/// starts, and no `unknown` half-word because the packed record has none.
+#[test]
+fn a_packed_node_decodes_to_the_same_tree_as_a_wide_one() {
+    let wide = parse(&build(&[2, 4, 7, 2])).expect("the wide fixture parses");
+    let packed =
+        parse(&build_with(&[2, 4, 7, 2], NodeLayout::Packed)).expect("the packed fixture parses");
+    assert_eq!(wide.layout, NodeLayout::Wide);
+    assert_eq!(packed.layout, NodeLayout::Packed);
+    assert_eq!(wide.nodes.len(), packed.nodes.len());
+    for (w, p) in wide.nodes.iter().zip(&packed.nodes) {
+        assert_eq!(
+            (
+                w.low,
+                w.high,
+                w.axis,
+                w.split,
+                w.triangle_count,
+                w.first_leaf
+            ),
+            (
+                p.low,
+                p.high,
+                p.axis,
+                p.split,
+                p.triangle_count,
+                p.first_leaf
+            )
+        );
+        assert_eq!(w.unknown, Some(0x000b));
+        assert_eq!(p.unknown, None);
+    }
+    assert_eq!(wide.leaves, packed.leaves);
+    assert_eq!(wide.mesh, packed.mesh);
+}
+
+/// The two strides are the only ones read. 20 is neither, and is refused by
+/// name rather than walked as if it were 19 or 24.
+#[test]
+fn it_refuses_a_node_stride_that_is_neither_layout() {
+    let mut broken = build(&[2, 4]);
+    let at = broken
+        .windows(4)
+        .position(|w| w == (NODE_LEN as u32).to_le_bytes())
+        .expect("the node stride field is in there");
+    broken[at..at + 4].copy_from_slice(&20u32.to_le_bytes());
+    assert_eq!(parse(&broken), Err(Error::BadNodeStride { stride: 20 }));
+}
+
+/// A packed file that lies about its node count runs off the array rather
+/// than resynchronising on the next tag: the file is refused, not guessed at.
+#[test]
+fn a_packed_file_with_a_short_node_array_is_refused() {
+    let file = build_with(&[2, 4], NodeLayout::Packed);
+    // magic, version, tag and stride are 16 bytes; the node count follows.
+    let at = 16;
+    let mut broken = file.clone();
+    broken[at..at + 4].copy_from_slice(&4u32.to_le_bytes());
+    assert!(parse(&broken).is_err());
 }
 
 /// The root splits and the two below it hold triangles - the distinction the

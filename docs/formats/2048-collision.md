@@ -43,7 +43,7 @@ struct KdNode {            // 24 bytes
     u32   axis;            // 0/1/2, all-ones on a leaf
     f32   split;           // where on that axis; 0 on a leaf
     u16   triangle_count;  // leaf only, 0 on an internal node
-    u16   unknown;         // 0x000b on every node of every file
+    u16   unknown;         // one value per file, the same on all its nodes: 0x000b on altima
     u32   first_leaf;      // where this leaf's run starts in `leaves`
 };
 
@@ -185,9 +185,47 @@ it, and hands the caller the soup. It is read anyway because a format page that
 cannot be checked against the file is a format page that rots - the leaf-tiling
 invariant above is what that buys.
 
-The **`unknown` half-word** at each node's `+0x12` is `0x000b` on every node of
-every file, internal and leaf alike, so nothing here distinguishes a field from
-a constant and it is carried rather than named.
+The **`unknown` half-word** at each node's `+0x12` is **one value per file**,
+the same on every node of it, internal and leaf alike, so nothing here
+distinguishes a field from a constant and it is carried rather than named. An
+earlier revision of this page said `0x000b` on every node of every file; that
+is altima's value and only altima's. Across the ten base-package circuits it is
+`0x000b` (altima), `0x0033` (arena, park, square), `0x0045` (bridge), `0x006c`
+(cathedral), `0x0084` (mall), `0x005f` (sol), `0x001c` (subway) and `0x003b`
+(tower), measured 2026-09-29 - a per-file quantity, plausibly a property of the
+tree the exporter built.
+
+## Omega Collection: a 19-byte node, and nothing else moved
+
+The PS4 Omega Collection's 38 `track_col.col` files (its 22 circuits and the
+ten `environments2048` ones, forwards and reversed) state a node stride of
+**19**, and in every one the next `"----"` sits at exactly `0x14 + 19 * N`.
+Everything after the node array is this container unchanged: on
+`environments2048\altima` it is **byte-identical** to 2048's own Vita file
+(415,286 bytes: leaf indices, bounds, triangle soup, final tag) and the file is
+smaller by exactly `5 * 27,199`. The nine other shared circuits were
+re-exported (different node counts, or the same count with a different soup),
+so they are not comparable byte for byte. **Confidence 85** for the layout:
+
+```c
+struct KdNodePacked {      // 19 bytes, no alignment
+    i32   low;             // child index, -1 on a leaf
+    i32   high;
+    u8    axis;            // 0/1/2, 0xff on a leaf
+    u16   triangle_count;
+    f32   split;
+    u32   first_leaf;
+};                         // the `unknown` half-word is not stored
+```
+
+against 2048's nodes on altima the children, axis, triangle count and leaf
+start agree on all 27,199 nodes, and the split on 22,582 exactly and on the
+other 4,617 to one ulp (the tree was rebuilt); every one of the 38 files' leaf
+runs tiles its leaf array exactly. `oag_vex::kdcol` reads both as
+`NodeLayout::Wide` and `NodeLayout::Packed`.
+Reproducers: `crates/vex/examples/omega_col_probe.rs` and
+`crates/game/tests/omega_race_ground_truth.rs`. See
+[omega-status.md](omega-status.md#racing-a-race-starts-on-this-titles-own-data).
 
 ## What a race does with it
 

@@ -173,6 +173,31 @@ about a second, decompression-shaped problem on top of it.
 
 ## Open
 
+- **Racing starts, and the node table is the next thing to read (2026-09-29,
+  `omega-race`).** On a corrected extraction `oag-game <dir> --race` loads
+  Omega's own spline (39 of 39 `track.vex` files), collision (a 19-byte k-d node,
+  38 of 38), hull and circuit geometry (2048's `.rcsmodel` with 64-bit pointers,
+  all 1,272 entries) and textures, and the craft drives the circuit. What it
+  does **not** read: the PS4 node table (node-bound scenery is drawn at its
+  node-local position - a prop sits under the camera on the first frame; the
+  header is the Vita's with 8-byte pointers, 17 nodes and their bind matrices
+  at `+0x120` on `ag_systems\ship.rcsmodel`), the skeleton and clip
+  (`property tag ends at 3496925615 but the file is 57856 bytes`), lightmaps
+  (291 materials name one on `tech_de_ra`), `track.final.pvs`, Omega's `.bnk`
+  banks (version word `1145588546`, the reader expects `3`), and the
+  `.EnvSettings` schema (read through 2048's reader; the patch copy has no
+  HDR/bloom block). Evidence and numbers:
+  [`omega-status.md`](../../docs/formats/omega-status.md#racing-a-race-starts-on-this-titles-own-data).
+- **The block-data-location questions below were an extraction bug, not a
+  format.** A short read in the extraction tool zeroed most of every entry
+  (`omega-status.md`, "An extraction-tool bug"); the corrected copy at
+  `data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/` has 60,151 of
+  `tech_de_ra\track.vex`'s 133,888 bytes different from `data/extracted/ps4/`'s.
+  **Promoting it is the maintainer's decision** and it shifts every census
+  figure the Omega docs quote; until then `crates/game/tests/omega_race_ground_truth.rs`
+  skips on `data/extracted/ps4` (loudly, even under `OAG_REQUIRE_GAME_DATA`) and
+  runs against `OAG_OMEGA_SOURCE=<dir>`.
+
 - **Block data location - corrected and narrower, still not closed.** The
   "roughly a third to a half" figure this section used to carry was itself
   measured wrong: `psarc_sweep`'s first-byte check counted several real,
@@ -252,6 +277,21 @@ about a second, decompression-shaped problem on top of it.
   [2048s-vita-eboots-are-imported-re-not-started.md](2048s-vita-eboots-are-imported-re-not-started.md).
 
 ## Next Steps
+
+- **Read the PS4 node table** (`oag_rcs::rcsmodel::psp2::nodes` with `u64`
+  offsets: node count `u16` at `+0x10`, name hashes at the pointer in `+0x18`,
+  ids at `+0x20`, bind matrices at `+0x28`, mesh count `u16` at `+0x38`, mesh
+  table at `+0x40` - all read off `ag_systems\ship.rcsmodel`, none coded), then
+  the skeleton and clip, so scenery is placed and moves. 3-4 hours if the mesh
+  objects are the Vita's with wider pointers, a day if not. The most visible
+  defect in an Omega race today.
+- **Bind the `lightmap` sampler** (`oag_rcs::rcsmodel::psp2::material::read_ps4`
+  already ranks it last; the mesh's second UV set carries its coordinate).
+- **Pair the reversed circuits' collision**: `kdcol::sibling_name` matches only
+  `track.vex`; Omega's is `track_reversed.vex` beside `track_col_reversed.col`.
+- **Decide the mount order with a capture, not a guess**: `oag_omega::EXTRA_CANDIDATES`
+  puts the patch ahead of the base because the patch's `.EnvSettings` copies are
+  newer (chosen, not measured).
 
 - Resolve why the "garbage" bucket exists (see Open, first item) - real,
   substantial bytes present at an offset with no arithmetic problem, that

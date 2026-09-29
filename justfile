@@ -328,19 +328,18 @@ hash-images:
 # sixteen) - twelve of nineteen parse this lane, the rest failing per-row
 # the same tolerant way a bad HD grid already does.
 #
-# **Racing is out of scope.** Omega's `.gnf` textures have no reader in this
-# project and its circuit files are a mix of plain `.vex` and an unread
-# `.final.*` family; `oag_title::RaceDefaults`'s otherwise-mandatory fields
-# are real-but-unread placeholders (`crates/omega/src/race.rs`). Starting a
-# race from the menus already reports the failure by name and returns to the
-# menu rather than crashing - the same generic recovery every title's own
-# bad load takes (`Session::finish_race_loading`) - so nothing Omega-specific
-# was added for that. The one crash this lane found is not Omega-specific
-# either: `--screenshot --press start,cross` (any title) skips straight
-# through to a race hand-off once the front end finishes, and an unparseable
-# default circuit takes the whole process down rather than reporting and
-# stopping - a pre-existing gap in the headless capture path, out of scope
-# here. See docs/formats/omega-status.md for what reads and what does not.
+# **A race starts**, on a corrected extraction only (2026-09-29, `omega-race`):
+# real spline, collision, hull and textured circuit geometry, see
+# docs/formats/omega-status.md. `data/extracted/ps4` is the short-read copy that
+# page describes, and a race fails there on `tech_de_ra\track.vex` having no
+# `WO Track` node; point at a corrected pair instead:
+#
+#     OAG_OMEGA_SRC=data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed \
+#         just play omega --race --no-audio --screenshot out.png
+#
+# A debug build spends about three minutes decoding the circuit's ~460 textures.
+# Not read: the node table (scenery drawn at its node-local position),
+# lightmaps, the sound banks.
 #
 # RACE REMIX itself - track from one title, craft from another, picked live
 # ([ADR-0034](docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md)) -
@@ -400,7 +399,7 @@ play *ARGS:
             args=("$src" "${args[@]:1}")
             ;;
         omega|omega-collection|omega-ps4-eu)
-            src="data/extracted/ps4"
+            src="${OAG_OMEGA_SRC:-data/extracted/ps4}"
             # Omega ships as a base `.pkg` plus a mandatory day-one patch, two
             # sibling directories under `$src` - `omega-eu` and
             # `omega-eu-patch`. The patch is not optional: its own
@@ -408,8 +407,8 @@ play *ARGS:
             # at all (`crates/omega/src/lib.rs`'s own `DATA_CANDIDATES` doc),
             # so a base-only extract refuses to open rather than booting a
             # front end with no menu XML in it.
-            if [ ! -f "$src/omega-eu-patch/uroot/data09.psarc" ]; then
-                echo "$src/omega-eu-patch/uroot/data09.psarc is missing." >&2
+            if ! find "$src" -maxdepth 3 -path '*/uroot/data09.psarc' 2>/dev/null | grep -q .; then
+                echo "$src has no */uroot/data09.psarc (the patch's front end)." >&2
                 if [ -f "data/images/omega-ps4-eu.pkg" ] || [ -f "data/images/omega-ps4-eu-patch.pkg" ]; then
                     echo "The package(s) are there but not extracted. Decrypt and" >&2
                     echo "unpack both into $src/omega-eu and $src/omega-eu-patch -" >&2

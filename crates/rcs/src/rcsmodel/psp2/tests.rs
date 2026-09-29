@@ -1,5 +1,6 @@
 //! What the 2048 `.rcsmodel` reader in [`super`] is asserted to do.
 
+use super::material::PS4_SAMPLER_STRIDE;
 use super::*;
 
 /// Builds an image with one CPU section, one GPU section and `submeshes`
@@ -320,4 +321,156 @@ fn a_pair_that_does_not_check_out_is_counted_not_decoded() {
     let decoded = parse(&file).expect("the container still parses");
     assert!(decoded.submeshes.is_empty());
     assert_eq!(decoded.unpaired_pointers, 2);
+}
+
+/// The PS4 Omega Collection's record puts its two buffer pointers
+/// [`PS4_BUFFER_POINTER_GAP`] apart, and is found on its own like the other
+/// two shapes. On `ag_systems\ship.rcsmodel` nine of the twelve records are this
+/// shape and a reader without it found the other three only.
+#[test]
+fn a_ps4_gap_submesh_is_found_on_its_own() {
+    let decoded = parse(&build_with_gaps(&[(9, 4, 24, PS4_BUFFER_POINTER_GAP)])).expect("parses");
+    assert_eq!(decoded.submeshes.len(), 1);
+    assert_eq!(decoded.submeshes[0].stride, 24);
+    assert_eq!(decoded.unpaired_pointers, 0);
+}
+
+/// All three shapes in one file, which is what a PS4 ship is: a mirrored twin
+/// in the Vita's 184-byte shape beside the 32-byte ones. None of them may
+/// shift where the scan resumes for the next.
+#[test]
+fn the_three_gaps_mix_without_desynchronising() {
+    let specs = [
+        (9, 4, 20, SKY_BUFFER_POINTER_GAP),
+        (6, 3, 28, PS4_BUFFER_POINTER_GAP),
+        (12, 5, 24, PS4_BUFFER_POINTER_GAP),
+        (6, 3, 28, BUFFER_POINTER_GAP),
+    ];
+    let decoded = parse(&build_with_gaps(&specs)).expect("parses");
+    let counts: Vec<(usize, usize)> = decoded
+        .submeshes
+        .iter()
+        .map(|m| (m.indices.len(), m.positions.len()))
+        .collect();
+    assert_eq!(counts, vec![(9, 4), (6, 3), (12, 5), (6, 3)]);
+    assert_eq!(decoded.unpaired_pointers, 0);
+}
+
+/// The header word that says a file is PS4's. A Vita file has `0` there and
+/// the fixture builder writes none, so the plain fixtures are Vita.
+#[test]
+fn a_ps4_file_is_told_from_a_vita_one_by_its_header_word() {
+    let mut file = build(&[(3, 3, 24)]);
+    assert!(!is_ps4(&file));
+    file[4..8].copy_from_slice(&PS4_HEADER_WORD.to_le_bytes());
+    assert!(is_ps4(&file));
+    assert!(!is_ps4(&file[..6]), "a truncated header is not PS4");
+    // The container reader does not care which it is.
+    assert!(parse(&file).is_ok());
+}
+
+/// Appends one PS4 sampler entry at `at`: the name hash, then the `0x12`
+/// word every measured entry carries, then a pointer [`PS4_SAMPLER_STRIDE`]
+/// apart from the next entry's.
+fn put_sampler(cpu: &mut [u8], at: usize, hash: u32, pointer: usize) {
+    cpu[at..at + 4].copy_from_slice(&hash.to_le_bytes());
+    cpu[at + 4..at + 8].copy_from_slice(&0x12u32.to_le_bytes());
+    cpu[at + 0x18..at + 0x20].copy_from_slice(&(pointer as u64).to_le_bytes());
+}
+
+/// Writes `text` NUL-terminated at `at` and returns where it starts, which is
+/// what a pointer to it holds. A NUL sits before it, as in the real pool.
+fn put_str(cpu: &mut [u8], at: usize, text: &str) -> usize {
+    cpu[at..at + text.len()].copy_from_slice(text.as_bytes());
+    at
+}
+
+/// A material whose first-listed texture is not its diffuse - the road on
+/// `tech_de_ra`, `track_surface_displacement2out`: a displacement map, then
+/// `Diffuse`, `Normal` and the per-object `lightmap`. The diffuse comes first
+/// after the read, the unnamed hash next, the other known roles last.
+#[test]
+fn a_ps4_material_lists_its_diffuse_texture_first() {
+    use crate::rcsmaterial::name_hash;
+    let mut cpu = vec![0u8; 0x400];
+    let name = put_str(&mut cpu, 0x300, "data/materials/road.rcsmaterial");
+    let displacement = put_str(&mut cpu, 0x330, "data/tex/displacement.gnf");
+    let diffuse = put_str(&mut cpu, 0x350, "data/tex/diffuse.gnf");
+    let normal = put_str(&mut cpu, 0x370, "data/tex/normal.gnf");
+    let lightmap = put_str(&mut cpu, 0x390, "data/tex/lightmap-lmap.gnf");
+    // The material's own name pointer, then four entries a stride apart.
+    cpu[0x08..0x10].copy_from_slice(&(name as u64).to_le_bytes());
+    let first = 0x20;
+    put_sampler(&mut cpu, first, 0xdead_beef, displacement);
+    put_sampler(
+        &mut cpu,
+        first + PS4_SAMPLER_STRIDE,
+        name_hash("Diffuse"),
+        diffuse,
+    );
+    put_sampler(
+        &mut cpu,
+        first + 2 * PS4_SAMPLER_STRIDE,
+        name_hash("Normal"),
+        normal,
+    );
+    put_sampler(
+        &mut cpu,
+        first + 3 * PS4_SAMPLER_STRIDE,
+        name_hash("lightmap"),
+        lightmap,
+    );
+
+    let materials = material::read_ps4(&cpu);
+    assert_eq!(materials.len(), 1);
+    assert_eq!(materials[0].name, "data/materials/road.rcsmaterial");
+    assert_eq!(
+        materials[0].textures,
+        [
+            "data/tex/diffuse.gnf",
+            "data/tex/displacement.gnf",
+            "data/tex/normal.gnf",
+            "data/tex/lightmap-lmap.gnf",
+        ]
+    );
+    assert_eq!(materials[0].diffuse_texture(), Some("data/tex/diffuse.gnf"));
+}
+
+/// Two materials are two entries in ascending address order, and each one's
+/// scan stops at the next one's name pointer - a texture belongs to the
+/// material above it, never the one below.
+#[test]
+fn ps4_materials_are_taken_in_address_order_and_do_not_share_textures() {
+    let mut cpu = vec![0u8; 0x400];
+    let first = put_str(&mut cpu, 0x300, "data/materials/a.rcsmaterial");
+    let second = put_str(&mut cpu, 0x330, "data/materials/b.rcsmaterial");
+    let tex_a = put_str(&mut cpu, 0x360, "data/tex/a.gnf");
+    let tex_b = put_str(&mut cpu, 0x380, "data/tex/b.gnf");
+    cpu[0x08..0x10].copy_from_slice(&(first as u64).to_le_bytes());
+    put_sampler(&mut cpu, 0x20, 0xdead_beef, tex_a);
+    cpu[0x80..0x88].copy_from_slice(&(second as u64).to_le_bytes());
+    put_sampler(&mut cpu, 0xa0, 0xdead_beef, tex_b);
+
+    let materials = material::read_ps4(&cpu);
+    let names: Vec<&str> = materials.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "data/materials/a.rcsmaterial",
+            "data/materials/b.rcsmaterial"
+        ]
+    );
+    assert_eq!(materials[0].textures, ["data/tex/a.gnf"]);
+    assert_eq!(materials[1].textures, ["data/tex/b.gnf"]);
+}
+
+/// A pointer into the middle of a path is not a material: the byte before a
+/// real pointer's target is NUL, and without that check a truncated
+/// `.rcsmaterial` suffix passes as a shorter, wrong name.
+#[test]
+fn a_pointer_into_the_middle_of_a_path_is_not_a_material() {
+    let mut cpu = vec![0u8; 0x100];
+    put_str(&mut cpu, 0x80, "data/materials/real.rcsmaterial");
+    cpu[0x08..0x10].copy_from_slice(&(0x80u64 + 5).to_le_bytes());
+    assert!(material::read_ps4(&cpu).is_empty());
 }
