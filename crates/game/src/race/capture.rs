@@ -789,7 +789,9 @@ pub fn capture(
                         race.finished(),
                         race.sim.world.laps_target(),
                     ),
-                    tick: standing.finish_tick.unwrap_or(race.sim.world.tick),
+                    tick: oag_race::race_clock_ticks(
+                        standing.finish_tick.unwrap_or(race.sim.world.tick),
+                    ),
                     best_lap_ticks: standing.best_lap_ticks,
                     // No campaign cell is selected for a headless capture
                     // either - see `RaceStage::observation`'s own doc.
@@ -841,7 +843,7 @@ pub fn capture(
                 // is already showing the count.
                 if let (Some((model, widget)), true) = (
                     countdown_model,
-                    RaceState::thrust_gated(readout.race_ticks) && !scene.draws_gantry(),
+                    RaceState::thrust_gated(race.sim.world.tick) && !scene.draws_gantry(),
                 ) {
                     match crate::hud::Countdown::new(&device, &queue, format, model, &widget) {
                         Ok(mut countdown) => countdown.draw(
@@ -849,7 +851,7 @@ pub fn capture(
                             &queue,
                             &mut encoder,
                             &hud_view,
-                            readout.race_ticks as f32 / 60.0,
+                            race.sim.world.tick as f32 / 60.0,
                             hud_viewport,
                             (width, height),
                         ),

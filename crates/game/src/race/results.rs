@@ -69,7 +69,10 @@ impl Race {
                     slot: u8::try_from(slot).unwrap_or(u8::MAX),
                     place: places[slot],
                     lap: ship.standing.lap,
-                    finish_tick: ship.standing.finish_tick,
+                    // The racing clock: the board prints this as the craft's
+                    // race time, and the original's own clock starts on the
+                    // release, not on the grid.
+                    finish_tick: ship.standing.finish_tick.map(oag_race::race_clock_ticks),
                     // The craft's own clock rather than `RaceState`'s, which
                     // only times slot 0 - the two agree there, which is what
                     // `crates/game/tests/lap_times_ground_truth.rs` asserts.
@@ -80,7 +83,7 @@ impl Race {
         self.view.results = Some(scoreboard::build(
             &crafts,
             self.sim.world.laps_target(),
-            self.sim.world.tick,
+            oag_race::race_clock_ticks(self.sim.world.tick),
         ));
     }
 }

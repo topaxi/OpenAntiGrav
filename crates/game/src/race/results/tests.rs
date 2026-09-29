@@ -39,7 +39,24 @@ fn the_board_is_taken_on_the_tick_the_race_finishes() {
         .expect("the race finished, so it has a board");
     assert_eq!(board.rows.len(), usize::from(race.sim.world.ship_count));
     assert_eq!(board.laps_target, race.sim.world.laps_target());
-    assert_eq!(board.tick, race.sim.world.tick);
+    assert_eq!(board.tick, oag_race::race_clock_ticks(race.sim.world.tick));
+}
+
+/// The board's times are the racing clock: the original's clocks start on the
+/// release, so a finish 5,000 ticks into the race is 5,000 minus the
+/// countdown on the board, for the player and every other row alike.
+#[test]
+fn a_finish_time_excludes_the_start_line_countdown() {
+    let mut race = race_with_a_grid();
+    finish(&mut race, 0, 5_000);
+    finish(&mut race, 2, 5_100);
+    race.sim.world.primary_race_mut().finished = true;
+    race.capture_results();
+    let board = race.results().expect("a board");
+
+    let time = |slot| board.rows.iter().find(|row| row.slot == slot)?.finish_tick;
+    assert_eq!(time(0), Some(5_000 - oag_race::COUNTDOWN_TICKS));
+    assert_eq!(time(2), Some(5_100 - oag_race::COUNTDOWN_TICKS));
 }
 
 /// The field is still moving when the player crosses. A board that kept

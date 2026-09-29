@@ -72,19 +72,22 @@ impl TimeTrialPace {
     /// "What the tier itself is, closed 2026-09-28" section for the full
     /// decompile this argument is checked against.
     ///
-    /// **`elapsed_ticks` inherits `TotalTime`/`CurrentTime`'s own existing
-    /// clock-start conventions, not newly-checked ones, and the two are not
-    /// the same convention.** `race_ticks` (Time Trial) is `World::tick`,
-    /// counting from the standing start (`tick == 0`), before the green
-    /// flag - the same *reset convention* `race-progress.md`'s own reading
-    /// of the original's `craft+0x920` describes ("is only reset by a
-    /// *lap* completion", so "is timed from whenever
-    /// `Race_UpdatePositions` starts stepping crafts", not the green flag
-    /// either). **Not the same *value*, though**: this build's own grid
-    /// spawn sits further back from the line than the original's
-    /// (`crates/race/src/state.rs`'s own `advance_progress` comment), so
-    /// `race_ticks` on lap 1 carries that extra run-up on top of matching
-    /// the reset convention - unmeasured how much.
+    /// **`elapsed_ticks` inherits `TotalTime`/`CurrentTime`'s own clock-start
+    /// conventions, and the two are not the same convention.** `race_ticks`
+    /// (Time Trial) is [`oag_race::race_clock_ticks`]: zero through the
+    /// start-line countdown and counting from the release, which is when the
+    /// original's `craft+0x920` starts (measured 2026-09-29: it reads `0.0`
+    /// through the countdown and takes its first `dt` on the tick thrust is
+    /// released - see `docs/gameplay/race-modes.md#the-race-clock-starts-at-the-release`).
+    /// Until that change this was `World::tick` from the grid, which charged
+    /// every medal comparison the whole 4.5 s countdown. It is still not
+    /// reset at the first crossing, the same *reset convention*
+    /// `race-progress.md`'s reading of `craft+0x920` describes ("is only
+    /// reset by a *lap* completion"). **Not the same *value*, though**: this
+    /// build's own grid spawn sits further back from the line than the
+    /// original's (`crates/race/src/state.rs`'s own `advance_progress`
+    /// comment), so `race_ticks` on lap 1 carries that extra run-up -
+    /// unmeasured how much.
     ///
     /// `Readout::lap_ticks` (Speed Lap) diverges further still: `RaceState`
     /// deliberately resets `lap_start_tick` at the *first* line crossing,
@@ -99,14 +102,7 @@ impl TimeTrialPace {
     /// authors `4000`/`4200`/`4500`, a 2 s gold-to-silver window) - large
     /// enough to flip the tier on a lap-1 Speed Lap reading. A divergence
     /// this function inherits rather than introduces, not yet measured
-    /// closely enough to correct for. Whether the original's own clock is
-    /// also offset from the *countdown's* own start (before
-    /// `RaceState::thrust_gated` releases thrust) is a separate,
-    /// still-open question neither `race_ticks` nor `lap_ticks` answers -
-    /// see
-    /// `docs/ghidra/functions/psp-pulse-usa/race-progress.md`'s own "The
-    /// first crossing starts the race but not the clock" bullet, open
-    /// since before this pass.
+    /// closely enough to correct for.
     #[must_use]
     pub fn from_elapsed(elapsed_ticks: u64, cell: &oag_tables::race_campaign::Cell) -> Self {
         let elapsed_centis = i64::try_from(elapsed_ticks * 100 / 60).unwrap_or(i64::MAX);

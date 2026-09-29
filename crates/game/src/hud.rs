@@ -522,9 +522,13 @@ pub struct Readout {
     pub place: u32,
     /// Ships in the race.
     pub ships: u32,
-    /// Ticks since the race began.
+    /// Ticks of racing clock: since the start-line countdown released the
+    /// craft, zero throughout it - [`oag_race::race_clock_ticks`]. It is the
+    /// clock the `TotalTime` readout and the medal pace read, **not** the raw
+    /// tick the start gantry and the thrust gate ride.
     pub race_ticks: u64,
-    /// Ticks since the current lap began.
+    /// Ticks since the current lap began, likewise never counting the
+    /// countdown - see [`oag_race::RaceState::lap_ticks`].
     pub lap_ticks: u64,
     /// The best lap so far, in ticks.
     pub best_lap_ticks: Option<u32>,

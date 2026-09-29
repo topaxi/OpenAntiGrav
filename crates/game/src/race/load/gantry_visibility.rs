@@ -77,8 +77,21 @@ pub(super) fn build(
         // another gets that one drawn rather than Pulse's substituted for it.
         if let Some(model) = manifest.billboard(8).and_then(|b| b.location()) {
             named_slot_8 = true;
-            gantry =
-                super::super::gantry::place(archives, model, track_model, start_position, report);
+            // The timeline's start is measured on Pulse alone - HD's PS3
+            // geometry, and 2048's, keep it off the race start.
+            let clock_start = if has_ps3_geometry {
+                0
+            } else {
+                super::super::gantry::CLOCK_START_TICK
+            };
+            gantry = super::super::gantry::place(
+                archives,
+                model,
+                track_model,
+                start_position,
+                clock_start,
+                report,
+            );
         }
     }
     // **Draw nothing and say so**, on the one route into `place` that reports

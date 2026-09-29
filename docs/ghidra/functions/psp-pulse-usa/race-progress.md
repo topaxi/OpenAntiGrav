@@ -366,9 +366,9 @@ Three consequences for a reimplementation:
 - **The first crossing starts the race but not the clock.** `craft+0x920`
   accumulates `dt` from the first update and is only reset by a *lap*
   completion, so lap 1 is timed from whenever `Race_UpdatePositions` starts
-  stepping crafts - not from the line. Whether that is the countdown's
-  "Go" or earlier was not traced; the race-start thread's countdown machine
-  is where to look.
+  stepping crafts - not from the line. **That is the thrust release** (measured
+  2026-09-29: `0.0` through the countdown, first `dt` on the release tick -
+  [race-modes.md](../../../gameplay/race-modes.md#the-race-clock-starts-at-the-release)).
 - **Lap numbering is off-by-one by design.** `craft+0xacc` is the crossing
   the next lap completes on, `2` from construction, so the HUD shows lap
   `1` on the grid, `1` after the first crossing, `2` after the second.
@@ -468,8 +468,12 @@ destroyed (`+0x860 & 0x1000`) and not retired, optionally listing them.
 
 ## Open questions
 
-- When `Race_UpdatePositions` starts running relative to the countdown -
-  it decides what lap 1's clock measures.
+- ~~When `Race_UpdatePositions` starts running relative to the countdown -
+  it decides what lap 1's clock measures.~~ **Answered 2026-09-29, measured:**
+  the lap clock (`racer+0x920`) and the manager's race time (`manager+0x2b8`)
+  are exactly `0.0` through the countdown and take their first `dt` on the tick
+  `throttleState` leaves zero, so lap 1 is timed from the thrust release. See
+  [race-modes.md](../../../gameplay/race-modes.md#the-race-clock-starts-at-the-release).
 - `craft+0x8d0`, stored per fastest lap and zeroed per lap, has no
   incrementer in the binary (only the two zero stores); the fourth field
   of the top-twenty record is dead.

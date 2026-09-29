@@ -64,6 +64,27 @@ pub fn wrapped_backward(delta: f32, half_length: f32) -> bool {
 /// covers.
 pub const COUNTDOWN_TICKS: u64 = 272;
 
+/// Ticks of racing clock at `tick`: the ticks since the start-line countdown
+/// released the craft, zero throughout the countdown itself.
+///
+/// **Measured, not chosen** - the same live PPSSPP captures as
+/// [`COUNTDOWN_TICKS`] read the original's own clocks on every tick of the
+/// countdown. The lap clock (`racer+0x920`, which the HUD's `CurrentTime` and,
+/// added to the completed laps' splits, a Time Trial's `TotalTime` both read)
+/// and the race manager's race time (`manager+0x2b8`) are exactly `0.0` until
+/// the tick `throttleState` steps off zero, and take their first `dt` **on that
+/// same tick**. Four captures, the same tick each time. So every time the
+/// player is shown or scored - the HUD's clocks, a finish time, a medal
+/// comparison - is this and not the raw tick.
+///
+/// `tick` is the caller's "ticks since the race was built" counter
+/// (`World::tick`), the same convention [`RaceState::thrust_gated`] takes.
+/// See `docs/gameplay/race-modes.md#the-race-clock-starts-at-the-release`.
+#[must_use]
+pub fn race_clock_ticks(tick: u64) -> u64 {
+    tick.saturating_sub(COUNTDOWN_TICKS)
+}
+
 /// How many completed laps [`RaceState::lap_splits`] and [`crate::Standing::lap_splits`]
 /// keep a time for.
 ///
@@ -250,9 +271,17 @@ impl RaceState {
     ///
     /// Saturating rather than wrapping: a caller that passes a tick from before
     /// the lap started gets zero, not a lap that has run for half an eternity.
+    ///
+    /// **A lap never starts before the release.** [`Self::lap_start_tick`] is
+    /// `0` until the first crossing, and counting from it would time lap 1 from
+    /// the start of the countdown; the original's lap clock reads `0.0` through
+    /// the countdown and starts on the release tick ([`race_clock_ticks`]), so
+    /// the start is floored at [`COUNTDOWN_TICKS`] here rather than by moving
+    /// the stored field, which would move every state hash for a value nothing
+    /// else reads.
     #[must_use]
     pub fn lap_ticks(&self, tick: u64) -> u64 {
-        tick.saturating_sub(self.lap_start_tick)
+        tick.saturating_sub(self.lap_start_tick.max(COUNTDOWN_TICKS))
     }
 
     /// Laps completed, which is one less than the lap being driven.
@@ -377,7 +406,12 @@ impl RaceState {
         if wall_contact {
             self.zone_dirty = true;
         }
-        if self.mode == Mode::Zone {
+        // Not through the countdown: the original's Zone machine leaves its
+        // countdown state into a state that resets the dwell timer, the dirty
+        // flag and the score before racing starts (`zone-mode.md`, state 1),
+        // so nothing accrued on the grid survives to the release. Held here
+        // rather than reset there - the same value, with no state to move.
+        if self.mode == Mode::Zone && !Self::thrust_gated(tick) {
             self.advance_zone(dt, &mut outcome);
         }
 

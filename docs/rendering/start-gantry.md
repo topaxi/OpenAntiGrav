@@ -226,86 +226,68 @@ engine does with it, and they are not the same sentence.
 
 ## Timing against the measured countdown
 
-The numbers, without a reconciliation:
+**Measured 2026-09-29 (confidence 85): the timeline starts at race tick 92, and
+its `GO` lands on the thrust release.** The numbers:
 
-- `GO` first lights **3.03-3.6 s** into the asset's own clock.
+- `GO` first lights **3.03-3.6 s** into the asset's own clock, and the `u` step
+  that hands the board from the digits to `GO` is at frame 181.
 - The measured thrust gate is **272 ticks = 4.533 s**
-  (`oag_race::COUNTDOWN_TICKS`, three live captures - see
+  (`oag_race::COUNTDOWN_TICKS` - see
   [`gameplay/race-modes.md`](../gameplay/race-modes.md#the-countdown-is-measured)).
 - The countdown panel **exits at frame 360/361 = 6.000 s**, 2.97 s after `GO`,
   precisely as the 6.000 s texture loop closes.
 
-### The gap is not a pre-roll: the two share a zero, and the original has it too
+The capture is in
+[`gameplay/race-modes.md`](../gameplay/race-modes.md#the-race-clock-starts-at-the-release):
+one screenshot per tick through a Time Trial's countdown in PPSSPP, the ticks
+numbered from the thrust release (tick 272), on four runs. The board is a blank
+dark-red panel until tick 132 (`3` reads white), tick 178 (`2`) and tick 222
+(`1`) - 46 and 44 ticks apart against the asset's 45 - and turns **green with
+`GO` on tick 273**, one tick after the release. Two things pin frame 0:
 
-**Confidence 82, and it retires this section's own standing hypothesis.** This
-used to read that the ~1 s between the asset's `GO` and the measured green was
-"unexplained pre-roll", and that a per-object gate had to exist because
-`g_ingame->0x40` is "a free-running global" and "a free-running clock cannot
-drive a countdown". **The second half of that is wrong, and it is what made the
-first half look like a mystery.**
+- **The green step, tick 92.** The `u` step at frame 181 is the one sharp edge
+  and lands on tick 273, so frame 0 is tick 92 = `272 - 180`. Confidence 85.
+- **The digit windows, ticks ~85-96.** Their midpoints (152, 197, 242) against
+  this page's lit windows (0.93-1.31 s, 1.68-2.06 s, 2.43-2.81 s) give frame 0 at
+  about 85, and against the texel rows (`3` rows 28-29, `2` rows 26-27, `1` rows
+  24-25, the `v` offset walking 8 texels in 180 frames) at about 96. These are
+  soft edges (a threshold on white pixels) and the two window models disagree by
+  11 ticks, so they bracket the green step rather than confirm it to a tick.
 
-`g_ingame->0x40` is not free-running across a session. It is **zeroed once per
-race, in `InGame_Construct`**:
+The clock uses 92, and the digits may sit up to ~7 ticks early or late against
+the original; only `GO` on the release is pinned. **Pulse only**: HD's and 2048's
+gantry files are different timelines (2048's `GO` slides in at frame 200), and
+their countdown was not captured, so they keep the timeline running off the race
+start as before - chosen, not measured.
 
-```text
-08812d98: mtc1 zero,f20        ; f20 = 0.0, the function's only mtc1
-   ...
-08813090: swc1 f20,0x40(s0)    ; g_ingame->0x40 = 0.0
-```
+`crates/game/src/race/gantry.rs::CLOCK_START_TICK` is that measurement, and the
+gantry's clock is `(tick - 92) / 60`.
 
-and `InGame_Update` (`0x08813328`) then advances it by `dt` once its own frame
-counter `this->0x3c` reaches 3 - so it starts three frames after construction
-and counts race seconds from there. Both functions were already named and are
-already in `names.tsv`; what is new here is the zeroing pair, read off the
-disassembly this pass. `anim-transform.md` establishes at confidence 85 that
-this one field is the clock **every** in-race animation path reads - the
-`Anim Transform` tree walk and the texture-transform path alike, with no
-per-model rule.
+### What this retires: the two do not share a zero, and ours drew `GO` 1.5 s early
 
-Now put that against the countdown measurement. The 272 ticks are counted from
-**the first frame the front end reports `InGame`**
-([`gameplay/race-modes.md`](../gameplay/race-modes.md#the-countdown-is-measured):
-`InGameTrackDescriptionScreen` for ticks 0-60, `InGame` from tick 61, green at
-tick 333). That is the same instant `InGame_Construct` runs.
+This page used to argue at confidence 82 that the asset's clock and the thrust
+gate **share a zero to within three frames**, from `g_ingame->0x40` being zeroed
+once per race in `InGame_Construct` and read by every in-race animation path, and
+concluded that the original lights `GO` about 0.93 s before the craft can move
+and holds it for 1.4 s after. **Both halves are wrong for the gantry.**
 
-**So the asset's clock and the thrust gate share a zero, to within three
-frames.** There is no pre-roll to find, and nothing to offset. The original
-itself lights `GO` about 0.93 s before the craft can move, and holds it lit for
-1.4 s after - the `GO` state spans the release rather than marking it.
+- The board is not driven by `g_ingame->0x40`, or not by it alone: a restart does
+  not reset that field (it read 41.9 s and 77.0 s at the first tick of two
+  captures, on a race started from the pause menu), yet the board still starts
+  from blank on every run and plays 3, 2, 1, `GO` in the same ticks.
+- The original's `GO` is drawn **on** the release, not 0.93 s before it. The
+  strobing `GO` column the asset authors is what the board shows from there on.
 
-The asset agrees with that reading independently: `GO`'s palette column
-alternates opaque and transparent row by row, so the word **strobes** across its
-whole 3.6-5.97 s window rather than switching on once (33 of 47 samples lit, 14
-dark). A launch cue would be a single clean transition. A flashing banner that
-spans the release is an announcement, not a starting pistol.
+The consequence the maintainer reported from play was real and was ours: the
+gantry ran off `world.tick / 60` from tick 0, so `GO` lit at tick ~182 and the
+board was green for the last ~90 ticks of the countdown, before the craft could
+move. It is fixed by starting the gantry's own clock at tick 92; nothing else on
+the track is shifted (the scenery's animation is still `world.tick / 60`).
 
-**What this does not settle.** Nothing has watched slot 8's own node read
-`g_ingame->0x40` during a countdown - this is a static argument from the clock's
-writers and readers, which is why it is 82 and not higher, and why the gated
-accumulator at `0x0890cf34` stays recorded above as an unresolved alternative
-rather than deleted. The one cheap check that would settle it outright is
-someone playing the original and reporting whether `GO` appears as the craft
-becomes drivable or about a second before.
-
-**A first live pass at that check, 2026-09-07, corroborates rather than
-settles.** `pulse-psp-usa.chd`, PPSSPP v1.20.4 (SDL build, Xvfb, no window
-visible to anyone), Time Trial, Talon's Junction, via `scripts/psp-drive.py
-menu` into a real restart, screenshotting on a wall-clock schedule rather
-than at breakpoints (see
-[`ppsspp-debugger.md`](../reverse-engineering/ppsspp-debugger.md) for why a
-countdown cannot be sat through under a breakpoint-driven capture). The
-in-frame HUD lap timer, not the wall clock, is what is comparable across
-screenshots: `GO` is already on the board, mid-strobe, in a frame whose timer
-still reads `0.00.0` (not yet counting - the craft is not yet released), and
-is fully solid white one screenshot later, where the timer has advanced to
-`0.00.5`. That is the same order this page's static argument already
-predicted - `GO` up before green - from an independent source. **This does
-not raise the 82**: the screenshots are on a wall-clock schedule roughly
-0.5 s apart with no tick-level correlation attempted (the run was software-
-rendered under `LIBGL_ALWAYS_SOFTWARE=1`, well below real time, so wall-clock
-offsets do not correspond to this page's own tick tables at all), and only
-one restart was captured this way. It is one corroborating data point, not
-the tick-accurate confirmation the open question above still asks for.
+What is *not* settled is what starts the timeline at tick 92 in the original: a
+gated accumulator (`0x0890cf34`, above) or a per-state write are both still
+candidates, and the fit only shows that the *result* is a 1:1 replay of the
+authored track that starts 180 frames before the release.
 
 The same file carries every state the gantry ever shows, as non-overlapping
 windows on one 60 Hz timeline. From the nine `Anim Transform` nodes' own keys:
@@ -1243,12 +1225,10 @@ Three things the coordinates alone did not say, found by rendering:
    extent sits outside the **mount's authored width**, which is 6 or 7 of the
    model's 15 on every circuit - the two states whose trigger is unrecovered,
    and nothing else.
-3. **The clock is the race clock, unshifted.** `world.tick / 60`, zero at the
-   start, held at frame 559 - the last frame before `Final_Lap`'s own first key.
-   Nothing is offset to make the asset's `GO` (3.03-3.6 s) coincide with the
-   measured thrust gate (4.533 s); that gap is [reproduced as it
-   stands](#timing-against-the-measured-countdown) rather than closed with a
-   constant nobody has measured.
+3. **The gantry's clock starts at tick 92 and is held at frame 559** - the last
+   frame before `Final_Lap`'s own first key. The 92 is measured, not chosen: it
+   puts the asset's `GO` step on the thrust release, as the original does - see
+   [the timing section](#timing-against-the-measured-countdown).
 
 Rendered on `16_Track`, `05_Track`, `13_Track`, `14_Track` and
 `16_Track`'s reversed variant at 1.00 s, 1.83 s, 2.60 s, 4.00 s and 5.90 s, the
@@ -1273,9 +1253,9 @@ both are here.
 
 ### What is still open
 
-- **The gap between the asset's `GO` and the measured green** is unchanged, and
-  a player sees it: the board says `GO` about a second before a craft can move.
-  See [the timing section](#timing-against-the-measured-countdown).
+- **What starts the timeline at tick 92 in the original.** The fit places frame 0
+  there to about 3 ticks; nothing has read the code that does it. See [the timing
+  section](#timing-against-the-measured-countdown).
 - **The `FINAL LAP` and chequered states are not shown at all**, because their
   triggers are unrecovered. Recovering them turns the clip above from a
   necessity into a per-state cull.

@@ -44,4 +44,6 @@ pub(crate) mod testing;
 pub use course::{Course, Located};
 pub use mode::{Mode, SpeedClass};
 pub use standing::{Standing, places};
-pub use state::{COUNTDOWN_TICKS, LapGate, MAX_RECORDED_LAPS, Outcome, RaceState};
+pub use state::{
+    COUNTDOWN_TICKS, LapGate, MAX_RECORDED_LAPS, Outcome, RaceState, race_clock_ticks,
+};
