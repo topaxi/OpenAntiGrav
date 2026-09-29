@@ -447,6 +447,11 @@ impl Session {
                 // whatever race is launched next.
                 let difficulty = self.campaign_difficulty.take();
                 self.campaign_ai_skill_scale = None;
+                // A Tournament cell set up its legs before this screen
+                // opened (`Session::launch_campaign_cell`); backing out
+                // abandons them, or the RACE page's next launch would run
+                // as that tournament's first leg.
+                self.abandon_tournament();
                 // Wipeout HD/Fury's `TeamRedirectBack` authors no `goto`, so
                 // its Back returns to the screen `Team Selection` came from:
                 // `Cell Selection`, on the same cell and rung. Pulse keeps

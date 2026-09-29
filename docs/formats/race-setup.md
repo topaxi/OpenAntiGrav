@@ -568,6 +568,12 @@ RotX="0.4" RotY="-0.5">`. Both are `<Model>` widgets - rendered meshes, with a
 camera stated. Confidence 90. `TrackModel` is a sibling of the screens rather
 than a child, so `Track Creation` and `Tournament C` share it.
 
+`ShipModel`'s values are read since 2026-09-29 (`oag_ui::picker::hd::ShipModel`)
+and nothing draws them yet: the one preview path this build has reads
+`<team>\ship_FE.vex`, which HD's own per-team `screen.xml` names and no HD
+archive carries. See `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Team
+Selection`" section for the rest of that screen.
+
 ## Two unlock axes, and they are not the same axis
 
 From `Data\Plugins\PI001\Definition.xml`. Confidence 95.

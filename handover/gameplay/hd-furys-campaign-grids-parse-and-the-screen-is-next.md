@@ -358,4 +358,6 @@ and the picked livery reaches the race. Full writeup:
    `goto`-less `TeamRedirectBack` does was not checked.
 5. **HD's track screen** (`Track_Selection_Definition.xml`, `DATA06`) is
    still unread; the RACE page keeps its TRACK row.
-
+6. **The default livery**: the original's fresh-profile campaign opens this
+   screen on `concept1`; this build opens on `settings.race.variant`, the
+   classic hull by default. Measured divergence, left in place.

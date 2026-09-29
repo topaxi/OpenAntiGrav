@@ -3309,7 +3309,13 @@ frame reads `080`/`085`/`080` for speed, thrust and shield, which is its
 `concept1`'s `8/8.5/8` and not `normal`'s. So the ratings follow the
 selected model, and the fresh-profile campaign default is `concept1` -
 consistent with `rpcs3-capture.md`'s own finding that a Fury-campaign race
-flies the `concept1` livery. Two frames, one team: 90, not higher.
+flies the `concept1` livery. Two frames, one team: 90, not higher. **What
+this does not show** is that the original always races what its screen
+selects: `rpcs3-capture.md` records a `racebox` walk whose screen showed the
+classic hull while the race flew `concept1`. And a divergence is left in
+place: the original's fresh-profile campaign opens this screen on
+`concept1`, this build on `settings.race.variant` (the classic hull by
+default).
 
 The seven `HexSelection` rows match `PI_TeamModel` file order (`chrome_c1`,
 `nitro`, `concept1`, `normal`, `SKIN1`, `SKIN2`, `chrome`): on the
