@@ -349,6 +349,10 @@ pub(super) fn load_screens(
 /// The face ratios are measured off the faces actually loaded where both
 /// are - `default` against `menu` - and Pulse's own `small` where the third
 /// is not. See [`oag_ui::picker::FaceScales`].
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is a separate fact of the two screens: the three files, the strings and faces, the grid"
+)]
 pub(super) fn selection_layouts(
     race_box: Option<&Screens>,
     team_box: Option<&TeamBox>,

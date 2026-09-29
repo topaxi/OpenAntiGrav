@@ -240,14 +240,15 @@ impl Picker {
         if count == 0 {
             return None;
         }
-        let index = if self.columns > 0 {
-            // Along the row, wrapping at its end.
-            let row = self.index / self.columns;
-            let width = self.columns.min(count - row * self.columns);
-            let column = (self.index % self.columns) as i64 + i64::from(step);
-            row * self.columns + column.rem_euclid(width as i64) as usize
-        } else {
-            (self.index as i64 + i64::from(step)).rem_euclid(count as i64) as usize
+        let index = match self.columns {
+            0 => (self.index as i64 + i64::from(step)).rem_euclid(count as i64) as usize,
+            columns => {
+                // Along the row, wrapping at its end.
+                let row = self.index / columns;
+                let width = columns.min(count - row * columns);
+                let column = (self.index % columns) as i64 + i64::from(step);
+                row * columns + column.rem_euclid(width as i64) as usize
+            }
         };
         self.land_on(index);
         Some(Event::Moved)

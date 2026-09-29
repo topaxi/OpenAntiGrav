@@ -62,8 +62,9 @@ pub fn race_laps(mode: oag_race::Mode, class: &str) -> Option<u32> {
 /// halves are not the same length, which is a plain list).
 ///
 /// A reverse circuit is labelled with its forward twin's name: the original's
-/// carousel never spells a direction in the name (`docs/formats/hd-frontend.md`)
-/// - it is the grid's row - and shows a `ReverseIcon` on the model panel.
+/// carousel never spells a direction in the name (`docs/formats/hd-frontend.md`),
+/// the direction being the grid's row, and shows a `ReverseIcon` on the model
+/// panel.
 /// The forward half's order is measured on RPCS3 (Vineta K, Anulpha Pass, Moa
 /// Therma, Chenghou Project, Metropia, Sebenco Climb, Ubermall, Sol 2, Talon's
 /// Junction, The Amphiseum, Modesto Heights, Tech De Ra, then Vineta K again
