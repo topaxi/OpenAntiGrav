@@ -76,6 +76,9 @@ pub struct Line {
     /// Parallel to [`Self::points`], or empty. Never any other length -
     /// [`Line::with_corridor`] drops a mismatched one rather than half-using it.
     corridor: Vec<Frame>,
+    /// Parallel to [`Self::points`], or empty: `true` where the track has no
+    /// surface under the line. See [`Self::with_unsupported`].
+    unsupported: Vec<bool>,
 }
 
 impl Line {
@@ -85,6 +88,7 @@ impl Line {
         Self {
             points,
             corridor: Vec::new(),
+            unsupported: Vec::new(),
         }
     }
 
@@ -101,7 +105,47 @@ impl Line {
         } else {
             Vec::new()
         };
-        Self { points, corridor }
+        Self {
+            points,
+            corridor,
+            unsupported: Vec::new(),
+        }
+    }
+
+    /// Marks the points with no track surface under them.
+    ///
+    /// # Chosen, not measured (maintainer decision, 2026-09-29)
+    ///
+    /// [`Self::curvature`] reads a chord that touches one of these as straight:
+    /// a craft over a gap is airborne and steers nothing, so a bend in the line
+    /// there is not a corner to brake for. At `01_Track`'s lip (samples 31-42,
+    /// where the line leaves an upper deck and runs about 60 degrees down
+    /// through the air onto a lower floor) the pitch read as a 0.075 rad/unit
+    /// bend, and this project's Ace braked from 127 u/s to about 20 and crawled
+    /// off the lip every lap. The original's field, logged live in PPSSPP,
+    /// crossed it 21 times of 21 at 69-111 u/s and flew the drop. The original's
+    /// AI is not being copied: the maintainer's decision is that opponents obey
+    /// the player's physics and drive smarter instead. Narrowed to gaps on
+    /// purpose - discounting *every* pitch change took crests faster everywhere
+    /// and killed three more `ai_clean_lap_gate` rows. See
+    /// `docs/gameplay/leaving-the-track.md`.
+    ///
+    /// A mask whose length does not match the points is dropped, for the same
+    /// reason [`Self::with_corridor`] drops a mismatched corridor.
+    #[must_use]
+    pub fn with_unsupported(mut self, unsupported: Vec<bool>) -> Self {
+        self.unsupported = if unsupported.len() == self.points.len() {
+            unsupported
+        } else {
+            Vec::new()
+        };
+        self
+    }
+
+    /// Whether the track has no surface under the line at `index`, wrapping.
+    #[must_use]
+    pub fn is_unsupported(&self, index: usize) -> bool {
+        !self.unsupported.is_empty() && self.unsupported[index % self.unsupported.len()]
     }
 
     /// Whether this line knows how much room there is around it.
@@ -342,9 +386,14 @@ impl Line {
         // centimetres - and an AI braking against it held 1.2 units/s and never
         // recovered, because slowing shrinks the span that produced the reading.
         // Pinned by `a_long_segment_is_still_straight`.
-        let (_, a, _) = self.ahead(index, span);
+        let (at_a, a, _) = self.ahead(index, span);
         let (at_b, b, _) = self.ahead(index, span * 2.0);
-        let (_, c, _) = self.ahead(index, span * 3.0);
+        let (at_c, c, _) = self.ahead(index, span * 3.0);
+        // Over a gap the craft is flying, not steering: see
+        // [`Self::with_unsupported`].
+        if self.is_unsupported(at_a) || self.is_unsupported(at_b) || self.is_unsupported(at_c) {
+            return 0.0;
+        }
         let into = b - a;
         let out_of = c - b;
         // A chord of no length carries no direction, and `normalize_or_zero`
@@ -364,12 +413,8 @@ impl Line {
         if travelled <= f32::EPSILON {
             return 0.0;
         }
-        let (into, out_of) = self.steered(at_b, into, out_of);
         let into = into.normalize_or_zero();
         let out_of = out_of.normalize_or_zero();
-        if into == Vec3::ZERO || out_of == Vec3::ZERO {
-            return 0.0;
-        }
         // `oag_core::math::acos` and not `f32::acos`: this angle reaches the
         // speed target every craft brakes against, and so the world hash, and
         // the platform's own `acos` is not required to be correctly rounded.
@@ -377,45 +422,6 @@ impl Line {
         // `-1..=1` by a rounding error and `acos` of `1.0000001` is `NaN`.
         let turned = oag_core::math::acos(into.dot(out_of).clamp(-1.0, 1.0));
         turned / travelled
-    }
-
-    /// The two chords with their component along the track's own normal at
-    /// `at` removed, so only the turn a craft has to **steer** is left.
-    ///
-    /// # Chosen, not measured (maintainer decision, 2026-09-29)
-    ///
-    /// A craft follows a crest, a dip or a drop by its hover, not by its
-    /// steering, and the speed target built on [`Self::curvature`] exists to
-    /// slow a craft for a corner it cannot turn through. At `01_Track`'s lip
-    /// (samples 27-42, where the line pitches down about 60 degrees onto a
-    /// lower floor) the pitch read in three dimensions is a 0.075 rad/unit
-    /// bend, so this project's Ace braked from 127 u/s to about 20 and crawled
-    /// off the lip every lap. The original's field, logged live in PPSSPP,
-    /// crossed it 21 times out of 21 at 69-111 u/s and flew the drop. The
-    /// original's AI is not being copied: the maintainer's decision is that
-    /// opponents obey the player's physics and drive smarter instead, so the
-    /// projection is this project's choice. See
-    /// `docs/gameplay/leaving-the-track.md`.
-    ///
-    /// The normal is `lateral x into`, the corridor's rightward axis crossed
-    /// with the incoming chord, which is the track's up for a line running
-    /// forward. The travelled distance is still the unprojected chords', so a
-    /// banked corner reads the same turn over the same length. A line with no
-    /// corridor, or a chord running along its own lateral, has no normal to
-    /// remove and keeps both chords whole.
-    fn steered(&self, at: usize, into: Vec3, out_of: Vec3) -> (Vec3, Vec3) {
-        if self.corridor.is_empty() {
-            return (into, out_of);
-        }
-        let lateral = self.corridor[at % self.corridor.len()].lateral;
-        let normal = lateral.cross(into).normalize_or_zero();
-        if normal == Vec3::ZERO {
-            return (into, out_of);
-        }
-        (
-            into - normal * into.dot(normal),
-            out_of - normal * out_of.dot(normal),
-        )
     }
 
     /// Which way the line bends over `span`, positive where it bends toward
