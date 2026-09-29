@@ -210,9 +210,12 @@ than one shared table:
 | Pure (USA and EU, `Data.wad`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`, `75`, `100` | `zone_bronze`/`silver`/`gold`, `bronze_med`/`silver_med`/`gold_med`, `ship_destroyed`, `ready`, `go` |
 | Wipeout HD/Fury (`DATA01.PSARC`) | `zone_5`, `10`, `15`, `20`, `25`, `30`, `35`, `40`, `45`, `50`, `60`, `70`, `80`, `90`, `100` | `ready`, `321_GO`, `go`, `RS_1_READY`, `RS_2_GO`, `energycritical`, `c_CLEAR`, `PERFECT_LAP`, `NEW_LAP_REC`, `ZONEMALE`, fourteen `MR_*` speed-class names (`MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`, `MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP`), `HBEAT`/`HBEAT_GO` |
 
-Every numbered cue reads as two waveforms on Pulse and HD (an alternate take,
-the same shape [`Bank::pick`](../../crates/game/src/audio/sfx.rs) already draws
-between elsewhere) and one on Pure. `Data\Sound\speech_zone.bnk` hashes to
+Every numbered cue reads as two waveforms on Pulse and HD and one on Pure.
+**Corrected 2026-09-29: on Pulse and HD the two are not an alternate take.**
+They are the *same* waveform keyed on twice, a left and a right copy at pan
+angles 30 and 330 degrees, and on Pulse the cue is a **sequence** of three words
+- see [the section below](#a-cue-can-be-a-sequence-and-zone_n-is-one). Pure's
+one waveform per cue is the whole line. `Data\Sound\speech_zone.bnk` hashes to
 `e66cdc25` on all three - confirmed by name (`oag-wad hash 'Data\Sound\speech_zone.bnk'`
 against the archive's own directory), not by assuming Pulse's spelling carries
 over.
@@ -264,7 +267,12 @@ too, and `crates/game/tests/sfx_ground_truth.rs`'s
 set so a codec regression shows up as a changed list rather than an unnoticed
 drift.
 
-**The two ladders can overlap, and nothing arbitrates it.** `ZONE_STAGES`
+**Pulse has no second ladder at all** (`zone_class_announcer` is `None` for it, and
+its `speech_zone.bnk` names no speed class), so nothing shares its voice on the
+same tick and the cut lines the maintainer heard on Pulse were not a stolen
+voice: they were the sequence being sampled, below.
+
+**The two ladders can overlap on HD, and nothing arbitrates it.** `ZONE_STAGES`
 steps at zones 2, 3, 5, 7, 12, 16, 20, 27, 35, 42, 50, 60, 75;
 `ZONE_ANNOUNCER.milestones` are 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70,
 80, 90, 100. Five zone numbers - 5, 20, 35, 50, 60 - are on both lists, so at
@@ -312,6 +320,96 @@ and is wrong - `speech_zone.bnk` names exactly 42 cues (`cue_count`, read off
 the bank's own header), `0`-`41`, and no `HBEAT_ZCHANGE` string appears
 anywhere in the file.** Corrected here rather than left to be re-discovered
 wrong a second time.
+
+### A cue can be a sequence, and `zone_N` is one
+
+**2026-09-29. The maintainer's report from play**: in a Pulse Zone race,
+reaching zone 5 announces just "clear", where the original says something like
+"zone 5, clear"; other milestones lose a different piece ("zone" alone, or just
+the number). Every claim below was read off the bank, not assumed.
+
+The grains of `zone_5` (`speech_zone.bnk` cue 2, commands 3-6), from
+`crates/formats/examples/zone_announcer_dump.rs`:
+
+```text
+cmd 3  op 0x05 (child)   delay   0   -> cue 20 ZONE
+cmd 4  op 0x01 (key-on)  delay 105   number, descriptor angle 30
+cmd 5  op 0x01 (key-on)  delay  10   the SAME waveform, angle 330
+cmd 6  op 0x05 (child)   delay 140   -> cue 19 CLEAR
+```
+
+and `ZONE` and `CLEAR` are each `key-on delay 0 angle 30`, `key-on delay 10 angle
+330` of one waveform (0.468 s and 0.563 s at 18,002 Hz). All thirteen numbered
+cues have the same four grains; only the number's waveform and the two delays
+change (105/100/95 before the number, 140-250 before CLEAR - authored per
+number, `0x64` on 25, 60 and 80 and `0x5f` on 90, which is why no gap is
+hard-coded anywhere).
+
+- **The delay is the second word of each command**, in master ticks, before
+  that command runs, and a child starts in parallel - see
+  [`sound.md`](../ghidra/functions/psp-pulse-usa/sound.md#the-master-tick-and-the-delay-word-2026-09-29).
+  Confidence **88**.
+- **One master tick is 258.4 Hz** on the PSP, measured live. Confidence **90**.
+- **The pan angle is the descriptor's `+0x04`**, degrees, mapped by
+  `Scream_PanVolumePair`'s law: 30 is left 0.5 and right 0.866, 330 the mirror
+  image (`oag_audio::spatial::pan_of_angle`). The left and right copies are ten
+  ticks (39 ms) apart. Confidence **85** - the law is read and live-checked for
+  emitters, the announcer's own voices have not been captured.
+- **So `zone_5` is**: ZONE at 0, the number at 0.41 s, CLEAR at 0.99 s, with a
+  39 ms Haas-style double on every word. By a 2 %-of-peak threshold ZONE's
+  speech ends 45-83 ms *after* the number starts (the number begins over
+  ZONE's tail) and the gap from a number's end to CLEAR is 0.03-0.40 s, mean
+  0.10 s, over the thirteen cues.
+
+**What went wrong**: `load_named_cue` reads a cue through
+`Bank::cue_tree_sounds`, which flattens a cue's children into one set of
+leaves - `ZONE`, the number and `CLEAR`, each twice - and `Announcer::pick`
+played one of the six at random. That is exactly "clear", "zone" or a bare
+number. **The hypothesis "the two waveforms are an alternate take" is dead**
+(same offset, same length, angles 30 and 330); **"the cue is a sequence whose
+grains were sampled instead of played" is confirmed**. The class announcer
+stealing the voice, the other candidate, does not apply to Pulse (it has none).
+
+**The fix** (`oag_formats::sblk::timeline`, `oag_game::audio::sfx::compose`):
+walk the timeline (key-ons and `0x05` children with their delays; any other
+opcode is reported, not skipped) and lay the grains down at their tick, at
+their pan, with their volume law, in one stereo sound on `Bus::Speech` - a
+single voice per announcement, sample-accurate, the mixer unchanged. Chosen,
+not measured: each grain lands on the nearest sample, and the tick's phase
+against the moment the cue starts (up to 3.9 ms) is taken as zero. Volume:
+each grain carries `2 * cue_volume^2 * sound_volume^2` behind its handler's
+scale (`Scream_OpPlayChild` folds the parent's volume in), so a child is 0.5 dB
+louder than the root's own key-on - read from the decompile of
+`Scream_OpPlayChild`, confidence **75**, and small enough to be inaudible if
+wrong.
+
+**Where it applies and where it deliberately does not.**
+
+| Bank | `zone_N` shape | Played as |
+| --- | --- | --- |
+| Pulse (PSP USA and EU) | 4 grains, 6 key-ons, three words | the timeline |
+| Pure (PSP USA and EU) | 1 grain, one waveform, the whole line | the flat pick (one waveform; unchanged) |
+| Wipeout HD | number twice (delay 5), then a child `c_CLEAR` after 240-350 | the flat pick |
+
+HD's `c_CLEAR` (cue 21) is two grains, `0x24` and `0x23`, a goto and its
+marker, and **no waveform** - so the bank plays no "clear" at all, which is
+either carried by a cross-bank cue the goto reaches or absent, and is
+**unread**. HD's tick is not measured (a different build), so its delays cannot
+be converted to time without lending it the PSP's rate; the timeline is
+therefore not used for a big-endian bank, and the two identical key-ons keep
+playing as one number, as before. `zone_35` and `zone_45` on HD have no child
+at all.
+
+**The flat pick is wrong in a wider place, and this lane did not fix it.** A
+survey of every playing cue on the five PSP/PS2 discs and HD (2026-09-29)
+finds 2,168 with fewer than two key-ons of their own, 385 with a `0x19` alternate group, **910 with
+several key-ons of one waveform and no `0x19`** (a left/right pair like this
+one) and **683 with several distinct waveforms and no `0x19`** (a layer or a
+sequence). `Banks::pick` draws uniformly among a cue's waveforms, which is
+right for the first two groups and, for the last two, plays one layer or one
+word of something authored to play together. Pulse's `~SHIELD` (0.501 s and
+1.087 s) is in that population. Which of those 1,593 cues are audible in play,
+and which are layers rather than sequences, is not established here.
 
 Ported as [`crate::audio::sfx::Announcer`](../../crates/game/src/audio/sfx/announcer.rs):
 one bank loaded per race, the numbered cues decoded by name, and a cue fires
@@ -682,7 +780,9 @@ at the cue boundary, so a cue's last group absorbed the next cue's key-ons; the
 walk is clipped now.
 
 What the *data* says regardless of the opcode is that these are **alternates,
-not layers**: `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
+not layers** - for `.COLLISIONS`, which is a fact about that cue and not about
+every cue with several key-ons (see
+[`zone_N`](#a-cue-can-be-a-sequence-and-zone_n-is-one)): `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
 0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
 one of them, chosen by its own generator, and says so - **`Banks::pick`
 matches "random, never repeats the immediately previous pick" as of

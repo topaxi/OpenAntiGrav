@@ -1131,3 +1131,6 @@
 0x08809980	function	Profile_DifficultyRC	85	race-campaign.md
 0x088098f0	function	Profile_SetDifficultyRC	85	race-campaign.md
 0x088d6430	function	CellSelection_Update	85	race-campaign.md
+0x08993eb4	function	Scream_MasterTick	88	sound.md
+0x08993124	function	Scream_TickHandlers	80	sound.md
+0x0898db80	function	Scream_TickCommandList	88	sound.md

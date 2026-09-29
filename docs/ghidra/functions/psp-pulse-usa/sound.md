@@ -1003,6 +1003,64 @@ only follows `0x24` can pick - but that is a hypothesis, not a measurement:
 the reachability walk has not been re-run with `0x25`'s marker ranges
 included, and it is what would turn 15% into a number.
 
+## The master tick and the delay word, 2026-09-29
+
+A command's second word is a **delay in master ticks**, and one master tick
+is **258.4 Hz**. Both were needed to play Pulse's Zone announcer as a sequence
+(see [psp-audio.md](../../../formats/psp-audio.md#a-cue-can-be-a-sequence-and-zone_n-is-one)),
+and both come from code this page had not read: the three functions between
+`Audio_OutputThread` and `Scream_StepCommandList`.
+
+| Address | Name | Confidence | What it does |
+| --- | --- | --- | --- |
+| `0x08993eb4` | `Scream_MasterTick` | 88 | Increments a pending-tick count (`0x08ac3688`) on every call, and while it is positive runs one tick: `++0x08ac35e0`, `Scream_TickHandlers`, the voice commit, and every fourth tick a slower update |
+| `0x08993124` | `Scream_TickHandlers` | 80 | Walks the live handler list (`0x08ac35a0`); a handler whose type nibble is `5` (a playing cue) and that is not paused (`+0x16 & 2`) goes to `Scream_TickCommandList` |
+| `0x0898db80` | `Scream_TickCommandList` | 88 | `handler + 0x48 -= 1`, then `while (delay < 1 && pc != -1) Scream_StepCommandList(handler)` |
+
+**The delay word.** `Scream_StepCommandList` runs the command at `pc`, advances
+`pc`, and - unless the list ended - stores `handler + 0x48 = (s16)next.word1 +
+result`, where `next.word1` is the *second word of the next command* and
+`result` is the handler's return (zero for `Scream_OpKeyOn` and
+`Scream_OpPlayChild`, both read this session). `Scream_StartSound` seeds
+`handler + 0x48` from command 0's second word and runs commands while it is
+zero. So the second word is the wait **before its own command**, counted from
+the previous command's execution: zero runs in the same tick, `d` runs `d`
+ticks later. `Scream_OpPlayChild` calls `Scream_StartSound` for the child, so
+the child's own list starts at that moment and the parent's next delay counts
+from the child *command*, not from the child's end.
+
+**The tick.** `Audio_OutputThread` (`0x0898ca54`) has four passes of an inner
+loop per output buffer. The raw disassembly shows `jal 0x08993eb4` at
+`0x0898cb00`, `0x0898cbf8` and `0x0898cc00`: **three master ticks per pass**,
+with the mixer call `0x0898c7e8` and a 0x400-byte copy between the first and
+second tick and again after the third, so two 256-frame grains per pass. The
+buffer is `0x2000` bytes and is handed to `Audio_OutputPannedBlocking` as 2,048
+frames. So 12 ticks per 2,048 frames at 44,100 Hz, `44100 * 3 / 512 = 258.398`
+per second.
+
+**Measured live, PPSSPP 1.20.4, Pulse USA, silent, own instance.** Reading the
+tick counter `0x08ac35e0` and `cpu.status`'s cycle counter (222 MHz) at
+stepping stops, three consecutive 6.0 s windows of emulated time:
+
+| Window | Ticks | Emulated s | Ticks per s |
+| --- | --- | --- | --- |
+| 1 | 1548 | 6.006 | 257.7 |
+| 2 | 1560 | 6.006 | 259.7 |
+| 3 | 1546 | 5.985 | 258.3 |
+
+Confidence **90** for the rate (static count and live count agree to within
+the window's own resolution of one tick in about 1,550). The delay-word
+reading is **88**: three decompiled functions agree, and the Zone announcer's
+own data is consistent with it (the second word of a `zone_N` cue's CLEAR
+grain is 140-250 ticks, 0.54-0.97 s, after a number that lasts 0.52-0.76 s -
+a wait, not a position).
+
+**What is not read.** The phase of the tick against the moment a cue is
+started (up to one tick, 3.9 ms, either way); `FUN_0898dc4c`, the sibling that
+seeks the list to a marker; and whether Wipeout HD's tick is the same - its
+build is not read for this, and `oag_formats::sblk::timeline::tick_seconds`
+answers `None` for its byte order rather than lend it this rate.
+
 ## Not determined
 
 - **24 of the 45 opcode handlers, plus one read but not confidently named.**
