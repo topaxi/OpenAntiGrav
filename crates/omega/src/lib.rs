@@ -11,21 +11,23 @@
 //! had nowhere to land: archive candidates, the boot profile, and Omega's own
 //! re-derived [`frontend::MENU_SKIN`] numbers.
 //!
-//! # Deliberately thin, and racing is out of scope
+//! # Deliberately thin, and racing is measured but not finished
 //!
-//! Like [`oag_2048`], this crate holds only what was actually measured. Two
-//! gaps are structural rather than an oversight:
+//! Like [`oag_2048`], this crate holds only what was actually measured.
 //!
 //! - **No PS4 emulator capture exists in this project's toolchain**, so
 //!   [`frontend::BOOT`]'s provenance is
 //!   [`oag_title::Provenance::Declared`], never `Measured` - nobody has
 //!   watched an Omega boot the way [ADR-0025] asks for before it upgrades.
-//! - **Racing is unread.** Omega's `.rcsmodel`/`.gnf`/`.vex` files are either
-//!   undecoded (`.gnf`, a PS4 texture container this project has no reader
-//!   for) or read as garbage past a corrupted block-data offset (the same
-//!   trap [`psarc.md`] documents for the base five archives). [`race`]'s own
-//!   doc comment says what that means for [`oag_title::RaceDefaults`]'s
-//!   otherwise-mandatory fields.
+//! - **A race starts** - real spline, collision, hull and circuit geometry, see
+//!   [`race`]'s module doc and `docs/formats/omega-status.md` - but this crate
+//!   is honest about what it has not read (Zone, boost, speed classes, the
+//!   sound banks, the `.envsettings` lighting): those fields stay `None`.
+//! - **Every archive must be extracted whole.** An earlier extraction of the
+//!   package pair lost most of the bytes of most entries to a short read in
+//!   the extraction tool; everything on this page's racing side was measured
+//!   on the corrected one (`omega-status.md`, "An extraction bug, not this
+//!   build's data").
 //!
 //! # The source is a directory pair, and the patch is mandatory
 //!
@@ -74,9 +76,8 @@ pub const TITLE: &Title = &Title {
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
     race: race::DEFAULTS,
-    // Unread, on the same terms `oag_2048::TITLE` states: the *files* are
-    // there under HD's own spellings, but this build cannot decode their
-    // `.rcsmodel` geometry. See `race`'s own doc comment.
+    // Unread, on the same terms `oag_2048::TITLE` states: nothing here has
+    // looked for an engine exhaust or flare model beside the hull.
     exhaust: &oag_title::exhaust::Exhaust::Unread,
     flare: &oag_title::flare::Flare::Unread,
     // **Split into three files, like 2048's, not combined like HD's or
@@ -202,29 +203,39 @@ pub mod archives {
 /// sibling refuses to open at all, honestly, rather than opening a base
 /// package whose own front end has no `skin.xml` to boot.
 ///
-/// **Carries no circuit.** A future racing lane will need the real
-/// patch-ahead-of-base *overlay* role [`oag_2048`]'s own `EXTRA_CANDIDATES`
-/// doc describes and deliberately does not build (searched ahead of, but not
-/// replacing, a bulk archive that still carries the game's actual content) -
-/// this crate's shortcut of making the patch's front-end archive *be* the
-/// bulk archive only works because nothing here reads a circuit through it.
+/// **Carries no circuit.** A circuit is in a base archive (`data02`) with
+/// its `.EnvSettings` repacked in the patch's `data08`, so [`EXTRA_CANDIDATES`]
+/// puts the patch's other archives ahead of the base - the closest this
+/// crate's role slots come to a real overlay.
 const DATA_CANDIDATES: &[(&str, Platform)] = &[(archives::DATA09, Platform::Ps4)];
 
-/// The other eight archives, all mounted, searched after [`DATA_CANDIDATES`].
+/// The other eight archives, all mounted, searched after [`DATA_CANDIDATES`]:
+/// the patch's `data08`, `data07` and `data05` first, then the base package.
 ///
-/// Order among these is unmeasured and does not matter for anything this
-/// crate reads today: every front-end path any of the eight also carries is
-/// served by `data09` first (see [`DATA_CANDIDATES`]), and nothing else is
-/// read here yet.
+/// **Patch ahead of base, and that is chosen, not measured** - no PS4 was
+/// watched mounting these. What *is* measured is that the choice matters:
+/// 10,921 of the 27,077 distinct paths across the nine archives are named by
+/// more than one (the patch repacks most of the base), and where the copies
+/// differ the patch's is the newer one - 29 of 40 sampled race-relevant
+/// collisions (`.EnvSettings`, `.vex`, `.col`, `.final.rcsmodel`,
+/// `handlingstats.xml`) differ, every `.EnvSettings` among them is the base's
+/// ~4.8 KB against the patch's ~5.6 KB. A base-first order would serve the
+/// older copy of every one of those, so the patch goes first, highest number
+/// first, the way [`DATA_CANDIDATES`] already puts `data09` ahead of all of
+/// them. Order among the three patch archives is unmeasured too.
+///
+/// Nothing front-end-shaped changes: every front-end path this crate reads is
+/// served by `data09` before any of these (see
+/// `crates/omega/tests/omega_title_ground_truth.rs`).
 const EXTRA_CANDIDATES: &[(&str, Platform)] = &[
+    (archives::DATA08, Platform::Ps4),
+    (archives::DATA07, Platform::Ps4),
+    (archives::DATA05, Platform::Ps4),
     (archives::DATA00, Platform::Ps4),
     (archives::DATA01, Platform::Ps4),
     (archives::DATA02, Platform::Ps4),
     (archives::DATA03, Platform::Ps4),
     (archives::DATA04, Platform::Ps4),
-    (archives::DATA05, Platform::Ps4),
-    (archives::DATA07, Platform::Ps4),
-    (archives::DATA08, Platform::Ps4),
 ];
 
 /// Opens whichever archives `source` carries, as Wipeout: Omega Collection.

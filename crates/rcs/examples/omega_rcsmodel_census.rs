@@ -42,8 +42,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     submeshes += model.submeshes.len();
                     with_geometry += usize::from(model.has_geometry());
                     with_materials += usize::from(!model.materials.is_empty());
-                    bound += model.submeshes.iter().filter(|s| s.material.is_some()).count();
-                    unbound += model.submeshes.iter().filter(|s| s.material.is_none()).count();
+                    bound += model
+                        .submeshes
+                        .iter()
+                        .filter(|s| s.material.is_some())
+                        .count();
+                    unbound += model
+                        .submeshes
+                        .iter()
+                        .filter(|s| s.material.is_none())
+                        .count();
                     materials_total += model.materials.len();
                     textured_materials += model
                         .materials

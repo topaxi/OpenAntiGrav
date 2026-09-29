@@ -313,12 +313,69 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
         .collect()
 }
 
+/// Bytes from the start of a PS4 sampler entry to its texture pointer.
+const PS4_SAMPLER_POINTER: usize = 0x18;
+/// Bytes per PS4 sampler entry. Consecutive entries of one material sit this
+/// far apart (`ag_systems\ship.rcsmodel`'s three at `0x1570`, `0x1598` and
+/// `0x15c0`), which is what says the layout above is a record and not a
+/// coincidence of one pointer's position. Nothing reads it - the scan looks at
+/// every eighth byte - so it is a fact for the tests to build fixtures by.
+#[cfg(test)]
+pub(super) const PS4_SAMPLER_STRIDE: usize = 0x28;
+
+/// The sampler names that mean "this is the surface's own colour", in the
+/// project's recovered `~crc32` preimages (`crate::rcsmaterial::names`).
+///
+/// `Texture1` is the first numbered slot, which is what every material that
+/// names only one texture uses (`diffuse.rcsmaterial`: `hull_girder.gnf` under
+/// `Texture1`); the rest are the diffuse spellings the same table carries.
+const DIFFUSE_SAMPLERS: &[&str] = &[
+    "Texture1",
+    "DiffuseTexture",
+    "DiffuseTexture1",
+    "diffuseTexture",
+    "diffuseTexture1",
+    "Diffuse",
+    "diffuse",
+    "Colour",
+    "Colour1",
+];
+
+/// Where a sampler ranks when a material names several textures: the diffuse
+/// spellings first, then a hash nothing has named, then every role that is
+/// known *not* to be the surface's colour (a normal, a specular, a lightmap).
+///
+/// **The unnamed rank sits above the known-other one on purpose**: 4 of the 5
+/// entries of `ag_systems\ship.rcsmodel` and most of a circuit's props carry a
+/// hash no preimage has been recovered for, and the texture they bind is the
+/// colour map. Preferring a named non-diffuse role over an unnamed one would
+/// bind a normal map where a diffuse belongs.
+fn sampler_rank(hash: u32) -> u8 {
+    match crate::rcsmaterial::names::sampler_name(hash) {
+        Some(name) if DIFFUSE_SAMPLERS.contains(&name) => 0,
+        None => 1,
+        Some(_) => 2,
+    }
+}
+
 /// Every distinct `.gnf` path an 8-byte-aligned 64-bit pointer inside
-/// `[from, to)` resolves to, in ascending address order.
+/// `[from, to)` resolves to, **diffuse-first** rather than in address order:
+/// ranked by [`sampler_rank`] of the sampler-name hash the entry carries
+/// [`PS4_SAMPLER_POINTER`] bytes before its pointer, and by address within a
+/// rank.
+///
+/// **Why the order needs a rank at all:** address order is what the Vita
+/// reading uses, and on a PS4 circuit it binds the wrong map on the road -
+/// `track_surface_displacement2out` lists `track_de_ra_displacement_df2.gnf`
+/// (a displacement map) ahead of `track_de_ra.gnf` (the `Diffuse` entry), and
+/// the first frame drew the road as a white sheet with rainbow banding. Read
+/// against the entry's own sampler hash the same material gives `Diffuse` ->
+/// `track_de_ra.gnf`, `Normal` -> `ds_track_n.gnf` and `lightmap` -> the
+/// per-object `-lmap.gnf`, which is the role a person would give each.
 fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
     let to = to.min(cpu.len());
-    let mut out = Vec::new();
-    let mut at = from.next_multiple_of(8);
+    let mut found: Vec<(u8, usize, String)> = Vec::new();
+    let mut at = from.next_multiple_of(8).max(PS4_SAMPLER_POINTER);
     while at + 8 <= to {
         if let Some(target) = u64_at(cpu, at)
             && let Ok(target) = usize::try_from(target)
@@ -326,13 +383,15 @@ fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
             && cpu.get(target - 1) == Some(&0)
             && let Some(path) = cstr_at(cpu, target)
             && ends_with_ci(&path, ".gnf")
-            && !out.contains(&path)
+            && !found.iter().any(|(_, _, p)| *p == path)
         {
-            out.push(path);
+            let rank = u32_at(cpu, at - PS4_SAMPLER_POINTER).map_or(1, sampler_rank);
+            found.push((rank, at, path));
         }
         at += 8;
     }
-    out
+    found.sort_by_key(|&(rank, at, _)| (rank, at));
+    found.into_iter().map(|(_, _, path)| path).collect()
 }
 
 fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
