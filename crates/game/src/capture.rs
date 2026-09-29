@@ -610,6 +610,13 @@ pub fn run(
                     options.menu_picker_seconds,
                 );
                 list.extend(stills);
+                // HD's ship screen's footer legend, as the live one draws it
+                // (`main::menu_stage::footer::hd_nav`).
+                if let (Some(legend), Some(_)) = (nav_legend.as_ref(), layout.hd.as_ref()) {
+                    let measure = |text: &str| oag_ui::font::measure(&font, text);
+                    let faces = oag_ui::picker::FaceScales::default();
+                    list.extend(legend.draw_gated(&faces, &measure, true));
+                }
                 // Same disc read `picker_stills` already made for the
                 // hexagonal window's cards - reused here rather than read
                 // twice, since the two share one `screen.xml`.

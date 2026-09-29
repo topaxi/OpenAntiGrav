@@ -444,29 +444,24 @@ impl MenuStage {
                     position: backdrop.player.position(),
                 })
             }
-            // A backdrop whose frames could not be opened is no backdrop: the
-            // planes hold nothing, and drawing them would be a green rectangle
-            // over the menu rather than a missing picture.
+            // Frames that could not be opened are no backdrop: drawing the empty
+            // planes would be a green rectangle rather than a missing picture.
             _ => None,
         };
-        // The movie where there is one, else the Fury backdrop's frame for
-        // this tick - sized to the viewport, since the sprite size and the
-        // colours scale with the picture's line count, and tinted for the
-        // page: the root is the disc's `Main Menu`, the rest its `default`.
+        // The movie where there is one, else the Fury backdrop's frame for this
+        // tick - sized to the viewport (sprite size and colours scale with the
+        // picture's line count), tinted `Main Menu` at the root, else `default`.
         let shown = shown.map(menu::Picture::from).or_else(|| {
             let fury = self.fury.as_ref()?;
             let (_, _, w, h) = viewport;
             let tint = self.fury_tints.for_root(self.menu.depth() == 1);
             Some(menu::Picture::from(fury.frame(h, w / h, tint)))
         });
-        // A selection screen replaces the rows outright - it is the disc's
-        // own screen, drawn in the same frame - and its preview goes on last,
-        // a 3D pass over the finished picture. No marquee, no page tween and
-        // no prompt apply to it.
+        // A selection screen replaces the rows outright, in the same frame; its
+        // preview goes on last, a 3D pass over the finished picture. No marquee,
+        // page tween or prompt applies. A circuit's stills live on a sheet of
+        // the screen's own, handed to the renderer once per selection.
         if let Some(picker) = self.picker.as_mut() {
-            // The circuit's stills live on a sheet of the screen's own -
-            // the front end's extended, so every placement below still
-            // holds - handed to the renderer once per selection.
             if let Some(sheet) = picker.take_sheet() {
                 self.renderer.set_sprites(&gpu.device, &gpu.queue, sheet);
             }
@@ -481,6 +476,11 @@ impl MenuStage {
                 &|text| font::measure(&self.text_atlas, text),
             );
             layers.body.extend(picker.slideshow_draws());
+            layers.chrome.extend(footer::hd_nav(
+                &self.nav_legend,
+                &self.default_atlas,
+                picker,
+            ));
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),

@@ -225,18 +225,16 @@ impl Session {
             .unzip();
         // One axis per screen, decided by the selected team's own entry so
         // the row and the setting it writes agree: every Pulse team
-        // declares skins, no HD or 2048 team does.
-        let axis = match entries
+        // declares skins, no HD or 2048 team does. Keyed on the skins
+        // themselves, not on the row's first id being empty - HD's own
+        // variant table opens on the classic hull's empty suffix too, which
+        // read as a skin row and sent `_c1`/`_n1` to `race.skin`.
+        let selected = entries
             .iter()
-            .find(|entry| entry.id == self.settings.race.team)
-            .or_else(|| entries.first())
-            .map(|entry| &entry.details)
-        {
-            Some(Details::Ship { variants, .. })
-                if variants.first().is_some_and(|(id, _)| id.is_empty()) =>
-            {
-                LiveryAxis::Skin
-            }
+            .position(|entry| entry.id == self.settings.race.team)
+            .unwrap_or(0);
+        let axis = match sources.get(selected) {
+            Some(PreviewSource::Ship { skins, .. }) if !skins.is_empty() => LiveryAxis::Skin,
             _ => LiveryAxis::Variant,
         };
         let livery = match axis {
