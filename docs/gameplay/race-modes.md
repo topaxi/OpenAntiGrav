@@ -1044,16 +1044,25 @@ What `oag_race` does with it:
   divergence, not the countdown.
 
 **The start gantry rides its own clock, 92 ticks in.** The board's timeline is not
-zero at the race start: fitting its authored keys (the `TEXOFFSET` walk of 8
-texels over 180 frames past the palette's white rows, and the `u` step at frame 181
-that hands the board to `GO`) to the six digit edges and the green step above puts
-frame 0 at **tick 92, within about 3 ticks** - `272 - 180`. The countdown's
+zero at the race start: the authored `u` step at frame 181 that hands the board
+to `GO` lands on the green step above, tick 273, which puts frame 0 at **tick 92**
+(`272 - 180`); the softer digit windows bracket that at 85-96. The countdown's
 `GO` is therefore the timeline's own handover frame landing on the release, and
 the "about a second of `GO` before the craft can move" the gantry docs recorded
 was our clock starting at tick 0, not the original's behaviour.
-`crates/game/src/race/gantry.rs::CLOCK_START_TICK`. The cockpit-view overlay
+`crates/game/src/race/gantry.rs::CLOCK_START_TICK`, **Pulse only**: HD and 2048
+keep their gantry timeline off the race start (chosen, not measured). The
+cockpit-view overlay
 (`Cockpit_321GO.vex`, only drawn where no gantry is) was **not** measured in the
 original and still runs off `world.tick / 60`.
+
+**Launch speed is not the problem.** Ours reads 28 km/h thirteen ticks after the
+release (tick 285), the original 26 km/h at tick 284 - so the "delay after GO" was
+the board, not the physics.
+
+**Saved records from before this change include the countdown.** A personal-best
+total time stored by an older build carries the extra ~4.5 s, so the first run
+after the change beats an old record by about that much. No migration is written.
 
 **Still open:** steering, braking and the airbrakes through the countdown
 (unmeasured, left live in ours); any other mode or title's countdown length;

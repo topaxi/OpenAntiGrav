@@ -290,16 +290,12 @@ impl Scene {
             // runs both off the tick.
             drawable.write_node_anims(queue, seconds);
         }
-        // The gantry has a clock of its own, which starts 92 ticks into the
-        // race so `GO` lands on the release - see `race::gantry::CLOCK_START_TICK`
-        // for the measurement. It clamps it itself - see
-        // `race::gantry::CLOCK_LIMIT` for why it stops rather than looping.
-        // `anim_seconds` still pins it, as it does the scenery.
+        // The gantry's own clock: 92 ticks in on Pulse so `GO` lands on the
+        // release (`race::gantry::CLOCK_START_TICK`); it clamps itself.
         if let Some(gantry) = &self.gantry {
             queue.write_buffer(gantry.fog(), 0, bytemuck::bytes_of(&scene));
-            let gantry_seconds =
-                anim_seconds.unwrap_or_else(|| gantry::clock_seconds(race.sim.world.tick));
-            gantry.write(queue, view_projection, prev_vp, gantry_seconds);
+            let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race.sim.world.tick));
+            gantry.write(queue, view_projection, prev_vp, clock);
         }
         oag_render::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation

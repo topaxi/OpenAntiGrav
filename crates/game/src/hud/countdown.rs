@@ -281,7 +281,8 @@ impl Countdown {
     }
 
     /// Draws one frame at `seconds` into the authored `Anim Transform` and
-    /// `TEXOFFSET` tracks - `race_ticks as f32 / 60.0`, the same clock
+    /// `TEXOFFSET` tracks - `world.tick as f32 / 60.0` (the raw tick, not the
+    /// HUD's racing clock), the same clock
     /// [`oag_race::RaceState::thrust_gated`] gates on, so a caller shows this
     /// for exactly the measured countdown span and no other window. Composites
     /// over whatever `view` already holds (`LoadOp::Load`), the same

@@ -243,12 +243,22 @@ one screenshot per tick through a Time Trial's countdown in PPSSPP, the ticks
 numbered from the thrust release (tick 272), on four runs. The board is a blank
 dark-red panel until tick 132 (`3` reads white), tick 178 (`2`) and tick 222
 (`1`) - 46 and 44 ticks apart against the asset's 45 - and turns **green with
-`GO` on tick 273**, one tick after the release. The texel grid predicts each
-digit's white window (`3` rows 28-29, `2` rows 26-27, `1` rows 24-25, the `v`
-offset walking 8 texels in 180 frames), so the six digit edges and the green step
-each give a frame-0 tick, and they agree on **tick 92 within about 3**. That is
-`272 - 180`: the digit sequence runs its authored 3.0 s and the `u` step at frame
-181 falls on the release.
+`GO` on tick 273**, one tick after the release. Two things pin frame 0:
+
+- **The green step, tick 92.** The `u` step at frame 181 is the one sharp edge
+  and lands on tick 273, so frame 0 is tick 92 = `272 - 180`. Confidence 85.
+- **The digit windows, ticks ~85-96.** Their midpoints (152, 197, 242) against
+  this page's lit windows (0.93-1.31 s, 1.68-2.06 s, 2.43-2.81 s) give frame 0 at
+  about 85, and against the texel rows (`3` rows 28-29, `2` rows 26-27, `1` rows
+  24-25, the `v` offset walking 8 texels in 180 frames) at about 96. These are
+  soft edges (a threshold on white pixels) and the two window models disagree by
+  11 ticks, so they bracket the green step rather than confirm it to a tick.
+
+The clock uses 92, and the digits may sit up to ~7 ticks early or late against
+the original; only `GO` on the release is pinned. **Pulse only**: HD's and 2048's
+gantry files are different timelines (2048's `GO` slides in at frame 200), and
+their countdown was not captured, so they keep the timeline running off the race
+start as before - chosen, not measured.
 
 `crates/game/src/race/gantry.rs::CLOCK_START_TICK` is that measurement, and the
 gantry's clock is `(tick - 92) / 60`.
@@ -269,8 +279,8 @@ and holds it for 1.4 s after. **Both halves are wrong for the gantry.**
   strobing `GO` column the asset authors is what the board shows from there on.
 
 The consequence the maintainer reported from play was real and was ours: the
-gantry ran off `world.tick / 60` from tick 0, so `GO` lit at tick ~182-216 and the
-board was green for the last 60-90 ticks of the countdown, before the craft could
+gantry ran off `world.tick / 60` from tick 0, so `GO` lit at tick ~182 and the
+board was green for the last ~90 ticks of the countdown, before the craft could
 move. It is fixed by starting the gantry's own clock at tick 92; nothing else on
 the track is shifted (the scenery's animation is still `world.tick / 60`).
 

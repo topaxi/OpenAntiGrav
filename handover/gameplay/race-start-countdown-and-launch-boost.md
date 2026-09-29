@@ -804,7 +804,8 @@ the fit is in [`docs/rendering/start-gantry.md`](../../docs/rendering/start-gant
 - **`GO`, measured (85).** The original's board turns green with `GO` on tick 273,
   one tick after the release; ours was green from ~tick 182-216. The gantry's
   timeline starts at tick 92 in the original (`272 - 180`, the authored `u` step
-  frame), now `CLOCK_START_TICK`.
+  frame; the softer digit windows bracket it at 85-96), now `CLOCK_START_TICK`,
+  Pulse only - HD and 2048 keep the timeline off the race start.
 - **Zone (65, static only).** Its score and dwell timer are held through the
   countdown, from `Zone_UpdateState` state 1's reset.
 

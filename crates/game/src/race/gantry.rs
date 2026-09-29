@@ -25,12 +25,14 @@
 //!   thrust gate opens at [`oag_race::COUNTDOWN_TICKS`] = 272, and the HUD's
 //!   clocks start on that same release ([`oag_race::race_clock_ticks`]).
 //!
-//! Fitting the asset's own keys to those six digit edges and the green step
-//! (the `TEXOFFSET` walk of 8 texels over 180 frames past the palette's white
-//! rows, and the `u` step at frame 181) puts the timeline's frame 0 at **tick
-//! 92, to within about 3 ticks**: [`CLOCK_START_TICK`]. That is `272 - 180`, so
-//! the digit sequence runs its authored 3.0 s and hands over to `GO` exactly as
-//! the craft is released.
+//! **The 92 comes from the green step**, the one sharp edge: the asset's `u`
+//! step at frame 181 lands on tick 273, so frame 0 is tick 92 -
+//! [`CLOCK_START_TICK`], which is `272 - 180`. The digit windows are softer and
+//! bracket it: their midpoints (ticks 152, 197, 242) against the asset's lit
+//! windows put frame 0 at about 85, and against the texel-row windows at about
+//! 96, so the digits may be up to ~7 ticks off in either direction; only the
+//! `GO` handover is pinned to a tick. **Measured on Pulse only** - see
+//! [`clock_seconds`] for what every other title gets.
 //!
 //! This **retires** the earlier reading of this module and of
 //! `docs/rendering/start-gantry.md`, which drove the gantry off `world.tick / 60`
@@ -84,12 +86,18 @@ pub const CLOCK_LIMIT: f32 = 559.0 / 60.0;
 pub const CLOCK_START_TICK: u64 = oag_race::COUNTDOWN_TICKS - 180;
 
 /// The gantry's own clock in seconds at race tick `tick`: zero until
-/// [`CLOCK_START_TICK`], then the asset's timeline at 60 frames a second.
+/// `start_tick`, then the asset's timeline at 60 frames a second.
 ///
-/// [`Gantry::write`] clamps it at [`CLOCK_LIMIT`].
+/// **`start_tick` is [`CLOCK_START_TICK`] on Pulse and `0` on every other
+/// title**: only Pulse's countdown was measured, and HD's and 2048's gantry
+/// files are different timelines (2048's `GO` slides in at frame 200, not 181),
+/// so a shift fitted to Pulse's would be a guess dressed as a measurement there.
+/// Those keep the timeline running off the race start, as before this was
+/// measured - chosen, not measured. [`Gantry::write`] clamps it at
+/// [`CLOCK_LIMIT`].
 #[must_use]
-pub fn clock_seconds(tick: u64) -> f32 {
-    tick.saturating_sub(CLOCK_START_TICK) as f32 / 60.0
+pub fn clock_seconds(start_tick: u64, tick: u64) -> f32 {
+    tick.saturating_sub(start_tick) as f32 / 60.0
 }
 
 /// The gantry, placed: the model and the matrix that stands it on the mount.
@@ -99,6 +107,9 @@ pub fn clock_seconds(tick: u64) -> f32 {
 pub struct Placed {
     pub(super) model: Model,
     pub(super) matrix: Mat4,
+    /// The race tick the timeline starts on: [`CLOCK_START_TICK`] where it was
+    /// measured (Pulse), `0` - the timeline off the race start - elsewhere.
+    pub(super) clock_start_tick: u64,
 }
 
 impl std::fmt::Debug for Placed {
@@ -106,6 +117,7 @@ impl std::fmt::Debug for Placed {
         f.debug_struct("Placed")
             .field("model", &self.model.label)
             .field("matrix", &self.matrix)
+            .field("clock_start_tick", &self.clock_start_tick)
             .finish()
     }
 }
@@ -121,6 +133,7 @@ pub(super) fn place(
     name: &str,
     track_model: &Model,
     start: Option<&StartPosition>,
+    clock_start_tick: u64,
     report: &mut Vec<String>,
 ) -> Option<Placed> {
     let Some(mount) = oag_render::gantry::mount(track_model) else {
@@ -167,7 +180,11 @@ pub(super) fn place(
         mount.vertices,
         (mount.centre - Vec3::from(start.position)).length(),
     ));
-    Some(Placed { model, matrix })
+    Some(Placed {
+        model,
+        matrix,
+        clock_start_tick,
+    })
 }
 
 /// Rewrites every draw's bounds into the space [`Placed::matrix`] actually
@@ -402,6 +419,7 @@ fn matrix(mount: &Mount, forward: Vec3) -> Mat4 {
 pub(super) struct Gantry {
     drawable: Drawable,
     matrix: Mat4,
+    clock_start_tick: u64,
 }
 
 impl Gantry {
@@ -439,7 +457,13 @@ impl Gantry {
         Ok(Self {
             drawable,
             matrix: placed.matrix,
+            clock_start_tick: placed.clock_start_tick,
         })
+    }
+
+    /// This gantry's timeline clock at race tick `tick`; see [`clock_seconds`].
+    pub(super) fn clock_seconds(&self, tick: u64) -> f32 {
+        clock_seconds(self.clock_start_tick, tick)
     }
 
     /// The fog block this frame, shared with the rest of the scenery.
