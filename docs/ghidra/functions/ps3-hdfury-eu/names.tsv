@@ -459,3 +459,8 @@
 0x00223f50	function	EndRaceResults_ResetGrid	78	endrace-results-grid.md
 0x0022b688	function	EndRaceResults_FillRaceRows	72	endrace-results-grid.md
 0x002278c0	function	EndRaceResults_HighlightRow	80	endrace-results-grid.md
+0x00631a70	function	Scream_AccumulateTicks	85	sound.md
+0x0062e518	function	Scream_MasterTick	90	sound.md
+0x0062e098	function	Scream_TickHandlers	82	sound.md
+0x006253d0	function	Scream_TickCommandList	88	sound.md
+0x00625218	function	Scream_StepCommandList	88	sound.md

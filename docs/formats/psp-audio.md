@@ -396,16 +396,23 @@ wrong.
 | Pulse (PSP USA and EU) | 4 grains, 6 key-ons, three words | the timeline at the measured 258.4 Hz |
 | Pulse (PS2 EU) | the same four grains | the timeline at the PSP's rate, lent and labelled chosen |
 | Pure (PSP USA and EU) | 1 grain, one waveform, the whole line | the flat pick (one waveform; unchanged) |
-| Wipeout HD | number twice (delay 5), then a child `c_CLEAR` after 240-350 | the flat pick |
+| Wipeout HD (PS3) | one waveform (the whole line) keyed twice, at 30 and 330 degrees 5 ticks apart, then a child `c_CLEAR` after 280-350 (`zone_35`, `zone_45`: no child) | the timeline at the measured 240 Hz, two grains |
 
 HD's `c_CLEAR` (cue 21) is two grains, `0x24` and `0x23`, a goto and its
-marker, and **no waveform** - so the bank plays no "clear" at all, which is
-either carried by a cross-bank cue the goto reaches or absent, and is
-**unread**. HD's tick is not measured (a different build), so its delays cannot
-be converted to time without lending it the PSP's rate; the timeline is
-therefore not used (`SequenceTick::Unknown`, as for Pure and 2048), and the two
-identical key-ons keep playing as one number, as before. `zone_35` and `zone_45` on HD have no child
-at all.
+marker, and **no waveform**: the goto scans its own cue for the marker beside it
+and the list ends, so the cue is silent by construction
+([ps3-hdfury-eu/sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#the-master-tick-is-240-hz-and-c_clear-is-silent-by-construction-2026-09-29)).
+There is no missing "clear": the one waveform each `zone_N` keys is the whole
+line ("zone", the number and "clear" in one 1.7-2.0 s recording), and the
+earlier reading of it as "the number" was wrong. HD's tick is **240 Hz**
+(`SequenceTick::Ps3`, measured 2026-09-29: 239.4-239.9 over four 10 s windows in
+RPCS3, and `48000 / 512 * 2.56` from the executable), so the pair is laid down
+as authored: the line at +30 degrees, and again at -30 degrees 20.8 ms later,
+instead of the flat pick's one centred copy. This needed the walk to follow a
+goto to its marker (`WalkModel::goto_markers`), which `SequenceTick::follows_gotos`
+switches on for HD **only**; Pulse's walk is unchanged (its 111 rendered WAVs
+are byte-identical before and after), so the 90-96 Pulse cues blocked on `0x22`/`0x23`/`0x24`
+stay as they were.
 
 **The flat pick is wrong in a wider place, and this lane did not fix it.**
 `cargo run --release -p oag-formats --example sblk_layer_census -- SHIELD`
@@ -441,9 +448,10 @@ The Zone announcer was the first cue found played as one random leaf of a
 sequence. The same is true of any cue whose command list keys several waveforms
 on, and `Banks::pick` did it for the weapon and pickup cues too. **Pulse cues
 now play as the list authors them** (`oag_game::audio::sfx::layers`), on the
-PSP tick, with nothing changed for Pure, Wipeout HD or 2048 (their tick is
-unmeasured, so their `SequenceTick` is `Unknown` and `Banks::voices` falls back
-to the flat pick).
+PSP tick. **Wipeout HD's cues follow at its own measured 240 Hz** (2026-09-29,
+`SequenceTick::Ps3`; seven sfx cues and the fifteen `zone_N` lines), while Pure
+and 2048 have an unmeasured tick, so their `SequenceTick` is `Unknown` and
+`Banks::voices` falls back to the flat pick.
 
 **How a cue plays**, per `Scream_StepCommandList` (see
 [sound.md](../ghidra/functions/psp-pulse-usa/sound.md#how-a-cues-list-runs-alternates-end-bend-and-loop-2026-09-29)):

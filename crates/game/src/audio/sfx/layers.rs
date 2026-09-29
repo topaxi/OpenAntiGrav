@@ -14,8 +14,8 @@
 //! Each grain is one [`CueVoice`]; [`start`] hands them to the mixer with the
 //! start delay [`oag_audio::Mixer::delay_start`] gives.
 //!
-//! What is authored: which waveforms, when (in master ticks at
-//! [`oag_formats::sblk::timeline::TICKS_PER_SECOND`]), each grain's volume
+//! What is authored: which waveforms, when (in master ticks at the build's
+//! [`SequenceTick::ticks_per_second`]), each grain's volume
 //! terms, its descriptor pan angle, the alternate groups (`0x19`) and the
 //! random bend (`0x1b`) through each descriptor's bend range. What is chosen,
 //! not measured: a delay is rounded to a whole output frame; a **placed** cue's
@@ -31,7 +31,7 @@ use oag_audio::spatial::{pan_of_angle, pan_volume_gain};
 use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_core::Rng;
 use oag_formats::sblk::Bank;
-use oag_formats::sblk::timeline::TICKS_PER_SECOND;
+use oag_formats::sblk::timeline::WalkModel;
 use oag_title::SequenceTick;
 
 use super::banks::decode_waveform;
@@ -150,14 +150,16 @@ pub(super) fn timelines(
     name: &str,
     tick: SequenceTick,
 ) -> anyhow::Result<Option<Vec<Timeline>>> {
-    match tick {
-        SequenceTick::Psp => {}
-        SequenceTick::Unknown => return Ok(None),
-    }
+    let Some(ticks_per_second) = tick.ticks_per_second() else {
+        return Ok(None);
+    };
     let Some(cue) = bank.cue_named(name) else {
         return Ok(None);
     };
-    let Some(all) = bank.cue_timelines(&cue) else {
+    let model = WalkModel {
+        goto_markers: tick.follows_gotos(),
+    };
+    let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
         return Ok(None);
     };
     if all.is_empty() || all.iter().any(|t| !t.is_complete() || t.grains.is_empty()) {
@@ -216,7 +218,7 @@ pub(super) fn timelines(
             layers.push(Layer {
                 sound,
                 looping: grain.sound.is_looping(),
-                delay: f64::from(grain.tick) / TICKS_PER_SECOND,
+                delay: f64::from(grain.tick) / ticks_per_second,
                 angle: grain.angle,
                 bend: grain.bend.map(|draw| Bend {
                     draw,

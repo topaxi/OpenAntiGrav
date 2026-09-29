@@ -140,7 +140,8 @@ fn the_announcer_plays_the_whole_line_as_one_voice() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_tick_is_only_claimed_for_the_builds_it_was_measured_on() {
-    // Pulse is the PSP measurement (lent to its PS2 pressing); nothing else.
+    // Pulse is the PSP measurement (lent to its PS2 pressing) and HD the PS3's;
+    // nothing else.
     let Some(opened) = open("pulse-psp-usa.chd") else {
         return;
     };
@@ -148,10 +149,13 @@ fn a_tick_is_only_claimed_for_the_builds_it_was_measured_on() {
         opened.title.race.zone_announcer.expect("a ladder").tick,
         SequenceTick::Psp
     );
-    for (image, title) in [
-        ("pure-psp-usa.chd", "Pure"),
-        ("hdfury-ps3-eu-dec.iso", "HD"),
-    ] {
+    if let Some(hd) = open("hdfury-ps3-eu-dec.iso") {
+        assert_eq!(
+            hd.title.race.zone_announcer.expect("a ladder").tick,
+            SequenceTick::Ps3
+        );
+    }
+    for (image, title) in [("pure-psp-usa.chd", "Pure")] {
         let Some(opened) = open(image) else {
             continue;
         };
@@ -213,22 +217,67 @@ fn pure_s_lines_are_single_grains_and_keep_the_flat_pick() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn hd_s_milestones_are_left_on_the_flat_pick_until_its_tick_is_measured() {
+fn hd_s_milestones_are_the_whole_line_as_a_stereo_pair_and_a_silent_child() {
     let Some(mut opened) = open("hdfury-ps3-eu-dec.iso") else {
         return;
     };
     let blob = bank_of(&mut opened);
     let bank = Bank::parse(&blob).expect("parse");
-    // HD's `zone_5` is the number twice and a child, `c_CLEAR`, whose own two
-    // grains are a goto and a marker: no waveform to lay down, and opcodes this
-    // walk reports rather than skips.
-    let cue = bank.cue_named("zone_5").expect("zone_5");
-    let timeline = bank.cue_timeline(&cue);
-    assert_eq!(timeline.grains.len(), 2);
-    assert_eq!(timeline.unread, vec![0x24, 0x23]);
+    let table = opened.title.race.zone_announcer.expect("a ladder");
+    // `c_CLEAR`, the child every `zone_N` starts, is a goto and the marker it
+    // lands on: with gotos followed it is complete and has no grain at all. The
+    // word "clear" is not a separate cue - it is inside the one waveform the
+    // parent keys.
+    let clear = bank.cue_named("c_CLEAR").expect("c_CLEAR");
+    let followed = bank.cue_timeline_modelled(
+        &clear,
+        &[],
+        oag_formats::sblk::timeline::WalkModel { goto_markers: true },
+    );
+    assert!(followed.is_complete() && followed.grains.is_empty());
+
     let announcer = Announcer::load(&mut opened.archives, opened.title.race.zone_announcer);
+    for &milestone in table.milestones {
+        let name = format!("zone_{milestone}");
+        let cue = bank.cue_named(&name).expect("the milestone's cue");
+        let timeline = bank.cue_timeline_modelled(
+            &cue,
+            &[],
+            oag_formats::sblk::timeline::WalkModel { goto_markers: true },
+        );
+        assert!(timeline.is_complete(), "{name}: {timeline:?}");
+        // The whole line, keyed at +30 degrees and again at -30 five ticks
+        // (20.8 ms at 240 Hz) later.
+        let got = shape(&timeline);
+        assert_eq!(got.len(), 2, "{name}");
+        assert_eq!(got[0].1, got[1].1, "{name}: one waveform twice");
+        assert_eq!((got[0].0, got[0].2), (0, 30), "{name}");
+        assert_eq!((got[1].0, got[1].2), (5, 330), "{name}");
+
+        let mut rng = oag_core::Rng::new(1);
+        let (line, looping) = announcer.pick(milestone, &mut rng).expect("a line");
+        assert!(!looping);
+        assert_eq!(line.channels(), 2);
+        // The composite is the waveform plus the pair's 5-tick offset.
+        let word = bank.cue_sounds(&cue)[0].clone();
+        let data = bank.waveform(&word).expect("the waveform is in the bank");
+        let frames = if word.is_adpcm() {
+            oag_formats::sblk::decode_adpcm(oag_formats::sblk::adpcm_played(data)).len()
+        } else {
+            oag_formats::sblk::decode_pcm16(data).len()
+        };
+        let expect = frames as f64 / f64::from(word.sample_rate()) + 5.0 / 240.0;
+        assert!(
+            (f64::from(line.seconds()) - expect).abs() < 0.002,
+            "{name}: {} s, expected {expect}",
+            line.seconds()
+        );
+    }
     assert!(
-        announcer.report.iter().all(|l| !l.contains("sequence of")),
+        announcer
+            .report
+            .iter()
+            .all(|l| l.contains("sequence of 2 grain(s)")),
         "{:?}",
         announcer.report
     );

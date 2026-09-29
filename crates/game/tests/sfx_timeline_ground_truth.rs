@@ -136,6 +136,66 @@ fn a_layered_cue_keys_each_voice_on_at_its_authored_delay() {
     assert!(ran > 0, "no Pulse disc image was present");
 }
 
+/// Wipeout HD's SCREAM runs a 240 Hz master tick (`SequenceTick::Ps3`), not the
+/// PSP's 258.4: the same authored tick counts land later in seconds.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_layered_cues_key_on_at_the_ps3_tick() {
+    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let banks = banks(&path);
+    // (cue, the delays of its voices in master ticks), read off the bank.
+    let cases: [(Cue, &[u32]); 2] = [
+        (Cue::Plasma, &[0, 15, 215, 230]),
+        (Cue::PlasmaHitWall, &[0, 0, 15, 15, 40]),
+    ];
+    for (cue, ticks) in cases {
+        let started = voices(&banks, cue);
+        assert_eq!(started.len(), ticks.len(), "{}", cue.name());
+        let mut end = 0.0f64;
+        for (voice, &t) in started.iter().zip(ticks) {
+            let want = f64::from(t) / 240.0;
+            assert!(
+                (voice.delay - want).abs() < 1e-9,
+                "{}: voice at {} not {want}",
+                cue.name(),
+                voice.delay
+            );
+            let (first, last) = extent(voice);
+            assert!(
+                first >= want - 0.001 && first < want + 0.02,
+                "{}: first audible at {first}, authored {want}",
+                cue.name()
+            );
+            let authored = want + f64::from(voice.sound.seconds()) / f64::from(voice.pitch);
+            assert!(
+                (last - authored).abs() < 0.03,
+                "{}: ends at {last}, authored {authored}",
+                cue.name()
+            );
+            end = end.max(authored);
+        }
+        let mut mixer = Mixer::new(RATE);
+        let _ = start_voices(&mut mixer, &started, cue.bus(), VoicePlace::DRY);
+        let (first, last) = frames(&mut mixer);
+        assert!(first < 0.02, "{}: starts late at {first}", cue.name());
+        assert!(
+            (last - end).abs() < 0.03,
+            "{}: ends at {last}, authored {end}",
+            cue.name()
+        );
+    }
+    assert!(
+        banks
+            .report
+            .iter()
+            .any(|l| l.contains("plays its timeline")),
+        "{:?}",
+        banks.report
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_shield_holds_both_of_its_loops_at_once() {

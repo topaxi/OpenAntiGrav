@@ -964,6 +964,106 @@ trace and `FUN_002ffa58`'s exact role (the addendum above's open item) is
 still unresolved - it is a callee's ambiguity, not this function's own, but
 the score does not separate the two.
 
+## The master tick is 240 Hz, and `c_CLEAR` is silent by construction, 2026-09-29
+
+Wipeout HD's SCREAM counts a command's delay word in **master ticks of 240 Hz**.
+Both halves were open in [psp-audio.md](../../../formats/psp-audio.md#a-cue-can-be-a-sequence-and-zone_n-is-one)
+(HD's tick "not measured", `c_CLEAR` "unread") and both are settled here: the
+rate from the executable and from a live count, `c_CLEAR` from the goto handler
+above. The Pulse counterpart is
+[psp-pulse-usa/sound.md](../psp-pulse-usa/sound.md#the-master-tick-and-the-delay-word-2026-09-29).
+
+### The chain, found from the opcode dispatch table
+
+The dispatch table's one reader, `lwz r4,0x2c94(r2)` at `0x006252b0` (TOC
+`0x008bd3c4`, so `0x008c0058`, which holds `0x00927614`), is the command stepper;
+its callers lead up to the tick in four hops. Every one is TOC-checked with
+`scripts/ps3-toc.py toc` (`0x008bd3c4`, `exact`).
+
+| Address | Name | Confidence | What it does |
+| --- | --- | --- | --- |
+| `0x00631a70` | `Scream_AccumulateTicks` | 85 | Once per audio-thread pass: `acc += *0x0091ea60` (a float), and while `acc > 1.0` (`0x008c023c`) calls `Scream_MasterTick` and subtracts 1.0 |
+| `0x0062e518` | `Scream_MasterTick` | 90 | Locks the sound system, and while its pending count (`0x013bc5b8`) is positive: `++0x013bc500`, `Scream_TickHandlers`, a slower update every fourth tick. Same shape as [Pulse's](../psp-pulse-usa/sound.md#the-master-tick-and-the-delay-word-2026-09-29) |
+| `0x0062e098` | `Scream_TickHandlers` | 82 | Walks the live handler list; a handler whose type nibble (`*h & 0x1f`) is `5` and that is not paused (`+0x22 & 2`) goes to `Scream_TickCommandList` |
+| `0x006253d0` | `Scream_TickCommandList` | 88 | `handler + 0xa0 -= 1`, then `while (delay < 1 && pc != -1) Scream_StepCommandList(handler)` |
+| `0x00625218` | `Scream_StepCommandList` | 88 | Runs the command at `handler + 0xa2` through the table, advances the pc, and sets `handler + 0xa0 = (s16)next.word1 + result` |
+
+`Scream_TickCommandList` and `Scream_StepCommandList` are the delay-word reading
+Pulse's page records, field for field (Pulse's `+0x48` is `+0xa0` here, `+0x4a`
+is `+0xa2`): **the second word of a command is the wait before that command,
+counted from the previous one, in master ticks**, and a wait of zero runs in the
+same tick. Confidence 88, two binaries agreeing.
+
+**The step is `2.56f`**: `0x0091ea60` reads `0x4023d70a`, `0x008c023c` reads
+`0x3f800000` (1.0). So a pass runs two or three ticks (the accumulator was read
+at 0.84, 0.12, 0.96, 0.80, 0.64 at five stops) and **the ticks of one pass run
+back to back**: a cue started in a pass has its ticks quantised to the audio
+pass, 10.7 ms wide, where Pulse's are 3.9 ms.
+
+**What paces a pass.** `SoundSystem_AudioThread` (`0x00309230`) calls
+`FUN_00679a18` (a stub for `Scream_AccumulateTicks`) when `g_sound_system+0xf90`
+is set (read live: 1), then `FUN_006799f8` (a stub for `0x00602c20`), the
+cellMS block generator whose error strings name `cellMSSystemGetNeededMemorySize`.
+That function loops `usleep(800)` until the `cellAudio` read index has moved by
+`iVar24` blocks, where `iVar24` is 1 when the MS grain word `*0x008bf984` is set
+and the block size `*0x008bf980` is 0x80 or 0x100, and otherwise 2. Live: the
+grain word is 0, so **a pass waits for two `cellAudio` blocks**. A `cellAudio`
+block is 256 frames at 48 kHz (the API's own fixed size, not read from this
+binary), so a pass is 512 frames = 10.667 ms, 93.75 passes a second:
+
+```text
+48000 / 512 * 2.56 = 240.0 ticks per second   (2.56f gives 239.99999)
+```
+
+### Measured live
+
+RPCS3 `v0.0.42-19980-028d1e8f`, HD EU (`BCES-00664`), Recompiler (LLVM), audio
+renderer Null, Xvfb :94, Main Menu, gdb stub. `scripts/rpcs3-hd-sound-tick.py`
+resumes the emulator for 10 s of wall clock, interrupts it, and reads the tick
+counter `0x013bc500` at each stop:
+
+| Window | Ticks | Wall s (resume to stop reply) | Ticks per s |
+| --- | --- | --- | --- |
+| 1 | 2402 | 10.020 | 239.71 |
+| 2 | 2403 | 10.021 | 239.81 |
+| 3 | 2404 | 10.020 | 239.93 |
+| 4 | 2404 | 10.040 | 239.44 |
+
+The same static and live number is not a coincidence of one path: a second
+caller of `Scream_MasterTick`, `FUN_006334a0` (returns 200, reached only through
+its OPD `0x008a34d0`), would add ticks on top of 240 if it ran, and the count is
+240 within the window's own resolution (the stop-reply latency, 20-40 ms of
+10 s). Not read: what registers `FUN_006334a0`.
+
+Confidence **90** for 240 Hz at HD's EU build: the static derivation (step,
+threshold, two-block pass) and four live windows agree to 0.2 %. The wall clock
+includes the pause round trip, so the live figure is a slight under-read by
+construction. Not measured: HD's US build (same code is expected, unread), a
+race rather than the front end (the audio thread is the same one), the phase of
+a cue's start against the tick.
+
+### `c_CLEAR` is a goto and its own marker
+
+`Scream_DoGrainGoto` (`0x006255f8`, decompile above) scans **the cue's own
+commands** from the first for a command whose byte 0 is `#` (`0x23`) and whose
+byte 1 equals the goto's own byte 1, sets `pc` to one before it and returns 0.
+HD's `c_CLEAR` (cue 21 of `speech_zone.bnk`, commands 71-72) is
+`0x24 operand 0`, `0x23 operand 0`: the goto lands on the marker beside it and
+the list ends. **The cue is silent.** It is not a missing "clear": each
+`zone_N`'s one waveform is the whole line ("zone", the number, "clear" in one
+recording; 1.7-2.0 s, three loudness bursts in the rendered envelope), keyed twice at
+pan angles 30 and 330 degrees, 5 ticks (20.8 ms) apart, then the silent child
+280-350 ticks (1.17-1.46 s) later. Why the child is there is not established;
+**hypothesis, no score**: it holds the cue alive past the line's end so the
+announcer queue (`Sound_QueueAnnouncerCue`, `0x00310bd8`) does not start the next
+line early.
+
+The rate and the reading are wired: `oag_title::SequenceTick::Ps3` (240 Hz, gotos
+followed), `oag_formats::sblk::timeline::WalkModel`. Seven HD sfx cues
+(`shieldactive`, `autopilot_eng`, `disengaging`, `PLASMA`, `PLASMAHITWALL`,
+`QUAKELAUNCH`, `LEACH`) and all fifteen `zone_N` lines now play their authored
+timeline.
+
 ## Not determined
 
 - **`sysvar_table`'s contents** (`0x008c0038`). A runtime pointer, not a

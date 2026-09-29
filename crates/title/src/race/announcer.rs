@@ -61,7 +61,9 @@ pub struct ZoneAnnouncer {
 /// and turning a delay into time needs the engine's master tick. It is a
 /// property of the *build*, not of the bank's byte order: the PSP's is
 /// 258.4 Hz, measured live (`docs/ghidra/functions/psp-pulse-usa/sound.md`,
-/// "The master tick and the delay word"); nothing else has been measured.
+/// "The master tick and the delay word"), and the PS3's is 240 Hz, read from
+/// the executable and measured live in RPCS3
+/// (`docs/ghidra/functions/ps3-hdfury-eu/sound.md`, "The master tick").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SequenceTick {
     /// Not measured for this title's build. A sequence cue is not laid out on
@@ -73,6 +75,37 @@ pub enum SequenceTick {
     /// the words and their order are authored either way, and the alternative
     /// is playing one of them at random.
     Psp,
+    /// The PS3's 240 Hz master tick (`48000 * 2.56 / 512`): Wipeout HD/Fury's
+    /// SCREAM adds 2.56 to an accumulator once per audio-thread pass, and a
+    /// pass waits for two 256-frame `cellAudio` blocks at 48 kHz. **Measured**
+    /// on HD's EU build in RPCS3 (239.4 to 239.9 ticks per second over four
+    /// 10 s windows). Omega's PS4 build is a different binary and is not
+    /// covered.
+    Ps3,
+}
+
+impl SequenceTick {
+    /// Master ticks per second, or [`None`] when the build's tick is not known.
+    #[must_use]
+    pub fn ticks_per_second(self) -> Option<f64> {
+        match self {
+            Self::Unknown => None,
+            Self::Psp => Some(44_100.0 * 3.0 / 512.0),
+            Self::Ps3 => Some(240.0),
+        }
+    }
+
+    /// Whether a cue walk follows `goto` (`0x24`) to its marker (`0x23`).
+    ///
+    /// Read on both builds' executables, but **only switched on where a cue
+    /// needs it and the title's audio was not already being played**: HD's
+    /// `c_CLEAR` is a goto and its marker and nothing else. Pulse keeps the
+    /// walk it was measured with, so its cue census does not move in the change
+    /// that measured HD.
+    #[must_use]
+    pub fn follows_gotos(self) -> bool {
+        matches!(self, Self::Ps3)
+    }
 }
 
 impl ZoneAnnouncer {
@@ -187,4 +220,26 @@ pub struct CountdownVoice {
     pub eliminator_bank: &'static str,
     /// The Zone bank, `Data\Sound\speech_zone.bnk` on Pulse.
     pub zone_bank: &'static str,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SequenceTick;
+
+    #[test]
+    fn each_build_names_its_own_rate_and_an_unmeasured_one_names_none() {
+        assert_eq!(SequenceTick::Unknown.ticks_per_second(), None);
+        // 44,100 Hz, three ticks per 512 frames.
+        let psp = SequenceTick::Psp.ticks_per_second().expect("measured");
+        assert!((psp - 258.398_437_5).abs() < 1e-9);
+        // 48,000 Hz, 2.56 ticks per 512 frames.
+        assert_eq!(SequenceTick::Ps3.ticks_per_second(), Some(240.0));
+    }
+
+    #[test]
+    fn only_the_ps3_walk_follows_gotos() {
+        assert!(!SequenceTick::Unknown.follows_gotos());
+        assert!(!SequenceTick::Psp.follows_gotos());
+        assert!(SequenceTick::Ps3.follows_gotos());
+    }
 }
