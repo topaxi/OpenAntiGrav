@@ -204,7 +204,7 @@ the real `.pkg`, turns a previously-refused (`Error::CorruptBlocks { count:
 unmodified decoder.
 
 **Checked against a corrected re-extraction
-(`data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/{omega-eu-fixed,omega-eu-patch-fixed}`), 2026-09-27: every named
+(first written under `data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/`, now `data/extracted/ps4/{omega-eu,omega-eu-patch}`), 2026-09-27: every named
 "missing"/"corrupt" texture above recovers, and none of it was genuinely
 absent.** `saveIcons.gnf`, `line.gnf`, `Hexmedal_HD.gnf` and all five
 campaign hex texture names (`Hexagon_HD_OUTLINE`, `Hexagon_HD`, `Hexlock_HD`,
@@ -223,12 +223,13 @@ decode results and the full census.
 
 ## Racing: a race starts, on this title's own data
 
-**Try:** `oag-game data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed --race
+**Try:** `oag-game data/extracted/ps4 --race
 --hold cross --no-audio --screenshot out.png` (any directory holding both
 packages' `uroot/dataNN.psarc`; they are found by name). `just play omega`
-reads `data/extracted/ps4`, which is the short-read copy above, so it does not
-get this far until that directory is replaced by a corrected extraction - the
-maintainer's call, because it shifts every census figure on this page.
+reads the same directory. `data/extracted/ps4` has held the corrected
+extraction since 2026-09-29; the short-read copy is `data/extracted/ps4.bak`,
+and a race does not get this far on it. Census figures on this page that name
+a count were measured on whichever copy the paragraph says.
 
 `omega-race`, 2026-09-29. On the corrected extraction a race loads the real
 spline, the real collision, the real craft and the real circuit geometry with
@@ -341,7 +342,7 @@ Reproducers: `crates/vex/examples/omega_track_probe.rs`, `omega_col_probe.rs`;
 `crates/rcs/examples/omega_rcsmodel_probe.rs`, `omega_rcsmodel_census.rs`,
 `omega_materials_probe.rs`; and the ground-truth suite
 `crates/game/tests/omega_race_ground_truth.rs`, which skips (loudly, even under
-`OAG_REQUIRE_GAME_DATA`) on the short-read extraction.
+`OAG_REQUIRE_GAME_DATA`) on a short-read extraction.
 
 ## See also
 

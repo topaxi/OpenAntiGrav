@@ -328,13 +328,14 @@ hash-images:
 # sixteen) - twelve of nineteen parse this lane, the rest failing per-row
 # the same tolerant way a bad HD grid already does.
 #
-# **A race starts**, on a corrected extraction only (2026-09-29, `omega-race`):
+# **A race starts**, on a whole extraction only (2026-09-29, `omega-race`):
 # real spline, collision, hull and textured circuit geometry, see
-# docs/formats/omega-status.md. `data/extracted/ps4` is the short-read copy that
-# page describes, and a race fails there on `tech_de_ra\track.vex` having no
-# `WO Track` node; point at a corrected pair instead:
+# docs/formats/omega-status.md. `data/extracted/ps4` is the whole extraction
+# since 2026-09-29; a short-read copy (the old one is `data/extracted/ps4.bak`)
+# fails a race on `tech_de_ra\track.vex` having no `WO Track` node. To read a
+# different pair of directories, set `OAG_OMEGA_SRC`:
 #
-#     OAG_OMEGA_SRC=data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed \
+#     OAG_OMEGA_SRC=data/extracted/ps4.bak \
 #         just play omega --race --no-audio --screenshot out.png
 #
 # A debug build spends about three minutes decoding the circuit's ~460 textures.

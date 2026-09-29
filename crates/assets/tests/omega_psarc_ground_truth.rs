@@ -1,7 +1,7 @@
-//! `omega-ps4-eu`'s five `dataNN.psarc` archives: the digest-matched path
-//! count is a container fact and a ratchet; whether an *individual* entry's
-//! content is real is not (see below), so this file does not assert a
-//! content rate.
+//! `omega-ps4-eu`'s five `dataNN.psarc` archives, on the corrected
+//! extraction: the digest-matched path count is a container fact and a
+//! ratchet, and so is the content of every entry whose extension carries a
+//! magic.
 //!
 //! **`#[ignore]`d and never run in CI.** They need
 //! `data/extracted/ps4/omega-eu/uroot/`, which this project does not ship -
@@ -12,35 +12,33 @@
 //! just test-data
 //! ```
 //!
-//! # What this asserts, and what it deliberately does not
+//! # What this asserts
 //!
-//! [`docs/formats/psarc.md`](../../../docs/formats/psarc.md)'s "Block data
-//! location" section measures that a large fraction of this family's real
-//! entries read back as either all-zero or "garbage" (present bytes that do
-//! not match their extension's own magic) through the crate's own,
-//! unmodified reader - **and that this is not a reader bug**: the same
-//! split reproduces across two independent extractions of two different
-//! `.pkg` files, `entry.offset` spans each archive's declared length
-//! exactly, and a small sample rules out a constant per-entry offset error.
-//! A test asserting a real-content-rate *floor* would therefore be asserting
-//! a fact about this one local dump, not about `oag_formats::psarc` or
-//! `oag_assets::psarc::Archive` - it would break the day someone re-extracts
-//! the `.pkg` and gets a differently-provisioned copy, with no reader
-//! change at fault. See that page for the measured numbers themselves.
+//! [`docs/formats/psarc.md`](../../../docs/formats/psarc.md) measures the
+//! archives on the **corrected extraction** (`PkgTool.Core` with the short
+//! `Stream.Read` in `PFSCReader.ReadSector` fixed, 2026-09-27; promoted to
+//! `data/extracted/ps4` 2026-09-29). Every number below is from that copy.
+//! An earlier copy of this file ratcheted the short-read extraction's
+//! numbers instead - about a seventh of each manifest's paths, thousands of
+//! zeroed placeholder rows and one "corrupt" row per archive - and all of it
+//! was the extractor's zero-padding, not a property of the archives. This
+//! file therefore now fails on a short-read copy, on purpose: the numbers
+//! cannot agree with it.
 //!
-//! What *is* a fact about the reader, and does belong in a ratchet:
+//! What is asserted, per archive:
 //!
-//! 1. The digest-matched path count per archive (`docs/formats/psarc.md`'s
-//!    "Manifest delimiter and entry/path correspondence" table) - a
-//!    regression here means `parse_manifest`/`match_paths_to_entries`
-//!    broke, not that the dump changed.
-//! 2. Every digest-matched entry either reads without error, or fails with
-//!    exactly the one documented corrupt row per archive
-//!    (`docs/formats/psarc.md`'s "A single corrupt row per archive"
-//!    section) - anything else is a new, unexplained read failure.
-//! 3. A small anchor set of known-real `.gnf`/`.vex` entries still decode on
-//!    their own magic - the positive control `docs/formats/psarc.md`'s
-//!    "valid" bucket numbers rest on.
+//! 1. The digest-matched path count, and that it names **every** entry
+//!    behind the manifest: no placeholder row, no orphan entry, no path
+//!    without an entry. A regression here means `parse_manifest` or
+//!    `match_paths_to_entries` broke - or the tree is not a whole extraction.
+//! 2. Every entry reads without error.
+//! 3. Every entry whose extension carries a magic (`.gnf`, `.vex`, the four
+//!    `.rcs*` kinds) carries it, the one exception being a big-endian
+//!    `.vex` (`XXEV`), which is real content in the other byte order and is
+//!    counted, not skipped. A whole extraction has no other misses; a torn
+//!    one has thousands.
+//! 4. A small anchor set of known-real `.gnf`/`.vex` entries still decode on
+//!    their own magic - the positive control.
 
 use std::path::PathBuf;
 
@@ -55,13 +53,31 @@ fn open(name: &str) -> Option<Archive> {
     Some(Archive::open_file(&path).unwrap_or_else(|e| panic!("open {name}: {e}")))
 }
 
-/// One archive's expected shape: digest-matched path count, and the single
-/// known corrupt directory index (real digest, unreadable geometry), if any.
-/// Numbers from `docs/formats/psarc.md`'s own measurements.
+/// One archive's expected shape, from `docs/formats/psarc.md`'s own
+/// measurements on the corrected extraction.
 struct Expected {
     archive: &'static str,
+    /// Digest-matched paths, which is also every entry behind the manifest.
     matched_paths: usize,
-    corrupt_index: Option<usize>,
+    /// Entries whose extension carries a magic and whose bytes are the
+    /// big-endian `.vex` (`XXEV`) rather than the little-endian one.
+    big_endian_vex: usize,
+}
+
+/// The magic an extension's bytes open with, and where, for the formats that
+/// carry one (`.png` included: 42 on `data00`, the only base archive with any). Little-endian `.vex` is `VEXX` at `+0x0c`; the other byte order
+/// is checked separately. `.rcsmodel`, `.rcsskeleton` and `.rcsanimclip`
+/// share one tag and `.rcsmaterial` has its own - see
+/// `crates/assets/examples/psarc_oracle.rs`.
+fn magic_of(extension: &str) -> Option<(usize, &'static [u8])> {
+    match extension {
+        "gnf" => Some((0x00, b"GNF ")),
+        "png" => Some((0x00, b"\x89PNG\r\n\x1a\n")),
+        "vex" => Some((0x0c, b"VEXX")),
+        "rcsmodel" | "rcsskeleton" | "rcsanimclip" => Some((0x00, &[0xed, 0xad, 0x5c, 0xca])),
+        "rcsmaterial" => Some((0x00, &[0xe5, 0xad, 0x5c, 0xca])),
+        _ => None,
+    }
 }
 
 fn check(expected: &Expected) {
@@ -75,25 +91,54 @@ fn check(expected: &Expected) {
         "{}: digest-matched path count",
         expected.archive
     );
+    assert_eq!(
+        archive.directory().entries.len(),
+        expected.matched_paths + 1,
+        "{}: every entry behind the manifest names a manifest path",
+        expected.archive
+    );
 
     let mut unexpected_errors = Vec::new();
-    // Walk by directory index directly - `paths()` order does not carry the
-    // index, and re-deriving it via `index_of_path` would re-run the same
-    // digest match `paths()` already did once.
-    let indices: Vec<usize> = (0..archive.directory().entries.len())
-        .filter(|&i| archive.directory().entries[i].digest != [0u8; 16])
-        .collect();
-    for index in indices {
-        if let Err(e) = archive.read(index) {
-            if Some(index) == expected.corrupt_index {
+    let mut wrong_magic = Vec::new();
+    let mut big_endian_vex = 0;
+    for path in archive.paths().to_vec() {
+        let index = archive
+            .index_of_path(&path)
+            .expect("a listed path resolves");
+        let bytes = match archive.read(index) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                unexpected_errors.push(format!("{index} {path}: {e}"));
                 continue;
             }
-            unexpected_errors.push(format!("{index}: {e}"));
+        };
+        let extension = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+        let Some((at, magic)) = magic_of(&extension) else {
+            continue;
+        };
+        let has = |at: usize, magic: &[u8]| bytes.get(at..at + magic.len()) == Some(magic);
+        if has(at, magic) {
+            continue;
+        }
+        if extension == "vex" && has(0x0c, b"XXEV") {
+            big_endian_vex += 1;
+        } else {
+            wrong_magic.push(format!("{index} {path}"));
         }
     }
     assert!(
         unexpected_errors.is_empty(),
         "{}: unexpected read errors: {unexpected_errors:?}",
+        expected.archive
+    );
+    assert!(
+        wrong_magic.is_empty(),
+        "{}: entries without their extension's magic: {wrong_magic:?}",
+        expected.archive
+    );
+    assert_eq!(
+        big_endian_vex, expected.big_endian_vex,
+        "{}: big-endian .vex entries",
         expected.archive
     );
 }
@@ -124,8 +169,8 @@ fn assert_decodes_as_vex(archive: &mut Archive, path: &str) {
 fn data00_matches_its_manifest_and_reads_without_new_errors() {
     check(&Expected {
         archive: "data00.psarc",
-        matched_paths: 1_492,
-        corrupt_index: Some(9042),
+        matched_paths: 10_926,
+        big_endian_vex: 6,
     });
 }
 
@@ -134,8 +179,8 @@ fn data00_matches_its_manifest_and_reads_without_new_errors() {
 fn data01_matches_its_manifest_and_reads_without_new_errors() {
     check(&Expected {
         archive: "data01.psarc",
-        matched_paths: 891,
-        corrupt_index: None,
+        matched_paths: 4_641,
+        big_endian_vex: 10,
     });
 }
 
@@ -144,8 +189,8 @@ fn data01_matches_its_manifest_and_reads_without_new_errors() {
 fn data02_matches_its_manifest_and_reads_without_new_errors() {
     check(&Expected {
         archive: "data02.psarc",
-        matched_paths: 923,
-        corrupt_index: Some(4676),
+        matched_paths: 5_611,
+        big_endian_vex: 8,
     });
 }
 
@@ -154,8 +199,8 @@ fn data02_matches_its_manifest_and_reads_without_new_errors() {
 fn data03_matches_its_manifest_and_reads_without_new_errors() {
     check(&Expected {
         archive: "data03.psarc",
-        matched_paths: 327,
-        corrupt_index: None,
+        matched_paths: 661,
+        big_endian_vex: 2,
     });
 }
 
@@ -164,8 +209,8 @@ fn data03_matches_its_manifest_and_reads_without_new_errors() {
 fn data04_matches_its_manifest_and_reads_without_new_errors() {
     check(&Expected {
         archive: "data04.psarc",
-        matched_paths: 837,
-        corrupt_index: Some(318),
+        matched_paths: 4_569,
+        big_endian_vex: 0,
     });
 }
 

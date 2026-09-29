@@ -243,7 +243,7 @@ boundary is a PSARC-block property, not a tile-row one: the archive's own
 each of blocks 0-3 falls a varying ~10-15 KiB in (15104, 11952, 10208,
 13856), which is a property of *that PSARC block's own stored bytes*, not
 of the address formula reading them in the wrong order. This is the same
-"garbage"/"all-zero" population [`psarc.md`'s](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+"garbage"/"all-zero" population [`psarc.md`'s](psarc.md#block-data-location-and-the-short-read-extraction)
 own "Block data location" section documents family-wide - landing on this
 specific ship-livery texture's own copy, not a defect in the tiling math.
 
@@ -342,7 +342,7 @@ never-looped `Read`.
    completely unmodified `oag_texture::gnf::Texture::decode` turns the
    result into a fully legible ship-livery texture -
    `data/scratch/drive-2026-09-27/omega-psarc/harimau_c1_livery4_patched.gnf.png`.
-   The file as currently shipped in `data/extracted/ps4/omega-eu` still
+   The file as extracted before 2026-09-29 (`data/extracted/ps4.bak/omega-eu`) still
    correctly raises `Error::CorruptBlocks { count: 49899 }` on the same
    entry - the refusal this project's reader is supposed to make on
    genuinely missing content, working exactly as designed against a
