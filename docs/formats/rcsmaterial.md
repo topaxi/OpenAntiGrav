@@ -2197,7 +2197,7 @@ PS4 sample matches that shape at any byte order. `crates/assets/examples/psarc_o
 now scores the tag the same way it already scores `.vex`'s `VEXX` and
 `.gnf`'s `GNF `, turning "no magic, zero-vs-nonzero only" into a real
 valid/all-zero/garbage split - **439 of 1,270 `.rcsmaterial` entries carry
-the tag** disc-wide; see [psarc.md](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+the tag** disc-wide; see [psarc.md](psarc.md#block-data-location-and-the-short-read-extraction)
 for the per-archive table.
 
 **The names inside still resolve.** `crates/rcs/examples/ps4_hash_scan.rs`

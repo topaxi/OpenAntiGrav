@@ -234,397 +234,216 @@ dispatching on version - which reproduces the well-behaved case's own
 positional order as a corollary, not a fact that needs its own code path.
 See `crates/formats/src/psarc.rs`'s module docs for the full argument.
 
-### Manifest delimiter and entry/path correspondence - confidence 88
+### Manifest delimiter and entry/path correspondence - confidence 92
 
-**The manifest is NUL-delimited, not newline-delimited.** Measured directly
-on `data00.psarc`: its 598,798-byte manifest carries zero `\n` bytes.
-Splitting on `\x00` and dropping empty segments recovers 10,714 well-formed
-paths - **not** the 22,582 a naive `split(NUL).len()` reports, which is
-counting 11,868 empty segments produced by long zero-byte runs inside the
-manifest text itself (three runs, 3,083 + 1,955 + 6,833 bytes, one of them
-truncating a real name mid-string - `Qirex_Col_A` where a `.gnf` extension
-should follow). Those runs are already deflate output, not a read bug (no
-`ShortBlock`), so the game genuinely ships stale zeroed-out manifest text -
-recorded as unrecoverable, not reconstructed.
+**Every number on this page is from the corrected extraction**
+([below](#block-data-location-and-the-short-read-extraction)): the short-read
+copy this project first measured made these archives look torn, and nothing
+about that picture survives a whole extraction. What was retired is listed in
+the same section, so a reader holding an older note can find it.
 
-**Entry order carries no relationship to manifest order at all.** The PS3
-invariant "entry `n + 1` is manifest line `n`" does not hold: the entry table
-is a concatenation of several separately digest-ascending runs (one descent
-in the sequence per extra run - `data00.psarc` has four, `data01.psarc` two,
-`data02.psarc`/`data04.psarc` one each, `data03.psarc` none), and it carries
-thousands of fully-zeroed placeholder rows (digest, `first_block`, `size` and
-`offset` all `0`) for manifest paths this particular archive does not store.
-A fourth row shape turns up too, one per archive on `data00`/`data01`/
-`data02`/`data04`, always at index 2183: a digest that is fourteen zero bytes
-and two real ones, not the all-zero placeholder shape and not a real path's
-MD5 either, with plausible-looking geometry beside it. `match_paths_to_entries`
-handles it the same way it handles any real entry whose digest matches no
-manifest path - drops it - so it needs no special case, but the "placeholder
-vs. real" split above is not the whole shape of the table.
+**The manifest is NUL-delimited, not newline-delimited.** `data00.psarc`'s
+598,798-byte manifest carries zero `\n` bytes and 10,925 `\x00` bytes:
+exactly the separators between 10,926 paths, with no empty segment and no
+zero run anywhere in the text. Splitting on `\x00` recovers every path, and
+they are 10,926 distinct strings. All nine `omega-ps4-eu{,-patch}`
+archives read the same way.
 
-The correspondence that *does* hold, checked against `path_digest` on all
-five archives:
+**The entry table is digest-ascending, one run, and is not in manifest
+order.** The PS3 invariant "entry `n + 1` is manifest line `n`" does not hold
+here: `psarc_census` finds it true for 3 of `data00`'s 10,926 entries, and
+the manifest is not sorted either. The entry table is the ordinary
+PSARC 1.4 shape - the manifest first, then every file sorted by the MD5 of
+its path - so a path is found by digest, which is what
+`match_paths_to_entries` always does. **There is no placeholder row and no
+orphan**: on all five base archives `zero-digest rows`, `entries with no
+path` and `paths with no entry` are all 0.
 
-| Archive | Manifest paths | Real (non-zero-digest) entries | Matched by digest |
+| Archive | Manifest paths | Entries behind the manifest | Matched by digest |
 | --- | ---: | ---: | ---: |
-| `data00.psarc` | 10,714 | 1,533 | 1,492 |
-| `data01.psarc` | 4,641 | 894 | 891 |
-| `data02.psarc` | 5,611 | 927 | 923 |
-| `data03.psarc` | 661 | 328 | 327 |
-| `data04.psarc` | 4,569 | 840 | 837 |
+| `data00.psarc` | 10,926 | 10,926 | 10,926 |
+| `data01.psarc` | 4,641 | 4,641 | 4,641 |
+| `data02.psarc` | 5,611 | 5,611 | 5,611 |
+| `data03.psarc` | 661 | 661 | 661 |
+| `data04.psarc` | 4,569 | 4,569 | 4,569 |
 
-97-99% of real entries resolve to a manifest path by MD5, on every archive -
-1,492/1,533, 891/894, 923/927, 327/328 and 837/840 respectively. That is not
-an *exact* invariant the way the PS3 check is (every one of 11,664 matches
-there); it corroborates the digest-based correspondence rather than proving
-it outright, which is what keeps this claim's confidence at 88 rather than
-in the PS3 page's 92. The 86-90% of manifest paths
-that *don't* resolve to a local entry are not a split-namespace scheme
-either: checked directly, at most 2 of `data00.psarc`'s 9,222 orphaned paths
-turn up as a real entry in any of the other four archives - noise, not a
-pattern. They are dead text, most plausibly left over from incremental
-repacking that zeroed a removed file's manifest and entry-table rows in
-place rather than compacting around them (the three zero-byte manifest runs
-above are the same behaviour caught mid-edit).
+The patch's four (`data05` 8,205, `data07` 6, `data08` 11,266, `data09` 120)
+are the same: a bijection, 46,005 of 46,005 across the nine archives. That is
+as exact as the PS3 check (every one of 11,664), and is why the confidence is
+92 rather than the 88 an incomplete table earned. It is the same
+self-consistency evidence, not a runtime trace, so it does not go higher.
 
-**One digest is shared by two entries on `data00.psarc`** (1,533 real rows,
-1,532 distinct digests): entries 6846 and 6857 carry the same digest and the
-same `first_block`, but entry 6857's `size` and `offset` are both zero -
-another instance of the "digest survives, geometry doesn't" pattern the
-corrupt-row section below documents, not a second file with the same name.
-`match_paths_to_entries` resolves both to the same path, so `Archive::paths`
-lists it twice; `index_of_path`'s first-match `.position()` resolves to
-entry 6846, the row with real geometry, so lookup by name is unaffected.
+**Entries share storage.** 4,121 of `data00`'s entries sit at an
+`(offset, size)` another entry also names, 367 of `data03`'s 661: the packer
+stores one copy of identical content and points every name at it. Eleven
+ship liveries' `ShieldHexagonal_ALPHA.gnf` on `data03.psarc` (entries 16, 66,
+75, 85, 110, 111, 122, 125, 208, 287, 308) all declare
+`(114606848, 49408)` and all read `GNF `; two `Holographic_02_GLOW.gnf`
+(12, 100) share `(114590208, 16640)` just before them. `Archive::paths` lists
+each name once, and `index_of_path` resolves to the entry that carries it, so
+sharing changes nothing for a caller.
+
+**Sixteen entries on `data00.psarc` have size zero** - all
+`Data/audio/sound/*.txt`, sharing `first_block` 25,567 and `offset`
+1,619,318,029 - and read as empty (the patch's `data08` has sixteen size-zero
+entries too). They are empty files, not missing content; `psarc_oracle`
+reports them `unvalidated_all_zero`.
 
 Implemented as the content-based branch in `parse_manifest` and the
-always-by-digest `match_paths_to_entries`, which drops both an unmatched
-manifest path and an unmatched real entry rather than guessing at either.
+always-by-digest `match_paths_to_entries`.
 `crates/formats/src/psarc/tests.rs` pins the NUL split, the newline split
 on a manifest that would have been misread by a version-based dispatch, and
 the digest match/drop behaviour with a synthetic table;
-`crates/assets/examples/psarc_list` reproduces the table above's "Matched by
-digest" column against real data (its own path count, not the manifest-path
-or real-entry counts, which need reading the directory and manifest
-separately):
+`crates/assets/examples/psarc_census` reproduces the table above, and
+`crates/assets/tests/omega_psarc_ground_truth.rs` ratchets it and reads every
+entry:
 
 ```sh
-cargo run -p oag-assets --example psarc_list -- data/extracted/ps4/omega-eu/uroot/data00.psarc
+cargo run -p oag-assets --release --example psarc_census -- data/extracted/ps4/omega-eu/uroot/data00.psarc
 ```
 
-### A single corrupt row per archive - confidence 75
+### No corrupt row - retired
 
-Three of the five archives (`data00.psarc` entry 9042, `data02.psarc` entry
-4676, `data04.psarc` entry 318) each carry **exactly one** row with a real,
-non-zero digest and a `first_block` in the billions - `data02`'s and
-`data04`'s also declare a `size` past their own archive's length (56.5 GB and
-740 GB, inside 9.1 GB and 6.0 GB files). No candidate block-table width could
-ever cover a `first_block` that large, so before this was handled the whole
-directory failed to parse - two of the five archives (`data02`, `data04`)
-could not be opened at all. `read_block_table` now excludes any entry whose
-`first_block` exceeds what the narrowest possible block table could hold from
-its own `highest`-block computation (the same treatment the already-fixed
-`size == 0` sentinel gets), and `Directory::parse` no longer validates every
-entry's block range up front - that check already exists on
-`Directory::entry_range` and now runs lazily, so this one bad row surfaces
-as a read error on the single path that names it instead of refusing the
-archive. Confidence is 75 rather than higher because *why* exactly one row
-per archive is left this way is not established - a single torn write is the
-working description, not a verified cause.
+An earlier version of this page described one row per archive on
+`data00`/`data02`/`data04` (entries 9042, 4676, 318) with a real digest, a
+`first_block` in the billions and, on two, a `size` past the archive's own
+length, and put it down to a torn write; it also described a fourth row shape
+at index 2183 (a digest of fourteen zero bytes and two real ones) and a
+duplicated digest on `data00` (entries 6846 and 6857). **All three were the
+extraction tool's zero-padding**, not properties of the archive: the entry
+table is part of the file the short read damaged. On a whole extraction every
+row is well-formed - `data00`'s size-zero entries above carry a sane
+`first_block` and `offset`, and all 46,005 entries read without error.
 
-### Block data location - the "first byte" oracle was wrong, and the corrected picture is three-way, not binary
+The code that came out of it stays, because it is sound on its own terms:
+`read_block_table` still leaves a `first_block` no block table could hold out
+of the width probe, and `Directory::parse` still validates an entry's block
+range lazily in `Directory::entry_range` rather than up front. Neither
+triggers on a whole extraction; a damaged one is exactly where a reader
+should degrade to a per-path error rather than refuse the archive.
 
-**Correction, 2026-09-16: the real/zero split measured below was itself
-measured wrong, in the direction that undercounts real content.** Every
-number in the table this replaced came from `psarc_sweep` checking only
-whether an entry's **first** byte is nonzero - the previous section's own
-"trap" writeup explains why *any*-byte was rejected (a corrupt buffer with
-one stray nonzero byte tens of KB in reads as real), but never checked the
-opposite failure: a genuinely real, correctly-located `.gnf` entry whose
-own pixel payload does not start at byte zero. It does not, on a large
-fraction of this family's textures - see the dedup example below - so
-"first byte zero" was silently counting real files as fake right alongside
-the actually-fake ones, and the true fraction is neither the old "30-54%"
-number nor a clean complement of it.
+### Block data location and the short-read extraction
 
-**The corrected oracle checks the format's own magic instead of a
-byte position**, on the extensions that carry one:
-`Data\...\*.vex` (`VEXX` at `+0x0c` - [`vex.md`](vex.md)),
-`Data\...\*.gnf` (`GNF ` at `+0x00` - Sony's public PS4 texture magic), and -
-added 2026-09-16 by `lane/omega-rcs`, see [`rcsmodel.md`](rcsmodel.md)'s and
-[`rcsmaterial.md`](rcsmaterial.md)'s own PS4 sections - `Data\...\*.rcsmodel`
-(`ED AD 5C CA` at `+0x00`) and `Data\...\*.rcsmaterial` (`E5 AD 5C CA` at
-`+0x00`). **On PS3, `.rcsmodel`/`.rcsmaterial` still carry no magic at all**
-(`crates/rcs/src/rcsmodel.rs`'s own module docs, unchanged) - the PS4 tag is a
-new container wrapping these two formats on this platform only, not a magic
-this project overlooked on PS3. Three buckets result, not two -
-`crates/assets/examples/psarc_oracle.rs`, superseding `psarc_sweep`:
+**Most of what this page used to say here was measured on a short-read
+extraction and is wrong.** `PkgTool.Core`'s `PFSCReader.ReadSector` made one
+`Stream.Read` and treated a short return as a whole sector, leaving the rest
+of the sector zero. The tool was fixed and both `.pkg` files re-extracted
+2026-09-27; that copy became `data/extracted/ps4/{omega-eu,omega-eu-patch}`
+on 2026-09-29 (the short-read one is `data/extracted/ps4.bak`, a local
+backup with no other use). The root cause, the patch and the before-and-after
+are in [`gnf.md`'s "Root cause"](gnf.md#root-cause-confidence-90-a-short-streamread-in-the-extraction-tool-not-this-projects-reader)
+and [`source-images.md`](../reverse-engineering/source-images.md); this page
+keeps only the measurements that survive.
 
-| Archive | `.gnf` valid | `.gnf` all-zero | `.gnf` garbage | `.vex` valid | `.vex` all-zero | `.vex` garbage |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `data00.psarc` | 413 | 80 | 187 | 20 | 44 | 6 |
-| `data01.psarc` | 188 | 39 | 176 | 16 | 47 | 4 |
-| `data02.psarc` | 256 | 27 | 180 | 5 | 5 | 3 |
-| `data03.psarc` | 58 | 30 | 76 | 19 | 51 | 6 |
-| `data04.psarc` | 305 | 95 | 267 | 3 | 2 | 1 |
+**What the short read produced, retired here:**
 
-("Valid" = magic found where the format declares it. "All-zero" = the
-entire declared range is zero, no exceptions. "Garbage" = neither: real
-bytes are present, but not the expected magic at the expected offset - the
-population the old first-byte check could not see at all, since a "garbage"
-entry's first byte is overwhelmingly zero too.)
+- A "real / all-zero / garbage" split of **30-70 % real** per archive, an
+  "unexplained block-data-location" problem, and a first-byte oracle, its
+  replacement magic oracle, and both of their tables (`.gnf` valid 413 / 188 /
+  256 / 58 / 305 on the five archives, and their `garbage` and `all-zero`
+  columns). Every one of those counts was the same measurement with more or
+  fewer zero-padded sectors in it.
+- A `data00` manifest "truncated mid-string" with three zero runs, and 10,714
+  paths against 1,533 real entries - 86-90 % "dead text", "thousands of
+  placeholder rows", "several descending runs" in the entry table. The
+  manifest was itself read through the buggy decompressor and the entry table
+  is part of the file it damaged.
+- A constant-offset check on three `garbage` `.gnf` entries, a theory that
+  PlayGo streaming state could leave a static dump un-resolved, and a lead
+  about an unclean base/patch merge. Each was a lead about the symptom; the
+  merge one closed negative for its own reason, kept below.
+- `ShieldHexagonal_ALPHA.gnf` being "genuinely missing content at a correct
+  offset": it is real GNF content, shared by eleven names (see above).
 
-**Added 2026-09-16 (`lane/omega-rcs`), same tool, same three buckets, now
-scoring `.rcsmodel`/`.rcsmaterial` too**:
+**The corrected oracle** (`crates/assets/examples/psarc_oracle.rs`, which reads
+every entry and checks the format's own magic - `VEXX` at `+0x0c` on `.vex`,
+`GNF ` on `.gnf`, `ED AD 5C CA` on `.rcsmodel`/`.rcsskeleton`/`.rcsanimclip`,
+`E5 AD 5C CA` on `.rcsmaterial`) on the whole extraction:
 
-| Archive | `.rcsmodel` valid | `.rcsmodel` all-zero | `.rcsmodel` garbage | `.rcsmaterial` valid | `.rcsmaterial` all-zero | `.rcsmaterial` garbage |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `data00.psarc` | 27 | 16 | 54 | 147 | 26 | 228 |
-| `data01.psarc` | 18 | 7 | 38 | 113 | 0 | 214 |
-| `data02.psarc` | 7 | 0 | 0 | 137 | 1 | 271 |
-| `data03.psarc` | 18 | 9 | 48 | 0 | 0 | 0 |
-| `data04.psarc` | 7 | 0 | 1 | 42 | 6 | 85 |
+| Archive | valid | big-endian `.vex` | magic missing | empty (size 0) | no magic to check |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `data00.psarc` | 9,137 | 6 | 0 | 16 | 1,767 |
+| `data01.psarc` | 4,507 | 10 | 0 | 0 | 124 |
+| `data02.psarc` | 5,421 | 8 | 0 | 0 | 182 |
+| `data03.psarc` | 632 | 2 | 0 | 0 | 27 |
+| `data04.psarc` | 4,465 | 0 | 0 | 0 | 104 |
 
-Same shape as `.gnf`/`.vex`: a "garbage" majority (`.rcsmodel` 141 of 250,
-`.rcsmaterial` 798 of 1,270 total entries) that is the same unresolved
-block-data-location population described above, not a new problem specific to
-these two formats. See [`rcsmodel.md`](rcsmodel.md)'s and
-[`rcsmaterial.md`](rcsmaterial.md)'s own PS4 sections for what "valid" means
-underneath the tag and for a full-population check that the payload past the
-tag is genuine content: **70 of 77 "valid" `.rcsmodel` files and 386 of 439
-"valid" `.rcsmaterial` files carry at least one `~crc32` name hash this
-project already knows the preimage of**, at a rate no chance collision comes
-close to explaining (`crates/rcs/examples/ps4_hash_scan.rs`'s own doc comment
-does the arithmetic).
+**The 26 `.vex` an earlier count called "garbage" carry the other byte
+order's magic.** Every one opens `00 00 00 06` ... `58 58 45 56` - `XXEV` at
+`+0x0c`, the big-endian spelling of `VEXX` that the PS3 files carry
+([`vex.md`](vex.md)); examples are `start_grid_*`, `Junk/*`, `hdships/zone/*`,
+`mageffect*` and the `Qirex_LANDSCAPE` billboard. Presumably the packer took
+them from the PS3 tree unconverted; the container-level check here only
+proves the magic, not that the tree decodes. `psarc_oracle` reports them as
+`valid_big_endian`, the ground-truth test counts them per archive, and
+`oag_vex::vex` accepts both spellings. **Every entry with a magic carries one
+of its two spellings; there is no all-zero content entry and no torn row.**
 
-**A genuine reader bug surfaced and was fixed while building this table, not
-just a better measurement of an unchanged reader.** `data00.psarc` entry
-2431, `data01.psarc` entry 4370 and `data02.psarc` entry 4659 each raised
-`Error::BadBlock` ("block did not inflate") the first time this table was
-built with the corrected oracle - a **short** stored block whose first byte
-happens to be `0x78` (zlib's marker), the same coincidence
-["A block size of zero means 'stored'"](#a-block-size-of-zero-means-stored)
-above already fixed for a *full-size* block, one level up. `Directory::read_entry`
-now falls back to treating the chunk as raw when `miniz_oxide` fails to
-inflate it, rather than erroring: deflate is deterministic, so a failed
-inflate proves the leading `0x78` was coincidental content rather than a
-real header - the `Error::BadBlock` variant this replaced is now unreachable
-and was removed. All three entries above now read (one - `data00`'s - as
-"valid" `.gnf`; the other two are `.rcsmaterial`, unvalidated but errorless),
-which is why `data00.psarc`'s `.gnf` "valid" count above is 413 rather than
-412 and `data01.psarc`'s is 188 rather than 187. Ground truth:
-`crates/assets/tests/omega_psarc_ground_truth.rs`; the existing PS3
-(`hdfury-ps3-eu`) and Vita `data.psarc` ground-truth suites stay green
-unchanged, checked directly rather than assumed, since this is the second
-time a fix here has regressed one of them.
+**Two structural findings hold and are re-measured:**
 
-**The dedup example that exposed the old oracle's blind spot.** Eleven
-different ship liveries' `Data/art/published/hdships/*/Livery*/ShieldHexagonal_ALPHA.gnf`
-on `data03.psarc` (entries 16, 66, 75, 85, 110, 111, 122, 125, 208, 287, 308)
-all declare the **identical** `(offset, size)` = `(114606848, 49408)` - the
-packer deduplicated one identical texture across eleven entries rather than
-storing it eleven times, not corruption. That entry's first 15,616 bytes
-*are* zero, but bytes 15,616-38,739 are real, plausible tiled-texture
-content (repeating `aa` alpha-fill runs); the old oracle's first-byte check
-called this "zero" outright. Immediately preceding it in the same archive,
-two differently-named `Holographic_02_GLOW.gnf` entries (12, 100) share
-their own dedup pair at `(114590208, 16640)`, open on `GNF ` at byte zero,
-and score "valid" both ways - so a shared offset is not itself suspicious,
-and `entry.offset` is doing its job at the boundary between the two groups.
+- **The block table's arithmetic is self-consistent.**
+  `max(entry.offset + entry.size)` lands **exactly** on the file's size on
+  all nine archives (`data03`: 2,576,997,583). Referenced block rows are
+  almost all of the table now - `data03` 39,587 of 39,640, `data00` 212,009
+  of 212,718 - where the short-read copy referenced 12,099 of `data03`'s.
+- **Nothing is deflated.** Every block row is exactly `0` (a full, padded
+  block of stored bytes) or exactly the entry's remaining byte count (a short
+  stored block, never padded); **zero** rows fall between - `data00` 203,537
+  full and 8,472 short, `data03` 39,182 and 405, the patch's `data05`,
+  `data08` and `data09` the same shape. The header's `compression: "zlib"`
+  reads the same four bytes as every PS3 archive, but every block sampled or
+  counted here is a plain copy.
 
-**The "garbage" bucket is real bytes that do not decode as their own
-extension claims, and a targeted check rules out the simplest explanation
-for it.** If `entry.offset` were off by a small, fixed amount for these
-rows, the expected magic should turn up nearby instead. Checked directly on
-three `data00.psarc` "garbage" `.gnf` entries by scanning an 8 KiB window on
-both sides of the declared range: `GNF ` is absent everywhere in two of the
-three, and present in the third only at exactly `entry.offset + entry.size`
-- i.e. it is the *next* entry's own header, not this entry's, shifted. A
-constant per-entry offset error is ruled out by this sample; what actually
-produces bytes that are present, substantial (tens of KB to over a
-megabyte, not a stray byte), and still not the claimed container **is now
-established, confidence 90**: see
-[`gnf.md`'s "Root cause"](gnf.md#root-cause-confidence-90-a-short-streamread-in-the-extraction-tool-not-this-projects-reader)
-section, `lane/omega-psarc`, 2026-09-27. It is a short, non-looped
-`Stream.Read` inside `PkgTool.Core`'s (`LibOrbisPkg`'s) `PFSCReader.ReadSector`,
-not this project's reader or anything about `entry.offset` - reproduced and
-fixed against the real `.pkg` directly, not just read off the tool's source.
-
-**The fix was also run at family scale, not just on the one file above**:
-`omega-ps4-eu{,-patch}.pkg` re-extracted whole with the patched tool
-(`data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/{omega-eu-fixed,omega-eu-patch-fixed}`,
-2026-09-27) and re-run through `psarc_oracle` on every archive. **Deliberately
-kept under `data/scratch/`, not `data/extracted/ps4/`** - `oag_omega`'s own
-source discovery (`crates/assets/src/source.rs`) walks every subdirectory of
-`data/extracted/ps4` looking for its archive candidates, so a same-named
-sibling there is picked up by `omega_title_ground_truth.rs` even mid-write
-(caught this directly: a first attempt landed under `data/extracted/ps4/`
-and briefly broke `main`'s gate on a zero-byte file read mid-extraction).
-
-| Archive | valid (before → after) | garbage (before → after) | all-zero (before → after) |
-| --- | ---: | ---: | ---: |
-| `data00.psarc` | 593 → 9,137 | 476 → 6 | 169 → 0 |
-| `data01.psarc` | 338 → 4,507 | 434 → 10 | 93 → 0 |
-| `data02.psarc` | 409 → 5,421 | 458 → 8 | 33 → 0 |
-| `data03.psarc` | 95 → 632 | 130 → 2 | 90 → 0 |
-| `data04.psarc` | 358 → 4,465 | 357 → 0 | 103 → 0 |
-| `data05.psarc` | 389 → 7,933 | 739 → 0 | 30 → 0 |
-| `data07.psarc` | 3 → 3 | 0 → 0 | 0 → 0 |
-| `data08.psarc` | 635 → 10,065 | 896 → 0 | 72 → 0 |
-
-(`data09.psarc` carries no magic-checked extension - only XML, in the
-`unvalidated_*` buckets - so it has no row above; its own `unvalidated_all_zero`
-count still drops from 15 to 0.) `garbage` falls from **3,490 to 26** across
-the family (99.3%) and `all_zero` from **590 to 0** for every magic-checked
-extension. `data07.psarc` was already clean - it is small enough (7 entries)
-that this session's sample never happened to exercise the buggy branch on it.
-The `valid` count's own jump (e.g. `data00.psarc` 593 to 9,137, a 15x
-increase, far more than the `garbage`+`all_zero` reduction alone explains) is
-a second effect of the same bug: the archive's own manifest text is read
-through this same buggy decompressor, so the old extraction's manifest was
-itself truncated-then-zero-padded, and thousands of real entries were never
-even reachable by path (`match_paths_to_entries` never saw their name at
-all) rather than reachable-but-corrupt. The 26 residual `garbage` entries
-were not chased further - `docs/formats/omega-status.md` and this page's own
-"torn write" paragraphs above already document that a handful of entries per
-archive carry implausible `first_block`/`size` values unrelated to this bug.
-
-**Two structural findings still hold and are not affected by the
-correction above:**
-
-- **Not file position.** Real ("valid" + "garbage" - both mean bytes are
-  physically present) and all-zero entries are interleaved throughout each
-  archive's whole offset range, not confined to a prefix, a suffix, or any
-  other contiguous region.
-- **The block table's own arithmetic is otherwise self-consistent.** Only
-  12,099 of `data03.psarc`'s 39,640 block-table rows (31%) are referenced by
-  any real entry's `first_block` + block count - the rest describe blocks no
-  entry claims - and `max(entry.offset + entry.size)` over every real entry
-  lands **exactly** on the file's true size, 2,576,997,583 bytes. Read as a
-  coordinate system, `entry.offset` spans the archive precisely; it is
-  specific entries' *content* that is missing or wrong; the offsets these
-  entries keep company with are not obviously wrong as numbers, and the
-  dedup boundary above shows two adjacent, correctly-read files sitting
-  right against a "garbage" one with nothing to distinguish their geometry.
-
-**New this session: the game itself never reads a `.psarc`'s block table at
-all.** `eboot.bin`'s own code was read looking for the loader this
-project's reader should be compared against
+**The game never reads a `.psarc`'s block table itself.** `eboot.bin`'s own
+code was read looking for the loader this project's reader should be compared
+against
 ([`docs/ghidra/functions/ps4-omega-eu/psarc-mount.md`](../ghidra/functions/ps4-omega-eu/psarc-mount.md)),
-and there isn't one: `PsarcArchive_Mount` (confidence 85) calls straight
-into Sony's own `sceFiosArchiveGetMountBufferSizeSync`/`sceFiosArchiveMountSync`
+and there isn't one: `PsarcArchive_Mount` (confidence 85) calls straight into
+Sony's own `sceFiosArchiveGetMountBufferSizeSync`/`sceFiosArchiveMountSync`
 FIOS2 exports, behind `PsarcArchive_WaitAndMountAll` (confidence 80), a
 background-thread loop that polls `scePlayGoGetLocus` per archive and mounts
-each only once its PlayGo chunk reports locally installed. This corroborates
-`.psarc` being a first-party Sony container with a first-party mounter (not
-a Wipeout-specific scheme) from the executable side, and it means the actual
-block-read implementation lives inside `libSceFios2.prx`, a separate signed
-system module this project holds but has not opened in Ghidra - see that
-page's own "Not read" for why not. It also surfaces PlayGo disc-streaming
-state as one plausible *mechanism* for a static dump legitimately carrying
-un-resolved placeholder content, though nothing in `PsarcArchive_WaitAndMountAll`
-touches per-entry content - it mounts a whole archive at a time - so it
-cannot be the whole explanation for entries that mount fine and still read
-short.
+each only once its PlayGo chunk reports locally installed. That corroborates
+`.psarc` being a first-party Sony container with a first-party mounter, from
+the executable side. The block-read implementation lives inside
+`libSceFios2.prx`, a separate signed system module this project holds but has
+not opened in Ghidra.
 
-**One thing the fuller sweep still rules out: it is not a codec mismatch.** Classified
-every block belonging to a real entry, on `data00.psarc`, `data01.psarc` and
-`data03.psarc`: each block's table value is either exactly `0` (a full,
-padded `block_size` of stored bytes) or exactly equal to the entry's
-remaining byte count at that block (a *short* stored block, never padded).
-**Zero** blocks fall between those two cases - the signature a genuinely
-`deflate`-shrunk block would leave. The header's `compression: "zlib"` field
-reads the same four bytes as every PS3 archive, but nothing checked here is
-actually deflated: every real file sampled on this family is stored raw. A
-non-zero entry that reads correctly is therefore a plain byte copy, and a
-zero one is not a decompression failure either - there is no decoding step
-in either case to have gotten wrong.
+**The patch is its own extraction and adds content.** `pkg_extract` takes
+exactly one `.pkg` and one output directory (`PkgTool/Program.cs`, read from
+source: no patch-chain or merge logic anywhere), so
+`omega-ps4-eu-patch.pkg` extracts to a directory of its own, and its `uroot/`
+holds **four archives with names the base `.pkg` does not have** - `data05`
+(654 MiB), `data07` (20 MiB), `data08` (5.3 GiB), `data09` (6.9 MiB), no
+`data06`, and no `data00`-`data04` - so it cannot be "the missing bytes" of
+any base archive. The base `.pkg` alone extracts to 40.6 GiB across five
+archives (`data00` 13 GiB, `data01` 11 GiB, `data02` 9.1 GiB, `data03` 2.5 GiB,
+`data04` 6.0 GiB). See `source-images.md`'s Omega Collection section for the
+full patch record.
 
-**The extraction-provenance lead is closed, negative.** An earlier version of
-this page treated the `data/extracted/ps4/omega-eu/` directory's ~40.8 GiB
-(against `source-images.md`'s recorded "~25 GiB, base `.pkg` only") as
-unexplained, and floated an unclean base/patch merge as a possible cause of
-the real/zero split. Checked directly, 2026-09-15: `PkgTool.Core pkg_extract`
-takes exactly one `.pkg` and one output directory
-(`PkgTool/Program.cs`'s `pkg_extract` verb, read from source - no patch-chain
-or merge logic anywhere in the tool) and simply overwrites nothing it doesn't
-touch, so a base-only extraction cannot have silently absorbed patch content.
-The `~25 GiB` figure was just an imprecise earlier estimate; the base `.pkg`
-alone reproducibly extracts to 40.6 GiB across its five archives (`data00`
-13 GiB, `data01` 11 GiB, `data02` 9.1 GiB, `data03` 2.5 GiB, `data04` 6.0 GiB -
-`source-images.md`'s own count corrected to match).
-
-Extracting `omega-ps4-eu-patch.pkg` on its own, same tool, same verb, settles
-it further: the patch's `uroot/` holds **four archives with names the base
-`.pkg` does not have at all** - `data05` (654 MiB), `data07` (20 MiB), `data08`
-(5.3 GiB), `data09` (6.9 MiB), no `data06`, and critically **no `data00`-`data04`** -
-so a patch extraction cannot be "the missing bytes" for any of this page's
-five base archives; it adds new content, it does not complete old content.
-See `source-images.md`'s Omega Collection section for the full patch
-extraction record.
-
-**And the same real/zero split is already present in the patch's own,
-freshly-extracted archives**, measured the same way (`psarc_sweep`, below):
-`data05.psarc` 415/1,207 (34%), `data07.psarc` 6/7 (86%), `data08.psarc`
-796/1,789 (44%), `data09.psarc` 84/121 (69%) - the same 30-70%-ish range as
-the five base archives, on a directory this session extracted itself,
-minutes before measuring it. That rules out "one bad extraction run" as an
-explanation as thoroughly as the merge theory above did: two independent
-extractions, from two different `.pkg` files, on the same machine, in the
-same session, both show the split. Whatever produces it is a property of
-this archive family (or of `PkgTool.Core`'s own PFS reader) - **and it is
-the latter, chased to ground and fixed 2026-09-27**, see the "Block data
-location" section's own root-cause paragraph above - not of one directory's
-provenance.
-
-**`psarc_sweep` (`crates/assets/examples/psarc_sweep.rs`) is superseded by
-`psarc_oracle` (`crates/assets/examples/psarc_oracle.rs`) for this
-question**, kept only as the record of the first-byte measurement above and
-of the trap its own module doc already describes (checking *any* nonzero
-byte over the whole buffer overcounts a corrupt header that happens to carry
-one stray nonzero byte deep inside it as real). `psarc_oracle` replaces the
-position-based check with the per-extension magic check the table above
-reports, and prints the detail (`first_block`, `size`, `offset`, block width)
-this page's own numbers came from for every entry that is not cleanly
-"valid":
+`psarc_sweep` (`crates/assets/examples/psarc_sweep.rs`) is superseded by
+`psarc_oracle` and kept only as the record of a first-byte heuristic that
+misread real files whose payload starts after a run of zeros; its numbers, like
+every other short-read number, describe the zero-padding.
 
 ```sh
 cargo run -p oag-assets --release --example psarc_oracle -- \
   data/extracted/ps4/omega-eu/uroot/data03.psarc
-# gnf: valid 58, all_zero 30, garbage 76 - matches this page's table
-```
+# gnf: valid 331 ... vex valid 154, valid_big_endian 2
 
-Reproduce the dedup example and a genuinely all-zero one:
-
-```sh
 cargo run -p oag-assets --example psarc_cat -- \
   data/extracted/ps4/omega-eu/uroot/data03.psarc \
   "Data/art/published/hdships/icaras_n1/Livery1/ShieldHexagonal_ALPHA.gnf" \
   | xxd | head -2
-# all zero for the first 15,616 bytes, then real tiled-texture bytes from
-# 15,616 to 38,739 - the entry the old first-byte oracle miscounted as fake
-
-cargo run -p oag-assets --example psarc_cat -- \
-  data/extracted/ps4/omega-eu/uroot/data03.psarc \
-  "Data/art/published/hdships/auricom_n1/Ship_LOD3.vex" | xxd | head
-# 976 bytes, all zero throughout - one of the genuinely all-zero entries
+# GNF at byte zero: the shared entry, read whole
 ```
 
 **Consequence for this crate:** `Directory::entry_range`/`Directory::read_entry`
-are unchanged and still trust `entry.offset` directly, exactly as the PS3
-reading does - and for the "valid" fraction measured above, that already
-produces correct content with no code change, confirmed now by magic rather
-than by a byte position that misclassified real files. `Archive::paths` on
-one of `omega-ps4-eu`'s five archives specifically names entries this crate
-can *locate in the directory and match to a path*; for any individual one of
-them, whether reading it back gives its real content is still not
-predictable from anything checked here - but the un-predictable population
-is smaller and better characterised than the old two-way split implied,
-split between "genuinely stores nothing" (all-zero) and "stores real bytes
-that are not the claimed format" (garbage), the latter now the open
-question rather than "half of everything." This is a property of that
-archive family, not of a declared version number - every other archive read
-so far, Vita `2048`'s included, reads real content for every entry
-`paths()` lists.
+are unchanged and trust `entry.offset` directly, exactly as the PS3 reading
+does, and on a whole extraction that is all it takes: every entry
+`Archive::paths` lists reads real content, as it does for Vita `2048`'s
+`data.psarc` and for HD. Naming an entry and reading it are the same thing
+here; the caution the older `Archive::paths` doc carried belonged to the
+damaged copy.
 
 ## See also
 

@@ -1904,7 +1904,7 @@ tree tag given [`.vex`'s own description](vex.md) of 2048's collision format
 this way) to check for the tag turns the PS4 `.rcsmodel`/`.rcsmaterial`
 population from "no magic, zero-vs-nonzero only" into the same three-bucket
 read the other two formats get - see
-[psarc.md](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)'s
+[psarc.md](psarc.md#block-data-location-and-the-short-read-extraction)'s
 table. Disc-wide: **77 of 250 `.rcsmodel` entries and 439 of 1,270
 `.rcsmaterial` entries carry the tag**; most of the remainder is the same
 unresolved PSARC block-data-location population that bucket already

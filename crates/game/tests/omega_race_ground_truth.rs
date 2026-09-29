@@ -5,15 +5,18 @@
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_OMEGA_SOURCE=data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed \
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
 //!     -E 'binary(omega_race_ground_truth)'
 //! ```
 //!
+//! `OAG_OMEGA_SOURCE=<dir>` reads a different directory pair than
+//! `data/extracted/ps4`.
+//!
 //! # These skip on the extraction they cannot be measured on
 //!
-//! **An earlier extraction of `omega-ps4-eu{,-patch}.pkg` is short of most of
-//! its bytes** - `docs/formats/omega-status.md`, "An extraction-tool bug" - and
+//! **A short-read extraction of `omega-ps4-eu{,-patch}.pkg` is short of most of
+//! its bytes** (`data/extracted/ps4` was one until 2026-09-29, and is not any
+//! more) - `docs/formats/omega-status.md`, "An extraction-tool bug" - and
 //! on it `tech_de_ra\track.vex` has no `WO Track` node at all, which is what
 //! this crate reported as "a clean negative" for a month. Every test here
 //! measures a property of the *corrected* extraction, so [`source`] opens the
@@ -21,10 +24,9 @@
 //! checks that one file, and **skips with a printed reason - even under
 //! `OAG_REQUIRE_GAME_DATA`** - when it is the corrupt one. That is deliberate:
 //! the variable exists to turn a *missing* image into a failure, and a corrupt
-//! copy is a known property of one maintainer's disk, not a missing image. It
-//! also means these tests prove nothing until the corrected extraction is where
-//! `data/extracted/ps4` looks, so a green run that printed the skip is not a
-//! green run.
+//! copy is a known property of one maintainer's disk, not a missing image. A
+//! green run that printed the skip is not a green run; `data/extracted/ps4`
+//! holds the corrected extraction since 2026-09-29, so it should not print.
 
 use std::path::{Path, PathBuf};
 

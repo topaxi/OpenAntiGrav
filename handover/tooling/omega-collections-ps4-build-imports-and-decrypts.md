@@ -191,12 +191,13 @@ about a second, decompression-shaped problem on top of it.
 - **The block-data-location questions below were an extraction bug, not a
   format.** A short read in the extraction tool zeroed most of every entry
   (`omega-status.md`, "An extraction-tool bug"); the corrected copy at
-  `data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/` has 60,151 of
-  `tech_de_ra\track.vex`'s 133,888 bytes different from `data/extracted/ps4/`'s.
-  **Promoting it is the maintainer's decision** and it shifts every census
-  figure the Omega docs quote; until then `crates/game/tests/omega_race_ground_truth.rs`
-  skips on `data/extracted/ps4` (loudly, even under `OAG_REQUIRE_GAME_DATA`) and
-  runs against `OAG_OMEGA_SOURCE=<dir>`.
+  the corrected copy has 60,151 of
+  `tech_de_ra\track.vex`'s 133,888 bytes different from the short-read one's.
+  **Promoted 2026-09-29**: `data/extracted/ps4` is the corrected extraction (the
+  short-read one is `data/extracted/ps4.bak`), `omega_psarc_ground_truth` was
+  re-measured on it (`psarc.md`, "Block data location and the short-read
+  extraction"), and `crates/game/tests/omega_race_ground_truth.rs` skips only
+  on a short-read copy, `OAG_OMEGA_SOURCE=<dir>` overriding the directory.
 
 - **Block data location - corrected and narrower, still not closed.** The
   "roughly a third to a half" figure this section used to carry was itself

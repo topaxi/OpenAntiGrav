@@ -122,17 +122,12 @@ impl Archive {
     /// structural way PSARC is *easier* than the WAD it replaces: a WAD
     /// stores only a name hash, so most of its names still have to be mined.
     ///
-    /// **Naming an entry is not the same as being able to read it, on the
-    /// PS4 Omega Collection family specifically (`omega-ps4-eu`'s
-    /// `dataNN.psarc` archives) - not a property of any particular declared
-    /// version.** `entry.offset` produces real content for a substantial
-    /// fraction of that family's entries already - roughly a third to a
-    /// half, varying by archive, through no more than [`Archive::read_path`]
-    /// as it stands - and zero bytes for the rest, with no known predictor
-    /// yet for which. See `docs/formats/psarc.md`'s "Block data location"
-    /// section. Every other archive read so far, including Vita `2048`'s
-    /// `data.psarc` despite it declaring the same version number, reads
-    /// real content for every entry `paths()` lists.
+    /// On a whole extraction of `omega-ps4-eu{,-patch}` every listed path is
+    /// also readable and carries its extension's real content - 46,005 of
+    /// 46,005 across the nine archives, `docs/formats/psarc.md`. A copy whose
+    /// counts fall far short of that (`data00` listing 1,492 paths, not
+    /// 10,926), or whose entries read as zeros, is a short-read extraction,
+    /// not a property of the archives.
     #[must_use]
     pub fn paths(&self) -> &[String] {
         &self.paths
