@@ -27,11 +27,31 @@
 //!   its own tick zero, and the parent's next delay counts from this command,
 //!   not from the child's end. Both handlers return zero, so no extra wait is
 //!   added to the next delay.
+//! - `0x19` is an **alternate group**: operand byte 0 is the alternate count
+//!   `N`, byte 1 the stride `S` (commands per alternate). The handler adds
+//!   `pick * S` to the program counter, arms the stepper's repeat mechanism for
+//!   `S` commands, and then skips `(N - pick - 1) * S`. So one alternate block
+//!   runs and **whatever follows the group runs after it** - the group is a
+//!   choice in the middle of a timeline, not the whole cue. The pick is a
+//!   caller's draw ([`Bank::cue_timeline_with`]); [`Timeline::groups`] lists
+//!   the groups met so the caller can enumerate or draw.
+//! - `0x2b` **ends the list**: the handler sets the program counter to the
+//!   last command, so the stepper's own increment runs off the end. Commands
+//!   after it are not reached by the list.
+//! - `0x1b` is a **random pitch bend** and returns zero, so it changes no
+//!   timing. It applies to every key-on that follows it (and to children
+//!   started later), through each descriptor's own bend range
+//!   ([`Sound::bend_down`](super::Sound::bend_down)); the draw is the caller's.
+//!   Recorded in [`Timeline::bends`] and [`Grain::bend`].
+//! - `0x14` is a no-op and `0x1e`/`0x1f`/`0x20`/`0x21` write a register byte;
+//!   all return zero. With no guard (`0x22`) or parameter sentinel to read a
+//!   register they change nothing this walk reports, and a cue that *does*
+//!   read one is incomplete anyway. Recorded in [`Timeline::passed`].
 //! - Every other opcode is not walked and is reported in
 //!   [`Timeline::unread`] rather than skipped silently: `0x1a` adds a random
-//!   wait, `0x19` chooses between alternates, `0x08` replaces the voice's own
-//!   playback state, and a timeline that met any of them is not the whole
-//!   truth about the cue.
+//!   wait, `0x08` replaces the voice's own playback state, `0x04` starts an
+//!   LFO, and a timeline that met any of them is not the whole truth about
+//!   the cue.
 //!
 //! # The tick
 //!
@@ -52,9 +72,23 @@ pub const TICKS_PER_SECOND: f64 = 44_100.0 * 3.0 / 512.0;
 
 /// The opcode that starts a child cue in parallel.
 const PLAY_CHILD: u8 = 0x05;
+/// The opcode that chooses one block of commands out of several.
+const ALTERNATE: u8 = 0x19;
+/// The opcode that sets a random pitch bend.
+const RANDOM_BEND: u8 = 0x1b;
+/// The opcode that ends the command list.
+const END: u8 = 0x2b;
+/// Opcodes that return zero and change nothing this walk reports.
+const PASS_THROUGH: [u8; 5] = [0x14, 0x1e, 0x1f, 0x20, 0x21];
 
 /// Offset of a child record's angle word, added to the child's voice angle.
 const CHILD_ANGLE_AT: usize = 0x04;
+
+/// The most alternate combinations [`Bank::cue_timelines`] will enumerate.
+pub const MAX_COMBINATIONS: usize = 64;
+
+/// Steps one walk may take, so a hostile command table terminates.
+const MAX_STEPS: usize = 4096;
 
 /// One waveform started at one moment.
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +107,18 @@ pub struct Grain {
     /// Pan angle in degrees: the descriptor's `+0x04` plus the child records'
     /// angle words on the way down.
     pub angle: i32,
+    /// Which `0x1b` execution (an index into [`Timeline::bends`]) detunes this
+    /// grain, when one was in force.
+    pub bend: Option<usize>,
+}
+
+/// An alternate group (`0x19`) the walk met.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlternateGroup {
+    /// Alternates in the group, operand byte 0.
+    pub count: u8,
+    /// Commands per alternate, operand byte 1.
+    pub stride: u8,
 }
 
 /// Everything a cue starts, in the order it starts it.
@@ -84,54 +130,141 @@ pub struct Timeline {
     pub unread: Vec<u8>,
     /// Child grains whose record did not resolve to a cue in this bank.
     pub unresolved: usize,
+    /// The alternate groups met, in walk order. The walk took the alternate
+    /// the caller's `picks` named for each (the first when it named none).
+    pub groups: Vec<AlternateGroup>,
+    /// Each `0x1b` executed, as its percentage operand. One random draw per
+    /// entry is shared by every [`Grain`] that names it.
+    pub bends: Vec<i8>,
+    /// Pass-through opcodes met, in walk order.
+    pub passed: Vec<u8>,
 }
 
 impl Timeline {
     /// Whether every command this walk met was one it models and every child
     /// resolved - the only case where the timeline is the whole cue.
+    ///
+    /// A cue with [`Self::groups`] is complete *for the alternates picked*.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         self.unread.is_empty() && self.unresolved == 0
     }
 }
 
+/// Where a walk is: shared state that threads through children.
+struct Walk<'a> {
+    sounds: &'a [Sound],
+    picks: &'a [u8],
+    path: Vec<u16>,
+    steps: usize,
+    out: Timeline,
+}
+
+/// One handler's own frame.
+#[derive(Clone, Copy)]
+struct Frame {
+    start: u32,
+    angle: i32,
+    cue_volume: i8,
+    scale: f32,
+    bend: Option<usize>,
+}
+
 impl Bank<'_> {
-    /// The timeline a cue plays, following the children it starts.
+    /// The timeline a cue plays, following the children it starts, with the
+    /// first alternate taken in every group.
     ///
     /// See the module docs for what is modelled. Depth is bounded by
     /// [`MAX_CHILD_DEPTH`] and a cue already on the walk's own path is not
     /// entered again, so a hostile bank terminates.
     #[must_use]
     pub fn cue_timeline(&self, cue: &Cue) -> Timeline {
+        self.cue_timeline_with(cue, &[])
+    }
+
+    /// [`Self::cue_timeline`] with `picks[k]` the alternate taken in the `k`th
+    /// group met (reduced modulo the group's count; the first when absent).
+    #[must_use]
+    pub fn cue_timeline_with(&self, cue: &Cue, picks: &[u8]) -> Timeline {
         let sounds = self.sounds();
-        let mut out = Timeline::default();
-        let mut path = vec![cue.index];
-        self.walk(cue, 0, 0, cue.volume, 1.0, &sounds, &mut path, &mut out);
+        let mut walk = Walk {
+            sounds: &sounds,
+            picks,
+            path: vec![cue.index],
+            steps: 0,
+            out: Timeline::default(),
+        };
+        let frame = Frame {
+            start: 0,
+            angle: 0,
+            cue_volume: cue.volume,
+            scale: 1.0,
+            bend: None,
+        };
+        self.walk(cue, frame, &mut walk);
+        let mut out = walk.out;
         // Stable, so two grains on one tick keep the order they were walked in.
         out.grains.sort_by_key(|grain| grain.tick);
         out
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn walk(
-        &self,
-        cue: &Cue,
-        start: u32,
-        angle: i32,
-        cue_volume: i8,
-        scale: f32,
-        sounds: &[Sound],
-        path: &mut Vec<u16>,
-        out: &mut Timeline,
-    ) {
+    /// Every timeline the cue can play: one per combination of alternates.
+    ///
+    /// `None` when the combinations pass [`MAX_COMBINATIONS`], or when the
+    /// groups met depend on the picks made (a group inside an alternate), which
+    /// this does not enumerate.
+    #[must_use]
+    pub fn cue_timelines(&self, cue: &Cue) -> Option<Vec<Timeline>> {
+        let first = self.cue_timeline(cue);
+        let counts: Vec<u8> = first.groups.iter().map(|g| g.count.max(1)).collect();
+        let total = counts
+            .iter()
+            .try_fold(1usize, |n, &c| n.checked_mul(usize::from(c)))?;
+        if total > MAX_COMBINATIONS {
+            return None;
+        }
+        let mut out = Vec::with_capacity(total);
+        for combination in 0..total {
+            let mut rest = combination;
+            let picks: Vec<u8> = counts
+                .iter()
+                .map(|&c| {
+                    let pick = (rest % usize::from(c)) as u8;
+                    rest /= usize::from(c);
+                    pick
+                })
+                .collect();
+            let timeline = self.cue_timeline_with(cue, &picks);
+            if timeline.groups != first.groups {
+                return None;
+            }
+            out.push(timeline);
+        }
+        Some(out)
+    }
+
+    fn walk(&self, cue: &Cue, frame: Frame, walk: &mut Walk) {
         if !cue.plays() {
             return;
         }
-        let mut tick = start;
-        for command in cue.range() {
+        let mut frame = frame;
+        let mut tick = frame.start;
+        // The stepper's repeat mechanism: commands left in the chosen block
+        // (`+0x52`) and the skip when it runs out (`+0x54`).
+        let mut repeat: Option<(i32, i32)> = None;
+        let mut started = false;
+        let count = cue.commands as i32;
+        let mut pc: i32 = 0;
+        while (0..count).contains(&pc) {
+            walk.steps += 1;
+            if walk.steps > MAX_STEPS {
+                walk.out.unread.push(0xff);
+                return;
+            }
+            let command = cue.first_command + pc as usize;
             let at = command * COMMAND_LEN;
             let Some(grain) = self.commands.get(at..at + COMMAND_LEN) else {
-                continue;
+                return;
             };
             let word = self.order.u32(grain, 0);
             let opcode = (word >> 24) as u8;
@@ -141,53 +274,74 @@ impl Bank<'_> {
             tick = tick.saturating_add(u32::try_from(delay).unwrap_or(0));
 
             if KEY_ON_OPCODES.contains(&opcode) {
-                let Some(sound) = sounds.iter().find(|s| s.command == command) else {
-                    out.unread.push(opcode);
-                    continue;
-                };
-                let descriptor_angle = self
-                    .block
-                    .get(sound.descriptor as usize + 4..)
-                    .and_then(|tail| tail.get(..2))
-                    .map_or(0, |b| i32::from(self.order.u16(b, 0) as i16));
-                out.grains.push(Grain {
-                    tick,
-                    sound: sound.clone(),
-                    cue_volume,
-                    scale,
-                    angle: angle + descriptor_angle,
-                });
+                if let Some(sound) = walk.sounds.iter().find(|s| s.command == command) {
+                    let descriptor_angle = self
+                        .block
+                        .get(sound.descriptor as usize + 4..)
+                        .and_then(|tail| tail.get(..2))
+                        .map_or(0, |b| i32::from(self.order.u16(b, 0) as i16));
+                    walk.out.grains.push(Grain {
+                        tick,
+                        sound: sound.clone(),
+                        cue_volume: frame.cue_volume,
+                        scale: frame.scale,
+                        angle: frame.angle + descriptor_angle,
+                        bend: frame.bend,
+                    });
+                    started = true;
+                } else {
+                    walk.out.unread.push(opcode);
+                }
             } else if opcode == PLAY_CHILD {
-                self.walk_child(
-                    word & 0x00ff_ffff,
-                    tick,
-                    angle,
-                    cue_volume,
-                    scale,
-                    sounds,
-                    path,
-                    out,
-                );
+                started = true;
+                self.walk_child(word & 0x00ff_ffff, tick, frame, walk);
+            } else if opcode == RANDOM_BEND {
+                if started {
+                    // Voices already keyed would be re-pitched by the handler;
+                    // not modelled.
+                    walk.out.unread.push(opcode);
+                } else {
+                    walk.out.bends.push((word & 0xff) as u8 as i8);
+                    frame.bend = Some(walk.out.bends.len() - 1);
+                }
+            } else if PASS_THROUGH.contains(&opcode) {
+                walk.out.passed.push(opcode);
+            } else if opcode == END {
+                return;
+            } else if opcode == ALTERNATE {
+                let alternates = (word & 0xff) as i32;
+                let stride = ((word >> 8) & 0xff) as i32;
+                if repeat.is_some() || alternates == 0 || stride == 0 {
+                    walk.out.unread.push(opcode);
+                    return;
+                }
+                let group = walk.out.groups.len();
+                let pick = i32::from(walk.picks.get(group).copied().unwrap_or(0)) % alternates;
+                walk.out.groups.push(AlternateGroup {
+                    count: alternates as u8,
+                    stride: stride as u8,
+                });
+                pc += pick * stride;
+                repeat = Some((stride + 1, (alternates - pick - 1) * stride));
             } else {
-                out.unread.push(opcode);
+                walk.out.unread.push(opcode);
             }
+
+            if let Some((left, skip)) = repeat {
+                if left - 1 == 0 {
+                    repeat = None;
+                    pc += skip;
+                } else {
+                    repeat = Some((left - 1, skip));
+                }
+            }
+            pc += 1;
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn walk_child(
-        &self,
-        operand: u32,
-        tick: u32,
-        angle: i32,
-        cue_volume: i8,
-        scale: f32,
-        sounds: &[Sound],
-        path: &mut Vec<u16>,
-        out: &mut Timeline,
-    ) {
+    fn walk_child(&self, operand: u32, tick: u32, frame: Frame, walk: &mut Walk) {
         let Some(record_at) = self.parameter_offset.checked_add(operand) else {
-            out.unresolved += 1;
+            walk.out.unresolved += 1;
             return;
         };
         let Some(record) = self
@@ -195,7 +349,7 @@ impl Bank<'_> {
             .get(record_at as usize..)
             .and_then(|tail| tail.get(..CHILD_RECORD_LEN))
         else {
-            out.unresolved += 1;
+            walk.out.unresolved += 1;
             return;
         };
         let index = self.order.u32(record, CHILD_INDEX_AT);
@@ -208,33 +362,34 @@ impl Bank<'_> {
                     .and_then(|name| self.cue_named(&name))
             });
         let Some(child) = child else {
-            out.unresolved += 1;
+            walk.out.unresolved += 1;
             return;
         };
-        if path.len() > MAX_CHILD_DEPTH || path.contains(&child.index) {
-            out.unresolved += 1;
+        if walk.path.len() > MAX_CHILD_DEPTH || walk.path.contains(&child.index) {
+            walk.out.unresolved += 1;
             return;
         }
         let child_angle = self.order.u32(record, CHILD_ANGLE_AT) as i32;
         if child_angle < 0 {
             // The negative range is `Scream_OpPlayChild`'s parameter-register
             // sentinels, which this walk does not model.
-            out.unread.push(PLAY_CHILD);
+            walk.out.unread.push(PLAY_CHILD);
             return;
         }
         let record_volume = self.order.u32(record, 0).min(127) as i8;
-        path.push(child.index);
+        walk.path.push(child.index);
         self.walk(
             &child,
-            tick,
-            angle + child_angle,
-            record_volume,
-            scale * f32::from(cue_volume.unsigned_abs()) / 127.0,
-            sounds,
-            path,
-            out,
+            Frame {
+                start: tick,
+                angle: frame.angle + child_angle,
+                cue_volume: record_volume,
+                scale: frame.scale * f32::from(frame.cue_volume.unsigned_abs()) / 127.0,
+                bend: frame.bend,
+            },
+            walk,
         );
-        path.pop();
+        walk.path.pop();
     }
 
     /// The name a child record carries in place of an index, when it does.
