@@ -136,11 +136,16 @@ impl Race {
                 0
             },
             ships: u32::from(self.sim.world.ship_count),
-            race_ticks: self.sim.world.tick,
+            // The racing clock, not the raw tick: the original's clocks read
+            // zero through the whole start-line countdown and start on the
+            // release. `oag_race::race_clock_ticks` has the measurement.
+            // The gates and animations that need the raw tick read
+            // `world.tick` themselves.
+            race_ticks: oag_race::race_clock_ticks(self.sim.world.tick),
             lap_ticks: if counted {
                 race.lap_ticks(self.sim.world.tick)
             } else {
-                self.sim.world.tick
+                oag_race::race_clock_ticks(self.sim.world.tick)
             },
             best_lap_ticks: race.best_lap_ticks,
             // Gated the same as `lap`/`laps` above: a track with no closed ring

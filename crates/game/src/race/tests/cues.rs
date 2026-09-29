@@ -819,7 +819,8 @@ fn the_class_announcer_fires_on_a_stage_step_and_not_on_every_zone() {
     // `STEP_SECONDS * 60.0 == 600`), with margin for the dt sum's own f32
     // slop - the boundary this asserts sits at zone 2 and every zone after
     // it names the same stage, so overshooting past it changes nothing.
-    for _ in 0..1300 {
+    // Past the start-line countdown, through which the zone machine holds.
+    for _ in 0..oag_race::COUNTDOWN_TICKS + 1300 {
         race.tick(&PlayerInputs::none());
         raised.extend(race.drain_class_announcements());
     }
@@ -849,7 +850,8 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
     let mut race = Race::start(setup);
 
     let mut raised = Vec::new();
-    for _ in 0..1300 {
+    // Past the start-line countdown, through which the zone machine holds.
+    for _ in 0..oag_race::COUNTDOWN_TICKS + 1300 {
         race.tick(&PlayerInputs::none());
         raised.extend(race.drain_class_announcements());
     }

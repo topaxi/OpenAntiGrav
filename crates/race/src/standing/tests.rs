@@ -1,4 +1,5 @@
 use super::*;
+use crate::COUNTDOWN_TICKS as COUNTDOWN;
 use crate::testing;
 
 fn course() -> Course {
@@ -247,8 +248,10 @@ fn the_standings_clock_agrees_with_the_players() {
     let mut standing = Standing::default();
 
     let mut laps = 0u32;
-    for tick in 0..500u64 {
-        let at = on_ring(110.0 + tick as f32);
+    // From the release: the player's lap clock is floored there and the field's
+    // starts at its first crossing, which no craft reaches before it.
+    for tick in COUNTDOWN..COUNTDOWN + 500 {
+        let at = on_ring(110.0 + (tick - COUNTDOWN) as f32);
         // The same position and the same tick into both, which is exactly how
         // `Race::tick` feeds them.
         let by_player = player

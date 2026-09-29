@@ -248,7 +248,11 @@ impl RaceStage {
                 finished,
                 self.race.sim.world.laps_target(),
             ),
-            tick: standing.finish_tick.unwrap_or(self.race.sim.world.tick),
+            // The racing clock, so a finish time - and the medal and record
+            // it feeds - excludes the start-line countdown.
+            tick: oag_race::race_clock_ticks(
+                standing.finish_tick.unwrap_or(self.race.sim.world.tick),
+            ),
             best_lap_ticks: standing.best_lap_ticks,
             campaign_medal: self
                 .campaign_medal(finished, standing.best_lap_ticks)
@@ -277,7 +281,9 @@ impl RaceStage {
             finished,
             place: self.race.player_place(),
             finish_centiseconds: finished.then(|| {
-                ticks_to_centiseconds(standing.finish_tick.unwrap_or(self.race.sim.world.tick))
+                ticks_to_centiseconds(oag_race::race_clock_ticks(
+                    standing.finish_tick.unwrap_or(self.race.sim.world.tick),
+                ))
             }),
             zone: self.race.sim.world.primary_race().zone,
             kills: standing.kills,
@@ -355,7 +361,7 @@ impl RaceStage {
                     .player_standing()
                     .finish_tick
                     .unwrap_or(self.race.sim.world.tick);
-                Some(ticks_to_centiseconds(tick))
+                Some(ticks_to_centiseconds(oag_race::race_clock_ticks(tick)))
             }
             CampaignMode::Race | CampaignMode::Head2Head | CampaignMode::TimeTrial => None,
             CampaignMode::SpeedLap => {
@@ -512,14 +518,14 @@ impl RaceStage {
                     // stands no gantry, not a second countdown beside one.
                     if let Some(countdown) = &mut self.countdown
                         && !self.scene.draws_gantry()
-                        && oag_race::RaceState::thrust_gated(readout.race_ticks)
+                        && oag_race::RaceState::thrust_gated(self.race.sim.world.tick)
                     {
                         countdown.draw(
                             gpu.device(),
                             gpu.queue(),
                             encoder,
                             view,
-                            readout.race_ticks as f32 / 60.0,
+                            self.race.sim.world.tick as f32 / 60.0,
                             viewport,
                             target_size,
                         );

@@ -3,7 +3,7 @@
 //! Split out of `state.rs` under the 200-line cap on inline `#[cfg(test)]`
 //! modules; see `scripts/check-file-size.py`.
 
-use super::{Outcome, RaceState};
+use super::{COUNTDOWN_TICKS as COUNTDOWN, Outcome, RaceState};
 use crate::testing::square_track;
 use crate::{Course, Mode, SpeedClass, zone};
 
@@ -265,13 +265,15 @@ fn a_zone_steps_every_ten_seconds_and_the_timer_resets_to_zero() {
     // accumulation is the one that steps. Counting the ticks it actually
     // took says that directly, and does not quietly pass if `dt` accumulates
     // to slightly under 10.0 and the step slips a tick.
+    // Counted from the release: the zone machine holds through the countdown
+    // (see `a_zone_holds_through_the_start_line_countdown`).
     let mut stepped_after = None;
-    for tick in 0..2_000 {
+    for tick in COUNTDOWN..COUNTDOWN + 2_000 {
         if state
             .update(&course, position, tick, DT, false)
             .zone_advanced
         {
-            stepped_after = Some(tick + 1);
+            stepped_after = Some(tick - COUNTDOWN + 1);
             break;
         }
     }
@@ -307,12 +309,12 @@ fn a_clean_zone_pays_the_bonus_and_a_dirty_one_does_not() {
     let mut clean = RaceState::new(Mode::Zone, SpeedClass::Venom);
     let mut dirty = RaceState::new(Mode::Zone, SpeedClass::Venom);
     let mut perfect = (false, false);
-    for tick in 0..=ticks_per_zone {
+    for tick in COUNTDOWN..=COUNTDOWN + ticks_per_zone {
         perfect.0 |= clean
             .update(&course, position, tick, DT, false)
             .perfect_zone;
         // One wall contact anywhere in the zone spoils it.
-        let hit = tick == 3;
+        let hit = tick == COUNTDOWN + 3;
         perfect.1 |= dirty.update(&course, position, tick, DT, hit).perfect_zone;
     }
 
@@ -333,9 +335,9 @@ fn the_dirty_flag_clears_at_each_zone_step() {
     let mut state = RaceState::new(Mode::Zone, SpeedClass::Venom);
 
     // Dirty the first zone only.
-    state.update(&course, position, 0, DT, true);
+    state.update(&course, position, COUNTDOWN, DT, true);
     assert!(state.zone_dirty);
-    for tick in 1..=ticks_per_zone {
+    for tick in COUNTDOWN + 1..=COUNTDOWN + ticks_per_zone {
         state.update(&course, position, tick, DT, false);
     }
     assert_eq!(state.zone, 1);
@@ -343,7 +345,7 @@ fn the_dirty_flag_clears_at_each_zone_step() {
 
     // The second zone is clean, so it pays.
     let mut paid = false;
-    for tick in ticks_per_zone + 1..=ticks_per_zone * 2 + 1 {
+    for tick in COUNTDOWN + ticks_per_zone + 1..=COUNTDOWN + ticks_per_zone * 2 + 1 {
         paid |= state
             .update(&course, position, tick, DT, false)
             .perfect_zone;
@@ -388,10 +390,49 @@ fn the_default_is_a_time_trial() {
 #[test]
 fn a_lap_clock_before_its_own_start_reads_zero() {
     let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
-    state.lap_start_tick = 100;
-    assert_eq!(state.lap_ticks(140), 40);
-    assert_eq!(state.lap_ticks(100), 0);
-    assert_eq!(state.lap_ticks(99), 0);
+    state.lap_start_tick = COUNTDOWN + 100;
+    assert_eq!(state.lap_ticks(COUNTDOWN + 140), 40);
+    assert_eq!(state.lap_ticks(COUNTDOWN + 100), 0);
+    assert_eq!(state.lap_ticks(COUNTDOWN + 99), 0);
+}
+
+/// The measured fact: the original's lap clock (`racer+0x920`) reads `0.0`
+/// through the whole countdown and takes its first `dt` on the release tick.
+/// Lap 1's clock is `lap_start_tick = 0` until the first crossing, so it is
+/// the floor that keeps the countdown out of it.
+#[test]
+fn the_lap_clock_starts_on_the_release_not_on_the_grid() {
+    let state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    assert_eq!(state.lap_ticks(0), 0);
+    assert_eq!(state.lap_ticks(COUNTDOWN - 1), 0);
+    assert_eq!(state.lap_ticks(COUNTDOWN), 0);
+    assert_eq!(state.lap_ticks(COUNTDOWN + 1), 1);
+    assert_eq!(state.lap_ticks(COUNTDOWN + 600), 600);
+}
+
+#[test]
+fn the_race_clock_is_zero_through_the_countdown_and_counts_from_the_release() {
+    assert_eq!(super::race_clock_ticks(0), 0);
+    assert_eq!(super::race_clock_ticks(COUNTDOWN - 1), 0);
+    assert_eq!(super::race_clock_ticks(COUNTDOWN), 0);
+    assert_eq!(super::race_clock_ticks(COUNTDOWN + 1), 1);
+}
+
+/// Zone's score and dwell timer are not running on the grid: the original's
+/// Zone machine resets both on leaving its countdown state, so counting them
+/// through it would bring the first zone in `COUNTDOWN_TICKS` early.
+#[test]
+fn a_zone_holds_through_the_start_line_countdown() {
+    let course = course();
+    let position = course.position(0).expect("in range");
+    let mut state = RaceState::new(Mode::Zone, SpeedClass::Venom);
+    for tick in 0..COUNTDOWN {
+        state.update(&course, position, tick, DT, false);
+    }
+    assert_eq!(state.score, 0, "scored on the grid");
+    assert_eq!(state.zone_timer, 0.0, "the zone timer ran on the grid");
+    state.update(&course, position, COUNTDOWN, DT, false);
+    assert!(state.score > 0, "did not start scoring on the release");
 }
 
 /// The exact boundary the live capture measured: gated through tick 271,
