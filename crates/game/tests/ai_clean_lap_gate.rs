@@ -115,16 +115,28 @@
 //!
 //! **Regenerated 2026-09-29**, when the grid moved onto the AI corridor's
 //! midpoint (`docs/ghidra/functions/psp-pulse-usa/grid.md`): the lone craft's
-//! slot-1 start moved about 1.8 units laterally on every circuit (and 30 on
-//! `01_Track`, where it used to start past the corridor edge and fall), so a
-//! trajectory sensitive to its start moved with it. Status changes, all on
-//! circuits with known hazards (`docs/gameplay/leaving-the-track.md`):
-//! `05_Track` VENOM and RAPIER `CleanLap` to `Died` (a `LostCircuit` and a wreck
-//! mid-lap, far from the grid), `05_Track` FLASH `Died` to `CleanLap`, `01_Track`
-//! FLASH `CleanLap` to `NoCleanLap`, `13_Track` RAPIER `Died` keeps its status
-//! but loses its lap time and PHANTOM gains one. The rest moved by a few ticks.
+//! slot-1 start moved about 1.8 units laterally on most circuits (30 on
+//! `01_Track`, where it used to start past the corridor edge and fall), so
+//! every outcome sensitive to the start moved with it. Status changes, and what
+//! was traced of each (`lone_craft_respawns` in `grid_stagger_ground_truth.rs`):
+//!
+//! - `01_Track` FLASH `CleanLap` to `NoCleanLap`: a `ResetZone` at spline index
+//!   42, five times - the slow crossing of the `01_Track` hole
+//!   `docs/gameplay/leaving-the-track.md` already documents (index ~31-42, a
+//!   slower class falls through it, Ace at speed clears it).
+//! - `05_Track` VENOM `CleanLap` to `Died`: `LostCircuit` at index 524 and 108,
+//!   then a wreck at 620. RAPIER `CleanLap` to `Died`: `LostCircuit` at 114,
+//!   `Stalled` at 652, a wreck at 2401. FLASH `Died` to `CleanLap`: one
+//!   `LostCircuit` at 73. The mechanism behind any of them is **not traced**;
+//!   `05_Track` is the circuit with 134 racing-line samples over no collision
+//!   (`docs/gameplay/ai.md`).
+//! - `13_Track` RAPIER (`Died`, lap time `Some` to `None`) and PHANTOM (`Died`,
+//!   `None` to `Some`): repeated `LostCircuit` at index 1286-1565 in both, as
+//!   before the change. **Not traced.**
+//!
 //! Nothing here is a claim that the driving got better or worse; it is the same
-//! driver from a start that is now where the original puts it.
+//! driver from a start that is now where the original puts it. The other rows
+//! moved by a few ticks.
 //!
 //! # Regenerating [`BASELINE`]
 //!

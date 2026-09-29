@@ -19,7 +19,7 @@
 //! geometry that a step down bigger than the hover probes' reach takes the surface
 //! out of view, after which the craft travels forward faster than gravity brings
 //! it back. Measured here before the rescue existed, one autopiloted craft alone
-//! at ace: on `05_Track` it passed 20 units from the sample table at tick 591,
+//! at ace (from the pre-2026-09-29 start; the test now uses Elite, see it): on `05_Track` it passed 20 units from the sample table at tick 591,
 //! never came back, and was **7,983 units** away by tick 6,000.
 //!
 //! So the four tests are: the bound on the circuit that produces the failure

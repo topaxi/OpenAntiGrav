@@ -138,7 +138,7 @@ fn lone_craft_respawns() {
     let image = image().expect("image");
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        class: "VENOM".to_string(),
+        class: std::env::var("OAG_GRID_CLASS").unwrap_or_else(|_| "VENOM".to_string()),
         mode: oag_race::Mode::SingleRace,
         difficulty: oag_ai::Difficulty::Ace,
         track: Some(circuit.entry.clone()),
@@ -257,7 +257,7 @@ const METROPIA_REVERSED_GRID: [[f32; 3]; 8] = [
 /// A reversed circuit's grid is laid out the same way as a forward one, node at
 /// the back: the decompile of `Race_ComputeGridLayout` reads as though a
 /// reversed circuit's node were the *front* slot, and this is the measurement
-/// that says it is not (worst slot 1.13 units, all eight).
+/// that says the layout that comes out is the forward one (worst slot 1.13 units, all eight).
 ///
 /// The bound is 1.5, **chosen, not measured**: the worst residual is the anchor's
 /// own along-track quantisation to the resampled spline.

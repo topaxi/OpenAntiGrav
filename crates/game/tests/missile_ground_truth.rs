@@ -98,6 +98,18 @@ fn a_missile_turns_toward_the_craft_it_locked() {
         race.tick(&PlayerInputs::none());
     }
 
+    // **Slot 0 is slid sideways so the target is off-axis.** On the corridor-midpoint
+    // grid (`grid.md`) slot 0 and the slot it locks share a column, so the shot is
+    // launched 0.13 degrees off the line to the target and a straight shot and a
+    // homing one end within a tenth of a unit whichever way the sign falls - the
+    // assertion below cannot fail on homing. Four units to the craft's left puts the
+    // target a few degrees off, which is asserted as a precondition.
+    {
+        let body = &mut race.sim.world.ships[0].physics.body;
+        let left = -body.right();
+        body.position += left * 4.0;
+    }
+
     let stats = race.missile_stats().expect("the disc authors a Missile");
 
     // Slot 0 sits at the back of the grid, so everybody is ahead of it. Fire by
@@ -166,35 +178,26 @@ fn a_missile_turns_toward_the_craft_it_locked() {
         "missile travelled {travelled:.1}, ended {homed:.1} from slot {target}; \
          a straight shot would have ended {straight:.1} away"
     );
-    // **How far off the target the shot was launched decides what can be
-    // asserted.** On the corridor-midpoint grid (`grid.md`) slot 0 and the slot it
-    // locks share a column, so the target is dead ahead - 0.13 degrees off the
-    // line - and a straight shot and a homing one end within a tenth of a unit of
-    // each other whichever way the sign falls. Before that layout change the
-    // margin was the same 0.1 and merely happened to fall the other way.
     let off_line = heading
         .dot((target_position - start).normalize())
         .clamp(-1.0, 1.0)
         .acos()
         .to_degrees();
+    println!("launched {off_line:.2} degrees off the line to the target");
+    assert!(
+        off_line > 1.0,
+        "the shot was launched {off_line:.2} degrees off its target, so a straight \
+         and a homing missile cannot be told apart and this test measures nothing"
+    );
     assert!(
         travelled > 0.0,
         "the missile never moved, so nothing was measured"
     );
-    if off_line > 1.0 {
-        assert!(
-            homed < straight,
-            "the missile ended {homed:.1} from its target where flying straight would \
-             have ended {straight:.1} away - the guidance term is not steering"
-        );
-    } else {
-        // Nothing to steer: assert only that it did not steer away.
-        assert!(
-            homed < straight + 0.5,
-            "a missile launched {off_line:.2} degrees off its target ended {homed:.1} \
-             from it where flying straight ends {straight:.1} away"
-        );
-    }
+    assert!(
+        homed < straight,
+        "the missile ended {homed:.1} from its target where flying straight would \
+         have ended {straight:.1} away - the guidance term is not steering"
+    );
 }
 
 /// A missile never locks the craft that fired it, on a full grid where seven

@@ -161,10 +161,9 @@ node itself; and when the track definition's `+0x164` flags read as a
 `-19.8` and the lateral sign flips - the grid is laid out *behind* the node
 along the tangent. That is the original's answer to the "reversed grids ran
 off the curve" problem below: it never extrapolates in a straight line. **The
-reversed branch is read from the decompile and refuted by a capture, see
+reversed branch is read from the decompile and contradicted by a capture, see
 [the 2026-09-29 measurement](#the-stagger-is-about-the-corridor-midpoint-not-the-node-2026-09-29):
-on Metropia reversed the node is still slot 8 and the field still runs ahead of
-it.** A track authoring all eight
+on Metropia reversed the layout that comes out is the forward one.** A track authoring all eight
 `"start position %d"` nodes takes them verbatim instead; no Pulse track does.
 
 `Race_PlaceGrid` then puts every craft on its matrix with a second downward
@@ -229,24 +228,34 @@ and it is what the 24-circuit test checks.
 AI corridor, each within 1.5 of `midpoint +/- 10` on the correct side. The
 narrowest margin to a corridor edge is 0.68.
 
-**A reversed circuit is laid out the same way as a forward one, measured.** The
+**A reversed circuit's grid comes out laid like a forward one, measured.** The
 decompile reads as though a reversed circuit (the definition's `+0x164 & 0x20`)
 put the node at the *front* slot: the output matrix index is `9 - i` and the step
 is `-19.8`. On Metropia reversed (`18_Track`, `02_Track` reversed) the original's
 slot 8 is at `(392.11, -13.38, 192.44)` and slot 1 at `(529.33, -12.92, 169.73)`,
 and ours - node as slot 8, field ahead of it in the direction of travel - lands
-within 1.13 on all eight, so **the node is the back of the grid there too**. Either
-the flag is not what `bVar1` reads on a Pulse `Reversed="True"` circuit or the
-branch is dead for a race; which was not chased, and the decompile's reversed
+within 1.13 on all eight. **What that proves is the layout and the slot
+numbering, not why the branch does not show.** Either the flag is not what
+`bVar1` reads on a Pulse `Reversed="True"` circuit, or the branch is skipped for a
+race, or it is taken and `track_reversed.vex`'s own spline runs the other way so
+the two negations cancel; which was not chased, and the decompile's reversed
 branch is left unported. Confidence **85** on "reversed circuits use the forward
-layout", from eight measured positions on one circuit; the track.md observation
-that a reversed file's node sits 2.2 units from a forward time-trial start is a
+layout", from eight positions on one circuit. The track.md observation that a
+reversed file's node sits 2.2 units from a forward time-trial start is a
 coincidence of where the exporter authored two files, not a slot number.
+
+**Only the Pulse PSP grid was read.** `grid_poses` also lays out the PS2 and Wipeout
+HD grids, whose own layout functions were not read; `hd_trackwall_ground_truth`
+(every HD grid on the track, both directions) still passes, and nothing checks the
+midpoint rule against those titles' originals.
 
 **How the eight were read.** `scripts/psp-drive.py menu --single-race
 --track-down 2` (new: Track Select is a wrapping list, so two presses from
 Talon's Junction reach Metropia), then `RESTART RACE` and a poll of the racer
-table at `0x08b34420`: entry `i` is slot `i + 1`, and its world position is at
+table at `0x08b34420`: entry `i` is **assumed** to be slot `i + 1` (the last is the player, whose
+HUD read `POS 8/8` and whose position `find_craft` returned as entry 7; the
+`16_Track` capture used the AI object's `+0x50` instead, and the two orders agree
+there), and its world position is at
 entry `+0x10` (the four floats before a 3x3 of the craft's axes). The table
 entry, not the craft struct, holds the copy that is stable through the countdown.
 
