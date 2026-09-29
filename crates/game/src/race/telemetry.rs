@@ -176,7 +176,33 @@ impl Race {
             // fills it in after this method returns, the same seam
             // `zone_stage`/`zone_next_in` already use above.
             time_trial_pace: None,
+            head_to_head: self.head_to_head(),
         }
+    }
+
+    /// Head2Head's gap readout: the unwrapped-progress difference between the
+    /// player and the one opponent, and who leads. `None` outside Head2Head.
+    ///
+    /// The original takes `|craft+0xad0 - craft+0xad0|` over the pair
+    /// (`FUN_0881d458`), and [`oag_race::Standing::distance`] is this
+    /// engine's `craft+0xad0` with the same lap-1 wrap fix, in the same
+    /// arc-length units. See `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
+    fn head_to_head(&self) -> Option<crate::hud::HeadToHead> {
+        if self.sim.world.mode() != oag_race::Mode::Head2Head {
+            return None;
+        }
+        let course = self.sim.course.as_ref()?;
+        let world = &self.sim.world;
+        let player = self.player_slot();
+        let opponent = (0..world.ship_count as usize)
+            .find(|&slot| slot != player && world.ships[slot].active)?;
+        let gap = (world.ships[player].standing.distance(course)
+            - world.ships[opponent].standing.distance(course))
+        .abs();
+        Some(crate::hud::HeadToHead {
+            gap,
+            player_leads: self.player_place() == 1,
+        })
     }
 
     /// Advances the shield bar's post-hit flash for the next [`Self::readout`].
