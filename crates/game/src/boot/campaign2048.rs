@@ -126,7 +126,7 @@ pub(super) fn map_events(
             kind,
             forced_craft,
             refused_craft,
-            card: event_card(&doc, &event, kind, strings),
+            card: event_card(&doc, event, kind, strings),
         });
     }
     report.push(format!(
