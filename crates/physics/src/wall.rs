@@ -58,19 +58,38 @@
 //! [`crate::integrate`]'s stability note, where the force is evaluated once per
 //! frame and held across all three sub-steps.
 //!
-//! # Only non-hoverable surfaces respond
+//! # Every mesh surface makes hull contacts
 //!
-//! [`Surface::Floor`] and [`Surface::MagFloor`] are skipped, because the hover
-//! spring already owns them and a lateral probe that fired on a floor would fight
-//! it - a hard-banked ship's own right axis points partly downwards, and the
-//! probe would then shove it sideways off a surface it is supposed to be resting
-//! on. [`Surface::Reset`] is skipped one layer down, by [`Raycaster`] itself.
+//! **Corrected 2026-09-29.** This section used to say only `Wall` responds,
+//! because "the hover spring already owns" floors and a lateral probe that fired
+//! on one would shove a banked ship off the surface it rests on. That was this
+//! crate's own reasoning and the original does not share it:
+//! `Collision_DispatchPair` (`0x08816eac`) dispatches on shape kind alone,
+//! `Collision_BoxAgainstMesh` (`0x08815cd4`) tests every candidate triangle of
+//! the mesh with no read of `collider+0x6c`, and `Collision_AddContact`
+//! (`0x08816864`) reads the colliders' friction and owner and nothing else. The
+//! ring consumer `FUN_088418e0` then proves non-wall contacts arrive: at
+//! `0x088426f4`-`0x08842728` it looks up each record's mesh collider and calls
+//! `FUN_08844100(craft, 3)` when `collider+0x6c == 2`, a `Reset` contact. So
+//! [`hull_contacts`] now takes every surface the raycaster returns, which is
+//! everything but `Reset` (handled by [`crate::reset`]). Confidence **88**.
 //!
-//! So **in a real race the only surface that ever responds is `Wall`, and the
-//! contact friction is therefore always `(0.05 + 0.02) / 2 = 0.035`**. That is
-//! the intended behaviour, not a coincidence to rely on: [`combine_friction`] and
-//! the sentinel are kept correct and unit-tested so that whoever enables lateral
-//! floor contacts inherits the right semantics rather than rediscovering them.
+//! It is what recovers a craft whose hull has sunk into a floor: the lower
+//! corners are behind the floor's plane by less than [`MAX_CONTACT_DEPTH`],
+//! each makes a contact, and each translates the body out by its own depth.
+//! Placed 3.6 units below rest height on `03_Track`'s level floor, the original
+//! is back at its rest height and ours now is too; before this, ours fell
+//! through. See `docs/gameplay/leaving-the-track.md`.
+//!
+//! A floor contact **moves the body and drives nothing else** - see [`reacts`]:
+//! the original charges no damage for it (its friction combines to `0.0`, and
+//! `FUN_088418e0` damages only a positive-friction record), and the impact edge,
+//! sparks and zone test here stay wall-only by choice. A hovering craft never
+//! makes one: its box sits above the surface it hovers over, so in ordinary
+//! running the only surface that responds is still `Wall`, at the combined
+//! friction `(0.05 + 0.02) / 2 = 0.035`.
+//!
+//! The swept guard in [`resolve`] keeps a wall-only filter ([`responds`]).
 //!
 //! # Known limits
 //!
@@ -248,6 +267,10 @@ pub struct WallResponse {
     pub angular_velocity_delta: Vec3,
     /// The friction [`Self::resolved`] used.
     pub friction: f32,
+    /// How many of [`Self::resolved_count`] were against a frictionless
+    /// surface (`Floor`, `MagFloor`), and so moved the body without driving
+    /// any reaction - see [`reacts`]. Reporting only.
+    pub floor_contacts: u32,
     /// Set when the swept query, rather than a hull probe, found the contact.
     ///
     /// Worth surfacing: it means the ship crossed the wall entirely within one
@@ -324,12 +347,46 @@ pub fn hull_extent(body: &Body, dimensions: &Dimensions, direction: Vec3) -> f32
         + direction.dot(body.forward()).abs() * half_length
 }
 
-/// Whether a surface takes part in wall response at all.
+/// Whether a surface takes part in the **swept** tunnelling guard.
 ///
-/// Everything the hover spring owns is excluded; see the module docs.
+/// Walls only. This filter used to gate the hull's ten-ray star as well, and
+/// that was this crate's own invention: `Collision_BoxAgainstMesh`
+/// (`0x08815cd4`), `Collision_DispatchPair` (`0x08816eac`) and
+/// `Collision_AddContact` (`0x08816864`) read no surface type anywhere, so the
+/// original's hull makes contacts against `Floor` and `MagFloor` exactly as it
+/// does against `Wall`. [`hull_contacts`] now does too; see the module docs,
+/// "Every mesh surface makes hull contacts".
+///
+/// The swept guard keeps the wall-only filter because it is not the original's
+/// pass 1 (`Body_StepWorld`'s pre-integration clip, which moves the body back
+/// along its velocity and applies no impulse) but a tunnelling guard of this
+/// crate's own that does apply one, and nothing measured says what it should
+/// do against a floor.
 #[must_use]
 pub fn responds(surface: Surface) -> bool {
     !surface.is_hoverable()
+}
+
+/// Whether a contact drives the craft's gameplay reactions: damage, the
+/// impact edge, the sparks and the zone's "clean" test.
+///
+/// `FUN_088418e0` walks the body's contact ring and charges hull damage only
+/// for a record whose stored friction (`record + 0x1a0`, the `contact+0x34`
+/// `Collision_AddContact` averaged) is **positive**: `lwc1 f12,0x30(s0)` at
+/// `0x08842648`, then `c.le.s f12,f20` against `0.0` and `bc1t` past the
+/// `Ship_Damage` call at `0x088426ac`. A floor or magstrip is the `-1.0`
+/// sentinel, so its contacts combine to `0.0` and never damage. Confidence
+/// **90** on the damage gate.
+///
+/// The impact edge, the sparks and the zone test are keyed to the same
+/// predicate, which is **chosen, not measured**: the original's spark and
+/// camera-shake dispatch at `0x0884263c` is not gated on friction but on
+/// `0x0883e37c` (unread) and a camera proximity test, so whether a floor
+/// contact sparks there is open. Kept wall-only here so that turning floor
+/// contacts on changes the body and nothing a player hears or is scored on.
+#[must_use]
+pub fn reacts(friction: f32) -> bool {
+    friction > 0.0
 }
 
 /// Resolves the hull against the collision world, mutating the body.
@@ -408,6 +465,11 @@ pub fn resolve<R: Raycaster + ?Sized>(
         response.escape += applied.escape;
         response.velocity_delta += applied.velocity_delta;
         response.angular_velocity_delta += applied.angular_velocity_delta;
+        if !reacts(friction) {
+            // A floor contact moves the body and nothing else; see [`reacts`].
+            response.floor_contacts += 1;
+            continue;
+        }
         impact |= applied.normal_speed < 0.0;
         impact_speed = impact_speed.max(-applied.normal_speed);
         response.impulse_sum += applied.impulse_magnitude;
@@ -835,11 +897,9 @@ fn hull_contacts<R: Raycaster + ?Sized>(
         );
 
         for hit in hits.iter().flatten().take(hit_count) {
-            // Per hit, not per probe. Bailing on the nearest hit's surface is
-            // what used to let a floor in front of a wall suppress the wall.
-            if !responds(hit.surface) {
-                continue;
-            }
+            // Every surface the raycaster returns makes a contact: it has
+            // already dropped `Reset`, and `Collision_BoxAgainstMesh` reads no
+            // surface type at all. See the module docs.
             // **Single-sided, by rejection rather than by flipping.**
             // `Collision_BoxAgainstMesh` (`0x08815cd4`) skips a sample point
             // unless `dot(boxCentre - s, n) > 0`, and passes the raw winding

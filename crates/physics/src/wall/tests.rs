@@ -508,8 +508,8 @@ fn a_ship_that_crossed_the_wall_within_one_frame_is_caught_by_the_sweep() {
 /// A floor standing in front of a wall used to hide the wall entirely.
 ///
 /// [`Raycaster::raycast`] returns the nearest hit of *any* surface, so the
-/// old probe took the floor, found [`responds`] false and gave up - even
-/// though the wall two tenths of a unit further on was penetrating.
+/// old probe took the floor, found the surface filter false and gave up -
+/// even though the wall two tenths of a unit further on was penetrating.
 /// `Collision_BoxAgainstMesh` has no such coupling: every triangle is its own
 /// test, and a surface the response ignores simply produces no contact rather
 /// than suppressing one.
@@ -531,7 +531,10 @@ fn a_floor_in_front_of_a_wall_no_longer_hides_it() {
         Vec3::new(1.0, 0.0, 0.0),
     );
 
-    assert_eq!(response.contacts, 5, "{response:?}");
+    // Five against the floor and five against the wall: the floor now makes
+    // its own contacts too, and still does not hide the wall.
+    assert_eq!(response.contacts, 10, "{response:?}");
+    assert_eq!(response.floor_contacts, 5, "{response:?}");
     assert!(
         response
             .resolved
@@ -638,13 +641,18 @@ fn a_wall_wound_away_from_the_ship_is_a_back_face() {
     assert_eq!(back_speed, 40.0, "and must not touch the body");
 }
 
-/// The hover spring owns floors. A lateral probe that fired on one would
-/// shove a banked ship off a surface it is meant to be resting on.
+/// A floor inside the hull pushes it out, and drives nothing else.
+///
+/// `Collision_BoxAgainstMesh` (`0x08815cd4`) reads no surface type, so the
+/// original's hull makes contacts against `Floor` and `MagFloor` exactly as
+/// against `Wall` - which is how it recovers a craft sunk into the floor. What
+/// the floor does **not** do is damage: `FUN_088418e0` charges a ring record
+/// only when its friction is positive (`0x08842648`), and a floor's is the
+/// `-1.0` sentinel. The swept guard stays wall-only; see [`responds`].
 #[test]
-fn hoverable_surfaces_never_produce_a_wall_contact() {
+fn a_floor_inside_the_hull_pushes_it_out_and_drives_no_reaction() {
     for surface in [Surface::Floor, Surface::MagFloor] {
         let mut state = ship_at(1.0, 10.0);
-        let before = state.body;
         let response = resolve(
             &mut state,
             &handling(),
@@ -652,8 +660,14 @@ fn hoverable_surfaces_never_produce_a_wall_contact() {
             &wall(1.6, surface),
             Vec3::new(1.0, 0.0, 0.0),
         );
+        assert_eq!(response.contacts, 5, "{surface:?}: {response:?}");
+        assert_eq!(response.floor_contacts, 5, "{surface:?}");
+        assert!(state.body.position.x < 1.0, "{surface:?}: {:?}", state.body);
+        assert!(state.body.linear_velocity.x < 10.0, "{surface:?}");
+        assert_eq!(response.impulse_sum, 0.0, "{surface:?}: no damage");
+        assert!(!response.impact, "{surface:?}: no impact edge");
         assert_eq!(response.resolved, None, "{surface:?}");
-        assert_eq!(state.body, before, "{surface:?}");
+        assert!(!state.wall_contact_prev, "{surface:?}");
         assert!(!responds(surface));
     }
 }

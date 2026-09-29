@@ -1201,27 +1201,36 @@ fn a_ship_flown_at_a_wall_ends_up_on_the_near_side_of_it_and_turns_round() {
     assert!(reversed, "the ship never bounced back off the wall");
 }
 
-/// A hoverable surface **in reach of a lateral probe** must still produce no
-/// response, because the hover spring owns those and a wall push there would
-/// shove a hard-banked ship off the surface it is resting on.
+/// A hoverable surface **inside the hull** pushes the craft, and costs it no
+/// shield.
 ///
-/// The geometry has to be inside the hull's reach for this to test anything. An
-/// earlier version put the quad far away and passed with the gate deleted: the
-/// only surface in range was the floor below, which no lateral probe points at.
-/// Here the quad sits half a unit to the ship's right, well inside the one-unit
-/// half-width, so a regression in `wall::responds` diverges on the first tick.
+/// This used to assert the opposite - that a floor in reach of a lateral probe
+/// is ignored, so a hard-banked ship is not shoved off the surface it rests on.
+/// That was this crate's own reasoning, and the original does not share it:
+/// `Collision_BoxAgainstMesh` (`0x08815cd4`) reads no surface type, so a floor
+/// inside the box makes contacts like any wall (see `oag_physics::wall`'s module
+/// docs). What the original does gate is damage - `FUN_088418e0` charges a
+/// contact only when its friction is positive (`0x08842648`), and a floor's is
+/// the `-1.0` sentinel - so the shield is the half of the old contract that
+/// survives.
+///
+/// The quad sits half a unit to the ship's right, well inside the one-unit
+/// half-width, and the hover probes cast straight down from `x = 0` and never
+/// reach it, so any difference is the hull's.
 #[test]
-fn a_hoverable_surface_within_reach_of_a_lateral_probe_is_still_ignored() {
-    let handling = fixture();
+fn a_hoverable_surface_inside_the_hull_pushes_it_and_charges_no_shield() {
+    let mut handling = fixture();
+    // A pool to charge against: the fixture's is zero, which clamps every run
+    // to the same empty bar and would pass the shield assertion vacuously.
+    handling.dimensions.shield = 100.0;
 
-    // Half the hull width is 1.0, so a quad at x = 0.5 is squarely inside it.
-    // The hover probes cast straight down from x = 0 and never reach it.
     let run = |beside: Option<Surface>| {
         let mut world = flat_floor(Surface::Floor);
         if let Some(surface) = beside {
             world.push(vertical_quad_at(0.5, surface));
         }
         let mut state = ship_at(4.0, &handling);
+        state.shield = 100.0;
         for _ in 0..120 {
             step(
                 &mut state,
@@ -1232,17 +1241,24 @@ fn a_hoverable_surface_within_reach_of_a_lateral_probe_is_still_ignored() {
                 TICK,
             );
         }
-        state.body
+        state
     };
 
     let alone = run(None);
     for surface in [Surface::Floor, Surface::MagFloor] {
-        assert_eq!(alone, run(Some(surface)), "{surface:?} produced a response");
+        let beside = run(Some(surface));
+        assert_ne!(alone.body, beside.body, "{surface:?} did not push the hull");
+        assert_eq!(
+            alone.shield, beside.shield,
+            "{surface:?} charged the shield: a frictionless contact must not"
+        );
     }
 
-    // And the control: the identical quad tagged `Wall` *must* change the run,
-    // or the assertions above are passing because nothing is in reach at all.
-    assert_ne!(alone, run(Some(Surface::Wall)));
+    // The control: the identical quad tagged `Wall` both pushes and charges,
+    // or the shield assertion above is passing because nothing charges at all.
+    let walled = run(Some(Surface::Wall));
+    assert_ne!(alone.body, walled.body);
+    assert!(walled.shield < alone.shield, "{} vs {}", walled.shield, alone.shield);
 }
 
 /// The suspension carries `normal_gravity + track_gravity`, not `normal_gravity`.

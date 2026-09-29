@@ -298,7 +298,7 @@ fn report_event(
         tick - d.tick,
     );
     if std::env::var_os("OAG_TRACE_EVENT").is_some() {
-        let from = recs.len().saturating_sub(120);
+        let from = recs.len().saturating_sub(std::env::var("OAG_TRACE_LEN").ok().and_then(|v| v.parse().ok()).unwrap_or(120));
         for rec in &recs[from..] {
             println!(
                 "TR|{label}|{level}|{population}|rescue {tick}|t {}|idx {}|sec {}|lat {:.2}|g {:.1}|\
@@ -887,5 +887,81 @@ fn shove_trial_trace() {
             ship.physics.time_airborne
         );
         race.tick(&PlayerInputs::single(throttle));
+    }
+}
+
+/// A lone craft's per-tick pose over a window of spline indices, first pass only.
+///
+/// `OAG_WINDOW=<circuit id>:<slot>:<from index>:<to index>:<max tick>`.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1 and OAG_WINDOW"]
+fn window_trace() {
+    let Ok(spec) = std::env::var("OAG_WINDOW") else {
+        return;
+    };
+    let parts: Vec<&str> = spec.split(':').collect();
+    let wanted = parts[0];
+    let slot: usize = parts[1].parse().expect("slot");
+    let from: usize = parts[2].parse().expect("from");
+    let to: usize = parts[3].parse().expect("to");
+    let max_tick: u64 = parts[4].parse().expect("max tick");
+    let Some(image) = image() else { return };
+    let circuit = circuits_all()
+        .into_iter()
+        .find(|c| format!("{}{}", c.id, if c.reversed { "r" } else { "" }) == wanted)
+        .expect("no such circuit");
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Ace,
+        track: Some(circuit.entry.clone()),
+        ..race::Options::default()
+    })
+    .expect("loading");
+    let mut race = race::Race::start(loaded.setup);
+    for other in 0..8 {
+        race.sim.world.ships[other].active = other == slot;
+    }
+    for tick in 0..max_tick {
+        race.tick(&PlayerInputs::none());
+        let ship = &race.sim.world.ships[slot];
+        let body = &ship.physics.body;
+        let Some((index, _, _)) = race.spline().nearest(body.position) else {
+            continue;
+        };
+        if index < from || index > to {
+            continue;
+        }
+        let up = body.up();
+        let v = body.linear_velocity;
+        let below = {
+            use oag_physics::{Ray, Raycaster};
+            race.collision()
+                .raycast(
+                    Ray::new(body.position, oag_core::math::Vec3::NEG_Y, 40.0),
+                    None,
+                    true,
+                )
+                .map_or("none".to_string(), |h| {
+                    format!("{:?} {:.2}", h.surface, h.distance)
+                })
+        };
+        println!(
+            "WIN|{tick}|idx {index}|below {below}|pos {:.2},{:.2},{:.2}|v {:.1},{:.1},{:.1}|up {:.2},{:.2},{:.2}|g {:.1}|air {:.2}|shield {:.1}|walls {}",
+            body.position.x,
+            body.position.y,
+            body.position.z,
+            v.x,
+            v.y,
+            v.z,
+            up.x,
+            up.y,
+            up.z,
+            ship.physics.grounded,
+            ship.physics.time_airborne,
+            ship.physics.shield,
+            race.wall_contact_ticks_of(slot),
+        );
     }
 }
