@@ -50,6 +50,7 @@ mod compose;
 pub mod countdown;
 mod dialect_2048;
 mod draw;
+mod head_to_head;
 mod lap_splits;
 mod overlay;
 mod runtime;
@@ -62,6 +63,7 @@ pub use assets::Assets;
 pub use compose::{Composed, compose};
 pub use countdown::Countdown;
 pub use draw::{Context, Frame, draw_list, pickup_icon_name, sprite_draw};
+pub use head_to_head::HeadToHead;
 pub use overlay::Overlay;
 pub use time_trial_pace::TimeTrialPace;
 pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
@@ -296,6 +298,7 @@ impl Layout {
                     height,
                 ],
                 color: colour(&self.constants, node.value("Color")),
+                origin_y: offset_y,
             });
             return None;
         };
@@ -665,6 +668,9 @@ pub struct Readout {
     /// `TotalTime` it always has). See
     /// `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`.
     pub time_trial_pace: Option<TimeTrialPace>,
+    /// Head2Head's gap to the opponent, `None` outside a two-craft Head2Head
+    /// race. See [`HeadToHead`].
+    pub head_to_head: Option<HeadToHead>,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.

@@ -188,6 +188,11 @@ pub struct Fill {
     pub rect: [f32; 4],
     /// Colour, resolved.
     pub color: [f32; 4],
+    /// The composed `<Item>` origin's `y`: what [`Self::rect`]'s `y` is
+    /// relative to. [`Self::rect`] is absolute, and the Head2Head bar's
+    /// runtime height is authored against the *local* `y` - see
+    /// `super::head_to_head`.
+    pub origin_y: f32,
 }
 
 /// One `<Mode3D><Model>`: a `.vex` model drawn in the 3D overlay layer.
