@@ -200,8 +200,45 @@ top-right anchor, a red `+ 3m`, the mint 5-px bar, `2.` below it, `POS` gone.
 - The `0x200` highlight bit on the player's row (`FUN_088cd290` / the flag at
   widget `+0x2c`): effect unread.
 - The multiplayer branch (`g_game_mode == 0xf`).
-- **Unmeasured against the original:** the bar's pixel size at a known gap, and
-  the colours, were not compared with a PPSSPP frame.
+- ~~Unmeasured against the original: the bar's pixel size at a known gap, and
+  the colours~~ - measured 2026-09-29, see "Live measurement".
+
+## Live measurement (PPSSPP v1.20.4, 2026-09-29)
+
+`pulse-psp-usa.chd`, Xvfb :95, own profile, **Racebox `Head to Head`, Talon's
+Junction White, Assegai, Venom** (not a campaign cell: both reach the same
+`mode == 9` branch in `Hud_BindWidgets`/`FUN_0881d458`). Frames are under
+`data/reference/psp-head2head/` (gitignored): `r3.png` (gap 62, trailing),
+`z.png`/`g1.png`/`g2.png`/`g4.png`/`g6.png` (gap 780 to 2700, trailing),
+`ld3.png`/`ld4.png` (player leading, produced by teleporting the player 45
+units ahead of the opponent's body with the debugger, so the pose is
+artificial and the HUD is the original's own), `blink.png` (40 frames of the
+player row). Screen is 960x544 (2x native), offset (160, 88) in the capture.
+
+| Claim | Result | Evidence | Conf |
+| --- | --- | --- | --- |
+| Bar is a vertical mint connector, 5 native px wide | **confirmed** | 10 px wide at 2x, x = 920 local (460 native), top y = 70 local (35 native), colour the layout's `HudColour2` | 90 |
+| Height `clamp(gap/2, 60, 180) - 30` | **confirmed at both ends** | gap 62 (and 20, on the grid): 60 px = 30 native; gap 780 to 6700: 300 px = 150 native. Intermediate value not sampled | 90 |
+| Gap label `"%s%3.0fm"`, `+` red when trailing | **confirmed** | `+ 62m`, `+ 20m` in red (the padding space is visible); label centred on the bar's midpoint, right edge about 8 px past the rows' | 92 |
+| `-` and green when leading | **confirmed** | `- 42m`, `- 35m`, `- 8m` in green `0xff30ff30`-like, and the rows swap: `1st AAA` (green) on top, `2nd Goteki 45` (white) below | 90 |
+| `POS` hidden | **confirmed** | no `POS` caption in any frame | 90 |
+| Second row at scale 0.8, y = `half` | **confirmed** (bind sets `+0xa4/+0xa8 = 0.8`; second row sits about 6 native px below the bar's bottom) | frames above; scale itself is not separable from the font change below | 75 |
+| Row texts `"%s %s"` = ordinal + name | **confirmed** | `1st Goteki 45` / `2nd AAA` | 92 |
+| Opponent name = `craft+0x798` through the string table | **consistent, value read**: the display name of the opponent's team, `Goteki 45` | the opponent flies Goteki 45 (visible on its hull); the id at `+0x798` was not read at a breakpoint | 75 |
+| Player name = `DAT_08b31774+0x457` | **consistent**: the profile tag typed at first boot, `AAA` | first-boot `TagSetup2FromBoot` left the default | 80 |
+| `0x200` flag on the player's row | **corrected: a throb**, not a static highlight. The player's row cycles between its colour and white, about 3.1 s per cycle (red minima at 1.9, 5.2, 8.5, 11.4, 14.5, 17.5 s of wall clock, emulator at 100%); the other row stays white | `blink.png`, a timed pixel count of the row | 80 for "throbs", period unmeasured to better than 0.1 s; the waveform is not read |
+| Both rows use the `Default` font | **new**: `Hud_BindWidgets` calls `FUN_088cd3b4(row, NULL)` on both, which stores `"Default"` (`0x08a81c7c`) and looks the font up; digits are 14 px tall against 16 px for the gap label at HUD scale 0.6 | decompile plus `z.png` | 85 |
+| Rows right-align at the same x | **new**: the bind copies `Position`'s `+0x9c`/`+0x168` onto `Position Outof`; right edges at 888 and 891 local | `z.png` | 88 |
+
+**Code changed by this pass:** the second row now uses `Position`'s `x` (it
+used its own authored 16, which drew it right of the leader row). Not changed:
+the `Default` font (no text bucket for it), the names (the readout carries no
+team or tag), the throb (law unread). `oag-game --race --mode head_to_head`
+before/after at 960x544: `data/scratch/pulse-live-check/ours/`.
+
+**Still open:** the id at `craft+0x798` was not read at a breakpoint; the
+`0x200` throb's law (phase, waveform, whether it is a generic Text-widget
+behaviour); the multiplayer branch; the campaign-cell launch itself.
 
 ## Names landed
 
