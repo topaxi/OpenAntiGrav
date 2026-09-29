@@ -194,7 +194,6 @@ fn measure(
             ring.pop_front();
         }
         ring.push_back(rec);
-
         let now_respawns = race.respawns_of(slot);
         if now_respawns != prev_respawns {
             prev_respawns = now_respawns;
