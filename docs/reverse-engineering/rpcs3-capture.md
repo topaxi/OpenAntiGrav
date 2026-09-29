@@ -86,6 +86,15 @@ plan's presses, landing on the wrong circuit silently.
 
 ### Racebox races the same hull the Team Selection screen does not show
 
+**Qualified 2026-09-29**: the "standard livery highlighted by default on a
+fresh save" below was read off a profile that already held a save. On a
+genuinely empty `savedata` both Racebox and the Fury campaign open
+`Team Selection` on the `concept1` row (`080`/`085` stat digits), and a
+profile with a save opened on `normal` - so the screen and the race do not
+disagree about the *default*, and what they do when a model was picked
+earlier is unread. See `docs/ui/campaign-screens.md`, "Walked on RPCS3
+with the input pressed, 2026-09-29".
+
 **Confirmed, 2026-09-13.** Racebox's `Team Selection`/`Ship Select` screen
 shows Feisar's standard blue/white/yellow livery highlighted by default, on
 a fresh save, with every other slot in the "NAVIGATE TEAM" hull-variant

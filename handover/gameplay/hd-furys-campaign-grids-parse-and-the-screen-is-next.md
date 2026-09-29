@@ -350,18 +350,21 @@ and the picked livery reaches the race. Full writeup:
    model build can be called with an archive and an entry name alone.
 2. **The `HexSelection` grid** - the per-team `FE\thumb0..3.gtf` look like
    its ship icons; the hex art itself is the widget class's own, unread.
-3. **Which direction moves what** - chosen off the grid's shape, not
-   pressed on RPCS3. One `scripts/rpcs3-drive.py` walk pressing `right` and
-   `down` on `Team Selection` would settle it.
+3. ~~**Which direction moves what**~~ - measured 2026-09-29 (confidence
+   90): left/right the team, up/down the model row, and the row is kept
+   across a team step. Same walk settled Track Creation's up/down = direction.
 4. **Pulse's own `Team Selection` Back** still reopens `Grid Selection`;
    whether Pulse's original returns to `Cell Selection` the way HD's
    `goto`-less `TeamRedirectBack` does was not checked.
 5. **HD's track screen** (`Track_Selection_Definition.xml`, `DATA06`) was
    read and wired on 2026-09-29 (next section); the RACE page's TEAM,
    VARIANT and TRACK rows are dropped for it.
-6. **The default livery**: the original's fresh-profile campaign opens this
-   screen on `concept1`; this build opens on `settings.race.variant`, the
-   classic hull by default. Measured divergence, left in place.
+6. ~~**The default livery**~~ - a fresh profile opens on `concept1` on both
+   routes (measured, confidence 90) and this build does now
+   (`Race::opening_variant`). **Still open**: what the original remembers on
+   a profile that already holds a save (it opened on `normal`), and the
+   fresh profile's team - Feisar there, `settings.race.team` (`assegai`)
+   here.
 
 ## 2026-09-29: HD's `Track Creation` (track screen) read, drawn and walked
 
@@ -389,9 +392,7 @@ press 12 is Vineta K again, cursor on the same top hex row, no reverse glyph in
    a white outline; cell pitch unmeasured). The hex grid is the largest empty
    area; measuring its pitch off `track-carousel/*.png` and drawing the
    authored `Hexagon_HD*.gtf` cells is about an afternoon.
-2. **Up/down = direction** and the **reverse row's order** are chosen. One
-   `scripts/rpcs3-drive.py browse` walk with `--button down` on `Track Creation`
-   settles both (15 minutes of RPCS3).
+2. ~~**Up/down = direction** and the **reverse row's order** are chosen.~~ Measured 2026-09-29 (confidence 90, one walk).
 3. **RECORDS cells**: no per-circuit record in (name, team, time) shape.
 4. **The `Squares` page dots** (12, first red) are code-filled.
 5. **Zone**: Zone skips the ship screen here as on Pulse, but HD's
