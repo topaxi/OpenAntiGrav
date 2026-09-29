@@ -76,6 +76,9 @@ pub struct Line {
     /// Parallel to [`Self::points`], or empty. Never any other length -
     /// [`Line::with_corridor`] drops a mismatched one rather than half-using it.
     corridor: Vec<Frame>,
+    /// Parallel to [`Self::points`], or empty: `true` where the track has no
+    /// surface under the line. See [`Self::with_unsupported`].
+    unsupported: Vec<bool>,
 }
 
 impl Line {
@@ -85,6 +88,7 @@ impl Line {
         Self {
             points,
             corridor: Vec::new(),
+            unsupported: Vec::new(),
         }
     }
 
@@ -101,7 +105,47 @@ impl Line {
         } else {
             Vec::new()
         };
-        Self { points, corridor }
+        Self {
+            points,
+            corridor,
+            unsupported: Vec::new(),
+        }
+    }
+
+    /// Marks the points with no track surface under them.
+    ///
+    /// # Chosen, not measured (maintainer decision, 2026-09-29)
+    ///
+    /// [`Self::curvature`] reads a chord that touches one of these as straight:
+    /// a craft over a gap is airborne and steers nothing, so a bend in the line
+    /// there is not a corner to brake for. At `01_Track`'s lip (samples 31-42,
+    /// where the line leaves an upper deck and runs about 60 degrees down
+    /// through the air onto a lower floor) the pitch read as a 0.075 rad/unit
+    /// bend, and this project's Ace braked from 127 u/s to about 20 and crawled
+    /// off the lip every lap. The original's field, logged live in PPSSPP,
+    /// crossed it 21 times of 21 at 69-111 u/s and flew the drop. The original's
+    /// AI is not being copied: the maintainer's decision is that opponents obey
+    /// the player's physics and drive smarter instead. Narrowed to gaps on
+    /// purpose - discounting *every* pitch change took crests faster everywhere
+    /// and killed three more `ai_clean_lap_gate` rows. See
+    /// `docs/gameplay/leaving-the-track.md`.
+    ///
+    /// A mask whose length does not match the points is dropped, for the same
+    /// reason [`Self::with_corridor`] drops a mismatched corridor.
+    #[must_use]
+    pub fn with_unsupported(mut self, unsupported: Vec<bool>) -> Self {
+        self.unsupported = if unsupported.len() == self.points.len() {
+            unsupported
+        } else {
+            Vec::new()
+        };
+        self
+    }
+
+    /// Whether the track has no surface under the line at `index`, wrapping.
+    #[must_use]
+    pub fn is_unsupported(&self, index: usize) -> bool {
+        !self.unsupported.is_empty() && self.unsupported[index % self.unsupported.len()]
     }
 
     /// Whether this line knows how much room there is around it.
@@ -342,9 +386,14 @@ impl Line {
         // centimetres - and an AI braking against it held 1.2 units/s and never
         // recovered, because slowing shrinks the span that produced the reading.
         // Pinned by `a_long_segment_is_still_straight`.
-        let (_, a, _) = self.ahead(index, span);
-        let (_, b, _) = self.ahead(index, span * 2.0);
-        let (_, c, _) = self.ahead(index, span * 3.0);
+        let (at_a, a, _) = self.ahead(index, span);
+        let (at_b, b, _) = self.ahead(index, span * 2.0);
+        let (at_c, c, _) = self.ahead(index, span * 3.0);
+        // Over a gap the craft is flying, not steering: see
+        // [`Self::with_unsupported`].
+        if self.is_unsupported(at_a) || self.is_unsupported(at_b) || self.is_unsupported(at_c) {
+            return 0.0;
+        }
         let into = b - a;
         let out_of = c - b;
         // A chord of no length carries no direction, and `normalize_or_zero`

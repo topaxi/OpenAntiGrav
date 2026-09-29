@@ -194,7 +194,6 @@ fn measure(
             ring.pop_front();
         }
         ring.push_back(rec);
-
         let now_respawns = race.respawns_of(slot);
         if now_respawns != prev_respawns {
             prev_respawns = now_respawns;
@@ -204,6 +203,7 @@ fn measure(
                 Some(RespawnCause::LostCircuit) => "lost",
                 Some(RespawnCause::Stalled) => "stalled",
                 Some(RespawnCause::OffTrack) => "offtrack",
+                Some(RespawnCause::Airborne) => "airborne",
                 Some(RespawnCause::Destroyed) => "wrecked",
                 None => "?",
             };

@@ -81,6 +81,7 @@ impl Raycaster for Plane {
             surface: Surface::Floor,
             vertex_scalar: 1.0,
             collider: 0,
+            triangle: None,
         })
     }
 

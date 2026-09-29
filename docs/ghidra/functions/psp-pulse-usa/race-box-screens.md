@@ -113,7 +113,11 @@ the actual screen behaviour lives:
 
 - `+0x99`: a hard-hidden byte: nonzero always fails.
 - a "cheat/dev unlock" global (`sceKernelGetGPI() & 1`, or a flag byte at
-  `DAT_08b31774+0x45f`): if set, everything is unlocked.
+  `DAT_08b31774+0x45f`): if set, everything is unlocked. **Confirmed live
+  2026-09-29**: `DAT_08b31774` holds a pointer (the profile object), and
+  writing `1` to the byte at that pointer `+0x45f` in PPSSPP makes Track Select
+  offer all 24 circuits - see
+  [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29).
 - otherwise it walks a linked list at `+0x9c` - the `<Unlock>` rows
   `race-setup.md` already reads from `Definition.xml` - and calls one of nine
   unnamed predicate functions per entry (`FUN_0888e6e8`,

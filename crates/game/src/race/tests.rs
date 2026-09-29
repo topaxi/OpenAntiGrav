@@ -664,6 +664,29 @@ fn hulled_handling() -> Handling {
     }
 }
 
+/// A horizontal quad at height `at` whose wound normal points **up**, for a
+/// fixture that drives the hull down into it.
+///
+/// [`plane`]'s horizontal quad faces down, and the hull narrowphase is
+/// single-sided - `Collision_BoxAgainstMesh`'s `dot(centre - s, n) > 0`
+/// rejection - so a craft pressed onto it from above makes no contact. The
+/// swept centre ray this crate used to cast ignored facing and hid that; since
+/// `Body_StepWorld`'s pass 1 replaced it, the fixture has to face the craft.
+fn upward_plane(at: f32, surface: oag_physics::Surface) -> oag_physics::TriangleSoup {
+    oag_physics::TriangleSoup::new(
+        vec![
+            [-500.0, at, -500.0],
+            [500.0, at, -500.0],
+            [500.0, at, 500.0],
+            [-500.0, at, 500.0],
+        ],
+        vec![[0, 2, 1], [0, 3, 2]],
+        Vec::new(),
+        surface,
+        0,
+    )
+}
+
 /// A large quad, as a collider of one class.
 ///
 /// `axis` picks the plane: 1 is horizontal at height `at`, 0 is vertical at

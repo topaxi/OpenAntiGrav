@@ -22,8 +22,9 @@
 //! at ace (from the pre-2026-09-29 start; the test now uses Elite, see it): on `05_Track` it passed 20 units from the sample table at tick 591,
 //! never came back, and was **7,983 units** away by tick 6,000.
 //!
-//! So the four tests are: the bound on the circuit that produces the failure
-//! unprompted, the reported failure reproduced on the circuit it was reported on,
+//! So the four tests are: the bound on a player shoved off an open edge (the
+//! autopilot produced the failure unprompted until 2026-09-29, and no longer
+//! does anywhere), the reported failure reproduced on the circuit it was reported on,
 //! the count of `Reset` colliders that says why those volumes cannot be the
 //! answer, and a control on the circuits that never leave at all.
 
@@ -101,57 +102,109 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
     Some(solo)
 }
 
+/// The player's craft alone on `track`, placed on the racing line at spline
+/// sample `index`, turned `degrees` to the left off the tangent, moving at
+/// `speed` along that heading with the throttle held for `ticks` - a player who
+/// steers off an open edge, without an input model. The same placement as
+/// `falloff_survey_ground_truth.rs`'s shove sweep.
+fn shoved_player(track: &str, index: usize, degrees: f32, speed: f32, ticks: u64) -> Option<Solo> {
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Ace,
+        track: Some(track.to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    for slot in 1..oag_gameplay::MAX_SHIPS {
+        race.sim.world.ships[slot].active = false;
+    }
+    let mut buttons = oag_gameplay::input::Input::new();
+    buttons.begin_frame(oag_gameplay::input::Button::Cross.bit());
+    buttons.begin_frame(oag_gameplay::input::Button::Cross.bit());
+    let throttle = oag_gameplay::InputSnapshot {
+        buttons,
+        ..oag_gameplay::InputSnapshot::new()
+    };
+    // Past the countdown, so the craft is allowed to move.
+    for _ in 0..600 {
+        race.tick(&PlayerInputs::single(throttle));
+    }
+    let height = oag_gameplay::spawn::spawn_height(&race.sim.world.ships[0].handling);
+    let sample = race.spline().sample(index).copied()?;
+    let mut pose = oag_gameplay::Pose::from_sample(&sample, sample.racing_line, height);
+    let up = pose.orientation * oag_core::math::Vec3::Y;
+    pose.orientation =
+        oag_core::math::Quat::from_axis_angle(up, -degrees.to_radians()) * pose.orientation;
+    let forward = pose.orientation * oag_core::math::Vec3::NEG_Z;
+    race.sim.world.ships[0].place_at(pose);
+    race.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
+
+    let mut solo = Solo {
+        half_width: race.spline().max_half_width(),
+        ..Solo::default()
+    };
+    let before = race.respawns();
+    for _ in 0..ticks {
+        race.tick(&PlayerInputs::single(throttle));
+        let position = race.sim.world.ships[0].physics.body.position;
+        if let Some(distance) = race.spline().distance_to(position) {
+            solo.peak = solo.peak.max(distance);
+        }
+    }
+    solo.laps = race.sim.world.ships[0].standing.lap;
+    solo.respawns = race.respawns() - before;
+    Some(solo)
+}
+
 /// **A player who comes off a real circuit stops receding.**
 ///
-/// `05_Track` is the circuit that produces the failure with no input from a
-/// driver: the craft leaves early in the first lap and, before this, never came
-/// back. The bound asserted is the one the mechanism guarantees rather than a
-/// fitted number - a craft cannot recede past the threshold for longer than
-/// [`oag_race::recovery::PLAYER_RESCUE_TICKS`], so its distance is bounded by how far a falling
-/// craft travels in three quarters of a second.
+/// **A placed shove off `04_Track`'s open edge since 2026-09-29.** The subject
+/// used to be the player's autopilot leaving `05_Track` on its own, first at
+/// Ace and then at Elite; with the hull port and the AI's gap-aware braking
+/// (`docs/gameplay/leaving-the-track.md`) no tier on any forward circuit sends
+/// the autopilot off through `OffTrack` any more, measured over all twelve and
+/// all four tiers. The failure this test owns is a property of the geometry -
+/// an edge with no wall and a drop beyond it - so it is now staged directly:
+/// `04_Track` sample 0, turned 45 degrees left at 110 u/s, throttle held, one of
+/// the shove sweep's leaks. Measured: it passes 200 units from the circuit
+/// before `OffTrack` puts it back.
+///
+/// The bound asserted is the one the mechanism guarantees rather than a fitted
+/// number - a craft cannot recede past the threshold for longer than
+/// [`oag_race::recovery::PLAYER_RESCUE_TICKS`], so its distance is bounded by
+/// how far a falling craft travels in three quarters of a second.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_player_that_leaves_a_real_circuit_stops_receding() {
-    // **Elite since 2026-09-29, Ace before.** The grid moved onto the corridor
-    // midpoint (`grid.md`), which shifted slot 0's start by about 1.6 units, and
-    // an Ace autopilot on `05_Track` no longer leaves the circuit (peak 24.1,
-    // no respawn). The failure this test owns is a property of the geometry, not of
-    // a tier: an Elite one leaves on the same circuit (peak 190, one `OffTrack`).
-    let Some(solo) = solo_player(
-        oag_ai::Difficulty::Elite,
-        "Data\\Environments\\05_Track\\track.vex",
-        6_000,
+    let Some(solo) = shoved_player(
+        "Data\\Environments\\04_Track\\track.vex",
+        0,
+        45.0,
+        110.0,
+        600,
     ) else {
         return;
     };
     println!(
-        "elite 05_Track: peak {:.1} ({:.1} half-widths), laps {}, respawns {}, longest stall {}",
+        "04_Track shove: peak {:.1} ({:.1} half-widths), respawns {}",
         solo.peak,
         solo.peak / solo.half_width,
-        solo.laps,
-        solo.respawns,
-        solo.longest_stall
+        solo.respawns
     );
-
     assert!(
         solo.respawns > 0,
-        "nothing recovered the player, so this circuit no longer measures anything"
+        "nothing recovered the player, so this placement no longer measures anything"
     );
-    // Before the rescue: 7,983 units, and receding for the rest of the race.
+    // Before the rescue existed, a craft that left this way receded for the
+    // rest of the race: 7,983 units on `05_Track` by tick 6,000.
     assert!(
         solo.peak < 1_000.0,
         "the player got {:.1} units from the circuit, so the rescue is not bounding it",
         solo.peak
-    );
-    // **Not a lap assertion, and that is a finding rather than a gap.** This
-    // circuit's authored racing line runs above its own collision surface for 134
-    // samples (`docs/gameplay/ai.md`), so a craft put back there comes off again
-    // and eventually wedges. An opponent is picked up by the stall rescue;
-    // the player is not, deliberately - see `Race::lost_off_the_track`. What this
-    // test owns is that the craft stops *receding*, which is what was broken.
-    println!(
-        "elite 05_Track: the craft is bounded but still not lapping - the stall is \
-         the separate open thread on this circuit"
     );
 }
 

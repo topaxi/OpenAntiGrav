@@ -196,3 +196,50 @@ fn curvature_approximates_one_over_the_radius() {
         "measured {measured}, expected about 0.01"
     );
 }
+
+/// A deck that drops 60 degrees onto a lower one, running along `-z` - the
+/// shape of `01_Track`'s lip - with the dropping points marked unsupported
+/// when `masked`.
+fn drop_line(masked: bool) -> Line {
+    let mut points = Vec::new();
+    let mut unsupported = Vec::new();
+    let (mut z, mut y) = (0.0f32, 30.0f32);
+    for step in 0..60 {
+        points.push(Vec3::new(0.0, y, z));
+        let pitched = (20..30).contains(&step);
+        unsupported.push(pitched);
+        z -= if pitched { 0.75 } else { 1.5 };
+        y -= if pitched { 1.3 } else { 0.0 };
+    }
+    let line = Line::new(points);
+    if masked {
+        line.with_unsupported(unsupported)
+    } else {
+        line
+    }
+}
+
+/// Chosen, not measured (maintainer decision): a bend over a gap is not a
+/// corner to brake for, because the craft is flying there.
+#[test]
+fn a_bend_over_a_gap_reads_straight() {
+    let masked = drop_line(true);
+    let raw = drop_line(false);
+    let at = 16;
+    assert!(
+        raw.curvature(at, 3.0) > 0.05,
+        "the fixture has no bend to remove: {}",
+        raw.curvature(at, 3.0)
+    );
+    assert_eq!(masked.curvature(at, 3.0), 0.0);
+    // Well clear of the gap on both sides, the two lines agree.
+    assert_eq!(masked.curvature(40, 3.0), raw.curvature(40, 3.0));
+}
+
+/// A mask of the wrong length is dropped rather than half-used.
+#[test]
+fn a_mismatched_unsupported_mask_is_dropped() {
+    let line = drop_line(false).with_unsupported(vec![true; 3]);
+    assert!(!line.is_unsupported(0));
+    assert!(line.curvature(16, 3.0) > 0.05);
+}

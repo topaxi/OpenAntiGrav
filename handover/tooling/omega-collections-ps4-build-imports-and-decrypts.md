@@ -195,38 +195,17 @@ about a second, decompression-shaped problem on top of it.
   extraction"), and `crates/game/tests/omega_race_ground_truth.rs` skips only
   on a short-read copy, `OAG_OMEGA_SOURCE=<dir>` overriding the directory.
 
-- **Block data location - corrected and narrower, still not closed.** The
-  "roughly a third to a half" figure this section used to carry was itself
-  measured wrong: `psarc_sweep`'s first-byte check counted several real,
-  correctly-located `.gnf` entries as fake because their pixel payload does
-  not start at byte zero (a dedup group of eleven `ShieldHexagonal_ALPHA.gnf`
-  liveries on `data03.psarc` is the worked example - 15,616 zero bytes then
-  real tiled-texture content). `crates/assets/examples/psarc_oracle.rs`
-  replaces it with a magic-based check (`VEXX`/`GNF `) and reports three
-  buckets instead of two: valid, all-zero, and **"garbage"** - real,
-  substantial bytes present but not the claimed magic, the population the
-  old oracle could not see at all. One genuine reader bug was found and
-  fixed along the way (a short stored block whose first byte coincidentally
-  matches zlib's marker no longer raises `Error::BadBlock`, the same
-  coincidence already known for full-size blocks). What is now settled:
-  `entry.offset` is not a location bug - a small sample rules out a constant
-  per-entry offset error, and the PS4 executable itself has no PSARC reader
-  of its own to compare against; it mounts every archive through Sony's
-  FIOS2 (`sceFiosArchiveMountSync`) behind a PlayGo chunk-locus poll, see
-  [`docs/ghidra/functions/ps4-omega-eu/psarc-mount.md`](../../docs/ghidra/functions/ps4-omega-eu/psarc-mount.md).
-  **What remains open**: why a substantial "garbage" population exists at
-  all - real bytes, wrong format, at an offset with no arithmetic problem.
-  Full numbers: [`docs/formats/psarc.md`](../../docs/formats/psarc.md)'s
-  "Block data location" section. **The extraction-provenance lead (whether
-  the base `.pkg` extraction had silently absorbed, or needed, patch
-  content) is closed, negative, 2026-09-15**: `PkgTool.Core pkg_extract` has
-  no base/patch merge logic at all (checked directly against its source),
-  the patch's own archives are four names (`data05`/`07`/`08`/`09`) the base
-  `.pkg` doesn't have rather than replacements for `data00`-`04`, and the
-  same split reproduces at similar magnitude on those four, freshly
-  extracted this session - see
-  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md),
-  split out to hold that finding.
+- **Block data location: closed - it was the extraction tool (2026-09-29).**
+  Every "garbage", "all-zero" and "roughly a third to a half real" figure
+  this thread carried came from the short-read extraction. On the whole one,
+  all nine archives are a bijection between manifest paths and entries
+  (46,005 of 46,005), every entry reads, and every entry with a magic carries
+  it (26 `.vex` in the big-endian spelling, `XXEV`). The patch's four archives
+  are names the base `.pkg` does not have, and nothing was merged or absorbed.
+  Numbers and the list of retired claims:
+  [`docs/formats/psarc.md`](../../docs/formats/psarc.md#block-data-location-and-the-short-read-extraction);
+  the patch finding:
+  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md).
 - **Closed, negative, 2026-09-16 (`lane/omega-rcs`): PS4 `.rcsmodel`/
   `.rcsmaterial` are not this format stored little-endian.** The byte-order
   hypothesis this bullet used to carry is withdrawn: every real sample opens

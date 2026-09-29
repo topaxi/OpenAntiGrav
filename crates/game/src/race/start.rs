@@ -230,7 +230,7 @@ impl Race {
         // shape of a measurement.
         let mut ai_pilots = [oag_ai::Pilot::BALANCED; oag_gameplay::MAX_SHIPS];
         let order = ai_order(&spline, course.as_ref());
-        let line = racing_line(&spline, &order);
+        let line = racing_line(&spline, &order, &collision, handling.antigrav.ride_height);
         let rescue_distance = spline.max_half_width() * RESCUE_HALF_WIDTHS;
         let player_rescue_distance = spline.max_half_width() * PLAYER_RESCUE_HALF_WIDTHS;
         // Where the player is placed, so the first recovery before they have

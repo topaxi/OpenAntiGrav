@@ -152,9 +152,15 @@ fn every_cue_has_something_that_raises_it() {
     // one here could make this pass by never testing anything. The same wall
     // also closes the Plasma's own bolt: charged and released a body-length
     // above it, the downward probe finds it within the first flight tick.
+    //
+    // Two coincident planes since `Body_StepWorld`'s pass 1 replaced the swept
+    // centre ray: the down-facing one first, which the projectiles' own
+    // queries were staged against and which wins their nearest-hit tie, and
+    // the up-facing one the single-sided hull narrowphase needs to meet the
+    // craft pressed down onto it. See `upward_plane`.
     let mut setup = setup_with(
         hulled_handling(),
-        vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
+        vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
@@ -226,8 +232,18 @@ fn every_cue_has_something_that_raises_it() {
         // Re-aimed at the wall every tick, so each one sees a fresh inbound
         // contact rather than the ship bouncing away after the first.
         let body = &mut race.sim.world.ships[0].physics.body;
-        body.position = Vec3::new(20.0, -39.7, 0.0);
+        // Level and pressed onto the wall, except on the Missile's own tick:
+        // `missile::launch` fires along the craft's *forward* from its nose,
+        // so for that one press the craft is lifted ten units clear and
+        // pointed nose-down at the wall.
+        body.position = Vec3::new(20.0, if tick == 212 { -30.0 } else { -39.7 }, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
+        body.orientation = if tick == 212 {
+            oag_core::math::Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+        } else {
+            oag_core::math::Quat::IDENTITY
+        };
+        body.angular_velocity = Vec3::ZERO;
         let snapshot = match tick {
             40 => buttons.tick(CIRCLE),
             130 | 210 | 212 => buttons.tick(SQUARE),

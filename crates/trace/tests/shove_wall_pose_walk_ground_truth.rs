@@ -68,13 +68,7 @@ fn wall_contacts_along_a_shove_capture() {
             Basis::LeftUpForward,
             AngularReading::NegatedLocal,
         );
-        let response = wall::resolve(
-            &mut state,
-            &handling,
-            &environment,
-            &collision,
-            pair[0].position,
-        );
+        let response = wall::resolve(&mut state, &handling, &environment, &collision);
         // The force law at the same pose: what speed change does it predict
         // for the step that follows, along the recorded velocity?
         let mut fstate = initial_state(

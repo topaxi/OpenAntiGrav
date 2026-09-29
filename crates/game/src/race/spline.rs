@@ -31,12 +31,17 @@ use super::*;
 ///
 /// Index-parallel to [`ai_order`] on purpose - see [`RaceSim::racing_line`].
 #[must_use]
-pub(super) fn racing_line(spline: &Spline, order: &[u32]) -> oag_ai::Line {
+pub(super) fn racing_line(
+    spline: &Spline,
+    order: &[u32],
+    collision: &oag_physics::CollisionWorld,
+    reach: f32,
+) -> oag_ai::Line {
     let samples: Vec<_> = order
         .iter()
         .filter_map(|&index| spline.sample(index as usize))
         .collect();
-    let points = samples
+    let points: Vec<Vec3> = samples
         .iter()
         .map(|sample| {
             let down = Vec3::from_array(sample.down);
@@ -56,7 +61,26 @@ pub(super) fn racing_line(spline: &Spline, order: &[u32]) -> oag_ai::Line {
             right: (sample.ai_bound_right - sample.racing_line).max(0.0),
         })
         .collect();
-    oag_ai::Line::with_corridor(points, corridor)
+    // Where the track has no surface under the line, cast down the sample's
+    // own normal from one probe reach above the line to one below it - what a
+    // craft's hover probes reach, and the cast `race_ground_truth`'s "nothing
+    // under the line" table makes. See `oag_ai::Line::with_unsupported` for
+    // what a driver does with it and why (chosen, not measured).
+    let unsupported = samples
+        .iter()
+        .zip(&points)
+        .map(|(sample, &point)| {
+            let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
+            oag_physics::Raycaster::raycast(
+                collision,
+                oag_physics::Ray::new(point + up * reach, -up, reach * 2.0),
+                None,
+                false,
+            )
+            .is_none()
+        })
+        .collect();
+    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
 }
 
 /// Which spline samples the AI line is made of, in the order a lap drives them.

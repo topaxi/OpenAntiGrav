@@ -218,9 +218,12 @@ this rule's difference from the old one is `midpoint(slot) + 10` against
 `node lane - 20`, which on that circuit is 1.6 to 1.85: the prediction was made
 before the run. Slot 8 was 1.68 because the raw node, not the midpoint plus ten,
 was used for the player; it is no longer. **The node-on-the-left branch is
-decompile-only.** Neither `01_Track` nor `17_Track` is reachable from the front
-end (`race-setup.md`: only `16`, `03` and `18` are unlocked), so no original
-capture of a left-side grid exists; it is the same code path with the sign flipped,
+decompile-only.** Neither `01_Track` nor `17_Track` is reachable from a fresh
+profile's front end (`race-setup.md`: only `16`, `03` and `18` are unlocked), so
+no original capture of a left-side grid exists yet - though since 2026-09-29
+every circuit is, through the dev-unlock byte in
+[ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29),
+and a Single Race on Basilico Black (`01_Track`) was logged with it; it is the same code path with the sign flipped,
 and it is what the 24-circuit test checks.
 
 **All 24 circuit-directions, all eight slots** (`grid_stagger_ground_truth.rs`,
