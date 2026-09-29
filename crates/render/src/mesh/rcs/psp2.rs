@@ -185,8 +185,16 @@ impl Report {
 /// resolve and passes `None` where they do not.
 #[must_use]
 pub fn animation_names(vex_name: &str) -> Option<(String, String)> {
-    let model = super::sibling_name(vex_name)?;
-    let stem = model.strip_suffix(".rcsmodel")?;
+    animation_names_beside(&super::sibling_name(vex_name)?)
+}
+
+/// The `.rcsskeleton` and `.rcsanimclip` that sit beside an `.rcsmodel`
+/// already found, whatever its spelling - `track.rcsmodel` gives
+/// `track.rcsskeleton`, and the Omega Collection's `track.final.rcsmodel`
+/// gives `track.final.rcsskeleton`. See [`super::sibling_name_cooked`].
+#[must_use]
+pub fn animation_names_beside(model_name: &str) -> Option<(String, String)> {
+    let stem = model_name.strip_suffix(".rcsmodel")?;
     Some((format!("{stem}.rcsskeleton"), format!("{stem}.rcsanimclip")))
 }
 

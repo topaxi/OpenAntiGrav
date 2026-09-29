@@ -30,6 +30,7 @@ pub(super) fn track_model(
     track: &str,
     track_blob: &[u8],
     geometry: &Option<Vec<u8>>,
+    model_name: Option<&str>,
     report: &mut Vec<String>,
 ) -> Option<Model> {
     match geometry {
@@ -40,7 +41,7 @@ pub(super) fn track_model(
         // of its own rather than a branch inside HD's. See
         // `oag_render::mesh::rcs::psp2`.
         Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
-            let animation = psp2_animation(archives, track, report);
+            let animation = psp2_animation(archives, track, model_name, report);
             match mesh::rcs::psp2::build(track, geometry, animation.as_ref(), &mut |path| {
                 archives.read_name(path).ok()
             }) {
@@ -86,9 +87,16 @@ pub(super) fn track_model(
 fn psp2_animation(
     archives: &mut oag_assets::Archives,
     track: &str,
+    model_name: Option<&str>,
     report: &mut Vec<String>,
 ) -> Option<mesh::rcs::psp2::Animation> {
-    let (skeleton_name, clip_name) = mesh::rcs::psp2::animation_names(track)?;
+    // Beside the `.rcsmodel` that was actually found, so the Omega Collection's
+    // `track.final.rcsmodel` reads `track.final.rcsskeleton` and not a
+    // `track.rcsskeleton` that does not exist.
+    let (skeleton_name, clip_name) = match model_name {
+        Some(model) => mesh::rcs::psp2::animation_names_beside(model)?,
+        None => mesh::rcs::psp2::animation_names(track)?,
+    };
     let Ok(skeleton) = archives.read_name(&skeleton_name) else {
         report.push(format!(
             "{track}: no .rcsskeleton beside it - node-bound scenery is placed by the \

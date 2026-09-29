@@ -11,9 +11,10 @@
 //! +0x00  char[4]  "kdtr"
 //! +0x04  char[4]  ASCII version, four hex digits, must read as 1
 //!        "----"   section tag, repeated before every section below
-//!        u32      node stride in bytes, 24 on every file seen
+//!        u32      node stride in bytes - 24 on every 2048 file, 19 on every
+//!                 Omega Collection file; see `NodeLayout`
 //!        u32      node count N
-//!        node[N]  the k-d tree, 24 bytes each - see `Node`
+//!        node[N]  the k-d tree, `stride` bytes each - see `Node`
 //!        "----"
 //!        u32      leaf index count M
 //!        u16[M]   triangle indices, the leaves' own contents
@@ -35,6 +36,20 @@
 //!        u8[T]    one surface byte per triangle - see `SurfaceByte`
 //!        f32[6]   the soup's own bounds: **centre, then half-extent**
 //! ```
+//!
+//! # Omega Collection's node is 19 bytes, and nothing else moved
+//!
+//! All 38 `track_col.col` files on the PS4 Omega Collection (its own 22
+//! circuits and the ten `environments2048` ones, forwards and reversed) state
+//! a node stride of **19** where 2048's state 24, and in every one of them the
+//! next `"----"` sits at exactly `0x14 + 19 * N`. Everything after the node
+//! array is the same container: on `environments2048\altima` it is
+//! **byte-identical** to 2048's own Vita file (415,286 bytes of leaf indices,
+//! bounds and triangle soup), and the file is smaller by exactly `5 * N`
+//! (`1,068,082 - 932,087 = 135,995 = 5 * 27,199`). The packed node is the
+//! wide one with the constant `0x000b` half-word dropped and the axis
+//! narrowed to a byte - see [`NodeLayout::Packed`] for the field order and the
+//! evidence.
 //!
 //! # The bounds are centre and half-extent, not min and max
 //!
@@ -73,8 +88,13 @@ pub const SECTION_TAG: &[u8; 4] = b"----";
 /// The only version `KdTree_Load` accepts.
 pub const VERSION: u32 = 1;
 
-/// Bytes per k-d tree node, stated by the file and checked against this.
+/// Bytes per k-d tree node in 2048's files, stated by the file and checked
+/// against this. See [`NodeLayout::Wide`].
 pub const NODE_LEN: usize = 0x18;
+
+/// Bytes per k-d tree node in the Omega Collection's files. See
+/// [`NodeLayout::Packed`].
+pub const NODE_LEN_PACKED: usize = 19;
 
 /// Bytes per triangle.
 ///
@@ -116,6 +136,11 @@ pub enum Error {
         /// The file's length.
         len: usize,
     },
+    /// A k-d node stride that is neither [`NODE_LEN`] nor [`NODE_LEN_PACKED`].
+    BadNodeStride {
+        /// The value read.
+        stride: usize,
+    },
     /// A stride the format does not permit.
     BadStride {
         /// What the stride is for.
@@ -154,6 +179,11 @@ impl fmt::Display for Error {
             Self::OutOfBounds { what, end, len } => {
                 write!(f, "{what} ends at {end} but the file is {len} bytes")
             }
+            Self::BadNodeStride { stride } => write!(
+                f,
+                "k-d node stride is {stride}, and only {NODE_LEN} (2048) and \
+                 {NODE_LEN_PACKED} (Omega Collection) read"
+            ),
             Self::BadStride {
                 what,
                 stride,
@@ -218,12 +248,15 @@ pub struct Node {
     /// Where this leaf's run starts in [`KdCollision::leaves`].
     pub first_leaf: usize,
     /// The upper half of the word [`triangle_count`](Self::triangle_count) is
-    /// the lower half of.
+    /// the lower half of, or `None` in a layout that has no such word.
     ///
-    /// `0x000b` on **every node of every file measured**, internal and leaf
-    /// alike, so nothing here distinguishes a field from a constant and it is
-    /// carried rather than named.
-    pub unknown: u16,
+    /// `0x000b` on **every node of every altima file measured** (2048's
+    /// own), internal and leaf alike, so nothing there distinguishes a field
+    /// from a constant and it is carried rather than named. It varies by
+    /// circuit - `0x0033` on `arena`, `0x0084` on `mall`, `0x001c` on `subway` -
+    /// and is always `None` for [`NodeLayout::Packed`], which does not store
+    /// it.
+    pub unknown: Option<u16>,
 }
 
 impl Node {
@@ -231,6 +264,63 @@ impl Node {
     #[must_use]
     pub fn is_leaf(&self) -> bool {
         self.low.is_none() && self.high.is_none()
+    }
+}
+
+/// How a file lays out one k-d node, stated by the file's own stride field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeLayout {
+    /// 2048's 24-byte node ([`NODE_LEN`]):
+    ///
+    /// ```text
+    /// +0x00  i32  low child, -1 for none
+    /// +0x04  i32  high child, -1 for none
+    /// +0x08  u32  split axis 0/1/2, all-ones on a leaf
+    /// +0x0c  f32  split position
+    /// +0x10  u32  triangle count in the low half, `unknown` in the high
+    /// +0x14  u32  first leaf index
+    /// ```
+    Wide,
+    /// The Omega Collection's 19-byte node ([`NODE_LEN_PACKED`]), a packed
+    /// record with no alignment:
+    ///
+    /// ```text
+    /// +0x00  i32  low child, -1 for none
+    /// +0x04  i32  high child, -1 for none
+    /// +0x08  u8   split axis 0/1/2, 0xff on a leaf
+    /// +0x09  u16  triangle count
+    /// +0x0b  f32  split position
+    /// +0x0f  u32  first leaf index
+    /// ```
+    ///
+    /// **Confidence 85.** Measured against 2048's own file for the one circuit
+    /// the two packages ship byte-identically past the node array
+    /// (`altima`, 27,199 nodes): the children, the axis, the triangle count
+    /// and the leaf start agree on all 27,199, the split position on 22,582
+    /// exactly and on the other 4,617 to within one unit in the last place
+    /// (the tree was rebuilt by a different export). It is not a
+    /// 100% agreement on the splits, so the one-ulp difference is stated
+    /// rather than rounded away, and nothing here is asserted about the
+    /// other nine circuits the two packages share, which Omega re-exported
+    /// with different trees. The record is unread by this engine either way.
+    Packed,
+}
+
+impl NodeLayout {
+    /// Bytes per node.
+    #[must_use]
+    pub const fn len(self) -> usize {
+        match self {
+            Self::Wide => NODE_LEN,
+            Self::Packed => NODE_LEN_PACKED,
+        }
+    }
+
+    /// Whether the layout has no bytes. Never true; here because a `len`
+    /// without it is a lint.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -250,6 +340,8 @@ pub struct Mesh {
 /// A decoded `track_col.col`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KdCollision {
+    /// How the file laid its nodes out.
+    pub layout: NodeLayout,
     /// The k-d tree's nodes, in file order.
     pub nodes: Vec<Node>,
     /// Every leaf's triangle indices, concatenated; a leaf names a run of them.
@@ -283,32 +375,17 @@ pub fn parse(file: &[u8]) -> Result<KdCollision> {
 
     r.tag("nodes")?;
     let stride = r.u32("node stride")? as usize;
-    if stride != NODE_LEN {
-        return Err(Error::BadStride {
-            what: "k-d node",
-            stride,
-            expected: NODE_LEN,
-        });
-    }
+    let layout = match stride {
+        NODE_LEN => NodeLayout::Wide,
+        NODE_LEN_PACKED => NodeLayout::Packed,
+        _ => return Err(Error::BadNodeStride { stride }),
+    };
     let node_count = r.u32("node count")? as usize;
-    let mut nodes = Vec::with_capacity(node_count.min(r.remaining() / NODE_LEN));
+    let mut nodes = Vec::with_capacity(node_count.min(r.remaining() / layout.len()));
     for _ in 0..node_count {
-        let low = r.child("k-d node child", node_count)?;
-        let high = r.child("k-d node child", node_count)?;
-        let axis = r.u32("k-d node axis")?;
-        let split = r.f32("k-d node split")?;
-        let counts = r.u32("k-d node leaf run")?;
-        let first_leaf = r.u32("k-d node leaf start")? as usize;
-        nodes.push(Node {
-            low,
-            high,
-            // The same word the two children use for their null: an internal
-            // node states 0/1/2 and a leaf states all-ones.
-            axis: u8::try_from(axis).ok().filter(|_| axis < 3),
-            split,
-            triangle_count: (counts & 0xffff) as usize,
-            first_leaf,
-            unknown: (counts >> 16) as u16,
+        nodes.push(match layout {
+            NodeLayout::Wide => r.wide_node(node_count)?,
+            NodeLayout::Packed => r.packed_node(node_count)?,
         });
     }
 
@@ -375,6 +452,7 @@ pub fn parse(file: &[u8]) -> Result<KdCollision> {
     }
 
     Ok(KdCollision {
+        layout,
         nodes,
         leaves,
         bounds,
@@ -595,6 +673,48 @@ impl<'a> Reader<'a> {
         } else {
             Err(Error::BadSectionTag { what, at })
         }
+    }
+
+    fn u8(&mut self, what: &'static str) -> Result<u8> {
+        Ok(u8::from_le_bytes(self.array(what)?))
+    }
+
+    fn wide_node(&mut self, count: usize) -> Result<Node> {
+        let low = self.child("k-d node child", count)?;
+        let high = self.child("k-d node child", count)?;
+        let axis = self.u32("k-d node axis")?;
+        let split = self.f32("k-d node split")?;
+        let counts = self.u32("k-d node leaf run")?;
+        let first_leaf = self.u32("k-d node leaf start")? as usize;
+        Ok(Node {
+            low,
+            high,
+            // The same word the two children use for their null: an internal
+            // node states 0/1/2 and a leaf states all-ones.
+            axis: u8::try_from(axis).ok().filter(|_| axis < 3),
+            split,
+            triangle_count: (counts & 0xffff) as usize,
+            first_leaf,
+            unknown: Some((counts >> 16) as u16),
+        })
+    }
+
+    fn packed_node(&mut self, count: usize) -> Result<Node> {
+        let low = self.child("k-d node child", count)?;
+        let high = self.child("k-d node child", count)?;
+        let axis = self.u8("k-d node axis")?;
+        let triangle_count = usize::from(self.u16("k-d node leaf run")?);
+        let split = self.f32("k-d node split")?;
+        let first_leaf = self.u32("k-d node leaf start")? as usize;
+        Ok(Node {
+            low,
+            high,
+            axis: Some(axis).filter(|&a| a < 3),
+            split,
+            triangle_count,
+            first_leaf,
+            unknown: None,
+        })
     }
 
     fn u16(&mut self, what: &'static str) -> Result<u16> {

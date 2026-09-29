@@ -157,8 +157,39 @@ pub const BUFFER_POINTER_GAP: usize = 28;
 /// `docs/formats/2048-rcsmodel.md`.
 pub const SKY_BUFFER_POINTER_GAP: usize = 184;
 
+/// The third known gap: the PS4 Omega Collection's ordinary record.
+///
+/// **The same container, with 64-bit pointers.** A PS4 `.rcsmodel` opens with
+/// the same `0xca5caded` magic, has the same header walk and the same
+/// relocation tables, and its submesh record starts the same way - index
+/// count, vertex count, index pointer at [`INDEX_POINTER`] - but a pointer is
+/// eight bytes wide, so the vertex pointer sits 32 bytes past the index one
+/// where the Vita's sits 28. The Vita's [`SKY_BUFFER_POINTER_GAP`] shape
+/// appears on PS4 too, for a mirrored twin of a shape, which is why a reader
+/// without this gap found only those: `ag_systems\ship.rcsmodel` has 12 records
+/// and 24 relocation sites, 3 records of gap 184 (710 triangles between them)
+/// and 9 of gap 32 (the body alone is 10,486 triangles).
+///
+/// **Confidence 90.** Every one of the 12 pairs on that file clears
+/// [`one`]'s arithmetic: index counts divisible by three, index buffers of
+/// exactly `count * 2` bytes rounded to four, vertex buffers a whole number of
+/// strides (20, 24 or 28 - the same set the Vita corpus shows), every index
+/// under its vertex count, and the position and 3-signed-byte normal read at
+/// the same offsets as on Vita give unit normals (mean length 0.994, the
+/// value `normal` decodes to on the Vita corpus) inside a bounding box of
+/// 5.6 x 2.4 x 13.8 units. **The Vita corpus cannot be affected**, and that is
+/// an argument rather than a hope: [`submeshes`] only consults a gap for a pair
+/// of relocation sites that no known gap had paired, and on the 993 Vita files
+/// every site is paired (`unpaired_pointers` is zero corpus-wide), so this gap
+/// is never reached there.
+pub const PS4_BUFFER_POINTER_GAP: usize = 32;
+
 /// Every gap [`submeshes`] tries, in the order it tries them.
-const KNOWN_BUFFER_POINTER_GAPS: [usize; 2] = [BUFFER_POINTER_GAP, SKY_BUFFER_POINTER_GAP];
+const KNOWN_BUFFER_POINTER_GAPS: [usize; 3] = [
+    BUFFER_POINTER_GAP,
+    SKY_BUFFER_POINTER_GAP,
+    PS4_BUFFER_POINTER_GAP,
+];
 
 /// Offset of the index-buffer pointer within a submesh record.
 pub const INDEX_POINTER: usize = 0x10;
