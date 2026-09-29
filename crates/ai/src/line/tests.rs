@@ -196,3 +196,66 @@ fn curvature_approximates_one_over_the_radius() {
         "measured {measured}, expected about 0.01"
     );
 }
+
+/// A deck that drops 60 degrees onto a lower one, running along `-z` with the
+/// corridor's right axis `+x` - the shape of `01_Track`'s lip, which a craft
+/// takes on its hover rather than its steering.
+fn drop_line(corridor: bool) -> Line {
+    let mut points = Vec::new();
+    let (mut z, mut y) = (0.0f32, 30.0f32);
+    for step in 0..60 {
+        points.push(Vec3::new(0.0, y, z));
+        let pitched = (20..30).contains(&step);
+        z -= if pitched { 0.75 } else { 1.5 };
+        y -= if pitched { 1.3 } else { 0.0 };
+    }
+    let frames = points
+        .iter()
+        .map(|_| Frame {
+            lateral: Vec3::X,
+            left: -5.0,
+            right: 5.0,
+        })
+        .collect();
+    if corridor {
+        Line::with_corridor(points, frames)
+    } else {
+        Line::new(points)
+    }
+}
+
+/// Chosen, not measured (maintainer decision): the corner-speed target reads
+/// only the turn a craft steers, so a pure pitch change is straight to it.
+#[test]
+fn a_drop_is_straight_to_a_line_that_knows_its_corridor() {
+    let steered = drop_line(true);
+    let raw = drop_line(false);
+    let at = 16;
+    assert!(
+        raw.curvature(at, 3.0) > 0.05,
+        "the fixture has no bend to remove: {}",
+        raw.curvature(at, 3.0)
+    );
+    assert!(
+        steered.curvature(at, 3.0) < 1e-4,
+        "a pitch read as a corner: {}",
+        steered.curvature(at, 3.0)
+    );
+}
+
+/// The same projection leaves a flat corner's turn whole.
+#[test]
+fn a_flat_corner_keeps_its_curvature_with_a_corridor() {
+    let flat = circle(50.0, 200);
+    let points: Vec<Vec3> = (0..200).map(|index| flat.point(index)).collect();
+    let frames = points
+        .iter()
+        .map(|p| Frame {
+            lateral: Vec3::new(p.x, 0.0, p.z).normalize(),
+            left: -5.0,
+            right: 5.0,
+        })
+        .collect();
+    let with = Line::with_corridor(points, frames);
+    assert!((with.curvature(0, 10.0) - flat.curvature(0, 10.0)).abs() < 1e-5);
+}
