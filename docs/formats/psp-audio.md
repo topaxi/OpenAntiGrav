@@ -493,7 +493,7 @@ Still unmodelled and flat: **`~BLOWUP`** (`0x15`/`0x1a`/`0x16`, a repeat) and
 
 **2026-09-29, Pulse (PSP), measured live.** A race start plays exactly two cues,
 `ready` and, 180.0 ticks later, `go`, and nothing else - no beep, no per-digit
-cue; the spoken 3, 2, 1 are inside `ready`'s own timeline. `go` is voiced on the
+cue started between them. `go` is voiced on the
 last tick the thrust gate holds and `ready` 180 ticks before it (`World::tick`
 271 and 91; the docs' axis 270 and 90). Trigger, ticks and the capture method are
 on [countdown-voice.md](../ghidra/functions/psp-pulse-usa/countdown-voice.md).

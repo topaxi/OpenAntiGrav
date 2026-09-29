@@ -597,8 +597,7 @@ pub enum Cue {
     /// same silent drop [`super::place`] already gives any craft-placed cue
     /// on an empty slot.
     ShurikenTravel,
-    /// The voice that counts the start in: `"ready"`, then the three, two, one
-    /// its own timeline speaks.
+    /// The start-of-race voice: `"ready"`, a timeline of several waveforms.
     ///
     /// `RaceMode_SetState` (`0x08827350`) plays it when it enters state 1, the
     /// state `RaceMode_UpdateIntro_q` (`0x08829e6c`) hands the race to at the
@@ -606,8 +605,8 @@ pub enum Cue {
     /// 0, 0, 0)`, the dry, no-emitter path [`Self::Disengaging`] takes. Measured
     /// live on Pulse (PSP), Time Trial, a single race and Eliminator: it starts
     /// **180 ticks before [`Self::Go`]** (see `crate::race::countdown` for the
-    /// ticks), with no other cue between the two - the 3, 2, 1 are inside this
-    /// one cue's own timeline, not separate starts.
+    /// ticks), with no other cue started between the two. What its words say is
+    /// not identified, and the gantry's `3`, `2`, `1` start no cue of their own.
     ///
     /// **The bank is the mode's speech bank**, which `World_LoadTrack` picked:
     /// `speech.bnk` (cue 11, six waveforms, 3.73 s), `speech_elim.bnk`

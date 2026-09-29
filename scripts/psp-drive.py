@@ -538,7 +538,12 @@ def menu(args):
     # fine and only the assertion is wrong. Do not chase it as a track-selection
     # bug, and do not loosen the threshold for a time trial, which needs it.
     print(
-        "set %s / VENOM" % ("SINGLE RACE" if args.single_race else "TIME TRIAL"),
+        "set %s / VENOM"
+        % (
+            "race type %d" % args.race_type
+            if args.race_type is not None
+            else "SINGLE RACE" if args.single_race else "TIME TRIAL"
+        ),
         file=sys.stderr,
     )
 
@@ -877,7 +882,9 @@ def main():
         metavar="N",
         help="press right N times from SINGLE RACE (0), overriding the above: "
         "1 HEAD TO HEAD, 2 TIME TRIAL, 3 SPEED LAP, 4 TOURNAMENT, 5 ZONE, "
-        "6 ELIMINATOR. Only the seven-entry list's reachable ones.",
+        "6 ELIMINATOR. **ZONE is greyed on a fresh profile** and the press "
+        "lands on a plain single race (an eight-craft grid, g_game_mode 3): "
+        "check the race that comes up, not the index.",
     )
     p.set_defaults(run=menu)
 

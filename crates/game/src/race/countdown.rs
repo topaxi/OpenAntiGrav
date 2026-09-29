@@ -3,8 +3,8 @@
 //! # What the original does
 //!
 //! Two cues, by name, both through the dry `Sound_PlayNamedInSlot`, and nothing
-//! else - no beeps, no per-digit cue. The 3, 2, 1 are inside `ready`'s own
-//! timeline (six waveforms in `speech.bnk`, 3.73 s).
+//! else started between them - no beeps, no per-digit cue. What `ready`'s six
+//! waveforms in `speech.bnk` (3.73 s) say is not identified.
 //!
 //! - **`ready`** is played by `RaceMode_SetState(mode, 1)`, called when the
 //!   intro substate machine (`RaceMode_UpdateIntro_q`) finishes.
@@ -13,7 +13,10 @@
 //!   state's timer reaches zero. That state lasts **180 ticks**: a
 //!   `RaceMode_SetState` breakpoint saw state 1 and state 2 exactly 180.0
 //!   frames apart, and the two cue starts are 180.0 frames apart in all three
-//!   captures.
+//!   captures. The number is a constant, not circuit data: `RaceManager_Construct`,
+//!   which every mode's constructor (Zone's `Zone_Create` too) calls, writes
+//!   `manager+0x7bc = 4.0`, and the state ends when the whole seconds left reach
+//!   zero, which is after 3.0 s.
 //!
 //! # Where the ticks come from
 //!
@@ -25,8 +28,9 @@
 //! single race 270.06, Eliminator 270.79 against a coarser anchor). The
 //! throttle is written by the craft update in between, which is the first one
 //! the countdown state no longer gates - so the cue is voiced at the end of the
-//! **last gated tick**, and that is causal rather than a number to align: the
-//! state that lifts the gate is the state change that plays it.
+//! **last gated tick**: the craft entry numbered 271 still reads a zero
+//! throttle after `go` has been voiced, and the state change that lifts the gate
+//! is the one that plays it.
 //!
 //! So here `go` is raised in the step whose `World::tick` is
 //! `COUNTDOWN_TICKS - 1`, the last one [`oag_race::RaceState::thrust_gated`]
@@ -37,7 +41,8 @@
 //! Time Trial, a single race and Eliminator were captured (Eliminator reads
 //! `elim_vo`, the others `SPEECH`); Zone shares the same two functions - it
 //! reaches `RaceMode_UpdateCountdown` through its own state-1 handler - and
-//! reads `zone_vo`, but was **not** captured live. Only the PSP pressing was
+//! reads `zone_vo`, but was **not** captured live: its ticks rest on the shared code
+//! and that constant, not on a measurement. Only the PSP pressing was
 //! measured: the PS2 pressing is the same title data and is lent these ticks.
 //! Pure, HD and 2048 carry `None` for [`oag_title::RaceDefaults::countdown_voice`]
 //! and play nothing. See

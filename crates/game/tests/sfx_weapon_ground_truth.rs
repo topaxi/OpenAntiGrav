@@ -222,11 +222,16 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     let Some(path) = image("pulse-psp-usa.chd") else {
         return;
     };
-    let loaded = race::load(&race::Options {
+    let mut loaded = race::load(&race::Options {
         source: path.display().to_string(),
         ..race::Options::default()
     })
     .expect("loading the race");
+    // **The start-of-race voice is dropped from this fixture.** `ready` opens
+    // voices from tick 91 and this counts them; what it counts is the held
+    // loops, and the start voice has its own file
+    // (`countdown_voice_ground_truth`).
+    loaded.setup.countdown_voice = false;
     let mut race = race::Race::start(loaded.setup);
     let mut audio = oag_game::audio::Audio::open(
         &oag_game::settings::Audio::default(),

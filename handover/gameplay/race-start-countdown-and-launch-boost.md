@@ -838,6 +838,16 @@ three names (`RaceMode_UpdateCountdown` 80, `Sound_PlayNamedInSlot` 75,
   and forcing `g_game_mode = 6` on a normal circuit hung on the loading screen.
   Static: the same two functions, `zone_vo` cues 15 and 16. A save with Zone
   unlocked closes it: `scripts/psp-countdown-cues.py --cues-only 300`.
+- **Ours plays `speech.bnk`'s lines in every mode; the original's speech bank is
+  the mode's.** `World_LoadTrack` puts `speech_elim`/`speech_zone` in the same slot
+  (`DAT_08ac1dfc`) `Shield_Activate`, `Ship_FireHeldWeapon` and `Autopilot_Update`
+  read. `elim_vo` names `shieldactive` (cue 7) but not `autopilot_eng` or
+  `disengaging`; `zone_vo` names none of the three (it has `shield_low`, cue 0).
+  So in Eliminator the original's shield line is `elim_vo`'s, not `speech.bnk`'s,
+  and in Zone it has none at all. Recorded, not fixed.
+- **Every capture was on Talon's Junction.** `go` is release minus one and `ready`
+  180 before it by construction (`RaceManager_Construct`'s `+0x7bc = 4.0`), but the
+  intro before `ready` is unmeasured on any other circuit.
 - **`ready` is 1-2 ticks before the gantry's derived start (92)**, probably one
   event seen through screenshot lag. Not measured further; `gantry.rs` untouched.
 - The Pure, HD and 2048 start voices are unmeasured (`countdown_voice: None`).

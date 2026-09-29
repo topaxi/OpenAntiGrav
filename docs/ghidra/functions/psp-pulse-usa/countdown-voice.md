@@ -41,17 +41,20 @@ Cross held throughout, restart via the pause menu each time.
   entered with state `1` and then state `2` exactly 180.0 frames apart (a
   breakpoint on it, Time Trial).
 - **`go` lands between the `Ship_UpdateCraft` entries numbered 270 and 271**,
-  and `throttleState` is written by the craft update in between, which is the
-  first one the state change no longer gates. So `go` is voiced on the **last
-  gated tick**, and that ordering is causal: the state change that lifts the gate
-  is what plays it. In `World::tick` terms that is `COUNTDOWN_TICKS - 1` = 271,
-  and `ready` is 91.
+  and the craft row at entry 270.99 (Time Trial) still reads `throttleState` 0
+  after `go` fired at 270.02, so the throttle is written by the craft update
+  after it, the first one the state change no longer gates. So `go` is voiced on
+  the **last gated tick** on the docs' axis, which already carries the +1 of
+  reading a value at the next entry. In `World::tick` terms that is
+  `COUNTDOWN_TICKS - 1` = 271, and `ready` is 91.
 - **Between the two, nothing.** Every cue start from the first `InGame` tick to
   400 frames past the release, in Time Trial: the track's own ambience (`gentrak`,
   the circuit bank) and `SHIP` 0 in the first tick, `SPEECH` 11 at 90, `SPEECH` 12
   at 270, then ambience and `HUD` cues well after the release. The gantry's
-  `3`, `2`, `1` at 132, 178 and 222 start no cue; the spoken digits are inside
-  `ready`'s own timeline.
+  `3`, `2`, `1` at 132, 178 and 222 start no cue. **What `ready`'s words say is
+  not identified**: `speech.bnk`'s is six waveforms (3.73 s), the other two banks'
+  a single left/right pair of 1.5 s and 1.24 s a side, so the digits being
+  spoken inside it is a guess this page does not make.
 - **`ready` is a timeline.** In `speech.bnk` it is six waveforms on authored
   delays (3.73 s summed). The first `Scream_KeyOnVoice` after the cue start is
   22.5 ticks later (rel. 113.27 against the cue at 90.79) and the next speech-
@@ -100,9 +103,11 @@ in its substate 4, when the per-mode wait finishes and `g_game_mode < 0xe` (ever
 single-machine mode; `>= 0xe` is multiplayer and takes a different exit).
 `RaceMode_UpdateIntro` is the nested five-substate machine
 [zone-mode.md](zone-mode.md#zone_updatestates-own-five-states-and-state-0s-nested-countdown)
-describes for Zone; all seven modes reach it, Zone through the thin wrapper at
-`0x0882f31c`. 65: the substate roles are read at branch level, only the call that
-matters here was watched live.
+describes for Zone. **Ten thin per-mode state-0 wrappers call it** (Zone's is
+`0x0882f31c`; Time Trial's `0x0882dd94`; six more and `0x08833548`), which is the
+whole of what was read about which modes reach it - the call that matters here
+was watched live in Time Trial only. 65: the substate roles are read at branch
+level.
 
 ```c
 /* RaceMode_UpdateCountdown (0x088274b4), the state-1 update */
@@ -114,13 +119,27 @@ if ((int)f(max(0, total(+0x7bc) - elapsed(+0x7c0))) == 0) {   /* f = FUN_0897e15
 }
 ```
 
-`RaceMode_UpdateCountdown` is called from each mode's state-1 handler, with the
-substate `+0x7cc` still 0 (`0x0882c5a8`, `0x0882cdfc`, `0x0882d55c`, `0x0882ddb0`,
-`0x0882ea0c`, **`0x0882f338` - Zone's**, `0x08833548`). That Zone reaches the same
-function is what puts the same `go` on it; confidence 70 for Zone's ticks, since
-they are inferred from the shared code rather than captured. 80 for the function
-itself: a decompile whose two calls are each confirmed by a live `RaceMode_SetState`
-hit and a cue start 180 frames apart.
+`RaceMode_UpdateCountdown` has seven callers, one per mode's state-1 handler
+(`0x0882c5a8`, `0x0882cdfc`, `0x0882d55c`, `0x0882ddb0`, `0x0882ea0c`, **`0x0882f338`
+- Zone's**, `0x08833548`). Time Trial's (`0x0882ddb0`) guards on the substate
+`+0x7cc == 0`; Zone's calls it unconditionally and then resets its dwell timer, so
+the guard is not shared. 80 for the function itself: a decompile whose two calls
+are each confirmed by a live `RaceMode_SetState` hit and a cue start 180 frames
+apart.
+
+**Why 180, and why it is not circuit data.** `RaceManager_Construct`
+(`0x08829124`) writes `manager+0x7bc = 4.0` (`0x40800000`) and `+0x7b8 = 1.0`, and
+every mode's constructor calls it - `TimeTrial_Construct`, `ArcadeRace_Construct`,
+`Elimination_Construct`, `FreePlay_Construct`, `Tournament_Construct`,
+`Demo_Construct`, **`Zone_Create`** and two more. The state ends when the whole
+seconds left (`4.0 - elapsed`) reach zero, which is after 3.0 s: 180 ticks. So
+Zone's `ready`-to-`go` length is the same constant, unless something later
+overwrites `+0x7bc` (not searched for; no xref by field offset is possible here).
+That, with the shared function, is the whole basis for Zone's ticks: **75, not
+captured**. The constant also means `go` is release minus one tick and `ready`
+180 before it on every circuit, while the time from the track description to
+`ready` is the intro substates' business and was measured on Talon's Junction
+only.
 
 `Sound_PlayNamedInSlot` (`0x0893a768`) is
 `(manager, slot, name, volume, pan, ...)`: it reads the bank pointer out of

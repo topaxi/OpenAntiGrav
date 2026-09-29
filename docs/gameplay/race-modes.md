@@ -1065,11 +1065,11 @@ entries before `throttleState` first reads 100**. The craft update in between is
 the first one the countdown state no longer gates, so `go` is the state change
 itself: `RaceMode_UpdateCountdown` plays it in the call that runs
 `Race_StartRacing`. Nothing else is started between the two - the gantry's
-`3`, `2`, `1` (132, 178, 222) have no cues of their own; the digits are spoken
-inside `ready`'s timeline. Confidence 95 for the ticks and the absence of other
+`3`, `2`, `1` (132, 178, 222) have no cues of their own; what `ready`'s words say
+is not identified. Confidence 95 for the ticks and the absence of other
 cues (four captures, agreeing to 0.05 tick in the three anchored ones), 80 for the
-trigger; **Zone was not captured** and is 70, from sharing the same two
-functions. `ready` sits one to two ticks before the gantry timeline's derived
+trigger; **Zone was not captured** and is 75, from sharing the same two
+functions and the constant that sets the 180 (`RaceManager_Construct`, all modes). `ready` sits one to two ticks before the gantry timeline's derived
 start (92), most likely the same event through a screenshot's lag. The bank is the
 mode's speech bank; see
 [countdown-voice.md](../ghidra/functions/psp-pulse-usa/countdown-voice.md).

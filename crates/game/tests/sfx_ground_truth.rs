@@ -725,6 +725,11 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // rival's stereo position into a claim about wherever the start line
     // happens to be. `track_audio_ground_truth` is where they are tested.
     loaded.setup.track_emitters = oag_game::audio::sfx::TrackEmitters::default();
+    // **The start-of-race voice is dropped from this fixture.** `ready` opens
+    // voices from tick 91 and this counts them; what it counts is the held
+    // loops, and the start voice has its own file
+    // (`countdown_voice_ground_truth`).
+    loaded.setup.countdown_voice = false;
     let mut race = race::Race::start(loaded.setup);
     assert!(
         race.ship_count() > 1,
@@ -812,11 +817,16 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     let Some(path) = image("pulse-psp-usa.chd") else {
         return;
     };
-    let loaded = race::load(&race::Options {
+    let mut loaded = race::load(&race::Options {
         source: path.display().to_string(),
         ..race::Options::default()
     })
     .expect("loading the race");
+    // **The start-of-race voice is dropped from this fixture.** `ready` opens
+    // voices from tick 91 and this counts them; what it counts is the held
+    // loops, and the start voice has its own file
+    // (`countdown_voice_ground_truth`).
+    loaded.setup.countdown_voice = false;
     let mut race = race::Race::start(loaded.setup);
     let mut audio = oag_game::audio::Audio::open(
         &oag_game::settings::Audio::default(),
@@ -927,7 +937,13 @@ fn a_loaded_race_reports_what_its_banks_did() {
     }
     // One line per cue, whether it loaded or not: a race that came up silent
     // has to say so in the same place a race that did not says what it read.
-    assert_eq!(sfx.len(), Cue::ALL.len(), "the load report is incomplete");
+    // Pulse also loads the start-of-race voice from the mode's own speech bank,
+    // one line for `ready` and one for `go`.
+    assert_eq!(
+        sfx.len(),
+        Cue::ALL.len() + Cue::COUNTDOWN.len(),
+        "the load report is incomplete"
+    );
     assert!(
         !loaded.setup.sounds.is_empty(),
         "a real disc loaded no cues"
