@@ -285,3 +285,52 @@ fn metropia_reversed_is_the_originals_grid() {
     }
     assert!(worst < 1.5, "worst slot is {worst:.3} from the original's");
 }
+
+/// Slot 0 alone under autopilot, every forward circuit at every tier: how far
+/// from the spline it gets and how often it is put back. Which circuit
+/// `off_track_rescue_ground_truth` can use to see the player leave.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn player_departures() {
+    if std::env::var_os("OAG_GRID").is_none() {
+        return;
+    }
+    for circuit in circuits_all().into_iter().filter(|c| !c.reversed) {
+        for level in [
+            oag_ai::Difficulty::Ace,
+            oag_ai::Difficulty::Elite,
+            oag_ai::Difficulty::Skilled,
+            oag_ai::Difficulty::Novice,
+        ] {
+            let image = image().expect("image");
+            let loaded = race::load(&race::Options {
+                source: image.display().to_string(),
+                class: "VENOM".to_string(),
+                mode: oag_race::Mode::SingleRace,
+                difficulty: level,
+                track: Some(circuit.entry.clone()),
+                ..race::Options::default()
+            })
+            .expect("load");
+            let mut race = race::Race::start(loaded.setup);
+            for slot in 1..oag_gameplay::MAX_SHIPS {
+                race.sim.world.ships[slot].active = false;
+            }
+            race.set_autopilot(true);
+            let mut peak = 0.0f32;
+            for _ in 0..6_000 {
+                race.tick(&oag_gameplay::PlayerInputs::none());
+                let p = race.sim.world.ships[0].physics.body.position;
+                peak = peak.max(race.spline().distance_to(p).unwrap_or(0.0));
+            }
+            println!(
+                "DEPART {} {:?} peak {:.1} respawns {} cause {:?}",
+                circuit.id,
+                level,
+                peak,
+                race.respawns(),
+                race.last_respawn_cause_of(0)
+            );
+        }
+    }
+}

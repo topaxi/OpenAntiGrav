@@ -112,15 +112,20 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_player_that_leaves_a_real_circuit_stops_receding() {
+    // **Elite since 2026-09-29, Ace before.** The grid moved onto the corridor
+    // midpoint (`grid.md`), which shifted slot 0's start by about 1.6 units, and
+    // an Ace autopilot on `05_Track` no longer leaves the circuit (peak 24.1,
+    // no respawn). The failure this test owns is a property of the geometry, not of
+    // a tier: an Elite one leaves on the same circuit (peak 190, one `OffTrack`).
     let Some(solo) = solo_player(
-        oag_ai::Difficulty::Ace,
+        oag_ai::Difficulty::Elite,
         "Data\\Environments\\05_Track\\track.vex",
         6_000,
     ) else {
         return;
     };
     println!(
-        "ace 05_Track: peak {:.1} ({:.1} half-widths), laps {}, respawns {}, longest stall {}",
+        "elite 05_Track: peak {:.1} ({:.1} half-widths), laps {}, respawns {}, longest stall {}",
         solo.peak,
         solo.peak / solo.half_width,
         solo.laps,
@@ -145,7 +150,7 @@ fn a_player_that_leaves_a_real_circuit_stops_receding() {
     // the player is not, deliberately - see `Race::lost_off_the_track`. What this
     // test owns is that the craft stops *receding*, which is what was broken.
     println!(
-        "ace 05_Track: the craft is bounded but still not lapping - the stall is \
+        "elite 05_Track: the craft is bounded but still not lapping - the stall is \
          the separate open thread on this circuit"
     );
 }
