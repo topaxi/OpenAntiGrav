@@ -48,6 +48,56 @@
 
 use oag_tables::fexml::{Node, parse};
 
+/// How many laps the race a player is setting up runs: the mode's own count
+/// for the speed class, `None` where no lap ends it. An unresolved class
+/// reads as no count rather than a guess.
+#[must_use]
+pub fn race_laps(mode: oag_race::Mode, class: &str) -> Option<u32> {
+    mode.laps_target(oag_race::SpeedClass::from_name(class)?)
+}
+
+/// Lays a title's circuits out the way Wipeout HD/Fury's `Track Creation`
+/// grid does: every forward circuit in list order, then every reverse one in
+/// the same order, and the number of columns that makes (`0` where the two
+/// halves are not the same length, which is a plain list).
+///
+/// A reverse circuit is labelled with its forward twin's name: the original's
+/// carousel never spells a direction in the name (`docs/formats/hd-frontend.md`)
+/// - it is the grid's row - and shows a `ReverseIcon` on the model panel.
+/// The forward half's order is measured on RPCS3 (Vineta K, Anulpha Pass, Moa
+/// Therma, Chenghou Project, Metropia, Sebenco Climb, Ubermall, Sol 2, Talon's
+/// Junction, The Amphiseum, Modesto Heights, Tech De Ra, then Vineta K again
+/// at twelve presses); the reverse half's is **chosen** to be the same.
+#[must_use]
+pub fn direction_rows(tracks: &[(Track, String)]) -> (Vec<(Track, String)>, usize) {
+    let forward: Vec<&(Track, String)> = tracks.iter().filter(|(t, _)| !t.reversed).collect();
+    let reverse: Vec<&(Track, String)> = tracks.iter().filter(|(t, _)| t.reversed).collect();
+    let mut out: Vec<(Track, String)> = forward.iter().map(|&pair| pair.clone()).collect();
+    for (track, label) in reverse.iter().copied() {
+        let twin = forward
+            .iter()
+            .find(|(other, _)| other.location == track.location)
+            .map_or_else(|| label.clone(), |(_, name)| name.clone());
+        out.push((track.clone(), twin));
+    }
+    let columns = if reverse.is_empty() || reverse.len() == forward.len() {
+        forward.len()
+    } else {
+        0
+    };
+    (out, columns)
+}
+
+/// The sheet name of `track`'s own emblem, for a title whose track screen
+/// draws one (`oag_title::FrontEnd::track_select`) and `None` for the rest.
+#[must_use]
+pub fn track_emblem(title: &oag_title::Title, track: &Track) -> Option<String> {
+    title
+        .front_end
+        .is_some_and(|front_end| front_end.track_select.is_some())
+        .then(|| oag_ui::picker::hd::track::emblem_src(&track.location))
+}
+
 /// One thing a player can pick on the Race page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Track {

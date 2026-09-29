@@ -420,6 +420,12 @@ pub struct FrontEnd {
     /// race box keeps its RACE page's own TRACK row, since nothing reads a
     /// track screen for it.
     pub team_select: Option<&'static str>,
+    /// A standalone `Track Creation` definition, the track screen's
+    /// counterpart to [`Self::team_select`]: Wipeout HD/Fury's
+    /// `Track_Selection_Definition.xml`, which its live skin includes and
+    /// which only `DATA06` carries. `None` on every other title, whose
+    /// track screen is in [`Self::race_box`] or unread.
+    pub track_select: Option<&'static str>,
     /// Whether this title's race-setup screens preview an entry with a
     /// rendered mesh.
     ///

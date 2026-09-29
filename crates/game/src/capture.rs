@@ -213,6 +213,7 @@ pub fn run(
         fury_backdrop,
         track_select,
         ship_select,
+        circuit_names,
         menu_font,
         title_font,
         buttons_font,
@@ -595,6 +596,7 @@ pub fn run(
                 );
                 let (mut list, request) = picker_page(
                     kind,
+                    &circuit_names,
                     layout,
                     &options.settings,
                     title,
@@ -612,7 +614,7 @@ pub fn run(
                 list.extend(stills);
                 // HD's ship screen's footer legend, as the live one draws it
                 // (`main::menu_stage::footer::hd_nav`).
-                if let (Some(legend), Some(_)) = (nav_legend.as_ref(), layout.hd.as_ref()) {
+                if let Some(legend) = nav_legend.as_ref().filter(|_| layout.is_hd()) {
                     let measure = |text: &str| oag_ui::font::measure(&font, text);
                     let faces = oag_ui::picker::FaceScales::default();
                     list.extend(legend.draw_gated(&faces, &measure, true));

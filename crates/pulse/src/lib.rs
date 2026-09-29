@@ -112,6 +112,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu_frame: Some(frontend::states::FE_SCREEN),
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
+    track_select: None,
     // `<location>\FE\forward.vex` and `<location>\ship_FE.vex`, both
     // resolving on both pressings - see `docs/formats/race-setup.md`.
     preview_meshes: true,

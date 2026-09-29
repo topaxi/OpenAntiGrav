@@ -81,6 +81,9 @@ pub fn targets(
     if let Some(extra) = layout.hd.as_deref() {
         return hd_targets(picker, layout, extra);
     }
+    if let Some(extra) = layout.hd_track.as_deref() {
+        return super::hd::track::targets(layout, extra);
+    }
     let screen = &layout.screen;
     let mut out = Vec::new();
     let variants = picker.variants().len();
@@ -237,7 +240,31 @@ impl Picker {
         if count == 0 {
             return None;
         }
-        let index = (self.index as i64 + i64::from(step)).rem_euclid(count as i64) as usize;
+        let index = if self.columns > 0 {
+            // Along the row, wrapping at its end.
+            let row = self.index / self.columns;
+            let width = self.columns.min(count - row * self.columns);
+            let column = (self.index % self.columns) as i64 + i64::from(step);
+            row * self.columns + column.rem_euclid(width as i64) as usize
+        } else {
+            (self.index as i64 + i64::from(step)).rem_euclid(count as i64) as usize
+        };
+        self.land_on(index);
+        Some(Event::Moved)
+    }
+
+    /// What up and down do: the other row of a grid, or the livery on a list.
+    pub(super) fn step_vertical(&mut self, step: i32) -> Option<Event> {
+        if self.columns == 0 {
+            return self.step_variant(step);
+        }
+        let rows = self.entries.len().div_ceil(self.columns);
+        let (row, column) = (self.index / self.columns, self.index % self.columns);
+        let target = (row as i64 + i64::from(step)).rem_euclid(rows as i64) as usize;
+        let index = target * self.columns + column;
+        if rows < 2 || index >= self.entries.len() {
+            return None;
+        }
         self.land_on(index);
         Some(Event::Moved)
     }

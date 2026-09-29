@@ -647,6 +647,7 @@ pub(super) fn picker_kind(page: &str) -> Option<oag_ui::picker::Kind> {
 )]
 pub(super) fn picker_page(
     kind: oag_ui::picker::Kind,
+    circuit_names: &oag_ui::language::CircuitNames,
     layout: &oag_ui::picker::Layout,
     settings: &crate::settings::Settings,
     title: &'static oag_title::Title,
@@ -666,37 +667,69 @@ pub(super) fn picker_page(
     seconds: Option<f32>,
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui::picker::{Details, Entry, Kind, Picker};
+    let mut grid_columns = 0;
     let (entries, previews): (Vec<Entry>, Vec<String>) = match kind {
-        Kind::Track => tracks
-            .iter()
-            .map(|track| {
-                (
-                    Entry {
-                        id: track.id.clone(),
-                        label: strings.get_or_id(&track.id).to_string(),
-                        details: Details::Track {
-                            // A capture keeps no records store; the
-                            // distance is the caller's, for the selected
-                            // circuit only.
-                            info: [
-                                if track.id == settings.race.track {
-                                    distance.map_or_else(|| "-".to_string(), |d| format!("{d:.0}"))
-                                } else {
-                                    "-".to_string()
+        Kind::Track => {
+            let labelled: Vec<(crate::catalogue::Track, String)> = tracks
+                .iter()
+                .map(|track| {
+                    (
+                        track.clone(),
+                        crate::catalogue::label(track, circuit_names, strings, tracks),
+                    )
+                })
+                .collect();
+            // HD's grid: the same order and columns the live screen uses.
+            let (labelled, columns) = if layout.hd_track.is_some() {
+                crate::catalogue::direction_rows(&labelled)
+            } else {
+                (labelled, 0)
+            };
+            grid_columns = columns;
+            labelled
+                .iter()
+                .map(|(track, label)| {
+                    (
+                        Entry {
+                            id: track.id.clone(),
+                            label: label.clone(),
+                            details: Details::Track {
+                                emblem: crate::catalogue::track_emblem(title, track),
+                                reversed: track.reversed,
+                                // A capture keeps no records store; the
+                                // distance is the caller's, for the selected
+                                // circuit only.
+                                info: {
+                                    let measured =
+                                        distance.filter(|_| track.id == settings.race.track);
+                                    let laps = crate::catalogue::race_laps(
+                                        oag_race::Mode::from_name(&settings.race.mode)
+                                            .unwrap_or_default(),
+                                        settings.race.class.trim(),
+                                    );
+                                    match (measured, layout.hd_track.is_some()) {
+                                        (Some(d), true) => {
+                                            let [length, race] =
+                                                oag_ui::picker::hd::track::length_rows(d, laps);
+                                            [length, race, "-".into()]
+                                        }
+                                        (Some(d), false) => {
+                                            [format!("{d:.0}"), "-".into(), "-".into()]
+                                        }
+                                        (None, _) => ["-".into(), "-".into(), "-".into()],
+                                    }
                                 },
-                                "-".into(),
-                                "-".into(),
-                            ],
+                            },
                         },
-                    },
-                    format!(
-                        r"{}\FE\{}.vex",
-                        track.location,
-                        if track.reversed { "reverse" } else { "forward" }
-                    ),
-                )
-            })
-            .unzip(),
+                        format!(
+                            r"{}\FE\{}.vex",
+                            track.location,
+                            if track.reversed { "reverse" } else { "forward" }
+                        ),
+                    )
+                })
+                .unzip()
+        }
         Kind::Ship => teams
             .iter()
             .map(|team| {
@@ -767,6 +800,9 @@ pub(super) fn picker_page(
         ),
     };
     let mut picker = Picker::new(kind, entries, Some(selected), variant);
+    if layout.hd_track.is_some() {
+        picker = picker.with_rows(grid_columns);
+    }
     picker.tick(seconds.unwrap_or(SETTLED_SECONDS));
     let skin_entry = match kind {
         Kind::Ship => teams

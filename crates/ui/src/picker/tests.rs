@@ -53,6 +53,8 @@ fn entries() -> Vec<Entry> {
             label: format!("Circuit {id}"),
             details: Details::Track {
                 info: ["5178".into(), "-.--.--".into(), "-.--.--".into()],
+                emblem: None,
+                reversed: false,
             },
         })
         .collect()

@@ -3,7 +3,9 @@
 //! The same three-page shape Pulse's own `Single Player` -> `Track Creation`
 //! -> `Team Selection` -> `Launch Game` takes (`docs/formats/race-setup.md`),
 //! with the RACE page standing in for `Single Player`. The START row opens
-//! the track picker where it used to launch outright; each picker writes the
+//! the track picker where it used to launch outright (Wipeout HD/Fury's
+//! own `Track Creation` and `Team Selection` are the same two steps, read
+//! from files of their own); each picker writes the
 //! same `race.*` setting its RACE-page row does, so the row, the picker and
 //! the race that launches all read one value; and a title whose front end
 //! authors neither screen (`Shell::track_select` is `None`) launches from
@@ -40,9 +42,14 @@ impl Session {
         };
         let mode = self.race_mode();
         let title = shell.title;
+        let hd = layout.hd_track.is_some();
         let zone = mode == oag_race::Mode::Zone;
-        let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
-            .tracks_for(mode)
+        let (listed, columns) = if hd {
+            catalogue::direction_rows(shell.tracks_for(mode))
+        } else {
+            (shell.tracks_for(mode).to_vec(), 0)
+        };
+        let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = listed
             .iter()
             .map(|(track, label)| {
                 (
@@ -51,6 +58,8 @@ impl Session {
                         label: label.clone(),
                         details: Details::Track {
                             info: self.track_info(title.name, track, mode),
+                            emblem: catalogue::track_emblem(title, track),
+                            reversed: track.reversed,
                         },
                     },
                     PreviewSource::Track {
@@ -67,6 +76,8 @@ impl Session {
             Some(self.settings.race.track.as_str()),
             None,
         );
+        // HD's circuits step left/right - see `Picker::with_entries_across`.
+        let model = if hd { model.with_rows(columns) } else { model };
         // The setting follows the screen from the moment it opens: a stored
         // circuit this mode's list does not hold - a race circuit after MODE
         // moved to Zone - lands the screen on its first entry, and that is
@@ -83,8 +94,7 @@ impl Session {
         // - and copied onto the panel as they land. A 4 MB read and a
         // spline parse per circuit is too slow for the frame thread and
         // too cheap to cache on disk.
-        let mut order: Vec<(String, String)> = shell
-            .tracks_for(mode)
+        let mut order: Vec<(String, String)> = listed
             .iter()
             .map(|(track, _)| (track.id.clone(), track.entry_name()))
             .collect();
@@ -319,6 +329,7 @@ impl Session {
                 return false;
             }
         };
+        let laps = catalogue::race_laps(self.race_mode(), self.settings.race.class.trim());
         let base = self
             .shell
             .as_ref()
@@ -355,6 +366,7 @@ impl Session {
             base,
             previews,
         );
+        picker.laps = laps;
         picker.refresh_preview(&self.gpu);
         picker.refresh_info();
         stage.picker = Some(picker);

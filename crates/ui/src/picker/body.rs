@@ -175,7 +175,7 @@ pub(super) fn body(
                 }
             }
             "Info1" | "Info2" | "Info3" => match &entry.details {
-                Details::Track { info } => {
+                Details::Track { info, .. } => {
                     let row = usize::from(name.as_bytes()[4] - b'1');
                     info.get(row).cloned()
                 }

@@ -60,6 +60,8 @@ use crate::screen::{BlockWidget, Node, Screen, Screens, Text, argb_to_rgba, pars
 
 use super::{Details, FaceScales, Layout, Picker};
 
+pub mod track;
+
 /// The screen every widget is authored on.
 pub const TOP_LEVEL: &str = "Team Selection Top Level";
 /// The single-player screen nested inside [`TOP_LEVEL`] - the one `Cell
@@ -198,6 +200,7 @@ pub fn read(
         faces,
         scale: [grid[0] / super::PSP_GRID[0], grid[1] / super::PSP_GRID[1]],
         hd: Some(Box::new(extra)),
+        hd_track: None,
     })
 }
 
@@ -344,23 +347,7 @@ pub(super) fn body(
             color: [1.0, 1.0, 1.0, 1.0],
         });
     }
-    for label in &extra.labels {
-        let color = argb_to_rgba(label.color);
-        out.push(Draw::Fill {
-            rect: [label.x, label.y, MINI_BULLET, MINI_BULLET],
-            color,
-        });
-        out.push(Draw::Text {
-            x: label.x + MINI_TEXT_INSET,
-            y: label.y,
-            scale: MINI_SCALE,
-            color,
-            border: None,
-            align: Align::Left,
-            text: label.text.clone(),
-            wrap_width: None,
-        });
-    }
+    draw_labels(&extra.labels, &mut out);
 
     let stats = selected_stats(picker);
     for (index, name) in STAT_BLOCKS.iter().enumerate() {
@@ -380,6 +367,27 @@ pub(super) fn body(
         out.push(text_draw(text, &line, layout));
     }
     out
+}
+
+/// The `MiniText` headings: a square bullet and the text beside it.
+fn draw_labels(labels: &[MiniText], out: &mut Vec<Draw>) {
+    for label in labels {
+        let color = argb_to_rgba(label.color);
+        out.push(Draw::Fill {
+            rect: [label.x, label.y, MINI_BULLET, MINI_BULLET],
+            color,
+        });
+        out.push(Draw::Text {
+            x: label.x + MINI_TEXT_INSET,
+            y: label.y,
+            scale: MINI_SCALE,
+            color,
+            border: None,
+            align: Align::Left,
+            text: label.text.clone(),
+            wrap_width: None,
+        });
+    }
 }
 
 /// What `LiveryString` says: the selected livery's own label, when the team

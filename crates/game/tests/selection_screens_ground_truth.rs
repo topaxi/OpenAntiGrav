@@ -188,6 +188,8 @@ fn the_track_picker_draws_the_discs_own_rows() {
             label: shell.strings.get_or_id(&track.id).to_string(),
             details: Details::Track {
                 info: ["-".into(), "-".into(), "-".into()],
+                emblem: None,
+                reversed: false,
             },
         })
         .collect();

@@ -21,7 +21,7 @@ pub(super) fn hd_nav(
     picker: &crate::picker_stage::PickerStage,
 ) -> Vec<Draw> {
     match legend {
-        Some(legend) if picker.layout.hd.is_some() => legend.draw_gated(
+        Some(legend) if picker.layout.is_hd() => legend.draw_gated(
             &picker::FaceScales::default(),
             &|text: &str| font::measure(atlas, text),
             true,
