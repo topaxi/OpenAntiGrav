@@ -150,6 +150,10 @@ pub(crate) struct PickerStage {
     /// anything - and whether the renderer has been handed it yet.
     sheet: Option<Sheet>,
     sheet_uploaded: bool,
+    /// The race's lap count, for HD's `RACE DISTANCE` row - the length
+    /// times this. Set by the caller after [`Self::new`]; `None` when the
+    /// race has no lap target, which is the row's `Infinity` glyph.
+    pub(crate) laps: Option<u32>,
 }
 
 impl PickerStage {
@@ -185,6 +189,7 @@ impl PickerStage {
             base,
             sheet: None,
             sheet_uploaded: false,
+            laps: None,
         }
     }
 
@@ -272,6 +277,11 @@ impl PickerStage {
     /// author no stills, so asking costs an already-open archive read and
     /// returns an empty list there.
     fn load_slideshow(&mut self, index: usize) {
+        // HD's track screen authors no hexagonal window: its `Emblem` and
+        // `FlyByMovie` are the widgets that show a circuit.
+        if self.layout.hd_track.is_some() {
+            return;
+        }
         let (location, zone) = match self.sources.get(index).cloned() {
             Some(PreviewSource::Track { location, zone, .. }) => (location, zone),
             Some(PreviewSource::Ship { location, .. }) => (location, false),
@@ -375,7 +385,13 @@ impl PickerStage {
             .collect();
         drop(measured);
         for (index, length) in known {
-            self.model.set_track_info(index, 0, format!("{length:.0}"));
+            if self.layout.hd_track.is_some() {
+                let [track, race] = picker::hd::track::length_rows(length, self.laps);
+                self.model.set_track_info(index, 0, track);
+                self.model.set_track_info(index, 1, race);
+            } else {
+                self.model.set_track_info(index, 0, format!("{length:.0}"));
+            }
         }
     }
 

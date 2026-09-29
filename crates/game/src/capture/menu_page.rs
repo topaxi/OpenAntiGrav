@@ -647,6 +647,7 @@ pub(super) fn picker_kind(page: &str) -> Option<oag_ui::picker::Kind> {
 )]
 pub(super) fn picker_page(
     kind: oag_ui::picker::Kind,
+    circuit_names: &oag_ui::language::CircuitNames,
     layout: &oag_ui::picker::Layout,
     settings: &crate::settings::Settings,
     title: &'static oag_title::Title,
@@ -666,37 +667,21 @@ pub(super) fn picker_page(
     seconds: Option<f32>,
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui::picker::{Details, Entry, Kind, Picker};
+    let mut grid_columns = 0;
     let (entries, previews): (Vec<Entry>, Vec<String>) = match kind {
-        Kind::Track => tracks
-            .iter()
-            .map(|track| {
-                (
-                    Entry {
-                        id: track.id.clone(),
-                        label: strings.get_or_id(&track.id).to_string(),
-                        details: Details::Track {
-                            // A capture keeps no records store; the
-                            // distance is the caller's, for the selected
-                            // circuit only.
-                            info: [
-                                if track.id == settings.race.track {
-                                    distance.map_or_else(|| "-".to_string(), |d| format!("{d:.0}"))
-                                } else {
-                                    "-".to_string()
-                                },
-                                "-".into(),
-                                "-".into(),
-                            ],
-                        },
-                    },
-                    format!(
-                        r"{}\FE\{}.vex",
-                        track.location,
-                        if track.reversed { "reverse" } else { "forward" }
-                    ),
-                )
-            })
-            .unzip(),
+        Kind::Track => {
+            let (entries, previews, columns) = track_entries::track_entries(
+                title,
+                settings,
+                circuit_names,
+                strings,
+                tracks,
+                layout,
+                distance,
+            );
+            grid_columns = columns;
+            (entries, previews)
+        }
         Kind::Ship => teams
             .iter()
             .map(|team| {
@@ -767,6 +752,9 @@ pub(super) fn picker_page(
         ),
     };
     let mut picker = Picker::new(kind, entries, Some(selected), variant);
+    if layout.hd_track.is_some() {
+        picker = picker.with_rows(grid_columns);
+    }
     picker.tick(seconds.unwrap_or(SETTLED_SECONDS));
     let skin_entry = match kind {
         Kind::Ship => teams
@@ -996,5 +984,7 @@ pub(super) fn fury_picture(
 // the *file* - code plus inline tests together - one line over
 // `scripts/check-file-size.py`'s separate 1,000-line cap on the file
 // itself, and moving the tests out is the same fix either cap asks for.
+mod track_entries;
+
 #[cfg(test)]
 mod tests;

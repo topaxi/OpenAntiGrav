@@ -395,15 +395,19 @@ impl Definition {
     /// before anything reads the page, so the row count, the scroll window
     /// and the cursor all agree.
     ///
-    /// A title with no such screens - Pure, HD, 2048 today - keeps all
+    /// A title with no such screens - Pure, 2048 today - keeps all
     /// three, and START launches off the rows as before. RACE REMIX and
     /// RECORDS keep their own `race.track`/`remix.*` rows either way: the
     /// first mixes titles and the second browses records, neither of which
     /// the selection screens do.
     pub fn drop_rows_picked_on_screen(&mut self, title: &oag_title::Title) {
-        let picks_on_screen = title
-            .front_end
-            .is_some_and(|front_end| front_end.race_box.is_some());
+        // Both screens, for a title that authors them in files of its own
+        // (Wipeout HD/Fury): with only one of the two, the other pick would
+        // have no screen to be made on and its row stays.
+        let picks_on_screen = title.front_end.is_some_and(|front_end| {
+            front_end.race_box.is_some()
+                || (front_end.track_select.is_some() && front_end.team_select.is_some())
+        });
         if !picks_on_screen {
             return;
         }

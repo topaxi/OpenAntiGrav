@@ -109,8 +109,7 @@ Head2Head cell today gets no gap readout.
   - both are read-only facts about the original nothing here depends on.
 - ~~The authored standings table is the one open item that *would* change
   what a player sees...~~ **Done 2026-09-28** - see the dated update above.
-  A live PPSSPP capture of the drawn table (this pass used a synthetic
-  field) is what is left of this item.
+  **Live capture done 2026-09-29** (`tournament.md`): layout, points, columns, page cycle match; open are display-name team cells (ours prints the folder id) and the `Default` font.
 - Trace `param_1+0x98`'s own writer (`tournament.md`'s own "What is not
   determined", new 2026-09-28) - the leg table's own row order depends on
   it, and this pass drew it as finish order on behavioural evidence, not a
@@ -119,7 +118,7 @@ Head2Head cell today gets no gap readout.
   (`crates/game/src/hud/head_to_head.rs`, fed by `Race::head_to_head`); the
   field semantics are pinned in `head2head.md` (the bar is a vertical
   connector, `+0xa0` is `Height`, vtable `+0xec` is `GetY`). Static evidence
-  only. Still open from it: the two row **names** (`craft+0x798`,
+  only. **Measured live 2026-09-29** (`head2head.md` "Live measurement"): bar, clamps, label, both colours, leading swap confirmed; the rows use the `Default` font and carry names (`1st Goteki 45`/`2nd AAA`), and the player's row throbs (`0x200`). Still open from it: the two row **names** (`craft+0x798`,
   `DAT_08b31774+0x457`), the player-row `0x200` highlight bit, the multiplayer
   branch, and a PPSSPP frame at a known gap to check the bar's size and colours.
 - **A live capture (this engine's own front end, or PPSSPP) of an actual

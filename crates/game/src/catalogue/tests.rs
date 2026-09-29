@@ -485,3 +485,45 @@ fn hd_ratings_are_per_model_in_tenths() {
     );
     assert!(team.model_for_directory(r"Data\Ships\Feisar_n1").is_none());
 }
+
+fn track(id: &str, folder: &str, reversed: bool) -> (Track, String) {
+    (
+        Track {
+            id: id.into(),
+            location: format!(r"Data\Environments\{folder}"),
+            reversed,
+            available_in_zone: false,
+        },
+        if reversed {
+            format!("{id} REVERSE")
+        } else {
+            id.to_string()
+        },
+    )
+}
+
+/// The order measured on RPCS3: every forward circuit, then every reverse
+/// one in the same order, twelve columns wide there; a reverse circuit takes
+/// its forward twin's name, and HD's four Zone-only environments are not in
+/// the ordinary carousel.
+#[test]
+fn hd_lays_circuits_out_forward_then_reverse_without_the_zone_environments() {
+    let listed = vec![
+        track("01", "01_Vineta_K", false),
+        track("08", "15_Anulpha_Pass", false),
+        track("09", "01_Vineta_K", true),
+        track("16", "15_Anulpha_Pass", true),
+        track("25", "Zone_1", false),
+    ];
+    let (rows, columns) = direction_rows(oag_hd::TITLE, oag_race::Mode::SingleRace, &listed);
+    let ids: Vec<&str> = rows.iter().map(|(t, _)| t.id.as_str()).collect();
+    assert_eq!(ids, ["01", "08", "09", "16"]);
+    assert_eq!(columns, 2);
+    let labels: Vec<&str> = rows.iter().map(|(_, l)| l.as_str()).collect();
+    assert_eq!(labels, ["01", "08", "01", "08"], "no direction in the name");
+
+    let zone_list = vec![track("25", "Zone_1", false), track("26", "Zone_2", false)];
+    let (zone, columns) = direction_rows(oag_hd::TITLE, oag_race::Mode::Zone, &zone_list);
+    assert_eq!(zone.len(), 2, "Zone keeps its own environments");
+    assert_eq!(columns, 2, "one row");
+}
