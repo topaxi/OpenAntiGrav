@@ -70,8 +70,15 @@ inside the corridor). It is in `crates/game/src/race/spawn.rs` (`grid_poses` car
 the authored node's offset from the centreline through the walk and adds the
 20-unit odd-column stagger on top of it). The stagger and pitch were measured off the
 original on `16_Track` only, and `Race_ComputeGridLayout` (`0x0882b3b0`) may scale or
-clamp the column by track width. **Not fixed here**: it changes the number the gate
-quotes.
+clamp the column by track width. **Fixed 2026-09-29** (`grid_stagger` lane): the original lays every slot at the AI
+corridor's midpoint plus or minus 10, node's side first, and this project carried the
+node's offset and staggered one fixed way. See
+[grid.md](../ghidra/functions/psp-pulse-usa/grid.md#the-stagger-is-about-the-corridor-midpoint-not-the-node-2026-09-29).
+The gate's `01_Track` respawn at 794 is gone; the slot-1 start moved by about 1.8
+laterally on every circuit, and with it `05_Track` (0 to 3 respawns, ticks
+4144/11104/13324: `LostCircuit`, `LostCircuit`, `Destroyed`, all far from the grid)
+and `07_Track` (index 687 to one `Destroyed` at 1137) - the hazards the table above
+already lists, reached by a different trajectory, not new ones.
 
 ## Discriminators, each answered yes or no
 
@@ -169,7 +176,7 @@ is how the sunk-craft result above was obtained. Only `16_Track`, `03_Track` and
 2. An original-side approach on an open edge, driven rather than teleported: scripted
    steering out of the line at `03_Track` spline index 1780 or `18_Track` index 73/2044,
    through `just scripted-emu`, replayed through `oag-trace run` for the pair.
-3. The `01_Track` grid: read the original's eight grid positions on that circuit
-   (a PPSSPP memory read, as `grid.md` did for `16_Track`).
+3. ~~The `01_Track` grid~~: done 2026-09-29 by rule, not capture - `01_Track` is not
+   reachable from the front end; Metropia reversed was read instead (`grid.md`).
 4. A perturbed-input survey (a lateral shove on a live lap) once (1) or (2) says what the
    original does; the shove sweep above is the cheap static form of it.

@@ -160,8 +160,10 @@ node itself; and when the track definition's `+0x164` flags read as a
 **reversed** circuit (`0x20`, or `0x4` without `0x8`/`0x10`) the step is
 `-19.8` and the lateral sign flips - the grid is laid out *behind* the node
 along the tangent. That is the original's answer to the "reversed grids ran
-off the curve" problem below: it never extrapolates in a straight line, and
-on a reversed file it walks the other way. A track authoring all eight
+off the curve" problem below: it never extrapolates in a straight line. **The
+reversed branch is read from the decompile and contradicted by a capture, see
+[the 2026-09-29 measurement](#the-stagger-is-about-the-corridor-midpoint-not-the-node-2026-09-29):
+on Metropia reversed the layout that comes out is the forward one.** A track authoring all eight
 `"start position %d"` nodes takes them verbatim instead; no Pulse track does.
 
 `Race_PlaceGrid` then puts every craft on its matrix with a second downward
@@ -180,6 +182,88 @@ one caller and constants that reproduce the two numbers measured live;
 `GRID_ROW_PITCH`/`GRID_COLUMN_OFFSET` can now be `19.8`/`20.0` by reading
 rather than by fit.
 
+## The stagger is about the corridor midpoint, not the node (2026-09-29)
+
+**Found by** the falloff survey (`docs/gameplay/leaving-the-track.md`): on
+`01_Track` and `17_Track` (`01_Track` reversed) grid slots 1, 3, 5 and 7 were
+placed **30 units off the centreline**, past the corridor edge, and fell from
+tick 0. Every other circuit's eight slots were inside the corridor. The player's
+own slot 8 was fine, but a *time trial* starts on slot 1 (`solo_slot_one`), so
+the player's start on those two circuits was on the falling column too.
+
+**The cause.** `grid_poses` carried the node's own lateral offset down the grid
+and added `GRID_COLUMN_OFFSET` to the *left* of it. That is only right when the
+node is on the right of the corridor midpoint, which it is on 22 of 24 circuits
+(`+9.2` to `+11.6` from the midpoint). On `01_Track` and
+`17_Track` it is on the left (`-10.8`, `-10.7`), so "20 further left" is 30 off.
+`Race_ComputeGridLayout` never does that (decompile re-read 2026-09-29): it
+locates the node, takes the AI corridor's midpoint at that sample
+(`SplinePt+0x4c`/`+0x50`), picks the sign of the first `10.0` from **which
+corridor edge the node is nearer**, and lays *every* slot, the eighth included,
+at `midpoint + sign * 10.0` on its own re-located sample, negating `sign` after
+each slot. So the even slots (8, 6, 4, 2) are on the node's side and the odd ones
+on the other, wherever the node happens to be. Confidence **88**, on the same
+footing as the layout above.
+
+**Measured against the original, two circuits.** The rule predicts the residual
+the layout table above already carried, and removes it:
+
+| circuit | source | worst slot before | worst slot after |
+| --- | --- | ---: | ---: |
+| `16_Track` (node right of midpoint) | the eight craft of `ORIGINAL_GRID` | 1.81 | **0.62** (slot 8: 1.68 to 0.48) |
+| `18_Track`, Metropia reversed (node right of midpoint) | eight craft read live 2026-09-29, `METROPIA_REVERSED_GRID` | - | **1.13** |
+
+The `16_Track` slot 1 to 7 residuals were 1.4 to 1.8 in the lateral direction, and
+this rule's difference from the old one is `midpoint(slot) + 10` against
+`node lane - 20`, which on that circuit is 1.6 to 1.85: the prediction was made
+before the run. Slot 8 was 1.68 because the raw node, not the midpoint plus ten,
+was used for the player; it is no longer. **The node-on-the-left branch is
+decompile-only.** Neither `01_Track` nor `17_Track` is reachable from the front
+end (`race-setup.md`: only `16`, `03` and `18` are unlocked), so no original
+capture of a left-side grid exists; it is the same code path with the sign flipped,
+and it is what the 24-circuit test checks.
+
+**All 24 circuit-directions, all eight slots** (`grid_stagger_ground_truth.rs`,
+`every_slot_starts_on_the_track`): 192 of 192 slots over collision and inside the
+AI corridor, each within 1.5 of `midpoint +/- 10` on the correct side. The
+narrowest margin to a corridor edge is 0.68.
+
+**A reversed circuit's grid comes out laid like a forward one, measured.** The
+decompile reads as though a reversed circuit (the definition's `+0x164 & 0x20`)
+put the node at the *front* slot: the output matrix index is `9 - i` and the step
+is `-19.8`. On Metropia reversed (`18_Track`, `02_Track` reversed) the original's
+slot 8 is at `(392.11, -13.38, 192.44)` and slot 1 at `(529.33, -12.92, 169.73)`,
+and ours - node as slot 8, field ahead of it in the direction of travel - lands
+within 1.13 on all eight. **What that proves is the layout and the slot
+numbering, not why the branch does not show.** Either the flag is not what
+`bVar1` reads on a Pulse `Reversed="True"` circuit, or the branch is skipped for a
+race, or it is taken and `track_reversed.vex`'s own spline runs the other way so
+the two negations cancel; which was not chased, and the decompile's reversed
+branch is left unported. Confidence **85** on "reversed circuits use the forward
+layout", from eight positions on one circuit. The track.md observation that a
+reversed file's node sits 2.2 units from a forward time-trial start is a
+coincidence of where the exporter authored two files, not a slot number.
+
+**Only the Pulse PSP grid was read.** `grid_poses` also lays out the PS2 and Wipeout
+HD grids, whose own layout functions were not read; `hd_trackwall_ground_truth`
+(every HD grid on the track, both directions) still passes, and nothing checks the
+midpoint rule against those titles' originals.
+
+**How the eight were read.** `scripts/psp-drive.py menu --single-race
+--track-down 2` (new: Track Select is a wrapping list, so two presses from
+Talon's Junction reach Metropia), then `RESTART RACE` and a poll of the racer
+table at `0x08b34420`: entry `i` is **assumed** to be slot `i + 1` (the last is the player, whose
+HUD read `POS 8/8` and whose position `find_craft` returned as entry 7; the
+`16_Track` capture used the AI object's `+0x50` instead, and the two orders agree
+there), and its world position is at
+entry `+0x10` (the four floats before a 3x3 of the craft's axes). The table
+entry, not the craft struct, holds the copy that is stable through the countdown.
+
+**One thing not changed:** each slot still shares the node's heading. The
+original re-derives orientation from each slot's own sample (`FUN_0882663c`);
+on a straight start that is the same to four places, and the measured headings
+on `16_Track` were.
+
 ## Ported, and how close it lands
 
 `oag_gameplay::spawn::grid_pose` is the layout and `oag_game::race::grid_poses`
@@ -192,8 +276,8 @@ every slot against the eight positions above, on the same track:
 
 | | worst | where it goes |
 | --- | ---: | --- |
-| Slot 8, our anchor | `1.68` | the authored node dropped onto the collision mesh |
-| Worst slot, whole grid | `2.40` | the anchor, plus about `0.7` |
+| Slot 8, our anchor | `1.68` (0.48 since 2026-09-29) | the authored node dropped onto the collision mesh; now re-laid on the corridor midpoint, see below |
+| Worst slot, whole grid | `2.40` (0.62 since 2026-09-29) | the anchor, plus about `0.7` |
 
 The residual is **near-constant across all eight** (`1.68` to `2.40`), which is
 what says the layout is right and the anchor is what is off: a wrong pitch or a

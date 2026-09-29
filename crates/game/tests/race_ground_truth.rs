@@ -985,22 +985,25 @@ fn the_whole_grid_lands_on_the_track() {
         );
     }
 
-    // Two staggered columns, against each slot's own nearest sample: the grid
-    // follows the curve now (`grid_poses`, `grid.md#reversed-grids-the-straight-line-ran-off-the-curve`).
-    // Five units: reprojecting one lane bias onto each slot's axis approximates.
-    let local_bias = |p: Vec3| {
+    // Two staggered columns, `GRID_COLUMN_OFFSET / 2` either side of the corridor
+    // midpoint, the even slots on the node's side (`grid.md`). Two units: the
+    // midpoint is read at the nearest resampled point, not the walked one.
+    let off_midpoint = |p: Vec3| {
         let (_, s, _) = race.spline().nearest(p).expect("has samples");
-        (p - Vec3::from_array(s.pos)).dot(Vec3::from_array(s.lateral).normalize_or_zero())
+        let lateral =
+            (p - Vec3::from_array(s.pos)).dot(Vec3::from_array(s.lateral).normalize_or_zero());
+        lateral - 0.5 * (s.ai_bound_left + s.ai_bound_right)
     };
-    let player_bias = local_bias(player.position);
+    let side = off_midpoint(player.position).signum();
     for (index, ship) in ships.iter().enumerate() {
         let slot = if index == 0 { 8 } else { index as u8 };
-        let stagger = [0.0, oag_gameplay::GRID_COLUMN_OFFSET][(slot % 2) as usize];
-        let lateral = local_bias(ship.physics.body.position);
+        let want = if slot.is_multiple_of(2) { side } else { -side }
+            * 0.5
+            * oag_gameplay::GRID_COLUMN_OFFSET;
+        let got = off_midpoint(ship.physics.body.position);
         assert!(
-            (lateral - (player_bias - stagger)).abs() < 5.0,
-            "slot {slot} sits {lateral:.2} off its own local centreline, expected {:.1}",
-            player_bias - stagger
+            (got - want).abs() < 2.0,
+            "slot {slot} sits {got:.2} from the corridor midpoint, expected {want:.1}"
         );
     }
 
@@ -1056,11 +1059,10 @@ const ORIGINAL_GRID: [[f32; 3]; 8] = [
 /// a bound. Every slot has to land, so a formation that is right on average and
 /// wrong at one end fails here.
 ///
-/// **Three units of tolerance, and where it goes.** Our anchor is the authored
-/// `Start Position` node dropped onto the collision mesh, and that lands 1.84
-/// units from the original's own slot 8 - so about two units of the budget is
-/// spent before the layout is consulted at all. The rest covers each slot being
-/// re-dropped onto its own footprint, which the original may not do the same way.
+/// **One unit of tolerance, chosen, not measured**: the worst slot measures 0.62.
+/// It was three, two of which were the raw node standing in for slot 8: the
+/// original lays every slot `10` either side of the AI corridor's midpoint
+/// (`grid.md`), and doing the same took the worst slot from 1.81 to 0.62.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn our_grid_is_the_originals_grid() {
@@ -1088,7 +1090,7 @@ fn our_grid_is_the_originals_grid() {
         worst = worst.max(error);
         println!("slot {slot}: ours {got:?}, original {want:?}, {error:.3} apart");
         assert!(
-            error < 3.0,
+            error < 1.0,
             "slot {slot} is {error:.3} from where the original puts it"
         );
     }

@@ -98,6 +98,18 @@ fn a_missile_turns_toward_the_craft_it_locked() {
         race.tick(&PlayerInputs::none());
     }
 
+    // **Slot 0 is slid sideways so the target is off-axis.** On the corridor-midpoint
+    // grid (`grid.md`) slot 0 and the slot it locks share a column, so the shot is
+    // launched 0.13 degrees off the line to the target and a straight shot and a
+    // homing one end within a tenth of a unit whichever way the sign falls - the
+    // assertion below cannot fail on homing. Four units to the craft's left puts the
+    // target a few degrees off, which is asserted as a precondition.
+    {
+        let body = &mut race.sim.world.ships[0].physics.body;
+        let left = -body.right();
+        body.position += left * 4.0;
+    }
+
     let stats = race.missile_stats().expect("the disc authors a Missile");
 
     // Slot 0 sits at the back of the grid, so everybody is ahead of it. Fire by
@@ -165,6 +177,17 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     println!(
         "missile travelled {travelled:.1}, ended {homed:.1} from slot {target}; \
          a straight shot would have ended {straight:.1} away"
+    );
+    let off_line = heading
+        .dot((target_position - start).normalize())
+        .clamp(-1.0, 1.0)
+        .acos()
+        .to_degrees();
+    println!("launched {off_line:.2} degrees off the line to the target");
+    assert!(
+        off_line > 1.0,
+        "the shot was launched {off_line:.2} degrees off its target, so a straight \
+         and a homing missile cannot be told apart and this test measures nothing"
     );
     assert!(
         travelled > 0.0,

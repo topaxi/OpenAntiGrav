@@ -183,7 +183,20 @@ impl Race {
             .then_some(base)
             .flatten()
             .map(|base| grid_poses(base, &spline, &collision, spawn_height(&handling))[0]);
-        if let Some(pose) = pose_override.or(solo_slot_one).or(base) {
+        // A full grid puts the player on slot 8, and slot 8 is the authored node
+        // re-laid on the corridor midpoint's own `+/-10`, not the node's raw
+        // position: `Race_ComputeGridLayout` derives every slot, the eighth
+        // included, from the midpoint at its own sample (`grid.md`). Measured on
+        // `16_Track`, the raw node sits 1.68 units from the original's eighth
+        // craft, all of it lateral.
+        let full_grid_slot_eight = full_grid.then_some(base).flatten().map(|base| {
+            grid_poses(base, &spline, &collision, spawn_height(&handling))[GRID_SLOTS as usize - 1]
+        });
+        if let Some(pose) = pose_override
+            .or(solo_slot_one)
+            .or(full_grid_slot_eight)
+            .or(base)
+        {
             ship.place_at(pose);
         }
 

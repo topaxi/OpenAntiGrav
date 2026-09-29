@@ -549,6 +549,10 @@ def menu(args):
 
     tap(dbg, "cross", 1, wait=3.0)
     expect(dbg, TRACK_SELECT, "confirming the race settings")
+    if args.track_down:
+        # Track Select wraps: 1/3 Talon's Junction, 2/3 Moa Therma, 3/3 Metropia
+        # (`18_Track`, `02_Track` reversed).
+        tap(dbg, "down", args.track_down, wait=0.6)
     tap(dbg, "cross", 1, wait=3.0)  # the track, whichever is selected
     tap(dbg, "cross", 1, wait=3.0)  # the ship
     expect(dbg, IN_GAME, "confirming the ship", timeout=30.0)
@@ -563,7 +567,7 @@ def menu(args):
             "read; choose Talon's Junction White once by hand and the profile keeps "
             "it." % off
         )
-        if args.any_track:
+        if args.any_track or args.track_down:
             print("warning: " + message, file=sys.stderr)
         else:
             print(message, file=sys.stderr)
@@ -885,6 +889,15 @@ def main():
         "6 ELIMINATOR. **ZONE is greyed on a fresh profile** and the press "
         "lands on a plain single race (an eight-craft grid, g_game_mode 3): "
         "check the race that comes up, not the index.",
+    )
+    p.add_argument(
+        "--track-down",
+        type=int,
+        default=0,
+        metavar="N",
+        help="press down N times on Track Select before confirming, to reach "
+        "Moa Therma (1) or Metropia (2) from Talon's Junction. Implies --any-track's "
+        "warning-only check.",
     )
     p.set_defaults(run=menu)
 
