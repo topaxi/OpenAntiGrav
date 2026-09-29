@@ -248,6 +248,7 @@ the disc authors except what "What does not draw right" lists.
 | Start position, pads | `track.vex` nodes | unchanged | `tech_de_ra`: 15 speedup and 11 weapon pad volumes |
 | Collision | `track_col.col` | `oag_vex::kdcol`, **19-byte node** | 38 of 38 decode; `tech_de_ra` 12,894 vertices, 20,777 triangles |
 | Circuit geometry | `track.final.rcsmodel` | `oag_rcs::rcsmodel::psp2`, **third pointer gap** | `tech_de_ra` 3,186 submeshes, 2,379,040 triangles, 0 unpaired |
+| Node table | same file | `psp2::nodes`, **8-byte pointers** ([`2048-animation.md`](2048-animation.md#the-models-node-table)) | `tech_de_ra`: 1,702 nodes, all with a written matrix; 2,659 mesh objects; 1,684 node-bound submeshes placed by their bind matrix |
 | Materials | same file | `psp2::material::read_ps4` | 461 materials; 453 resolve a texture, 3,155 of 3,186 draws textured |
 | Textures | `.gnf` | `oag_texture::gnf`, unchanged | as [`gnf.md`](gnf.md) |
 | Craft hull | `hdships\<team>\Ship.vex` + `ship.rcsmodel` | `psp2` | `ag_systems` 12 submeshes, 22,666 triangles, 4 of 4 materials textured |
@@ -316,13 +317,28 @@ a PS4 mount them.
 
 ### What does not draw right, or at all
 
-- **The node table is not read on PS4.** Omega's header is 2048's with 8-byte
-  pointers (17 nodes and their bind matrices at `+0x120` on `ag_systems`, 12
-  meshes, a table at `+0x40`) but `psp2::nodes` reads none of it, so
-  node-bound scenery is drawn at its node-local position: on the first frame a
-  prop sits under the camera. **Next, and the most visible defect.**
+- **Node-bound scenery is placed by the model's bind matrices, and nothing
+  else places it** (`omega-nodes`, 2026-09-29). The PS4 node table reads
+  (Vita layout, 8-byte pointers; one invariant per header pointer over all
+  124,709 mesh objects, [`2048-animation.md`](2048-animation.md#the-models-node-table)),
+  and a race now draws `tech_de_ra`'s 1,684 node-bound submeshes at their
+  nodes: the camera droid `CamBot_New2` hovers over the stands at
+  `(-73, -1, 89)` where it drew at the world origin, the crowd entities sit
+  in the stands, and the craft's airbrake flaps are back on their hinges at
+  `(±2.16, -0.05, -4.47)` instead of under the cockpit. **The box at the
+  bottom of `final_300_close.png` is not node-bound and did not move**: it is
+  static circuit geometry (`node None`), under the start grid, drawn
+  identically with and without the table - the earlier note that a node-bound
+  prop sat under the camera was an inference that the render does not bear
+  out. Nothing within 25 units of the craft at tick 300 is node-bound except
+  the droid. A node with no written matrix and no skeleton entry is not drawn
+  and is counted (`Report::unplaced`): 3,220 submeshes on `data00` and 15,035
+  on `data04`, all in 2048's `trackZone` (Zone mode) models and a few props on
+  `cathedral`/`mall`/`tower`; a race on `tech_de_ra` has none.
 - **Skeleton and clip do not decode** (`property tag ends at 3496925615 but the
-  file is 57856 bytes`): nothing animates.
+  file is 57856 bytes`): nothing animates, and the nodes above stand at their
+  bind pose. The skeleton is the 32-bit container's layout and the PS4 one has
+  not been laid out.
 - **Lightmaps are not bound**, though 291 materials name one on `tech_de_ra`.
 - **`track.final.pvs` is not read**, so every chunk draws: 2.38M triangles, and
   a debug build spends about three minutes decoding the 453 textures.

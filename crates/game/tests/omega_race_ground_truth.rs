@@ -371,6 +371,27 @@ fn an_omega_race_loads_its_spline_collision_and_craft() {
         "{:#?}",
         loaded.report
     );
+    // The node table places scenery: every one of the circuit's 1,684
+    // node-bound submeshes takes its node's written matrix (none is left at
+    // its node-local origin or dropped), and so does the hull's airbrakes.
+    let node_line = |head: &str| {
+        loaded
+            .report
+            .iter()
+            .find(|line| line.contains(head))
+            .unwrap_or_else(|| panic!("no report line for {head}: {:#?}", loaded.report))
+    };
+    let circuit = node_line(r"Data\environments\tech_de_ra\track.vex: 2379040 triangle(s)");
+    assert!(
+        circuit.contains("; 1684 node-bound submesh(es), 0 moving on 0 animated node(s)"),
+        "{circuit}"
+    );
+    assert!(!circuit.contains("not drawn"), "{circuit}");
+    let hull = node_line(r"hdships\ag_systems\Ship.vex: 22666 triangle(s)");
+    assert!(
+        hull.contains("; 12 node-bound submesh(es), 0 moving"),
+        "{hull}"
+    );
     assert_eq!(loaded.setup.ai.paths.len(), 2);
     assert_eq!(loaded.setup.ai.point_count(), 835);
     assert!(!loaded.liveries.is_empty());
