@@ -271,6 +271,7 @@ pub fn step<R: Raycaster + ?Sized>(
     let dt = clamp_dt(measured_dt);
 
     state.body.clear_accumulators();
+    wall::pre_integration_clip(state, handling, env, raycaster, dt);
     let mut evaluated = forces::evaluate(state, controls, handling, env, raycaster, dt);
 
     let before_integration = state.body.position;
@@ -291,7 +292,7 @@ pub fn step<R: Raycaster + ?Sized>(
         state.body.linear_velocity = velocity;
     }
 
-    evaluated.wall = wall::resolve(state, handling, env, raycaster, before_integration);
+    evaluated.wall = wall::resolve(state, handling, env, raycaster);
     // `Ship_ApplyCollisionImpulse`'s port: consumes `state.pending_impulse` every
     // tick, same as the original consumes `entity->0x4c + 0x110`. Currently a
     // guaranteed no-op - nothing in this crate writes `pending_impulse` yet, both
