@@ -233,8 +233,8 @@ maintainer's call, because it shifts every census figure on this page.
 `omega-race`, 2026-09-29. On the corrected extraction a race loads the real
 spline, the real collision, the real craft and the real circuit geometry with
 its textures, the craft rides the circuit (`grounded 1.0`, 27 units/s after 300
-ticks with accelerate held, 58 units along the spline by tick 900), and the
-frame is legible: an AG Systems hull on Tech De Ra's start gantry with the
+ticks with accelerate held, 58 units along the spline by tick 900, where it
+stops against the first barrier - nothing steers it), and the frame is legible: an AG Systems hull on Tech De Ra's start gantry with the
 circuit's road, barriers and banners behind it
 (`data/scratch/omega-race/j300.png`). Nothing here is a stand-in for an asset
 the disc authors except what "What does not draw right" lists.

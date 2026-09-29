@@ -224,9 +224,16 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[(archives::DATA09, Platform::Ps4)
 /// first, the way [`DATA_CANDIDATES`] already puts `data09` ahead of all of
 /// them. Order among the three patch archives is unmeasured too.
 ///
-/// Nothing front-end-shaped changes: every front-end path this crate reads is
-/// served by `data09` before any of these (see
-/// `crates/omega/tests/omega_title_ground_truth.rs`).
+/// **What this order does not change, checked 2026-09-29:** every front-end XML
+/// this crate reads is served by `data09` before any of these (see
+/// `crates/omega/tests/omega_title_ground_truth.rs`), and the images the boot
+/// samples come from these eight archives - so the boot's `image` report was
+/// diffed before and after this order on both the short-read and the
+/// corrected extraction and is line-for-line identical (14 and 11 lines). What
+/// it does change is which copy of a `.EnvSettings` a race reads, and the
+/// patch's copy carries no HDR/bloom block the reader recognises where the
+/// base's does, so the read bloom chain is off in a race; which copy the
+/// game itself reads is the thing nobody has observed.
 const EXTRA_CANDIDATES: &[(&str, Platform)] = &[
     (archives::DATA08, Platform::Ps4),
     (archives::DATA07, Platform::Ps4),
