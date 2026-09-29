@@ -985,10 +985,9 @@ fn the_whole_grid_lands_on_the_track() {
         );
     }
 
-    // Two staggered columns, laid `GRID_COLUMN_OFFSET / 2` either side of the AI
-    // corridor's midpoint at each slot's own nearest sample, the even slots on the
-    // node's side (`Race_ComputeGridLayout`, `grid.md`). Two units: the midpoint
-    // is read at the nearest resampled point, not the walked one.
+    // Two staggered columns, `GRID_COLUMN_OFFSET / 2` either side of the corridor
+    // midpoint, the even slots on the node's side (`grid.md`). Two units: the
+    // midpoint is read at the nearest resampled point, not the walked one.
     let off_midpoint = |p: Vec3| {
         let (_, s, _) = race.spline().nearest(p).expect("has samples");
         let lateral =
@@ -1060,13 +1059,10 @@ const ORIGINAL_GRID: [[f32; 3]; 8] = [
 /// a bound. Every slot has to land, so a formation that is right on average and
 /// wrong at one end fails here.
 ///
-/// **One unit of tolerance, chosen, not measured.** The worst slot measures
-/// 0.62 (slot 4) and slot 8 0.48. It was three units, of which about two were the
-/// authored node being used as slot 8's position: the original lays every slot,
-/// the eighth included, `10` either side of the AI corridor's midpoint rather
-/// than on the node itself (`grid.md`), and doing the same took the worst slot
-/// from 1.81 to 0.62. The rest is each slot being re-dropped onto its own
-/// footprint, which the original may not do the same way.
+/// **One unit of tolerance, chosen, not measured**: the worst slot measures 0.62.
+/// It was three, two of which were the raw node standing in for slot 8: the
+/// original lays every slot `10` either side of the AI corridor's midpoint
+/// (`grid.md`), and doing the same took the worst slot from 1.81 to 0.62.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn our_grid_is_the_originals_grid() {
