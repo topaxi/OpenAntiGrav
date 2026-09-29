@@ -178,6 +178,26 @@ impl Race {
         self.sim.respawns.get(slot).copied().unwrap_or(0)
     }
 
+    /// Which trigger fired this craft's most recent respawn, `None` if it has
+    /// not had one. See [`respawn::RespawnCause`](super::respawn::RespawnCause).
+    #[must_use]
+    pub fn last_respawn_cause_of(&self, slot: usize) -> Option<RespawnCause> {
+        self.sim.last_respawn_cause.get(slot).copied().flatten()
+    }
+
+    /// Whether respawning has given up on this craft after
+    /// [`RESPAWN_GIVE_UP`](oag_race::recovery::RESPAWN_GIVE_UP) back-to-back
+    /// rescues. Once set no trigger fires for it again, so a survey has to
+    /// know.
+    #[must_use]
+    pub fn respawn_given_up_of(&self, slot: usize) -> bool {
+        self.sim
+            .respawn_disabled
+            .get(slot)
+            .copied()
+            .unwrap_or(false)
+    }
+
     /// How many barrel rolls an **opponent** has armed this race.
     ///
     /// Counted for the deviation our AI carries and the original's does not -

@@ -57,6 +57,12 @@ pub struct Race {
     /// Wipeout HD/Fury's twelve.
     #[serde(default)]
     pub variant: String,
+    /// Whether the player has ever picked a model on Ship Select. Wipeout
+    /// HD/Fury opens that screen on `concept1` for a profile that has not -
+    /// see [`Self::opening_variant`] - and an empty [`Self::variant`] alone
+    /// cannot say "chose the classic hull" from "never chose".
+    #[serde(default)]
+    pub variant_chosen: bool,
     /// Which `PI_ModelSkin` of `team` the craft is painted in, by the name
     /// the definition declares (`Alternative`), or empty for the baseline
     /// paint. What Ship Select's livery row picks on a title whose teams
@@ -91,7 +97,24 @@ impl Default for Race {
             team: default_team(),
             track: default_track(),
             variant: String::new(),
+            variant_chosen: false,
             skin: String::new(),
+        }
+    }
+}
+
+impl Race {
+    /// The model Ship Select opens on: the stored variant, or on Wipeout
+    /// HD/Fury the fresh-profile default (`oag_hd::race::FRESH_PROFILE_VARIANT`)
+    /// while the player has not picked one. A non-empty stored variant always
+    /// wins, so a config written before [`Self::variant_chosen`] existed keeps
+    /// what it had.
+    #[must_use]
+    pub fn opening_variant(&self, title: &oag_title::Title) -> &str {
+        if title.name == oag_hd::TITLE.name && self.variant.is_empty() && !self.variant_chosen {
+            oag_hd::race::FRESH_PROFILE_VARIANT
+        } else {
+            &self.variant
         }
     }
 }

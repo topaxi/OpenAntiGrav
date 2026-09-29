@@ -162,6 +162,7 @@ impl Race {
                 let index = self.sim.world.ships[slot].driver.index as usize;
                 self.sample_index_of(index)
             };
+            self.sim.last_respawn_cause[slot] = Some(respawn::RespawnCause::Destroyed);
             self.respawn(slot, sample_index);
         }
         if mode != Mode::Eliminator {

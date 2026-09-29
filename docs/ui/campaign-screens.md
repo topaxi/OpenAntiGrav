@@ -1061,16 +1061,17 @@ for: HD's circuit name table is a different archive copy from its circuit
 *list* (`docs/formats/hd-frontend.md`), so `strings.get_or_id(&cell.track)`
 alone would show the wrong name on eight circuits. `hd_track_line` folds
 through `CircuitNames::get`, falling back to `strings.get_or_id` and then
-the raw id - **simplified from `oag_game::catalogue::label`**: that function
-also appends `FE_REVERSE` where a reversed circuit shares its forward
-twin's own name, which needs the full circuit catalogue this module has no
-access to at draw time, so a reversed HD circuit whose name collides with
-its forward twin is not disambiguated here. The live session
-(`session::campaign::open_campaign`) passes the real
-`Shell::circuit_names`; the headless `--menu-page cell-select` capture
-passes `CircuitNames::default()` (a no-op fold, same gap `picker_page`'s own
-RACE-page capture already has) - see `oag_game::campaign::menu_page`'s own
-doc for why building one there was out of scope this pass.
+the raw id. It is **not** `oag_game::catalogue::label`: that function
+appends `FE_REVERSE` where a reversed circuit shares its forward twin's name,
+which the original never does on HD (`docs/formats/hd-frontend.md`: the drawn
+name never carries a direction, and Track Select here draws the bare name
+plus a `ReverseIcon`), so a reversed Fury cell (`grid9`..`grid14` carry
+dozens) reads `TALON'S JUNCTION`, not `TALON'S JUNCTION REVERSE` - checked
+2026-09-29 by comparing `label` with the bare fold over every cell's track
+ids. The live session (`session::campaign::open_campaign`) and the headless
+`--menu-page cell-select` capture both pass `Shell::circuit_names` (the
+capture passed `CircuitNames::default()` until 2026-09-29 and so drew the raw
+`17_Track` where the disc names `TALON'S JUNCTION`).
 
 **A three-rung difficulty toggle, `DifficultyButton` - new state, backed by
 an existing function.** `oag_tables::race_campaign::Cell::targets_for_difficulty`
@@ -3312,10 +3313,8 @@ consistent with `rpcs3-capture.md`'s own finding that a Fury-campaign race
 flies the `concept1` livery. Two frames, one team: 90, not higher. **What
 this does not show** is that the original always races what its screen
 selects: `rpcs3-capture.md` records a `racebox` walk whose screen showed the
-classic hull while the race flew `concept1`. And a divergence is left in
-place: the original's fresh-profile campaign opens this screen on
-`concept1`, this build on `settings.race.variant` (the classic hull by
-default).
+classic hull while the race flew `concept1`. The fresh-profile default is
+settled by "Walked on RPCS3 with the input pressed, 2026-09-29" below.
 
 The seven `HexSelection` rows match `PI_TeamModel` file order (`chrome_c1`,
 `nitro`, `concept1`, `normal`, `SKIN1`, `SKIN2`, `chrome`): on the
@@ -3337,13 +3336,58 @@ each through `Block_Render`'s translucent two-pass fill (`x 0.676`, see
 fills the two halves side by side and draws the border once over both
 (`oag_ui::menu::block::draw_split_fill`, chosen).
 
+### Walked on RPCS3 with the input pressed, 2026-09-29
+
+`scripts/rpcs3-drive.py`'s session with a scratch walk that taps `right`,
+`down`, `up` and `left` and photographs after each press (isolated
+`XDG_CONFIG_HOME`, `Xvfb :94`, muted; shots and the script in
+`data/scratch/hd-frontend-polish/`). Two boots on a **fresh profile**
+(`savedata` empty, `EpilepsyWarning` and `FirstPlay` answered), one on the
+old save of 2026-09-21.
+
+- **Axes, confidence 90**: `Right`/`Left` step the team (Feisar -> Qirex ->
+  Piranha), `Up`/`Down` step the model row of the `NAVIGATE TEAM` hex
+  column (the highlight moves down one hex; the stat digits change in
+  step). Racebox and the Fury campaign alike. The former "chosen, not
+  measured" reading was right.
+- **The model row survives a team step, confidence 90**: on the fresh
+  campaign boot `Right` from Feisar's `concept1` landed on Qirex's
+  `concept1` (`085`/`080`, the red overhang bars), and `Down` from there on
+  Qirex's `normal` (`080`/`070`, `8/7/8/9`), both matching `DATA00`'s
+  `PI_TeamModel` `<FE>` rows. This build restarted the livery on every team
+  step; it now keeps it (`Picker::land_on`).
+- **A fresh profile opens on `concept1`, on both routes, confidence 90**:
+  the third `HexSelection` row highlighted and Feisar reading `080`/`085`/
+  `*`/`080` on a fresh boot of the Fury campaign and again on a fresh boot of
+  Racebox (three fresh-profile frames with the earlier `rpcs3-fresh-default`
+  one). The disc authors no default: `Team_Selection_Definition.xml` and
+  `CellMode_Definition.xml` (`DATA06`) carry no model, livery or default
+  attribute, the `Cell Mode Redirect Game` that once forced a ship is the
+  disabled `<aRedirect>`, and the first unlocked `PI_TeamModel` in file order
+  is `concept1` (`chrome_c1` is `<Unlock locked="true">`, `nitro` needs
+  `grid8`), which fits but is not a proven rule.
+- **A profile that already holds a save opened elsewhere**: the same disc,
+  the old 2026-09-21 save, campaign and Racebox both opened on `normal`
+  (`070`/`080`) - and `rpcs3-capture.md`'s 2026-09-13 note of a "fresh"
+  Racebox opening on the classic hull was very likely that. So the original
+  remembers something per profile; **what, where and when it is written is
+  unread** (a plain `Back` and re-entry within one boot reopened on
+  `concept1` again, which says nothing since the first press had landed on a
+  locked row).
+- **This build**: `oag_game::settings::Race::opening_variant` opens Ship
+  Select on `_c1` (`Fury Concept`) on HD while `race.variant` is empty and
+  `race.variant_chosen` is false; the flag is set by the first livery
+  change or any Confirm and persists in the config, so a deliberate classic
+  hull sticks. "Never picked" as the definition of a fresh profile is
+  **chosen, not measured**. Not done: the original's fresh profile also
+  opens on **Feisar**, the first team; this build opens on
+  `settings.race.team` (`assegai` by default).
+
 ### Chosen, not measured
 
-- **Axes**: left/right steps the team, up/down the livery
-  (`oag_ui::picker::Picker::with_entries_across`), read off the hex grid's
-  shape - the selected team is the centred `SelectedColumnCol` column and a
-  team's models are its rows. No capture has pressed a direction on this
-  screen.
+- **The livery order**: this build cycles three variants (`HD`, `Fury
+  Concept`, `Fury Nitro`), not the original's seven rows, and wraps; see
+  the RPCS3 section below for what was measured about the axes.
 - **`LiveryString`** shows the selected variant's label (`HD`, `Fury
   Concept`, `Fury Nitro`) when the team offers more than one. The widget is
   authored empty and filled by code this build has not read; it stands in
@@ -3428,7 +3472,7 @@ campaign path; this build reads it off the disc and walks it there.**
 `Tournament C`, in the same file, is a separate screen (`TrackNumber0..11`,
 `SelectedTrack0..11`, add/remove/randomise buttons) and is **not read**.
 
-### `right` wraps at twelve, confidence 80; the rows being directions is chosen
+### `right` wraps at twelve, confidence 80; the rows are directions, confidence 90
 
 **Measured**: the 27 frames of the `right`-only walk show Vineta K at press 0,
 12 and 24, and every frame from 13 to 24 repeats the frame twelve earlier - the
@@ -3439,11 +3483,17 @@ tell a 24-entry list from a 12-wide wrap (the original never spells a direction
 in a name), so the score rests on the cursor and the missing glyph, not on the
 repeat.
 
-**Chosen, no score**: that the grid's two rows are the two directions. It is
-read off the two rows under the `CIRCUIT DIRECTION` heading and the authored
-`ReverseIcon` art; no capture pressed `down`. The earlier "24 entries, forward
-then reverse" reading (`rpcs3-capture.md`) is therefore not disproved, only no
-longer the one this build follows. The forward order is measured
+**Measured 2026-09-29, confidence 90**: the grid's two rows are the two
+directions. An RPCS3 walk pressing `right`, `down`, `right`, `down`, `up`,
+`left` on `Track Creation` (`data/scratch/hd-frontend-polish/rpcs3-racebox-oldsave/`):
+`Right` Anulpha Pass -> Moa Therma; `Down` on Anulpha Pass drew `REVERSE`
+and the circular arrow icon with the lower hex highlighted, `Right` from
+there stepped Moa Therma reversed (the same order), a second `Down` stayed
+put, `Up` went back to forward with the icon gone, `Left` stepped back to
+Anulpha Pass. The `CIRCUIT DIRECTION` hexes and the direction icon do the
+work; the name never gains `REVERSE`. The earlier "24 entries, forward
+then reverse" reading (`rpcs3-capture.md`) is therefore disproved, not just
+no longer the one this build follows. The forward order is measured
 (Vineta K, Anulpha Pass, Moa Therma, Chenghou Project, Metropia, Sebenco Climb,
 Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
 `Zone`'s four environments are not among them.
@@ -3478,10 +3528,10 @@ original fills them from code. That id choice is **chosen, not measured**.
 
 ### Chosen, not measured
 
-- **Axes**: left/right steps along a row (measured), up/down switches
-  direction (read off the grid's two rows, no capture pressed it).
-  `oag_ui::picker::Picker::with_rows`.
-- **The order of the reverse row** is the forward order.
+- **Axes**: measured, see "`right` wraps at twelve" above -
+  left/right steps along a row, up/down switches direction.
+  `oag_ui::picker::Picker::with_rows`. **The order of the reverse row** is
+  the forward order, also measured (one walk).
 - **A reverse circuit is labelled with its forward twin's name**: the frame
   never spells a direction in the name.
 - **Pointer**: the `CHOOSE CIRCUIT` frame's left/right halves step the circuit,

@@ -674,14 +674,12 @@ fn hd_format_centiseconds(value: i64) -> String {
 }
 
 /// `Track`'s own resolution - the circuit's display name through
-/// [`CircuitNames`], falling back to the string table and then the raw id,
-/// the same three-step fallback `oag_game::catalogue::label` gives the RACE
-/// page. **Simplified from that function**: it also appends `FE_REVERSE`
-/// where a reversed circuit shares its forward twin's own name, which needs
-/// the full circuit catalogue (`every: &[Track]`) this module has no access
-/// to at draw time - not applied here, so a reversed HD circuit whose name
-/// collides with its forward twin draws identically to it. `Tournament`
-/// cells (`{n} Races`) are unaffected, the same reading
+/// [`CircuitNames`], falling back to the string table and then the raw id.
+/// **Deliberately not `oag_game::catalogue::label`**: that appends `FE_REVERSE`
+/// where a reversed circuit shares its forward twin's name, and HD's own
+/// screens never spell a direction in a name (`docs/formats/hd-frontend.md`),
+/// so a reversed cell reads the bare circuit name here as on Track Select.
+/// `Tournament` cells (`{n} Races`) are unaffected, the same reading
 /// `crate::campaign::draw::track_line` already gives them.
 fn hd_track_line(cell: &Cell, circuit_names: &CircuitNames, strings: &StringTable) -> String {
     if cell.mode == Mode::Tournament {
