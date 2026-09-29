@@ -276,6 +276,7 @@ impl Frontend {
                 let mut out = self.draw_screen_at(current, self.on_screen_for);
                 out.insert(1, white);
                 self.draw_campaign_map(&mut out);
+                self.draw_event_card(&mut out);
                 out
             }
             _ => self.draw_screen_at(current, self.on_screen_for),

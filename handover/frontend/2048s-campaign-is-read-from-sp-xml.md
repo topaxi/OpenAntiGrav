@@ -258,6 +258,20 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    rects, so building that screen for real is still its own, separate piece
    of work - see `campaign-event-card.md`'s own "not chased" note on the
    `M_X`/`M_Y` projection its draw call also computes.
+   **Card built 2026-09-29** (branch `2048-event-card`): layout recovered from
+   `CampaignEventCard_DrawPanel` and friends, the photo/emblem/glyph art found
+   in `NewImages` (no XML names it), and `oag_ui::frontend::event_card` draws
+   it with pointer support - see `docs/formats/2048-campaign.md`'s "The event
+   card". **Still open, in order of player impact:** (a) page kinds `1`-`4`
+   (`FUN_810540c4` and siblings; kind `1` is on every SP card and is drawn
+   blank) and the predicates that give the reference frame its third dot
+   (`CampaignEventCard_BuildPageList`); (b) the `BEAT_VALUE` objective line -
+   read the `vtable+0x6c` override of `GameModeObjective_FormatText`; (c) the
+   Zone events' photo (no authored circuit; find where a Zone run picks its
+   circuit); (d) `FUN_812b021a`, which words the kind line under the title
+   (this build's `RACE`/`ZONE` is chosen); (e) the elite row and restriction
+   glyphs; (f) verify the class ordinal order and the Change-craft glyph against
+   a live frame; (g) the slide-in/fade animation is not drawn.
 7. **Closed 2026-09-28** - see the "Open" section's own entry above for what
    landed (`grid_craft`, `Options::grid_teams`, `apply_grid_teams`) and where
    it is measured and verified.

@@ -10,7 +10,7 @@
 //! language are in hand, so the front end receives text and cells and never
 //! opens a file.
 
-use oag_ui::frontend::{EventIcon, ExtraTile, Launch, MapEvent};
+use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent};
 use oag_ui::language::StringTable;
 
 /// Every `SP.xml` event that has a map cell, as the map draws it.
@@ -126,6 +126,7 @@ pub(super) fn map_events(
             kind,
             forced_craft,
             refused_craft,
+            card: event_card(&doc, event, kind, strings),
         });
     }
     report.push(format!(
@@ -162,4 +163,119 @@ pub(super) fn extra_tiles(language: Option<&str>) -> Vec<ExtraTile> {
             launch: Launch::Remix,
         },
     ]
+}
+
+/// The ten circuits `FUN_81060744` (`0x810f1196`'s photo call) and
+/// `FUN_81060584` (the emblem) name-match `M_TRACKNAME` against. The
+/// executable's own table also carries the DLC circuits and their `_R`
+/// reverses, none of which `SP.xml` authors an event on.
+const CARD_TRACKS: [&str; 10] = [
+    "square",
+    "park",
+    "tower",
+    "mall",
+    "bridge",
+    "arena",
+    "subway",
+    "cathedral",
+    "sol",
+    "altima",
+];
+
+/// `FUN_812b671a`'s ordinal-to-wording table, for the ordinals the campaign
+/// authors and whose wording is recovered: `FINISH`, `POSITION` and `KILLS`.
+/// `BEAT_VALUE` (`2`) is left unworded on purpose - its text is a per-mode
+/// override of the event or `FE_SCORE_POINTS`, and the disc's table has no
+/// such entry (`docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`).
+fn objective_text(strings: &StringTable, objective_type: i64, target: i64) -> Option<String> {
+    let id = match (objective_type, target) {
+        (1, _) => "SP_Objective_Finish",
+        (4, 1) => "ER_FINISH_1ST",
+        (4, 2) => "ER_FINISH_2ND",
+        (4, 3) => "ER_FINISH_3RD",
+        (4, _) => "ER_FINISH_IN_POS",
+        (7, _) => "FE_ELIMINATE_OPP",
+        _ => return None,
+    };
+    let text = strings.get(id)?;
+    Some(text.replace("%d", &target.to_string()))
+}
+
+/// What one event's card says, off the same instances the map already read.
+fn event_card(
+    doc: &oag_2048::campaign::Document,
+    event: &oag_2048::campaign::Event,
+    kind: EventIcon,
+    strings: &StringTable,
+) -> EventCard {
+    let track = event
+        .track
+        .and_then(|track| oag_2048::campaign::track_for(doc, track));
+    let known = track
+        .as_ref()
+        .map(|track| track.track_name.as_str())
+        .filter(|name| CARD_TRACKS.contains(name));
+    let photo = known.map(|name| {
+        let mut chars = name.chars();
+        let head: String = chars
+            .next()
+            .into_iter()
+            .flat_map(char::to_uppercase)
+            .collect();
+        format!(
+            r"Data\FE\NewImages\trackscreens\{head}{}.gtf",
+            chars.as_str()
+        )
+    });
+    let emblem = known.map(|name| format!(r"Data\FE\NewImages\tracks\{name}.gtf"));
+    let objective = event
+        .pass_objective
+        .and_then(|reference| oag_2048::campaign::objective_for(doc, reference));
+    let class_icon = event
+        .speed_class
+        .and_then(|class| usize::try_from(class).ok())
+        .and_then(|class| {
+            oag_ui::frontend::CARD_TEXTURES
+                .iter()
+                .copied()
+                .filter(|t| t.contains(r"speedclass\"))
+                .nth(class)
+        })
+        .map(str::to_string);
+    let kind_id = match kind {
+        EventIcon::Race => "IG_HUD_RACE",
+        EventIcon::SpeedLap => "Speed Lap",
+        EventIcon::Zone => "Zone",
+        EventIcon::Elimination => "ER_ELIM",
+    };
+    EventCard {
+        title: track.map(|track| track.display_name).unwrap_or_default(),
+        kind_label: strings.get(kind_id).map(str::to_string),
+        pass_label: strings.get("FE_PASS").map(str::to_string),
+        has_objective: objective.is_some(),
+        objective: objective.and_then(|objective| {
+            objective_text(
+                strings,
+                objective.objective_type?,
+                objective.target.unwrap_or(0),
+            )
+        }),
+        laps: event.laps.filter(|&laps| laps > 0),
+        class_icon,
+        photo,
+        emblem,
+    }
+}
+
+/// Every texture the cards of `events` ask for beyond the fixed set.
+pub(super) fn card_textures(events: &[MapEvent]) -> Vec<&str> {
+    let mut names: Vec<&str> = oag_ui::frontend::CARD_TEXTURES.to_vec();
+    for card in events.iter().map(|event| &event.card) {
+        for name in [&card.photo, &card.emblem].into_iter().flatten() {
+            if !names.contains(&name.as_str()) {
+                names.push(name);
+            }
+        }
+    }
+    names
 }

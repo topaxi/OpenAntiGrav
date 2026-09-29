@@ -68,7 +68,7 @@ const VITA: (u32, u32) = (960, 544);
 /// The chain `oag_2048::frontend::BOOT_PROFILE` resolves to, with the intro
 /// movie's plan as given - `0` frames is "no demuxer", the state every run
 /// is in until `oag-video` reads MP4.
-fn boot(intro_frames: usize) -> Frontend {
+pub(super) fn boot(intro_frames: usize) -> Frontend {
     let mut frontend = Frontend::booting(
         Sequence {
             steps: vec![
@@ -109,12 +109,12 @@ fn boot(intro_frames: usize) -> Frontend {
     frontend
 }
 
-fn tick(frontend: &mut Frontend, input: &mut Input, held: u32) {
+pub(super) fn tick(frontend: &mut Frontend, input: &mut Input, held: u32) {
     input.begin_frame(held);
     frontend.update(1.0 / 60.0, input, None);
 }
 
-fn press(frontend: &mut Frontend, input: &mut Input, button: Button) {
+pub(super) fn press(frontend: &mut Frontend, input: &mut Input, button: Button) {
     tick(frontend, input, button.bit());
     tick(frontend, input, 0);
 }
@@ -371,7 +371,7 @@ fn a_middle_aligned_text_centres_its_line_once_the_face_is_known() {
     assert_eq!(pen(&frontend), 370.0 - 18.5);
 }
 
-fn reach_the_shell(frontend: &mut Frontend, input: &mut Input) {
+pub(super) fn reach_the_shell(frontend: &mut Frontend, input: &mut Input) {
     reach_the_grid(frontend, input);
     press(frontend, input, Button::Cross);
     press(frontend, input, Button::Cross);
@@ -394,6 +394,7 @@ fn three_events() -> Vec<MapEvent> {
         kind: EventIcon::Race,
         forced_craft: None,
         refused_craft: Vec::new(),
+        card: crate::frontend::EventCard::default(),
     })
     .collect()
 }
@@ -413,6 +414,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             kind: EventIcon::Race,
             forced_craft: None,
             refused_craft: Vec::new(),
+            card: crate::frontend::EventCard::default(),
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
@@ -423,6 +425,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             kind: EventIcon::Race,
             forced_craft: None,
             refused_craft: Vec::new(),
+            card: crate::frontend::EventCard::default(),
         },
     ]
 }
@@ -506,11 +509,22 @@ fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
         Some("2048 - Event 2")
     );
     press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
     assert_eq!(
         frontend.launch(),
         Some(&Launch::Event("2048 - Event 2".to_string()))
     );
+}
+
+/// A tap on the event card's Launch button - the centre of its hit rect.
+fn launch_button_tap() -> Pointer {
+    Pointer {
+        at: Some((880.0, 480.0)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    }
 }
 
 #[test]
@@ -549,6 +563,10 @@ fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
     let again = marker_of(&frontend, 0);
     assert!(frontend.pointer(&click(again)));
     tick(&mut frontend, &mut input, 0);
+    assert!(frontend.event_card_open());
+    assert!(!frontend.is_finished(), "the second click opens the card");
+    assert!(frontend.pointer(&launch_button_tap()));
+    tick(&mut frontend, &mut input, 0);
     assert_eq!(
         frontend.launch(),
         Some(&Launch::Event("2048 - Event 2".to_string()))
@@ -581,7 +599,7 @@ fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
 /// One event restricted the way `"2050 - Event 5"` really is (no Agility, no
 /// Speed) - `Feisar2048\3` (Feisar's own speed craft) is the one refused id
 /// these tests exercise.
-fn a_restricted_event() -> Vec<MapEvent> {
+pub(super) fn a_restricted_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
         x: 1,
@@ -591,6 +609,7 @@ fn a_restricted_event() -> Vec<MapEvent> {
         kind: EventIcon::Race,
         forced_craft: None,
         refused_craft: vec!["Feisar2048\\3".to_string()],
+        card: crate::frontend::EventCard::default(),
     }]
 }
 
@@ -599,7 +618,7 @@ fn a_restricted_event() -> Vec<MapEvent> {
 /// [`Frontend::launch_selected_event`] never consults it once
 /// [`MapEvent::forced_craft`] is `Some`, the precedence `race::load_event`
 /// already applies.
-fn a_forced_event() -> Vec<MapEvent> {
+pub(super) fn a_forced_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
         x: 1,
@@ -609,6 +628,7 @@ fn a_forced_event() -> Vec<MapEvent> {
         kind: EventIcon::Race,
         forced_craft: Some("Qirex2048\\1".to_string()),
         refused_craft: vec!["Feisar2048\\3".to_string()],
+        card: crate::frontend::EventCard::default(),
     }]
 }
 
@@ -619,6 +639,7 @@ fn a_restricted_event_refuses_a_launch_when_the_seeded_craft_is_forbidden() {
     frontend.seed_craft("Feisar2048\\3".to_string());
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
     press(&mut frontend, &mut input, Button::Cross);
     assert!(
         !frontend.is_finished(),
@@ -639,6 +660,7 @@ fn a_restricted_event_launches_when_the_seeded_craft_is_allowed() {
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
     assert_eq!(
         frontend.launch(),
@@ -657,6 +679,7 @@ fn touching_team_overrides_the_seed_in_either_direction() {
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
     assert!(
         !frontend.is_finished(),
         "team_choice() names the forbidden craft, overriding an allowed seed"
@@ -671,6 +694,7 @@ fn touching_team_overrides_the_seed_in_either_direction() {
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
 }
 
@@ -681,6 +705,7 @@ fn a_forced_event_launches_regardless_of_refused_craft_or_the_seed() {
     frontend.seed_craft("Feisar2048\\3".to_string());
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
     press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
     assert_eq!(
@@ -715,8 +740,10 @@ fn a_click_on_a_restricted_events_marker_refuses_the_same_way_the_pad_does() {
     // First click selects (matching `a_click_on_an_unselected_marker...`'s
     // own shape) - the map opens on this event already selected here since
     // it is the only one, so this click already lands on the selected
-    // marker and should refuse straight away.
+    // marker and opens the card, whose Launch refuses.
     assert!(frontend.pointer(&click));
+    tick(&mut frontend, &mut input, 0);
+    assert!(frontend.pointer(&launch_button_tap()));
     tick(&mut frontend, &mut input, 0);
     assert!(
         !frontend.is_finished(),
@@ -738,6 +765,7 @@ fn refresh_campaign_progress_opens_a_gated_event_once_its_own_gate_is_passed() {
     frontend
         .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Pass));
     press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Cross);
     press(&mut frontend, &mut input, Button::Cross);
     assert_eq!(
         frontend.launch(),

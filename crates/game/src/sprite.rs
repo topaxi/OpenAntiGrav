@@ -236,6 +236,10 @@ struct Staged {
 /// the backdrop stacked over it.
 const GUTTER: u32 = 1;
 
+/// The tallest a sheet stacks before it starts another column - wgpu's own
+/// default `max_texture_dimension_2d`.
+const MAX_SIDE: u32 = 8192;
+
 // `Placed` moved to `oag_ui::frontend::placement`: it is pure data, and the
 // front end needs to name it without pulling in this module's decode step.
 // `pub use` rather than a private import: `crate::race::hud` names
@@ -378,26 +382,45 @@ impl Sheet {
             return Self::default();
         }
 
-        let width = decoded
-            .iter()
-            .map(|staged| u32::from(staged.image.width))
-            .max()
-            .unwrap_or(1);
-        let height: u32 = decoded
-            .iter()
-            .map(|staged| u32::from(staged.image.height) + GUTTER)
-            .sum();
+        // One column, stacked, unless that would be taller than a texture
+        // may be: 2048's campaign cards add ten 512x512 photos to a sheet
+        // that was already most of the way there (11,068 rows against a
+        // GPU limit of 8,192), so past `MAX_SIDE` the stack continues in a
+        // further column to the right. A sheet that fits is laid out exactly
+        // as it always was - byte-identical, which is what keeps every
+        // screenshot comparable.
+        let mut origins: Vec<(u32, u32)> = Vec::with_capacity(decoded.len());
+        let (mut column_x, mut column_width, mut pen) = (0u32, 0u32, 0u32);
+        let mut height = 0u32;
+        for staged in &decoded {
+            let (w, h) = (
+                u32::from(staged.image.width),
+                u32::from(staged.image.height),
+            );
+            if pen > 0 && pen + h > MAX_SIDE {
+                column_x += column_width;
+                column_width = 0;
+                pen = 0;
+            }
+            origins.push((column_x, pen));
+            column_width = column_width.max(w);
+            pen += h + GUTTER;
+            height = height.max(pen);
+        }
+        let width = column_x + column_width;
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let mut placed = Vec::with_capacity(decoded.len());
-        let mut pen = 0u32;
 
-        for Staged {
-            src,
-            image: texture,
-            quad_extent,
-            blend,
-        } in decoded
+        for (
+            Staged {
+                src,
+                image: texture,
+                quad_extent,
+                blend,
+            },
+            (x, y),
+        ) in decoded.into_iter().zip(origins)
         {
             let (w, h) = (u32::from(texture.width), u32::from(texture.height));
             let bits_per_pixel = texture.bits_per_pixel;
@@ -407,7 +430,7 @@ impl Sheet {
             // whenever another image is wider than this one.
             for row in 0..h {
                 let from = (row * w * 4) as usize;
-                let to = ((pen + row) * width * 4) as usize;
+                let to = (((y + row) * width + x) * 4) as usize;
                 rgba[to..to + (w * 4) as usize]
                     .copy_from_slice(&pixels[from..from + (w * 4) as usize]);
             }
@@ -416,15 +439,14 @@ impl Sheet {
             placed.push((
                 src,
                 Placed {
-                    x: 0,
-                    y: pen,
+                    x,
+                    y,
                     width: w,
                     height: h,
                     quad_extent,
                     blend,
                 },
             ));
-            pen += h + GUTTER;
         }
 
         Self {
@@ -668,6 +690,36 @@ mod tests {
             (same.width, same.height, same.len()),
             (8, extended.height, 2)
         );
+    }
+
+    #[test]
+    fn a_stack_taller_than_a_texture_continues_in_a_second_column() {
+        let tall = |src: &str| DecodedImage {
+            src: src.to_string(),
+            width: 4,
+            height: 5000,
+            rgba: vec![255; 4 * 5000 * 4],
+            quad_extent: None,
+            blend: None,
+        };
+        let mut report = Vec::new();
+        let sheet = Sheet::build_with(&[], vec![tall("a"), tall("b"), tall("c")], &mut report);
+        assert!(sheet.height <= MAX_SIDE, "{} rows", sheet.height);
+        let (a, b, c) = (
+            sheet.get("a").unwrap(),
+            sheet.get("b").unwrap(),
+            sheet.get("c").unwrap(),
+        );
+        assert_eq!((a.x, a.y), (0, 0));
+        assert_eq!(
+            (b.x, b.y),
+            (4, 0),
+            "b would end at 10001 rows, so it starts a column"
+        );
+        assert_eq!((c.x, c.y), (8, 0));
+        assert_eq!(sheet.width, 12);
+        let at = ((b.y * sheet.width + b.x) * 4) as usize;
+        assert_eq!(sheet.rgba[at..at + 4], [255, 255, 255, 255]);
     }
 
     #[test]

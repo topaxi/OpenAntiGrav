@@ -12,6 +12,7 @@
 mod aspect;
 mod backdrop;
 mod drawing;
+mod event_card;
 mod intro;
 mod pointer;
 mod screens;
