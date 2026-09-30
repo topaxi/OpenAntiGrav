@@ -13,6 +13,25 @@
 /// [`ModelTexture`] for why the sharing is an `Arc`.
 pub type TextureSlots = Vec<Option<std::sync::Arc<ModelTexture>>>;
 
+/// How many mip levels a PSP `.vex` texture reaches the GPU with: **one**.
+///
+/// **Measured against PPSSPP 1.20.4 at the PSP's own 480x272, 2026-09-30, and
+/// not read off the binary.** The game sets `TEXLEVEL` to slope mode with a
+/// bias (`Gu_TexLevelMode`, `mesh-draw.md`) and asks for trilinear filtering,
+/// yet in a matched frame the running original resolves every scenery texel at
+/// its base level: the high-frequency energy (Laplacian standard deviation) of
+/// four regions of Talon's Junction reads 11.3 / 3.9 / 11.5 / 13.1 in the
+/// original, 8.2 / 2.6 / 8.2 / 10.7 with the full box-filtered chain and
+/// 10.3 / 3.8 / 11.4 / 13.0 with the base level alone. Far track, where a chain
+/// would have cost the most sharpness, agrees too (16.0 against 15.9). So the
+/// chain a hardware sampler would walk here is not what the picture shows.
+/// Whether real PSP hardware agrees is unmeasured: the reference is the
+/// emulator, and its slope-mode level selection is what this reproduces.
+///
+/// The authored depth stays parsed as `Texture::mip_count` in `oag-vex`; the
+/// depth was never what differed.
+pub const PSP_SAMPLED_LEVELS: u32 = 1;
+
 /// A texture decoded from the model.
 ///
 /// **Held by `Arc` everywhere, because a slot is not a texture.** The slots in
@@ -44,14 +63,11 @@ pub struct ModelTexture {
     /// the GE has nowhere to sample a level past what was uploaded. Wired for
     /// the PSP `.vex` embedded-texture path first.
     ///
-    /// **This alone does not close the advert-board blur**: capping
-    /// `hub_banner_GLOW.tga` (128x128, `mip_count = 5`) at its authored depth
-    /// changed 24 of 518,400 pixels in a Talon's Junction Time Trial capture,
-    /// mean difference 4.7e-5 - the same "measured inert" shape this file's
-    /// own doc already found for the exhaust textures. Landed anyway because
-    /// the gap itself - a parsed field no consumer read - was real and this
-    /// closes it exactly as that doc's own "worth fixing on its own account"
-    /// note asked for; the blur's actual cause is still open.
+    /// **The PSP `.vex` path passes [`PSP_SAMPLED_LEVELS`], not the authored
+    /// depth.** Capping at the authored depth (`hub_banner_GLOW.tga`, 128x128,
+    /// `mip_count = 5`) changed 24 of 518,400 pixels and left the blur this
+    /// field was added to chase; the blur was level *selection* - the running
+    /// original samples the base level - which is what one level reproduces.
     pub mip_count: Option<u32>,
 }
 

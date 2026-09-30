@@ -77,7 +77,7 @@ fn livery() -> Livery {
 /// for a Pulse race, on the `--screenshot` path that never opened the cache.
 /// Fails if `Scene::new` stops opening it, whichever caller it comes from.
 #[test]
-fn a_weapon_pool_of_drawables_compiles_its_pipelines_once() {
+fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
@@ -131,18 +131,18 @@ fn a_weapon_pool_of_drawables_compiles_its_pipelines_once() {
     )
     .expect("the scene builds");
 
+    for (pool, (slots, shared)) in scene.weapon_pool_sharing().into_iter().enumerate() {
+        assert_eq!(
+            slots,
+            oag_gameplay::projectile::MAX_PROJECTILES,
+            "pool {pool} lost a slot"
+        );
+        assert!(shared, "pool {pool} gave every slot its own geometry copy");
+    }
     let (asked, reused, distinct) = scene.build_cache();
-    let drawables = 4 * oag_gameplay::projectile::MAX_PROJECTILES;
-    assert!(
-        asked as usize >= drawables,
-        "{asked} pipeline requests for {drawables}+ drawables: the cache was not open"
-    );
+    assert!(asked > 0, "no pipeline request went through the cache");
     assert!(
         distinct < 100,
-        "{distinct} distinct pipelines for identical models: the cache is not sharing"
-    );
-    assert!(
-        reused as usize >= drawables,
-        "only {reused} of {asked} pipeline requests reused one"
+        "{distinct} distinct pipelines for identical models: the cache is not sharing ({reused} of {asked} reused)"
     );
 }

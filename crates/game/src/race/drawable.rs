@@ -5,6 +5,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
+mod instance;
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
@@ -13,7 +14,7 @@ use super::*;
 /// group layouts and pairing a bind group with another pipeline's layout is a
 /// validation error waiting to happen.
 pub(super) struct Drawable {
-    model: Model,
+    model: std::sync::Arc<Model>,
     pipeline: wgpu::RenderPipeline,
     alpha_test_pipeline: wgpu::RenderPipeline,
     /// One per alpha-test reference this model's own batches ask for - see
@@ -62,7 +63,7 @@ pub(super) struct Drawable {
     /// What [`Self::fog_bind`] needs besides [`Self::fog`] and the showing
     /// stage's own four textures to be rebuilt - see
     /// [`mesh_render::zone::RebindResources`] and [`Self::rebind_zone`].
-    zone_rebind: mesh_render::zone::RebindResources,
+    zone_rebind: std::sync::Arc<mesh_render::zone::RebindResources>,
     /// This model's opaque index ranges, kept so the shadow caster pass can
     /// draw them without walking the draw list again every frame.
     ///
@@ -186,7 +187,7 @@ impl Drawable {
         Ok(Self {
             opaque_ranges,
             lod: oag_render::mesh::LodSwitch::new(&model.lod_groups),
-            model,
+            model: std::sync::Arc::new(model),
             pipeline,
             alpha_test_pipeline,
             cutout_pipelines,
@@ -205,7 +206,7 @@ impl Drawable {
             anims: anim_buffer,
             node_anims: node_anim_buffer,
             zone_vis: zone_vis_texture,
-            zone_rebind,
+            zone_rebind: std::sync::Arc::new(zone_rebind),
             ripple: std::cell::RefCell::new(None),
         })
     }

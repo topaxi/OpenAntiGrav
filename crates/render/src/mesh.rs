@@ -568,10 +568,10 @@ fn build_class(
                     u32::from(t.width),
                     u32::from(t.height),
                     t.to_rgba(),
-                    // The disc's own chain depth - see `ModelTexture::mip_count`'s
-                    // doc. `.max(1)`: a 0 here would upload no base level at
-                    // all, which no real texture object means by it.
-                    Some(u32::from(t.mip_count).max(1)),
+                    // The one level the running original samples, whatever
+                    // chain the file declares - see `ModelTexture::mip_count`'s
+                    // doc and `docs/rendering/frame-audit.md`.
+                    Some(PSP_SAMPLED_LEVELS),
                 ))
             })
         })
@@ -912,7 +912,7 @@ mod draw_call;
 pub use draw_call::{Bounds, DrawCall};
 
 mod model_texture;
-pub use model_texture::{BlockFormat, ModelTexture, Texels, TextureSlots};
+pub use model_texture::{BlockFormat, ModelTexture, PSP_SAMPLED_LEVELS, Texels, TextureSlots};
 
 mod flame;
 pub mod groups;
