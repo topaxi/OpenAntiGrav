@@ -50,12 +50,17 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
   reads whiter than the original's and is not re-measured.
   Ours now reads 7-11 % *brighter* (up to 20 % on the sixth overlapping hit);
   not decoded.
-- **An emitter's own particles are not rotated or stretched.** 45 of the 76 PSP
-  emitters draw as class 3 (`ParticleSystem_DrawRotatedSprite`), 23 author a
-  roll (`WO_SHIP_COLL_SPARK_DAMAGE`'s smoke root: random `0..0.105` rad per
-  tick). The law is read and measured on templates only; an emitter's flag bits
-  live at a different word and what feeds its derived `+0xf0` is unread. First
-  step: log `particle+0x5c`/`+0x64` of a live emitter particle.
+- **An emitter's own particles are rotated and stretched (2026-09-30), but the
+  law is read, not measured live.** It is a different routine from the
+  template's (`ParticleSystem_DrawRolledQuads`): roll always a rate, aspect the
+  constant `+0x4c8`, the quad the turned unit square scaled in screen `x`
+  (a parallelogram once the aspect is not 1). Confidence 80 from the
+  instructions. Open: a live read of `slot+0x50` over a few ticks on a flipped
+  and an unflipped keyframed particle, which would make the keyframed sign
+  (the reverse of the constant one) measured; the four keyframed emitters are
+  `WO_LEACHBEAM_CHARGING`'s `RINGS`, `WO_MISSILE_EXPLO`'s `drift_down`,
+  `WO_MODESTO_STEAM_A`, `WO_QUAKE`'s `debris`. `+0x4c8` is also `2`, `3` and
+  `0.05` on class 6 and 7 streaks, whose routines are unread.
 - **A particle's age at its first draw.** The original samples a particle before
   it ages, and a template is drawn at age 0; ours now does that for templates
   only. An emitter's particle is emitted and aged in one tick in `psys`, so it
@@ -85,12 +90,14 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Next Steps
 
-- Emitter rotation: capture a live emitter particle's `+0x5c` roll and `+0x64`
-  aspect (the smoke root of `WO_SHIP_COLL_SPARK_DAMAGE`, a Rocket's
-  `SMOKERING`), read how the emitter's flag word becomes the derived
-  `res+0x884`, then play the roll on the 23 emitters that author one.
+- Measure the emitter roll live: log `slot+0x50` and the byte at `slot+0x81`
+  of one `WO_SHIP_COLL_SPARK_DAMAGE` smoke particle (random rate, coin) and of
+  a `WO_MISSILE_EXPLO` `drift_down` (keyed) over three ticks.
+- Read the class 6 and 7 batch routines (`FUN_08917c7c`, `FUN_08918160`) for
+  their use of `+0x4c8` (`3` on the collision sparks' streaks).
 - Re-shoot the Missile, Shuriken, absorb and ship-explosion looks against the
-  original now that their templates are stretched and rolled: only the
+  original now that their templates are stretched, rolled and (since
+  2026-09-30) ride their instance and go when it is released: only the
   collision sparks were compared per locator.
 - The 7-11 % surplus: compare a single locator's sprite alone (the original's
   `ParticleSystem_DrawParticle` skipped for everything but it) against ours
