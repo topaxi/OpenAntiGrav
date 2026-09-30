@@ -156,14 +156,34 @@ with the largest change. The previous pass's own boxes were not recorded, and it
 not directly comparable. Only 74 pixels differ
 between `original` and `maximum` at this size: the far field is small at 480x272.
 
-**`--anisotropy` is now nearly inert on a PSP `.vex` model.** The slope law
-samples with `textureSampleLevel`, an explicit level, and a GPU takes no
-anisotropic footprint from one. The same pose with `--anisotropy off` against
-`16x`: 602 pixels differ over 1 % with the derivative path (`textureSample` over
-the same chain), 5.6 with the slope law. Left as it is: the original has no
-anisotropy, and the derivative path cannot honour the recovered level. Getting
-both would mean `textureSampleGrad` with gradients scaled to the law's level; not
-attempted.
+**`--anisotropy` works again on a PSP `.vex` model.** The slope law first sampled
+with `textureSampleLevel`, an explicit level, and a GPU takes no anisotropic
+footprint from one: the same pose (Talon straight) with `--anisotropy off` against
+`16x` differed in 602 pixels over 1 % with the derivative path (`textureSample`
+over the same chain) and 5.6 with the slope law. `mesh.wgsl`'s
+`sample_at_slope_level` now takes `textureSampleGrad` with the screen-space
+derivatives reshaped so the level the hardware picks is still the law's (plus
+TEXTURE DETAIL's shift). With `w = 2^level` the width of one texel of that level
+and `pmax` the footprint's long axis in base texels, `probes = clamp(ceil(pmax / w),
+1, clamp)`; the long gradient is set to `probes * w`, the short one to `w`, each
+along its own direction, so the hardware reads a ratio of `probes` and a level of
+`log2(probes * w / probes)`. The sampler's clamp reaches the shader as the
+`aniso_max` pipeline constant. Anisotropy off, or a footprint no wider than a
+texel of the level, is one probe and the plain explicit level.
+
+Two things this is not. It **cannot sharpen**: the level is the slope law's and
+stays so, so anisotropy only antialiases along the long axis of a foreshortened
+surface (less shimmer and moire on far girders and floor), and TEXTURE DETAIL is
+the control that shows finer levels. And a first version that set the probe count
+from the surface's own ratio, ignoring how big the footprint was, blurred near
+walls by up to 16x the footprint; sizing it from `pmax / w` leaves everything a
+texel or narrower alone. The same pose, `--anisotropy off` against `16x`, now
+differs in 22156 of 130560 pixels at 480x272 (72975 of 921600 at 1280x720),
+concentrated on far edges and grazing floor; near surfaces are unchanged.
+`crates/render/tests/psp_slope_lod.rs` asserts the level under every anisotropy
+setting with a stretched footprint (so a level that drifts fails), that 16x moves
+a foreshortened striped surface, and that it moves nothing when the footprint is
+under a texel.
 
 **A consequence to watch**: a coarse authored level of a cutout texture has alpha
 above the reference nearly everywhere, so a cutout batch (trees, fences, pad
