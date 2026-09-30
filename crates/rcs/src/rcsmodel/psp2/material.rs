@@ -171,14 +171,32 @@ pub struct Material {
     /// byte extent, in ascending address order - see the module doc for why
     /// this is a scan rather than a decoded sampler array.
     pub textures: Vec<String>,
+    /// The `.gnf` bound to the material's **`lightmap` sampler**, by the
+    /// sampler's own name hash - a PS4 material only; `None` on every Vita
+    /// one, whose sampler table is not read (see [`read`]).
+    ///
+    /// Also one of [`Self::textures`], last in its ranking. A submesh's
+    /// declaration carries `lightmapUV` if and only if its material has one of
+    /// these: 50,042 of 226,381 submeshes over Omega's five base archives, no
+    /// exception in either direction
+    /// (`crates/rcs/tests/omega_declaration_ground_truth.rs`).
+    pub lightmap: Option<String>,
 }
 
 impl Material {
-    /// The first texture found - this reading's answer for "the" diffuse
-    /// texture. Ordinal, not semantic; see the module doc.
+    /// The first texture found that is not the lightmap - this reading's
+    /// answer for "the" diffuse texture. Ordinal, not semantic; see the module
+    /// doc.
+    ///
+    /// A material that names only a lightmap has no diffuse one. None of
+    /// `tech_de_ra`'s 461 does, so on every circuit measured this is the first
+    /// texture, as it always was.
     #[must_use]
     pub fn diffuse_texture(&self) -> Option<&str> {
-        self.textures.first().map(String::as_str)
+        self.textures
+            .iter()
+            .map(String::as_str)
+            .find(|path| Some(*path) != self.lightmap.as_deref())
     }
 }
 
@@ -308,6 +326,7 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 name,
                 technique,
                 textures,
+                lightmap: None,
             }
         })
         .collect()
@@ -372,9 +391,10 @@ fn sampler_rank(hash: u32) -> u8 {
 /// against the entry's own sampler hash the same material gives `Diffuse` ->
 /// `track_de_ra.gnf`, `Normal` -> `ds_track_n.gnf` and `lightmap` -> the
 /// per-object `-lmap.gnf`, which is the role a person would give each.
-fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
+fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> (Vec<String>, Option<String>) {
     let to = to.min(cpu.len());
     let mut found: Vec<(u8, usize, String)> = Vec::new();
+    let mut lightmap: Option<(usize, String)> = None;
     let mut at = from.next_multiple_of(8).max(PS4_SAMPLER_POINTER);
     while at + 8 <= to {
         if let Some(target) = u64_at(cpu, at)
@@ -385,13 +405,19 @@ fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
             && ends_with_ci(&path, ".gnf")
             && !found.iter().any(|(_, _, p)| *p == path)
         {
-            let rank = u32_at(cpu, at - PS4_SAMPLER_POINTER).map_or(1, sampler_rank);
-            found.push((rank, at, path));
+            let hash = u32_at(cpu, at - PS4_SAMPLER_POINTER);
+            if hash == Some(crate::rcsmaterial::LIGHTMAP_SAMPLER) && lightmap.is_none() {
+                lightmap = Some((at, path.clone()));
+            }
+            found.push((hash.map_or(1, sampler_rank), at, path));
         }
         at += 8;
     }
     found.sort_by_key(|&(rank, at, _)| (rank, at));
-    found.into_iter().map(|(_, _, path)| path).collect()
+    (
+        found.into_iter().map(|(_, _, path)| path).collect(),
+        lightmap.map(|(_, path)| path),
+    )
 }
 
 fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
@@ -399,35 +425,25 @@ fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
         .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
 }
 
-/// The PS4 Omega Collection's material table, found by its name pointers.
+/// Where a PS4 file states its material count: a 64-bit word at this offset of
+/// the CPU section, `461` on `tech_de_ra` and `593` on `05_ubermall`.
+const PS4_FILE_MATERIAL_COUNT: usize = 0x70;
+/// Where a PS4 file states the address of its material table: `count` 64-bit
+/// pointers, each to a material header whose `.rcsmaterial` name pointer sits
+/// [`PS4_HEADER_NAME_POINTER`] bytes in.
+const PS4_FILE_MATERIAL_TABLE: usize = 0x78;
+/// Bytes from the start of a PS4 material header to its name pointer.
+const PS4_HEADER_NAME_POINTER: usize = 8;
+
+/// Every 8-aligned 64-bit word that points at a NUL-preceded string ending in
+/// `.rcsmaterial`, with that string, in address order.
 ///
-/// **The same container with 64-bit pointers, and a different header.** The
-/// Vita's file-level count and offset table ([`FILE_MATERIAL_COUNT`],
-/// [`FILE_MATERIAL_TABLE`]) are not where a PS4 file keeps them, and this
-/// reading did not find where it does. What it found instead is the thing
-/// that made the Vita reading possible in the first place: the ASCII paths sit
-/// in the clear inside section B, and a pointer reaches each. So a material is
-/// **an 8-aligned 64-bit word that points at a NUL-preceded string ending in
-/// `.rcsmaterial`**, materials are taken in ascending address order, and a
-/// material's own extent runs to the next one's pointer. Its textures are
-/// every `.gnf` path an 8-aligned pointer in that extent resolves to, which is
-/// the scan [`textures_in`] does for the Vita's `.gxt`.
-///
-/// **Why the order is table order: the index that follows it.** A PS4 submesh
-/// record carries a material index at [`super::PS4_MATERIAL_INDEX_BEFORE_RECORD`]
-/// bytes before it, and read against this order it names the material a
-/// person would pick on `ag_systems\ship.rcsmodel` - `GlassShape` draws with
-/// `glass_texture`, `FlashyFlashyShape` with `emissive_bloom` and the body
-/// shapes with `diffuse_with_specular_from_alpha_n_vcol` - and, corpus-wide,
-/// the index lands inside the table on every submesh
-/// (`crates/game/tests/omega_race_ground_truth.rs`). **Confidence 75**: the
-/// closure is exact and the semantic check is real, but neither the count
-/// field nor the table that would state the order outright is located, and
-/// which texture of several a material binds is ordinal, as it is on Vita.
-///
-/// The technique name is not read: no pointer to it has been placed.
-#[must_use]
-pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
+/// **Not the same thing as the material table.** A file can carry a name
+/// pointer that no table entry reaches - `05_ubermall`'s
+/// `diffuse_normal_specular.rcsmaterial` at `0x1a248` is one, 594 sites against
+/// a table of 593 - which is why [`read_ps4`] indexes by the table and uses
+/// these only to bound each material's extent.
+fn ps4_name_sites(cpu: &[u8]) -> Vec<(usize, String)> {
     let mut sites: Vec<(usize, String)> = Vec::new();
     let mut at = 0usize;
     while at + 8 <= cpu.len() {
@@ -442,20 +458,82 @@ pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
         }
         at += 8;
     }
-    let starts: Vec<usize> = sites.iter().map(|(site, _)| *site).collect();
     sites
-        .into_iter()
-        .enumerate()
-        .map(|(i, (site, name))| {
-            let next = starts
-                .get(i + 1)
-                .copied()
-                .unwrap_or_else(|| site.saturating_add(TAIL_SCAN_LIMIT));
-            Material {
-                name,
-                technique: None,
-                textures: gnf_textures_in(cpu, site + 8, next),
-            }
+}
+
+/// The material table the file itself states, as an index into `sites` for each
+/// entry in table order, or `None` when it does not check out.
+///
+/// **Checked in full**: the count is plausible, the table lies inside the
+/// section, and every one of its entries is a header whose name pointer is one
+/// of `sites` - so a file whose header is not laid out this way falls back to
+/// the address-order reading rather than reading garbage as a table.
+fn ps4_table(cpu: &[u8], sites: &[(usize, String)]) -> Option<Vec<usize>> {
+    let count = usize::try_from(u64_at(cpu, PS4_FILE_MATERIAL_COUNT)?).ok()?;
+    let table = usize::try_from(u64_at(cpu, PS4_FILE_MATERIAL_TABLE)?).ok()?;
+    if count == 0 || count > MAX_COUNT || table.checked_add(count.checked_mul(8)?)? > cpu.len() {
+        return None;
+    }
+    (0..count)
+        .map(|i| {
+            let header = usize::try_from(u64_at(cpu, table + i * 8)?).ok()?;
+            let site = header.checked_add(PS4_HEADER_NAME_POINTER)?;
+            sites.binary_search_by_key(&site, |(at, _)| *at).ok()
         })
         .collect()
+}
+
+/// The PS4 Omega Collection's material table.
+///
+/// **The same container with 64-bit pointers, and a different header.** The
+/// file states its table outright at [`PS4_FILE_MATERIAL_COUNT`] and
+/// [`PS4_FILE_MATERIAL_TABLE`]: a count and the address of `count` pointers to
+/// material headers, and a material's `.rcsmaterial` name pointer is 8 bytes
+/// into its header. On all `tech_de_ra`'s 461 and `05_ubermall`'s 593 the
+/// table's entries are the headers of the name sites the ASCII paths in the
+/// clear lead to - the way the Vita's reading was found in the first place -
+/// and a submesh's material index ([`super::PS4_MATERIAL_INDEX_BEFORE_RECORD`])
+/// is an index into **this** table.
+///
+/// **What the earlier reading did instead, and why it was wrong for some
+/// files.** It took every name site in address order as the table. Where no
+/// site lies outside the table the two are the same list, which is why
+/// `tech_de_ra` and the craft read right; where one does (`05_ubermall`'s
+/// stray `diffuse_normal_specular.rcsmaterial` sits at `0x1a248`, thirteen
+/// circuits in all), every material after it was **one index off** - a
+/// submesh drew with its neighbour's material and the neighbour's texture.
+/// The control that says which reading is right: a submesh's material names a
+/// `lightmap` sampler if and only if its own declaration carries `lightmapUV`
+/// (`crates/rcs/tests/omega_declaration_ground_truth.rs`), which holds exactly
+/// on the table's order and fails on the address order in those thirteen files.
+///
+/// A material's own extent still runs to the next name site of any kind in
+/// address order, and its textures are every `.gnf` path an 8-aligned pointer
+/// in that extent resolves to, which is the scan [`textures_in`] does for the
+/// Vita's `.gxt`. A file whose header does not state a table that checks out
+/// falls back to address order.
+///
+/// The technique name is not read: no pointer to it has been placed.
+#[must_use]
+pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
+    let sites = ps4_name_sites(cpu);
+    let extent_end = |site: usize| {
+        let next = sites.partition_point(|(at, _)| *at <= site);
+        sites
+            .get(next)
+            .map_or_else(|| site.saturating_add(TAIL_SCAN_LIMIT), |(at, _)| *at)
+    };
+    let build = |(site, name): &(usize, String)| {
+        let (textures, lightmap) = gnf_textures_in(cpu, site + 8, extent_end(*site));
+        Material {
+            name: name.clone(),
+            technique: None,
+            textures,
+            lightmap,
+        }
+    };
+    match ps4_table(cpu, &sites) {
+        Some(order) => order.into_iter().map(|i| build(&sites[i])).collect(),
+        None => sites.iter().map(build).collect(),
+    }
 }

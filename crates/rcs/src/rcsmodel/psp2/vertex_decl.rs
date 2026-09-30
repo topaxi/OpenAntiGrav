@@ -28,6 +28,23 @@
 //! declaration found this way restates its own stride at each attribute
 //! record (`+0x04`, big-endian - see the module doc), and only a
 //! self-consistent one is kept.
+//!
+//! # The PS4 keeps the per-submesh pointer, and it is exact there
+//!
+//! Keyed by stride, one declaration stands for every chunk of that stride, and
+//! on a PS4 circuit that is wrong: `tech_de_ra`'s 3,186 submeshes are 8 strides
+//! and **43 distinct layouts** (stride 24 alone has 18), and the layouts differ
+//! in *where the diffuse coordinate is* and in whether a `lightmapUV` follows
+//! it. A PS4 record holds an 8-byte pointer at [`PS4_DECLARATION_POINTER`] that
+//! is the address of its own declaration's header, and it resolves on **3,186 of
+//! 3,186** submeshes of that circuit with the declared stride equal to the
+//! buffer-derived one on every one. [`find_by_header`] is that lookup.
+//!
+//! **Control group.** A submesh's material names a `lightmap` sampler if and
+//! only if its own declaration carries `lightmapUV`: 856 submeshes both, 2,330
+//! neither, **0 in either off-diagonal cell** - two independently read fields
+//! agreeing on every submesh, which a wrong pointer offset cannot do. The
+//! Vita's `u32` at the same offset resolves for 14.2 % and is left alone.
 
 use std::collections::HashMap;
 
@@ -36,6 +53,11 @@ const HEADER_LEN: usize = 4;
 
 /// Bytes per attribute record.
 const ATTRIBUTE_LEN: usize = 8;
+
+/// Where a PS4 submesh record holds the address of its own declaration's
+/// header: a 64-bit word, `+0x28` from [`super::INDEX_POINTER`]'s record start.
+/// See the module doc for the measurement.
+pub const PS4_DECLARATION_POINTER: usize = 0x28;
 
 /// The largest attribute count any declaration measured on this title uses,
 /// plus room - the same bound HD's own reading takes for the same reason: a
@@ -54,6 +76,12 @@ pub const TANGENT_HASH: u32 = 0xdbe5_f417;
 pub const UV1_HASH: u32 = 0x4272_14fc;
 /// `~crc32("lightmapUV")`.
 pub const LIGHTMAP_HASH: u32 = 0x26a7_b665;
+
+/// The type nibble of a PS4 two-component half-float attribute: `Uv1`,
+/// `lightmapUV` and every other coordinate set on all 43 layouts of
+/// `tech_de_ra`, which also carries two `f32` pairs (`0`) that are not
+/// coordinates of the diffuse or lightmap sets.
+pub const PS4_HALF2: u8 = 1;
 
 /// One attribute of a vertex, as the declaration spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +131,28 @@ impl VertexDecl {
     pub fn lightmap_texcoord(&self) -> Option<&Attribute> {
         self.attribute(LIGHTMAP_HASH)
     }
+
+    /// The diffuse coordinate of a declaration known to be **this submesh's
+    /// own** - `Uv1` where it is named, otherwise the first two-component
+    /// half-float attribute that is not the lightmap's.
+    ///
+    /// **Only sound on a declaration reached through the record's own pointer**
+    /// ([`PS4_DECLARATION_POINTER`]). Keyed by stride, "the first that names a
+    /// `Uv1`" was the best available and [`Self::diffuse_texcoord`] still is
+    /// there; on a PS4 circuit the same stride also carries layouts with no
+    /// `Uv1` at all, where the diffuse set is the file's own `uv1`
+    /// (`0x7a3f521c`), `Uv2` (`0xdb7b4546`) or an unnamed hash sitting first
+    /// and the lightmap's `lightmapUV` after it - HD's own rule, "a
+    /// two-component coordinate that is not `lightmapUV`"
+    /// (`crate::rcsmodel::vertex_decl::VertexDecl::diffuse_texcoord`).
+    #[must_use]
+    pub fn own_diffuse_texcoord(&self) -> Option<&Attribute> {
+        self.diffuse_texcoord().or_else(|| {
+            self.attributes.iter().find(|a| {
+                a.name_hash != LIGHTMAP_HASH && a.components == 2 && a.gxm_type == PS4_HALF2
+            })
+        })
+    }
 }
 
 /// Reads the declaration at `header_at` within `cpu_bytes` (the CPU section's
@@ -145,6 +195,24 @@ pub fn parse(cpu_bytes: &[u8], header_at: usize) -> Option<VertexDecl> {
     Some(VertexDecl { stride, attributes })
 }
 
+/// Every declaration in `cpu_bytes` with the offset of its header, in the order
+/// the anchor is found.
+///
+/// Found by anchoring on every occurrence of [`POSITION_HASH`] and decoding
+/// outward - see the module doc for why this, rather than a per-submesh
+/// pointer, is what the Vita's [`super::submeshes`] uses.
+fn scan(cpu_bytes: &[u8]) -> impl Iterator<Item = (usize, VertexDecl)> + '_ {
+    let anchor = POSITION_HASH.to_le_bytes();
+    cpu_bytes
+        .windows(4)
+        .enumerate()
+        .filter(move |(_, w)| *w == anchor)
+        .filter_map(move |(i, _)| {
+            let header_at = i.checked_sub(HEADER_LEN)?;
+            Some((header_at, parse(cpu_bytes, header_at)?))
+        })
+}
+
 /// Every declaration in `cpu_bytes`, keyed by its own stride.
 ///
 /// **Not every declaration of a given stride is identical** - two chunks
@@ -154,25 +222,10 @@ pub fn parse(cpu_bytes: &[u8], header_at: usize) -> Option<VertexDecl> {
 /// one thing every caller of this map wants; an earlier version that kept
 /// strictly the first declaration measured 27.6% of the corpus's submeshes
 /// resolving a texcoord where this measures 92.5%.
-///
-/// Found by anchoring on every occurrence of [`POSITION_HASH`] and decoding
-/// outward - see the module doc for why this, rather than a per-submesh
-/// pointer, is what [`super::submeshes`] uses.
 #[must_use]
 pub fn find_by_stride(cpu_bytes: &[u8]) -> HashMap<usize, VertexDecl> {
-    let anchor = POSITION_HASH.to_le_bytes();
     let mut out: HashMap<usize, VertexDecl> = HashMap::new();
-    for (i, _) in cpu_bytes
-        .windows(4)
-        .enumerate()
-        .filter(|(_, w)| *w == anchor)
-    {
-        let Some(header_at) = i.checked_sub(HEADER_LEN) else {
-            continue;
-        };
-        let Some(decl) = parse(cpu_bytes, header_at) else {
-            continue;
-        };
+    for (_, decl) in scan(cpu_bytes) {
         match out.get(&decl.stride) {
             Some(existing) if existing.diffuse_texcoord().is_some() => {}
             _ => {
@@ -181,4 +234,12 @@ pub fn find_by_stride(cpu_bytes: &[u8]) -> HashMap<usize, VertexDecl> {
         }
     }
     out
+}
+
+/// Every declaration in `cpu_bytes`, keyed by the offset of its header - what
+/// a PS4 submesh's pointer at [`PS4_DECLARATION_POINTER`] holds. See the module
+/// doc.
+#[must_use]
+pub fn find_by_header(cpu_bytes: &[u8]) -> HashMap<usize, VertexDecl> {
+    scan(cpu_bytes).collect()
 }

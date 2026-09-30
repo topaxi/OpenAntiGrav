@@ -238,6 +238,17 @@ simulation state. `oag_game::race::load` asks for the sibling file **only when
 the `.vex` answered with no collision at all**, so no other title's load changes
 shape.
 
+**A reversed circuit's file is `track_col_reversed.col`** - the `_col` goes
+before the `_reversed`, beside `track_reversed.vex` - and `kdcol::sibling_name`
+pairs it since 2026-09-30 (before, only `track.vex` was paired, so a reversed
+circuit that authors no collision in its `.vex` loaded none). 2048's packages
+ship 12 of them (3 in the base package, 5 in `dlc1`, 4 in `dlc2`), which the
+"26 files" count above, all `track_col.col`, does not include. Five reversed
+circuits changed from no collision to this file (Amphiseum, Modesto Heights,
+Sebenco Climb, Sol 2, Tech De Ra); the other reversed circuits either author
+their collision in the `.vex` or do not load. The reversed files were read
+with the same reader and were not validated separately here.
+
 **The vertices are world space already**, so nothing composes a transform onto
 them. That is measured here rather than inherited from the `.vex` path: the
 Rosetta above matches 2048's triangles to HD's world-space ones within one unit.

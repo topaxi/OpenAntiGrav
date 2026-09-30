@@ -173,17 +173,19 @@ about a second, decompression-shaped problem on top of it.
 
 ## Open
 
-- **Racing starts, and the node table now reads (2026-09-29, `omega-race`,
-  `omega-nodes`).** On a corrected extraction `oag-game <dir> --race` loads
-  Omega's own spline (39 of 39 `track.vex` files), collision (a 19-byte k-d node,
-  38 of 38), hull and circuit geometry (2048's `.rcsmodel` with 64-bit pointers,
-  all 1,272 entries) and textures, and the craft drives the circuit. What it
-  does **not** read: the skeleton and clip
-  (`property tag ends at 3496925615 but the file is 57856 bytes`), lightmaps
-  (291 materials name one on `tech_de_ra`), `track.final.pvs`, Omega's `.bnk`
-  banks (version word `1145588546`, the reader expects `3`), and the
-  `.EnvSettings` schema (read through 2048's reader; the patch copy has no
-  HDR/bloom block). Evidence and numbers:
+- **Racing starts, the node table, skeleton and clip read, lightmaps are
+  bound, reversed circuits get collision (2026-09-29/30, `omega-race`,
+  `omega-nodes`, `omega-catchup`).** On a corrected extraction `oag-game <dir>
+  --race` loads Omega's own spline (39 of 39 `track.vex` files), collision (a
+  19-byte k-d node, 38 of 38, reversed circuits paired), hull and circuit
+  geometry (2048's `.rcsmodel` with 64-bit pointers, all 1,272 entries), the
+  skeleton and clip (the Vita's with 8-byte offsets) so the scenery moves, and
+  textures with their lightmaps. What it does **not** read or get right:
+  `track.final.pvs` (every chunk draws), Omega's `.bnk` banks (they are Wwise
+  `BKHD` version 118, see Next Steps), the `.EnvSettings` schema (read through
+  2048's reader: the patch's `Lighting.Nova prelit scale bias power` and its
+  `Tonemap.*` block are unread), and the lightmap's combination, which is HD's
+  own carried over and unmeasured for this title. Evidence and numbers:
   [`omega-status.md`](../../docs/formats/omega-status.md#racing-a-race-starts-on-this-titles-own-data).
 - **The block-data-location questions below were an extraction bug, not a
   format.** A short read in the extraction tool zeroed most of every entry
@@ -254,17 +256,40 @@ about a second, decompression-shaped problem on top of it.
 
 ## Next Steps
 
-- **Read the PS4 skeleton and clip** (`oag_rcs::rcsskeleton`/`rcsanimclip` fail
-  with `property tag ends at 3496925615 but the file is 57856 bytes`; the node
-  table reads since 2026-09-29, and the model's ids appear verbatim in the
-  skeleton in 61 files, so the container is there). That moves the droid, the
-  crowd and the rotors, and places the 18,255 submeshes on 2048's Zone models
-  that have no matrix of their own (now not drawn, `Report::unplaced`). 3-4
-  hours if it is the Vita's layout with wider pointers, as the node table was.
-- **Bind the `lightmap` sampler** (`oag_rcs::rcsmodel::psp2::material::read_ps4`
-  already ranks it last; the mesh's second UV set carries its coordinate).
-- **Pair the reversed circuits' collision**: `kdcol::sibling_name` matches only
-  `track.vex`; Omega's is `track_reversed.vex` beside `track_col_reversed.col`.
+- **Measure the lightmap's combination** (bound 2026-09-30 with HD's shader
+  path, chosen not measured). Three authored things to read first, all in the
+  patch's `.EnvSettings`: `"Lighting.Nova prelit scale bias power"=2.5 0.2 2`
+  (2048's Vita has `1 0 1 0`; the formula behind three numbers is not
+  recovered), the `Tonemap.*` block (exposure min/max/response/time, luminance
+  and source-colour coefficients) that the reader does not look for, and what the
+  atlas's alpha means (39 to 55 % zero on the three atlases sampled). The
+  materials are PS4 GCN shaders inside the `.rcsmaterial`, so the formula is a
+  Ghidra or shader-microcode question, not a listing one. Until then the frame
+  is not a verdict: the reversed circuit's clipped-white share went 0.99 % to
+  7.04 %, the forward one's 11.98 % to 8.32 % (HD's Tech De Ra: 4.78 %).
+- **Extend the declaration and animation censuses to the patch archives**
+  (`omega_declaration_ground_truth.rs`, `omega_animation_ground_truth.rs` read
+  the five base archives; `data08` carries the front-end scenes and the newer
+  copies of most files).
+- **Read `track.final.pvs`** (every chunk still draws: 2.38M triangles, and a
+  debug build spends three to five minutes decoding textures), and check the
+  reversed circuit's `.pvs` name: the loader asks for `track_reversed.pvs` and the
+  archive has `track_reversed.final.pvs`.
+- **Sound, scoped 2026-09-30, not started.** `data00` (base) and `data08`
+  (patch) each hold **53 Wwise `.bnk` banks and 714 / 734 `.wem` media files**
+  (`Data/audio/sound/`, `English(US)/` for speech), `data02` 10 more banks and
+  `data05` one. A bank opens `BKHD` with version word `0x76` (118); the
+  existing reader's "version `1145588546`, expects `3`" is that magic read as a
+  number, so it is a different container from 2048's, not a version drift. A
+  `.wem` is a RIFF/WAVE whose `fmt ` tag is `0xFFFC` (2 channels, 48 kHz on the
+  one sampled), a Wwise-flavoured codec this project has no decoder for and
+  whose identity is unconfirmed. Three pieces, in order: (1) a `BKHD`/`HIRC`
+  reader (bank id, event to media id, `DIDX`/`DATA`), which is a documented
+  format; (2) the `.wem` codec, the unknown that sets the estimate; (3) the map
+  from Wwise events to this project's cue vocabulary, which needs the
+  simulation's own cue list beside the bank's event names. A day for (1), two or
+  three for (2) if the codec is a known Wwise one and open-ended if not, half a
+  day for (3) on one circuit. Nothing here is checked against a running PS4.
 - **Decide the mount order with a capture, not a guess**: `oag_omega::EXTRA_CANDIDATES`
   puts the patch ahead of the base because the patch's `.EnvSettings` copies are
   newer (chosen, not measured).

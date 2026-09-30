@@ -414,6 +414,17 @@ pub struct SubMesh {
     /// a real, countable state (92.5% of the corpus's submeshes have one)
     /// rather than an error, on the same terms as [`Self::normals`].
     pub texcoords: Vec<[f32; 2]>,
+    /// Lightmap texture coordinates, one per vertex, from the submesh's own
+    /// declaration's `lightmapUV` ([`vertex_decl::VertexDecl::lightmap_texcoord`]).
+    ///
+    /// **Empty on every Vita submesh, and on every PS4 one whose declaration
+    /// names none.** Only a PS4 record's own pointer
+    /// ([`vertex_decl::PS4_DECLARATION_POINTER`]) reaches the declaration that
+    /// carries one; keyed by stride the attribute was invisible, which is why
+    /// nothing read a lightmap coordinate before. A submesh has one here if and
+    /// only if its material names a `lightmap` sampler - 856 of `tech_de_ra`'s
+    /// 3,186, no exception either way.
+    pub lightmap_texcoords: Vec<[f32; 2]>,
     /// How many of [`Self::texcoords`] decoded to a non-finite value and were
     /// substituted with the origin.
     ///
@@ -646,7 +657,16 @@ pub fn parse(file: &[u8]) -> Result<Model> {
 /// same pass rather than one after the other, so a gap that does not check out
 /// costs one step (`i += 1`) rather than desynchronising the sites after it.
 fn submeshes(file: &[u8], cpu: Section, gpu: Section, ps4: bool) -> Result<(Vec<SubMesh>, usize)> {
-    let declarations_by_stride = vertex_decl::find_by_stride(&file[cpu.at..cpu.at + cpu.len]);
+    let cpu_bytes = &file[cpu.at..cpu.at + cpu.len];
+    let declarations = Declarations {
+        by_stride: vertex_decl::find_by_stride(cpu_bytes),
+        // Only a PS4 record's pointer is exact - see `vertex_decl`.
+        by_header: if ps4 {
+            vertex_decl::find_by_header(cpu_bytes)
+        } else {
+            std::collections::HashMap::new()
+        },
+    };
     let mut sites: Vec<usize> = (0..gpu.entries)
         .map(|e| u32_at(file, gpu.table + e * RELOCATION_LEN, "relocation entry"))
         .collect::<Result<Vec<u32>>>()?
@@ -687,7 +707,7 @@ fn submeshes(file: &[u8], cpu: Section, gpu: Section, ps4: bool) -> Result<(Vec<
             gpu,
             (record, gap, ps4),
             &length_of,
-            &declarations_by_stride,
+            &declarations,
         ) else {
             i += 1;
             continue;
@@ -711,7 +731,7 @@ fn one(
     gpu: Section,
     (record, gap, ps4): (usize, usize, bool),
     length_of: &impl Fn(u32) -> Option<usize>,
-    declarations_by_stride: &std::collections::HashMap<usize, vertex_decl::VertexDecl>,
+    declarations: &Declarations,
 ) -> Option<SubMesh> {
     let base = cpu.at.checked_add(record)?;
     let index_count = u32_at(file, base, "index count").ok()? as usize;
@@ -774,12 +794,20 @@ fn one(
             normals.push(unpack_normal([file[at], file[at + 1], file[at + 2]]));
         }
     }
+    let own = ps4
+        .then(|| declarations.of_record(file, cpu, record, stride))
+        .flatten();
+    let by_stride = declarations.by_stride.get(&stride);
     let mut texcoords = Vec::new();
     let mut non_finite_texcoords = 0usize;
-    let uv1_offset = declarations_by_stride
-        .get(&stride)
-        .and_then(|decl| decl.diffuse_texcoord())
-        .map(|attr| usize::from(attr.offset));
+    // A record's own declaration where it names one, the stride's otherwise -
+    // so a Vita file, and a PS4 record whose pointer does not resolve, read
+    // exactly what they always did.
+    let uv1_offset = match own {
+        Some(decl) => decl.own_diffuse_texcoord(),
+        None => by_stride.and_then(|decl| decl.diffuse_texcoord()),
+    }
+    .map(|attr| usize::from(attr.offset));
     if let Some(off) = uv1_offset
         && stride >= off + 4
     {
@@ -801,8 +829,28 @@ fn one(
             }
         }
     }
+    // The lightmap coordinate, from the record's own declaration only: keyed by
+    // stride it was invisible. Halves like every other coordinate set here.
+    let mut lightmap_texcoords = Vec::new();
+    if let Some(off) = own
+        .and_then(|decl| decl.lightmap_texcoord())
+        .filter(|attr| attr.components == 2 && attr.gxm_type == vertex_decl::PS4_HALF2)
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 4
+    {
+        lightmap_texcoords.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            let uv = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+            lightmap_texcoords.push(if uv[0].is_finite() && uv[1].is_finite() {
+                uv
+            } else {
+                [0.0, 0.0]
+            });
+        }
+    }
     let mut tangents = Vec::new();
-    let tangent_offset = declarations_by_stride.get(&stride).and_then(|decl| {
+    let tangent_offset = own.or(by_stride).and_then(|decl| {
         let attr = decl.attribute(vertex_decl::TANGENT_HASH)?;
         (attr.components == 4 && attr.gxm_type == 5).then_some(usize::from(attr.offset))
     });
@@ -829,10 +877,47 @@ fn one(
         positions,
         normals,
         texcoords,
+        lightmap_texcoords,
         non_finite_texcoords,
         tangents,
         stride,
     })
+}
+
+/// The vertex declarations of one file, under the two lookups a submesh can
+/// use.
+struct Declarations {
+    /// One per stride - the Vita's only lookup, and a PS4 record's fallback.
+    by_stride: std::collections::HashMap<usize, vertex_decl::VertexDecl>,
+    /// By the address of the header. Empty for a Vita file.
+    by_header: std::collections::HashMap<usize, vertex_decl::VertexDecl>,
+}
+
+impl Declarations {
+    /// The declaration a PS4 record points at, or `None` when the pointer does
+    /// not reach one whose stride is the record's own.
+    ///
+    /// The stride check is what keeps this honest: a record whose word at
+    /// [`vertex_decl::PS4_DECLARATION_POINTER`] is something else, on a file
+    /// that has not been measured, falls back to the stride's declaration
+    /// rather than reading a coordinate out of the wrong layout.
+    fn of_record(
+        &self,
+        file: &[u8],
+        cpu: Section,
+        record: usize,
+        stride: usize,
+    ) -> Option<&vertex_decl::VertexDecl> {
+        let at = cpu
+            .at
+            .checked_add(record)?
+            .checked_add(vertex_decl::PS4_DECLARATION_POINTER)?;
+        let word = file.get(at..at.checked_add(8)?)?;
+        let target = usize::try_from(u64::from_le_bytes(word.try_into().ok()?)).ok()?;
+        self.by_header
+            .get(&target)
+            .filter(|decl| decl.stride == stride)
+    }
 }
 
 fn f32_at(file: &[u8], at: usize) -> f32 {

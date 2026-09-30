@@ -163,6 +163,39 @@ fn every_omega_collision_file_decodes_and_its_leaf_runs_tile() {
     assert_eq!(seen, 38, "38 collision files across the nine archives");
 }
 
+/// Every one of Omega's twelve reversed circuits finds its collision:
+/// `kdcol::sibling_name` turns `track_reversed.vex` into
+/// `track_col_reversed.col`, and that name is an entry of the same archive.
+/// Before 2026-09-30 it only paired `track.vex`, so a reversed race loaded with
+/// no collision and the craft fell through the world.
+#[test]
+#[ignore = "needs the corrected Omega extraction"]
+fn every_reversed_circuit_pairs_with_its_reversed_collision() {
+    let Some(source) = source() else { return };
+    let mut paired = std::collections::BTreeSet::new();
+    for number in ["00", "01", "02", "03", "04", "05", "07", "08"] {
+        let archive = archive(&source, number);
+        let all: std::collections::BTreeSet<String> = archive
+            .paths()
+            .iter()
+            .map(|p| p.to_ascii_lowercase())
+            .collect();
+        for track in archive
+            .paths()
+            .iter()
+            .filter(|p| p.to_ascii_lowercase().ends_with("/track_reversed.vex"))
+        {
+            let sibling = kdcol::sibling_name(track).unwrap_or_else(|| panic!("{track}"));
+            assert!(
+                all.contains(&sibling.to_ascii_lowercase()),
+                "{track}: {sibling} is not in data{number}.psarc"
+            );
+            paired.insert(sibling.to_ascii_lowercase());
+        }
+    }
+    assert_eq!(paired.len(), 12, "twelve reversed circuits: {paired:#?}");
+}
+
 /// Omega's `environments2048\altima\track_col.col` is 2048's own file with
 /// the node array re-encoded: everything after it - leaf indices, bounds, the
 /// triangle soup and the final tag, 415,286 bytes - is byte-identical, and the

@@ -623,6 +623,13 @@ pub fn collision_nodes(decoded: &KdCollision) -> (Vec<CollisionNode>, Vec<(u8, u
 /// The `track_col.col` beside a `track.vex`, or `None` for a name that is not a
 /// track file.
 ///
+/// A reversed circuit is `track_reversed.vex` and its collision is
+/// `track_col_reversed.col`: the `_col` goes between `track` and the
+/// `_reversed`, not after it. Wipeout Omega Collection ships all twelve of its
+/// reversed circuits that way (`data01`/`data02`, every `track_reversed.vex`
+/// beside a `track_col_reversed.col`); 2048's base package ships no reversed
+/// `.col` at all, so for it the reversed name simply is not found.
+///
 /// The same sibling-name idiom `oag_render::mesh::rcs::sibling_name` uses, and
 /// the same reason: the pairing is by position in the archive's own directory,
 /// not by anything either file states.
@@ -630,11 +637,20 @@ pub fn collision_nodes(decoded: &KdCollision) -> (Vec<CollisionNode>, Vec<(u8, u
 pub fn sibling_name(track: &str) -> Option<String> {
     let cut = track.rfind(['/', '\\'])? + 1;
     let stem = track[cut..].strip_suffix(".vex")?;
-    if !stem.eq_ignore_ascii_case("track") {
+    let (base, reversed) = match stem.len().checked_sub(REVERSED.len()) {
+        Some(at) if stem.is_char_boundary(at) && stem[at..].eq_ignore_ascii_case(REVERSED) => {
+            (&stem[..at], &stem[at..])
+        }
+        _ => (stem, ""),
+    };
+    if !base.eq_ignore_ascii_case("track") {
         return None;
     }
-    Some(format!("{}{stem}_col.col", &track[..cut]))
+    Some(format!("{}{base}_col{reversed}.col", &track[..cut]))
 }
+
+/// The suffix that turns `track` into the reversed circuit's `track_reversed`.
+const REVERSED: &str = "_reversed";
 
 /// A cursor that refuses to read past the end.
 struct Reader<'a> {
