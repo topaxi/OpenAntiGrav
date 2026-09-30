@@ -1156,9 +1156,93 @@ missing once the camera and the pick sequence were matched. Every one of the
 | --- | --- | ---: |
 | `0x088f7e64` | `ParticleSystem_UpdateParticleFields` | 85 |
 
-**Open.** 45 of the 76 PSP emitters draw as class 3 too, 23 of them author a
-roll (`WO_SHIP_COLL_SPARK_DAMAGE`'s own smoke root: random `0..0.105` rad per
-tick), and **none of that is played**: an emitter's flags live at a different
-word than a template's `res+0x884`, and which derived word each emitter flag
-becomes (and what feeds the derived `+0xf0` for an emitter) is unread. Capture
-`particle+0x5c` and `+0x64` of a live emitter particle first.
+**An emitter's own particles are not this routine's.** 45 of the 76 PSP
+emitters draw as class 3 too, 23 of them author a roll, and they go through
+neither `ParticleSystem_UpdateParticleFields` (its only callers are
+`ParticleSystem_InitParticleFields` and `ParticleSystem_Update`, both for
+templates) nor `ParticleSystem_DrawParticle`. See the next section.
+
+### An emitter's own particles: the batched draw and the roll law (2026-09-30)
+
+Two kinds of particle live in an instance and the page above had them folded
+into one. A **template** is a `0x90`-byte record in the list at instance
+`+0x1b0`, linked by `+0x78`, sampled by `ParticleSystem_UpdateParticleFields`
+and drawn one at a time by `ParticleSystem_DrawParticle`. An **emitter's own
+particle** is a slot of the pool at instance `+0x74` (`0xa0` bytes a slot, the
+particle at `slot + 0x10`), integrated by `ParticleSystem_UpdateParticles` and
+drawn a whole instance at a time. The offsets are the same layout shifted by
+`0x40` (template `+0x30` size, `+0x34` colour, `+0x4c` life; pool `+0x70`,
+`+0x74`, `+0x8c`), which is how a read of one was mistaken for the other.
+
+| Address | Name | What |
+| --- | --- | --- |
+| `0x089177e4` | `ParticleSystem_DrawInstanceTree` | recurses the child chain (`+0x1ac`, sibling `+0x18`), then draws the instance's pool and, in the order flag `0x400000` picks, walks the `+0x1b0` template list into `ParticleSystem_DrawParticle` |
+| `0x08918bf8` | `ParticleSystem_DrawEmitterPool` | pushes the matrix, binds the sprite, applies the blend class (`res+0xc0`), then **switches on `res+0xb8`**: index `0` and `1` to `FUN_089194d0`, `2` (class 3) to `ParticleSystem_DrawRolledQuads`, `5` (class 6) to `FUN_08917c7c`, `6` (class 7) to `FUN_08918160`, and every other index draws nothing. Only when the atlas grid is at most 16 cells: a larger grid draws no particle here at all |
+| `0x089178c0` | `ParticleSystem_DrawRolledQuads` | the class 3 batch: one quad a live particle, six vertices each, one `Gu_DrawArray` |
+
+**`ParticleSystem_DrawRolledQuads`.** `h` is the particle's size (`slot+0x70`
+as a float), `w = h * *(float *)(res + 0x4c8)`, and the roll is `slot+0x50`,
+turned to radians by the VFPU's `2/pi`. The four vertices are built in
+registers as `C700 = (-w, -h, w, h)` times `(cos, -sin, cos, -sin)` and
+`(sin, cos, sin, cos)`, added to the view-space position, so the quad's two
+half-edges are
+
+```
+a = (w cos, -h sin)      b = (w sin, h cos)       vertices  -a-b, -a+b, a-b, a+b
+```
+
+which is the turned *unit* square with the aspect applied to the screen's `x`
+afterwards. **It is a parallelogram, not the template's rectangle, whenever
+`w != h` and the roll is not a multiple of a quarter turn.** At `w = h` it is
+the same rotated square `ParticleSystem_DrawRotatedSprite` draws, with the same
+sense: `a` is that routine's `axis_u` direction. Confidence **80**: read in
+full in the decompile and the disassembly, **not** measured live.
+
+**`+0x4c8` is a constant per emitter record, and the corpus authors it.** Read
+on all 76 PSP emitters (`pob_emitter_roll_ground_truth`): `1.0` on 43 of the 45
+class 3 emitters; **`4.0` on `WO_SHURIKEN_HEAD` and `WO_SHURIKEN_TRAIL`**, which
+have no roll; and `3` on the collision sparks' class 6 streaks (and
+`WO_CANNON_SPARKS`'s `thin_streaks`, `WO_ROCKET_EXPLO_TRACK`'s `fat_streaks`),
+`2` on the class 6 and 7 of the missile bounce, rain, Shuriken bounce and expiry
+and the absorb, `0.05` on `WO_REPULSER`. The class 6 and 7 routines are not
+read here; that the same word is a streak's stretch is the obvious reading and
+it is **unread**.
+
+**The roll, off `ParticleSystem_InitParticle` and `ParticleSystem_UpdateParticles`**
+(slot offsets; the first reads are the `0x88f6e6c` decompile's, confidence
+**80**, static):
+
+| What | Law |
+| --- | --- |
+| start angle, `slot+0x50` | `Psys_RandFloatRange(-pi, pi)` under emitter flag `0x4`, else `0`; unless the class is 6 or 7, whose `+0x50` is the streak's other end |
+| the coin | flag `0x8` adds `2` to the byte at `slot+0x81` when `FUN_088f8e18` says so (bit 1 set: flipped) |
+| rate, `slot+0x9c` | the `res+0x698` channel: mode `0` (keyframed) leaves `0`; mode `2` its constant (the `hi` word, `+0x6a8`); mode `3` `Psys_RandFloatRange(lo, hi)` **once, here**; all negated when the coin bit is set |
+| per tick, `DAT_08b6206c` (class 3 only) | channel not keyframed (`DAT_08b6206a` clear): `roll += rate * dt`. Keyframed: `roll -= v * dt` when the coin bit is **clear** and `roll += v * dt` when it is **set**, `v` the baked rotation component of the channel vector **before** this tick's integration - the value at the age the tick began with |
+
+`dt` is the instance's tick count (`instance+0xc`, the same `dt` velocity is
+multiplied by). **There is no absolute mode for an emitter** and no aspect
+channel; the keyframed sign being the reverse of the constant one is the
+decompile's reading and is **unmeasured**: the four keyframed class 3 emitters
+on the disc are `WO_LEACHBEAM_CHARGING`'s `RINGS`, `WO_MISSILE_EXPLO`'s
+`drift_down`, `WO_MODESTO_STEAM_A` and `WO_QUAKE`'s `debris`, and only the last
+pair's flags decide which way they turn without a coin. The port plays all of
+the above in `oag_render::psys::roll`.
+
+**Corrects the section above.** `FUN_089177e4` walks the template list, not the
+pool, so "the `+0x64` of an emitter's particles is `1.0`" was never a statement
+about them: an emitter's particle has no `+0x64` (its aspect is `res+0x4c8`).
+
+**Still open.** Whether an emitter's first draw is at age 0 as a template's is
+(unmeasured, not played); which of `ParticleSystem_Update`'s orderings puts a
+pool particle's spawn before or after its first integration; the class 6 and 7
+batch routines' use of `+0x4c8`; and a live read of `slot+0x50` over a few ticks
+on a flipped and an unflipped keyframed particle, which would make the sign
+measured.
+
+### Applied names (the batched draw)
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x089177e4` | `ParticleSystem_DrawInstanceTree` | 80 |
+| `0x08918bf8` | `ParticleSystem_DrawEmitterPool` | 80 |
+| `0x089178c0` | `ParticleSystem_DrawRolledQuads` | 80 |

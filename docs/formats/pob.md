@@ -383,10 +383,11 @@ resource in a live PPSSPP session:
 | `+0xbc` | u32 | colour mode: 2 = random table entry per particle; else over-life walk (2) |
 | `+0xc0` | u32 | blend class, dispatched by `ParticleSystem_ApplyBlendClass`: 2 additive, 3 alpha-over (3) |
 | `+0xc4` | u32[256] | RGBA colour table - a gradient, orange `(181,134,87,200)` → ember `(48,46,46,0)` here |
+| `+0x4c8` | f32 | **aspect**: a class 3 particle's half-width over its half-height (`ParticleSystem_DrawRolledQuads`, `0x089178c0`). `1.0` on 43 of the 45 class 3 emitters, `4.0` on the Shuriken's head and trail; `2`, `3` and `0.05` on class 6 and 7 streaks, whose use of it is unread. Played since 2026-09-30 (confidence 80, static read). See [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md), "An emitter's own particles" |
 | `+0x4cc` | f32 | playback-rate base (1.0) |
 | `+0x4d0` | f32 | child velocity-inherit scale (1.0) |
 | `+0x4d4` | f32 | child spawn probability (0.1) |
-| `+0x4d8`,`+0x5b8`,`+0x698`,`+0x778`,`+0x858` | block | channel blocks: size, alpha, rotation speed, atlas frame rate (added 2026-09-24, see below), emission scale - each `{period f32, mode u32 (0 keyframed / 2 constant / 3 random), key count i32, lo f32, hi f32, (time,value) f32 pairs}` |
+| `+0x4d8`,`+0x5b8`,`+0x698`,`+0x778`,`+0x858` | block | channel blocks: size, alpha, rotation speed (**always a rate**, radians per tick, on an emitter - played since 2026-09-30: flag `0x4` starts the angle at `U(-pi, pi)`, flag `0x8` flips a coin per particle, a random channel draws its rate once at spawn, a keyframed one turns the opposite way round from the others; class 3 only), atlas frame rate (added 2026-09-24, see below), emission scale - each `{period f32, mode u32 (0 keyframed / 2 constant / 3 random), key count i32, lo f32, hi f32, (time,value) f32 pairs}` |
 | `+0x93c`,`+0x940` | i32, ptr | animated-attribute array (count, records of 0xec bytes) - re-derives the severity-scaled params per tick when present (0, null) |
 | `+0x944`,`+0x948`,`+0x94c` | ptr | on-death child system, per-particle child system, **next sibling emitter** (0, 0, `base+0xd20`) |
 | `+0x9a0` | u16,u16 | sprite-atlas grid (1, 1) |
@@ -1351,4 +1352,6 @@ executable alone. **A template's first draw is at age 0**: the instance's first
 update makes the particle and draws it before anything ages it (live: `glow`
 `0.75` then `3.18`, `shazam` `9.36` twice), so `oag_render::psys` skips the
 first tick's ageing for a template particle. An emitter's particles are not
-treated that way - unmeasured.
+treated that way - unmeasured. (Their roll and aspect are a different law: a
+constant `+0x4c8` aspect and a roll that is always a rate; see the emitter
+record's table above.)

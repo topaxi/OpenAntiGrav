@@ -661,9 +661,15 @@ pub struct Emitter {
     /// `+0x698`: billboard roll speed, radians per tick.
     pub rotation_speed: Channel,
     /// A sprite template's `+0xf0` block: the sprite's stretch, which the
-    /// draw reads as its aspect - see [`initial`]. `None` on an emitter
-    /// record, whose derived record is not read here.
+    /// per-tick field update turns into the quad's aspect - see [`initial`].
+    /// `None` on an emitter record, which has no such block: its quad's aspect
+    /// is the constant [`Emitter::aspect`].
     pub stretch: Option<Channel>,
+    /// `+0x4c8`: the draw class 3 batch draw (`ParticleSystem_DrawRolledQuads`) makes a
+    /// particle's half-width `aspect * size` and its half-height `size`. Read
+    /// on an emitter record only; a template's is [`Emitter::stretch`], and
+    /// holds `1.0` here.
+    pub aspect: f32,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -823,6 +829,7 @@ fn emitter_placeholder() -> Emitter {
         alpha: channel(),
         rotation_speed: channel(),
         stretch: None,
+        aspect: 1.0,
         frame_rate: channel(),
         emission_scale: channel(),
         playback_rate: 0.0,
@@ -902,6 +909,7 @@ fn parse_emitter(
         alpha: parse_channel(record, order, 0x5b8)?,
         rotation_speed: parse_channel(record, order, 0x698)?,
         stretch: None,
+        aspect: float(0x4c8),
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),

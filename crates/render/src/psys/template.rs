@@ -29,104 +29,10 @@
 //! [`unroll`] repeats the keys over the normalised life, which is the same
 //! curve without giving the pool a second notion of age.
 
-use oag_core::Rng;
-use oag_core::math::Vec3;
 use oag_vex::pob::{self, Channel, ChannelMode};
 
-use super::{ColourScale, Effect, EmitterSpec, Particle, channel_sample, quad};
-use crate::mesh::GpuVertex;
-
-/// `ParticleSystem_InitParticleFields`' flag `0x10`: start at a random roll.
-const RANDOM_START: u32 = 0x10;
-/// Flag `0x08`: a coin at spawn picks which way the roll turns.
-const RANDOM_SENSE: u32 = 0x08;
-/// Flag `0x20`: the roll channel is the angle itself, not a rate.
-const ABSOLUTE: u32 = 0x20;
-
-/// What a template's draw class 3 adds to a plain billboard: the quad is
-/// `ParticleSystem_DrawRotatedSprite`'s, `aspect * size` wide and `size` tall,
-/// turned by the particle's roll. Both come off channels the parse had
-/// left unread (`+0xf0` and `+0x390`), and the law is
-/// `FUN_088f7e64`'s, the per-tick field update:
-///
-/// - **stretch** `v` at the particle's age: `v > 0` is aspect `1 + v`; `v <= 0`
-///   grows the size by `1 - v` and sets aspect `1 / (1 - v)`.
-/// - **roll**: under `0x20` the channel's value is the angle that tick; else it
-///   is a rate and the angle accumulates, turning the other way for a particle
-///   the `0x08` coin flipped.
-///
-/// Measured on a struck craft: `shazam` aspect `1.5` and roll `0`, `glow`
-/// aspect `1.7` and roll `2 pi` falling by `~0.7` per tick - exactly the
-/// `0.5`/`0.7` stretch constants and the glow's keyed `0..2 pi` roll channel.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Rotation {
-    stretch: Channel,
-    roll: Channel,
-    flags: u32,
-}
-
-impl Rotation {
-    /// The rotation `record` authors, if it is a template with a stretch
-    /// block.
-    pub(super) fn of(record: &pob::Emitter) -> Option<Self> {
-        Some(Self {
-            stretch: record.stretch.clone()?,
-            roll: record.rotation_speed.clone(),
-            flags: record.flags,
-        })
-    }
-
-    /// A new particle's roll and turning sense, drawing from `rng` only for
-    /// the flags that ask for a draw.
-    pub(super) fn start(&self, rng: &mut Rng) -> (f32, f32) {
-        let roll = if self.flags & RANDOM_START != 0 {
-            rng.next_f32() * std::f32::consts::TAU
-        } else {
-            0.0
-        };
-        let turn = if self.flags & RANDOM_SENSE != 0 && rng.below(2) == 1 {
-            -1.0
-        } else {
-            1.0
-        };
-        (roll, turn)
-    }
-
-    /// `particle`'s roll after one update at normalised `age`.
-    pub(super) fn roll_at(&self, particle: &Particle, age: f32, dt_ticks: f32) -> f32 {
-        let v = channel_sample(&self.roll, age, particle.size_sample);
-        if self.flags & ABSOLUTE != 0 {
-            v * dt_ticks
-        } else {
-            particle.roll + particle.turn * v * dt_ticks
-        }
-    }
-
-    /// The sprite's six vertices: `half` is the size channel's value before
-    /// the stretch takes its share.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn quad(
-        &self,
-        particle: &Particle,
-        age: f32,
-        half: f32,
-        right: Vec3,
-        up: Vec3,
-        rgb: [f32; 3],
-        alpha: f32,
-    ) -> [GpuVertex; 6] {
-        let v = channel_sample(&self.stretch, age, particle.size_sample);
-        let (half, aspect) = if v > 0.0 {
-            (half, 1.0 + v)
-        } else {
-            (half * (1.0 - v), 1.0 / (1.0 - v))
-        };
-        let (sin, cos) = particle.roll.sin_cos();
-        let across = (right * cos - up * sin) * (half * aspect);
-        let down = (right * sin + up * cos) * half;
-        quad(particle.position, across, down, 0.5, rgb, alpha)
-    }
-}
+use super::roll::Rotation;
+use super::{ColourScale, Effect, EmitterSpec};
 
 impl Effect {
     /// Appends a one-shot spec for every template on a root emitter, and
@@ -144,7 +50,7 @@ impl Effect {
                 };
                 let life = spec.lifetime_ticks.0.max(1.0);
                 spec.template = true;
-                spec.rotation = Rotation::of(template);
+                spec.rotation = Rotation::of_template(template);
                 spec.size = unroll(&spec.size, life);
                 spec.alpha = unroll(&spec.alpha, life);
                 spec.atlas = super::Atlas::SINGLE;

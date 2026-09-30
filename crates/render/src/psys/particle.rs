@@ -31,10 +31,13 @@ pub(super) struct Particle {
     pub(super) frame_at: f32,
     /// A template's first draw is at age 0 - see [`super::template`].
     pub(super) fresh: bool,
-    /// A rotating template's angle and which way it turns, `1` or `-1` - see
-    /// [`super::template::Rotation`].
+    /// A rotating particle's angle and which way it turns, `1` or `-1` - see
+    /// [`super::roll::Rotation`].
     pub(super) roll: f32,
     pub(super) turn: f32,
+    /// The once-drawn sample of a random roll channel - see
+    /// [`super::roll::Rotation::start`].
+    pub(super) spin_sample: f32,
 }
 
 impl Particle {
@@ -54,6 +57,7 @@ impl Particle {
         fresh: false,
         roll: 0.0,
         turn: 1.0,
+        spin_sample: 0.0,
     };
 
     pub(super) fn alive(self) -> bool {

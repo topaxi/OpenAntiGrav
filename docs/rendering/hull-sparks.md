@@ -132,7 +132,12 @@ with the picks forced the same, ours is never the weaker one. Frames:
 
 **What is left.** Ours reads 7-11 % brighter on a single hit and up to 20 % on
 the sixth, where the flashes overlap and the framebuffer saturates. Not
-decoded. The per-tick draw law is measured on *templates*; an emitter's own
-particles (45 of 76 PSP emitters are class 3, 23 author a roll) are not
-treated the same way and are not rotated - that is the next piece of the
-struck craft's look and the smoke's.
+decoded. The per-tick draw law above is measured on *templates*. **An emitter's
+own particles are played the same night they were read**: a different routine
+(`ParticleSystem_DrawRolledQuads`) with a different law - roll always a rate, the
+aspect a constant `+0x4c8`, the quad the turned unit square scaled in screen
+`x`. The collision sparks' smoke root (random `0..0.105` rad per tick, a random
+start and a coin) now turns; the struck craft's numbers above were taken
+**before** that, and the smoke was never the gap (see the paragraph before
+"Result"), so they are not re-measured here. Confidence 80 on the law, from the
+instructions alone, **not** yet measured live.

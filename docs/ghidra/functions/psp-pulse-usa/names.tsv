@@ -1164,3 +1164,6 @@
 0x0890db54	function	Mesh_DrawExtraPassBatches	85	mesh-draw.md
 0x0890d508	function	Mesh_CompileExtraPass	85	mesh-draw.md
 0x088f7e64	function	ParticleSystem_UpdateParticleFields	85	particle-system.md
+0x089177e4	function	ParticleSystem_DrawInstanceTree	80	particle-system.md
+0x08918bf8	function	ParticleSystem_DrawEmitterPool	80	particle-system.md
+0x089178c0	function	ParticleSystem_DrawRolledQuads	80	particle-system.md

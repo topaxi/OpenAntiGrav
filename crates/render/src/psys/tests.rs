@@ -419,3 +419,42 @@ fn a_templates_first_draw_is_its_size_at_age_zero() {
         half(&system)
     );
 }
+
+/// An emitter's own class 3 particle is turned by the emitter's roll channel
+/// and stretched by its aspect: drop the rotation and the quad is the plain
+/// square the port drew before `ParticleSystem_DrawRolledQuads`'s law was played.
+#[test]
+fn an_emitters_particle_is_turned_and_stretched() {
+    let quads = |rate: f32, rotated: bool| {
+        let mut effect = (*effect("spin", true, 10.0)).clone();
+        effect.emitters[0].rotation =
+            rotated.then(|| roll::Rotation::emitter(4.0, constant(rate), 0));
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        run(&mut system, &effect, 4, &mut Rng::new(5));
+        system.vertices(&effect, Vec3::X, Vec3::Y).0
+    };
+    let span = |quads: &[GpuVertex], axis: usize| {
+        let values = quads.iter().map(|v| v.position[axis]);
+        values.clone().fold(f32::MIN, f32::max) - values.fold(f32::MAX, f32::min)
+    };
+    let plain = quads(0.0, false);
+    assert!(
+        (span(&plain, 0) - 2.0).abs() < 1e-4,
+        "plain {}",
+        span(&plain, 0)
+    );
+    let stretched = quads(0.0, true);
+    assert!(
+        (span(&stretched, 0) - 8.0).abs() < 1e-4,
+        "stretched {}",
+        span(&stretched, 0)
+    );
+    let turning = quads(0.4, true);
+    assert!(
+        span(&turning, 1) > 1.2 * span(&stretched, 1),
+        "the roll did not turn the quad: {} vs {}",
+        span(&turning, 1),
+        span(&stretched, 1)
+    );
+}
