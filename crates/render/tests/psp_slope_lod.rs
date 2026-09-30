@@ -489,7 +489,7 @@ fn draw(
 /// Level 0 is alternating black and white columns; the levels under it are the
 /// mid grey a box filter makes of them.
 fn striped() -> Arc<ModelTexture> {
-    let column = |x: usize| if x % 2 == 0 { 0 } else { 255 };
+    let column = |x: usize| if x.is_multiple_of(2) { 0 } else { 255 };
     let base: Vec<u8> = (0..16)
         .flat_map(|texel| [column(texel % 4); 3].into_iter().chain([255]))
         .collect();
