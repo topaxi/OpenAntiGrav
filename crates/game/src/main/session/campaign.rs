@@ -355,6 +355,7 @@ impl Session {
         // Elimination's own kill target is the cell's gold target - see
         // `oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`'s own doc, which
         // this is the caller that retires the default in favour of.
+        race_options.weapons_override = None;
         race_options.eliminator_kill_target = (mode == oag_race::Mode::Eliminator)
             .then(|| u32::try_from(cell.gold).ok())
             .flatten();

@@ -27,6 +27,16 @@ impl Frontend {
         self.default_line_height = Some(default_line_height);
     }
 
+    /// Steps the language picker's rows by one line of the `Default` face this
+    /// build loaded (`line_height`, in grid units) rather than by the table
+    /// [`font_line_height`] holds, which is Pulse's.
+    ///
+    /// The `<Menu>` states no pitch of its own, so a line of its font is the
+    /// inference either way; this only makes the line the disc's own.
+    pub fn set_picker_line_height(&mut self, line_height: f32) {
+        self.picker_line_height = Some(line_height);
+    }
+
     /// The scale a widget authored in font `role` draws at, against
     /// `Default`. `1.0` for a role nothing measured.
     pub(crate) fn face_scale(&self, role: &str) -> f32 {

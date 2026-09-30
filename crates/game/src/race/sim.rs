@@ -120,6 +120,10 @@ pub struct RaceSim {
     /// the first. Bookkeeping outside `state_hash`, read by survey tests through
     /// [`Race::last_respawn_cause_of`].
     pub(super) last_respawn_cause: [Option<respawn::RespawnCause>; oag_gameplay::MAX_SHIPS],
+    /// Whether this race runs with weapons - [`Setup::weapons_on`], resolved.
+    /// Read through [`Self::damage_rules`] so contact and weapon damage agree
+    /// with the pads the load kept.
+    pub(super) weapons_on: bool,
     /// The kill count that ends an Eliminator event - see
     /// [`Setup::eliminator_kill_target`].
     pub(super) eliminator_kill_target: u32,
@@ -370,4 +374,16 @@ pub struct RaceSim {
     /// never re-arm. Render-side state, and out of the hash for the same
     /// reason. See [`Race::tick`], where the two are set side by side.
     pub(super) contact_cue_cooldown: [f32; oag_gameplay::MAX_SHIPS],
+}
+
+impl RaceSim {
+    /// The mode's damage rules with this race's own weapons switch applied -
+    /// what every damage and weapon-hit site asks instead of
+    /// `oag_gameplay::damage_rules(mode)` alone, which knows only the mode.
+    pub(super) fn damage_rules(&self) -> oag_physics::DamageRules {
+        oag_physics::DamageRules {
+            weapons: self.weapons_on,
+            ..oag_gameplay::damage_rules(self.world.mode())
+        }
+    }
 }

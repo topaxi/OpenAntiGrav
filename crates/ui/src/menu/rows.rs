@@ -172,7 +172,7 @@ fn draw_list_rows(
                     Some(keys.join(" / "))
                 }
             }
-            other => other.value().map(|value| value.to_string()),
+            other => menu.shown(other).map(|value| value.to_string()),
         };
         if let Some(text) = value {
             if let Some(color) = fill {
@@ -356,7 +356,7 @@ fn draw_text_rows(
                     Some(keys.join(" / "))
                 }
             }
-            other => other.value().map(|value| value.to_string()),
+            other => menu.shown(other).map(|value| value.to_string()),
         };
         if let Some(text) = value {
             out.push(Draw::Text {

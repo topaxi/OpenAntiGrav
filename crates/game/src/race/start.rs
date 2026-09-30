@@ -23,6 +23,7 @@ impl Race {
             mode,
             eliminator_kill_target,
             laps_override,
+            weapons_override,
             difficulty,
             opponents,
             trail_sparks,
@@ -74,11 +75,8 @@ impl Race {
         // race has no weapon pads to walk rather than a walk that decides
         // nothing. Dropping the volumes here also makes it impossible for a
         // later change to reach them by accident.
-        let weapon_pads = if mode.weapons_enabled() {
-            weapon_pads
-        } else {
-            Vec::new()
-        };
+        let weapons_on = weapons_override.unwrap_or_else(|| mode.weapons_enabled());
+        let weapon_pads = if weapons_on { weapon_pads } else { Vec::new() };
 
         let mut world = World::new(seed);
         // The lap count is per speed class, not per mode - the campaign's 236
@@ -367,6 +365,7 @@ impl Race {
                 respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
                 respawns: [0; oag_gameplay::MAX_SHIPS],
                 last_respawn_cause: [None; oag_gameplay::MAX_SHIPS],
+                weapons_on,
                 eliminator_kill_target: eliminator_kill_target
                     .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
                 last_damager: [None; oag_gameplay::MAX_SHIPS],

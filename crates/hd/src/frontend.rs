@@ -342,6 +342,7 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     reel: None,
     menu_backdrop: None,
     picker_backdrop_parent: None,
+    picker_from_loaded_faces: true,
     fallback_globals: &[],
     // No src-less widget found on this title yet.
     fallback_images: &[],

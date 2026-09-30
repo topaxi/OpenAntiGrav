@@ -77,8 +77,33 @@ helpers are read, the mode index to mode name mapping is by elimination, so only
 (`FUN_088e62d4`), and hidden for indices `0xe`, `0xf` and `0x10` (`FUN_088e6378`). This
 build greys it in every mode but Eliminator. Whether the list wraps past 25 is **not read**
 (the XML authors no `wrap`); this build's generic choice row decides, **chosen, not measured**.
-The values are read at boot by `oag_game::boot::screens::read_kill_targets` via
+The values are read at boot by `oag_game::boot::screens::read_race_setup` via
 `oag_title::FrontEnd::race_setup`.
+
+**When the `Weapons` row is editable, and what it shows when it is not** (read 2026-09-30, the
+same routine `FUN_088e715c`, Pulse PSP USA; confidence 85). The row is the pair at `param_1+0xf0`
+(text) and `+0xec` (list); per mode index the routine either enables it (`FUN_088e62d4`) or greys
+it (`FUN_088e6400`) **and forces its value** with `FUN_088a9ab8(list, "FE_OFF"|"FE_ON")`, first
+saving the player's own index at `+0x138` and restoring it (`FUN_08888574`) when a mode that
+allows a pick comes back:
+
+| Mode index | Row | Shows |
+| --- | --- | --- |
+| 5 (Time Trial), 10 (Speed Lap), 6 (Zone), 9 (Head2Head), 0xf | greyed | forced `FE_OFF` |
+| 8 (Elimination), 0x12 | greyed | forced `FE_ON` |
+| 3, 4 (Single Race and Tournament; which is which is unread), 0xc, 0xe, 0x10 | **enabled** | the player's pick |
+
+Three independent sources agree on the first row: `Race_ReadSetupOptions`' weapons-off set
+(`shield.md`), `Mode::weapons_enabled`, and the 2026-08-10 PPSSPP observation of the greyed `OFF`
+in Time Trial, Speed Lap, Zone and Head to Head with Tournament's row editable. Only the
+Eliminator's greyed `ON` is read from the routine alone (index 8 is the one that also enables
+`KILLS`, which is what fixes it as Elimination). The list's own `Default="FE_ON"` is the row's
+default. The two entries are `idstring="FE_ON" value="On"` and `idstring="FE_OFF" value="Off"`;
+`Race_ReadSetupOptions` compares the value against `"On"`. This build stores `On`/`Off`
+(`race.weapons`, empty = untouched = `On`), shows the disc's own `FE_ON`/`FE_OFF` strings, and
+offers the pick in a single race only, the one mode of its five that is in the third row (the
+mapping of indices 3 and 4 to Single Race and Tournament is by elimination against the greyed
+rows and the 2026-08-10 capture, not read).
 
 Two `<Text>` widgets sit at coordinates already occupied by a list and are
 swapped in for particular modes: `Zone` over the `Class` row, and

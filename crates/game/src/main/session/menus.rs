@@ -232,6 +232,7 @@ impl Session {
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
+        model.supply(menu::ValueSource::Weapons, &shell.weapons);
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
@@ -737,6 +738,8 @@ impl Session {
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
             race_options.mode = mode;
         }
+        // The WEAPONS row's pick, for a single race only.
+        race_options.weapons_override = self.settings.race.weapons_override(race_options.mode);
         // The KILLS row's pick, for an Eliminator only.
         race_options.eliminator_kill_target =
             self.settings.race.eliminator_kill_target(race_options.mode);

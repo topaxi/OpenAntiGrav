@@ -161,6 +161,38 @@ pub(super) fn load_menu_font(
     }
 }
 
+/// The menu, title and button-glyph faces in one call, each read at
+/// `texel_scale` (see `oag_display::space::Space::font_texel_scale`).
+///
+/// Three loads that were three statements in `boot::load`, each repeating the
+/// same `.map(|atlas| atlas.with_texel_scale(..))`; the scale is applied here
+/// once so a fourth face cannot forget it.
+pub(super) fn load_role_fonts(
+    archives: &mut oag_assets::Archives,
+    languages: &[Language],
+    preferred: Option<&Language>,
+    skin: &oag_title::MenuSkin,
+    texel_scale: f32,
+    report: &mut Vec<String>,
+) -> RoleFonts {
+    let scaled =
+        |atlas: Option<oag_ui::font::Atlas>| atlas.map(|a| a.with_texel_scale(texel_scale));
+    (
+        scaled(load_menu_font(archives, languages, preferred, skin, report)),
+        scaled(load_title_font(
+            archives, languages, preferred, skin, report,
+        )),
+        scaled(load_buttons_font(archives, languages, preferred, report)),
+    )
+}
+
+/// What [`load_role_fonts`] returns: menu, title, buttons.
+pub(super) type RoleFonts = (
+    Option<oag_ui::font::Atlas>,
+    Option<oag_ui::font::Atlas>,
+    Option<oag_ui::font::Atlas>,
+);
+
 /// Reads the face the screen title draws in, when this title names one.
 ///
 /// The mirror of [`load_menu_font`], one widget over: the role comes from

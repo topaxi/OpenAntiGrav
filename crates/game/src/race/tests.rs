@@ -140,6 +140,7 @@ fn setup(handling: Handling) -> Setup {
         mode: Mode::TimeTrial,
         eliminator_kill_target: None,
         laps_override: None,
+        weapons_override: None,
         difficulty: oag_ai::Difficulty::default(),
         class: "VENOM".to_string(),
         opponents: false,

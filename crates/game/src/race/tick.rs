@@ -198,7 +198,7 @@ impl Race {
         self.test_weapon_pads(player, before, moved, &sweep);
         // The mode's rules, read before the craft is borrowed: `World::mode`
         // asks the whole world and the borrow checker will not have both.
-        let env_damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
+        let env_damage_rules = self.sim.damage_rules();
         let ship = &mut self.sim.world.ships[player];
         // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
         // throttle armed last tick is consumed by this step and nothing after
@@ -248,7 +248,7 @@ impl Race {
         // blast this tick is blown up before the lap counter reads it.
         // The whole table rather than the Rocket's block: a blast is looked up by
         // the weapon that made it now that more than one weapon can make one.
-        let damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
+        let damage_rules = self.sim.damage_rules();
         // One report per slot: a hit a shield swallowed (the *only* thing that
         // makes a shell visibly react - see `oag_render::shield::ShipShield::hit`)
         // or one that got through (the hull's own sparks). Both have to come

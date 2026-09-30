@@ -319,7 +319,7 @@ impl Race {
     /// **What it still does not get**: reaction latency, and adaptation between
     /// races - which was blocked on per-craft lap times and is not any more.
     pub(super) fn step_opponents(&mut self) {
-        let damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
+        let damage_rules = self.sim.damage_rules();
         // Once for the whole grid: every craft's view needs the same ordering.
         let places = self.places();
         for slot in 1..self.sim.world.ship_count as usize {

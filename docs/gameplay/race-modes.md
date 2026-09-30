@@ -130,7 +130,8 @@ race-setup format string carries `laps="%d"`.
 
 Weapons and AI fall out of the mode rather than being set: selecting TIME TRIAL on
 the original's Custom Race screen flips WEAPONS to OFF and AI DIFFICULTY to N/A on
-its own. Neither exists here yet, so nothing had to be turned off.
+its own. The RACE page's WEAPONS row does the same here (greyed, showing OFF); AI DIFFICULTY
+is greyed but still shows its stored value rather than N/A.
 
 **Not implemented:** the fresh-attempt-behind-you behaviour. The run stops at the
 end of the class's own last lap.
@@ -483,9 +484,11 @@ nothing until now.
 - **No opponents.** `MSC_EVENT_SR` promises "a full grid of opponents" and the
   original's `AI DIFFICULTY` row is selectable. That is the AI item; until it
   lands the field is empty rather than parked, for the reason above.
-- **No `WEAPONS` row.** The original calls weapons "optional" here and this
-  build takes the default, so a single race always has them. A missing setting,
-  not a different rule.
+- ~~**No `WEAPONS` row.**~~ **There is one now (2026-09-30).** The original calls weapons "optional" here
+  and leaves the row editable; this build's RACE page offers the disc's own `On`/`Off` in a single
+  race (`race.weapons`, default `On`), greyed and showing the mode's own answer elsewhere -
+  [`race-setup.md`](../formats/race-setup.md). Off drops the weapon pads and clears the damage
+  rules' weapons flag together (`Options::weapons_override`).
 - ~~**The lap count is ours.**~~ **Not any more, and it is no longer flat.**
   The lap count is **per speed class, not per mode**:
 

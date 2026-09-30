@@ -494,9 +494,9 @@ impl Mode {
     /// Single race is on the other side of that switch: it is not in
     /// `Race_ReadSetupOptions`' weapons-off set, its `AI DIFFICULTY` and
     /// `WEAPONS` rows are both selectable, and `MSC_EVENT_SR` calls weapons
-    /// "optional". **This build takes the default rather than offering the
-    /// choice** - there is no `WEAPONS` row on the race menu, so a single race
-    /// always has them on. That is a missing setting, not a different rule.
+    /// "optional". **This is the mode's own answer; the RACE page's `WEAPONS` row
+    /// overrides it for a single race only** (`race::Options::weapons_override`),
+    /// so a race asks that, not this, whether weapons are on.
     ///
     /// **`true` for Eliminator too** - it is the mode `MSC_EVENT_ELIM` calls
     /// *"a weapons-heavy environment"*, and `Race_ReadSetupOptions`' own

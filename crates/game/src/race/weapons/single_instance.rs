@@ -54,7 +54,7 @@ impl Race {
             self.sim.world.quake = None;
             return;
         }
-        let rules = oag_gameplay::damage_rules(self.sim.world.mode());
+        let rules = self.sim.damage_rules();
         let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
         // Snapshotted before `apply_hits` runs, for `Cue::QuakeHit`'s own
         // rising edge below - the same before/after shape `Race::tick`'s own
@@ -144,7 +144,7 @@ impl Race {
         let Some(mut beam) = self.sim.world.leach_beam else {
             return;
         };
-        let rules = oag_gameplay::damage_rules(self.sim.world.mode());
+        let rules = self.sim.damage_rules();
         let report = beam.advance(
             &mut self.sim.world.ships,
             self.sim.world.ship_count,
