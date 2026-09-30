@@ -119,6 +119,24 @@ provably inert for this lane (the only reader is
 `crates/game/src/race/hud.rs`, reached only once a race has already started
 loading).
 
+## The menu backdrop (2026-09-30, `omega-menu-backdrop`)
+
+Omega's menus now sit on the HD-style `<BackgroundAnim>` scene, which is the only backdrop
+Omega can have: no `.points2` clouds ship in any of the nine archives. The scene is
+`FrontEndScene_HD_ATG.vex` with its PS4 `.rcsmodel` (byte-identical in `data00` and `data08`);
+the `*_VR` scenes are not drawn. The `.vex` carries the motion and the camera (60 s loop, 2,274
+translation keys on `camera1`), the `.rcsmodel` the geometry, and the two bind by shape name -
+`oag_render::mesh::rcs::psp2::build_with_vex`. The picture is the scene drawn on white and filtered by
+`FEBackgroundAnim_fp` into a grey line drawing; everything is read in
+[`menu-backdrop-scene.md`](../ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md).
+`--menu-page main` (settled `Main Menu` row: edge 0.6, fill 0.2, width 0.5, no blur) and any other
+page (the `default` row: 0.3, 0.1, 1.5, blur 3) draw it, and `--anim-seconds` picks the moment. **The
+boot screens do not** - they are outside `Top FE Screen` in the skin, so the original has none there
+either. **Not validated against the original**: no PS4 emulator exists and HD's one capture of its HD
+style shows a flat white page. Chosen, not measured: the blur kernel, the linear sampling, and which
+page takes which row. The campaign screens, the end-of-race screens and the pickers sit under the same
+widget and do not draw it yet.
+
 ## What a menu-page capture does today
 
 **Invocation (watched working, 2026-09-30).** The source is a positional path,

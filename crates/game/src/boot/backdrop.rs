@@ -24,7 +24,7 @@ pub enum MenuBackdrop {
     /// The Fury style's point clouds.
     Fury(Arc<FuryAssets>),
     /// The HD style's filtered 3D scene.
-    Scene(SceneAssets),
+    Scene(Box<SceneAssets>),
 }
 
 /// Reads whichever backdrop this source's style draws, or says why none.
@@ -48,7 +48,8 @@ pub(super) fn load(
         report.push("menu backdrop: the skin authors no BackgroundAnim widget".to_string());
         return None;
     };
-    scene::load(archives, widget, report).map(|assets| Arc::new(MenuBackdrop::Scene(assets)))
+    scene::load(archives, widget, report)
+        .map(|assets| Arc::new(MenuBackdrop::Scene(Box::new(assets))))
 }
 
 impl MenuBackdrop {
@@ -68,7 +69,7 @@ impl MenuBackdrop {
             Self::Fury(assets) => {
                 oag_ui::backdrop::Fury::new(assets.settings.clone(), assets.first, fury::SEED).map(
                     |model| Live::Fury {
-                        model,
+                        model: Box::new(model),
                         tints: assets.tints.clone(),
                     },
                 )
@@ -132,7 +133,7 @@ impl MenuBackdrop {
 pub enum Live {
     /// The Fury point-cloud model and the skin's tints.
     Fury {
-        model: oag_ui::backdrop::Fury,
+        model: Box<oag_ui::backdrop::Fury>,
         tints: oag_ui::backdrop::Tints,
     },
     /// The scene's clock and eased look.
