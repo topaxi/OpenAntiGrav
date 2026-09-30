@@ -5,7 +5,7 @@ use super::Cli;
 
 impl Cli {
     /// Applies `--render-scale`, `--upscaler`, `--anti-aliasing`,
-    /// `--motion-blur`, `--shadows`, `--screen-filter` and `--lod`'s preset
+    /// `--motion-blur`, `--shadows`, `--screen-filter`, `--lod` and `--texture-detail`'s preset
     /// to one render profile.
     ///
     /// **One function because there are two callers and they disagreed.**
@@ -44,6 +44,9 @@ impl Cli {
         }
         if let Some(detail) = self.lod {
             profile.model_detail = detail;
+        }
+        if let Some(detail) = self.texture_detail {
+            profile.texture_detail = detail;
         }
     }
 }

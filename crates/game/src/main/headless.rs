@@ -534,6 +534,7 @@ pub(crate) fn run_race(
                 motion_blur: render_profile.motion_blur,
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
+                texture_detail: render_profile.texture_detail,
                 camera_jitter: cli.camera_jitter,
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,

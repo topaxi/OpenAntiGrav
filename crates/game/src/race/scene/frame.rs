@@ -190,7 +190,7 @@ impl Scene {
         self.render_shadow_map(queue, encoder, race, shadows);
         self.render_sun_occlusion(queue, encoder, race, shadows);
         let scene = mesh_render::Scene {
-            fog,
+            fog: fog.with_texture_detail(race.texture_detail()),
             // Pulse's hull lights reach the craft alone - see `ship_scene`.
             light: light.without_hull(),
             // The flame surface's scroll clock - `time`, engine parameter slot

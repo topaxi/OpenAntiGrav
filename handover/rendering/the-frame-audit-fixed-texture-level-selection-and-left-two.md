@@ -8,7 +8,8 @@ was soft scenery, fixed by uploading a PSP `.vex` texture with the mip levels th
 disc authors and selecting among them by the GE's recovered slope law
 (`Texels::Chain`, `mesh_render::PSP_TEXLOD_SLOPE`; tests `psp_slope_lod.rs` and
 `psp_texture_levels_ground_truth.rs`). Two differences are traced only as far as
-a lead.
+a lead. The TEXTURE DETAIL setting (`original`/`high`/`maximum`) landed on top
+of it the same day; see `frame-audit.md`.
 
 ## Open
 
@@ -36,20 +37,6 @@ a lead.
   timing only; a comparison that needs them should pin the same tick after GO.
 
 ## Next Steps
-
-- **TEXTURE DETAIL (not started)**, the maintainer's request 2026-09-30: a
-  `graphics.texture_detail` setting beside MODEL DETAIL with the same shape.
-  `original` is `PSP_TEXLOD_SLOPE`/`PSP_TEXLOD_BIAS` as they stand (default);
-  `high` doubles the distance before each level step; `maximum` always samples
-  level 0. One multiplier on the law: scale `texlod_slope` in
-  `mesh_render/texlod.rs::constants` (`original` x1, `high` x0.5, `maximum` a slope
-  so small the level clamps to 0). `high` and `maximum` are labelled chosen, not
-  measured, in the `menu.toml` comment. Needs a `menu.toml` row with `string_id`
-  plus `english.toml` text (`just check-strings`), pointer support like its
-  neighbours, a test per preset, and live application if MODEL DETAIL applies
-  live. Model this on `[render_profiles.<title>] model_detail` and
-  `--lod`. Also check `--anisotropy` against the slope law: `textureSampleLevel`
-  with an anisotropic sampler is accepted but was not looked at.
 
 - Live-read the hull model's `+0x1a8` and the `+0x48`/`+0x70` light lists off the
   trace's entity pointer (the `craft+0x8b4` read this pass did not resolve to a

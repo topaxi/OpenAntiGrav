@@ -276,7 +276,11 @@ pub struct Fog {
     /// names `fogColour` (a crc32 preimage, not a resemblance). See
     /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
     pub curve: f32,
-    _pad2: f32,
+    /// The player's TEXTURE DETAIL as levels added to the slope law's, off a
+    /// PSP `.vex` model's view depth - see [`super::TextureDetail::level_shift`]. `0.0`
+    /// is the recovered law, which is also what every buffer nothing writes
+    /// holds. Here rather than a pipeline constant so the setting applies live.
+    pub texlod_shift: f32,
 }
 
 impl Fog {
@@ -295,7 +299,16 @@ impl Fog {
             enabled: 0.0,
             density: 0.0,
             curve: 0.0,
-            _pad2: 0.0,
+            texlod_shift: 0.0,
+        }
+    }
+
+    /// This fog with the player's TEXTURE DETAIL in its level shift.
+    #[must_use]
+    pub fn with_texture_detail(self, detail: super::TextureDetail) -> Self {
+        Self {
+            texlod_shift: detail.level_shift(),
+            ..self
         }
     }
 
@@ -313,7 +326,7 @@ impl Fog {
             enabled: 1.0,
             density: 0.0,
             curve: 0.0,
-            _pad2: 0.0,
+            texlod_shift: 0.0,
         }
     }
 
@@ -336,7 +349,7 @@ impl Fog {
             enabled: 1.0,
             density,
             curve: 1.0,
-            _pad2: 0.0,
+            texlod_shift: 0.0,
         }
     }
 }

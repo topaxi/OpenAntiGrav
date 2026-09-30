@@ -19,7 +19,7 @@ pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 pub use hull_lights::{HULL_LIGHTS, HullLights, ge_channel};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
 pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
-pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE};
+pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
 mod velocity;
 pub use uniforms::{
@@ -374,7 +374,7 @@ pub fn build(
     if receives_shadow != ShadowReceiver::Never {
         constants.push(("receives_shadow", receives_shadow.constant()));
     }
-    constants.extend(texlod::constants(model));
+    constants.extend(texlod::constants(model, anisotropy));
     if let Some(flame) = model.flame {
         constants.extend([
             ("flame_shading", 1.0),
