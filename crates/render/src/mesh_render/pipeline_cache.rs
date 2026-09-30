@@ -88,11 +88,16 @@ thread_local! {
 /// Opens the cache for the current thread until dropped.
 ///
 /// **Every `build()` call this scope wraps must share one `device`** -
-/// nothing here checks, because both of this project's callers already hold
-/// that: `race::Scene::new` takes one `device` for its whole build, and its
-/// two callers - the async `race-build` worker (`crate::race_build::build`)
-/// and the direct `--race` launch (`main::stage::Stage::race`) - each build
-/// exactly one scene per scope.
+/// nothing here checks, because the one caller already holds that:
+/// `race::Scene::new` opens the scope itself and builds every drawable from
+/// its own `device`, so the windowed launch, the race-build worker and the
+/// `--screenshot` capture all get it without asking. It used to be opened by
+/// whoever called `Scene::new`, and the capture path never did: 9,859 pipelines
+/// compiled for 53 distinct ones, about 7 MiB resident per drawable.
+///
+/// **Scopes do not nest.** The cache is one thread-local slot, so opening a
+/// second scope replaces the first one's cache and dropping it empties the
+/// slot, after which the outer scope's counters panic. Open it in one place.
 #[derive(Debug)]
 pub struct Scope {
     _private: (),
