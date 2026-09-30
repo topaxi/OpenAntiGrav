@@ -48,7 +48,7 @@ recorded.
 | ---: | --- | --- | --- | --- |
 | 1 | **Scenery, trees, mountains and track surface drawn soft** | Laplacian standard deviation in four regions of one frame: original 13.4 / 6.1 / 14.9 / 7.5, ours before 10.8 / 4.4 / 11.3 / 6.3, ours after 12.7 / 6.2 / 15.5 / 8.2 | our box-filtered mip chain, where the original resolves the base level | **fixed** (the disc's levels, selected by the GE's slope law) |
 | 2 | Hull sheen: a whiter, glossier spine and canopy in the original | spine mean 143,139,113 against 91,77,53 at tick 0, but 191,193,143 against 143,144,76 at tick 90 and the close crops read nearly equal once the flare's bloom is in | part flare bloom (state), part the hull's `0x2000` extra pass: six batches (not the one glass batch) drawn a second time under environment mapping with `envtest4bit.tga` | **drawn** (`oag_render::shine`); closes roughly a third to a half of the measured gap, the rest is bloom and pose, see below |
-| 3 | Dark bowl-shaped objects on the grass left of Talon's straight at (161,-47,-185) | a few percent of the frame | draws 1381-1391 of the track (`factory_floor_01_rp_shinemap`, `Building_05`, `Building_07`, `energy_GLOW`, `piston_end_shinemap`) are factory roofs at 37-100 units; the original's terrain hides them, ours does not | open |
+| 3 | Dark bowl-shaped objects on the grass left of Talon's straight at (161,-47,-185) | a few percent of the frame (about 600 pixels at 480x272) | draws **1479..1494** of the opaque list: the sixteen batches of four animated slab transports (nodes 789, 793, 804, 806 of `16_Track`'s `track.vex`, 320-460 units long, each with a `sound` child). The original's GE list never contains them; ours drew every moving batch past the section mask | **fixed** (the mask applies to moving draws), see section 3 |
 | 4 | Track neon strips and the start gantry | animated | timing (trap 3), not measured as a defect | not a defect on this evidence |
 | 5 | Sky, fog and tone | regional means agree within 5 % on all four frames (e.g. Talon mid, 18 cells: 101,129,146 against 108,137,156 at worst) | - | matches |
 
@@ -240,14 +240,82 @@ camera differences, and the pass's own unmeasured parts: one additive redraw
 stands in for the original's replace-then-add, there is no fog on it, and the
 airbrakes' batches are not deflected with their flaps.
 
-## 3. The factory roofs (open)
+## 3. The factory roofs (fixed)
 
-At the Talon straight pose, the original hides a factory complex behind terrain
-that ours draws over. Ours renders the buildings' dark roofs as bowls on the
-horizon. Not traced: whether the original's terrain is a layer that draws after
-the factory, whether the factory belongs to a PVS section the original culls at
-this eye, or whether our section placement differs. The draws are
-`1381..1391` (`--ticks 1`, PVS on).
+**The first reading was wrong twice.** The audit named draws `1381..1391`
+(`factory_floor_01_rp_shinemap`, `Building_05`, `Building_07`, `energy_GLOW`,
+`piston_end_shinemap`) and asked whether the original's terrain hid them. An
+index bisect of the opaque loop at the audit's own pose (`talon-fast`, `--ticks
+1`, PVS on) shows those draws change **no pixel** (0 differing at a 3 % fuzz);
+the bowls are draws `1479..1494`, and excluding only them removes the bowls and
+leaves the terrain, the silo and the trees as the original shows them. Nor was it
+the terrain drawing late: the roof meshes are not in the original's frame.
+
+**What the roofs are.** Four animated nodes of `Data\Environments\16_Track\track.vex`
+(`0x3c0 Anim Transform` parents with a `sound` child each; nodes 789, 793, 804 and
+806), three batches apiece, flat slabs: 22, 143 and 71 vertices, 320 to 460 units
+long, 15.6 units tall, 29.7 wide. They move along authored keys (across
+`--anim-seconds 0 .. 8` they slide but stay beside the straight, so this is not an
+animation-phase difference) and all carry `DrawCall::moving`, which exempted them
+from **both** culling tests.
+
+**Discriminating question, written before the capture.** In the original's GE list
+at this pose, is a batch with these vertex counts and extents submitted? *Present*
+would make it a depth or draw-order difference on our side; *absent* a section or
+node-visibility difference. PPSSPP's `gpu.record.dump` returns the frame's whole GE
+list ([`psp-ge-dump.py`](../../scripts/psp-ge-dump.py); method in
+[ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md), "Reading the
+frame's GE list"). Each PRIM's world-space box under its world matrix gives a
+signature (vertex count, sorted extents), and the same signature is taken off our
+own draws.
+
+**Result: absent.** Six dumps over four poses on one boot (`talon-fast` twice,
+`talon-mid`, `talon-mid2` twice, the start grid) and a cold second boot at the
+fast pose: no PRIM of any of the seven carries a roof signature (0 hits, not a
+near miss). A moving mesh's box changes with its rotation, so the absence was
+re-checked with numbers a rotation cannot change: **no dump holds a single
+143-vertex PRIM** (the slabs' main batch, in all four roof nodes), and the only
+22/35/71-vertex PRIMs whose longest vertex-to-vertex distance comes within 5 % of
+a slab's are a 35-vertex object at one fixed world box in three dumps taken
+seconds apart (principal extents 264 x 117 x 71 against the slab's 264 x 30 x 2.5,
+so not the slab, and not moving). Positive control, same method: 88 to 98 % of our static batches find
+their twin in the original's list (135 of 153 at `talon-fast`, 151 of 157 at the
+grid, 182 of 188 at `talon-mid2`, 265 of 271 on the second boot; 97 of 152 at the
+second fast dump, where the craft had drifted 5 units/s off the pose), so the
+signature reads batches when they are there.
+
+**Cause: a node-visibility difference, not depth.** `oag_render::pvs::visible`
+returned `true` at the top for a moving draw, skipping the authored section mask as
+well as the frustum. The mask keys on the draw's node, not its position, so it
+needs no trustworthy bound. Applying it to moving draws (frustum still exempt):
+
+| Pose | moving draws we submit, before / after | original's moving batches we still draw, before / after |
+| --- | --- | --- |
+| `talon-fast`, boot 1 (two dumps) | 214 / 81 | 60 / 60 and 76 / 76 |
+| `talon-fast`, boot 2 | 214 / 81 | 16 / 16 |
+| `talon-mid2` (at rest) | 214 / 81 | 78 / 78 |
+| start grid (at rest) | 214 / 21 | 18 / 18 |
+| `talon-mid` (at rest) | 214 / 24 | 0 / 0 |
+
+Every moving batch whose signature the original's list contains survives the
+rule (the dropped ones are "no signature match", which for a moving batch is
+weaker than "not submitted"), and the sixteen roof batches go (16 roof draws before, 0 after, at all of the poses rendered). The
+original's own frame omits what its sections hide, and the section mask is
+authored data. **Confidence 75**: four poses on Talon's Junction, one circuit; the original's loader has not been read doing the
+walk (`docs/formats/track.md`), and the signature is a match by shape and not by
+address. A moving draw that passes the mask but is absent from the original's list
+still exists (21 to 24 at the rest poses): the original frustum-culls by a real
+bound, which we cannot. At `talon-mid` the original draws no moving batch at all,
+so that pose confirms nothing for the rule.
+
+**Seen as a player.** `data/shots/frame-audit/talon-fast/roofs-orig-before-after.png`: the
+original, ours before and ours after at the fast pose. The dark slabs left of the
+silo are gone and the grass, the silo and the trees read as the original's.
+
+**Not done.** Static draws: 2 to 12 % have no twin in the original's list at each
+well-posed dump (batches it splits differently, or culls by a bound we lack); that
+is unexamined, not a finding. The end-to-end picture check is one
+pose; the two rest poses show a few-pixel change before and after.
 
 ## Reproducing
 
@@ -257,6 +325,9 @@ this eye, or whether our section placement differs. The draws are
 uv run --with websocket-client scripts/psp-drive.py --port 45093 menu
 uv run --with websocket-client scripts/psp-drive.py --port 45093 place --pos=X,Y,Z --tangent=X,Y,Z --up=X,Y,Z --speed 0
 uv run --with websocket-client scripts/psp-trace.py --port 45093 --ticks 3 --camera --out t.csv --shot-every 1 --shot-dir shots
+# the original's submitted batches at a pose (section 3)
+uv run --with websocket-client --with zstandard scripts/psp-ge-dump.py dump --port 45093 --out frame.ppdmp
+uv run --with zstandard scripts/psp-ge-dump.py census frame.ppdmp --out frame.prims.json
 # ours
 oag-game --race --no-audio --size 480x272 --render-scale 100 --msaa off --motion-blur off \
     --screen-filter off --anisotropy off --ticks 1 --pose-from t.csv --pose-tick 2 --screenshot ours.png

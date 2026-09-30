@@ -237,12 +237,17 @@ The two halves must compose back to the whole chain or every animated mesh draws
 subtly wrong with nothing else noticing, so that is asserted directly against
 `world_transforms_at` at four different times.
 
-**Culling is switched off for a moving draw** ([`DrawCall::moving`]). Its bounds
-describe where it was at time zero and nothing about where it is now, and an
-honest bound would be its whole authored path - 5,000 units on the widest node,
-which would swallow most of the circuit and cull nothing anyway. That leaves
-about 7% of a circuit's meshes drawn unculled, against a moving object vanishing
-when the tests disagree with where it is.
+**The frustum test is switched off for a moving draw** ([`DrawCall::moving`]);
+the section mask is not. Its bounds describe where it was at time zero and
+nothing about where it is now, and an honest bound would be its whole authored
+path - 5,000 units on the widest node, which would swallow most of the circuit
+and cull nothing anyway. That leaves about 7% of a circuit's meshes drawn past
+the frustum, against a moving object vanishing when the test disagrees with
+where it is. The mask keys on the node, so it needs no bound, and **the original
+applies it to moving meshes too** (2026-09-30, [frame-audit.md](frame-audit.md)
+section 3): until that day this page said culling was off for both tests, and
+the result was sixteen batches of slab transports drawn as dark roofs on Talon's
+straight that the original never submits.
 
 One simplification is deliberate and measured: `mesh.wgsl` does not build an
 inverse transpose for normals, though 129 of the 920 authored scale keys are

@@ -609,16 +609,26 @@ pub fn visible(
     chunks: Option<&ChunkSet>,
     frustum: Option<&Frustum>,
 ) -> bool {
-    // A draw the shader moves has bounds that describe where it was at time
-    // zero and nothing about where it is now, so neither test below can be
-    // trusted on it. See [`DrawCall::moving`].
-    if draw.moving {
-        return true;
-    }
+    // The authored section mask is structural - it keys on the draw's node,
+    // not on where the geometry is - so it holds for a draw the shader moves
+    // exactly as for a static one. **The original hides a moving mesh by its
+    // section too**: at four poses on Talon's Junction, every moving draw
+    // whose shape signature the original's GE list contained (16 to 78 of
+    // them) was still drawn under this rule, while the rule dropped 133 to
+    // 193 of the 214 moving draws with no signature match - among them the
+    // sixteen batches of the slab transports that drew as dark roofs beside
+    // the straight, absent from every dump by vertex count alone. See
+    // `docs/rendering/frame-audit.md` section 3.
     if let Some(set) = visible_set
         && !set.allows(sections)
     {
         return false;
+    }
+    // The frustum is the one test a moving draw cannot take: its bounds
+    // describe where it was at time zero and nothing about where it is now.
+    // See [`DrawCall::moving`].
+    if draw.moving {
+        return true;
     }
     // The PS3's first tier, and mutually exclusive with the one above in
     // practice: a Pulse track has sections and no chunk indices, an HD one has
