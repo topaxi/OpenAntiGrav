@@ -20,7 +20,9 @@ use oag_rcs::rcsskeleton::{IDENTITY, Skeleton, multiply};
 use oag_rcs::rig::NodeMotion;
 use oag_rcs::{rcsanimclip, rcsskeleton};
 
-use crate::mesh::anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
+use oag_vex::vex;
+
+use crate::mesh::anim_node::{self, AnimNode, Motion, NODE_ANIM_LIMIT};
 
 /// The two files that animate a 2048 model, parsed.
 #[derive(Debug, Clone, PartialEq)]
@@ -92,23 +94,16 @@ pub struct Plan {
     pub frozen: usize,
 }
 
-/// Plans every node of `scene`.
+/// Where a node bakes by its own bind matrix alone.
 ///
-/// Without `animation`, every node-bound mesh bakes through the model's
-/// bind matrix and nothing takes a slot. With one, each model node is found
-/// in the skeleton by id; a node the clip moves, or under one it moves,
-/// takes a slot, and the rest bake through the skeleton's own composition
-/// (pivots included), which is where the model's bind matrix and the
-/// skeleton disagree - see `oag_rcs::rcsskeleton::Node::local`.
-#[must_use]
-pub fn plan(scene: &psp2::nodes::Scene, animation: Option<&Animation>) -> Plan {
-    // A node past the model's written bind count has no matrix of its own,
-    // and with no skeleton entry either nothing authored says where its
-    // vertices - which are in the node's space - belong. Not drawn, and
-    // counted as unplaced: an identity there would draw the geometry at the
-    // node's own origin, which is the one place the file does not put it (on
-    // Omega's first frame that was a prop under the camera).
-    let by_bind = |n: &psp2::nodes::Node| match n.bind {
+/// A node past the model's written bind count has no matrix of its own, and
+/// with no skeleton entry either nothing authored says where its vertices -
+/// which are in the node's space - belong. Not drawn, and counted as unplaced:
+/// an identity there would draw the geometry at the node's own origin, which is
+/// the one place the file does not put it (on Omega's first frame that was a
+/// prop under the camera).
+fn by_bind(n: &psp2::nodes::Node) -> Placement {
+    match n.bind {
         Some(bind) => Placement {
             to_world: bind,
             xform: 0,
@@ -121,7 +116,19 @@ pub fn plan(scene: &psp2::nodes::Scene, animation: Option<&Animation>) -> Plan {
             unplaced: true,
             ..Placement::STATIC
         },
-    };
+    }
+}
+
+/// Plans every node of `scene`.
+///
+/// Without `animation`, every node-bound mesh bakes through the model's
+/// bind matrix and nothing takes a slot. With one, each model node is found
+/// in the skeleton by id; a node the clip moves, or under one it moves,
+/// takes a slot, and the rest bake through the skeleton's own composition
+/// (pivots included), which is where the model's bind matrix and the
+/// skeleton disagree - see `oag_rcs::rcsskeleton::Node::local`.
+#[must_use]
+pub fn plan(scene: &psp2::nodes::Scene, animation: Option<&Animation>) -> Plan {
     let Some(animation) = animation else {
         return Plan {
             placements: scene.nodes.iter().map(by_bind).collect(),
@@ -224,6 +231,78 @@ pub fn plan(scene: &psp2::nodes::Scene, animation: Option<&Animation>) -> Plan {
         anim_nodes,
         unmatched,
         frozen,
+    }
+}
+
+/// Plans `scene` off the animation a `.vex` authors beside it.
+///
+/// **Omega's front-end scene ships its motion in the `.vex`, not in a
+/// `.rcsskeleton`/`.rcsanimclip` pair** - the same file HD ships, re-exported
+/// with a PS4 `.rcsmodel` for its geometry - so the `Anim Transform` nodes are
+/// what moves it. Each of the model's mesh objects is found in the `.vex` by
+/// its shape name, and placed the way the PS3 path places a chunk
+/// (`mesh::anim_node::placement`): baked through the static chain between its
+/// node and the nearest `Anim Transform` above it, and moved by that
+/// transform's slot of the shader's table, or baked through the whole chain
+/// where nothing above it moves.
+///
+/// A model node no mesh object names, or whose shape the `.vex` does not, falls
+/// back to its own bind matrix and is counted in [`Plan::unmatched`]. A `.vex`
+/// that will not parse plans nothing at all, every node baking by its bind.
+#[must_use]
+pub fn plan_from_vex(scene: &psp2::nodes::Scene, vex_data: &[u8]) -> Plan {
+    let by_bind_only = || Plan {
+        placements: scene.nodes.iter().map(by_bind).collect(),
+        ..Plan::default()
+    };
+    let Ok(nodes) = vex::nodes(vex_data) else {
+        return by_bind_only();
+    };
+    let Ok(classes) = vex::classes_of(vex_data) else {
+        return by_bind_only();
+    };
+    let anchors = vex::anim_anchors(vex_data, &nodes);
+    let anchor_world = vex::anchor_world(vex_data, &nodes, 0.0);
+    let (anim_nodes, slots) = anim_node::collect(vex_data, &nodes, &anchors, classes);
+    let mut unmatched = 0;
+    let placements = scene
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(index, model_node)| {
+            let found = scene
+                .meshes
+                .iter()
+                .find(|mesh| mesh.node == Some(index))
+                .and_then(|mesh| {
+                    nodes
+                        .iter()
+                        .position(|node| node.name.as_deref() == Some(mesh.name.as_str()))
+                });
+            let Some(found) = found else {
+                unmatched += 1;
+                return by_bind(model_node);
+            };
+            let placed = anim_node::placement(&anchors, &anchor_world, &slots, found);
+            let at_zero = match (placed.xform, placed.bounds_matrix) {
+                (0, _) => placed.to_world,
+                (_, Some(anchor)) => vex::multiply(&placed.to_world, &anchor),
+                (_, None) => placed.to_world,
+            };
+            Placement {
+                to_world: placed.to_world,
+                xform: placed.xform,
+                world_at_zero: at_zero,
+                hidden: false,
+                unplaced: false,
+            }
+        })
+        .collect();
+    Plan {
+        placements,
+        anim_nodes,
+        unmatched,
+        frozen: 0,
     }
 }
 

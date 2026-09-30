@@ -627,3 +627,59 @@ fn upload_sprite(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureVie
     }
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
+
+/// One of the pictures a draw list can put under its quads, in the order the
+/// list puts them. The derived order is the tie-break when two sit at the same
+/// quad: the Fury pass first, then the scene, then the movie.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum Cut {
+    Fury,
+    Scene,
+    Video,
+}
+
+impl super::Renderer {
+    /// Uploads the Fury backdrop's clouds and builds its passes.
+    ///
+    /// Called once, by whoever built the menus, with the clouds the boot read
+    /// off the disc; from then on a `Draw::FuryBackdrop` in a list draws.
+    pub fn set_fury_backdrop(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        clouds: &[PointCloud],
+    ) {
+        self.fury = Some(FuryBackdrop::new(device, queue, self.target_format, clouds));
+    }
+
+    /// Puts the HD-style backdrop's scene on the GPU; from then on a
+    /// `Draw::SceneBackdrop` in a list draws. A scene that will not build is
+    /// reported and leaves the list's entry drawing nothing.
+    pub fn set_scene_backdrop(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        model: oag_render::mesh::Model,
+    ) {
+        match super::SceneBackdrop::new(device, queue, self.target_format, model) {
+            Ok(scene) => self.scene = Some(scene),
+            Err(error) => log::warn!("menu scene backdrop: {error:#} - it draws nothing"),
+        }
+    }
+
+    /// The offscreen passes of whichever backdrops the list carries, encoded
+    /// before the page's own pass.
+    pub(super) fn prepare_backdrops(
+        &mut self,
+        (device, queue, encoder): (&wgpu::Device, &wgpu::Queue, &mut wgpu::CommandEncoder),
+        (fury, scene): (Option<&Frame>, Option<&oag_ui::scene_backdrop::Frame>),
+        viewport: (u32, u32),
+    ) {
+        if let (Some(frame), Some(fury)) = (fury, &mut self.fury) {
+            fury.prepare(device, queue, encoder, frame, viewport);
+        }
+        if let (Some(frame), Some(scene)) = (scene, &mut self.scene) {
+            scene.prepare(device, queue, encoder, frame, viewport);
+        }
+    }
+}

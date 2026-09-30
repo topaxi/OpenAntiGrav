@@ -726,10 +726,10 @@ pub(crate) struct Shell {
     /// source whose root authors no `TextInfoIsAlwaysLast` viewport, which is
     /// every title but Pulse today.
     pub(crate) ticker: Option<oag_ui::campaign::footer::TickerLayout>,
-    /// The Fury menu backdrop's settings, clouds and tints, read at boot -
-    /// see `oag_game::boot::fury`. `None` on every source but a Fury-style
-    /// HD, and then the menus sit on the movie or the page's clear.
-    pub(crate) fury_backdrop: Option<std::sync::Arc<oag_game::boot::fury::FuryAssets>>,
+    /// The style's menu backdrop, read at boot - see `oag_game::boot::backdrop`.
+    /// `None` where the source has none, and then the menus sit on the movie or
+    /// the page's clear.
+    pub(crate) fury_backdrop: Option<std::sync::Arc<oag_game::boot::backdrop::MenuBackdrop>>,
     /// The race box's two selection screens, read at boot - see
     /// `oag_game::boot::Shell::track_select`. `None` launches straight from
     /// the RACE page.

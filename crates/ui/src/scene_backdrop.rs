@@ -244,7 +244,10 @@ impl Scene {
     /// Seconds into the loop.
     #[must_use]
     pub fn seconds(&self) -> f32 {
-        loop_position(self.ticks as f32 / FRAMES_PER_SECOND, self.widget.anim_length)
+        loop_position(
+            self.ticks as f32 / FRAMES_PER_SECOND,
+            self.widget.anim_length,
+        )
     }
 
     /// The working copy now.
