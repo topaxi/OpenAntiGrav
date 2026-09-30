@@ -31,7 +31,7 @@ the patch's `data08.psarc`, plus the patch's `data05.psarc` with one more
 (`English(US)/frontend.bnk`). Beside them are 714 loose `.wem` files in `data00`
 and 734 in `data08`, under `Data/audio/sound/` (`data/audio/sound/` in the
 patch) with `English(US)/` for speech. Every bank is **bank generator version
-118** (Wwise 2017.1). No other archive carries either.
+118** (Wwise 2017.1, recalled from the version number and not read off the disc). No other archive carries either.
 
 ## The container
 
@@ -98,8 +98,10 @@ random/sequence (61), plus settings, attenuations and effects.
 The source's plugin id is `AKMAKECLASSID(type, company, number)`, `type |
 company << 4 | number << 16`. **Codec plugins** (`0x000N0001`): number 1 is PCM
 (10 sounds), number 12 is ATRAC9 (6,858 of 6,873 `data00` sounds, plus every
-music track source). Three sounds use source plugins (`0x00640002`, `0x00650002`,
-`0x00660002`: Wwise's silence, sine and tone generators), which carry no media.
+music track source). Five sounds in `data00` and seven in `data08` use *source* plugins instead
+(`0x00640002` and `0x00660002`, and in `data08` `0x00650002` too), which carry no
+media; they look like Wwise's built-in silence, sine and tone generators, which
+is recalled and not read off the disc.
 
 ### What was measured, and what it closes
 
@@ -189,10 +191,15 @@ codec:
    eight-channel) with `-xerror` and no message; random bytes in the same
    container stop at "Invalid scalefactor coding mode!". `atrac9dec` (a port of
    LibAtrac9) decodes all mono and stereo files, both loose and embedded.
-4. **The bank says so** (confidence 75). Every sound whose media is tagged
-   `0xFFFC` carries a codec plugin of number 12, and Wwise's own codec numbering
-   has `AKCODECID_ATRAC9` at 12. That number is recalled from the SDK's header,
-   not read off the disc; items 1-3 do not depend on it.
+4. **The bank says so.** Every source whose plugin is codec number 12 has
+   media tagged `0xFFFC`, and every one whose plugin is codec number 1 has media
+   tagged `0xFFFE` (PCM), **with no exception**: 7,785 ATRAC9 sources in `data00`
+   (6,858 sounds and 927 music-track sources) and 8,503 in `data08` (7,510 and
+   993), and 10 PCM sounds in each, each media found the way a player finds it
+   (`omega_data00_codec_plugin_names_the_media_tag`). That the number 12 *means*
+   ATRAC9 is `AKCODECID_ATRAC9` in Wwise's codec numbering, **recalled from the
+   SDK's header and not read off the disc** (confidence 75); items 1-3 do not
+   depend on it.
 
 Extra data, 18 bytes (confidence 90; the layout is fitted, every field checked
 against `fmt ` or the frame count):
@@ -273,7 +280,8 @@ any device.
 | Event, `Play`, sound and music-track layouts | 90 | exact-end on 2,183 of 2,183 Play; embedded size = `DIDX` size on every embedded sound; 0 unresolved media over two archives |
 | Parent id at the head of the base parameters | 85 | fitted: resolves to an object or root on every node, 110 roots; the rest of the structure unread |
 | `.wem` is ATRAC9 | 93 | four independent statements above |
-| Plugin number 12 is ATRAC9 | 75 | recalled from the SDK, agrees with the media |
+| Plugin number 12 *means* ATRAC9 | 75 | recalled from the SDK; agrees with the media on every source |
+| Plugin number 12 / 1 versus media tag `0xFFFC` / `0xFFFE` | 94 | 7,785 + 10 sources in `data00`, 8,503 + 10 in `data08`, 0 mismatches |
 | The 18 bytes of extra data | 90 | every field checked against `fmt ` and the frame count on every file |
 | Mono/stereo decode is right | 90 | two independent decoders agree to 1 LSB up to polarity |
 | Which polarity is Sony's | - | not known |

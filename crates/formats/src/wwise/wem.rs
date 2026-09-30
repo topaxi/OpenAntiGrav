@@ -39,9 +39,12 @@
 //!    other. **It refuses every four-, six- and eight-channel file** (58 of
 //!    them in each archive), so items 1 and 2 are what identifies those, and
 //!    FFmpeg's decode of the four- and eight-channel ones.
-//! 4. **The bank says so** (recalled, not read off the disc). Every sound whose
-//!    media is `0xFFFC` carries a codec plugin of number 12, and Wwise's codec
-//!    numbering has `AKCODECID_ATRAC9` at 12; items 1-3 do not depend on it.
+//! 4. **The bank says so.** Every sound and music-track source whose plugin is
+//!    codec number 12 has media tagged `0xFFFC`, and every one whose plugin is
+//!    number 1 has media tagged `0xFFFE`, with no exception (7,785 and 10 in
+//!    `data00`, 8,503 and 10 in `data08`). That number 12 *means* ATRAC9 is
+//!    recalled from Wwise's codec numbering, not read off the disc; items 1-3 do
+//!    not depend on it.
 //!
 //! # The extra data
 //!

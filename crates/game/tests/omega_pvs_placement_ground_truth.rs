@@ -208,8 +208,10 @@ fn world_placed_draws_peak_at_offset_zero_and_node_placed_ones_are_never_culled(
     }
 }
 
-/// A mesh object no cell sets is never drawn by the original, and the renderer
-/// draws it only when the PVS is off.
+/// A mesh object no cell sets is one HD's engine never draws (its loader was
+/// read to use one cell's bitmap as the frame's visible set), so it is
+/// *inferred*, at about confidence 75, that Omega's does not either; the
+/// renderer draws it only when the PVS is off.
 ///
 /// `tech_de_ra` forward's mesh object 2412, `tracksurface:wohdtrack_0022Shape`,
 /// is two triangles of `track_surface_displacement2out` in world space, is set

@@ -340,7 +340,7 @@ fn base_data00_banks() {
 /// Liverpool `SBlk` container the PSP and HD share, which
 /// `oag_formats::sblk` reads: six little-endian and four big-endian (the
 /// PS3's byte-swapped layout), all of them environment banks under
-/// `Data/environments/`. The handover thread counted them with the Wwise banks
+/// `Data/environments/`. An earlier census counted them with the Wwise banks
 /// because of the extension.
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu"]

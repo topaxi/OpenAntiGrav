@@ -10,8 +10,7 @@
 //!
 //! `omega_data08_*` read the patch's archive, which carries the newer copy of
 //! every bank and all of the loose media; `omega_data00_*` the base's. The
-//! ffmpeg cross-check needs `ffmpeg` on `PATH` and **fails, not skips, under
-//! `OAG_REQUIRE_GAME_DATA` without it**.
+//! ffmpeg cross-check needs `ffmpeg` on `PATH` and skips, printing why, without it.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -502,15 +501,13 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
         }
     }
     assert!(!picked.is_empty(), "a stereo file at least");
+    // A missing tool is a skip, as in the movie ground truths; the game-data
+    // switch is for missing game data.
     let ffmpeg_present = std::process::Command::new("ffmpeg")
         .arg("-version")
         .output()
         .is_ok();
     if !ffmpeg_present {
-        assert!(
-            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-            "OAG_REQUIRE_GAME_DATA is set but ffmpeg is not on PATH"
-        );
         println!("skipping: ffmpeg is not on PATH");
         return;
     }
@@ -613,4 +610,110 @@ fn ffmpeg_pcm(wem: &Wem<'_>) -> Vec<i16> {
         .iter()
         .map(|b| i16::from_le_bytes(*b))
         .collect()
+}
+
+/// A sound's codec plugin says what its media's `fmt ` tag is.
+///
+/// The join the identification leans on: every sound and music-track source
+/// whose plugin is codec number 12 has media tagged `0xFFFC` (ATRAC9), and
+/// every one whose plugin is number 1 has media tagged `0xFFFE` (PCM), over
+/// every source in the archive's banks - the media found the way a player finds
+/// it, embedded in some bank's `DIDX` or as the loose `<id>.wem`. A prefetch
+/// head is enough: `fmt ` is the first chunk.
+fn plugin_join(dir: &str, name: &str) -> Option<[usize; 3]> {
+    let mut archive = archive(dir, name)?;
+    let loose: std::collections::BTreeMap<(bool, u32), String> = archive
+        .paths()
+        .iter()
+        .filter_map(|p| {
+            let lower = p.to_ascii_lowercase();
+            let language = lower.contains("/english(us)/");
+            let id = lower
+                .rsplit('/')
+                .next()?
+                .strip_suffix(".wem")?
+                .parse()
+                .ok()?;
+            Some(((language, id), p.clone()))
+        })
+        .collect();
+    let blobs = banks(&mut archive);
+    let parsed: Vec<Bank<'_>> = blobs
+        .iter()
+        .filter_map(|(_, blob)| Bank::parse(blob).ok())
+        .collect();
+    let library = Library::new(parsed.clone());
+    let tag_of = |head: &[u8]| -> u16 {
+        assert!(
+            head.len() >= 22 && &head[12..16] == b"fmt ",
+            "a wem opens with fmt "
+        );
+        u16::from_le_bytes([head[20], head[21]])
+    };
+    // [ATRAC9 sources checked, PCM sources checked, mismatches or unresolved]
+    let mut out = [0usize; 3];
+    let mut check = |source: oag_formats::wwise::hirc::Source,
+                     archive: &mut oag_assets::psarc::Archive| {
+        let plugin = source.plugin;
+        let want = match plugin.codec() {
+            Some(oag_formats::wwise::hirc::Codec::Atrac9) => TAG_ATRAC9,
+            Some(oag_formats::wwise::hirc::Codec::Pcm) => TAG_PCM,
+            _ => return,
+        };
+        let tag = if let Some(bank) = library.bank_with_media(source.media_id) {
+            tag_of(
+                library.banks()[bank]
+                    .embedded(source.media_id)
+                    .expect("in DATA"),
+            )
+        } else if let Some(path) = loose.get(&(source.language_specific(), source.media_id)) {
+            tag_of(&archive.read_path(path).expect("the loose wem reads"))
+        } else {
+            out[2] += 1;
+            return;
+        };
+        out[usize::from(want == TAG_PCM)] += 1;
+        out[2] += usize::from(tag != want);
+    };
+    for bank in &parsed {
+        for object in bank.objects() {
+            match object.kind {
+                oag_formats::wwise::Kind::Sound => {
+                    if let Some(sound) = oag_formats::wwise::hirc::Sound::parse(bank.body(object)) {
+                        check(sound.source, &mut archive);
+                    }
+                }
+                oag_formats::wwise::Kind::MusicTrack => {
+                    for source in oag_formats::wwise::hirc::MusicTrack::parse(bank.body(object))
+                        .into_iter()
+                        .flat_map(|t| t.sources)
+                    {
+                        check(source, &mut archive);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    Some(out)
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_data00_codec_plugin_names_the_media_tag() {
+    let Some(c) = plugin_join("omega-eu", "data00.psarc") else {
+        return;
+    };
+    // 6,858 sounds and 927 music-track sources, and 10 PCM sounds.
+    assert_eq!(c, [7_785, 10, 0]);
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu-patch"]
+fn omega_data08_codec_plugin_names_the_media_tag() {
+    let Some(c) = plugin_join("omega-eu-patch", "data08.psarc") else {
+        return;
+    };
+    // 7,510 sounds and 993 music-track sources, and 10 PCM sounds.
+    assert_eq!(c, [8_503, 10, 0]);
 }

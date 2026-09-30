@@ -453,8 +453,11 @@ a PS4 mount them.
   draws the PVS rejects and the frustum passes and projecting them onto that
   block: mesh object 2412, `tracksurface:wohdtrack_0022Shape`, two triangles of
   `track_surface_displacement2out` in world space, **set in none of the
-  circuit's 882 cells** (56 of its 2,659 mesh objects are set in none). The
-  original never draws it; nothing the original draws went missing
+  circuit's 882 cells** (56 of its 2,659 mesh objects are set in none). That
+  the original never draws it is an inference (confidence 75): no Omega
+  executable has been read, and HD's PS3 loader was read to use one cell's
+  bitmap as the frame's visible set, so a chunk no cell sets is one that engine
+  never draws. Nothing else the PVS-off frame draws differs
   (`omega_pvs_placement_ground_truth`).
   **The cell padding is HD's** (`CHUNK_PAD`, `CHUNK_TRUST_RADIUS`, chosen for
   HD's 12-unit cell spacing; Omega's are about 5.6 apart) - **chosen, not
@@ -471,8 +474,8 @@ a PS4 mount them.
   unresolved media over `data00` and `data08`) and the `.wem`: **every one is
   Sony's ATRAC9**, mono and stereo decode in process and agree with FFmpeg to
   one LSB up to polarity, four-, six- and eight-channel files do not decode yet.
-  The handover thread's "10 more banks in `data02`" are the old `SBlk`
-  container, not Wwise. One Tech De Ra cue plays through the mixer to a WAV.
+  The ten `.bnk` in `data02`, which an extension-based census had counted
+  as Wwise, are the old `SBlk` container. One Tech De Ra cue plays through the mixer to a WAV.
   Still silent: `Data\Psys\*.POB` particle effects are not in this archive set
   under those names; the blob shadow is this project's generated falloff, not the
   disc's.
