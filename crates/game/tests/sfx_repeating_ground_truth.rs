@@ -20,7 +20,9 @@ use oag_game::audio::sfx::{Banks, Cue, Playing, VoicePlace};
 const RATE: u32 = 44_100;
 const TICK: f64 = 1.0 / 60.0;
 const MASTER: f64 = 44_100.0 * 3.0 / 512.0;
-const PULSE: [&str; 2] = ["pulse-psp-usa.chd", "pulse-psp-eu.chd"];
+const PULSE: [&str; 3] = ["pulse-psp-usa.chd", "pulse-psp-eu.chd", "pulse-ps2-eu.chd"];
+/// Titles whose lists are read on no binary this runner was read from.
+const NOT_PSP_TICK: [&str; 2] = ["pure-psp-usa.chd", "hdfury-ps3-eu-dec.iso"];
 
 fn banks(path: &std::path::Path) -> Banks {
     let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
@@ -160,4 +162,24 @@ fn the_explosion_re_keys_its_second_waveform_every_43_ticks_over_a_held_loop() {
         assert_eq!(mixer.active_voices(), 0, "{file}: stopped");
     }
     assert!(ran > 0, "no Pulse disc image was present");
+}
+
+/// The runner's semantics (the per-tick clear of `0x16`'s flag, the guard's
+/// parameter bytes, `HudSight` writing parameter 0) were read from Pulse's PSP
+/// executable, so a title on another tick keeps the one-shot path.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_title_off_the_psp_tick_builds_no_repeating_program() {
+    let mut ran = 0;
+    for file in NOT_PSP_TICK {
+        let Some(path) = oag_testdata::image(file) else {
+            continue;
+        };
+        ran += 1;
+        let banks = banks(&path);
+        for cue in [Cue::Blowup, Cue::LockOn] {
+            assert!(banks.program(cue).is_none(), "{file}: {}", cue.name());
+        }
+    }
+    assert!(ran > 0, "no Pure or HD disc image was present");
 }

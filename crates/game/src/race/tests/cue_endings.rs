@@ -112,6 +112,46 @@ fn a_missile_that_outlives_its_fuse_raises_the_cue_the_original_names_shurikenex
     );
 }
 
+/// The three ways a Missile impact reaches the cue table: a craft hit, the fuse
+/// (`blast: false`), and a wall ending after the bounce budget, which is neither.
+#[test]
+fn a_missile_that_spends_its_bounces_is_neither_the_fuse_nor_a_craft_hit() {
+    use oag_gameplay::projectile::Impact;
+    let base = Impact {
+        point: Vec3::ZERO,
+        kind: oag_tables::weapons::Weapon::Missile,
+        owner: 0,
+        struck: None,
+        blast: true,
+        effect: None,
+    };
+    let ending = |impact: Impact| super::super::weapons::missile_ending_cue(&impact);
+    assert_eq!(
+        ending(Impact {
+            struck: Some(1),
+            ..base
+        }),
+        Some(Cue::MissileHitShip)
+    );
+    assert_eq!(
+        ending(Impact {
+            blast: false,
+            ..base
+        }),
+        Some(Cue::MissileExpire)
+    );
+    assert_eq!(ending(base), None, "a wall ending plays neither");
+    assert_eq!(
+        ending(Impact {
+            kind: oag_tables::weapons::Weapon::Plasma,
+            blast: false,
+            ..base
+        }),
+        None,
+        "another weapon's no-blast ending is not the Missile's fuse"
+    );
+}
+
 /// `LeachBeam_InitUnlocked` plays `LEACHFAIL`; only the locked constructor
 /// plays `LEACH`.
 #[test]

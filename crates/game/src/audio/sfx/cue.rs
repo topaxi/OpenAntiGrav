@@ -401,13 +401,13 @@ pub enum Cue {
     /// The Missile's own travel loop, from launch to whatever ends it.
     ///
     /// `~MISSILETVL` (the bank spells it with `~`; `missile.md`'s own prose
-    /// calls it `_MISSILETVL`, trust the bank) is confirmed alongside
-    /// [`Self::Missile`] above at the same confidence, but neither the
-    /// emitter nor its radius is stated. **Chosen, not measured: placed at
-    /// the bolt's own position, reusing [`Self::RocketTravel`]'s measured
-    /// `600.0` radius** rather than [`oag_audio::Emitter::CRAFT_RADIUS`],
-    /// on the strength of the two weapons' shared `<WEAPON>TVL` naming and
-    /// shared launch shape - not a reading of `Missile_Init` itself.
+    /// calls it `_MISSILETVL`, trust the bank) is played by `Missile_Init`
+    /// (`0x0885a3f8`) through an emitter the round allocates for itself
+    /// (`round+0x64`, `+0x50` pointed at the round's own matrix), its radius
+    /// `+0x38` written to `0x44160000` = **600.0**, the handle kept at
+    /// `round+0x68`. Read 2026-09-30, confidence 88: the placement and the
+    /// radius, which this port had chosen by reusing [`Self::RocketTravel`]'s,
+    /// are measured. [`Self::Missile`] rides the emitter the caller passes.
     MissileTravel,
     /// A Missile glancing off a wall - **every bounce, not the final
     /// ending.**
@@ -418,17 +418,12 @@ pub enum Cue {
     /// `crate::race::weapons::visuals::bounced_this_tick`, which this cue
     /// shares the `bounces_before`/after comparison with. **Not the
     /// projectile's final ending**: a missile that exhausts its bounce
-    /// budget and finally detonates plays neither this nor any cue this
-    /// port fires - see `Impact::blast`'s own doc comment on `blast: false`
-    /// for that ending, and the by-catch `missile.md` records reading its
-    /// own literal as `SHURIKENEXPL` there (confidence 60, likely a
-    /// copy-paste bug in the original) - left unwired rather than wired
-    /// under a name this port does not trust. Placed at the bolt's own
-    /// position, the same chosen `600.0` radius as [`Self::MissileTravel`].
-    ///
-    /// **`MISSILEEXPSHIP` is deliberately not a variant here.** The bank
-    /// binds it (2 waveforms), but no call site was found on `missile.md` -
-    /// an effect whose trigger is not recovered stays unwired.
+    /// budget and detonates on a wall (`struck: None`, `blast: true`) plays
+    /// neither this nor any other cue here - the teardown plays
+    /// `MISSILEEXPWALL` off bit `0x10`, whose setter is not read (see
+    /// [`Self::MissileHitShip`] for the teardown itself). Placed at the
+    /// bolt's own position, the `600.0` radius [`Self::MissileTravel`]
+    /// measures.
     MissileHitWall,
     /// A Missile ending on a craft.
     ///
@@ -453,8 +448,11 @@ pub enum Cue {
     /// `weapons.bnk`. Earlier notes took the string for a misread and left it
     /// unwired; it is the disc's own data (a copy-paste in the original, but
     /// the original plays it), so it plays. Confidence 88 for the trigger; that
-    /// it is a slip of the authors' is inference. Fires from the impact loop for
-    /// a Missile impact that struck nothing.
+    /// it is a slip of the authors' is inference. Fires for the one Missile impact
+    /// that struck nothing and spends no blast (`blast: false`), the fuse
+    /// (`missile_ending_cue` in `race::weapons`). **On HD the call site is
+    /// unread**: HD's bank carries the cue, so it plays there too, on the
+    /// strength of Pulse's binary alone.
     MissileExpire,
     /// The Cannon's own round leaving the barrel.
     ///

@@ -144,7 +144,7 @@ float d = dot(s->velocity, normal);
 s->velocity = s->velocity + (-normal) * (2.0f * d);   // v - 2(v.n)n
 position    = hit + normal * 0.1f;                    // 0x3dcccccd
 Psys_Spawn_q(..., "WO_SHURIKEN_BOUNCE", 'SHBO', ...); // 0x08a7cdbc
-Sound_Play(1.0f, s->travel_voice, ..., "SHURIKENHIT");// 0x08a7cd5c
+Sound_Play(1.0f, s->emitter /* round+0x50, 300.0 radius */, ..., "SHURIKENHIT");// 0x08a7cd5c
 ```
 
 **A perfect specular reflection with no damping term anywhere in the

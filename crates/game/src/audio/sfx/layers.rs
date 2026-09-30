@@ -271,7 +271,7 @@ pub struct Program {
     pub(super) ticks_per_second: f64,
 }
 
-/// `name` as a [`Program`], when the title's tick is measured, the list is
+/// `name` as a [`Program`], when the title runs on the PSP tick, the list is
 /// one a runner runs and every waveform it keys on decodes and pans.
 ///
 /// # Errors
@@ -282,6 +282,11 @@ pub(super) fn program(
     name: &str,
     tick: SequenceTick,
 ) -> anyhow::Result<Option<Program>> {
+    // The runner's semantics are Pulse PSP's; PS2 lends its tick, the same way
+    // the timelines do. A title on another tick keeps the one-shot path.
+    if !matches!(tick, SequenceTick::Psp) {
+        return Ok(None);
+    }
     let Some(ticks_per_second) = tick.ticks_per_second() else {
         return Ok(None);
     };

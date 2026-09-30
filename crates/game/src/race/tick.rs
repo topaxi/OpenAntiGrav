@@ -349,15 +349,13 @@ impl Race {
                 _ => None,
             };
             // A Missile's own endings: a craft hit plays `MISSILEEXPSHIP`, and
-            // one that outlived its fuse plays `SHURIKENEXPL` (a wall never
-            // ends it - it mirrors off) - see `Cue::MissileHitShip` and
-            // `Cue::MissileExpire`.
-            if impact.kind == Weapon::Missile {
-                let cue = if impact.struck.is_some() {
-                    crate::audio::sfx::Cue::MissileHitShip
-                } else {
-                    crate::audio::sfx::Cue::MissileExpire
-                };
+            // one that outlived its fuse plays `SHURIKENEXPL` - the fuse is the
+            // one impact that struck nothing and spends no blast
+            // (`blast: false`). A missile that spends its bounce budget on a
+            // wall also strikes nothing but does blast, and plays neither: the
+            // pool plays `MISSILEEXPWALL` off a bit this port has not read the
+            // setter of. See `Cue::MissileHitShip` and `Cue::MissileExpire`.
+            if let Some(cue) = weapons::missile_ending_cue(impact) {
                 self.sim
                     .cues
                     .push(crate::audio::sfx::CueEvent::at_point(cue, impact.point));

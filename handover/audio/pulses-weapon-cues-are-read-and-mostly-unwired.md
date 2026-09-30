@@ -72,7 +72,16 @@ the addresses.
   `sfx_weapon_ground_truth::a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts`
   and `projectile::tests::a_cannon_round_that_hits_nothing_is_reaped_at_one_second`.
 - **`~QUAKETRAVEL` is one voice, not two**: the original opens one per road span
-  (up to two, when the wave crosses a join). Chosen, not measured.
+  (up to two, when the wave crosses a join). Chosen, not measured. **And it is
+  flat-picked**: the cue authors two loops of one waveform at 30 and 330 degrees
+  (the second bent by 2 semitones), and `TravelVoices::follow` picks one and plays
+  it centred. The same flat pick applies to the other travel loops.
+- **A Missile that spends its bounce budget on a wall plays nothing here**: its
+  teardown plays `MISSILEEXPWALL` off bit `0x10`, whose setter (in `Missile_Update`)
+  is unread. The fuse and craft-hit endings are wired.
+- **HD**: its bank carries `SHURIKENEXPL`, `MISSILEEXPSHIP`, `~QUAKETRAVEL`,
+  `LEACHFAIL` and `SHURIKEN`, so they play there on the strength of Pulse's binary
+  alone; HD's own call sites are unread.
 - **Not heard by a human yet**: none of the newly wired cues has been listened
   to; only the mixer's counts and the command lists were checked.
 - **Not read**: whether an opponent's Quake or Shuriken launch sounds through the

@@ -919,3 +919,27 @@ impl Race {
         fired
     }
 }
+
+/// The cue a Missile's ending plays, if it is one whose trigger is read.
+///
+/// A craft hit plays `MISSILEEXPSHIP`. The fuse - the one Missile impact with
+/// `blast: false`, see [`oag_gameplay::projectile::Impact::blast`] - plays the
+/// cue the original's `3.0 < age` pass names, `SHURIKENEXPL`. A missile that
+/// spends its bounce budget on a wall strikes nothing but does blast, and plays
+/// neither: the pool plays `MISSILEEXPWALL` off a bit whose setter this port
+/// has not read.
+pub(super) fn missile_ending_cue(
+    impact: &oag_gameplay::projectile::Impact,
+) -> Option<crate::audio::sfx::Cue> {
+    use crate::audio::sfx::Cue;
+    if impact.kind != oag_tables::weapons::Weapon::Missile {
+        return None;
+    }
+    if impact.struck.is_some() {
+        Some(Cue::MissileHitShip)
+    } else if !impact.blast {
+        Some(Cue::MissileExpire)
+    } else {
+        None
+    }
+}
