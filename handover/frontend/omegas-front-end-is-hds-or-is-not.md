@@ -157,6 +157,15 @@ content against `hd-frontend.md`.
      code is shared.
   4. Grids 16-18 have no `RequiredPoints` attribute and are skipped; their
      cells never reach the screen.
+  5. **2026-09-30, `omega-frontend-fixes`: the "hexagons do not start a race" report was the mouse.**
+     Hit regions were the 128x64 sprite texture, not the 72x62 hexagon, so a hover landed on a
+     neighbour; fixed and held by `campaign_pointer_ground_truth` (Omega and HD). Also closed: the
+     invisible click target on Omega's `Grid Selection`, and a refused `NitroBattle`/`Detonator`
+     cell now says so on screen. **Still unwalked:** a fresh profile has exactly two playable cells
+     (`grid0_3_1`, `grid0_3_2`, the only `Locked="false"` ones on an unlocked grid); everything else
+     opens by medal, so finishing a cell race and seeing a neighbour unlock on Omega has not been
+     walked (with the EndRace screens unwired, the built-in results table is what ends the race).
+     The maintainer's own `records.toml` holds no Omega medal, so nobody has yet.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 

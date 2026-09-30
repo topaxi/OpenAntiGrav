@@ -3809,3 +3809,39 @@ glyph; `Right` twice -> Moa Therma reversed; Enter -> `SHIP SELECT`; Escape ->
 `Data\Environments\03_Track\track_reversed.vex`. Mouse: a click on the
 frame's right half stepped, the left half stepped back, a right click
 returned to the RACE page. Shots in `data/scratch/hd-track-select/live/`.
+
+## Wipeout HD/Fury and Omega: a hover lands on the hexagon drawn, 2026-09-30
+
+`omega-frontend-fixes`. A maintainer playing Omega could not start a race from a
+hexagon. Walked from the language picker under Xvfb: the keyboard path was fine
+(`Return`, `Return` launches `grid0_3_1`; `Down`, `Return` launches `grid0_3_2`), and
+the **mouse** failed. The hex sprites (`Hexagon_HD.mip`, `_OUTLINE`, `_THICK_OUT`) are
+128x64 power-of-two textures whose opaque pixels are a 72x62 hexagon in the top-left
+corner (alpha box x 1..72, y 1..62 on Omega's; `Hexlock_HD.mip`'s glyph is x 20..54).
+[`oag_ui::campaign::pointer`] tested the placed texture rectangle as if it were the
+hexagon, so each hit region was a hexagon 128 wide and 111 tall centred 28 units right of
+the art. Neighbours overlapped and the first target in cell order won: hovering
+`grid0_3_2` (Speed Lap, unlocked) selected `grid0_2_2` (Time Trial, `Locked` unset), and a
+confirm on a padlocked cell does nothing (the measured Pulse behaviour, kept).
+
+The target is now the box of the sprite's opaque pixels (`Sheet::opaque_extent`: alpha at
+half strength or more, **chosen, not measured**), built by `oag_game::campaign::hit`, which
+the live session and the test both call.
+`crates/game/tests/campaign_pointer_ground_truth.rs` probes the centre and six points at
+0.7 of the circumradius of every occupied hex of every grid on Omega and on HD/Fury and
+requires each to land on its own cell; it fails on the old targets on both. Pulse's hexes
+carry an explicit size and are unaffected in practice.
+
+Two smaller mouse dead ends on the same screens, fixed together:
+
+- **Omega's `Grid Selection` has no flyer card**, so the click target that used to fall
+  back to `Flyer Pad Lock`'s authored rect (`x=934 y=304 512x512`, the padlock that sits on
+  a card) was an invisible square. With no card drawn a click anywhere in the page's content
+  band (`hd::CONFIRM_BAND`, between the header and footer rules) confirms the one tier on
+  screen; the arrows still win where they overlap. Chosen, not measured.
+- **A cell the engine cannot race says so.** `NitroBattle` and `Detonator` (25 of Omega's
+  167 cells) refused the launch with only a log line. `Cell Selection` now shows
+  `OAG_CAMPAIGN_MODE_UNSUPPORTED` (or `OAG_CAMPAIGN_TRACK_UNAVAILABLE` for a circuit the
+  disc lacks) a row above the footer, in the legend's own word face
+  (`NavigationLegend::notice`), until the next input. The wording and the row are ours. A
+  locked cell still shows nothing beyond its padlock.

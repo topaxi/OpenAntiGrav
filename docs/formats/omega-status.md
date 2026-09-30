@@ -248,7 +248,18 @@ Screenshots: `data/scratch/drive-2026-09-27/omega-gnf/omega-{boot,main,grid,cell
   front-end asset this lane looked for. Whether it is elsewhere under a
   different name, or genuinely absent from this build of the front end, was
   not chased.
-- **The menu block art** (`MenuSkin::blocks`) - deliberately left `None`.
+- **The menu block art** (`MenuSkin::blocks`) - deliberately left `None` (and trying HD's
+  `MENU_BLOCKS` on Omega on 2026-09-30 confirmed why: Omega's own `file2.gtf` decodes with
+  a fill swatch of alpha 0.004, so HD's numbers draw outlines with no fill, text still
+  invisible - the two binaries' blocks are not the same thing).
+  **Its consequence, fixed 2026-09-30:** with no block behind them, Omega's option rows were
+  white (`FEGlobals->TextColor`) on a white page (`HD_BG`). Where a row's text cannot be
+  read on the page the frame clears to (`menu::rows::text_is_lost_on_page`, lightness within
+  a quarter), each row and value now sits on a box in the frame's own authored `HD_Grey`
+  (`HD_Blue` selected), the way the strip's tabs are filled when there is no block art. The
+  box's size and the lightness threshold are **chosen, not measured**; the colours are
+  authored. Pulse, Pure and HD captures of `options`/`graphics` are byte-identical before
+  and after (their text is light on a dark page).
   HD's own `MenuBlocks` numbers are read out of `EBOOT.elf` at named
   addresses, nothing authored in any XML, and nobody has disassembled
   Omega's PS4 executable; pointing at HD's table would assert an unmeasured
@@ -309,6 +320,26 @@ artefact. See `data/scratch/drive-2026-09-27/omega-psarc.md` for the exact
 decode results and the full census.
 
 ## Campaign: confirming a cell starts its race, 2026-09-30
+
+**Correction, 2026-09-30 (`omega-frontend-fixes`): the mouse walk below proved less than it
+said, and a player could not start the second unlocked cell with a mouse.** It clicked
+`grid0_3_1`, the first target in the list, which wins every overlap; `grid0_3_2` (also
+`Locked="false"`, Speed Lap on `08_Track`) was never hovered. HD's and Omega's hex
+sprites are 128x64 power-of-two textures holding a 72x62 hexagon in the top-left corner
+(alpha box measured on `Hexagon_HD.mip`: x 1..72, y 1..62), and the pointer target was the
+whole texture, so every hit region was 128 wide, 111 tall and 28 units right of the art.
+Hovering `grid0_3_2` selected its padlocked neighbour `grid0_2_2` (the panel read
+`Zeitrennen / 08_Track`) and a confirm did nothing; the log said only `grid0_2_2 is
+locked`. The keyboard and pad path was never broken (`Return` and `Down`, `Return` both
+reach a race, walked from the language picker). Fixed: the target is the box of the
+sprite's opaque pixels (`Sheet::opaque_extent`, `oag_game::campaign::hit`), held by
+`crates/game/tests/campaign_pointer_ground_truth.rs` on every Omega and HD grid (it fails
+on the old targets). **HD had the same bug.** Two more things a mouse-only player met:
+`Grid Selection` has no flyer card on Omega, so its click target was the invisible
+`Flyer Pad Lock` rect - with no card drawn a click on the page's content band now confirms
+the tier (chosen, not measured); and a refused cell (25 of 167: `NitroBattle`, `Detonator`)
+only logged, it now shows `OAG_CAMPAIGN_MODE_UNSUPPORTED` above the footer. The walk below
+otherwise stands.
 
 `omega-campaign-launch`, walked windowed under Xvfb by mouse: `RACE CAMPAIGN`,
 `Grid Selection` (a click on the flyer's authored `Flyer Pad Lock` rect),

@@ -33,8 +33,11 @@ Fury `--anim-seconds 4` one). Disc-backed:
   the root page taking `Main Menu` and every other `default`.
 - **HD's own HD style** has the same widget; `menu_scene: true` on `oag_hd` would draw it, unverified, and
   changes HD's bytes.
-- **The menu rows are white on the white page** on Omega's HD-style colours (`BAC..`/`Deutsch` on `--menu-page
-  options`): the rows use `Skin::selected`/`normal` colours made for a dark page. Not this lane's.
+- ~~**The menu rows are white on the white page**~~ - fixed 2026-09-30 (`omega-frontend-fixes`):
+  where row text cannot be read on the page the frame clears to, each row and value sits on a box
+  in the frame's authored `HD_Grey` (`HD_Blue` selected), see `omega-status.md`. The box size and the
+  lightness threshold are chosen, not measured; Omega's real row blocks are code in a PS4 executable
+  nobody has read, and HD's block numbers do not reproduce on Omega's own `file2.gtf`.
 - The scene target's size and sampler state; Omega's own `AnimLength` reader (no PS4 program open).
 
 ## Next Steps
