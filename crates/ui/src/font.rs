@@ -594,6 +594,11 @@ pub struct Atlas {
     /// nothing here feeds the simulation, but determinism by default is cheaper
     /// than remembering where the exception was.
     glyphs: BTreeMap<char, Cell>,
+    /// Grid units per atlas texel: what a [`Cell`]'s pixel size means in the
+    /// grid the layout is authored in. `1.0` everywhere except a source whose
+    /// faces are drawn at a higher resolution than its grid - see
+    /// [`Self::with_texel_scale`].
+    pub texel_scale: f32,
     /// Whether this came off the disc.
     real: bool,
 }
@@ -637,6 +642,7 @@ impl Atlas {
             solid,
             line_height: CELL as f32,
             glyphs: BTreeMap::new(),
+            texel_scale: 1.0,
             real: false,
         }
     }
@@ -701,8 +707,24 @@ impl Atlas {
             )]
             line_height: font.line_height as f32,
             glyphs,
+            texel_scale: 1.0,
             real: true,
         }
+    }
+
+    /// This atlas with its texels read as `scale` grid units each.
+    ///
+    /// Omega's faces are the same as HD's at twice the pixel size (every glyph
+    /// width, height and advance of `helv`/`helvb`/`PS_BUTTONS` is 2.0x HD's
+    /// at the median), while its `skin.xml` authors HD's numbers, so its text
+    /// is laid out at half its texel size. `line_height` is stored in grid
+    /// units, so it moves with the scale; [`measure`] and the renderer's glyph
+    /// boxes read [`Self::texel_scale`]. `1.0` is an exact identity.
+    #[must_use]
+    pub fn with_texel_scale(mut self, scale: f32) -> Self {
+        self.line_height *= scale;
+        self.texel_scale *= scale;
+        self
     }
 
     /// Whether these glyphs came off the disc rather than out of this file.
@@ -782,7 +804,7 @@ pub fn base_letter(ch: char) -> char {
 pub fn measure(atlas: &Atlas, text: &str) -> f32 {
     text.chars()
         .filter_map(|c| atlas.cell(c))
-        .map(|cell| cell.advance)
+        .map(|cell| cell.advance * atlas.texel_scale)
         .sum()
 }
 
@@ -1038,6 +1060,21 @@ mod fold_tests {
         // Proportional, unlike the built-in set where every advance is 6.
         assert!(narrow.advance < wide.advance);
         assert!((measure(&atlas, "Ai") - (wide.advance + narrow.advance)).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_texel_scale_moves_line_height_and_measure_and_one_moves_nothing() {
+        let blob = synthetic_font(&[(b'A' as u16, 6, 9, 0, 0)]);
+        let font = fnt::Font::parse(&blob).expect("parse");
+        let plain = Atlas::from_font(&font);
+        let same = Atlas::from_font(&font).with_texel_scale(1.0);
+        assert_eq!(same.line_height, plain.line_height);
+        assert_eq!(measure(&same, "AA"), measure(&plain, "AA"));
+
+        let half = Atlas::from_font(&font).with_texel_scale(0.5);
+        assert_eq!(half.line_height, plain.line_height * 0.5);
+        assert_eq!(measure(&half, "AA"), measure(&plain, "AA") * 0.5);
+        assert_eq!(half.cell('A'), plain.cell('A'), "texel boxes stay texels");
     }
 
     #[test]

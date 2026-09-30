@@ -170,6 +170,28 @@ impl Space {
         display_aspect: 960.0 / 544.0,
     };
 
+    /// Wipeout: Omega Collection's 1920x1080 square pixels, shown as itself.
+    ///
+    /// Its front end is HD's `PI001` plugin carried forward, and its `skin.xml`
+    /// authors the same grid: `Studio Logo`'s `<Movie>` states `Width="1920"
+    /// height="1080"` and the whole of `mainmenu_definition.xml` reads against
+    /// it (`oag_omega::frontend::MENU_SKIN::space`). A PS4 source used to fall
+    /// through [`Space::of`] to [`Self::PSP`], so HD-scale coordinates were
+    /// drawn on a 480x272 grid and text came out about four times too large.
+    ///
+    /// **Grid measured, confidence 85**, on three sites in Omega's own
+    /// `skin.xml` (`omega_font_scale_ground_truth`): the legal line centred at
+    /// `x="960" y="972"`, and two `line.gtf` rules at `x="160"
+    /// width="1600"`, symmetric about 960, at `y="110"` and `y="975"`. A
+    /// separate constant rather than a reuse of [`Self::HD`] because the grid
+    /// is Omega's own reading; it happens to agree with HD's. The panel
+    /// a PS4 presents this on is **chosen, not measured**: 16:9 is assumed
+    /// from the grid alone.
+    pub const OMEGA: Self = Self {
+        size: (1920.0, 1080.0),
+        display_aspect: 16.0 / 9.0,
+    };
+
     /// What a texture's own pixel size means in this grid, per axis.
     ///
     /// **Only for the one case where the data gives no size**: an `<Image>` with
@@ -202,6 +224,25 @@ impl Space {
         }
     }
 
+    /// Grid units per texel of the source's own font atlases.
+    ///
+    /// `1.0` for every source but Omega, whose `helv`, `helvb` and
+    /// `PS_BUTTONS` are HD's faces at twice the pixel size (median glyph
+    /// width, height and advance ratio 2.0, all 242 shared glyphs of `helv`
+    /// and `helvb` within 1.7-2.4) under `skin.xml` numbers that are HD's own.
+    /// **0.5 is an inference, confidence 60**: the ratio is measured off the
+    /// disc, that the PS4 build draws them at half size is not - nothing of
+    /// the PS4 executable's text path has been read.
+    #[must_use]
+    pub fn font_texel_scale(platform: oag_disc::Platform) -> f32 {
+        // Keyed on the platform: `OMEGA` and `HD` are the same numbers.
+        if platform == oag_disc::Platform::Ps4 {
+            0.5
+        } else {
+            1.0
+        }
+    }
+
     /// The space a source authors in, from what its archives say it is.
     #[must_use]
     pub fn of(platform: oag_disc::Platform) -> Self {
@@ -209,6 +250,7 @@ impl Space {
             oag_disc::Platform::Ps2 => Self::PS2,
             oag_disc::Platform::Ps3 => Self::HD,
             oag_disc::Platform::Vita => Self::VITA,
+            oag_disc::Platform::Ps4 => Self::OMEGA,
             // A source we could not identify is read as a PSP one, which is
             // what every other unidentified-source path here already does.
             _ => Self::PSP,
@@ -265,5 +307,27 @@ pub fn pillarbox_in(space: Space, aspect: (u32, u32)) -> [f32; 4] {
     } else {
         let width = content * screen_w / frame;
         [(screen_w - width) / 2.0, 0.0, width, screen_h]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_ps4_source_authors_in_1080p_not_the_psp_grid() {
+        let space = Space::of(oag_disc::Platform::Ps4);
+        assert_eq!(space, Space::OMEGA);
+        assert_ne!(space, Space::PSP);
+        assert_eq!(space.size, (1920.0, 1080.0));
+    }
+
+    #[test]
+    fn only_omega_reads_its_font_texels_at_half_size() {
+        use oag_disc::Platform;
+        assert_eq!(Space::font_texel_scale(Platform::Ps4), 0.5);
+        for other in [Platform::Psp, Platform::Ps2, Platform::Ps3, Platform::Vita] {
+            assert_eq!(Space::font_texel_scale(other), 1.0);
+        }
     }
 }

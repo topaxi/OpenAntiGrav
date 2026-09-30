@@ -90,6 +90,7 @@ impl Renderer {
             GlyphSlot::Buttons => MODE_BUTTONS_ATLAS,
         };
         let width = font::measure(atlas, text) * scale;
+        let texel = atlas.texel_scale;
         let mut pen = match align {
             Align::Left => x,
             Align::Centre => x - width / 2.0,
@@ -106,7 +107,10 @@ impl Renderer {
             // Size and advance come from the cell rather than a constant: the
             // disc's fonts are proportional, and the built-in set fills the
             // same fields in with its fixed 5x7 box.
-            let (w, h) = (cell.width as f32 * scale, cell.height as f32 * scale);
+            let (w, h) = (
+                cell.width as f32 * scale * texel,
+                cell.height as f32 * scale * texel,
+            );
             let mut rect = [pen, y, w, h];
             let mut uv = [
                 cell.x as f32,
@@ -117,7 +121,7 @@ impl Renderer {
             if let Some((left, right)) = clip {
                 let (glyph_left, glyph_right) = (rect[0], rect[0] + rect[2]);
                 if glyph_right <= left || glyph_left >= right {
-                    pen += cell.advance * scale;
+                    pen += cell.advance * scale * texel;
                     continue;
                 }
                 // `rect` and `uv` trimmed together, so a half-visible glyph
@@ -139,7 +143,7 @@ impl Renderer {
                 chamfer: [0.0, 0.0],
                 tile: [0.0, 0.0],
             });
-            pen += cell.advance * scale;
+            pen += cell.advance * scale * texel;
         }
     }
 
