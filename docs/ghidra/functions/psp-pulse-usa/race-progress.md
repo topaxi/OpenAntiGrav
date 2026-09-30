@@ -144,14 +144,18 @@ closes
 
 This is the one block of `PlayerStatus_Update`'s own decompile that reads
 `g_game_mode` rather than `craft`, gated on it reading `5`, `0x11` or `10` -
-a different ordinal space
-from [`race-campaign.md`](race-campaign.md)'s `PI_Cell.mode` (which also
-uses `5` for `Time Trial` and `10` for `Speed Lap`, coincidentally or not;
-`0x11` is not one of that enum's nine documented values, so this block's own
-third gate is likely a front-end-only "Free Play Time Trial" variant with no
-campaign cell behind it - not chased further, since the campaign branch
-below needed only "which of the three modes", not what `0x11` itself is
-called):
+which [`state-machine.md`](state-machine.md#the-game-mode-enum-g_game_mode-0x08b31048)'s
+enum names as `Time Trial`, `Multiplayer Time Trial` and `Speed Lap` (a
+different ordinal space from [`race-campaign.md`](race-campaign.md)'s
+`PI_Cell.mode`, which also uses `5` for `Time Trial` and `10` for `Speed Lap`,
+because both index the same nine-name front-end vocabulary). A fourth,
+separate `if` below it handles `g_game_mode == 7` (`Free Play`, tier `5`). An
+earlier revision of this page guessed `0x11` was "a front-end-only Free Play
+variant"; the enum settles it. **Every other mode leaves the target at `-1`**,
+because the function writes `param_2+0x78 = 0xffffffff` unconditionally a few
+lines above this block, every tick - which is what hides the clock on Zone,
+Eliminator, single race, Head2Head and Tournament. See "Which modes hide the
+clock" below for the live check.
 
 ```c
 uVar14 = craft->0x920 * 100.0;              // current lap time, centiseconds
@@ -238,18 +242,54 @@ project's own `oag_game::records` has no split-time equivalent, so:
   the `gold`/`silver`/`bronze` ladder alone, not this branch, and says so in
   its own doc comment.
 
-Also open: `g_game_mode`'s own full enum (what `0x11` and `7` are called),
-`DAT_08ab0de0`'s own meaning (confirmed non-zero on a fresh profile, gating
-the whole block; `0` forces tier `4`, the layout's own default "Total"
-caption), and **whether this build's own `TotalTime`/`TotalTimeTxt` should
-be hidden on Zone/Elimination at all**: `g_game_mode` for those two modes is
-outside `{5, 0x11, 10, 7}`, so the original leaves `+0x78 = -1` on them,
-which `Hud_UpdateTimeCluster`'s own `iVar6 == -1` check hides both widgets
-for - but `Zone_HUD.xml`/`Elimination_HUD.xml` both author `TotalTime`
-(`hud.md`'s "place and the total time" section), and this build draws it
-unconditionally whenever no place is shown, which is every tick of both
-modes. Pre-existing (not introduced by this pass, and not fixed by it) -
-noticed while reading this decompile, not chased further.
+Also open: `DAT_08ab0de0`'s own meaning (confirmed non-zero on a fresh
+profile, gating the whole block; `0` forces tier `4`, the layout's own default
+"Total" caption).
+
+### Which modes hide the clock, confirmed live 2026-09-30
+
+Confidence **95** (was an inference from the decompile alone, no frame taken).
+
+- **The gate.** `PlayerStatus_Update` (above) writes `target = -1` and `redden =
+  false` on every tick and overwrites the target only for `g_game_mode` 5, `0x11`,
+  10 and 7. `Hud_UpdateTimeCluster` (`0x0881c9d0`) reads `-1` and clears bit `0x4`
+  of `+0x2c` on the two widgets it bound at `hud+0x200` and `hud+0x204`.
+  `Hud_BindWidgets` (`0x0881fbec`) binds exactly these by name: `hud+0x200` is
+  `"TotalTime"` and `hud+0x204` is `"TotalTimeTxt"` (the decompile passes
+  `s_TotalTime_08a79fd4` and `s_TotalTimeTxt_08a79fe0` to the widget lookup
+  immediately before each store), which closes the "not confirmed by name" note
+  on [`hud-time-caption-substitution.md`](hud-time-caption-substitution.md).
+  Bit `0x4` is the visible bit: it is set on `CurrentTime` and the widgets that draw.
+- **Eliminator (`g_game_mode` 8), read off a running PPSSPP**
+  (`pulse-psp-usa.chd`, own profile, Xvfb, single race type 6): `PLAYER_HUD+0x30`
+  (`PlayerStatus+0x78`) reads `0xffffffff`, `+0x34` reads `4`, `+0x38` reads `0`;
+  `TotalTime` and `TotalTimeTxt` flag words (`+0x2c`) both read `0xb082` (bit `0x4`
+  clear) while `CurrentTime`, `CurrentTimeTxt`, `BestTime` and `BestTimeTxt` read
+  `0xf086` (bit `0x4` set). The frame agrees: `KILLS (5)` and the per-craft kill
+  column fill the top-right corner, `best` and `current` sit bottom-left, and there
+  is no `TOTAL` caption and no total time anywhere on screen. The mode object
+  is `Elimination_Construct` (`Elimination_HUD.xml`); the HUD's flag word
+  `hud+0x40` read `0x229f` and `hud+0x284` (the mode it bound for) read `8`.
+- **Zone (`g_game_mode` 6) has nothing to hide.** `Zone_HUD.xml` authors no
+  `TotalTime`, `TotalTimeTxt`, `CurrentTime` or `BestTime` at all (its widgets
+  are `Lap`/`LapOf`/`Lap Outof`, `Zone`, `Score`, `SpeedClass`/`SpeedClassTxt`
+  and `TimeDiffText` - `just wad cat --expand` on
+  `Data\XML\Zone_HUD.xml`), and `Hud_BindWidgets` skips the whole
+  `+0x1f0`-`+0x204` bind when the HUD's `0x20` flag is set, the same flag its
+  `Zone`/`Score`/`SpeedClass` bind is under. The revision of this page that said
+  both layouts author `TotalTime` was wrong for Zone: only `Elimination_HUD.xml`
+  does. No Zone frame was taken (Zone is greyed on a fresh profile; a forced
+  `g_game_mode = 6` hung the loader, see [`countdown-voice.md`](countdown-voice.md)),
+  so the Zone half is the layout read plus the bind gate, not a live frame.
+- **What this build does now.** `oag_title::HudArt::total_time_timed_modes_only`
+  is `true` for Pulse only, and `oag_game::hud::time_trial_pace::mode_hides_total_time`
+  hides both widgets outside Time Trial and Speed Lap - the modes this build races
+  from the original's `{5, 10}`; Free Play (7) and Multiplayer Time Trial (`0x11`)
+  are not modes it runs. That also hides the clock in a single race, Tournament and
+  Head2Head **when no place is on screen yet**, which the older
+  place-owns-the-anchor rule missed; where a place is up it was already hidden.
+  2048's live frame draws `TOTAL` beside `POS`, so the rule is not applied to
+  any other title.
 
 ## The counter: `Craft_UpdateLapProgress` (`0x08842a18`)
 

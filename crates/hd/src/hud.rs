@@ -149,6 +149,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Single-field edit; the rest of this file is lane 3's.
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
+    total_time_timed_modes_only: false,
     runtime: Some(RUNTIME),
 };
 

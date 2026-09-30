@@ -155,5 +155,31 @@ pub(super) fn time_trial_colour(readout: &super::Readout, name: &str) -> Option<
     (name == "TotalTime" && pace.missed).then(|| oag_ui::screen::argb_to_rgba(0xFFFF_0000))
 }
 
+/// Whether this title's HUD update hides `TotalTime` and `TotalTimeTxt` for
+/// the readout's mode - [`oag_title::HudArt::total_time_timed_modes_only`].
+///
+/// **Pulse hides them in every mode but Time Trial and Speed Lap.**
+/// `PlayerStatus_Update` (`0x0883b3b8`) writes the clock's target field to
+/// `-1` each tick and overwrites it only for `g_game_mode` 5 (Time Trial),
+/// `0x11` (Multiplayer Time Trial), 10 (Speed Lap) and 7 (Free Play);
+/// `Hud_UpdateTimeCluster` clears both widgets' visible bit while it reads
+/// `-1`. Free Play and the multiplayer modes are not modes this build races,
+/// so the two it does are the whole set. Confidence **95**: the decompile,
+/// plus a PPSSPP frame of an Eliminator race (`g_game_mode` 8) with no `TOTAL`
+/// on screen and both widgets' flag words read live with the bit clear - see
+/// `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`.
+///
+/// This is a fact about the mode, not the layout, which is why it is
+/// separate from `place_owns_the_anchor`: a single race with no place yet
+/// (`Readout::place` zero) hides the clock too, and Zone's layout authors no
+/// `TotalTime` at all so it never reaches this.
+pub(super) fn mode_hides_total_time(art: &oag_title::HudArt, readout: &super::Readout) -> bool {
+    art.total_time_timed_modes_only
+        && !matches!(
+            readout.mode,
+            oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap
+        )
+}
+
 #[cfg(test)]
 mod tests;
