@@ -53,11 +53,11 @@ pub(super) fn advance_one_flare(
     playing: &mut Option<psys::Playing>,
 ) {
     match (name, *playing) {
-        // Gone, or a weapon with no flare of its own: hand the instance back
-        // and let it fade out rather than riding a weapon that never
-        // authored this effect.
+        // Gone, or a weapon with no flare of its own: release the instance
+        // (templates at once, the emitters' own particles fade out) rather
+        // than riding a weapon that never authored this effect.
         (None, Some(instance)) => {
-            stage.detach(instance);
+            stage.release(instance);
             *playing = None;
         }
         (None, None) => {}

@@ -860,6 +860,7 @@ impl System {
                 continue;
             }
             let spec = &effect.emitters[usize::from(particle.spec)];
+            template::ride(spec, particle, self.anchor);
             if std::mem::take(&mut particle.fresh) {
                 if let Some(rotation) = &spec.rotation {
                     particle.roll = rotation.advance(particle, 0.0, 0.0, dt_ticks);
@@ -1457,10 +1458,8 @@ impl Stage {
     }
 
     /// Stops an attached instance emitting and releases the slot back to the
-    /// stage.
-    ///
-    /// Live particles finish their own lives - see [`System::stop`] - so the
-    /// slot stays busy for a moment longer and only then becomes reusable.
+    /// stage; live particles finish their own lives - see [`System::stop`] -
+    /// so the slot stays busy a moment longer. [`Stage::kill`] ends them.
     pub fn detach(&mut self, playing: Playing) {
         if let Some(instance) = self.get_mut(playing) {
             instance.attached = false;
@@ -1726,6 +1725,7 @@ fn sphere_direction(rng: &mut Rng) -> Vec3 {
 mod pipeline;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, MAX_VERTICES, Pipeline};
 
+mod release;
 mod riding;
 
 mod particle;

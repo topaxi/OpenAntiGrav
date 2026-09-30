@@ -29,10 +29,11 @@
 //! [`unroll`] repeats the keys over the normalised life, which is the same
 //! curve without giving the pool a second notion of age.
 
+use oag_core::math::Vec3;
 use oag_vex::pob::{self, Channel, ChannelMode};
 
 use super::roll::Rotation;
-use super::{ColourScale, Effect, EmitterSpec};
+use super::{ColourScale, Effect, EmitterSpec, Particle, System};
 
 impl Effect {
     /// Appends a one-shot spec for every template on a root emitter, and
@@ -79,6 +80,29 @@ impl Effect {
         for spec in self.emitters.iter_mut().filter(|spec| spec.template) {
             spec.per_emission = (0, 0);
         }
+    }
+}
+
+impl System {
+    /// Frees every template particle, at once - `ParticleSystem_StopAndClear`'s
+    /// `FUN_088f48c0`, which empties the instance's template list.
+    pub(super) fn clear_templates(&mut self, effect: &Effect) {
+        for particle in &mut self.particles {
+            if particle.alive() && effect.emitters[usize::from(particle.spec)].template {
+                *particle = Particle::DEAD;
+            }
+        }
+    }
+}
+
+/// A template follows its instance: `ParticleSystem_UpdateParticleFields`
+/// copies the owning instance's node position (`instance + 0x120`) into the
+/// particle every update, for as long as the handle resolves. So an attached
+/// flare's `glow` rides the rocket, where an emitter's own particles stay
+/// where they were born.
+pub(super) fn ride(spec: &EmitterSpec, particle: &mut Particle, anchor: Vec3) {
+    if spec.template {
+        particle.position = anchor;
     }
 }
 

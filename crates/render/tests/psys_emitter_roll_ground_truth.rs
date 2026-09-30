@@ -118,3 +118,60 @@ fn the_damage_effects_smoke_is_turned() {
         "another source keeps the rotation"
     );
 }
+
+/// `WO_MISSILE_HEAD`'s two templates only: a `redbar` (6000 ticks) and a
+/// `glow` (3600, 34 units), with the emitters' own particles switched off.
+fn missile_head_templates() -> Option<std::sync::Arc<Effect>> {
+    let mut effect = effect("WO_MISSILE_HEAD")?;
+    for spec in effect.emitters.iter_mut().filter(|spec| !spec.template) {
+        spec.per_emission = (0, 0);
+    }
+    Some(std::sync::Arc::new(effect))
+}
+
+/// The x extent of everything the stage draws.
+fn x_extent(stage: &oag_render::psys::Stage) -> f32 {
+    let (mut all, over) = stage.vertices(Vec3::X, Vec3::Y);
+    all.extend(over);
+    let xs = all.iter().map(|v| v.position[0]);
+    xs.clone().fold(f32::MIN, f32::max) - xs.fold(f32::MAX, f32::min)
+}
+
+/// A missile in flight: its `glow` and `redbar` ride it. They were spawned
+/// once at the muzzle and left there - a 34-unit glow hanging at the launch
+/// point for the minute the template lives - until
+/// `ParticleSystem_UpdateParticleFields`'s copy of the instance position was
+/// played.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_missiles_templates_ride_it_and_go_when_it_does() {
+    let Some(effect) = missile_head_templates() else {
+        return;
+    };
+    let templates = effect.emitters.iter().filter(|spec| spec.template).count();
+    assert_eq!(templates, 2, "redbar and glow");
+    let run = |end: fn(&mut oag_render::psys::Stage, oag_render::psys::Playing)| {
+        let mut stage = oag_render::psys::Stage::new();
+        let mut rng = Rng::new(1);
+        let playing = stage.attach(&effect, Vec3::ZERO, 1.0).expect("attach");
+        for tick in 0..60 {
+            stage.follow(playing, Vec3::new(tick as f32 * 10.0, 0.0, 0.0));
+            stage.advance(1.0 / TICK_HZ, &mut rng);
+        }
+        let flying = (x_extent(&stage), stage.alive_count());
+        end(&mut stage, playing);
+        stage.advance(1.0 / TICK_HZ, &mut rng);
+        (flying, stage.alive_count())
+    };
+    let (flying, released) = run(oag_render::psys::Stage::release);
+    assert!(
+        flying.0 < 150.0,
+        "the templates hang back: drawn {} units wide over 590 of flight",
+        flying.0
+    );
+    assert_eq!(flying.1, 2);
+    assert_eq!(released, 0, "a release leaves its templates alive");
+    // Not released - an instance that ran out on its own - they finish.
+    let (_, detached) = run(oag_render::psys::Stage::detach);
+    assert_eq!(detached, 2);
+}

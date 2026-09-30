@@ -70,12 +70,12 @@ impl Race {
     /// `LEACHENERGY` - one segment short of the target, then walked back
     /// toward the shooter one chain point a tick, which is where
     /// `LeachBeam_Advance` writes the effect's own matrix. The previous
-    /// instance is detached at each re-spawn so its particles finish where
-    /// they are. The original hands its handle to `Psys_ReleaseHandle`
-    /// (`0x088f3298`), which **kills** it - the manager frees the instance and
-    /// its live particles on its next tick (read 2026-09-30, see
-    /// `particle-system.md`) - so the detach is **chosen, not measured**, and
-    /// differs from the original until `psys::Stage` has a kill.
+    /// instance is **killed** at each re-spawn and when the beam retires:
+    /// the original hands its handle to `Psys_ReleaseHandle` (`0x088f3298`)
+    /// with `now == 0` at both (`LeachBeam_Advance`, and `FUN_08872e64`, the
+    /// teardown `LeachBeam_UpdatePool` calls on retire), which sets the dead
+    /// bit, and the manager frees the instance and its live particles on its
+    /// next tick (read 2026-09-30, see `particle-system.md`).
     pub(in crate::race) fn advance_leach_beam_ribbon(&mut self) {
         let locked = self
             .sim
@@ -86,7 +86,7 @@ impl Race {
             self.view.leach_beam_ribbon = None;
             self.view.leach_ball_elapsed = 0.0;
             if let Some(playing) = self.view.leach_beam_effect.take() {
-                self.view.stage.detach(playing);
+                self.view.stage.kill(playing);
             }
             return;
         };
@@ -130,7 +130,7 @@ impl Race {
         match (effect, self.view.leach_beam_effect, at) {
             (Some(effect), playing, Some(at)) if pulsed || playing.is_none() => {
                 if let Some(playing) = playing {
-                    self.view.stage.detach(playing);
+                    self.view.stage.kill(playing);
                 }
                 self.view.leach_beam_effect = self.view.stage.attach(&effect, at, 1.0);
             }
@@ -315,14 +315,16 @@ impl Race {
     /// measured** - the row `Quake_Update` builds from its
     /// `AiTrack_LocatePosition` struct is not read.
     ///
-    /// Detaches the instance the tick the wave goes away (`self.sim.world.quake`
-    /// becomes `None`), the same "hand the slot back, let the particles fade"
-    /// shape [`Race::advance_projectile_flares`] already takes.
+    /// Releases the instance the tick the wave goes away
+    /// (`self.sim.world.quake` becomes `None`), as `Quake_Update` does
+    /// (`Psys_ReleaseHandle`, `now != 0`): the same "hand the slot back, free
+    /// the templates, let the particles fade" shape
+    /// [`Race::advance_projectile_flares`] takes.
     pub(in crate::race) fn advance_quake_visual(&mut self) {
         let Some(wave) = self.sim.world.quake else {
             self.view.quake_point = None;
             if let Some(playing) = self.view.quake_effect.take() {
-                self.view.stage.detach(playing);
+                self.view.stage.release(playing);
             }
             return;
         };
@@ -653,10 +655,13 @@ impl Race {
     /// the moment it landed rather than from its detonation, which
     /// [`Race::ignite_blast`] is the only thing that plays.
     ///
-    /// A projectile that stops riding a flare has it **detached, not
-    /// killed**: emission stops and the particles already out finish their
-    /// own lives, so the smoke outlives the weapon the way it does in the
-    /// original. That is also the bug the invented rocket trail could not
+    /// A projectile that stops riding a flare **releases** it, not kills it
+    /// (`Psys_ReleaseHandle` with `now != 0`, which `RocketPool_Update`,
+    /// `MissilePool_Update` and `Plasmas_Update` all call, read 2026-09-30):
+    /// emission stops and the template particles go at once - the missile's
+    /// `glow` lives 3600 ticks and the plasma head's 65535 - while the
+    /// particles the emitters already put out finish their own lives, so the
+    /// smoke outlives the weapon the way it does in the original. That is also the bug the invented rocket trail could not
     /// avoid - it had to drop the whole streak the instant the slot vacated,
     /// or the next projectile to take that slot would have inherited it.
     ///

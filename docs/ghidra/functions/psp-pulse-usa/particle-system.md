@@ -1090,11 +1090,40 @@ its handle it destroys itself. Confidence **82** for the kill (every link is a
 direct read; the manager tick's ordering against the draw was not checked, so
 a frame of the old particles may draw first).
 
-`oag_render::psys::Stage::detach` does the opposite - stops the emitters and
-lets live particles finish - which is **chosen, not measured** for every
-effect it is used for and is wrong, by this reading, wherever the original
-reaches `Psys_ReleaseHandle`: the LeachBeam ENERGY re-spawn, and the rocket
-and plasma heads the other pages record as "release".
+**Which callers take which arm** (every caller of `Psys_ReleaseHandle`, read
+2026-09-30 from the decompiles of all ten):
+
+| Caller | `now` | Releases |
+| --- | --- | --- |
+| `LeachBeam_Advance` (`0x08873fa0`), at the pulse block's `WO_LEACHBEAM_ENERGY` re-spawn | `0` | the previous ENERGY instance |
+| `FUN_08872e64` (the teardown `LeachBeam_UpdatePool` calls on retire) | `0` | the ENERGY instance |
+| `RocketPool_Update`, `MissilePool_Update` (two handles), `Plasmas_Update`, `Quake_Update` | `1` | the projectile's flares, the quake's effect, when it ends |
+| `FUN_0883d664`, `FUN_0883f540`, `FUN_08875658`, `FUN_08877210` | `1` | per-craft and per-weapon handles, not matched to a port site |
+
+**The two arms are not the same as a detach, and neither is a detach.** The
+page above had `now != 0` zeroing "the live particle list"; that list (`+0x1b0`)
+is the instance's **template** list, not its pool (see "An emitter's own
+particles"), so the `now != 0` arm stops the emitters and frees the templates
+and leaves every emitter particle to live out its life. `now == 0` destroys
+the lot (`ParticleSystem_Destroy` walks the pool at `+0x74` in `FUN_088f45a0` as well, unread past its loop header).
+In `oag_render::psys::Stage`: `now == 0` is **`kill`** (the ENERGY, both
+sites), `now != 0` is **`release`** (the rocket, missile and plasma flares and
+the quake), and `detach` - nothing freed early - is for an instance whose
+emitters ran out on their own, which no caller here releases. Confidence
+**82**; the one **chosen, not measured** part is that `kill` empties the
+instance in the same tick, where the original lets one more draw through if the
+draw runs before the manager's tick.
+
+**It matters more than it looks, because templates live long.** The missile's
+`WO_MISSILE_HEAD` carries a `redbar` (6000 ticks) and a `glow` (3600, 34 units),
+the plasma head's `WO_PLASMA_HEAD` three (up to 65535). With the port's old
+detach they outlived the projectile by a minute or more, **and** they were
+never moved: `ParticleSystem_UpdateParticleFields` copies the owning instance's
+node position (`instance + 0x120`) into a template every update (its
+`FUN_088f24d0` lookup, the same handle resolution), so a flare's `glow` rides
+the rocket, where the port spawned it once at the muzzle and left it there.
+Both are fixed the same day (`psys::template::ride`, `Stage::release`), and
+pinned on the real `WO_MISSILE_HEAD` in `psys_emitter_roll_ground_truth`.
 
 | Address | Name | Confidence |
 | --- | --- | ---: |
