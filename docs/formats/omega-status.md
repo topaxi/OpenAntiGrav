@@ -249,7 +249,8 @@ the disc authors except what "What does not draw right" lists.
 | Collision | `track_col.col` | `oag_vex::kdcol`, **19-byte node** | 38 of 38 decode; `tech_de_ra` 12,894 vertices, 20,777 triangles |
 | Circuit geometry | `track.final.rcsmodel` | `oag_rcs::rcsmodel::psp2`, **third pointer gap** | `tech_de_ra` 3,186 submeshes, 2,379,040 triangles, 0 unpaired |
 | Node table | same file | `psp2::nodes`, **8-byte pointers** ([`2048-animation.md`](2048-animation.md#the-models-node-table)) | `tech_de_ra`: 1,702 nodes, all with a written matrix; 2,659 mesh objects; 1,684 node-bound submeshes placed by their bind matrix |
-| Materials | same file | `psp2::material::read_ps4` | 461 materials; 453 resolve a texture, 3,155 of 3,186 draws textured |
+| Skeleton, clip | `track.final.rcsskeleton`, `.rcsanimclip` | `oag_rcs::rcsskeleton`, `rcsanimclip`, **8-byte offsets** | `tech_de_ra`: 168 nodes, 64 animated tracks, 250 s loop, 150 submeshes moving |
+| Materials | same file | `psp2::material::read_ps4`, **by the header's own table** | 461 materials; 453 resolve a texture, 3,155 of 3,186 draws textured |
 | Textures | `.gnf` | `oag_texture::gnf`, unchanged | as [`gnf.md`](gnf.md) |
 | Craft hull | `hdships\<team>\Ship.vex` + `ship.rcsmodel` | `psp2` | `ag_systems` 12 submeshes, 22,666 triangles, 4 of 4 materials textured |
 | Handling | `hdships\<team>\handlingstats.xml` | `oag_tables::handling`, unchanged | `ag_systems`: team "AG Systems", class `venom` |
@@ -375,12 +376,23 @@ a PS4 mount them.
   not bear out. Nothing within 25 units of the craft at tick 300 is node-bound
   except the droid. A node with no written matrix and no skeleton entry is not drawn
   and is counted (`Report::unplaced`): 3,220 submeshes on `data00` and 15,035
-  on `data04`, all in 2048's `trackZone` (Zone mode) models and a few props on
-  `cathedral`/`mall`/`tower`; a race on `tech_de_ra` has none.
-- **Skeleton and clip do not decode** (`property tag ends at 3496925615 but the
-  file is 57856 bytes`): nothing animates, and the nodes above stand at their
-  bind pose. The skeleton is the 32-bit container's layout and the PS4 one has
-  not been laid out.
+  on `data04` while the skeleton did not decode, all in 2048's `trackZone`
+  (Zone mode) models and a few props on `cathedral`/`mall`/`tower`. With the
+  skeleton read there are none: the skeleton names every one (below).
+- **Skeleton and clip decode, and the scenery moves** (`omega-catchup`,
+  2026-09-30). The PS4's are the Vita's files with 8-byte offsets
+  ([`2048-animation.md`](2048-animation.md#rcsskeleton)); `tech_de_ra` is 168
+  skeleton nodes and 64 animated tracks over a 250 s loop, 150 submeshes move,
+  and the 1,534 model nodes the skeleton does not name stand at their own bind
+  matrix. The camera droid `CamBot_New2` behind the start line is upright and
+  facing the grid at tick 0 and has dropped and turned away by tick 1800
+  (`data/scratch/omega-catchup/droid-crop.png`, from `droid-t0.png` and
+  `droid-t1800.png`, the same camera pose). Every node with no matrix of its
+  own on Omega's base archives (12,310, all on 2048's Zone models and a few
+  props) is named by its skeleton, so **none is left unplaced any more**. What is
+  *not* checked: the rotors' spin and the crowd against a reference (nothing
+  to compare with), and the shader's node-table ceiling on the Zone models,
+  which no race here loads.
 - **Lightmaps are bound, and their combination is chosen, not measured**
   (`omega-catchup`, 2026-09-30). The atlas is each material's `lightmap`
   sampler (a 2048x2048 BC7 `-lmap.gnf`, 49 distinct on `tech_de_ra` reversed)

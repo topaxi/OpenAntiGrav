@@ -258,6 +258,30 @@ through the parent index. A parent's index is lower than its child's on 48 of
 the base package's 49 files (`bridge`'s `startgridanims_sp` is the
 exception), so `Skeleton::order` sorts rather than assumes.
 
+**The PS4 layout is the same file with 8-byte offsets, confidence 95.** Chosen
+by header word `+0x04` like the model's (`psp2::is_ps4`); the count stays at
+`+0x04` and everything that is an offset widens:
+
+```c
+Vita -> PS4:  ids +0x0c -> +0x10   parents +0x10 -> +0x18
+              props +0x14 -> +0x20   parent matrices +0x18 -> +0x28
+property block: u64 slot count, then per node { u64 table; u64 9 }  (16 bytes)
+per-node table: u64[9] property offsets
+one property:   { u32 tag; u32 pad; u64 offset of the value }
+```
+
+The id and parent arrays, the matrices and every value stay 4-byte. On
+`tech_de_ra` (168 nodes) the arrays and the matrix table close on the section's
+length to the byte. Over all 110 skeletons of Omega's five base archives
+(`crates/rcs/tests/omega_animation_ground_truth.rs`) **every one of the 20,102
+written model bind matrices composes exactly from the skeleton's scale,
+rotation and translation through the hierarchy** - the closure that pins the
+parent array, the root marker, the parent matrices and the composition order at
+once. Not every model node is in the skeleton (`tech_de_ra`'s model lists
+1,702 against its 168), so "every node is named" is the Vita's closure and not
+this one; the nodes with **no** matrix of their own, 12,310 of them on the
+2048 Zone circuits, **are** all named, which is what places them.
+
 ## `.rcsanimclip`
 
 ```c
@@ -312,6 +336,17 @@ two of HD's loops into one 138.33 s track. `psp2_scenery_animation_ground_truth.
 compares only the nodes whose loop is a whole multiple of HD's, and carries a
 per-circuit floor under what each measured, because a re-authored vehicle
 misses by thousands of units and says nothing about the composition.
+
+**The PS4's clip** widens the same offsets: header `+0x10` node ids and `+0x18`
+tracks (`u64`), duration at `+0x20`; a track is 24 bytes, `{ u32 0; u32 9;
+u64 channel table; u32 0; f32 loop length }`; a channel keeps its tag, duration,
+key count and type word and holds its keys' `u64` offset at `+0x10`, the rate
+at `+0x18` and the spacing at `+0x1c`. Confidence 95 on the same arithmetic:
+69 clips, every id a skeleton id, every channel's key count its duration over
+its spacing to within one, every clip's duration its longest track's, and every
+slot the kind it is on the Vita. `tech_de_ra`: 64 tracks, 116 channels, a
+250 s loop, and a 376-key 5 Hz rotation channel whose keys are unit
+quaternions.
 
 ## What a race does with it
 
