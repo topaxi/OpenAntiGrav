@@ -61,14 +61,10 @@ fn rows_and_pitch(source: &str) -> Option<(Vec<f32>, f32)> {
             _ => None,
         })
         .collect();
-    let scale = match frontend
+    let scale = frontend
         .language_screen()
         .and_then(|s| s.menu.as_ref())
-        .map(|m| m.scale)
-    {
-        Some(scale) => scale,
-        None => 1.0,
-    };
+        .map_or(1.0, |m| m.scale);
     Some((ys, loaded.font.line_height * scale))
 }
 
