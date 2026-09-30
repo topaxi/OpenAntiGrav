@@ -36,9 +36,7 @@
 //! degree turn, which no settled frame shows) and the native code that settles
 //! them is unread.
 //!
-//! **Not drawn**: the card's chamfered corner and its own body (both in the
-//! placeholder model the widget names, `00_flyer.vex`), the floor reflection
-//! under it, the glow around it, the flip to `flyer_back.vex`, the elements
+//! **Not drawn**: the card's body colour under the picture, the glow around it, the flip to `flyer_back.vex`, the elements
 //! animating, and the light: Fury's cards are lit by `simpletexture*`
 //! programs whose light direction and colours (`0x02df31e5`, `0x2dba643d`,
 //! `0x81db67ea`) are written by code nobody has found, so every card is drawn
@@ -58,6 +56,9 @@ use crate::preview::Preview;
 use crate::render::Renderer;
 
 mod clip;
+mod shell;
+
+pub use shell::Shell;
 
 /// The vertical field of view the card is seen at, radians: **1.0,
 /// measured**. `Flyer_Item`'s render function (`0x001a2510`) builds its
@@ -72,9 +73,9 @@ pub const CARD_HEIGHT: f32 = 66.6;
 /// The moment of a card's own animation it is drawn at, seconds. **Chosen**:
 /// inside the widget's own idle loop (the constructor at `0x001a2060` holds
 /// `6.0` and `3.0`, and the draw at `0x001a2510` wraps a time past `6.0` back
-/// by 3), after the elements are in and before the glitch a Fury card flashes
-/// at the end of its four-second loop.
-pub const SETTLED_SECONDS: f32 = 3.5;
+/// by 3), after the elements are in, with `10_impact`'s ship assembled, and
+/// before the glitch a Fury card flashes at the end of its four-second loop.
+pub const SETTLED_SECONDS: f32 = 3.0;
 
 /// How the card stands in front of the widget's camera: turned about its
 /// vertical axis, and moved from straight ahead.
@@ -256,6 +257,14 @@ struct Placement {
     half_size: [f32; 2],
 }
 
+/// The card's outline widened by `stretch`.
+fn stretched(outline: &[[[f32; 2]; 3]], stretch: f32) -> Vec<[[f32; 2]; 3]> {
+    outline
+        .iter()
+        .map(|triangle| triangle.map(|[x, y]| [x * stretch, y]))
+        .collect()
+}
+
 /// Every flyer card a campaign screen can show, decoded and waiting.
 ///
 /// The card caches sit behind `RefCell`s so a stage that only holds the
@@ -302,6 +311,18 @@ impl Flyers {
         let mut waiting = HashMap::new();
         let mut placed = HashMap::new();
         let mut report = Vec::new();
+        // The card's own shape and reflection. Without them a card is a plain
+        // rectangle with no reflection, and the loader says so.
+        let shell = match shell::Shell::load(archives) {
+            Ok(shell) => Some(shell),
+            Err(error) => {
+                report.push(format!(
+                    "{}: {error:#} - cards are plain rectangles with no reflection",
+                    shell::ENTRY
+                ));
+                None
+            }
+        };
         for CardSpec {
             flyer: name,
             window,
@@ -338,11 +359,21 @@ impl Flyers {
                     }
                     clip::bake(&mut model, SETTLED_SECONDS);
                     clip::flatten(&mut model, &camera.to_world, *window, CARD_HEIGHT, *stretch);
-                    let half = [
-                        camera.value_1c * CARD_HEIGHT / 2.0 * stretch,
-                        CARD_HEIGHT / 2.0,
-                    ];
-                    clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]);
+                    // The card is as wide as its camera's aspect makes it (times
+                    // `stretch`): the shell's outline, a 1.54 rectangle, is
+                    // widened or narrowed to that - by nothing on the base and
+                    // Fury grids, whose cameras say 1.54, and to 0.74 on the
+                    // squarer campaign cards.
+                    let half_width = camera.value_1c * CARD_HEIGHT / 2.0 * stretch;
+                    let half = [half_width, CARD_HEIGHT / 2.0];
+                    match &shell {
+                        Some(shell) => {
+                            let widen = half_width / shell.half_size[0];
+                            clip::clip_to_shape(&mut model, &stretched(&shell.outline, widen));
+                            clip::reflect(&mut model, shell.fade);
+                        }
+                        None => clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]),
+                    }
                     placed.insert(name.clone(), Placement { half_size: half });
                     waiting.insert(name.clone(), model);
                 }

@@ -110,3 +110,78 @@ fn a_stretch_widens_the_picture_only() {
         "{u} {v}"
     );
 }
+
+/// A triangle of vertices at the given card positions.
+fn tri(points: [[f32; 2]; 3]) -> Model {
+    let mut model = model_of(&points.map(|[x, y]| [x, y, 0.0]));
+    model.indices = vec![0, 1, 2];
+    model.draws = vec![DrawCall {
+        range: 0..3,
+        texture: None,
+        bounds: oag_render::mesh::Bounds {
+            centre: [0.0; 3],
+            radius: 1.0,
+        },
+        moving: false,
+        culled: false,
+        blend: None,
+        blend_state: None,
+        layer: 0,
+        alpha_test_ref: None,
+        node: None,
+        chunk: None,
+    }];
+    model
+}
+
+/// A picture is cut to the shape it is shown on: a triangle wider than the
+/// shape keeps only the part inside it, whichever way the shape is wound.
+#[test]
+fn a_triangle_is_cut_to_the_shape() {
+    let mut model = tri([[-10.0, -10.0], [10.0, -10.0], [-10.0, 10.0]]);
+    let shape = [[[0.0, 0.0], [-1.0, 4.0], [-4.0, 0.0]]];
+    clip_to_shape(&mut model, &shape);
+    assert!(!model.indices.is_empty());
+    for v in &model.vertices {
+        assert!(
+            v.position[0] <= 1e-4 && v.position[1] >= -1e-4,
+            "{:?}",
+            v.position
+        );
+        assert!(v.position[0] >= -4.0 - 1e-4 && v.position[1] <= 4.0 + 1e-4);
+    }
+}
+
+/// The reflection is a mirrored, alpha-blended copy of the part of the picture
+/// nearest the bottom edge, faded from the top alpha to nothing.
+#[test]
+fn the_reflection_mirrors_the_bottom_and_fades() {
+    let mut model = tri([[-4.0, -10.0], [4.0, -10.0], [0.0, -6.0]]);
+    for v in &mut model.vertices {
+        v.colour = [1.0; 4];
+    }
+    let fade = Fade {
+        edge_y: -10.0,
+        depth: 4.0,
+        top_alpha: 0.3,
+    };
+    reflect(&mut model, fade);
+    let added = model.transparent_draws.last().expect("a reflection draw");
+    assert!(added.blend == Some(oag_vex::vex::BlendClass::AlphaOver));
+    let range = added.range.start as usize..added.range.end as usize;
+    for &i in &model.indices[range] {
+        let v = &model.vertices[i as usize];
+        assert!(
+            v.position[1] <= -10.0 + 1e-4 && v.position[1] >= -14.0 - 1e-4,
+            "{:?}",
+            v.position
+        );
+        let want = 0.3 * (v.position[1] + 14.0) / 4.0;
+        assert!(
+            (v.colour[3] - want).abs() < 1e-4,
+            "{} against {want}",
+            v.colour[3]
+        );
+    }
+    assert_eq!(model.draws.len(), 1, "the picture itself is untouched");
+}

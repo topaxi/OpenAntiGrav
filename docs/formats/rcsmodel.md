@@ -134,6 +134,30 @@ Two things still unexplained. Byte `+0x07` takes the values `01` and `02` and
 nothing here distinguishes them. And the byte above the layout selector counts
 chunks but reads `0xff` on many, which no reading accounts for.
 
+### The placeholder's two surfaces: an inline chunk's vertex is 18 bytes
+
+`Data/FE/Flyers/00_flyer.rcsmodel` (5,508 bytes) is two inline chunks and
+settles the inline vertex on a file small enough to read by eye. **Every
+vertex is 18 bytes**: three `s16` positions (bias plus `1/128` times the
+integer, so `-6553` is `-51.2`), a `u32` packed normal in RSX 11-11-10 form
+(`0x80400000` is `(0, 0, -1)` and `0x7fc00000` is `(0, 0, +1)`), two `half`
+texture coordinates at `+0x0a`, and four colour bytes `R G B A` at `+0x0e`.
+`26 * 18`, `114 * 18` and `29 * 18` end where the next header begins on all
+three surfaces. **Confidence 85**: one file, but the positions land on the
+`.vex` node's box to the hundredth (`x` `-51.20..51.20`, `y` `0..66.59`),
+the uv's `v` is `1 - y / 66.6` exactly, and the two ramps are monotone.
+
+`cardShape`'s chunk carries **two surfaces** (`extra_surfaces`: a 26-vertex
+back face at `z = -0.2` and a 114-vertex front face and edge geometry at
+`z = +-0.2`), the second named by a header at `0x800`; the stride search
+finds 18 for the second and none for the first, whose buffers are not
+contiguous with a following header. Colours: `ff ff ff ff`, and `70 70 70 ff`
+on some edge vertices; the reflection's are `ff ff ff 4c`, `26`, `00`.
+`Mesh::inline_colours` reads the four bytes and leaves the meaning to a caller
+that knows the chunk (on most inline chunks the tail is two halves - see
+`Mesh::inline_uv_before_colour`). Open: the same reading on the other 2,488
+inline chunks.
+
 ## The `.vex` is not optional
 
 This format cannot be read on its own, and that is a property of the format:

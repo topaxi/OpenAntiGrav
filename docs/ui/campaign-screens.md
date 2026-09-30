@@ -1049,7 +1049,7 @@ at its backdrop: backdrop, then the card, then chrome and widgets. Live and
 | What | Value | Confidence |
 | --- | --- | --- |
 | widget | `<Flyer name="FlyerModel">`, top level (a sibling of the screens), `OriginX/Y` `960`/`540`, `nearZ` `1`, `farZ` `1000`, `obeySafeZone` `true`, `x` `80`, `y` `-33.3`, `z` `-200`, `RotX` `0`, `RotY` `1.5`, `RotationCentreOffsetX` `-60`, no `orthoScale` (the two `Campaign Selection` flyers carry `0.75` and `RotY` `0.6f`/`-0.6f`) | 95 |
-| which model | the widget's `Src` is always `Data\FE\Flyers\00_flyer.vex`, a 1.6 KB placeholder (`cardShape`, `card_reflectShape`, a dummy texture). The executable carries `Data/FE/Flyers/%s/`, `%sflyer.vex`, `%sflyer_Back.vex` and `Data\FE\Flyers\%s\Logo.gtf`, and every grid authors `FlyerName="01_uplift"` and so on: that is the `%s`. The class is `Flyer_Item` (`Flyer_Item.cpp`), a `Model_Item` (`Model_Item.cpp`); its loader `0x001a2ba8` formats the two paths and stores the front and back models at `+0x224`/`+0x228` | 85 (the formatting call site is read, the loop through it is not) |
+| which model | the widget's `Src` is always `Data\FE\Flyers\00_flyer.vex`, a 1.6 KB placeholder (`cardShape`, `card_reflectShape`, two dummy textures the runtime swaps for the flyer's picture). The executable carries `Data/FE/Flyers/%s/`, `%sflyer.vex`, `%sflyer_Back.vex` and `Data\FE\Flyers\%s\Logo.gtf`, and every grid authors `FlyerName="01_uplift"` and so on: that is the `%s`. The class is `Flyer_Item` (`Flyer_Item.cpp`), a `Model_Item` (`Model_Item.cpp`); its loader `0x001a2ba8` formats the two paths and stores the front and back models at `+0x224`/`+0x228` | 85 (the formatting call site is read, the loop through it is not) |
 | the flyer's own camera | every `flyer.vex` carries a `Transform` `camera1` parenting a `Camera` `cameraShape1` (`oag_vex::camera`): a translation `(0, 0, z)` with `z` `92.4957` on the eight base grids and `12.0` on Fury's eight and on both campaign cards. `Flyer_Item`'s loader also stores the camera node at `+0x22c`/`+0x230`, and its render function (`0x001a2510`) puts that node's matrix in the view stack. The `Camera` payload's `+0x1c` word is the card's aspect ratio to four digits (`1.5380` base, `1.5389` Fury, `1.0833` campaign) | 90 |
 | the widget's field of view | `Flyer_Item`'s render function `0x001a2510` builds a perspective matrix from `tanf(0.5)` (a literal at `0x008acf4c`, the half angle) and the aspect global `1.7778`: a vertical field of view of **1.0 rad**. A planar fit of four base frames with the focal length left free lands on 0.90 to 1.03 rad independently. `Model_Item`'s own render function (`0x001d35e8`) takes `tanf(field * scale)` from a widget field instead | 90 |
 | materials | the base campaign's are `basicnonalpha` (`TEX` then `MOV`, alpha 0, opaque), `basicalpha` and `scrollingalpha` (colour from a swatch `.gtf`, alpha from an elements atlas's red channel times a parameter): unlit. **Fury's are `simpletexture`, `simpletextureandtexturealpha` and `simpletextureandtexturealphauvoffsetscale`**, which compute `(constantAmbientColour + saturate(N.L) * directionalLight0Colour) * texture`, the light direction and both colours patched by name hash (`0x02df31e5`, `0x2dba643d`, `0x81db67ea`) | 90 (`ps3-microcode.py fp-file`) |
@@ -1111,7 +1111,7 @@ luminance (base), inside the padlock's and the left column's exclusions.
 | pose (`GRID_POSE`) | yaw `-0.289`, centre `22.0` units right and `111.1` in front of the widget's camera, none up; in card units, one pose for all sixteen | four starts converge on yaw `-0.288..-0.298`, `tx 21.96..21.99`, `dist 111.3..111.6` |
 | card height (`CARD_HEIGHT`) | 66.6 units, its width the camera's `+0x1c` times that (102.4) | the placeholder's `cardShape` spans 102.4 by 66.6 |
 | window (`HD_WINDOW`, `FURY_WINDOW`) | tangent of half the vertical field of view the card shows of its camera's image: `0.346` on the base grids, `0.321` on Fury's and on the two `Campaign Selection` cards | fitted; the camera's `+0x20` word moves with the first two (`0x4f15`, `0x4a2c`; proportionality gives `0.344`, `0.323`) and **not** with the campaign cards' (`0x3621` would give `0.236`, where `hd_campaign`'s own geometry says `0.319`), so it is not what sets them |
-| moment (`SETTLED_SECONDS`) | 3.5 s | inside the widget's `[3, 6)` loop, after the elements are in and before the glitch a Fury card flashes at `3.63..4.0` s of its four-second loop; the base cards differ from their old "latest key" moment by 0.1 to 1.2 percent of pixels |
+| moment (`SETTLED_SECONDS`) | 3.0 s | the widget's own loop start, `[3, 6)`: after the elements are in, before the glitch a Fury card flashes at `3.63..4.0` s of its four-second loop, and with `10_impact`'s ship silhouette assembled (at 2.5 s it is still in pieces); the base cards differ from their old "latest key" moment by about 1 percent of pixels |
 
 The widget's own `x y z`, `RotY` and `RotationCentreOffsetX` are **read and
 not applied**: `RotY="1.5"` read as radians is an 86 degree turn, which is
@@ -1127,13 +1127,29 @@ background plane exactly (`0.321` against `0.319` from geometry). The
 proportionality with the camera's `+0x20` word that two points suggested fails
 on the campaign cards, so the two windows are constants per campaign.
 
+#### The shell: `00_flyer.vex` is the card, not a stand-in
+
+The widget's `Src` is drawn by `Flyer_Item` as the card itself: `cardShape` (a
+102.4 by 66.6 rectangle with a chamfered top-left corner and a few notches
+along its left and right edges, 6,783.6 of the rectangle's 6,819.8 square
+units, at `y` `0` to `66.6`) and `card_reflectShape` (`y` `-33.3` to `0`, the
+lower half mirrored, its vertex alpha `0x4c` at the card's bottom edge, `0x26`
+a third of the way down and `0` at the bottom). `oag_game::flyer::shell` reads
+both: the front face's twenty-five triangles cut the flattened picture to the
+card's outline (`clip::clip_to_shape`), and `clip::reflect` adds the mirrored
+copy, alpha-blended and faded by the recovered alpha. The layout of the inline
+chunks they sit in is on `docs/formats/rcsmodel.md`. The earlier lane's "two
+chunks read at stride 0" was one of three surfaces: the scene builder already
+drew `cardShape`'s front face (114 vertices) and the reflection; the 26-vertex
+back face is the one with no recoverable stride.
+
 #### Not drawn, and said so
 
-- **The card's own body and chamfered corner**, and the floor **reflection**:
-  both are in the placeholder `00_flyer.vex` (`cardShape`, `card_reflectShape`),
-  whose two chunks this build reads at stride 0. RPCS3 shows the card with its
-  top-left corner cut and a mirrored copy under it; ours is a plain rectangle
-  over black. Decoding the placeholder is the next step.
+- **The card's body colour.** The shell's front face is textured with
+  `flyer_dummy_front.gtf`, a 128 by 128 green debug picture the runtime swaps
+  for the flyer's picture (`flyer_dummy_` is a format string in the executable);
+  ours draws no body under a card, so a flyer whose artwork does not cover its
+  face shows black there where RPCS3 shows the mid-transition grey.
 - **The glow around the card and the bloom on Fury's reds.** RPCS3's Fury
   frames are brighter and saturated where ours are the texture's own colour.
 - **The light on Fury's cards.** Its materials are lit (above) and the three

@@ -230,6 +230,34 @@ fn campaign_selections_cards_land_where_rpcs3_shows_them() {
     near(hd[0], 879.0, "HD's left edge, selected");
 }
 
+/// The placeholder is the card: 102.4 by 66.6 with a chamfered corner and
+/// notches (the front face covers 6,783.6 square units of the rectangle's
+/// 6,819.8), and its reflection fades from alpha `0x4c` over half the card's
+/// height.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_placeholder_is_the_cards_outline_and_reflection() {
+    let Some(image) = image() else { return };
+    let mut archives = archives(&image);
+    let shell = oag_game::flyer::Shell::load(&mut archives).expect("the shell reads");
+    assert!((shell.half_size[0] - 51.2).abs() < 0.02, "{shell:?}");
+    assert!((shell.half_size[1] - 33.3).abs() < 0.02, "{shell:?}");
+    let area: f32 = shell
+        .outline
+        .iter()
+        .map(|[a, b, c]| {
+            ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])).abs() / 2.0
+        })
+        .sum();
+    assert!((area - 6783.6).abs() < 1.0, "{area}");
+    assert!(
+        (shell.fade.top_alpha - 76.0 / 255.0).abs() < 1e-4,
+        "{shell:?}"
+    );
+    assert!((shell.fade.depth - 33.3).abs() < 0.05, "{shell:?}");
+    assert!((shell.fade.edge_y + 33.3).abs() < 0.05, "{shell:?}");
+}
+
 /// The card is a flat quad set: the widest card is 115 units across and no
 /// vertex of any base card is more than a few units off the plane. A Fury card
 /// is authored at a third of the width and 28 units deep, which is why none is
