@@ -71,6 +71,7 @@ pub mod source;
 pub mod sprite;
 pub mod title;
 pub mod upscale;
+pub mod wem;
 
 use log::info;
 

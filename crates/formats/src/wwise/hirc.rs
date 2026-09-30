@@ -259,7 +259,8 @@ pub struct Plugin(pub u32);
 /// A codec, by the plugin number a codec-class plugin id carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Codec {
-    /// Plugin number 1: 10 sounds, and every one's media is `fmt ` tag `0x0001`.
+    /// Plugin number 1: 10 sounds, and every one's media is `fmt ` tag `0xFFFE`
+    /// (`WAVE_FORMAT_EXTENSIBLE`, which is how Wwise writes PCM).
     Pcm,
     /// Plugin number 12: **all 6,626 of the base banks' codec sounds bar the
     /// PCM ones**, and every one's media is `fmt ` tag `0xFFFC`. Sony's

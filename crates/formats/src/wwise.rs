@@ -92,6 +92,7 @@ pub mod hirc;
 mod library;
 #[cfg(test)]
 mod tests;
+pub mod wem;
 
 pub use hirc::{Kind, Object};
 pub use library::{EventPlan, Library, MediaRef};
