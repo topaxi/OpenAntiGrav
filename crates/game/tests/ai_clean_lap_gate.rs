@@ -150,6 +150,20 @@
 //! further**: the physics moved toward the capture, and retuning the driver
 //! to it is the AI lane's work.
 //!
+//! **Regenerated again 2026-09-30, for a driver change**: `Line::curvature`
+//! no longer reads the foot of a hill as a corner (`bend_angle`; `docs/gameplay/
+//! ai.md`, "A valley is not a corner"). The three rows the airbrake re-record
+//! above lost come back - `05_Track` VENOM and FLASH and `14_Track` RAPIER
+//! `Died` to `CleanLap` - because the Ace no longer brakes 7 units/s at the
+//! foot of `05_Track`'s hill and arrives at its crest lip above the ~70 units/s
+//! that clears it. One row is worse: `07_Track` FLASH `Died` to `Eliminated`
+//! (contact 864 to 869, **not traced**; the circuit already `Died` on all four
+//! classes). Clean-lap times fell by 1-2 s on the circuits with a valley in
+//! them (`06_Track` and `09_Track` by up to 130 ticks), and `13_Track` RAPIER
+//! and PHANTOM took more contact (1129 to 1555, 641 to 1347; both `Died`
+//! before and after). Totals over the 48 rows: contact 17357 to 13834
+//! (13340 before the airbrake change), `Died` rows 14 to 10 (11 before it).
+//!
 //! # Regenerating [`BASELINE`]
 //!
 //! Never by hand. [`print_baseline_source`] below runs the same 48 rows this
@@ -352,54 +366,54 @@ struct Row {
 /// what "improve" means per field and how each is asserted.
 #[rustfmt::skip]
 const BASELINE: &[Row] = &[
-    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2518), contact_ticks: 66 },
-    Row { circuit: "03_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2631), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2585), contact_ticks: 5 },
-    Row { circuit: "10_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2287), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "VENOM", status: Status::Died, lap_ticks: Some(2380), contact_ticks: 3201 },
-    Row { circuit: "04_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2355), contact_ticks: 70 },
-    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(3087), contact_ticks: 11 },
-    Row { circuit: "14_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2745), contact_ticks: 9 },
-    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2231), contact_ticks: 163 },
-    Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2286), contact_ticks: 302 },
-    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2768), contact_ticks: 109 },
-    Row { circuit: "07_Track", class: "VENOM", status: Status::Died, lap_ticks: Some(3059), contact_ticks: 634 },
-    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2294), contact_ticks: 93 },
-    Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2388), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2393), contact_ticks: 22 },
-    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2041), contact_ticks: 45 },
-    Row { circuit: "05_Track", class: "FLASH", status: Status::Died, lap_ticks: Some(2154), contact_ticks: 1467 },
-    Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2108), contact_ticks: 85 },
-    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2818), contact_ticks: 57 },
-    Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2431), contact_ticks: 66 },
-    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1983), contact_ticks: 310 },
-    Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2075), contact_ticks: 481 },
-    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2564), contact_ticks: 107 },
-    Row { circuit: "07_Track", class: "FLASH", status: Status::Died, lap_ticks: Some(2930), contact_ticks: 864 },
-    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2085), contact_ticks: 185 },
-    Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2184), contact_ticks: 19 },
-    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2213), contact_ticks: 111 },
-    Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1877), contact_ticks: 203 },
-    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1918), contact_ticks: 173 },
-    Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1876), contact_ticks: 307 },
-    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2576), contact_ticks: 216 },
-    Row { circuit: "14_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(2155), contact_ticks: 348 },
-    Row { circuit: "01_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1742), contact_ticks: 462 },
-    Row { circuit: "13_Track", class: "RAPIER", status: Status::Died, lap_ticks: None, contact_ticks: 1129 },
-    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2427), contact_ticks: 211 },
-    Row { circuit: "07_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(2738), contact_ticks: 854 },
-    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1976), contact_ticks: 241 },
-    Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2093), contact_ticks: 58 },
-    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2131), contact_ticks: 156 },
-    Row { circuit: "10_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1816), contact_ticks: 335 },
-    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1782), contact_ticks: 173 },
-    Row { circuit: "04_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1783), contact_ticks: 494 },
-    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2454), contact_ticks: 304 },
-    Row { circuit: "14_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(2022), contact_ticks: 548 },
-    Row { circuit: "01_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1645), contact_ticks: 575 },
-    Row { circuit: "13_Track", class: "PHANTOM", status: Status::Died, lap_ticks: None, contact_ticks: 641 },
-    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2359), contact_ticks: 239 },
-    Row { circuit: "07_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(2683), contact_ticks: 1208 },
+    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2507), contact_ticks: 60 },
+    Row { circuit: "03_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2573), contact_ticks: 0 },
+    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2582), contact_ticks: 4 },
+    Row { circuit: "10_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2334), contact_ticks: 3 },
+    Row { circuit: "05_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2381), contact_ticks: 79 },
+    Row { circuit: "04_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2354), contact_ticks: 88 },
+    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2994), contact_ticks: 27 },
+    Row { circuit: "14_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2744), contact_ticks: 9 },
+    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2222), contact_ticks: 168 },
+    Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2265), contact_ticks: 293 },
+    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2646), contact_ticks: 93 },
+    Row { circuit: "07_Track", class: "VENOM", status: Status::Died, lap_ticks: Some(2989), contact_ticks: 594 },
+    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2263), contact_ticks: 94 },
+    Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2325), contact_ticks: 0 },
+    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2380), contact_ticks: 15 },
+    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2029), contact_ticks: 50 },
+    Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2161), contact_ticks: 131 },
+    Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2108), contact_ticks: 89 },
+    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2716), contact_ticks: 33 },
+    Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2431), contact_ticks: 79 },
+    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1985), contact_ticks: 317 },
+    Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2071), contact_ticks: 465 },
+    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2443), contact_ticks: 108 },
+    Row { circuit: "07_Track", class: "FLASH", status: Status::Eliminated, lap_ticks: Some(2835), contact_ticks: 869 },
+    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2052), contact_ticks: 199 },
+    Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2111), contact_ticks: 6 },
+    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2201), contact_ticks: 112 },
+    Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1901), contact_ticks: 215 },
+    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1913), contact_ticks: 177 },
+    Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1872), contact_ticks: 298 },
+    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2480), contact_ticks: 245 },
+    Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2151), contact_ticks: 391 },
+    Row { circuit: "01_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1734), contact_ticks: 464 },
+    Row { circuit: "13_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1884), contact_ticks: 1555 },
+    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2301), contact_ticks: 158 },
+    Row { circuit: "07_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(2623), contact_ticks: 909 },
+    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1950), contact_ticks: 243 },
+    Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2033), contact_ticks: 92 },
+    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2102), contact_ticks: 139 },
+    Row { circuit: "10_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1786), contact_ticks: 298 },
+    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1779), contact_ticks: 209 },
+    Row { circuit: "04_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1778), contact_ticks: 534 },
+    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2334), contact_ticks: 325 },
+    Row { circuit: "14_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1990), contact_ticks: 526 },
+    Row { circuit: "01_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1639), contact_ticks: 545 },
+    Row { circuit: "13_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1786), contact_ticks: 1347 },
+    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2263), contact_ticks: 215 },
+    Row { circuit: "07_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(2552), contact_ticks: 964 },
 ];
 
 /// Runs one row and asserts it against its frozen [`BASELINE`] entry.
