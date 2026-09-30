@@ -21,11 +21,15 @@
 //!
 //! - **`EndRace Results`**: the headline (`Line1`) and a per-lap table
 //!   (`Lap`/`Time`), off whatever this build's own [`oag_race::Standing::lap_splits`]
-//!   kept. The table's own **third column is never filled** - its meaning is
-//!   unread (`docs/formats/endrace-screens.md`), and drawing a number into it
-//!   would be inventing what the column means. Neither are the
-//!   `perfectlap{n}` icons: the flag's own direction (does nonzero mean
-//!   "perfect" or the reverse) is not settled either.
+//!   kept, under the `boostimg` header icon the disc puts over the third column.
+//!   That column's **values are never filled** - what the number counts is
+//!   unread (`docs/formats/endrace-screens.md`), and drawing one would be inventing
+//!   what the column means - and the `perfectlap{n}` icons never show: their flag's
+//!   direction is settled (nonzero shows the icon) but this build keeps no per-lap
+//!   perfect flag. Eliminator and Zone races have tables of their own,
+//!   [`EliminationResults`] and [`ZoneResults`], and a Tournament leg's is
+//!   [`TournamentResults`]; see [`table`] for how a mode's populate shows only the
+//!   rows it fills.
 //! - **`EndRace Rewards`**: the medal-award phrase and, for a no-medal
 //!   campaign race, the disc's own hex-dash glyph - the one case this
 //!   project's own capture (`results-02.png`) actually shows. A medal that
@@ -57,10 +61,16 @@ pub use crate::campaign::Layout;
 
 pub mod draw;
 pub mod hd;
+mod modes;
 pub mod pointer;
+mod table;
 
 pub use draw::{
     endrace_menu_draw_list, results_draw_list, rewards_draw_list, tournament_results_draw_list,
+};
+pub use modes::{
+    EliminationResults, EliminationRow, ZoneResults, elimination_results_draw_list,
+    zone_results_draw_list,
 };
 
 #[cfg(test)]
@@ -105,10 +115,10 @@ pub enum Headline {
     Position(u8),
     /// No finishing position (a field of one) - `ER_SHIP_DES`.
     NoPosition,
-    /// `Zone`/`Eliminator` go through a populate helper
-    /// (`FUN_088db574`/`FUN_088db1ec`) this project has not decompiled -
-    /// drawing nothing rather than guessing its own headline. See
-    /// `docs/formats/endrace-screens.md`.
+    /// `Zone`/`Eliminator` on Wipeout HD/Fury, whose own populate for them is
+    /// unread - drawing nothing rather than guessing a headline. Pulse's two
+    /// have tables of their own ([`EliminationResults`], [`ZoneResults`]) with
+    /// their own `Line1`, so they never reach this.
     Unresolved,
 }
 

@@ -46,6 +46,16 @@ pub(super) enum EndRaceKind {
     TournamentResults {
         standings: bool,
     },
+    /// An Eliminator race's `EndRace Results` - `EndRaceResults_PopulateEliminationTable`
+    /// (`0x088db1ec`). Fed the eight records a live PPSSPP race left in
+    /// `g_endrace_result` (2026-09-30), so the still can be laid beside the frame
+    /// it was taken from; only the team ids are this project's own spelling.
+    EliminationResults,
+    /// A Zone race's `EndRace Results` - `EndRaceResults_PopulateZoneTable`
+    /// (`0x088db574`). **Chosen numbers**, not measured: no Zone frame is
+    /// reachable, and two of the six statistics draw blank on purpose, as this
+    /// build's own race would leave them.
+    ZoneResults,
 }
 
 #[must_use]
@@ -74,6 +84,10 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
         "endrace-results-tournament-standings" | "endrace_results_tournament_standings" => {
             Some(EndRaceKind::TournamentResults { standings: true })
         }
+        "endrace-results-eliminator" | "endrace_results_eliminator" => {
+            Some(EndRaceKind::EliminationResults)
+        }
+        "endrace-results-zone" | "endrace_results_zone" => Some(EndRaceKind::ZoneResults),
         _ => None,
     }
 }
@@ -326,6 +340,58 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
+        EndRaceKind::EliminationResults => {
+            // The live race's eight records (slot order is the grid's, the ranking
+            // is `EliminationResults::new`'s): the player last with 0 kills.
+            let craft = |team: &str, kills: u32, deaths: u32, player: bool| {
+                oag_ui::endrace::EliminationRow {
+                    team_name: Some(team.to_string()),
+                    kills,
+                    deaths,
+                    player,
+                }
+            };
+            let model = oag_ui::endrace::EliminationResults::new(vec![
+                craft("Assegai", 0, 1, true),
+                craft("Feisar", 2, 4, false),
+                craft("EGX", 5, 5, false),
+                craft("Qirex", 3, 3, false),
+                craft("Goteki", 3, 1, false),
+                craft("AG_Systems", 2, 4, false),
+                craft("Triakis", 1, 2, false),
+                craft("Piranha", 4, 1, false),
+            ]);
+            oag_ui::endrace::elimination_results_draw_list(
+                &model,
+                &screens.results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
+        EndRaceKind::ZoneResults => {
+            let model = oag_ui::endrace::ZoneResults {
+                zones_cleared: 7,
+                perfect_zones: Some(3),
+                laps_cleared: None,
+                perfect_laps: None,
+                top_speed_kmh: Some(812),
+                score: 4321,
+            };
+            oag_ui::endrace::zone_results_draw_list(
+                &model,
+                &screens.results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
         EndRaceKind::Menu {
             tournament_next_leg,
         } => {
@@ -450,6 +516,12 @@ fn hd_endrace_page(
         EndRaceKind::TournamentResults { standings: _ } => {
             anyhow::bail!(
                 "Wipeout HD/Fury's own EndRace Results authors no Tournament standings table"
+            )
+        }
+        // Zone's and Eliminator's tables are Pulse's own populate functions too.
+        EndRaceKind::EliminationResults | EndRaceKind::ZoneResults => {
+            anyhow::bail!(
+                "Wipeout HD/Fury's own EndRace Results authors no Zone or Eliminator table"
             )
         }
         // Tournament is Pulse-only in this build so far - `tournament_next_leg`

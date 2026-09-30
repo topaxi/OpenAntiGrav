@@ -21,8 +21,8 @@ use anyhow::Result;
 
 use oag_tables::race_campaign::Medal;
 use oag_ui::endrace::{
-    EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards, TournamentResults,
-    TournamentRow,
+    EliminationResults, EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards,
+    TournamentResults, TournamentRow, ZoneResults,
 };
 
 use oag_game::render::Renderer;
@@ -50,6 +50,13 @@ pub(crate) enum ResultsModel {
     /// three seconds between this leg's own placings and the running
     /// standings. See [`oag_ui::endrace::TournamentResults`].
     PulseTournament(TournamentResults),
+    /// An Eliminator race's field, ranked by kills - Pulse only, off
+    /// `EndRaceResults_PopulateEliminationTable`. See
+    /// [`oag_ui::endrace::EliminationResults`].
+    PulseElimination(EliminationResults),
+    /// A Zone run's six statistics - Pulse only, off
+    /// `EndRaceResults_PopulateZoneTable`. See [`oag_ui::endrace::ZoneResults`].
+    PulseZone(ZoneResults),
     Hd(FieldResults),
 }
 
@@ -188,7 +195,10 @@ impl EndRaceRuntime {
     #[must_use]
     pub(crate) fn menu_targets(&self) -> Vec<oag_ui::endrace::pointer::Target> {
         match &self.results {
-            ResultsModel::Pulse(_) | ResultsModel::PulseTournament(_) => {
+            ResultsModel::Pulse(_)
+            | ResultsModel::PulseTournament(_)
+            | ResultsModel::PulseElimination(_)
+            | ResultsModel::PulseZone(_) => {
                 oag_ui::endrace::pointer::menu_targets(&self.menu, &self.screens.menu)
             }
             ResultsModel::Hd(_) => {
@@ -260,6 +270,30 @@ impl EndRaceRuntime {
                     &|src| sprites.get(src),
                 )
             }
+            (Which::Results, ResultsModel::PulseElimination(results)) => {
+                oag_ui::endrace::elimination_results_draw_list(
+                    results,
+                    &self.screens.results,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
+            (Which::Results, ResultsModel::PulseZone(results)) => {
+                oag_ui::endrace::zone_results_draw_list(
+                    results,
+                    &self.screens.results,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
             (Which::Results, ResultsModel::Hd(results)) => {
                 oag_ui::endrace::hd::hd_results_draw_list(
                     results,
@@ -295,18 +329,22 @@ impl EndRaceRuntime {
                     &|src| sprites.get(src),
                 )
             }
-            (Which::Menu, ResultsModel::Pulse(_) | ResultsModel::PulseTournament(_)) => {
-                oag_ui::endrace::endrace_menu_draw_list(
-                    &self.menu,
-                    &self.screens.menu,
-                    &self.skin,
-                    &self.frame,
-                    &self.strings,
-                    None,
-                    true,
-                    &|src| sprites.get(src),
-                )
-            }
+            (
+                Which::Menu,
+                ResultsModel::Pulse(_)
+                | ResultsModel::PulseTournament(_)
+                | ResultsModel::PulseElimination(_)
+                | ResultsModel::PulseZone(_),
+            ) => oag_ui::endrace::endrace_menu_draw_list(
+                &self.menu,
+                &self.screens.menu,
+                &self.skin,
+                &self.frame,
+                &self.strings,
+                None,
+                true,
+                &|src| sprites.get(src),
+            ),
             (Which::Menu, ResultsModel::Hd(_)) => oag_ui::endrace::hd::hd_menu_draw_list(
                 &self.menu,
                 &self.screens.menu,
@@ -394,9 +432,10 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
                 None => Headline::NoPosition,
             }
         }
-        // `Zone`/`Eliminator` go through a populate helper this project has
-        // not decompiled - see `oag_ui::endrace::Headline::Unresolved`'s own
-        // doc.
+        // Pulse's `Zone`/`Eliminator` never ask for this: each has a table of its
+        // own with its own `Line1` (`ZoneResults`, `EliminationResults`). What
+        // reaches here is HD's field grid, whose own populate for those modes is
+        // not read - see `oag_ui::endrace::Headline::Unresolved`'s own doc.
         oag_race::Mode::Zone | oag_race::Mode::Eliminator => Headline::Unresolved,
     }
 }
@@ -509,6 +548,47 @@ pub(crate) fn tournament_results(
         leg,
         standings,
     ))
+}
+
+/// Pulse's Eliminator table: one row per craft in the field, in slot order - the
+/// ranking is [`EliminationResults::new`]'s. `slot_teams` is the grid roster's team
+/// ids in slot order, `None` when the launch named no team (the cells then draw
+/// absent); slot 0 is the player.
+#[must_use]
+pub(crate) fn elimination_results(
+    ships: &[oag_gameplay::Ship],
+    slot_teams: Option<&[String]>,
+) -> EliminationResults {
+    EliminationResults::new(
+        ships
+            .iter()
+            .enumerate()
+            .map(|(slot, ship)| oag_ui::endrace::EliminationRow {
+                team_name: slot_teams.and_then(|teams| teams.get(slot).cloned()),
+                kills: ship.standing.kills,
+                deaths: ship.standing.deaths,
+                player: slot == 0,
+            })
+            .collect(),
+    )
+}
+
+/// Pulse's Zone table: the two numbers the world keeps (`zone` and `score`) and
+/// the two the race view tallies. The other two rows the original prints - `Laps
+/// cleared` and `Perfect laps` - are left blank: what steps them is unrecovered.
+#[must_use]
+pub(crate) fn zone_results(
+    state: &oag_race::RaceState,
+    stats: crate::race::RunStats,
+) -> ZoneResults {
+    ZoneResults {
+        zones_cleared: u32::from(state.zone),
+        perfect_zones: Some(stats.perfect_zones),
+        laps_cleared: None,
+        perfect_laps: None,
+        top_speed_kmh: Some(stats.top_speed_kmh()),
+        score: state.score,
+    }
 }
 
 /// `oag_game::records::Medal` restated as `oag_tables::race_campaign::Medal` -
@@ -803,3 +883,6 @@ mod tests {
         assert!(!results_table_takes_confirm(false, false));
     }
 }
+
+#[cfg(test)]
+mod modes_tests;

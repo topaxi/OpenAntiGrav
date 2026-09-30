@@ -8,8 +8,8 @@ use log::warn;
 use oag_ui::endrace::{Event, MenuOption};
 
 use crate::race_stage::endrace::{
-    EndRaceRuntime, LoyaltyInputs, ResultsModel, hd_field_rows, headline, loyalty_award,
-    menu_options, to_campaign_medal, tournament_results,
+    EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, hd_field_rows, headline,
+    loyalty_award, menu_options, to_campaign_medal, tournament_results, zone_results,
 };
 use crate::stage::Stage;
 
@@ -196,13 +196,24 @@ impl Session {
         // team flew which slot is not carried past the `Race` that just
         // finished. `None` (no team named at all) draws every row's own
         // name absent rather than invented.
+        // The grid roster in slot order, for the two tables that name a team per
+        // craft. The ids are folder names; the draw resolves each to its display
+        // name through the string table, as the original's own `localise` does.
+        let slot_teams = (!is_hd
+            && matches!(
+                mode,
+                oag_race::Mode::Tournament | oag_race::Mode::Eliminator
+            ))
+        .then(|| {
+            team.as_deref().map(|team| {
+                crate::race::slot_teams(&mut archives, title_ref, team, &opponent_teams)
+            })
+        })
+        .flatten();
         let pulse_tournament = (!is_hd && mode == oag_race::Mode::Tournament)
             .then_some(self.tournament.as_ref())
             .flatten()
             .and_then(|progress| {
-                let slot_teams = team.as_deref().map(|team| {
-                    crate::race::slot_teams(&mut archives, title_ref, team, &opponent_teams)
-                });
                 tournament_results(
                     board.as_ref(),
                     progress,
@@ -213,6 +224,17 @@ impl Session {
 
         let results = if let Some(tournament) = pulse_tournament {
             ResultsModel::PulseTournament(tournament)
+        } else if !is_hd && mode == oag_race::Mode::Eliminator {
+            let world = &stage.race.sim.world;
+            ResultsModel::PulseElimination(elimination_results(
+                &world.ships[..usize::from(world.ship_count)],
+                slot_teams.as_deref(),
+            ))
+        } else if !is_hd && mode == oag_race::Mode::Zone {
+            ResultsModel::PulseZone(zone_results(
+                stage.race.sim.world.primary_race(),
+                stage.race.run_stats(),
+            ))
         } else if is_hd {
             ResultsModel::Hd(oag_ui::endrace::FieldResults {
                 headline: headline(mode, observation.place),

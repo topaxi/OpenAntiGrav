@@ -18,6 +18,48 @@ use super::*;
 
 use crate::scoreboard::{self, Board, Craft};
 
+/// What a Zone run reports about itself that the world does not keep, for
+/// `EndRace Results`' six rows (`oag_ui::endrace::ZoneResults`).
+///
+/// **Presentation-side state**, on [`RaceView`]: no field reaches
+/// [`RaceSim::state_hash`], so keeping a tally here cannot move a hash or a
+/// replay. It is fed from events the simulation already emits and reads nothing
+/// back into it.
+///
+/// Only the two statistics this build can honestly count. `Laps cleared` and
+/// `Perfect laps` are the other two of the original's block
+/// (`Zone_Update`'s `+0x1a14`/`+0x1a16`) and what steps them is not recovered, so
+/// they stay off - see `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunStats {
+    /// Zones that ended without a wall contact - the `outcome.perfect_zone` edge,
+    /// `Zone_Update`'s `+0x1a12`.
+    pub perfect_zones: u32,
+    /// The fastest the player's craft has been going, in hundredths of a unit a
+    /// second, as `Zone_Update` keeps it: a `u16` of `speed * 100`, replaced when a
+    /// larger one comes along.
+    top_speed_centi: u16,
+}
+
+impl RunStats {
+    /// Folds one tick's speed in. `speed` is the player's `|dot(velocity, forward)|`,
+    /// which is `craft+0x2ec` (`docs/ghidra/functions/psp-pulse-usa/engine.md`) - the
+    /// figure `Zone_Update` reads - though not sampled on the original's frame
+    /// boundary, so the maximum can differ by a tick's worth of acceleration.
+    pub(super) fn observe(&mut self, speed: f32) {
+        // `(uint)(speed * 100.0)` masked to sixteen bits, compared as unsigned.
+        let centi = ((speed * 100.0) as u32 & 0xffff) as u16;
+        self.top_speed_centi = self.top_speed_centi.max(centi);
+    }
+
+    /// `ER_TOP_SPEED`'s number: `top * 0xe10 / 100000` in integers, which is the same
+    /// 3.6 the speedometer multiplies by.
+    #[must_use]
+    pub fn top_speed_kmh(self) -> u32 {
+        u32::from(self.top_speed_centi) * 0xe10 / 100_000
+    }
+}
+
 impl Race {
     /// Whether the race has reached its finish condition.
     ///
@@ -32,6 +74,12 @@ impl Race {
     #[must_use]
     pub fn finished(&self) -> bool {
         self.sim.world.primary_race().finished
+    }
+
+    /// The Zone results screen's tallies. See [`RunStats`].
+    #[must_use]
+    pub fn run_stats(&self) -> RunStats {
+        self.view.run_stats
     }
 
     /// The results, once there are any.

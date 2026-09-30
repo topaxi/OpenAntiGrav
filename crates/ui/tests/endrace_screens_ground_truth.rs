@@ -115,3 +115,49 @@ fn the_real_icon_widgets_collect_as_images() {
         );
     }
 }
+
+/// `oag_ui::endrace`'s table walk gates a row's background by the `y` of the
+/// anonymous widgets nested in each `tablebg{n}`, which the screen reader collects
+/// flat: a `hex_bg.mip` tile and two fading rules. This counts them on the real
+/// file, with the bands written out again here rather than shared: **every row owns
+/// exactly one tile and two rules, and no other unnamed widget sits in the grid's
+/// 92..253 span**, so a widget in a band is one of the row's own.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_table_row_nests_one_tile_and_two_rules_and_nothing_else_sits_in_its_band() {
+    let Some(screens) = screens() else { return };
+    let results = screens.by_name("EndRace Results").unwrap();
+    // Row 1 owns [92, 113); row i > 1 owns [93 + 20 (i - 1), 113 + 20 (i - 1)).
+    let band = |y: f32| -> Option<usize> {
+        (1..=8).find(|&row| {
+            let top = 92.0 + 20.0 * (row - 1) as f32 + if row == 1 { 0.0 } else { 1.0 };
+            (top..top + if row == 1 { 21.0 } else { 20.0 }).contains(&y)
+        })
+    };
+    let mut tiles = [0; 8];
+    for image in results.images.iter().filter(|image| image.name.is_none()) {
+        if let Some(row) = band(image.y) {
+            tiles[row - 1] += 1;
+        }
+    }
+    let mut rules = [0; 8];
+    for fill in results.fills.iter().filter(|fill| fill.name.is_none()) {
+        if let Some(row) = band(fill.y) {
+            rules[row - 1] += 1;
+        }
+    }
+    assert_eq!(tiles, [1; 8], "one hex_bg tile per row");
+    assert_eq!(rules, [2; 8], "two fading rules per row");
+
+    // The wrapper fill carries its own `y` without the tag's `OffsetY` - the reader's
+    // quirk `oag_ui::endrace` compensates for - so a row's `tablebg` fill reads 0 or 1.
+    for row in 1..=8 {
+        let name = format!("tablebg{row}");
+        let fill = results
+            .fills
+            .iter()
+            .find(|fill| fill.name.as_deref() == Some(name.as_str()))
+            .unwrap_or_else(|| panic!("{name} is a fill"));
+        assert!(fill.y <= 1.0, "{name} is at {}, not at its row", fill.y);
+    }
+}

@@ -438,4 +438,6 @@ pub struct RaceView {
     /// already holds, so hashing it would hash the same facts twice, and a
     /// replay reproduces it by reaching the same tick. See [`Self::results`].
     pub(super) results: Option<crate::scoreboard::Board>,
+    /// The tallies the Zone results screen reports - see [`RunStats`].
+    pub(super) run_stats: super::results::RunStats,
 }
