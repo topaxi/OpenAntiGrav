@@ -309,6 +309,7 @@ impl Race {
     /// shape [`Race::advance_projectile_flares`] already takes.
     pub(in crate::race) fn advance_quake_visual(&mut self) {
         let Some(wave) = self.sim.world.quake else {
+            self.view.quake_point = None;
             if let Some(playing) = self.view.quake_effect.take() {
                 self.view.stage.detach(playing);
             }
@@ -331,6 +332,7 @@ impl Race {
         let left = centre - lateral * sample.half_width_left;
         let right = centre + lateral * sample.half_width_right;
         let midpoint = (left + right) * 0.5;
+        self.view.quake_point = Some(midpoint);
         let scale = (right - left).length() / 50.0;
         // The frame's `X` runs edge to edge: `Quake_Update`'s basis starts
         // from `normalize(B - A)` as its first row (`0x0891da08`, read

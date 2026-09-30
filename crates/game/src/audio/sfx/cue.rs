@@ -430,6 +430,32 @@ pub enum Cue {
     /// binds it (2 waveforms), but no call site was found on `missile.md` -
     /// an effect whose trigger is not recovered stays unwired.
     MissileHitWall,
+    /// A Missile ending on a craft.
+    ///
+    /// `MissilePool_Update` (`0x08869588`, confidence 88, read whole
+    /// 2026-09-30) opens its teardown on the destroy bit and plays exactly one
+    /// of two cues off the round's own flags: `MISSILEEXPWALL` when bit `0x10`
+    /// is set, **`MISSILEEXPSHIP` when bit `0x20` is** (the craft-hit bit
+    /// `MissilePool_TestCraftHits` sets, the same one `CannonPool_Update`'s
+    /// teardown tests), each on the round's own emitter with its radius written
+    /// to `600.0` (`0x44160000`) just before. The `Sound_Play` for this one is
+    /// the `lw` at `0x08869af8` (pointer cell `0x08a7c93c`, string `0x08a7c92c`).
+    /// Fires from the impact loop when a Missile's [`oag_gameplay::projectile::Impact`]
+    /// names a struck craft, at the impact point, like [`Self::RocketHitShip`].
+    MissileHitShip,
+    /// A Missile that outlived its fuse.
+    ///
+    /// The pool's second pass tests `3.0 < age` on every live round and, still
+    /// holding the round's active bit, plays the cue at pointer cell
+    /// `0x08a7c950` on the round's emitter (radius `600.0`) before it sets the
+    /// destroy bit. **That cell holds `"SHURIKENEXPL"`**, not a Missile name -
+    /// read directly, `0x08a7c940` - and `SHURIKENEXPL` is a real cue in
+    /// `weapons.bnk`. Earlier notes took the string for a misread and left it
+    /// unwired; it is the disc's own data (a copy-paste in the original, but
+    /// the original plays it), so it plays. Confidence 88 for the trigger; that
+    /// it is a slip of the authors' is inference. Fires from the impact loop for
+    /// a Missile impact that struck nothing.
+    MissileExpire,
     /// The Cannon's own round leaving the barrel.
     ///
     /// Played "at the end of `Cannon_Init`" (`0x088648ec`, confidence 80) -
@@ -505,6 +531,21 @@ pub enum Cue {
     /// *victim's* - the page's own naming is internally inconsistent, and
     /// this port sides with the victim rather than the shooter.
     QuakeHit,
+    /// The Quake wave travelling: a held loop while its span is active.
+    ///
+    /// `Quake_Update` (`0x0891d268`, confidence 85), per road span: when
+    /// `Quake_SampleSpan` first reports the span active it spawns `WO_QUAKE`,
+    /// allocates a `SoundEmitter` pointed at the span's own matrix with its
+    /// radius written to `600.0` (`0x44160000`), and plays `~QUAKETRAVEL`
+    /// (pointer cell `0x08a88554`, string `0x08a88544`, `lw` at `0x0891d954`)
+    /// with a handle kept per span; when the span goes inactive it releases the
+    /// effect and stops the voice. So the loop lasts as long as the wave.
+    ///
+    /// **One voice here, not two**: the original has a voice per span (two at
+    /// most, when the wave crosses a join), this port a single travelling wave.
+    /// **Placed at the wave's own road midpoint**, the same point the `WO_QUAKE`
+    /// visual follows; the original's is the span midpoint, which is that.
+    QuakeTravel,
     /// The LeachBeam firing, locked onto somebody.
     ///
     /// `LeachBeam_InitLocked` (`0x08873d3c`, confidence 82) plays `LEACH`
@@ -517,6 +558,17 @@ pub enum Cue {
     /// both the places a beam can be locked and fired: `Race::spend_pickup`'s
     /// own LeachBeam arm and `Race::fire_opponent_leach_beam`.
     Leach,
+    /// The LeachBeam fired with nothing to lock onto.
+    ///
+    /// `LeachBeam_InitUnlocked` (`0x08872da8`, confidence 85) ends with
+    /// `Sound_Play(1.0, param_4, ..., "LEACHFAIL", 0)`: pointer cell
+    /// `0x08a7cc20`, string `0x08a7cc14`, on the emitter it is handed, which
+    /// `Weapon_FireLeachBeam` (`0x08866658`) fills from `shooter->emitter` - the
+    /// same craft emitter [`Self::Leach`] rides. It is the constructor a fire
+    /// with no lock (`craft+0x16c == -1`) reaches, so an unlocked shot plays
+    /// this where a locked one plays `LEACH`. Fires from
+    /// `Race::spend_pickup`'s unlocked arm; an opponent only fires with a lock.
+    LeachFail,
     /// The LeachBeam's own body, held for as long as a **locked** beam
     /// instance exists - through its disconnect linger, not only while it
     /// is [`connected`](oag_gameplay::projectile::leach_beam::Beam::connected).
@@ -559,33 +611,35 @@ pub enum Cue {
     /// [`Self::ShurikenTravel`]'s own doc comment below makes for an
     /// unread emitter argument, carrying no confidence score of its own.
     LeachEnergy,
+    /// A Shuriken leaving the craft.
+    ///
+    /// `Shuriken_Init` (`0x08877280`, confidence 88) plays `SHURIKEN` (pointer
+    /// cell `0x08a7cd44`, string `0x08a7cd38`) on the emitter its caller hands it
+    /// as its last argument - the firing craft's own, before it allocates the
+    /// blade's - the same shape [`Self::Plasma`] takes. Earlier notes could not
+    /// verify this name; the string is `"SHURIKEN"` and the cue is in
+    /// `weapons.bnk` (cue 29). Fires from `Race::spend_pickup`'s Shuriken arm
+    /// and `throw_opponent_shuriken`, on the craft.
+    ShurikenLaunch,
     /// A Shuriken glancing off a wall.
     ///
     /// `Shuriken_Bounce` (`0x088778ac`, confidence 88) plays `SHURIKENHIT` on
-    /// every bounce, matching the already-built `WO_SHURIKEN_BOUNCE`
-    /// visual's edge; see `crate::race::weapons::visuals::bounced_this_tick`,
-    /// which already accepts `Weapon::Shuriken`. The call's own argument is
-    /// `s->travel_voice` - the same handle [`Self::ShurikenTravel`] opened -
-    /// which the page reads but does not itself resolve to an emitter
-    /// identity. **Placed on the firing craft: chosen, not measured**, the
-    /// same reasoning as [`Self::ShurikenTravel`] below.
+    /// every bounce (`Sound_Play` at `0x08877b60`), matching the `WO_SHURIKEN_BOUNCE`
+    /// visual's edge; see `crate::race::weapons::visuals::bounced_this_tick`.
+    /// **On the blade's own emitter**: it loads `round+0x50`, writes `300.0`
+    /// (`0x43960000`) to its `+0x38` and plays through it. This corrects the
+    /// earlier "placed on the firing craft" choice, made when no bolt-owned
+    /// emitter had been read.
     ShurikenHit,
     /// The Shuriken's own travel loop, from throw to whatever ends it.
     ///
-    /// `Shuriken_Init` (`0x08877280`, confidence 88) is handed
-    /// `craft->emitter` directly - the same emitter
-    /// [`super::Placement::Craft`] already reads for `.COLLISIONS`,
-    /// `ABSORB`, `~SHIELD` and `MINELAUNCH` - rather than allocating a
-    /// bolt-owned one the way `Rocket_Init`/`Missile_Init` do. **What the
-    /// page does not show is the `~SHURIKENTRAVEL` play call's own emitter
-    /// argument** - only that no bolt-owned `SoundEmitter_Init` exists to
-    /// supply one. So riding the firing craft rather than the blade is
-    /// **chosen, not measured, and carries no confidence score** - the
-    /// absence of a bolt-owned emitter is what rules the alternative out,
-    /// not a read of this cue's own call site. A blade thrown by a craft
-    /// that has since gone inactive is heard from nowhere either way, the
-    /// same silent drop [`super::place`] already gives any craft-placed cue
-    /// on an empty slot.
+    /// `Shuriken_Init` allocates a bolt-owned emitter at `round+0x50` (a
+    /// `SoundEmitter_Init`, `+0x50` pointed at the round's own matrix at
+    /// `round+0xf0`, `+0x38 = 300.0`) and plays `~SHURIKENTRAVEL` through it,
+    /// keeping the handle at `round+0x54`. Read 2026-09-30, confidence 88; it
+    /// replaces the earlier reading that Shuriken had no emitter of its own and
+    /// rode the craft's. Held per **projectile slot**, at the blade's position,
+    /// radius `300.0`.
     ShurikenTravel,
     /// The start-of-race voice: `"ready"`, a timeline of several waveforms.
     ///

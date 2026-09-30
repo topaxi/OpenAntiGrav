@@ -137,8 +137,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
         lifetime: 5.0,
         ..Default::default()
     };
-    // Owned by slot 0, so `Cue::ShurikenTravel`'s own craft-based placement
-    // (see its doc comment) has somewhere to read a position from.
+    // On the blade's own emitter, so it needs no owner to be heard from.
     let shuriken = oag_gameplay::projectile::Projectile {
         kind: Some(oag_tables::weapons::Weapon::Shuriken),
         position: origin,
@@ -179,22 +178,6 @@ fn the_four_travel_voices_open_together_and_close_together() {
          body did not all open"
     );
 
-    // The `None`-position path: `craft_positions` returns a fixed
-    // `[Option<_>; MAX_SHIPS]` array, so an owner past `MAX_SHIPS` (`8`) - not
-    // merely past this fixture's own field of eight - is nowhere
-    // `craft.get` ever returns `Some` for, which is what stops the
-    // Shuriken's own voice without touching any real craft's own engine -
-    // deactivating a real ship would stop that slot's engine at the same
-    // time, conflating the two.
-    race.sim.world.projectiles.slots[2].owner = 200;
-    audio.race_tick(&mut race);
-    audio.tick();
-    assert_eq!(
-        voices(&audio),
-        idle + 3 + 1,
-        "ShurikenTravel kept sounding with nowhere to be heard from"
-    );
-
     // Clear the rest and confirm every held voice this test opened closes.
     race.sim.world.projectiles.slots[0] = oag_gameplay::projectile::Projectile::default();
     race.sim.world.projectiles.slots[1] = oag_gameplay::projectile::Projectile::default();
@@ -208,6 +191,66 @@ fn the_four_travel_voices_open_together_and_close_together() {
         idle + 1,
         "a held travel voice outlived the projectile or beam that opened it"
     );
+}
+
+/// `~QUAKETRAVEL` is held for as long as a wave travels: `Quake_Update` opens
+/// it on the emitter it gives the span and stops it when the span goes.
+///
+/// The wave is placed on the far side of the circuit from the grid, so no craft
+/// is near enough to draw a `QUAKEHIT` one-shot into the count.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    let mut audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(std::path::PathBuf::from("/dev/null")),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    let voices =
+        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+    let idle = voices(&audio);
+
+    let stats = race.quake_stats().expect("Pulse authors a Quake");
+    let length = race.course().expect("a course").length();
+    race.sim.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+        0,
+        length * 0.5,
+        1.0,
+        &stats,
+    ));
+    race.tick(&PlayerInputs::none());
+    audio.race_tick(&mut race);
+    audio.tick();
+    assert!(race.quake_point().is_some(), "the wave has no road point");
+    assert_eq!(voices(&audio), idle + 1, "~QUAKETRAVEL did not open");
+
+    race.tick(&PlayerInputs::none());
+    audio.race_tick(&mut race);
+    audio.tick();
+    assert_eq!(voices(&audio), idle + 1, "~QUAKETRAVEL did not stay open");
+
+    race.sim.world.quake = None;
+    race.tick(&PlayerInputs::none());
+    audio.race_tick(&mut race);
+    audio.tick();
+    assert_eq!(voices(&audio), idle, "~QUAKETRAVEL outlived the wave");
 }
 
 /// `~AUTOPILOT` and `autopilot_eng` through the whole path, the same shape

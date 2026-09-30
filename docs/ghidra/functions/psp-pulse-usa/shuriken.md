@@ -302,3 +302,24 @@ exactly the seven-slot Repulser block the arithmetic predicts between the
 LeachBeam's (`+0x104`) and the Shuriken's (`+0x144`), which is a fifth
 confirmation of that run. `blast_time` (`0x08a78b98`) and `wave_time`
 (`0x08a78ba4`) are located; which offsets they land on is not read.
+
+## 2026-09-30: the launch cue is `SHURIKEN`, and the blade owns an emitter (pulse-weapon-audio lane)
+
+`Shuriken_Init` (`0x08877280`) decompiled whole, confidence 88:
+
+- `Sound_Play(1.0, param_6, ..., "SHURIKEN", 0)` (pointer cell `0x08a7cd44`,
+  string `0x08a7cd38`) on the emitter its caller passes last - the firing
+  craft's own, before the blade's exists. The launch cue's name was never
+  unverified: it is the plain string `SHURIKEN`, and `weapons.bnk` has a cue by
+  that name (cue 29). Wired as `Cue::ShurikenLaunch`.
+- It **then allocates a bolt-owned emitter**: `FUN_08946ce4(0x70)` +
+  `SoundEmitter_Init`, stored at `round+0x50`, its `+0x50` pointed at the round's
+  own matrix (`round+0xf0`) and its radius `+0x38` set to `0x43960000` =
+  **300.0**, then plays `~SHURIKENTRAVEL` through it, keeping the handle at
+  `round+0x54`. `Shuriken_Bounce` (`0x088778ac`; the `Sound_Play` for
+  `SHURIKENHIT` is at `0x08877b60`) loads the same `round+0x50` and writes the
+  same 300.0 before it plays.
+
+**This corrects the 2026-09-23 note above**, which put both cues on the firing
+craft's emitter on the strength of "no bolt-owned `SoundEmitter_Init` exists".
+One does; both ride the blade, radius 300.0, measured.

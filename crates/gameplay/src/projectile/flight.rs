@@ -547,8 +547,8 @@ impl Projectiles {
                 // original reaps a stale rocket silently, exactly as this
                 // does, and since 2026-09-16 the Rocket takes that branch
                 // above at [`rocket::LIFETIME_SECONDS`] and never reaches
-                // this one. A missile never gets here either, having
-                // detonated above.
+                // this one. The Cannon's `1.0` follows it there. A missile
+                // never gets here either, having detonated above.
                 //
                 // **A mine or a bomb never gets here either**, for a different
                 // reason: its countdown is the disc's own `timetodie` and

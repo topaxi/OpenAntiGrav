@@ -348,6 +348,20 @@ impl Race {
                 )),
                 _ => None,
             };
+            // A Missile's own endings: a craft hit plays `MISSILEEXPSHIP`, and
+            // one that outlived its fuse plays `SHURIKENEXPL` (a wall never
+            // ends it - it mirrors off) - see `Cue::MissileHitShip` and
+            // `Cue::MissileExpire`.
+            if impact.kind == Weapon::Missile {
+                let cue = if impact.struck.is_some() {
+                    crate::audio::sfx::Cue::MissileHitShip
+                } else {
+                    crate::audio::sfx::Cue::MissileExpire
+                };
+                self.sim
+                    .cues
+                    .push(crate::audio::sfx::CueEvent::at_point(cue, impact.point));
+            }
             if let Some((wall, ship)) = hit_cues {
                 let cue = if impact.struck.is_some() { ship } else { wall };
                 self.sim
@@ -385,12 +399,11 @@ impl Race {
                         projectile.position,
                     ));
                 }
-                // Rides the firing craft's own emitter, not the blade's - see
-                // `Cue::ShurikenHit`'s own doc comment.
+                // On the blade's own emitter - see `Cue::ShurikenHit`.
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
-                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
                         crate::audio::sfx::Cue::ShurikenHit,
-                        usize::from(projectile.owner),
+                        projectile.position,
                     ));
                 }
                 _ => {}

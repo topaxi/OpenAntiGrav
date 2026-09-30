@@ -16,7 +16,7 @@ impl Cue {
     pub const COUNTDOWN: [Self; 2] = [Self::Ready, Self::Go];
 
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 38] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -40,14 +40,19 @@ impl Cue {
         Self::Missile,
         Self::MissileTravel,
         Self::MissileHitWall,
+        Self::MissileHitShip,
+        Self::MissileExpire,
         Self::Cannon,
         Self::CannonHitWall,
         Self::CannonHitShip,
         Self::QuakeLaunch,
         Self::QuakeHit,
+        Self::QuakeTravel,
         Self::Leach,
+        Self::LeachFail,
         Self::LeachAttach,
         Self::LeachEnergy,
+        Self::ShurikenLaunch,
         Self::ShurikenHit,
         Self::ShurikenTravel,
     ];
@@ -72,14 +77,19 @@ impl Cue {
             | Self::Missile
             | Self::MissileTravel
             | Self::MissileHitWall
+            | Self::MissileHitShip
+            | Self::MissileExpire
             | Self::Cannon
             | Self::CannonHitWall
             | Self::CannonHitShip
             | Self::QuakeLaunch
             | Self::QuakeHit
+            | Self::QuakeTravel
             | Self::Leach
+            | Self::LeachFail
             | Self::LeachAttach
             | Self::LeachEnergy
+            | Self::ShurikenLaunch
             | Self::ShurikenHit
             | Self::ShurikenTravel => BankName::Weapons,
             Self::ShieldActive | Self::Engaging | Self::Disengaging | Self::Ready | Self::Go => {
@@ -162,14 +172,19 @@ impl Cue {
             Self::Missile => "MISSILE",
             Self::MissileTravel => "~MISSILETVL",
             Self::MissileHitWall => "MISSILEEXPWALL",
+            Self::MissileHitShip => "MISSILEEXPSHIP",
+            Self::MissileExpire => "SHURIKENEXPL",
             Self::Cannon => "CANNON",
             Self::CannonHitWall => "CANNONEXPLWALL",
             Self::CannonHitShip => "CANNONEXPLSHIP",
             Self::QuakeLaunch => "QUAKELAUNCH",
             Self::QuakeHit => "QUAKEHIT",
+            Self::QuakeTravel => "~QUAKETRAVEL",
             Self::Leach => "LEACH",
+            Self::LeachFail => "LEACHFAIL",
             Self::LeachAttach => "~LEACHATTACH",
             Self::LeachEnergy => "LEACHENERGY",
+            Self::ShurikenLaunch => "SHURIKEN",
             Self::ShurikenHit => "SHURIKENHIT",
             Self::ShurikenTravel => "~SHURIKENTRAVEL",
         }
@@ -207,6 +222,7 @@ impl Cue {
                 | Self::PlasmaTravel
                 | Self::RocketTravel
                 | Self::MissileTravel
+                | Self::QuakeTravel
                 | Self::LeachAttach
                 | Self::ShurikenTravel
         )
@@ -253,7 +269,13 @@ impl Cue {
             | Self::RocketHitShip
             | Self::MissileTravel
             | Self::MissileHitWall
+            | Self::MissileHitShip
+            | Self::MissileExpire
+            | Self::QuakeTravel
             | Self::LeachAttach => 600.0,
+            // Measured: `Shuriken_Init` and `Shuriken_Bounce` each write
+            // `0x43960000` to the blade's own emitter's `+0x38`.
+            Self::ShurikenTravel | Self::ShurikenHit => 300.0,
             // Measured, not reused from `LeachAttach`'s `600.0` -
             // `LeachBeam_Advance`'s pulse block writes its own emitter at a
             // `300.0` falloff, half the beam body's own; see
@@ -345,7 +367,10 @@ impl Cue {
             Self::Rocket => Placement::Craft,
             // Chosen, not measured - see each variant's own doc comment.
             Self::Missile | Self::Cannon => Placement::Craft,
-            Self::MissileTravel | Self::MissileHitWall => Placement::Point,
+            Self::MissileTravel
+            | Self::MissileHitWall
+            | Self::MissileHitShip
+            | Self::MissileExpire => Placement::Point,
             Self::CannonHitWall | Self::CannonHitShip => Placement::Point,
             // Same `Ship_FireHeldWeapon` switch, same positional call shape
             // as `Rocket` - see that variant's own doc comment.
@@ -354,9 +379,13 @@ impl Cue {
             // and pending-damage fields, all the struck craft's own - see
             // this variant's own doc comment.
             Self::QuakeHit => Placement::Craft,
+            // The wave's own road midpoint, tracked per tick by
+            // [`super::super::travel::TravelVoices`] - see this variant's own
+            // doc comment.
+            Self::QuakeTravel => Placement::Point,
             // `LeachBeam_InitLocked` plays `LEACH` on the shooter's own
             // emitter - see this variant's own doc comment.
-            Self::Leach => Placement::Craft,
+            Self::Leach | Self::LeachFail => Placement::Craft,
             // A bespoke per-tick tracker on the beam's own `600.0`-radius
             // emitter, the same shape [`Self::PlasmaTravel`] takes for a
             // projectile slot - see [`super::SfxVoices::leach_attach`] and
@@ -367,10 +396,11 @@ impl Cue {
             // target, not a craft's emitter - see this variant's own doc
             // comment and [`Self::radius`].
             Self::LeachEnergy => Placement::Point,
-            // `Shuriken_Init` is handed `craft->emitter` directly, so both
-            // ride the firing craft rather than the blade - see
-            // [`Self::ShurikenTravel`]'s own doc comment.
-            Self::ShurikenHit | Self::ShurikenTravel => Placement::Craft,
+            // `SHURIKEN` rides the emitter `Shuriken_Init` is handed - the
+            // firing craft's - and the blade's own two ride the emitter it
+            // allocates for itself; see each variant's own doc comment.
+            Self::ShurikenLaunch => Placement::Craft,
+            Self::ShurikenHit | Self::ShurikenTravel => Placement::Point,
         }
     }
 }

@@ -351,6 +351,12 @@ impl Race {
                         // about.
                         return;
                     }
+                    // `Shuriken_Init` plays `SHURIKEN` on the firing craft's
+                    // emitter before it builds the blade's own.
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                        crate::audio::sfx::Cue::ShurikenLaunch,
+                        slot,
+                    ));
                 }
                 oag_tables::weapons::Weapon::Missile => {
                     let Some(stats) = weapons.missile() else {
@@ -437,9 +443,8 @@ impl Race {
                     // `craft+0x16c`, and the no-lock arm builds a real
                     // instance that simply expires. The player has fired.
                     //
-                    // `LEACH` only fires on the locked arm - see `Cue::Leach`'s
-                    // own doc comment for why the unlocked/fizzle case is not
-                    // confirmed as the same cue.
+                    // `LEACH` fires on the locked arm and `LEACHFAIL` on the
+                    // unlocked one - see `Cue::Leach` and `Cue::LeachFail`.
                     self.sim.world.leach_beam = Some(match self.sight_target() {
                         Some(target) => {
                             self.sim.cues.push(crate::audio::sfx::CueEvent::new(
@@ -450,7 +455,13 @@ impl Race {
                                 slot as u8, target, &stats,
                             )
                         }
+                        // `LeachBeam_InitUnlocked` plays `LEACHFAIL` on the
+                        // shooter's emitter - see `Cue::LeachFail`.
                         None => {
+                            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                                crate::audio::sfx::Cue::LeachFail,
+                                slot,
+                            ));
                             oag_gameplay::projectile::leach_beam::Beam::unlocked(slot as u8, &stats)
                         }
                     });

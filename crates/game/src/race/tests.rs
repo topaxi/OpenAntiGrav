@@ -18,6 +18,7 @@ mod autopilot;
 mod camera;
 mod cannon_draw;
 mod countdown;
+mod cue_endings;
 mod cues;
 mod eliminator;
 mod energy_bar_delay;

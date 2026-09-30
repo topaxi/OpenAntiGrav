@@ -756,3 +756,24 @@ Short, and each is labelled where it lives:
 - **Not firing at all when nothing locks.** The original's behaviour on an
   unlocked press has not been read.
 - **The pending-hit condition of the lock**, dropped for the reason above.
+
+## 2026-09-30: `MISSILEEXPSHIP` and the fuse cue are both triggered (pulse-weapon-audio lane)
+
+`MissilePool_Update` (`0x08869588`) read whole, confidence 88. Its teardown
+(destroy bit `4` set) plays exactly one cue off the round's flags on the round's
+own emitter (`+0x64`), its radius (`+0x38`) written to `0x44160000` = **600.0**
+first: `MISSILEEXPWALL` when bit `0x10` is set, **`MISSILEEXPSHIP` when bit
+`0x20` is** (pointer cell `0x08a7c93c`, the `lw` at `0x08869af8`); neither on a
+round that ended with neither bit. So `MISSILEEXPSHIP` fires on a craft hit and
+nowhere else; the earlier "no call site found" was a search that did not follow
+the pointer cell.
+
+**The fuse ending plays a cue too, and it is not silent.** The pool's second
+pass tests `3.0 < age` on a live round and, before setting the destroy bit,
+plays the cue at pointer cell `0x08a7c950` on the round's emitter (radius 600.0)
+- and that cell holds **`SHURIKENEXPL`** (string `0x08a7c940`), a real cue in
+`weapons.bnk` (cue 32). The by-catch above was right that this is a copy-paste in
+the original; it was wrong to leave it unwired, since what plays is the disc's
+own data. Wired as `Cue::MissileExpire`; that it is an authors' slip is inference,
+not scored. Both endings are pinned by
+`race::tests::cue_endings`.

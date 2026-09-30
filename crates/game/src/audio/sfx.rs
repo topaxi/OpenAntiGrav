@@ -195,6 +195,9 @@ pub(super) struct SfxVoices {
     /// only stable handle each one has. See [`Cue::ShurikenTravel`]'s own
     /// doc comment for why the emitter is the craft's.
     shuriken_travel: TravelVoices,
+    /// `~QUAKETRAVEL`'s held voice, slot 0 of a [`TravelVoices`] for the one
+    /// wave the race ever has. See [`Cue::QuakeTravel`].
+    quake_travel: TravelVoices,
     /// `~LEACHATTACH`'s held voice, while a **locked** beam instance exists -
     /// see [`Cue::LeachAttach`]. `Option<VoiceId>` rather than a
     /// [`TravelVoices`]: the LeachBeam is `crate::race::Race`'s own single
@@ -260,6 +263,7 @@ impl Audio {
                 rocket_travel: TravelVoices::new(),
                 missile_travel: TravelVoices::new(),
                 shuriken_travel: TravelVoices::new(),
+                quake_travel: TravelVoices::new(),
                 leach_attach: None,
                 rng: Rng::new(SFX_SEED),
             }
@@ -535,11 +539,8 @@ impl Audio {
                 |p| p.kind == Some(oag_tables::weapons::Weapon::Missile),
                 |p| Some(p.position),
             );
-            // Rides the *firing craft's* own emitter rather than the blade's
-            // - see [`Cue::ShurikenTravel`]'s own doc comment - so `position`
-            // reads `craft[p.owner]` instead of `p.position`. `None` when
-            // that craft has gone (an empty slot, or past `craft`'s own
-            // length), which stops the voice the same way an ended bolt does.
+            // On the blade's own emitter, `300.0` radius - see
+            // [`Cue::ShurikenTravel`].
             voices.shuriken_travel.tick(
                 mixer,
                 banks,
@@ -549,13 +550,19 @@ impl Audio {
                 Cue::ShurikenTravel,
                 Cue::ShurikenTravel.radius(),
                 |p| p.kind == Some(oag_tables::weapons::Weapon::Shuriken),
-                |p| {
-                    craft
-                        .get(usize::from(p.owner))
-                        .copied()
-                        .flatten()
-                        .map(|(pos, _)| pos)
-                },
+                |p| Some(p.position),
+            );
+            // `~QUAKETRAVEL`: one held voice while a wave travels, at its road
+            // midpoint. See [`Cue::QuakeTravel`].
+            voices.quake_travel.follow(
+                0,
+                race.quake_point(),
+                mixer,
+                banks,
+                &mut voices.rng,
+                &listener,
+                Cue::QuakeTravel,
+                Cue::QuakeTravel.radius(),
             );
 
             // `~LEACHATTACH`, held for as long as a **locked** beam instance
@@ -704,6 +711,7 @@ impl Audio {
                 voices.rocket_travel.stop_all(mixer);
                 voices.missile_travel.stop_all(mixer);
                 voices.shuriken_travel.stop_all(mixer);
+                voices.quake_travel.stop_all(mixer);
                 if let Some(id) = voices.leach_attach.take() {
                     mixer.stop(id);
                 }

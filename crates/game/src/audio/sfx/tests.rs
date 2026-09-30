@@ -175,6 +175,7 @@ fn every_cue_names_a_bank_and_a_string() {
             Cue::PlasmaTravel,
             Cue::RocketTravel,
             Cue::MissileTravel,
+            Cue::QuakeTravel,
             Cue::LeachAttach,
             Cue::ShurikenTravel,
         ]
