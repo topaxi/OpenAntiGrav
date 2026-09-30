@@ -398,6 +398,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     team_select: None,
     track_select: None,
+    race_setup: None,
     // Inert either way: `race_box` is `None`, so no picker opens to read
     // this. The real evidence that 2048 previews a mesh on its team screen
     // lives in `TOUCH::team_model_origin` instead - see that field's own doc

@@ -113,6 +113,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,
+    race_setup: Some(names::RACE_SETUP_DEFINITION),
     // `<location>\FE\forward.vex` and `<location>\ship_FE.vex`, both
     // resolving on both pressings - see `docs/formats/race-setup.md`.
     preview_meshes: true,
@@ -322,6 +323,9 @@ pub mod names {
     /// Selection` screens, one of [`FRONTEND_ROOT`]'s 23 `LoadXML` includes.
     /// See `docs/formats/race-setup.md`.
     pub const RACE_BOX_DEFINITION: &str = r"Data\Plugins\PI001\GUI\Selection_Definition.xml";
+    /// The race box's `Single Player` screen: its `Mode`, `Class`, `Weapons`,
+    /// `Difficulty` and `Eliminations` lists. See `docs/formats/race-setup.md`.
+    pub const RACE_SETUP_DEFINITION: &str = r"Data\Plugins\PI001\GUI\RaceBox_Definition.xml";
 
     /// The game plugin's own definition: which circuits, teams, ship models and
     /// music tracks this release carries.

@@ -69,6 +69,17 @@ name="Single Player">`. Five `<List>` widgets, read directly. Confidence 92.
 `Difficulty` against `SkillLevel` - on all three titles that have it. Code
 keying off the widget name will not find the saved value.
 
+**When the `Eliminations` row shows** (read 2026-09-30 off the screen's per-mode visibility
+routine `FUN_088e715c`, called with the mode index, Pulse PSP USA; confidence 75 - the
+helpers are read, the mode index to mode name mapping is by elimination, so only Elimination
+(index 8) is relied on): the row and its `EliminationsText` are shown **greyed** by default
+(`FUN_088e6400`: visible plus the dimmed flag), **enabled** for Elimination
+(`FUN_088e62d4`), and hidden for indices `0xe`, `0xf` and `0x10` (`FUN_088e6378`). This
+build greys it in every mode but Eliminator. Whether the list wraps past 25 is **not read**
+(the XML authors no `wrap`); this build's generic choice row decides, **chosen, not measured**.
+The values are read at boot by `oag_game::boot::screens::read_kill_targets` via
+`oag_title::FrontEnd::race_setup`.
+
 Two `<Text>` widgets sit at coordinates already occupied by a list and are
 swapped in for particular modes: `Zone` over the `Class` row, and
 `DifficultyNaText` (`FE_NA`) over the `Difficulty` row. Confidence 80 - the

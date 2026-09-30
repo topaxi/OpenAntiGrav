@@ -178,6 +178,8 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = ", {failed} échoué(s)"
 
 [untranslated]
 ids = [
+    # The KILLS row, new with the Eliminator kill target; no translation pass yet.
+    "OAG_RACE_KILLS",
     # RECORDS is new since this file's own translation pass and has not been
     # reached by it - see `docs/architecture/menus.md`'s RECORDS section.
     "OAG_MENU_RECORDS",

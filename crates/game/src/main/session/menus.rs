@@ -231,6 +231,7 @@ impl Session {
         model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
+        model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
@@ -716,10 +717,11 @@ impl Session {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
-        // The campaign is the only writer of either field - see
+        // The campaign writes both fields - see
         // `Session::launch_campaign_cell` - and a RACE-page launch must
         // never inherit one left over from a campaign cell that was backed
-        // out of before racing.
+        // out of before racing. The kill target is then set from the KILLS
+        // row below.
         race_options.eliminator_kill_target = None;
         race_options.laps_override = None;
         // Resolved before the circuit below, and out of its usual
@@ -735,6 +737,9 @@ impl Session {
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
             race_options.mode = mode;
         }
+        // The KILLS row's pick, for an Eliminator only.
+        race_options.eliminator_kill_target =
+            self.settings.race.eliminator_kill_target(race_options.mode);
         let chosen = self.shell.as_ref().and_then(|shell| {
             shell
                 .track(race_options.mode, &self.settings.race.track)

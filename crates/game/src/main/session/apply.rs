@@ -543,6 +543,7 @@ impl Session {
             }
             "race.track" => self.settings.race.track = text,
             "race.variant" => self.settings.race.variant = text,
+            "race.kill_target" => self.settings.race.kill_target = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
             // The two title rows resupply their scoped TRACK/TEAM the same
             // way `race.mode` resupplies the ordinary TRACK row above -

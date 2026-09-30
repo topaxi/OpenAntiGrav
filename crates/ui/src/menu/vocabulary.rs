@@ -269,6 +269,10 @@ pub enum ValueSource {
     /// definition file could name a file on someone else's disk. See
     /// `oag_game::screen`.
     ScreenFilters,
+    /// The kill targets the race box's `KILLS` row offers, off the disc's own
+    /// `Eliminations` list (`oag_game::boot::Shell::kill_targets`). Empty on a
+    /// title that reads no such list, which draws the row unusable.
+    KillTargets,
 }
 
 impl ValueSource {
@@ -297,6 +301,7 @@ impl ValueSource {
             Self::PilotAxisLow => "pilot_axis_low",
             Self::PilotAxisHigh => "pilot_axis_high",
             Self::ScreenFilters => "screen_filters",
+            Self::KillTargets => "kill_targets",
         }
     }
 
@@ -325,6 +330,7 @@ impl ValueSource {
             "pilot_axis_low" => Some(Self::PilotAxisLow),
             "pilot_axis_high" => Some(Self::PilotAxisHigh),
             "screen_filters" => Some(Self::ScreenFilters),
+            "kill_targets" => Some(Self::KillTargets),
             _ => None,
         }
     }

@@ -70,6 +70,12 @@ pub struct Race {
     /// `crate::livery::ship_skin`.
     #[serde(default)]
     pub skin: String,
+    /// The Eliminator kill target the `KILLS` row holds, as the disc's own
+    /// list spells it (`"5"` to `"25"`), or empty for "untouched", which races
+    /// [`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`]. Read only in an
+    /// Eliminator; see [`Self::eliminator_kill_target`].
+    #[serde(default)]
+    pub kill_target: String,
 }
 
 /// Time trial: the mode the RACE page opens on, and the one the reference
@@ -99,11 +105,22 @@ impl Default for Race {
             variant: String::new(),
             variant_chosen: false,
             skin: String::new(),
+            kill_target: String::new(),
         }
     }
 }
 
 impl Race {
+    /// The kill target a launch in `mode` carries: the `KILLS` row's pick in an
+    /// Eliminator, and `None` in every other mode (nothing reads it there) or
+    /// while the row is untouched, which leaves the default to `Race::start`.
+    #[must_use]
+    pub fn eliminator_kill_target(&self, mode: oag_race::Mode) -> Option<u32> {
+        (mode == oag_race::Mode::Eliminator)
+            .then(|| self.kill_target.parse().ok())
+            .flatten()
+    }
+
     /// The model Ship Select opens on: the stored variant, or on Wipeout
     /// HD/Fury the fresh-profile default (`oag_hd::race::FRESH_PROFILE_VARIANT`)
     /// while the player has not picked one. A non-empty stored variant always

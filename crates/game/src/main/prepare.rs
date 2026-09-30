@@ -140,10 +140,9 @@ impl Pending {
             // that function's own doc for why a value set once here would
             // go stale the moment the OPTIONS page's LANGUAGE row changes it.
             language: self.settings.language.clone(),
-            // `None`: no CLI flag names one and the campaign grid a real
-            // value would come from is not wired into this engine yet - see
-            // `race::Options::eliminator_kill_target`.
-            eliminator_kill_target: None,
+            // The saved KILLS row, for an Eliminator only; no CLI flag names
+            // one. See `race::Options::eliminator_kill_target`.
+            eliminator_kill_target: self.settings.race.eliminator_kill_target(self.mode),
             // `None` for the same reason - the campaign is the only writer
             // of this field. See `race::Options::laps_override`.
             laps_override: None,

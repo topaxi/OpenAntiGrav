@@ -369,6 +369,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
+    race_setup: None,
     // `false`, and not because HD has no 3-D craft on this screen - it
     // does (`ShipModel`). The one preview path this build has reads
     // `<team>\ship_FE.vex`, which HD's own per-team `screen.xml` names and

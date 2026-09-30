@@ -163,6 +163,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     team_select: None,
     track_select: None,
+    race_setup: None,
     preview_meshes: false,
     // Not checked this pass - a gap, not a measurement that Omega ships no
     // such screen. Racing is out of this title's scope anyway - see the

@@ -686,3 +686,13 @@ fn hd_reads_its_own_track_creation() {
         shell.sprites.get(&src).is_some()
     }));
 }
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_kills_row_offers_the_discs_own_eliminations_list() {
+    let Some(path) = image() else {
+        return;
+    };
+    // `RaceBox_Definition.xml`'s `Eliminations` list, in authored order.
+    assert_eq!(shell(&path).kill_targets, ["5", "10", "15", "20", "25"]);
+}

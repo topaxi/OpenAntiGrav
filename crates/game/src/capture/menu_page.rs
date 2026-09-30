@@ -54,6 +54,7 @@ pub(super) fn menu_page(
     page: &str,
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
+    kill_targets: &[String],
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
@@ -139,6 +140,13 @@ pub(super) fn menu_page(
     model.supply(
         oag_ui::menu::ValueSource::RaceModes,
         &oag_ui::menu::mode_choices(strings),
+    );
+    model.supply(
+        oag_ui::menu::ValueSource::KillTargets,
+        &kill_targets
+            .iter()
+            .map(oag_ui::menu::Choice::plain)
+            .collect::<Vec<_>>(),
     );
     model.supply(
         oag_ui::menu::ValueSource::Languages,
