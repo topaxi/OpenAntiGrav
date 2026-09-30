@@ -861,6 +861,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
+            slot_teams: slot_teams.clone(),
             collision,
             handling,
             airbrake_graphics,

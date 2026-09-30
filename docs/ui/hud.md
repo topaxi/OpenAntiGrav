@@ -145,14 +145,12 @@ use it; Pure, whose own Eliminator layout has never been read off its disc,
 falls back to `arcade` - the same "no dedicated file, reuse one that exists"
 shape this page's own `speed_lap`/`time_trial` row already has.
 
-**Only the layout is wired.** Nothing here yet substitutes kill/death counts,
-the `PosTag` column, or any of this layout's own widgets with live numbers -
-`oag_gameplay::hash::write_world` now carries `Standing::kills`/`deaths` as
-real simulation state (`docs/gameplay/race-modes.md#eliminator`), but no HUD
-draw call reads either field. This is the same, already-documented gap
-`docs/gameplay/race-modes.md` records for `Zone_HUD.xml` - the substitution
-rule between a mode's own counters and the widgets a layout positions is
-unread on every layout, not only this one - and Eliminator does not close it.
+**The layout, the `PosTag` kill column and the `KILLS (n)` header are wired**
+(see the `PosTag` section above); `Standing::kills` reaches the screen through
+`Race::readout`. Deaths and this layout's other counters are not drawn, which is
+the same gap `docs/gameplay/race-modes.md` records for `Zone_HUD.xml`: the
+substitution rule between a mode's own counters and the widgets a layout
+positions is unread on every layout but the ones read one at a time.
 
 ## The schema
 
@@ -360,16 +358,22 @@ anchors would have no reason to be. `Elimination_HUD.xml` corroborates at
 its own `x=460`, needing no composing at all since its `PosTag` block sits
 in a single, unnested `<Item OffsetX="460" OffsetY="5">`.
 
-**What is still unread is what the eight rows draw.** Neither carries an
-`idstring` or a `string`, so the content is runtime-supplied and this page
-does not know whether a row shows a name, a place number, or both -
-filling it in would be inventing what the asset does not author. Until that
-is read, `hud::RUNTIME_ANCHORED`/`hud::is_screen_positioned` keep skipping
-`PosTag` in the on-screen check, on the conservative half of this finding:
-the *anchor* is confirmed on screen, but `align="left"` at `x=405` on a
-480-wide screen leaves only 75 px before the edge - narrower than
-`TotalTime`'s own measured 92 px overflow two paragraphs up - and a label's
-own text width cannot be checked without knowing what fills it.
+**What the eight rows draw, read 2026-09-30: the Eliminator's kill column,
+and nothing at all in a solo race.** `Hud_UpdateKillColumn` (`0x0881af38`,
+[hud-kill-column.md](../ghidra/functions/psp-pulse-usa/hud-kill-column.md))
+writes `"<name> <kills>"` into the rows, one per craft, ordered by kills, when
+the HUD's `0x200` flag is set - which `Elimination_Construct` sets. A live
+Venom Eliminator frame reads `KILLS (5)` over `AG Systems 1`, `Feisar 1`,
+`Qirex 1`, `AAA 0`, `Triakis 0`, `Goteki 45 0`, `Piranha 0`, `EG-X 0` in the
+`Default` face at `x=460`. In a solo single race, Tournament or Time Trial
+nothing writes them (`hud+0x40` has `0x40`, whose reader only writes the
+`Position`/`PositionOf` digits); a place *list* in the same rows exists for
+multiplayer alone (`0x800`), a mode this build does not run. Wired in
+[`oag_game::hud::kill_tags`](../../crates/game/src/hud/kill_tags.rs), with a new
+`Default`-face text bucket. **Chosen, not measured**: the player's row carries
+the player's team name where the original prints the profile tag (this build
+has none), and the tie order follows this build's grid array. `PosTag` is no
+longer skipped by `hud::is_screen_positioned`.
 
 **`PlrTag0`-`PlrTag7` are the genuine runtime anchor** - a separate,
 multiplayer-only layout (`MPTag_HUD.xml`), and its eight `<Text>` widgets
@@ -613,7 +617,7 @@ geometry - the geometry is 95 throughout.
 | Wrong way | `WrongWay` | 70 | `dot(forward, tangent)` is a sufficient source |
 | Zone | `Zone`, `Score`, `Zone_Bar_*` | 50 | Zone mode is a separate scope item |
 | Eliminator | kill counters | 50 | |
-| Tags | `PosTag0-7`, `HeadToHeadBar` | 95 anchor / 50 content | a fixed column (`405/460, 25..165`), not runtime-anchored - see above; what fills each row is unread |
+| Tags | `PosTag0-7`, `HeadToHeadBar` | 95 anchor / 85 content | a fixed column (`405/460, 25..165`), not runtime-anchored; the rows are the Eliminator's kill column, blank in a solo race - see above |
 | Tags | `PlrTag0-7` | 50 | genuinely runtime-anchored, multiplayer only (`MPTag_HUD.xml`) |
 | Debug | `VersionTextOnHUD`, `Info1`-`Info4`, `Info`, `Info2nd` | 40 | present in shipped layouts; purpose inferred from the names |
 

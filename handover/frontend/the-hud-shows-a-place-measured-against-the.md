@@ -5,12 +5,24 @@
 ## Open
 
 - The `TOTAL`/`POS` caption pair suppression is unconfirmed, based on a ~5 px overlap argument rather than a measurement
-- **Corrected 2026-09-08: `PosTag0`-`PosTag7` are not runtime-anchored, and there is no projection to compute.** They were read as "anchored to a rival's projected screen position at runtime" - the reading this thread's own `## Next Steps` line below repeated - off an arcade-layout `<Item OffsetX="-40">` taken in isolation. `<Item>` offsets compose (`Layout::collect`), and the enclosing `<Item OffsetX="445" OffsetY="5">` composes with it to `(405, 5)`: `PosTag0` through `PosTag7` land at a fixed column, `x=405`, `y=25` to `165` in twenty-pixel steps, on the arcade layout, and independently at `x=460` (no composing needed - single-level `<Item>`) on the eliminator one. Both measured and pinned by `postag_is_a_fixed_column_not_a_runtime_anchor` in `crates/game/tests/hud_layout_ground_truth.rs`; see [hud.md](../../docs/ui/hud.md) for the full correction, which also touched `docs/gameplay/ai.md` and `crate::hud`'s own doc comments (`RUNTIME_ANCHORED`, `Font::Default`). `Race::view()`/`Race::projection()` and `oag_race::sight::project` (the lock-on reticle's own recovered world-to-screen projection, confidence 88-92) are real, public, and reusable if a genuine per-craft screen anchor is ever needed elsewhere - but not for this widget. `PlrTag0`-`PlrTag7` (`MPTag_HUD.xml`, multiplayer-only) are the genuine runtime anchor this reading described: no authored `x`/`y` at all.
-- **What is still open, and it is now the real gap**: what each of the eight `PosTag` rows is meant to say. Neither carries an `idstring` nor a `string` - the content is runtime-supplied and unread. A place number, a name, or both is a real question this thread does not answer; filling it without reading it further would be inventing what the asset does not author.
+- ~~**What each of the eight `PosTag` rows is meant to say.**~~ **Closed 2026-09-30**:
+  they are the Eliminator's kill column (`"<team> <kills>"`, most kills first, the player's row
+  brighter), written by `Hud_UpdateKillColumn` (`0x0881af38`) when the HUD's `0x200` flag is set,
+  and never written in a solo race; a multiplayer place list uses the same rows under `0x800`.
+  Wired, with the `KILLS (5)` header and a new `Default`-face text bucket - see
+  [hud.md](../../docs/ui/hud.md) and
+  [hud-kill-column.md](../../docs/ghidra/functions/psp-pulse-usa/hud-kill-column.md).
+  **Still chosen, not measured**: the player's row carries the player's team name (the original
+  prints the profile tag, which this build has none of), and the tie order follows this build's
+  grid array. `PlrTag0`-`PlrTag7` (`MPTag_HUD.xml`, multiplayer only) are the genuine runtime
+  anchor and are not drawn.
+- **Head2Head's two ordinal rows are still ordinals alone.** They are `"%s %s"` in the original
+  (ordinal, then the team name for the opponent and the profile tag for the player) in the `Default`
+  face; the bucket now exists, the readout's per-slot team ids now exist, and
+  `crates/game/src/hud/head_to_head.rs` has not been moved onto them.
 
 ## Next Steps
 
-- Measure the `TOTAL`/`POS` caption pair directly instead of relying on the ~5 px overlap argument
-- Read what `PosTag0`-`PosTag7` are meant to draw - a place number, a name, or both - probably from the same decompiled function that would name the field-list widget's own binding, the way `Position`'s own binding to `Race::places()` was found. Once that is known, the drawing side is comparatively small: eight rows at a fixed, already-measured column, one per opponent ordered however the content turns out to want (likely by place, off `Race::places()` again).
+- Move Head2Head's two rows onto the `Default` bucket with their names (see the Open bullet).
 
 Resolved 2026-09-05: the shield bar's colour is a threshold plus a one-shot post-hit flash, not a gradient - see [shield.md](../../docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-0x0881c638-tints-the-bar-from-a-20-threshold-not-a-gradient) for the evidence, wired into `oag_game::hud` the same day - see [hud.md](../../docs/ui/hud.md#still-open-after-the-frame).

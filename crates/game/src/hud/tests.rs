@@ -13,6 +13,7 @@ use super::*;
 // are `pub(super)`, so this reaches them by name rather than through the
 // parent's own imports.
 use super::draw::*;
+use super::pickup::*;
 
 /// The shape of the real `TimeTrial_HUD.xml`, cut to what this module reads.
 /// Every attribute spelling, the `FEConst->` indirection, the `<Item>`
@@ -740,11 +741,12 @@ fn an_image_with_no_src_is_a_solid_fill_rather_than_a_broken_sprite() {
     assert_eq!(layout.widget_count(), 1);
 }
 
-/// The floating opponent tags are anchored at runtime, so their authored
-/// position is an offset and may legitimately be negative.
+/// The multiplayer tags are anchored at runtime, so their authored position is
+/// an offset and may legitimately be negative. `PosTag0`-`PosTag7` are a fixed
+/// column and draw where they are authored.
 #[test]
-fn the_opponent_tags_are_not_screen_positioned() {
-    assert!(!is_screen_positioned("PosTag0"));
+fn only_the_multiplayer_tags_are_not_screen_positioned() {
+    assert!(is_screen_positioned("PosTag0"));
     assert!(!is_screen_positioned("PlrTag7"));
     assert!(is_screen_positioned("SpeedBar"));
     assert!(is_screen_positioned("Lap"));
@@ -863,5 +865,6 @@ pub(super) fn context<'a>(
         art: oag_pulse::hud::ART,
         hud_line_height: 25.0,
         small_line_height: 10.0,
+        default_line_height: 10.0,
     }
 }

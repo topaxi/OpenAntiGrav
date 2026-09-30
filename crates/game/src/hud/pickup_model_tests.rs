@@ -8,6 +8,7 @@
 //! [`super::zone_tests`] are their own files.
 
 use super::draw::*;
+use super::pickup::*;
 use super::*;
 
 /// Pure's `<Mode3D>` weapon-icon block, cut to the backdrop grid plus two
@@ -92,6 +93,7 @@ fn pure_pickup_context<'a>(
         art: oag_pure::hud::ART,
         hud_line_height: 25.0,
         small_line_height: 10.0,
+        default_line_height: 10.0,
     }
 }
 
@@ -217,6 +219,7 @@ fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
         art: oag_pulse::hud::ART,
         hud_line_height: 25.0,
         small_line_height: 10.0,
+        default_line_height: 10.0,
     };
     assert!(oag_pulse::hud::ART.pickup_icon_models.is_none());
     assert!(pickup_model_draws(&cx, Weapon::Turbo).is_empty());

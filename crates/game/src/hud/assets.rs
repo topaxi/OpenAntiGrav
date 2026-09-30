@@ -35,6 +35,10 @@ pub struct Assets {
     pub font: oag_ui::font::Atlas,
     /// The `HUDSmall` font, likewise.
     pub small_font: oag_ui::font::Atlas,
+    /// The `Default` font (`pulse_text.fnt` on Pulse), for the widgets that
+    /// name it. Loaded only when the layout has one; otherwise it is the value
+    /// face again, which nothing draws in.
+    pub default_font: oag_ui::font::Atlas,
     /// The language's string table, for the `IG_HUD_*` captions.
     pub strings: oag_ui::language::StringTable,
     /// The grid this layout's coordinates are in, and what it is shown as.
@@ -76,6 +80,7 @@ impl Assets {
             art: self.art,
             hud_line_height: self.font.line_height,
             small_line_height: self.small_font.line_height,
+            default_line_height: self.default_font.line_height,
         })
     }
 }

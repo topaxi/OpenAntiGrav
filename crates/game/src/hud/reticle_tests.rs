@@ -150,6 +150,7 @@ fn context_with<'a>(
         art,
         hud_line_height: 25.0,
         small_line_height: 10.0,
+        default_line_height: 10.0,
     }
 }
 

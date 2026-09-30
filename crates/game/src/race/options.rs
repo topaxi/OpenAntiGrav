@@ -478,6 +478,11 @@ pub struct Setup {
     /// weapon hit throws, or none on a title whose path is unread. See
     /// `race::hit_sparks`.
     pub hit_spark_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
+    /// The team id each grid slot flies (`Feisar`), for the HUD's per-craft
+    /// rows - the Eliminator's kill column. Ids, not names: the string table
+    /// turns one into the name a player reads at draw time. Empty where a
+    /// caller builds a `Setup` by hand.
+    pub slot_teams: Vec<String>,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.

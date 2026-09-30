@@ -1,5 +1,5 @@
-//! Pulse's Time Trial clock cluster counts down to a `RECORD`, against the
-//! disc that authors the figure.
+//! Pulse's in-race HUD text that comes from the disc's own data: the Time Trial
+//! clock cluster counting down to a `RECORD`, and the Eliminator's kill column.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. Run it with `just test-data`, or only this file:
@@ -110,4 +110,61 @@ fn a_time_trial_draws_the_record_caption_and_counts_down_to_it() {
     readout.time_trial_pace = pace_for(readout.mode, 0, 0, None, None);
     let (small, _) = texts(&oag_game::hud::draw_list(&context, &readout));
     assert!(small.contains(&total_word), "small text {small:?}");
+}
+
+/// The Eliminator's kill column, from a real race's readout: eight rows in
+/// the default face, the disc's own team names, `KILLS (5)` over them.
+///
+/// The live frame this is checked against (PPSSPP, Venom Eliminator on
+/// Talon's Junction) reads `KILLS (5)` over `AG Systems 1`, `Feisar 1`,
+/// `Qirex 1`, `AAA 0`, `Triakis 0`, `Goteki 45 0`, `Piranha 0`, `EG-X 0`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_eliminator_draws_the_kill_column_in_the_default_face() {
+    let Some(image) = image() else { return };
+    let loaded = load(&image, oag_race::Mode::Eliminator);
+    let context = loaded.hud.context().expect("Pulse's layout parses");
+    let mut race = oag_game::race::Race::start(loaded.setup);
+    race.tick(&PlayerInputs::none());
+    let mut readout = race.readout();
+    assert_eq!(readout.kill_target, 5, "the race box's first kill row");
+    assert_eq!(readout.kill_tags.len(), 8, "one row per craft on the grid");
+    assert_eq!(
+        readout.kill_tags.iter().filter(|tag| tag.player).count(),
+        1,
+        "exactly one row is the player's"
+    );
+
+    // Two kills for the craft in slot 3 lifts it to the top row.
+    race.sim.world.ships[3].standing.kills = 2;
+    readout = race.readout();
+    assert_eq!(readout.kill_tags[0].kills, 2);
+
+    let frame = oag_game::hud::draw_list(&context, &readout);
+    assert!(
+        frame.default_text.len() >= 8,
+        "eight rows in the default face, drew {:?}",
+        frame.default_text
+    );
+    let (small, _) = texts(&frame);
+    let caption = context.strings.get_or_id("IG_HUD_KILLS").to_string();
+    assert!(
+        small.contains(&format!("{caption} (5)")),
+        "the header carries the target: {small:?}"
+    );
+    // Every opponent row names its team from the disc's string table, not the
+    // folder id: `AG_Systems` reads `AG Systems`.
+    let rows: Vec<String> = frame
+        .default_text
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        rows.iter().any(|row| row.starts_with("AG Systems ")),
+        "rows {rows:?}"
+    );
+    assert!(rows.iter().all(|row| !row.contains('_')), "rows {rows:?}");
 }

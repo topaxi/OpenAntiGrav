@@ -71,6 +71,7 @@ fn context<'a>(
         art: oag_pulse::hud::ART,
         hud_line_height: 25.0,
         small_line_height: 10.0,
+        default_line_height: 10.0,
     }
 }
 
