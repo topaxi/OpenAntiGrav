@@ -160,3 +160,37 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
         speed(&control)
     );
 }
+
+/// `FUN_0883f540` lights `WO_LEACHBEAM_CHARGING` on **any** craft holding id
+/// `10`, not only the player's: an opponent carrying the pickup charges, and
+/// stops the moment it lets go. A hand-laid one-emitter stand-in for the effect,
+/// so this asserts the gate and its per-slot bookkeeping, not the picture.
+#[test]
+fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not() {
+    let mut race = race_with_a_grid();
+    let blob =
+        super::respawn::one_emitter_pob(crate::race::effect_names::LEACHBEAM_CHARGING_EFFECT, 0);
+    let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses");
+    race.view
+        .effects
+        .insert(crate::race::effect_names::LEACHBEAM_CHARGING_EFFECT, effect);
+
+    race.sim.world.ships[1].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.view.leach_charge_effect[1].is_some(),
+        "the opponent holding a LeachBeam must charge"
+    );
+    assert!(
+        race.view.leach_charge_effect[0].is_none(),
+        "the player holds nothing, so carries no charge"
+    );
+
+    race.sim.world.ships[1].pickup.weapon = None;
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.view.leach_charge_effect[1].is_none(),
+        "the charge goes the moment the pickup does"
+    );
+}

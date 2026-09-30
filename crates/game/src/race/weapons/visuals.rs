@@ -18,7 +18,7 @@ pub(in crate::race) use flash::flash_for;
 use super::*;
 
 impl Race {
-    /// Keeps [`LEACHBEAM_CHARGING_EFFECT`] on the player while they hold a
+    /// Keeps [`LEACHBEAM_CHARGING_EFFECT`] on every craft that is holding a
     /// LeachBeam - the disc's own `Data\Psys\*.POB`, played through the same
     /// [`psys::Stage`] every other weapon's are, with its trigger read out of
     /// the executable (see [`LEACHBEAM_CHARGING_EFFECT`]).
@@ -27,28 +27,33 @@ impl Race {
     /// rather than a craft, so it is driven from
     /// [`Self::advance_leach_beam_ribbon`].
     pub(in crate::race) fn advance_leach_beam_visual(&mut self) {
-        // The charge: up exactly while slot 0 holds a LeachBeam, which is the
-        // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
-        let holding = self.sim.world.ships[0].pickup.weapon
-            == Some(oag_tables::weapons::Weapon::LeachBeam)
-            && self.sim.world.ships[0].active;
-        let holder = self.sim.world.ships[0].physics.body.position;
-        match (
-            holding.then(|| self.view.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned()),
-            self.view.leach_charge_effect,
-        ) {
-            (Some(Some(effect)), None) => {
-                self.view.leach_charge_effect = self.view.stage.attach(&effect, holder, 1.0);
+        let effect = self.view.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned();
+        for slot in 0..MAX_SHIPS {
+            // The charge: up exactly while the craft holds a LeachBeam and is
+            // in state 1, which is the whole of `FUN_0883f540`'s own gate, run
+            // for every craft. Nothing chosen here.
+            let ship = &self.sim.world.ships[slot];
+            let holding =
+                ship.pickup.weapon == Some(oag_tables::weapons::Weapon::LeachBeam) && ship.active;
+            let holder = ship.physics.body.position;
+            match (
+                holding.then_some(&effect),
+                self.view.leach_charge_effect[slot],
+            ) {
+                (Some(Some(effect)), None) => {
+                    self.view.leach_charge_effect[slot] =
+                        self.view.stage.attach(effect, holder, 1.0);
+                }
+                (Some(Some(_)), Some(playing)) => self.view.stage.follow(playing, holder),
+                // Not holding one any more (or the file never loaded): tear
+                // the instance down, the same way the original despawns it the
+                // moment its own two-part gate stops holding.
+                (None, Some(playing)) | (Some(None), Some(playing)) => {
+                    self.view.stage.detach(playing);
+                    self.view.leach_charge_effect[slot] = None;
+                }
+                (None, None) | (Some(None), None) => {}
             }
-            (Some(Some(_)), Some(playing)) => self.view.stage.follow(playing, holder),
-            // Not holding one any more (or the file never loaded): tear the
-            // instance down, the same way the original despawns it the moment
-            // its own two-part gate stops holding.
-            (None, Some(playing)) | (Some(None), Some(playing)) => {
-                self.view.stage.detach(playing);
-                self.view.leach_charge_effect = None;
-            }
-            (None, None) | (Some(None), None) => {}
         }
     }
 
