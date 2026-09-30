@@ -117,3 +117,71 @@ fn a_header_this_parser_does_not_recognise_is_refused() {
     let empty = build(0, 8, &[], |_, _| true, 0);
     assert!(matches!(Pvs::parse(&empty), Err(Error::Empty { .. })));
 }
+
+/// Builds a [`Dialect::Psp2`] file: little-endian, word 2 is `1`, a bitmap is
+/// `ceil(chunks / 8)` bytes and a cell record's fourth float is zero.
+fn build_psp2(cells: usize, chunks: usize, set: impl Fn(usize, usize) -> bool) -> Vec<u8> {
+    let width = chunks.div_ceil(8);
+    let mut out = Vec::new();
+    for word in [cells as u32, chunks as u32, 1, 0xdead_beef] {
+        out.extend_from_slice(&word.to_le_bytes());
+    }
+    for cell in 0..cells {
+        for axis in [cell as f32, 2.0, 3.0, 0.0] {
+            out.extend_from_slice(&axis.to_le_bytes());
+        }
+    }
+    for cell in 0..cells {
+        let mut map = vec![0u8; width];
+        for chunk in 0..chunks {
+            if set(cell, chunk) {
+                map[chunk >> 3] |= 1 << (chunk & 7);
+            }
+        }
+        out.extend_from_slice(&map);
+    }
+    out
+}
+
+#[test]
+fn the_psp2_dialect_is_little_endian_with_a_tight_bitmap() {
+    // 16 chunks is exactly two bytes here. HD's rule would want three and run
+    // every cell into the next: the four Omega files whose chunk count divides
+    // by eight are what settled it.
+    for (chunks, want) in [(20usize, 3usize), (16, 2), (8, 1), (7, 1)] {
+        let blob = build_psp2(3, chunks, |cell, chunk| chunk == cell);
+        let pvs = Pvs::parse_as(&blob, Dialect::Psp2).unwrap();
+        assert_eq!(pvs.dialect(), Dialect::Psp2);
+        assert_eq!(pvs.bitmap_bytes(), want, "{chunks} chunk(s)");
+        assert_eq!(pvs.trailing(), 0, "{chunks} chunk(s) fill the file exactly");
+        for cell in 0..3 {
+            assert!(pvs.visible(cell, cell));
+            assert_eq!(pvs.visible_count(cell), 1);
+        }
+        assert_eq!(pvs.position(2), Some([2.0, 2.0, 3.0]));
+    }
+}
+
+#[test]
+fn detection_reads_header_word_two_and_never_the_title() {
+    let psp2 = build_psp2(2, 24, |_, chunk| chunk == 5);
+    assert_eq!(Pvs::parse_detect(&psp2).unwrap().dialect(), Dialect::Psp2);
+    let ps3 = build(2, 24, &[[0.0; 3]; 2], |_, chunk| chunk == 5, 0);
+    assert_eq!(Pvs::parse_detect(&ps3).unwrap().dialect(), Dialect::Ps3);
+    // Each dialect refuses the other's file rather than misreading it, and
+    // HD's own entry point never accepts a little-endian one.
+    assert!(matches!(
+        Pvs::parse(&psp2),
+        Err(Error::UnknownLayout { .. })
+    ));
+    assert!(matches!(
+        Pvs::parse_as(&ps3, Dialect::Psp2),
+        Err(Error::UnknownLayout { .. })
+    ));
+    let mut neither = psp2.clone();
+    neither[8..12].copy_from_slice(&7u32.to_le_bytes());
+    assert!(matches!(
+        Pvs::parse_detect(&neither),
+        Err(Error::UnknownLayout { .. })
+    ));
+}

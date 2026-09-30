@@ -14,7 +14,7 @@
 //!
 //! # Layout
 //!
-//! Big-endian throughout, like every other PS3 asset here.
+//! Big-endian throughout in this dialect, like every other PS3 asset here.
 //!
 //! ```text
 //! +0x00  u32  cells
@@ -78,6 +78,42 @@
 //! every record read so far and is deliberately not interpreted.
 //! Confidence 90.
 //!
+//! # A second dialect: Wipeout 2048 and the Omega Collection
+//!
+//! **The same file, written little-endian, with three differences.** Vita's
+//! `2048` and the PS4 Omega Collection both ship `track.pvs` /
+//! `track.final.pvs` (and `trackzone.pvs` for zone mode) in the 2048 lineage's
+//! layout: [`Dialect::Psp2`]. It is HD's layout with the byte order swapped
+//! and:
+//!
+//! - header word 2 is **`1`**, not `16` (all 42 Omega files, and every Vita
+//!   file read);
+//! - **the bitmap is `ceil(chunks / 8)` bytes, with no spare byte** - the
+//!   Omega files whose chunk count divides by eight (`mall/trackzone.pvs`,
+//!   `sol/trackzone.pvs`, `04_chenghou_project/track_reversed.final.pvs` and
+//!   `amphiseum/track_reversed.final.pvs`) are exactly `cells` bytes short of
+//!   the table under HD's `chunks / 8 + 1` and exact under `ceil`, so this is
+//!   a real layout difference and not a fitting choice;
+//! - the fourth float of a cell record is **`0`**, not a repeat of `z`.
+//!
+//! **A chunk is a `.rcsmodel` *mesh object*, not a submesh.** The declared
+//! chunk count equals `psp2::Model::scene.meshes.len()` on every file and
+//! is *not* the submesh count (`tech_de_ra`: 2,659 mesh objects, 3,186
+//! submeshes). Bit `k` is mesh object `k` in the model's own node-table
+//! order, LSB first, the same rule as HD; the ground truth
+//! (`tests/psp2_pvs_ground_truth.rs`) repeats the near/far measurement above
+//! against each mesh object's own bounds to show it. The cell positions are
+//! corroborated by a second source: the `.pvsxml` beside each file (a
+//! text-authored `pvsSet` list of `origin` points) is usually shorter than
+//! the binary and not always in its order, but **every origin it carries is
+//! one of the binary's cell records** (34 of Omega's 42 files have one; the
+//! eight zone-mode `trackzone.pvs` files do not).
+//!
+//! [`Pvs::parse_detect`] tells the two apart from header word 2 - which is
+//! `16` big-endian or `1` little-endian, and cannot be both - rather than
+//! from the title, so a caller does not need to know which console the file
+//! came off.
+//!
 //! # What is not read
 //!
 //! **Header word 3, and the trailing bytes.** 14 of the 28 files are exactly
@@ -97,13 +133,55 @@ const CELLS_AT: usize = 0x10;
 /// Bytes per cell record: four big-endian `f32`.
 const CELL_SIZE: usize = 16;
 
-/// The value header word 2 carries on every file on the disc.
+/// The value header word 2 carries on every HD file on the disc.
 ///
 /// Read and checked rather than skipped, because it is the one field whose
 /// meaning is unknown *and* constant - if a future title's file differs there,
 /// the difference should surface as a refusal rather than as a silently
 /// misparsed table.
 const EXPECTED_STRIDE_WORD: u32 = CELLS_AT as u32;
+
+/// The value header word 2 carries on every [`Dialect::Psp2`] file: all 42 on
+/// Omega's archives and the Vita's `track.pvs` read.
+const PSP2_STRIDE_WORD: u32 = 1;
+
+/// Which title lineage wrote a `.pvs`. See the module docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dialect {
+    /// Wipeout HD / Fury: big-endian, header word 2 is `16`, a bitmap is
+    /// `chunks / 8 + 1` bytes and a chunk is a `.rcsmodel` chunk in file
+    /// order.
+    Ps3,
+    /// Wipeout 2048 (Vita) and the Omega Collection (PS4): little-endian,
+    /// header word 2 is `1`, a bitmap is `ceil(chunks / 8)` bytes and a chunk
+    /// is a `.rcsmodel` mesh object.
+    Psp2,
+}
+
+impl Dialect {
+    fn order(self) -> ByteOrder {
+        match self {
+            Self::Ps3 => ByteOrder::Big,
+            Self::Psp2 => ByteOrder::Little,
+        }
+    }
+
+    fn stride_word(self) -> u32 {
+        match self {
+            Self::Ps3 => EXPECTED_STRIDE_WORD,
+            Self::Psp2 => PSP2_STRIDE_WORD,
+        }
+    }
+
+    /// Bytes in one cell's bitmap.
+    #[must_use]
+    pub fn bitmap_width(self, chunks: usize) -> usize {
+        match self {
+            Self::Ps3 => chunks / 8 + 1,
+            Self::Psp2 => chunks.div_ceil(8),
+        }
+    }
+}
 
 /// Why a `.pvs` could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +220,7 @@ impl std::error::Error for Error {}
 /// A circuit's authored visibility partition.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pvs {
+    dialect: Dialect,
     positions: Vec<[f32; 3]>,
     chunks: usize,
     width: usize,
@@ -150,7 +229,7 @@ pub struct Pvs {
 }
 
 impl Pvs {
-    /// Reads a whole `track.pvs`.
+    /// Reads a whole HD `track.pvs` ([`Dialect::Ps3`]).
     ///
     /// # Errors
     ///
@@ -158,16 +237,43 @@ impl Pvs {
     /// declares, when header word 2 is not the constant every shipped file
     /// carries, or when it declares an empty partition.
     pub fn parse(data: &[u8]) -> Result<Self, Error> {
+        Self::parse_as(data, Dialect::Ps3)
+    }
+
+    /// Reads a `.pvs` of either dialect, telling them apart from header word 2.
+    ///
+    /// Word 2 is `16` big-endian in HD's files and `1` little-endian in the
+    /// 2048 lineage's, and no file can be both. A file that is neither is
+    /// refused with HD's error, so a third layout surfaces rather than being
+    /// misread as one of these.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::parse`].
+    pub fn parse_detect(data: &[u8]) -> Result<Self, Error> {
+        let word2 = |order: ByteOrder| (data.len() >= CELLS_AT).then(|| order.u32(data, 8));
+        if word2(ByteOrder::Little) == Some(PSP2_STRIDE_WORD) {
+            return Self::parse_as(data, Dialect::Psp2);
+        }
+        Self::parse_as(data, Dialect::Ps3)
+    }
+
+    /// Reads a whole `.pvs` in a stated [`Dialect`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::parse`].
+    pub fn parse_as(data: &[u8], dialect: Dialect) -> Result<Self, Error> {
         if data.len() < CELLS_AT {
             return Err(Error::TooShort {
                 need: CELLS_AT,
                 got: data.len(),
             });
         }
-        let order = ByteOrder::Big;
+        let order = dialect.order();
         let word = |i: usize| order.u32(data, i * 4);
         let (cells, chunks) = (word(0) as usize, word(1) as usize);
-        if word(2) != EXPECTED_STRIDE_WORD {
+        if word(2) != dialect.stride_word() {
             return Err(Error::UnknownLayout { word: word(2) });
         }
         if cells == 0 || chunks == 0 {
@@ -176,7 +282,7 @@ impl Pvs {
                 chunks: chunks as u32,
             });
         }
-        let width = chunks / 8 + 1;
+        let width = dialect.bitmap_width(chunks);
         let bits_at = CELLS_AT + cells * CELL_SIZE;
         let need = bits_at + cells * width;
         if data.len() < need {
@@ -192,12 +298,19 @@ impl Pvs {
             })
             .collect();
         Ok(Self {
+            dialect,
             positions,
             chunks,
             width,
             bits: data[bits_at..need].to_vec(),
             trailing: data.len() - need,
         })
+    }
+
+    /// Which layout this file was read as.
+    #[must_use]
+    pub fn dialect(&self) -> Dialect {
+        self.dialect
     }
 
     /// How many cells the partition has.
