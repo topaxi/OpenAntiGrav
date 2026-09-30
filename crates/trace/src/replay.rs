@@ -199,6 +199,13 @@ pub struct Options {
     /// silent misreading this harness exists to prevent. Both numbers are worth
     /// having; they are not the same number.
     pub reseed: Option<NonZeroUsize>,
+    /// The track's speed pads, in node order, from
+    /// [`oag_vex::pads::volumes`] with [`oag_vex::vex::CLASS_SPEEDUP_PAD`].
+    ///
+    /// Empty - the default - arms no boost, which is right for a run with no
+    /// track and was, until 2026-09-30, what every run did whether or not it
+    /// had one; the replay's `pads` module says what that cost a lap comparison.
+    pub pads: Vec<oag_vex::pads::PadVolume>,
 }
 
 /// The ship state a recording's first row describes.
@@ -474,6 +481,13 @@ pub fn replay<R: Raycaster + ?Sized>(
     let mut out = Trace {
         frames: Vec::with_capacity(trace.len()),
     };
+    let mut pad_sweep = pads::PadSweep::default();
+    // Only a reseed reads it, so a single-seeded run does not pay for it.
+    let recorded_pads = if options.reseed.is_some() {
+        pads::recorded_pad_state(&trace.frames, &options.pads, handling)
+    } else {
+        Vec::new()
+    };
 
     for (index, recorded) in trace.frames.iter().enumerate() {
         // Put the ship back on the recording, when asked. Deliberately *before*
@@ -489,6 +503,15 @@ pub fn replay<R: Raycaster + ?Sized>(
         {
             world.ships[0].physics =
                 initial_state(recorded, handling, options.basis, options.angular);
+            // The pad timer is not a recorded column, so it is restored from the
+            // recording's own positions rather than reset to nothing: a window
+            // opening mid-boost otherwise loses the boost.
+            let (pad_timer, pad_direction) = recorded_pads[index];
+            world.ships[0].physics.pad_timer = pad_timer;
+            world.ships[0].physics.pad_direction = pad_direction;
+            // And the swept test continues from where the original's previous
+            // test was made, which is the recording's previous position.
+            pad_sweep.restart_from(Some(trace.frames[index - 1].position));
             speed_cached = recorded.speed_cached;
         }
 
@@ -509,7 +532,12 @@ pub fn replay<R: Raycaster + ?Sized>(
         let snapshot = snapshot_for(recorded, &mut buttons, &options.inputs, index);
         let controls = ship_controls(&snapshot, options.scheme);
         let position = world.ships[0].physics.body.position;
-        let env = located_environment(environment, track, position);
+        let env = Environment {
+            // Tested at the position the tick starts from, as the running game
+            // tests it before stepping the craft.
+            pad_hit: pad_sweep.test(&options.pads, position),
+            ..located_environment(environment, track, position)
+        };
         let ship = &mut world.ships[0];
         oag_physics::step(
             &mut ship.physics,
@@ -689,6 +717,8 @@ where
         scheme: options.scheme,
         // A scenario run has no recording to be put back onto.
         reseed: None,
+        // Nor, yet, a track's pads: `drive` takes none.
+        pads: Vec::new(),
     };
 
     for index in 0..options.ticks {
@@ -889,6 +919,8 @@ fn snapshot_of(state: &Held) -> InputSnapshot {
         ..InputSnapshot::new()
     }
 }
+
+mod pads;
 
 #[cfg(test)]
 mod tests;

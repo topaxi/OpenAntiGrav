@@ -307,6 +307,9 @@ fn compare_capture(name: &str, reseed: usize) {
         angular: AngularReading::NegatedLocal,
         scheme: Default::default(),
         reseed: NonZeroUsize::new(reseed),
+        // No speed pads, as before 2026-09-30: this measures the hover, and
+        // `pad_crossing_ground_truth.rs` is where the boost is checked.
+        pads: Vec::new(),
     };
     let emitted = replay(
         &recorded,
