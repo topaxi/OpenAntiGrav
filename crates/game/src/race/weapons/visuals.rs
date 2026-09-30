@@ -10,6 +10,7 @@
 mod cannon;
 mod flares;
 mod flash;
+mod hooks;
 mod laid;
 pub(crate) use cannon::{CannonAssets, CannonDraw};
 pub(in crate::race) use flares::*;
@@ -55,44 +56,6 @@ impl Race {
                 (None, None) | (Some(None), None) => {}
             }
         }
-    }
-
-    /// The LeachBeam's `WO_LEACHBEAM_ENERGY` instance's handle and the live
-    /// particles of that effect on the stage, for tests.
-    #[doc(hidden)]
-    #[must_use]
-    pub fn leach_energy_for_tests(&self) -> (Option<oag_render::psys::Playing>, usize) {
-        let alive = self
-            .view
-            .effects
-            .get(LEACHBEAM_ENERGY_EFFECT)
-            .map_or(0, |effect| self.view.stage.alive_of_effect(effect));
-        (self.view.leach_beam_effect, alive)
-    }
-
-    /// Puts a locked LeachBeam from `owner` on `target` into the world, off the
-    /// race's own weapon table, for tests. `false` when the title authors none.
-    #[doc(hidden)]
-    pub fn lock_leach_beam_for_tests(&mut self, owner: u8, target: u8) -> bool {
-        let Some(stats) = self
-            .sim
-            .weapons
-            .as_ref()
-            .and_then(oag_tables::weapons::WeaponStats::leach_beam)
-        else {
-            return false;
-        };
-        self.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
-            owner, target, &stats,
-        ));
-        true
-    }
-
-    /// A loaded particle effect by name, for tests.
-    #[doc(hidden)]
-    #[must_use]
-    pub fn effect_for_tests(&self, name: &str) -> Option<std::sync::Arc<oag_render::psys::Effect>> {
-        self.view.effects.get(name).cloned()
     }
 
     /// One tick of `LeachBeam_Advance`'s presentation half for as long as a
