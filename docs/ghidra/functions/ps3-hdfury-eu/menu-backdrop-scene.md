@@ -126,7 +126,7 @@ is **byte-identical in `data00` and `data08`**, and is HD's file re-exported: th
 PS4 `.rcsmodel` (9,184 triangles, 56 mesh objects, one material, `Basic_Emissive`) and the
 motion is in the `.vex` beside it, not in a `.rcsskeleton`/`.rcsanimclip` pair. The shape names
 of the two files agree, which is how
-`oag_render::mesh::rcs::psp2::placement::plan_from_vex` binds them: 51 of the 56 meshes hang
+`oag_render::mesh::rcs::psp2::placement::plan_from_vex` binds them: 54 of the 56 meshes hang
 under one of the seven `Anim Transform` nodes.
 
 **The boot screens have no backdrop, by the skin's own structure.** `Language Selection`,
@@ -164,5 +164,5 @@ have it are `Main Menu` and everything the navigation controller opens.
 - The scene target's size and sampler state.
 - Whether Omega's PS4 build reads `AnimLength` or keeps HD's literal: no PS4 program is
   open in the bridge.
-- Campaign, end-of-race and picker screens sit under the same widget and draw it in the
-  original; this build's versions of them do not yet.
+- The live campaign stage and the end-of-race screens sit under the same widget and draw
+  it in the original; this build's do not yet (the campaign *stills* do).

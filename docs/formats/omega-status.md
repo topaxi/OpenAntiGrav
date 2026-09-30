@@ -134,8 +134,9 @@ page (the `default` row: 0.3, 0.1, 1.5, blur 3) draw it, and `--anim-seconds` pi
 boot screens do not** - they are outside `Top FE Screen` in the skin, so the original has none there
 either. **Not validated against the original**: no PS4 emulator exists and HD's one capture of its HD
 style shows a flat white page. Chosen, not measured: the blur kernel, the linear sampling, and which
-page takes which row. The campaign screens, the end-of-race screens and the pickers sit under the same
-widget and do not draw it yet.
+page takes which row. The `--menu-page grid-select`/`cell-select` stills draw it too (they take the
+page's picture); the live campaign stage and the end-of-race screens sit under the
+same widget and do not yet. Omega authors no track or ship picker.
 
 ## What a menu-page capture does today
 

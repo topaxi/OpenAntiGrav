@@ -246,8 +246,9 @@ pub fn plan(scene: &psp2::nodes::Scene, animation: Option<&Animation>) -> Plan {
 /// transform's slot of the shader's table, or baked through the whole chain
 /// where nothing above it moves.
 ///
-/// A model node no mesh object names, or whose shape the `.vex` does not, falls
-/// back to its own bind matrix and is counted in [`Plan::unmatched`]. A `.vex`
+/// A shape is found by its name, and failing that by its name without a
+/// `namespace:` prefix. A model node no mesh object names, or whose shape the
+/// `.vex` does not, falls back to its own bind matrix and is counted in [`Plan::unmatched`]. A `.vex`
 /// that will not parse plans nothing at all, every node baking by its bind.
 #[must_use]
 pub fn plan_from_vex(scene: &psp2::nodes::Scene, vex_data: &[u8]) -> Plan {
@@ -275,9 +276,13 @@ pub fn plan_from_vex(scene: &psp2::nodes::Scene, vex_data: &[u8]) -> Plan {
                 .iter()
                 .find(|mesh| mesh.node == Some(index))
                 .and_then(|mesh| {
-                    nodes
-                        .iter()
-                        .position(|node| node.name.as_deref() == Some(mesh.name.as_str()))
+                    // The exporter spells a namespaced shape (`goteki:canopy..`)
+                    // with its namespace in the model and without it in the
+                    // `.vex`: three of Omega's scene's five misses.
+                    let bare = mesh.name.rsplit(':').next().unwrap_or(&mesh.name);
+                    let named =
+                        |want: &str| nodes.iter().position(|n| n.name.as_deref() == Some(want));
+                    named(&mesh.name).or_else(|| named(bare))
                 });
             let Some(found) = found else {
                 unmatched += 1;

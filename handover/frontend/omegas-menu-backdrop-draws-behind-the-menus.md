@@ -2,7 +2,7 @@
 categories: [frontend, rendering]
 ---
 
-# Omega's menu backdrop draws behind `--menu-page` pages; the campaign, end-of-race and picker screens, HD's own HD style, and two unread passes are open
+# Omega's menu backdrop draws behind the menus and the campaign stills; the live campaign stage, the end-of-race screens, HD's own HD style, and two unread passes are open
 
 2026-09-30, `omega-menu-backdrop`. Evidence and every number:
 [menu-backdrop-scene.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md)
@@ -23,9 +23,10 @@ Fury `--anim-seconds 4` one). Disc-backed:
 
 - **Not validated against the original.** No PS4 emulator exists and HD's only capture of its HD style
   shows a flat white page. The look is what the recovered program computes; nothing was compared.
-- **The campaign screens (`Campaign Selection`, `Grid Selection`, `Cell Selection`), the end-of-race
-  screens and the pickers** sit under the same widget in the skin and draw no backdrop here. They are
-  built by `capture/campaign_page.rs`/`main/campaign_stage.rs`, which the campaign-launch lane owns.
+- **The live campaign stage** (`main/campaign_stage.rs`, which the campaign-launch lane owns) and the
+  **end-of-race screens** sit under the same widget in the skin and draw no backdrop in a window. The
+  `--menu-page grid-select`/`cell-select` stills do draw it, because `capture/campaign_page.rs` already
+  took the page's `Picture`. Omega authors no track or ship picker, so there is nothing to draw there.
 - **The boot screens have none in the original**: they are outside `Top FE Screen`. Not a gap.
 - **Bands** (`use_bands`, always false), **`GroundPlane`** (named `_VR`), both not drawn.
 - **Chosen, not measured**: the blur kernel (`0x003e3e50` unread), linear sampling of the scene target,
@@ -38,6 +39,6 @@ Fury `--anim-seconds 4` one). Disc-backed:
 
 ## Next Steps
 
-1. Draw the backdrop under the campaign, end-of-race and picker screens (hand `Picture` to their list builders).
+1. Draw the backdrop under the live campaign stage and the end-of-race screens (hand `Picture` to their list builders; `Live::tick`/`picture` are the two calls).
 2. Read `0x003e3e50`'s kernel and replace the chosen blur.
 3. Try a live RPCS3 capture of HD's HD style past its first seconds; if it draws this, flip `oag_hd`'s `menu_scene`.

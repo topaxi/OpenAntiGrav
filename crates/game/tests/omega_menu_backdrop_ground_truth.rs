@@ -223,3 +223,92 @@ fn the_renderer_draws_a_grey_drawing_that_changes_with_the_clock() {
         "the same clock draws the same picture"
     );
 }
+
+/// The `oag_texture::png` writer's own output back to RGBA: stored deflate
+/// blocks, filter 0 on every row.
+fn decode_stored_png(bytes: &[u8]) -> (usize, usize, Vec<u8>) {
+    let (mut width, mut height, mut zlib) = (0usize, 0usize, Vec::new());
+    let mut at = 8;
+    while at + 8 <= bytes.len() {
+        let len = u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
+        let kind = &bytes[at + 4..at + 8];
+        let data = &bytes[at + 8..at + 8 + len];
+        match kind {
+            b"IHDR" => {
+                width = u32::from_be_bytes(data[0..4].try_into().unwrap()) as usize;
+                height = u32::from_be_bytes(data[4..8].try_into().unwrap()) as usize;
+            }
+            b"IDAT" => zlib.extend_from_slice(data),
+            _ => {}
+        }
+        at += 12 + len;
+    }
+    let mut raw = Vec::new();
+    let mut at = 2;
+    loop {
+        let last = zlib[at] & 1 == 1;
+        let len = u16::from_le_bytes(zlib[at + 1..at + 3].try_into().unwrap()) as usize;
+        raw.extend_from_slice(&zlib[at + 5..at + 5 + len]);
+        at += 5 + len;
+        if last {
+            break;
+        }
+    }
+    let mut rgba = Vec::with_capacity(width * height * 4);
+    for row in raw.chunks(width * 4 + 1) {
+        assert_eq!(
+            row[0], 0,
+            "a filtered row: this decoder reads the writer's own"
+        );
+        rgba.extend_from_slice(&row[1..]);
+    }
+    (width, height, rgba)
+}
+
+/// `--menu-page main` for `anim_seconds`, through the real binary: the path a
+/// player's window takes, which the tests above go around.
+fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize, usize, Vec<u8>) {
+    let out = std::env::temp_dir().join(format!("oag-omega-backdrop-{name}.png"));
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(source)
+        .args(["--no-audio", "--size", "640x360", "--menu-page", "main"])
+        .args(["--anim-seconds", anim_seconds, "--screenshot"])
+        .arg(&out)
+        .env(
+            "XDG_CONFIG_HOME",
+            std::env::temp_dir().join("oag-omega-backdrop-config"),
+        )
+        .status()
+        .expect("running oag-game");
+    assert!(
+        status.success(),
+        "oag-game --menu-page main --anim-seconds {anim_seconds}"
+    );
+    decode_stored_png(&std::fs::read(&out).expect("the screenshot"))
+}
+
+/// The wiring end to end: Omega's `--menu-page main` draws the scene where the
+/// rows are not, and draws a different picture a few seconds on. Dropping the
+/// backdrop from the boot, the stage or the capture leaves a white page and
+/// fails both.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/ and a GPU adapter"]
+fn omega_menu_page_main_shows_the_scene_and_it_moves() {
+    let Some(source) = omega() else {
+        return;
+    };
+    let (width, height, early) = menu_page(&source, "0", "early");
+    let (_, _, late) = menu_page(&source, "20", "late");
+    // The middle of the page, clear of the title and tab rows and the footer.
+    let mut grey = 0;
+    for y in height * 3 / 10..height * 85 / 100 {
+        for x in width * 3 / 10..width * 7 / 10 {
+            grey += usize::from(early[(y * width + x) * 4] < 240);
+        }
+    }
+    assert!(
+        grey > 200,
+        "{grey} grey pixels in the middle of the page: the backdrop is not drawn"
+    );
+    assert_ne!(early, late, "the page does not change with the clock");
+}
