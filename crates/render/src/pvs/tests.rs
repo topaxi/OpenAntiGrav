@@ -401,8 +401,12 @@ fn a_moving_draw_is_hidden_by_its_section_but_never_by_its_bounds() {
     let mut draw = draw_at([1.0e6, 0.0, 0.0], 1.0);
     draw.moving = true;
     let hides_section_2 = VisibleSet { mask: !(1u64 << 2) };
-    let looking_away =
-        Frustum::from_view_projection(oag_core::math::Mat4::perspective_rh(1.0, 1.0, 0.1, 10.0));
+    let looking_away = {
+        use oag_core::math::{Vec3, camera};
+        let projection = camera::perspective(core::f32::consts::FRAC_PI_2, 1.0, 1.0, 100.0);
+        let view = camera::look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
+        Frustum::from_view_projection(projection * view)
+    };
     assert!(
         !visible(&draw, 1 << 2, Some(&hides_section_2), None, None),
         "a section the set hides hides its moving draw"
