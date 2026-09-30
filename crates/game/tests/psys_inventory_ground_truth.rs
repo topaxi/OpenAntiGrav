@@ -63,17 +63,25 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
         "a sibling of the `_TRAIL` the damage tree embeds, and nothing reads \
          which effect or emitter references it.",
     ),
+    // The three below have their triggers recovered (2026-09-30,
+    // `docs/ghidra/functions/psp-pulse-usa/screen-flash-callers.md`) and are
+    // not played: this engine has the destroyed states
+    // (`oag_physics::CraftState`) and starts their screen flashes
+    // (`race::craft_flash`), but no craft explosion particles yet.
     (
         "WO_SHIP_EXPLOSION",
-        "no craft destruction in this engine; eliminations are not built.",
+        "spawned by `Ship_SpawnExplosionBig` (`0x088407b0`), 1.5 s after the \
+         craft goes out (`Ship_UpdateDestroyed`); not played, only its wash.",
     ),
     (
         "WO_SHIP_DEATH_SPARKS",
-        "same - the death path does not exist.",
+        "spawned by `Ship_SpawnExplosionSmall` (`0x0883e064`) at each of ten \
+         `Fx` nodes, on `Ship_SetState` state 5; not played.",
     ),
     (
         "WO_SHIP_FXNODE_EXPLO",
-        "plays at a hull `Fx` locator; which node and on what event is unread.",
+        "spawned beside `WO_SHIP_DEATH_SPARKS` by `Ship_SpawnExplosionSmall`, \
+         at each `Fx` node; not played.",
     ),
     // **Not `WO_CANNON_SPARKS`** - that one is wired, off `Cannon_UpdateRound`
     // (`0x0886593c`), on the wall/track hit path only. The Cannon landed
@@ -162,15 +170,15 @@ const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
     ),
     (
         "WO_SHIP_EXPLOSION_DEBRIS",
-        "no craft destruction in this engine.",
+        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
     ),
     (
         "WO_SHIP_EXPLO_SMOKE",
-        "no craft destruction in this engine.",
+        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
     ),
     (
         "WO_SHIP_FXNODE_BIGEXPLO",
-        "no craft destruction in this engine.",
+        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
     ),
 ];
 

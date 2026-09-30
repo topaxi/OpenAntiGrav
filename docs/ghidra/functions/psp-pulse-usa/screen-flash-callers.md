@@ -4,8 +4,9 @@
 the Ghidra bridge: `get_xrefs_to(0x088f00c0)`, each call site's delay slot for the
 kind (`li a1, N`), each caller's gate read above it.
 
-**Status:** **all fifteen callers read, eleven of the twelve kinds placed, ten
-built.** The consumer and the kind table are in
+**Status:** **all fifteen callers read, ten of the twelve kinds placed and built
+from a live-measured caller, two with no caller, and the placed-but-unbuilt ones
+named below.** The consumer and the kind table are in
 [particle-system.md](particle-system.md), "The screen flash's consumer, read and
 measured"; this page is the other end. The table there was re-derived from the
 function's own stores (all twelve kinds, every key and every key time) and
@@ -22,7 +23,7 @@ the call site, and the kind is a literal in the delay slot.
 | `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) | `0x0886ee5c` | 0 | a Rocket that struck a craft | yes |
 | `Missile_SpawnExplosion` (`0x08868d50`) | `0x08868e78` | 0 | every ending | yes |
 | `Shuriken_SpawnExpiry` (`0x08870c78`) | `0x08870da8` | 0 | every ending (see below) | yes |
-| `Ship_SpawnExplosionSmall` (`0x0883e064`) | `0x0883e114` | 0 | `Ship_SetState` state 5, every craft | yes |
+| `Ship_SpawnExplosionSmall` (`0x0883e064`) | `0x0883e114` | 0 | `Ship_SetState` state 5, every craft | yes, the player excluded (see "Measured live") |
 | `Ship_SpawnExplosionBig` (`0x088407b0`) | `0x088408a0`, `0x0884090c` | 7 when `craft+0x368 == 0`, else 0 | `Ship_UpdateDestroyed`, and state 7 in modes 0, 0xe-0x12 | yes |
 | `PlasmaBlast_Construct` (`0x0885fd90`) | `0x0885fe68` | 1 | every Plasma ending | yes |
 | `Repulser_SpawnWaves_q` (`0x08876300`) | `0x088765ac` | 2 | the Repulser's field beginning | no: the Repulser is not built |
@@ -95,6 +96,55 @@ teardown then calls `Shuriken_SpawnExpiry` (`0x08870c78`), which:
 It calls nothing that spends damage. **Built** as `oag_game::race::SHURIKEN_EXPIRE_EFFECT`,
 with the fuse ending reported as an `Impact` with `blast: false`
 (`oag_gameplay::projectile`); the sound is not.
+
+## Measured live (2026-09-30, PPSSPP, Talon's Junction, the player stationary)
+
+One breakpoint on `ScreenFlash_Start` (`0x088f00c0`), a weapon bit written into
+`craft+0x1b8` (or a 500-point hit posted into the pending-damage channel), and
+the first hit logged: kind, `ra`, frames since the write, and the distance from
+the eye.
+
+| Trigger | Kind | `ra` | Frame | Where | What it confirms |
+| --- | ---: | --- | ---: | --- | --- |
+| Missile (`0x40`) | 0 | `0x08868e80` | 179 | 563 units out | `Missile_SpawnExplosion`; its self-detonation at 3 s. Past `far`, so nothing washes |
+| Shuriken (`0x20000`) | 0 | `0x08870db0` | 119 | 367 units out | `Shuriken_SpawnExpiry`, at the authored 2 s fuse. Past `far` |
+| Plasma (`0x4`) | 1 | `0x0885fe70` | 85 | 56 units out | `PlasmaBlast_Construct` |
+| Mine (`0x2`) | 8 | `0x08868058` | 29 | on the craft | `Mine_SpawnExplosion` |
+| Bomb (`0x100`) | 3 | `0x088721a4` | 30 | on the craft | `BombBlast_Construct` |
+| A posted 500-point hit | 0 | `0x0883e11c` | 31 | on the craft | `Ship_SpawnExplosionSmall`, 30 frames after the hit: state 4's 0.5 s |
+| the same | 7 | `0x088408a8` | 121 | on the craft | `Ship_SpawnExplosionBig`, 90 frames later: state 5's 1.5 s |
+
+**The Mine and the Bomb tripped on the stationary craft that laid them, 29 and
+30 frames later.** That is `Bomb_InArmingDelay`'s 0.5 s, read for the Bomb in
+[mine.md](mine.md) and now seen for the Mine as well: the original has no
+permanent owner exclusion. This port does (`oag_gameplay::projectile::mine::triggered_by`,
+labelled chosen). A gameplay change with the racing gate behind it, so it is
+recorded here and not made.
+
+**The player's own state-5 wash is measured faint, and this port leaves it out.**
+The flash's falloff reads `DAT_08ab10b0`, the *active* camera (`ScreenFlash_DistanceFalloff`,
+`0x088effb8`), and by state 5 that is the destroy camera (`Camera_SetMode(5)`):
+`(32.2, -23.4, -202.0)`, **168.7 units** from the wreck, a falloff of 0.25. This
+port keeps the chase camera at 11.6 units, where kind 0 would be four times as
+strong. Kind 7 has no falloff and is started.
+
+**The wash matches the original's frame by frame for Plasma.** Struck minus the
+frame before, over two dark track patches away from the fireball
+(`data/scratch/pulse-impact-visuals/measure.py`), red, green, blue added:
+
+| frames after the flash starts | original | ours |
+| ---: | --- | --- |
+| 0 | 120, 18, 169 | 115, 17, 164 |
+| 10 | 100, 15, 155 | 98, 15, 154 |
+| 18 | 72, 11, 136 | 70, 10, 134 |
+| 28 | 49, 6, 114 | 47, 5, 111 |
+| 38 | 29, 4, 88 | 28, 3, 87 |
+
+Ours runs one frame behind (it starts a tick later), and every channel is within
+5 counts. Kind 8's first frame in the original adds `(96, 97, 0)`: yellow, no
+blue, as the table says. Kinds 0, 3 and 7 were seen placed and coloured but not
+measured per frame; the Missile and Shuriken are placed, not seen (their
+detonations were out of range).
 
 ## Applied names
 

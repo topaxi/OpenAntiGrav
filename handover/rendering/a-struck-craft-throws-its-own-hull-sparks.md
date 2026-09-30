@@ -34,40 +34,49 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Open
 
-- **Ours still reads much weaker than the original, and the draw-side
-  pieces did not close it.** The fx-brightness thread's streak UVs and atlas
-  advance landed on 2026-09-24 (psys-draw lane,
-  [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
-  "Streaks, atlas advance and the screen flash"). Re-shot with the same
-  hook and ticks: `data/scratch/psys-draw/struck-main-vs-streak.png` shows
-  the original, then main, then the streaks.
-  - `DrawStreak` (class 6) is a **wedge**. It has a sprite-sized head at
-    the particle and a sliver back to its spawn point, sampling the peaky
-    `orange_glow2` sprite. So the long yellow rays became orange heads with
-    faint tails. That is dimmer and shorter than both main and the
-    original's long orange rays.
-  - **Wall scrapes changed too**: every Pulse PSP collision spark is the
-    same effect. `data/scratch/psys-draw/scrape-main-vs-final.png` and
-    `scrape-zoom.png` show main's small white glints becoming small orange
-    embers. They are no spikier than before. No original scrape capture
-    exists to judge against, so whether the wedge stays on by default is
-    the lead's call. The read itself is at instruction level.
-  - None of the four emitters authors an atlas grid, so the frame advance
-    changes nothing here.
-  - The original's white-to-orange bloom hugging the hull is still not
-    reproduced. Candidates, none read:
-    - the original's view-space build (a common depth, not ours);
-    - the light strip behind the craft in the original's shot;
-    - `FUN_0883e37c`'s gate;
-    - `CockpitHitFx_Arm_q`'s overlay.
-  - **The next step is a matched capture, not a tune.** Put the original
-    craft on the grid (not over the light strip) and take a struck/unstruck
-    diff at the same spot, so the background stops confounding the
-    comparison.
-  - The smoke is emitted and matches the file. A dump at tick 310 shows 8
-    alpha-over puffs 3-9 units across. They are grey to brown
-    (`0.22`-`0.49`), alpha up to `0.78`, so they read as dark smoke over the
-    dark start grid.
+- **Measured 2026-09-30: ours is 10-20 times weaker, and it is not bloom.**
+  Original and ours, the player stationary on the grid after GO, a Cannon-tagged
+  hit every 6 frames from frame 1 (the `craft+0x120`/`+0x138` channel, same as
+  above), struck minus unstruck mean luminance over the frame:
+
+  | region | original, frames 5-6 / 10-12 / 16 | ours, ticks 2-6 after the first hit |
+  | --- | --- | --- |
+  | lower half | +55 / +51 / +71 | +3 to +6 |
+  | box around the hull | +100 / +80 / +101 | +12 to +24 |
+
+  The original's wash rises in one frame (frame 5) and pulses with each hit
+  (frames 5, 10-12, 16). Frames: `data/scratch/pulse-impact-visuals/frames/hit-orig-struck.png`
+  (original), `.../ours/hstruck-montage.png` (ours), 960 x 544 crops.
+  - **The glow mask is not involved.** Read out of EDRAM on the software
+    renderer at frames 6, 8 and 10 of a struck run
+    (`vhit-struck/vram-k*-alpha.png`), the alpha holds only the neon strips, the
+    banner, the panels and the hull's blink lights. Nothing stamps under the
+    sparks or the smoke, so the bloom cannot be what lights the hull. Rules out
+    the bloom candidate the previous pass carried.
+  - **A live particle draw log finds two sprite layers ours does not draw.** A
+    breakpoint on `ParticleSystem_DrawParticle` (`0x089186bc`) in the first 16
+    frames after a hit logs, per locator, a `shazam` sprite (white, half-size
+    **9.36**, five frames, shrinking 9.36, 9.36, 8.73, 6.54, 4.33) and a `glow`
+    sprite (orange-white, half-size flickering between **0.75 and 4.8** every
+    frame, for the whole 16). Their positions are two hull locators. Their
+    records are not the emitter layout: `+0x20` reads `3.9` and `2.0`, and
+    **9.36 = 3.9 x 2.4 and 4.8 = 2.0 x 2.4**, the hit's severity. The strings
+    `shazam` and `glow` are inside `WO_SHIP_COLL_SPARK_DAMAGE.POB` (blob offsets
+    `0x1aa0`, `0x3d60`, `0x4656`) and `oag_vex::pob::ParticleSystem::emitters`
+    does not reach them: it finds four records, and the file carries two more
+    texture paths (`orange_glow2.tga` at `0x3cf0` and `0x4630`) than it has
+    emitters for. A half-size 9.36 sprite at 11 units is about 300 pixels
+    wide, which is the warm envelope round the hull in the original and
+    nothing in ours. **This is the lead.** The log does not show the
+    `WO_SHIP_COLL_SPARK` streaks at all, so the draw log is not the whole draw
+    path either.
+  - **Ours does not shake the camera.** Every hit swings the original's view
+    (`Camera_ArmShake`, same block of `Ship_Damage`); the frames above are not
+    the same view. Not ported.
+  - The wedge, the atlas advance and the wall-scrape questions in the previous
+    pass are unchanged; the earlier candidates `FUN_0883e37c`, the view-space
+    build and `CockpitHitFx_Arm_q` were not tested.
+  - The smoke is emitted and matches the file, as before.
 - **Wall sparks and hit sparks keep separate cooldowns.** The original's
   0.8 s gate lives on the locator's `ShipCollisionFx` instance, so the two
   share it. Ours keeps two separate gates, and wall sparks remain the
@@ -92,13 +101,18 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Next Steps
 
-- Capture the original's struck craft on the start grid, off the light
-  strip, struck and unstruck at the same spot. Compare against
-  `data/scratch/psys-draw/streak/struck/` at k=8-16.
-- Find HD's `Ship_Damage` (the `uWeaponDamageReceived` telemetry string is
-  a lead) and read whether it sparks the hull. Then read the `WO_DAMAGE_*`
-  consumer through the TOC-displacement search.
+- Find what the `shazam` and `glow` records are. Read `ParticleSystem_DrawParticle`'s
+  caller `FUN_089177e4` (it walks the live list by `particle+0x78`) and the
+  producer of `particle+0x44`; dump a live struck instance's records with
+  `data/scratch/pulse-impact-visuals/particle_log.py` (it logs the record
+  header, 0x100 bytes, per distinct resource). Then extend `emitters` to reach
+  them and play them; it is Pulse PSP data, so gate it like the extent law.
+- Port `Camera_ArmShake` for a weapon hit to the player (`Ship_Damage`, same
+  block), with the destroy camera; both are needed to read a struck frame the way
+  the original's does.
+- HD: find its `Ship_Damage` (the `uWeaponDamageReceived` telemetry string is a
+  lead), then the `WO_DAMAGE_*` consumer.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-24: `Ship_Damage`'s weapon branch throws `WO_SHIP_COLL_SPARK_DAMAGE` (LeachBeam: its own variant) on one or two random hull locators per landed hit, severity 2.4, 0.8 s per locator; built as `race::hit_sparks`, Pulse only. The streak strips and atlas advance landed and did not close the bloom gap (rays became orange wedge heads); next is a matched struck/unstruck capture off the light strip. HD's Cannon sparks are read, not built.
+2026-09-30: measured 10-20x weaker than the original and ruled out the glow mask; two unparsed sprite layers (`shazam`, `glow`, severity-scaled) are the lead. 2026-09-24: `Ship_Damage`'s weapon branch throws `WO_SHIP_COLL_SPARK_DAMAGE` (LeachBeam: its own variant) on one or two random hull locators per landed hit, severity 2.4, 0.8 s per locator; built as `race::hit_sparks`, Pulse only. The streak strips and atlas advance landed and did not close the bloom gap (rays became orange wedge heads); next is a matched struck/unstruck capture off the light strip. HD's Cannon sparks are read, not built.
