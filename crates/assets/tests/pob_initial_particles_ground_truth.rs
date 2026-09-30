@@ -138,3 +138,34 @@ fn the_ps2_effects_are_surveyed_for_templates() {
     }
     println!("ps2: {} template(s)", found.len());
 }
+
+/// The one keyed stretch on the disc. Live on PPSSPP, a Mine's `BANG` drew
+/// aspects `2.130, 5.272, 8.468, 11.623, 14.763` at ticks 0..4 of its six
+/// (`ParticleSystem_DrawParticle`'s `particle+0x64`), so the aspect is `1 + v`
+/// for the channel's `v` - the law a constant `0.5` or `0.7` cannot test - and
+/// the quad is up to 49 units wide at that tick's half-size `3.35`.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_mine_bangs_keyed_stretch_reads_the_live_aspect() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let found = templates(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display()));
+    let (_, _, bang) = found
+        .iter()
+        .find(|(system, _, template)| system == "WO_MINE_EXPLO" && template.name == "BANG")
+        .expect("the Mine's BANG");
+    let stretch = bang.stretch.as_ref().expect("a stretch block");
+    assert_eq!(stretch.mode, ChannelMode::Keyframed);
+    assert_eq!(bang.lifetime_ticks, (6, 0));
+    for (tick, live) in [2.130, 5.272, 8.468, 11.623, 14.763]
+        .into_iter()
+        .enumerate()
+    {
+        let aspect = 1.0 + stretch.scaled_at(tick as f32 / 6.0);
+        assert!(
+            (aspect - live).abs() < 0.1,
+            "tick {tick}: {aspect} vs {live}"
+        );
+    }
+}

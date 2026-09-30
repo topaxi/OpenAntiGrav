@@ -1310,7 +1310,10 @@ particle:
 `+0xf0` block into the quad's aspect (`v > 0`: `1 + v`; `v <= 0`: size times
 `1 - v`, aspect `1 / (1 - v)`), and every template draws as class 3, a
 `ParticleSystem_DrawRotatedSprite` quad `aspect * size` wide and `size` tall,
-turned by the roll. Live on a struck craft: `shazam` aspect `1.500`, roll `0`
+turned by the roll. Confidence **85**, and the `1 + v` law is pinned on the one keyed stretch on
+the disc: a Mine's `BANG` (`+0xf0` keyed `1..20` over its six ticks) drew
+aspects `2.130, 5.272, 8.468, 11.623, 14.763` live, a bar up to 49 units wide.
+Live on a struck craft: `shazam` aspect `1.500`, roll `0`
 (`+0xf0` = `0.5`); `glow` aspect `1.700` (`0.7`), roll `2 pi` falling as its
 nine-key channel says (flags `0x30`: angle, not rate, random start). The
 `+0x2b0` block is the atlas-frame rate, constant `1.0` and unused on a one-cell

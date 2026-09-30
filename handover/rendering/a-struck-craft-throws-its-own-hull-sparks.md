@@ -42,7 +42,12 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
   the earlier comparison crossed `OPT_CLOSE` and `OPT_FAR`; a template's first
   draw was a tick late; the template sprite is a stretched, rolling quad
   (`+0xf0` aspect `1.5`/`1.7`, the keyed roll channel), which the parser had
-  set aside as constant. The earlier "1.6x / 2.6x" numbers are retracted.
+  set aside as constant. The earlier "1.6x / 2.6x" numbers are retracted, and
+  so are the earlier lane's Plasma, Mine, Quake and collision-spark look
+  comparisons, which were shot on an `OPT_CLOSE` profile against the port's
+  `far`. The Mine's `BANG` stretch law was pinned live after this change (a bar
+  up to 49 units wide, matched); the Mine's and Plasma's whole-frame wash still
+  reads whiter than the original's and is not re-measured.
   Ours now reads 7-11 % *brighter* (up to 20 % on the sixth overlapping hit);
   not decoded.
 - **An emitter's own particles are not rotated or stretched.** 45 of the 76 PSP

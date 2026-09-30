@@ -79,6 +79,23 @@ the opposite sign and small.
    "The per-tick field update"; format: [`pob.md`](../formats/pob.md), "The
    sprite templates".
 
+**Confidence.** The stretch and roll law and the first-draw-at-age-0 rule are
+85 (`ParticleSystem_UpdateParticleFields` read in full, and every field matched
+live on four effects: the collision sparks, and the Mine's `BANG`, which tests
+the `1 + v` law on the one keyed stretch on the disc - aspects `2.130, 5.272,
+8.468, 11.623, 14.763` at ticks 0..4 against the channel's own keys, pinned in
+`pob_initial_particles_ground_truth`). The 0.89-0.93 is a measurement of the
+port against the original on one race, one craft, one camera view.
+
+**The earlier look comparisons are retracted for the same reason.** The Plasma,
+Mine, Quake and collision-spark "re-shot against the original" frames of the
+previous lane were taken on a profile sitting on `OPT_CLOSE` against the port's
+`far`. Shapes survive that (an aspect does not depend on camera distance), which
+is how the Mine's `BANG` bars were checked above; washes and the `0.6 s` flash
+brightnesses do not. The Mine's and Plasma's whole-frame brightness against the
+original is **not** re-measured: ours reads whiter than the original's frames
+around the detonation, before and after this change.
+
 The smoke, the fountain and the embers were never the gap: with every
 `ParticleSystem_DrawParticle` call skipped on the original (which leaves exactly
 those layers) the struck-minus-control luminance is 1-10 against 20-55 for the
@@ -87,8 +104,12 @@ tenths of the original's flash is the two template sprites.
 
 ## Result
 
-Per locator, both sides repeated across restarts (the original's sums repeated
-to within 1 unit, `L0` 230 and 231, `L2` 92 and 94):
+Per locator. The original was captured on three boots of the same race for
+locators 0-3 (sums repeated to within 1 unit, `L0` 230 and 231, `L2` 92 and
+94); locators 4 and 5 were clean once, in the second of two runs (**seen once**;
+the first, in a run with a shorter gap between hits, drew nothing for locator 4
+and a negative difference for locator 5 late on, unexplained - the locator's
+previous instance or cooldown is the suspect):
 
 | Locator | Original | Ours | Original / ours |
 | --- | ---: | ---: | ---: |
