@@ -104,6 +104,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
+        shine_draws: Vec::new(),
 
         vertex_colour_is_light: false,
         stamps_glow: false,

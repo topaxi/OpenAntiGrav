@@ -1,0 +1,121 @@
+//! A Pulse hull's `0x2000` extra pass on a real disc image.
+//!
+//! **`#[ignore]`d and never run in CI.** It needs game content, which this
+//! project does not ship. See
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test shine_ground_truth --run-ignored all
+//! ```
+//!
+//! # What only real data can say here
+//!
+//! The original draws six batches of every team's hull twice - once under
+//! environment mapping with the material's *second* texture - `envtest4bit.tga`,
+//! or `envmap_stripe2.tga` on AG_Systems - which a recorded GE list on Talon's Junction showed under `TEXMAPMODE` 2,
+//! lights 0 and 1, lighting off. This proves the loader finds exactly those
+//! batches on every team's own `Ship.vex` and hands the second texture to the
+//! second draw, so a loader that read the wrong bit, the wrong material word
+//! or the wrong file comes back with another count or another texture and
+//! fails here rather than drawing nothing quietly.
+
+use oag_game::livery::{self, LoadContext};
+use oag_race::Mode;
+
+/// Every Pulse PSP team, by the directory the disc keeps it in.
+const TEAMS: [&str; 8] = [
+    "Assegai",
+    "Qirex",
+    "Feisar",
+    "AG_Systems",
+    "EGX",
+    "Goteki",
+    "Triakis",
+    "Piranha",
+];
+
+fn load(shine: bool) -> Option<Vec<livery::Livery>> {
+    let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
+    let mut archives =
+        oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
+    let teams: Vec<String> = TEAMS.iter().map(|t| (*t).to_string()).collect();
+    let mut report = Vec::new();
+    let liveries = livery::load(
+        &mut archives,
+        &teams,
+        &LoadContext {
+            race: oag_pulse::TITLE.race,
+            mode: Mode::SingleRace,
+            flare: oag_pulse::TITLE.flare,
+            hull_overlay: false,
+            hull_shine: shine,
+            absorb_shell: false,
+        },
+        None,
+        None,
+        &mut report,
+    )
+    .expect("the liveries load");
+    Some(liveries)
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_teams_hull_carries_six_extra_pass_batches_under_the_env_map() {
+    let Some(liveries) = load(true) else { return };
+    assert_eq!(liveries.len(), TEAMS.len());
+    for (team, livery) in TEAMS.iter().zip(&liveries) {
+        let shine = livery
+            .shine
+            .as_ref()
+            .unwrap_or_else(|| panic!("{team}: no extra pass was built"));
+        // shipShape's three blended batches, both airbrakes' one each and the
+        // canopy's glass - the six the recorded GE list showed under mode 2.
+        assert_eq!(shine.draws.len(), 6, "{team}");
+        for draw in &shine.draws {
+            let texture = shine.textures[draw.texture.expect("a texture")]
+                .as_ref()
+                .expect("a decoded texture");
+            println!(
+                "{team}: shine draw {:?} under {}",
+                draw.range, texture.label
+            );
+            // `envtest4bit.tga` on seven teams, `envmap_stripe2.tga` on
+            // AG_Systems: each is whatever the hull's own material names.
+            assert!(
+                texture.label.contains("env"),
+                "{team}: a shine draw is under {}, not an environment map",
+                texture.label
+            );
+            // The same vertices the hull's own draw of that batch uses.
+            let hull = &livery.hull;
+            assert!(
+                hull.draws
+                    .iter()
+                    .chain(&hull.transparent_draws)
+                    .chain(&hull.alpha_tested_draws)
+                    .any(|own| own.range == draw.range),
+                "{team}: a shine draw has no batch of the hull behind it"
+            );
+        }
+        // The hull itself is untouched: its draws name their own textures.
+        assert!(
+            livery
+                .hull
+                .draws
+                .iter()
+                .chain(&livery.hull.transparent_draws)
+                .all(|d| d.texture.is_none_or(|t| livery.hull.textures[t]
+                    .as_ref()
+                    .is_none_or(|t| !t.label.contains("env")))),
+            "{team}: the hull's own pass was handed the env texture"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_context_that_does_not_ask_for_the_pass_builds_none() {
+    let Some(liveries) = load(false) else { return };
+    assert!(liveries.iter().all(|l| l.shine.is_none()));
+}

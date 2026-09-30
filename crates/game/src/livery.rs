@@ -116,6 +116,10 @@ pub struct Livery {
     pub absorb_overlay: Option<Model>,
     /// The same under [`absorb::LEACH`], while this craft's LeachBeam pulses.
     pub leach_overlay: Option<Model>,
+    /// The hull's `0x2000` extra pass - the environment-mapped second texture
+    /// drawn over it every frame; see [`oag_render::shine`]. `None` wherever
+    /// it is not built.
+    pub shine: Option<Model>,
     /// HD's `AbsorbEffect` shell - see [`absorb::shell`]. `None` elsewhere.
     pub absorb_shell: Option<Model>,
     /// The plume's own authored texture-transform animation.
@@ -202,6 +206,9 @@ pub struct LoadContext<'a> {
     /// Whether to build the absorb hull overlay - Pulse's alone, and only
     /// while `oag_render::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
     pub hull_overlay: bool,
+    /// Whether to build the hull's extra pass - Pulse's alone, and only while
+    /// `oag_render::shine::DRAWN` says so. See [`oag_render::shine`].
+    pub hull_shine: bool,
     /// Whether to load HD's absorb shell. See [`absorb::shell`].
     pub absorb_shell: bool,
 }
@@ -252,6 +259,7 @@ pub fn load(
                 absorb: source.absorb.clone(),
                 absorb_overlay: source.absorb_overlay.clone(),
                 leach_overlay: source.leach_overlay.clone(),
+                shine: source.shine.clone(),
                 absorb_shell: source.absorb_shell.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
@@ -294,6 +302,7 @@ pub fn load(
                     absorb: player.absorb.clone(),
                     absorb_overlay: player.absorb_overlay.clone(),
                     leach_overlay: player.leach_overlay.clone(),
+                    shine: player.shine.clone(),
                     absorb_shell: player.absorb_shell.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
@@ -373,6 +382,7 @@ fn one(
                     absorb: Vec::new(),
                     absorb_overlay: None,
                     leach_overlay: None,
+                    shine: None,
                     absorb_shell: None,
                     boost: None,
                     boost_uv: None,
@@ -411,6 +421,7 @@ fn one(
             absorb,
             absorb_overlay: None,
             leach_overlay: None,
+            shine: None,
             absorb_shell: absorb::shell(archives, team, ships.dir, ctx.absorb_shell, report),
             hull,
             boost: lit.boost,
@@ -462,6 +473,19 @@ fn one(
     let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
     let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
         .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
+    let shine = if ctx.hull_shine {
+        let shine = oag_render::shine::build(&hull);
+        report.push(match &shine {
+            Some(model) => format!(
+                "{hull_name}: {} extra-pass batch(es) under their second texture (oag_render::shine)",
+                model.draws.len()
+            ),
+            None => format!("{hull_name}: no 0x2000 extra-pass batch - no shine pass"),
+        });
+        shine
+    } else {
+        None
+    };
     Ok(Livery {
         team: team.to_string(),
         hull,
@@ -470,6 +494,7 @@ fn one(
         absorb: Vec::new(),
         absorb_overlay,
         leach_overlay,
+        shine,
         absorb_shell: None,
         boost,
         boost_uv,

@@ -40,6 +40,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
+        shine_draws: Vec::new(),
 
         vertex_colour_is_light: false,
         stamps_glow: false,
@@ -232,6 +233,7 @@ mod merge_tests {
             material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
             material_anim: Vec::new(),
+            shine_draws: Vec::new(),
 
             vertex_colour_is_light: false,
             stamps_glow: false,

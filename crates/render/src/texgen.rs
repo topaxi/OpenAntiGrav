@@ -4,7 +4,11 @@
 //! # Scope, corrected 2026-08-10
 //!
 //! **The boost plume no longer uses this module, and the plume-specific
-//! rationale below is retained as history.** The plume's compiled display
+//! rationale below is retained as history. A Pulse hull's extra pass does:
+//! see [`crate::shine`], which calls [`environment_map`] with
+//! [`ENV_BASIS_0`]/[`ENV_BASIS_1`] - the same fixed pair, because the hull
+//! model takes the same load-time branch the plume was first read on
+//! (`model+0x1a8 == 1`, read live on a hull 2026-09-30).** The plume's compiled display
 //! list was read to be replayed under `TEXMAPMODE` 0 - authored coordinates,
 //! sampled through the keyframed `TEXOFFSET` u-scroll authored in
 //! `shipboost.vex` itself (see `mesh-draw.md`, "The plume is replayed under
@@ -73,8 +77,10 @@ use oag_core::math::{Mat4, Vec3};
 
 use crate::mesh::GpuVertex;
 
-/// The light-0 direction the boost plume's coordinates are generated from -
-/// the `u` axis, and therefore the brightness ramp.
+/// The light-0 direction of the fixed environment-map basis - the `u` axis.
+/// Named for the plume while it was the only known user; it is
+/// `g_envmap_light_basis` column 0, which every model whose `+0x1a8` is set
+/// reads, the hull included.
 ///
 /// Recovered, not fitted: column 0 of `g_envmap_light_basis` (`0x08abf510`),
 /// which `Vex_LoadModel` builds once at `0x08913078`-`0x08913248` as
@@ -102,11 +108,10 @@ use crate::mesh::GpuVertex;
 ///
 /// See `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The two light
 /// vectors are a fixed world-space pair, built once at load".
-pub const PLUME_LIGHT_0: Vec3 = Vec3::new(0.955_336_5, -0.248_672_2, -0.159_670_4);
+pub const ENV_BASIS_0: Vec3 = Vec3::new(0.955_336_5, -0.248_672_2, -0.159_670_4);
 
-/// The light-1 direction - the `v` axis, and therefore which streak band a
-/// vertex lands in. Column 1 of the same basis; see [`PLUME_LIGHT_0`].
-pub const PLUME_LIGHT_1: Vec3 = Vec3::new(0.0, 0.540_302_3, -0.841_471);
+/// The light-1 direction - the `v` axis. Column 1 of the same basis; see [`ENV_BASIS_0`].
+pub const ENV_BASIS_1: Vec3 = Vec3::new(0.0, 0.540_302_3, -0.841_471);
 
 /// Generates uvgen-2 texture coordinates for `base` into `out`.
 ///
@@ -126,7 +131,7 @@ pub const PLUME_LIGHT_1: Vec3 = Vec3::new(0.0, 0.540_302_3, -0.841_471);
 /// GE world really is model-to-world for a mesh batch, with no model-view
 /// folding: the mesh path sets GE matrix 2 while the view matrix is GE matrix
 /// 1, set separately. That fork is what decides whether this is a matcap, and
-/// for the boost plume it lands on "not a matcap" - see [`PLUME_LIGHT_0`].
+/// for the boost plume it lands on "not a matcap" - see [`ENV_BASIS_0`].
 ///
 /// `out` is resized to `base`'s length and every field but `texcoord` is
 /// copied through unchanged, so the caller can upload it whole.

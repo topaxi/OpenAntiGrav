@@ -59,6 +59,7 @@ impl Scene {
         prev: &motion::Snapshot,
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
+        self.write_shine(race, queue, view_projection, prev_vp, prev, scratch);
         for which in [Overlay::Absorb, Overlay::LeachBeam] {
             for (slot, overlay, pulse) in self.hull_overlays(race, which) {
                 overlay.write(
@@ -86,6 +87,7 @@ impl Scene {
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
+        self.draw_shine(race, pass, stats);
         for which in [Overlay::Absorb, Overlay::LeachBeam] {
             for (_, overlay, _) in self.hull_overlays(race, which) {
                 stats.add(overlay.draw_overlay(pass));

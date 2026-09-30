@@ -206,6 +206,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
+        shine_draws: Vec::new(),
 
         vertex_colour_is_light: false,
         stamps_glow: false,

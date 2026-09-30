@@ -183,6 +183,20 @@ pub struct Model {
     /// [`mesh::rcs`] resolves an [`oag_rcs::rcsmodel::material::Curve`]
     /// through - see `mesh::rcs::curve_track`.
     pub material_anim: Vec<u32>,
+    /// The `0x2000` **extra pass**'s draws: every batch whose `pass_mask` has
+    /// that bit and whose material names a second texture
+    /// (`oag_vex::vex::Material::second_texture`), as a copy of the batch's own
+    /// draw - the same index range, so the same vertices - with
+    /// [`DrawCall::texture`] the **second** texture.
+    ///
+    /// The original draws each such batch twice: first `FUN_0890db54` under
+    /// `TEXMAPMODE` 2 (environment mapping) with this texture, then the
+    /// batch's own pass. Nothing in [`Self::draws`], [`Self::alpha_tested_draws`]
+    /// or [`Self::transparent_draws`] changes; this list is for the caller that
+    /// draws the second pass - see [`crate::shine`]. Empty for a model that
+    /// authors none, which is every model but a Pulse hull. Only the `.vex`
+    /// path fills it.
+    pub shine_draws: Vec<DrawCall>,
     /// Whether [`GpuVertex::colour`] holds a **baked light** rather than a tint.
     ///
     /// True only for a Wipeout HD `.rcsmodel`, whose fragment programs *add*
@@ -297,6 +311,7 @@ impl Model {
             material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
             material_anim: Vec::new(),
+            shine_draws: Vec::new(),
 
             vertex_colour_is_light: false,
             stamps_glow: false,
@@ -616,6 +631,7 @@ fn build_class(
     let mut draws: Vec<DrawCall> = Vec::new();
     let mut alpha_tested_draws: Vec<DrawCall> = Vec::new();
     let mut transparent_draws: Vec<DrawCall> = Vec::new();
+    let mut shine_draws: Vec<DrawCall> = Vec::new();
     let mut mesh_count = 0;
     let mut airbrakes: [Option<Flap>; 2] = [None, None];
     let mut anim_tracks: Vec<AnimTrack> = Vec::new();
@@ -667,6 +683,7 @@ fn build_class(
         // is simply not animated - the engine's own identity default. Read
         // here rather than per batch because several batches share a material.
         let transforms = vex::mesh_tex_transforms(payload);
+        let mesh_flags = u16::from_le_bytes([payload[0], payload[1]]);
 
         for batch_list in [0u8, 1u8] {
             for batch in vex::mesh_batches(payload, batch_list).context("decoding batches")? {
@@ -688,6 +705,11 @@ fn build_class(
                     .copied()
                     .flatten()
                     .map(|m| m.texture);
+                let second_texture = materials
+                    .get(usize::from(batch.material_index))
+                    .copied()
+                    .flatten()
+                    .map(|m| m.second_texture);
                 let texture = material_texture
                     .map(|t| t as usize)
                     .filter(|&t| textures.get(t).is_some_and(Option::is_some));
@@ -771,7 +793,7 @@ fn build_class(
                     // one instant - which is all it can ever be, and why
                     // `moving` turns the tests off rather than trusting it.
                     let centre = bounds_matrix.map_or(centre, |m| vex::transform_point(&m, centre));
-                    out.push(DrawCall {
+                    let draw = DrawCall {
                         range: first_index..last_index,
                         texture,
                         bounds: Bounds { centre, radius },
@@ -792,7 +814,23 @@ fn build_class(
                         node: Some(index as u32),
                         // Not a `.rcsmodel` chunk - see `DrawCall::chunk`.
                         chunk: None,
-                    });
+                    };
+                    // The extra pass: the same indices again under the
+                    // material's second texture - see `Model::shine_draws`.
+                    // Gated as `Mesh_CompileDisplayLists` and `FUN_0890db54`
+                    // gate it: the mesh word and the batch's own `0x2000`.
+                    if mesh_flags & 0x2000 != 0
+                        && batch.pass_mask & 0x2000 != 0
+                        && let Some(second) = second_texture
+                            .map(|t| t as usize)
+                            .filter(|&t| textures.get(t).is_some_and(Option::is_some))
+                    {
+                        shine_draws.push(DrawCall {
+                            texture: Some(second),
+                            ..draw.clone()
+                        });
+                    }
+                    out.push(draw);
                 }
             }
         }
@@ -883,6 +921,7 @@ fn build_class(
         draws,
         alpha_tested_draws,
         transparent_draws,
+        shine_draws,
         textures,
         lightmaps: Vec::new(),
         material_slots: Vec::new(),

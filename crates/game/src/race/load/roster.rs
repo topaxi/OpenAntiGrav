@@ -208,6 +208,7 @@ pub(super) fn grid(
             flare: craft_title.flare,
             hull_overlay: oag_render::hull_overlay::DRAWN
                 && craft_title.name == oag_pulse::TITLE.name,
+            hull_shine: oag_render::shine::DRAWN && craft_title.name == oag_pulse::TITLE.name,
             absorb_shell: craft_title.name == oag_hd::TITLE.name,
         },
         hull_variant,
