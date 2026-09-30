@@ -243,3 +243,51 @@ fn a_mismatched_unsupported_mask_is_dropped() {
     assert!(!line.is_unsupported(0));
     assert!(line.curvature(16, 3.0) > 0.05);
 }
+
+/// A level run along `-z` that turns into a slope of `degrees` (a climb when
+/// positive) at its middle, every point one unit apart along the path.
+fn slope_line(degrees: f32) -> Line {
+    let (sin, cos) = {
+        let radians = degrees.to_radians();
+        (radians.sin(), radians.cos())
+    };
+    let mut points = Vec::new();
+    let (mut y, mut z) = (0.0f32, 0.0f32);
+    for step in 0..80 {
+        points.push(Vec3::new(0.0, y, z));
+        if step < 40 {
+            z -= 1.0;
+        } else {
+            z -= cos;
+            y += sin;
+        }
+    }
+    Line::new(points)
+}
+
+/// Chosen, not measured: the foot of a hill is concave, the road presses the
+/// craft down and nothing asks its yaw for anything, so it is not a corner to
+/// brake for. `05_Track`'s AI braked 7 units/s there and clipped the lip.
+#[test]
+fn the_foot_of_a_hill_is_not_a_corner() {
+    let foot = slope_line(25.0);
+    assert_eq!(foot.curvature(34, 3.0), 0.0);
+}
+
+/// The other half, and what `64da876e` lacked: over the top of a crest the craft
+/// leaves the road, so the pitch still reads as a bend.
+#[test]
+fn the_top_of_a_crest_is_still_a_bend() {
+    // Level road that turns into a descent: the road falls away under the craft.
+    let crest = slope_line(-25.0);
+    let raw = crest.curvature(34, 3.0);
+    assert!(raw > 0.05, "a crest reads as {raw}");
+}
+
+/// The yaw half is unchanged on a line with no height in it.
+#[test]
+fn a_flat_circle_reads_exactly_as_it_did() {
+    let ring = circle(100.0, 64);
+    let measured = ring.curvature(0, 10.0);
+    assert!((measured - 0.01).abs() < 0.002, "measured {measured}");
+}
