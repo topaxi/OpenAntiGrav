@@ -1071,7 +1071,10 @@ the pivot. It uses:
   Overlaying a frame on ours in authored space (RPCS3's frame is the 1920 by
   1080 grid at 0.94 scale, offset `(39, 28.6)`, read off the padlock's own
   bounding box) puts wordmark, stripes, silhouettes and sponsor mark within a
-  few pixels of each other on tiers 0, 1, 3, 4, 5 and 7.
+  few pixels of each other. **Tiers 3 and 5 were the fit's own inputs, so
+  their agreement proves nothing**; tiers 0, 1 and 4 were not, and agree side
+  by side (`final/cmp-t0.png`, `cmp-t1.png`, `cmp-t4.png`). Tiers 2, 6 and 7
+  were compared by eye and show the gaps listed under "Not drawn".
 - **the body cut to `x` `-48.3..48.3`, `y` `-28.7..33.7`** (card-local). The
   elements overhang the body, and every frame shows a clean rectangle: the
   stripes start cut mid-hatch at authored `x` 751. That rectangle is 0.835 of the
@@ -1099,6 +1102,22 @@ a 3-D (not planar) pose. `Campaign Selection`'s two cards (`Fury_Campaign`,
 `HD_Campaign` in the executable) are likewise undrawn. The white body is also
 slightly wrong on some tiers (`08_meltdown`'s leaves a gap at its left), because
 the cut is one rectangle for every card.
+
+**The body is probably the placeholder's, which this build cannot decode yet.**
+The widget's own `Src` is `00_flyer.vex`, and that is what the runtime draws
+first (`cardShape` at 102.4 by 66.6, `y="-33.3"` being its half height, plus
+`card_reflectShape`, which is where the reflection would come from) with the
+per-grid flyer on top. Its two chunks read at stride 0 with nonsense
+coordinates (`hd_unlit_probe`'s inline-chunk reading does not fit them), so they
+are not drawn; the body here is the per-grid flyer's own `bgplane` cut to the
+measured rectangle, a substitute for that missing asset alone. It shows on the
+tiers where `bgplane` is narrower than the card: on `07_dropzone` and
+`08_meltdown` the body starts 75 or so authored pixels right of the elements,
+and stripe fragments stand outside it; on `07_dropzone` a white slashing
+element crosses the padlock that RPCS3 does not show; on `03_frenzy` the
+`ignition` caption hangs at the bottom edge where RPCS3 hides it, the cut being
+a few units too low there. Decoding the placeholder is the next step, before
+any further fitting.
 
 **Omega: same assets by name, not drawable yet.** Omega's base package carries
 `Data/fe/flyers/01_uplift/flyer.vex`, `flyer.rcsmodel`, `flyer_back.*` and
@@ -3300,7 +3319,10 @@ reproduce. What a player sees, screen by screen (two or more frames each):
    frame to HD, `Left` back.
 3. **`Grid Selection`** (HD): `Event 01/08`, `POINTS ACHIEVED 00/06`,
    `TOTAL POINTS AVAILABLE 000/018`, the point-cloud flyer. On Fury:
-   `00/07`, `000/021`, a different flyer.
+   `00/07`, `000/021`, a different flyer. **Superseded 2026-09-30**: those
+   are this build's own fractions, which RPCS3 does not show - it reads bare
+   numbers (`0`, `18`), and the flyer is a flat card now drawn for the base
+   campaign; see "The flyer behind `Grid Selection`".
 4. **`Cell Selection`** (HD `grid0`): `Single Race`, `VINETA K`, Venom,
    weapons on, 3 laps, `0/3` points, best `NONE`, the three target medals,
    `10 MORE POINTS NEEDED TO UNLOCK:`, footer `AI DIFFICULTY (NOVICE)`. On
