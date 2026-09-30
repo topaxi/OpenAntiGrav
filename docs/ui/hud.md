@@ -370,7 +370,9 @@ nothing writes them (`hud+0x40` has `0x40`, whose reader only writes the
 `Position`/`PositionOf` digits); a place *list* in the same rows exists for
 multiplayer alone (`0x800`), a mode this build does not run. Wired in
 [`oag_game::hud::kill_tags`](../../crates/game/src/hud/kill_tags.rs), with a new
-`Default`-face text bucket. **Chosen, not measured**: the player's row carries
+`Default`-face text bucket, for Pulse only (`oag_title::HudArt::kill_column`; HD authors
+its own `KillsText` and `PosTag0`-`PosTag5`, unmeasured). The player's row is drawn at scale
+`1.0` and the others at `0.8`. **Chosen, not measured**: the player's row carries
 the player's team name where the original prints the profile tag (this build
 has none), and the tie order follows this build's grid array. `PosTag` is no
 longer skipped by `hud::is_screen_positioned`.
@@ -1059,8 +1061,9 @@ circuit, mode and class - chosen, not measured.** The original keys its store
 by team (`FUN_088091a0`, `Profile_GetBestRaceTime` in
 [race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md#the-stored-best-fun_088091a0-and-the-record-branch-closed-2026-09-30)),
 which `oag_game::records::Key` has no field for, so a run in one team's ship
-races the best of any team's. A track whose `stats.xml` does not read draws the
-plain elapsed clock, as the original does when its track record is null.
+races the best of any team's. A track whose `stats.xml` does not read (any source but Pulse on a PSP disc; the load
+report says so) draws the plain elapsed clock in a plain race, as the original does when
+its track record is null; a campaign cell still races its own ladder.
 
 ## Lap counting was the one real blocker
 

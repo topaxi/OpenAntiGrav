@@ -311,6 +311,7 @@ fn the_clock_is_hidden_outside_the_timed_modes() {
     // did: 2048's own frame shows `TOTAL` beside `POS` in a race with a field.
     let unmeasured = oag_title::HudArt {
         total_time_timed_modes_only: false,
+        kill_column: false,
         ..*oag_pulse::hud::ART
     };
     assert!(shown(&unmeasured, Mode::Eliminator));

@@ -54,37 +54,44 @@ pub struct RecordTarget {
     pub personal_best_centis: Option<i64>,
     /// The track's own `stats.xml` figure for this class: `<RaceTimes>` for a
     /// Time Trial, `<LapTimes>` for a Speed Lap. Truncated, as the
-    /// original's `(uint)(float * 100.0)` is.
-    pub authored_centis: i64,
+    /// original's `(uint)(float * 100.0)` is. `None` where the file did not
+    /// read: a campaign cell still races its ladder without it, a plain race
+    /// has nothing to race.
+    pub authored_centis: Option<i64>,
 }
 
 impl RecordTarget {
     /// The target a `mode` race on `class` chases, or `None` for a mode the
-    /// clock cluster is not shown in, or a class this track has no figure
-    /// for. `best` is the [`crate::records::Record`] this race saves to.
+    /// clock cluster is not shown in. `best` is the [`crate::records::Record`]
+    /// this race saves to; `stats` is `None` where the track's `stats.xml`
+    /// did not read, or the class is not one of the four.
     #[must_use]
     pub fn new(
         mode: oag_race::Mode,
         class: &str,
-        stats: &TrackStats,
+        stats: Option<&TrackStats>,
         best: Option<&crate::records::Record>,
     ) -> Option<Self> {
-        let class = oag_tables::handling::SpeedClass::from_name(class)?;
+        let class = oag_tables::handling::SpeedClass::from_name(class);
+        let authored = |figures: fn(&TrackStats) -> [f32; 4]| {
+            let (stats, class) = (stats?, class?);
+            #[allow(clippy::cast_possible_truncation)]
+            Some((figures(stats)[class as usize] * 100.0) as i64)
+        };
         let (authored, best_ticks) = match mode {
             oag_race::Mode::TimeTrial => (
-                stats.race_times[class as usize],
+                authored(|stats| stats.race_times),
                 best.and_then(|record| record.best_total_ticks),
             ),
             oag_race::Mode::SpeedLap => (
-                stats.lap_times[class as usize],
+                authored(|stats| stats.lap_times),
                 best.and_then(|record| record.best_lap_ticks.map(u64::from)),
             ),
             _ => return None,
         };
         Some(Self {
             personal_best_centis: best_ticks.map(ticks_to_centis),
-            #[allow(clippy::cast_possible_truncation)]
-            authored_centis: (authored * 100.0) as i64,
+            authored_centis: authored,
         })
     }
 }
@@ -182,7 +189,10 @@ impl TimeTrialPace {
             // best and the authored figure.
             None => (
                 PaceTier::Record,
-                best.map_or(target.authored_centis, |b| b.min(target.authored_centis)),
+                match (best, target.authored_centis) {
+                    (Some(best), Some(authored)) => best.min(authored),
+                    (best, authored) => best.or(authored).unwrap_or(0),
+                },
             ),
             // A stored best already faster than gold, and still ahead of.
             Some(cell) if best.is_some_and(|b| b < cell.gold && elapsed < b) => {
@@ -209,10 +219,12 @@ impl TimeTrialPace {
 /// [`super::Readout::time_trial_pace`] for a race in `mode`, or `None` when
 /// the clock keeps showing the plain elapsed time.
 ///
-/// `target` is `None` when the track's `stats.xml` did not load, which the
-/// original treats the same way: `PlayerStatus_Update` fills the target block
-/// only under `DAT_08b310b4 != 0`, the loaded track record. Only Time Trial
-/// counts the whole race; Speed Lap reads the current lap.
+/// Without a campaign ladder the readout races the authored figure, and where
+/// the track's `stats.xml` did not load there is none: `PlayerStatus_Update`
+/// fills the target block only under `DAT_08b310b4 != 0`, the loaded track
+/// record, so a plain race keeps the plain clock. A campaign cell races its
+/// ladder either way. Only Time Trial counts the whole race; Speed Lap reads
+/// the current lap.
 #[must_use]
 pub fn pace_for(
     mode: oag_race::Mode,
@@ -226,7 +238,12 @@ pub fn pace_for(
         oag_race::Mode::SpeedLap => lap_ticks,
         _ => return None,
     };
-    Some(TimeTrialPace::evaluate(elapsed, ladder, target?))
+    let default = RecordTarget::default();
+    let target = target.unwrap_or(&default);
+    if ladder.is_none() && target.authored_centis.is_none() {
+        return None;
+    }
+    Some(TimeTrialPace::evaluate(elapsed, ladder, target))
 }
 
 /// [`super::Readout::time_trial_pace`]'s own caption -

@@ -150,6 +150,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
     total_time_timed_modes_only: false,
+    kill_column: false,
     runtime: Some(RUNTIME),
 };
 

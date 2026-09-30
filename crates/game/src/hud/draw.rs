@@ -646,6 +646,19 @@ pub(super) fn top_edge(label: &Label, line_height: f32) -> f32 {
 /// too faint to see at that exposure, this rule is what to revisit.
 #[must_use]
 pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
+    // The kill column is Pulse's alone - see [`oag_title::HudArt::kill_column`].
+    let ungated;
+    let readout =
+        if cx.art.kill_column || (readout.kill_tags.is_empty() && readout.kill_target == 0) {
+            readout
+        } else {
+            ungated = Readout {
+                kill_tags: Vec::new(),
+                kill_target: 0,
+                ..readout.clone()
+            };
+            &ungated
+        };
     let mut frame = Frame::default();
 
     // An always-on name draws **once**, even where the layout authors it twice.
@@ -774,6 +787,19 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         if text.is_empty() {
             continue;
         }
+        // The kill column's rows are drawn at the size the row's own craft
+        // gets: the player's larger. Everything downstream reads `label`.
+        let scaled;
+        let label = match super::kill_tags::scale(readout, &label.name) {
+            Some(factor) => {
+                scaled = Label {
+                    scale: label.scale * factor,
+                    ..label.clone()
+                };
+                &scaled
+            }
+            None => label,
+        };
         let line_height = match label.font {
             Font::Small => cx.small_line_height,
             Font::Default => cx.default_line_height,
@@ -792,7 +818,6 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             scale: label.scale,
             color: super::time_trial_pace::time_trial_colour(readout, &label.name)
                 .or_else(|| super::runtime::colour(cx, readout, &label.name))
-                .or_else(|| super::kill_tags::colour(readout, &label.name, label.color))
                 .unwrap_or(label.color),
             // The layout's own `BorderColor`, which is what makes the HUD fonts'
             // baked outline visible as an outline rather than as more glyph. The

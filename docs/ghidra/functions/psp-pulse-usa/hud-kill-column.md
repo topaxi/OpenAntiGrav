@@ -47,13 +47,16 @@ so rows are ordered by kills, most first, and among equal kills **the craft late
 in the grid array is higher**. The row text, for the solo modes (`DAT_08b30f90+0xb8 < 14`):
 
 - the player (`craft+0x48 == 0`): `"%s  %d"` (`0x08a79ccc`, two spaces) of
-  the profile's tag (`DAT_08b31774 + 0x457`) and the kills; alpha `1.0`;
+  the profile's tag (`DAT_08b31774 + 0x457`) and the kills; scale `1.0`;
   widget flag `+0x2c |= 0x200`.
 - an opponent: `"%s %d"` (`0x08a79cc4`) of the team's display name
   (`FUN_088938ec(DAT_08ab1160, craft+0x798, 0)`, a string-table lookup of the
-  team id) and the kills; alpha `0.8` (`0x3f4ccccd`), `+0x2c &= ~0x200`.
+  team id) and the kills; scale `0.8` (`0x3f4ccccd`), `+0x2c &= ~0x200`.
 
-The alpha is written to widget `+0xa4` and `+0xa8`. Modes `>= 14` (multiplayer)
+The scale is written to widget `+0xa4` and `+0xa8`, the pair `Hud_BindWidgets` writes
+`0x3f4ccccd` to on `PositionOf` as Head2Head's second row's scale (`head_to_head.rs`'s
+`SECOND_ROW_SCALE`); a crop of the live frame shows the player's row taller than its
+neighbours at the same brightness. An earlier revision of this page read them as alpha. Modes `>= 14` (multiplayer)
 take the name from `FUN_08966848(DAT_08b32d40, craft+0x364)` instead.
 
 ## `FUN_0881d458` (`0x0881d458`): the place readout, confidence 78
@@ -63,8 +66,8 @@ Renamed `Hud_UpdatePositionCluster`. Three shapes, by `hud+0x40` and the mode at
 - **`hud+0x40 & 0x800` (multiplayer):** the place list in the same rows. Row
   `i < PLAYER_HUD+0x18` is visible (`+0x2c |= 4`) and reads `"<place digit> <name>"`
   from the race manager's place array (`manager+0x98+4i`), the player's own row
-  taking the profile tag at full alpha and the flag `0x200`, the others the team
-  name at `0.8`.
+  taking the profile tag at full size and the flag `0x200`, the others the team
+  name at scale `0.8`.
 - **mode 9 or 15 (Head2Head):** the two ordinal rows and the gap label,
   [head2head.md](head2head.md).
 - **otherwise (a solo race):** the two digits of `PLAYER_HUD+0x10` and `+0x18` into
@@ -85,7 +88,7 @@ Own PPSSPP, `pulse-psp-usa.chd`, Venom Eliminator on Talon's Junction:
 clear), `hud+0x284` `8`. The frame reads `KILLS (5)` over
 `AG Systems 1`, `Feisar 1`, `Qirex 1`, `AAA 0`, `Triakis 0`, `Goteki 45 0`,
 `Piranha 0`, `EG-X 0`, top to bottom, right-aligned at `x=460`, `y` stepping by
-20, in the default face (`pulse_text.fnt`); the player's row is the brighter one.
+20, in the default face (`pulse_text.fnt`); the player's row is the larger one.
 That is the sort rule above (three craft on one kill above five on none, and the
 zero-kill craft in descending array order), with the profile tag `AAA` typed at
 the first-boot name entry. A solo single race reads `pos 8/8` and no rows.
@@ -96,7 +99,9 @@ the first-boot name entry. A solo single race reads `pos 8/8` and no rows.
 `ranked` is the row rule, `Readout::kill_tags` carries the rows, and `draw.rs`
 puts them in a new `Default`-face text bucket (`Frame::default_text`, a third
 `Renderer` in `Overlay`, the face loaded only for a layout that names it).
-`KillsText` now reads `KILLS (5)`.
+`KillsText` now reads `KILLS (5)`. **Pulse only**
+(`oag_title::HudArt::kill_column`): Wipeout HD authors a `KillsText` and six `PosTag`
+slots of its own and nothing has measured what it writes in them.
 
 **Chosen, not measured:** this build has no profile tag, so the player's row
 carries the player's team's display name; the grid array's order is this

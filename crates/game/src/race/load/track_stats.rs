@@ -19,6 +19,11 @@ pub(super) fn read(
     report: &mut Vec<String>,
 ) -> Option<TrackStats> {
     if !pulse_psp {
+        report.push(
+            "track stats: not read (only Pulse on a PSP disc keeps them in FEData.wad); the \
+             HUD's RECORD readout has no authored time"
+                .into(),
+        );
         return None;
     }
     let (directory, file) = track.rsplit_once('\\')?;

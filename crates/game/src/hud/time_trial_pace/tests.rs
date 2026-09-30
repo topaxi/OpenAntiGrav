@@ -41,7 +41,7 @@ fn grid0_3_2() -> Cell {
 /// (11700 cs), with no stored best - the fresh-profile case.
 const VENOM_RACE: RecordTarget = RecordTarget {
     personal_best_centis: None,
-    authored_centis: 11_700,
+    authored_centis: Some(11_700),
 };
 
 fn ladder_only(elapsed_ticks: u64) -> TimeTrialPace {
@@ -214,14 +214,41 @@ fn the_target_reads_the_figure_and_the_best_that_belong_to_the_mode() {
         best_lap_ticks: Some(1_800),
         ..Record::default()
     };
-    let tt = RecordTarget::new(oag_race::Mode::TimeTrial, "Venom", &stats, Some(&best))
-        .expect("a target");
-    assert_eq!(tt.authored_centis, 11_700);
+    let tt = RecordTarget::new(
+        oag_race::Mode::TimeTrial,
+        "Venom",
+        Some(&stats),
+        Some(&best),
+    )
+    .expect("a target");
+    assert_eq!(tt.authored_centis, Some(11_700));
     assert_eq!(tt.personal_best_centis, Some(10_000));
-    let lap = RecordTarget::new(oag_race::Mode::SpeedLap, "flash", &stats, Some(&best))
+    let lap = RecordTarget::new(oag_race::Mode::SpeedLap, "flash", Some(&stats), Some(&best))
         .expect("a target");
-    assert_eq!(lap.authored_centis, 3_300);
+    assert_eq!(lap.authored_centis, Some(3_300));
     assert_eq!(lap.personal_best_centis, Some(3_000));
-    assert!(RecordTarget::new(oag_race::Mode::SingleRace, "venom", &stats, None).is_none());
-    assert!(RecordTarget::new(oag_race::Mode::TimeTrial, "unknown", &stats, None).is_none());
+    assert!(RecordTarget::new(oag_race::Mode::SingleRace, "venom", Some(&stats), None).is_none());
+    // A class the file has no figure for, or no file at all: no authored time.
+    let unknown = RecordTarget::new(oag_race::Mode::TimeTrial, "unknown", Some(&stats), None);
+    assert_eq!(unknown.expect("a target").authored_centis, None);
+    let unread = RecordTarget::new(oag_race::Mode::TimeTrial, "venom", None, Some(&best));
+    assert_eq!(unread.expect("a target").authored_centis, None);
+}
+
+/// Where `stats.xml` did not read, a plain race keeps the plain clock - the
+/// original's null track record - and a campaign cell still races its ladder.
+#[test]
+fn without_stats_a_plain_race_has_no_pace_and_a_campaign_cell_still_does() {
+    let mode = oag_race::Mode::TimeTrial;
+    let unread = RecordTarget::new(mode, "venom", None, None);
+    assert_eq!(super::pace_for(mode, 0, 0, None, unread.as_ref()), None);
+    let cell = grid0_3_2();
+    let pace = super::pace_for(mode, 0, 0, Some(&cell), unread.as_ref()).expect("a pace");
+    assert_eq!(pace.tier, PaceTier::Gold);
+    assert_eq!(super::pace_for(mode, 0, 0, Some(&cell), None), Some(pace));
+    // A mode the cluster is not shown in has none either way.
+    assert_eq!(
+        super::pace_for(oag_race::Mode::SingleRace, 0, 0, Some(&cell), None),
+        None
+    );
 }

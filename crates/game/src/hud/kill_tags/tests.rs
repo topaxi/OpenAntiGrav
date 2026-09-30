@@ -34,10 +34,10 @@ fn strings() -> oag_ui::language::StringTable {
     )
 }
 
-/// The player's row has two spaces before the count and full alpha; an
-/// opponent's has one and `0.8`; a row past the field has neither.
+/// The player's row has two spaces before the count and full size; an
+/// opponent's has one and `0.8` of it; a row past the field has neither.
 #[test]
-fn the_rows_read_name_then_kills_and_dim_the_opponents() {
+fn the_rows_read_name_then_kills_and_shrink_the_opponents() {
     let readout = Readout {
         kill_tags: vec![
             KillTag {
@@ -64,11 +64,92 @@ fn the_rows_read_name_then_kills_and_dim_the_opponents() {
     );
     assert_eq!(super::text(&readout, "PosTag2", &strings), None);
     assert_eq!(super::text(&readout, "Position", &strings), None);
-    let white = [1.0; 4];
-    assert_eq!(
-        super::colour(&readout, "PosTag0", white),
-        Some([1.0, 1.0, 1.0, 0.8])
+    assert_eq!(super::scale(&readout, "PosTag0"), Some(0.8));
+    assert_eq!(super::scale(&readout, "PosTag1"), Some(1.0));
+    assert_eq!(super::scale(&readout, "PosTag5"), None);
+}
+
+const COLUMN: &str = r#"
+<Screen>
+<Screen name="HUD">
+<Variable global="HudBGColour"><Values String="0x40000000"></Values></Variable>
+<Item OffsetX="460" OffsetY="5">
+<Text name="KillsText">
+<Values idstring="IG_HUD_KILLS" font="HUDSmall" align="right" x="0" y="0" CalcBlur="1"/>
+</Text>
+<Text name="PosTag0">
+<Values x="0" y="20" scale="1.0" font="Default" align="right" vertalign="centre" CalcBlur="1"/>
+</Text>
+<Text name="PosTag1">
+<Values x="0" y="40" scale="1.0" font="Default" align="right" vertalign="centre" CalcBlur="1"/>
+</Text>
+</Item>
+</Screen>
+</Screen>"#;
+
+fn column_readout() -> Readout {
+    Readout {
+        kill_target: 5,
+        kill_tags: vec![
+            KillTag {
+                team: "AG_Systems".into(),
+                kills: 1,
+                player: false,
+            },
+            KillTag {
+                team: "Feisar".into(),
+                kills: 0,
+                player: true,
+            },
+        ],
+        ..Readout::blank()
+    }
+}
+
+/// Through the whole draw list: the rows land in the `Default` bucket, the
+/// player's at full size and the opponent's at `0.8` of it, under a `KILLS (5)`
+/// header - and a title that has not had the column measured draws none of it.
+#[test]
+fn the_column_draws_in_the_default_bucket_and_only_where_the_title_has_it() {
+    use crate::hud::Draw;
+    let layout = crate::hud::Layout::from_xml(COLUMN);
+    let strings = strings();
+    let frame = crate::hud::draw_list(
+        &crate::hud::tests::context(&layout, &strings),
+        &column_readout(),
     );
-    assert_eq!(super::colour(&readout, "PosTag1", white), Some(white));
-    assert_eq!(super::colour(&readout, "PosTag5", white), None);
+    let scales: Vec<(String, f32)> = frame
+        .default_text
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, scale, .. } => Some((text.clone(), *scale)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        scales,
+        [
+            ("AG Systems 1".to_string(), 0.8),
+            ("Feisar  0".to_string(), 1.0)
+        ]
+    );
+    let header: Vec<&Draw> = frame.small_text.iter().collect();
+    assert!(
+        matches!(header.as_slice(), [Draw::Text { text, .. }] if text == "IG_HUD_KILLS (5)"),
+        "{header:?}"
+    );
+
+    let other = oag_title::HudArt {
+        kill_column: false,
+        ..*oag_pulse::hud::ART
+    };
+    let mut cx = crate::hud::tests::context(&layout, &strings);
+    cx.art = &other;
+    let frame = crate::hud::draw_list(&cx, &column_readout());
+    assert!(frame.default_text.is_empty(), "{:?}", frame.default_text);
+    let header: Vec<&Draw> = frame.small_text.iter().collect();
+    assert!(
+        matches!(header.as_slice(), [Draw::Text { text, .. }] if text == "IG_HUD_KILLS"),
+        "{header:?}"
+    );
 }

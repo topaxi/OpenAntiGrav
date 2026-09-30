@@ -501,6 +501,13 @@ pub struct HudArt {
     /// race with a field (`docs/formats/2048-hud.md`), so the rule is not a
     /// property of the engine.
     pub total_time_timed_modes_only: bool,
+    /// Whether the Eliminator's `PosTag0`-`PosTag7` rows and `KillsText`
+    /// header are drawn as `"<team> <kills>"` and `KILLS (n)`. **Pulse only**:
+    /// read off its executable (`Hud_UpdateKillColumn`) and a live frame.
+    /// Wipeout HD authors `KillsText` and six `PosTag` slots of its own
+    /// (`docs/formats/hd-hud.md`) and nothing has measured what it writes in
+    /// them, so it stays off there rather than borrowing Pulse's answer.
+    pub kill_column: bool,
     /// What this title's per-tick HUD update writes over its layout: the
     /// shield readout's runtime colours and fill, and which segments of the
     /// lap and place arcs are up. See [`RuntimeHud`].

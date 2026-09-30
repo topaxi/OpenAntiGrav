@@ -271,8 +271,9 @@ What `oag_game::hud` does now: `RecordTarget` carries
 `min(stored best, authored)`, `TimeTrialPace::evaluate` applies the branch
 structure above (a campaign cell's `RECORD` needs `best < gold` and the run
 ahead of it; a plain race is `RECORD` throughout), and a track whose `stats.xml`
-did not read draws the plain clock, the same as the original's null
-`DAT_08b310b4`. See [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
+did not read draws the plain clock in a plain race, the same as the original's null
+`DAT_08b310b4`; a campaign cell still races its ladder there, which the original would not
+(chosen: the cells' targets are their own data, and PS2 Pulse's per-track files are unread). See [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
 Not measured: a live frame with a **stored** best, since the profile used holds
 none; the min and the campaign `RECORD` branch rest on the decompile plus unit
 tests.

@@ -60,9 +60,9 @@ fn the_load_carries_venoms_authored_time_off_the_disc() {
     let stats = loaded.track_stats.expect("16_Track's stats.xml reads");
     assert_eq!(stats.race_times[0], 117.0, "Venom's <RaceTimes>");
     assert_eq!(stats.lap_times[0], 38.0, "Venom's <LapTimes>");
-    let target = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", &stats, None)
+    let target = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", Some(&stats), None)
         .expect("a Time Trial has a record target");
-    assert_eq!(target.authored_centis, 11_700);
+    assert_eq!(target.authored_centis, Some(11_700));
 }
 
 /// The whole cluster, drawn from a real race's readout: the caption is the
@@ -89,7 +89,7 @@ fn a_time_trial_draws_the_record_caption_and_counts_down_to_it() {
     // Ticks in the countdown are not race time: the clock has not started.
     assert_eq!(readout.race_ticks, 0);
 
-    let fresh = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", &stats, None);
+    let fresh = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", Some(&stats), None);
     readout.time_trial_pace = pace_for(readout.mode, 0, 0, None, fresh.as_ref());
     let (small, hud) = texts(&oag_game::hud::draw_list(&context, &readout));
     assert!(small.contains(&record_word), "small text {small:?}");
@@ -101,7 +101,12 @@ fn a_time_trial_draws_the_record_caption_and_counts_down_to_it() {
         best_total_ticks: Some(6_000),
         ..Record::default()
     };
-    let faster = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", &stats, Some(&best));
+    let faster = RecordTarget::new(
+        oag_race::Mode::TimeTrial,
+        "VENOM",
+        Some(&stats),
+        Some(&best),
+    );
     readout.time_trial_pace = pace_for(readout.mode, 0, 0, None, faster.as_ref());
     let (_, hud) = texts(&oag_game::hud::draw_list(&context, &readout));
     assert!(hud.contains(&"1.40.0".to_string()), "hud text {hud:?}");

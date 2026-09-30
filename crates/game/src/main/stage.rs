@@ -462,14 +462,12 @@ impl Stage {
         // What the HUD's `RECORD` readout chases, read once here so the
         // standing best cannot move mid-race: the row this race will save to,
         // as it stood when the race started.
-        let record_target = track_stats.as_ref().and_then(|stats| {
-            oag_game::hud::RecordTarget::new(
-                setup.mode,
-                &setup.class,
-                stats,
-                oag_game::records::load().get(&result_key),
-            )
-        });
+        let record_target = oag_game::hud::RecordTarget::new(
+            setup.mode,
+            &setup.class,
+            track_stats.as_ref(),
+            oag_game::records::load().get(&result_key),
+        );
         // Opened for this one call and dropped right after: every drawable
         // `Scene::new` builds shares this `device`, so `mesh_render::build`
         // parses `mesh.wgsl` once instead of once per drawable and reuses a

@@ -329,14 +329,12 @@ pub fn capture(
         ..
     } = loaded;
     let mode = setup.mode;
-    let record_target = track_stats.as_ref().and_then(|stats| {
-        crate::hud::RecordTarget::new(
-            setup.mode,
-            &setup.class,
-            stats,
-            options.previous_best.as_ref(),
-        )
-    });
+    let record_target = crate::hud::RecordTarget::new(
+        setup.mode,
+        &setup.class,
+        track_stats.as_ref(),
+        options.previous_best.as_ref(),
+    );
     let weapons_on = setup.weapons_on();
     // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
     // fallback when the flag was not given. See `main::stage::build_race_stage`.

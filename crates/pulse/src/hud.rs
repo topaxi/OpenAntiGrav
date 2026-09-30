@@ -99,6 +99,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // both widgets on it. Seen on a live Eliminator frame. See
     // `oag_title::HudArt::total_time_timed_modes_only`.
     total_time_timed_modes_only: true,
+    kill_column: true,
     runtime: None,
 };
 

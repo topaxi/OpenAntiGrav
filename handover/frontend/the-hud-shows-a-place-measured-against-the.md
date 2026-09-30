@@ -11,7 +11,7 @@
   [race-progress.md](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md#which-modes-hide-the-clock-confirmed-live-2026-09-30).
 - ~~**What each of the eight `PosTag` rows is meant to say.**~~ **Closed 2026-09-30**:
   they are the Eliminator's kill column (`"<team> <kills>"`, most kills first, the player's row
-  brighter), written by `Hud_UpdateKillColumn` (`0x0881af38`) when the HUD's `0x200` flag is set,
+  larger), written by `Hud_UpdateKillColumn` (`0x0881af38`) when the HUD's `0x200` flag is set,
   and never written in a solo race; a multiplayer place list uses the same rows under `0x800`.
   Wired, with the `KILLS (5)` header and a new `Default`-face text bucket - see
   [hud.md](../../docs/ui/hud.md) and

@@ -11,11 +11,11 @@
 //!   with strictly fewer kills)`; when that row is taken it moves up one until
 //!   it finds a free one, so **among equal kills the craft later in the grid
 //!   array sits higher**. See [`ranked`].
-//! - **`"<name> <kills>"`** for an opponent, in the `Default` face at alpha
+//! - **`"<name> <kills>"`** for an opponent, in the `Default` face at scale
 //!   `0.8`, the name being the team's display name (`AG Systems`, `Goteki 45`
 //!   on the live frame); **`"<name>  <kills>"`** (two spaces) for the player,
-//!   at alpha `1.0`, the name being the profile's tag (`AAA` on the live
-//!   frame).
+//!   at scale `1.0`, the name being the profile's tag (`AAA` on the live
+//!   frame - **larger**, not brighter, than the rows around it).
 //! - Rows past the field's size are never written, so they stay empty.
 //!
 //! The mode-`>= 14` half of the function (multiplayer names) and the
@@ -45,9 +45,14 @@ pub struct KillTag {
     pub player: bool,
 }
 
-/// Opponents' rows are drawn at this alpha, the player's at `1.0`
+/// Opponents' rows are drawn at this scale, the player's at `1.0`
 /// (`0x3f4ccccd` and `0x3f800000` written to the widget's `+0xa4`/`+0xa8`).
-const OPPONENT_ALPHA: f32 = 0.8;
+///
+/// **Scale, not alpha**: `Hud_BindWidgets` writes the same `0x3f4ccccd` to the
+/// same pair of floats on `PositionOf` as Head2Head's second row's scale, and a
+/// crop of the live frame shows the `AAA` row taller than `Triakis` beside it
+/// at the same brightness.
+const OPPONENT_SCALE: f32 = 0.8;
 
 /// The row each craft takes, top to bottom: `result[row]` is an index into
 /// `kills`.
@@ -110,11 +115,11 @@ pub(super) fn header(
     })
 }
 
-/// `name`'s colour: the layout's own, with the alpha the row is written at.
-pub(super) fn colour(readout: &Readout, name: &str, authored: [f32; 4]) -> Option<[f32; 4]> {
+/// The factor `name`'s own scale is multiplied by: the row's `1.0` or
+/// `0.8` - see [`OPPONENT_SCALE`].
+pub(super) fn scale(readout: &Readout, name: &str) -> Option<f32> {
     let tag = readout.kill_tags.get(row_of(name)?)?;
-    let alpha = if tag.player { 1.0 } else { OPPONENT_ALPHA };
-    Some([authored[0], authored[1], authored[2], authored[3] * alpha])
+    Some(if tag.player { 1.0 } else { OPPONENT_SCALE })
 }
 
 #[cfg(test)]
