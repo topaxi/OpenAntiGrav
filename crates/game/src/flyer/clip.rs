@@ -68,16 +68,24 @@ pub fn bake(model: &mut Model, seconds: f32) {
 /// per unit of distance, so the layers still sort the way the camera sees
 /// them.
 ///
+/// `stretch` widens the picture against its height, `1.0` for none.
+///
 /// `camera_to_world` is row-major with the translation in row 3 - the
 /// convention `oag_vex::vex` documents - and a vertex at or behind the camera
 /// is held a hair in front of it rather than sent through infinity.
-pub fn flatten(model: &mut Model, camera_to_world: &[f32; 16], window_tan: f32, card_height: f32) {
+pub fn flatten(
+    model: &mut Model,
+    camera_to_world: &[f32; 16],
+    window_tan: f32,
+    card_height: f32,
+    stretch: f32,
+) {
     let view = Mat4::from_cols_array(camera_to_world).inverse();
     for vertex in &mut model.vertices {
         let eye = view.transform_point3(Vec3::from(vertex.position));
         let depth = (-eye.z).max(1e-3);
         let scale = card_height / 2.0 / window_tan / depth;
-        vertex.position = [eye.x * scale, eye.y * scale, -depth * DEPTH_ORDER];
+        vertex.position = [eye.x * scale * stretch, eye.y * scale, -depth * DEPTH_ORDER];
     }
 }
 

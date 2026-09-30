@@ -30,8 +30,8 @@
 //!
 //! **Chosen, not measured**, each fitted to settled RPCS3 frames of `Grid
 //! Selection` - two Fury tiers and four base tiers, jointly, mean correlation
-//! 0.91: the card's [`POSE`], its height [`CARD_HEIGHT`], and how much of the
-//! camera's image the card shows ([`window_tan`]). The widget's own `x y z`,
+//! 0.91: the grid card's [`GRID_POSE`], its height [`CARD_HEIGHT`], and how much of
+//! the camera's image it shows ([`HD_WINDOW`], [`FURY_WINDOW`]). The widget's own `x y z`,
 //! `RotY` and pivot describe a start pose (as radians `RotY="1.5"` is an 86
 //! degree turn, which no settled frame shows) and the native code that settles
 //! them is unread.
@@ -65,7 +65,7 @@ mod clip;
 /// with the focal length free lands on 0.90 to 1.03 rad on four base frames.
 pub const FOV_Y: f32 = 1.0;
 
-/// The card's height, in the units [`POSE`] is written in. **Chosen**; 66.6 is
+/// The card's height, in the units [`GRID_POSE`] is written in. **Chosen**; 66.6 is
 /// what `00_flyer.vex`'s `cardShape` spans.
 pub const CARD_HEIGHT: f32 = 66.6;
 
@@ -91,32 +91,95 @@ pub struct Pose {
     pub offset: [f32; 3],
 }
 
-/// The settled pose: one for every card, base campaign and Fury alike.
+/// `Grid Selection`'s settled pose: one for every card, base campaign and Fury
+/// alike.
 ///
 /// **Chosen, not measured.** Fitted jointly on two Fury frames and four base
 /// frames, each frame a flat warp of the card's own camera image against the
 /// RPCS3 frame: yaw -0.289, centre 22.0 units right and 111.1 in front, all
 /// six frames within 0.87 to 0.94 correlation. It puts the card's left edge at
 /// authored column 747, where every settled RPCS3 frame puts it (750).
-pub const POSE: Pose = Pose {
+pub const GRID_POSE: Pose = Pose {
     yaw: -0.289,
     offset: [22.0, 0.0, -111.1],
 };
 
 /// The tangent of half the vertical field of view of the camera's image the
-/// card shows - how much of what the flyer's camera sees fits on the card.
+/// base campaign's cards show - how much of what the flyer's camera sees fits
+/// on the card. **Chosen, not measured**: fitted on four base frames (0.346,
+/// 680 pixels of a 1080-tall picture). The camera frames the artwork, not the
+/// backing plane: on `04_vertigo` the elements run to `+-48` units and the
+/// window is `+-48.9` wide at the picture's own depth.
+pub const HD_WINDOW: f32 = 0.346;
+
+/// The same for Fury's cards and the two `Campaign Selection` cards.
+/// **Chosen, not measured**: 0.321 fitted on two Fury frames, and 0.319 from
+/// `hd_campaign`'s own geometry, whose 22.2 by 20.4 background sits 32 units
+/// from its camera and is exactly the picture's height at 0.319.
 ///
-/// **Chosen, not measured.** The base cards and Fury's need different windows,
-/// 0.346 and 0.321 (fitted; 0.344 and 0.323 from this formula), and the camera
-/// carries one number that moves with them: the word at `+0x20`
-/// ([`oag_vex::camera::Camera::value_20`]), `0x4f15` on the base grids and
-/// `0x4a2c` on Fury's. The proportionality is fitted on those two points and
-/// is not a reading of what the word is.
+/// The camera's `+0x20` word moves with the two windows (`0x4f15` and `0x4a2c`
+/// against 0.346 and 0.321) but not with the campaign cards' (`0x3621`, which
+/// the same proportionality would put at 0.236), so it is not what sets them.
+pub const FURY_WINDOW: f32 = 0.321;
+
+/// How much wider than its camera's aspect the two `Campaign Selection`
+/// cards are drawn: **chosen, not measured**. On RPCS3's frames they stand
+/// 800 by 710 authored pixels (aspect 1.13) where the camera's `+0x1c` says
+/// 1.083, and the wordmark on `Fury`'s is 5 percent wider than the picture at
+/// the camera's aspect makes it, so the picture is stretched, not shown wider.
+pub const CAMPAIGN_STRETCH: f32 = 1.048;
+
+/// One card to load: a flyer, the window of its camera's image it shows and
+/// how much wider than its camera's aspect it is drawn.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CardSpec {
+    /// The `FlyerName`.
+    pub flyer: String,
+    /// [`HD_WINDOW`] or [`FURY_WINDOW`].
+    pub window: f32,
+    /// `1.0` or [`CAMPAIGN_STRETCH`].
+    pub stretch: f32,
+}
+
+/// One card on a screen: which flyer, seen through which widget, in which pose.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Show {
+    /// The flyer's `FlyerName`: `01_uplift`, `fury_campaign`.
+    pub flyer: String,
+    /// The `<Flyer>` widget that places it: `FlyerModel`,
+    /// `FuryCampaignFlyerModel`.
+    pub widget: String,
+    /// Where it stands.
+    pub pose: Pose,
+}
+
+/// The pose of a `Campaign Selection` card, from its widget's own numbers.
+///
+/// **Authored, with three things chosen**: the widget's `orthoScale` (`0.75`)
+/// scales its placement, so the card stands `z / scale` in front of the
+/// camera (70 / 0.75 = 93.3 units), turned by `RotY` about a pivot
+/// `RotationCentreOffsetX / scale` beside its centre (`+-40`), and its
+/// `y` of `-33.3` puts the card's centre 11.1 units under the axis. The
+/// unselected card turns by `RotY` (`0.6` on Fury's, `-0.6` on `HD`'s) and the
+/// selected one faces the camera, which is **chosen**: that reading fits the
+/// RPCS3 frames where Fury's card faces front and `HD`'s is turned when Fury
+/// is selected and the reverse when `HD` is, but the widget authors only the
+/// turned pose. The half card height in the `y` is the placeholder's own
+/// (`cardShape` runs from `0` up by 66.6, so `-33.3` centres it - read from
+/// the header's bounds, not yet decoded).
 #[must_use]
-pub fn window_tan(camera: &oag_vex::camera::Camera) -> f32 {
-    #[expect(clippy::cast_precision_loss, reason = "a 15-bit word")]
-    let word = camera.value_20 as f32;
-    1.70e-5 * word
+pub fn campaign_pose(widget: &FlyerWidget, selected: bool) -> Pose {
+    let scale = widget.ortho_scale.unwrap_or(1.0);
+    let yaw = if selected { 0.0 } else { widget.rotation[1] };
+    let pivot = widget.rotation_centre_offset_x / scale;
+    // The card's centre is `pivot` from the pivot; turning it about the
+    // pivot moves it by `pivot - R(yaw) * pivot`.
+    let offset = [
+        widget.position[0] / scale + pivot - pivot * yaw.cos(),
+        widget.position[1] / scale + CARD_HEIGHT / 2.0,
+        widget.position[2] / scale + pivot * yaw.sin(),
+    ];
+    Pose { yaw, offset }
 }
 
 /// The camera and model matrices for the card on `space`'s grid.
@@ -200,7 +263,8 @@ struct Placement {
 /// `self.campaign.as_ref()` for the whole of a frame) can still build a card's
 /// GPU state the first time a grid shows it.
 pub struct Flyers {
-    widget: FlyerWidget,
+    /// Every `<Flyer>` widget the screen file authors, by name.
+    widgets: HashMap<String, FlyerWidget>,
     /// Decoded, not yet on the GPU, by `FlyerName`.
     waiting: RefCell<HashMap<String, Model>>,
     /// On the GPU, by `FlyerName`.
@@ -216,7 +280,7 @@ pub struct Flyers {
 impl std::fmt::Debug for Flyers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Flyers")
-            .field("widget", &self.widget.name)
+            .field("widgets", &self.widgets.len())
             .field("waiting", &self.waiting.borrow().len())
             .field("cards", &self.cards.borrow().len())
             .finish_non_exhaustive()
@@ -224,7 +288,7 @@ impl std::fmt::Debug for Flyers {
 }
 
 impl Flyers {
-    /// Decodes the front of every named flyer through `archives`.
+    /// Decodes the front of every flyer `cards` names through `archives`.
     ///
     /// A card that will not read or decode, or whose `.vex` authors no camera,
     /// is reported and left out, which draws nothing for that grid - never
@@ -232,13 +296,18 @@ impl Flyers {
     #[must_use]
     pub fn load(
         archives: &mut oag_assets::Archives,
-        widget: FlyerWidget,
-        names: &[String],
+        widgets: Vec<FlyerWidget>,
+        cards: &[CardSpec],
     ) -> Self {
         let mut waiting = HashMap::new();
         let mut placed = HashMap::new();
         let mut report = Vec::new();
-        for name in names {
+        for CardSpec {
+            flyer: name,
+            window,
+            stretch,
+        } in cards
+        {
             if waiting.contains_key(name) {
                 continue;
             }
@@ -268,13 +337,11 @@ impl Flyers {
                         vertex.lit = 0.0;
                     }
                     clip::bake(&mut model, SETTLED_SECONDS);
-                    clip::flatten(
-                        &mut model,
-                        &camera.to_world,
-                        window_tan(&camera),
-                        CARD_HEIGHT,
-                    );
-                    let half = [camera.value_1c * CARD_HEIGHT / 2.0, CARD_HEIGHT / 2.0];
+                    clip::flatten(&mut model, &camera.to_world, *window, CARD_HEIGHT, *stretch);
+                    let half = [
+                        camera.value_1c * CARD_HEIGHT / 2.0 * stretch,
+                        CARD_HEIGHT / 2.0,
+                    ];
                     clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]);
                     placed.insert(name.clone(), Placement { half_size: half });
                     waiting.insert(name.clone(), model);
@@ -283,7 +350,10 @@ impl Flyers {
             }
         }
         Self {
-            widget,
+            widgets: widgets
+                .into_iter()
+                .map(|widget| (widget.name.clone(), widget))
+                .collect(),
             waiting: RefCell::new(waiting),
             cards: RefCell::new(HashMap::new()),
             placed,
@@ -292,14 +362,63 @@ impl Flyers {
         }
     }
 
+    /// The card `Grid Selection` shows for the flyer named `flyer`.
+    #[must_use]
+    pub fn grid_show(flyer: &str) -> Show {
+        Show {
+            flyer: flyer.to_string(),
+            widget: flyer::GRID_WIDGET.to_string(),
+            pose: GRID_POSE,
+        }
+    }
+
+    /// The two cards `Campaign Selection` shows with `selected` chosen: each
+    /// through its own widget, the chosen one facing the camera and the other
+    /// turned as its widget authors it ([`campaign_pose`]). Empty when either
+    /// widget is missing.
+    #[must_use]
+    pub fn selection_shows(&self, selected: oag_ui::campaign::selection::Campaign) -> Vec<Show> {
+        use oag_ui::campaign::selection::Campaign;
+        [
+            (
+                Campaign::Fury,
+                flyer::FURY_CAMPAIGN_FLYER,
+                flyer::FURY_CAMPAIGN_WIDGET,
+            ),
+            (
+                Campaign::Hd,
+                flyer::HD_CAMPAIGN_FLYER,
+                flyer::HD_CAMPAIGN_WIDGET,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(campaign, name, widget)| {
+            let pose = campaign_pose(self.widgets.get(widget)?, campaign == selected);
+            Some(Show {
+                flyer: name.to_string(),
+                widget: widget.to_string(),
+                pose,
+            })
+        })
+        .collect()
+    }
+
+    /// `show`'s camera and model matrices on `space`'s grid, or `None` when its
+    /// widget or its card is not loaded.
+    fn matrices(&self, show: &Show, space: Space) -> Option<(Mat4, Mat4)> {
+        let widget = self.widgets.get(&show.widget)?;
+        self.has(&show.flyer)
+            .then(|| flyer_view_projection(widget, space, show.pose))
+    }
+
     /// The card's bounding rectangle on `space`'s grid, `[x, y, width,
     /// height]`: its four corners through the same camera [`Self::draw`] uses -
     /// what a click on the card should hit. `None` for a card that is not
     /// loaded.
     #[must_use]
-    pub fn card_rect(&self, name: &str, space: Space) -> Option<[f32; 4]> {
-        let [hx, hy] = self.placed.get(name)?.half_size;
-        let (view_projection, model) = flyer_view_projection(&self.widget, space, POSE);
+    pub fn card_rect(&self, show: &Show, space: Space) -> Option<[f32; 4]> {
+        let [hx, hy] = self.placed.get(&show.flyer)?.half_size;
+        let (view_projection, model) = self.matrices(show, space)?;
         let to_screen = view_projection * model;
         let mut lo = [f32::MAX; 2];
         let mut hi = [f32::MIN; 2];
@@ -323,7 +442,7 @@ impl Flyers {
         self.waiting.borrow().contains_key(name) || self.cards.borrow().contains_key(name)
     }
 
-    /// Draws `name`'s card into the screen, over whatever `view` holds.
+    /// Draws `show`'s card into the screen, over whatever `view` holds.
     ///
     /// The first call for a name builds its GPU state; a card whose pipelines
     /// will not build is logged, dropped, and draws nothing from then on.
@@ -338,19 +457,21 @@ impl Flyers {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
         space: Space,
-        name: &str,
+        show: &Show,
     ) {
-        if let Some(model) = self.waiting.borrow_mut().remove(name) {
+        if let Some(model) = self.waiting.borrow_mut().remove(&show.flyer) {
             match Preview::new(device, queue, format, self.anisotropy, model) {
                 Ok(card) => {
-                    self.cards.borrow_mut().insert(name.to_string(), card);
+                    self.cards.borrow_mut().insert(show.flyer.clone(), card);
                 }
-                Err(error) => log::warn!("flyer {name}: {error:#} - it draws nothing"),
+                Err(error) => log::warn!("flyer {}: {error:#} - it draws nothing", show.flyer),
             }
         }
-        let (view_projection, model) = flyer_view_projection(&self.widget, space, POSE);
+        let Some((view_projection, model)) = self.matrices(show, space) else {
+            return;
+        };
         let mut cards = self.cards.borrow_mut();
-        let Some(card) = cards.get_mut(name) else {
+        let Some(card) = cards.get_mut(&show.flyer) else {
             return;
         };
         card.draw_matrices(
@@ -368,10 +489,10 @@ impl Flyers {
     }
 }
 
-/// Renders a campaign screen's draw list, with the flyer card named by `card`
+/// Renders a campaign screen's draw list, with the flyer cards `cards` names
 /// between its first `split` draws (the backdrop) and the rest - so the
-/// card sits over the backdrop and under every widget, `Flyer Pad Lock`
-/// included. With no card (`None`, or one that did not load) this is exactly
+/// cards sit over the backdrop and under every widget, `Flyer Pad Lock`
+/// included. With no card (`None`, or none that loaded) this is exactly
 /// `renderer.render_with(load, .., list, ..)`.
 ///
 /// `list` is the draws and the backdrop's length; `frame` the viewport, the
@@ -387,12 +508,20 @@ pub fn render_list(
     view: &wgpu::TextureView,
     list: (&[Draw], usize),
     frame: ((f32, f32, f32, f32), (u32, u32), Space),
-    card: Option<(&Flyers, &str)>,
+    cards: Option<(&Flyers, &[Show])>,
     clip: Option<(usize, f32, f32)>,
 ) {
     let (device, queue, format) = gpu;
     let ((list, split), (viewport, target_size, space)) = (list, frame);
-    let Some((flyers, name)) = card.filter(|(flyers, name)| flyers.has(name)) else {
+    let shown: Vec<&Show> = cards
+        .map(|(flyers, shows)| {
+            shows
+                .iter()
+                .filter(|show| flyers.has(&show.flyer))
+                .collect()
+        })
+        .unwrap_or_default();
+    let Some((flyers, _)) = cards.filter(|_| !shown.is_empty()) else {
         renderer.render_with(load, device, queue, encoder, view, list, viewport, clip);
         return;
     };
@@ -407,17 +536,19 @@ pub fn render_list(
         viewport,
         None,
     );
-    flyers.draw(
-        device,
-        queue,
-        format,
-        encoder,
-        view,
-        viewport,
-        target_size,
-        space,
-        name,
-    );
+    for show in shown {
+        flyers.draw(
+            device,
+            queue,
+            format,
+            encoder,
+            view,
+            viewport,
+            target_size,
+            space,
+            show,
+        );
+    }
     let over = wgpu::LoadOp::Load;
     renderer.render_with(
         over,
@@ -450,7 +581,7 @@ mod tests {
 
     /// Where a card-local point lands on `space`'s grid.
     fn on_grid(point: Vec3, space: Space) -> [f32; 2] {
-        let (view_projection, model) = flyer_view_projection(&widget(), space, POSE);
+        let (view_projection, model) = flyer_view_projection(&widget(), space, GRID_POSE);
         let clip =
             view_projection * model * oag_core::math::Vec4::new(point.x, point.y, point.z, 1.0);
         [
@@ -464,20 +595,20 @@ mod tests {
     /// middle of the screen.
     #[test]
     fn a_centred_origin_does_not_shift_the_axis() {
-        let (view_projection, _) = flyer_view_projection(&widget(), Space::HD, POSE);
+        let (view_projection, _) = flyer_view_projection(&widget(), Space::HD, GRID_POSE);
         let clip = view_projection * oag_core::math::Vec4::new(0.0, 0.0, -100.0, 1.0);
         assert!((clip.x / clip.w).abs() < 1e-5, "{clip:?}");
         assert!((clip.y / clip.w).abs() < 1e-5, "{clip:?}");
     }
 
-    /// The card's centre lands where [`POSE`] says, whatever the widget's own
+    /// The card's centre lands where [`GRID_POSE`] says, whatever the widget's own
     /// (unapplied) `x y z` are.
     #[test]
     fn the_card_centre_lands_at_the_pose() {
-        let (_, model) = flyer_view_projection(&widget(), Space::HD, POSE);
+        let (_, model) = flyer_view_projection(&widget(), Space::HD, GRID_POSE);
         let origin = model.transform_point3(Vec3::ZERO);
         assert!(
-            (origin - Vec3::from(POSE.offset)).length() < 1e-4,
+            (origin - Vec3::from(GRID_POSE.offset)).length() < 1e-4,
             "{origin:?}"
         );
     }
@@ -497,23 +628,57 @@ mod tests {
     /// +Z), the direction every settled RPCS3 frame shows.
     #[test]
     fn a_negative_yaw_brings_the_right_edge_closer() {
-        let (_, model) = flyer_view_projection(&widget(), Space::HD, POSE);
+        let (_, model) = flyer_view_projection(&widget(), Space::HD, GRID_POSE);
         let right = model.transform_point3(Vec3::new(51.2, 0.0, 0.0));
         let left = model.transform_point3(Vec3::new(-51.2, 0.0, 0.0));
         assert!(right.z > left.z, "{right:?} {left:?}");
     }
 
-    /// The window a camera shows is proportional to its `+0x20` word, and the
-    /// two words the disc authors give the two windows the fits found.
+    /// The selected card faces the camera at the distance its widget puts it:
+    /// `z` over the `orthoScale`, and its `y` puts the centre under the axis.
     #[test]
-    fn the_window_follows_the_cameras_word() {
-        let camera = |word| oag_vex::camera::Camera {
-            name: None,
-            to_world: [0.0; 16],
-            value_1c: 1.538,
-            value_20: word,
+    fn a_selected_campaign_card_faces_front_at_the_distance_the_widget_puts_it() {
+        let widget = FlyerWidget {
+            position: [0.0, -33.3, -70.0],
+            rotation: [0.0, -0.6],
+            rotation_centre_offset_x: 30.0,
+            ortho_scale: Some(0.75),
+            ..widget()
         };
-        assert!((window_tan(&camera(0x4f15)) - 0.344).abs() < 0.002);
-        assert!((window_tan(&camera(0x4a2c)) - 0.323).abs() < 0.002);
+        let pose = campaign_pose(&widget, true);
+        assert_eq!(pose.yaw, 0.0);
+        assert!((pose.offset[2] + 93.33).abs() < 0.01, "{pose:?}");
+        assert!((pose.offset[1] + 11.1).abs() < 0.01, "{pose:?}");
+        assert!(pose.offset[0].abs() < 1e-4, "{pose:?}");
+    }
+
+    /// The unselected card turns by `RotY` about its pivot, which moves its
+    /// centre: `HD`'s (pivot on the right, `RotY` negative) swings back and
+    /// toward its pivot, and Fury's mirrors it.
+    #[test]
+    fn an_unselected_campaign_card_swings_about_its_pivot() {
+        let widget = |x: f32, turn: f32, pivot: f32| FlyerWidget {
+            position: [0.0, -33.3, -70.0],
+            rotation: [0.0, turn],
+            rotation_centre_offset_x: pivot,
+            ortho_scale: Some(0.75),
+            ..FlyerWidget {
+                origin: [x, 450.0],
+                ..self::tests::widget()
+            }
+        };
+        let hd = campaign_pose(&widget(1280.0, -0.6, 30.0), false);
+        let fury = campaign_pose(&widget(640.0, 0.6, -30.0), false);
+        assert_eq!(hd.yaw, -0.6);
+        assert!(hd.offset[2] < -93.33 - 20.0, "{hd:?}");
+        assert!(hd.offset[0] > 5.0 && hd.offset[0] < 9.0, "{hd:?}");
+        assert!(
+            (hd.offset[2] - fury.offset[2]).abs() < 1e-4,
+            "{hd:?} {fury:?}"
+        );
+        assert!(
+            (hd.offset[0] + fury.offset[0]).abs() < 1e-4,
+            "{hd:?} {fury:?}"
+        );
     }
 }

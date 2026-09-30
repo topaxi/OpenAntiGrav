@@ -14,8 +14,12 @@ pub(super) enum CampaignKind {
     /// **HD/Fury only.** `Campaign Selection`, ahead of `Grid` - see
     /// `crate::campaign_stage::Screen::Selection`'s own doc. Refused on
     /// every other title, the same way [`campaign_page`] already refuses a
-    /// source with no campaign at all.
-    Selection,
+    /// source with no campaign at all. `selected` is `0` for Fury (the
+    /// default) and `1` for `Wipeout HD`, spelled `campaign-select` and
+    /// `campaign-select@1`.
+    Selection {
+        selected: usize,
+    },
     /// `hd_base` picks HD's base `grid0`..`grid7` over Fury's (the default,
     /// see [`campaign_page`]), and `tier` the page within them. Spelled
     /// `grid-select`, `grid-select-hd` and `grid-select-hd@3`.
@@ -33,7 +37,7 @@ pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
         None => (page, 0),
     };
     match name {
-        "campaign-select" | "campaign_select" => Some(CampaignKind::Selection),
+        "campaign-select" | "campaign_select" => Some(CampaignKind::Selection { selected: tier }),
         "grid-select" | "grid_select" => Some(CampaignKind::Grid {
             hd_base: false,
             tier,
@@ -75,7 +79,7 @@ pub(super) fn render_frame(
 /// backdrop and its widgets - see [`crate::flyer::render_list`].
 pub(super) struct FlyerShot {
     flyers: crate::flyer::Flyers,
-    name: String,
+    shows: Vec<crate::flyer::Show>,
     /// How many of the list's first draws are the backdrop.
     split: usize,
 }
@@ -104,7 +108,7 @@ impl FlyerShot {
             view,
             (list, self.split),
             (viewport, target_size, space),
-            Some((&self.flyers, &self.name)),
+            Some((&self.flyers, &self.shows)),
             None,
         );
     }
@@ -271,9 +275,10 @@ pub(super) fn campaign_page(
         ),
     };
     let mut flyer_name = None;
+    let mut selected_campaign = None;
     let layers = if is_hd {
         match kind {
-            CampaignKind::Selection => {
+            CampaignKind::Selection { selected } => {
                 let Some(layout) = campaign.selection_layout.as_ref() else {
                     anyhow::bail!(
                         "this source has no Campaign Selection screen - DATA06's own copy of \
@@ -281,7 +286,12 @@ pub(super) fn campaign_page(
                         oag_hd::campaign::SCREEN_ENTRY
                     );
                 };
-                let model = oag_ui::campaign::selection::CampaignSelection::new();
+                let model = oag_ui::campaign::selection::CampaignSelection::at(if selected == 0 {
+                    oag_ui::campaign::selection::Campaign::Fury
+                } else {
+                    oag_ui::campaign::selection::Campaign::Hd
+                });
+                selected_campaign = Some(model.selected());
                 // No progress source in a still - `0` earned, the same
                 // fresh-profile reading `GridSelection::new`'s own bare
                 // `from_grid` call gives every other number below. The
@@ -310,6 +320,10 @@ pub(super) fn campaign_page(
                     false,
                     &|src| sprites.get(src),
                     &footer_overlay,
+                    campaign
+                        .flyers
+                        .as_ref()
+                        .is_some_and(|flyers| !flyers.selection_shows(model.selected()).is_empty()),
                 )
             }
             CampaignKind::Grid { tier, .. } => {
@@ -374,7 +388,7 @@ pub(super) fn campaign_page(
         }
     } else {
         match kind {
-            CampaignKind::Selection => {
+            CampaignKind::Selection { .. } => {
                 anyhow::bail!(
                     "Campaign Selection is Wipeout HD/Fury's own screen - this source has none"
                 );
@@ -426,13 +440,17 @@ pub(super) fn campaign_page(
         }
     };
     let split = layers.backdrop.len();
-    let shot = campaign
-        .flyers
-        .zip(flyer_name)
-        .map(|(flyers, name)| FlyerShot {
+    let shot = campaign.flyers.and_then(|flyers| {
+        let shows = match (flyer_name, selected_campaign) {
+            (Some(name), _) => vec![crate::flyer::Flyers::grid_show(&name)],
+            (None, Some(selected)) => flyers.selection_shows(selected),
+            (None, None) => return None,
+        };
+        Some(FlyerShot {
             flyers,
-            name,
+            shows,
             split,
-        });
+        })
+    });
     Ok((layers.flatten(), shot))
 }

@@ -180,3 +180,108 @@ fn the_selector_outline_moves_to_the_right_half_for_hd() {
         );
     }
 }
+
+/// `Campaign Selection` in miniature: the title, and the two medal counters.
+const XML: &str = r#"
+<Screen type="CampaignSelection" name="Campaign Selection">
+<Text name="ScreenTitle"><Values idstring="FE_RC_SELECT" x="180" y="80" color="0xffaaaaaa"></Values></Text>
+<Text name="NumMedalsTextFury"><Values string="a" x="820" y="770"></Values></Text>
+<Text name="NumMedalsTextHD"><Values string="b" x="1460" y="770"></Values></Text>
+</Screen>
+"#;
+
+fn list(selected: Campaign, cards: bool) -> Vec<Draw> {
+    let strings = crate::language::StringTable::from_xml(
+        r#"<Strings>
+<Entry ID="FE_RC_SELECT" String="CAMPAIGN SELECT"></Entry>
+<Entry ID="FE_CAMPSEL_MODES" String="CAMPAIGN MODES"></Entry>
+<Entry ID="FE_RC_FURY" String="FURY CAMPAIGN"></Entry>
+<Entry ID="FE_RC_HD" String="HD CAMPAIGN"></Entry>
+<Entry ID="RC_GM" String="GOLD MEDALS"></Entry>
+</Strings>"#,
+    );
+    let layout = Layout::read_authored(
+        &crate::screen::Screens::from_xml(XML),
+        "Campaign Selection",
+        &strings,
+        crate::picker::FaceScales::default(),
+        [1920.0, 1080.0],
+        [1920.0, 1080.0],
+    )
+    .expect("the screen is in the fixture");
+    let skin = Skin::new(
+        oag_hd::frontend::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    draw_list(
+        &CampaignSelection::at(selected),
+        &layout,
+        &skin,
+        &Frame::default(),
+        &strings,
+        (0, 80),
+        (0, 87),
+        None,
+        false,
+        &|_| None,
+        &[],
+        cards,
+    )
+    .body
+}
+
+fn texts(draws: &[Draw]) -> Vec<&str> {
+    draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// With no card drawn the screen keeps its stand-ins: the outline round the
+/// selected half, the two campaign names and both medal counters.
+#[test]
+fn without_cards_the_stand_ins_and_both_counters_draw() {
+    let draws = list(Campaign::Fury, false);
+    let words = texts(&draws);
+    for want in ["FURY CAMPAIGN", "HD CAMPAIGN", "0 / 80", "0 / 87"] {
+        assert!(words.contains(&want), "{want} in {words:?}");
+    }
+    assert_eq!(
+        draws
+            .iter()
+            .filter(|d| matches!(d, Draw::Fill { .. }))
+            .count(),
+        4,
+        "the four sides of the outline"
+    );
+}
+
+/// With the cards drawn the outline and the names are gone - the turned card
+/// and the card's own wordmark say the same - and only the selected
+/// campaign's medal counter shows, on both selections.
+#[test]
+fn with_cards_only_the_selected_campaigns_counter_draws() {
+    for (selected, shown, hidden) in [
+        (Campaign::Fury, "0 / 80", "0 / 87"),
+        (Campaign::Hd, "0 / 87", "0 / 80"),
+    ] {
+        let draws = list(selected, true);
+        let words = texts(&draws);
+        assert!(words.contains(&shown), "{shown} in {words:?}");
+        assert!(!words.contains(&hidden), "{hidden} in {words:?}");
+        assert!(!words.contains(&"FURY CAMPAIGN") && !words.contains(&"HD CAMPAIGN"));
+        assert_eq!(
+            words.iter().filter(|w| **w == "GOLD MEDALS").count(),
+            1,
+            "one label: {words:?}"
+        );
+        assert!(
+            !draws.iter().any(|d| matches!(d, Draw::Fill { .. })),
+            "no outline"
+        );
+    }
+}

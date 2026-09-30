@@ -76,7 +76,7 @@ fn the_top_of_the_window_lands_on_the_top_of_the_card() {
     // Half the vertical field of view has a tangent of 0.5, so the window's
     // top at 10 units is 5 up; the card is 2 tall.
     let mut model = model_of(&[[0.0, 5.0, 0.0], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]);
-    flatten(&mut model, &camera_at_ten(), 0.5, 2.0);
+    flatten(&mut model, &camera_at_ten(), 0.5, 2.0, 1.0);
     let at = |i: usize| model.vertices[i].position;
     assert!((at(0)[1] - 1.0).abs() < 1e-5, "{:?}", at(0));
     assert!(
@@ -93,8 +93,20 @@ fn the_top_of_the_window_lands_on_the_top_of_the_card() {
 #[test]
 fn a_nearer_layer_is_larger_and_stays_in_front() {
     let mut model = model_of(&[[1.0, 0.0, 0.0], [1.0, 0.0, 8.0]]);
-    flatten(&mut model, &camera_at_ten(), 0.5, 2.0);
+    flatten(&mut model, &camera_at_ten(), 0.5, 2.0, 1.0);
     let (far, near) = (model.vertices[0].position, model.vertices[1].position);
     assert!((near[0] / far[0] - 5.0).abs() < 1e-4, "{far:?} {near:?}");
     assert!(near[2] > far[2], "{far:?} {near:?}");
+}
+
+/// A stretch widens the picture and leaves its height alone.
+#[test]
+fn a_stretch_widens_the_picture_only() {
+    let mut model = model_of(&[[1.0, 1.0, 0.0]]);
+    flatten(&mut model, &camera_at_ten(), 0.5, 2.0, 1.5);
+    let [u, v, _] = model.vertices[0].position;
+    assert!(
+        (u - 0.2 * 1.5).abs() < 1e-5 && (v - 0.2).abs() < 1e-5,
+        "{u} {v}"
+    );
 }

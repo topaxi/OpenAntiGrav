@@ -37,6 +37,19 @@
 
 use crate::screen::{Screens, parse};
 
+/// `Grid Selection`'s `<Flyer>` widget.
+pub const GRID_WIDGET: &str = "FlyerModel";
+
+/// `Campaign Selection`'s two `<Flyer>` widgets, Fury's on the left.
+pub const FURY_CAMPAIGN_WIDGET: &str = "FuryCampaignFlyerModel";
+pub const HD_CAMPAIGN_WIDGET: &str = "HDCampaignFlyerModel";
+
+/// The two campaign cards' `FlyerName`s: the folders
+/// `Data/FE/Flyers/fury_campaign/` and `Data/FE/Flyers/hd_campaign/`, which no
+/// grid names.
+pub const FURY_CAMPAIGN_FLYER: &str = "fury_campaign";
+pub const HD_CAMPAIGN_FLYER: &str = "hd_campaign";
+
 /// One `<Flyer>` widget's own values. Nothing here is a pixel: `x y z` and
 /// the rotations are the model's pose, `origin` the screen point the camera is
 /// centred on, in the screen's own authored grid.

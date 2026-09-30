@@ -107,12 +107,27 @@ fn every_card_of_both_campaigns_decodes_and_every_grid_has_a_logo() {
         .chain(&FURY_CARDS)
         .map(ToString::to_string)
         .collect();
-    let flyers = oag_game::flyer::Flyers::load(&mut archives, widget, &names);
+    let cards: Vec<oag_game::flyer::CardSpec> = names
+        .iter()
+        .map(|name| oag_game::flyer::CardSpec {
+            flyer: name.clone(),
+            window: if HD_CARDS.contains(&name.as_str()) {
+                oag_game::flyer::HD_WINDOW
+            } else {
+                oag_game::flyer::FURY_WINDOW
+            },
+            stretch: 1.0,
+        })
+        .collect();
+    let flyers = oag_game::flyer::Flyers::load(&mut archives, vec![widget], &cards);
     assert!(flyers.report.is_empty(), "{:?}", flyers.report);
     for name in &names {
         assert!(flyers.has(name), "{name} did not decode");
         let [x, y, width, height] = flyers
-            .card_rect(name, oag_display::space::Space::HD)
+            .card_rect(
+                &oag_game::flyer::Flyers::grid_show(name),
+                oag_display::space::Space::HD,
+            )
             .unwrap_or_else(|| panic!("{name} has no rectangle"));
         assert!(
             width > 400.0 && height > 300.0,
@@ -163,6 +178,56 @@ fn every_flyer_authors_its_camera_on_the_cards_axis() {
     for name in ["fury_campaign", "hd_campaign"] {
         check(name, 12.0, 1.0833, 0x3621);
     }
+}
+
+/// `Campaign Selection`'s two cards land where RPCS3's frames put them, off
+/// the disc's own widget numbers (`z`, `orthoScale`, `RotY`, the pivot): with
+/// Fury selected its card faces front from authored column 240 to 1038 and
+/// row 212 down, and `HD`'s is turned with its left edge at 1105; with `HD`
+/// selected its card's left edge is at 879. Measured on
+/// `campaign-settled-a` and `campaign-right`; the tolerance is the width of
+/// the fit, not of the frame.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn campaign_selections_cards_land_where_rpcs3_shows_them() {
+    let Some(image) = image() else { return };
+    let mut archives = archives(&image);
+    let xml = screen_xml(&mut archives);
+    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let widgets = flyer::read(&xml, &screens);
+    let cards: Vec<oag_game::flyer::CardSpec> =
+        [flyer::FURY_CAMPAIGN_FLYER, flyer::HD_CAMPAIGN_FLYER]
+            .map(|name| oag_game::flyer::CardSpec {
+                flyer: name.to_string(),
+                window: oag_game::flyer::FURY_WINDOW,
+                stretch: oag_game::flyer::CAMPAIGN_STRETCH,
+            })
+            .to_vec();
+    let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &cards);
+    assert!(flyers.report.is_empty(), "{:?}", flyers.report);
+    let rects = |selected| {
+        let shows = flyers.selection_shows(selected);
+        assert_eq!(shows.len(), 2, "both widgets are on the disc");
+        shows
+            .into_iter()
+            .map(|show| {
+                flyers
+                    .card_rect(&show, oag_display::space::Space::HD)
+                    .unwrap_or_else(|| panic!("{} has no rectangle", show.flyer))
+            })
+            .collect::<Vec<_>>()
+    };
+    let near = |got: f32, want: f32, what: &str| {
+        assert!((got - want).abs() < 40.0, "{what}: {got} against {want}");
+    };
+    use oag_ui::campaign::selection::Campaign;
+    let [fury, hd] = rects(Campaign::Fury).try_into().expect("two");
+    near(fury[0], 240.0, "Fury's left edge, selected");
+    near(fury[0] + fury[2], 1038.0, "Fury's right edge, selected");
+    near(fury[1], 212.0, "Fury's top, selected");
+    near(hd[0], 1105.0, "HD's left edge, turned");
+    let [_, hd] = rects(Campaign::Hd).try_into().expect("two");
+    near(hd[0], 879.0, "HD's left edge, selected");
 }
 
 /// The card is a flat quad set: the widest card is 115 units across and no

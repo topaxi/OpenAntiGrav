@@ -352,6 +352,14 @@ impl CampaignSelection {
 
 /// `Campaign Selection`'s draw list.
 ///
+/// `cards` is whether the two flyer cards are drawn behind it. **When they are,
+/// the two stand-ins for them are not**: the selected half's white outline and
+/// the two campaign names ([`FURY_ENTRY_NAME_POSITION`],
+/// [`HD_ENTRY_NAME_POSITION`]) were this build's own invention for a screen
+/// with nothing in the space the cards fill, and an RPCS3 frame draws neither -
+/// the selected card faces the camera and the other is turned, which is the
+/// indication, and each card carries its own name.
+///
 /// `fury_gold`/`hd_gold` are each `(earned, total)` - `earned` is `0` on a
 /// fresh profile, the same "player-progress source is optional" reading the
 /// rest of this module gives; `total` is the denominator: the campaign's own
@@ -398,6 +406,7 @@ pub fn draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
+    cards: bool,
 ) -> Layers {
     let (fury_gold_medals, fury_gold_total) = fury_gold;
     let (hd_gold_medals, hd_gold_total) = hd_gold;
@@ -423,6 +432,10 @@ pub fn draw_list(
 
     let screen = &layout.screen;
     let mut out = Vec::new();
+    // With the cards drawn, only the selected campaign's medal counter shows:
+    // an RPCS3 frame with Fury selected has none beside the turned `HD` card
+    // and one with `HD` selected none beside Fury's.
+    let shown = |campaign: Campaign| !cards || model.selected() == campaign;
     for fill in &screen.fills {
         out.push(fill_draw(fill));
     }
@@ -452,8 +465,12 @@ pub fn draw_list(
             "ScreenTitle" => None,
             // `RB_EVENT_TYPE` is a reused/generic idstring this build does
             // not trust as content - see [`draw_list`]'s own doc.
-            "NumMedalsTextFury" => Some(format!("{fury_gold_medals} / {fury_gold_total}")),
-            "NumMedalsTextHD" => Some(format!("{hd_gold_medals} / {hd_gold_total}")),
+            "NumMedalsTextFury" => {
+                shown(Campaign::Fury).then(|| format!("{fury_gold_medals} / {fury_gold_total}"))
+            }
+            "NumMedalsTextHD" => {
+                shown(Campaign::Hd).then(|| format!("{hd_gold_medals} / {hd_gold_total}"))
+            }
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
@@ -470,13 +487,7 @@ pub fn draw_list(
         .iter()
         .find(|text| text.name.as_deref() == Some("ScreenTitle"))
         .map_or(0xffff_ffff, |text| text.color);
-    let hand_placed = [
-        (
-            SUBTITLE_POSITION,
-            grey,
-            strings.get_or_id(SUBTITLE_ID),
-            Align::Left,
-        ),
+    let entry_names = [
         (
             FURY_ENTRY_NAME_POSITION,
             grey,
@@ -489,20 +500,31 @@ pub fn draw_list(
             strings.get_or_id(Campaign::Hd.entry_id()),
             Align::Centre,
         ),
-        (
+    ];
+    let mut hand_placed = vec![(
+        SUBTITLE_POSITION,
+        grey,
+        strings.get_or_id(SUBTITLE_ID),
+        Align::Left,
+    )];
+    if shown(Campaign::Fury) {
+        hand_placed.push((
             FURY_GOLD_MEDALS_LABEL_POSITION,
             FURY_GOLD_MEDALS_LABEL_COLOR,
             strings.get_or_id(GOLD_MEDALS_LABEL_ID),
             Align::Left,
-        ),
-        (
+        ));
+    }
+    if shown(Campaign::Hd) {
+        hand_placed.push((
             HD_GOLD_MEDALS_LABEL_POSITION,
             grey,
             strings.get_or_id(GOLD_MEDALS_LABEL_ID),
             Align::Left,
-        ),
-    ];
-    for ((x, y), color, content, align) in hand_placed {
+        ));
+    }
+    let names: &[_] = if cards { &[] } else { &entry_names };
+    for ((x, y), color, content, align) in hand_placed.into_iter().chain(names.iter().copied()) {
         out.push(Draw::Text {
             x,
             y,
@@ -518,7 +540,9 @@ pub fn draw_list(
     // The selected half's outline - see [`SELECTOR_BORDER`]'s own doc on why
     // this is drawn rather than a `Selector` widget the screen does not
     // author.
-    out.extend(selector_outline(model.selected()));
+    if !cards {
+        out.extend(selector_outline(model.selected()));
+    }
 
     layers.body = out;
     layers
