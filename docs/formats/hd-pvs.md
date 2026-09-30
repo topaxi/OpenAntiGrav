@@ -314,3 +314,12 @@ here. Measured effect, tick 300, `tech_de_ra` forward: 1,271 draws and 939,301
 triangles with frustum culling alone, 757 and 619,822 with the PVS; the reversed
 circuit's frames and 2048 Altima's are pixel-identical with it on and off. See
 [omega-status.md](omega-status.md).
+
+**HD's own frames did not move.** Talon's Junction at tick 300, hold accelerate,
+the build before this change against the build after it: the PNGs are
+byte-identical with `--pvs true` and with `--pvs false`, and the load-report line
+(`621 visibility cell(s) over 983 chunk(s), plus 28377 trailing byte(s)`) is
+the same text. After: 588 draws and 255,221 triangles with the PVS, 726 and
+304,328 without. `Pvs::parse` (the HD entry point) is untouched;
+`from_hd_pvs` calls `parse_detect`, which reads little-endian word 2 first and
+falls back to it.
