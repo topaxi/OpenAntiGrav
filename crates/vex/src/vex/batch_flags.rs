@@ -119,6 +119,13 @@ impl Batch {
     /// `GU_BLEND` is actually *enabled* when they do, are separate,
     /// lower-confidence claims. See
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
+    ///
+    /// **This reads the file's byte, and the running game's can differ.**
+    /// `Mesh_CountBatchesPerList` ORs `0x10` into every list-A batch with
+    /// `pass_mask & 0x2000` and without `0x0800` at load, so those batches draw
+    /// with the replace branch in the original whatever the disc says - read
+    /// live on Assegai's hull, where five batches carry it at runtime and none
+    /// on disc. See "The hull's extra pass" in that page.
     #[must_use]
     pub fn is_additive_blend(&self) -> bool {
         self.header_flags & 0x10 == 0

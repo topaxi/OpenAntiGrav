@@ -47,7 +47,7 @@ recorded.
 | # | Difference | Size | Cause | Status |
 | ---: | --- | --- | --- | --- |
 | 1 | **Scenery, trees, mountains and track surface drawn soft** | Laplacian standard deviation in four regions of one frame: original 13.4 / 6.1 / 14.9 / 7.5, ours before 10.8 / 4.4 / 11.3 / 6.3, ours after 12.7 / 6.2 / 15.5 / 8.2 | our box-filtered mip chain, where the original resolves the base level | **fixed** (the disc's levels, selected by the GE's slope law) |
-| 2 | Hull sheen: a whiter, glossier spine and canopy in the original | spine mean 143,139,113 against 91,77,53 at tick 0, but 191,193,143 against 143,144,76 at tick 90 and the close crops read nearly equal once the flare's bloom is in | part flare bloom (state), part unconfirmed: `Ship.vex` has one transparent batch (`Glass_ADD.tga`, 8x8) that the GE draws under environment-mapped UVs and `oag_render::texgen` has no caller | open, see below |
+| 2 | Hull sheen: a whiter, glossier spine and canopy in the original | spine mean 143,139,113 against 91,77,53 at tick 0, but 191,193,143 against 143,144,76 at tick 90 and the close crops read nearly equal once the flare's bloom is in | part flare bloom (state), part the hull's `0x2000` extra pass: six batches (not the one glass batch) drawn a second time under environment mapping with `envtest4bit.tga` | **drawn** (`oag_render::shine`); closes roughly a third to a half of the measured gap, the rest is bloom and pose, see below |
 | 3 | Dark bowl-shaped objects on the grass left of Talon's straight at (161,-47,-185) | a few percent of the frame | draws 1381-1391 of the track (`factory_floor_01_rp_shinemap`, `Building_05`, `Building_07`, `energy_GLOW`, `piston_end_shinemap`) are factory roofs at 37-100 units; the original's terrain hides them, ours does not | open |
 | 4 | Track neon strips and the start gantry | animated | timing (trap 3), not measured as a defect | not a defect on this evidence |
 | 5 | Sky, fog and tone | regional means agree within 5 % on all four frames (e.g. Talon mid, 18 cells: 101,129,146 against 108,137,156 at worst) | - | matches |
@@ -199,24 +199,46 @@ The change applies to every title that loads a `.vex` with embedded textures:
 `crates/render/tests/psp_texture_levels_ground_truth.rs` fails if a circuit's
 textures stop arriving as the disc's own chain.
 
-## 2. The hull's sheen (open)
+## 2. The hull's sheen (drawn, gap partly closed)
 
 What was ruled out: the hull's light list (it is the recovered `AmbientLight` and
 three `DirectionalLight` nodes, and the wings match to 1 %), bloom (toggling it
 changes neither the trees nor the spine), and the idle flare (a state artefact,
-trap 2). What remains is a gloss the original has on the yellow spine and the
-inner wings. **Lead**: `Ship.vex`'s single transparent batch is `Glass_ADD.tga`,
-8x8, 111 indices on Assegai; `Mesh_BeginTransparentPass` draws such batches with
-`TEXMAPMODE` uvgen 2 (environment mapping from the normal and two light
-directions), which `oag_render::texgen` implements and nothing calls. A local
-experiment that env-mapped **every** transparent batch in `fs_main_blend` left the
-hull unchanged and erased the track's bright glass floor, so the naive wiring is
-wrong. What decides it, unread: whether the hull takes the fixed-basis branch
-(`model+0x1a8 != 0`) or the view-matrix matcap, and whether the track's glass
-takes the other. A live read of the hull model's `+0x1a8` and `+0x48`/`+0x70`
-light lists would settle it; the craft pointer this session read
-(`craft+0x8b4`) did not resolve to a model, so the read needs the trace's entity
-pointer instead.
+trap 2). What remained was a gloss the original has on the yellow spine and the
+inner wings.
+
+**Cause, read live 2026-09-30**: the original draws six of the hull's fourteen
+batches **twice** - `Ship.vex`'s `0x2000` batches (`shipShape`'s three blended
+ones, both airbrakes' and the canopy glass) - first under environment mapping
+with their material's **second** texture, `envtest4bit.tga` (a 64x64 black map
+with three white glints), then their ordinary pass added on top. The lead this
+page used to carry, the single `Glass_ADD` batch, was one of the six and not the
+cause alone; the "naive wiring" that left the hull unchanged drew the wrong
+texture (the glass's own) on the wrong batches. The hull model's `+0x1a8` is **1**
+(read live), so the coordinates come from the fixed world-space basis and follow
+the ship, not the camera. Evidence, the recorded GE list and the loader rule that
+makes five of the six *replace* what is under them: `mesh-draw.md`, "The hull's
+extra pass". Implementation: `oag_render::shine`, drawn after the hulls through
+the absorb overlay's plumbing; `crates/game/tests/shine_ground_truth.rs`.
+
+Matched poses (Talon's Junction, Assegai, 480x272, no filters; RGB means, spine
+box of `talon-mid2`, ship box of `talon-fast`):
+
+| Frame | Original | Ours without | Ours with |
+| --- | --- | --- | --- |
+| `talon-mid2` spine | 153, 154, 95 | 135, 139, 85 | 143, 148, 94 |
+| `talon-mid2` whole ship | 142.5, 161.0, 161.4 | 134.6, 154.1, 155.2 | 137.1, 156.6, 157.8 |
+| `talon-fast` ship box | 155.6, 173.2, 170.5 | 149.1, 161.7, 158.9 | 150.8, 163.4, 160.8 |
+| `talon-corner` ship box | 14.4, 26.5, 27.8 | 35.0, 36.8, 60.2 | 35.4, 37.1, 60.5 |
+
+The pass moves every measured region toward the original and never past it, and
+the glint reads as a soft sheen on the inner wings and canopy rather than a flat
+lift. **It does not close the gap**: a third to a half of it on the first two
+frames, nothing on `talon-corner`, where the ship is mostly out of frame and the
+difference is framing. What remains is the flare's bloom and small pose and
+camera differences, and the pass's own unmeasured parts: one additive redraw
+stands in for the original's replace-then-add, there is no fog on it, and the
+airbrakes' batches are not deflected with their flaps.
 
 ## 3. The factory roofs (open)
 

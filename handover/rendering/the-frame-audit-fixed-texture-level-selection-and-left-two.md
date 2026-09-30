@@ -13,14 +13,16 @@ of it the same day; see `frame-audit.md`.
 
 ## Open
 
-- **The hull's sheen.** The original's yellow spine and inner wings carry a gloss
-  ours lacks (or has less of). Ruled out: the light list, bloom, the idle flare.
-  Lead: `Ship.vex`'s one transparent batch (`Glass_ADD.tga`, 8x8) draws under
-  uvgen-2 environment mapping in the original and `oag_render::texgen` has no
-  caller. A naive wiring (every transparent batch, matcap from the view rows) left
-  the hull unchanged and erased the track's glass floor, so the wiring needs the
-  per-model branch first: `model+0x1a8` decides fixed basis or view matcap, and
-  the hull's value was not read.
+- **The hull's sheen: drawn 2026-09-30, gap partly closed.** ~~Lead: the single
+  `Glass_ADD` batch.~~ The cause is the `0x2000` extra pass - six batches per hull
+  drawn under environment mapping with their material's second texture
+  (`envtest4bit.tga`), `model+0x1a8 == 1` so the basis is the fixed world-space
+  pair (read live; `mesh-draw.md`, "The hull's extra pass"). `oag_render::shine`
+  draws it; it closes roughly a third to a half of the measured spine gap
+  (`frame-audit.md` section 2). Still open on the pass: a track's
+  `*_shinemap` batches (their `+0x1a8` is 0, the view-matrix matcap, unread), the
+  original's replace-then-add against our single additive redraw, fog on the pass,
+  the airbrakes' flap deflection, and the wreck model (`+0x8b8`, same flags).
 - **Factory roofs on the Talon straight.** At `(161,-47,-185)` heading
   `-0.94,-0.09,-0.34` ours draws dark bowl shapes (track draws 1381-1391, PVS on)
   where the original shows terrain. Not traced: draw order versus terrain,
@@ -38,10 +40,6 @@ of it the same day; see `frame-audit.md`.
 
 ## Next Steps
 
-- Live-read the hull model's `+0x1a8` and the `+0x48`/`+0x70` light lists off the
-  trace's entity pointer (the `craft+0x8b4` read this pass did not resolve to a
-  model), then wire uvgen 2 for `Ship.vex`'s glass batch alone and compare
-  against `data/shots/frame-audit/talon-mid2`.
 - Bisect the factory roofs by draw index (`OAG_LO`/`OAG_HI`-style filter on the
   opaque loop) against a capture with the terrain's own layer, before touching
   PVS placement.

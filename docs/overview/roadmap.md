@@ -1133,8 +1133,11 @@ change how this list should be read:
       `Plasma_scroll_ADD_GLOW` on `16_Track` is one tile with all rows distinct,
       so it slides rather than cycles. The exhaust's trail reads authored scroll
       rates for its own layers, and no track equivalent has been found
-- [ ] The `0x2000` extra pass and its second texture index at material `+0x08` -
-      it lands on exactly the `*_shinemap` textures, and nothing draws it
+- [x] The `0x2000` extra pass and its second texture index at material `+0x08` -
+      **a Pulse hull draws it** (`oag_render::shine`, 2026-09-30): six batches
+      per team under environment mapping with `envtest4bit.tga`. A track's
+      `*_shinemap` batches are still not drawn, and their light basis is the
+      view-matrix matcap (`model+0x1a8 == 0`), unread
 
 ### Ship visual state
 
