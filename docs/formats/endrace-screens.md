@@ -27,12 +27,12 @@ just wad cat data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
 | --- | --- | --- | --- |
 | `BigTopText` | `idstring="ER_RES"` | unconditional ("RESULTS") | 90 - direct XML read |
 | `Line1` | `string="race complete!"` template | overwritten per mode - see below | 80 - decompiled |
-| `Line2`..`Line8` | blank `Text` rows, `x=100` | filled only by the Tournament/Zone/Elimination-specific populate helpers this pass did not decompile | 50 - not traced |
+| `Line2`..`Line8` | blank `Text` rows, `x=100` | **never filled**: `EndRaceResults_OnEnter` is the only code that names them and it writes the empty string; none of the four populate helpers touches them (2026-09-30, all read) | 85 - cross-references, see the ghidra page |
 | `table` (a `Text` acting as a group) | wraps the whole per-lap grid | shown/hidden as one unit | 80 |
 | `lap0.0`/`lap0.1`/`lap0.2` | blank header cells, `x=140/220/320` | `RC_LAP` ("LAP"), `PRO_TIME` ("TIME"), blank | 82 - decompiled |
 | `lap1.0`..`lap8.2` (24 more cells, rows 2-9) | blank, `y` 95..235 | per-lap values, row *n* filled only while `n <=` laps completed (max 5 shown by the single-player path, see below); a 9th row (`tablebg9`) is the totals line | 80 |
-| `perfectlap1`..`perfectlap5` | plain `Image` + `idstring="MSC_PL"` overlay, `x=352`, `y` matching rows 1-5 | shown by default (XML baseline), explicitly hidden per-lap when a stored per-lap flag byte is nonzero | 65 - direction of the flag not resolved |
-| `boostimg` | plain `Image`, `x=320 y=77` (header row) | explicitly hidden, unconditionally, on the single-player path (see below) | 78 |
+| `perfectlap1`..`perfectlap5` | plain `Image` + `idstring="MSC_PL"` overlay, `x=352`, `y` matching rows 1-5 | hidden by `ResetTable`, then **shown** for lap `n` when its stored per-lap flag byte is nonzero - the bit-`0x4`-is-visible correction, 2026-09-30 | 88 - polarity settled |
+| `boostimg` | plain `Image`, `x=320 y=77` (header row), 12x12 at `U=480 V=32` of `pulse_assets.mip` | hidden by `ResetTable`, **shown by `PopulateLapTable` and by nothing else** - the header icon of the third column; the Tournament, Zone, Elimination and multiplayer tables never show it | 88 |
 | `ContinueButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | direct XML idstrings | 90 |
 | `EndRaceRewardsRedirect` | `<Default goto="EndRace Rewards">` | one of the two - see below | 70 |
 | `EndRaceMenuRedirect` | `<Default goto="Race End Save">` | the other of the two | 70 |
@@ -64,40 +64,56 @@ own 8-byte slot):
 | 2 | `lap{n}.2` | a stored 16-bit value at `+0x10` | decimal |
 
 `docs/ui/campaign-screens.md`'s capture read column 2 as `6`/`9`/`10` summing
-to a `25` total, and called it "a pennant-icon column" on sight. **This pass's
-decompile does not confirm an icon binds to that column at all**: its header
-cell (`lap0.2`) is left blank by `EndRaceResults_PopulateLapTable`, and the
-one icon on this screen shaped like a per-lap indicator - `boostimg` - is
-unconditionally hidden by the same function before the per-lap loop runs, for
-every mode this function handles (`Race`/`Time Trial`/`Head2Head`/`Speed
-Lap`). So the "pennant" in the capture's own description is most likely the
-`perfectlap{n}` icon (`x=352`, sitting immediately to the right of column 2's
-`x=320`, not inside it) read as part of the same visual row, not column 2's
-own digits. **What column 2's stored 16-bit value actually counts is still
-not determined**, but a second live data point narrows the candidates
-(traced 2026-09-14, [`endrace-screens.md`'s own ghidra
-page](../ghidra/functions/psp-pulse-usa/endrace-screens.md#open)): a second
-`grid0_3_2` race (`Weapons="off"`, same as the first) read `6`/`10`/`8`
-(sum `24`) against the first capture's `6`/`9`/`10` (sum `25`) - **a
-weapon/pickup count is ruled out for both captures specifically**, since
-neither race could carry a weapon at all with `Weapons="off"` authored on
-the cell. Lap 1 reads `6` in both independently-driven races (both starting
-from the same grid position), while laps 2-3 differ by one or two - a
-speedup/boost pad count (present regardless of the `Weapons=` setting, and
-plausible to cross a slightly different number of depending on the exact
-line driven) is the strongest remaining candidate, not confirmed. The raw
-source field during the race itself was traced to `session + 0x900 +
-lap*0x10 + 0x94` (the ghidra page's own copy-site read), but its writer -
-whatever increments it mid-race - was not located either pass. Confidence
-40 on any specific reading; 80 on the structural facts (the field exists,
-is a per-lap 16-bit int, is not what draws the header icon, and is not a
-weapon/pickup count on either of the two `Weapons="off"` captures this
-project has). The totals row's own aggregate (`+0x1148` of the shared
-struct, not summed client-side) reproduces both captures' own totals from
-their own three lap values exactly - an internally consistent whole on both
-runs, whatever the unit is. A live breakpoint on writes to
+to a `25` total and called it "a pennant-icon column" on sight, and it was right:
+**the icon is `boostimg`**. An earlier revision of this page read the decompile as
+hiding `boostimg` unconditionally, from `|= 4`/`&= ~4` pairs read the wrong way
+round; bit `0x4` is the *visible* bit (the correction is on the ghidra page and was
+found from an unrelated live flag read), so `EndRaceResults_ResetTable` hides the
+icon and `EndRaceResults_PopulateLapTable` shows it. The header cell `lap0.2` is
+blanked, which makes the icon itself the column's header - it counts something the
+boost glyph stands for. **What the stored 16-bit value counts is still not
+determined**, but the candidates narrow (traced 2026-09-14, [`endrace-screens.md`'s
+own ghidra page](../ghidra/functions/psp-pulse-usa/endrace-screens.md#open)): a
+second `grid0_3_2` race (`Weapons="off"`, same as the first) read `6`/`10`/`8`
+(sum `24`) against the first capture's `6`/`9`/`10` (sum `25`) - a weapon/pickup
+count is ruled out for both captures, since neither race could carry a weapon at
+all with `Weapons="off"` authored on the cell. Lap 1 reads `6` in both
+independently-driven races (both starting from the same grid position), while
+laps 2-3 differ by one or two - a speedup/boost pad count (present regardless of
+the `Weapons=` setting, and plausible to cross a slightly different number of
+depending on the exact line driven) fits the icon's name and the data, and is
+still unconfirmed. The raw source field during the race itself was traced to
+`session + 0x900 + lap*0x10 + 0x94` (the ghidra page's own copy-site read), but
+its writer - whatever increments it mid-race - was not located either pass.
+Confidence 60 on "boost-shaped" (the widget's name and glyph), 40 on any more
+specific reading; 88 on the structural facts (the field exists, is a per-lap 16-bit
+int, is headed by `boostimg`, and is not a weapon/pickup count on either of the two
+`Weapons="off"` captures this project has). The totals row's own aggregate
+(`+0x1148` of the shared struct, not summed client-side) reproduces both captures'
+own totals from their own three lap values exactly - an internally consistent
+whole on both runs, whatever the unit is. A live breakpoint on writes to
 `session+0x900+lap*0x10+0x94` itself, not another correlation pass, is the
 direct next step.
+
+### One table, five fillings: which widgets each mode shows (2026-09-30)
+
+The `table` group is one authored grid - `zonetopline`, `tablebg1`-`tablebg8` (four
+widgets each: a dark fill, a `hex_bg.mip` tile and two fading rules, on a 20 px
+pitch from `y = 92`), `topbarcenter`, the 27 `lap{r}.{c}` cells, `perfectlap1`-`5`,
+`boostimg` and `tablehighlight` - and every mode fills it differently. Bit `0x4` of a
+widget's flag word is the visible bit; `ResetTable` hides the rows and icons and
+each populate shows what it uses. Read on the ghidra page's "The variant populates":
+
+| Mode | Header row | Rows shown | `boostimg` | Highlight (at `y = 93 + 20 * (row - 1)`) | Cells |
+| --- | --- | --- | --- | --- | --- |
+| Time Trial, Speed Lap, single race | `RC_LAP` / `PRO_TIME` / *blank, `boostimg` on top* | one per lap (max 5) + a totals row (none for Speed Lap) | **shown** | the totals row (hidden for Speed Lap) | lap number, time, third column |
+| Tournament | `PRO_POS` / `ER_TEAM` / `ER_POINTS` | one per craft | hidden | the player's row | position, team, points |
+| Zone | none (`topbarcenter` hidden) | six | hidden | hidden | label in column 0, value in column 2 |
+| Eliminator | `ER_DEATHS` / `ER_TEAM` / `IG_HUD_KILLS` | one per craft | hidden | the player's row | deaths, team, kills |
+| Network play | `PRO_POS` / `PRO_NAME` / `PRO_TOT_TIME` | one per craft | hidden | the player's row | place, name, time |
+
+`Line1` reads `ER_ZONE_COM` for Zone and `"%s %s"` of `ER_ELIM_COM` and the place's
+ordinal for Eliminator; `Line2`-`Line8` are never filled in any mode.
 
 ### Two Redirects, one screen - which one fires is mode-driven too
 
@@ -306,14 +322,14 @@ populate functions in full:
   stored 16-bit field. Meaning still unresolved, but weapon/pickup counts
   are now ruled out (both captures are `Weapons="off"`); a boost/speedup-pad
   count is the leading unconfirmed candidate as of 2026-09-14.
-- **The `perfectlap{n}` flag's direction** - hidden when a stored per-lap
-  byte is nonzero; whether "nonzero" means "this lap was perfect" or the
-  reverse was not settled.
-- **`boostimg`'s actual firing condition.** Authored on this screen but
-  unconditionally hidden by every single-player-mode code path this pass
-  decompiled; presumably wired in the Tournament/Zone/Elimination/split-screen
-  variants (`FUN_088dad90`/`FUN_088db574`/`FUN_088db1ec`/`FUN_088d9588`),
-  none of which this pass opened.
+- ~~**The `perfectlap{n}` flag's direction**~~ **Settled 2026-09-30**: nonzero
+  shows the icon. What makes a lap "perfect" is not read (the bytes come from
+  `craft+0x900 + lap*0x10 + 0x8c`).
+- ~~**`boostimg`'s actual firing condition.**~~ **Settled 2026-09-30**: shown on the
+  ordinary per-lap table alone - see the widget table. The Tournament, Zone,
+  Elimination and multiplayer populates (`EndRaceResults_PopulateTournamentTable`,
+  `..ZoneTable`, `..EliminationTable`, `..MultiplayerTable`) are all read and none
+  shows it.
 - **`EndRace Results`'s two-Redirect toggle** - which of `EndRace Rewards`/
   `Race End Save` fires is decompiled at a structural level only; the exact
   bit arithmetic was read once, not independently re-derived or

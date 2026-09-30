@@ -48,7 +48,12 @@ mechanism below instead.
 | --- | --- | --- | --- |
 | `0x088d98cc` | `EndRaceResults_OnEnter` | 82 | sets `BigTopText`/`Line1`, dispatches to the per-mode populate helper, toggles the two outgoing Redirects |
 | `0x088da8c8` | `EndRaceResults_PopulateLapTable` | 80 | the single-player (`Race`/`Time Trial`/`Head2Head`/`Speed Lap`) per-lap table |
-| `0x088d939c` | `EndRaceResults_ResetTable` | 76 | blanks all 27 `lap{r}.{c}` cells, unhides the 8 `tablebg` rows and the 5 `perfectlap` icons, re-hides `boostimg` and `topbarcenter`'s prior state |
+| `0x088d939c` | `EndRaceResults_ResetTable` | 88 | blanks all 27 `lap{r}.{c}` cells, **hides** the 8 `tablebg` rows, the 5 `perfectlap` icons and `boostimg`, and shows `topbarcenter` - see "Bit `0x4` is the visible bit" below (an earlier revision read every one of these backwards) |
+| `0x088da530` | `EndRaceResults_Update` | 85 | the per-frame update: accumulates the screen timer at `+0xdc`, plays the finishing-place jingle once, flips the Tournament page every 3 s, and re-runs the multiplayer populate every frame in modes `0xe`/`0xf` |
+| `0x088dad90` | `EndRaceResults_PopulateTournamentTable` | 82 | Tournament and Multiplayer Tournament - read on [`tournament.md`](tournament.md) |
+| `0x088db574` | `EndRaceResults_PopulateZoneTable` | 82 | Zone: six label/value rows, no header - see "The variant populates" below |
+| `0x088db1ec` | `EndRaceResults_PopulateEliminationTable` | 92 | Eliminator and Multiplayer Elimination: `Deaths`/`Team`/`Kills` per craft, **read on a live frame** |
+| `0x088d9588` | `EndRaceResults_PopulateMultiplayerTable` | 78 | the network-play variant of the ordinary table: `Pos`/`Name`/`Total Time` per craft; gated on `+0xe9`, which is `g_game_mode > 0xd` and not split-screen |
 
 `EndRaceResults_OnEnter` switches on a mode-shaped value read two ways in the
 same function (`local_48[0x2e]`, i.e. `*(int*)(DAT_08b30f90 + 0xb8)`, and
@@ -90,12 +95,145 @@ separately-tracked aggregate, not summed client-side) under the `PRO_STATS_TOT`
 label - confirmed by the aggregate reproducing the capture's own `25` from
 `6+9+10` exactly.
 
-`boostimg` is hidden unconditionally by both `EndRaceResults_ResetTable`
-(which un-hides it first, matching the XML's own baseline-visible authoring)
-and then immediately re-hidden by `EndRaceResults_PopulateLapTable` before
-its per-lap loop runs, for every mode this function handles. Confidence 78 -
-full decompile of both functions, the double un-hide-then-hide read directly
-off the instructions in that order.
+### Bit `0x4` is the visible bit, and the earlier reading had it backwards (2026-09-30)
+
+Every widget on these screens carries its state in a flag word at `+0x2c`, and
+**bit `0x4` set means drawn**. The evidence is independent of these screens:
+on a running PPSSPP Eliminator race, `Hud_UpdateTimeCluster` clears `0x4` on
+`TotalTime`/`TotalTimeTxt` and their flag words read `0xb082` (hidden, and absent
+from the frame) against `0xf086` on `CurrentTime` (drawn, and present) - see
+[`race-progress.md`](race-progress.md#which-modes-hide-the-clock-confirmed-live-2026-09-30).
+This page and its sibling formats page had read `|= 4` as hide and `&= ~4` as show
+for these three functions. Corrected, on the same decompiles:
+
+- `EndRaceResults_ResetTable` **hides** `tablebg1`-`tablebg8` (`&= ~4`),
+  `perfectlap1`-`perfectlap5` and `boostimg`, and **shows** `topbarcenter`
+  (`|= 4`). It also blanks every `lap{r}.{c}` cell. Nothing in it un-hides a row.
+- `EndRaceResults_PopulateLapTable` then **shows** `boostimg` (`|= 4`, at
+  `0x088daa00`), shows `tablebg{i}` for each lap row it fills and for the totals
+  row, and shows `perfectlap{i}` only `if (lap.+0x12 != 0)`. So **`boostimg` is
+  visible on every ordinary per-lap table**, which is what the one live capture
+  shows (`results-01.png`: a pennant glyph at `x=320 y=77`, the header cell of the
+  third column) and what `docs/ui/endrace-screens.md` had flagged as disagreeing
+  with the decompile. The decompile never disagreed: it was misread. The direction
+  of the `perfectlap{i}` flag is settled by the same correction - a **nonzero**
+  byte shows the "perfect lap" icon, and `Race_BuildEndRaceResult` counts the same
+  bytes into the perfect-lap total the loyalty law multiplies by 25/50.
+- **`boostimg` is written by exactly two functions**, `ResetTable` (hide) and
+  `PopulateLapTable` (show); `get_xrefs_to` on its string (`0x08a82d84`) returns
+  those two and nothing else. The Tournament, Zone, Elimination and multiplayer
+  populates call `ResetTable` and never show it again, so it is drawn on the
+  ordinary per-lap table **only**. `Line2`..`Line8` are written by
+  `EndRaceResults_OnEnter` alone (`get_xrefs_to` on `0x08a82e34` and `0x08a82e64`
+  each return `OnEnter` and nothing else), and only ever with the empty string
+  (`&DAT_08a82d38`): they are authored and never filled, in any mode.
+  Confidence **88** for "never shown / never filled" - a widget looked up by a
+  name built at runtime would not appear in the cross-references, and no
+  `Line%d`-shaped format string exists for this screen.
+- The tail of `PopulateLapTable` moves `tablehighlight` to `y = laps * 0x14 + 0x5d`
+  (`93 + 20 * laps`) onto the totals row, or hides it for Speed Lap (mode 10) which
+  has no totals row. That is the same `93 + 20 * (row - 1)` the Tournament table
+  uses, one pixel below where `tablebg_y` puts the row background.
+- `boostimg` is the header **icon** of the third column. That column's own header
+  cell (`lap0.2`) is blanked, so the icon *is* the header - which is the strongest
+  single hint yet at what the column counts: a boost. The values themselves (`6`,
+  `9`, `10` on the first capture) remain unexplained; see "Open".
+
+Confidence **88** for the polarity (a single live measurement of the flag on a
+widget that is provably hidden, plus one frame that shows `boostimg` on the
+per-lap table) and for every consequence above that is a direct read of a
+`|= 4`/`&= ~4` pair.
+
+## The variant populates (2026-09-30)
+
+All four run after `EndRaceResults_ResetTable` (so every `tablebg`, `perfectlap` and
+`boostimg` starts hidden and every cell blank) and each begins by showing the
+`table` group (`|= 4`). They are selected by `EndRaceResults_OnEnter`'s switch:
+Zone (6) runs the Zone populate; Elimination and Multiplayer Elimination (8, `0x12`)
+run the Elimination populate; Tournament and Multiplayer Tournament (4, `0x10`) the
+Tournament one; every mode in `{3, 5, 9, 10, 0xe, 0xf, 0x11}` runs the lap table, or
+the multiplayer table when `g_game_mode > 0xd`.
+
+### `EndRaceResults_PopulateEliminationTable` - `0x088db1ec`, read on a live frame
+
+Confidence **92**. Header cells: `lap0.0` = `ER_DEATHS` ("Deaths:"), `lap0.1` =
+`ER_TEAM` ("Team"; `PRO_NAME` when `+0xe9` is set, i.e. network play), `lap0.2` =
+`IG_HUD_KILLS` ("Kills"). One row per craft in the field (`DAT_08b30f90` of them),
+in the order `Race_BuildEndRaceResult` left them. Row `r`, from the per-craft
+record at `g_endrace_result + 0x110 * (r - 1)`:
+
+| Cell | Source | Format |
+| --- | --- | --- |
+| `tablebg{r}` | - | shown |
+| `lap{r}.0` | `+0x13c`, the craft's deaths (`craft+0x8d4`) | `%d`, or `ER_DNF` when `+0x140 == -1` |
+| `lap{r}.1` | the localised team name at `+0x35` (`localise(craft+0x798)`) | text |
+| `lap{r}.2` | `+0x138`, the craft's kills (`craft+0x8d8`) | `%d`, or `ER_DNF` when `+0x140 == -1` |
+| `tablehighlight` | moved to `y = 0x5d + 0x14 * (r - 1)` when `+0x34` (the player flag) is set | - |
+
+`Line1` is `"%s %s"` of `ER_ELIM_COM` ("Eliminator complete - ", trailing space
+included, hence the double space on screen) and `ER_1STP`..`ER_8THP`, for the place
+in `+0x0`; outside 1..8 `Line1` stays blank. **`Race_BuildEndRaceResult` sorts the
+records before this runs** (a bubble sort at `0x0882a498`, mode 8 only): kills
+descending, then deaths ascending, then a full tie puts the player's record first
+(the swap tests `next.player != 0`); any other tie keeps the order
+`FUN_08826d80` returned the crafts in. The place is the player's index after the
+sort. The `+0x140` word is never written on this path - it read `0` on all eight
+records - so `ER_DNF` is unreachable in a single-player Eliminator and is not drawn
+by this build.
+
+**Live measurement**, PPSSPP v1.20.4, `pulse-psp-usa.chd`, Eliminator on Talon's
+Junction, the player parked so the AI reached the 5-kill target in 85 s. The
+struct was dumped at `Race End Photo` (`*(0x08b317b4) + 0x7d8`): `place = 8`,
+records `EG-X` 5 kills / 5 deaths, `Piranha` 4/1, `Goteki 45` 3/1, `Qirex` 3/3,
+`AG Systems` 2/4, `Feisar` 2/4, `Triakis` 1/2, `Assegai` (`+0x34 = 1`) 0/1, all
+`+0x140 = 0`. The `EndRace Results` frame reads, top to bottom, `RESULTS`,
+`ELIMINATOR COMPLETE -  8TH PLACE`, header `Deaths: | Team | Kills` at `x = 140 /
+220 / 320`, and the same eight rows in the same order with the player's row
+highlighted, static over a 6 s watch (no page cycling, unlike Tournament). Every
+cell of the table is accounted for by the row above. Sort law, columns, header,
+`Line1` wording and highlight are **confirmed**; the frame shows the team names
+as display names (`Goteki 45`, `AG Systems`), so the localise call is a string-table
+lookup of the team's folder id.
+
+### `EndRaceResults_PopulateZoneTable` - `0x088db574`
+
+Confidence **82** (decompile plus the writers of the source fields; no Zone frame -
+Zone is greyed on a fresh profile and a forced `g_game_mode = 6` hangs the loader).
+`table` shown, `topbarcenter` **hidden** (there is no header row), `tablebg1`-
+`tablebg6` shown, and `Line1` = `ER_ZONE_COM` ("Zone session complete!"). After the
+populate `OnEnter` hides `tablehighlight`. Six label/value rows; the label goes in
+`lap{r}.0` and the value in `lap{r}.2`, `lap{r}.1` stays blank:
+
+| Row | Label (`idstring`) | Value | Source: the Zone mode object's stats block |
+| ---: | --- | --- | --- |
+| 1 | `ER_ZONE_CLEAR` "Total zones cleared:" | `%d` | `+0x1a10` u16, the zone number - `Zone_Update` adds 1 per 10 s step |
+| 2 | `ER_PERF_ZONE` "Perfect zones:" | `%d` | `+0x1a12` u16 - `Zone_Update` adds 1 at a zone step when the "dirty" byte `+0x1a28` is clear |
+| 3 | `ER_LAPSC` "Laps cleared:" | `%d` | `+0x1a14` u16 - `Zone_Update` adds 1 per call while `craft+0x911` bit 0 is set and `craft+0xacc > 2` |
+| 4 | `MSC_DATA_PLAP` "Perfect laps:" | `%d` | `+0x1a16` u16 - `Zone_Update` adds 1 (and 2000 score) when `craft+0x860 & 0x200000` |
+| 5 | `ER_TOP_SPEED` "Top speed:" | `"%d %s"` of `top * 0xe10 / 100000` and `RC_KMH` | `+0x1a1a` u16, the running maximum of `craft->+0x94->+0x2ec * 100` |
+| 6 | `ER_ZONE_SCORE` "Zone score:" | `%d` | `+0x1a1c` s32 - 1 per call, 500 per zone step, 500 more for a clean zone, 2000 per row-4 event, 100 per new speedup pad |
+
+`Race_BuildEndRaceResult` copies the block through the mode object's virtual at
+`vtable+0x74` into `g_endrace_result + 0x1134` (zones), `+0x1138` (perfect zones),
+`+0x1140` (row 3), `+0x1144` (row 4), `+0x1150` (top speed) and `+0x113c` (score).
+The Zone page's older table called `+0x1a16` "laps completed" and `+0x1a14` "a
+counter stepped on a lap-like condition"; the end screen's own labels say row 3 is
+*laps cleared* and row 4 *perfect laps*, and the `0x200000` flag that feeds row 4 is
+also worth 2000 points, so that is a bonus event and not a plain lap count.
+What `craft+0x911` bit 0 and `craft+0x860 & 0x200000` are is **not determined**, which
+is why this build cannot honestly fill rows 3 and 4.
+
+### `EndRaceResults_PopulateMultiplayerTable` - `0x088d9588`
+
+Confidence **78**. Not split-screen: it is entered when the screen's `+0xe9` byte is
+set, and `OnEnter` sets that byte to `g_game_mode > 0xd` - the network-play family,
+modes `0xe`, `0xf`, `0x10`, `0x11` and `0x12`. It fills the same `table` with a
+`PRO_POS` / `PRO_NAME` / `PRO_TOT_TIME` header and one row per craft: the place
+(`%d`), the name at `+0x35`, and the finishing time at `+0x140` - `ER_DNF` for `-1`,
+`ER_RACING` for `0`, and otherwise the time through `FUN_08819878`. The player's row
+takes the highlight. `EndRaceResults_Update` calls it every frame in modes `0xe` and
+`0xf`, so the times fill in as other players finish. This build has no network play,
+so nothing draws it.
 
 ## `EndRace Rewards`
 
@@ -436,30 +574,30 @@ understood and cleared.
   `Race_ComputeLoyaltyAward` (`0x0880ac50`), called from
   `Race_BuildEndRaceResult` (`0x0882a498`); see "The loyalty-award
   computation, decompiled and runtime-confirmed" above.
-- **The per-lap `+0x10` pennant column's own writer, during the race** -
-  narrowed but not closed 2026-09-14. `Race_BuildEndRaceResult`'s own copy
-  loop (already decompiled: `iVar19 = base; ...; *(short*)(iVar19+0x7e8) =
-  *(short*)(iVar15+0x94); iVar15 += 0x10; iVar19 += 8`) shows the raw source
-  is `*(session + 0x900 + lap*0x10 + 0x94)`, a 2-byte field in an 8-lap,
-  16-byte-stride per-lap record (siblings `+0x88` time, `+0x8c` perfect-lap
-  flag, `+0x90` lap number - all three already named as the copy targets
-  `+0xc`/`+0x12`/`+0x13`) inside the in-race state object at `base+0x2c0`
-  (itself not named this pass). This is the *copy site*, not the writer -
-  whatever fills `session+0x900+lap*0x10+0x94` during the race itself was
-  not located; `search_instructions` on the raw offset `0x94` alone returns
-  241 matches (mostly unrelated `sw ra,0x94(sp)` prologue spills) and is not
-  selective enough. **Two live data points now exist** (both `grid0_3_2`,
-  Venom, `Weapons="off"`): `6,10,8` (sum 24, this pass) and `6,9,10` (sum
-  25, the prior pass) - **weapons/pickups are ruled out for both**, since
-  neither race could carry a weapon at all. Lap 1 reads `6` in both
-  independently-driven races starting from the same grid position;
-  laps 2-3 differ by one or two. Speedup/boost pads (present regardless of
-  the `Weapons=` setting, and plausible to cross a slightly different count
-  of depending on the exact line) are the strongest remaining candidate,
-  not confirmed. The next step is a live breakpoint on writes to
-  `session+0x900+lap*0x10+0x94` itself (needs `session`'s own address,
-  readable at any `EndRace Results` breakpoint as `*(int*)(base+0x2c0)`),
-  not another correlation pass.
+- **The per-lap `+0x10` column's own writer, during the race** - narrowed but not
+  closed 2026-09-14, and its header is now known (2026-09-30): the column is headed
+  by the **`boostimg`** icon (see "Bit `0x4` is the visible bit"), the only thing
+  the ordinary table draws in that header cell, so it counts something the icon
+  stands for. `Race_BuildEndRaceResult`'s own copy loop (already decompiled:
+  `iVar19 = base; ...; *(short*)(iVar19+0x7e8) = *(short*)(iVar15+0x94); iVar15 +=
+  0x10; iVar19 += 8`) shows the raw source is `*(session + 0x900 + lap*0x10 +
+  0x94)`, a 2-byte field in an 8-lap, 16-byte-stride per-lap record (siblings
+  `+0x88` time, `+0x8c` perfect-lap flag, `+0x90` lap number - all three already
+  named as the copy targets `+0xc`/`+0x12`/`+0x13`) inside the in-race state object
+  at `base+0x2c0` (itself not named this pass). This is the *copy site*, not the
+  writer - whatever fills `session+0x900+lap*0x10+0x94` during the race itself was
+  not located; `search_instructions` on the raw offset `0x94` alone returns 241
+  matches (mostly unrelated `sw ra,0x94(sp)` prologue spills) and is not selective
+  enough. **Two live data points now exist** (both `grid0_3_2`, Venom,
+  `Weapons="off"`): `6,10,8` (sum 24, this pass) and `6,9,10` (sum 25, the prior
+  pass) - **weapons/pickups are ruled out for both**, since neither race could carry
+  a weapon at all. Lap 1 reads `6` in both independently-driven races starting from
+  the same grid position; laps 2-3 differ by one or two. The icon's name and the
+  data agree on speedup/boost pads, present regardless of the `Weapons=` setting -
+  the strongest candidate, still not confirmed. The next step is a live write
+  watchpoint on `session+0x900+lap*0x10+0x94` itself (needs `session`'s own address,
+  readable at any `EndRace Results` breakpoint as `*(int*)(base+0x2c0)`), not another
+  correlation pass.
 - ~~**`0x088d7e1c`'s own `+0xbe` gate**~~ **Ruled out 2026-09-14** -
   `0x088d7e1c` is the held-confirm variant used by `InGame Photo`, not
   `Cell Selection`'s own dispatcher; see "`0x088d7e1c` ruled out..." above.
@@ -469,11 +607,17 @@ understood and cleared.
 - **`EndRaceResults`/`EndRaceMenu`'s own `Update`/`OnExit` slots**
   (`0x088da530`, `0x088d92e0`, `0x088d8338`, `0x088d8248`) were positionally
   located (vtable word 9/31) but not decompiled this pass.
-- **The Tournament/Zone/Elimination/split-screen populate helpers**
-  (`FUN_088dad90`, `FUN_088db574`, `FUN_088db1ec`, `FUN_088d9588`) were
-  identified by call site only, not opened - see `docs/formats/endrace-screens.md`'s
-  own `Line2`..`Line8` and `boostimg` open items, both of which likely close
-  once one of these is read.
+- ~~**The Tournament/Zone/Elimination/split-screen populate helpers**~~ **Closed
+  2026-09-30**: all four are read - see "The variant populates". The Elimination
+  table is confirmed on a live frame; the Zone table is decompile-only (no Zone
+  frame is reachable) and the multiplayer table is not runnable here. `boostimg` is
+  shown on the ordinary lap table only, and `Line2`..`Line8` are never filled.
+  Still unknown inside them: what `craft+0x911` bit 0 and `craft+0x860 & 0x200000`
+  are (Zone's "Laps cleared" and "Perfect laps"), and who writes the `+0x140`
+  word on the Eliminator path (it reads `0`, and `-1` would print `DNF`).
+- **`EndRaceResults_OnExit` and `EndRaceMenu`'s `Update`/`OnExit`** (`0x088d92e0`,
+  `0x088d8338`, `0x088d8248`) remain undecompiled; `EndRaceResults_Update`
+  (`0x088da530`) is read.
 - **`MedalImg`'s own state in a medal-earning run** was not observed (the
   one capture is a no-medal run) - see the formats page.
 - **Nothing here is cross-checked against `psp-pulse-eu`.** Per this
@@ -493,7 +637,12 @@ understood and cleared.
 | `0x088d90dc` | `EndRaceMenu_Construct` | 78 |
 | `0x088d98cc` | `EndRaceResults_OnEnter` | 82 |
 | `0x088da8c8` | `EndRaceResults_PopulateLapTable` | 80 |
-| `0x088d939c` | `EndRaceResults_ResetTable` | 76 |
+| `0x088d939c` | `EndRaceResults_ResetTable` | 88 |
+| `0x088da530` | `EndRaceResults_Update` | 85 |
+| `0x088dad90` | `EndRaceResults_PopulateTournamentTable` | 82 |
+| `0x088db574` | `EndRaceResults_PopulateZoneTable` | 82 |
+| `0x088db1ec` | `EndRaceResults_PopulateEliminationTable` | 92 |
+| `0x088d9588` | `EndRaceResults_PopulateMultiplayerTable` | 78 |
 | `0x088dbbd4` | `EndRaceRewards_OnEnter` | 85 |
 | `0x088dd2b8` | `EndRaceRewards_Update` | 85 |
 | `0x088d81dc` | `EndRaceMenu_OnEnter` | 76 |
