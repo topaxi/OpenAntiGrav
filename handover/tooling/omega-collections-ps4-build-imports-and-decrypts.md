@@ -263,8 +263,6 @@ about a second, decompression-shaped problem on top of it.
   hours if it is the Vita's layout with wider pointers, as the node table was.
 - **Bind the `lightmap` sampler** (`oag_rcs::rcsmodel::psp2::material::read_ps4`
   already ranks it last; the mesh's second UV set carries its coordinate).
-- **Pair the reversed circuits' collision**: `kdcol::sibling_name` matches only
-  `track.vex`; Omega's is `track_reversed.vex` beside `track_col_reversed.col`.
 - **Decide the mount order with a capture, not a guess**: `oag_omega::EXTRA_CANDIDATES`
   puts the patch ahead of the base because the patch's `.EnvSettings` copies are
   newer (chosen, not measured).

@@ -356,8 +356,18 @@ a PS4 mount them.
   reader expects `3`; `Data\Psys\*.POB` particle effects are not in this
   archive set under those names; the blob shadow is this project's generated
   falloff, not the disc's.
-- **Reversed circuits do not get collision:** `kdcol::sibling_name` pairs only
-  `track.vex`, and Omega's reversed one is `track_col_reversed.col`.
+- **Reversed circuits get their collision** (`omega-catchup`, 2026-09-30).
+  `kdcol::sibling_name` used to pair only `track.vex`, so a reversed race
+  loaded no collision at all. The reversed name is `track_col_reversed.col`
+  (`_col` before `_reversed`), beside `track_reversed.vex`, on all twelve of
+  `data01`/`data02`'s reversed circuits
+  (`every_reversed_circuit_pairs_with_its_reversed_collision`). `tech_de_ra`
+  reversed: 12,880 vertices, 20,757 triangles, 29,104 k-d nodes, four colliders,
+  and the craft rides it (`grounded 1.0`, 27.1 units/s after 300 ticks,
+  `data/scratch/omega-catchup/rev-t300.png`). The other titles are untouched:
+  Pulse, Pure and HD author collision in the `.vex`, so the sibling is never
+  asked, and 2048 ships no reversed `.col`, so its `track_reversed.vex` would
+  just not find one.
 - **Defaults are chosen, not measured:** `tech_de_ra` and `ag_systems`. Zone,
   boost, speed classes and every per-team variant table stay `None`.
 

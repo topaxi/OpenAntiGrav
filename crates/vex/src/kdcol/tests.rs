@@ -322,3 +322,33 @@ fn the_sibling_name_is_the_track_beside_it() {
     assert_eq!(sibling_name("Data/Ships/Feisar/Ship.vex"), None);
     assert_eq!(sibling_name("track.vex"), None);
 }
+
+/// Omega's reversed circuits: `track_reversed.vex` beside
+/// `track_col_reversed.col`, the `_col` before the `_reversed`. Measured on
+/// all twelve of `data01`/`data02`'s reversed circuits.
+#[test]
+fn a_reversed_track_pairs_with_the_reversed_collision() {
+    assert_eq!(
+        sibling_name("Data/environments/tech_de_ra/track_reversed.vex").as_deref(),
+        Some("Data/environments/tech_de_ra/track_col_reversed.col")
+    );
+    assert_eq!(
+        sibling_name(r"Data\environments\tech_de_ra\Track_Reversed.vex").as_deref(),
+        Some(r"Data\environments\tech_de_ra\Track_col_Reversed.col")
+    );
+}
+
+/// Only the track itself pairs: the other files a circuit directory holds
+/// that end in `_reversed.vex` are not collision-bearing.
+#[test]
+fn a_reversed_file_that_is_not_the_track_has_no_sibling() {
+    for name in [
+        "Data/environments/tech_de_ra/start_grid_reversed.vex",
+        "Data/environments/tech_de_ra/padReplacement_reversed.vex",
+        "Data/environments/tech_de_ra/track_overlay_reversed.vex",
+        "Data/environments/tech_de_ra/_reversed.vex",
+        "Data/environments/tech_de_ra/track_reversedx.vex",
+    ] {
+        assert_eq!(sibling_name(name), None, "{name}");
+    }
+}
