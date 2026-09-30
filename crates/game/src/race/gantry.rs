@@ -57,6 +57,16 @@
 //! So the clock is held at [`CLOCK_LIMIT`], the last frame before the lap
 //! board's own first key. The countdown plays in full off the disc's own
 //! timing; the two states with no trigger are simply never reached.
+//!
+//! # And on Pulse it stops earlier still: `GO` is held
+//!
+//! **Measured against the original, 2026-09-30** (PPSSPP, Talon's Junction,
+//! craft stationary, about 21 s of race clock): the board shows a strobing `GO`
+//! throughout. It never replays `3 2 1`, the panel never leaves the aperture,
+//! and the `Board` dressing never arrives. Playing the authored track through
+//! frame 360 in open air put the panel 9.99 units above the banner and replayed
+//! the whole strip there - the maintainer's report - so on Pulse the clock
+//! loops [`GO_LOOP`] instead, see [`held_on_go`].
 
 use super::*;
 
@@ -85,6 +95,33 @@ pub const CLOCK_LIMIT: f32 = 559.0 / 60.0;
 /// 92, the subtraction is only how it is spelled.
 pub const CLOCK_START_TICK: u64 = oag_race::COUNTDOWN_TICKS - 180;
 
+/// The span of the authored timeline Pulse's gantry loops on once `GO` is up,
+/// in seconds: frame 216 (where `GO`'s column has scrolled into the opaque
+/// strobe band, `docs/rendering/start-gantry.md`) to frame 349, the last frame
+/// before `Board`, `Text` and `Arrow` teleport in at 350/351.
+///
+/// **Chosen, not measured, and carries no confidence score.** What is measured
+/// is the behaviour it stands in for (`docs/rendering/start-gantry.md`, "What
+/// the original does after `GO`"): on Pulse the board keeps showing a strobing
+/// `GO` for at least 21 s of race clock. It never exits, never replays `3 2 1`
+/// and never shows the `Board` dressing, none of which the authored frames
+/// past 360 would let a *looping* clock avoid. How the original keeps the
+/// strobe going is unrecovered; looping the authored strobe span reproduces
+/// what a player sees and plays only frames the file authors.
+pub const GO_LOOP: (f32, f32) = (216.0 / 60.0, 349.0 / 60.0);
+
+/// `seconds` on Pulse's gantry clock, with the timeline held in its `GO` state:
+/// straight through until [`GO_LOOP`]'s end, then round that span forever.
+#[must_use]
+pub fn held_on_go(seconds: f32) -> f32 {
+    let (from, to) = GO_LOOP;
+    if seconds < to {
+        seconds
+    } else {
+        from + (seconds - from) % (to - from)
+    }
+}
+
 /// The gantry's own clock in seconds at race tick `tick`: zero until
 /// `start_tick`, then the asset's timeline at 60 frames a second.
 ///
@@ -110,6 +147,10 @@ pub struct Placed {
     /// The race tick the timeline starts on: [`CLOCK_START_TICK`] where it was
     /// measured (Pulse), `0` - the timeline off the race start - elsewhere.
     pub(super) clock_start_tick: u64,
+    /// Whether the timeline is held in its `GO` state ([`held_on_go`]) rather
+    /// than run on to the states past it. Pulse's alone, the same axis the
+    /// measured [`CLOCK_START_TICK`] sits on.
+    pub(super) holds_go: bool,
 }
 
 impl std::fmt::Debug for Placed {
@@ -118,6 +159,7 @@ impl std::fmt::Debug for Placed {
             .field("model", &self.model.label)
             .field("matrix", &self.matrix)
             .field("clock_start_tick", &self.clock_start_tick)
+            .field("holds_go", &self.holds_go)
             .finish()
     }
 }
@@ -184,6 +226,7 @@ pub(super) fn place(
         model,
         matrix,
         clock_start_tick,
+        holds_go: clock_start_tick != 0,
     })
 }
 
@@ -420,6 +463,7 @@ pub(super) struct Gantry {
     drawable: Drawable,
     matrix: Mat4,
     clock_start_tick: u64,
+    holds_go: bool,
 }
 
 impl Gantry {
@@ -458,12 +502,18 @@ impl Gantry {
             drawable,
             matrix: placed.matrix,
             clock_start_tick: placed.clock_start_tick,
+            holds_go: placed.holds_go,
         })
     }
 
     /// This gantry's timeline clock at race tick `tick`; see [`clock_seconds`].
     pub(super) fn clock_seconds(&self, tick: u64) -> f32 {
-        clock_seconds(self.clock_start_tick, tick)
+        let seconds = clock_seconds(self.clock_start_tick, tick);
+        if self.holds_go {
+            held_on_go(seconds)
+        } else {
+            seconds
+        }
     }
 
     /// The fog block this frame, shared with the rest of the scenery.

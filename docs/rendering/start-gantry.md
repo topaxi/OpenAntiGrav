@@ -234,8 +234,10 @@ its `GO` lands on the thrust release.** The numbers:
 - The measured thrust gate is **272 ticks = 4.533 s**
   (`oag_race::COUNTDOWN_TICKS` - see
   [`gameplay/race-modes.md`](../gameplay/race-modes.md#the-countdown-is-measured)).
-- The countdown panel **exits at frame 360/361 = 6.000 s**, 2.97 s after `GO`,
-  precisely as the 6.000 s texture loop closes.
+- The asset's countdown panel **exits at frame 360/361 = 6.000 s**, 2.97 s after
+  `GO`, precisely as the 6.000 s texture loop closes. **That is what the file
+  authors, not what the original was seen to do**: it never happens on a
+  stationary craft in 21 s (next section).
 
 The capture is in
 [`gameplay/race-modes.md`](../gameplay/race-modes.md#the-race-clock-starts-at-the-release):
@@ -262,6 +264,50 @@ start as before - chosen, not measured.
 
 `crates/game/src/race/gantry.rs::CLOCK_START_TICK` is that measurement, and the
 gantry's clock is `(tick - 92) / 60`.
+
+### What the original does after `GO`: it holds `GO`
+
+**Measured 2026-09-30.** Reported from play: past `GO`, a full `3 2 1 GO` strip
+stayed visible above the gantry, beside the banner. Reproduced first: on
+`16_Track`, `--race --ticks 460/700`, `start_light_background` (node 5) and
+`start_light_321go` (node 19) sit 9.99 units above the aperture (`--draws`
+lists both, `oag-view --anim-seconds 7.0` shows them stacked over `Board`),
+and the 6.000 s texture loop replays `3`, `2`, `1`, `GO` on them. The mount
+measures 45.5 x 10.4, so +9.99 is one aperture height up: the file authors
+"out of the aperture" and relies on the track's own structure to hide it, which
+this project's open-air draw does not have. Candidates (a) and (b) of the lane
+brief are ruled out (the transform track is played correctly, the UVs are the
+authored four cells); (c) is out too, the nodes are the countdown itself.
+
+Then the original, PPSSPP, `pulse-psp-usa.chd`, Talon's Junction, Time Trial,
+fresh profile, **craft not driven** (no thrust, so the gantry stays in view),
+one screenshot per ~0.4 s wall for 46 s, which is about 21 s of HUD race clock
+at the emulator's roughly half speed. Two runs agree:
+
+- The board goes green and reads `GO` on the release, and **keeps showing
+  `GO`, strobing between lit, dim and dark, through the whole capture.**
+- It never replays `3 2 1`, the panel never moves up out of the frame, nothing
+  sits above the banner, and the `Board`/`Text`/`Arrow` dressing (which the
+  file brings in at 5.85 s) never appears. The authored teleport at frame 360
+  is therefore not played in the original, at least on a stationary craft.
+
+**Fix** (`race::gantry::held_on_go`, `GO_LOOP`): Pulse's gantry clock runs to
+frame 349 and then loops frames 216 to 349, the span in which `GO`'s column
+strobes and before the `Board` teleports in at 350/351. **The loop is chosen,
+not measured, and carries no confidence score.** Measured is only the
+behaviour it stands in for: `GO` strobing indefinitely. How the original keeps
+the strobe going (a loop on the offset track, a per-state write, the gated
+accumulator at `0x0890cf34` above) is unrecovered. The strobe's period in the
+capture is visibly of the same order as the authored one (about 0.7 s) but
+was not measured against it. HD and 2048 are untouched: HD's glyph teleports
++10.004 at the same 6.000 s (`start_gantry_hd_ground_truth.rs`), and very
+likely shows the same strip, but its countdown was not captured.
+`crates/game/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
+never leaves the aperture on the held clock and does on the raw one.
+
+**Also seen, not touched:** ours draws the green chevron HUD hexagon over the
+banner's left end from tick ~460 on a stationary craft (it clips the `G`),
+where the original's stationary frames show none.
 
 ### What this retires: the two do not share a zero, and ours drew `GO` 1.5 s early
 
