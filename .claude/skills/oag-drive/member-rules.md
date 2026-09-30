@@ -24,6 +24,16 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   `env -u WAYLAND_DISPLAY WINIT_UNIX_BACKEND=x11 DISPLAY=:9N`.
   `DISPLAY` alone is not enough: `WAYLAND_DISPLAY` is inherited and winit
   prefers it, which has put member windows on the maintainer's desktop twice.
+  RADV cannot present on Xvfb (no DRI3) and draws black frames, so a windowed
+  `oag-game` there also needs software Vulkan:
+  `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`. Expect 5-7 fps.
+- **`--race` skips the front end.** Anything built by the front-end flow
+  (the EndRace screens, campaign state) never exists in a `--race` run. Walk
+  the menus instead, or use `--menu-page` for a still.
+- **Scope.** Stop after the steps your brief requires and gate. Stretch
+  goals come only after the gate is green, and only if the brief lists them.
+  A long wait on a race that will not finish is a signal to stop and find a
+  shorter path, not to wait longer.
 - **Audio.** `oag-game` always gets `--no-audio`; emulators run muted. Verify
   sound by writing WAV and inspecting it, never through the speakers.
 - **Processes.** Record the PID of everything you start, and kill only by
