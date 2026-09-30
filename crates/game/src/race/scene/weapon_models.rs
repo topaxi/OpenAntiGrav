@@ -35,9 +35,15 @@ pub(super) fn build(
     zone_art: &mesh_render::zone::StageArt,
     shadow_maps: mesh_render::ShadowMaps<'_>,
 ) -> Result<Vec<Drawable>> {
-    let mut drawables = Vec::new();
+    let mut drawables: Vec<Drawable> = Vec::new();
     if let Some(model) = model.filter(|model| !model.indices.is_empty()) {
         for _ in 0..oag_gameplay::projectile::MAX_PROJECTILES {
+            // Every slot but the first is another name for the first's GPU
+            // resources - see `Drawable::instance` for what it shares.
+            if let Some(slot) = drawables.first().map(|first| first.instance(device, queue)) {
+                drawables.push(slot);
+                continue;
+            }
             drawables.push(Drawable::new(
                 device,
                 queue,
@@ -122,6 +128,19 @@ pub(super) fn build_all(
 }
 
 impl super::Scene {
+    /// Each of the four projectile pools' length, and whether every slot in it
+    /// draws from the first slot's own vertex and index buffers.
+    #[cfg(test)]
+    pub(in crate::race) fn weapon_pool_sharing(&self) -> [(usize, bool); 4] {
+        [&self.rockets, &self.mines, &self.bombs, &self.cannon_rounds].map(|pool| {
+            let shared = pool.iter().all(|slot| {
+                pool.first()
+                    .is_some_and(|first| first.shares_geometry_with(slot))
+            });
+            (pool.len(), shared)
+        })
+    }
+
     /// Writes this tick's matrices onto the Rocket's, the Plasma bolt's, the
     /// Mine's, the Bomb's and the Cannon round's drawables, and hands back
     /// every matrix list so the caller can bound its own draw loops the same

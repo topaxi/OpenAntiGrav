@@ -160,8 +160,15 @@ comment already relied on for the sun occlusion pass. A pipeline cached from
 one `build()` call's layouts is exactly as valid against a later call's bind
 groups as one built fresh for it would have been.
 
-`Stage::build_race_stage` (`crates/game/src/main/stage.rs`) opens the scope
-around the one `race::Scene::new` call and logs what it did:
+`race::Scene::new` opens the scope itself and logs what it did. It used to be
+`Stage::build_race_stage` that opened it around the call, which left the
+`--screenshot` path (`race/capture.rs`) with no scope at all: every one of its
+~1,200 drawables (1,152 of them the weapon pools, 128 per model) compiled its
+own pipelines, about 7 MiB of resident memory each, and a headless Pulse or HD
+race peaked at 8.4 GiB where the same scene with the scope open peaks at about
+0.58 GiB. With the scope inside `Scene::new` no caller can forget it, and
+`race::tests::scene_build` fails when a pool of identical drawables stops
+sharing its pipelines:
 
 ```
 race scene build cache: shader 1196/1197 reused, pipeline 9806/9859 reused (53 distinct built)
@@ -176,6 +183,18 @@ against a real (adapter-gated) device and assert the second call's pipeline
 and shader module compare equal to the first's - `wgpu::RenderPipeline` and
 `wgpu::ShaderModule` both compare by handle, not content, so a stale-cache bug
 that handed back the wrong pipeline would fail these, not just look plausible.
+
+**A weapon pool is one drawable and 127 names for it.** `race/scene/weapon_models.rs`
+builds `MAX_PROJECTILES` (128) drawables per weapon model, one per pool slot,
+and the first is built whole with `Drawable::new` while the other 127 come from
+`Drawable::instance` (`race/drawable/instance.rs`): the same vertex and index
+buffers, textures, pipelines and fog buffer (reference-counted `wgpu` handles),
+plus a uniform buffer of their own for the slot's matrix, plus their own
+animation buffers when the model animates, because a Plasma blast scrubs one
+clock per slot. Built whole, a slot cost about 200 kB with the cache open (and
+about 7 MiB without it); shared, roughly 40 kB. Headless Pulse peaks at about
+340 MiB, HD at about 720, from 545 and 885 with a whole drawable per slot, and
+the frames are byte-identical (`race::tests::scene_build` pins the sharing).
 
 **Pixels checked unchanged, not just assumed:** `--race --screenshot ...
 --ticks 90 --hold cross --no-audio` on Pulse PSP, Pulse PS2 and Wipeout HD

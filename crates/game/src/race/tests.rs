@@ -38,6 +38,7 @@ mod reconcile;
 mod respawn;
 mod run_stats;
 mod scene;
+mod scene_build;
 mod shield_flash;
 mod spawn;
 mod spline;
