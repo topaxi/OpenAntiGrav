@@ -13,6 +13,7 @@ use super::*;
 // are `pub(super)`, so this reaches them by name rather than through the
 // parent's own imports.
 use super::draw::*;
+use super::pickup::*;
 
 /// The shape of the real `TimeTrial_HUD.xml`, cut to what this module reads.
 /// Every attribute spelling, the `FEConst->` indirection, the `<Item>`
@@ -310,6 +311,7 @@ fn the_clock_is_hidden_outside_the_timed_modes() {
     // did: 2048's own frame shows `TOTAL` beside `POS` in a race with a field.
     let unmeasured = oag_title::HudArt {
         total_time_timed_modes_only: false,
+        kill_column: false,
         ..*oag_pulse::hud::ART
     };
     assert!(shown(&unmeasured, Mode::Eliminator));
@@ -325,7 +327,7 @@ fn a_campaign_pace_substitutes_the_caption_and_the_countdown() {
     let strings = strings();
     let readout = Readout {
         time_trial_pace: Some(super::time_trial_pace::TimeTrialPace {
-            medal: oag_tables::race_campaign::Medal::Silver,
+            tier: super::time_trial_pace::PaceTier::Silver,
             remaining_ticks: 179,
             missed: false,
         }),
@@ -367,7 +369,7 @@ fn a_missed_campaign_pace_reddens_only_the_countdown() {
     let strings = strings();
     let readout = Readout {
         time_trial_pace: Some(super::time_trial_pace::TimeTrialPace {
-            medal: oag_tables::race_campaign::Medal::Bronze,
+            tier: super::time_trial_pace::PaceTier::Bronze,
             remaining_ticks: 0,
             missed: true,
         }),
@@ -740,11 +742,12 @@ fn an_image_with_no_src_is_a_solid_fill_rather_than_a_broken_sprite() {
     assert_eq!(layout.widget_count(), 1);
 }
 
-/// The floating opponent tags are anchored at runtime, so their authored
-/// position is an offset and may legitimately be negative.
+/// The multiplayer tags are anchored at runtime, so their authored position is
+/// an offset and may legitimately be negative. `PosTag0`-`PosTag7` are a fixed
+/// column and draw where they are authored.
 #[test]
-fn the_opponent_tags_are_not_screen_positioned() {
-    assert!(!is_screen_positioned("PosTag0"));
+fn only_the_multiplayer_tags_are_not_screen_positioned() {
+    assert!(is_screen_positioned("PosTag0"));
     assert!(!is_screen_positioned("PlrTag7"));
     assert!(is_screen_positioned("SpeedBar"));
     assert!(is_screen_positioned("Lap"));
@@ -863,5 +866,6 @@ pub(super) fn context<'a>(
         art: oag_pulse::hud::ART,
         hud_line_height: 25.0,
         small_line_height: 10.0,
+        default_line_height: 10.0,
     }
 }

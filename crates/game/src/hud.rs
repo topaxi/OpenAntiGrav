@@ -51,8 +51,10 @@ pub mod countdown;
 mod dialect_2048;
 mod draw;
 mod head_to_head;
+pub mod kill_tags;
 mod lap_splits;
 mod overlay;
+mod pickup;
 mod runtime;
 mod shield_bar;
 mod sight_draw;
@@ -62,10 +64,12 @@ mod widget;
 pub use assets::Assets;
 pub use compose::{Composed, compose};
 pub use countdown::Countdown;
-pub use draw::{Context, Frame, draw_list, pickup_icon_name, sprite_draw};
+pub use draw::{Context, Frame, draw_list, sprite_draw};
 pub use head_to_head::HeadToHead;
+pub use kill_tags::KillTag;
 pub use overlay::Overlay;
-pub use time_trial_pace::TimeTrialPace;
+pub use pickup::pickup_icon_name;
+pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
 pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
 
 // The two the outline default is built from. Everything else `draw` decides is
@@ -421,26 +425,20 @@ impl Layout {
     }
 }
 
-/// Widget-name prefixes this crate does not yet check the position of.
+/// Widget-name prefixes this crate does not check the position of.
 ///
-/// **The two are not the same kind of gap, corrected 2026-09-08.**
 /// `PlrTag0`-`PlrTag7` (`MPTag_HUD.xml`, multiplayer only) are the real
 /// runtime anchor this constant's name describes: their `<Values>` carries
-/// no `x`/`y` at all. `PosTag0`-`PosTag7` are not - they resolve to a fixed
-/// on-screen column, `(405, 25..165)` on the arcade layout and
-/// `(460, 25..165)` on the eliminator one, both measured and pinned by
-/// `postag_is_a_fixed_column_not_a_runtime_anchor`
-/// (`crates/game/tests/hud_layout_ground_truth.rs`) - an earlier reading
-/// took the arcade layout's inner `<Item OffsetX="-40">` alone and called
-/// the result negative, missing that the outer `<Item OffsetX="445">`
-/// composes with it. `PosTag` stays in this list anyway: what each of the
-/// eight rows draws is unread (no `idstring`, no `string`), so the anchor
-/// being on screen does not mean a label's own text width is checkable yet.
-/// See `docs/ui/hud.md`.
+/// no `x`/`y` at all. `PosTag0`-`PosTag7` used to be listed here and are not
+/// any more: they resolve to a fixed on-screen column, `(405, 25..165)` on
+/// the arcade layout and `(460, 25..165)` on the eliminator one, both
+/// measured and pinned by `postag_is_a_fixed_column_not_a_runtime_anchor`
+/// (`crates/game/tests/hud_layout_ground_truth.rs`), and the Eliminator's
+/// kill column now draws in them - see [`kill_tags`]. See `docs/ui/hud.md`.
 ///
 /// This exists because the on-screen check is otherwise the sharpest test of the
 /// `<Item>` handling, and these eight would force it to be dropped entirely.
-pub const RUNTIME_ANCHORED: &[&str] = &["PosTag", "PlrTag"];
+pub const RUNTIME_ANCHORED: &[&str] = &["PlrTag"];
 
 /// Whether a widget's authored position is a screen coordinate at all.
 ///
@@ -498,7 +496,7 @@ const TICKS_PER_SECOND: f64 = 60.0;
 /// A plain snapshot, deliberately: [`draw_list`] takes this rather than a
 /// `&Race`, so the whole HUD is testable without a world, a track or a GPU. Every
 /// field is a value the simulation already has or a documented gap.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Readout {
     /// Speed in km/h - `|velocity| * 3.6`, using the recovered factor in
     /// [`oag_render::exhaust::SPEED_TO_KMH`].
@@ -658,23 +656,25 @@ pub struct Readout {
     /// The race's mode. Read by a title's runtime HUD rules, which the
     /// original keys on its own mode id - see `hud::runtime`.
     pub mode: oag_race::Mode,
-    /// The campaign Time Trial/Speed Lap "pacing" indicator -
+    /// The Time Trial/Speed Lap "pacing" indicator -
     /// `Hud_UpdateTimeCluster`'s tier/target/redden triple
-    /// (`*(hud+0x3c)+0x34`/`+0x30`/`+0x38`), for the gold/silver/bronze
-    /// ladder of the campaign branch (`DAT_08b30ffc != 0`) alone. `None`
-    /// outside a campaign Time Trial/Speed Lap cell. Two things the
-    /// original's own ladder does that this field does not reproduce, both
-    /// named rather than silently dropped - see
-    /// [`TimeTrialPace::from_elapsed`]'s own doc:
-    /// `RECORD` beating a personal best even on a campaign cell
-    /// (`FUN_088091a0`, unread), and the whole non-campaign ghost/record
-    /// branch (a non-campaign Time Trial still draws the plain elapsed
-    /// `TotalTime` it always has). See
+    /// (`*(hud+0x3c)+0x34`/`+0x30`/`+0x38`): a campaign cell's
+    /// gold/silver/bronze ladder, or `RECORD` against the stored best and the
+    /// track's authored time. `None` outside those two modes, and whenever the
+    /// track's `stats.xml` did not load, which leaves the plain elapsed clock.
+    /// See [`pace_for`] and
     /// `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`.
     pub time_trial_pace: Option<TimeTrialPace>,
     /// Head2Head's gap to the opponent, `None` outside a two-craft Head2Head
     /// race. See [`HeadToHead`].
     pub head_to_head: Option<HeadToHead>,
+    /// The Eliminator's kill column, top row first: one row per craft, already
+    /// in the order the original draws them. Empty in every other mode. See
+    /// [`kill_tags`].
+    pub kill_tags: Vec<KillTag>,
+    /// The Eliminator's kill target, resolved: the number in `KILLS (5)`.
+    /// Zero in every other mode. See [`kill_tags::header`].
+    pub kill_target: u32,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.

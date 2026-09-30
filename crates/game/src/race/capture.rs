@@ -325,9 +325,16 @@ pub fn capture(
         clouds,
         ghost_static,
         ripples,
+        track_stats,
         ..
     } = loaded;
     let mode = setup.mode;
+    let record_target = crate::hud::RecordTarget::new(
+        setup.mode,
+        &setup.class,
+        track_stats.as_ref(),
+        options.previous_best.as_ref(),
+    );
     let weapons_on = setup.weapons_on();
     // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
@@ -840,12 +847,15 @@ pub fn capture(
                 readout.zone_stage = scene.zone_stage().unwrap_or(0);
                 readout.zone_next_in =
                     scene.zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
-                // `readout.time_trial_pace` is deliberately left `None` here,
-                // unlike `RaceStage::draw_hud`'s own equivalent line: this
-                // headless capture path has no campaign cell in scope at all
-                // (see this function's own `campaign_medal: None` a few
-                // lines up), so there is nothing for `TimeTrialPace` to read
-                // off - `None` is correct, not an oversight.
+                // No campaign cell on this path (`campaign_medal: None` above):
+                // no ladder, so `RECORD`.
+                readout.time_trial_pace = crate::hud::pace_for(
+                    readout.mode,
+                    readout.race_ticks,
+                    readout.lap_ticks,
+                    None,
+                    record_target.as_ref(),
+                );
                 overlay.draw(
                     &device,
                     &queue,

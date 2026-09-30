@@ -10,8 +10,8 @@
 //! `Easy`/`Venom`, matching that page character for character.
 //!
 //! ```text
-//! <RaceTimes Venom="138" Flash="128" Rapier="119" Phantom="117"/>
-//! <LapTimes  Venom="33"  Flash="25"  Rapier="29"  Phantom="38"/>
+//! <RaceTimes Venom="117" Flash="138" Rapier="119" Phantom="128"/>
+//! <LapTimes  Venom="38"  Flash="33"  Rapier="29"  Phantom="25"/>
 //! <Targets Elimination="10" Zone="25"/>
 //! <Physical Length="5178"/>
 //! <SkillLevels>
@@ -26,7 +26,14 @@
 //!
 //! (element and attribute names already expanded by [`crate::fexml`] - the
 //! file on disc spells them `<k>`/`<l>`/`<c>`/`<f>` and one/two-letter
-//! attributes, per the shipped `<code>` dictionary.)
+//! attributes, per the shipped `<code>` dictionary. **The dictionary, not the
+//! order, says which class a figure is**: the file spells `<RaceTimes n="138"
+//! m="128" o="119" p="117"/>` with `n`=Flash, `m`=Phantom, `o`=Rapier,
+//! `p`=Venom. An earlier revision of this comment had Venom and Flash and
+//! Phantom rotated; a live PPSSPP read of `DAT_08b310b4+0xa0` gives
+//! `(117.0, 138.0, 119.0, 128.0)` in Venom/Flash/Rapier/Phantom order, and
+//! `RaceTimes` are **seconds** - `PlayerStatus_Update` multiplies them by 100
+//! into centiseconds, and the HUD's `record` counts down from `1.57.0`.)
 //!
 //! `TrackStats_Load` (`0x088c454c`) and `TrackStats_ParseElement`
 //! (`0x088c46f8`) in `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`
@@ -45,9 +52,12 @@
 //! [`resolve_skill_scale`] - see that function's own doc.
 //!
 //! `RaceTimes`/`LapTimes`/`Targets`/`Physical` are parsed and carried too,
-//! since they are on the same record, but nothing in this crate reads them
-//! yet - `docs/formats/race-setup.md`'s own note that a single number per
-//! class has no established gold/silver/bronze split still applies.
+//! since they are on the same record. This crate reads neither;
+//! `oag_game::hud::RecordTarget` does, for the Time Trial and Speed Lap
+//! `RECORD` readout - `<RaceTimes>` (whole race) and `<LapTimes>` (one lap),
+//! both seconds. `docs/formats/race-setup.md`'s note that a single number per
+//! class carries no gold/silver/bronze split still applies: that split is a
+//! campaign cell's own.
 
 use crate::fexml::{self, Node};
 use crate::handling::SpeedClass;
@@ -57,7 +67,7 @@ use crate::race_campaign::{Cell, Difficulty};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TrackStats {
     /// `<RaceTimes>`, one figure per class, indexed by [`SpeedClass`]'s own
-    /// discriminant. Units not established - see the module docs.
+    /// discriminant. Seconds - see the module docs.
     pub race_times: [f32; 4],
     /// `<LapTimes>`, the same shape.
     pub lap_times: [f32; 4],

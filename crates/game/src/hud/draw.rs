@@ -11,9 +11,10 @@
 //! HUD would draw. [`super::Overlay`] is the half that does.
 
 use super::{
-    Draw, Font, Label, Layout, Precision, Readout, Sprite, VertAlign, argb_to_rgba, colour,
-    format_lap_time, is_screen_positioned,
+    Draw, Font, Label, Layout, Precision, Readout, Sprite, VertAlign, format_lap_time,
+    is_screen_positioned,
     lap_splits::{lap_split_row_text, lap_split_sprites},
+    pickup::{pickup_model_draws, pickup_sprites},
 };
 
 /// The colour a glyph's baked outline takes when a widget names none.
@@ -175,6 +176,10 @@ pub(super) fn text_for(
         // gated by `ALWAYS_ON` the way sprites are: a second `POS` label with
         // nothing under it, floating beside the real one.
         "PositionTxt2" => None,
+        // The Eliminator's kill column - `PosTag0` to `PosTag7`. See
+        // [`super::kill_tags`].
+        "KillsText" => super::kill_tags::header(readout, label, strings),
+        name if name.starts_with("PosTag") => super::kill_tags::text(readout, name, strings),
         "Lap" => (readout.lap > 0).then(|| readout.lap.to_string()),
         "Lap Outof" => (readout.laps > 0).then(|| readout.laps.to_string()),
         // 2048's own name and own shape: one widget for the whole `1/3`
@@ -199,11 +204,11 @@ pub(super) fn text_for(
         // place only when the two actually coincide - see
         // [`place_owns_the_anchor`], `false` throughout on 2048.
         //
-        // **A campaign Time Trial/Speed Lap cell substitutes a countdown to
-        // the next medal for the plain elapsed clock** -
-        // [`Readout::time_trial_pace`], `Hud_UpdateTimeCluster_q`'s own law.
+        // **A Time Trial/Speed Lap counts down to a target (a campaign
+        // medal, or the record) instead of the plain elapsed clock** -
+        // [`Readout::time_trial_pace`], `Hud_UpdateTimeCluster_q`'s law.
         // `0` once [`super::TimeTrialPace::missed`], which is what a missed
-        // bronze target shows alongside `TotalTime`'s own reddened colour -
+        // target shows alongside `TotalTime`'s own reddened colour -
         // see [`time_trial_colour`].
         "TotalTime" => (!place_shown).then(|| match readout.time_trial_pace {
             Some(pace) => format_lap_time(u64::from(pace.remaining_ticks), Precision::Tenths),
@@ -211,7 +216,7 @@ pub(super) fn text_for(
         }),
         "TotalTimeTxt" => (!place_shown)
             .then(|| match readout.time_trial_pace {
-                Some(pace) => Some(super::time_trial_pace::medal_caption(pace.medal, strings)),
+                Some(pace) => Some(super::time_trial_pace::tier_caption(pace.tier, strings)),
                 None => caption(label, strings),
             })
             .flatten(),
@@ -518,168 +523,6 @@ pub(super) fn place_owns_the_anchor(layout: &Layout, readout: &Readout) -> bool 
 /// [`place_owns_the_anchor`] makes from two coincident anchors.
 pub(super) const SPEED_UNIT_WIDGET: &str = "SpeedBarTextKMH";
 
-/// The backdrop the held pickup's icon sits on.
-///
-/// Authored `Centred="true"` at `x=240` - the middle of the PSP's 480.
-pub(super) const PICKUP_BACKGROUND: &str = "PickupBackground";
-
-/// The layout's sprite name for one weapon's icon.
-///
-/// **A name rule, not an id table, and that is a finding rather than a
-/// convenience.** `docs/ui/hud.md` recorded these as "14 `*Icon` widgets" whose
-/// "icon ids are numeric", with no id-to-weapon mapping known. Read off the
-/// disc, `Arcade_HUD.xml` authors **thirteen** and names each after its weapon's
-/// own `type` string - `TurboIcon`, `ShieldIcon`, `RocketIcon` and so on - which
-/// is exactly `weapons::Weapon::ALL`. So the lookup needs nothing recovered:
-/// the layout and the weapon table agree on the spelling, misspellings
-/// (`LeachBeam`, `Repulser`) included.
-///
-/// The numeric ids are still real - `0x0883b3b8` forces one - and are simply not
-/// needed to draw the right icon.
-#[must_use]
-pub fn pickup_icon_name(weapon: oag_tables::weapons::Weapon) -> String {
-    format!("{}Icon", weapon.as_type())
-}
-
-/// The sprites a held pickup adds to the frame, in paint order.
-///
-/// Empty when nothing is held. The backdrop takes the held weapon's own colour
-/// when `art.pickup_colours` has measured one - see `oag_pulse::hud::
-/// PICKUP_COLOURS` for what that measurement is and is not - and otherwise
-/// falls back to a title whose `art.pickup_backdrop_colour` names a constant,
-/// or is drawn as authored if neither answers. It is skipped entirely on a
-/// title that already draws it as part of `art.always_on`, so HD's backdrop is
-/// one quad whether or not a pickup is held rather than two stacked on the
-/// same pixels.
-pub(super) fn pickup_sprites(
-    layout: &Layout,
-    weapon: oag_tables::weapons::Weapon,
-    art: &oag_title::HudArt,
-) -> Vec<Sprite> {
-    if let Some(uv_table) = art.pickup_icon_uv {
-        return super::dialect_2048::pickup_sprites_uv_rewrite(layout, weapon, uv_table);
-    }
-    let icon = pickup_icon_name(weapon);
-    let backdrop = (!art.always_on.contains(&PICKUP_BACKGROUND)).then_some(PICKUP_BACKGROUND);
-    // Backdrop first: the icon sits on it, and paint order here is the layout's
-    // own back-to-front convention.
-    backdrop
-        .into_iter()
-        .chain([icon.as_str()])
-        .filter_map(|name| layout.sprite(name))
-        .map(|sprite| {
-            let mut sprite = sprite.clone();
-            if sprite.name == PICKUP_BACKGROUND {
-                // `pickup_colours` is positional - see its own doc comment -
-                // indexed the same way `Weapon::ALL` declares its thirteen.
-                if let Some(argb) = art
-                    .pickup_colours
-                    .and_then(|colours| colours[weapon as usize])
-                {
-                    sprite.color = argb_to_rgba(argb);
-                } else if let Some(raw) = art
-                    .pickup_backdrop_colour
-                    .and_then(|key| layout.constants.get(key))
-                {
-                    // Only when this title asks for the substitution *and* the
-                    // layout defines the constant it names. A source that does
-                    // not gets the authored colour and, on Pulse, the
-                    // unreadable picture - which is the honest failure: this
-                    // build does not know what colour the backdrop is, and
-                    // inventing one for a layout that never offered it would
-                    // be a second guess on top of the first.
-                    sprite.color = colour(&layout.constants, Some(raw));
-                }
-            }
-            sprite
-        })
-        .collect()
-}
-
-/// [`pickup_sprites`]'s counterpart for Pure's dialect: the held pickup's
-/// icon as a `<Mode3D><Model>` draw, plus its backdrop grid, rather than
-/// `<Image>` sprites.
-///
-/// Empty whenever `cx.art.pickup_icon_models` is `None` (every title but
-/// Pure, so far), whenever the held weapon's slot in it is `None` - Pure
-/// authors no icon for `Cannon`, `LeachBeam`, `Repulser` or `Shuriken`, and a
-/// Pure race can hand out the last of those (`oag_gameplay::pickup::
-/// IMPLEMENTED`), so this is a live path and not a dead branch - or whenever
-/// the model failed to build or its art did not reach the sheet, which
-/// [`crate::race::hud::vex_model_art`] reports and this draws nothing for
-/// rather than guessing a placeholder size.
-///
-/// **Draws the backdrop grid first**, the same paint order [`pickup_sprites`]
-/// puts the icon over `PICKUP_BACKGROUND` in, and for the same reason: the
-/// icon sits on it.
-pub(super) fn pickup_model_draws(
-    cx: &Context<'_>,
-    weapon: oag_tables::weapons::Weapon,
-) -> Vec<Draw> {
-    let Some(models) = cx.art.pickup_icon_models else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    if let Some(name) = cx.art.pickup_icon_backdrop_model {
-        out.extend(model_draw(cx, name, [1.0, 1.0, 1.0, 1.0]));
-    }
-    if let Some(name) = models[weapon as usize] {
-        // The model's own authored `colour` - see `Model::colour`'s doc for
-        // why this is not routed through `pickup_colours`' substitution at
-        // all: there is nothing to substitute, the XML already carries the
-        // final answer. White is the fallback for a name this table gives
-        // that the layout does not actually author with a `colour=`, which
-        // none of Pure's ten currently are.
-        let tint = cx
-            .layout
-            .models
-            .iter()
-            .find(|model| model.name == name)
-            .and_then(|model| model.colour)
-            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
-        out.extend(model_draw(cx, name, tint));
-    }
-    out
-}
-
-/// One `<Mode3D><Model>` widget as a flat, tinted quad - the icon and grid
-/// widgets' shared shape, neither of which rotates the way the sight brackets
-/// do.
-///
-/// `None` when the widget is not in the layout, its model did not resolve
-/// into the sheet, or the sheet holds no [`crate::sprite::Placed::quad_extent`]
-/// for it - the last being why [`crate::race::hud::vex_model_art`] computes
-/// one for every model it decodes rather than leaving it for the sight
-/// brackets' hand-measured `SIGHT_SIZE` to answer for widgets it was never
-/// measured against.
-fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
-    let model = cx.layout.models.iter().find(|model| model.name == name)?;
-    let placed = cx.sheet.get(&model.src)?;
-    let [w, h] = placed.quad_extent?;
-    let [x, y, _z] = model.position;
-    Some(Draw::BlendedSprite {
-        // Centred on its own authored position, the same convention the sight
-        // brackets' quads use - see `bracket_draws`.
-        rect: [x - w * 0.5, y - h * 0.5, w, h],
-        uv: [
-            placed.x as f32,
-            placed.y as f32,
-            placed.width as f32,
-            placed.height as f32,
-        ],
-        color,
-        // Neither the icon nor its grid turns - the sight brackets are the only
-        // `<Mode3D>` widget that does.
-        rotation: 0.0,
-        // The model's own declared class. **Unmeasured here**: no Pure disc is
-        // present in this worktree, so what Pure's eleven icon models declare
-        // is whatever their own `pass_mask` says, taken as read. A model whose
-        // batches are opaque carries `None` and draws exactly as it did before
-        // this variant existed. See `crate::sprite::Placed::blend`.
-        blend: placed.blend,
-    })
-}
-
 /// Everything the HUD needs that does not change from frame to frame.
 ///
 /// Bundled rather than passed as four arguments because the caller assembles it
@@ -705,6 +548,9 @@ pub struct Context<'a> {
     pub hud_line_height: f32,
     /// Line height of the `HUDSmall` font, as actually loaded.
     pub small_line_height: f32,
+    /// Line height of the `Default` font (`pulse_text.fnt`), as actually
+    /// loaded. Only the per-craft rows use it - see [`super::kill_tags`].
+    pub default_line_height: f32,
     /// What a widget with no `BorderColor` outlines its glyphs in.
     ///
     /// 57 of the 84 HUD-font widgets are in that position, and the original draws
@@ -714,9 +560,9 @@ pub struct Context<'a> {
 
 /// One frame's worth of HUD, split by which pass draws it.
 ///
-/// Three lists rather than one because a [`crate::render::Renderer`] binds
-/// exactly one font atlas, so the two text fonts cannot share a pass. Draw them
-/// in field order: sprites, then `HUD` text, then `HUDSmall` text.
+/// Four lists rather than one because a [`crate::render::Renderer`] binds
+/// exactly one font atlas, so the three text fonts cannot share a pass. Draw them
+/// in field order: sprites, then `HUD`, `HUDSmall` and `Default` text.
 ///
 /// Splitting text across two passes means paint order is no longer strictly the
 /// layout's document order *between* fonts. That is safe here because no label
@@ -730,19 +576,24 @@ pub struct Frame {
     pub hud_text: Vec<Draw>,
     /// Text in the `HUDSmall` font: the captions.
     pub small_text: Vec<Draw>,
+    /// Text in the `Default` font: the per-craft rows.
+    pub default_text: Vec<Draw>,
 }
 
 impl Frame {
     /// Whether there is nothing at all to draw.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.sprites.is_empty() && self.hud_text.is_empty() && self.small_text.is_empty()
+        self.sprites.is_empty()
+            && self.hud_text.is_empty()
+            && self.small_text.is_empty()
+            && self.default_text.is_empty()
     }
 
     /// How many quads' worth of work this frame is, for a log line.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.sprites.len() + self.hud_text.len() + self.small_text.len()
+        self.sprites.len() + self.hud_text.len() + self.small_text.len() + self.default_text.len()
     }
 }
 
@@ -795,6 +646,19 @@ pub(super) fn top_edge(label: &Label, line_height: f32) -> f32 {
 /// too faint to see at that exposure, this rule is what to revisit.
 #[must_use]
 pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
+    // The kill column is Pulse's alone - see [`oag_title::HudArt::kill_column`].
+    let ungated;
+    let readout =
+        if cx.art.kill_column || (readout.kill_tags.is_empty() && readout.kill_target == 0) {
+            readout
+        } else {
+            ungated = Readout {
+                kill_tags: Vec::new(),
+                kill_target: 0,
+                ..readout.clone()
+            };
+            &ungated
+        };
     let mut frame = Frame::default();
 
     // An always-on name draws **once**, even where the layout authors it twice.
@@ -923,11 +787,23 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         if text.is_empty() {
             continue;
         }
-        let small = label.font == Font::Small;
-        let line_height = if small {
-            cx.small_line_height
-        } else {
-            cx.hud_line_height
+        // The kill column's rows are drawn at the size the row's own craft
+        // gets: the player's larger. Everything downstream reads `label`.
+        let scaled;
+        let label = match super::kill_tags::scale(readout, &label.name) {
+            Some(factor) => {
+                scaled = Label {
+                    scale: label.scale * factor,
+                    ..label.clone()
+                };
+                &scaled
+            }
+            None => label,
+        };
+        let line_height = match label.font {
+            Font::Small => cx.small_line_height,
+            Font::Default => cx.default_line_height,
+            Font::Hud => cx.hud_line_height,
         };
         // The next class's name is the one widget in any layout whose authored
         // position this build overrides, because the layout authors it as a
@@ -952,10 +828,10 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             text,
             wrap_width: None,
         };
-        if small {
-            frame.small_text.push(draw);
-        } else {
-            frame.hud_text.push(draw);
+        match label.font {
+            Font::Small => frame.small_text.push(draw),
+            Font::Default => frame.default_text.push(draw),
+            Font::Hud => frame.hud_text.push(draw),
         }
     }
 

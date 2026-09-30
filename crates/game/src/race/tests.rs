@@ -165,6 +165,7 @@ fn setup(handling: Handling) -> Setup {
         absorb_burst: None,
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
+        slot_teams: Vec::new(),
         trail_sparks: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),

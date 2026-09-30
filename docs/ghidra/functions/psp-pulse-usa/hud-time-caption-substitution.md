@@ -100,14 +100,13 @@ cell, against that cell's own `gold`/`silver`/`bronze` fields
 (`oag_tables::race_campaign::Cell`, `DAT_08b30ffc+0xa0/0xa4/0xa8`) rather
 than anything invented, **except when the player's own stored personal
 best for the cell already beats gold and the live pace beats that too**, in
-which case the original shows `RECORD` instead - a second, still-unread
-source (`FUN_088091a0`), which `oag_game::hud::TimeTrialPace` does not
-reproduce. Otherwise (no campaign cell) the tier is always `RECORD`,
-compared against that same personal-best store narrowed by the track's own
-`RaceTimes` record - see
+which case the original shows `RECORD` instead (the stored best is
+`Profile_GetBestRaceTime`, `0x088091a0`, read 2026-09-30). Otherwise (no
+campaign cell) the tier is always `RECORD`, compared against that same
+personal-best store narrowed by the track's own `RaceTimes` record - see
 [race-progress.md](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28)
-for the full branch structure and what `oag_game::hud::TimeTrialPace`
-does and does not carry forward.
+for the full branch structure and
+[the stored best](race-progress.md#the-stored-best-fun_088091a0-and-the-record-branch-closed-2026-09-30).
 
 What race-progress.md leaves open, restated here since this page named it
 first: `param_1 + 0x30` (`iVar5` above, `-1` hides both the numeric and
@@ -175,27 +174,27 @@ under the fix that page describes before spending more time on this by hand.
 **Settled:** the substitution is a real, single, table-driven mechanism keyed
 on an ordinal state - not five independent code paths, not a per-mode
 `match`. `oag_game::hud::draw::caption`'s fallback, resolving `TotalTimeTxt`
-straight off the layout's own `idstring`, is correct only for every tier
-this table maps back to `IG_HUD_TOTAL`: the whole of a race in a mode
-outside `{5, 0x11, 10, 7}` (every mode but Time Trial/Speed Lap/the two
-unnamed ones), plus `DAT_08ab0de0 == 0`. **Not** a non-campaign Time
-Trial/Speed Lap - the reference frame this page opened with is exactly that
-case, reading `record`, not `Total`.
+straight off the layout's own `idstring`, is correct only for the tiers this
+table maps back to `IG_HUD_TOTAL`: a race in a mode outside `{5, 0x11, 10, 7}`
+(where the widget pair is hidden anyway), `DAT_08ab0de0 == 0`, and a track whose
+record did not load.
 
-**Settled and implemented, 2026-09-28:** `IG_HUD_BRONZE`/`SILVER`/`GOLD`
-wired for a campaign Time Trial/Speed Lap cell -
-[race-progress.md](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28)
-found the real source for tiers `0`-`2`, `Cell::gold`/`silver`/`bronze`, so
-this is no longer the invented stand-in the previous revision of this
-section forbade. `draw.rs`'s `TotalTime`/`TotalTimeTxt` arms now check
-[`Readout::time_trial_pace`](../../../../crates/game/src/hud.rs) first and
-fall back to the plain reading above when it is `None`.
+**Settled and implemented, 2026-09-30:** all four captions.
+`IG_HUD_BRONZE`/`SILVER`/`GOLD` for a campaign Time Trial/Speed Lap cell
+(2026-09-28), and `IG_HUD_RECORD` for a plain Time Trial or Speed Lap and for a
+campaign cell whose stored best already beats gold -
+[race-progress.md](race-progress.md#the-stored-best-fun_088091a0-and-the-record-branch-closed-2026-09-30)
+has the source (`min(stored best, <RaceTimes>/<LapTimes>)`) and the live frame
+it was checked on: `record 1.33.2` at `0.23.7` on a Venom Time Trial on Talon's
+Junction, reproduced as `1.33.2` at `0.23.8` on ours. `draw.rs`'s
+`TotalTime`/`TotalTimeTxt` arms read
+[`Readout::time_trial_pace`](../../../../crates/game/src/hud.rs), which
+`RaceStage::draw_hud` and the headless capture both fill; `None` leaves the
+plain reading above.
 
-**Still not settled:** `IG_HUD_RECORD`, on both paths - `FUN_088091a0`'s own
-per-team split-time record store, which this project has no equivalent of.
-Not only the non-campaign Time Trial/Speed Lap/`0x11` case: a campaign cell
-whose player has a personal best already faster than gold shows `RECORD`
-too, and `oag_game::hud::TimeTrialPace` does not produce it - it shows
-`GOLD` there instead, a known, documented gap rather than a silent one. See
-[race-progress.md](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28)'s
-own "What stays open".
+**Still not settled, and chosen rather than measured:** the stored best. The
+original's store is per team (`Profile_GetBestRaceTime`, `0x088091a0`);
+`oag_game::records::Key` is circuit, mode and class, so a run in one team's
+ship races the best of any team's. No live frame has a *stored* best on it
+(the profile used holds none), so the `min` and the campaign `RECORD` branch
+are the decompile plus unit tests, not a frame.

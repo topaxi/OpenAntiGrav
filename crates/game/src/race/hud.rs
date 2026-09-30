@@ -168,11 +168,32 @@ pub(super) fn load_hud(
         }
     };
 
+    // The `Default` face, only for a layout with a widget that names it (on
+    // Pulse, the Eliminator's kill column), so a layout without one costs no
+    // second font decode and no report line about a role it never asked for.
+    let default_font = if layout.as_ref().is_some_and(|layout| {
+        layout
+            .labels
+            .iter()
+            .any(|label| label.font == crate::hud::Font::Default)
+    }) {
+        hud_font(
+            archives,
+            &languages,
+            chosen,
+            oag_ui::language::roles::DEFAULT,
+            report,
+        )
+    } else {
+        font.clone()
+    };
+
     crate::hud::Assets {
         layout,
         sheet,
         font,
         small_font,
+        default_font,
         strings,
         // The grid the layout's numbers are in, off the mounted source rather
         // than defaulted: `Space::default()` is the PSP's 480x272, and an HD

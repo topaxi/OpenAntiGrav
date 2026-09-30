@@ -550,6 +550,7 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
                 // collision, so they are the disc's.
                 hud_line_height: 25.0,
                 small_line_height: 10.0,
+                default_line_height: 10.0,
             },
             &readout,
         );

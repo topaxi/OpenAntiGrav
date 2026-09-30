@@ -66,6 +66,7 @@ impl Race {
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors,
+            slot_teams,
             ..
         } = setup;
 
@@ -451,6 +452,7 @@ impl Race {
                     Rng::new(super::engine_light::engine_light_seed(slot))
                 }),
                 spark_anchors,
+                slot_teams,
                 collision_fx,
                 sparks: psys::System::new(),
                 effects,

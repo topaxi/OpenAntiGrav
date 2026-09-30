@@ -4,36 +4,22 @@ The layout was never an RE problem - Pulse ships five layouts as `Data\XML\*_HUD
 
 ## Open
 
-- **The mode-code string-key substitution rule is read for one widget pair, not
-  generalised.** `TimeTrial_HUD.xml`'s `TotalTimeTxt` (`idstring="IG_HUD_TOTAL"`)
-  reads `IG_HUD_RECORD` on a live frame because `Hud_UpdateTimeCluster_q`
-  (`0x0881c9d0`) picks its caption key from a five-way table keyed on an ordinal
-  "tier" (`IG_HUD_TOTAL` default; `0`-`3` map to `BRONZE`/`SILVER`/`GOLD`/`RECORD`;
-  `5` leaves the caption alone). Confidence 84 for the table itself - see
-  [hud-time-caption-substitution.md](../../docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md).
-  **Not settled:** what produces the tier value (confidence 50, not renamed), and
-  the other 25 of the binary's 38 `IG_HUD_*` keys with no widget in any shipped
-  layout - only this one pair was chased.
+- ~~**The mode-code string-key substitution rule is read for one widget pair.**~~
+  **Closed 2026-09-30 for that pair**: all four captions
+  (`IG_HUD_BRONZE`/`SILVER`/`GOLD`/`RECORD`) are wired, `RECORD` against
+  `min(stored best, <RaceTimes>/<LapTimes>)`; see
+  [hud.md](../../docs/ui/hud.md#medal-targets-closed-2026-09-28). **Still
+  chosen, not measured**: the stored best is keyed by circuit, mode and class,
+  where the original's is per team; and no live frame has a stored best on it.
+  The other 25 of the binary's 38 `IG_HUD_*` keys were not chased.
 - 25 of the binary's 38 `IG_HUD_*` keys still appear in no layout and have no
   read mechanism (down from 26, now that `IG_HUD_RECORD` is accounted for).
 - Zone, Eliminator, `<Mode3D>` and text outlines are scoped out (details on `hud.md`)
 
 ## Next Steps
 
-- **Implementation is blocked on RE, not ready to wire.** Wiring
-  `IG_HUD_BRONZE`/`SILVER`/`GOLD`/`RECORD` into `oag_game::hud::draw::caption`
-  without a real source for the tier value would invent the medal/record
-  evaluation this thread did not recover - the stand-in this project's rules
-  forbid. It waited on lap-timing and medal-progression data; **the lap half
-  is read as of 2026-09-16**
-  ([race-progress.md](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md):
-  `craft+0x928`/`+0x930` are the last and best lap, and the same function
-  raises the HUD's record and final-lap flags at `"PLAYER_HUD"+0xe0`), so what
-  still blocks the tier value is the medal-progression half
-  ([hud.md](../../docs/ui/hud.md)'s "Medal targets" deferred item).
-- If picked up again: `Hud_UpdateTimeCluster_q` has no confirmed caller (see its
-  evidence page) - reads on `param_1 + 0x30`/`+ 0x34`/`+ 0x5a` and on what widgets
-  land at `+ 0x200`/`+ 0x204` are the next things to chase. **The PSP relocation
-  patch landed 2026-09-07** (`HANDOVER.md`, "Traps that are live") - `get_xrefs_to`
-  and `get_function_callers` should no longer be invisible on `psp-pulse-usa`,
-  so this is unblocked and not yet retried.
+- **Measure a stored best on a live frame**: set a Time Trial best on the
+  original (a finished race), then read `PLAYER_HUD+0x30`/`+0x34` on the next
+  one - it would settle the `min` and the per-team keying
+  (`Profile_GetBestRaceTime`, [race-progress.md](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md#the-stored-best-fun_088091a0-and-the-record-branch-closed-2026-09-30)).
+- Read the other 25 `IG_HUD_*` keys' triggers, one at a time.

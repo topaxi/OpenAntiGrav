@@ -145,14 +145,12 @@ use it; Pure, whose own Eliminator layout has never been read off its disc,
 falls back to `arcade` - the same "no dedicated file, reuse one that exists"
 shape this page's own `speed_lap`/`time_trial` row already has.
 
-**Only the layout is wired.** Nothing here yet substitutes kill/death counts,
-the `PosTag` column, or any of this layout's own widgets with live numbers -
-`oag_gameplay::hash::write_world` now carries `Standing::kills`/`deaths` as
-real simulation state (`docs/gameplay/race-modes.md#eliminator`), but no HUD
-draw call reads either field. This is the same, already-documented gap
-`docs/gameplay/race-modes.md` records for `Zone_HUD.xml` - the substitution
-rule between a mode's own counters and the widgets a layout positions is
-unread on every layout, not only this one - and Eliminator does not close it.
+**The layout, the `PosTag` kill column and the `KILLS (n)` header are wired**
+(see the `PosTag` section above); `Standing::kills` reaches the screen through
+`Race::readout`. Deaths and this layout's other counters are not drawn, which is
+the same gap `docs/gameplay/race-modes.md` records for `Zone_HUD.xml`: the
+substitution rule between a mode's own counters and the widgets a layout
+positions is unread on every layout but the ones read one at a time.
 
 ## The schema
 
@@ -360,16 +358,24 @@ anchors would have no reason to be. `Elimination_HUD.xml` corroborates at
 its own `x=460`, needing no composing at all since its `PosTag` block sits
 in a single, unnested `<Item OffsetX="460" OffsetY="5">`.
 
-**What is still unread is what the eight rows draw.** Neither carries an
-`idstring` or a `string`, so the content is runtime-supplied and this page
-does not know whether a row shows a name, a place number, or both -
-filling it in would be inventing what the asset does not author. Until that
-is read, `hud::RUNTIME_ANCHORED`/`hud::is_screen_positioned` keep skipping
-`PosTag` in the on-screen check, on the conservative half of this finding:
-the *anchor* is confirmed on screen, but `align="left"` at `x=405` on a
-480-wide screen leaves only 75 px before the edge - narrower than
-`TotalTime`'s own measured 92 px overflow two paragraphs up - and a label's
-own text width cannot be checked without knowing what fills it.
+**What the eight rows draw, read 2026-09-30: the Eliminator's kill column,
+and nothing at all in a solo race.** `Hud_UpdateKillColumn` (`0x0881af38`,
+[hud-kill-column.md](../ghidra/functions/psp-pulse-usa/hud-kill-column.md))
+writes `"<name> <kills>"` into the rows, one per craft, ordered by kills, when
+the HUD's `0x200` flag is set - which `Elimination_Construct` sets. A live
+Venom Eliminator frame reads `KILLS (5)` over `AG Systems 1`, `Feisar 1`,
+`Qirex 1`, `AAA 0`, `Triakis 0`, `Goteki 45 0`, `Piranha 0`, `EG-X 0` in the
+`Default` face at `x=460`. In a solo single race, Tournament or Time Trial
+nothing writes them (`hud+0x40` has `0x40`, whose reader only writes the
+`Position`/`PositionOf` digits); a place *list* in the same rows exists for
+multiplayer alone (`0x800`), a mode this build does not run. Wired in
+[`oag_game::hud::kill_tags`](../../crates/game/src/hud/kill_tags.rs), with a new
+`Default`-face text bucket, for Pulse only (`oag_title::HudArt::kill_column`; HD authors
+its own `KillsText` and `PosTag0`-`PosTag5`, unmeasured). The player's row is drawn at scale
+`1.0` and the others at `0.8`. **Chosen, not measured**: the player's row carries
+the player's team name where the original prints the profile tag (this build
+has none), and the tie order follows this build's grid array. `PosTag` is no
+longer skipped by `hud::is_screen_positioned`.
 
 **`PlrTag0`-`PlrTag7` are the genuine runtime anchor** - a separate,
 multiplayer-only layout (`MPTag_HUD.xml`), and its eight `<Text>` widgets
@@ -613,7 +619,7 @@ geometry - the geometry is 95 throughout.
 | Wrong way | `WrongWay` | 70 | `dot(forward, tangent)` is a sufficient source |
 | Zone | `Zone`, `Score`, `Zone_Bar_*` | 50 | Zone mode is a separate scope item |
 | Eliminator | kill counters | 50 | |
-| Tags | `PosTag0-7`, `HeadToHeadBar` | 95 anchor / 50 content | a fixed column (`405/460, 25..165`), not runtime-anchored - see above; what fills each row is unread |
+| Tags | `PosTag0-7`, `HeadToHeadBar` | 95 anchor / 85 content | a fixed column (`405/460, 25..165`), not runtime-anchored; the rows are the Eliminator's kill column, blank in a solo race - see above |
 | Tags | `PlrTag0-7` | 50 | genuinely runtime-anchored, multiplayer only (`MPTag_HUD.xml`) |
 | Debug | `VersionTextOnHUD`, `Info1`-`Info4`, `Info`, `Info2nd` | 40 | present in shipped layouts; purpose inferred from the names |
 
@@ -720,10 +726,18 @@ The rule this build applies is [`oag_title::HudArt::total_time_timed_modes_only`
 (true for Pulse alone): outside Time Trial and Speed Lap both widgets are hidden.
 `oag_game::hud::place_owns_the_anchor` stays for the titles the flag is `false`
 for - 2048 draws `TOTAL` beside `POS` on a live frame, and HD and Pure are
-unmeasured - where it asks the *layout*, not just the readout. **The captions were
-not separately confirmed** on the single-race frames - the `TOTAL` caption is
-suppressed with its clock here, and the Eliminator frame is the one that shows
-neither the clock nor its caption.
+unmeasured - where it asks the *layout*, not just the readout. **The caption pair was measured directly on a single race, 2026-09-30**
+(own PPSSPP, Venom single race on Talon's Junction, `g_game_mode` 3, at `0.23.7`):
+`PLAYER_HUD+0x30` reads `0xffffffff`; `TotalTime` (`hud+0x200`) and `TotalTimeTxt`
+(`hud+0x204`) both have flag word `0xb082`, visible bit `0x4` clear, against `0xf086`
+on `CurrentTime`, `BestTime`, `Position` (`hud+0x240`) and `PositionOf`
+(`hud+0x244`); the frame reads `pos` over `8 / 8` and no `TOTAL` anywhere. So the
+`TOTAL` caption is hidden by the same `-1` gate as its clock, and `POS` is not
+hidden by anything: the two never compete for the corner in Pulse. The **~5 px
+overlap argument is retired** - nothing in the original is suppressed because of an
+overlap. In Time Trial and Speed Lap the clock and its caption show and there is
+no field, so no place. `place_owns_the_anchor` is therefore redundant for Pulse
+(the mode gate decides first) and remains only for the titles the gate is off for.
 
 **The same two frames settle a second question nobody asked them.** The original
 places its own **parked player 8th of 8 on the grid**, before anyone has crossed
@@ -1027,25 +1041,29 @@ the track's own best time - which is what the frame `hud.md`'s own
 `Total`) turns out to be: a non-campaign Time Trial, comparing against a
 personal-best/track-record pair rather than a medal at all.
 
-**Implemented for the campaign branch's gold/silver/bronze ladder, not for
-`RECORD` on either path.**
+**Implemented for the whole target-time block, 2026-09-30.**
 [`oag_game::hud::TimeTrialPace`](../../crates/game/src/hud/time_trial_pace.rs)
-reimplements the live ladder as a pure function of the elapsed tick count
-(`race_ticks` for Time Trial, `lap_ticks` for Speed Lap) against
-`oag_tables::race_campaign::Cell::gold`/`silver`/`bronze` - already-parsed
-fields, no new RE needed to reach them. `RaceStage::draw_hud` computes it
-(the campaign cell lives on `RaceStage`, not on `Race`) and
-`oag_game::hud::draw`'s `TotalTime`/`TotalTimeTxt` arms substitute it for
-the plain elapsed clock and the layout's own caption whenever it is `Some`.
-**Not implemented, and named rather than hidden**: `RECORD` on either path -
-`FUN_088091a0`'s own per-team, per-track split-time record store, which
-this project's `oag_game::records` has no equivalent of. A campaign cell
-run on a personal best already faster than gold shows `GOLD` here where the
-original shows `RECORD`; a non-campaign Time Trial keeps drawing plain
-elapsed
-`TotalTime`, a known divergence now rather than an unexamined default. See
-`hud-time-caption-substitution.md`'s own "What this does and does not
-settle" for the same split.
+reimplements the live tier as a pure function of the elapsed tick count
+(`race_ticks` for Time Trial, `lap_ticks` for Speed Lap). A campaign cell
+races `oag_tables::race_campaign::Cell::gold`/`silver`/`bronze`; any other
+Time Trial or Speed Lap is `RECORD` throughout, counting down to
+`min(stored best, authored time)` - `<RaceTimes>` for Time Trial, `<LapTimes>`
+for Speed Lap, both from the circuit's own `stats.xml`
+(`oag_game::hud::RecordTarget`, read at load off `FEData.wad` like the
+campaign's AI-skill lookup). A campaign cell whose stored best already beats
+gold shows `RECORD` while the run is ahead of it, as the original does.
+`RaceStage::draw_hud` and the headless capture path both compute it.
+**Checked against the original on the same ship and track**: a Venom Time
+Trial on Talon's Junction shows `record 1.33.2` at `0.23.7` on the live PPSSPP
+frame and `rekord 1.33.2` at `0.23.8` on ours (German UI), and `1.57.0` at the
+start of the run (`117.0 s`). **The stored best is this build's own, keyed by
+circuit, mode and class - chosen, not measured.** The original keys its store
+by team (`FUN_088091a0`, `Profile_GetBestRaceTime` in
+[race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md#the-stored-best-fun_088091a0-and-the-record-branch-closed-2026-09-30)),
+which `oag_game::records::Key` has no field for, so a run in one team's ship
+races the best of any team's. A track whose `stats.xml` does not read (any source but Pulse on a PSP disc; the load
+report says so) draws the plain elapsed clock in a plain race, as the original does when
+its track record is null; a campaign cell still races its own ladder.
 
 ## Lap counting was the one real blocker
 

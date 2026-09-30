@@ -1144,5 +1144,8 @@
 0x08829e6c	function	RaceMode_UpdateIntro	65	countdown-voice.md
 0x088e5ff4	function	RaceBox_ApplySetupGlobals	78	eliminator-kill-target.md
 0x08b30fb0	data	g_eliminator_kill_target	82	eliminator-kill-target.md
+0x088091a0	function	Profile_GetBestRaceTime	75	race-progress.md
+0x0881af38	function	Hud_UpdateKillColumn	85	hud-kill-column.md
+0x0881d458	function	Hud_UpdatePositionCluster	78	hud-kill-column.md
 0x0898daf0	function	Scream_SetCueParameter	85	sound.md
 0x08992034	function	Sound_SetCueParameter	82	sound.md
