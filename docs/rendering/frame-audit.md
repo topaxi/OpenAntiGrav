@@ -149,8 +149,11 @@ Gray -define convolve:scale='!' -morphology Convolve Laplacian:0`, sd x 255):
 
 `original` is softest and `maximum` sharpest, and the whole frame reproduces the
 previous pass's 16.56 (slope law) and 16.74 (base level). The strips are the two
-with the largest change; the previous pass's own boxes were not recorded, so its
-24.51/22.77 and 28.36/26.40 are not directly comparable. Only 74 pixels differ
+with the largest change. The previous pass's own boxes were not recorded, and its
+24.51/22.77 and 28.36/26.40 cannot be recovered from the saved frames
+(`data/shots/frame-audit/far/ours-l0.png` and `ours-slope.png` reproduce its whole-frame
+16.74 and 16.57, but hundreds of boxes match each pair to two decimals), so they are
+not directly comparable. Only 74 pixels differ
 between `original` and `maximum` at this size: the far field is small at 480x272.
 
 **`--anisotropy` is now nearly inert on a PSP `.vex` model.** The slope law
