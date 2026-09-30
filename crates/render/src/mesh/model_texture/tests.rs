@@ -18,7 +18,7 @@ fn gnf(levels: u32) -> Vec<u8> {
     for (offset, word) in [(4, word1), (8, word2), (12, word3), (16, word4)] {
         bytes[16 + offset..16 + offset + 4].copy_from_slice(&word.to_le_bytes());
     }
-    for block in bytes[data_offset..].chunks_exact_mut(16) {
+    for block in bytes[data_offset..].as_chunks_mut::<16>().0 {
         block[0] = 1;
     }
     bytes
