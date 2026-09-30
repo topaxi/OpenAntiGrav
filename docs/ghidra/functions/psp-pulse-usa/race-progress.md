@@ -166,11 +166,13 @@ if (mode != SpeedLap) {                     // Time Trial / "Free Play": sum eve
 target[0x78] = -1;                          // hidden unless a target exists
 redden[0x80] = false;
 if DAT_08ab0de0 != 0 {                      // a global gate, unread past this
-    ghost = FUN_088091a0(DAT_08b31774);     // per-team, per-track split-time
-                                             // record store - a separate,
-                                             // unread format, see below.
-                                             // Read unconditionally, campaign
+    ghost = Profile_GetBestRaceTime(DAT_08b31774); // per-team, per-track
+                                             // record store, see "The
+                                             // stored best" below. Read
+                                             // unconditionally, campaign
                                              // cell or not.
+    if DAT_08b310b4 == 0: /* no loaded track record: the block ends here,
+                             target keeps uVar14 = the plain clock */
     if campaign_cell := DAT_08b30ffc; campaign_cell != 0 {
         gold   = campaign_cell->0xa0;       // == Cell::gold, `<Gold Target=>`
         silver = campaign_cell->0xa4;       // == Cell::silver
@@ -181,10 +183,12 @@ if DAT_08ab0de0 != 0 {                      // a global gate, unread past this
         // independently, off the XML parser rather than off this function.
     } else {
         gold = silver = bronze = 0;         // forces the branch below
-        // ghost is replaced with min(ghost, the per-track/per-class
-        // `RaceTimes` record read off `DAT_08b310b4`, confirmed live at
-        // 117.0 s for Venom/Talon's Junction - race-campaign.md's own
-        // `<RaceTimes>` table) here, non-campaign only.
+        // ghost is replaced with min(ghost, authored), non-campaign only,
+        // where authored = (uint)(float * 100.0) of
+        //   DAT_08b310b4 + DAT_08b31040*4 + 0xb0   (`<LapTimes>`, Speed Lap)
+        //   DAT_08b310b4 + DAT_08b31040*4 + 0xa0   (`<RaceTimes>`, otherwise)
+        // and DAT_08b31040 is the class ordinal, 0 = Venom. A ghost of 0 or
+        // 0xffffffff means "none stored" and is replaced outright.
     }
     if      gold == 0:                  tier[0x7c] = 3            // RECORD - always true, non-campaign
     elif    ghost < gold && uVar14 < ghost: tier[0x7c] = 3         // RECORD - a campaign cell too, when
@@ -209,7 +213,7 @@ same tier a fresh per-tick evaluation against the current `uVar14` alone
 would show, past the point every target is missed: the last real write
 before that point necessarily left it at `0` (bronze), which is exactly what
 a stateless re-evaluation also produces once `uVar14 > bronze`. See
-[`oag_game::hud::TimeTrialPace::from_elapsed`](../../../../crates/game/src/hud/time_trial_pace.rs)'s
+[`oag_game::hud::TimeTrialPace::evaluate`](../../../../crates/game/src/hud/time_trial_pace.rs)'s
 own doc comment for the branch-by-branch argument this reimplementation is
 built on - it needed no persistent per-race state as a result, only
 `race_ticks`/`lap_ticks`, already on `Readout`.
@@ -224,27 +228,54 @@ HUD tier is honest, not invented.
 carries it, computed at `RaceStage::draw_hud` (where the campaign cell
 lives) and consumed by `oag_game::hud::draw`'s `TotalTime`/`TotalTimeTxt`
 arms - see [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
+`RECORD` followed on 2026-09-30; see "The stored best" below.
 
-**What stays open**: the `ghost`/`FUN_088091a0` branch, on both paths, not
-only the non-campaign one - see the pseudocode above. That function reads a
-per-team, per-track record keyed by `DAT_08b31774` (the same store
-[`race-campaign.md`](race-campaign.md)'s loyalty section already names) and
-sums up to five `ushort` split times per lap from an offset this page has
-not chased (`param_1+0x460`/`+0x464` select which track/class row). This
-project's own `oag_game::records` has no split-time equivalent, so:
+**What stays open**: `DAT_08ab0de0`'s own meaning (confirmed non-zero on a
+fresh profile, gating the whole block; `0` forces tier `4`, the layout's own
+default "Total" caption). The `ghost` branch is closed - see below.
 
-- a non-campaign Time Trial still draws the plain elapsed `TotalTime` it
-  always has - a known, documented divergence now, not an unexamined
-  default;
-- a campaign Time Trial/Speed Lap cell where the player's own stored
-  personal best already beats gold shows `GOLD` where the original would
-  show `RECORD` - `oag_game::hud::TimeTrialPace::from_elapsed` implements
-  the `gold`/`silver`/`bronze` ladder alone, not this branch, and says so in
-  its own doc comment.
+### The stored best (`FUN_088091a0`) and the `RECORD` branch, closed 2026-09-30
 
-Also open: `DAT_08ab0de0`'s own meaning (confirmed non-zero on a fresh
-profile, gating the whole block; `0` forces tier `4`, the layout's own default
-"Total" caption).
+`Profile_GetBestRaceTime` (`0x088091a0`), confidence **75** (decompile read
+directly; the value it returns was not read live, and the store's own layout
+past the two rows below was not chased). It takes the profile object
+(`DAT_08b31774`) and returns a time in centiseconds, or `0` when
+`profile+0x464 == -1` (no row selected):
+
+- **`g_game_mode` 5 (Time Trial) and `0x11`**: the sum of five `ushort`s at
+  `row + profile+0x460*0x50 + 0x144 + 4 + 8*i`, skipping `0xffff`. A whole
+  race's total, from per-lap splits.
+- **`g_game_mode` 10 (Speed Lap)**: one `ushort` at `row + profile+0x460*0x30 +
+  0x408`. One lap.
+- Race, Head2Head, Tournament and the 14-16 family read a different row of the
+  same store; the HUD never asks for those.
+
+`profile+0x460` selects the row, so the store is **per team**, which
+`oag_game::records::Key` (circuit, mode, class) has no field for. This build
+maps the two rows to `Record::best_total_ticks` and `Record::best_lap_ticks`
+and says so: **chosen, not measured**.
+
+**The authored half, measured live 2026-09-30** (own PPSSPP, `pulse-psp-usa.chd`,
+a plain Venom Time Trial on Talon's Junction, `g_game_mode` 5, no campaign
+cell): `DAT_08b310b4` read `0x08d0aed0`, `DAT_08b31040` (the class ordinal) `0`,
+`DAT_08b30ffc` (campaign cell) `0`, `DAT_08ab0de0` `1`. `DAT_08b310b4+0xa0` read
+`(117.0, 138.0, 119.0, 128.0)` and `+0xb0` `(38.0, 33.0, 29.0, 25.0)`, and the
+frame at `0.23.7` read `record 1.33.2`: `117.0 - 23.7 = 93.3`, with `PLAYER_HUD+0x30`
+reading `8265` cs and tier `3`. `TrackStats_ParseElement` (`0x088c46f8`) puts
+`Venom` at `+0xa0`, `Flash` `+0xa4`, `Rapier` `+0xa8`, `Phantom` `+0xac` **by
+attribute name**, and the file's own `<code>` dictionary spells them `p`, `n`,
+`o`, `m` - so the class is the dictionary's word, not its position. Both figures
+are seconds.
+
+What `oag_game::hud` does now: `RecordTarget` carries
+`min(stored best, authored)`, `TimeTrialPace::evaluate` applies the branch
+structure above (a campaign cell's `RECORD` needs `best < gold` and the run
+ahead of it; a plain race is `RECORD` throughout), and a track whose `stats.xml`
+did not read draws the plain clock, the same as the original's null
+`DAT_08b310b4`. See [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
+Not measured: a live frame with a **stored** best, since the profile used holds
+none; the min and the campaign `RECORD` branch rest on the decompile plus unit
+tests.
 
 ### Which modes hide the clock, confirmed live 2026-09-30
 

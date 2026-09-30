@@ -21,6 +21,7 @@ mod pulse_psp;
 pub(super) mod ripple;
 mod roster;
 mod surfaces;
+mod track_stats;
 mod variant;
 mod weapon_models;
 use crate::remix::craft_of;
@@ -829,6 +830,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     });
 
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
+    let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
     let mut loaded = Loaded {
         title,
         platform: archives.layout.platform,
@@ -898,6 +900,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             camera_override: options.camera,
         },
         hud,
+        track_stats,
         track_model,
         gantry,
         collision_model,

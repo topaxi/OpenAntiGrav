@@ -325,7 +325,7 @@ fn a_campaign_pace_substitutes_the_caption_and_the_countdown() {
     let strings = strings();
     let readout = Readout {
         time_trial_pace: Some(super::time_trial_pace::TimeTrialPace {
-            medal: oag_tables::race_campaign::Medal::Silver,
+            tier: super::time_trial_pace::PaceTier::Silver,
             remaining_ticks: 179,
             missed: false,
         }),
@@ -367,7 +367,7 @@ fn a_missed_campaign_pace_reddens_only_the_countdown() {
     let strings = strings();
     let readout = Readout {
         time_trial_pace: Some(super::time_trial_pace::TimeTrialPace {
-            medal: oag_tables::race_campaign::Medal::Bronze,
+            tier: super::time_trial_pace::PaceTier::Bronze,
             remaining_ticks: 0,
             missed: true,
         }),

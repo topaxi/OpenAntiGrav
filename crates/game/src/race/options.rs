@@ -681,6 +681,10 @@ pub struct Loaded {
     pub platform: oag_disc::Platform,
     /// The HUD's layout, atlas, fonts and strings.
     pub hud: crate::hud::Assets,
+    /// The circuit's own `stats.xml`, for the HUD's `RECORD` readout. `None`
+    /// off Pulse's PSP disc, or when the file did not read - the load report
+    /// says which.
+    pub track_stats: Option<oag_tables::track_stats::TrackStats>,
     /// What to draw for the track.
     pub track_model: Model,
     /// The start gantry and where it stands, when this circuit authors a mount

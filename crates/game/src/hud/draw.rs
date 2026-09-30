@@ -199,11 +199,11 @@ pub(super) fn text_for(
         // place only when the two actually coincide - see
         // [`place_owns_the_anchor`], `false` throughout on 2048.
         //
-        // **A campaign Time Trial/Speed Lap cell substitutes a countdown to
-        // the next medal for the plain elapsed clock** -
-        // [`Readout::time_trial_pace`], `Hud_UpdateTimeCluster_q`'s own law.
+        // **A Time Trial/Speed Lap counts down to a target (a campaign
+        // medal, or the record) instead of the plain elapsed clock** -
+        // [`Readout::time_trial_pace`], `Hud_UpdateTimeCluster_q`'s law.
         // `0` once [`super::TimeTrialPace::missed`], which is what a missed
-        // bronze target shows alongside `TotalTime`'s own reddened colour -
+        // target shows alongside `TotalTime`'s own reddened colour -
         // see [`time_trial_colour`].
         "TotalTime" => (!place_shown).then(|| match readout.time_trial_pace {
             Some(pace) => format_lap_time(u64::from(pace.remaining_ticks), Precision::Tenths),
@@ -211,7 +211,7 @@ pub(super) fn text_for(
         }),
         "TotalTimeTxt" => (!place_shown)
             .then(|| match readout.time_trial_pace {
-                Some(pace) => Some(super::time_trial_pace::medal_caption(pace.medal, strings)),
+                Some(pace) => Some(super::time_trial_pace::tier_caption(pace.tier, strings)),
                 None => caption(label, strings),
             })
             .flatten(),

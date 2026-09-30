@@ -1144,3 +1144,4 @@
 0x08829e6c	function	RaceMode_UpdateIntro	65	countdown-voice.md
 0x088e5ff4	function	RaceBox_ApplySetupGlobals	78	eliminator-kill-target.md
 0x08b30fb0	data	g_eliminator_kill_target	82	eliminator-kill-target.md
+0x088091a0	function	Profile_GetBestRaceTime	75	race-progress.md

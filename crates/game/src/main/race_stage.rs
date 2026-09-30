@@ -34,6 +34,11 @@ pub(crate) struct RaceStage {
     /// escaped race any other way. See `Session::frame`'s finish-transition
     /// arm and `Session::escape`, the only two readers.
     pub(crate) result_key: oag_game::records::Key,
+    /// What the HUD's `RECORD` readout counts down to: the stored best under
+    /// [`Self::result_key`] as it stood at load, and the track's authored
+    /// time. `None` for a mode with no such readout and whenever the track's
+    /// `stats.xml` did not load. See `oag_game::hud::RecordTarget`.
+    pub(crate) record_target: Option<oag_game::hud::RecordTarget>,
     /// This race's own personal-best comparison, computed once at the finish
     /// transition and drawn on the results table alongside
     /// [`oag_game::scoreboard::Board`] - see [`RaceStage::draw_hud`].
@@ -477,29 +482,22 @@ impl RaceStage {
                     readout.zone_next_in = self
                         .scene
                         .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
-                    // Campaign Time Trial/Speed Lap only - see
-                    // `oag_game::hud::Readout::time_trial_pace`'s own doc for
-                    // why a non-campaign Time Trial is deliberately left
-                    // alone here. `campaign_cell` is title-blind (HD reuses
-                    // the same `oag_tables::race_campaign::Cell`), so
-                    // nothing here stops it computing on HD - what actually
-                    // keeps this Pulse-only is `draw.rs`'s own widget-name
-                    // match: no shipped HD layout authors a widget literally
-                    // named `TotalTime`/`TotalTimeTxt` (only `TotalTimeBG`,
-                    // a background), so the substitution never has anything
-                    // to substitute on. A future HD layout that does author
-                    // one would need this gate revisited.
-                    readout.time_trial_pace = self.campaign_cell.as_ref().and_then(|cell| {
-                        let elapsed_ticks = match cell.mode {
-                            oag_tables::race_campaign::Mode::TimeTrial => readout.race_ticks,
-                            oag_tables::race_campaign::Mode::SpeedLap => readout.lap_ticks,
-                            _ => return None,
-                        };
-                        Some(oag_game::hud::TimeTrialPace::from_elapsed(
-                            elapsed_ticks,
-                            cell,
-                        ))
-                    });
+                    // A campaign cell races its own ladder; any other Time
+                    // Trial or Speed Lap races the record. See
+                    // `oag_game::hud::Readout::time_trial_pace`. `campaign_cell`
+                    // is title-blind (HD reuses the same
+                    // `oag_tables::race_campaign::Cell`), so nothing here
+                    // stops it computing on HD - what keeps this Pulse-only is
+                    // `record_target` (`stats.xml` is read off Pulse's PSP disc
+                    // alone) and `draw.rs`'s widget-name match: no shipped HD
+                    // layout authors a widget named `TotalTime`/`TotalTimeTxt`.
+                    readout.time_trial_pace = oag_game::hud::pace_for(
+                        readout.mode,
+                        readout.race_ticks,
+                        readout.lap_ticks,
+                        self.campaign_cell.as_ref(),
+                        self.record_target.as_ref(),
+                    );
                     hud.draw(gpu.device(), gpu.queue(), encoder, view, &readout, viewport);
                     // The countdown, for exactly the measured start-line gate's
                     // span and no other window - see `oag_game::hud::countdown`
