@@ -134,6 +134,7 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
   one; see
   [`the-race-campaign-is-authored-shape-not-content.md`](the-race-campaign-is-authored-shape-not-content.md)'s
   own `Open`/`Next Steps` for where that stands.
+- ~~`MedalImg` under an earned trophy~~ **Settled 2026-09-30 (80)**: a live gold run shows no static glyph under the trophy (this build already hides it), and the original's trophy spins (about a 6 s period) where this build holds frame 0; the spin is the remaining gap. Third-column note from the same run: a one-lap race read `6`, so lap 1 reads 6 on all four captures; this build's autopilot counts 7/7/7 on the same circuit.
 - **Two no-medal Time Trial captures now exist**, but **no medal-earning
   run** - `MedalImg`'s own static-icon-under-the-trophy question is still
   open, and the Race-family/Zone/Elimination loyalty branches are still
