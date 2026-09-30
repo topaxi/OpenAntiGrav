@@ -17,12 +17,20 @@
 //! depth far past the chain stays on level 2. See
 //! `mesh_render::PSP_TEXLOD_SLOPE` for where the two constants come from.
 //!
+//! # TEXTURE DETAIL
+//!
+//! The player's preset is the scene uniform's `fog.texlod_shift`, added to that
+//! level: `high` is one level less at every depth (the step at double the
+//! distance) and `maximum` clamps everything to level 0. One test per preset,
+//! each at a depth where it must differ from `original`, so a preset that stops
+//! reaching the shader fails its own test.
+//!
 //! Skips when there is no adapter.
 
 use std::sync::Arc;
 
 use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_render::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
+use oag_render::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -138,44 +146,101 @@ fn level_at(
     queue: &wgpu::Queue,
     texture: Arc<ModelTexture>,
     depth: f32,
+    detail: TextureDetail,
 ) -> usize {
-    let texel = draw(device, queue, &model(texture, depth), depth);
+    let texel = draw(device, queue, &model(texture, depth), depth, detail);
     (0..3).max_by_key(|&channel| texel[channel]).unwrap()
+}
+
+fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return None;
+    };
+    Some(
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device"),
+    )
+}
+
+/// Asserts each `(depth, level)` under `detail`.
+fn assert_levels(detail: TextureDetail, expected: &[(f32, usize)]) {
+    let Some((device, queue)) = gpu() else { return };
+    for &(depth, level) in expected {
+        assert_eq!(
+            level_at(&device, &queue, chain(), depth, detail),
+            level,
+            "{detail} at view depth {depth}"
+        );
+    }
 }
 
 #[test]
 fn a_chain_is_sampled_at_the_level_the_slope_law_names() {
-    let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
-        eprintln!("no GPU adapter: skipping");
-        return;
-    };
-    let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .expect("requesting the device");
-
-    for (depth, level) in [
-        (64.0, 0),
-        (128.0, 0),
-        (256.0, 1),
-        (512.0, 2),
-        (100_000.0, 2),
-    ] {
-        assert_eq!(
-            level_at(&device, &queue, chain(), depth),
-            level,
-            "view depth {depth}: log2({depth} / 256) + 1 clamped to the three levels"
-        );
-    }
+    assert_levels(
+        TextureDetail::Original,
+        &[
+            (64.0, 0),
+            (128.0, 0),
+            (256.0, 1),
+            (512.0, 2),
+            (100_000.0, 2),
+        ],
+    );
+    let Some((device, queue)) = gpu() else { return };
     // The discriminating half: the same quad with no chain of the disc's stays
     // on its one level at every depth, so the levels above were the rule's.
     for depth in [64.0, 512.0, 100_000.0] {
         assert_eq!(
-            level_at(&device, &queue, plain(), depth),
+            level_at(&device, &queue, plain(), depth, TextureDetail::Original),
             0,
             "a model without Texels::Chain keeps the sampler's own selection"
         );
     }
+}
+
+#[test]
+fn high_texture_detail_doubles_the_depth_of_each_level_step() {
+    // Original steps at 256 and 512; high at 512 and 1024. Depth 256 and 512
+    // are where it differs from `original`, 1024 where it reaches the last level.
+    assert_levels(
+        TextureDetail::High,
+        &[
+            (64.0, 0),
+            (256.0, 0),
+            (512.0, 1),
+            (1024.0, 2),
+            (100_000.0, 2),
+        ],
+    );
+}
+
+#[test]
+fn maximum_texture_detail_is_level_zero_at_every_depth() {
+    assert_levels(
+        TextureDetail::Maximum,
+        &[(64.0, 0), (512.0, 0), (100_000.0, 0)],
+    );
+}
+
+#[test]
+fn texture_detail_leaves_a_model_without_a_chain_alone() {
+    let Some((device, queue)) = gpu() else { return };
+    for detail in TextureDetail::ALL {
+        assert_eq!(level_at(&device, &queue, plain(), 512.0, detail), 0);
+    }
+}
+
+#[test]
+fn every_preset_round_trips_its_name_and_original_is_the_default() {
+    for detail in TextureDetail::ALL {
+        assert_eq!(detail.name().parse::<TextureDetail>(), Ok(detail));
+    }
+    assert_eq!(TextureDetail::default(), TextureDetail::Original);
+    assert_eq!(TextureDetail::Original.level_shift(), 0.0);
+    assert_eq!(TextureDetail::High.level_shift(), -1.0);
+    assert!(TextureDetail::Maximum.level_shift() <= -32.0);
 }
 
 /// Identity camera and model, so clip space is model space.
@@ -205,7 +270,13 @@ fn uniforms(depth: f32) -> Vec<u8> {
 /// Draws `model`'s one opaque call into a `SIZE`x`SIZE` target cleared to
 /// transparent black, and answers the centre texel - so a discarded fragment
 /// reads as the clear and a kept one does not.
-fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, depth: f32) -> [u8; 4] {
+fn draw(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    depth: f32,
+    detail: TextureDetail,
+) -> [u8; 4] {
     let built = mesh_render::build(
         device,
         queue,
@@ -226,7 +297,9 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, depth: f32) -
         mesh_render::ShadowReceiver::Never,
     )
     .expect("building the mesh pipeline");
-    queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
+    let mut scene = Scene::off();
+    scene.fog.texlod_shift = detail.level_shift();
+    queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("slope uniforms"),

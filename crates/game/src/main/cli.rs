@@ -681,6 +681,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) lod: Option<oag_render::mesh::ModelDetail>,
 
+    /// How far out a PSP `.vex` model keeps its finer texture levels:
+    /// `original`, `high` or `maximum`, overriding
+    /// `[render_profiles.<title>] texture_detail` for this run only (the file
+    /// on disk is not changed). See `oag_render::mesh_render::TextureDetail`.
+    #[arg(long)]
+    pub(crate) texture_detail: Option<oag_render::mesh_render::TextureDetail>,
+
     /// Whether the track's authored visibility set culls this run: `true` or
     /// `false`.
     ///

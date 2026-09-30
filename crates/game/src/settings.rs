@@ -811,6 +811,10 @@ pub fn menu_seeds(
             "graphics.model_detail",
             text(&profile.model_detail.to_string()),
         ),
+        (
+            "graphics.texture_detail",
+            text(&profile.texture_detail.to_string()),
+        ),
         ("graphics.screen_filter", text(&profile.screen_filter)),
         (
             "graphics.screen_filter_strength",

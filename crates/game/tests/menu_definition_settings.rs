@@ -557,6 +557,17 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the MSAA rows and `Msaa::ALL` must be one list"
     );
 
+    let texture_detail: Vec<oag_render::mesh_render::TextureDetail> =
+        values("graphics.texture_detail")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
+    assert_eq!(
+        texture_detail,
+        oag_render::mesh_render::TextureDetail::ALL,
+        "the TEXTURE DETAIL rows and `TextureDetail::ALL` must be one list"
+    );
+
     let sizes: Vec<Size> = values("display.window_size")
         .iter()
         .map(|name| name.parse::<Size>().unwrap_or_else(|e| panic!("{e}")))

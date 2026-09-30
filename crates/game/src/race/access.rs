@@ -61,6 +61,21 @@ impl Race {
         self.view.model_detail = detail;
     }
 
+    /// How far out a PSP `.vex` model keeps its finer texture levels -
+    /// `[render_profiles.<title>] texture_detail`. Render-only and idempotent
+    /// like [`Self::set_model_detail`], so the frame loop sets it every frame
+    /// and the menu row applies live.
+    pub fn set_texture_detail(&mut self, detail: oag_render::mesh_render::TextureDetail) {
+        self.view.texture_detail = detail;
+    }
+
+    /// The preset [`Self::set_texture_detail`] last set; the frame writes it
+    /// into the scene uniform.
+    #[must_use]
+    pub fn texture_detail(&self) -> oag_render::mesh_render::TextureDetail {
+        self.view.texture_detail
+    }
+
     /// Which grid the lock-on reticle's coordinates are in.
     ///
     /// The title's own HUD space - `oag_game::hud::Assets::space` - because the
