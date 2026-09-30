@@ -36,18 +36,9 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
 - **An orange-white flash at the target in some original frames** has no
   counterpart in ours. Candidates: the victim's damage feedback, or
   `WO_SHIP_SPARK_DAMAGE_*`. Not identified.
-- **The original kills the ENERGY instance at each re-spawn; we detach it.**
-  2026-09-30: `FUN_088f3298` (`Psys_ReleaseHandle`) sets the dead bit, and
-  the manager's next tick destroys the instance with every live particle
-  (`particle-system.md`, "Releasing an instance by handle"). `Stage::detach`
-  lets the particles finish. Needs a `Stage::kill`, which is `oag_render::psys`
-  and was out of this lane; the rocket and plasma heads reach the same
-  function and use `detach` too.
 
 ## Next Steps
 
 1. Capture a bent beam on PPSSPP (Talon's Junction, a chord across a corner)
    and compare it with ours at the same pose: settles the far-end hook and
    the locate radius.
-2. Add `psys::Stage::kill` and use it for the ENERGY re-spawn (and read what
-   the rocket and plasma heads' release should do).

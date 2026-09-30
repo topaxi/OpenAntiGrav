@@ -419,3 +419,138 @@ fn a_templates_first_draw_is_its_size_at_age_zero() {
         half(&system)
     );
 }
+
+/// An emitter's own class 3 particle is turned by the emitter's roll channel
+/// and stretched by its aspect: drop the rotation and the quad is the plain
+/// square the port drew before `ParticleSystem_DrawRolledQuads`'s law was played.
+#[test]
+fn an_emitters_particle_is_turned_and_stretched() {
+    let quads = |rate: f32, rotated: bool| {
+        let mut effect = (*effect("spin", true, 10.0)).clone();
+        effect.emitters[0].rotation =
+            rotated.then(|| roll::Rotation::emitter(4.0, constant(rate), 0));
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        run(&mut system, &effect, 4, &mut Rng::new(5));
+        system.vertices(&effect, Vec3::X, Vec3::Y).0
+    };
+    let span = |quads: &[GpuVertex], axis: usize| {
+        let values = quads.iter().map(|v| v.position[axis]);
+        values.clone().fold(f32::MIN, f32::max) - values.fold(f32::MAX, f32::min)
+    };
+    let plain = quads(0.0, false);
+    assert!(
+        (span(&plain, 0) - 2.0).abs() < 1e-4,
+        "plain {}",
+        span(&plain, 0)
+    );
+    let stretched = quads(0.0, true);
+    assert!(
+        (span(&stretched, 0) - 8.0).abs() < 1e-4,
+        "stretched {}",
+        span(&stretched, 0)
+    );
+    let turning = quads(0.4, true);
+    assert!(
+        span(&turning, 1) > 1.2 * span(&stretched, 1),
+        "the roll did not turn the quad: {} vs {}",
+        span(&turning, 1),
+        span(&stretched, 1)
+    );
+}
+
+/// `Psys_ReleaseHandle` with `now == 0` destroys the instance and every
+/// particle with it; a detach leaves them to finish.
+#[test]
+fn a_kill_takes_the_live_particles_and_a_detach_leaves_them() {
+    let forever = effect("forever", true, 10.0);
+    let mut rng = Rng::new(3);
+    let held = |end: fn(&mut Stage, Playing)| {
+        let mut stage = Stage::new();
+        let playing = stage.attach(&forever, Vec3::ZERO, 1.0).expect("attach");
+        for _ in 0..6 {
+            stage.advance(DT, &mut Rng::new(3));
+        }
+        assert!(stage.alive_count() > 0);
+        end(&mut stage, playing);
+        assert!(!stage.is_playing(playing));
+        stage.alive_count()
+    };
+    assert!(held(Stage::detach) > 0, "a detach cut its particles");
+    assert_eq!(held(Stage::kill), 0, "a kill left particles behind");
+
+    // The slot is free at once, and the dead handle moves nothing.
+    let mut stage = Stage::new();
+    let stale = stage.attach(&forever, Vec3::ZERO, 1.0).expect("attach");
+    stage.advance(DT, &mut rng);
+    stage.kill(stale);
+    stage.follow(stale, Vec3::splat(100.0));
+    stage.advance(DT, &mut rng);
+    assert_eq!(stage.alive_count(), 0);
+}
+
+/// The emitter of `effect()` plus a long-lived template on it, the shape of
+/// `WO_MISSILE_HEAD`: a `glow` for 3600 ticks beside a trail.
+fn with_template() -> std::sync::Arc<Effect> {
+    let mut effect = (*effect("head", true, 10.0)).clone();
+    let mut template = effect.emitters[0].clone();
+    template.template = true;
+    template.looping = false;
+    template.duration_ticks = 1.0;
+    template.lifetime_ticks = (3600.0, 0.0);
+    effect.roots.push(effect.emitters.len());
+    effect.emitters.push(template);
+    std::sync::Arc::new(effect)
+}
+
+fn templates_alive(stage: &Stage, effect: &Effect) -> Vec<Vec3> {
+    let mut found = Vec::new();
+    for instance in stage.instances.iter() {
+        for p in instance.system.particles.iter() {
+            if p.alive() && effect.emitters[usize::from(p.spec)].template {
+                found.push(p.position);
+            }
+        }
+    }
+    found
+}
+
+/// `ParticleSystem_UpdateParticleFields` copies the owning instance's node
+/// position into a template every update: the missile's `glow` rides the
+/// missile. Measured on the disc's own `WO_MISSILE_HEAD`, a `glow` drawn 34
+/// units across used to hang at the muzzle for the whole flight.
+#[test]
+fn a_template_rides_its_instances_anchor() {
+    let effect = with_template();
+    let (mut stage, mut rng) = (Stage::new(), Rng::new(1));
+    let playing = stage.attach(&effect, Vec3::ZERO, 1.0).expect("attach");
+    for tick in 1..=20 {
+        let at = Vec3::new(tick as f32 * 10.0, 0.0, 0.0);
+        stage.follow(playing, at);
+        stage.advance(DT, &mut rng);
+        assert_eq!(templates_alive(&stage, &effect), [at], "tick {tick}");
+    }
+}
+
+/// `Psys_ReleaseHandle` with `now != 0` (`ParticleSystem_StopAndClear`) frees
+/// the template list at once and leaves the emitters' own particles to
+/// finish; a detach, which an instance that ran out on its own gets, cuts
+/// neither.
+#[test]
+fn a_release_frees_the_templates_and_leaves_the_rest() {
+    let effect = with_template();
+    let after = |end: fn(&mut Stage, Playing)| {
+        let (mut stage, mut rng) = (Stage::new(), Rng::new(1));
+        let playing = stage.attach(&effect, Vec3::ZERO, 1.0).expect("attach");
+        for _ in 0..6 {
+            stage.advance(DT, &mut rng);
+        }
+        end(&mut stage, playing);
+        (templates_alive(&stage, &effect).len(), stage.alive_count())
+    };
+    let (kept, alive) = after(Stage::detach);
+    assert_eq!(kept, 1, "a detach cut the template");
+    let (freed, survivors) = after(Stage::release);
+    assert_eq!(freed, 0, "a release left the template");
+    assert_eq!(survivors, alive - 1, "a release cut more than the template");
+}

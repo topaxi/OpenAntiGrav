@@ -66,6 +66,7 @@ impl Effect {
             spec.frames = super::FrameAdvance::Still;
         }
         self.mute_templates();
+        self.mute_rotation();
     }
 }
 

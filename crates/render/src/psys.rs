@@ -38,8 +38,6 @@
 //!   [`streak`] for the two-point classes, which Pulse's alone builds as
 //!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
 //!   so those draw the procedural radial falloff in `psys.wgsl`.
-//! - **Roll and aspect on an emitter's own particles** (45 of 76 PSP emitters):
-//!   played for a sprite template only, see [`template::Rotation`].
 //! - **The emitter extent of shapes 2, 3, 6 and 8.** Shapes 1 (a line), 4
 //!   and 7 (a sphere) place their particles as read - see [`spawn`]; the
 //!   unread shapes still spawn at the anchor.
@@ -315,8 +313,8 @@ pub struct EmitterSpec {
     pub sheet_rect: Option<[f32; 4]>,
     /// Built from a sprite template, not an emitter record - see [`template`].
     pub template: bool,
-    /// A template's rotating, stretched quad - see [`template::Rotation`].
-    pub rotation: Option<template::Rotation>,
+    /// A template's rotating, stretched quad - see [`roll::Rotation`].
+    pub rotation: Option<roll::Rotation>,
 }
 
 /// A parsed `.pob` ready to play: the root emitter first, then the tree
@@ -591,7 +589,7 @@ impl EmitterSpec {
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
             sheet_rect: None,
             template: false,
-            rotation: None,
+            rotation: roll::Rotation::of_emitter(record),
         })
     }
 }
@@ -862,9 +860,10 @@ impl System {
                 continue;
             }
             let spec = &effect.emitters[usize::from(particle.spec)];
+            template::ride(spec, particle, self.anchor);
             if std::mem::take(&mut particle.fresh) {
                 if let Some(rotation) = &spec.rotation {
-                    particle.roll = rotation.roll_at(particle, 0.0, dt_ticks);
+                    particle.roll = rotation.advance(particle, 0.0, 0.0, dt_ticks);
                 }
                 continue;
             }
@@ -887,7 +886,7 @@ impl System {
             particle.life -= dt;
             let after = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
             if let Some(rotation) = &spec.rotation {
-                particle.roll = rotation.roll_at(particle, after, dt_ticks);
+                particle.roll = rotation.advance(particle, before, after, dt_ticks);
             }
             let frames = spec.atlas.frames();
             spec.frames.step(particle, before, after, dt_ticks, frames);
@@ -963,10 +962,11 @@ impl System {
             fresh: spec.template,
             roll: 0.0,
             turn: 1.0,
+            spin_sample: 0.0,
         };
         particle.frame_at = f32::from(particle.frame);
         if let Some(rotation) = &spec.rotation {
-            (particle.roll, particle.turn) = rotation.start(rng);
+            rotation.start(&mut particle, rng);
         }
         let slot = expendable_slot(&self.particles);
         self.particles[slot] = particle;
@@ -1458,10 +1458,8 @@ impl Stage {
     }
 
     /// Stops an attached instance emitting and releases the slot back to the
-    /// stage.
-    ///
-    /// Live particles finish their own lives - see [`System::stop`] - so the
-    /// slot stays busy for a moment longer and only then becomes reusable.
+    /// stage; live particles finish their own lives - see [`System::stop`] -
+    /// so the slot stays busy a moment longer. [`Stage::kill`] ends them.
     pub fn detach(&mut self, playing: Playing) {
         if let Some(instance) = self.get_mut(playing) {
             instance.attached = false;
@@ -1727,6 +1725,7 @@ fn sphere_direction(rng: &mut Rng) -> Vec3 {
 mod pipeline;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, MAX_VERTICES, Pipeline};
 
+mod release;
 mod riding;
 
 mod particle;
@@ -1734,6 +1733,7 @@ use particle::Particle;
 mod quad;
 use quad::quad;
 
+mod roll;
 mod template;
 
 #[cfg(test)]
