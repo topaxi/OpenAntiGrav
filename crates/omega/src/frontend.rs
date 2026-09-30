@@ -162,13 +162,24 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu_frame: Some(states::FE_SCREEN),
     // See this module's own "What is not here" section.
     race_box: None,
+    // `Team_Selection_Definition.xml` is in `data09.psarc` at HD's own path,
+    // and naming it makes the screen read - but it then draws an empty frame:
+    // the team logos sit at `Data\art\published\hdships\<Team>\FE\Logo.gnf`
+    // (HD's reader asks `Data\Ships\<Team>\FE\Logo.gtf`), the stat blocks do
+    // not draw, and `screen.xml` has no slideshow chain. Left `None` so a
+    // confirmed campaign cell races the default craft rather than opening a
+    // screen a player cannot read; measured 2026-09-30, the open item in
+    // `docs/formats/omega-status.md`.
     team_select: None,
     track_select: None,
     race_setup: None,
     preview_meshes: false,
-    // Not checked this pass - a gap, not a measurement that Omega ships no
-    // such screen. Racing is out of this title's scope anyway - see the
-    // module doc. See `oag_title::FrontEnd::endrace_entry`.
+    // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
+    // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)
+    // draws `EndRace Results`, but `EndRace Menu` then draws no option blocks
+    // (HD's draws three), a dead end for the player. Left `None` so a finished
+    // race keeps the built-in results table and returns to the menus;
+    // measured 2026-09-30, the open item in `docs/formats/omega-status.md`.
     endrace_entry: None,
 };
 
