@@ -846,7 +846,10 @@
 0x088d90dc	function	EndRaceMenu_Construct	78	endrace-screens.md
 0x088d98cc	function	EndRaceResults_OnEnter	82	endrace-screens.md
 0x088da8c8	function	EndRaceResults_PopulateLapTable	80	endrace-screens.md
-0x088d939c	function	EndRaceResults_ResetTable	76	endrace-screens.md
+0x088db574	function	EndRaceResults_PopulateZoneTable	82	endrace-screens.md
+0x088db1ec	function	EndRaceResults_PopulateEliminationTable	92	endrace-screens.md
+0x088d9588	function	EndRaceResults_PopulateMultiplayerTable	78	endrace-screens.md
+0x088d939c	function	EndRaceResults_ResetTable	88	endrace-screens.md
 0x088dbbd4	function	EndRaceRewards_OnEnter	85	endrace-screens.md
 0x088dd2b8	function	EndRaceRewards_Update	85	endrace-screens.md
 0x088d81dc	function	EndRaceMenu_OnEnter	76	endrace-screens.md

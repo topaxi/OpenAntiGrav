@@ -483,6 +483,24 @@ pub struct HudArt {
     /// assume, since none of them ever names a second face to fall back
     /// *from*.
     pub hud_small_font_role: Option<&'static str>,
+    /// Whether `TotalTime` and `TotalTimeTxt` are up only in the timed modes,
+    /// Time Trial and Speed Lap, and hidden in every other.
+    ///
+    /// **Pulse's rule, read off the executable and seen on a running
+    /// original.** `PlayerStatus_Update` (`0x0883b3b8`) writes the clock's
+    /// target field to `-1` every tick and overwrites it only when
+    /// `g_game_mode` is Time Trial (5), Multiplayer Time Trial (`0x11`), Speed
+    /// Lap (10) or Free Play (7); `Hud_UpdateTimeCluster` (`0x0881c9d0`) clears
+    /// the visible bit on both widgets while it reads `-1`. A PPSSPP frame of
+    /// an Eliminator race (`g_game_mode` 8) shows no `TOTAL` in the top-right
+    /// corner, and the two widgets' flag words read live with that bit clear.
+    /// See `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`.
+    ///
+    /// `false` for every title that has not had this checked, which is every
+    /// title but Pulse: 2048's own frame shows `TOTAL` and `POS` together in a
+    /// race with a field (`docs/formats/2048-hud.md`), so the rule is not a
+    /// property of the engine.
+    pub total_time_timed_modes_only: bool,
     /// What this title's per-tick HUD update writes over its layout: the
     /// shield readout's runtime colours and fill, and which segments of the
     /// lap and place arcs are up. See [`RuntimeHud`].

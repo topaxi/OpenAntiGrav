@@ -490,6 +490,7 @@ impl Race {
                 sparks_anchor_up: None,
                 sparks_attached: false,
                 results: None,
+                run_stats: results::RunStats::default(),
                 shield_was_up: false,
                 // `0.0`, not `1.0`: the pool is `0.0` until `<Misc>` loads (see
                 // `Readout::shield_fraction`'s own zero-guard), and a full-pool

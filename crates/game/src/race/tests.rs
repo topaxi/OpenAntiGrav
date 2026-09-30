@@ -35,6 +35,7 @@ mod models;
 mod pads;
 mod reconcile;
 mod respawn;
+mod run_stats;
 mod scene;
 mod shield_flash;
 mod spawn;

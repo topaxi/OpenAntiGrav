@@ -178,6 +178,7 @@ pub use load::{load, load_event};
 pub use options::{CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, Setup};
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;
+pub use results::RunStats;
 pub use scene::Scene;
 pub use sim::RaceSim;
 pub use spline::{Spline, circuit_length};

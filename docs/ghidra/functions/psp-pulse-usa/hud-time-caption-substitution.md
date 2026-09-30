@@ -117,9 +117,26 @@ gap. `param_1 + 0x5a`, gating the *other* caption pair this function updates
 (`IG_HUD_CURRENT`/`MSC_RACE_ENDS` at `+0x1f0`/`+0x1f4`), is unrelated and
 still unread. `tier == 5` (skips the caption block, calls
 `func_0x000157f0` instead of `func_0x000156e4` on the same value) is
-`g_game_mode == 7`'s own branch in `PlayerStatus_Update` - a fourth mode
-alongside Time Trial/`0x11`/Speed Lap, not chased past "it exists and is
-not a fifth medal tier".
+`g_game_mode == 7`'s own branch in `PlayerStatus_Update` - **Free Play**
+([`state-machine.md`](state-machine.md#the-game-mode-enum-g_game_mode-0x08b31048)'s
+enum: 5 Time Trial, 7 Free Play, 10 Speed Lap, `0x11` Multiplayer Time Trial),
+which shows the race manager's own clock in the same widgets; not a fifth medal
+tier.
+
+## `param_1 + 0x30 == -1` hides both widgets, and that is most modes
+
+The `iVar6 == -1` branch at the top of the target-time block clears bit `0x4`
+(visible) of `+0x2c` on `param_1 + 0x200` and `param_1 + 0x204`, and writes
+nothing else. `PlayerStatus_Update` sets the field to `-1` every tick and
+overwrites it only for Time Trial, Multiplayer Time Trial, Speed Lap and Free
+Play, so **the pair is hidden in Zone, Eliminator, single race, Head2Head and
+Tournament**. Confirmed live on an Eliminator race, 2026-09-30, confidence
+**95** - the evidence (the field read `-1`, both widgets' flag words read `0xb082`
+against `0xf086` for the widgets that draw, and a frame with no `TOTAL` on screen)
+is on
+[`race-progress.md`](race-progress.md#which-modes-hide-the-clock-confirmed-live-2026-09-30).
+Zone is the odd one: `Zone_HUD.xml` authors neither widget, so there is nothing to
+hide there.
 
 ## `param_1` is the same struct `Hud_BindWidgets`'s dispatcher builds
 
@@ -128,11 +145,17 @@ decompilation), `+ 0x1f8`, `+ 0x1fc`, `+ 0x200` and `+ 0x204` are all read
 here and are exactly the offsets `FUN_0881fbec` - the widget-bind function
 [hud.md](../../../ui/hud.md#lap-counting-was-the-one-real-blocker) already
 names as "the widget bind" - writes widget lookups into. So this function
-consumes widgets that function found by name; which named widgets land at
-`0x200`/`0x204` specifically was not chased (the two candidates are `TotalTime`
-and `TotalTimeTxt`, since only they are known to co-occur in `TimeTrial_HUD.xml`
-without a `Position` pair, but `FUN_0881fbec`'s own lookup calls were not
-traced far enough to confirm the offsets by name rather than by position).
+consumes widgets that function found by name: `hud+0x1f0` is `"CurrentTime"`,
+`+0x1f4` `"CurrentTimeTxt"`, `+0x1f8` `"BestTime"`, `+0x1fc` `"BestTimeTxt"`, `+0x200`
+`"TotalTime"` and `+0x204` `"TotalTimeTxt"` - read directly off
+`Hud_BindWidgets`'s decompile, where each `FUN_08973390` name string
+(`s_CurrentTime_08a79fb8` and its five neighbours) is passed to the widget
+lookup immediately before the store. That block is entered only when `hud+0x40 &
+0x20 == 0`, so in Zone (the mode whose `Zone`/`Score`/`SpeedClass` binds sit under
+the same flag, read from the other branch) the six slots stay null.
+Confidence **92** for the names (a direct decompile of both the binder and this
+function, and the live flag words at exactly these slots); the earlier "candidates"
+wording is retired.
 
 ## No caller found, and that is the relocation bug again
 

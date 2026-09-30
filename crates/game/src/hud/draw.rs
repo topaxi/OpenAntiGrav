@@ -98,8 +98,9 @@ pub(super) fn crop_vertically(sprite: &Sprite, fraction: f32) -> Sprite {
 /// wired up".
 ///
 /// `place_shown` is the one decision this function cannot make from its own
-/// arguments: whether *this layout* yields the top-right anchor to the place -
-/// see [`place_owns_the_anchor`]. `speed_unit` is the second, and
+/// arguments: whether the clock is hidden - the place owning its anchor
+/// ([`place_owns_the_anchor`]) or the title's own mode rule
+/// ([`super::time_trial_pace::mode_hides_total_time`]). `speed_unit` is the second, and
 /// [`SPEED_UNIT_WIDGET`] is why. `classes` is the third: what this title
 /// calls each rung of its Zone ladder
 /// ([`oag_title::HudArt::zone_speed_classes`], `None` unread). `shield_percent`
@@ -888,8 +889,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     frame.sprites.extend(lap_split_sprites(cx, readout));
 
     // Decided once for the frame rather than per widget: it is a fact about the
-    // layout and the readout together, and two widgets have to agree on it.
-    let place_shown = place_owns_the_anchor(cx.layout, readout);
+    // layout, the readout and the title together, and two widgets have to agree.
+    let place_shown = place_owns_the_anchor(cx.layout, readout)
+        || super::time_trial_pace::mode_hides_total_time(cx.art, readout);
     // Likewise a fact about the layout rather than about one widget.
     let speed_unit = cx.layout.label(SPEED_UNIT_WIDGET).is_none();
     // `speed_unit`'s own pattern: `Position` carries the whole `8/8` only

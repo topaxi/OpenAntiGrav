@@ -17,6 +17,7 @@ use crate::language::StringTable;
 use crate::menu::{Frame, Layers, Picture, Skin};
 use crate::screen::{Fill, Image, Text, argb_to_rgba};
 
+use super::table::{Shown, lap_slot, table_layers};
 use super::{EndRaceMenu, Headline, Layout, Results, Rewards, TournamentResults, TournamentRow};
 
 #[cfg(test)]
@@ -58,14 +59,14 @@ const MENU_SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 /// `EndRace Results`' draw list: the headline and the per-lap table.
 ///
-/// **The table's third column and the `perfectlap{n}` icons never draw** -
-/// see the module doc on [`super::Results`] for why: the column's own
-/// meaning, and the flag's own direction, are both unread. `boostimg` is
-/// left undrawn too, on the decompile's own "hidden unconditionally on
-/// every single-player path" reading - `docs/ui/endrace-screens.md` records
-/// that the one capture this project holds shows a header glyph at
-/// `boostimg`'s own position, which contradicts that reading, but resolving
-/// which is right is `endrace-loose-ends`'s lane, not this one's.
+/// **The `perfectlap{n}` icons never draw**: this build keeps no per-lap "perfect"
+/// flag. **`boostimg` draws** as the third column's header icon, and the column counts
+/// the speedup pads entered on each lap ([`super::LapSplit::boosts`]). The icon is shown
+/// by `EndRaceResults_PopulateLapTable` and by no other populate; it was left undrawn
+/// until 2026-09-30 on a reading of the decompile that had bit `0x4` the wrong way
+/// round (`docs/ui/endrace-screens.md`).
+/// Speed Lap has no totals row and no highlight; a race with no completed lap hides
+/// the whole table (`table &= ~4`).
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
@@ -81,78 +82,34 @@ pub fn results_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
+    let laps = model.laps.len();
+    let totals = model.headline != Headline::SpeedLap;
+    let shown = Shown {
+        table: laps > 0,
+        rows: laps + usize::from(totals),
+        header_bar: true,
+        boost_icon: true,
+        highlight: totals.then_some(laps + 1),
     };
-    let screen = &layout.screen;
-    let mut out = Vec::new();
-    let total_row = model.laps.len() + 1;
-    for fill in &screen.fills {
-        if fill.name.as_deref() == Some("tablehighlight") {
-            // `tablehighlight` carries `Color`/no `src`, so it collects as a
-            // [`crate::screen::Fill`], not an `Image` - repositioned onto the
-            // totals row, the same "authored default, overridden at the
-            // right row" idiom `crate::campaign::draw::centred_selector_draw`
-            // uses for `Selector`. **Chosen, not measured**: no decompile of
-            // this screen's own row-highlight positioning was made this
-            // pass.
-            out.push(Draw::Fill {
-                rect: [
-                    0.0,
-                    tablebg_y(total_row),
-                    fill.width.unwrap_or(0.0),
-                    fill.height.unwrap_or(0.0),
-                ],
-                color: argb_to_rgba(fill.color),
-            });
-            continue;
-        }
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let name = image.name.as_deref().unwrap_or("");
-        if name.starts_with("perfectlap") || name == "boostimg" {
-            continue;
-        }
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
-    for text in &screen.texts {
-        let name = text.name.as_deref().unwrap_or("");
-        let content = if text.idstring.as_deref() == Some("MSC_PL") {
-            // `perfectlap{n}`'s own overlay: `<Text idstring="MSC_PL">`
-            // nested *inside* `<Image name="perfectlap{n}">`
-            // (`docs/formats/endrace-screens.md`), so it carries no `name`
-            // of its own - `name.starts_with("perfectlap")` (which the
-            // image loop above uses, on the `Image` that does carry the
-            // name) cannot catch it. Found by looking: every row drew a
-            // faint "TP" (this source's own French for `MSC_PL`) past the
-            // totals row - `perfectlap{n}`'s own direction being unread is
-            // exactly why the image half is already skipped above; this is
-            // that same skip, keyed on the one field this nested text does
-            // carry, for the half that was still leaking through.
-            None
-        } else if name.starts_with("lap") {
-            lap_cell_text(name, model, strings)
-        } else {
-            match name {
-                "Line1" => headline_text(model.headline, strings),
-                _ => text.string.clone(),
+    table_layers(
+        layout,
+        skin,
+        frame,
+        backdrop,
+        race_behind,
+        sprites,
+        shown,
+        &|text| {
+            let name = text.name.as_deref().unwrap_or("");
+            if name.starts_with("lap") {
+                lap_cell_text(name, model, strings, totals)
+            } else if name == "Line1" {
+                headline_text(model.headline, strings)
+            } else {
+                text.string.clone()
             }
-        };
-        let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
-    }
-    layers.body = out;
-    layers
+        },
+    )
 }
 
 /// Pulse's own Tournament `EndRace Results`' draw list: `BigTopText` (the
@@ -185,80 +142,41 @@ pub fn tournament_results_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let screen = &layout.screen;
     let rows = model.current();
-    let player_row = rows
-        .iter()
-        .position(|row| row.player)
-        .map(|index| index + 1);
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        if fill.name.as_deref() == Some("tablehighlight") {
-            // Measured, not chosen, unlike the ordinary per-lap table's own
-            // `tablebg_y`: `EndRaceResults_PopulateTournamentTable`'s own
-            // `iVar7` starts at `0x5d` (93) for row 1 and steps `0x14` (20)
-            // a row, one pixel below the per-lap table's `92` - a real,
-            // small divergence between the two tables' own row pitch, not a
-            // rounding artefact of this reimplementation.
-            let Some(row) = player_row else { continue };
-            out.push(Draw::Fill {
-                rect: [
-                    0.0,
-                    tournament_highlight_y(row),
-                    fill.width.unwrap_or(0.0),
-                    fill.height.unwrap_or(0.0),
-                ],
-                color: argb_to_rgba(fill.color),
-            });
-            continue;
-        }
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let name = image.name.as_deref().unwrap_or("");
-        // Per-lap concepts that do not apply to a per-craft table:
-        // `perfectlap{n}`'s own direction is unread even on the ordinary
-        // table ([`results_draw_list`]'s own doc), and `boostimg` is a
-        // single header-row glyph, not a per-row one - neither has a
-        // reading on this screen at all.
-        if name.starts_with("perfectlap") || name == "boostimg" {
-            continue;
-        }
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
-    for text in &screen.texts {
-        let name = text.name.as_deref().unwrap_or("");
-        let content = if text.idstring.as_deref() == Some("MSC_PL") {
-            // `perfectlap{n}`'s own overlay - see [`results_draw_list`]'s
-            // own doc on why this is keyed on `idstring`, not `name`. Per-lap,
-            // not per-craft: nothing on this table either way.
-            None
-        } else if name.starts_with("lap") {
-            tournament_lap_cell_text(name, rows, strings)
-        } else {
-            match name {
-                "BigTopText" => Some(tournament_big_top_text(model, strings)),
-                "Line1" => Some(strings.get_or_id(model.line1_id()).to_string()),
-                _ => text.string.clone(),
+    // The highlight steps `0x5d + 0x14 * (row - 1)` - the same literal the lap
+    // table's totals row ends on, one pixel under a `tablebg`'s own `OffsetY`.
+    // `boostimg` is the lap table's header icon and no other populate shows it.
+    let shown = Shown {
+        table: true,
+        rows: rows.len(),
+        header_bar: true,
+        boost_icon: false,
+        highlight: rows
+            .iter()
+            .position(|row| row.player)
+            .map(|index| index + 1),
+    };
+    table_layers(
+        layout,
+        skin,
+        frame,
+        backdrop,
+        race_behind,
+        sprites,
+        shown,
+        &|text| {
+            let name = text.name.as_deref().unwrap_or("");
+            if name.starts_with("lap") {
+                tournament_lap_cell_text(name, rows, strings)
+            } else {
+                match name {
+                    "BigTopText" => Some(tournament_big_top_text(model, strings)),
+                    "Line1" => Some(strings.get_or_id(model.line1_id()).to_string()),
+                    _ => text.string.clone(),
+                }
             }
-        };
-        let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
-    }
-    layers.body = out;
-    layers
+        },
+    )
 }
 
 /// `EndRace Rewards`' draw list: the medal-award phrase, the disc's own
@@ -462,7 +380,7 @@ pub(super) fn headline_text(headline: Headline, strings: &StringTable) -> Option
 
 /// `ER_1STP`..`ER_8THP`, 1-based - `None` outside that range, which cannot
 /// happen for an 8-craft field but is not this function's job to assert.
-fn ordinal_idstring(place: u8) -> Option<&'static str> {
+pub(super) fn ordinal_idstring(place: u8) -> Option<&'static str> {
     Some(match place {
         1 => "ER_1STP",
         2 => "ER_2NDP",
@@ -491,19 +409,14 @@ pub(super) fn medal_award_text(
     strings.get_or_id(id).to_string()
 }
 
-/// The `lap{n}.{c}` widget name a table cell carries, e.g. `"lap3.1"` ->
-/// `(3, 1)`. `n = 0` is the header row.
-fn lap_slot(name: &str) -> Option<(usize, usize)> {
-    let rest = name.strip_prefix("lap")?;
-    let mut parts = rest.split('.');
-    let n = parts.next()?.parse().ok()?;
-    let c = parts.next()?.parse().ok()?;
-    Some((n, c))
-}
-
 /// A `lap{n}.{c}` cell's own content - the header row, a real lap, the
 /// totals row, or nothing (column 2, and any row past the totals one).
-fn lap_cell_text(name: &str, model: &Results, strings: &StringTable) -> Option<String> {
+fn lap_cell_text(
+    name: &str,
+    model: &Results,
+    strings: &StringTable,
+    totals: bool,
+) -> Option<String> {
     let (n, c) = lap_slot(name)?;
     if n == 0 {
         return match c {
@@ -512,33 +425,32 @@ fn lap_cell_text(name: &str, model: &Results, strings: &StringTable) -> Option<S
             _ => None,
         };
     }
-    if c == 2 {
-        // The third column's own meaning is unread - see the module doc.
-        return None;
-    }
     if n <= model.laps.len() {
         let split = model.laps[n - 1];
         return match c {
             0 => Some(split.lap.to_string()),
             1 => Some(format_ticks(u64::from(split.ticks))),
+            // The `boostimg` column: the pads entered on this lap.
+            2 => split.boosts.map(|boosts| boosts.to_string()),
             _ => None,
         };
     }
-    if n == model.laps.len() + 1 {
+    if totals && n == model.laps.len() + 1 {
         return match c {
             0 => Some(strings.get_or_id("PRO_STATS_TOT").to_string()),
             1 => Some(format_ticks(model.total_ticks)),
+            // `+0x1148`, the sum `Race_BuildEndRaceResult` accumulates over the laps
+            // it reports - drawn only when every lap has a count to add up.
+            2 => model
+                .laps
+                .iter()
+                .map(|split| split.boosts)
+                .sum::<Option<u32>>()
+                .map(|total| total.to_string()),
             _ => None,
         };
     }
     None
-}
-
-/// The totals row background's own `y` - `tablebg{n}`'s own `OffsetY`
-/// pattern (`92`, then `+20` per row) read directly off
-/// `EndRace_Definition.xml`.
-fn tablebg_y(row: usize) -> f32 {
-    92.0 + (row.saturating_sub(1)) as f32 * 20.0
 }
 
 /// `BigTopText`'s own text on Pulse's Tournament results screen -
@@ -580,19 +492,13 @@ fn tournament_lap_cell_text(
     let row = rows.get(n - 1)?;
     match c {
         0 => Some(n.to_string()),
-        1 => row.team_name.clone(),
+        1 => row
+            .team_name
+            .as_deref()
+            .map(|id| strings.get_or_id(id).to_string()),
         2 => Some(row.points.to_string()),
         _ => None,
     }
-}
-
-/// `tablehighlight`'s own `y` on Pulse's Tournament standings table - one
-/// pixel below the ordinary per-lap table's own [`tablebg_y`]:
-/// `EndRaceResults_PopulateTournamentTable`'s own `iVar7` starts at `0x5d`
-/// (93) for row 1 and steps `0x14` (20) a row. Measured, not chosen - see
-/// the draw list's own doc.
-fn tournament_highlight_y(row: usize) -> f32 {
-    93.0 + (row.saturating_sub(1)) as f32 * 20.0
 }
 
 /// Ticks (this project's own fixed 60 Hz timestep - see

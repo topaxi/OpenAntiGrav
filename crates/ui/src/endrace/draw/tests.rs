@@ -139,16 +139,24 @@ fn sprite_count(layers: &crate::menu::Layers) -> usize {
         .count()
 }
 
-/// `BigTopText`/`Line1` and the per-lap table draw off the model, and the
-/// third column and `perfectlap`/`boostimg` never appear - see the module
-/// doc on why.
+/// `BigTopText`/`Line1` and the per-lap table draw off the model. The third
+/// column's own values and the `perfectlap` icons never appear - see the module
+/// doc on why; the `boostimg` header icon does (`modes::tests` checks it).
 #[test]
 fn results_draws_the_headline_and_the_lap_table_but_never_the_third_column() {
     let model = Results {
         headline: Headline::TimeTrial,
         laps: vec![
-            LapSplit { lap: 1, ticks: 60 },
-            LapSplit { lap: 2, ticks: 120 },
+            LapSplit {
+                lap: 1,
+                ticks: 60,
+                boosts: None,
+            },
+            LapSplit {
+                lap: 2,
+                ticks: 120,
+                boosts: None,
+            },
         ],
         total_ticks: 180,
     };

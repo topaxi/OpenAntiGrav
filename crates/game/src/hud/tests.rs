@@ -241,12 +241,15 @@ fn the_total_time_yields_its_anchor_to_the_place() {
     assert!(!solo.contains(&"Position".to_string()), "{solo:?}");
 }
 
-/// A layout with a clock and no place keeps its clock in a race with a field.
+/// A layout with a clock and no place keeps its clock in a timed mode, in a
+/// field.
 ///
-/// `Elimination_HUD.xml` is that layout: it carries `TotalTime` and no
-/// `Position` at all, so the yield above has to be a question about the layout
-/// and not only about the readout - otherwise an Eliminator race loses its
-/// clock to a widget that is not there.
+/// The yield above has to be a question about the layout and not only about the
+/// readout: a layout that authors `TotalTime` and no `Position` has nothing to
+/// yield to. (This test's doc used to name `Elimination_HUD.xml` as the layout
+/// that keeps its clock in a race with a field. That was an inference and a
+/// live Eliminator frame refutes it - see
+/// [`the_clock_is_hidden_outside_the_timed_modes`].)
 #[test]
 fn a_layout_with_no_place_widget_keeps_its_total_time() {
     let layout = Layout::from_xml(
@@ -257,6 +260,60 @@ fn a_layout_with_no_place_widget_keeps_its_total_time() {
     let strings = strings();
     let frame = draw_list(&context(&layout, &strings), &placed());
     assert_eq!(frame.hud_text.len(), 1, "{frame:?}");
+}
+
+/// Pulse's HUD update leaves the clock hidden in every mode but Time Trial and
+/// Speed Lap, whatever the layout authors and whatever the place is.
+///
+/// `PlayerStatus_Update` writes the target field to `-1` each tick and
+/// `Hud_UpdateTimeCluster` hides `TotalTime`/`TotalTimeTxt` while it reads
+/// that. A PPSSPP frame of an Eliminator race (`elim-hud-01.png`, 2026-09-30)
+/// has no `TOTAL` in its top-right corner, and the two widgets' flag words read
+/// live with the visible bit clear. The fixture is the real `Arcade_HUD.xml`
+/// corner, so a single race with no place yet is covered as well as
+/// `Elimination_HUD.xml`'s own shape.
+#[test]
+fn the_clock_is_hidden_outside_the_timed_modes() {
+    use oag_race::Mode;
+    let layout = Layout::from_xml(TOP_RIGHT);
+    let strings = strings();
+    let shown = |art: &oag_title::HudArt, mode: Mode| -> bool {
+        let cx = Context {
+            art,
+            ..context(&layout, &strings)
+        };
+        let readout = Readout {
+            mode,
+            ..Readout::blank()
+        };
+        let frame = draw_list(&cx, &readout);
+        !frame.hud_text.is_empty() && !frame.small_text.is_empty()
+    };
+
+    for mode in [
+        Mode::TimeTrial,
+        Mode::SpeedLap,
+        Mode::Zone,
+        Mode::SingleRace,
+        Mode::Eliminator,
+        Mode::Tournament,
+        Mode::Head2Head,
+    ] {
+        assert_eq!(
+            shown(oag_pulse::hud::ART, mode),
+            matches!(mode, Mode::TimeTrial | Mode::SpeedLap),
+            "{mode:?}"
+        );
+    }
+
+    // A title that has not had the rule checked keeps drawing it, as it always
+    // did: 2048's own frame shows `TOTAL` beside `POS` in a race with a field.
+    let unmeasured = oag_title::HudArt {
+        total_time_timed_modes_only: false,
+        ..*oag_pulse::hud::ART
+    };
+    assert!(shown(&unmeasured, Mode::Eliminator));
+    assert!(shown(&unmeasured, Mode::SingleRace));
 }
 
 /// A campaign Time Trial cell substitutes the medal caption and the

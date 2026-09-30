@@ -46,15 +46,17 @@ trade against a `Stage::Menu`-based design.
 | Widget | Draws | Why |
 | --- | --- | --- |
 | `BigTopText` (`ER_RES`) | Yes | direct idstring, resolved generically |
-| `Line1` (headline) | Yes, for `TimeTrial`/`SpeedLap`/`SingleRace` | `SingleRace` uses the finishing-position idstring (`ER_1STP`..`ER_8THP`); `Zone`/`Eliminator` draw nothing (`Headline::Unresolved`) - their own populate helper (`FUN_088db574`/`FUN_088db1ec`) is undecompiled |
+| `Line1` (headline) | Yes, for `TimeTrial`/`SpeedLap`/`SingleRace` | `SingleRace` uses the finishing-position idstring (`ER_1STP`..`ER_8THP`). `Zone` and `Eliminator` have tables of their own, below; `Headline::Unresolved` remains only for HD's grid, whose populate for them is unread |
 | `lap0.0`/`lap0.1` (header) | Yes | `RC_LAP`/`PRO_TIME` |
-| `lap0.2` (header) | **No** | the column's own meaning is unread |
+| `lap0.2` (header) | **No text, but the header icon draws** | the cell is blanked in the original too: `boostimg` is the header - see the `boostimg` row |
 | `lap{n}.0`/`lap{n}.1` | Yes, up to [`oag_race::MAX_RECORDED_LAPS`] (4) | off `Standing::lap_splits`, which is itself capped at 4 - see below |
-| `lap{n}.2` | **No, any row** | same reason as the header |
-| totals row (`PRO_STATS_TOT` + `tablebg{n+1}`) | Yes | `Results::total_ticks`, the player's own finish tick |
-| `tablehighlight` | Yes, repositioned onto the totals row | **chosen, not measured** - no decompile of this screen's own row-highlight positioning exists; see the doc on `results_draw_list` |
-| `perfectlap{n}` | **No** | the flag's own direction (does nonzero mean "perfect" or the reverse) is unread. **Its own `idstring="MSC_PL"` text overlay used to leak through regardless** - found and fixed 2026-09-28: the overlay is a nested, unnamed `<Text>` inside the `<Image name="perfectlap{n}">` element (`docs/formats/endrace-screens.md`), so the by-`name` skip this row already gave the image half never caught the text half; `results_draw_list` now also skips any text whose `idstring` is `MSC_PL`. Visible as a faint "TP" (this source's own French) past each row in a pre-fix capture. |
-| `boostimg` | **No** | the decompile's own "hidden unconditionally on every single-player path" reading - see [Open](#open) for why this project's one capture disagrees |
+| `lap{n}.2` | **Yes, 2026-09-30**: pads entered on that lap | `crate::race::RunStats::boosts_by_lap`, counted on the edge `Ship_ApplySpeedupPad` bumps the original's own counter on (a *new* pad, the human craft only) - the writer was found by a live write watchpoint. Blank for a lap with no count |
+| totals row (`PRO_STATS_TOT` + `tablebg{n+1}`) | Yes | `Results::total_ticks`, the player's own finish tick; the third cell is the sum of the laps' pad counts (`+0x1148`) |
+| `tablehighlight` | Yes, on the totals row; hidden for Speed Lap | **measured 2026-09-30**: `PopulateLapTable` ends on `y = laps * 0x14 + 0x5d`, i.e. `93 + 20 * laps`, and hides it in mode 10, which has no totals row. It was `92 + 20 * laps`, chosen, before |
+| `tablebg{n}` rows | **Only the rows in use**, 2026-09-30 | `ResetTable` hides all eight and `PopulateLapTable` shows one per lap and the totals row; this build drew all eight on every table until the bit-`0x4` correction (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`). A race with no completed lap hides the whole `table` group |
+| `topbarcenter` | Yes | shown by `ResetTable` |
+| `perfectlap{n}` | **No** | the flag's direction is settled (nonzero shows the icon, 2026-09-30) but this build keeps no per-lap "perfect" flag and does not know what makes a lap perfect, so none is ever set. **Its own `idstring="MSC_PL"` text overlay used to leak through regardless** - found and fixed 2026-09-28: the overlay is a nested, unnamed `<Text>` inside the `<Image name="perfectlap{n}">` element (`docs/formats/endrace-screens.md`), so the by-`name` skip this row already gave the image half never caught the text half; `results_draw_list` now also skips any text whose `idstring` is `MSC_PL`. Visible as a faint "TP" (this source's own French) past each row in a pre-fix capture. |
+| `boostimg` | **Yes, 2026-09-30** | the third column's header icon, shown by `EndRaceResults_PopulateLapTable` and by no other populate. The earlier "hidden unconditionally" reading had `\|= 4` and `&= ~4` backwards; the one capture (`results-01.png`) always agreed with the corrected one. The column under it counts the pads entered on each lap, and the totals cell sums them |
 | `ContinueButton`/`ControlTextConfirm` | Yes | direct idstrings |
 
 [`oag_race::MAX_RECORDED_LAPS`]: ../../crates/race/src/state.rs
@@ -95,9 +97,9 @@ field).
 | `Line1` | Yes | `ER_RACE_STAN`/`ER_TOUR_STAN`, whichever page is current |
 | `lap0.0`/`lap0.1`/`lap0.2` (header) | Yes | `PRO_POS`/`ER_TEAM`/`ER_POINTS` |
 | `lap{n}.0` | Yes, one row per grid slot | the row's own 1-based index - `EndRaceResults_PopulateTournamentTable` does not sort, so this is simply which row a craft's own data landed on |
-| `lap{n}.1` | Yes, when a team is known | the craft's own team name - `None` (this project keeps no per-slot team name past the race that just finished, unlike a live `Race`) draws the cell absent, never a guessed `"SLOT n"` |
+| `lap{n}.1` | Yes, when a team is known | the craft's own team, **resolved to its display name** (`AG_Systems` -> `AG Systems`) through the string table at draw time, 2026-09-30 - the original's `localise(craft+0x798)`. `None` (a launch that named no team) draws the cell absent, never a guessed `"SLOT n"` |
 | `lap{n}.2` | Yes | this leg's own points (leg page) or the running total (standings page) - `oag_race::tournament::points_for_finish`/`Progress::points` |
-| `tablehighlight` | Yes, on the player's own row | measured at a different `y` pitch than the per-lap table's own (`93 + 20*row`, not `92 + 20*row`) - see `tournament_highlight_y`'s own doc |
+| `tablehighlight` | Yes, on the player's own row | `93 + 20 * (row - 1)` - the same step every populate uses, since 2026-09-30 (the lap table's own was `92 + ...`, chosen, until then) |
 | `perfectlap{n}`/`boostimg` | **No** | per-lap concepts, no reading on a per-craft table |
 | `ContinueButton`/`ControlTextConfirm` | Yes | direct idstrings, unchanged |
 
@@ -119,6 +121,71 @@ autopilot cost `tournament.md`'s own "Live verification" section names, not
 attempted again this pass. Kept under `data/scratch/pulse-tourney/shots/`
 (gitignored - game content).
 
+### `EndRace Results`, on an Eliminator race and a Zone run: their own tables
+
+**Status: draws, 2026-09-30.** `EndRaceResults_OnEnter` gives Eliminator (mode 8) and
+Zone (mode 6) tables of their own, filled by `EndRaceResults_PopulateEliminationTable`
+and `EndRaceResults_PopulateZoneTable`; the reading is on the [ghidra
+page](../ghidra/functions/psp-pulse-usa/endrace-screens.md#the-variant-populates-2026-09-30).
+Both go through the walk every table shares
+([`oag_ui::endrace::table`](../../crates/ui/src/endrace/table.rs)), which shows only
+the rows a mode fills. Models and draws are in
+[`oag_ui::endrace::modes`](../../crates/ui/src/endrace/modes.rs); the builders are
+`crate::race_stage::endrace::{elimination_results, zone_results}`.
+
+**Eliminator - confirmed against a live PPSSPP frame** (`--menu-page
+endrace-results-eliminator` draws the same eight records the original ended a race
+on):
+
+| Widget | Draws | Why |
+| --- | --- | --- |
+| `Line1` | Yes | `"%s %s"` of `ER_ELIM_COM` and the place's ordinal (`Eliminator complete -  8th place`, two spaces and all); blank outside places 1-8 |
+| header | Yes | `ER_DEATHS` / `ER_TEAM` / `IG_HUD_KILLS`, at the authored columns 140 / 220 / 320 |
+| rows | Yes, one per craft | **deaths, team, kills** - deaths sit in the *first* column, which is odd enough that the live frame is what settled it |
+| order | kills descending, deaths ascending, the player first on a full tie | `Race_BuildEndRaceResult`'s sort, reproduced by `EliminationResults::new`. **It ranks the screen, not the race**: the simulation's own finishing place is neither read nor changed |
+| team cell | display name | folder id through the string table, as in the Tournament table |
+| `tablehighlight` | Yes, on the player's row | `93 + 20 * (row - 1)` |
+| `ER_DNF` | **No** | printed in place of both numbers when a record's `+0x140` is `-1`; nothing writes that word on this path and it read `0` on all eight live records |
+| `boostimg`, `perfectlap{n}` | No | the lap table's |
+
+**Zone - decompile only** (no Zone frame is reachable; `--menu-page
+endrace-results-zone` draws **chosen** numbers):
+
+| Row | Draws | Why |
+| --- | --- | --- |
+| `Line1` | `ER_ZONE_COM` | direct |
+| header row and `topbarcenter` | **Hidden**, as in the original | Zone has no header |
+| 1 `ER_ZONE_CLEAR` | label and `RaceState::zone` | `+0x1a10`, the zone number |
+| 2 `ER_PERF_ZONE` | label and a running count | `RunStats::perfect_zones`, ticked on the `perfect_zone` edge - on the view side of `Race`, so no hash moves |
+| 3 `ER_LAPSC` | label, **value blank** | what steps `+0x1a14` (`craft+0x911` bit 0) is not recovered |
+| 4 `MSC_DATA_PLAP` | label, **value blank** | what steps `+0x1a16` (`craft+0x860 & 0x200000`, also worth 2000 points) is not recovered |
+| 5 `ER_TOP_SPEED` | label and `"<n> KM/H"` | `RunStats`' running maximum of the player's `\|dot(velocity, forward)\|`, kept as `Zone_Update` keeps it (`u16(speed * 100)`, printed `* 3600 / 100000`). **Chosen, not measured**: sampled per tick rather than on the original's frame, and the maximum is taken over the whole run, not only while the mode was racing |
+| 6 `ER_ZONE_SCORE` | label and `RaceState::score` | `+0x1a1c`. This build's own score omits the 2000-point row-4 bonus, so it can read low |
+| `tablehighlight` | No | `OnEnter` hides it after the populate |
+
+**Live, 2026-09-30** (Xvfb `:92`, software Vulkan, `pulse-psp-usa.chd`, isolated
+`XDG_CONFIG_HOME`, keyboard and pointer through the real front end - `RACEBOX`, a mode
+value, `START`, track, team). **Zone**: a real run steered into a wall - `Zone
+session complete!`, `Total zones cleared: 26`, `Perfect zones: 16`, both lap rows
+labelled and blank, `Top speed: 847 KM/H`, `Zone score: 24014`, no header bar - then
+the flow carried on to `EndRace Menu`. **Eliminator**: the field is 8 craft and the
+kill count is 10, which the AI did not reach in 8 game-minutes with the player
+parked (the original's did with 5 in 85 s), so the finish was reached by a
+**temporary local change of `ELIMINATOR_KILL_TARGET_DEFAULT` to 0**, reverted and
+not committed. It ended the race on tick 0 and showed the table over the real race
+scene: `Eliminator complete -  1st place` (an all-zero field, the player first on the
+tie), `Deaths: | Team | Kills`, eight rows with **display names** (`AG Systems`, `EG-X`,
+`Goteki 45`), the player's row highlighted; `Confirm` reached `EndRace Menu`, and a
+**pointer click on `VIEW RESULTS AGAIN`** brought the table back. The numbers in a
+populated Eliminator table are therefore covered by the unit tests and the
+`--menu-page endrace-results-eliminator` still, laid against the original's frame, not
+by a live race with kills in it. The original's frame for comparison:
+`data/scratch/pulse-endrace-modes/shots/original-eliminator-results.png` (gitignored).
+
+Both tables' cells draw in the upper-case front-end font, as the lap table's already do,
+where the frames show the mixed-case default face - the shared-table font gap
+`tournament.md` records, not a fault of these.
+
 ### `EndRace Rewards`
 
 | Widget | Draws | Why |
@@ -126,7 +193,7 @@ attempted again this pass. Kept under `data/scratch/pulse-tourney/shots/`
 | header (`ER_REWARD`) | Yes | direct idstring |
 | `RewardLine1` (medal-award phrase) | Yes | `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA` off `Rewards::medal` |
 | `MedalImg` (hex-dash glyph) | Yes, campaign + no medal only | the one measured case (`results-02.png`) |
-| `MedalImg` under an earned trophy | **No** | confidence 55 on whether it stays visible - not determined by any capture this project holds |
+| `MedalImg` under an earned trophy | **No - settled 2026-09-30, confidence 80** | a live gold-medal run (campaign `grid0_3_2`, one lap, 1.19.84, `Gold medal awarded`) shows only the gold trophy in the medal square and **no static hex glyph under it**; the trophy **spins** about its vertical axis (seven frames 0.9 s apart, edge-on to full face and back, about a 6 s period) where this build holds its first frame - `StartPaused` and the animation stay **chosen, not measured** here |
 | trophy (`TrophyPanel`, `g_trophy`/`s_trophy`/`b_trophy`) | **Yes, 2026-09-28**, on a campaign race that earned a medal | the medal's own model, `oag_game::endrace::Trophy`, drawn with the disc's `Mode3D` camera - see "The trophy" below |
 | `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum` (the loyalty row) | **Yes, 2026-09-14** | `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal` landed in main (confidence 95/90) - see [`oag_ui::endrace::Loyalty`](../../crates/ui/src/endrace.rs) and `crate::race_stage::endrace::loyalty_award`. `None` (nothing draws) only when a launch names no team at all |
 | `loyaltybg`/`loyaltybar` | Yes, alongside the row | `loyaltybar`'s own fill width scales by `total * 0.00124` - see [Open](#open) for a visual mismatch against the reference frame this pass found and did not resolve |
@@ -304,15 +371,22 @@ still.
   MEDAL AWARDED` and `FEISAR LOYALTY 45 POINTS`, `TOTAL LOYALTY: 45`, and
   `records.toml` banked `[[loyalty]] team = "feisar" total = 45` -> `EndRace
   Menu` -> `RETURN TO GRID` -> `Cell Selection`.
-- **`boostimg`'s own condition disagrees with the decompile.** `results-01.png`
-  shows a flag/pennant glyph in the header row at approximately `boostimg`'s
-  own authored position (`x=320 y=77`), but
-  `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md` reads it as
-  unconditionally hidden on every single-player path this pass decompiled.
-  This build follows the decompile (draws nothing) rather than the one
-  capture, on the reasoning that a widget's own firing condition is this
-  project's `endrace-loose-ends` lane's call, not this one's - flagged here
-  so it is not lost.
+- ~~**`boostimg`'s own condition disagrees with the decompile.**~~ **Closed
+  2026-09-30**: it did not - `|= 4` is *visible*. The header icon draws on the lap
+  table now, and the column under it is the per-lap **speedup-pad count**
+  (`Ship_ApplySpeedupPad`, found with a live write watchpoint), which this build
+  tallies on the same pad-entry edge. Open: lap 1 reads `6` on both captures against
+  `9`-`10` on the laps after, unexplained, and this build's own counts have not been
+  laid against a full lap of the original on the same circuit.
+- **`EndRaceResults_Update` and the network table** are read but draw nothing here:
+  this build has no network play (`EndRaceResults_PopulateMultiplayerTable`).
+- **A parser quirk this pass routed around** rather than fixing:
+  `Screens::collect_widgets` places a colour-only `<Image OffsetY=...>` wrapper at
+  its own `y` without the tag's `OffsetY`, so the eight `tablebg{n}` backings landed
+  on the top of the screen (`y` 0 and 1). `oag_ui::endrace::table` puts the offset
+  back for those eight; the shared reader is untouched, since nothing here measured
+  another screen that depends on the current behaviour. A wrapper on some other screen
+  with an `OffsetY` and no `src` would show the same fault.
 - **The scrolling tip ticker / button-legend footer this screen's own frame
   chrome might carry** were not investigated - out of scope for this pass,
   which is about the three `EndRace` screens specifically, not the shared

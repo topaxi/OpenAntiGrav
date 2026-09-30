@@ -698,16 +698,32 @@ pos
 ```
 
 in the top-right corner, on the grid and again fifty seconds into the lap, with
-**no total time anywhere on the screen**. Two frames, both `POS`, no clock. That
-also squares with the layouts: `TimeTrial`, `Zone` and `Elimination` carry
-`TotalTime` and no place, so the clock is not homeless without this anchor and the
-place would be.
+**no total time anywhere on the screen**. Two frames, both `POS`, no clock.
 
-The rule is `oag_game::hud::place_owns_the_anchor` and it asks the *layout*, not
-just the readout, so `Elimination_HUD.xml` keeps its clock. **The captions were not
-separately confirmed** - the `TOTAL` caption is suppressed with its clock here on
-the ~5 px overlap argument above, and the reference frames show `pos` where it
-would have been, which is consistent with but does not isolate that.
+**The place was never the reason, and the anchor is not why the clock is
+missing.** This section originally read the missing clock as the place winning a
+shared anchor and said `Elimination_HUD.xml` "keeps its clock" because it authors no
+`Position`. Both halves are wrong. `PlayerStatus_Update` (`0x0883b3b8`) leaves the
+clock's target at `-1` in every mode but Time Trial, Speed Lap, Free Play and
+Multiplayer Time Trial, and `Hud_UpdateTimeCluster` (`0x0881c9d0`) hides
+`TotalTime`/`TotalTimeTxt` on `-1`: the clock is hidden in a single race whether
+or not a place is up. A live PPSSPP frame of an **Eliminator** race
+(2026-09-30, `g_game_mode` 8) has no `TOTAL` in its top-right corner although its
+layout authors no `Position` - the corner holds `KILLS (5)` and the per-craft kill
+column - and both widgets' flag words read with the visible bit clear. See
+[`race-progress.md`](../ghidra/functions/psp-pulse-usa/race-progress.md#which-modes-hide-the-clock-confirmed-live-2026-09-30)
+for the evidence. `Zone_HUD.xml` authors no `TotalTime` at all (only
+`TimeTrial_HUD.xml`, `Elimination_HUD.xml` and `Arcade_HUD.xml` do), so there is
+nothing to hide there.
+
+The rule this build applies is [`oag_title::HudArt::total_time_timed_modes_only`]
+(true for Pulse alone): outside Time Trial and Speed Lap both widgets are hidden.
+`oag_game::hud::place_owns_the_anchor` stays for the titles the flag is `false`
+for - 2048 draws `TOTAL` beside `POS` on a live frame, and HD and Pure are
+unmeasured - where it asks the *layout*, not just the readout. **The captions were
+not separately confirmed** on the single-race frames - the `TOTAL` caption is
+suppressed with its clock here, and the Eliminator frame is the one that shows
+neither the clock nor its caption.
 
 **The same two frames settle a second question nobody asked them.** The original
 places its own **parked player 8th of 8 on the grid**, before anyone has crossed

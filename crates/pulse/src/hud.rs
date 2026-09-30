@@ -94,6 +94,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // role rather than one plugin id). See `oag_title::HudArt::hud_font_role`.
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
+    // Measured: `PlayerStatus_Update` leaves the clock target at -1 outside Time Trial,
+    // Speed Lap, Free Play and Multiplayer Time Trial, and `Hud_UpdateTimeCluster` hides
+    // both widgets on it. Seen on a live Eliminator frame. See
+    // `oag_title::HudArt::total_time_timed_modes_only`.
+    total_time_timed_modes_only: true,
     runtime: None,
 };
 

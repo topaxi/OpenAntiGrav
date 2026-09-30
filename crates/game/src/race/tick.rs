@@ -499,6 +499,13 @@ impl Race {
             // `oag_physics::damage::CraftState`.
         }
 
+        {
+            let body = &self.sim.world.ships[player].physics.body;
+            self.view
+                .run_stats
+                .observe(body.linear_velocity.dot(body.forward()).abs());
+        }
+
         if let Some(course) = &self.sim.course {
             let position = self.sim.world.ships[player].physics.body.position;
             // The same flag the collision sparks fire on, so "the HUD says that
@@ -517,6 +524,9 @@ impl Race {
             // to the ship's own pool. `Ship_SetShield` (`0x0883e6f4`) does the
             // same clamp against the stat block's maximum, so a full ship gains
             // nothing and the bar cannot overfill.
+            if outcome.perfect_zone {
+                self.view.run_stats.perfect_zones += 1;
+            }
             if outcome.perfect_zone
                 && let Some(zone) = self.sim.zone
             {
