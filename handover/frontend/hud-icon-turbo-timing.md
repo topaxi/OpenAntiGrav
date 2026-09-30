@@ -1,4 +1,4 @@
-# The gantry hexagon is TurboIcon, legitimate - the grant-timing bug is fixed; the advert-board blur is not
+# The gantry hexagon is TurboIcon, legitimate - the grant-timing bug is fixed; the advert-board blur was texture level selection, fixed 2026-09-30
 
 2026-09-07. A maintainer-requested side-by-side
 (`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/gantry-compare.md`,
@@ -76,7 +76,7 @@ asked for.
 countdown weapon gate is now warranted elsewhere, now that the one case
 that argued against it (this bug) is understood and fixed.
 
-## The advert-board blur: two known causes ruled out, mip-chain depth landed but measured inert, cause still open
+## The advert-board blur: resolved 2026-09-30 - the original samples the base level (see the end of this section)
 
 2026-09-08. Identified the exact board and texture, ruled out two
 `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`-documented mechanisms, and
@@ -134,19 +134,20 @@ Also unchecked: whether bloom or another post-process pass amplifies this
 additive-blend (`ADD`/`GLOW`-named) texture's inherent softness beyond what
 the original's own compositing does - not traced this session either.
 
+**Resolved 2026-09-30 by the frame audit** ([frame-audit.md](../../docs/rendering/frame-audit.md)):
+the blur was `TEXLEVEL` after all, but not as a bias. Matched frames at 480x272
+show the original resolving every scenery texture at its base level, while ours
+walked a box-filtered chain (trees, mountains and road read 15-30 % softer by
+Laplacian energy). A PSP `.vex` texture now reaches the GPU with one level
+(`mesh::PSP_SAMPLED_LEVELS`). The game programs slope mode with a `1/256` slope
+(`Gu_TexLodSlope`, `0x08811694`), a depth-driven law that stays at level 0 inside
+about 128 units. Post-processing was ruled out too: bloom on and off left the
+trees identical. Nothing in this thread is open.
+
 ## Next Steps
 
-- Open a Ghidra project on `psp-pulse-usa`, read `Texture_BuildBindList`'s
-  `+0x06 & 0x18` branch for `hub_banner_GLOW.tga` specifically, and compare
-  its computed LOD bias (if mode 2) against what `oag_render`'s sampler
-  applies (currently none).
-- If bias is a dead end too, capture `--anti-aliasing off --upscaler off`
-  (bloom's own flag, whichever `graphics.*` row names it) against the same
-  tick-130 repro above and diff against the enabled-bloom capture, to rule
-  post-processing in or out before looking anywhere else.
+None.
 
 ## Open
 
-- The advert-board blur's actual cause - two mechanisms ruled out
-  (filter mode, mip-chain depth), TEXLEVEL bias and post-processing
-  unchecked.
+Nothing.

@@ -420,6 +420,7 @@
 0x08811814	function	Gu_AlphaFunc	92	mesh-draw.md
 0x088113f0	function	Gu_TexFilter	88	mesh-draw.md
 0x088114b0	function	Gu_TexLevelMode	80	mesh-draw.md
+0x08811694	function	Gu_TexLodSlope	85	mesh-draw.md
 0x088126ac	function	Gu_Material	90	mesh-draw.md
 0x088112c8	function	Gu_Color	88	mesh-draw.md
 0x08811508	function	Gu_TexMapMode	88	mesh-draw.md
