@@ -287,6 +287,20 @@ pub fn fade_draw(draw: oag_ui::frontend::Draw, alpha: f32) -> oag_ui::frontend::
 ///
 /// The entry is missing, or will not decode as a mesh.
 pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
+    model_named(archives, entry).map(|(model, _)| model)
+}
+
+/// [`model`], and the `.gtf` path of each texture slot in order - what a caller
+/// that has to treat one texture's draws differently needs to find them. Empty
+/// for a PSP or PS2 model, whose textures are embedded and carry no path.
+///
+/// # Errors
+///
+/// As [`model`].
+pub fn model_named(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+) -> Result<(Model, Vec<String>)> {
     let blob = archives
         .read_name(entry)
         .with_context(|| format!("reading the preview mesh {entry}"))?;
@@ -297,6 +311,7 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
     if oag_render::mesh::geometry_is_external(&blob) {
         return ps3_model(archives, entry, &blob);
     }
+    let named = |model| (model, Vec::new());
     let model = oag_render::mesh::build(entry, &blob)
         .with_context(|| format!("decoding the preview mesh {entry}"))?;
     if !model.textures.is_empty()
@@ -306,11 +321,11 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
         return oag_render::mesh::build_with_textures(entry, &blob, Some(&external))
             .map(|mut model| {
                 model.keep_nearest();
-                model
+                named(model)
             })
             .with_context(|| format!("decoding the preview mesh {entry} with its texture set"));
     }
-    Ok(model)
+    Ok(named(model))
 }
 
 /// [`model`]'s PS3 branch: the scene `.vex` and the `.rcsmodel` beside it,
@@ -321,20 +336,30 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
 /// path, and a flyer is all first-pass (every mesh node addresses a chunk), so
 /// the two give the same model; the scene path is the one the rest of this
 /// project's HD ground truth is pinned against.
-fn ps3_model(archives: &mut oag_assets::Archives, entry: &str, blob: &[u8]) -> Result<Model> {
+fn ps3_model(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    blob: &[u8],
+) -> Result<(Model, Vec<String>)> {
     let sibling = oag_render::mesh::rcs::sibling_name(entry)
         .with_context(|| format!("{entry} names no .rcsmodel"))?;
     let geometry = archives
         .read_name(&sibling)
         .with_context(|| format!("{entry}: reading its {sibling}"))?;
+    // The `.gtf` requests come in texture-slot order, which is how a draw
+    // names its texture.
+    let mut textures = Vec::new();
     let (mut model, report) =
         oag_render::mesh::rcs::build_scene(entry, blob, &geometry, &mut |path| {
+            if path.to_ascii_lowercase().ends_with(".gtf") {
+                textures.push(path.to_string());
+            }
             archives.read_name(path).ok()
         })
         .with_context(|| format!("decoding the preview mesh {entry}"))?;
     log::info!("preview {entry}: {}", report.describe());
     model.keep_nearest();
-    Ok(model)
+    Ok((model, textures))
 }
 
 /// Paints the skin file `entry` onto a preview `model` built from

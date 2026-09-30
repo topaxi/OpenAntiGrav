@@ -6,30 +6,43 @@
 //! learned the PS3 `.vex` + `.rcsmodel` pair (it could only read a PSP or PS2
 //! `.vex` before, which is why HD's own `preview_meshes` is `false`), and
 //! [`crate::preview::Preview::draw_matrices`] is `draw_mode3d`'s second half
-//! with the camera passed in. This module adds the two things specific to a
-//! flyer: which entries to read ([`oag_ui::campaign::flyer`]) and the camera
-//! ([`flyer_view_projection`]).
+//! with the camera passed in. This module adds the things specific to a
+//! flyer: which entries to read ([`oag_ui::campaign::flyer`]), what the card
+//! shows ([`clip`]) and where it stands ([`flyer_view_projection`]).
+//!
+//! # What a card is
+//!
+//! **A flat picture of the flyer's own scene, turned on the screen.** Every
+//! flyer authors a camera (`camera1`, [`oag_vex::camera`]) and is composed for
+//! it; the Fury cards are stacks of layers 28 units deep and every card's
+//! elements overhang its frame. RPCS3 shows the camera's image on a rectangle
+//! and nothing beyond it - the picture behind the reading is in [`clip`] - so
+//! the scene is flattened through its own camera and cut to the card, and the
+//! card is a rectangle in 3-D.
 //!
 //! # Authored versus chosen
 //!
-//! Authored, off `CellMode_Definition.xml` and the executable's own format
-//! strings: which model (`Data/FE/Flyers/<FlyerName>/flyer.vex`), the widget's
-//! position `x y z`, its `OriginX`/`OriginY`, `nearZ`/`farZ`,
-//! `RotationCentreOffsetX` as a pivot, and the materials and textures, which
-//! come from the disc's own `.rcsmaterial`s (`basicnonalpha`, `basicalpha`,
-//! `scrollingalpha` - three unlit programs, no light enters any of them).
+//! **Authored**: which model (`Data/FE/Flyers/<FlyerName>/flyer.vex`), the
+//! widget's `OriginX`/`OriginY`, `nearZ`/`farZ`, the flyer's own camera
+//! position, and the materials and textures, which come from the disc's own
+//! `.rcsmaterial`s. **Measured** off the executable and confirmed by fitting:
+//! the widget's vertical field of view, [`FOV_Y`].
 //!
-//! **Chosen, not measured**: the field of view, and the settled yaw. The
-//! widget's own `RotY="1.5"` is not a settled pose (as radians it is an
-//! 86 degree turn, nearly edge-on, which is what RPCS3 shows mid-transition),
-//! and the native `Flyer` class that would say what it means is unread. Both
-//! constants below were fitted to settled RPCS3 frames of `Grid Selection`,
-//! which makes them a match to a picture rather than a reading of the
-//! executable.
+//! **Chosen, not measured**, each fitted to settled RPCS3 frames of `Grid
+//! Selection` - two Fury tiers and four base tiers, jointly, mean correlation
+//! 0.91: the card's [`POSE`], its height [`CARD_HEIGHT`], and how much of the
+//! camera's image the card shows ([`window_tan`]). The widget's own `x y z`,
+//! `RotY` and pivot describe a start pose (as radians `RotY="1.5"` is an 86
+//! degree turn, which no settled frame shows) and the native code that settles
+//! them is unread.
 //!
-//! **Not drawn**: the glow around an unlocked card, the floor reflection
-//! under it, the flip to `flyer_back.vex`, and the elements animating in on a
-//! page change. A card is drawn flat-lit, static and settled.
+//! **Not drawn**: the card's chamfered corner and its own body (both in the
+//! placeholder model the widget names, `00_flyer.vex`), the floor reflection
+//! under it, the glow around it, the flip to `flyer_back.vex`, the elements
+//! animating, and the light: Fury's cards are lit by `simpletexture*`
+//! programs whose light direction and colours (`0x02df31e5`, `0x2dba643d`,
+//! `0x81db67ea`) are written by code nobody has found, so every card is drawn
+//! at its own texture colours.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -46,28 +59,72 @@ use crate::render::Renderer;
 
 mod clip;
 
-/// The vertical field of view, radians. **Chosen, not measured** - see the
-/// module doc.
-pub const CHOSEN_FOV_Y: f32 = 0.545;
+/// The vertical field of view the card is seen at, radians: **1.0,
+/// measured**. `Flyer_Item`'s render function (`0x001a2510`) builds its
+/// projection from `tanf(0.5)`, a literal in the executable, and a planar fit
+/// with the focal length free lands on 0.90 to 1.03 rad on four base frames.
+pub const FOV_Y: f32 = 1.0;
 
-/// The settled yaw, radians. **Chosen, not measured.** Negative turns the
-/// card's right edge toward the camera, which is how every settled RPCS3 frame
-/// shows it (the right edge is the taller one).
-pub const CHOSEN_SETTLED_YAW: f32 = -0.37;
+/// The card's height, in the units [`POSE`] is written in. **Chosen**; 66.6 is
+/// what `00_flyer.vex`'s `cardShape` spans.
+pub const CARD_HEIGHT: f32 = 66.6;
 
-/// Where the card's centre sits in camera space, `(x right, y up, z)`, with
-/// `z` the authored `-200`. **Chosen, not measured.** The camera only pins
-/// the ratio of field of view to distance, so the authored depth is kept and
-/// the field of view fitted to it; `x` is the card's offset from the optical
-/// axis, and `y` is zero - the card is centred on the screen's vertical
-/// middle in every reference frame, where the authored `y="-33.3"` would put
-/// it a third of a card below.
-pub const CHOSEN_CENTRE: [f32; 3] = [20.6, 0.0, -200.0];
+/// The moment of a card's own animation it is drawn at, seconds. **Chosen**:
+/// inside the widget's own idle loop (the constructor at `0x001a2060` holds
+/// `6.0` and `3.0`, and the draw at `0x001a2510` wraps a time past `6.0` back
+/// by 3), after the elements are in and before the glitch a Fury card flashes
+/// at the end of its four-second loop.
+pub const SETTLED_SECONDS: f32 = 3.5;
 
-/// The camera and model matrices for a flyer widget on `space`'s grid.
+/// How the card stands in front of the widget's camera: turned about its
+/// vertical axis, and moved from straight ahead.
 ///
-/// - **Projection**: a symmetric perspective frustum at [`CHOSEN_FOV_Y`] and
-///   the display's own aspect, with the widget's authored `nearZ`/`farZ`.
+/// **Chosen, not measured.**
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pose {
+    /// Turn about the card's vertical axis, radians. Negative brings the
+    /// card's right edge toward the camera, which is how every settled RPCS3
+    /// frame shows it (the right edge is the taller one).
+    pub yaw: f32,
+    /// Where the card's centre is: `(x right, y up, z)` with `z` negative in
+    /// front of the camera, in the card's own units.
+    pub offset: [f32; 3],
+}
+
+/// The settled pose: one for every card, base campaign and Fury alike.
+///
+/// **Chosen, not measured.** Fitted jointly on two Fury frames and four base
+/// frames, each frame a flat warp of the card's own camera image against the
+/// RPCS3 frame: yaw -0.289, centre 22.0 units right and 111.1 in front, all
+/// six frames within 0.87 to 0.94 correlation. It puts the card's left edge at
+/// authored column 747, where every settled RPCS3 frame puts it (750).
+pub const POSE: Pose = Pose {
+    yaw: -0.289,
+    offset: [22.0, 0.0, -111.1],
+};
+
+/// The tangent of half the vertical field of view of the camera's image the
+/// card shows - how much of what the flyer's camera sees fits on the card.
+///
+/// **Chosen, not measured.** The base cards and Fury's need different windows,
+/// 0.346 and 0.321 (fitted; 0.344 and 0.323 from this formula), and the camera
+/// carries one number that moves with them: the word at `+0x20`
+/// ([`oag_vex::camera::Camera::value_20`]), `0x4f15` on the base grids and
+/// `0x4a2c` on Fury's. The proportionality is fitted on those two points and
+/// is not a reading of what the word is.
+#[must_use]
+pub fn window_tan(camera: &oag_vex::camera::Camera) -> f32 {
+    #[expect(clippy::cast_precision_loss, reason = "a 15-bit word")]
+    let word = camera.value_20 as f32;
+    1.70e-5 * word
+}
+
+/// The camera and model matrices for the card on `space`'s grid.
+///
+/// - **Projection**: a symmetric perspective frustum at [`FOV_Y`] and the
+///   display's own aspect, with the widget's authored `nearZ`/`farZ`.
+/// - **View**: none - the card stands in front of the widget's camera at
+///   `pose.offset`.
 /// - **`OriginX`/`OriginY`**: the screen point the optical axis passes
 ///   through, as a post-projection shift from the grid's centre. On `Grid
 ///   Selection` that is `(960, 540)`, the centre of the 1920 by 1080 grid, so
@@ -75,73 +132,65 @@ pub const CHOSEN_CENTRE: [f32; 3] = [20.6, 0.0, -200.0];
 ///   `(1280, 450)`. **Chosen, not measured**: that these are absolute
 ///   positions rather than offsets as `Mode3D`'s are - the two readings
 ///   agree on `Grid Selection`'s own numbers.
-/// - **Model**: the card's centre at [`CHOSEN_CENTRE`], turned by the
-///   widget's authored `RotX` (`0.0`) and `yaw`.
+/// - **Model**: the card turned by the widget's authored `RotX` (`0.0`) and
+///   `pose.yaw`, then moved by `pose.offset`.
 ///
 /// **The widget's own `x y z`, `RotY` and `RotationCentreOffsetX` are read and
-/// not applied.** Applied as written (a card at `(80, -33.3, -200)` turned
-/// `1.5` radians about a pivot 60 units left of it) they give a near edge-on
-/// card well off the picture, and no settled frame looks like that; see the
-/// module doc. The numbers [`CHOSEN_CENTRE`] and [`CHOSEN_SETTLED_YAW`] stand
-/// where they would be, fitted to a planar homography between a head-on render
-/// of the card and two settled RPCS3 frames (`docs/ui/campaign-screens.md`).
+/// not applied** - see the module doc.
 #[must_use]
-pub fn flyer_view_projection(widget: &FlyerWidget, space: Space, yaw: f32) -> (Mat4, Mat4) {
+pub fn flyer_view_projection(widget: &FlyerWidget, space: Space, pose: Pose) -> (Mat4, Mat4) {
     let [near, far] = widget.depth;
-    let projection = camera::perspective(CHOSEN_FOV_Y, space.display_aspect, near, far);
+    let projection = camera::perspective(FOV_Y, space.display_aspect, near, far);
     let shift = Vec3::new(
         2.0 * widget.origin[0] / space.size.0 - 1.0,
         1.0 - 2.0 * widget.origin[1] / space.size.1,
         0.0,
     );
     let view_projection = Mat4::from_translation(shift) * projection;
-    let model = Mat4::from_translation(Vec3::from(CHOSEN_CENTRE))
+    let model = Mat4::from_translation(Vec3::from(pose.offset))
         * Mat4::from_rotation_x(widget.rotation[0])
-        * Mat4::from_rotation_y(yaw);
+        * Mat4::from_rotation_y(pose.yaw);
     (view_projection, model)
 }
 
-/// The time a card's own node animations are done by, in seconds: the latest
-/// key of any channel that actually moves, held just short of the node's own
-/// `LoopEnd`.
+/// The textures of the effects a Fury card plays over itself: the crash-screen
+/// glitch panel and its noise bars, the rings and the flashes.
 ///
-/// A card's elements animate in from a collapsed start (an RPCS3 frame taken a
-/// second into a page change shows the wordmark and stripes half-grown), and
-/// every reference frame this was fitted to is the settled end of that.
-///
-/// **Two traps, both met on `01_uplift`.** A channel with one key does not
-/// move, and one node authors its single key at frame 36,000 - ten minutes -
-/// which read as a last key would have pushed every other node's clock past
-/// its six-second `LoopEnd` and wrapped the whole card back to its collapsed
-/// start. And a node's last key sits *on* the loop point (360 frames of a
-/// 6.0000005 s loop), so the time is backed off by a frame to stay on the
-/// hold rather than on the wrap.
-fn settled_seconds(model: &Model) -> f32 {
-    use oag_render::mesh::Motion;
-    model
-        .anim_nodes
-        .iter()
-        .filter_map(|node| match &node.transform {
-            Motion::Vex(transform) => {
-                let unit = if transform.seconds_per_key > 0.0 {
-                    transform.seconds_per_key
-                } else {
-                    1.0 / 60.0
-                };
-                let last = [
-                    &transform.translation,
-                    &transform.rotation,
-                    &transform.scale,
-                ]
-                .iter()
-                .filter(|channel| channel.times.len() > 1)
-                .filter_map(|channel| channel.times.last().copied())
-                .max()?;
-                Some((f32::from(last) * unit).min(transform.loop_seconds - unit))
-            }
-            Motion::Rig(_) => None,
-        })
-        .fold(0.0, f32::max)
+/// **Not drawn, on purpose.** Each is a quad textured through a material that
+/// takes its UV offset and scale (`simpletextureandtexturealphauvoffsetscale`)
+/// or its alpha from a parameter the native code animates, and drawn with
+/// those parameters at rest they come out as solid white discs, white bars and
+/// a brown static panel where RPCS3 shows nothing at all at three different
+/// moments of the card's loop. An effect whose driver is unread is left
+/// absent rather than drawn wrong.
+const UNREAD_EFFECTS: [&str; 5] = [
+    "loops",
+    "flashes",
+    "noise_bar",
+    "failscreen",
+    "crash_screen",
+];
+
+/// Removes every draw that samples one of [`UNREAD_EFFECTS`]. `textures` is
+/// the `.gtf` path of each texture slot, in order.
+fn hide_effects(model: &mut Model, textures: &[String]) {
+    let hidden = |draw: &oag_render::mesh::DrawCall| {
+        draw.texture
+            .and_then(|slot| textures.get(slot))
+            .is_some_and(|path| {
+                let path = path.to_ascii_lowercase();
+                UNREAD_EFFECTS.iter().any(|effect| path.contains(effect))
+            })
+    };
+    model.draws.retain(|draw| !hidden(draw));
+    model.alpha_tested_draws.retain(|draw| !hidden(draw));
+    model.transparent_draws.retain(|draw| !hidden(draw));
+}
+
+/// Where a card sits on its rectangle: half its width and height, card units.
+#[derive(Debug, Clone, Copy)]
+struct Placement {
+    half_size: [f32; 2],
 }
 
 /// Every flyer card a campaign screen can show, decoded and waiting.
@@ -156,8 +205,8 @@ pub struct Flyers {
     waiting: RefCell<HashMap<String, Model>>,
     /// On the GPU, by `FlyerName`.
     cards: RefCell<HashMap<String, Preview>>,
-    /// [`settled_seconds`] per card, by `FlyerName`.
-    settled: HashMap<String, f32>,
+    /// The rectangle of each card, by `FlyerName`.
+    placed: HashMap<String, Placement>,
     /// Set by whoever opens the campaign, from the session's own setting.
     pub anisotropy: Anisotropy,
     /// One line per card that would not read, for the loader's log.
@@ -177,8 +226,9 @@ impl std::fmt::Debug for Flyers {
 impl Flyers {
     /// Decodes the front of every named flyer through `archives`.
     ///
-    /// A card that will not read or decode is reported and left out, which
-    /// draws nothing for that grid - never another grid's card in its place.
+    /// A card that will not read or decode, or whose `.vex` authors no camera,
+    /// is reported and left out, which draws nothing for that grid - never
+    /// another grid's card in its place.
     #[must_use]
     pub fn load(
         archives: &mut oag_assets::Archives,
@@ -186,32 +236,47 @@ impl Flyers {
         names: &[String],
     ) -> Self {
         let mut waiting = HashMap::new();
-        let mut settled = HashMap::new();
+        let mut placed = HashMap::new();
         let mut report = Vec::new();
         for name in names {
             if waiting.contains_key(name) {
                 continue;
             }
             let entry = flyer::front_entry(name);
-            match crate::preview::model(archives, &entry) {
-                Ok(mut model) => {
-                    // No light enters a flyer: its three materials are
-                    // texture-only programs (`basicnonalpha` is `TEX` then
-                    // `MOV`, `basicalpha` and `scrollingalpha` add a second
-                    // `TEX` for the alpha), read off their microcode with
-                    // `scripts/ps3-microcode.py`. `lit = 0` is this
-                    // renderer's name for that; left at 1 the card is
-                    // multiplied by the stand-in two-light rig and comes out
-                    // at about 0.4 of its own colours.
+            let camera = archives
+                .read_name(&entry)
+                .ok()
+                .and_then(|blob| oag_vex::camera::cameras(&blob).into_iter().next());
+            let Some(camera) = camera else {
+                report.push(format!("{entry}: no Camera node - no flyer is drawn"));
+                continue;
+            };
+            match crate::preview::model_named(archives, &entry) {
+                Ok((mut model, textures)) => {
+                    hide_effects(&mut model, &textures);
+                    // Fury's cards are lit by `simpletexture*` programs
+                    // (`(ambient + saturate(N.L) * sun) * texture`), the base
+                    // campaign's are not (`basicnonalpha` is `TEX` then `MOV`,
+                    // `basicalpha` and `scrollingalpha` add a second `TEX` for
+                    // the alpha) - read off their microcode with
+                    // `scripts/ps3-microcode.py`. What feeds the light is a
+                    // native write nobody has found, so both are drawn unlit
+                    // (`lit = 0`, this renderer's name for that): left at 1 a
+                    // card is multiplied by the stand-in two-light rig and
+                    // comes out at about 0.4 of its own colours.
                     for vertex in &mut model.vertices {
                         vertex.lit = 0.0;
                     }
-                    // Posed at its settled moment and cut to its body - see
-                    // [`clip`] for both, and for what is measured about the cut.
-                    let at = settled_seconds(&model);
-                    clip::bake(&mut model, at);
-                    clip::clip(&mut model, clip::CARD_RECT);
-                    settled.insert(name.clone(), settled_seconds(&model));
+                    clip::bake(&mut model, SETTLED_SECONDS);
+                    clip::flatten(
+                        &mut model,
+                        &camera.to_world,
+                        window_tan(&camera),
+                        CARD_HEIGHT,
+                    );
+                    let half = [camera.value_1c * CARD_HEIGHT / 2.0, CARD_HEIGHT / 2.0];
+                    clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]);
+                    placed.insert(name.clone(), Placement { half_size: half });
                     waiting.insert(name.clone(), model);
                 }
                 Err(error) => report.push(format!("{entry}: {error:#} - no flyer is drawn")),
@@ -221,36 +286,35 @@ impl Flyers {
             widget,
             waiting: RefCell::new(waiting),
             cards: RefCell::new(HashMap::new()),
-            settled,
+            placed,
             anisotropy: Anisotropy::default(),
             report,
         }
     }
 
     /// The card's bounding rectangle on `space`'s grid, `[x, y, width,
-    /// height]`: [`clip::CARD_RECT`]'s four corners through the same camera
-    /// [`Self::draw`] uses - what a click on the card should hit.
+    /// height]`: its four corners through the same camera [`Self::draw`] uses -
+    /// what a click on the card should hit. `None` for a card that is not
+    /// loaded.
     #[must_use]
-    pub fn card_rect(&self, space: Space) -> [f32; 4] {
-        let (view_projection, model) =
-            flyer_view_projection(&self.widget, space, CHOSEN_SETTLED_YAW);
+    pub fn card_rect(&self, name: &str, space: Space) -> Option<[f32; 4]> {
+        let [hx, hy] = self.placed.get(name)?.half_size;
+        let (view_projection, model) = flyer_view_projection(&self.widget, space, POSE);
         let to_screen = view_projection * model;
-        let [x0, y0, x1, y1] = clip::CARD_RECT;
         let mut lo = [f32::MAX; 2];
         let mut hi = [f32::MIN; 2];
-        for (x, y) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
+        for (x, y) in [(-hx, -hy), (hx, -hy), (hx, hy), (-hx, hy)] {
             let clip = to_screen * oag_core::math::Vec4::new(x, y, 0.0, 1.0);
-            let ndc = [clip.x / clip.w, clip.y / clip.w];
             let at = [
-                (ndc[0] * 0.5 + 0.5) * space.size.0,
-                (0.5 - ndc[1] * 0.5) * space.size.1,
+                (clip.x / clip.w * 0.5 + 0.5) * space.size.0,
+                (0.5 - clip.y / clip.w * 0.5) * space.size.1,
             ];
             for k in 0..2 {
                 lo[k] = lo[k].min(at[k]);
                 hi[k] = hi[k].max(at[k]);
             }
         }
-        [lo[0], lo[1], hi[0] - lo[0], hi[1] - lo[1]]
+        Some([lo[0], lo[1], hi[0] - lo[0], hi[1] - lo[1]])
     }
 
     /// Whether `name` has a card to draw.
@@ -284,13 +348,11 @@ impl Flyers {
                 Err(error) => log::warn!("flyer {name}: {error:#} - it draws nothing"),
             }
         }
+        let (view_projection, model) = flyer_view_projection(&self.widget, space, POSE);
         let mut cards = self.cards.borrow_mut();
         let Some(card) = cards.get_mut(name) else {
             return;
         };
-        let (view_projection, model) =
-            flyer_view_projection(&self.widget, space, CHOSEN_SETTLED_YAW);
-        let seconds = self.settled.get(name).copied().unwrap_or(0.0);
         card.draw_matrices(
             device,
             queue,
@@ -301,7 +363,7 @@ impl Flyers {
             space,
             view_projection,
             model,
-            seconds,
+            SETTLED_SECONDS,
         );
     }
 }
@@ -386,55 +448,72 @@ mod tests {
         }
     }
 
+    /// Where a card-local point lands on `space`'s grid.
+    fn on_grid(point: Vec3, space: Space) -> [f32; 2] {
+        let (view_projection, model) = flyer_view_projection(&widget(), space, POSE);
+        let clip =
+            view_projection * model * oag_core::math::Vec4::new(point.x, point.y, point.z, 1.0);
+        [
+            (clip.x / clip.w * 0.5 + 0.5) * space.size.0,
+            (0.5 - clip.y / clip.w * 0.5) * space.size.1,
+        ]
+    }
+
     /// `Grid Selection`'s own origin is the centre of its grid, so the
     /// projection carries no shift: a point on the optical axis lands at the
     /// middle of the screen.
     #[test]
     fn a_centred_origin_does_not_shift_the_axis() {
-        let (view_projection, _) = flyer_view_projection(&widget(), Space::HD, 0.0);
+        let (view_projection, _) = flyer_view_projection(&widget(), Space::HD, POSE);
         let clip = view_projection * oag_core::math::Vec4::new(0.0, 0.0, -100.0, 1.0);
         assert!((clip.x / clip.w).abs() < 1e-5, "{clip:?}");
         assert!((clip.y / clip.w).abs() < 1e-5, "{clip:?}");
     }
 
-    /// The card's centre lands where [`CHOSEN_CENTRE`] says, whatever the
-    /// widget's own (unapplied) `x y z` are.
+    /// The card's centre lands where [`POSE`] says, whatever the widget's own
+    /// (unapplied) `x y z` are.
     #[test]
-    fn the_card_centre_lands_at_the_chosen_centre() {
-        let (_, model) = flyer_view_projection(&widget(), Space::HD, 0.0);
+    fn the_card_centre_lands_at_the_pose() {
+        let (_, model) = flyer_view_projection(&widget(), Space::HD, POSE);
         let origin = model.transform_point3(Vec3::ZERO);
         assert!(
-            (origin - Vec3::from(CHOSEN_CENTRE)).length() < 1e-4,
+            (origin - Vec3::from(POSE.offset)).length() < 1e-4,
             "{origin:?}"
         );
     }
 
-    /// The card's rectangle on the HD grid sits where the measured frames put
-    /// it: its left edge near authored `x` 751 and its centre right of the
-    /// grid's middle.
+    /// The card's left edge sits where every settled RPCS3 frame puts it:
+    /// authored column 750, on the base campaign's card and Fury's alike (the
+    /// two differ by less than a tenth of a unit in width).
     #[test]
-    fn the_card_rect_lands_where_the_frames_put_it() {
-        let flyers = Flyers {
-            widget: widget(),
-            waiting: RefCell::new(HashMap::new()),
-            cards: RefCell::new(HashMap::new()),
-            settled: HashMap::new(),
-            anisotropy: Anisotropy::default(),
-            report: Vec::new(),
-        };
-        let [x, y, width, height] = flyers.card_rect(Space::HD);
-        assert!((x - 751.0).abs() < 25.0, "left edge {x}");
-        assert!(x + width / 2.0 > 960.0, "centre {}", x + width / 2.0);
-        assert!(y > 100.0 && y + height < 1000.0, "{y} {height}");
+    fn the_left_edge_lands_at_the_column_rpcs3_shows() {
+        for width in [102.43_f32, 102.49] {
+            let [x, _] = on_grid(Vec3::new(-width / 2.0, 0.0, 0.0), Space::HD);
+            assert!((x - 750.0).abs() < 6.0, "{width}: left edge {x}");
+        }
     }
 
     /// A negative yaw brings the card's right edge toward the camera (toward
     /// +Z), the direction every settled RPCS3 frame shows.
     #[test]
     fn a_negative_yaw_brings_the_right_edge_closer() {
-        let (_, model) = flyer_view_projection(&widget(), Space::HD, CHOSEN_SETTLED_YAW);
+        let (_, model) = flyer_view_projection(&widget(), Space::HD, POSE);
         let right = model.transform_point3(Vec3::new(51.2, 0.0, 0.0));
         let left = model.transform_point3(Vec3::new(-51.2, 0.0, 0.0));
         assert!(right.z > left.z, "{right:?} {left:?}");
+    }
+
+    /// The window a camera shows is proportional to its `+0x20` word, and the
+    /// two words the disc authors give the two windows the fits found.
+    #[test]
+    fn the_window_follows_the_cameras_word() {
+        let camera = |word| oag_vex::camera::Camera {
+            name: None,
+            to_world: [0.0; 16],
+            value_1c: 1.538,
+            value_20: word,
+        };
+        assert!((window_tan(&camera(0x4f15)) - 0.344).abs() < 0.002);
+        assert!((window_tan(&camera(0x4a2c)) - 0.323).abs() < 0.002);
     }
 }

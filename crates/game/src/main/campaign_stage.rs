@@ -256,10 +256,9 @@ impl CampaignStage {
     /// The selected card's rectangle on the HD grid, for the pointer - `None`
     /// when no card is drawn, which leaves the pointer on its fallback rect.
     pub(crate) fn flyer_card_rect(&self) -> Option<[f32; 4]> {
-        let flyers = self.flyers.as_ref()?;
-        flyers
-            .has(self.flyer_name()?)
-            .then(|| flyers.card_rect(oag_display::space::Space::HD))
+        self.flyers
+            .as_ref()?
+            .card_rect(self.flyer_name()?, oag_display::space::Space::HD)
     }
 
     /// Advances the ticker's own clock - called once a frame from

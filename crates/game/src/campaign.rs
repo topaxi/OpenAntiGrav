@@ -380,23 +380,10 @@ fn load_hd(
         .iter()
         .filter_map(|grid| grid.flyer_name.clone())
         .collect();
-    // **Only the base campaign's eight cards are decoded.** The pose and cut
-    // are fitted to RPCS3 frames of `grid0`..`grid7`, whose cards are flat,
-    // 115 units wide and at most a few units deep. Fury's eight (`09_blitzed`
-    // and on) are authored at about a third of that scale and as stacked
-    // layers 28 units deep - the settled frames show a lit box, not a flat
-    // card - so this camera draws them as a few stray pixels. None is drawn,
-    // rather than a wrong one: see `docs/ui/campaign-screens.md`.
-    let card_names: Vec<String> = grids
-        .get(oag_hd::campaign::HD_GRID_RANGE)
-        .unwrap_or(&[])
-        .iter()
-        .filter_map(|grid| grid.flyer_name.clone())
-        .collect();
     let flyers = oag_ui::campaign::flyer::read(&xml, &screens)
         .into_iter()
         .find(|widget| widget.name == "FlyerModel")
-        .map(|widget| crate::flyer::Flyers::load(archives, widget, &card_names));
+        .map(|widget| crate::flyer::Flyers::load(archives, widget, &flyer_names));
     if let Some(flyers) = &flyers {
         for line in &flyers.report {
             log::warn!("{line}");
