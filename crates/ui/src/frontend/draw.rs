@@ -19,7 +19,7 @@
 //! `super` re-exports it, so every `crate::frontend::Draw` in the tree is
 //! unchanged.
 
-use super::rows::{LanguageRows, language_rows};
+use super::rows::LanguageRows;
 use super::*;
 use oag_display::space::pillarbox_in;
 
@@ -845,7 +845,7 @@ impl Frontend {
             scale,
             pitch: row,
             align,
-        } = language_rows(menu);
+        } = self.language_rows(menu);
         // **The title's own measured unselected ink wins over the widget's
         // `color`**, where it measured one. Pure's `<Menu>` says
         // `color="FEGlobals->TextColor"`, and `TextColor` is `0xFF11ACD0` -
@@ -911,8 +911,16 @@ impl Frontend {
             // fallback below exactly as it was - unverified against a real
             // Pulse capture, so left unchanged rather than guessed at.
             if selected && static_selected.is_none() {
+                // A pitch read off the face is the whole row, so the band is
+                // the row - the table's `- 4.0` insets are guesses sized for
+                // Pulse's 13-unit line and would light the top half only.
+                let rect = if self.picker_line_height.is_some() {
+                    [menu_x - 6.0, y, self.band_width(scale), row]
+                } else {
+                    [menu_x - 6.0, y - 4.0, 220.0, row - 4.0]
+                };
                 out.push(Draw::Fill {
-                    rect: [menu_x - 6.0, y - 4.0, 220.0, row - 4.0],
+                    rect,
                     color: [0.37, 0.86, 0.96, 0.35],
                 });
             }

@@ -434,6 +434,10 @@ pub struct Frontend {
     /// widget attribute that needs it: `vertalign="middle"`. `None` until
     /// [`Self::set_face_scales`], which anchors every text at its pen.
     default_line_height: Option<f32>,
+    /// The `Default` face's own line height, when the language picker's row
+    /// pitch is to be one line of it - see
+    /// [`Self::set_picker_line_height`]. `None` keeps the table.
+    picker_line_height: Option<f32>,
 }
 
 impl Frontend {
@@ -584,6 +588,7 @@ impl Frontend {
             campaign: CampaignMap::default(),
             face_scales: Vec::new(),
             default_line_height: None,
+            picker_line_height: None,
         };
         frontend.machine.transition_to(start);
         frontend

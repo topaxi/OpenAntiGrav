@@ -267,6 +267,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     // `LANGUAGE_PLUGINS` are read for their `<Font>`/string-table roles, not
     // for a picker screen this boot walks.
     picker_backdrop_parent: None,
+    picker_row_pitch_from_face: false,
     fallback_globals: &[],
     fallback_images: &[],
 };

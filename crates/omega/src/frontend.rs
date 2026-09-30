@@ -144,6 +144,7 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     // on the same terms `oag_hd::frontend::BOOT`'s own `None` states.
     menu_backdrop: None,
     picker_backdrop_parent: None,
+    picker_row_pitch_from_face: true,
     fallback_globals: &[],
     fallback_images: &[],
 };

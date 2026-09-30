@@ -182,6 +182,17 @@ pub struct BootProfile {
     /// child screen with no fill of its own and would otherwise draw on black -
     /// Pure's, which sits on `Intro Screen`'s white.
     pub picker_backdrop_parent: Option<&'static str>,
+    /// Whether the language picker's row pitch is one line of the `Default`
+    /// face this build loaded, rather than `oag_ui`'s hard-coded table of
+    /// Pulse's line heights.
+    ///
+    /// The picker's `<Menu>` states no pitch (the disc authors x, y, scale,
+    /// colour and alignment only), so the step is one line of the widget's own
+    /// font. Pulse's table happens to be that for Pulse; on HD and Omega it is
+    /// 13 against a 33 or 64 unit face and the rows print over each other.
+    /// `false` keeps the table, which is what Pulse, Pure and 2048 draw
+    /// against captures matched with it.
+    pub picker_row_pitch_from_face: bool,
     /// `FEGlobals` this title's own `Skin.xml` leaves undeclared, measured.
     ///
     /// Merged in only for keys the disc does not declare; a real declaration
@@ -261,6 +272,7 @@ mod tests {
         reel: None,
         menu_backdrop: None,
         picker_backdrop_parent: None,
+        picker_row_pitch_from_face: false,
         fallback_globals: &[],
         fallback_images: &[],
     };

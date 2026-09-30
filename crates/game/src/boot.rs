@@ -540,25 +540,14 @@ pub fn load_shell(
         &mut report,
     );
     steps.lap("strings");
-    let menu_font = load_menu_font(
+    let (menu_font, title_font, buttons_font) = fonts::load_role_fonts(
         &mut archives,
         &languages,
         preferred_language,
         menu_skin,
+        texel_scale,
         &mut report,
-    )
-    .map(|atlas| atlas.with_texel_scale(texel_scale));
-    let title_font = load_title_font(
-        &mut archives,
-        &languages,
-        preferred_language,
-        menu_skin,
-        &mut report,
-    )
-    .map(|atlas| atlas.with_texel_scale(texel_scale));
-    let buttons_font =
-        fonts::load_buttons_font(&mut archives, &languages, preferred_language, &mut report)
-            .map(|atlas| atlas.with_texel_scale(texel_scale));
+    );
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
@@ -1234,6 +1223,9 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     if !face_scales.is_empty() {
         frontend.set_face_scales(face_scales, font.line_height);
     }
+    if profile.picker_row_pitch_from_face {
+        frontend.set_picker_line_height(font.line_height);
+    }
     if !campaign_events.is_empty() {
         frontend.set_campaign(campaign_events);
     }
@@ -1595,7 +1587,7 @@ pub(crate) mod sprites;
 mod steps;
 pub(crate) mod xml;
 
-use fonts::{load_font, load_menu_font, load_title_font};
+use fonts::load_font;
 pub use languages::{chosen_language, load_languages, load_strings};
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};
