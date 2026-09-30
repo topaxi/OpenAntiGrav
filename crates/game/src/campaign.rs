@@ -15,6 +15,7 @@ use oag_ui::picker::FaceScales;
 
 use crate::sprite::Sheet;
 
+pub mod hit;
 pub mod launch;
 
 /// `Data\Plugins\PI001\GUI\CellMode_Definition.xml` - the file Pulse's own

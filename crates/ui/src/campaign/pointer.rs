@@ -13,10 +13,18 @@
 //! corners. A rectangle test there picks whichever hex is listed first, not
 //! whichever one the player is actually pointing at, so every hex target
 //! here is tested with [`crate::pointer::hex_contains`] rather than
-//! [`crate::pointer::contains`]. The rect handed to it is the same one the
-//! draw would place the sprite at - authored position, sprite's own size -
-//! so a hit region can never drift from the picture the way a hand-typed
-//! rectangle could.
+//! [`crate::pointer::contains`]. The rect handed to it is where the draw
+//! places the sprite's **visible hexagon** - authored position, plus the
+//! box of the sprite's opaque pixels ([`Extent`]) - so a hit region can never
+//! drift from the picture the way a hand-typed rectangle could.
+//!
+//! **Not the sprite's own size.** HD's and Omega's hex sprites are 128x64
+//! power-of-two textures holding a 72x62 hexagon in their top-left corner. A
+//! test against the whole texture was a hexagon 128 wide, 111 tall and 28
+//! units right of the art, so a hover on one hex landed in a neighbour's
+//! region and the first target in order won: pointing at `grid0_3_2` selected
+//! `grid0_2_2`, a padlocked cell, and a confirm did nothing. The box is read
+//! off the decoded texture, never typed in.
 //!
 //! # What is a target
 //!
@@ -34,7 +42,7 @@
 use crate::frontend::Placed;
 use crate::pointer::{Pointer, contains, hex_contains};
 
-use super::{CellSelection, Event, GRIDS_PER_PAGE, GridSelection, Layout, hex_rect};
+use super::{CellSelection, Event, GRIDS_PER_PAGE, GridSelection, Layout, hex_image};
 
 /// What a click on one of the screen's targets does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +55,12 @@ pub enum What {
     /// (`Cell Selection`).
     Hex(usize),
 }
+
+/// Where a sprite's opaque pixels sit inside its own texture, `[x, y, width,
+/// height]` in texels, for a source image whose texture is padded past its
+/// art. `None` for an image the caller has no pixels for, which keeps the
+/// placed rectangle.
+pub type Extent<'a> = &'a dyn Fn(&str) -> Option<[f32; 4]>;
 
 /// One rect a pointer can land on, and what it does.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,6 +80,7 @@ pub fn grid_targets(
     model: &GridSelection,
     layout: &Layout,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    extent: Extent,
 ) -> Vec<Target> {
     let screen = &layout.screen;
     let mut out = Vec::new();
@@ -85,7 +100,7 @@ pub fn grid_targets(
         if index >= model.grids().len() {
             continue;
         }
-        if let Some(rect) = hex_rect(screen, slot, 0, sprites) {
+        if let Some(rect) = hex_hit_rect(screen, slot, 0, sprites, extent) {
             out.push(Target {
                 what: What::Hex(index),
                 rect,
@@ -102,6 +117,7 @@ pub fn cell_targets(
     model: &CellSelection,
     layout: &Layout,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    extent: Extent,
 ) -> Vec<Target> {
     let screen = &layout.screen;
     let mut out = Vec::new();
@@ -109,7 +125,7 @@ pub fn cell_targets(
         let Some((x, y)) = cell.grid_coords() else {
             continue;
         };
-        if let Some(rect) = hex_rect(screen, x as usize, y as usize, sprites) {
+        if let Some(rect) = hex_hit_rect(screen, x as usize, y as usize, sprites, extent) {
             out.push(Target {
                 what: What::Hex(index),
                 rect,
@@ -117,6 +133,32 @@ pub fn cell_targets(
         }
     }
     out
+}
+
+/// The hexagon at slot `(x, y)` as the player sees it: [`hex_image`]'s rect
+/// cropped to `extent`'s box of opaque pixels, scaled the way the draw scales
+/// the texture.
+fn hex_hit_rect(
+    screen: &crate::screen::Screen,
+    x: usize,
+    y: usize,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    extent: Extent,
+) -> Option<[f32; 4]> {
+    let (image, rect, placed) = hex_image(screen, x, y, sprites)?;
+    let Some([ex, ey, ew, eh]) = extent(&image.src) else {
+        return Some(rect);
+    };
+    let scale = [
+        rect[2] / placed.width.max(1) as f32,
+        rect[3] / placed.height.max(1) as f32,
+    ];
+    Some([
+        rect[0] + ex * scale[0],
+        rect[1] + ey * scale[1],
+        ew * scale[0],
+        eh * scale[1],
+    ])
 }
 
 /// Where an image is drawn: its authored size, or its texture's - the same
