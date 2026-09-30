@@ -37,10 +37,12 @@
 //! | `+0x888`, `+0x88c` | lifetime centre and spread, ticks |
 //! | `+0x8cc` | next record, or 0 |
 //!
-//! `+0xf0`, `+0x2b0` are two more channel blocks, constant in both records
-//! (`0.5` and `0.7`; `1.0`); nothing here reads them, and the draw path was
-//! not traced through them. The sprite is the parent emitter's own: both
-//! records point at the same pixel pool the emitters do.
+//! `+0xf0` is the sprite's **stretch** (its draw aspect) and `+0x2b0` the
+//! atlas-frame rate; `+0xf0` is read here as [`Emitter::stretch`], `+0x2b0` is
+//! constant `1.0` in every record and unused on a one-cell grid. All of
+//! them draw as class 3, a rotated quad - see `pob.md`. The sprite is the
+//! parent emitter's own: both records point at the same pixel pool the
+//! emitters do.
 //!
 //! **Live confirmation.** A struck craft at severity `2.4` drew `shazam` at
 //! half-sizes `9.36, 9.36, 8.73, 6.54, 4.33` (`3.9 * 2.4` held to `0.287` of
@@ -107,6 +109,7 @@ fn parse_one(record: &[u8], order: ByteOrder, offset: usize) -> Option<Emitter> 
     let size = parse_channel(record, order, 0x10).ok()?;
     let alpha = parse_channel(record, order, 0x1d0).ok()?;
     let rotation_speed = parse_channel(record, order, 0x390).ok()?;
+    let stretch = parse_channel(record, order, 0xf0).ok();
     let mut colours = Box::new([[0u8; 4]; 256]);
     for (entry, bytes) in colours.iter_mut().zip(record[0x470..].as_chunks::<4>().0) {
         *entry = *bytes;
@@ -153,6 +156,7 @@ fn parse_one(record: &[u8], order: ByteOrder, offset: usize) -> Option<Emitter> 
         size,
         alpha,
         rotation_speed,
+        stretch,
         frame_rate: constant(),
         emission_scale: constant(),
         playback_rate: 1.0,

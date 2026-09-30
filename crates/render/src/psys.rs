@@ -38,8 +38,11 @@
 //!   [`streak`] for the two-point classes, which Pulse's alone builds as
 //!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
 //!   so those draw the procedural radial falloff in `psys.wgsl`.
-//! - **Billboard roll.** The rotation-speed channel is parsed and unused;
-//!   quads here are axis-aligned to the camera.
+//! - **Billboard roll and aspect, on an emitter's own particles.** Played for
+//!   a sprite template (`template::Rotation`, measured), not for the 45 of 76
+//!   PSP emitters that draw as class 3: their roll flags sit at a different
+//!   word and the derived record that feeds the stretch is unread, so those
+//!   quads are square and axis-aligned to the camera.
 //! - **The emitter extent of shapes 2, 3, 6 and 8.** Shapes 1 (a line), 4
 //!   and 7 (a sphere) place their particles as read - see [`spawn`]; the
 //!   unread shapes still spawn at the anchor.
@@ -315,6 +318,8 @@ pub struct EmitterSpec {
     pub sheet_rect: Option<[f32; 4]>,
     /// Built from a sprite template, not an emitter record - see [`template`].
     pub template: bool,
+    /// A template's rotating, stretched quad - see [`template::Rotation`].
+    pub rotation: Option<template::Rotation>,
 }
 
 /// A parsed `.pob` ready to play: the root emitter first, then the tree
@@ -589,57 +594,8 @@ impl EmitterSpec {
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
             sheet_rect: None,
             template: false,
+            rotation: None,
         })
-    }
-}
-
-/// One live particle. Dead when [`Particle::life`] reaches zero.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct Particle {
-    position: Vec3,
-    velocity: Vec3,
-    /// The streak's other end: the spawn point under
-    /// [`Render::Streak::from_spawn`], the previous tick's position
-    /// otherwise - the particle-row-`+0x50` mechanism of
-    /// `ParticleSystem_UpdateParticles`.
-    origin: Vec3,
-    life: f32,
-    max_life: f32,
-    /// Which [`Effect::emitters`] entry authored it.
-    spec: u16,
-    /// The palette entry drawn at spawn, under [`ColourMode::RandomEntry`].
-    colour_index: u8,
-    /// The `0..=1` samples the two [`ChannelMode::Random`] channels draw
-    /// once at spawn; unused for the other modes.
-    size_sample: f32,
-    alpha_sample: f32,
-    /// The system's scale at spawn - the original's severity, which
-    /// multiplies both speed and drawn size.
-    scale: f32,
-    /// Which cell of the emitter's [`Atlas`] it draws - see [`sprite`].
-    frame: u16,
-    /// [`Particle::frame`] before its floor, as [`frames`] advances it.
-    frame_at: f32,
-}
-
-impl Particle {
-    const DEAD: Self = Self {
-        position: Vec3::ZERO,
-        velocity: Vec3::ZERO,
-        origin: Vec3::ZERO,
-        life: 0.0,
-        max_life: 0.0,
-        spec: 0,
-        colour_index: 0,
-        size_sample: 0.0,
-        alpha_sample: 0.0,
-        scale: 0.0,
-        frame: 0,
-        frame_at: 0.0,
-    };
-
-    fn alive(self) -> bool {
-        self.life > 0.0
     }
 }
 
@@ -909,6 +865,12 @@ impl System {
                 continue;
             }
             let spec = &effect.emitters[usize::from(particle.spec)];
+            if std::mem::take(&mut particle.fresh) {
+                if let Some(rotation) = &spec.rotation {
+                    particle.roll = rotation.roll_at(particle, 0.0, dt_ticks);
+                }
+                continue;
+            }
             if !matches!(spec.render, Render::Streak { from_spawn: true }) {
                 particle.origin = particle.position;
             }
@@ -927,6 +889,9 @@ impl System {
             let before = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
             particle.life -= dt;
             let after = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
+            if let Some(rotation) = &spec.rotation {
+                particle.roll = rotation.roll_at(particle, after, dt_ticks);
+            }
             let frames = spec.atlas.frames();
             spec.frames.step(particle, before, after, dt_ticks, frames);
             if particle.life <= 0.0 {
@@ -998,8 +963,14 @@ impl System {
             // procedural profile (every PS2 and HD effect) draws what it did.
             frame: spec.random_frame(rng),
             frame_at: 0.0,
+            fresh: spec.template,
+            roll: 0.0,
+            turn: 1.0,
         };
         particle.frame_at = f32::from(particle.frame);
+        if let Some(rotation) = &spec.rotation {
+            (particle.roll, particle.turn) = rotation.start(rng);
+        }
         let slot = expendable_slot(&self.particles);
         self.particles[slot] = particle;
 
@@ -1189,7 +1160,10 @@ impl System {
             }
             // `cap = 0.5` collapses the shader's cap/cross profile to the
             // plain radial falloff a round sprite wants.
-            let mut corners = quad(particle.position, right * half, up * half, 0.5, rgb, alpha);
+            let mut corners = match &spec.rotation {
+                Some(rotation) => rotation.quad(particle, age, half, right, up, rgb, alpha),
+                None => quad(particle.position, right * half, up * half, 0.5, rgb, alpha),
+            };
             if let Some(rect) = spec.sheet_rect {
                 sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
             }
@@ -1758,6 +1732,8 @@ pub use pipeline::{BLEND, BLEND_ALPHA_OVER, MAX_VERTICES, Pipeline};
 
 mod riding;
 
+mod particle;
+use particle::Particle;
 mod quad;
 use quad::quad;
 

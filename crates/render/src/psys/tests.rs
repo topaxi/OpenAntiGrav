@@ -56,6 +56,7 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             frames: FrameAdvance::Still,
             sheet_rect: None,
             template: false,
+            rotation: None,
         }],
         roots: vec![0],
         skipped_templates: 0,
@@ -376,4 +377,45 @@ fn an_over_life_frame_follows_the_age() {
     assert!((particle.frame_at - 7.99).abs() < 1e-5);
     FrameAdvance::Still.step(&mut particle, 0.5, 0.9, 1.0, 16);
     assert_eq!(particle.frame, 7, "a still frame never moves");
+}
+
+/// Live, on a struck craft: a template's first draw carries its size at age
+/// zero (`glow` `0.75`, `shazam` `9.36` twice), and the next frame's the size
+/// one tick in. The instance's own first update makes the particle and draws
+/// it before anything ages it.
+#[test]
+fn a_templates_first_draw_is_its_size_at_age_zero() {
+    let mut effect = (*effect("tpl", false, 1.0)).clone();
+    {
+        let spec = &mut effect.emitters[0];
+        spec.template = true;
+        spec.lifetime_ticks = (10.0, 0.0);
+        spec.size = Channel {
+            period: 0.0,
+            mode: ChannelMode::Keyframed,
+            lo: 1.0,
+            hi: 11.0,
+            keys: vec![(0.0, 0.0), (1.0, 1.0)],
+        };
+    }
+    let mut rng = Rng::new(3);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    let half = |system: &System| {
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        let xs = additive.iter().map(|v| v.position[0]);
+        (xs.clone().fold(f32::MIN, f32::max) - xs.fold(f32::MAX, f32::min)) / 2.0
+    };
+    run(&mut system, &effect, 1, &mut rng);
+    assert!(
+        (half(&system) - 1.0).abs() < 1e-4,
+        "first draw {}",
+        half(&system)
+    );
+    run(&mut system, &effect, 1, &mut rng);
+    assert!(
+        (half(&system) - 2.0).abs() < 1e-4,
+        "second draw {}",
+        half(&system)
+    );
 }

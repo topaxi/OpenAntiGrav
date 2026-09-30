@@ -78,6 +78,52 @@ fn the_psp_collision_sparks_carry_a_shazam_and_a_glow() {
     // is what the live particle drew first (`fff5f5ff`, R G B A order).
     assert!((glow.alpha.hi - 255.0).abs() < 1e-6);
     assert_eq!(glow.colours[0], [255, 245, 245, 255]);
+
+    // The draw class is 3, a rotating sprite, so the `+0xf0` block is its
+    // aspect term and the roll channel its angle. Live on PPSSPP: `shazam`
+    // aspect `1.5`, roll `0`; `glow` aspect `1.7`, roll `2 pi` falling ~`0.7`
+    // a tick, flags `0x30` (random start, angle not rate).
+    let stretch = |t: &pob::Emitter| t.stretch.clone().expect("a template has a stretch block");
+    assert_eq!(
+        (stretch(shazam).mode, stretch(shazam).hi),
+        (ChannelMode::Constant, 0.5)
+    );
+    assert_eq!(
+        (stretch(glow).mode, stretch(glow).hi),
+        (ChannelMode::Constant, 0.7)
+    );
+    assert_eq!(
+        (shazam.rotation_speed.lo, shazam.rotation_speed.hi),
+        (0.0, 0.0)
+    );
+    assert!((glow.rotation_speed.hi - std::f32::consts::TAU).abs() < 1e-5);
+    assert_eq!(glow.rotation_speed.keys.len(), 9);
+    assert_eq!((shazam.flags, glow.flags), (0, 0x30));
+}
+
+/// Every one of the 31 templates on the PSP disc draws through class 3, which
+/// is what the rotating quad is for.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_psp_template_is_a_rotating_sprite_with_a_stretch_block() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let found = templates(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display()));
+    assert!(!found.is_empty());
+    for (system, parent, template) in &found {
+        assert_eq!(
+            template.draw_class(),
+            Some(3),
+            "{system} / {parent} / {}",
+            template.name
+        );
+        assert!(
+            template.stretch.is_some(),
+            "{system} / {parent} / {}",
+            template.name
+        );
+    }
 }
 
 #[test]
