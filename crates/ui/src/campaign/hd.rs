@@ -801,12 +801,17 @@ fn hd_difficulty_button_line(
 /// caller has one** (`card`, `[x, y, width, height]` in this screen's grid,
 /// which `oag_game::flyer::Flyers::card_rect` projects from the card the
 /// renderer actually draws), so a click lands on what the player sees.
-/// Without one, for a source whose flyers did not load, it falls back to the
-/// measure this screen used before it drew any: `Flyer Pad Lock`'s own
-/// authored rect (`x="934" y="304" width="512" height="512"`), the padlock
-/// that sits centred on the card, a disc-authored bound on roughly where it
-/// is. **Chosen, not measured**, either way: the original's click region is
-/// not read.
+///
+/// **With no card drawn it is the page's whole content band**, between the
+/// header rule and the footer rule ([`CONFIRM_BAND`]). Omega draws no card at
+/// all, and the rect this used to fall back to - `Flyer Pad Lock`'s authored
+/// `x="934" y="304" width="512" height="512"`, the padlock that sits centred
+/// on a card - is then an invisible target: a player with only a mouse could
+/// click anywhere on the page but one unmarked square and never leave it.
+/// There is only ever one tier on screen, so a click on the page confirming
+/// it is the two-tap idiom's second tap with nothing else to select.
+/// **Chosen, not measured**, either way: the original's click region is not
+/// read. The arrows come first in the list so they win where they overlap.
 #[must_use]
 pub fn hd_grid_targets(
     layout: &Layout,
@@ -819,19 +824,23 @@ pub fn hd_grid_targets(
         let what = match image.name.as_deref() {
             Some("Flyer Left Arrow") => What::Previous,
             Some("Flyer Right Arrow") => What::Next,
-            Some("Flyer Pad Lock") => What::Hex(0),
             _ => continue,
         };
         if let Some(rect) = image_rect(image, sprites) {
-            let rect = match what {
-                What::Hex(_) => card.unwrap_or(rect),
-                _ => rect,
-            };
             out.push(Target { what, rect });
         }
     }
+    out.push(Target {
+        what: What::Hex(0),
+        rect: card.unwrap_or(CONFIRM_BAND),
+    });
     out
 }
+
+/// Where a click confirms `Grid Selection` when no flyer card is drawn: the
+/// page between its header and footer rules, in the 1920x1080 grid this
+/// screen is authored in. Chosen, not measured.
+pub const CONFIRM_BAND: [f32; 4] = [0.0, 100.0, 1920.0, 900.0];
 
 /// Where an image is drawn - the same fallback [`super::pointer::grid_targets`]
 /// applies, duplicated rather than exported since [`super::pointer`]'s own

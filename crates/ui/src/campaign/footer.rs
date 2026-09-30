@@ -194,6 +194,10 @@ enum PromptKind {
     Back,
 }
 
+/// How far above the legend's own row [`NavigationLegend::notice`] sits, in
+/// the screen's own grid units. Chosen, not measured.
+const NOTICE_LIFT: f32 = 56.0;
+
 /// One `NavigationController` prompt - an icon glyph and its label, both
 /// resolved through the string table already.
 #[derive(Debug, Clone)]
@@ -466,6 +470,34 @@ impl NavigationLegend {
             },
             prompt.text.clone(),
         )
+    }
+
+    /// `text` as one line in the legend's own word face (not its button glyphs) and colour, a row above the
+    /// prompts and starting where the leftmost of them does - what
+    /// `Cell Selection` says when a confirmed cell cannot launch. `None` when
+    /// the legend has no prompt to take its face from.
+    ///
+    /// **The row and the left edge are chosen, not measured**: the disc authors
+    /// no line for this.
+    #[must_use]
+    pub fn notice(&self, text: &str, faces: &FaceScales) -> Option<Draw> {
+        let base = self.prompts.iter().find(|prompt| {
+            prompt.kind == PromptKind::Confirm && prompt.font.eq_ignore_ascii_case("default")
+        })?;
+        let left = self
+            .prompts
+            .iter()
+            .map(|prompt| prompt.x)
+            .fold(base.x, f32::min);
+        let prompt = Prompt {
+            text: text.to_string(),
+            x: left,
+            y: base.y - NOTICE_LIFT,
+            align_right_to: None,
+            left_bound: None,
+            ..base.clone()
+        };
+        Some(Self::draw_prompt(&prompt, faces, &|_| 0.0))
     }
 
     /// One line saying which halves this legend actually has to draw - for

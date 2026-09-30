@@ -561,6 +561,42 @@ impl Sheet {
         self.rgba.get(at).map(|alpha| f32::from(*alpha) / 255.0)
     }
 
+    /// The box of `src`'s visible pixels inside its own placement, `[x, y,
+    /// width, height]` in texels from the placement's top-left - `None` for an
+    /// image this sheet does not hold, or one with nothing visible.
+    ///
+    /// Textures are padded to a power of two, so a placement's rectangle can
+    /// hold far more than its art: `Hexagon_HD.mip` is 128x64 around a 72x62
+    /// hexagon. A pixel counts as visible at half coverage or more - **chosen,
+    /// not measured**: the art's edge is anti-aliased, and half coverage is
+    /// where the eye puts it.
+    #[must_use]
+    pub fn opaque_extent(&self, src: &str) -> Option<[f32; 4]> {
+        let placed = self.get(src)?;
+        let mut bounds: Option<(u32, u32, u32, u32)> = None;
+        for row in 0..placed.height {
+            for column in 0..placed.width {
+                let at = (((placed.y + row) * self.width + placed.x + column) * 4 + 3) as usize;
+                if self.rgba.get(at).is_none_or(|alpha| *alpha < 128) {
+                    continue;
+                }
+                bounds = Some(match bounds {
+                    None => (column, row, column, row),
+                    Some((x0, y0, x1, y1)) => {
+                        (x0.min(column), y0.min(row), x1.max(column), y1.max(row))
+                    }
+                });
+            }
+        }
+        let (x0, y0, x1, y1) = bounds?;
+        Some([
+            x0 as f32,
+            y0 as f32,
+            (x1 - x0 + 1) as f32,
+            (y1 - y0 + 1) as f32,
+        ])
+    }
+
     /// Every placement this sheet holds, name and rectangle together.
     ///
     /// The same shape `crate::frontend::Frontend`'s own `placements` field

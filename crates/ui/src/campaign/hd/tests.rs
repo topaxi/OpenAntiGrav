@@ -453,3 +453,61 @@ fn difficulty_button_line_is_none_for_modes_the_button_is_not_measured_active_on
         );
     }
 }
+
+fn grid_layout_with_no_card_art() -> Layout {
+    Layout {
+        screen: Screen::default(),
+        scale: [1.0, 1.0],
+        faces: crate::picker::FaceScales::default(),
+    }
+}
+
+fn click_at(x: f32, y: f32) -> Pointer {
+    Pointer {
+        at: Some((x, y)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    }
+}
+
+/// Omega draws no flyer card, so the confirm target cannot be the invisible
+/// padlock rect it used to be: a click anywhere on the page confirms the one
+/// tier on it.
+#[test]
+fn with_no_card_drawn_a_click_anywhere_on_the_page_confirms_the_tier() {
+    let layout = grid_layout_with_no_card_art();
+    let targets = hd_grid_targets(&layout, &|_| None, None);
+    let mut model = GridSelection::new(vec![GridSummary::empty()]);
+    for at in [(700.0, 533.0), (200.0, 300.0), (1700.0, 900.0)] {
+        assert_eq!(
+            model.hd_pointer(&click_at(at.0, at.1), &targets),
+            vec![Event::Confirmed],
+            "a click at {at:?}"
+        );
+    }
+    assert!(
+        model
+            .hd_pointer(&click_at(700.0, 30.0), &targets)
+            .is_empty(),
+        "the header is not the page"
+    );
+}
+
+/// With a card on screen the click region is the card, as before.
+#[test]
+fn with_a_card_drawn_only_the_card_confirms() {
+    let layout = grid_layout_with_no_card_art();
+    let card = [934.0, 304.0, 512.0, 512.0];
+    let targets = hd_grid_targets(&layout, &|_| None, Some(card));
+    let mut model = GridSelection::new(vec![GridSummary::empty()]);
+    assert_eq!(
+        model.hd_pointer(&click_at(1100.0, 500.0), &targets),
+        vec![Event::Confirmed]
+    );
+    assert!(
+        model
+            .hd_pointer(&click_at(300.0, 500.0), &targets)
+            .is_empty()
+    );
+}

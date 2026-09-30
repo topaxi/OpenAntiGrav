@@ -155,10 +155,10 @@ pub(super) fn campaign_pointer(
                 model.hd_pointer(pointer, &targets)
             }
             crate::campaign_stage::Screen::Cell { model, .. } => {
-                let targets = oag_ui::campaign::pointer::cell_targets(
+                let targets = oag_game::campaign::hit::cell_targets(
                     model,
                     campaign.cell_layout(),
-                    &|src| campaign.sprites.get(src),
+                    &campaign.sprites,
                 );
                 let difficulty_rect =
                     oag_ui::campaign::hd::difficulty_button_rect(&campaign.cell_layout().screen);
@@ -174,14 +174,10 @@ pub(super) fn campaign_pointer(
         // `crate::campaign_stage::Screen::Selection`'s own doc.
         crate::campaign_stage::Screen::Selection(_) => Vec::new(),
         crate::campaign_stage::Screen::Grid(model) => {
-            oag_ui::campaign::pointer::grid_targets(model, campaign.grid_layout(), &|src| {
-                campaign.sprites.get(src)
-            })
+            oag_game::campaign::hit::grid_targets(model, campaign.grid_layout(), &campaign.sprites)
         }
         crate::campaign_stage::Screen::Cell { model, .. } => {
-            oag_ui::campaign::pointer::cell_targets(model, campaign.cell_layout(), &|src| {
-                campaign.sprites.get(src)
-            })
+            oag_game::campaign::hit::cell_targets(model, campaign.cell_layout(), &campaign.sprites)
         }
     };
     match &mut campaign.screen {

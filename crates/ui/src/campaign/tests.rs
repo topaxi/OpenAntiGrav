@@ -599,7 +599,7 @@ fn hex_centre(rect: [f32; 4]) -> (f32, f32) {
 fn grid_selections_hexes_are_at_the_docs_own_measured_positions() {
     let layout = grid_layout();
     let model = GridSelection::new(grid_summaries(4));
-    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32(), &|_| None);
     let rect_of = |index: usize| {
         targets
             .iter()
@@ -618,7 +618,7 @@ fn grid_selections_hexes_are_at_the_docs_own_measured_positions() {
 fn a_grid_page_offers_no_hex_for_a_slot_the_page_has_no_tier_for() {
     let layout = grid_layout();
     let model = GridSelection::new(grid_summaries(2));
-    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32(), &|_| None);
     assert!(targets.iter().any(|t| t.what == pointer::What::Hex(0)));
     assert!(targets.iter().any(|t| t.what == pointer::What::Hex(1)));
     assert!(
@@ -634,7 +634,7 @@ fn a_grid_page_offers_no_hex_for_a_slot_the_page_has_no_tier_for() {
 fn hovering_a_grid_hex_selects_it_and_a_second_click_confirms() {
     let layout = grid_layout();
     let mut model = GridSelection::new(grid_summaries(4));
-    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32(), &|_| None);
     assert_eq!(
         model.pointer(&hover((111.0, 142.0)), &targets),
         vec![Event::Moved]
@@ -656,9 +656,12 @@ fn hovering_a_grid_hex_selects_it_and_a_second_click_confirms() {
 #[test]
 fn a_point_in_two_hexes_overlapping_bounding_boxes_picks_the_one_that_actually_contains_it() {
     let layout = grid_layout();
-    let targets = pointer::grid_targets(&GridSelection::new(grid_summaries(4)), &layout, &|_| {
-        placed32()
-    });
+    let targets = pointer::grid_targets(
+        &GridSelection::new(grid_summaries(4)),
+        &layout,
+        &|_| placed32(),
+        &|_| None,
+    );
     let hex0 = targets
         .iter()
         .find(|t| t.what == pointer::What::Hex(0))
@@ -684,9 +687,12 @@ fn a_point_in_two_hexes_overlapping_bounding_boxes_picks_the_one_that_actually_c
 #[test]
 fn a_point_in_the_gap_between_two_grid_hexes_picks_nothing() {
     let layout = grid_layout();
-    let targets = pointer::grid_targets(&GridSelection::new(grid_summaries(4)), &layout, &|_| {
-        placed32()
-    });
+    let targets = pointer::grid_targets(
+        &GridSelection::new(grid_summaries(4)),
+        &layout,
+        &|_| placed32(),
+        &|_| None,
+    );
     assert_eq!(pointer::hit(&targets, (96.0, 152.0)), None);
 }
 
@@ -700,7 +706,7 @@ fn clicking_the_paging_arrow_turns_a_page_and_the_secondary_button_backs_out() {
     // clamps rather than wrapping, so starting on page 0 would make this
     // click a no-op.
     model.set_index(4);
-    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32(), &|_| None);
     let up = targets
         .iter()
         .find(|t| t.what == pointer::What::Previous)
@@ -730,7 +736,7 @@ fn cell_selections_hexes_sit_at_their_own_grid_coords_position() {
         race_cell("grid0_1_0", "16_Track"),
     ];
     let model = CellSelection::new(cells);
-    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32(), &|_| None);
     let rect_of = |index: usize| {
         targets
             .iter()
@@ -752,7 +758,7 @@ fn hovering_a_cell_selects_it_and_a_second_click_confirms() {
         race_cell("grid0_1_0", "16_Track"),
     ];
     let mut model = CellSelection::new(cells);
-    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32(), &|_| None);
     assert_eq!(
         model.pointer(&hover((81.0, 75.0)), &targets),
         vec![Event::Moved]
@@ -772,7 +778,7 @@ fn a_point_in_the_gap_between_two_cells_picks_nothing() {
         race_cell("grid0_1_0", "16_Track"),
     ];
     let model = CellSelection::new(cells);
-    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32(), &|_| None);
     let hex0 = targets
         .iter()
         .find(|t| t.what == pointer::What::Hex(0))
@@ -799,7 +805,7 @@ fn a_click_while_cell_help_is_open_closes_it_rather_than_confirming_the_cell_und
     press(&mut input, Button::Triangle);
     assert_eq!(model.update(&mut input), vec![Event::Help]);
     assert!(model.help_open());
-    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32(), &|_| None);
     assert_eq!(
         model.pointer(&click((51.0, 56.0)), &targets),
         vec![Event::Help]
