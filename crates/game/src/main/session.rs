@@ -648,6 +648,9 @@ pub(crate) struct Shell {
     pub(crate) modes: Vec<menu::Choice>,
     /// The `KILLS` row's values, off the disc's own `Eliminations` list.
     pub(crate) kill_targets: Vec<menu::Choice>,
+    /// The `WEAPONS` row's two states, valued by the disc's `On`/`Off` and
+    /// labelled by its own `FE_ON`/`FE_OFF` strings.
+    pub(crate) weapons: Vec<menu::Choice>,
     pub(crate) font: oag_ui::font::Atlas,
     pub(crate) sprites: oag_game::sprite::Sheet,
     /// The front end's own `FEGlobals` table, carried from `boot::Shell`'s
@@ -770,9 +773,10 @@ impl Shell {
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),
-            kill_targets: (boot_shell.kill_targets.iter())
+            kill_targets: (boot_shell.race_setup.kill_targets.iter())
                 .map(menu::Choice::plain)
                 .collect(),
+            weapons: boot_shell.race_setup.weapon_choices(&boot_shell.strings),
             // The disc's own names for its stylings, so the row offers what the
             // source has rather than a list this build holds.
             front_end_styles: boot_shell

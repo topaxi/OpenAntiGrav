@@ -270,9 +270,14 @@ pub enum ValueSource {
     /// `oag_game::screen`.
     ScreenFilters,
     /// The kill targets the race box's `KILLS` row offers, off the disc's own
-    /// `Eliminations` list (`oag_game::boot::Shell::kill_targets`). Empty on a
+    /// `Eliminations` list (`oag_game::boot::RaceSetup::kill_targets`). Empty on a
     /// title that reads no such list, which draws the row unusable.
     KillTargets,
+    /// The two states of the race box's `WEAPONS` row, off the disc's own
+    /// `Weapons` list: stored as its `On`/`Off`, shown as its `FE_ON`/`FE_OFF`
+    /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty on a title
+    /// that reads no such list, which draws the row unusable.
+    Weapons,
 }
 
 impl ValueSource {
@@ -302,6 +307,7 @@ impl ValueSource {
             Self::PilotAxisHigh => "pilot_axis_high",
             Self::ScreenFilters => "screen_filters",
             Self::KillTargets => "kill_targets",
+            Self::Weapons => "weapons",
         }
     }
 
@@ -331,6 +337,7 @@ impl ValueSource {
             "pilot_axis_high" => Some(Self::PilotAxisHigh),
             "screen_filters" => Some(Self::ScreenFilters),
             "kill_targets" => Some(Self::KillTargets),
+            "weapons" => Some(Self::Weapons),
             _ => None,
         }
     }

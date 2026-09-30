@@ -230,14 +230,20 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
    against this build's three (`MODE`, `SPEED CLASS`, `AI DIFFICULTY`;
    `TEAM`/`VARIANT`/`TRACK` are correctly dropped, per "The flow" above).
    **2026-09-30: `KILLS` now has its row** (`race.kill_target`, values off
-   the disc's `Eliminations` list, greyed outside an Eliminator). `WEAPONS`
-   (an on/off toggle, separate from `Mode::weapons_enabled`'s per-mode
-   default) still has no setting anywhere in this crate to back a row with. Shared with the PSP build
-   (same `menu.toml`), so not a PS2-only gap; a settings + UI addition
-   rather than a small fix, so left for whoever picks up this thread next
-   rather than built here. See
-   `handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md`'s own
-   Open/Next-Steps for the pointer.
+   the disc's `Eliminations` list, greyed outside an Eliminator). **2026-09-30
+   (`pulse-racebox-rows`): `WEAPONS` has its row too** - `race.weapons`, the
+   disc's own `Weapons` list (`On`/`Off`, labels `FE_ON`/`FE_OFF`), editable in a
+   single race and greyed showing the mode's own answer elsewhere (Off in Time
+   Trial/Speed Lap/Zone, On in Eliminator - `FUN_088e715c`, confidence 85,
+   `docs/formats/race-setup.md`), carried into the race as
+   `Options::weapons_override` so Off drops the pads and the damage rules'
+   weapons flag together. The blank SPEED CLASS value in `--menu-page race`
+   was the capture never supplying that list (`capture::menu_page::race_sources`
+   now does). Still open on the page: AI DIFFICULTY shows its stored value
+   greyed where the original swaps in `N/A` (`DifficultyNaText`), Zone's
+   `Zone` text over the SPEED CLASS row is not drawn, and the original's list
+   default for Difficulty is `Easy` of three where this build's is `elite` of
+   four.
 4. HD's equivalent screen-population code is still unfound - see
    `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md` - and
    solving it there would let the two titles' readings corroborate each

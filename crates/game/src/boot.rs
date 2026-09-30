@@ -73,8 +73,8 @@ pub struct Boot {
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
-    /// The `KILLS` row's values - see [`Shell::kill_targets`].
-    pub kill_targets: Vec<String>,
+    /// The `KILLS` and `WEAPONS` rows' values - see [`Shell::race_setup`].
+    pub race_setup: RaceSetup,
     /// The circuit names, for a capture's circuit labels.
     pub circuit_names: oag_ui::language::CircuitNames,
     /// The row face and the title's own - see [`Shell::menu_font`]/[`Shell::title_font`].
@@ -279,8 +279,9 @@ pub struct Shell {
     /// [`oag_ui::picker`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
-    /// The `KILLS` row's values, off the disc's `Eliminations` list.
-    pub kill_targets: Vec<String>,
+    /// The `KILLS` row's values off the disc's `Eliminations` list and the
+    /// `WEAPONS` row's off its `Weapons` list.
+    pub race_setup: RaceSetup,
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
@@ -528,7 +529,7 @@ pub fn load_shell(
         &screens,
         &mut report,
     );
-    let kill_targets = screens::read_kill_targets(&mut archives, front_end.race_setup, &mut report);
+    let race_setup = screens::read_race_setup(&mut archives, front_end.race_setup, &mut report);
     let strings = load_strings(
         &mut archives,
         &languages,
@@ -834,7 +835,7 @@ pub fn load_shell(
             fury_backdrop,
             track_select,
             ship_select,
-            kill_targets,
+            race_setup,
             menu_font,
             title_font,
             buttons_font,
@@ -1138,7 +1139,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         fury_backdrop,
         track_select,
         ship_select,
-        kill_targets,
+        race_setup,
         menu_font,
         title_font,
         buttons_font,
@@ -1344,7 +1345,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         fury_backdrop,
         track_select,
         ship_select,
-        kill_targets,
+        race_setup,
         circuit_names,
         menu_font,
         title_font,
@@ -1584,6 +1585,7 @@ mod progress;
 mod provenance;
 pub(crate) mod roster;
 mod screens;
+pub use screens::RaceSetup;
 pub(crate) mod sprites;
 mod steps;
 pub(crate) mod xml;

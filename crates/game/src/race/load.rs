@@ -308,7 +308,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
-    if options.mode.weapons_enabled() && weapons.is_none() {
+    if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
     }
@@ -588,7 +588,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // before anything asks whether weapons are on. The PS3 path is
     // `geometry::weapon_pad_model` - see its own doc comment for why.
     let weapon_pad_model = if rcs_drawn {
-        geometry::weapon_pad_model(ps3_weapon_pad_model, options.mode, &mut report)
+        geometry::weapon_pad_model(ps3_weapon_pad_model, options.weapons_on(), &mut report)
     } else if !vex_geometry {
         None
     } else {
@@ -604,7 +604,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         } else {
             report.push(format!(
                 "{} the track's weapon pads: {} triangle(s), {} material(s)",
-                if options.mode.weapons_enabled() {
+                if options.weapons_on() {
                     "drawing"
                 } else {
                     "decoded but not drawing (weapons off in this mode)"
@@ -836,6 +836,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             mode: options.mode,
             eliminator_kill_target: options.eliminator_kill_target,
             laps_override: options.laps_override,
+            weapons_override: options.weapons_override,
             difficulty: options.difficulty,
             class: options.class.clone(),
             opponents: options.opponents,

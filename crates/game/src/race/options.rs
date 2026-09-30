@@ -195,6 +195,13 @@ pub struct Options {
     /// has no cell to read one from. See that constant's own doc for the
     /// same retirement clause [`Self::eliminator_kill_target`] carries.
     pub laps_override: Option<u32>,
+    /// The weapons switch this race runs with, or `None` for
+    /// [`Mode::weapons_enabled`]'s own answer.
+    ///
+    /// **Set only for a single race**, the one mode whose `WEAPONS` row the
+    /// original leaves editable - `Settings::race::weapons_override`. In every
+    /// other mode the mode decides, so nothing else sets it.
+    pub weapons_override: Option<bool>,
     /// Force the Zone colour grade to a stage, instead of resting where the
     /// title's own ladder leaves it.
     ///
@@ -344,6 +351,7 @@ impl Default for Options {
             language: None,
             eliminator_kill_target: None,
             laps_override: None,
+            weapons_override: None,
             zone_stage: None,
             ribbon: false,
             collision: false,
@@ -372,6 +380,8 @@ pub struct Setup {
     /// [`oag_race::RaceState::laps_target`] by [`Race::start`] once the
     /// class-derived table has already run.
     pub laps_override: Option<u32>,
+    /// See [`Options::weapons_override`]; resolved by [`Self::weapons_on`].
+    pub weapons_override: Option<bool>,
     /// How good the opponents are. See [`Options::difficulty`].
     pub difficulty: oag_ai::Difficulty,
     /// The speed class the race is run in, spelled the way the disc spells it.
@@ -912,3 +922,23 @@ pub struct Campaign2048Progress {
 
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.
 mod headless;
+
+impl Options {
+    /// Whether this race runs with weapons: the override when one is set,
+    /// otherwise [`Mode::weapons_enabled`]. Every reader that used to ask the
+    /// mode asks this, so pads, damage and the load report agree.
+    #[must_use]
+    pub fn weapons_on(&self) -> bool {
+        self.weapons_override
+            .unwrap_or_else(|| self.mode.weapons_enabled())
+    }
+}
+
+impl Setup {
+    /// [`Options::weapons_on`], on the half of the options a running race keeps.
+    #[must_use]
+    pub fn weapons_on(&self) -> bool {
+        self.weapons_override
+            .unwrap_or_else(|| self.mode.weapons_enabled())
+    }
+}

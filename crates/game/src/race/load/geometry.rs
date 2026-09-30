@@ -148,13 +148,13 @@ fn psp2_animation(
 /// mode's own gate had nothing to act on.
 pub(super) fn weapon_pad_model(
     pads: Option<Model>,
-    mode: oag_race::Mode,
+    weapons_on: bool,
     report: &mut Vec<String>,
 ) -> Option<Model> {
     match &pads {
         Some(pads) => report.push(format!(
             "{} the track's weapon pads: {} triangle(s), {} material(s)",
-            if mode.weapons_enabled() {
+            if weapons_on {
                 "drawing"
             } else {
                 "decoded but not drawing (weapons off in this mode)"

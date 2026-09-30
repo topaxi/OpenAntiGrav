@@ -808,6 +808,13 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
             "{stays} dropped on Pulse: {kept:?}"
         );
     }
+    // The race box's own two lists are read on Pulse alone.
+    for stays in ["race.kill_target", "race.weapons"] {
+        assert!(
+            kept.contains(&stays.to_string()),
+            "{stays} dropped on Pulse"
+        );
+    }
     // RECORDS and RACE REMIX keep their own circuit rows.
     let elsewhere = pulse
         .pages
@@ -831,6 +838,13 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
         assert!(
             kept.contains(&stays.to_string()),
             "{stays} dropped on Pure: {kept:?}"
+        );
+    }
+
+    for gone in ["race.kill_target", "race.weapons"] {
+        assert!(
+            !settings_on_race(&pure).contains(&gone.to_string()),
+            "{gone} stays on Pure, which reads no such list"
         );
     }
 

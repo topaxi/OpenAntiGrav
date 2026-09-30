@@ -107,3 +107,35 @@ fn no_eliminator_kill_target_falls_back_to_the_default() {
         Mode::ELIMINATOR_KILL_TARGET_DEFAULT
     );
 }
+
+/// The `WEAPONS` row's pick reaches the race: a single race with weapons off
+/// keeps no weapon pads and reports weapons off to every damage rule, where an
+/// untouched one keeps both. Time Trial and Eliminator ignore the override's
+/// absence and follow the mode.
+#[test]
+fn a_single_race_with_weapons_off_has_no_pads_and_no_weapon_damage() {
+    let race_with = |mode: Mode, weapons_override: Option<bool>| {
+        let mut setup = setup(hulled_handling());
+        setup.mode = mode;
+        setup.weapon_pads = enveloping_pad();
+        setup.weapons_override = weapons_override;
+        Race::start(setup)
+    };
+
+    let on = race_with(Mode::SingleRace, None);
+    assert!(!on.sim.weapon_pads.is_empty(), "the default keeps the pads");
+    assert!(on.sim.damage_rules().weapons);
+
+    let off = race_with(Mode::SingleRace, Some(false));
+    assert!(off.sim.weapon_pads.is_empty(), "OFF drops the pads");
+    assert!(
+        !off.sim.damage_rules().weapons,
+        "OFF reaches the damage rules"
+    );
+
+    for mode in [Mode::TimeTrial, Mode::Eliminator] {
+        let race = race_with(mode, None);
+        assert_eq!(race.sim.damage_rules().weapons, mode.weapons_enabled());
+        assert_eq!(race.sim.weapon_pads.is_empty(), !mode.weapons_enabled());
+    }
+}

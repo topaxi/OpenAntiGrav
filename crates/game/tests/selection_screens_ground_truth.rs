@@ -694,5 +694,25 @@ fn the_kills_row_offers_the_discs_own_eliminations_list() {
         return;
     };
     // `RaceBox_Definition.xml`'s `Eliminations` list, in authored order.
-    assert_eq!(shell(&path).kill_targets, ["5", "10", "15", "20", "25"]);
+    assert_eq!(
+        shell(&path).race_setup.kill_targets,
+        ["5", "10", "15", "20", "25"]
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_weapons_row_offers_the_discs_own_two_states() {
+    let Some(path) = image() else {
+        return;
+    };
+    // `RaceBox_Definition.xml`'s `Weapons` list: the string id and the `value`
+    // `Race_ReadSetupOptions` compares against `"On"`.
+    assert_eq!(
+        shell(&path).race_setup.weapons,
+        [
+            ("FE_ON".to_string(), "On".to_string()),
+            ("FE_OFF".to_string(), "Off".to_string())
+        ]
+    );
 }

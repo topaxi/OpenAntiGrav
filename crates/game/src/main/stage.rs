@@ -476,7 +476,7 @@ impl Stage {
             pad_model,
             weapon_pad_model,
             gantry,
-            setup.mode,
+            setup.weapons_on(),
             rocket_model,
             mine_model,
             bomb_model,

@@ -54,7 +54,7 @@ pub(super) fn menu_page(
     page: &str,
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
-    kill_targets: &[String],
+    race_setup: &crate::boot::RaceSetup,
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
@@ -123,7 +123,7 @@ pub(super) fn menu_page(
     }
 
     let mut model = oag_ui::menu::Menu::new(definition);
-    race_sources::supply(&mut model, title, tracks, teams, kill_targets, strings);
+    race_sources::supply(&mut model, title, tracks, teams, race_setup, strings);
     model.supply(
         oag_ui::menu::ValueSource::Languages,
         &languages

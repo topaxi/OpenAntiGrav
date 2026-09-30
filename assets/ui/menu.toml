@@ -181,6 +181,24 @@ values_from = "speed_classes"
 # modes. `disabled_by` matches positively, so the list is the modes *without* a
 # grid rather than a negation of the one with it - keep it in step with
 # `oag_race::Mode::ALL`.
+# The race box's `WEAPONS` row, third in the original too. Its two options are the
+# disc's own `Weapons` list (`oag_game::boot::RaceSetup::weapons`, stored `On`/`Off`).
+# Only a single race lets the player move it: the original greys it in every other
+# mode and shows the mode's own answer, `Off` for Time Trial, Speed Lap and Zone and
+# `On` for Eliminator (`FUN_088e715c`, `docs/formats/race-setup.md`), which is what
+# `pinned` does - the player's own pick is untouched and returns with the mode.
+# `Mode::weapons_enabled` is the same answer on the simulation's side.
+[[page.entry]]
+kind = "choice"
+label = "WEAPONS"
+string_id = "OAG_RACE_WEAPONS"
+setting = "race.weapons"
+values_from = "weapons"
+pinned = [
+    { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"], shows = "Off" },
+    { setting = "race.mode", value = "eliminator", shows = "On" },
+]
+
 [[page.entry]]
 kind = "choice"
 label = "AI DIFFICULTY"

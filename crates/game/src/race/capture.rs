@@ -328,6 +328,7 @@ pub fn capture(
         ..
     } = loaded;
     let mode = setup.mode;
+    let weapons_on = setup.weapons_on();
     // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
     let difficulty = setup.difficulty;
@@ -428,7 +429,7 @@ pub fn capture(
         pad_model,
         weapon_pad_model,
         gantry,
-        mode,
+        weapons_on,
         rocket_model,
         mine_model,
         bomb_model,

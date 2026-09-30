@@ -13,7 +13,7 @@ pub(super) fn supply(
     title: &'static oag_title::Title,
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
-    kill_targets: &[String],
+    race_setup: &crate::boot::RaceSetup,
     strings: &oag_ui::language::StringTable,
 ) {
     model.supply(
@@ -40,10 +40,15 @@ pub(super) fn supply(
     );
     model.supply(
         oag_ui::menu::ValueSource::KillTargets,
-        &kill_targets
+        &race_setup
+            .kill_targets
             .iter()
             .map(oag_ui::menu::Choice::plain)
             .collect::<Vec<_>>(),
+    );
+    model.supply(
+        oag_ui::menu::ValueSource::Weapons,
+        &race_setup.weapon_choices(strings),
     );
 }
 
@@ -51,46 +56,99 @@ pub(super) fn supply(
 mod tests {
     use super::*;
 
-    /// The RACE page of every title, on a fresh profile: every row that
-    /// carries a list shows a value. This is the blank SPEED CLASS a
-    /// `--menu-page race` still drew when the capture never supplied it.
+    /// The Pulse RACE page the way a capture or a live session builds it: the
+    /// title's own trims, the disc's own lists (Pulse's authored `Eliminations`
+    /// and `Weapons`), a strings table with `FE_ON`/`FE_OFF`.
+    fn pulse_page() -> oag_ui::menu::Menu {
+        let mut strings = oag_ui::language::StringTable::default();
+        strings.merge(
+            [("FE_ON", "ON"), ("FE_OFF", "OFF")]
+                .map(|(id, text)| (id.to_string(), text.to_string()))
+                .into(),
+        );
+        let title = oag_pulse::TITLE;
+        let mut definition =
+            oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, &strings).unwrap();
+        definition.drop_unavailable_race_variant(title);
+        definition.drop_rows_picked_on_screen(title);
+        let setup = crate::boot::RaceSetup {
+            kill_targets: ["5", "10", "15", "20", "25"].map(String::from).to_vec(),
+            weapons: vec![
+                ("FE_ON".into(), "On".into()),
+                ("FE_OFF".into(), "Off".into()),
+            ],
+        };
+        let mut model = oag_ui::menu::Menu::new(definition);
+        supply(&mut model, title, &[], &[], &setup, &strings);
+        model.open("race");
+        model
+    }
+
+    fn shown(model: &oag_ui::menu::Menu, setting: &str) -> String {
+        let entry = model
+            .page()
+            .entries
+            .iter()
+            .find(|entry| entry.setting() == Some(setting))
+            .unwrap_or_else(|| panic!("no {setting} row"));
+        match model.shown(entry) {
+            Some(oag_ui::menu::Value::Text(text)) => text,
+            other => panic!("{setting} shows {other:?}"),
+        }
+    }
+
+    /// The RACE page on a fresh profile shows a value on every row that has a
+    /// list. SPEED CLASS drew blank in a `--menu-page race` still when the
+    /// capture never supplied it.
     #[test]
     fn every_race_page_row_with_a_list_shows_a_value_on_a_fresh_profile() {
-        let strings = oag_ui::language::StringTable::default();
-        let kills: Vec<String> = ["5", "10", "15", "20", "25"]
-            .iter()
-            .map(ToString::to_string)
-            .collect();
-        for title in [oag_pulse::TITLE, oag_pure::TITLE] {
-            let mut definition =
-                oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, &strings).unwrap();
-            definition.drop_unavailable_race_variant(title);
-            definition.drop_rows_picked_on_screen(title);
-            let mut model = oag_ui::menu::Menu::new(definition);
-            supply(&mut model, title, &[], &[], &kills, &strings);
-            model.open("race");
-            let class = model
+        let model = pulse_page();
+        assert_eq!(shown(&model, "race.class"), "VENOM");
+        assert_eq!(shown(&model, "race.kill_target"), "5");
+        // Time Trial is the fresh profile's mode, and it pins WEAPONS to OFF.
+        assert_eq!(shown(&model, "race.weapons"), "OFF");
+        assert_eq!(shown(&model, "ai.difficulty"), "novice");
+    }
+
+    /// WEAPONS is greyed and shows the mode's own answer in every mode but a
+    /// single race, which `Mode::weapons_enabled` says too - the pin in
+    /// `menu.toml` and the simulation cannot drift apart without this failing.
+    #[test]
+    fn weapons_row_shows_what_the_mode_will_actually_do() {
+        let mut model = pulse_page();
+        for mode in oag_race::Mode::ALL {
+            model.seed("race.mode", &oag_ui::menu::Value::Text(mode.name().into()));
+            let entry = model
                 .page()
                 .entries
                 .iter()
-                .find(|entry| entry.setting() == Some("race.class"))
-                .unwrap_or_else(|| panic!("{} has no SPEED CLASS row", title.name));
-            let Some(oag_ui::menu::Value::Text(shown)) = class.value() else {
-                panic!("{}: SPEED CLASS shows nothing", title.name);
-            };
-            assert_eq!(shown, "VENOM", "{}: the first rung of the ladder", title.name);
-            let kill = model
-                .page()
-                .entries
-                .iter()
-                .find(|entry| entry.setting() == Some("race.kill_target"))
-                .unwrap_or_else(|| panic!("{} has no KILLS row", title.name));
-            assert_eq!(
-                kill.value(),
-                Some(oag_ui::menu::Value::Text("5".into())),
-                "{}",
-                title.name
-            );
+                .find(|entry| entry.setting() == Some("race.weapons"))
+                .unwrap();
+            let single_race = mode == oag_race::Mode::SingleRace;
+            assert_eq!(model.is_disabled(entry), !single_race, "{mode:?} greyed");
+            if !single_race {
+                let want = if mode.weapons_enabled() { "ON" } else { "OFF" };
+                assert_eq!(shown(&model, "race.weapons"), want, "{mode:?}");
+            }
         }
+    }
+
+    /// A pick made in a single race survives a visit to a pinned mode.
+    #[test]
+    fn the_players_pick_returns_when_the_pinned_mode_is_left() {
+        let mut model = pulse_page();
+        model.seed(
+            "race.mode",
+            &oag_ui::menu::Value::Text("single_race".into()),
+        );
+        model.seed("race.weapons", &oag_ui::menu::Value::Text("Off".into()));
+        assert_eq!(shown(&model, "race.weapons"), "OFF");
+        model.seed("race.mode", &oag_ui::menu::Value::Text("eliminator".into()));
+        assert_eq!(shown(&model, "race.weapons"), "ON");
+        model.seed(
+            "race.mode",
+            &oag_ui::menu::Value::Text("single_race".into()),
+        );
+        assert_eq!(shown(&model, "race.weapons"), "OFF");
     }
 }

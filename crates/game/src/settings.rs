@@ -867,6 +867,7 @@ pub fn menu_seeds(
         ("race.track", text(&settings.race.track)),
         ("race.variant", text(&settings.race.variant)),
         ("race.kill_target", text(&settings.race.kill_target)),
+        ("race.weapons", text(&settings.race.weapons)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
         ("remix.track_title", text(&settings.remix.track_title)),
         ("remix.track", text(&settings.remix.track)),

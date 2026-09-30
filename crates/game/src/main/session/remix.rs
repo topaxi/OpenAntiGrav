@@ -333,6 +333,7 @@ impl Session {
         };
         race_options.eliminator_kill_target = None;
         race_options.laps_override = None;
+        race_options.weapons_override = None;
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
             race_options.mode = mode;
         }
