@@ -1,4 +1,4 @@
-//! The HUD's GPU half: two [`crate::render::Renderer`]s and the pass that drives
+//! The HUD's GPU half: three [`crate::render::Renderer`]s and the pass that drives
 //! them.
 //!
 //! Split out of [`super`] so the layout model and the draw list stay testable
@@ -8,7 +8,7 @@
 
 use super::{Assets, Context, Layout, Readout, draw_list};
 
-/// The HUD's two renderers and the data they draw.
+/// The HUD's three renderers and the data they draw.
 ///
 /// # Why two renderers
 ///
@@ -32,6 +32,7 @@ pub struct Overlay {
     art: &'static oag_title::HudArt,
     hud_line_height: f32,
     small_line_height: f32,
+    default_line_height: f32,
     /// The grid the layout is authored in - `Assets::space`, kept so the
     /// frame loop can hand a screen filter the title's own row count on the
     /// `--race` route, which has no menu shell to read it from.
@@ -40,6 +41,8 @@ pub struct Overlay {
     values: crate::render::Renderer,
     /// Draws the captions, in `small.fnt`.
     captions: crate::render::Renderer,
+    /// Draws the per-craft rows, in the `Default` face.
+    rows: crate::render::Renderer,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -92,10 +95,20 @@ impl Overlay {
             &assets.sheet,
         )?;
         captions.set_space(assets.space);
+        let mut rows = crate::render::Renderer::new(
+            device,
+            queue,
+            format,
+            None,
+            assets.default_font.clone(),
+            &assets.sheet,
+        )?;
+        rows.set_space(assets.space);
 
         Ok(Some(Self {
             hud_line_height: assets.font.line_height,
             small_line_height: assets.small_font.line_height,
+            default_line_height: assets.default_font.line_height,
             sheet: assets.sheet.clone(),
             art: assets.art,
             strings: assets.strings.clone(),
@@ -103,6 +116,7 @@ impl Overlay {
             layout,
             values,
             captions,
+            rows,
         }))
     }
 
@@ -122,14 +136,16 @@ impl Overlay {
             art: self.art,
             hud_line_height: self.hud_line_height,
             small_line_height: self.small_line_height,
+            default_line_height: self.default_line_height,
             default_border: self.layout.default_border(),
         }
     }
 
     /// Draws the HUD **over** whatever is already in `view`.
     ///
-    /// Two passes, both `LoadOp::Load`: sprites and values through the `HUD`
-    /// renderer, then captions through the `HUDSmall` one. The sprites go with the
+    /// Up to three passes, all `LoadOp::Load`: sprites and values through the
+    /// `HUD` renderer, captions through the `HUDSmall` one, then per-craft rows
+    /// through the `Default` one. The sprites go with the
     /// values because they share a renderer and the sprite sheet is bound in both.
     pub fn draw(
         &mut self,
@@ -156,6 +172,10 @@ impl Overlay {
         if !frame.small_text.is_empty() {
             self.captions
                 .overlay(device, queue, encoder, view, &frame.small_text, viewport);
+        }
+        if !frame.default_text.is_empty() {
+            self.rows
+                .overlay(device, queue, encoder, view, &frame.default_text, viewport);
         }
     }
 }

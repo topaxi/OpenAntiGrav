@@ -167,6 +167,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // measured. See `oag_title::HudArt::hud_small_font_role`.
     hud_small_font_role: None,
     total_time_timed_modes_only: false,
+    kill_column: false,
     runtime: None,
 };
 

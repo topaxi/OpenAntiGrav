@@ -76,6 +76,7 @@ impl Setup {
             absorb_burst: None,
             absorb_anchors: Vec::new(),
             hit_spark_anchors: Vec::new(),
+            slot_teams: Vec::new(),
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
             // Zero travel at zero speed: the flaps neither open nor move.

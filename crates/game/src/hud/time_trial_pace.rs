@@ -5,44 +5,120 @@
 //! `scripts/check-file-size.py`'s 1,000-line ratchet, the same reason
 //! [`super::lap_splits`] has its own file.
 //!
-//! **Deliberately incomplete, and the gap is not hidden.**
+//! **What this reproduces, and the one thing it does not.**
 //! `PlayerStatus_Update`'s own decompile
 //! (`docs/ghidra/functions/psp-pulse-usa/race-progress.md`'s "The
-//! target-time readout" section) has a second `RECORD` path even on a
-//! campaign cell: if the player's own stored personal best for this track
-//! (`FUN_088091a0`, keyed by team) beats the cell's own gold target *and*
-//! the live pace is currently beating that personal best too, the original
-//! shows `RECORD` instead of `GOLD`. `FUN_088091a0`'s own record format is
-//! unread - this project has nothing to feed that branch - so
-//! [`TimeTrialPace::from_elapsed`] never produces [`Medal::Gold`]'s
-//! `RECORD` upgrade. A campaign cell run on a personal best already faster
-//! than gold shows `GOLD` here where the original would show `RECORD`;
-//! everything else the original's own ladder does for a campaign cell is
-//! reproduced.
+//! target-time readout" section) picks the tier in two ways. A campaign cell
+//! races its own gold/silver/bronze ladder, and shows `RECORD` instead when
+//! the player's stored best already beats gold and the run is ahead of it. A
+//! plain Time Trial or Speed Lap has no ladder, so it is `RECORD` throughout,
+//! counting down to the smaller of the player's stored best and the track's
+//! authored `<RaceTimes>` (Time Trial) or `<LapTimes>` (Speed Lap). Both come
+//! from [`RecordTarget`].
+//!
+//! **The stored best is this build's own, keyed by circuit, mode and class -
+//! chosen, not measured.** The original keys its record store by team
+//! (`FUN_088091a0`, `param_1+0x460`), and this project's
+//! [`crate::records::Key`] has no team, so a run flown in one team's ship
+//! races the best of any team's. The authored figure is unaffected.
 
-use oag_tables::race_campaign::Medal;
+use oag_tables::race_campaign::Cell;
+use oag_tables::track_stats::TrackStats;
 
-/// [`super::Readout::time_trial_pace`]'s own value: which medal the current
-/// pace is chasing, and how far off it the clock reads right now.
+/// The tier `Hud_UpdateTimeCluster` reads (`*(hud+0x3c)+0x34`): `0` to `3`.
+///
+/// Its own type rather than [`oag_tables::race_campaign::Medal`], which
+/// [`crate::records`] persists as a campaign award and which has no
+/// `Record`: a pace is a caption, not something earned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaceTier {
+    /// Tier `0`, `IG_HUD_BRONZE`.
+    Bronze,
+    /// Tier `1`, `IG_HUD_SILVER`.
+    Silver,
+    /// Tier `2`, `IG_HUD_GOLD`.
+    Gold,
+    /// Tier `3`, `IG_HUD_RECORD`.
+    Record,
+}
+
+/// The time a plain (or personal-best-beating) run races: what
+/// `PlayerStatus_Update` calls the ghost.
+///
+/// Both figures are centiseconds, the unit the original compares in. See the
+/// module doc for what is measured and what is chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RecordTarget {
+    /// The stored best for this circuit, mode and class - `FUN_088091a0`'s
+    /// answer. `None` until a race here has set one.
+    pub personal_best_centis: Option<i64>,
+    /// The track's own `stats.xml` figure for this class: `<RaceTimes>` for a
+    /// Time Trial, `<LapTimes>` for a Speed Lap. Truncated, as the
+    /// original's `(uint)(float * 100.0)` is. `None` where the file did not
+    /// read: a campaign cell still races its ladder without it, a plain race
+    /// has nothing to race.
+    pub authored_centis: Option<i64>,
+}
+
+impl RecordTarget {
+    /// The target a `mode` race on `class` chases, or `None` for a mode the
+    /// clock cluster is not shown in. `best` is the [`crate::records::Record`]
+    /// this race saves to; `stats` is `None` where the track's `stats.xml`
+    /// did not read, or the class is not one of the four.
+    #[must_use]
+    pub fn new(
+        mode: oag_race::Mode,
+        class: &str,
+        stats: Option<&TrackStats>,
+        best: Option<&crate::records::Record>,
+    ) -> Option<Self> {
+        let class = oag_tables::handling::SpeedClass::from_name(class);
+        let authored = |figures: fn(&TrackStats) -> [f32; 4]| {
+            let (stats, class) = (stats?, class?);
+            #[allow(clippy::cast_possible_truncation)]
+            Some((figures(stats)[class as usize] * 100.0) as i64)
+        };
+        let (authored, best_ticks) = match mode {
+            oag_race::Mode::TimeTrial => (
+                authored(|stats| stats.race_times),
+                best.and_then(|record| record.best_total_ticks),
+            ),
+            oag_race::Mode::SpeedLap => (
+                authored(|stats| stats.lap_times),
+                best.and_then(|record| record.best_lap_ticks.map(u64::from)),
+            ),
+            _ => return None,
+        };
+        Some(Self {
+            personal_best_centis: best_ticks.map(ticks_to_centis),
+            authored_centis: authored,
+        })
+    }
+}
+
+fn ticks_to_centis(ticks: u64) -> i64 {
+    i64::try_from(ticks * 100 / 60).unwrap_or(i64::MAX)
+}
+
+/// [`super::Readout::time_trial_pace`]'s own value: which tier the current
+/// pace is in, and how far off it the clock reads right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TimeTrialPace {
-    /// The medal this pace would earn if the race ended this tick.
-    pub medal: Medal,
-    /// Ticks left to beat [`Self::medal`]'s own target, or `0` once
+    /// The tier this pace is in this tick.
+    pub tier: PaceTier,
+    /// Ticks left to beat [`Self::tier`]'s own target, or `0` once
     /// [`Self::missed`].
     pub remaining_ticks: u32,
-    /// Whether the clock has already passed the cell's own bronze target -
-    /// `Hud_UpdateTimeCluster_q`'s literal `0xffff0000` (pure red) tint,
-    /// applied to `TotalTime` alone.
+    /// Whether the clock has already passed the target - `Hud_UpdateTimeCluster_q`'s
+    /// literal `0xffff0000` (pure red) tint, applied to `TotalTime` alone.
     pub missed: bool,
 }
 
 impl TimeTrialPace {
-    /// `Hud_UpdateTimeCluster`'s tier ladder (`0x0881c9d0`), fed by
-    /// `PlayerStatus_Update`'s own campaign branch (`0x0883b3b8`),
-    /// collapsed to a pure function of the elapsed tick count - the
-    /// gold/silver/bronze ladder only; see this module's own doc for the
-    /// `RECORD`-via-personal-best branch this deliberately omits.
+    /// `Hud_UpdateTimeCluster`'s tier (`0x0881c9d0`), fed by
+    /// `PlayerStatus_Update`'s own target-time block (`0x0883b3b8`),
+    /// collapsed to a pure function of the elapsed tick count. `ladder` is a
+    /// campaign cell's own gold/silver/bronze, `None` for a plain race.
     ///
     /// **The original's own tier field is stateful**: written once a tick,
     /// and left untouched once the elapsed value has passed every target,
@@ -104,43 +180,83 @@ impl TimeTrialPace {
     /// this function inherits rather than introduces, not yet measured
     /// closely enough to correct for.
     #[must_use]
-    pub fn from_elapsed(elapsed_ticks: u64, cell: &oag_tables::race_campaign::Cell) -> Self {
-        let elapsed_centis = i64::try_from(elapsed_ticks * 100 / 60).unwrap_or(i64::MAX);
-        let (medal, target_centis) = if elapsed_centis <= cell.gold {
-            (Medal::Gold, cell.gold)
-        } else if elapsed_centis <= cell.silver {
-            (Medal::Silver, cell.silver)
-        } else {
-            (Medal::Bronze, cell.bronze)
+    pub fn evaluate(elapsed_ticks: u64, ladder: Option<&Cell>, target: &RecordTarget) -> Self {
+        let elapsed = ticks_to_centis(elapsed_ticks);
+        // The original's own `0xffffffff` and `0` both mean "no stored best".
+        let best = target.personal_best_centis.filter(|&best| best > 0);
+        let (tier, target_centis) = match ladder {
+            // No ladder: always `RECORD`, chasing the smaller of the stored
+            // best and the authored figure.
+            None => (
+                PaceTier::Record,
+                match (best, target.authored_centis) {
+                    (Some(best), Some(authored)) => best.min(authored),
+                    (best, authored) => best.or(authored).unwrap_or(0),
+                },
+            ),
+            // A stored best already faster than gold, and still ahead of.
+            Some(cell) if best.is_some_and(|b| b < cell.gold && elapsed < b) => {
+                (PaceTier::Record, best.unwrap_or(0))
+            }
+            Some(cell) if elapsed <= cell.gold => (PaceTier::Gold, cell.gold),
+            Some(cell) if elapsed <= cell.silver => (PaceTier::Silver, cell.silver),
+            Some(cell) => (PaceTier::Bronze, cell.bronze),
         };
-        let missed = elapsed_centis > cell.bronze;
+        let missed = elapsed > target_centis;
         let remaining_ticks = if missed {
             0
         } else {
-            u32::try_from((target_centis - elapsed_centis).max(0) * 60 / 100).unwrap_or(u32::MAX)
+            u32::try_from((target_centis - elapsed).max(0) * 60 / 100).unwrap_or(u32::MAX)
         };
         Self {
-            medal,
+            tier,
             remaining_ticks,
             missed,
         }
     }
 }
 
+/// [`super::Readout::time_trial_pace`] for a race in `mode`, or `None` when
+/// the clock keeps showing the plain elapsed time.
+///
+/// Without a campaign ladder the readout races the authored figure, and where
+/// the track's `stats.xml` did not load there is none: `PlayerStatus_Update`
+/// fills the target block only under `DAT_08b310b4 != 0`, the loaded track
+/// record, so a plain race keeps the plain clock. A campaign cell races its
+/// ladder either way. Only Time Trial counts the whole race; Speed Lap reads
+/// the current lap.
+#[must_use]
+pub fn pace_for(
+    mode: oag_race::Mode,
+    race_ticks: u64,
+    lap_ticks: u64,
+    ladder: Option<&Cell>,
+    target: Option<&RecordTarget>,
+) -> Option<TimeTrialPace> {
+    let elapsed = match mode {
+        oag_race::Mode::TimeTrial => race_ticks,
+        oag_race::Mode::SpeedLap => lap_ticks,
+        _ => return None,
+    };
+    let default = RecordTarget::default();
+    let target = target.unwrap_or(&default);
+    if ladder.is_none() && target.authored_centis.is_none() {
+        return None;
+    }
+    Some(TimeTrialPace::evaluate(elapsed, ladder, target))
+}
+
 /// [`super::Readout::time_trial_pace`]'s own caption -
-/// `Hud_UpdateTimeCluster`'s `IG_HUD_GOLD`/`SILVER`/`BRONZE` arm of its
-/// five-way table. `RECORD` **is** reachable on a campaign cell too (see
-/// this module's own top-level doc) but is not produced by
-/// [`TimeTrialPace::from_elapsed`], so there is nothing here to map it
-/// from; the layout's own default `TOTAL` likewise has no [`Medal`] value
-/// to represent "no pace" or "not a Time Trial/Speed Lap cell" - both stay
-/// `None` upstream instead. See
+/// `Hud_UpdateTimeCluster`'s `IG_HUD_BRONZE`/`SILVER`/`GOLD`/`RECORD` arms of
+/// its five-way table. The layout's own default `TOTAL` has no tier to map
+/// from ("not a Time Trial/Speed Lap race"), which stays `None` upstream. See
 /// `docs/ghidra/functions/psp-pulse-usa/hud-time-caption-substitution.md`.
-pub(super) fn medal_caption(medal: Medal, strings: &oag_ui::language::StringTable) -> String {
-    let id = match medal {
-        Medal::Gold => "IG_HUD_GOLD",
-        Medal::Silver => "IG_HUD_SILVER",
-        Medal::Bronze => "IG_HUD_BRONZE",
+pub(super) fn tier_caption(tier: PaceTier, strings: &oag_ui::language::StringTable) -> String {
+    let id = match tier {
+        PaceTier::Gold => "IG_HUD_GOLD",
+        PaceTier::Silver => "IG_HUD_SILVER",
+        PaceTier::Bronze => "IG_HUD_BRONZE",
+        PaceTier::Record => "IG_HUD_RECORD",
     };
     strings.get_or_id(id).to_string()
 }

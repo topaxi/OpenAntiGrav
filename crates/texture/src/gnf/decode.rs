@@ -129,55 +129,119 @@ fn has_valid_bc7_mode(byte0: u8) -> bool {
     byte0 != 0x00
 }
 
-fn decode_micro_tiled(texture: &Texture, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
+/// One level's blocks, untiled into plain row-major order.
+///
+/// `offset` is the level's first byte from [`Texture::data_offset`]. Counts
+/// every block whose byte 0 carries no valid mode bit while it goes, and
+/// reports the count beside the bytes so a caller can refuse a level without
+/// a second pass.
+fn untile_level(
+    texture: &Texture,
+    blob: &[u8],
+    offset: usize,
+    width_blocks: u32,
+    height_blocks: u32,
+    tiles_x: u32,
+) -> Result<(Vec<u8>, usize)> {
+    let mut out = Vec::with_capacity((width_blocks * height_blocks) as usize * 16);
+    let mut corrupt = 0usize;
+    for by in 0..height_blocks {
+        for bx in 0..width_blocks {
+            let start =
+                texture.data_offset + offset + micro_tiled_block_offset(bx, by, tiles_x) as usize;
+            let block = blob.get(start..start + 16).ok_or(Error::DataOutOfBounds {
+                need: start + 16,
+                got: blob.len(),
+            })?;
+            corrupt += usize::from(!has_valid_bc7_mode(block[0]));
+            out.extend_from_slice(block);
+        }
+    }
+    Ok((out, corrupt))
+}
+
+fn require_micro_tiled_bc7(texture: &Texture) -> Result<()> {
     if texture.surface_format != SurfaceFormat::Bc7 {
         return Err(Error::UnsupportedFormat {
             format: texture.surface_format,
         });
     }
+    Ok(())
+}
 
+fn decode_micro_tiled(texture: &Texture, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
+    require_micro_tiled_bc7(texture)?;
     let (width_blocks, height_blocks, tiles_x, _tiles_y) = base_level_tile_grid(texture);
-    let mut corrupt = 0usize;
-    for by in 0..height_blocks {
-        for bx in 0..width_blocks {
-            let start = texture.data_offset + micro_tiled_block_offset(bx, by, tiles_x) as usize;
-            let byte0 = *blob.get(start).ok_or(Error::DataOutOfBounds {
-                need: start + 1,
-                got: blob.len(),
-            })?;
-            if !has_valid_bc7_mode(byte0) {
-                corrupt += 1;
+    let (blocks, corrupt) = untile_level(texture, blob, 0, width_blocks, height_blocks, tiles_x)?;
+    if corrupt > 0 {
+        return Err(Error::CorruptBlocks { count: corrupt });
+    }
+    row_major_blocks(&blocks, texture.width, texture.height, 16, |b| {
+        crate::bcn::bc7(b.try_into().expect("checked length"))
+    })
+}
+
+pub(super) fn bc7_level(blocks: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
+    row_major_blocks(blocks, width, height, 16, |b| {
+        crate::bcn::bc7(b.try_into().expect("checked length"))
+    })
+    .ok()
+}
+
+/// Every mip level's BC7 blocks, untiled and row-major, base level first.
+///
+/// Levels follow one another in the file, each padded to whole 8x8-block
+/// micro tiles: `ceil(wb/8) * ceil(hb/8) * 1024` bytes for a level `wb` x
+/// `hb` blocks wide. That accounts for every byte past the header of 15,413 of
+/// the 15,4xx BC7 `.gnf` files on the disc - see `docs/formats/gnf.md`.
+pub(super) fn block_levels(texture: &Texture, blob: &[u8]) -> Result<Vec<Vec<u8>>> {
+    require_micro_tiled_bc7(texture)?;
+    if texture.tile_mode.0 != super::TileMode::THIN_1D_THIN {
+        return Err(Error::Tiled {
+            tile_mode: texture.tile_mode.0,
+        });
+    }
+    let count = usize::from(
+        texture
+            .last_mip_level
+            .saturating_sub(texture.base_mip_level),
+    ) + 1;
+    let grids: Vec<(u32, u32, u32, u32)> = (0..count)
+        .map(|level| {
+            if level == 0 {
+                base_level_tile_grid(texture)
+            } else {
+                let wb = (texture.width >> level).max(1).div_ceil(4);
+                let hb = (texture.height >> level).max(1).div_ceil(4);
+                (wb, hb, wb.div_ceil(8), hb.div_ceil(8))
             }
-        }
+        })
+        .collect();
+    let expected: usize = grids
+        .iter()
+        .map(|(_, _, tx, ty)| (tx * ty) as usize * MICRO_TILE_BYTES as usize)
+        .sum();
+    // Exact, not "at least": a cubemap or an array carries more than one
+    // surface's chain, and reading its first as if it were the only one would
+    // hand the GPU a picture that is not the file's.
+    let found = blob.len().saturating_sub(texture.data_offset);
+    if found != expected {
+        return Err(Error::ChainLayout { expected, found });
+    }
+    let mut levels = Vec::with_capacity(count);
+    let mut offset = 0usize;
+    let mut corrupt = 0usize;
+    for (width_blocks, height_blocks, tiles_x, tiles_y) in grids {
+        let (blocks, bad) =
+            untile_level(texture, blob, offset, width_blocks, height_blocks, tiles_x)?;
+        corrupt += bad;
+        levels.push(blocks);
+        offset += (tiles_x * tiles_y) as usize * MICRO_TILE_BYTES as usize;
     }
     if corrupt > 0 {
         return Err(Error::CorruptBlocks { count: corrupt });
     }
-
-    let mut out = vec![[0u8; 4]; (texture.width * texture.height) as usize];
-    for by in 0..height_blocks {
-        for bx in 0..width_blocks {
-            let start = texture.data_offset + micro_tiled_block_offset(bx, by, tiles_x) as usize;
-            let block: [u8; 16] = blob
-                .get(start..start + 16)
-                .and_then(|s| s.try_into().ok())
-                .ok_or(Error::DataOutOfBounds {
-                    need: start + 16,
-                    got: blob.len(),
-                })?;
-            let texels = crate::bcn::bc7(&block);
-            for ty in 0..4 {
-                for tx in 0..4 {
-                    let px = bx * 4 + tx;
-                    let py = by * 4 + ty;
-                    if px < texture.width && py < texture.height {
-                        out[(py * texture.width + px) as usize] = texels[(ty * 4 + tx) as usize];
-                    }
-                }
-            }
-        }
-    }
-    Ok(out)
+    Ok(levels)
 }
 
 /// Walks a row-major grid of 4x4 blocks, `unit_len` bytes each, decoding

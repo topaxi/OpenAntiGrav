@@ -206,6 +206,8 @@ pub struct RaceView {
     pub(super) engine_light_rng: [Rng; MAX_SHIPS],
     /// Authored hull spark anchors per slot, model space.
     pub(super) spark_anchors: Vec<Vec<Vec3>>,
+    /// The team id each slot flies - [`Setup::slot_teams`].
+    pub(super) slot_teams: Vec<String>,
     /// The `Ship Collision Fx` locators in model space - see
     /// [`Setup::collision_fx`].
     pub(super) collision_fx: Vec<crate::livery::SparkAnchor>,

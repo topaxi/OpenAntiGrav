@@ -447,6 +447,56 @@ output does not change - but the mechanism producing it is now understood
 to be `Thin_1DThin`'s own (much simpler) pitch alignment, not a macro-tile
 bank/pipe reduction.
 
+## Mip chains, and handing the blocks to the GPU untouched
+
+2026-09-30. `Texture::decode` reads the base level only, which is all a sprite
+needs. A textured race wants the whole chain, and the chain is in the file.
+**Confidence: 90** for the layout, which the byte counts below settle
+exactly.
+
+**Layout of a `Thin_1DThin` BC7 chain.** Levels follow one another from
+`data_offset`, largest first, each padded to whole micro tiles (8x8 blocks,
+1,024 bytes) and no further: a level `w` x `h` texels is
+`ceil(ceil(w/4)/8) * ceil(ceil(h/4)/8) * 1024` bytes, with `w`/`h` halved (to a
+floor of 1) per level, and there are `last_mip_level - base_mip_level + 1` of
+them. `crates/texture/examples/gnf_mip_layout_probe.rs` sums that against the
+bytes each file holds past its header: **15,413 of the 15,525 BC7
+`TileMode(13)` files across all nine archives match to the byte.** The other
+112 are the files that carry more than one surface - cubemaps (`skyCube`,
+`feenvmap_cube`), arrays, and a few front-end images with trailing bytes - and
+they differ by whole extra chains, which is how they were told apart. Each
+level untiles with the same micro-tile formula the base level does.
+
+`Texture::block_levels` returns every level as linear BC7 blocks, still
+compressed, and **refuses** anything its layout does not account for
+(`Error::ChainLayout`) or a corrupt block in *any* level
+(`Error::CorruptBlocks`, the base level's own guard extended down the chain,
+since a chain with a hole in it samples garbage at distance). On the
+corpus that is 0 corrupt chains among the 2D ones (the 55 `data08` and
+handful of base-archive refusals the first pass counted were cubemaps read as
+2D).
+`decode_bc7_level` decodes one level to RGBA8 for a GPU without block
+compression.
+
+**What a renderer does with it.** `oag_render::ModelTexture::from_gnf` keeps a
+chain of two or more levels on a block-aligned base as `Texels::Blocks` with
+`BlockFormat::Bc7` and uploads it as `Bc7RgbaUnorm`, the way HD's `.gtf` DXT
+chains already went. A single-level texture, or one with a base off the 4x4
+grid, still decodes to RGBA8 and gets the renderer's own box-filtered chain.
+One byte a texel on the CPU and on the GPU where the decoded picture is four,
+with the disc's chain in place of a synthesised one.
+
+**The one pixel difference this makes**, measured rather than assumed:
+`crates/texture/tests/omega_gnf_mips_ground_truth.rs` (`#[ignore]`d) decodes
+level 1 of every chain and compares it with a 2x2 box filter of the decoded
+base - what the renderer used to synthesise. Mean absolute difference per
+channel, in 8-bit units, over the archives: 1.04 (`data08`) to 2.75
+(`data03`) over the six archives that hold BC7 chains, worst single texture 28. The base level is bit-identical to
+`decode`'s (asserted). A Tech De Ra race still, RGBA8 path against blocks
+path, differs by a mean 0.88 of 255 with 0.7% of pixels over 16, at
+high-contrast edges: the authored mips, plus the GPU's own BC7 decode of the
+base. Both are the hardware's own doing, which is what the original ran.
+
 ## Implemented where
 
 `oag_texture::gnf`, since 2026-09-16; `Texture::decode` and the BC7 block

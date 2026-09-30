@@ -124,6 +124,7 @@ const TITLE: &Title = &Title {
         hud_font_role: "HUD",
         hud_small_font_role: Some("HUDSmall"),
         total_time_timed_modes_only: false,
+        kill_column: false,
         runtime: None,
     },
     // Unread here for the fourth and fifth time, and the same reason both

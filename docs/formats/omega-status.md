@@ -419,6 +419,61 @@ the base and ~5.6 KB in the patch. `oag_omega::EXTRA_CANDIDATES` therefore
 searches `data08`, `data07`, `data05` before `data00`-`data04`. Nobody watched
 a PS4 mount them.
 
+### What one race costs in memory
+
+2026-09-30, `lane/omega-memory`. Tech De Ra forward, `--race --hold cross
+--ticks 300`, a **debug** build, Linux, peak RSS from `getrusage` (the
+`--screenshot` run; the same binary that took 375 s and 9.6 GiB).
+
+| | RGBA8 decode (before) | BC7 blocks (after) |
+| --- | --- | --- |
+| **Peak RSS** | **9,605 MiB** | **3,360 MiB** |
+| Wall clock to the still | 375 s | 7 s |
+| Track albedo, CPU (461 textures) | 6,129 MiB | 2,043 MiB |
+| Track lightmaps, CPU (51 atlases) | 709 MiB | 236 MiB |
+| Sky (6), CPU | 384 MiB | 128 MiB |
+| Craft (3 teams), CPU, decoded once per team | 513 MiB each | 171 MiB each |
+| Track GPU, summed uploads incl. mips | 8,172 + 945 MiB | 2,043 + 236 MiB |
+| Craft GPU, 8 craft | 684 MiB x 8 | 171 MiB x 3 distinct (20 of 551 uploads reused) |
+| Track vertices + indices, CPU and GPU each | 188 + 27 MiB | unchanged |
+| Archive buffers held | none (`RssFile` 19 MiB) | none |
+
+Every texture in the circuit is BC7 (`Thin_1DThin`) and 4 bytes a texel decoded
+against 1 as the disc ships it, so the decode was the whole cost: the textures
+**are** 2,279 MiB of blocks and 6,838 MiB decoded, and the source-format size
+is what the upload now is. The biggest are 18 x 8192-square and 21 x
+4096-square files - the craft liveries are 8192-square (85 MiB with the chain)
+despite the `_1024` in their names.
+
+What was tested against each lead suspect: **(a) confirmed and fixed** - BC7
+passes through with the disc's own chain (`gnf.md`, "Mip chains"). **(b)
+confirmed and fixed** - the lightmaps are BC7 too, 709 to 236 MiB. **(c)
+confirmed** - a `Drawable` kept its `Model`, so every decoded texture lived for
+the race; `Model::release_texels` now drops them once uploaded, which frees
+2.3 GiB of blocks after the upload. **(d) refuted** - `RssFile` is 19 MiB; the
+PSARC readers seek. **(e) refuted as a large item** - the whole circuit's
+geometry is 215 MiB per copy, against 2 GiB of textures; a 2.38M-triangle
+circuit's parse costs about 380 MiB transient.
+
+**What the peak still is.** Every model's textures are decoded before the
+scene builds any of them, so the peak (3,360 MiB) is all of them at once,
+before the first upload frees anything. After the uploads RSS falls to 2,585
+MiB, and that is glibc holding freed pages: with
+`MALLOC_MMAP_THRESHOLD_=1048576` it is 1,167 MiB. Uploading each texture as
+it is decoded would take the peak to about the steady state; it needs the
+model loaders to see a device, which they do not today.
+
+**A picture difference, and it is the mips.** The still differs from the RGBA8
+one by a mean 0.88 of 255, 0.7% of pixels over 16, at high-contrast edges:
+the renderer now samples the disc's authored chain instead of a box-filtered
+one, and the GPU's BC7 decoder does the base level. The authored chain is what
+the PS4 sampled.
+
+Not Omega, but found here: **Pulse and HD peak at 8.4 and 8.2 GiB, and it is
+not their assets** - it is 128 full `Drawable`s per weapon model
+(`MAX_PROJECTILES`), 1,152 on Pulse and 896 on HD, each about 7 MiB. Omega
+builds no weapon pools. See the handover thread.
+
 ### What does not draw right, or at all
 
 - **Node-bound scenery is placed by the model's bind matrices, and nothing

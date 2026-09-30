@@ -176,13 +176,49 @@ impl Race {
             shield_blink_phase: self.view.shield_blink_timer,
             energy_bar_delay_fraction: self.view.energy_bar_delay_fraction,
             mode: self.sim.world.mode(),
-            // Not this struct's to know: it needs the campaign cell, which
-            // lives on `RaceStage`, one level up - `RaceStage::draw_hud`
-            // fills it in after this method returns, the same seam
+            // Not this struct's to know: it needs the campaign cell and the
+            // stored best, which live on `RaceStage`, one level up -
+            // `RaceStage::draw_hud` fills it in after this method returns,
+            // the same seam
             // `zone_stage`/`zone_next_in` already use above.
             time_trial_pace: None,
             head_to_head: self.head_to_head(),
+            kill_tags: self.kill_tags(),
+            kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
+                self.sim.eliminator_kill_target
+            } else {
+                0
+            },
         }
+    }
+
+    /// The Eliminator's kill column, top row first, in the order the original
+    /// draws it - see [`crate::hud::kill_tags`]. Empty in every other mode, and
+    /// for a slot with no team on record (a `Setup` built by hand).
+    fn kill_tags(&self) -> Vec<crate::hud::KillTag> {
+        let world = &self.sim.world;
+        if world.mode() != oag_race::Mode::Eliminator {
+            return Vec::new();
+        }
+        let slots: Vec<usize> = (0..world.ship_count as usize)
+            .filter(|&slot| world.ships[slot].active)
+            .collect();
+        let kills: Vec<u32> = slots
+            .iter()
+            .map(|&slot| world.ships[slot].standing.kills)
+            .collect();
+        let player = self.player_slot();
+        crate::hud::kill_tags::ranked(&kills)
+            .into_iter()
+            .filter_map(|row| {
+                let slot = slots[row];
+                Some(crate::hud::KillTag {
+                    team: self.view.slot_teams.get(slot)?.clone(),
+                    kills: kills[row],
+                    player: slot == player,
+                })
+            })
+            .collect()
     }
 
     /// Head2Head's gap readout: the unwrapped-progress difference between the

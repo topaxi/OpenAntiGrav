@@ -887,7 +887,7 @@ pub fn build(
     let mut view_of = |texture: &std::sync::Arc<crate::mesh::ModelTexture>| -> wgpu::TextureView {
         views
             .entry(std::sync::Arc::as_ptr(texture) as usize)
-            .or_insert_with(|| texture::upload(device, queue, texture, blocks))
+            .or_insert_with(|| texture::upload_shared(device, queue, texture, blocks))
             .clone()
     };
 
@@ -904,6 +904,8 @@ pub fn build(
         let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());
         texture_binds.push(bind(&albedo, &lightmap, label));
     }
+
+    texture::log_census(model, blocks);
 
     let placeholder = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("placeholder"),

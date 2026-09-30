@@ -429,6 +429,7 @@ impl Stage {
             shadows,
             shadow_hulls,
             campaign_2048_event,
+            track_stats,
             ghost_static,
             ripples,
             ..
@@ -457,6 +458,15 @@ impl Stage {
             track_entry.or(Some(title.race.track)),
             setup.mode.name(),
             &setup.class,
+        );
+        // What the HUD's `RECORD` readout chases, read once here so the
+        // standing best cannot move mid-race: the row this race will save to,
+        // as it stood when the race started.
+        let record_target = oag_game::hud::RecordTarget::new(
+            setup.mode,
+            &setup.class,
+            track_stats.as_ref(),
+            oag_game::records::load().get(&result_key),
         );
         let mut scene = race::Scene::new(
             gpu.device(),
@@ -577,6 +587,7 @@ impl Stage {
             scoreboard,
             countdown,
             result_key,
+            record_target,
             personal_best: None,
             result_saved: false,
             // Filled in by the caller once this stage is actually handed

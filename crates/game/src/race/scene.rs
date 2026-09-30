@@ -807,10 +807,11 @@ impl Scene {
         let msaa_color = msaa_color_texture(device, format, size, sample_count);
         let attachment_views = Attachments::new(&depth, &velocity, msaa_color.as_ref());
         let (shader_calls, shader_hits) = cache_scope.shader_counts();
+        let (texture_calls, texture_hits) = cache_scope.texture_counts();
         let build_cache = cache_scope.pipeline_counts();
         info!(
             "race scene build cache: shader {shader_hits}/{shader_calls} reused, pipeline \
-             {}/{} reused ({} distinct built)",
+             {}/{} reused ({} distinct built), texture upload {texture_hits}/{texture_calls} reused",
             build_cache.1, build_cache.0, build_cache.2
         );
         Ok(Self {
