@@ -24,6 +24,9 @@
 //! is put back, so the flash follows those rather than a state number this
 //! engine does not have. **Chosen, not measured:**
 //!
+//! - the player's own state-5 wash is not started, see the comment in
+//!   [`Race::advance_craft_flashes`]: the original's active camera is 168.7
+//!   units away by then (measured live), this port's is 11.6;
 //! - every [`Race::respawn`] of the player flashes kind 6, including the
 //!   invented off-track rescue, because a teleport is what the player sees;
 //! - the big explosion's flash is armed at the state 5 edge and fires
@@ -66,7 +69,16 @@ impl Race {
             let out_of_the_race_now =
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
             if out_of_the_race_now {
-                self.start_flash(oag_render::flash::BLAST, position);
+                // **Not the player's own.** Kind 0 falls off with distance
+                // from the *active* camera, and by state 5 the original has
+                // put the player in its destroy camera (`Camera_SetMode(5)`),
+                // measured live at 168.7 units from the wreck: a falloff of
+                // 0.25, so a faint tint. This port keeps the chase camera,
+                // 11.6 units away, where the same flash would be four times
+                // as strong. Skipped until that camera is ported.
+                if slot != player {
+                    self.start_flash(oag_render::flash::BLAST, position);
+                }
                 self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position));
             }
             if let Some((left, at)) = &mut self.view.craft_flashes.blowup[slot] {
