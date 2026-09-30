@@ -160,8 +160,15 @@ comment already relied on for the sun occlusion pass. A pipeline cached from
 one `build()` call's layouts is exactly as valid against a later call's bind
 groups as one built fresh for it would have been.
 
-`Stage::build_race_stage` (`crates/game/src/main/stage.rs`) opens the scope
-around the one `race::Scene::new` call and logs what it did:
+`race::Scene::new` opens the scope itself and logs what it did. It used to be
+`Stage::build_race_stage` that opened it around the call, which left the
+`--screenshot` path (`race/capture.rs`) with no scope at all: every one of its
+~1,200 drawables (1,152 of them the weapon pools, 128 per model) compiled its
+own pipelines, about 7 MiB of resident memory each, and a headless Pulse or HD
+race peaked at 8.4 GiB where the same scene with the scope open peaks at about
+0.58 GiB. With the scope inside `Scene::new` no caller can forget it, and
+`race::tests::scene_build` fails when a pool of identical drawables stops
+sharing its pipelines:
 
 ```
 race scene build cache: shader 1196/1197 reused, pipeline 9806/9859 reused (53 distinct built)
