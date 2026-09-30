@@ -1,0 +1,148 @@
+//! What building a [`Scene`] costs on the GPU side, as opposed to what it draws.
+
+use super::*;
+use oag_render::mesh::{Bounds, DrawCall, GpuVertex};
+
+fn vertex(position: [f32; 3]) -> GpuVertex {
+    GpuVertex {
+        position,
+        normal: [0.0, 0.0, 1.0],
+        colour: [1.0; 4],
+        texcoord: [0.0; 2],
+        lightmap_texcoord: [0.0; 2],
+        lit: 0.0,
+        anim: 0,
+        xform: 0,
+        sun_mask: 1.0,
+        slots: mesh::slots::DEFAULT,
+        specular_exponent: mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
+    }
+}
+
+/// One opaque triangle: enough geometry that every pool builds a drawable.
+fn triangle() -> Model {
+    Model {
+        vertices: vec![
+            vertex([-1.0, 0.0, 0.0]),
+            vertex([1.0, 0.0, 0.0]),
+            vertex([0.0, 1.0, 0.0]),
+        ],
+        indices: vec![0, 1, 2],
+        draws: vec![DrawCall {
+            moving: false,
+            blend: None,
+            blend_state: None,
+            layer: oag_vex::vex::LAYER_DEFAULT,
+            culled: false,
+            range: 0..3,
+            texture: None,
+            bounds: Bounds {
+                centre: [0.0; 3],
+                radius: 1.5,
+            },
+            node: None,
+            chunk: None,
+            alpha_test_ref: None,
+        }],
+        ..model(0, 0)
+    }
+}
+
+fn livery() -> Livery {
+    Livery {
+        team: "Test".to_string(),
+        hull: triangle(),
+        nozzle: None,
+        boost: None,
+        flare: None,
+        shield: None,
+        collision_fx: Vec::new(),
+        absorb: Vec::new(),
+        absorb_overlay: None,
+        leach_overlay: None,
+        absorb_shell: None,
+        boost_uv: None,
+        engine_light: None,
+        cannon_flash: [None, None],
+    }
+}
+
+/// **Every drawable in a weapon pool shares one pipeline set.**
+///
+/// A pool is `MAX_PROJECTILES` drawables of one model, and each asks
+/// `mesh_render::build` for the same pipelines. With the build cache open the
+/// first compiles them and the other 127 reuse them; without it each compiles
+/// its own, which measured about 7 MiB of resident memory per drawable - 8.4 GiB
+/// for a Pulse race, on the `--screenshot` path that never opened the cache.
+/// Fails if `Scene::new` stops opening it, whichever caller it comes from.
+#[test]
+fn a_weapon_pool_of_drawables_compiles_its_pipelines_once() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(
+        &mesh_render::device_descriptor("scene build test", &adapter),
+    )) else {
+        eprintln!("no GPU device: skipping");
+        return;
+    };
+    let scene = Scene::new(
+        &device,
+        &queue,
+        triangle(),
+        &[livery()],
+        None,
+        None,
+        None,
+        None,
+        None,
+        true,
+        Some(triangle()),
+        Some(triangle()),
+        Some(triangle()),
+        Some(triangle()),
+        Default::default(),
+        Default::default(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Default::default(),
+        None,
+        wgpu::TextureFormat::Rgba8Unorm,
+        (64, 64),
+        Anisotropy::Off,
+        false,
+        None,
+        oag_display::display::Msaa::Off,
+        Vec::new(),
+        mesh_render::Light::stand_in(),
+        None,
+        None,
+        None,
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("the scene builds");
+
+    let (asked, reused, distinct) = scene.build_cache();
+    let drawables = 4 * oag_gameplay::projectile::MAX_PROJECTILES;
+    assert!(
+        asked as usize >= drawables,
+        "{asked} pipeline requests for {drawables}+ drawables: the cache was not open"
+    );
+    assert!(
+        distinct < 100,
+        "{distinct} distinct pipelines for identical models: the cache is not sharing"
+    );
+    assert!(
+        reused as usize >= drawables,
+        "only {reused} of {asked} pipeline requests reused one"
+    );
+}
