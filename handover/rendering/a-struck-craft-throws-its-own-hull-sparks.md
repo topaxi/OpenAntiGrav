@@ -2,7 +2,7 @@
 categories: [gameplay]
 ---
 
-# A struck craft throws its own hull sparks; they still read weaker than the original's
+# A struck craft throws its own hull sparks; they read within 10 % of the original's
 
 2026-09-24. The user saw it in the original: a craft taking Cannon rounds
 shows sparks and smoke. Ours showed nothing on the struck craft.
@@ -34,45 +34,33 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Open
 
-- **Closed 2026-09-30 to 1.6x on the hull and 2.6x on the lower half, from
-  6.5x and 9x.** The gap was two sprite layers nobody parsed. A live
-  `ParticleSystem_DrawParticle` log after a hit named `shazam` (white, half-size
-  9.36, six ticks) and `glow` (orange, 0.75 to 4.8, 40 ticks) at the two struck
-  locators, in records `WO_SHIP_COLL_SPARK_DAMAGE.POB` carries and
-  `pob::emitters` never reached: **sprite templates**, one particle per record
-  the moment an emitter instance exists (`ParticleSystem_InitInstance`
-  `0x088f58a4`, list at `+0x9a8`). Now parsed (`oag_vex::pob::initial`) and
-  played (`oag_render::psys::template`), Pulse PSP only; layout and corpus in
-  [pob.md](../../docs/formats/pob.md), "The sprite templates". 28 of them on 20
-  PSP effects were never drawn: the Plasma's 36-unit `PLASMA_GLOW`, the Mine's
-  `ring` and `BANG`, the Missile's `glow` and `booga`, the Quake's `shazzam`,
-  the Shuriken's, the ship explosions' and the absorb's `glow`. Their looks moved
-  with this; Plasma, Mine, the collision sparks and the Quake were re-shot against
-  the original (below), the others were not.
-- **Measured** (struck minus unstruck mean luminance, the player stationary on
-  the grid after GO, a Cannon-tagged hit every 6 frames from frame 1; original
-  on PPSSPP, ours from a scratch hook `direct_hit` + `throw_hit_sparks`):
-
-  | region, frames 2-16 after the first hit | original | ours before | ours now |
-  | --- | ---: | ---: | ---: |
-  | hull box, first hit | +100 | +14 | +103 |
-  | hull box, mean over the burst | +79 | +12 | +53 |
-  | lower half, first hit | +55 | +3 | +41 |
-  | lower half, mean over the burst | +45 | +5 | +17 |
-
-  Frames: `data/scratch/pulse-impact-visuals/ours/sstruck-montage.png` (ours),
-  `frames/hit-orig-struck.png` (original). **What is left**, none decoded:
-  - the later hits: the original's second and third hit (one locator each, the
-    others in the 0.8 s gate) wash as hard as the first; ours ~2.6x weaker.
-    The locator picks are random on both sides (`ShipCollisionFx_Trigger` calls
-    logged live: hit 1 locators 3,4; hit 2 locator 2; hit 3 locator 1, and so
-    on), so a per-locator comparison needs the same picks;
-  - the glow mask is **ruled out** (EDRAM alpha read on the software renderer
-    at frames 6, 8, 10 stamps nothing under the sparks);
-  - `Camera_ArmShake` on a weapon hit is now armed (`Ship_Damage`'s
-    `Camera_ArmShake(0.6, 0.6, camera, 1)`, player only), which moves no
-    luminance but the view.
-  - The smoke is emitted and matches the file, as before.
+- **The brightness gap is closed to within 10 % (2026-09-30).** Measured per
+  locator against the original with the same forced picks, the same camera view
+  and the shake and bloom taken out of both: original / ours `0.89-0.93` on
+  every one of the six locators, `0.81-0.95` per hit over six hits six frames
+  apart. Three causes, in [hull-sparks.md](../../docs/rendering/hull-sparks.md):
+  the earlier comparison crossed `OPT_CLOSE` and `OPT_FAR`; a template's first
+  draw was a tick late; the template sprite is a stretched, rolling quad
+  (`+0xf0` aspect `1.5`/`1.7`, the keyed roll channel), which the parser had
+  set aside as constant. The earlier "1.6x / 2.6x" numbers are retracted, and
+  so are the earlier lane's Plasma, Mine, Quake and collision-spark look
+  comparisons, which were shot on an `OPT_CLOSE` profile against the port's
+  `far`. The Mine's `BANG` stretch law was pinned live after this change (a bar
+  up to 49 units wide, matched); the Mine's and Plasma's whole-frame wash still
+  reads whiter than the original's and is not re-measured.
+  Ours now reads 7-11 % *brighter* (up to 20 % on the sixth overlapping hit);
+  not decoded.
+- **An emitter's own particles are not rotated or stretched.** 45 of the 76 PSP
+  emitters draw as class 3 (`ParticleSystem_DrawRotatedSprite`), 23 author a
+  roll (`WO_SHIP_COLL_SPARK_DAMAGE`'s smoke root: random `0..0.105` rad per
+  tick). The law is read and measured on templates only; an emitter's flag bits
+  live at a different word and what feeds its derived `+0xf0` is unread. First
+  step: log `particle+0x5c`/`+0x64` of a live emitter particle.
+- **A particle's age at its first draw.** The original samples a particle before
+  it ages, and a template is drawn at age 0; ours now does that for templates
+  only. An emitter's particle is emitted and aged in one tick in `psys`, so it
+  draws one tick *older* than the original would if the same law holds. Not
+  measured for emitters.
 - **Wall sparks and hit sparks keep separate cooldowns.** The original's
   0.8 s gate lives on the locator's `ShipCollisionFx` instance, so the two
   share it. Ours keeps two separate gates, and wall sparks remain the
@@ -97,15 +85,18 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Next Steps
 
-- Capture the original and ours with the same locator picks (force them in a
-  scratch hook, and post on PPSSPP through the one-locator path
-  `ShipCollisionFx_Trigger`'s `a0` names) and compare per locator; the
-  remaining 2.6x on later hits is the first place to look.
+- Emitter rotation: capture a live emitter particle's `+0x5c` roll and `+0x64`
+  aspect (the smoke root of `WO_SHIP_COLL_SPARK_DAMAGE`, a Rocket's
+  `SMOKERING`), read how the emitter's flag word becomes the derived
+  `res+0x884`, then play the roll on the 23 emitters that author one.
 - Re-shoot the Missile, Shuriken, absorb and ship-explosion looks against the
-  original now that their templates play; only Plasma, Mine, the collision
-  sparks and the Quake were compared.
-- Read the templates' unread pieces: the two constant channels at `+0xf0` and
-  `+0x2b0`, the roll channel (unplayed), and templates on child emitters
+  original now that their templates are stretched and rolled: only the
+  collision sparks were compared per locator.
+- The 7-11 % surplus: compare a single locator's sprite alone (the original's
+  `ParticleSystem_DrawParticle` skipped for everything but it) against ours
+  at a frame where nothing overlaps.
+- Read the `+0x2b0` constant block's consumer on a multi-cell template (none in
+  the corpus), and the templates on child emitters
   (`Effect::skipped_templates`; zero on the collision sparks).
 - HD: find its `Ship_Damage` (the `uWeaponDamageReceived` telemetry string is
   a lead), then the `WO_DAMAGE_*` consumer.
@@ -115,4 +106,4 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-30: the gap was 28 unparsed sprite templates (`shazam`, `glow`, ...) - now parsed and played, hull box 1.6x weaker from 6.5x; camera shake armed on a weapon hit. 2026-09-24: `Ship_Damage`'s weapon branch throws `WO_SHIP_COLL_SPARK_DAMAGE` (LeachBeam: its own variant) on one or two random hull locators per landed hit, severity 2.4, 0.8 s per locator; built as `race::hit_sparks`, Pulse only. The streak strips and atlas advance landed and did not close the bloom gap (rays became orange wedge heads); next is a matched struck/unstruck capture off the light strip. HD's Cannon sparks are read, not built.
+2026-09-30: the gap was 28 unparsed sprite templates (`shazam`, `glow`, ...) - now parsed and played; then matched per locator against the original (same picks, same camera view) and closed to within 10 %: a one-tick-late first draw and a square quad where the template is a stretched, rolling one (`+0xf0` aspect, roll channel); camera shake armed on a weapon hit. 2026-09-24: `Ship_Damage`'s weapon branch throws `WO_SHIP_COLL_SPARK_DAMAGE` (LeachBeam: its own variant) on one or two random hull locators per landed hit, severity 2.4, 0.8 s per locator; built as `race::hit_sparks`, Pulse only. The streak strips and atlas advance landed and did not close the bloom gap (rays became orange wedge heads); next is a matched struck/unstruck capture off the light strip. HD's Cannon sparks are read, not built.

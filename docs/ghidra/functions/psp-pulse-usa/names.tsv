@@ -1163,3 +1163,4 @@
 0x088f4790	function	ParticleSystem_StopAndClear	78	particle-system.md
 0x0890db54	function	Mesh_DrawExtraPassBatches	85	mesh-draw.md
 0x0890d508	function	Mesh_CompileExtraPass	85	mesh-draw.md
+0x088f7e64	function	ParticleSystem_UpdateParticleFields	85	particle-system.md

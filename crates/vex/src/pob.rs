@@ -660,6 +660,10 @@ pub struct Emitter {
     pub alpha: Channel,
     /// `+0x698`: billboard roll speed, radians per tick.
     pub rotation_speed: Channel,
+    /// A sprite template's `+0xf0` block: the sprite's stretch, which the
+    /// draw reads as its aspect - see [`initial`]. `None` on an emitter
+    /// record, whose derived record is not read here.
+    pub stretch: Option<Channel>,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -818,6 +822,7 @@ fn emitter_placeholder() -> Emitter {
         size: channel(),
         alpha: channel(),
         rotation_speed: channel(),
+        stretch: None,
         frame_rate: channel(),
         emission_scale: channel(),
         playback_rate: 0.0,
@@ -896,6 +901,7 @@ fn parse_emitter(
         size: parse_channel(record, order, 0x4d8)?,
         alpha: parse_channel(record, order, 0x5b8)?,
         rotation_speed: parse_channel(record, order, 0x698)?,
+        stretch: None,
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),
