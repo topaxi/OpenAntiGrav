@@ -219,24 +219,33 @@ use oag_ai::probe::{self, Scenario};
 ///   driver code changed: every row moves because the AI flies the player's
 ///   physics and airbrakes into corners, so the same inputs now carry it
 ///   somewhere else.
+/// - **All three rows regenerated 2026-09-30, for `Line::curvature`'s split of
+///   a pitch change** (`bend_angle`: yaw plus the *convex* pitch, a concave one
+///   reading straight). This scenario's line is flat, so the curvature spread
+///   it reports is unchanged (`0.000255..0.020490` and `0.000030..0.026295`) and
+///   no corner moved: the rows move because `bend_angle` computes the yaw from
+///   the chords flattened onto the ground plane, which differs from the plain
+///   chord angle in the last bit, and one bit in a speed target is one bit in
+///   the hash. No transcendental was added - `oag_core::math::acos` is the
+///   only one it calls.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0x008d_efff_a9dd_160c,
-        0xde4d_7f1d_28b7_d38f,
+        0xb27b_df5d_9fd5_c28d,
+        0x74b5_77e2_abbc_dc2d,
     ),
     (
         600,
         Scenario::Field,
-        0x13ef_e6fc_2809_dcfa,
-        0x9b35_d3b1_43b8_8c15,
+        0x5249_34d8_34dd_e4e6,
+        0xfac7_6d7b_763e_551e,
     ),
     (
         1_800,
         Scenario::Field,
-        0xe3f0_ec70_da85_aa35,
-        0x53db_00e2_bd7a_d6fc,
+        0x9548_b23b_b132_b7b7,
+        0xb7da_882b_82c1_cdb7,
     ),
 ];
 
