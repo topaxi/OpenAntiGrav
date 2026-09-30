@@ -124,6 +124,44 @@ about 256 units (whole frame 16.74 to 16.56, 74 pixels differing by more than
 1 %). That gap is the level 1 the hardware rule selects and the emulator does
 not; whether real hardware shows it is still unmeasured.
 
+**TEXTURE DETAIL** (`[render_profiles.<title>] texture_detail`, `--texture-detail`,
+the graphics page's row beside MODEL DETAIL) is one multiplier on that law, as
+levels: `original` (default) is the recovered slope law exactly; `high` doubles
+the depth of every level step (the level shifted by -1); `maximum` never steps
+(level 0 at every depth). `high` and `maximum` are **chosen, not measured**. It is
+`Fog.texlod_shift` in the scene uniform (`mesh_render::TextureDetail::level_shift`,
+zero for `original` and for any buffer nothing writes), added to the level in
+`mesh.wgsl`, and the race hands the preset over every frame, so the row applies
+live. Proof: `psp_slope_lod.rs` reads the level each preset selects at depths
+64 to 100,000 (a preset that stops reaching the shader fails its own test), and
+`texture_detail_ground_truth.rs` runs the binary per preset on the Talon straight
+and asserts the three pictures differ pairwise.
+
+Talon long straight (`--pose -297.96,-50.5,-172.83`, `--ticks 1`, 480x272),
+luma Laplacian standard deviation, same metric as above (`magick ... -colorspace
+Gray -define convolve:scale='!' -morphology Convolve Laplacian:0`, sd x 255):
+
+| Region | original | high | maximum (= the old base level) |
+| --- | --- | --- | --- |
+| Whole frame | 16.56 | 16.70 | 16.73 |
+| Strip 120x40+120+80 | 21.37 | 22.49 | 22.80 |
+| Strip 120x40+120+0 | 32.52 | 32.92 | 32.92 |
+
+`original` is softest and `maximum` sharpest, and the whole frame reproduces the
+previous pass's 16.56 (slope law) and 16.74 (base level). The strips are the two
+with the largest change; the previous pass's own boxes were not recorded, so its
+24.51/22.77 and 28.36/26.40 are not directly comparable. Only 74 pixels differ
+between `original` and `maximum` at this size: the far field is small at 480x272.
+
+**`--anisotropy` is now nearly inert on a PSP `.vex` model.** The slope law
+samples with `textureSampleLevel`, an explicit level, and a GPU takes no
+anisotropic footprint from one. The same pose with `--anisotropy off` against
+`16x`: 602 pixels differ over 1 % with the derivative path (`textureSample` over
+the same chain), 5.6 with the slope law. Left as it is: the original has no
+anisotropy, and the derivative path cannot honour the recovered level. Getting
+both would mean `textureSampleGrad` with gradients scaled to the law's level; not
+attempted.
+
 **A consequence to watch**: a coarse authored level of a cutout texture has alpha
 above the reference nearly everywhere, so a cutout batch (trees, fences, pad
 glows) reads fatter at depth than it did with a base level. Wipeout Pure's
