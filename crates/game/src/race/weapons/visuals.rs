@@ -66,9 +66,11 @@ impl Race {
     /// toward the shooter one chain point a tick, which is where
     /// `LeachBeam_Advance` writes the effect's own matrix. The previous
     /// instance is detached at each re-spawn so its particles finish where
-    /// they are; the original hands its handle to `FUN_088f3298`, whose effect
-    /// on live particles was not read, so the detach is **chosen, not
-    /// measured**.
+    /// they are. The original hands its handle to `Psys_ReleaseHandle`
+    /// (`0x088f3298`), which **kills** it - the manager frees the instance and
+    /// its live particles on its next tick (read 2026-09-30, see
+    /// `particle-system.md`) - so the detach is **chosen, not measured**, and
+    /// differs from the original until `psys::Stage` has a kill.
     pub(in crate::race) fn advance_leach_beam_ribbon(&mut self) {
         let locked = self
             .sim
