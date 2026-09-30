@@ -104,18 +104,28 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
   per-team persistent total's own writer, `Loyalty_AccumulateTotal`
   (`0x08807884`), is a plain capped accumulate (`+= award`, ceiling
   `100000`) - a drawing pass now has both laws, not just the display field.
-- **The per-lap table's third column** (`docs/formats/endrace-screens.md`'s
-  own "the third column does not" section) - a real, stored per-lap 16-bit
-  field, meaning still unresolved. Candidates ruled out: a finishing
-  position (exceeds the 8-craft field), the `boostimg` icon (unconditionally
-  hidden on every single-player mode path decompiled), and - new
-  2026-09-14, from a second live race - **weapon/pickup counts** (both
-  captures are `Weapons="off"` cells, so neither could carry one). A
-  speedup/boost-pad count is the leading remaining candidate, unconfirmed.
-- **The Tournament/Zone/Elimination/split-screen variants of `EndRace
-  Results`'s own populate** (`FUN_088dad90`/`FUN_088db574`/`FUN_088db1ec`/
-  `FUN_088d9588`) were not opened - `Line2`..`Line8` and `boostimg`'s real
-  firing condition likely close once one of these is read.
+- **The per-lap table's third column** (`docs/formats/endrace-screens.md`'s "third
+  column" section) - a real, stored per-lap 16-bit field, meaning still unresolved.
+  **2026-09-30: the column is headed by the `boostimg` icon**, which the earlier
+  passes had misread as hidden (bit `0x4` is the *visible* bit - the correction is on
+  the ghidra page). That icon now draws over an empty column. Candidates ruled out: a
+  finishing position (exceeds the 8-craft field) and weapon/pickup counts (both captures
+  are `Weapons="off"` cells). A speedup/boost-pad count fits the icon and the data
+  and is unconfirmed. Next step, not another correlation pass: a live write watchpoint
+  on `craft+0x994 + lap*0x10` (`craft = *(*(0x08b317b4)+0x2c0)`), placing the craft on
+  a speedup pad with `psp-drive.py place`.
+- ~~**The Tournament/Zone/Elimination/split-screen variants of `EndRace
+  Results`'s own populate**~~ **Closed 2026-09-30**: all four are read, the
+  Eliminator table and the sort behind it are confirmed on a live PPSSPP frame, and
+  both Zone and Eliminator now draw (`oag_ui::endrace::modes`). `FUN_088d9588` is the
+  *network-play* table (`g_game_mode > 0xd`), not split-screen. `boostimg` is shown by
+  the lap table only; `Line2`..`Line8` are never filled in any mode.
+  **Still open inside them**: Zone's `Laps cleared` and `Perfect laps` (what steps
+  `craft+0x911` bit 0 and `craft+0x860 & 0x200000`; both draw a label and no value);
+  who writes the `+0x140` word that would print `DNF` on the Eliminator table (it read
+  `0` on all eight live records); and a **Zone live frame** - Zone is greyed on a
+  fresh profile and a forced `g_game_mode = 6` hangs the loader, so that table is
+  decompile-only.
 - **The generic confirm-swallow-on-a-locked-tile mechanism** - found while
   reading these screens (`StateMachine_EvaluateRedirect`,
   `0x088c8798`, ruled out as the predicate itself), and narrowed further
@@ -183,6 +193,19 @@ Results` draws correctly over a real, just-finished race. What is left:
   into `race::Options::team`; now `Session::launch_campaign_race` does, and
   a live Pulse walk drew `FEISAR LOYALTY 45 POINTS` and banked it. Same
   Open section.
+- **2026-09-30: Zone and Eliminator results draw**, and the lap table is corrected -
+  only the rows a mode fills show, `boostimg` is the third column's header icon, the
+  highlight sits at `93 + 20 * (row - 1)`, and per-craft team ids resolve to display
+  names (the folder-id/display-name gap `tournament.md` recorded is closed for both
+  per-craft tables). Judged live against the original's Eliminator frame; the Zone
+  numbers on `--menu-page endrace-results-zone` are chosen. **A shared-parser quirk was
+  routed around, not fixed**: `Screens::collect_widgets` places a colour-only
+  `<Image OffsetY=...>` wrapper without its own `OffsetY` (eight `tablebg` backings
+  landed on the top of the screen). If another screen draws a src-less wrapper with an
+  offset it has the same fault. **The Eliminator HUD is a separate gap seen on the same
+  frame**: the original draws `KILLS (5)` and a per-team kill list top-right, which
+  this build's `Elimination_HUD.xml` draw does not (the widgets are unread on every
+  layout). Nothing of it is wired.
 - Decide, once `data/images/pulse-psp-usa.chd`'s save/ghost system (if any)
   exists in this project, whether `EndRace Menu`'s ghost comparison is worth
   reproducing at all versus staying results-only, the way `RECORDS`'s own

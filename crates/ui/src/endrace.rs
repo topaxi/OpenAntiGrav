@@ -28,7 +28,7 @@
 //!   direction is settled (nonzero shows the icon) but this build keeps no per-lap
 //!   perfect flag. Eliminator and Zone races have tables of their own,
 //!   [`EliminationResults`] and [`ZoneResults`], and a Tournament leg's is
-//!   [`TournamentResults`]; see [`table`] for how a mode's populate shows only the
+//!   [`TournamentResults`]; see the `table` module for how a mode's populate shows only the
 //!   rows it fills.
 //! - **`EndRace Rewards`**: the medal-award phrase and, for a no-medal
 //!   campaign race, the disc's own hex-dash glyph - the one case this

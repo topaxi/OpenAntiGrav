@@ -163,6 +163,25 @@ endrace-results-zone` draws **chosen** numbers):
 | 6 `ER_ZONE_SCORE` | label and `RaceState::score` | `+0x1a1c`. This build's own score omits the 2000-point row-4 bonus, so it can read low |
 | `tablehighlight` | No | `OnEnter` hides it after the populate |
 
+**Live, 2026-09-30** (Xvfb `:92`, software Vulkan, `pulse-psp-usa.chd`, isolated
+`XDG_CONFIG_HOME`, keyboard and pointer through the real front end - `RACEBOX`, a mode
+value, `START`, track, team). **Zone**: a real run steered into a wall - `Zone
+session complete!`, `Total zones cleared: 26`, `Perfect zones: 16`, both lap rows
+labelled and blank, `Top speed: 847 KM/H`, `Zone score: 24014`, no header bar - then
+the flow carried on to `EndRace Menu`. **Eliminator**: the field is 8 craft and the
+kill count is 10, which the AI did not reach in 8 game-minutes with the player
+parked (the original's did with 5 in 85 s), so the finish was reached by a
+**temporary local change of `ELIMINATOR_KILL_TARGET_DEFAULT` to 0**, reverted and
+not committed. It ended the race on tick 0 and showed the table over the real race
+scene: `Eliminator complete -  1st place` (an all-zero field, the player first on the
+tie), `Deaths: | Team | Kills`, eight rows with **display names** (`AG Systems`, `EG-X`,
+`Goteki 45`), the player's row highlighted; `Confirm` reached `EndRace Menu`, and a
+**pointer click on `VIEW RESULTS AGAIN`** brought the table back. The numbers in a
+populated Eliminator table are therefore covered by the unit tests and the
+`--menu-page endrace-results-eliminator` still, laid against the original's frame, not
+by a live race with kills in it. The original's frame for comparison:
+`data/scratch/pulse-endrace-modes/shots/original-eliminator-results.png` (gitignored).
+
 Both tables' cells draw in the upper-case front-end font, as the lap table's already do,
 where the frames show the mixed-case default face - the shared-table font gap
 `tournament.md` records, not a fault of these.
