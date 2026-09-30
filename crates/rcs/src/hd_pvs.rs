@@ -86,7 +86,7 @@
 //! layout: [`Dialect::Psp2`]. It is HD's layout with the byte order swapped
 //! and:
 //!
-//! - header word 2 is **`1`**, not `16` (all 42 Omega files, and every Vita
+//! - header word 2 is **`1`**, not `16` (all 44 Omega files, and every Vita
 //!   file read);
 //! - **the bitmap is `ceil(chunks / 8)` bytes, with no spare byte** - the
 //!   Omega files whose chunk count divides by eight (`mall/trackzone.pvs`,
@@ -102,12 +102,16 @@
 //! submeshes). Bit `k` is mesh object `k` in the model's own node-table
 //! order, LSB first, the same rule as HD; the ground truth
 //! (`tests/psp2_pvs_ground_truth.rs`) repeats the near/far measurement above
-//! against each mesh object's own bounds to show it. The cell positions are
+//! against each mesh object's own bounds, and shows the correlation with
+//! nearness peaks at index offset zero on all 44 Omega files. **Mesh objects
+//! a node places are left out of that test** (their bounds are in node space),
+//! and need no proof: their bits are set in every cell, so the PVS never culls
+//! one (1,623 of 1,623 on `tech_de_ra`). The cell positions are
 //! corroborated by a second source: the `.pvsxml` beside each file (a
 //! text-authored `pvsSet` list of `origin` points) is usually shorter than
 //! the binary and not always in its order, but **every origin it carries is
-//! one of the binary's cell records** (34 of Omega's 42 files have one; the
-//! eight zone-mode `trackzone.pvs` files do not).
+//! one of the binary's cell records** (34 of Omega's 44 files have one; the
+//! ten zone-mode `trackzone.pvs` files do not).
 //!
 //! [`Pvs::parse_detect`] tells the two apart from header word 2 - which is
 //! `16` big-endian or `1` little-endian, and cannot be both - rather than
@@ -141,7 +145,7 @@ const CELL_SIZE: usize = 16;
 /// misparsed table.
 const EXPECTED_STRIDE_WORD: u32 = CELLS_AT as u32;
 
-/// The value header word 2 carries on every [`Dialect::Psp2`] file: all 42 on
+/// The value header word 2 carries on every [`Dialect::Psp2`] file: all 44 on
 /// Omega's archives and the Vita's `track.pvs` read.
 const PSP2_STRIDE_WORD: u32 = 1;
 

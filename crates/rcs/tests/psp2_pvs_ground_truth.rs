@@ -374,8 +374,8 @@ fn check(
         // origins beside 675 cells), and not always in its order. So it is a
         // second source for the positions it does carry - each origin is one
         // of the binary's cell records - and not for how many cells there are.
-        // Zone-mode `trackzone.pvs` files have no `.pvsxml`, and the Vita's
-        // base game authors no `<origin>` at all.
+        // The ten zone-mode `trackzone.pvs` files have no `.pvsxml`, and of the
+        // Vita's 28 only its DLC1 circuits (8 files) carry `<origin>`s.
         if let Some((bad, origins)) = m.origin_disagreements.filter(|&(_, n)| n > 0) {
             assert_eq!(
                 bad, 0,

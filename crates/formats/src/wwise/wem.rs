@@ -10,36 +10,38 @@
 //!
 //! `fmt ` is 36 bytes, `WAVEFORMATEX` plus 18 bytes of extra data, and its
 //! `wFormatTag` is **`0xFFFC`** on every ATRAC9 file - Wwise's own tag, not a
-//! registered one. Four independent statements agree that it is Sony's ATRAC9
-//! and not something Wwise-specific:
+//! registered one: all 1,448 loose files and 1,956 (`data00`) or 2,080
+//! (`data08`) embedded ones. The other two embedded files are PCM, tag `0xFFFE`.
+//! Four independent things agree that it is Sony's ATRAC9 and not something
+//! Wwise-specific:
 //!
-//! 1. **The bank says so.** A sound's `HIRC` source carries a plugin id whose
-//!    class is *codec* and whose number is 12, on all 6,858 (`data00`) and
-//!    7,510 (`data08`) sounds whose media has tag `0xFFFC`. Wwise's codec
-//!    numbering has `AKCODECID_ATRAC9` at 12 (recalled from the SDK's header
-//!    rather than found on the disc; the three statements below do not depend
-//!    on it).
-//! 2. **The extra data contains a valid ATRAC9 configuration word.** Bytes
+//! 1. **The extra data contains a valid ATRAC9 configuration word.** Bytes
 //!    6-9 of it are four bytes that open `0xFE` - ATRAC9's sync byte - then a
-//!    4-bit sample-rate index (7, which is 48 kHz), a 3-bit channel-config
-//!    index, a validation bit (0), an 11-bit `frame bytes - 1` and a 2-bit
-//!    superframe index. Over the 400 files sampled: sync `0xFE` 400 of 400;
-//!    rate index 7 and `fmt` rate 48,000, 400; validation bit clear, 400;
-//!    **`frame bytes` equals `nBlockAlign`, 400**; superframe index 0 (one
-//!    frame per block) 400; and the channel-config index tracks the channel
-//!    count - index 2 is 2 channels (371 files), 5 is 4 (24), 4 is 8 (5) -
-//!    which is LibAtrac9's own table. Four unrelated fields agreeing with
-//!    `fmt` is not a coincidence a different codec would produce.
-//! 3. **Two independent ATRAC9 decoders accept every frame and agree.**
-//!    FFmpeg's decoder decodes each of the 60 files tried with `-xerror`,
-//!    two, four and eight channels, with no error, where random bytes in the
+//!    4-bit sample-rate index, a 3-bit channel-config index, a validation bit,
+//!    an 11-bit `frame bytes - 1` and a 2-bit superframe index. On **every**
+//!    ATRAC9 `.wem` in both archives: sync `0xFE`; validation bit 0; superframe
+//!    index 0 (one frame per block); rate index 7 with `fmt ` at 48 kHz or 4
+//!    with `fmt ` at 24 kHz; **frame bytes equals `nBlockAlign`**; and the
+//!    channel-config index tracks the channel count - 0 mono, 2 stereo, 5 four
+//!    channels, 3 six, 4 eight, which is LibAtrac9's own table. Five fields
+//!    that must agree with `fmt ` and with each other, on 4,000-odd files.
+//! 2. **The frame arithmetic is ATRAC9's.** The extra data's first word is the
+//!    samples per frame (256 at 48 kHz, 128 at 24 kHz) and its last the encoder
+//!    delay, one frame's worth; `frames * frame_samples - delay - samples` is
+//!    between 0 and one frame on every file.
+//! 3. **Independent ATRAC9 decoders accept the data.** FFmpeg's decodes all 400
+//!    loose `data00` files sampled (371 stereo, 24 four-channel, 5
+//!    eight-channel) with `-xerror` and no message, where random bytes in the
 //!    same container stop at "Invalid scalefactor coding mode!". The pure-Rust
-//!    port of LibAtrac9 (`atrac9dec`) and FFmpeg produce the same PCM to within
-//!    one least-significant bit on a stereo voice clip (99.75% of samples
-//!    identical), **up to polarity**: one is the negation of the other.
-//! 4. **The frame size is ATRAC9's.** 256 samples a frame at 48 kHz, and the
-//!    file's sample count is `frames * 256 - delay - pad` with `0 <= pad <
-//!    256` on all 400.
+//!    port of LibAtrac9 (`atrac9dec`) decodes every mono and stereo file, and
+//!    agrees with FFmpeg to within one least-significant bit on 59 of 59 mono
+//!    and stereo files sampled - **up to polarity**: one is the negation of the
+//!    other. **It refuses every four-, six- and eight-channel file** (58 of
+//!    them in each archive), so items 1 and 2 are what identifies those, and
+//!    FFmpeg's decode of the four- and eight-channel ones.
+//! 4. **The bank says so** (recalled, not read off the disc). Every sound whose
+//!    media is `0xFFFC` carries a codec plugin of number 12, and Wwise's codec
+//!    numbering has `AKCODECID_ATRAC9` at 12; items 1-3 do not depend on it.
 //!
 //! # The extra data
 //!
@@ -53,8 +55,8 @@
 //!
 //! The channel config is Wwise's `AkChannelConfig`: the low byte is the
 //! channel count, bits 8-11 the config type (1, standard) and the rest the
-//! speaker mask - `0x3` for stereo, `0x603` for four channels (front and
-//! side), `0x63f` for eight (7.1).
+//! speaker mask - `0x4` mono, `0x3` stereo, `0x603` four channels (front and
+//! side), `0x60f` six (5.1 with side surrounds), `0x63f` eight (7.1).
 //!
 //! # Not the RIFF size
 //!

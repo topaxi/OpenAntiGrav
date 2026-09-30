@@ -420,15 +420,62 @@ a PS4 mount them.
   baked shading where they were flat. **The purple crystalline kerbs are not
   a defect of this title's reader**: HD's own render of the same circuit has
   them. Load time is about 19 s longer in a debug build.
-- **`track.final.pvs` is not read**, so every chunk draws: 2.38M triangles, and
-  a debug build spends about three minutes decoding the 453 textures.
+- **`track.final.pvs` is read and culls** (`omega-pvs-sound`, 2026-09-30). It is
+  [HD's `track.pvs`](hd-pvs.md) in the 2048 lineage's dialect: little-endian,
+  header word 2 is `1`, the bitmap is `ceil(chunks / 8)` bytes, and a chunk is a
+  **`.rcsmodel` mesh object** (`scene.meshes`, 2,659 on `tech_de_ra`) and not a
+  submesh (3,186). All **44** shipped `.pvs` files (34 `track.final.pvs` and 10
+  zone-mode `trackzone.pvs`, over `data00`, `data01`, `data02`, `data04`) parse, declare exactly their model's mesh-object count, and fill
+  their table to the byte (`psp2_pvs_ground_truth`); the four `zone_N` circuits
+  ship a `.pvsxml` and no `.pvs`, so they draw every chunk and the load report
+  says so. A cell sees on average 30 to 78 percent of a `track.final.pvs`
+  circuit's chunks (16 to 51 percent for `trackzone`; HD's is about 33), so
+  the reduction is smaller than HD's on the open circuits.
+  **The name follows the model that was found**: the loader used to ask for
+  `track.pvs` / `track_reversed.pvs` (derived from the `.vex`), which the archive
+  does not have, so *neither* direction of any circuit was ever read.
+  Measured at the same tick with `--pvs false` and `--pvs true`
+  (`data/scratch/omega-pvs-sound`, debug build, 1440x816, `tech_de_ra`, hold
+  accelerate; `false` is frustum culling alone, which is on by default - the whole
+  scene is 3,198 draws and 2,379,040 triangles):
+
+  | frame | draws `false` / `true` | triangles `false` / `true` | pixels that differ |
+  | --- | --- | --- | --- |
+  | forward, tick 300 | 1,271 / 757 | 939,301 / 619,822 | 2,384 (0.20%) |
+  | forward, tick 600 | 1,283 / 759 | 952,672 / 620,986 | 2,107 (0.18%) |
+  | reversed, tick 300 | 943 / 708 | 718,371 / 618,388 | **0** |
+  | reversed, tick 600 | 944 / 707 | 725,503 / 625,349 | **0** |
+  | 2048 (Vita) Altima, tick 300 | 616 / 447 | 145,779 / 98,032 | **0** |
+
+  The forward frames differ in one 57 x 77 pixel block on the right-hand wall
+  (`fwd-t300-crop.png`): with the PVS off a dark slab lies across the pipe wall,
+  with it on the wall is continuous. **It is one object**, found by logging the
+  draws the PVS rejects and the frustum passes and projecting them onto that
+  block: mesh object 2412, `tracksurface:wohdtrack_0022Shape`, two triangles of
+  `track_surface_displacement2out` in world space, **set in none of the
+  circuit's 882 cells** (56 of its 2,659 mesh objects are set in none). The
+  original never draws it; nothing the original draws went missing
+  (`omega_pvs_placement_ground_truth`).
+  **The cell padding is HD's** (`CHUNK_PAD`, `CHUNK_TRUST_RADIUS`, chosen for
+  HD's 12-unit cell spacing; Omega's are about 5.6 apart) - **chosen, not
+  measured** for this title. A debug build still spends minutes decoding the
+  453 textures; culling does not shorten that.
 - **`.EnvSettings` is read through 2048's reader** and its sun (`[4.00, 2.33,
   0.82]` over an ambient of `1.0`) is not checked against PS4's schema. The
   patch's copy carries no HDR/bloom block, so the read bloom chain is off.
-- **Silent:** Omega's `.bnk` banks carry a version word `1145588546` where the
-  reader expects `3`; `Data\Psys\*.POB` particle effects are not in this
-  archive set under those names; the blob shadow is this project's generated
-  falloff, not the disc's.
+- **Sound is read, not played** (`omega-pvs-sound`, 2026-09-30). The banks are
+  **Audiokinetic Wwise**, bank generator version 118, not the PSP's `SBlk`, so
+  `sfx: <name> not loaded: unsupported bank version 1145588546` is still what a
+  race prints: nothing wires Wwise events to this project's cues.
+  [`wwise.md`](wwise.md) has the container, the event-to-media chain (0
+  unresolved media over `data00` and `data08`) and the `.wem`: **every one is
+  Sony's ATRAC9**, mono and stereo decode in process and agree with FFmpeg to
+  one LSB up to polarity, four-, six- and eight-channel files do not decode yet.
+  The handover thread's "10 more banks in `data02`" are the old `SBlk`
+  container, not Wwise. One Tech De Ra cue plays through the mixer to a WAV.
+  Still silent: `Data\Psys\*.POB` particle effects are not in this archive set
+  under those names; the blob shadow is this project's generated falloff, not the
+  disc's.
 - **Reversed circuits get their collision** (`omega-catchup`, 2026-09-30).
   `kdcol::sibling_name` used to pair only `track.vex`, so a reversed race
   loaded no collision at all. The reversed name is `track_col_reversed.col`

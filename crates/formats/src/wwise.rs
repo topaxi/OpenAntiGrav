@@ -41,7 +41,7 @@
 //! +0x0c  u16  alignment
 //! +0x0e  u16  device allocated
 //! +0x10  u32  project id
-//! +0x14  ...  zero padding to the chunk's size (0 to 184 bytes)
+//! +0x14  ...  zero padding to the chunk's size (0 to 232 bytes)
 //! ```
 //!
 //! The padding is zero in all 107 banks - which is the check that the fields
@@ -60,7 +60,8 @@
 //!
 //! `u32 count`, then `count` objects `{ u8 type, u32 size, u32 id, body }`
 //! where `size` counts the `id` and the body. They tile the chunk exactly and
-//! the count is the header's (74 of 74 banks that have one). Types seen: 1 settings, 2
+//! the count is the header's (75 of 75 banks that have one: 37 in `data00`, 1 in
+//! `data05`, 37 in `data08`). Types seen: 1 settings, 2
 //! sound, 3 action, 4 event, 5 random/sequence container, 6 switch container,
 //! 7 actor-mixer, 8 bus, 9 layer container, 10 music segment, 11 music track,
 //! 12 music switch, 13 music random/sequence, 14 attenuation, 18-22 effects

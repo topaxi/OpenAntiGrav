@@ -630,5 +630,9 @@ surface and the craft's own wordmark on its tail.
 
 Still absent from that picture, and unrelated to anything above: the
 `.envsettings` sun/fog/bloom blocks do not parse for this title, so the race
-draws with a stand-in lighting rig, unfogged and without bloom; and
-`track.pvs` is not this project's HD PVS layout, so every chunk draws.
+draws with a stand-in lighting rig, unfogged and without bloom. (`track.pvs`
+was listed here as "not this project's HD PVS layout, so every chunk draws":
+it is that layout's little-endian dialect and it is read and culls since
+2026-09-30 - [hd-pvs.md](hd-pvs.md), "The 2048 lineage's dialect". Four of the
+Vita's DLC1 `track_reversed.pvs` files do not belong to their model and are
+refused; the rest agree.)

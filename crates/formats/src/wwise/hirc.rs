@@ -262,8 +262,8 @@ pub enum Codec {
     /// Plugin number 1: 10 sounds, and every one's media is `fmt ` tag `0xFFFE`
     /// (`WAVE_FORMAT_EXTENSIBLE`, which is how Wwise writes PCM).
     Pcm,
-    /// Plugin number 12: **all 6,626 of the base banks' codec sounds bar the
-    /// PCM ones**, and every one's media is `fmt ` tag `0xFFFC`. Sony's
+    /// Plugin number 12: 6,858 (`data00`) and 7,510 (`data08`) sounds, and every
+    /// music track source; every one's media is `fmt ` tag `0xFFFC`. Sony's
     /// ATRAC9 - see `docs/formats/wwise.md` for the identification.
     Atrac9,
     Other(u16),
@@ -377,10 +377,10 @@ impl MusicTrack {
 /// when `n > 0` a bypass byte and `n` seven-byte records), a `u8`, the override
 /// bus id and then the parent. Everything after that - positioning, sends,
 /// state, RTPCs - varies and is not read, which is why this is the whole of
-/// what a node contributes. **Fitted, not documented**: the parent it yields
-/// is an object in the same bank or `0` for 6,868 + 463 + 525 + 133 + 1,789 of
-/// the 9,785 nodes measured, plus 110 roots and one parent (a sound in
-/// `Ship_NGP`) in no bank.
+/// what a node contributes. **Fitted, not documented**: of `data00`'s 9,889
+/// nodes the parent it yields is an object in some bank on 9,779 (all but one
+/// in the node's own bank; a sound in `Ship_NGP` has its parent in another) and
+/// `0`, the root, on the other 110 - none dangles.
 fn parent_at(body: &[u8], at: usize) -> Option<u32> {
     let mut r = Reader::new(body, at);
     r.u8()?;

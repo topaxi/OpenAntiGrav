@@ -58,9 +58,8 @@ struct Census {
     refused_multichannel: usize,
 }
 
-/// Structural and decode checks for one file; `decode` says whether to run the
-/// decoder (the music streams are hundreds of megabytes between them).
-fn check(c: &mut Census, label: &str, blob: &[u8], decode: bool) {
+/// Structural and decode checks for one file.
+fn check(c: &mut Census, label: &str, blob: &[u8]) {
     let wem = Wem::parse(blob).unwrap_or_else(|e| panic!("{label}: {e}"));
     c.files += 1;
     let tags = wem.tags();
@@ -171,9 +170,6 @@ fn check(c: &mut Census, label: &str, blob: &[u8], decode: bool) {
         .unwrap_or_else(|| panic!("{label}: fewer samples decoded than the header states"));
     assert!(pad < frame_samples, "{label}: {pad} samples of padding");
     c.consistent += 1;
-    if !decode {
-        return;
-    }
     match wem::decode(blob) {
         Ok(pcm) => {
             assert_eq!(
@@ -229,14 +225,11 @@ fn banks(archive: &mut oag_assets::psarc::Archive) -> Vec<(String, Vec<u8>)> {
         .collect()
 }
 
-/// Files above this many bytes are checked structurally and not decoded.
-const DECODE_LIMIT: usize = usize::MAX;
-
 fn loose_census(dir: &str, name: &str) -> Option<Census> {
     let mut archive = archive(dir, name)?;
     let mut c = Census::default();
     for (path, blob) in loose(&mut archive) {
-        check(&mut c, &path, &blob, blob.len() <= DECODE_LIMIT);
+        check(&mut c, &path, &blob);
     }
     Some(c)
 }
@@ -270,7 +263,7 @@ fn embedded_census(dir: &str, name: &str) -> Option<Census> {
                 c.prefetch_heads += 1;
                 continue;
             }
-            check(&mut c, &label, bytes, bytes.len() <= DECODE_LIMIT);
+            check(&mut c, &label, bytes);
         }
     }
     Some(c)
@@ -615,7 +608,9 @@ fn ffmpeg_pcm(wem: &Wem<'_>) -> Vec<i16> {
     );
     std::fs::remove_dir_all(&dir).ok();
     out.stdout
-        .chunks_exact(2)
-        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| i16::from_le_bytes(*b))
         .collect()
 }
