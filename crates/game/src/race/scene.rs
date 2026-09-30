@@ -365,7 +365,7 @@ impl Scene {
         pad_model: Option<Model>,
         weapon_pad_model: Option<Model>,
         gantry: Option<gantry::Placed>,
-        mode: Mode,
+        weapons_on: bool,
         rocket_model: Option<Model>,
         mine_model: Option<Model>,
         bomb_model: Option<Model>,
@@ -559,7 +559,7 @@ impl Scene {
         // "decoded, then hidden" - closer to what clearing a visibility bit
         // before the submit pass actually does than a flag checked at draw
         // time would be.
-        let weapon_pads = if mode.weapons_enabled() {
+        let weapon_pads = if weapons_on {
             pad_drawable(weapon_pad_model)?
         } else {
             None

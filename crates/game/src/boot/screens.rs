@@ -436,18 +436,46 @@ fn with_served_gaps(
     strings
 }
 
-/// The kill targets the race box's `KILLS` row offers, in the order the disc's
-/// own `Eliminations` list authors them (`5`, `10`, `15`, `20`, `25` on
-/// Pulse), off `name` - [`oag_title::FrontEnd::race_setup`]. Empty when the
-/// title names no such file, or it will not read (reported), which leaves the
-/// row unusable rather than offering values nothing authored.
-pub(super) fn read_kill_targets(
+/// What the race box's `Single Player` screen authors for the rows this build
+/// reads: the `KILLS` row's targets and the `WEAPONS` row's two states, each in
+/// the order the disc's own list has them. Empty when the title names no such
+/// file ([`oag_title::FrontEnd::race_setup`]) or it will not read (reported),
+/// which leaves the row unusable rather than offering values nothing authored.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RaceSetup {
+    /// The `Eliminations` list (`5`, `10`, `15`, `20`, `25` on Pulse).
+    pub kill_targets: Vec<String>,
+    /// The `Weapons` list as `(string id, value)`: `("FE_ON", "On")` then
+    /// `("FE_OFF", "Off")` on Pulse. The value is what the original's
+    /// `Race_ReadSetupOptions` compares against `"On"`; the string id is the
+    /// row's label in the front end's own string table.
+    pub weapons: Vec<(String, String)>,
+}
+
+impl RaceSetup {
+    /// The `WEAPONS` row's options: stored as the disc's `value` (`On`/`Off`),
+    /// shown as its own string for the entry (`FE_ON`/`FE_OFF`, in the
+    /// language `strings` is for).
+    #[must_use]
+    pub fn weapon_choices(
+        &self,
+        strings: &oag_ui::language::StringTable,
+    ) -> Vec<oag_ui::menu::Choice> {
+        self.weapons
+            .iter()
+            .map(|(id, value)| oag_ui::menu::Choice::labelled(value, strings.get_or_id(id)))
+            .collect()
+    }
+}
+
+/// The race box's `Single Player` lists off `name` - see [`RaceSetup`].
+pub(super) fn read_race_setup(
     archives: &mut oag_assets::Archives,
     name: Option<&str>,
     report: &mut Vec<String>,
-) -> Vec<String> {
+) -> RaceSetup {
     let Some(name) = name else {
-        return Vec::new();
+        return RaceSetup::default();
     };
     let xml = archives
         .read_name(name)
@@ -456,38 +484,71 @@ pub(super) fn read_kill_targets(
             fexml::text(&blob).map_err(|e| anyhow::anyhow!("reading the front-end XML: {e}"))
         });
     match xml {
-        Ok(xml) => eliminations(&xml),
+        Ok(xml) => RaceSetup {
+            kill_targets: list_entries(&xml, "Eliminations")
+                .into_iter()
+                .map(|(string, _)| string)
+                .collect(),
+            weapons: list_entries(&xml, "Weapons")
+                .into_iter()
+                .filter_map(|(string, value)| Some((string, value?)))
+                .collect(),
+        },
         Err(error) => {
-            report.push(format!("{name}: {error:#} - no KILLS row values"));
-            Vec::new()
+            report.push(format!(
+                "{name}: {error:#} - no KILLS or WEAPONS row values"
+            ));
+            RaceSetup::default()
         }
     }
 }
 
-/// The `string` of every entry of the list named `Eliminations`, unparsed.
-fn eliminations(xml: &str) -> Vec<String> {
-    let Some(at) = xml.find("name=\"Eliminations\"") else {
+/// The `string` (`idstring` on an entry that names a string-table id) and the
+/// `value`, when the entry has one, of every tag in the first list named `list`
+/// that carries one, unparsed. The tag's own name is
+/// not matched: the front end's shortened XML expands it per file.
+fn list_entries(xml: &str, list: &str) -> Vec<(String, Option<String>)> {
+    let Some(at) = xml.find(&format!("name=\"{list}\"")) else {
         return Vec::new();
     };
-    let list = &xml[at..];
-    let list = &list[..list.find("</List>").unwrap_or(list.len())];
-    list.split("string=\"")
-        .skip(1)
-        .filter_map(|rest| rest.split('"').next())
-        .map(str::to_string)
+    let body = &xml[at..];
+    let body = &body[..body.find("</List>").unwrap_or(body.len())];
+    body.split('<')
+        .filter_map(|tag| {
+            let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+            let attribute = |key: &str| {
+                let rest = tag.split(&format!(" {key}=\"")).nth(1)?;
+                rest.split('"').next().map(str::to_string)
+            };
+            Some((
+                attribute("string").or_else(|| attribute("idstring"))?,
+                attribute("value"),
+            ))
+        })
         .collect()
 }
 
 #[cfg(test)]
-mod kill_target_tests {
-    use super::eliminations;
+mod race_setup_tests {
+    use super::list_entries;
 
     #[test]
-    fn the_list_is_read_in_authored_order_and_nothing_else() {
-        let xml = r#"<List name="Weapons"><Data string="FE_ON"/></List>
+    fn a_list_is_read_in_authored_order_and_nothing_else() {
+        let xml = r#"<List name="Weapons" global="Weapons"><Entry idstring="FE_ON" value="On"></Entry><Entry idstring="FE_OFF" value="Off"></Entry></List>
 <List name="Eliminations" focus="true" global="Eliminations"><Anim x="250"/><Data string="5"/><Data string="10"/><Data string="25"/></List>
 <Text string="later"/>"#;
-        assert_eq!(eliminations(xml), ["5", "10", "25"]);
-        assert!(eliminations("<List name=\"Mode\"/>").is_empty());
+        let kills: Vec<String> = list_entries(xml, "Eliminations")
+            .into_iter()
+            .map(|(string, _)| string)
+            .collect();
+        assert_eq!(kills, ["5", "10", "25"]);
+        assert_eq!(
+            list_entries(xml, "Weapons"),
+            [
+                ("FE_ON".to_string(), Some("On".to_string())),
+                ("FE_OFF".to_string(), Some("Off".to_string())),
+            ]
+        );
+        assert!(list_entries("<List name=\"Mode\"/>", "Eliminations").is_empty());
     }
 }

@@ -143,7 +143,6 @@ unmeasured gap.
   anchor than two typefaces' cap-tops at 682x512 to close - a widget
   bounding box, or a capture at a higher internal resolution than PCSX2's
   GS buffer gives on this title.
-- The `WEAPONS` row gap above (`KILLS` landed 2026-09-30 as `race.kill_target`),
-  as its own piece of work: a `race.weapons` setting, wired into `Mode::weapons_enabled`
-  and the Eliminator mode's own kill threshold, plus two `menu.toml` rows
-  gated the way `AI DIFFICULTY` already is.
+- ~~The `WEAPONS` row gap above~~ **landed 2026-09-30** (`race.weapons`, with `KILLS`'s
+  `race.kill_target` the same day): the disc's own `Weapons` list, editable in a single race and
+  pinned to the mode's own answer elsewhere - see `docs/formats/race-setup.md`.

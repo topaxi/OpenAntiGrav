@@ -76,6 +76,12 @@ pub struct Race {
     /// Eliminator; see [`Self::eliminator_kill_target`].
     #[serde(default)]
     pub kill_target: String,
+    /// The `WEAPONS` row's pick, as the disc's own `Weapons` list spells it
+    /// (`"On"` or `"Off"`), or empty for "untouched", which is the list's
+    /// authored default (`On`). Read only in a single race, the one mode whose
+    /// row is editable; see [`Self::weapons_override`].
+    #[serde(default)]
+    pub weapons: String,
 }
 
 /// Time trial: the mode the RACE page opens on, and the one the reference
@@ -106,11 +112,31 @@ impl Default for Race {
             variant_chosen: false,
             skin: String::new(),
             kill_target: String::new(),
+            weapons: String::new(),
         }
     }
 }
 
 impl Race {
+    /// The weapons switch a launch in `mode` carries, or `None` to leave it to
+    /// [`oag_race::Mode::weapons_enabled`].
+    ///
+    /// Only a single race honours the `WEAPONS` row: the original greys it in
+    /// every other mode and forces its value there (Time Trial, Speed Lap and
+    /// Zone `Off`, Eliminator `On` - `docs/formats/race-setup.md`), which is
+    /// what `Mode::weapons_enabled` already says.
+    #[must_use]
+    pub fn weapons_override(&self, mode: oag_race::Mode) -> Option<bool> {
+        if mode != oag_race::Mode::SingleRace {
+            return None;
+        }
+        match self.weapons.as_str() {
+            "On" => Some(true),
+            "Off" => Some(false),
+            _ => None,
+        }
+    }
+
     /// The kill target a launch in `mode` carries: the `KILLS` row's pick in an
     /// Eliminator, and `None` in every other mode (nothing reads it there) or
     /// while the row is untouched, which leaves the default to `Race::start`.

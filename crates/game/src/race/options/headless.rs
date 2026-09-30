@@ -34,6 +34,7 @@ impl Setup {
             mode,
             eliminator_kill_target: None,
             laps_override: None,
+            weapons_override: None,
             difficulty: oag_ai::Difficulty::default(),
             class: "VENOM".to_string(),
             // The whole grid, so a tick has eight craft to step rather than

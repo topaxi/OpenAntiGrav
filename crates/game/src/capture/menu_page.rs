@@ -54,7 +54,7 @@ pub(super) fn menu_page(
     page: &str,
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
-    kill_targets: &[String],
+    race_setup: &crate::boot::RaceSetup,
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
@@ -123,31 +123,7 @@ pub(super) fn menu_page(
     }
 
     let mut model = oag_ui::menu::Menu::new(definition);
-    model.supply(
-        oag_ui::menu::ValueSource::Tracks,
-        &tracks
-            .iter()
-            .map(|track| oag_ui::menu::Choice::labelled(&track.id, strings.get_or_id(&track.id)))
-            .collect::<Vec<_>>(),
-    );
-    model.supply(
-        oag_ui::menu::ValueSource::Teams,
-        &teams
-            .iter()
-            .map(|team| oag_ui::menu::Choice::labelled(&team.id, strings.get_or_id(&team.id)))
-            .collect::<Vec<_>>(),
-    );
-    model.supply(
-        oag_ui::menu::ValueSource::RaceModes,
-        &oag_ui::menu::mode_choices(strings),
-    );
-    model.supply(
-        oag_ui::menu::ValueSource::KillTargets,
-        &kill_targets
-            .iter()
-            .map(oag_ui::menu::Choice::plain)
-            .collect::<Vec<_>>(),
-    );
+    race_sources::supply(&mut model, title, tracks, teams, race_setup, strings);
     model.supply(
         oag_ui::menu::ValueSource::Languages,
         &languages
@@ -992,6 +968,7 @@ pub(super) fn fury_picture(
 // the *file* - code plus inline tests together - one line over
 // `scripts/check-file-size.py`'s separate 1,000-line cap on the file
 // itself, and moving the tests out is the same fix either cap asks for.
+mod race_sources;
 mod track_entries;
 
 #[cfg(test)]

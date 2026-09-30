@@ -659,3 +659,30 @@ fn the_kills_pick_is_an_eliminator_launch_option_only() {
     assert_eq!(picked.eliminator_kill_target(Mode::Eliminator), Some(15));
     assert_eq!(picked.eliminator_kill_target(Mode::TimeTrial), None);
 }
+
+/// The WEAPONS row reaches a launch only in a single race, and only once
+/// touched: every other mode's answer is the mode's own.
+#[test]
+fn the_weapons_pick_is_a_single_race_launch_option_only() {
+    use oag_race::Mode;
+    let untouched = Race::default();
+    assert_eq!(untouched.weapons_override(Mode::SingleRace), None);
+    let off = Race {
+        weapons: "Off".to_string(),
+        ..Race::default()
+    };
+    assert_eq!(off.weapons_override(Mode::SingleRace), Some(false));
+    for mode in [
+        Mode::TimeTrial,
+        Mode::SpeedLap,
+        Mode::Zone,
+        Mode::Eliminator,
+    ] {
+        assert_eq!(off.weapons_override(mode), None, "{mode:?}");
+    }
+    let on = Race {
+        weapons: "On".to_string(),
+        ..Race::default()
+    };
+    assert_eq!(on.weapons_override(Mode::SingleRace), Some(true));
+}

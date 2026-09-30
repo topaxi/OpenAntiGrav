@@ -146,6 +146,9 @@ impl Pending {
             // `None` for the same reason - the campaign is the only writer
             // of this field. See `race::Options::laps_override`.
             laps_override: None,
+            // The saved WEAPONS row, for a single race only. See
+            // `race::Options::weapons_override`.
+            weapons_override: self.settings.race.weapons_override(self.mode),
             zone_stage: self.cli.zone_stage,
             opponent_teams,
             // No CLI flag or menu screen offers a per-slot override; only

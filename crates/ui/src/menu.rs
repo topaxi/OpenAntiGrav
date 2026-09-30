@@ -306,6 +306,8 @@ pub enum Entry {
         current: usize,
         /// What makes this row inert. See [`Menu::is_disabled`].
         disabled_by: Option<Condition>,
+        /// What pins it to one of its own options. See [`Pin`].
+        pins: Vec<Pin>,
         /// What makes this row's setting stored but ineffective, one entry
         /// per independently-triggered combination. See [`Menu::warning`].
         warnings: Vec<Warning>,
@@ -893,9 +895,10 @@ impl Menu {
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        entry
-            .disabled_by()
-            .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
+        self.pin(entry).is_some()
+            || entry
+                .disabled_by()
+                .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
     }
 
     /// This row's warning: the first declared one that applies. See [`Entry::warnings`].
@@ -1036,6 +1039,8 @@ pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;
 mod jump;
+mod pin;
+pub use pin::Pin;
 mod layers;
 pub mod pointer;
 mod rows;

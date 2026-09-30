@@ -33,7 +33,8 @@ use crate::language::StringTable;
 use oag_gameplay::input::button_from_name;
 
 use super::{
-    Action, Choice, Condition, Entry, FORMAT_VERSION, Page, Restart, Value, ValueSource, Warning,
+    Action, Choice, Condition, Entry, FORMAT_VERSION, Page, Pin, Restart, Value, ValueSource,
+    Warning,
 };
 
 /// A parsed, checked menu tree.
@@ -151,6 +152,9 @@ mod raw {
         /// `{ setting = "...", value = ... }`: what makes this row inert. Only
         /// `choice` and `toggle` rows may carry it.
         pub disabled_by: Option<Condition>,
+        /// `[{ setting = "...", value = ..., shows = "..." }, ...]`: what pins the
+        /// row to one of its own options. Only `choice` rows may carry it.
+        pub pinned: Option<Vec<Pinned>>,
         /// `[{ setting = "...", values = [...], message = "..." }, ...]`, refused if empty.
         pub warn_when: Option<Vec<Warning>>,
         /// `restart_required = "..."`: what to say once this row has been moved
@@ -184,6 +188,14 @@ mod raw {
         pub setting: String,
         pub value: Option<toml::Value>,
         pub values: Option<Vec<toml::Value>>,
+    }
+
+    /// One `pinned` entry: a [`Condition`] plus the option shown while it holds.
+    #[derive(Deserialize)]
+    pub struct Pinned {
+        #[serde(flatten)]
+        pub when: Condition,
+        pub shows: String,
     }
 
     /// `warn_when = { message = "...", all = [{ ... }, { ... }] }`.
@@ -316,6 +328,7 @@ impl Definition {
                 for condition in entry
                     .disabled_by()
                     .into_iter()
+                    .chain(entry.pins().iter().map(|pin| &pin.when))
                     .chain(entry.warnings().iter().flat_map(|w| w.all.iter()))
                 {
                     self.check_condition(condition, &context)?;
@@ -401,6 +414,18 @@ impl Definition {
     /// first mixes titles and the second browses records, neither of which
     /// the selection screens do.
     pub fn drop_rows_picked_on_screen(&mut self, title: &oag_title::Title) {
+        // The KILLS and WEAPONS rows offer the lists of the race box's
+        // `Single Player` screen, which only a title with a
+        // `FrontEnd::race_setup` file has: elsewhere the row would draw
+        // permanently unusable, the reason the VARIANT row is dropped too.
+        let reads_setup = title
+            .front_end
+            .is_some_and(|front_end| front_end.race_setup.is_some());
+        if !reads_setup && let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
+            page.retain_rows(|entry| {
+                !matches!(entry.setting(), Some("race.kill_target" | "race.weapons"))
+            });
+        }
         // Both screens, for a title that authors them in files of its own
         // (Wipeout HD/Fury): with only one of the two, the other pick would
         // have no screen to be made on and its row stays.
@@ -477,6 +502,7 @@ fn resolve(
     // failure the rest of this loader exists to make impossible.
     if (entry.disabled_by.is_some()
         || entry.warn_when.is_some()
+        || entry.pinned.is_some()
         || entry.restart_required.is_some())
         && !matches!(entry.kind.as_str(), "choice" | "toggle")
     {
@@ -493,6 +519,23 @@ fn resolve(
         .as_ref()
         .map(|condition| condition_from(condition, context))
         .transpose()?;
+    let pins = entry
+        .pinned
+        .iter()
+        .flatten()
+        .map(|pin| {
+            Ok(Pin {
+                when: condition_from(&pin.when, context)?,
+                shows: pin.shows.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    if !pins.is_empty() && entry.kind != "choice" {
+        return Err(Error::BadEntry {
+            context: context.to_string(),
+            problem: "only a choice can be pinned to one of its options".to_string(),
+        });
+    }
     // `warn_when = []` is refused, the same shape as `restart_required = ""` below.
     if entry.warn_when.as_deref().is_some_and(<[_]>::is_empty) {
         return Err(Error::BadEntry {
@@ -575,6 +618,7 @@ fn resolve(
                 source,
                 current: 0,
                 disabled_by,
+                pins,
                 warnings,
                 restart,
             })
