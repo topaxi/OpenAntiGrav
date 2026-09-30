@@ -124,6 +124,15 @@ about 256 units (whole frame 16.74 to 16.56, 74 pixels differing by more than
 1 %). That gap is the level 1 the hardware rule selects and the emulator does
 not; whether real hardware shows it is still unmeasured.
 
+**A consequence to watch**: a coarse authored level of a cutout texture has alpha
+above the reference nearly everywhere, so a cutout batch (trees, fences, pad
+glows) reads fatter at depth than it did with a base level. Wipeout Pure's
+speed-pad guard (`pad_alpha_test_ground_truth`, an orbit framing hundreds of
+units out) stopped discriminating for exactly that reason and now compares at the
+base level, which is what it is about; the discard operator's own test is
+unchanged. Whether the original's distant cutouts thicken the same way is part of
+what a hardware capture would settle.
+
 The change applies to every title that loads a `.vex` with embedded textures:
 **Wipeout Pure is unmeasured** against its own capture and shares the rule.
 `crates/render/tests/psp_texture_levels_ground_truth.rs` fails if a circuit's
