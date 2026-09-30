@@ -143,3 +143,19 @@ fn a_rocket_striking_the_player_in_the_tick_throws_its_hull_sparks() {
     );
     assert!(race.hit_sparks_started_for_tests() > 0);
 }
+
+/// A landed weapon hit shakes the local player's camera, and only theirs:
+/// `Ship_Damage`'s `Camera_ArmShake` sits inside its `+0x368 == 0` block.
+#[test]
+fn a_weapon_hit_shakes_the_players_camera_and_nobody_elses() {
+    let mut race = race_with_locators(six_locators());
+    let mut on_rival = [WeaponHit::default(); MAX_SHIPS];
+    on_rival[3].landed = true;
+    race.throw_hit_sparks(&on_rival, false);
+    assert!(!race.view.shake.active(), "a rival's hit shook our camera");
+
+    race.throw_hit_sparks(&landed_on_player(), false);
+    assert!(race.view.shake.active());
+    // Magnitude 0.6, as authored: the wall path's `severity * 0.3` at 2.0.
+    assert!((race.view.shake.magnitude() - 0.6).abs() < 1e-5);
+}

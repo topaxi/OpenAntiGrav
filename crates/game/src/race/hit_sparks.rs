@@ -100,6 +100,10 @@ pub(super) fn anchors(
         .collect()
 }
 
+/// `Camera_ArmShake`'s magnitude argument on a weapon hit, as `Ship_Damage`
+/// passes it (`0x3f19999a`).
+const WEAPON_HIT_SHAKE_MAGNITUDE: f32 = 0.6;
+
 /// One hit spark riding its locator.
 #[derive(Debug, Clone, Copy)]
 struct Riding {
@@ -148,11 +152,32 @@ impl Race {
         hits: &[oag_gameplay::projectile::WeaponHit],
         leach: bool,
     ) {
+        let player = self.sim.world.primary_slot();
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
+                if slot == player {
+                    self.arm_weapon_hit_shake();
+                }
                 self.throw_hit_spark(slot, leach);
             }
         }
+    }
+
+    /// `Ship_Damage`'s weapon branch, for the local player: `Camera_ArmShake(0.6,
+    /// 0.6, camera, 1)` (`Ship_Damage` `0x088439ac`, the end of its
+    /// `source == 2` block), beside the spark and gated on `+0x368 == 0` like
+    /// it. Magnitude `0.6` is passed as authored, where a wall contact's is
+    /// its clamped severity times `0.3` - hence the division; the duration is
+    /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read
+    /// 2026-09-30, confidence 85. **The game-mode gate** (not mode 2 or 12) is
+    /// not applied: neither mode is one this port races in.
+    fn arm_weapon_hit_shake(&mut self) {
+        use oag_render::camera::shake::{MAGNITUDE_SCALE, Side};
+        self.view.shake.arm(
+            WEAPON_HIT_SHAKE_MAGNITUDE / MAGNITUDE_SCALE,
+            Side::Elsewhere,
+            &mut self.view.shake_rng,
+        );
     }
 
     fn throw_hit_spark(&mut self, slot: usize, leach: bool) {
