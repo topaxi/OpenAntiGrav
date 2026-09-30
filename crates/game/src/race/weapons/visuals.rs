@@ -18,7 +18,7 @@ pub(in crate::race) use flash::flash_for;
 use super::*;
 
 impl Race {
-    /// Keeps [`LEACHBEAM_CHARGING_EFFECT`] on the player while they hold a
+    /// Keeps [`LEACHBEAM_CHARGING_EFFECT`] on every craft that is holding a
     /// LeachBeam - the disc's own `Data\Psys\*.POB`, played through the same
     /// [`psys::Stage`] every other weapon's are, with its trigger read out of
     /// the executable (see [`LEACHBEAM_CHARGING_EFFECT`]).
@@ -27,28 +27,33 @@ impl Race {
     /// rather than a craft, so it is driven from
     /// [`Self::advance_leach_beam_ribbon`].
     pub(in crate::race) fn advance_leach_beam_visual(&mut self) {
-        // The charge: up exactly while slot 0 holds a LeachBeam, which is the
-        // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
-        let holding = self.sim.world.ships[0].pickup.weapon
-            == Some(oag_tables::weapons::Weapon::LeachBeam)
-            && self.sim.world.ships[0].active;
-        let holder = self.sim.world.ships[0].physics.body.position;
-        match (
-            holding.then(|| self.view.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned()),
-            self.view.leach_charge_effect,
-        ) {
-            (Some(Some(effect)), None) => {
-                self.view.leach_charge_effect = self.view.stage.attach(&effect, holder, 1.0);
+        let effect = self.view.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned();
+        for slot in 0..MAX_SHIPS {
+            // The charge: up exactly while the craft holds a LeachBeam and is
+            // in state 1, which is the whole of `FUN_0883f540`'s own gate, run
+            // for every craft. Nothing chosen here.
+            let ship = &self.sim.world.ships[slot];
+            let holding =
+                ship.pickup.weapon == Some(oag_tables::weapons::Weapon::LeachBeam) && ship.active;
+            let holder = ship.physics.body.position;
+            match (
+                holding.then_some(&effect),
+                self.view.leach_charge_effect[slot],
+            ) {
+                (Some(Some(effect)), None) => {
+                    self.view.leach_charge_effect[slot] =
+                        self.view.stage.attach(effect, holder, 1.0);
+                }
+                (Some(Some(_)), Some(playing)) => self.view.stage.follow(playing, holder),
+                // Not holding one any more (or the file never loaded): tear
+                // the instance down, the same way the original despawns it the
+                // moment its own two-part gate stops holding.
+                (None, Some(playing)) | (Some(None), Some(playing)) => {
+                    self.view.stage.detach(playing);
+                    self.view.leach_charge_effect[slot] = None;
+                }
+                (None, None) | (Some(None), None) => {}
             }
-            (Some(Some(_)), Some(playing)) => self.view.stage.follow(playing, holder),
-            // Not holding one any more (or the file never loaded): tear the
-            // instance down, the same way the original despawns it the moment
-            // its own two-part gate stops holding.
-            (None, Some(playing)) | (Some(None), Some(playing)) => {
-                self.view.stage.detach(playing);
-                self.view.leach_charge_effect = None;
-            }
-            (None, None) | (Some(None), None) => {}
         }
     }
 
@@ -66,9 +71,11 @@ impl Race {
     /// toward the shooter one chain point a tick, which is where
     /// `LeachBeam_Advance` writes the effect's own matrix. The previous
     /// instance is detached at each re-spawn so its particles finish where
-    /// they are; the original hands its handle to `FUN_088f3298`, whose effect
-    /// on live particles was not read, so the detach is **chosen, not
-    /// measured**.
+    /// they are. The original hands its handle to `Psys_ReleaseHandle`
+    /// (`0x088f3298`), which **kills** it - the manager frees the instance and
+    /// its live particles on its next tick (read 2026-09-30, see
+    /// `particle-system.md`) - so the detach is **chosen, not measured**, and
+    /// differs from the original until `psys::Stage` has a kill.
     pub(in crate::race) fn advance_leach_beam_ribbon(&mut self) {
         let locked = self
             .sim
@@ -101,7 +108,8 @@ impl Race {
         );
         let ribbon = ribbon.get_or_insert_with(|| oag_render::beam::Ribbon::new(rng));
         let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
-        let at = ribbon.energy_point(owner, target, beam.range);
+        let spline = &self.sim.spline;
+        let at = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
 
         // `LEACHENERGY`: the same pulse block that re-spawns
         // `WO_LEACHBEAM_ENERGY` below, per `LeachBeam_Advance`'s own reading
@@ -270,7 +278,8 @@ impl Race {
             range: beam.range,
             alpha,
         };
-        oag_render::beam::build(ribbon, &frame)
+        let spline = &self.sim.spline;
+        oag_render::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
     }
 
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling

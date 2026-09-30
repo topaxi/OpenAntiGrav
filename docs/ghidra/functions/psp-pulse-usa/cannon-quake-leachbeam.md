@@ -46,8 +46,8 @@ produced it and the one that replaces it.
 | `0x08873090` | `LeachBeam_MarkDisconnected` | 80 (new 2026-09-08) |
 | `0x088730a4` | `LeachBeam_LingerExpired` | 80 (new 2026-09-08) |
 | `0x08873068` | `LeachBeam_UnlockedExpired` | 78 (new 2026-09-08) |
-| `0x088734d0` | `LeachBeam_KeepInTrack` | 72 (new 2026-09-23) |
-| `0x08873328` | `LeachBeam_ReaimChain` | 70 (new 2026-09-23) |
+| `0x088734d0` | `LeachBeam_KeepInTrack` | 80 (new 2026-09-23, re-read 2026-09-30) |
+| `0x08873328` | `LeachBeam_ReaimChain` | 80 (new 2026-09-23, re-read 2026-09-30) |
 | `0x0883f228` | `Ship_ApplyPendingWeaponRepair` | 85 (new 2026-09-08) |
 | `0x08853a80` | `Ai_Update` | 85 (new 2026-09-08) |
 | `0x0885077c` | `WeaponAi_Construct` | 85 (new 2026-09-08) |
@@ -2814,20 +2814,77 @@ tick's chain loop, `LeachBeam_Advance` writes the undisplaced point
 `origin + (segments - 1 - cursor) * step` into its translation row
 (`instance+0x120`). So the effect appears one segment short of the target
 and walks back to the shooter one segment a tick. The previous instance's
-handle (`instance+0xec`) goes to `FUN_088f3298` first. Confidence **82**.
+handle (`instance+0xec`) goes to `FUN_088f3298` first, which **kills** it:
+read 2026-09-30, see [particle-system.md](particle-system.md), "Releasing an
+instance by handle". Confidence **82**.
 
-**The two new names.** Both are read from single decompiles:
+**The two names, re-read from disassembly on 2026-09-30.** The first pass
+read them from single decompiles, and the decompile of `ReaimChain` hides its
+first argument (a float in `f12`), so the row for it here was wrong. Read
+again instruction by instruction:
 
 | Address | Name | Confidence | What it does |
 | --- | --- | --- | --- |
-| `0x088734d0` | `LeachBeam_KeepInTrack` | 72 | For each chain point: `AiTrack_LocatePosition(100.0, *(instance+0x168), ...)` gives the track frame there. If the point is below the road, or within `2.0` of either edge (`half_width - 2.0` each side), it calls the function below. |
-| `0x08873328` | `LeachBeam_ReaimChain` | 70 | Pulls the point back inside the tube, then rewrites the step to `(target - point) / remaining`, so the rest of the chain re-aims at the target. |
+| `0x088734d0` | `LeachBeam_KeepInTrack` | 80 | `AiTrack_LocatePosition(100.0, track, &frame, point, 0, -1, 0)` fills a `SplinePt`-shaped record on the stack (`+0x00` pos, `+0x20` down, `+0x30` lateral, `+0x44`/`+0x48` half-widths), zero-initialised from `DAT_08a90a20`, which reads sixteen zero bytes. Three plane tests follow, in order, against that one record. |
+| `0x08873328` | `LeachBeam_ReaimChain` | 80 | Moves the point and rewrites the step. Arguments: `a0` out step, `a1` the beam instance (target at `*(inst+0xa0) + 0x30`), `a2` direction vector, `a3` the point (in place), `t0` chain points still to place, `f12` the scale. |
 
-Together they bend the arc to stay inside the track where the straight line
-would cut a corner. **Not built** - see `oag_render::beam`'s own module doc.
-The two confidences stop short of the 85s above: the plane tests are read,
-but which `AiTrack_LocatePosition` output fields are the edges was inferred
-from how they are used.
+**The three tests** (`0x088735d4`, `0x08873724`, `0x088738d0` each leave the
+failed test's own dot product in `f12`, which is the scale `ReaimChain`
+receives; it is negative by construction):
+
+1. **Below the road:** `(pos - point) . down < 0`. Direction `-down`. The
+   move is an exact projection onto the road plane through `pos`.
+2. **Past the right wall:** `(pos + lateral * (half_width_right - 2.0) -
+   point) . lateral < 0`. Direction `normalize(pos - point)`, straight at the
+   centre-line point, **not** along `lateral`.
+3. **Past the left wall:** the mirror, with `-lateral` and
+   `half_width_left - 2.0`.
+
+There is no ceiling test. The record is located once; each test reads the
+point the test before it may have moved, and a later re-aim overwrites the
+step. `*(point + 0xc)` is set to `1.0` after each. The `2.0` is the literal
+at `0x08873648`/`0x08873818`; `normalize` divides by `MaxFloat` for a zero
+length (`vcst.s MaxFloat`).
+
+**What `ReaimChain` computes** (`0x0887334c`-`0x08873460`), with `s = f12`
+and `dir = *a2`:
+
+- the point moves to `point - s * dir`;
+- the step becomes `(target - (point + s * dir)) / remaining`, measured from
+  the point **displaced the other way**, and left undivided when `remaining`
+  is zero (`0x0887346c`).
+
+So a chain re-aimed once ends `2 * s * dir` off the target, not on it. This
+is what the code does, and the port reproduces it rather than correcting it.
+The earlier row's "`(target - point) / remaining`" was the decompiler's
+reading of the same instructions with the sign of `s` lost.
+
+**`LeachBeam_Advance`'s loop around them** (`0x08873fa0`): per chain point
+`base += step`, then `KeepInTrack(instance, &base, &step, segments - i - 1)`
+updates `base` and `step` **in place**, then the two-axis displacement is
+added to the kept `base` and stored. The two displacement axes, the
+angular step and the amplitude span are computed once before the loop from
+the unbent step, so only the base walk bends. The value written into
+`WO_LEACHBEAM_ENERGY`'s matrix (`instance+0x120`) is the kept base, so the
+effect follows the bend.
+
+**Why the record layout is 80 and not higher.** The layout is `SplinePt`'s
+([track.md](../../../formats/track.md)) field for field: `+0x20` is the
+`down` axis (the floor test's sign only comes out as "below the road" with
+it), `+0x30` the lateral axis, and `+0x44`/`+0x48` the left and right
+half-widths, which the test pairs with `-lateral` and `+lateral`
+respectively, matching `oag_game`'s own `centre + lateral * half_width_right`.
+What is not read is `AiTrack_LocatePosition`'s search: `100.0` is taken as a
+radius, and whether it interpolates along a segment or returns a control
+point is not established. When it finds nothing the zeroed record makes
+every test compute `0`, which is not `< 0`, so the chain stays straight -
+that part is read.
+
+**Built** in `oag_render::beam::tube` (2026-09-30), fed by
+`oag_game::race::Spline::tube_frame`; a disc-backed test on Talon's
+Junction's own spline (`leach_tube_ground_truth`) finds the worst chord on
+the circuit, `9.22` units out of the tube straight and `0.01` bent. Not
+measured against PPSSPP: our side only.
 
 #### Measured in play (PPSSPP v1.20.4, UCUS98712)
 

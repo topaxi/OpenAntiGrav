@@ -41,13 +41,11 @@
 //! `WO_LEACHBEAM_ENERGY` respawn fires on every wrap, and the pulse strength
 //! re-arms about once a second.
 //!
-//! **Not built**: `LeachBeam_Advance` passes every chain point through
-//! `FUN_088734d0`, which locates it on the track (`AiTrack_LocatePosition`)
-//! and, when it has left the tube - below the road, or within `2.0` of either
-//! edge - re-aims the rest of the chain at the target through
-//! `FUN_08873328`. So the original's arc bends to stay inside the track where
-//! the straight line would cut a corner. This module draws the straight-line
-//! arc; on a straight, the two agree.
+//! **The track tube** (`LeachBeam_KeepInTrack`, `LeachBeam_ReaimChain`): every
+//! undisplaced chain point is located on the track and, below the road or
+//! within [`tube::EDGE_MARGIN`] of an edge, re-aimed back inside - see
+//! [`tube`]. On a straight, or with no track to locate on, the chain is the
+//! straight line.
 //!
 //! **Chosen, no confidence score**: nothing in the geometry. The shooter's
 //! basis is the drawn hull's own rotation (the physics body's orientation and
@@ -57,6 +55,14 @@
 use oag_core::{Rng, math::Vec3};
 
 use crate::mesh::GpuVertex;
+
+pub mod tube;
+pub use tube::TubeFrame;
+
+/// What places a chain point on the track: the stand-in for
+/// `AiTrack_LocatePosition`, supplied by the caller because this crate owns no
+/// track. See [`tube`].
+pub type Locate<'a> = &'a dyn Fn(Vec3) -> Option<TubeFrame>;
 
 /// Half the strip's own width - `LeachBeam_InitLocked` copies this from
 /// `DAT_08a7cc04`, read directly as `0x3f800000` = `1.0`. Confidence **90**.
@@ -203,17 +209,26 @@ impl Ribbon {
     }
 
     /// Where `WO_LEACHBEAM_ENERGY` sits this tick: the undisplaced chain point
-    /// `segment_count - 1 - cursor`, which `LeachBeam_Advance` writes into the
+    /// `segment_count - 1 - cursor` (after the track tube has bent it, see
+    /// [`tube::walk`]), which `LeachBeam_Advance` writes into the
     /// effect's own matrix (`instance+0x120`) - so the effect starts one
     /// segment short of the target at each pulse and walks back to the
     /// shooter one segment a tick. `None` when the cursor is past the chain,
     /// where the original's match never fires and the effect stays put.
     #[must_use]
-    pub fn energy_point(&self, owner: Vec3, target: Vec3, range: f32) -> Option<Vec3> {
+    pub fn energy_point(
+        &self,
+        owner: Vec3,
+        target: Vec3,
+        range: f32,
+        locate: Locate,
+    ) -> Option<Vec3> {
         let separation = target - owner;
         let segments = segment_count(separation.length(), range).min(MAX_SEGMENTS);
         let index = segments.checked_sub(1)?.checked_sub(self.drawn.0)?;
-        Some(owner + separation / segments as f32 * index as f32)
+        tube::walk(owner, target, segments, locate)
+            .get(index as usize)
+            .copied()
     }
 }
 
@@ -240,7 +255,7 @@ pub struct Frame {
 
 /// The chain `LeachBeam_Advance` writes to `instance+0x170`: the shooter's
 /// origin, then `segments` displaced points ending at the target.
-fn chain(ribbon: &Ribbon, frame: &Frame, segments: u32) -> Vec<Vec3> {
+fn chain(ribbon: &Ribbon, frame: &Frame, segments: u32, locate: Locate) -> Vec<Vec3> {
     let separation = frame.target - frame.owner;
     let step = separation / segments as f32;
     let span = (6.0 / frame.range) * separation.length().min(frame.range);
@@ -253,11 +268,14 @@ fn chain(ribbon: &Ribbon, frame: &Frame, segments: u32) -> Vec<Vec3> {
         ribbon.amplitudes[bucket.min(AMPLITUDE_BUCKETS)]
     };
 
+    // The axes, `span` and `angular_step` keep the straight line's values: the
+    // original computes them once before its loop, and only the base walk
+    // bends.
+    let bases = tube::walk(frame.owner, frame.target, segments, locate);
     let mut points = Vec::with_capacity(segments as usize + 1);
     points.push(frame.owner);
-    let mut base = frame.owner;
     for i in 0..segments {
-        base += step;
+        let base = bases[i as usize + 1];
         let a = (i + cursor) % segments;
         let b = (i + counter / 2) % segments;
         let push_a = ((a + 1) as f32 * angular_step).sin() * amplitude(a);
@@ -279,15 +297,18 @@ fn chain(ribbon: &Ribbon, frame: &Frame, segments: u32) -> Vec<Vec3> {
 /// points `0` and `segments - 1` - not at `segments`, which only the second
 /// strip draws, at full alpha.
 ///
+/// `locate` places a point on the track for the tube bend; one that returns
+/// `None` everywhere draws the straight-line chain.
+///
 /// Empty when the two craft coincide or `range` is non-positive.
 #[must_use]
-pub fn build(ribbon: &Ribbon, frame: &Frame) -> Vec<GpuVertex> {
+pub fn build(ribbon: &Ribbon, frame: &Frame, locate: Locate) -> Vec<GpuVertex> {
     let distance = (frame.target - frame.owner).length();
     if distance < 1e-4 || frame.range <= 0.0 {
         return Vec::new();
     }
     let segments = segment_count(distance, frame.range).min(MAX_SEGMENTS);
-    let points = chain(ribbon, frame, segments);
+    let points = chain(ribbon, frame, segments, locate);
     let n = segments as usize;
 
     let mut vertices = vec![bytemuck::Zeroable::zeroed(); 4 * (n + 1)];

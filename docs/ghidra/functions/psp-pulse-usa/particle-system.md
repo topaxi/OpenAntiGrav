@@ -1040,3 +1040,57 @@ texture words at `+0x890`.
 | Address | Name | Confidence |
 | --- | --- | ---: |
 | `0x088f58a4` | `ParticleSystem_InitInstance` | 80 |
+
+### Releasing an instance by handle (2026-09-30)
+
+What the original does with the handle it is given when an effect's owner is
+done with it. Read from disassembly and decompiles, all five functions
+directly; no live capture.
+
+`FUN_088f3298(manager, handle, now)` (`Psys_ReleaseHandle`) resolves the
+handle through `Psys_LookupHandle` (`0x088f24d0`: slot `handle % capacity` of
+the table at `manager+0x4690`, records of `0xc` bytes, valid only when the
+stored id equals the handle, else `0`) and then does one of two things to the
+instance:
+
+- **`now == 0`** (every caller this page follows: `LeachBeam_Advance`'s
+  `WO_LEACHBEAM_ENERGY` re-spawn passes `0`): sets bit `8` of `+0x160`. That
+  is the same "dead" flag `ParticleSystem_Update` sets on an instance that
+  has run out. Nothing in `ParticleSystem_Update` tests it on the way in, so
+  the instance carries on until the manager's next tick: `FUN_088f3510`
+  calls `Psys_ReapDead` (`0x088f32f8`), which walks the active list
+  (`manager+0x48`), unlinks every instance with bit `8` set and passes it to
+  `ParticleSystem_Destroy` (`0x088f42b8`).
+- **`now != 0`**: `ParticleSystem_StopAndClear` (`0x088f4790`) zeroes the
+  remaining duration (`+0x138`), clears `+0x160` bits `1` and `0x10`
+  (emitting, and the looping mode), frees the live particle list at `+0x1b0`
+  (`FUN_088f48c0`) and recurses into the death and sibling instances
+  (`+0x1a8`, `+0x1a4`). The instance then reports itself dead on its next
+  `ParticleSystem_Update`.
+
+`ParticleSystem_Destroy` releases the handle (`FUN_088f2460`), frees the
+**live particle list** (`FUN_088f7e38` on each entry of `+0x1b0`), destroys the
+death, sibling and per-particle-child instances, and returns the instance to
+the pool (`FUN_08946d00`).
+
+**So the release is a kill, not a detach.** Bit `8` takes the instance and
+every particle it still holds out at the next manager tick; nothing lets the
+particles finish. The node that owns the effect (`FUN_08915cdc`) follows the
+same contract from the other side: when `Psys_LookupHandle` returns `0` for
+its handle it destroys itself. Confidence **82** for the kill (every link is a
+direct read; the manager tick's ordering against the draw was not checked, so
+a frame of the old particles may draw first).
+
+`oag_render::psys::Stage::detach` does the opposite - stops the emitters and
+lets live particles finish - which is **chosen, not measured** for every
+effect it is used for and is wrong, by this reading, wherever the original
+reaches `Psys_ReleaseHandle`: the LeachBeam ENERGY re-spawn, and the rocket
+and plasma heads the other pages record as "release".
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x088f24d0` | `Psys_LookupHandle` | 85 |
+| `0x088f3298` | `Psys_ReleaseHandle` | 82 |
+| `0x088f32f8` | `Psys_ReapDead` | 82 |
+| `0x088f42b8` | `ParticleSystem_Destroy` | 82 |
+| `0x088f4790` | `ParticleSystem_StopAndClear` | 78 |

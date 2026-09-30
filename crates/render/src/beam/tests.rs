@@ -21,6 +21,11 @@ fn frame(target: Vec3) -> Frame {
     }
 }
 
+/// The straight-line chain: no track to locate on.
+fn build(ribbon: &Ribbon, frame: &Frame) -> Vec<GpuVertex> {
+    super::build(ribbon, frame, &|_| None)
+}
+
 fn position(vertex: &GpuVertex) -> Vec3 {
     Vec3::from_array(vertex.position)
 }
@@ -234,7 +239,12 @@ fn the_energy_point_walks_from_the_target_to_the_shooter() {
     let mut seen = Vec::new();
     for _ in 0..segments {
         ribbon.advance(DT, 50.0, 250.0, &mut r);
-        seen.push(-ribbon.energy_point(Vec3::ZERO, target, 250.0).unwrap().z);
+        seen.push(
+            -ribbon
+                .energy_point(Vec3::ZERO, target, 250.0, &|_| None)
+                .unwrap()
+                .z,
+        );
     }
     assert!((seen[0] - (50.0 - step)).abs() < 1e-3, "{seen:?}");
     assert!(seen.last().unwrap().abs() < 1e-3, "{seen:?}");

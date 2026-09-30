@@ -467,7 +467,7 @@ impl Race {
                 quake_effect: None,
                 quake_point: None,
                 leach_beam_effect: None,
-                leach_charge_effect: None,
+                leach_charge_effect: [None; MAX_SHIPS],
                 leach_beam_ribbon: None,
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 leach_ball_elapsed: 0.0,

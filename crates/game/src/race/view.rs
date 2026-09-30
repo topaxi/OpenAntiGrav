@@ -259,16 +259,15 @@ pub struct RaceView {
     /// original allows a single beam in the whole race, so
     /// [`oag_gameplay::World::leach_beam`] is one `Option` and this follows it.
     pub(super) leach_beam_effect: Option<psys::Playing>,
-    /// The [`weapons::visuals::LEACHBEAM_CHARGING_EFFECT`] instance riding a
-    /// craft that is *holding* a LeachBeam, or `None`.
+    /// Per craft slot, the [`weapons::visuals::LEACHBEAM_CHARGING_EFFECT`]
+    /// instance riding that craft while it is *holding* a LeachBeam, or `None`.
     ///
     /// **Not the fired weapon - the carried one.** `FUN_0883f540` spawns this
     /// on any craft whose held-weapon id is the LeachBeam's `10`, and despawns
     /// it the moment that stops being true, so a player sees the pickup
-    /// charging before they ever press fire. One slot rather than eight because
-    /// only the player's own craft is followed; see
-    /// [`Race::advance_leach_beam_visual`].
-    pub(super) leach_charge_effect: Option<psys::Playing>,
+    /// charging before they ever press fire, and so does every opponent holding
+    /// one; see [`Race::advance_leach_beam_visual`].
+    pub(super) leach_charge_effect: [Option<psys::Playing>; MAX_SHIPS],
     /// The LeachBeam ribbon's own render-side state - the amplitude table and
     /// scroll phase [`oag_gameplay::projectile::leach_beam::Beam`]
     /// deliberately does not carry, see `oag_render::beam`'s module doc
