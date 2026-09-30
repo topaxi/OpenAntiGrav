@@ -222,7 +222,8 @@ options-menu entry (`FEGlobals->HD_Grey` styled, same as every other option
 row), and `data08.psarc` carries `data/fe/frontendscene/frontendscene2_VR.vex`
 - a second, VR-specific front-end 3D backdrop scene. None of this exists in
 [hd-frontend.md](hd-frontend.md); it is PSVR support genuinely new to Omega,
-not inherited.
+not inherited. The non-VR scene, `FrontEndScene_HD_ATG.vex`, *is* HD's file and is
+what Omega's menus draw - see [omega-status.md](omega-status.md)'s menu backdrop section.
 
 ## 2048's campaign: HD's screen shape, 2048's own map content
 

@@ -155,6 +155,11 @@ Two structural facts to expect, both different from every other binary here:
   branch), two colours that moved (the hit flash is amber where Pulse's is
   cyan) and one that is parameterized rather than hardcoded (the steady-state
   target, unresolved - ported as Pulse's white, chosen not measured).
+- [menu-backdrop-scene.md](menu-backdrop-scene.md) - `BackgroundAnim_Item.cpp`, the HD
+  style's backdrop and the one Omega's menus draw: the scene `FrontEndScene_HD_ATG.vex` flown
+  through its own animated camera into a white target, filtered by `FEBackgroundAnim_fp`'s
+  Roberts cross (edge and fill levels) and blurred, the `ScreenSetting` row layout and its
+  0.97/0.03 easing, the 60 s clock, the 57.3 degree field of view.
 - [menu-backdrop.md](menu-backdrop.md) - `BackgroundAnimFury_Item.cpp`, the
   Fury menu's backdrop: one of nineteen `.points2` ship point clouds (the record
   format, measured on all nineteen), the camera paths and colours in

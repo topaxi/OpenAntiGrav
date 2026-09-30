@@ -176,6 +176,17 @@ pub struct BootProfile {
     /// `None` for a title that ships none, which is a measurement: neither Pure
     /// pressing carries `Data\Movies\Backdrop.PMF`.
     pub menu_backdrop: Option<&'static str>,
+    /// Whether this title's menus sit on the HD-style `BackgroundAnim` widget:
+    /// a 3D scene named by the skin, filtered to a grey drawing and drawn
+    /// behind the rows.
+    ///
+    /// **A per-title switch because the widget is in every HD-lineage skin and
+    /// only some titles have a reading of it worth drawing.** Wipeout HD's
+    /// `skin.xml` authors the same `<BackgroundAnim>`, and this build draws
+    /// nothing there (`false`), which is the fact the Fury style's own widget
+    /// already sits beside. Omega ships no Fury clouds, so this widget is the
+    /// only backdrop it can have.
+    pub menu_scene: bool,
     /// The screen whose own solid fills the language picker inherits.
     ///
     /// `None` where the picker carries its own background. `Some` where it is a
@@ -280,6 +291,7 @@ mod tests {
         ],
         reel: None,
         menu_backdrop: None,
+        menu_scene: false,
         picker_backdrop_parent: None,
         picker_from_loaded_faces: false,
         fallback_globals: &[],

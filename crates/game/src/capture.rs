@@ -27,8 +27,8 @@ use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
 use menu_page::{
-    PreviewRequest, draw_preview, fury_picture, menu_page, open_for_previews, picker_kind,
-    picker_page, picker_stills,
+    PreviewRequest, draw_preview, menu_page, open_for_previews, picker_kind, picker_page,
+    picker_stills,
 };
 use offscreen::{offscreen, read_back, write_png};
 
@@ -541,11 +541,10 @@ pub fn run(
                 position: 0,
             });
             let format = showing.and_then(VideoFormat::of);
-            // The movie where there is one, else the Fury backdrop's frame
-            // for this page - see `fury_picture`.
+            // The movie where there is one, else the style's backdrop for this
+            // page - see `MenuBackdrop::still`.
             let frame = frame.map(oag_ui::menu::Picture::from).or_else(|| {
-                fury_picture(
-                    fury_backdrop.as_deref(),
+                fury_backdrop.as_deref()?.still(
                     page,
                     oag_display::display::viewport(
                         (width, height),
@@ -888,7 +887,7 @@ pub fn run(
     let mut renderer = Renderer::new(&device, &queue, format, video_format, face, &sprites)?;
     renderer.set_space(space);
     if let Some(assets) = &fury_backdrop {
-        renderer.set_fury_backdrop(&device, &queue, &assets.clouds);
+        assets.install(&mut renderer, &device, &queue);
     }
     // On Pulse (both PSP pressings and the PS2 port) this loads the
     // `Default`-role atlas rather than a title role, so

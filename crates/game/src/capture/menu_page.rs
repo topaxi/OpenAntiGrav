@@ -925,40 +925,6 @@ pub(super) fn picker_stills(
     (stills, mode3d)
 }
 
-/// The Fury backdrop's frame for a captured page, on a source that has one:
-/// the same model the live stage ticks, run `anim_seconds` in at sixty frames
-/// a second, sized to the viewport and tinted for the page - the root is the
-/// disc's `Main Menu`. One frame, so the trail the live picture accumulates
-/// is not here; the fresh particles are.
-pub(super) fn fury_picture(
-    assets: Option<&crate::boot::fury::FuryAssets>,
-    page: &str,
-    viewport: (f32, f32, f32, f32),
-    anim_seconds: Option<f32>,
-    fury_path: Option<usize>,
-) -> Option<oag_ui::menu::Picture> {
-    let assets = assets?;
-    let mut model = oag_ui::backdrop::Fury::new(
-        assets.settings.clone(),
-        assets.first,
-        crate::boot::fury::SEED,
-    )?;
-    if let Some(path) = fury_path {
-        model.force_path(path)?;
-    }
-    let frames =
-        (anim_seconds.unwrap_or(0.0).max(0.0) * oag_ui::backdrop::FRAMES_PER_SECOND) as u32;
-    for _ in 0..frames {
-        model.tick();
-    }
-    let (_, _, w, h) = viewport;
-    Some(oag_ui::menu::Picture::from(model.frame(
-        h,
-        w / h,
-        assets.tints.for_root(page == "main"),
-    )))
-}
-
 // A plain `mod tests;`, not `#[path]`ed: this file has no `#[path]` of its
 // own (it is a normal child of `capture.rs`'s `mod menu_page;`), so this
 // resolves to `menu_page/tests.rs` beside it, the same move
