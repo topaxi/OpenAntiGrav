@@ -1422,7 +1422,6 @@ fn run(args: RunArgs) -> Result<()> {
     } else {
         collision
     };
-
     let options = Options {
         inputs: inputs(&args, recorded.len())?,
         dt: if args.fixed_dt {
@@ -1434,6 +1433,7 @@ fn run(args: RunArgs) -> Result<()> {
         angular: args.angular.into(),
         scheme: args.scheme,
         reseed: args.reseed,
+        pads: locator::load_speedup_pads(args.source.as_deref(), &args.track)?,
     };
     if args.fixed_dt {
         warn!(

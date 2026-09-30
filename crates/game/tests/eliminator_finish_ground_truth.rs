@@ -16,12 +16,17 @@ use oag_gameplay::PlayerInputs;
 const TICKS: u64 = 60 * 60 * 6;
 
 fn loaded_eliminator(kill_target: Option<u32>) -> Option<race::Race> {
+    loaded_eliminator_seeded(kill_target, None)
+}
+
+fn loaded_eliminator_seeded(kill_target: Option<u32>, seed: Option<u64>) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Eliminator,
         eliminator_kill_target: kill_target,
+        seed,
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -66,27 +71,50 @@ fn a_parked_player_eliminator_reaches_a_finish() {
     assert_eq!(kills[0], 0, "the parked player cannot have scored");
 }
 
+/// Seeds tried, in this order, by the test below: the default first, then a
+/// fixed run of small integers. Fixed before any result was looked at, so no
+/// seed is chosen because it passes.
+const SEARCH_SEEDS: [Option<u64>; 5] = [None, Some(1), Some(2), Some(3), Some(4)];
+
 /// The target a launch carries is the one the race ends on, not a constant:
 /// 3 here, where the test above ends on 2, so a KILLS pick dropped on the way
 /// into `Options` (leaving the default 5) ends on neither and fails one of the
 /// two bounds below.
+///
+/// **Whether a given field reaches three kills is a weapons lottery** over
+/// seven craft (`docs/gameplay/race-modes.md`, and the Eliminator handover
+/// thread's open five-kill finish), so this walks [`SEARCH_SEEDS`] until one
+/// field ends and checks that race: every race that ends must end on the chosen
+/// target. At least one of the five must end, or the test fails.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_chosen_kill_target_is_what_the_eliminator_ends_on() {
-    let Some(mut race) = loaded_eliminator(Some(3)) else {
-        return;
-    };
     let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());
-    let mut best_when_ended = None;
-    for _ in 0..TICKS * 3 {
-        race.tick(&parked);
-        if race.sim.world.primary_race().finished {
-            best_when_ended = (0..race.sim.world.ship_count as usize)
-                .map(|slot| race.sim.world.ships[slot].standing.kills)
-                .max();
-            break;
+    let mut unfinished = Vec::new();
+    for seed in SEARCH_SEEDS {
+        let Some(mut race) = loaded_eliminator_seeded(Some(3), seed) else {
+            return;
+        };
+        let mut best_when_ended = None;
+        for _ in 0..TICKS * 3 {
+            race.tick(&parked);
+            if race.sim.world.primary_race().finished {
+                best_when_ended = (0..race.sim.world.ship_count as usize)
+                    .map(|slot| race.sim.world.ships[slot].standing.kills)
+                    .max();
+                break;
+            }
+        }
+        match best_when_ended {
+            Some(best) => {
+                assert!(
+                    (3..5).contains(&best),
+                    "seed {seed:?} ended with a best of {best} kills"
+                );
+                return;
+            }
+            None => unfinished.push(seed),
         }
     }
-    let best = best_when_ended.expect("the race ends within eighteen game-minutes");
-    assert!((3..5).contains(&best), "ended with a best of {best} kills");
+    panic!("no field of {unfinished:?} reached a finish within eighteen game-minutes");
 }

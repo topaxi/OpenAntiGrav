@@ -483,9 +483,16 @@ two runs of the original itself, from the same pinned start pose, are 100
 units apart by tick 495 - a long single-seeded comparison measures the
 emulator's scheduler, not the force law. The reference lap
 (`data/traces/talons-junction-clean-lap.csv`) is 96.3% wall-free, first
-touching a wall at tick 256, and *inside* that clean window single-seeded
-position error is already 44.1 units by tick 240: the force law, not contact
-geometry, is now what limits comparison length. Full numbers, the
+touching a wall at tick 256. **Inside that clean window single-seeded
+position error is 4.6 units at tick 240 and never above 5** (2026-09-30).
+The 44.1 recorded before was two bugs, not the force law's shape: the
+replay harness never armed the speed pads (the original crosses one at tick
+161), and the airbrake's forward `drag` term read `steerX` on `-1..=1` where
+the original holds it on `+/-100`, 100x weak. Pinned by
+`crates/trace/tests/lap_window_ground_truth.rs` and
+`pad_crossing_ground_truth.rs`; the address trail is in
+[engine.md](docs/ghidra/functions/psp-pulse-usa/engine.md#the-raw-steerx-is-on-the-100-scale-too).
+Full numbers, the
 standing-start scenario's independent cross-check (launch acceleration 32.69
 against a recorded 32.52), and why `grounded` cannot be read as a headline
 (`1.0` on all 3,146 of the original's own ticks) are on
@@ -643,6 +650,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The HUD shows a place, measured against the original; the caption pair and opponent place are the open half](handover/frontend/the-hud-shows-a-place-measured-against-the.md) - the shield-bar-colour half resolved 2026-09-05 (threshold plus a one-shot post-hit flash, not a gradient - `Hud_UpdateEnergyBar`, confidence 82); wiring it into `oag_game::hud` is its own thread now
 - [The field drove in single file, and the fix is a per-craft personality off the disc's own AI corridor](handover/gameplay/the-field-drove-in-single-file-and-the.md) - **2026-09-07: two threads closed, one stays open.** The "nothing knows another craft exists" bullet is false and corrected with file:line evidence (`crates/ai/src/field.rs`.
 - [Airborne ticks *have* been captured - 65 of them, and they are thin in a specific way](handover/tooling/airborne-ticks-have-been-captured-and-are-thin.md) - **the old title was false, corrected 2026-09-07.** `talons-junction-clean-lap.csv` holds **31** non-grounded ticks over three events (8 with both probes off.
+- [Pulse handling after the airbrake scale fix](handover/gameplay/pulse-handling-after-the-airbrake-scale-fix.md) - 2026-09-30: the reference lap tracks to 4.6 units at tick 240 (was 43.9) after two fixes, missing speed pads in the replay and a 100x-weak airbrake drag term; the AI follow-up landed (a valley is not a corner: `05_Track` and `14_Track` RAPIER clean again); left open: `07_Track` FLASH `Eliminated`, the unrescued `05_Track` crest clip, a small no-airbrake residual, `drive` has no pads.
 - [The crest lag is crest phase, not the cushion](handover/gameplay/the-crest-lag-is-phase-not-the-cushion.md) - **resolved 2026-09-07 by the pose walk, and the answer is (b).** The two candidates for the seven-tick liftoff lag on `16_Track`'s 1595 crest were our hover reach being too generous or residual crest...
 - [Is there a fifth handling class?](handover/gameplay/is-there-a-fifth-handling-class.md)
 - [The lap capture's own "the HUD said `Lap 2 of 3`" claim is now in tension with the finding that closed this row, and nobody has reconciled them](handover/frontend/the-lap-captures-own-the-hud-said-lap.md)

@@ -212,24 +212,40 @@ use oag_ai::probe::{self, Scenario};
 ///   `0.7`/`0.05`/`3.0`. All three rows move again for the same reason the
 ///   entry above gives: this scenario calls `Driver::drive`, so a differential
 ///   that behaves differently is a driver that ends up somewhere different.
+/// - **All three rows regenerated 2026-09-30, for the player's physics.**
+///   `oag_physics::airbrake::evaluate`'s forward `drag` term ran 100x weak,
+///   reading the raw `steerX` on `-1..=1` where the original holds it on
+///   `+/-100`; see `oag-physics`' own determinism gate for the entry. No
+///   driver code changed: every row moves because the AI flies the player's
+///   physics and airbrakes into corners, so the same inputs now carry it
+///   somewhere else.
+/// - **All three rows regenerated 2026-09-30, for `Line::curvature`'s split of
+///   a pitch change** (`bend_angle`: yaw plus the *convex* pitch, a concave one
+///   reading straight). This scenario's line is flat, so the curvature spread
+///   it reports is unchanged (`0.000255..0.020490` and `0.000030..0.026295`) and
+///   no corner moved: the rows move because `bend_angle` computes the yaw from
+///   the chords flattened onto the ground plane, which differs from the plain
+///   chord angle in the last bit, and one bit in a speed target is one bit in
+///   the hash. No transcendental was added - `oag_core::math::acos` is the
+///   only one it calls.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0xcbb6_08ac_5da5_35db,
-        0x12c9_2d37_5898_4434,
+        0xb27b_df5d_9fd5_c28d,
+        0x74b5_77e2_abbc_dc2d,
     ),
     (
         600,
         Scenario::Field,
-        0x5538_0690_94e7_78a7,
-        0xd556_34d7_2716_cd2d,
+        0x5249_34d8_34dd_e4e6,
+        0xfac7_6d7b_763e_551e,
     ),
     (
         1_800,
         Scenario::Field,
-        0x05ce_bd25_5983_91c3,
-        0x7e84_2fc4_c927_3215,
+        0x9548_b23b_b132_b7b7,
+        0xb7da_882b_82c1_cdb7,
     ),
 ];
 

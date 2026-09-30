@@ -129,6 +129,9 @@ fn run(name: &str) {
             angular: AngularReading::NegatedLocal,
             scheme: Default::default(),
             reseed: None,
+            // No speed pads, as before 2026-09-30: this measures the hover, and
+            // `pad_crossing_ground_truth.rs` is where the boost is checked.
+            pads: Vec::new(),
         };
         let ours = replay(
             &slice,

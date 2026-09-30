@@ -7,10 +7,12 @@
 //! feature rather than a fix to something already there. See Task #33.
 
 use anyhow::Result;
+use log::info;
 use oag_race::Course;
-use oag_vex::track;
+use oag_vex::pads::PadVolume;
+use oag_vex::{track, vex};
 
-use crate::{load_ai, resample};
+use crate::{load_ai, read_track_blob, resample};
 
 /// A track's spline, resampled the same way `resample` always is - dropping
 /// which path each sample came from, which the locator has no use for.
@@ -26,4 +28,18 @@ pub(crate) fn load_samples(source: Option<&str>, name: &str) -> Result<Vec<track
         .into_iter()
         .map(|(_, sample)| sample)
         .collect())
+}
+
+/// The track's speed pads, in node order - what [`crate::replay::Options::pads`]
+/// takes. Empty with no disc, exactly as [`load_samples`] is, and for a `.vex`
+/// that authors none.
+pub(crate) fn load_speedup_pads(source: Option<&str>, name: &str) -> Result<Vec<PadVolume>> {
+    let Some(source) = source else {
+        return Ok(Vec::new());
+    };
+    let blob = read_track_blob(source, name)?;
+    let nodes = vex::nodes(&blob).map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
+    let pads = oag_vex::pads::volumes(&blob, &nodes, vex::CLASS_SPEEDUP_PAD);
+    info!("{name}: {} speed pad(s)", pads.len());
+    Ok(pads)
 }

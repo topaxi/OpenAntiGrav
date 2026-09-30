@@ -40,6 +40,7 @@
 
 use oag_core::math::Vec3;
 
+use crate::controls::CONTROL_RANGE;
 use crate::params::Handling;
 use crate::ship::{ShipControls, ShipState, Sideshift};
 
@@ -240,7 +241,20 @@ pub fn evaluate(
     // the *ramped* states at `craft+0x2c4`/`+0x2c8`. The asymmetry is the
     // original's and is exactly the kind of thing a tidying pass unifies by
     // accident, so it is called out here and pinned by a test.
-    let slide = (left - right_brake).abs() * handling.airbrake.drag * input.steer_x.abs() * 0.01;
+    //
+    // **On the original's `+/-100` scale, not `ShipControls`' `-1..=1`.**
+    // `Ship_UpdateSteering` loads the same `+0x0` (`0x088487a0`) and compares
+    // it straight against the ramped `craft+0x2c0` (`0x088487b8`), which every
+    // capture shows running to `+/-100`, so the snapshot holds the axis in
+    // percent; `engine.md` measured the sibling `+0x10` axis live at `+/-100`.
+    // Until 2026-09-30 this multiplied by the normalised axis and ran the term
+    // 100x weak: a craft holding one airbrake into a turn lost about
+    // `0.19 * speed` units/s^2 of forward push the original keeps, measured
+    // one tick at a time on `talons-junction-clean-lap.csv`. See
+    // `docs/physics/cornering-ground-truth.md`, whose fit of this term at
+    // `1.03`-`1.07` of the read value was taken with `steerX` on this scale.
+    let steer_x = input.steer_x.abs() * CONTROL_RANGE;
+    let slide = (left - right_brake).abs() * handling.airbrake.drag * steer_x * 0.01;
 
     // Along `+forward`, and it accelerates. See this function's header for the
     // instructions that settle the sign.

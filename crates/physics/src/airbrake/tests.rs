@@ -212,8 +212,11 @@ fn the_airbrake_drag_term_has_the_magnitude_the_instruction_stream_forms() {
     let forces = evaluate(&state, &input, &handling, 40.0);
 
     // `slide` first, then `(forward * speed) * slide * 0.001` - the two
-    // `vscl.q`s and the two literals, in order.
-    let slide = 100.0f32 * handling.airbrake.drag * 1.0 * 0.01;
+    // `vscl.q`s and the two literals, in order. A full `steer_x` of `1.0` is
+    // the snapshot's `100.0`: `Ship_UpdateSteering` compares that same field
+    // straight against the `+/-100` ramped state, so dropping the scale runs
+    // this term 100x weak, which it did until 2026-09-30.
+    let slide = 100.0f32 * handling.airbrake.drag * 100.0 * 0.01;
     let expected = -(40.0f32 * slide * 0.001);
 
     // Forward is `-Z`, and the lateral term is along `+X`, so `.z` isolates

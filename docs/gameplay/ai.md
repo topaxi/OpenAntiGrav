@@ -1,3 +1,23 @@
+`05_Track` VENOM and FLASH and `14_Track` RAPIER are `CleanLap` again. One row
+reads worse than before the airbrake fix, `07_Track` FLASH `Died` to
+`Eliminated` (contact 854 to 869), and it is **a window artefact**: both trees
+wreck once mid-run and the new one wrecks a second time at tick 17834, 166 ticks
+before the 18,000-tick window closes, while a respawn takes 167. `06_Track` and
+`09_Track` lap 1-2 s quicker on every class they were `CleanLap` on. `13_Track`
+RAPIER and PHANTOM took more contact (1129 to 1555, 641 to 1347), already `Died`
+either way; that is not explained by the change, which drops only three samples
+above 0.005 on that circuit's driven line.
+
+**Checked for real corners being discounted.** The world-Y flattening would
+misread a banked or past-vertical corner as a valley, so every sample the change
+took from above 0.01 to under half was listed on all twelve circuits (lone Ace,
+VENOM, the samples its driver actually reads). Every one has a chord with a
+climb of at least 0.06 (about 3.5 degrees); none is level ground, and the
+largest (`02_Track`, 0.034 over 60 samples at a 59-to-37 degree drop;
+`06_Track`, 0.028 over a steepening climb) are the foot of a slope. No evidence
+of a dropped banked turn, on those twelve lines. It is a world-Y approximation:
+a section that banks past vertical would need the line's own frame.
+
 # Opponent AI
 
 What drives the seven other craft. **A basic driver does, as of 2026-08-11**:
@@ -3295,6 +3315,110 @@ the board: the windowed curvature **falls monotonically** through it, `0.01387
 craft is at full lock hitting a wall. That is the same understatement the
 `curvature_span` residual names, now feeding a second consumer. The gate's logic
 is not wrong here; its input is.
+
+## A valley is not a corner
+
+Added 2026-09-30, from the AI lane that followed the airbrake scale fix
+([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-raw-steerx-is-on-the-100-scale-too)).
+That fix made `oag_physics::airbrake::evaluate`'s forward term 100x stronger,
+and three `ai_clean_lap_gate` rows went `CleanLap` to `Died` (`05_Track` FLASH
+and VENOM, `14_Track` RAPIER) and `difficulty_ground_truth` went red. The
+working theory was that the drivers, tuned against the weak term, now arrive
+too fast. **It was mostly wrong**, and what replaced it is worth keeping.
+
+### What the airbrake fix did not do
+
+- **The AI has no model of the airbrake drag.** `oag-ai` emits `steer_x` on
+  `-1..=1` like a player's snapshot and the physics does the `x100`, so nothing
+  in the crate assumed the old scale and there was nothing to update.
+- **It did not make the field drive into corners faster.** Over the 48 rows
+  of the board, the mean clean-lap time per row moved by 16 ticks or less on
+  every circuit, and contact ticks by under 100 on nine of twelve. `05_Track`
+  carried the regression (537 to 5014, four classes), `07_Track` rose by 265
+  and `13_Track` fell by 854.
+- **Removing the differential does not undo it.** `trail_max = 0` turns
+  `05_Track` VENOM back to `CleanLap` and kills `10_Track` and `04_Track` RAPIER
+  instead, with `05_Track` FLASH and `14_Track` RAPIER still `Died`.
+
+### What `05_Track` does
+
+The fatal spot is a crest lip at about `(-651, 68, -517)`, reached up a hill from
+`(-411, -5, -537)` on a straight, **with no airbrake held**. Traced, lone Ace at
+VENOM, every pass of it on the pre-fix and post-fix trees:
+
+| forward speed at the lip (units/s, about) | result |
+| --- | --- |
+| 70.9 to 73.5, ten passes across both trees | clears |
+| 69.0 | clips: forward speed 68 to 18 in one tick, the craft slides back down and wrecks |
+
+So the lip needs about 70 and the driver arrives at 71-74: a knife edge that
+already existed. The airbrake change only moved lap 3's arrival down by 3.
+
+The reason the arrival is that low is the driver braking for the hill. At the
+foot, `Line::curvature` read the line levelling into the climb as a bend of
+`0.013` (a radius of 75) and `corner_target` answered 117 against a speed of
+126, so the Ace lifted and tapped both airbrakes for 14 ticks, losing 7 units/s
+before a climb that takes out 50 more on its own.
+
+### The change
+
+**A pitch change is a corner only where it is convex.** `Line::curvature` now
+reads `hypot(yaw, crest)` (`bend_angle`): the yaw is the turn between the chords
+flattened onto the ground plane (world Y up), and `crest` is how far the climb
+angle *falls* from one chord to the next. The foot of a hill and the bottom of a
+drop are concave - the hover spring presses the craft into the road and nothing
+is asked of its yaw - so they read straight. A crest or a drop's lip still reads
+as a bend, because the craft leaves the road over it. A chord steeper than sixty
+degrees keeps the plain angle between chords. Every other consumer of
+`curvature` (the boost gate, the rocket gate, the differential's exit gate)
+reads the same number, which is why it is changed in the estimator and not at
+the brake.
+
+**Chosen, not measured**, and it revisits two earlier commits. `64da876e`
+discounted every pitch change and was narrowed to gaps in `2c1a3d4f` because it
+"took crests faster everywhere and killed three more rows". Keeping the convex
+half is what that experiment lacked: flattening both halves on this tree
+(experiment, not shipped) fixed the three rows and killed `10_Track` RAPIER and
+`09_Track` PHANTOM, and the convex-only version killed neither.
+
+### The board
+
+`ai_clean_lap_gate`, 48 rows, lone Ace, three states on the same code but for
+the airbrake line and this change:
+
+| | pre-airbrake-fix | post-fix | valley change |
+| --- | ---: | ---: | ---: |
+| `Died` rows | 11 | 14 | **10** |
+| contact ticks, all rows | 13340 | 17357 | 13834 |
+
+`05_Track` VENOM and FLASH and `14_Track` RAPIER are `CleanLap` again. **One row
+is worse than before the airbrake fix: `07_Track` FLASH, `Died` to `Eliminated`**
+(contact 854 to 869, not traced). `06_Track` and `09_Track` lap 1-2 s quicker on
+every class they were `CleanLap` on. `13_Track` RAPIER and PHANTOM took more
+contact (1129 to 1555, 641 to 1347), already `Died` either way.
+
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+stays all twelve clean, and `05_Track`'s respawns are **0**, where they were 1
+before the airbrake fix and 3 after it. `07_Track` still respawns once (at tick
+1949, where it was 715).
+
+### What this does not fix
+
+- **Ace against Elite is thin.** `difficulty_ground_truth` is green at the
+  unchanged `2.0 %` tolerance, with Ace **1.85 %** under Elite on the five-seed
+  leader mean (6725 against 6852; 0.66 % before the airbrake fix, 2.14 % after
+  it). Ace is below Elite on four of the five seeds, and the field's own mean is
+  close to a tie, so the ordering is the pace-ceiling effect the test's own
+  comment records and not a driving fault this change removes.
+- **The crest lip is still a knife edge.** The driver now arrives with margin,
+  but a craft that arrives below about 70 on a slower class or after a
+  collision clips it, and once it has, **neither rescue fires**: it climbs and
+  slides back on a cycle of about 60 ticks for up to 5,000 ticks, never stopped
+  for two seconds and never far from its line. That is race rules, not driving,
+  and not attempted here.
+- **`05_Track`'s racing line still runs above its own collision surface for 134
+  samples** ([above](#the-clean-ace-board-every-circuit-every-speed-class-wall-contact-counted)),
+  a separate open fault.
 
 ## Where this sits
 

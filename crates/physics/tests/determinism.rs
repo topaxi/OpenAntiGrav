@@ -306,6 +306,17 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   old `Aerobatic` pair reproduces bit for bit, so pass 1 is the whole
 ///   movement - its clip fires on the script's wall runs, where the swept ray
 ///   it replaced never did.
+/// - **The two 3,600-tick rows regenerated 2026-09-30, behaviour.**
+///   `airbrake::evaluate`'s forward `drag` term multiplied the raw `steerX` on
+///   `ShipControls`' `-1..=1` where `Ship_UpdateAirbrakes` reads it off the
+///   input snapshot on `+/-100` (`Ship_UpdateSteering` compares that field
+///   straight against the `+/-100` ramped state at `0x088487b8`), so the term
+///   ran 100x weak. Found by a one-tick pose walk of
+///   `talons-junction-clean-lap.csv`; see `lap_window_ground_truth.rs` in
+///   `oag-trace`. **The 600-tick `Corridor` row did not move**, which is the
+///   check that this is the force law and not a hash-input change: the term
+///   needs an airbrake imbalance *and* a steering deflection at once, and the
+///   short corridor never holds both.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
@@ -316,14 +327,14 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         3_600,
         Script::Corridor,
-        0x15b0_cbc2_4a2f_2a10,
-        0x4d12_c724_8429_0628,
+        0x0475_b934_4503_366e,
+        0xe5a7_709d_5dbd_3343,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xeafa_de52_6f41_07bb,
-        0xa720_c7d1_acce_fd9d,
+        0xccf3_51b3_110c_e688,
+        0x4f50_920e_9828_3d82,
     ),
 ];
 

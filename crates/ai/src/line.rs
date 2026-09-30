@@ -366,6 +366,24 @@ impl Line {
     ///
     /// Returns zero on a straight, on a degenerate line, and on any line shorter
     /// than three points.
+    ///
+    /// # A valley is not a corner
+    ///
+    /// **The bend is the turn a craft steers plus the crest it may leave the
+    /// ground over - not a pitch change in general.** See [`bend_angle`] for the
+    /// split. A line that turns from level into a climb or from a drop into
+    /// level is concave: the hover spring presses the craft into the road and
+    /// nothing is asked of its yaw, so braking for it only costs the speed the
+    /// hill then takes out of the craft anyway. `05_Track` runs a 70 units/s
+    /// crest lip straight after such a bend, and the craft that braked 7 units/s
+    /// at the foot of the hill arrived at the lip at 69 and clipped it, where 71
+    /// and up cleared it.
+    ///
+    /// **Chosen, not measured**: a modelling decision on our own driver, with
+    /// the board in `docs/gameplay/ai.md` ("A valley is not a corner") behind
+    /// it. It revisits `64da876e`, which discounted *every* pitch change and was
+    /// narrowed to gaps in `2c1a3d4f` because it took crests faster everywhere;
+    /// keeping the convex half is what that experiment lacked.
     #[must_use]
     pub fn curvature(&self, index: usize, span: f32) -> f32 {
         if self.points.len() < 3 {
@@ -420,8 +438,7 @@ impl Line {
         // the platform's own `acos` is not required to be correctly rounded.
         // The clamp is still ours - a dot of two unit vectors can leave
         // `-1..=1` by a rounding error and `acos` of `1.0000001` is `NaN`.
-        let turned = oag_core::math::acos(into.dot(out_of).clamp(-1.0, 1.0));
-        turned / travelled
+        bend_angle(into, out_of) / travelled
     }
 
     /// Which way the line bends over `span`, positive where it bends toward
@@ -445,6 +462,39 @@ impl Line {
         let out_of = (c - b).normalize_or_zero();
         (out_of - into).dot(lateral)
     }
+}
+
+/// How far the line turns between two unit chords, in radians: the yaw a craft
+/// has to steer plus the **convex** pitch it may leave the road over.
+///
+/// `hypot(yaw, crest)`, where `yaw` is the angle between the chords once
+/// flattened onto the ground plane (world Y is up) and `crest` is how far the
+/// climb angle *falls* from the first chord to the second. A concave pitch
+/// change - the foot of a hill, the bottom of a drop - contributes nothing; see
+/// [`Line::curvature`].
+///
+/// A chord steeper than sixty degrees has no ground heading worth reading, so
+/// a bend through one falls back to the plain angle between the chords, which is
+/// what every bend read before this split.
+fn bend_angle(into: Vec3, out_of: Vec3) -> f32 {
+    let flat_in = Vec3::new(into.x, 0.0, into.z);
+    let flat_out = Vec3::new(out_of.x, 0.0, out_of.z);
+    if flat_in.length() <= 0.5 || flat_out.length() <= 0.5 {
+        // `oag_core::math::acos` and not `f32::acos`: see [`Line::curvature`].
+        return oag_core::math::acos(into.dot(out_of).clamp(-1.0, 1.0));
+    }
+    let yaw = oag_core::math::acos(
+        flat_in
+            .normalize_or_zero()
+            .dot(flat_out.normalize_or_zero())
+            .clamp(-1.0, 1.0),
+    );
+    // The climb angle of a unit chord is `pi/2 - acos(y)`; the `pi/2` cancels in
+    // the difference.
+    let climb_in = -oag_core::math::acos(into.y.clamp(-1.0, 1.0));
+    let climb_out = -oag_core::math::acos(out_of.y.clamp(-1.0, 1.0));
+    let crest = (climb_in - climb_out).max(0.0);
+    (yaw * yaw + crest * crest).sqrt()
 }
 
 #[cfg(test)]
