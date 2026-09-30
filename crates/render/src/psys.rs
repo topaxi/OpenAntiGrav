@@ -38,11 +38,8 @@
 //!   [`streak`] for the two-point classes, which Pulse's alone builds as
 //!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
 //!   so those draw the procedural radial falloff in `psys.wgsl`.
-//! - **Billboard roll and aspect, on an emitter's own particles.** Played for
-//!   a sprite template (`template::Rotation`, measured), not for the 45 of 76
-//!   PSP emitters that draw as class 3: their roll flags sit at a different
-//!   word and the derived record that feeds the stretch is unread, so those
-//!   quads are square and axis-aligned to the camera.
+//! - **Roll and aspect on an emitter's own particles** (45 of 76 PSP emitters):
+//!   played for a sprite template only, see [`template::Rotation`].
 //! - **The emitter extent of shapes 2, 3, 6 and 8.** Shapes 1 (a line), 4
 //!   and 7 (a sphere) place their particles as read - see [`spawn`]; the
 //!   unread shapes still spawn at the anchor.
