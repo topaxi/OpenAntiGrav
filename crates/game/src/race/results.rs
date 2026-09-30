@@ -18,23 +18,33 @@ use super::*;
 
 use crate::scoreboard::{self, Board, Craft};
 
-/// What a Zone run reports about itself that the world does not keep, for
-/// `EndRace Results`' six rows (`oag_ui::endrace::ZoneResults`).
+/// What a finished run reports about itself that the world does not keep, for
+/// `EndRace Results`: the Zone table's two tallies and the lap table's third column.
 ///
 /// **Presentation-side state**, on [`RaceView`]: no field reaches
 /// [`RaceSim::state_hash`], so keeping a tally here cannot move a hash or a
 /// replay. It is fed from events the simulation already emits and reads nothing
 /// back into it.
 ///
-/// Only the two statistics this build can honestly count. `Laps cleared` and
-/// `Perfect laps` are the other two of the original's block
-/// (`Zone_Update`'s `+0x1a14`/`+0x1a16`) and what steps them is not recovered, so
-/// they stay off - see `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`.
+/// Only what this build can honestly count. Zone's `Laps cleared` and `Perfect laps`
+/// (`Zone_Update`'s `+0x1a14`/`+0x1a16`) are the rest of that block and what steps them
+/// is not recovered, so they stay off - see
+/// `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RunStats {
     /// Zones that ended without a wall contact - the `outcome.perfect_zone` edge,
     /// `Zone_Update`'s `+0x1a12`.
     pub perfect_zones: u32,
+    /// Speedup pads the player entered on each lap, the `boostimg` column.
+    ///
+    /// `Ship_ApplySpeedupPad` (`0x08848f9c`) adds one to `craft + 0x900 + lap * 0x10 +
+    /// 0x94` each time a human-flown craft **enters a new pad** - the same edge that
+    /// arms the exhaust flare and, in Zone, scores 100 - and `Race_BuildEndRaceResult`
+    /// copies the four-or-five laps it reports into the third column. Read off a live
+    /// write watchpoint (2026-09-30): the field's only writer is that instruction.
+    /// Indexed by lap - 1, like [`oag_race::RaceState::lap_splits`] and bounded by the
+    /// same [`oag_race::MAX_RECORDED_LAPS`].
+    pub boosts_by_lap: [u32; oag_race::MAX_RECORDED_LAPS],
     /// The fastest the player's craft has been going, in hundredths of a unit a
     /// second, as `Zone_Update` keeps it: a `u16` of `speed * 100`, replaced when a
     /// larger one comes along.
@@ -50,6 +60,15 @@ impl RunStats {
         // `(uint)(speed * 100.0)` masked to sixteen bits, compared as unsigned.
         let centi = ((speed * 100.0) as u32 & 0xffff) as u16;
         self.top_speed_centi = self.top_speed_centi.max(centi);
+    }
+
+    /// One speedup pad entered on `lap` (1-based, `RaceState::lap`'s own meaning). A lap
+    /// past the recorded few is dropped, as its split is.
+    pub(super) fn count_boost(&mut self, lap: u32) {
+        let slot = usize::try_from(lap.saturating_sub(1)).unwrap_or(usize::MAX);
+        if let Some(count) = self.boosts_by_lap.get_mut(slot) {
+            *count += 1;
+        }
     }
 
     /// `ER_TOP_SPEED`'s number: `top * 0xe10 / 100000` in integers, which is the same
@@ -76,7 +95,7 @@ impl Race {
         self.sim.world.primary_race().finished
     }
 
-    /// The Zone results screen's tallies. See [`RunStats`].
+    /// The results screens' tallies. See [`RunStats`].
     #[must_use]
     pub fn run_stats(&self) -> RunStats {
         self.view.run_stats

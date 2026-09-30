@@ -144,6 +144,41 @@ widget that is provably hidden, plus one frame that shows `boostimg` on the
 per-lap table) and for every consequence above that is a direct read of a
 `|= 4`/`&= ~4` pair.
 
+## The third column counts speedup pads entered, and `Ship_ApplySpeedupPad` is its writer (2026-09-30)
+
+Confidence **92**. The column headed by `boostimg`
+(`EndRaceResults_PopulateLapTable`'s `lap{n}.2`, the 16-bit per-lap field at `session +
+0x900 + lap * 0x10 + 0x94`) is **the number of speedup pads the player's craft entered on
+that lap**, and its totals cell is the sum (`+0x1148`, accumulated by
+`Race_BuildEndRaceResult`'s loop over the copied laps).
+
+- **The writer, from a live write watchpoint.** PPSSPP, a Time Trial on Talon's Junction
+  (Venom, Assegai): write watchpoints armed on the six per-lap slots `craft+0x994 + 16 * i`
+  with `craft = *(*(0x08b317b4) + 0x2c0)`, plus a control on `craft+0x920` (the running lap
+  time, which must fire every tick: **3,440 hits**, so a zero elsewhere is a zero). The craft
+  was driven along the committed lap script; slot 0 was written **twice**, both at
+  `PC = 0x0884910c` - the `sw a1, 0(a0)` at the tail of the counter increment inside
+  `Ship_ApplySpeedupPad` (`0x08848f9c`), the function that applies the pad boost - and no
+  other slot and no other PC was ever hit. That is the field's only writer in this run, and
+  the store follows the load-add-store sequence `0x08849104`-`0x0884910c` exactly.
+- **The condition, from the decompile.** Inside the new-pad branch (the pad `Pads_TestCraft`
+  returned is not the one latched at `craft+0x1d0` - the edge that also arms
+  `ExhaustFlare_OnSpeedupPad` and, in Zone, raises the 100-point flag), when the craft's
+  entity has `+0x368 == 0` - the local player, by the five converging uses on
+  [`pads.md`](pads.md) - it does `+0x8d0 += 1` (a per-race pad total), bumps the profile-side
+  counter at `DAT_08b31774 + 0x11c` when `FUN_08809b38()` says so, and, when the craft's lap
+  counter `craft + 0xac8` minus one is below `0x14`, adds one to `craft + 0x900 +
+  (lap - 1) * 0x10 + 0x94`. **One count per pad entry, not per tick**, and an AI craft's laps
+  never count.
+- **The data agrees.** Talon's Junction has 17 speedup-pad volumes in about eleven places
+  round the lap (`oag-trace pads`: several sit in pairs a few units apart, and a few are on the
+  alternative path), against the captures' `9`, `10`, `10`, `8` on full laps. The first lap reads
+  `6` in both captures; why is not determined - the count is only bumped while `craft+0xac8 - 1`
+  is a valid slot, and this project has not pinned how `+0xac8` moves at the start line.
+- **Earlier readings retired.** The candidates on record were a finishing position, weapon
+  and pickup counts (both ruled out) and "a boost/speedup-pad count, unconfirmed"; the last is
+  the answer. The `boostimg` icon is the pad's own glyph.
+
 ## The variant populates (2026-09-30)
 
 All four run after `EndRaceResults_ResetTable` (so every `tablebg`, `perfectlap` and
@@ -574,30 +609,11 @@ understood and cleared.
   `Race_ComputeLoyaltyAward` (`0x0880ac50`), called from
   `Race_BuildEndRaceResult` (`0x0882a498`); see "The loyalty-award
   computation, decompiled and runtime-confirmed" above.
-- **The per-lap `+0x10` column's own writer, during the race** - narrowed but not
-  closed 2026-09-14, and its header is now known (2026-09-30): the column is headed
-  by the **`boostimg`** icon (see "Bit `0x4` is the visible bit"), the only thing
-  the ordinary table draws in that header cell, so it counts something the icon
-  stands for. `Race_BuildEndRaceResult`'s own copy loop (already decompiled:
-  `iVar19 = base; ...; *(short*)(iVar19+0x7e8) = *(short*)(iVar15+0x94); iVar15 +=
-  0x10; iVar19 += 8`) shows the raw source is `*(session + 0x900 + lap*0x10 +
-  0x94)`, a 2-byte field in an 8-lap, 16-byte-stride per-lap record (siblings
-  `+0x88` time, `+0x8c` perfect-lap flag, `+0x90` lap number - all three already
-  named as the copy targets `+0xc`/`+0x12`/`+0x13`) inside the in-race state object
-  at `base+0x2c0` (itself not named this pass). This is the *copy site*, not the
-  writer - whatever fills `session+0x900+lap*0x10+0x94` during the race itself was
-  not located; `search_instructions` on the raw offset `0x94` alone returns 241
-  matches (mostly unrelated `sw ra,0x94(sp)` prologue spills) and is not selective
-  enough. **Two live data points now exist** (both `grid0_3_2`, Venom,
-  `Weapons="off"`): `6,10,8` (sum 24, this pass) and `6,9,10` (sum 25, the prior
-  pass) - **weapons/pickups are ruled out for both**, since neither race could carry
-  a weapon at all. Lap 1 reads `6` in both independently-driven races starting from
-  the same grid position; laps 2-3 differ by one or two. The icon's name and the
-  data agree on speedup/boost pads, present regardless of the `Weapons=` setting -
-  the strongest candidate, still not confirmed. The next step is a live write
-  watchpoint on `session+0x900+lap*0x10+0x94` itself (needs `session`'s own address,
-  readable at any `EndRace Results` breakpoint as `*(int*)(base+0x2c0)`), not another
-  correlation pass.
+- ~~**The per-lap `+0x10` column's own writer, during the race**~~ **Closed 2026-09-30**:
+  `Ship_ApplySpeedupPad` at `0x0884910c`, a speedup-pad entry count per lap - see "The third
+  column counts speedup pads entered". Open inside it: why lap 1 reads `6` against `9`-`10`
+  on the laps after it in both captures (how `craft+0xac8` moves at the start line is not
+  pinned), and what `craft+0x368` is (named only as "the local player" by convergence).
 - ~~**`0x088d7e1c`'s own `+0xbe` gate**~~ **Ruled out 2026-09-14** -
   `0x088d7e1c` is the held-confirm variant used by `InGame Photo`, not
   `Cell Selection`'s own dispatcher; see "`0x088d7e1c` ruled out..." above.

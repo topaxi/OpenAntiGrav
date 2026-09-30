@@ -50,13 +50,13 @@ trade against a `Stage::Menu`-based design.
 | `lap0.0`/`lap0.1` (header) | Yes | `RC_LAP`/`PRO_TIME` |
 | `lap0.2` (header) | **No text, but the header icon draws** | the cell is blanked in the original too: `boostimg` is the header - see the `boostimg` row |
 | `lap{n}.0`/`lap{n}.1` | Yes, up to [`oag_race::MAX_RECORDED_LAPS`] (4) | off `Standing::lap_splits`, which is itself capped at 4 - see below |
-| `lap{n}.2` | **No, any row** | same reason as the header |
-| totals row (`PRO_STATS_TOT` + `tablebg{n+1}`) | Yes | `Results::total_ticks`, the player's own finish tick |
+| `lap{n}.2` | **Yes, 2026-09-30**: pads entered on that lap | `crate::race::RunStats::boosts_by_lap`, counted on the edge `Ship_ApplySpeedupPad` bumps the original's own counter on (a *new* pad, the human craft only) - the writer was found by a live write watchpoint. Blank for a lap with no count |
+| totals row (`PRO_STATS_TOT` + `tablebg{n+1}`) | Yes | `Results::total_ticks`, the player's own finish tick; the third cell is the sum of the laps' pad counts (`+0x1148`) |
 | `tablehighlight` | Yes, on the totals row; hidden for Speed Lap | **measured 2026-09-30**: `PopulateLapTable` ends on `y = laps * 0x14 + 0x5d`, i.e. `93 + 20 * laps`, and hides it in mode 10, which has no totals row. It was `92 + 20 * laps`, chosen, before |
 | `tablebg{n}` rows | **Only the rows in use**, 2026-09-30 | `ResetTable` hides all eight and `PopulateLapTable` shows one per lap and the totals row; this build drew all eight on every table until the bit-`0x4` correction (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`). A race with no completed lap hides the whole `table` group |
 | `topbarcenter` | Yes | shown by `ResetTable` |
 | `perfectlap{n}` | **No** | the flag's direction is settled (nonzero shows the icon, 2026-09-30) but this build keeps no per-lap "perfect" flag and does not know what makes a lap perfect, so none is ever set. **Its own `idstring="MSC_PL"` text overlay used to leak through regardless** - found and fixed 2026-09-28: the overlay is a nested, unnamed `<Text>` inside the `<Image name="perfectlap{n}">` element (`docs/formats/endrace-screens.md`), so the by-`name` skip this row already gave the image half never caught the text half; `results_draw_list` now also skips any text whose `idstring` is `MSC_PL`. Visible as a faint "TP" (this source's own French) past each row in a pre-fix capture. |
-| `boostimg` | **Yes, 2026-09-30** | the third column's header icon, shown by `EndRaceResults_PopulateLapTable` and by no other populate. The earlier "hidden unconditionally" reading had `\|= 4` and `&= ~4` backwards; the one capture (`results-01.png`) always agreed with the corrected one. **The column's values stay blank** - the icon is the disc's header, and what the number under it counts is unrecovered - so a header icon over an empty column is what draws |
+| `boostimg` | **Yes, 2026-09-30** | the third column's header icon, shown by `EndRaceResults_PopulateLapTable` and by no other populate. The earlier "hidden unconditionally" reading had `\|= 4` and `&= ~4` backwards; the one capture (`results-01.png`) always agreed with the corrected one. The column under it counts the pads entered on each lap, and the totals cell sums them |
 | `ContinueButton`/`ControlTextConfirm` | Yes | direct idstrings |
 
 [`oag_race::MAX_RECORDED_LAPS`]: ../../crates/race/src/state.rs
@@ -373,9 +373,11 @@ still.
   Menu` -> `RETURN TO GRID` -> `Cell Selection`.
 - ~~**`boostimg`'s own condition disagrees with the decompile.**~~ **Closed
   2026-09-30**: it did not - `|= 4` is *visible*. The header icon draws on the lap
-  table now; see the `boostimg` row above. What stays open is the third column's
-  values, headed by that icon: a boost/speedup-pad count fits the icon and the two
-  captures (`6,9,10` and `6,10,8`) and is unconfirmed.
+  table now, and the column under it is the per-lap **speedup-pad count**
+  (`Ship_ApplySpeedupPad`, found with a live write watchpoint), which this build
+  tallies on the same pad-entry edge. Open: lap 1 reads `6` on both captures against
+  `9`-`10` on the laps after, unexplained, and this build's own counts have not been
+  laid against a full lap of the original on the same circuit.
 - **`EndRaceResults_Update` and the network table** are read but draw nothing here:
   this build has no network play (`EndRaceResults_PopulateMultiplayerTable`).
 - **A parser quirk this pass routed around** rather than fixing:

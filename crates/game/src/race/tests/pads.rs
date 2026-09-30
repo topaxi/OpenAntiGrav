@@ -281,3 +281,31 @@ fn only_zone_mode_scores_for_a_speed_pad() {
         );
     }
 }
+
+/// The lap table's third column counts pads **entered**: one on the lap the craft is on,
+/// however long it sits inside - `Ship_ApplySpeedupPad`'s per-lap counter shares the
+/// edge with the exhaust flare and the Zone score.
+#[test]
+fn entering_a_pad_counts_one_boost_on_the_current_lap_and_not_again_while_inside() {
+    let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
+    let lap = race.sim.world.primary_race().lap;
+    for _ in 0..90 {
+        race.tick(&PlayerInputs::none());
+    }
+    let boosts = race.run_stats().boosts_by_lap;
+    assert_eq!(boosts.iter().sum::<u32>(), 1, "{boosts:?}");
+    assert_eq!(boosts[lap as usize - 1], 1, "on lap {lap}: {boosts:?}");
+}
+
+/// Only the human's own entries count: the eight craft on the grid all enter the pad,
+/// and the third column is the player's (`craft+0x368 == 0`).
+#[test]
+fn an_opponent_entering_a_pad_is_not_a_boost_on_the_players_lap() {
+    let mut race = grid_on_a_speed_pad();
+    race.tick(&PlayerInputs::none());
+    assert!(
+        (0..8).all(|slot| race.sim.pad_current[slot] == Some(0)),
+        "the whole grid should be on the pad"
+    );
+    assert_eq!(race.run_stats().boosts_by_lap.iter().sum::<u32>(), 1);
+}

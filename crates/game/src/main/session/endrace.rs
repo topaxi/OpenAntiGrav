@@ -61,11 +61,13 @@ impl Session {
         let board = stage.race.results().cloned();
         let observation = stage.observation();
         let standing = &stage.race.sim.world.ships[0].standing;
+        let boosts = stage.race.run_stats().boosts_by_lap;
         let laps: Vec<oag_ui::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
             .filter_map(|index| {
                 standing.lap_splits[index].map(|ticks| oag_ui::endrace::LapSplit {
                     lap: (index + 1) as u32,
                     ticks,
+                    boosts: Some(boosts[index]),
                 })
             })
             .collect();

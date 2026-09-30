@@ -479,6 +479,15 @@ Two more details a reader will otherwise trip over:
 
 ### The sound, and a mode constant that is not Zone's
 
+**The new-pad branch also keeps the pad-visit statistics, and their per-lap half is the
+`EndRace Results` third column.** For `racer+0x368 == 0` it adds one to a per-race pad total
+(`racer+0x8d0`), one to a profile-side counter (`DAT_08b31774 + 0x11c`), and one to
+`craft + 0x900 + (lap - 1) * 0x10 + 0x94`, where `lap` is `craft + 0xac8` and the slot is
+bounded by `0x14`. A live write watchpoint on that per-lap field (2026-09-30) caught only
+`PC = 0x0884910c`, the store of that increment. See
+[`endrace-screens.md`](endrace-screens.md#the-third-column-counts-speedup-pads-entered-and-ship_applyspeeduppad-is-its-writer-2026-09-30).
+This is a sixth use of `+0x368` that separates the local player from everyone else.
+
 Both branches name the same sound, `"SPEEDUPPAD"`, and pick between two emitters.
 Which one is taken splits on `racer+0x368` - **the same field that gates the Zone
 score and the pad-visit statistics** in `Ship_ApplySpeedupPad`. Three independent

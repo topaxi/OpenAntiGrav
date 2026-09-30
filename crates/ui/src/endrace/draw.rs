@@ -59,12 +59,12 @@ const MENU_SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 /// `EndRace Results`' draw list: the headline and the per-lap table.
 ///
-/// **The table's third column draws no values and no `perfectlap{n}` icon** - see
-/// the module doc on [`super::Results`]: what the column counts is unread, and this
-/// build keeps no per-lap "perfect" flag for the icons. **`boostimg` draws**: it is
-/// the third column's header icon, shown by `EndRaceResults_PopulateLapTable` and by
-/// no other populate, and it was left undrawn until 2026-09-30 on a reading of the
-/// decompile that had bit `0x4` the wrong way round (`docs/ui/endrace-screens.md`).
+/// **The `perfectlap{n}` icons never draw**: this build keeps no per-lap "perfect"
+/// flag. **`boostimg` draws** as the third column's header icon, and the column counts
+/// the speedup pads entered on each lap ([`super::LapSplit::boosts`]). The icon is shown
+/// by `EndRaceResults_PopulateLapTable` and by no other populate; it was left undrawn
+/// until 2026-09-30 on a reading of the decompile that had bit `0x4` the wrong way
+/// round (`docs/ui/endrace-screens.md`).
 /// Speed Lap has no totals row and no highlight; a race with no completed lap hides
 /// the whole table (`table &= ~4`).
 #[must_use]
@@ -425,15 +425,13 @@ fn lap_cell_text(
             _ => None,
         };
     }
-    if c == 2 {
-        // The third column's own meaning is unread - see the module doc.
-        return None;
-    }
     if n <= model.laps.len() {
         let split = model.laps[n - 1];
         return match c {
             0 => Some(split.lap.to_string()),
             1 => Some(format_ticks(u64::from(split.ticks))),
+            // The `boostimg` column: the pads entered on this lap.
+            2 => split.boosts.map(|boosts| boosts.to_string()),
             _ => None,
         };
     }
@@ -441,6 +439,14 @@ fn lap_cell_text(
         return match c {
             0 => Some(strings.get_or_id("PRO_STATS_TOT").to_string()),
             1 => Some(format_ticks(model.total_ticks)),
+            // `+0x1148`, the sum `Race_BuildEndRaceResult` accumulates over the laps
+            // it reports - drawn only when every lap has a count to add up.
+            2 => model
+                .laps
+                .iter()
+                .map(|split| split.boosts)
+                .sum::<Option<u32>>()
+                .map(|total| total.to_string()),
             _ => None,
         };
     }

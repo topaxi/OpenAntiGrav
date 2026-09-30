@@ -104,16 +104,15 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
   per-team persistent total's own writer, `Loyalty_AccumulateTotal`
   (`0x08807884`), is a plain capped accumulate (`+= award`, ceiling
   `100000`) - a drawing pass now has both laws, not just the display field.
-- **The per-lap table's third column** (`docs/formats/endrace-screens.md`'s "third
-  column" section) - a real, stored per-lap 16-bit field, meaning still unresolved.
-  **2026-09-30: the column is headed by the `boostimg` icon**, which the earlier
-  passes had misread as hidden (bit `0x4` is the *visible* bit - the correction is on
-  the ghidra page). That icon now draws over an empty column. Candidates ruled out: a
-  finishing position (exceeds the 8-craft field) and weapon/pickup counts (both captures
-  are `Weapons="off"` cells). A speedup/boost-pad count fits the icon and the data
-  and is unconfirmed. Next step, not another correlation pass: a live write watchpoint
-  on `craft+0x994 + lap*0x10` (`craft = *(*(0x08b317b4)+0x2c0)`), placing the craft on
-  a speedup pad with `psp-drive.py place`.
+- ~~**The per-lap table's third column**~~ **Closed 2026-09-30**: it is the number of
+  speedup pads the player entered on that lap, headed by the `boostimg` icon (which the
+  earlier passes had misread as hidden - bit `0x4` is the *visible* bit). A live write
+  watchpoint on `craft+0x994 + lap*0x10` caught its only writer at `0x0884910c` inside
+  `Ship_ApplySpeedupPad`; this build now tallies it on the same new-pad edge
+  (`crate::race::RunStats::boosts_by_lap`) and draws it. **Still open**: lap 1 reads `6`
+  against `9`-`10` on the laps after it in both captures, unexplained (how `craft+0xac8`
+  moves at the start line is not pinned), and this build's own per-lap counts have not been
+  compared with the original's on the same circuit.
 - ~~**The Tournament/Zone/Elimination/split-screen variants of `EndRace
   Results`'s own populate**~~ **Closed 2026-09-30**: all four are read, the
   Eliminator table and the sort behind it are confirmed on a live PPSSPP frame, and

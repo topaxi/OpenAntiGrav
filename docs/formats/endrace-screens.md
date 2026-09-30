@@ -61,7 +61,7 @@ own 8-byte slot):
 | --- | --- | --- | --- |
 | 0 | `lap{n}.0` | a stored byte at `+0x13` | decimal |
 | 1 | `lap{n}.1` | a stored value at `+0xc` | the same centisecond time formatter `race-campaign.md` already names (`FUN_088196e4`) |
-| 2 | `lap{n}.2` | a stored 16-bit value at `+0x10` | decimal |
+| 2 | `lap{n}.2` | a stored 16-bit value at `+0x10` - the speedup pads entered on this lap | decimal |
 
 `docs/ui/campaign-screens.md`'s capture read column 2 as `6`/`9`/`10` summing
 to a `25` total and called it "a pennant-icon column" on sight, and it was right:
@@ -70,30 +70,15 @@ hiding `boostimg` unconditionally, from `|= 4`/`&= ~4` pairs read the wrong way
 round; bit `0x4` is the *visible* bit (the correction is on the ghidra page and was
 found from an unrelated live flag read), so `EndRaceResults_ResetTable` hides the
 icon and `EndRaceResults_PopulateLapTable` shows it. The header cell `lap0.2` is
-blanked, which makes the icon itself the column's header - it counts something the
-boost glyph stands for. **What the stored 16-bit value counts is still not
-determined**, but the candidates narrow (traced 2026-09-14, [`endrace-screens.md`'s
-own ghidra page](../ghidra/functions/psp-pulse-usa/endrace-screens.md#open)): a
-second `grid0_3_2` race (`Weapons="off"`, same as the first) read `6`/`10`/`8`
-(sum `24`) against the first capture's `6`/`9`/`10` (sum `25`) - a weapon/pickup
-count is ruled out for both captures, since neither race could carry a weapon at
-all with `Weapons="off"` authored on the cell. Lap 1 reads `6` in both
-independently-driven races (both starting from the same grid position), while
-laps 2-3 differ by one or two - a speedup/boost pad count (present regardless of
-the `Weapons=` setting, and plausible to cross a slightly different number of
-depending on the exact line driven) fits the icon's name and the data, and is
-still unconfirmed. The raw source field during the race itself was traced to
-`session + 0x900 + lap*0x10 + 0x94` (the ghidra page's own copy-site read), but
-its writer - whatever increments it mid-race - was not located either pass.
-Confidence 60 on "boost-shaped" (the widget's name and glyph), 40 on any more
-specific reading; 88 on the structural facts (the field exists, is a per-lap 16-bit
-int, is headed by `boostimg`, and is not a weapon/pickup count on either of the two
-`Weapons="off"` captures this project has). The totals row's own aggregate
-(`+0x1148` of the shared struct, not summed client-side) reproduces both captures'
-own totals from their own three lap values exactly - an internally consistent
-whole on both runs, whatever the unit is. A live breakpoint on writes to
-`session+0x900+lap*0x10+0x94` itself, not another correlation pass, is the
-direct next step.
+blanked, which makes the icon itself the column's header. **The column counts the
+speedup pads the player entered on that lap, and its totals cell is their sum** (settled
+2026-09-30, confidence 92: a live write watchpoint caught the per-lap field's only writer
+inside `Ship_ApplySpeedupPad` - see [the ghidra page's "The third column counts
+speedup pads entered"](../ghidra/functions/psp-pulse-usa/endrace-screens.md#the-third-column-counts-speedup-pads-entered-and-ship_applyspeeduppad-is-its-writer-2026-09-30)).
+The captures' `6`/`9`/`10` (total `25`) and `6`/`10`/`8` (`24`) are pad counts on Talon's
+Junction, which has about eleven pad positions on a lap; lap 1 reading `6` both times is
+not explained. A weapon/pickup count was ruled out by both captures being `Weapons="off"`
+cells, and a finishing position by exceeding the field size.
 
 ### One table, five fillings: which widgets each mode shows (2026-09-30)
 
@@ -106,7 +91,7 @@ each populate shows what it uses. Read on the ghidra page's "The variant populat
 
 | Mode | Header row | Rows shown | `boostimg` | Highlight (at `y = 93 + 20 * (row - 1)`) | Cells |
 | --- | --- | --- | --- | --- | --- |
-| Time Trial, Speed Lap, single race | `RC_LAP` / `PRO_TIME` / *blank, `boostimg` on top* | one per lap (max 5) + a totals row (none for Speed Lap) | **shown** | the totals row (hidden for Speed Lap) | lap number, time, third column |
+| Time Trial, Speed Lap, single race | `RC_LAP` / `PRO_TIME` / *blank, `boostimg` on top* | one per lap (max 5) + a totals row (none for Speed Lap) | **shown** | the totals row (hidden for Speed Lap) | lap number, time, pads entered |
 | Tournament | `PRO_POS` / `ER_TEAM` / `ER_POINTS` | one per craft | hidden | the player's row | position, team, points |
 | Zone | none (`topbarcenter` hidden) | six | hidden | hidden | label in column 0, value in column 2 |
 | Eliminator | `ER_DEATHS` / `ER_TEAM` / `IG_HUD_KILLS` | one per craft | hidden | the player's row | deaths, team, kills |
@@ -318,10 +303,9 @@ populate functions in full:
 
 ## What is not determined
 
-- **The per-lap third column on `EndRace Results`** (see above) - a real,
-  stored 16-bit field. Meaning still unresolved, but weapon/pickup counts
-  are now ruled out (both captures are `Weapons="off"`); a boost/speedup-pad
-  count is the leading unconfirmed candidate as of 2026-09-14.
+- ~~**The per-lap third column on `EndRace Results`**~~ **Settled 2026-09-30**: the number of
+  speedup pads entered on the lap (see above). Still open: why lap 1 reads `6` on both
+  captures.
 - ~~**The `perfectlap{n}` flag's direction**~~ **Settled 2026-09-30**: nonzero
   shows the icon. What makes a lap "perfect" is not read (the bytes come from
   `craft+0x900 + lap*0x10 + 0x8c`).

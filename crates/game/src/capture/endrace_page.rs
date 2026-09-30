@@ -217,22 +217,16 @@ fn endrace_page(
     let mut trophy = None;
     let layers = match kind {
         EndRaceKind::Results => {
+            // The reference capture's own three laps and their third column
+            // (`6`/`9`/`10`, total `25`): `results-01.png`.
+            let split = |lap, seconds, boosts| oag_ui::endrace::LapSplit {
+                lap,
+                ticks: seconds_to_ticks(seconds),
+                boosts: Some(boosts),
+            };
             let model = oag_ui::endrace::Results {
                 headline: oag_ui::endrace::Headline::TimeTrial,
-                laps: vec![
-                    oag_ui::endrace::LapSplit {
-                        lap: 1,
-                        ticks: seconds_to_ticks(92.49),
-                    },
-                    oag_ui::endrace::LapSplit {
-                        lap: 2,
-                        ticks: seconds_to_ticks(49.34),
-                    },
-                    oag_ui::endrace::LapSplit {
-                        lap: 3,
-                        ticks: seconds_to_ticks(49.93),
-                    },
-                ],
+                laps: vec![split(1, 92.49, 6), split(2, 49.34, 9), split(3, 49.93, 10)],
                 total_ticks: u64::from(seconds_to_ticks(191.76)),
             };
             oag_ui::endrace::results_draw_list(

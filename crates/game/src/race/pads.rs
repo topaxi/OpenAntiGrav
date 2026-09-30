@@ -113,6 +113,13 @@ impl Race {
         if entered != self.sim.pad_current[slot] {
             self.sim.pad_current[slot] = entered;
             if entered.is_some() {
+                // The lap table's third column: `Ship_ApplySpeedupPad` adds one to the
+                // human craft's own per-lap counter on this same edge (`craft+0x900 +
+                // lap * 0x10 + 0x94`, its only writer). See [`RunStats`].
+                if self.sim.world.controllers[slot].is_human() {
+                    let lap = self.sim.world.race[slot].lap;
+                    self.view.run_stats.count_boost(lap);
+                }
                 // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under
                 // the mode selector `zone-mode.md` identifies.
                 // **Whichever slot a person flies, not slot 0** - the same

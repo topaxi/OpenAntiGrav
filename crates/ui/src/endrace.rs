@@ -100,6 +100,12 @@ pub struct LapSplit {
     /// This project's own fixed 60 Hz tick - see
     /// [`docs::determinism`](../../../docs/architecture/determinism.md).
     pub ticks: u32,
+    /// Speedup pads entered on this lap - the third column, headed by the `boostimg`
+    /// icon: `Ship_ApplySpeedupPad`'s per-lap counter at `craft + 0x900 + lap * 0x10 +
+    /// 0x94`, copied by `Race_BuildEndRaceResult` (`docs/ghidra/functions/psp-pulse-usa/
+    /// endrace-screens.md`). `None` leaves the cell blank, for a source that keeps no
+    /// such tally.
+    pub boosts: Option<u32>,
 }
 
 /// `Line1`'s own two-step narrowing - see

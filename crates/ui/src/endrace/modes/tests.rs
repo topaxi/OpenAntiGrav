@@ -418,9 +418,21 @@ fn the_lap_table_shows_boostimg_and_only_its_own_rows() {
     let results = |headline| Results {
         headline,
         laps: vec![
-            LapSplit { lap: 1, ticks: 60 },
-            LapSplit { lap: 2, ticks: 120 },
-            LapSplit { lap: 3, ticks: 180 },
+            LapSplit {
+                lap: 1,
+                ticks: 60,
+                boosts: None,
+            },
+            LapSplit {
+                lap: 2,
+                ticks: 120,
+                boosts: None,
+            },
+            LapSplit {
+                lap: 3,
+                ticks: 180,
+                boosts: None,
+            },
         ],
         total_ticks: 360,
     };
@@ -483,4 +495,58 @@ fn a_race_with_no_lap_hides_the_table() {
         "no header bar, top rule or icon"
     );
     assert!(!text_list(&layers).contains(&"Lap".to_string()));
+}
+
+/// The third column, under its `boostimg` header: each lap's pad count and their sum on
+/// the totals row - the reference capture's own `6`/`9`/`10` and `25`. A lap with no
+/// count leaves its cell blank and the total with it.
+#[test]
+fn the_third_column_counts_boosts_per_lap_and_totals_them() {
+    let draw = |boosts: [Option<u32>; 3]| {
+        let model = Results {
+            headline: Headline::TimeTrial,
+            laps: boosts
+                .iter()
+                .enumerate()
+                .map(|(index, boosts)| LapSplit {
+                    lap: index as u32 + 1,
+                    ticks: 3000,
+                    boosts: *boosts,
+                })
+                .collect(),
+            total_ticks: 9000,
+        };
+        results_draw_list(
+            &model,
+            &layout(),
+            &skin(),
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed(),
+        )
+    };
+    let column = |layers: &Layers| -> Vec<(f32, String)> {
+        texts(layers)
+            .into_iter()
+            .filter(|(_, x, _)| (*x - 320.0).abs() < 0.01)
+            .map(|(text, _, y)| (y, text))
+            .collect()
+    };
+
+    let counted = draw([Some(6), Some(9), Some(10)]);
+    assert_eq!(
+        column(&counted),
+        [
+            (96.0, "6".to_string()),
+            (116.0, "9".to_string()),
+            (136.0, "10".to_string()),
+            (156.0, "25".to_string()),
+        ]
+    );
+
+    let partial = draw([Some(6), None, Some(10)]);
+    let values: Vec<String> = column(&partial).into_iter().map(|(_, text)| text).collect();
+    assert_eq!(values, ["6", "10"], "a lap with no count leaves no total");
 }

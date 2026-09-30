@@ -147,8 +147,16 @@ fn results_draws_the_headline_and_the_lap_table_but_never_the_third_column() {
     let model = Results {
         headline: Headline::TimeTrial,
         laps: vec![
-            LapSplit { lap: 1, ticks: 60 },
-            LapSplit { lap: 2, ticks: 120 },
+            LapSplit {
+                lap: 1,
+                ticks: 60,
+                boosts: None,
+            },
+            LapSplit {
+                lap: 2,
+                ticks: 120,
+                boosts: None,
+            },
         ],
         total_ticks: 180,
     };
