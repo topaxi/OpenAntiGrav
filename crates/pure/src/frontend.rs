@@ -443,6 +443,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     // Neither pressing carries `Data\Movies\Backdrop.PMF`.
     menu_backdrop: None,
     picker_backdrop_parent: Some(states::INTRO_SCREEN),
+    picker_from_loaded_faces: false,
     fallback_globals: FALLBACK_GLOBALS,
     fallback_images: FALLBACK_IMAGES,
 };

@@ -148,15 +148,46 @@ are also HD's at twice the pixel size (`helv` line height 64 against 33, `helvb`
 advance ratio 2.0 on every shared glyph), so its atlases are read at
 `Space::font_texel_scale` 0.5 - **an inference, confidence 60**: the ratio is
 measured, that the PS4 build draws at half size is not (no PS4 text path has
-been read). The main menu now lays out as HD's does; the same still-wrong list
-as HD applies: the Language Selection rows overlap (row pitch comes from
-Pulse's hard-coded `font_line_height` table), and its confirm glyph is a box.
-Screenshots: `data/scratch/omega-fe-retouch/f-{boot,main,grid-select,cell-select}.png`.
-Not fixed here, still visible on `cell-select`: the footer's third prompt draws
-over the "Speed Class" caption, `%d` in "NOCH %d PUNKTE" is not substituted, and
-unresolved ids show their raw names ("Event line", "rc laps line").
-`--race` stills show no HUD at all on Omega at tick 120, before or after this
-change (byte-identical), so whether Omega's HUD shares this path is untested.
+been read). The main menu now lays out as HD's does.
+
+**Screens (2026-09-30, `omega-fe-screens`).** Four defects closed, three of them
+shared with HD:
+
+- *Language Selection rows overlapped* (HD too). The picker's `<Menu>` authors
+  x, y, scale, colour and alignment and **no pitch**, so the step was always an
+  inference, and the table it inferred from (`font_line_height`) is Pulse's: 13
+  units against HD's 33 and Omega's 32 (`helv`, 64 at 0.5). `oag_title::BootProfile::picker_from_loaded_faces`
+  (true for HD and Omega only) now steps by one line of the loaded `Default`
+  face; the face height is the disc's, the rule "one line of the widget's font"
+  is the inference. The selected row's band is drawn the full row and 300 wide,
+  **chosen, not measured**. No reference exists: HD's picker was never caught on
+  RPCS3 (`hd-frontend.md`, the redirect fires in milliseconds) and no PS4
+  emulator exists here. Pulse, Pure and 2048 still use the table, byte-identical.
+- *The confirm glyph was a box* (HD too). `ControlTextConfirmButton` authors
+  `font="menu"`, HD's language plugins declare no `menu` role, and `FE_CONFIRM_BUTTON`
+  is a single Buttons-face codepoint. The picker now draws it (and the back
+  prompt) through the `Buttons` slot, the mechanism the campaign footer already
+  uses. Which face the original picks is **chosen, not measured**.
+- *`cell-select`/`grid-select` raw ids ("Event line", "rc laps line"), `%d`, the
+  footer overprint and "more points needed" over "010"* were one cause: the
+  campaign still and live stage dispatched `title == HD` to `oag_ui::campaign::hd`
+  and sent Omega to Pulse's draw list, which has no arm for HD's widget names.
+  `oag_game::campaign::draws_hd_campaign` covers both titles. Omega's `Cell
+  Selection` also authors a `RecordsButton` (`FE_RECORDS`) at exactly
+  `DifficultyButton`'s `x=944 y=994`; it is suppressed (no leaderboard behind it,
+  as HD's endrace drops `RecordsCycle`) - **chosen, not measured**.
+- `--race` still shows no HUD at tick 120 on Omega; untouched.
+
+Still visible on Omega: circuit names read as ids (`01_Track`: the German
+`entries.xml` names only the four Zone circuits, `25_Track`..`28_Track`, the rest
+live elsewhere or under other ids); the three medal icons under the target row
+are in the wrong order (`Hexmedal_HD` is 976x549 on Omega against HD's 1024x768,
+and the crop is HD's); no flyer and a white backdrop on `grid-select` (`flyers:
+None`); `Event 01/08` is an English literal on HD too; the Endrace screens still
+dispatch `title == HD` alone. The picker's `Svenska` x4 and `Portugus` are **the
+disc's own**: `definition.xml` really says `ID="Japanese" String="Svenska"` (and
+Korean, TraditionalChinese), and `ID="Portuguese" String="Portugus"`. `P??????`
+(Russian) is Cyrillic missing from the `Default` face's atlas.
 
 `just play omega` boots the front end, reads `data09.psarc`'s ten `FEGlobals`,
 the boot chain and the string table, and stops on **Language Selection** - the

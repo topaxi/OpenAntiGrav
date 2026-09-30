@@ -126,7 +126,7 @@ BASELINE = {
     # `crates/game/src/boot/options.rs`, split out for the `platform` field
     # the title+platform render-profile split (`crates/game/src/settings.rs`)
     # needed on `Boot`/`Shell` - a move, with room left for it.
-    "crates/game/src/boot.rs": 1666,
+    "crates/game/src/boot.rs": 1661,
     # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
     # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -
     # prep for the `oag-ui` extraction, which cannot name a type that lives in
