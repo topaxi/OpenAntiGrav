@@ -300,3 +300,10 @@ OAG_LOADING_COUNTS_LOADED = "{done} / {total} loaded"
 OAG_LOADING_COUNTS_CONVERTED = "{done} / {total} converted"
 OAG_LOADING_COUNTS_CACHED_SUFFIX = ", {cached} already cached"
 OAG_LOADING_COUNTS_FAILED_SUFFIX = ", {failed} failed"
+
+# The line Cell Selection shows when a confirmed cell cannot launch - a mode
+# this build cannot run yet, or a circuit this disc does not carry. Ours, not
+# the disc's: nothing authored says either, and saying nothing left the cell
+# looking dead. `crates/game/src/main/campaign_stage.rs`.
+OAG_CAMPAIGN_MODE_UNSUPPORTED = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET"
+OAG_CAMPAIGN_TRACK_UNAVAILABLE = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC"

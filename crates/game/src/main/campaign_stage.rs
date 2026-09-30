@@ -154,6 +154,10 @@ pub(crate) struct CampaignStage {
     /// slideshow does: nothing here is per-entity art.
     pub(crate) sprites: oag_game::sprite::Sheet,
     pub(crate) screen: Screen,
+    /// Why the last confirmed cell did not launch, shown a row above the
+    /// footer until the player does anything else - see
+    /// [`Self::nav_legend_draw`]. `None` the rest of the time.
+    pub(crate) notice: Option<String>,
     /// [`oag_title::Title::name`], for [`Self::medal_of`] - the same string
     /// `oag_game::records::Key::new`'s own `title` takes. Also what
     /// `crate::main::menu_stage::MenuStage::render` and
@@ -235,6 +239,7 @@ impl CampaignStage {
             strings,
             sprites,
             screen,
+            notice: None,
             title,
             circuit_names,
             records,
@@ -280,16 +285,24 @@ impl CampaignStage {
 
     /// The `Confirm`/`Back` legend's own draw list, or empty when this
     /// source's `Skin.xml` carried none - see
-    /// `oag_ui::campaign::footer::NavigationLegend::draw`.
+    /// `oag_ui::campaign::footer::NavigationLegend::draw`, and [`Self::notice`]
+    /// when there is one.
     #[must_use]
     pub(crate) fn nav_legend_draw(
         &self,
         faces: &oag_ui::picker::FaceScales,
         measure: &dyn Fn(&str) -> f32,
     ) -> Vec<oag_ui::frontend::Draw> {
-        self.nav_legend
-            .as_ref()
-            .map_or_else(Vec::new, |legend| legend.draw(faces, measure))
+        let Some(legend) = self.nav_legend.as_ref() else {
+            return Vec::new();
+        };
+        let mut draws = legend.draw(faces, measure);
+        draws.extend(
+            self.notice
+                .as_deref()
+                .and_then(|text| legend.notice(text, faces)),
+        );
+        draws
     }
 
     /// The ticker's own draw at its current clock - `None` when this source

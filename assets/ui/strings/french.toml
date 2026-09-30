@@ -232,4 +232,7 @@ ids = [
     # this file's own header.
     "OAG_HINTS_ESC_TO_MENU",
     "OAG_HINTS_ESC_QUITS",
+    # Cell Selection's refusal lines, new with them; no translation pass yet.
+    "OAG_CAMPAIGN_MODE_UNSUPPORTED",
+    "OAG_CAMPAIGN_TRACK_UNAVAILABLE",
 ]

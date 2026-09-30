@@ -4,6 +4,7 @@
 //! this holds open.
 
 use log::warn;
+use oag_game::campaign::launch::Refusal;
 use oag_ui::campaign::Event;
 
 use crate::campaign_stage::{CampaignStage, Screen};
@@ -184,6 +185,8 @@ impl Session {
             let Some(campaign) = stage.campaign.as_mut() else {
                 return;
             };
+            // A refusal line lasts until the player does anything else.
+            campaign.notice = None;
             match (&campaign.screen, event) {
                 // **HD only** - `Campaign Selection` ahead of `Grid
                 // Selection`. See `crate::campaign_stage`'s own module doc.
@@ -312,6 +315,21 @@ impl Session {
             Ok(plan) => plan,
             Err(refusal) => {
                 warn!("{}: {refusal}", cell.name);
+                let (id, literal) = match refusal {
+                    Refusal::Mode(_) => (
+                        "OAG_CAMPAIGN_MODE_UNSUPPORTED",
+                        "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET",
+                    ),
+                    Refusal::NoTrack | Refusal::MissingTrack(_) => (
+                        "OAG_CAMPAIGN_TRACK_UNAVAILABLE",
+                        "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC",
+                    ),
+                };
+                if let Stage::Menu(stage) = &mut self.stage
+                    && let Some(campaign) = stage.campaign.as_mut()
+                {
+                    campaign.notice = Some(campaign.strings.get(id).unwrap_or(literal).to_string());
+                }
                 return;
             }
         };

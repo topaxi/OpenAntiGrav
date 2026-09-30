@@ -30,13 +30,13 @@ struct Loaded {
 fn open_omega() -> Option<Loaded> {
     let source = oag_testdata::exact("data/extracted/ps4")?;
     let mut archives = oag_omega::open(&source.display().to_string()).expect("open omega");
-    Some(load(&mut archives, &oag_omega::TITLE))
+    Some(load(&mut archives, oag_omega::TITLE))
 }
 
 fn open_hd() -> Option<Loaded> {
     let source = oag_testdata::exact("data/images/hdfury-ps3-eu-dec.iso")?;
     let mut archives = oag_hd::open(&source.display().to_string()).expect("open hd");
-    Some(load(&mut archives, &oag_hd::TITLE))
+    Some(load(&mut archives, oag_hd::TITLE))
 }
 
 fn load(archives: &mut oag_assets::Archives, title: &'static oag_title::Title) -> Loaded {
