@@ -301,6 +301,15 @@ Confidence **95** (was an inference from the decompile alone, no frame taken).
   is no `TOTAL` caption and no total time anywhere on screen. The mode object
   is `Elimination_Construct` (`Elimination_HUD.xml`); the HUD's flag word
   `hud+0x40` read `0x229f` and `hud+0x284` (the mode it bound for) read `8`.
+- **Single race (`g_game_mode` 3), read off a running PPSSPP the same day**
+  (same build): `PLAYER_HUD+0x30` reads `0xffffffff`, `+0x34` reads `4`; `TotalTime`
+  and `TotalTimeTxt` flag words (`+0x2c`) both read `0xb082` (bit `0x4` clear) while
+  `CurrentTime`, `CurrentTimeTxt`, `BestTime`, `BestTimeTxt`, `Position` (`hud+0x240`)
+  and `PositionOf` (`hud+0x244`) read `0xf086`. `hud+0x40` read `0x20df` (the `0x40`
+  place-readout bit set, `0x200` and `0x800` clear). The frame reads `pos 8/8` and
+  no `TOTAL`. This is the direct measurement of the caption pair: `TOTAL` is hidden
+  by the `-1` gate with its clock, `POS` is drawn, and neither is hidden by an
+  overlap. Confidence **95**.
 - **Zone (`g_game_mode` 6) has nothing to hide.** `Zone_HUD.xml` authors no
   `TotalTime`, `TotalTimeTxt`, `CurrentTime` or `BestTime` at all (its widgets
   are `Lap`/`LapOf`/`Lap Outof`, `Zone`, `Score`, `SpeedClass`/`SpeedClassTxt`

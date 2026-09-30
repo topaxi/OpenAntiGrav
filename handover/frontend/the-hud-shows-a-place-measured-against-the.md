@@ -4,7 +4,11 @@
 
 ## Open
 
-- The `TOTAL`/`POS` caption pair suppression is unconfirmed, based on a ~5 px overlap argument rather than a measurement
+- ~~The `TOTAL`/`POS` caption pair suppression is unconfirmed.~~ **Closed 2026-09-30**, measured
+  on a live single race: the `TOTAL` caption is hidden by the clock's `-1` gate (flag word
+  `0xb082`), `POS` is drawn (`0xf086`), and the ~5 px overlap argument is retired - see
+  [hud.md](../../docs/ui/hud.md) and
+  [race-progress.md](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md#which-modes-hide-the-clock-confirmed-live-2026-09-30).
 - ~~**What each of the eight `PosTag` rows is meant to say.**~~ **Closed 2026-09-30**:
   they are the Eliminator's kill column (`"<team> <kills>"`, most kills first, the player's row
   brighter), written by `Hud_UpdateKillColumn` (`0x0881af38`) when the HUD's `0x200` flag is set,

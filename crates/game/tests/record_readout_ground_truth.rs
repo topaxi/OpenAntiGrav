@@ -168,3 +168,23 @@ fn an_eliminator_draws_the_kill_column_in_the_default_face() {
     );
     assert!(rows.iter().all(|row| !row.contains('_')), "rows {rows:?}");
 }
+
+/// A single race draws `pos` and no `TOTAL`, as the live frame does: the clock
+/// cluster is hidden by the mode, and `POS` is not hidden by anything. Measured
+/// on PPSSPP 2026-09-30 (`TotalTimeTxt` flag word `0xb082`, `PositionTxt` up).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_single_race_draws_pos_and_no_total() {
+    let Some(image) = image() else { return };
+    let loaded = load(&image, oag_race::Mode::SingleRace);
+    let context = loaded.hud.context().expect("Pulse's layout parses");
+    let pos = context.strings.get_or_id("IG_HUD_POS").to_string();
+    let total = context.strings.get_or_id("IG_HUD_TOTAL").to_string();
+    let mut race = oag_game::race::Race::start(loaded.setup);
+    race.tick(&PlayerInputs::none());
+    let readout = race.readout();
+    assert_eq!(readout.place, 8, "the parked player is 8th of 8");
+    let (small, _) = texts(&oag_game::hud::draw_list(&context, &readout));
+    assert!(small.contains(&pos), "small text {small:?}");
+    assert!(!small.contains(&total), "small text {small:?}");
+}

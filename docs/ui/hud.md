@@ -724,10 +724,18 @@ The rule this build applies is [`oag_title::HudArt::total_time_timed_modes_only`
 (true for Pulse alone): outside Time Trial and Speed Lap both widgets are hidden.
 `oag_game::hud::place_owns_the_anchor` stays for the titles the flag is `false`
 for - 2048 draws `TOTAL` beside `POS` on a live frame, and HD and Pure are
-unmeasured - where it asks the *layout*, not just the readout. **The captions were
-not separately confirmed** on the single-race frames - the `TOTAL` caption is
-suppressed with its clock here, and the Eliminator frame is the one that shows
-neither the clock nor its caption.
+unmeasured - where it asks the *layout*, not just the readout. **The caption pair was measured directly on a single race, 2026-09-30**
+(own PPSSPP, Venom single race on Talon's Junction, `g_game_mode` 3, at `0.23.7`):
+`PLAYER_HUD+0x30` reads `0xffffffff`; `TotalTime` (`hud+0x200`) and `TotalTimeTxt`
+(`hud+0x204`) both have flag word `0xb082`, visible bit `0x4` clear, against `0xf086`
+on `CurrentTime`, `BestTime`, `Position` (`hud+0x240`) and `PositionOf`
+(`hud+0x244`); the frame reads `pos` over `8 / 8` and no `TOTAL` anywhere. So the
+`TOTAL` caption is hidden by the same `-1` gate as its clock, and `POS` is not
+hidden by anything: the two never compete for the corner in Pulse. The **~5 px
+overlap argument is retired** - nothing in the original is suppressed because of an
+overlap. In Time Trial and Speed Lap the clock and its caption show and there is
+no field, so no place. `place_owns_the_anchor` is therefore redundant for Pulse
+(the mode gate decides first) and remains only for the titles the gate is off for.
 
 **The same two frames settle a second question nobody asked them.** The original
 places its own **parked player 8th of 8 on the grid**, before anyone has crossed
