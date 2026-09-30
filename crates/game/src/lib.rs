@@ -36,6 +36,7 @@ pub mod cursor;
 pub mod dlc;
 pub mod drs;
 pub mod endrace;
+pub mod flyer;
 pub mod ghosts;
 pub mod hud;
 pub mod icon;

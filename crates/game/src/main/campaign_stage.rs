@@ -175,6 +175,9 @@ pub(crate) struct CampaignStage {
     records: oag_game::records::Store,
     /// See [`CellCursors`]'s own doc.
     cell_cursors: CellCursors,
+    /// **HD only.** The flyer cards `Grid Selection` draws behind its
+    /// widgets - see [`oag_game::flyer`]. `None` on every other title.
+    pub(crate) flyers: Option<oag_game::flyer::Flyers>,
 }
 
 impl CampaignStage {
@@ -197,6 +200,7 @@ impl CampaignStage {
         title: String,
         circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,
+        flyers: Option<oag_game::flyer::Flyers>,
     ) -> Self {
         let grid_range = 0..grids.len();
         // `Campaign Selection` is HD's own screen ahead of `Grid
@@ -235,7 +239,27 @@ impl CampaignStage {
             circuit_names,
             records,
             cell_cursors: CellCursors::default(),
+            flyers,
         }
+    }
+
+    /// The `FlyerName` of the tier `Grid Selection` has selected, and so of
+    /// the card to draw behind it - `None` on any other screen, which draws no
+    /// card, and on a tier that names none.
+    pub(crate) fn flyer_name(&self) -> Option<&str> {
+        let Screen::Grid(model) = &self.screen else {
+            return None;
+        };
+        model.selected()?.flyer_name.as_deref()
+    }
+
+    /// The selected card's rectangle on the HD grid, for the pointer - `None`
+    /// when no card is drawn, which leaves the pointer on its fallback rect.
+    pub(crate) fn flyer_card_rect(&self) -> Option<[f32; 4]> {
+        let flyers = self.flyers.as_ref()?;
+        flyers
+            .has(self.flyer_name()?)
+            .then(|| flyers.card_rect(oag_display::space::Space::HD))
     }
 
     /// Advances the ticker's own clock - called once a frame from

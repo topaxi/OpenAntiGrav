@@ -591,22 +591,9 @@ impl MenuStage {
                         )
                     }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
-                        let (grid_index, grid_count, grid_summary) =
-                            campaign.cell_grid_summary().unwrap_or_else(|| {
-                                (
-                                    0,
-                                    1,
-                                    oag_ui::campaign::GridSummary {
-                                        name: String::new(),
-                                        cell_count: 0,
-                                        max_points: 0,
-                                        required_points: 0,
-                                        gold_medals: 0,
-                                        points_earned: 0,
-                                        locked: false,
-                                    },
-                                )
-                            });
+                        let (grid_index, grid_count, grid_summary) = campaign
+                            .cell_grid_summary()
+                            .unwrap_or_else(|| (0, 1, oag_ui::campaign::GridSummary::empty()));
                         // No ticker: HD's shared `Skin.xml` has no `TextInfoIsAlwaysLast` viewport.
                         let footer_overlay = campaign
                             .nav_legend_draw(&campaign.cell_layout().faces, &default_measure);
@@ -687,6 +674,7 @@ impl MenuStage {
                     }
                 }
             };
+            let split = layers.backdrop.len();
             let flat = layers.flatten();
             // The ticker's own clip: `Renderer::render_with`'s `clip` is
             // keyed on a draw's index in the *flattened* list
@@ -721,14 +709,19 @@ impl MenuStage {
             } else {
                 wgpu::LoadOp::Clear(wgpu::Color::BLACK)
             };
-            self.renderer.render_with(
+            // `Grid Selection`'s flyer card goes between the backdrop and the
+            // widgets; every other campaign screen has none, which makes this
+            // exactly `Renderer::render_with`.
+            let card = campaign.flyers.as_ref().zip(campaign.flyer_name());
+            oag_game::flyer::render_list(
+                &mut self.renderer,
                 load,
-                &gpu.device,
-                &gpu.queue,
+                (&gpu.device, &gpu.queue, gpu.config.format),
                 encoder,
                 view,
-                &list,
-                viewport,
+                (&list, split),
+                (viewport, target_size, self.skin.space()),
+                card.filter(|_| !frozen_race),
                 clip,
             );
             return Ok(());

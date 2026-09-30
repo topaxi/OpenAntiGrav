@@ -304,6 +304,7 @@ fn a_grids_title_resolves_through_the_per_grid_idstring() {
         gold_medals: 0,
         points_earned: 0,
         locked: false,
+        flyer_name: None,
     }]);
     let layers = grid_draw_list(
         &model,
@@ -551,6 +552,7 @@ fn the_selector_is_centred_on_the_selected_hex_not_top_left_aligned() {
         gold_medals: 0,
         points_earned: 0,
         locked: false,
+        flyer_name: None,
     }]);
     let layers = grid_draw_list(
         &model,

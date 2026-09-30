@@ -16,17 +16,97 @@ pub(super) enum CampaignKind {
     /// every other title, the same way [`campaign_page`] already refuses a
     /// source with no campaign at all.
     Selection,
-    Grid,
+    /// `hd_base` picks HD's base `grid0`..`grid7` over Fury's (the default,
+    /// see [`campaign_page`]), and `tier` the page within them. Spelled
+    /// `grid-select`, `grid-select-hd` and `grid-select-hd@3`.
+    Grid {
+        hd_base: bool,
+        tier: usize,
+    },
     Cell,
 }
 
 #[must_use]
 pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
-    match page {
+    let (name, tier) = match page.split_once('@') {
+        Some((name, tier)) => (name, tier.parse().ok()?),
+        None => (page, 0),
+    };
+    match name {
         "campaign-select" | "campaign_select" => Some(CampaignKind::Selection),
-        "grid-select" | "grid_select" => Some(CampaignKind::Grid),
+        "grid-select" | "grid_select" => Some(CampaignKind::Grid {
+            hd_base: false,
+            tier,
+        }),
+        "grid-select-hd" | "grid_select_hd" => Some(CampaignKind::Grid {
+            hd_base: true,
+            tier,
+        }),
         "cell-select" | "cell_select" => Some(CampaignKind::Cell),
         _ => None,
+    }
+}
+
+/// Renders a `--menu-page` frame: `list` through `renderer`, with
+/// `shot`'s flyer card between its backdrop and its widgets when it has one.
+/// Exactly `Renderer::render` when it has none.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_frame(
+    shot: Option<&FlyerShot>,
+    renderer: &mut crate::render::Renderer,
+    gpu: (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    list: &[oag_ui::frontend::Draw],
+    viewport: (f32, f32, f32, f32),
+    target: ((u32, u32), oag_display::space::Space),
+    clip: Option<(usize, f32, f32)>,
+) {
+    let (device, queue, format) = gpu;
+    match shot {
+        Some(shot) => shot.render(
+            renderer, device, queue, format, encoder, view, list, viewport, target.0, target.1,
+        ),
+        None => renderer.render(device, queue, encoder, view, list, viewport, clip),
+    }
+}
+
+/// The flyer card `--menu-page grid-select` owes the frame between its
+/// backdrop and its widgets - see [`crate::flyer::render_list`].
+pub(super) struct FlyerShot {
+    flyers: crate::flyer::Flyers,
+    name: String,
+    /// How many of the list's first draws are the backdrop.
+    split: usize,
+}
+
+impl FlyerShot {
+    /// Renders `list` into `view` with the card in between.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn render(
+        &self,
+        renderer: &mut crate::render::Renderer,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        list: &[oag_ui::frontend::Draw],
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        space: oag_display::space::Space,
+    ) {
+        crate::flyer::render_list(
+            renderer,
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            (device, queue, format),
+            encoder,
+            view,
+            (list, self.split),
+            (viewport, target_size, space),
+            Some((&self.flyers, &self.name)),
+            None,
+        );
     }
 }
 
@@ -110,7 +190,7 @@ pub(super) fn campaign_page(
     // own. A capture with no file, or a title/cell this machine has never
     // raced under, draws exactly the fresh-profile numbers either way.
     records: &crate::records::Store,
-) -> Result<Vec<oag_ui::frontend::Draw>> {
+) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
     let campaign = crate::campaign::load(
         archives,
         strings,
@@ -173,7 +253,8 @@ pub(super) fn campaign_page(
     // `Wipeout HD` campaign only when a source's `DATA06` copy is missing or
     // incomplete and `grid_layout_fury` is `None` (`Campaign::selection_layout`'s
     // own doc: the two are `Some`/`None` together).
-    let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref() {
+    let base_hd = matches!(kind, CampaignKind::Grid { hd_base: true, .. });
+    let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref().filter(|_| !base_hd) {
         Some(layout) => (
             campaign
                 .grids
@@ -189,6 +270,7 @@ pub(super) fn campaign_page(
             &campaign.grid_layout,
         ),
     };
+    let mut flyer_name = None;
     let layers = if is_hd {
         match kind {
             CampaignKind::Selection => {
@@ -230,8 +312,8 @@ pub(super) fn campaign_page(
                     &footer_overlay,
                 )
             }
-            CampaignKind::Grid => {
-                let model = oag_ui::campaign::GridSelection::new(
+            CampaignKind::Grid { tier, .. } => {
+                let mut model = oag_ui::campaign::GridSelection::new(
                     hd_grids
                         .iter()
                         .map(|grid| {
@@ -239,6 +321,8 @@ pub(super) fn campaign_page(
                         })
                         .collect(),
                 );
+                model.set_index(tier);
+                flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
                 oag_ui::campaign::hd::hd_grid_draw_list(
                     &model,
                     hd_grid_layout,
@@ -268,18 +352,9 @@ pub(super) fn campaign_page(
                 let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of)
                     .with_difficulty(&difficulty_of)
                     .with_default_difficulty(oag_tables::race_campaign::Difficulty::Easy);
-                let grid_summary = grid.map_or(
-                    oag_ui::campaign::GridSummary {
-                        name: String::new(),
-                        cell_count: 0,
-                        max_points: 0,
-                        required_points: 0,
-                        gold_medals: 0,
-                        points_earned: 0,
-                        locked: false,
-                    },
-                    |grid| oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of),
-                );
+                let grid_summary = grid.map_or(oag_ui::campaign::GridSummary::empty(), |grid| {
+                    oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
+                });
                 oag_ui::campaign::hd::hd_cell_draw_list(
                     &model,
                     &campaign.cell_layout,
@@ -304,7 +379,7 @@ pub(super) fn campaign_page(
                     "Campaign Selection is Wipeout HD/Fury's own screen - this source has none"
                 );
             }
-            CampaignKind::Grid => {
+            CampaignKind::Grid { .. } => {
                 let model = oag_ui::campaign::GridSelection::new(
                     campaign
                         .grids
@@ -350,5 +425,14 @@ pub(super) fn campaign_page(
             }
         }
     };
-    Ok(layers.flatten())
+    let split = layers.backdrop.len();
+    let shot = campaign
+        .flyers
+        .zip(flyer_name)
+        .map(|(flyers, name)| FlyerShot {
+            flyers,
+            name,
+            split,
+        });
+    Ok((layers.flatten(), shot))
 }

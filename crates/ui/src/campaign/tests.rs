@@ -476,6 +476,7 @@ fn a_tier_is_locked_until_its_own_points_or_the_previous_tiers_are_met() {
         gold_medals: 0,
         points_earned: earned,
         locked: true,
+        flyer_name: None,
     };
     // grid0 never locked at all - `grid_00.xml`'s own `Locked="false"`.
     let grid0 = GridSummary {
@@ -568,6 +569,7 @@ fn grid_summaries(n: usize) -> Vec<GridSummary> {
             gold_medals: 0,
             points_earned: 0,
             locked: false,
+            flyer_name: None,
         })
         .collect()
 }
