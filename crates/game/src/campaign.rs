@@ -168,6 +168,19 @@ pub fn static_footer_overlay(
     overlay
 }
 
+/// Whether `title_name` draws HD's campaign screens - HD itself, and Omega,
+/// whose front end is HD's `PI001` plugin carried forward
+/// (`docs/formats/omega-frontend.md`).
+///
+/// Every dispatch that picks `oag_ui::campaign::hd`'s draw list over Pulse's
+/// asks this. Omega used to fall through to Pulse's, which has no arm for
+/// HD's widget names (`Event`, `RC Laps`, `NextPoints`, `EPoints Title`), so
+/// their raw ids and the `%d` template drew on screen.
+#[must_use]
+pub fn draws_hd_campaign(title_name: &str) -> bool {
+    title_name == oag_hd::TITLE.name || title_name == oag_omega::TITLE.name
+}
+
 /// Reads the campaign screen off `archives`, title-dispatched: Pulse's
 /// `Data\Plugins\PI001\GUI\CellMode_Definition.xml` and
 /// `Data\Plugins\grids\Definition.xml`, or Wipeout HD/Fury's own copies of
