@@ -291,9 +291,11 @@ The three changes, each with what it rests on:
      (82 in the crowd rigs, 2 on `sol`, 6 in the front-end scenes). The Vita
      corpus is unaffected by construction: a gap is only consulted for a site
      no known gap paired, and no Vita site goes unpaired.
-   - *Materials, by their name pointers - confidence 75.* The Vita's file-level
-     count and table are not where a PS4 file keeps them; the `.rcsmaterial`
-     paths sit in the clear, and a material is a 64-bit word pointing at one.
+   - *Materials, by the header's own table - confidence 95 (was 75, by name
+     pointers alone, until 2026-09-30).* The `.rcsmaterial` paths sit in the
+     clear and a material is a 64-bit word pointing at one; the file states its
+     count at CPU `+0x70` and its table of header pointers at `+0x78`
+     ([below](#a-ps4-submesh-points-at-its-own-vertex-declaration-and-its-materials-are-the-headers-own-table)).
      A submesh names its material 0x28 bytes before its record, and all
      239,108 submeshes in the package name one inside the table. On
      `ag_systems` `GlassShape` gets `glass_texture` and `FlashyFlashyShape` gets
@@ -306,6 +308,39 @@ The three changes, each with what it rests on:
      `track_de_ra_displacement_df2.gnf` first and read in address order the
      first frame drew the road as a white sheet; ranked by sampler role its
      `Diffuse` (`track_de_ra.gnf`) comes first.
+
+### A PS4 submesh points at its own vertex declaration, and its materials are the header's own table
+
+Two readings that looked settled were wrong for part of the corpus, both found
+by asking why a lightmap control group was not exact.
+
+- **A submesh record holds a 64-bit pointer to its own declaration's header at
+  `+0x28` from the record start - confidence 95, a counted fact.** It resolves,
+  with the stride the declaration states equal to the buffer-derived one, on all
+  226,381 submeshes of the five base archives
+  (`crates/rcs/tests/omega_declaration_ground_truth.rs`). The Vita's `u32` at the
+  same offset resolves for 14.2 % and is left alone. Keyed by stride, one
+  declaration stood for every chunk of that stride, and `tech_de_ra` has 43
+  layouts over 8 strides: 285 of its 3,186 submeshes read the diffuse coordinate
+  out of a tangent or colour set, and the reversed circuit decoded 218,672
+  vertices to non-finite floats. Both are gone. A PS4 file no other reading of
+  which is measured falls back to the stride's declaration.
+- **The declaration's `lightmapUV` and the material's `lightmap` sampler agree
+  on every submesh** - 50,042 have both, the rest neither, **0 in either
+  off-diagonal** - and all 17.97 M decoded lightmap coordinates lie in `0..=1`.
+  Two independent reads agreeing everywhere is what says the pointer offset is
+  right; it is also what found the second bug.
+- **A PS4 material table is the header's, not the address order of the name
+  pointers - confidence 95.** The count is a 64-bit word at CPU `+0x70` and the
+  address of `count` header pointers at `+0x78`; a header's `.rcsmaterial` name
+  pointer is 8 bytes in. Every file's read materials are exactly that count.
+  Taking every name site in address order gave the same list where none lies
+  outside the table, and shifted every later material by one where one does
+  (`05_ubermall`'s `diffuse_normal_specular.rcsmaterial` at `0x1a248`: 594
+  sites, 593 entries; thirteen circuit models) - a submesh drew with its neighbour's
+  material. `tech_de_ra`, `talons_junction` and the craft were not affected.
+- The atlas decodes as BC7 at 2048x2048 with an alpha channel whose mean is 32 to
+  77 of 255. What the alpha is for is not read.
 
 **The mount order is chosen, not measured.** 10,921 of the 27,077 distinct
 paths are named by more than one archive (the patch repacks most of the base)
@@ -346,7 +381,31 @@ a PS4 mount them.
   file is 57856 bytes`): nothing animates, and the nodes above stand at their
   bind pose. The skeleton is the 32-bit container's layout and the PS4 one has
   not been laid out.
-- **Lightmaps are not bound**, though 291 materials name one on `tech_de_ra`.
+- **Lightmaps are bound, and their combination is chosen, not measured**
+  (`omega-catchup`, 2026-09-30). The atlas is each material's `lightmap`
+  sampler (a 2048x2048 BC7 `-lmap.gnf`, 49 distinct on `tech_de_ra` reversed)
+  and its coordinate is `lightmapUV` in the submesh's own vertex declaration
+  ([the declaration pointer](#a-ps4-submesh-points-at-its-own-vertex-declaration-and-its-materials-are-the-headers-own-table)).
+  The shader path is Wipeout HD's, unchanged: the prelit curve on the atlas
+  colour and the atlas alpha as the sun mask. Nothing measured says that is this
+  title's combination. **Two authored things it does not read:** the patch's
+  `.EnvSettings` carries `"Lighting.Nova prelit scale bias power"=2.5 0.2 2`
+  (2048's Vita files carry `1 0 1 0`; the formula behind three numbers is not
+  recovered, so the scene keeps its 1/1 defaults), and a `Tonemap.*` block
+  (`Exposure minimum/maximum/response/time`, luminance and source-colour
+  coefficients) where the reader looks for HD's `HDR and Bloom.*`, so the earlier
+  "no HDR/bloom block" line means "none under HD's names". The atlas alpha is 39
+  to 55 % zero on the three atlases sampled, so the sun mask is not the constant
+  it is on HD's circuits, and what it means here is a question for the shader.
+  Frames (forward circuit, tick 600, hold accelerate, debug build):
+  `data/scratch/omega-catchup/fwd-t600-pre.png` (no lightmap, 11.98 % clipped
+  white, mean luminance 0.619) against `fwd-t600-lm1.png` (8.32 %, 0.563), with
+  HD's Tech De Ra at tick 300 (`hd-tdr-t300.png`, 4.78 %, 0.321) as the only
+  comparison there is. The reversed frame at tick 300 goes the other way
+  (0.99 % to 7.04 %), so the aggregate is not a verdict; the walls now carry
+  baked shading where they were flat. **The purple crystalline kerbs are not
+  a defect of this title's reader**: HD's own render of the same circuit has
+  them. Load time is about 19 s longer in a debug build.
 - **`track.final.pvs` is not read**, so every chunk draws: 2.38M triangles, and
   a debug build spends about three minutes decoding the 453 textures.
 - **`.EnvSettings` is read through 2048's reader** and its sun (`[4.00, 2.33,
@@ -366,8 +425,10 @@ a PS4 mount them.
   and the craft rides it (`grounded 1.0`, 27.1 units/s after 300 ticks,
   `data/scratch/omega-catchup/rev-t300.png`). The other titles are untouched:
   Pulse, Pure and HD author collision in the `.vex`, so the sibling is never
-  asked, and 2048 ships no reversed `.col`, so its `track_reversed.vex` would
-  just not find one.
+  asked. 2048's base and DLC packages ship `track_reversed.vex` (4 in
+  `data.psarc`) beside **no** `track_col_reversed.col` (only the 14 forward
+  `track_col.col`), so its reversed circuits still find no collision, as before;
+  whether they are meant to reuse the forward one is not measured here.
 - **Defaults are chosen, not measured:** `tech_de_ra` and `ag_systems`. Zone,
   boost, speed classes and every per-team variant table stay `None`.
 
