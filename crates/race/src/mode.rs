@@ -220,38 +220,33 @@ impl Mode {
     /// outside the campaign has no cell to read at all.
     pub const SINGLE_RACE_LAPS_BY_CLASS: [u32; SpeedClass::ALL.len()] = [3, 4, 4, 5];
 
-    /// Kills that end an Eliminator event, **when nothing more specific is
-    /// available**.
+    /// Kills that end an Eliminator event when no campaign cell supplies one:
+    /// `5`, **the first entry of the race box's `KILLS` list**.
     ///
-    /// **Not the flat, measured number this constant used to claim.** It read
-    /// `FEData.wad`'s 24-entry per-track family as authoring an identical
-    /// `<Targets Elimination="10">` on every one and called that a flat
-    /// census; `progress`'s Ghidra pass (2026-09-08, after this constant was
-    /// first written) found the number was never flat at all -
-    /// `Data\Plugins\grids\grid_00..15.xml` authors 236 `PI_Cell` records,
-    /// each with its **own** gold-medal kill target, and the values actually
-    /// used are **10, 7 and 5**, not one figure. `FEData.wad`'s `10` was one
-    /// sample of three read as the whole population. See
-    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`.
+    /// **Measured 2026-09-30, confidence 90**: `RaceBox_ApplySetupGlobals`
+    /// (`0x088e5ff4`) `atoi`s the selected entry of the `Eliminations` list
+    /// (`5`, `10`, `15`, `20`, `25`) into `DAT_08b30fb0`, the figure
+    /// `Eliminator_UpdateKillTarget` ends the race on when there is no cell,
+    /// and a fresh profile's Racebox shows `KILLS 5` with the row untouched. A
+    /// Racebox Eliminator on the original ended at exactly five kills. See
+    /// `docs/ghidra/functions/psp-pulse-usa/eliminator-kill-target.md`. It was
+    /// `10`, read off `FEData.wad`'s `<Targets Elimination="10">`, which is
+    /// what the list's own `Default="10"` attribute also says and which the
+    /// running screen does not honour.
     ///
-    /// **So this is a chosen default, not a recovery, kept only because the
-    /// campaign grid this number actually lives on is not wired into this
-    /// engine at all** - there is no `PI_Cell` for a `--mode eliminator` race
-    /// started outside the campaign to read a target from. `10` is one of the
-    /// three real values rather than an invented one, which is the one thing
-    /// that keeps this from being the kind of number `CLAUDE.md` forbids
-    /// authoring - but it carries no confidence score, because a default is
-    /// not a measurement. `oag_game::race::Options::eliminator_kill_target`
-    /// is where a caller overrides it; wiring the campaign grid to supply the
-    /// cell's own value is the fix that retires this constant outright.
+    /// **It is the list's first entry, not a fixed rule**: this build has no
+    /// `KILLS` row on its race page yet, so the other four (`10` to `25`) are
+    /// unreachable from a Custom Race, which is what retires this constant.
+    /// A campaign cell's own gold figure (`10`, `7` or `5`) still wins, wired
+    /// in `Session::launch_campaign_cell`.
     ///
     /// **Whose kill count ends the race is measured, and it is not only the
-    /// player's.** `progress`'s same pass reads the ending off `entity+0x8d8`
-    /// on *any* craft - the race ends the moment one ship's own tally reaches
-    /// the target, whichever ship that is. [`RaceState::eliminator_finished`]
+    /// player's.** `Eliminator_UpdateKillTarget` reads `entity+0x8d8` on *any*
+    /// craft - the race ends the moment one ship's own tally reaches the
+    /// target, whichever ship that is. [`RaceState::eliminator_finished`]
     /// takes the target and the highest count across the whole field for
     /// exactly this reason, rather than the player's own alone.
-    pub const ELIMINATOR_KILL_TARGET_DEFAULT: u32 = 10;
+    pub const ELIMINATOR_KILL_TARGET_DEFAULT: u32 = 5;
 
     /// The token this mode is stored and configured as.
     ///

@@ -379,6 +379,8 @@ impl Race {
             if RaceState::thrust_gated(self.sim.world.tick) {
                 controls.thrust = 0.0;
             }
+            // An Eliminator leader waits for the pack; only ever a reduction.
+            controls.thrust *= self.eliminator_pack_scale(slot);
             // An opponent under a Disruptor: always AI-driven, so the Stall
             // passes it by and the rest apply. See `Race::disrupted_controls`.
             controls = self.disrupted_controls(slot, controls, true);
@@ -483,13 +485,6 @@ impl Race {
             if evaluated.shield.absorbed {
                 self.view.shield[slot].hit();
             }
-            // Eliminator's own kill-attribution rule, the opponents' half of
-            // the one `Race::tick` applies to the player - see
-            // `crate::race::eliminator`.
-            if evaluated.shield.lost > 0.0 {
-                self.sim.last_damager[slot] = None;
-            }
-
             // **The same recovery the player gets**, and it is not a nicety.
             // Without it an opponent that leaves the geometry keeps going: the
             // solo benchmark measured craft receding from the track at racing

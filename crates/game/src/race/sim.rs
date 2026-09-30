@@ -123,10 +123,13 @@ pub struct RaceSim {
     /// The kill count that ends an Eliminator event - see
     /// [`Setup::eliminator_kill_target`].
     pub(super) eliminator_kill_target: u32,
-    /// The slot that last struck each craft with a direct weapon hit,
-    /// `None` once nobody has (or the last hit was a wall, which credits
-    /// nobody). Eliminator-only bookkeeping - see `crate::race::eliminator`.
+    /// The slot whose weapon last got through to each craft, `None` while
+    /// nobody's has. Eliminator-only bookkeeping - see `crate::race::eliminator`.
     pub(super) last_damager: [Option<u8>; oag_gameplay::MAX_SHIPS],
+    /// The tick, plus one, on which a weapon hit last got through to each craft
+    /// - `0` for never. What tells [`Self::last_damager`]'s credit apart from
+    /// a death by wall: see `crate::race::eliminator`. Hashed.
+    pub(super) last_weapon_hit: [u64; oag_gameplay::MAX_SHIPS],
     /// Seconds left before an Eliminated craft returns to the race, once it
     /// has reached that state - see `crate::race::eliminator`. Hashed: a
     /// craft one tick out on its respawn is one tick out on everything after.

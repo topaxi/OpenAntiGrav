@@ -49,7 +49,7 @@ pub struct BlastStats {
 /// answer to the caller, which is "spend no blast". A weapon that reaches an
 /// impact with no authored numbers is a bug upstream in
 /// [`crate::pickup::IMPLEMENTED`], not something to paper over with a default.
-pub(super) fn blast_stats(
+pub fn blast_stats(
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     kind: Weapon,
 ) -> Option<BlastStats> {

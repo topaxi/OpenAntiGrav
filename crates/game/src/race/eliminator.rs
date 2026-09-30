@@ -21,15 +21,17 @@
 //! global default; `MSC_EVENT_ELIM` says a destroyed craft comes back rather
 //! than sitting out, and `ER_DEATHS` is the row that counts how often.
 //!
-//! **Chosen, and said so where it happens**: which craft's weapon gets
-//! credited for a kill. Nothing in the read executable was traced for a kill
-//! *attribution* mechanism - only that the count exists at `entity+0x8d8` -
-//! so [`RaceSim::last_damager`] is this build's own rule: the most recent craft
-//! to land a direct weapon hit on the one that died, cleared the moment a
-//! wall or another cause deals damage instead so a stale hit is never
-//! credited for an unrelated death. A death with no recent weapon hit (wall
-//! contact, or a shot too long ago) credits nobody, the same as a real
-//! deathmatch usually treats a self-inflicted or environmental kill.
+//! **Measured** (`docs/ghidra/functions/psp-pulse-usa/eliminator-kill-target.md`,
+//! `Ship_Damage`, confidence 85): a kill is credited on the blow that empties
+//! the shield, when that blow is a weapon's, to the craft recorded as the
+//! victim's last attacker - [`Race::credit_kill`]. A wall that finishes a craft
+//! credits nobody, and an earlier wall scrape does not erase the attacker.
+//!
+//! **Chosen, and said so where it happens**: how the attacker id is derived.
+//! [`RaceSim::last_damager`] is the craft whose weapon last hit the victim
+//! directly, or whose blast last reached it ([`Race::credit_blast`]); which
+//! blast a splash belongs to is re-derived from the impact whose radius the
+//! victim was inside.
 //!
 //! Also chosen: the respawn pose. [`Race::respawn`] is the off-track/`Reset`
 //! recovery this file reuses rather than a pipeline of its own - same
@@ -116,6 +118,9 @@ impl Race {
 
             if self.sim.respawn_delay[slot] <= 0.0 {
                 self.sim.respawn_delay[slot] = delay;
+                if mode == Mode::Eliminator {
+                    self.credit_kill(slot);
+                }
             }
             self.sim.respawn_delay[slot] -= self.sim.dt;
             if self.sim.respawn_delay[slot] > 0.0 {
@@ -128,18 +133,6 @@ impl Race {
             // the race, and `crates/game/tests/ai_clean_lap_gate.rs` reads it
             // to tell a craft that died and came back from one that never died.
             self.sim.world.ships[slot].standing.deaths += 1;
-            if mode == Mode::Eliminator {
-                // A kill only counts against a *different* craft with a recent
-                // hit on record - see this module's own doc comment for why a
-                // stale or absent damager credits nobody.
-                if let Some(killer) = self.sim.last_damager[slot].take()
-                    && killer as usize != slot
-                    && self.sim.world.ships[killer as usize].active
-                {
-                    self.sim.world.ships[killer as usize].standing.kills += 1;
-                }
-            }
-
             // **A full pool, and for state 6 that is measured**:
             // `Ship_UpdateRespawn` calls `Ship_ResetShield` on its way back to
             // state 1. For the Eliminator's state 8 the consumer of its own
@@ -223,4 +216,144 @@ impl Race {
         );
         self.play_absorb_feedback(slot, false);
     }
+
+    /// How much of its throttle an Eliminator opponent uses, so the field stays
+    /// within reach of itself. `1.0` everywhere but the front of the pack.
+    ///
+    /// **Chosen, not measured; no confidence score.** The mode is won on kills,
+    /// and a field of identical craft on one racing line strings itself out
+    /// until nobody is inside shooting range of anybody. Measured on `16_Track`
+    /// with the player parked, the spread between first and last opponent went
+    /// from 118 units at the start to 3,900 by the six-minute mark. The
+    /// original's own weapon AI fires readily only at a craft **inside 100
+    /// units ahead** (`WeaponAi`'s skill score is `3` there and `0` otherwise,
+    /// `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`), so it is a dense
+    /// field the original's mode runs on. The original gets that density from
+    /// an AI that is known to cheat; this gets some of it by **a leader that
+    /// lets the pack catch up**: a craft with nobody ahead of it, and whose
+    /// nearest opponent behind is more than [`PACK_REACH`] back, lifts off the
+    /// throttle, down to [`PACK_MIN_THRUST`] once the pack is
+    /// [`PACK_REACH`] + [`PACK_EASE_SPAN`] behind. The throttle is only ever
+    /// *reduced*, so the AI obeys the player's physics and gets nothing the
+    /// player's craft lacks.
+    ///
+    /// Only opponents count as the pack: the human's slot is left out, or a
+    /// parked player would hold every opponent back. Craft that are down are
+    /// ignored, and so is one more than [`PACK_LOST`] behind, which is a craft
+    /// that has come off the circuit rather than one to wait for.
+    pub(super) fn eliminator_pack_scale(&self, slot: usize) -> f32 {
+        if self.sim.world.mode() != Mode::Eliminator {
+            return 1.0;
+        }
+        let Some(course) = &self.sim.course else {
+            return 1.0;
+        };
+        let racing = |other: usize| {
+            other != 0
+                && self.sim.world.ships[other].active
+                && self.sim.world.ships[other].physics.craft_state
+                    == oag_physics::CraftState::Racing
+        };
+        let mine = self.sim.world.ships[slot].standing.distance(course);
+        let mut nearest_behind = f32::INFINITY;
+        for other in (1..self.sim.world.ship_count as usize).filter(|&o| o != slot && racing(o)) {
+            let gap = self.sim.world.ships[other].standing.distance(course) - mine;
+            if gap >= 0.0 {
+                return 1.0;
+            }
+            if -gap < PACK_LOST {
+                nearest_behind = nearest_behind.min(-gap);
+            }
+        }
+        if !nearest_behind.is_finite() {
+            return 1.0;
+        }
+        let out_of_reach = ((nearest_behind - PACK_REACH) / PACK_EASE_SPAN).clamp(0.0, 1.0);
+        1.0 - (1.0 - PACK_MIN_THRUST) * out_of_reach
+    }
+
+    /// Credits the craft that destroyed `victim`, the tick `victim` goes down.
+    ///
+    /// **Measured**, `Ship_Damage` (`0x088439ac`), confidence 85: on the blow
+    /// that takes a shield to zero in game mode 8, and only when that blow's
+    /// source is a weapon, the attacker recorded on the victim (`+0x4c`'s
+    /// `+0x13c`, never cleared by anything read) has its kill counter
+    /// (`+0x8d8`) raised, unless it is the victim itself. A wall that finishes
+    /// a craft off credits nobody, and a wall scrape *earlier* does not erase
+    /// the credit for a rocket that finishes it later - which this build used
+    /// to, and which is why a third of Eliminator deaths credited nobody.
+    ///
+    /// **Ours**: the attacker id is [`RaceSim::last_damager`], set by a direct
+    /// hit or by the nearest blast that reached the craft
+    /// ([`Self::credit_blast`]); and "the fatal blow was a weapon" is a weapon
+    /// hit within [`FATAL_BLOW_WINDOW_TICKS`] of the craft being seen down, since the
+    /// destroyed sequence sits between the two.
+    pub(super) fn credit_kill(&mut self, victim: usize) {
+        let tick = self.sim.world.tick;
+        let hit = self.sim.last_weapon_hit[victim];
+        if hit == 0 || tick + 1 - hit > FATAL_BLOW_WINDOW_TICKS {
+            return;
+        }
+        if let Some(killer) = self.sim.last_damager[victim]
+            && killer as usize != victim
+            && self.sim.world.ships[killer as usize].active
+        {
+            self.sim.world.ships[killer as usize].standing.kills += 1;
+        }
+    }
+
+    /// Credits a blast's owner with every craft it hurt.
+    ///
+    /// The direct-hit half is in `Race::tick`; this is the splash. **Ours**: the
+    /// original attributes the damage at the point it is applied, and this build
+    /// applies a blast to every craft in its radius in one pass that does not
+    /// say whose it was, so the owner is re-derived here as the impact whose
+    /// radius the struck craft is inside.
+    pub(super) fn credit_blast(
+        &mut self,
+        impact: &oag_gameplay::projectile::Impact,
+        hits: &[oag_gameplay::projectile::WeaponHit; MAX_SHIPS],
+    ) {
+        if self.sim.world.mode() != Mode::Eliminator {
+            return;
+        }
+        let Some(stats) =
+            oag_gameplay::projectile::blast_stats(self.sim.weapons.as_ref(), impact.kind)
+        else {
+            return;
+        };
+        for slot in 0..self.sim.world.ship_count as usize {
+            if slot == impact.owner as usize || !hits[slot].landed {
+                continue;
+            }
+            let ship = &self.sim.world.ships[slot];
+            if !ship.active || (ship.physics.body.position - impact.point).length() > stats.radius {
+                continue;
+            }
+            self.sim.last_damager[slot] = Some(impact.owner);
+        }
+    }
 }
+
+/// How many ticks before a craft is seen to be `Eliminated` a weapon hit may
+/// have landed and still count as the blow that destroyed it.
+///
+/// **Measured on this build, not on the original**: a craft passes through its
+/// half-second destroyed sequence (`DESTROYED_DURATION`, 30 ticks) between the
+/// fatal blow and reaching `Eliminated`, and the probe read the gap at 28
+/// ticks from the killing rocket, so forty covers it with a little to spare.
+/// The original credits on the blow itself and needs no window.
+const FATAL_BLOW_WINDOW_TICKS: u64 = 60;
+
+/// How far behind the leader the nearest opponent may be before it eases off,
+/// in units of track. Chosen, not measured.
+const PACK_REACH: f32 = 60.0;
+
+/// The extra gap over which the easing builds to its full effect. Chosen.
+const PACK_EASE_SPAN: f32 = 120.0;
+
+/// The fraction of its throttle a leader keeps at full easing. Chosen.
+const PACK_MIN_THRUST: f32 = 0.3;
+
+/// A craft further behind than this is not part of the pack. Chosen.
+const PACK_LOST: f32 = 1500.0;
