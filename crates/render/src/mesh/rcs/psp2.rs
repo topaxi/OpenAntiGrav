@@ -94,6 +94,13 @@ pub struct Report {
     pub textures: usize,
     /// Draws that got a texture bound.
     pub textured_draws: usize,
+    /// Distinct lightmap atlases decoded and bound as materials' second
+    /// texture - see [`psp2::material::Material::lightmap`].
+    pub lightmaps: usize,
+    /// Lightmap atlases a material named that did not resolve in the archive or
+    /// would not decode. Such a draw binds the black placeholder, which is the
+    /// same picture as no lightmap at all.
+    pub lightmap_misses: usize,
     /// Draws whose material named a texture that did not resolve in the
     /// archive or would not decode - the honest count of what is still
     /// missing, kept apart from a submesh that simply has no material.
@@ -151,6 +158,14 @@ impl Report {
                 self.decoded_tangents
             )
         };
+        let lightmaps = if self.lightmaps == 0 && self.lightmap_misses == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} lightmap atlas(es) bound, {} unresolved",
+                self.lightmaps, self.lightmap_misses
+            )
+        };
         let nodes = if self.node_bound == 0 {
             String::new()
         } else {
@@ -184,7 +199,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}{nodes}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}{lightmaps}{nodes}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -315,6 +330,14 @@ pub fn build(
         report.moving += usize::from(place.xform != 0);
         report.hidden += usize::from(place.hidden && !place.unplaced);
         report.unplaced += usize::from(place.unplaced);
+        // The second texture is this material's lightmap, where its submesh's
+        // own declaration carries a `lightmapUV` - which is the same set of
+        // submeshes, exactly (`oag_rcs`'s declaration ground truth).
+        let role = if submesh.lightmap_texcoords.is_empty() {
+            0
+        } else {
+            crate::mesh::slots::SECOND_IS_LIGHTMAP
+        };
         let to_world = Mat4::from_cols_array(&place.to_world);
         let at_zero = Mat4::from_cols_array(&place.world_at_zero);
         // Normals through the bake's inverse transpose: 166 skeleton nodes
@@ -375,15 +398,23 @@ pub fn build(
             // bound at all, which is what `report.diffuse_texture` being
             // `None` already says.
             let texcoord = submesh.texcoords.get(i).copied().unwrap_or([0.0, 0.0]);
+            // The atlas coordinate a lightmapped submesh's own declaration
+            // names, and nothing where it names none - so a Vita model, which
+            // never has one, is unchanged to the bit.
+            let lightmap_texcoord = submesh
+                .lightmap_texcoords
+                .get(i)
+                .copied()
+                .unwrap_or([0.0, 0.0]);
             model.vertices.push(GpuVertex {
                 position,
                 normal,
                 colour: [1.0, 1.0, 1.0, 1.0],
                 texcoord,
                 lit: 1.0,
-                lightmap_texcoord: [0.0, 0.0],
+                lightmap_texcoord,
                 anim: 0,
-                slots: 0,
+                slots: role,
                 xform: place.xform,
                 sun_mask: 1.0,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
@@ -460,6 +491,10 @@ fn bind_textures(
     // the one outcome `psp2::parse` already refuses to allow.
     debug_assert_eq!(model.draws.len(), decoded.submeshes.len());
     let mut cache: Vec<Option<Option<usize>>> = vec![None; decoded.materials.len()];
+    // A lightmap is shared by however many materials name the same file, and a
+    // 2,048-square atlas is 16 MiB decoded, so decode each path once.
+    let mut atlases: std::collections::HashMap<&str, Option<std::sync::Arc<ModelTexture>>> =
+        std::collections::HashMap::new();
     for (draw, submesh) in model.draws.iter_mut().zip(&decoded.submeshes) {
         let Some(index) = submesh.material else {
             continue;
@@ -473,6 +508,27 @@ fn bind_textures(
             let texture = decode_material_texture(path, &blob)?;
             let at = model.textures.len();
             model.textures.push(Some(std::sync::Arc::new(texture)));
+            // Positionally beside the diffuse, as `Model::lightmaps` is
+            // defined; left empty for a model no material of which names one,
+            // which is every Vita model.
+            if decoded.materials.iter().any(|m| m.lightmap.is_some()) {
+                debug_assert_eq!(model.lightmaps.len(), at);
+                let atlas = decoded.materials[index]
+                    .lightmap
+                    .as_deref()
+                    .and_then(|lmap| {
+                        let entry = atlases.entry(lmap).or_insert_with(|| {
+                            let atlas = textures(lmap)
+                                .and_then(|blob| decode_material_texture(lmap, &blob))
+                                .map(std::sync::Arc::new);
+                            report.lightmaps += usize::from(atlas.is_some());
+                            report.lightmap_misses += usize::from(atlas.is_none());
+                            atlas
+                        });
+                        entry.clone()
+                    });
+                model.lightmaps.push(atlas);
+            }
             if report.diffuse_texture.is_none() {
                 report.diffuse_texture = Some(path.to_string());
             }
