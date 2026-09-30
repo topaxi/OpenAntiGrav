@@ -6,7 +6,7 @@
 //! frame with it is `race/frame.rs`; its tests are `race/tests/scene.rs`.
 
 use super::*;
-use log::warn;
+use log::{info, warn};
 
 mod absorb_overlay;
 mod absorb_shell;
@@ -343,9 +343,23 @@ pub struct Scene {
     far: f32,
     /// The ghost ship - see [`ghost`].
     ghost: ghost::Ghosts,
+    /// How many of [`Self::new`]'s render pipelines were asked for, reused and
+    /// built, from `mesh_render::BuildCacheScope`. Kept so a test can tell a
+    /// pool of 128 drawables sharing one pipeline set from one that compiled
+    /// 128 of them.
+    build_cache: BuildCacheCounts,
 }
 
+/// One scene build's pipeline cache: `(asked for, reused, distinct built)`.
+type BuildCacheCounts = (u32, u32, usize);
+
 impl Scene {
+    /// This scene's pipeline cache, as `(asked for, reused, distinct built)`.
+    #[must_use]
+    pub fn build_cache(&self) -> (u32, u32, usize) {
+        self.build_cache
+    }
+
     /// Builds both pipelines and a depth buffer for a viewport of `size`.
     ///
     /// # Errors
@@ -395,6 +409,14 @@ impl Scene {
         shadows: Vec<oag_render::shadow::Silhouette>,
         shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
     ) -> Result<Self> {
+        // **Opened here, not by the caller.** Every drawable below shares this
+        // `device`, so `mesh_render::build` parses `mesh.wgsl` once and reuses
+        // a pipeline whenever two drawables ask for the descriptor-identical
+        // one. A caller that opened it itself is a caller that can forget: the
+        // `--screenshot` path did, and compiled 9,859 pipelines for 53
+        // distinct ones - about 7 MiB of resident memory per weapon drawable,
+        // 8.4 GiB for a Pulse race. See `pipeline_cache`.
+        let cache_scope = mesh_render::BuildCacheScope::open();
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
         // waste the depth range on empty space.
@@ -784,7 +806,15 @@ impl Scene {
         let velocity = motion::velocity_texture(device, size, sample_count);
         let msaa_color = msaa_color_texture(device, format, size, sample_count);
         let attachment_views = Attachments::new(&depth, &velocity, msaa_color.as_ref());
+        let (shader_calls, shader_hits) = cache_scope.shader_counts();
+        let build_cache = cache_scope.pipeline_counts();
+        info!(
+            "race scene build cache: shader {shader_hits}/{shader_calls} reused, pipeline \
+             {}/{} reused ({} distinct built)",
+            build_cache.1, build_cache.0, build_cache.2
+        );
         Ok(Self {
+            build_cache,
             bloom,
             hd,
             motion_blur,

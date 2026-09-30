@@ -14,7 +14,7 @@ use log::info;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{audio, boot, loading, movie, race, settings};
 use oag_gameplay::ControlScheme;
-use oag_render::mesh_render::{Anisotropy, BuildCacheScope};
+use oag_render::mesh_render::Anisotropy;
 
 use crate::frontend_stage::{FrontendStage, PendingMovie};
 use crate::gpu::{Gpu, GpuContext};
@@ -458,14 +458,6 @@ impl Stage {
             setup.mode.name(),
             &setup.class,
         );
-        // Opened for this one call and dropped right after: every drawable
-        // `Scene::new` builds shares this `device`, so `mesh_render::build`
-        // parses `mesh.wgsl` once instead of once per drawable and reuses a
-        // pipeline whenever two drawables ask for the descriptor-identical
-        // one - measured at 7.2-8.1 s of naga work before this, mostly spent
-        // reparsing the same source. See `pipeline_cache` and
-        // `docs/architecture/race-load-transition.md`.
-        let cache_scope = BuildCacheScope::open();
         let mut scene = race::Scene::new(
             gpu.device(),
             gpu.queue(),
@@ -507,13 +499,6 @@ impl Stage {
             shadow_hulls,
         )?;
         scene.attach_ripples(ripples);
-        let (shader_calls, shader_hits) = cache_scope.shader_counts();
-        let (pipeline_calls, pipeline_hits, pipelines) = cache_scope.pipeline_counts();
-        info!(
-            "race scene build cache: shader {shader_hits}/{shader_calls} reused, pipeline \
-             {pipeline_hits}/{pipeline_calls} reused ({pipelines} distinct built)"
-        );
-        drop(cache_scope);
         // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.
         scene.prepare_ghost(
             gpu.device(),
