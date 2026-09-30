@@ -8,10 +8,6 @@
 //! stays in [`super`], beside [`super::place`] and [`super::CueEvent`], which
 //! read it far more than this file does.
 
-use oag_audio::Bus;
-
-use super::{BankName, Placement};
-
 /// A sound the simulation asks for, by the name the original passes to
 /// `Sound_Play`.
 ///
@@ -177,6 +173,11 @@ pub enum Cue {
     /// reading rather than a gap in it - whatever an opponent's explosion
     /// sounds like comes from somewhere this pass did not find.
     ///
+    /// **Plays its list as it runs** (`[key-on loop, 0x15, key-on, 0x1a 0,
+    /// 0x16]`): the loop held from the start and the second waveform re-keyed
+    /// every 43 master ticks until the explosion ends, by
+    /// [`super::repeating::Held::drive_blowup`].
+    ///
     /// **The one cue of nine with no confirmed Pure trigger.** The `~BLOWUP`
     /// string exists in Pure's executable and the cue exists on its disc,
     /// but its call site was not found - six search methods that found every
@@ -193,30 +194,19 @@ pub enum Cue {
     /// [`lock-sight.md`](../../../../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md),
     /// confidence 85.
     ///
-    /// **The bank agrees with the reading**: `~ROCKLOCK` lives in `hud.bnk`
-    /// beside `SPEEDUPPAD` and `~BLOWUP`, and it binds exactly **two**
-    /// waveforms, neither looping, 0.11 s apiece - which is what a parameter
-    /// with two values selects between.
+    /// **It is a repeating list, not two blips.** `~ROCKLOCK` (`hud.bnk` cue 6)
+    /// is `[0x15, guard(param 0 == 0), key-on (delay 30), guard(param 0 == 1),
+    /// key-on (delay 15), 0x16]`: a beep every 30 master ticks (116 ms) while
+    /// seeking, every 15 (58 ms) once locked, both binding the same 0.052 s
+    /// waveform. The guard, the parameter write and the loop-back are read in
+    /// `sound.md`'s "Cue parameters" section; the list runs as
+    /// [`oag_formats::sblk::runner::Runner`] and is held open by
+    /// [`super::repeating::Held::drive_sight`], which writes parameter 0 each
+    /// frame and stops the voice when the target goes away.
     ///
-    /// **This port fires them as two edges rather than as one parameterised
-    /// voice**, because this mixer has no cue parameters: waveform `0` on
-    /// entering [`oag_race::sight::State::Seeking`] and waveform `1` on
-    /// entering [`oag_race::sight::State::Locked`]. With two 0.11 s
-    /// non-looping waveforms the audible result is the same pair of blips; what
-    /// is lost is the original's ability to switch mid-voice, which at that
-    /// length it never gets to use. Recorded rather than smoothed over.
-    ///
-    /// **Which waveform is which is inference, at 55.** What is read is that the
-    /// parameter takes `0` while seeking and `1` once locked; that those values
-    /// index the cue's two waveforms *in that order* is the obvious reading,
-    /// not one taken off the bank's command list. This is a different gap from
-    /// the one `Banks::pick` closes: `0x19` decodes which *randomly-chosen*
-    /// alternate a multi-waveform cue plays, and `LockOn`'s two waveforms are
-    /// never reached that way - `pick_at` selects between them by the
-    /// seeking/locked parameter above, a mapping no command-list reading would
-    /// recover either way. If the two turn out to be the other way round, the
-    /// seeking blip and the lock chime are swapped and nothing else changes.
-    /// `--sound` writes a WAV and settles it by ear.
+    /// **A title with no measured tick** builds no program and falls back to
+    /// one blip per forward edge (waveform `0` seeking, `1` locked), the
+    /// behaviour this cue had before the list was run.
     ///
     /// Pure's own `HudSight_UpdateTone` is a near line-for-line match: same
     /// three-state toggle, same `0x400` volume, same choice to call the
@@ -411,13 +401,13 @@ pub enum Cue {
     /// The Missile's own travel loop, from launch to whatever ends it.
     ///
     /// `~MISSILETVL` (the bank spells it with `~`; `missile.md`'s own prose
-    /// calls it `_MISSILETVL`, trust the bank) is confirmed alongside
-    /// [`Self::Missile`] above at the same confidence, but neither the
-    /// emitter nor its radius is stated. **Chosen, not measured: placed at
-    /// the bolt's own position, reusing [`Self::RocketTravel`]'s measured
-    /// `600.0` radius** rather than [`oag_audio::Emitter::CRAFT_RADIUS`],
-    /// on the strength of the two weapons' shared `<WEAPON>TVL` naming and
-    /// shared launch shape - not a reading of `Missile_Init` itself.
+    /// calls it `_MISSILETVL`, trust the bank) is played by `Missile_Init`
+    /// (`0x0885a3f8`) through an emitter the round allocates for itself
+    /// (`round+0x64`, `+0x50` pointed at the round's own matrix), its radius
+    /// `+0x38` written to `0x44160000` = **600.0**, the handle kept at
+    /// `round+0x68`. Read 2026-09-30, confidence 88: the placement and the
+    /// radius, which this port had chosen by reusing [`Self::RocketTravel`]'s,
+    /// are measured. [`Self::Missile`] rides the emitter the caller passes.
     MissileTravel,
     /// A Missile glancing off a wall - **every bounce, not the final
     /// ending.**
@@ -428,18 +418,42 @@ pub enum Cue {
     /// `crate::race::weapons::visuals::bounced_this_tick`, which this cue
     /// shares the `bounces_before`/after comparison with. **Not the
     /// projectile's final ending**: a missile that exhausts its bounce
-    /// budget and finally detonates plays neither this nor any cue this
-    /// port fires - see `Impact::blast`'s own doc comment on `blast: false`
-    /// for that ending, and the by-catch `missile.md` records reading its
-    /// own literal as `SHURIKENEXPL` there (confidence 60, likely a
-    /// copy-paste bug in the original) - left unwired rather than wired
-    /// under a name this port does not trust. Placed at the bolt's own
-    /// position, the same chosen `600.0` radius as [`Self::MissileTravel`].
-    ///
-    /// **`MISSILEEXPSHIP` is deliberately not a variant here.** The bank
-    /// binds it (2 waveforms), but no call site was found on `missile.md` -
-    /// an effect whose trigger is not recovered stays unwired.
+    /// budget and detonates on a wall (`struck: None`, `blast: true`) plays
+    /// neither this nor any other cue here - the teardown plays
+    /// `MISSILEEXPWALL` off bit `0x10`, whose setter is not read (see
+    /// [`Self::MissileHitShip`] for the teardown itself). Placed at the
+    /// bolt's own position, the `600.0` radius [`Self::MissileTravel`]
+    /// measures.
     MissileHitWall,
+    /// A Missile ending on a craft.
+    ///
+    /// `MissilePool_Update` (`0x08869588`, confidence 88, read whole
+    /// 2026-09-30) opens its teardown on the destroy bit and plays exactly one
+    /// of two cues off the round's own flags: `MISSILEEXPWALL` when bit `0x10`
+    /// is set, **`MISSILEEXPSHIP` when bit `0x20` is** (the craft-hit bit
+    /// `MissilePool_TestCraftHits` sets, the same one `CannonPool_Update`'s
+    /// teardown tests), each on the round's own emitter with its radius written
+    /// to `600.0` (`0x44160000`) just before. The `Sound_Play` for this one is
+    /// the `lw` at `0x08869af8` (pointer cell `0x08a7c93c`, string `0x08a7c92c`).
+    /// Fires from the impact loop when a Missile's [`oag_gameplay::projectile::Impact`]
+    /// names a struck craft, at the impact point, like [`Self::RocketHitShip`].
+    MissileHitShip,
+    /// A Missile that outlived its fuse.
+    ///
+    /// The pool's second pass tests `3.0 < age` on every live round and, still
+    /// holding the round's active bit, plays the cue at pointer cell
+    /// `0x08a7c950` on the round's emitter (radius `600.0`) before it sets the
+    /// destroy bit. **That cell holds `"SHURIKENEXPL"`**, not a Missile name -
+    /// read directly, `0x08a7c940` - and `SHURIKENEXPL` is a real cue in
+    /// `weapons.bnk`. Earlier notes took the string for a misread and left it
+    /// unwired; it is the disc's own data (a copy-paste in the original, but
+    /// the original plays it), so it plays. Confidence 88 for the trigger; that
+    /// it is a slip of the authors' is inference. Fires for the one Missile impact
+    /// that struck nothing and spends no blast (`blast: false`), the fuse
+    /// (`missile_ending_cue` in `race::weapons`). **On HD the call site is
+    /// unread**: HD's bank carries the cue, so it plays there too, on the
+    /// strength of Pulse's binary alone.
+    MissileExpire,
     /// The Cannon's own round leaving the barrel.
     ///
     /// Played "at the end of `Cannon_Init`" (`0x088648ec`, confidence 80) -
@@ -515,6 +529,21 @@ pub enum Cue {
     /// *victim's* - the page's own naming is internally inconsistent, and
     /// this port sides with the victim rather than the shooter.
     QuakeHit,
+    /// The Quake wave travelling: a held loop while its span is active.
+    ///
+    /// `Quake_Update` (`0x0891d268`, confidence 85), per road span: when
+    /// `Quake_SampleSpan` first reports the span active it spawns `WO_QUAKE`,
+    /// allocates a `SoundEmitter` pointed at the span's own matrix with its
+    /// radius written to `600.0` (`0x44160000`), and plays `~QUAKETRAVEL`
+    /// (pointer cell `0x08a88554`, string `0x08a88544`, `lw` at `0x0891d954`)
+    /// with a handle kept per span; when the span goes inactive it releases the
+    /// effect and stops the voice. So the loop lasts as long as the wave.
+    ///
+    /// **One voice here, not two**: the original has a voice per span (two at
+    /// most, when the wave crosses a join), this port a single travelling wave.
+    /// **Placed at the wave's own road midpoint**, the same point the `WO_QUAKE`
+    /// visual follows; the original's is the span midpoint, which is that.
+    QuakeTravel,
     /// The LeachBeam firing, locked onto somebody.
     ///
     /// `LeachBeam_InitLocked` (`0x08873d3c`, confidence 82) plays `LEACH`
@@ -527,6 +556,17 @@ pub enum Cue {
     /// both the places a beam can be locked and fired: `Race::spend_pickup`'s
     /// own LeachBeam arm and `Race::fire_opponent_leach_beam`.
     Leach,
+    /// The LeachBeam fired with nothing to lock onto.
+    ///
+    /// `LeachBeam_InitUnlocked` (`0x08872da8`, confidence 85) ends with
+    /// `Sound_Play(1.0, param_4, ..., "LEACHFAIL", 0)`: pointer cell
+    /// `0x08a7cc20`, string `0x08a7cc14`, on the emitter it is handed, which
+    /// `Weapon_FireLeachBeam` (`0x08866658`) fills from `shooter->emitter` - the
+    /// same craft emitter [`Self::Leach`] rides. It is the constructor a fire
+    /// with no lock (`craft+0x16c == -1`) reaches, so an unlocked shot plays
+    /// this where a locked one plays `LEACH`. Fires from
+    /// `Race::spend_pickup`'s unlocked arm; an opponent only fires with a lock.
+    LeachFail,
     /// The LeachBeam's own body, held for as long as a **locked** beam
     /// instance exists - through its disconnect linger, not only while it
     /// is [`connected`](oag_gameplay::projectile::leach_beam::Beam::connected).
@@ -569,33 +609,35 @@ pub enum Cue {
     /// [`Self::ShurikenTravel`]'s own doc comment below makes for an
     /// unread emitter argument, carrying no confidence score of its own.
     LeachEnergy,
+    /// A Shuriken leaving the craft.
+    ///
+    /// `Shuriken_Init` (`0x08877280`, confidence 88) plays `SHURIKEN` (pointer
+    /// cell `0x08a7cd44`, string `0x08a7cd38`) on the emitter its caller hands it
+    /// as its last argument - the firing craft's own, before it allocates the
+    /// blade's - the same shape [`Self::Plasma`] takes. Earlier notes could not
+    /// verify this name; the string is `"SHURIKEN"` and the cue is in
+    /// `weapons.bnk` (cue 29). Fires from `Race::spend_pickup`'s Shuriken arm
+    /// and `throw_opponent_shuriken`, on the craft.
+    ShurikenLaunch,
     /// A Shuriken glancing off a wall.
     ///
     /// `Shuriken_Bounce` (`0x088778ac`, confidence 88) plays `SHURIKENHIT` on
-    /// every bounce, matching the already-built `WO_SHURIKEN_BOUNCE`
-    /// visual's edge; see `crate::race::weapons::visuals::bounced_this_tick`,
-    /// which already accepts `Weapon::Shuriken`. The call's own argument is
-    /// `s->travel_voice` - the same handle [`Self::ShurikenTravel`] opened -
-    /// which the page reads but does not itself resolve to an emitter
-    /// identity. **Placed on the firing craft: chosen, not measured**, the
-    /// same reasoning as [`Self::ShurikenTravel`] below.
+    /// every bounce (`Sound_Play` at `0x08877b60`), matching the `WO_SHURIKEN_BOUNCE`
+    /// visual's edge; see `crate::race::weapons::visuals::bounced_this_tick`.
+    /// **On the blade's own emitter**: it loads `round+0x50`, writes `300.0`
+    /// (`0x43960000`) to its `+0x38` and plays through it. This corrects the
+    /// earlier "placed on the firing craft" choice, made when no bolt-owned
+    /// emitter had been read.
     ShurikenHit,
     /// The Shuriken's own travel loop, from throw to whatever ends it.
     ///
-    /// `Shuriken_Init` (`0x08877280`, confidence 88) is handed
-    /// `craft->emitter` directly - the same emitter
-    /// [`super::Placement::Craft`] already reads for `.COLLISIONS`,
-    /// `ABSORB`, `~SHIELD` and `MINELAUNCH` - rather than allocating a
-    /// bolt-owned one the way `Rocket_Init`/`Missile_Init` do. **What the
-    /// page does not show is the `~SHURIKENTRAVEL` play call's own emitter
-    /// argument** - only that no bolt-owned `SoundEmitter_Init` exists to
-    /// supply one. So riding the firing craft rather than the blade is
-    /// **chosen, not measured, and carries no confidence score** - the
-    /// absence of a bolt-owned emitter is what rules the alternative out,
-    /// not a read of this cue's own call site. A blade thrown by a craft
-    /// that has since gone inactive is heard from nowhere either way, the
-    /// same silent drop [`super::place`] already gives any craft-placed cue
-    /// on an empty slot.
+    /// `Shuriken_Init` allocates a bolt-owned emitter at `round+0x50` (a
+    /// `SoundEmitter_Init`, `+0x50` pointed at the round's own matrix at
+    /// `round+0xf0`, `+0x38 = 300.0`) and plays `~SHURIKENTRAVEL` through it,
+    /// keeping the handle at `round+0x54`. Read 2026-09-30, confidence 88; it
+    /// replaces the earlier reading that Shuriken had no emitter of its own and
+    /// rode the craft's. Held per **projectile slot**, at the blade's position,
+    /// radius `300.0`.
     ShurikenTravel,
     /// The start-of-race voice: `"ready"`, a timeline of several waveforms.
     ///
@@ -626,354 +668,4 @@ pub enum Cue {
     Go,
 }
 
-impl Cue {
-    /// The two start-of-race cues, loaded on their own because their bank is
-    /// the mode's and not the title's. See [`Self::Ready`].
-    pub const COUNTDOWN: [Self; 2] = [Self::Ready, Self::Go];
-
-    /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 33] = [
-        Self::SpeedupPad,
-        Self::Collision,
-        Self::Absorb,
-        Self::Engine,
-        Self::Shield,
-        Self::ShieldActive,
-        Self::Autopilot,
-        Self::Engaging,
-        Self::Disengaging,
-        Self::Blowup,
-        Self::LockOn,
-        Self::MineLaunch,
-        Self::Plasma,
-        Self::PlasmaTravel,
-        Self::PlasmaHitWall,
-        Self::PlasmaHitShip,
-        Self::Rocket,
-        Self::RocketTravel,
-        Self::RocketHitWall,
-        Self::RocketHitShip,
-        Self::Missile,
-        Self::MissileTravel,
-        Self::MissileHitWall,
-        Self::Cannon,
-        Self::CannonHitWall,
-        Self::CannonHitShip,
-        Self::QuakeLaunch,
-        Self::QuakeHit,
-        Self::Leach,
-        Self::LeachAttach,
-        Self::LeachEnergy,
-        Self::ShurikenHit,
-        Self::ShurikenTravel,
-    ];
-
-    /// The bank the cue is looked up in.
-    #[must_use]
-    pub fn bank(self) -> BankName {
-        match self {
-            Self::SpeedupPad | Self::Blowup | Self::LockOn | Self::Autopilot => BankName::Hud,
-            Self::Collision | Self::Engine => BankName::Ship,
-            Self::Absorb
-            | Self::Shield
-            | Self::MineLaunch
-            | Self::Plasma
-            | Self::PlasmaTravel
-            | Self::PlasmaHitWall
-            | Self::PlasmaHitShip
-            | Self::Rocket
-            | Self::RocketTravel
-            | Self::RocketHitWall
-            | Self::RocketHitShip
-            | Self::Missile
-            | Self::MissileTravel
-            | Self::MissileHitWall
-            | Self::Cannon
-            | Self::CannonHitWall
-            | Self::CannonHitShip
-            | Self::QuakeLaunch
-            | Self::QuakeHit
-            | Self::Leach
-            | Self::LeachAttach
-            | Self::LeachEnergy
-            | Self::ShurikenHit
-            | Self::ShurikenTravel => BankName::Weapons,
-            Self::ShieldActive | Self::Engaging | Self::Disengaging | Self::Ready | Self::Go => {
-                BankName::Speech
-            }
-        }
-    }
-
-    /// Which mix bus this cue's voice belongs on.
-    ///
-    /// **Read straight off [`Self::bank`], because the bank is where the
-    /// original draws the line.** `shieldactive` sits in `speech.bnk` and not
-    /// in `weapons.bnk` beside the `~SHIELD` loop it fires with, and that is
-    /// already this module's own reason for calling it a voice line rather
-    /// than an effect - see [`Self::ShieldActive`]. `Disengaging` agrees from
-    /// the other direction: `Autopilot_Update` plays it through the dry,
-    /// full-volume path instead of the craft's emitter, which is a line in the
-    /// player's ear rather than a thing happening in the world.
-    ///
-    /// So a cue moves bus by moving bank, and nothing here holds a second list
-    /// that can disagree with `bank()`. See
-    /// [ADR-0027](../../../../../docs/architecture/adr/0027-three-mix-buses.md).
-    #[must_use]
-    pub fn bus(self) -> Bus {
-        match self.bank() {
-            BankName::Speech => Bus::Speech,
-            BankName::Hud | BankName::Ship | BankName::Weapons => Bus::Sfx,
-        }
-    }
-
-    /// The string to look up in that bank's name table.
-    ///
-    /// # The dot in `.COLLISIONS` is the executable's own, not a lookup fix-up
-    ///
-    /// **Correction, 2026-09-04**: this section used to read the executable as
-    /// passing bare `"COLLISIONS"` and claimed the leading dot was added here
-    /// to bridge a SCREAM sound/child-sound naming split, at confidence 70.
-    /// That was a misread of the call site - `ShipCollisionFx_Trigger`'s
-    /// string argument is not built in place the way its three spark names
-    /// are; it is loaded indirectly out of a small pointer table
-    /// (`0x08924854: lw a3,0x46ec(a2)`), and the decompiler's inline literal
-    /// showed the table slot's own apparent text, not the string the pointer
-    /// it holds actually points at. Reading that pointer's target directly
-    /// (`0x08a886e0`) gives `.COLLISIONS\0` - the dot is already in the
-    /// executable's own data. See the correction paragraph in
-    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
-    ///
-    /// So this is a plain, exact match: no bridging, no SCREAM child-sound
-    /// theory needed, just the same name the game itself passes. It happens
-    /// to be the only cue named `.COLLISIONS` on any disc, and Wipeout HD's
-    /// bank independently confirms the dot is a plain naming convention, not
-    /// a parent/child marker: `.COLLISIONS` is the **parent**, and the cues
-    /// it plays are the plainly named `c_CShipShip` and `c_CShipWall`. See
-    /// `oag_formats::sblk::child`.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::SpeedupPad => "SPEEDUPPAD",
-            Self::Collision => ".COLLISIONS",
-            Self::Absorb => "ABSORB",
-            Self::Engine => "~ENGINE",
-            Self::Shield => "~SHIELD",
-            Self::ShieldActive => "shieldactive",
-            Self::Autopilot => "~AUTOPILOT",
-            Self::Engaging => "autopilot_eng",
-            Self::Disengaging => "disengaging",
-            Self::Ready => "ready",
-            Self::Go => "go",
-            Self::Blowup => "~BLOWUP",
-            Self::LockOn => "~ROCKLOCK",
-            Self::MineLaunch => "MINELAUNCH",
-            Self::Plasma => "PLASMA",
-            Self::PlasmaTravel => "~PLASMATVL",
-            Self::PlasmaHitWall => "PLASMAHITWALL",
-            Self::PlasmaHitShip => "PLASMAHITSHIP",
-            Self::Rocket => "ROCKET",
-            Self::RocketTravel => "~ROCKETTVL",
-            Self::RocketHitWall => "ROCKEXPLWALL",
-            Self::RocketHitShip => "ROCKEXPLSHIP",
-            Self::Missile => "MISSILE",
-            Self::MissileTravel => "~MISSILETVL",
-            Self::MissileHitWall => "MISSILEEXPWALL",
-            Self::Cannon => "CANNON",
-            Self::CannonHitWall => "CANNONEXPLWALL",
-            Self::CannonHitShip => "CANNONEXPLSHIP",
-            Self::QuakeLaunch => "QUAKELAUNCH",
-            Self::QuakeHit => "QUAKEHIT",
-            Self::Leach => "LEACH",
-            Self::LeachAttach => "~LEACHATTACH",
-            Self::LeachEnergy => "LEACHENERGY",
-            Self::ShurikenHit => "SHURIKENHIT",
-            Self::ShurikenTravel => "~SHURIKENTRAVEL",
-        }
-    }
-
-    /// Whether this port keeps a handle to the voice rather than firing and
-    /// forgetting it.
-    ///
-    /// Both of these are cues the original opens with `Sound_PlayLooping` and
-    /// an out-parameter, which is what the `~` prefix marks - see
-    /// `docs/architecture/adr/0018-audio-mixer-architecture.md`. The `~` is
-    /// **not** the test: `~SPARKS` and `~FLYBY_DIST` also carry it and are
-    /// one-shots the caller can cancel, so a held cue is one whose *holder* is
-    /// written here.
-    ///
-    /// [`Self::PlasmaTravel`], [`Self::RocketTravel`], [`Self::MissileTravel`]
-    /// and [`Self::ShurikenTravel`] all join this list held **per projectile
-    /// slot** rather than per grid slot or as a single race-wide handle - see
-    /// [`super::travel::TravelVoices`]. [`Self::LeachAttach`] is held once for
-    /// the whole race, on [`super::SfxVoices::leach_attach`], since the
-    /// LeachBeam is a world-wide single instance rather than a projectile
-    /// slot. [`Self::Autopilot`] joins them the same way `Blowup` already
-    /// does: a level-driven handle (`ships[0].autopilot_timer > 0.0`), not a
-    /// per-projectile one. None of the six is ever pushed through the cue
-    /// queue, so this only guards against a stray push being mis-played.
-    #[must_use]
-    pub fn held(self) -> bool {
-        matches!(
-            self,
-            Self::Engine
-                | Self::Shield
-                | Self::Blowup
-                | Self::Autopilot
-                | Self::PlasmaTravel
-                | Self::RocketTravel
-                | Self::MissileTravel
-                | Self::LeachAttach
-                | Self::ShurikenTravel
-        )
-    }
-
-    /// How far this cue's voice can be heard, for a cue that carries its own
-    /// emitter rather than riding a craft's.
-    ///
-    /// Only read by [`super::place`]'s [`Placement::Point`] arm and by the
-    /// bespoke held-voice trackers ([`super::travel::TravelVoices`],
-    /// [`super::SfxVoices::leach_attach`]) - every [`Placement::Craft`] cue
-    /// keeps [`oag_audio::Emitter::CRAFT_RADIUS`] unconditionally, by
-    /// construction, so this only matters for the handful of cues with a
-    /// bolt- or beam-owned emitter.
-    ///
-    /// Defaults to [`oag_audio::Emitter::CRAFT_RADIUS`] - `SoundEmitter_Init`'s
-    /// own default, which is what every cue here keeps unless its own call
-    /// site is read overriding it. **Measured at `600.0` for the Rocket**
-    /// (`Rocket_Init` writes `+0x38` directly) and **for the LeachBeam's own
-    /// body** (`LeachBeam_InitLocked`'s `+0x4c` emitter). **Chosen at `600.0`
-    /// for the Missile**, reusing the Rocket's measured figure rather than
-    /// [`oag_audio::Emitter::CRAFT_RADIUS`] - see [`Self::MissileTravel`]'s
-    /// own doc comment for why. The Cannon's own hit cues keep the default:
-    /// no override is stated for them. **Measured at `300.0` for
-    /// [`Self::LeachEnergy`]** - half the beam body's own `600.0`, its own
-    /// separate call site.
-    #[must_use]
-    pub fn radius(self) -> f32 {
-        match self {
-            Self::RocketTravel
-            | Self::RocketHitWall
-            | Self::RocketHitShip
-            | Self::MissileTravel
-            | Self::MissileHitWall
-            | Self::LeachAttach => 600.0,
-            // Measured, not reused from `LeachAttach`'s `600.0` -
-            // `LeachBeam_Advance`'s pulse block writes its own emitter at a
-            // `300.0` falloff, half the beam body's own; see
-            // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
-            // "Assets and cues - checked, not assumed".
-            Self::LeachEnergy => 300.0,
-            _ => oag_audio::Emitter::CRAFT_RADIUS,
-        }
-    }
-
-    /// Which emitter the original plays this cue on.
-    ///
-    /// Read off each call site's first argument to `Sound_Play`, which is the
-    /// emitter record and nothing else - see
-    /// [`positional-audio.md`](../../../../../docs/ghidra/functions/psp-pulse-usa/positional-audio.md).
-    /// A cue whose call site has not been read stays [`Placement::Unplaced`]
-    /// rather than being placed somewhere plausible.
-    #[must_use]
-    pub fn placement(self) -> Placement {
-        match self {
-            // `lw a0, 0x50(a0)` at `0x08924844`, inside
-            // `ShipCollisionFx_Trigger` - the craft's own emitter, with no
-            // branch, so the player's hull is positional too.
-            Self::Collision => Placement::Craft,
-            // `FUN_08840640` is the absorb effect and sits on the same craft;
-            // its emitter argument was not disassembled, so this rides
-            // `Collision`'s reading of the contact path rather than its own.
-            Self::Absorb => Placement::Craft,
-            // `Shield_Activate`'s own doc comment above: `Sound_PlayLooping(1.0,
-            // entity->0x50, ...)`, the same `+0x50` the collision path uses.
-            Self::Shield => Placement::Craft,
-            // Two branches, and which is taken splits on `racer+0x368` -
-            // `ExhaustFlare_OnSpeedupPad` (`0x08904f74`) plays positionally off
-            // `craft+0x50` on one side and dry at volume `0x400` through
-            // `FUN_0883e9b0` on the other. See [`Placement::CraftUnlessPlayer`].
-            Self::SpeedupPad => Placement::CraftUnlessPlayer,
-            // `ExhaustFlare_Init` gives the note its own emitter at a quarter
-            // of the craft radius, and [`Engine`] holds the voice, so this
-            // never reaches the one-shot path.
-            Self::Engine => Placement::Engine,
-            // Recorded as `Sound_Play(entity, ..., "shieldactive", 0x400, 0)` -
-            // full volume and pan zero, which is the shape of the *non*-emitter
-            // path. Left dry, which is also what this port has always done.
-            //
-            // `Disengaging` joins it on a stronger footing: its call site is
-            // read, and it is `FUN_0883e9b0` -> `FUN_0893a768`, the path that
-            // takes no emitter at all.
-            Self::ShieldActive | Self::Disengaging => Placement::Unplaced,
-            // `RaceMode_SetState` and `RaceMode_UpdateCountdown` both call
-            // `Sound_PlayNamedInSlot` with no emitter and `0x400`: a voice in
-            // the player's ear, the same shape as `Disengaging` above.
-            Self::Ready | Self::Go => Placement::Unplaced,
-            // Read, not assumed: case 4 hands it to the path that takes no
-            // emitter and a volume of `0x400`.
-            Self::Blowup => Placement::Unplaced,
-            // Both halves of `Ship_FireHeldWeapon`'s case 6 go through
-            // `FUN_0883e9b0` too - the same dry, no-emitter path `Blowup` and
-            // `Disengaging` take - see each variant's own doc comment.
-            Self::Autopilot | Self::Engaging => Placement::Unplaced,
-            // `HudSight_UpdateTone` opens it with a volume of `0x400` and no
-            // emitter argument, which is the same dry, full-volume shape - and
-            // it is a HUD sound about the player's own reticle rather than a
-            // thing happening somewhere in the world.
-            Self::LockOn => Placement::Unplaced,
-            // Traces to the firing craft's own `+0x50` - see this variant's
-            // own doc comment - so it rides the craft, not the mine.
-            Self::MineLaunch => Placement::Craft,
-            // `Plasma_Init` plays this off the argument it was handed
-            // directly - the firing craft's own emitter - before it ever
-            // constructs the bolt's own. See this variant's own doc comment.
-            Self::Plasma => Placement::Craft,
-            // All three ride the bolt's own emitter, which `Plasma_Init`
-            // constructs pointed at the bolt's own matrix rather than any
-            // craft's - see each variant's own doc comment. None is routed
-            // through this function's `craft` slice: [`Self::PlasmaTravel`]
-            // is a bespoke per-tick tracker keyed by projectile slot, and
-            // [`Self::PlasmaHitWall`]/[`Self::PlasmaHitShip`] each carry their
-            // own point on the [`CueEvent`] rather than a grid slot.
-            Self::PlasmaTravel | Self::PlasmaHitWall | Self::PlasmaHitShip => Placement::Point,
-            // Same shape as the Plasma's three, on the Rocket's own
-            // `600.0`-radius emitter - see each variant's own doc comment and
-            // [`Self::radius`].
-            Self::RocketTravel | Self::RocketHitWall | Self::RocketHitShip => Placement::Point,
-            // `Ship_FireHeldWeapon`'s own `Sound_Play(1.0, *(param_1+0x50),
-            // weapons.bnk, 0, "ROCKET", 0)` - a plain positional call taking
-            // an explicit emitter argument, the same shape [`Self::Shield`]
-            // reads above, not the dry path - see this variant's own doc
-            // comment.
-            Self::Rocket => Placement::Craft,
-            // Chosen, not measured - see each variant's own doc comment.
-            Self::Missile | Self::Cannon => Placement::Craft,
-            Self::MissileTravel | Self::MissileHitWall => Placement::Point,
-            Self::CannonHitWall | Self::CannonHitShip => Placement::Point,
-            // Same `Ship_FireHeldWeapon` switch, same positional call shape
-            // as `Rocket` - see that variant's own doc comment.
-            Self::QuakeLaunch => Placement::Craft,
-            // Settled by cross-reading the surrounding block's shield gate
-            // and pending-damage fields, all the struck craft's own - see
-            // this variant's own doc comment.
-            Self::QuakeHit => Placement::Craft,
-            // `LeachBeam_InitLocked` plays `LEACH` on the shooter's own
-            // emitter - see this variant's own doc comment.
-            Self::Leach => Placement::Craft,
-            // A bespoke per-tick tracker on the beam's own `600.0`-radius
-            // emitter, the same shape [`Self::PlasmaTravel`] takes for a
-            // projectile slot - see [`super::SfxVoices::leach_attach`] and
-            // [`Self::radius`].
-            Self::LeachAttach => Placement::Point,
-            // Pushed with the ribbon's own `energy_point` as a
-            // [`super::CueEvent::at_point`] - the pulse block's own re-spawn
-            // target, not a craft's emitter - see this variant's own doc
-            // comment and [`Self::radius`].
-            Self::LeachEnergy => Placement::Point,
-            // `Shuriken_Init` is handed `craft->emitter` directly, so both
-            // ride the firing craft rather than the blade - see
-            // [`Self::ShurikenTravel`]'s own doc comment.
-            Self::ShurikenHit | Self::ShurikenTravel => Placement::Craft,
-        }
-    }
-}
+mod tables;

@@ -43,8 +43,7 @@ impl TravelVoices {
     /// on `charge <= 0.0` for the Plasma. `position` says where that slot is
     /// heard from; `None` stops the voice the same tick a bolt actually
     /// ending would, which is what lets [`Cue::ShurikenTravel`]'s
-    /// firing-craft placement share this same tracker - a craft that has
-    /// gone inactive is nowhere to keep sounding from. `radius` is
+    /// the position closure share this same tracker. `radius` is
     /// [`Cue::radius`], read once by the caller rather than per slot since it
     /// does not vary by projectile.
     #[allow(clippy::too_many_arguments)]
@@ -62,32 +61,34 @@ impl TravelVoices {
     ) {
         for (slot, projectile) in projectiles.iter().enumerate() {
             let at = flying(projectile).then(|| position(projectile)).flatten();
-            match (at, self.voices[slot]) {
-                // The rising edge: this slot started flying (or came into
-                // range of a position) this tick.
-                (Some(at), None) => {
-                    if let Some((sound, looping)) = banks.pick(cue, rng)
-                        && looping
-                    {
-                        let placed = Emitter {
-                            position: at.to_array(),
-                            radius,
-                            cone: None,
-                        }
-                        .place(listener, 1.0);
-                        let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
-                        self.voices[slot] = mixer.play(Play {
-                            gain,
-                            pan,
-                            ..Play::looping(sound, cue.bus())
-                        });
-                    }
-                    // Else nothing loaded, or the bank says this waveform is
-                    // not a loop - the same defensive guard `Engine::tick`
-                    // carries for `~ENGINE`.
-                }
-                // Still flying and still held: follow it.
-                (Some(at), Some(id)) if mixer.is_playing(id) => {
+            self.follow(slot, at, mixer, banks, rng, listener, cue, radius);
+        }
+    }
+
+    /// One slot's voice for one tick: `at` is where it is heard from, or
+    /// [`None`] when the thing it follows has gone.
+    ///
+    /// The body of [`Self::tick`]'s per-slot loop, so a single travelling thing
+    /// that is not a projectile (the Quake's wave) can share it.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn follow(
+        &mut self,
+        slot: usize,
+        at: Option<Vec3>,
+        mixer: &mut Mixer,
+        banks: &Banks,
+        rng: &mut Rng,
+        listener: &Listener,
+        cue: Cue,
+        radius: f32,
+    ) {
+        match (at, self.voices[slot]) {
+            // The rising edge: this slot started flying (or came into
+            // range of a position) this tick.
+            (Some(at), None) => {
+                if let Some((sound, looping)) = banks.pick(cue, rng)
+                    && looping
+                {
                     let placed = Emitter {
                         position: at.to_array(),
                         radius,
@@ -95,20 +96,38 @@ impl TravelVoices {
                     }
                     .place(listener, 1.0);
                     let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
-                    mixer.set_gain(id, gain);
-                    mixer.set_pan(id, pan);
+                    self.voices[slot] = mixer.play(Play {
+                        gain,
+                        pan,
+                        ..Play::looping(sound, cue.bus())
+                    });
                 }
-                // The pool reclaimed the voice before the bolt itself ended -
-                // starved, not stopped. Forget the stale handle so a later
-                // tick does not stop whatever slot the pool gave it to next.
-                (Some(_), Some(_)) => self.voices[slot] = None,
-                // The falling edge: no longer flying, or nowhere to place it.
-                (None, Some(id)) => {
-                    mixer.stop(id);
-                    self.voices[slot] = None;
-                }
-                (None, None) => {}
+                // Else nothing loaded, or the bank says this waveform is
+                // not a loop - the same defensive guard `Engine::tick`
+                // carries for `~ENGINE`.
             }
+            // Still flying and still held: follow it.
+            (Some(at), Some(id)) if mixer.is_playing(id) => {
+                let placed = Emitter {
+                    position: at.to_array(),
+                    radius,
+                    cone: None,
+                }
+                .place(listener, 1.0);
+                let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+                mixer.set_gain(id, gain);
+                mixer.set_pan(id, pan);
+            }
+            // The pool reclaimed the voice before the bolt itself ended -
+            // starved, not stopped. Forget the stale handle so a later
+            // tick does not stop whatever slot the pool gave it to next.
+            (Some(_), Some(_)) => self.voices[slot] = None,
+            // The falling edge: no longer flying, or nowhere to place it.
+            (None, Some(id)) => {
+                mixer.stop(id);
+                self.voices[slot] = None;
+            }
+            (None, None) => {}
         }
     }
 

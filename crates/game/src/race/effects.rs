@@ -855,6 +855,13 @@ impl Race {
         self.sim.world.ships[0].autopilot_timer > 0.0
     }
 
+    /// Where the Quake wave is on the road, while one travels: the point
+    /// [`crate::audio::sfx::Cue::QuakeTravel`] is heard from.
+    #[must_use]
+    pub fn quake_point(&self) -> Option<oag_core::math::Vec3> {
+        self.view.quake_point
+    }
+
     /// Whether the player's shield pickup is currently up.
     ///
     /// A *level*, not an edge, and that is what `~SHIELD` wants:

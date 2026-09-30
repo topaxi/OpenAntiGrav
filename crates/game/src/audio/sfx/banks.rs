@@ -18,7 +18,7 @@ use oag_audio::Sound;
 use oag_core::Rng;
 use oag_formats::sblk;
 
-use super::layers::{self, CueVoice, Timeline};
+use super::layers::{self, CueVoice, Program, Timeline};
 use super::{BankName, Cue};
 
 /// One cue's decoded audio: every waveform its command run binds.
@@ -69,6 +69,9 @@ pub struct Banks {
     /// combination. Absent for a cue whose flat [`Self::pick`] is what it
     /// plays; see [`super::layers`].
     pub(super) timelines: BTreeMap<Cue, Vec<Timeline>>,
+    /// Cues that repeat while held and play as the list runs, in place of the
+    /// flat pick or the one-shot timeline. See [`Cue::repeats`].
+    pub(super) programs: BTreeMap<Cue, Program>,
 }
 
 impl Banks {
@@ -92,6 +95,7 @@ impl Banks {
     ) -> Self {
         let mut sounds = BTreeMap::new();
         let mut timelines = BTreeMap::new();
+        let mut programs = BTreeMap::new();
         let mut report = Vec::new();
         let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
 
@@ -113,7 +117,10 @@ impl Banks {
                 cue,
                 tick,
                 &mut sounds,
-                &mut timelines,
+                Tables {
+                    timelines: &mut timelines,
+                    programs: &mut programs,
+                },
                 &mut report,
             );
         }
@@ -124,6 +131,7 @@ impl Banks {
             sounds,
             report,
             timelines,
+            programs,
             ..Default::default()
         }
     }
@@ -160,7 +168,10 @@ impl Banks {
                 cue,
                 tick,
                 &mut self.sounds,
-                &mut self.timelines,
+                Tables {
+                    timelines: &mut self.timelines,
+                    programs: &mut self.programs,
+                },
                 &mut report,
             );
         }
@@ -193,6 +204,12 @@ impl Banks {
         let index = index.min(loaded.waveforms.len().checked_sub(1)?);
         let (sound, looping) = &loaded.waveforms[index];
         Some((Arc::clone(sound), *looping))
+    }
+
+    /// The list of a cue that repeats while held, when it loaded as one.
+    #[must_use]
+    pub fn program(&self, cue: Cue) -> Option<&Program> {
+        self.programs.get(&cue)
     }
 
     /// Everything one play of a cue starts, drawn by `rng`.
@@ -249,6 +266,12 @@ impl Banks {
 /// Decodes one cue out of an already-read bank blob into the maps [`Banks`]
 /// keeps, one report line either way.
 ///
+/// The per-cue tables [`load_one`] fills beside the decoded waveforms.
+struct Tables<'a> {
+    timelines: &'a mut BTreeMap<Cue, Vec<Timeline>>,
+    programs: &'a mut BTreeMap<Cue, Program>,
+}
+
 /// The body of [`Banks::load`]'s loop, lifted so [`Banks::load_countdown`] can
 /// load a cue from the *mode's* speech bank on the same terms.
 fn load_one(
@@ -257,11 +280,15 @@ fn load_one(
     cue: Cue,
     tick: oag_title::SequenceTick,
     sounds: &mut BTreeMap<Cue, Loaded>,
-    timelines: &mut BTreeMap<Cue, Vec<Timeline>>,
+    tables: Tables,
     report: &mut Vec<String>,
 ) {
+    let Tables {
+        timelines,
+        programs,
+    } = tables;
     match load_cue(blob, cue, tick) {
-        Ok((loaded, skipped, timeline)) => {
+        Ok((loaded, skipped, timeline, program)) => {
             let undecoded = if skipped == 0 {
                 String::new()
             } else {
@@ -286,6 +313,17 @@ fn load_one(
                 Ok(None) => extra = not_one_event(cue, &loaded),
                 Err(e) => line.push_str(&format!("; timeline not built, flat pick kept: {e}")),
             }
+            match program {
+                Ok(Some(p)) => {
+                    line.push_str(&format!(
+                        "; plays its list as a repeating program ({} key-on(s))",
+                        p.layers.len()
+                    ));
+                    programs.insert(cue, p);
+                }
+                Ok(None) => {}
+                Err(e) => line.push_str(&format!("; program not built: {e}")),
+            }
             report.push(line);
             report.extend(extra);
             sounds.insert(cue, loaded);
@@ -306,7 +344,12 @@ fn load_cue(
     blob: &[u8],
     cue: Cue,
     tick: oag_title::SequenceTick,
-) -> anyhow::Result<(Loaded, usize, TimelineResult)> {
+) -> anyhow::Result<(
+    Loaded,
+    usize,
+    TimelineResult,
+    anyhow::Result<Option<Program>>,
+)> {
     let bank = sblk::Bank::parse(blob)?;
     let (loaded, skipped) = load_named_cue(&bank, cue.name())?;
     // The engine is driven by one voice's per-tick pitch and volume, and how
@@ -316,7 +359,12 @@ fn load_cue(
     } else {
         layers::timelines(&bank, cue.name(), tick)
     };
-    Ok((loaded, skipped, timeline))
+    let program = if cue.repeats() {
+        layers::program(&bank, cue.name(), tick)
+    } else {
+        Ok(None)
+    };
+    Ok((loaded, skipped, timeline, program))
 }
 
 /// The length ratio past which a cue's waveforms cannot all be alternates of

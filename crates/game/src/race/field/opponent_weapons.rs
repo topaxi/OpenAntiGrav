@@ -385,10 +385,18 @@ impl Race {
         ) else {
             return false;
         };
-        self.sim
+        let thrown = self
+            .sim
             .world
             .projectiles
-            .throw(position, velocity, slot as u8, stats.fuse)
+            .throw(position, velocity, slot as u8, stats.fuse);
+        if thrown {
+            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                crate::audio::sfx::Cue::ShurikenLaunch,
+                slot,
+            ));
+        }
+        thrown
     }
 
     /// What an opponent does with a pickup it is holding.

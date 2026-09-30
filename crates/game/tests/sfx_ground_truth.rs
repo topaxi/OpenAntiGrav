@@ -103,13 +103,16 @@ fn render(sound: std::sync::Arc<oag_audio::Sound>) -> (f32, f32) {
 /// was read with `oag-wad sounds` and carries no `CANNON*`, `LEACH*` or
 /// `SHURIKEN*` entry of any kind; Pure's own weapon in their place is the
 /// Disruptor.
-const NOT_ON_PURE: [Cue; 8] = [
+const NOT_ON_PURE: [Cue; 11] = [
+    Cue::MissileExpire,
     Cue::Cannon,
     Cue::CannonHitWall,
     Cue::CannonHitShip,
     Cue::Leach,
+    Cue::LeachFail,
     Cue::LeachAttach,
     Cue::LeachEnergy,
+    Cue::ShurikenLaunch,
     Cue::ShurikenHit,
     Cue::ShurikenTravel,
 ];
@@ -282,6 +285,10 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
     // own `weapons.bnk`/`speech.bnk`, this test just never asked for any of
     // them until then.
     //
+    // **Five more on 2026-09-30**, when their triggers were recovered
+    // (`MISSILEEXPSHIP`, `SHURIKENEXPL`, `~QUAKETRAVEL`, `LEACHFAIL`,
+    // `SHURIKEN`): each is already in HD's own `weapons.bnk`.
+    //
     // **This test is `#[ignore]`d, so `just` stayed green while it was stale.**
     // `disengaging` was added a commit earlier and this list was not updated
     // with it; the failure surfaced only on the next `--run-ignored all`. The
@@ -312,14 +319,19 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
             "MISSILE",
             "~MISSILETVL",
             "MISSILEEXPWALL",
+            "MISSILEEXPSHIP",
+            "SHURIKENEXPL",
             "CANNON",
             "CANNONEXPLWALL",
             "CANNONEXPLSHIP",
             "QUAKELAUNCH",
             "QUAKEHIT",
+            "~QUAKETRAVEL",
             "LEACH",
+            "LEACHFAIL",
             "~LEACHATTACH",
             "LEACHENERGY",
+            "SHURIKEN",
             "SHURIKENHIT",
             "~SHURIKENTRAVEL",
         ],

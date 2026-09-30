@@ -345,6 +345,41 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
     assert_eq!(projectiles.live(), 0, "the slot leaked");
 }
 
+/// `CannonPool_Update` reaps a round at `1.0 < age`, not at the shared flight
+/// cap: a round is still in the air a tick short of one second, and gone with
+/// no impact a tick after it.
+#[test]
+fn a_cannon_round_that_hits_nothing_is_reaped_at_one_second() {
+    let mut projectiles = Projectiles::new();
+    projectiles.spawn(Weapon::Cannon, Vec3::ZERO, Vec3::Z * 600.0, 0);
+    let world = empty_world();
+    let dt = 1.0 / 60.0;
+
+    let mut live_after = Vec::new();
+    for _ in 0..120 {
+        let impacts = projectiles.advance(
+            dt,
+            &world,
+            &ships(&[]),
+            None,
+            None,
+            None,
+            TriggerRadii::default(),
+            "VENOM",
+        );
+        assert!(
+            impacts.iter().all(Option::is_none),
+            "a reaped round must not report an impact"
+        );
+        live_after.push(projectiles.live());
+    }
+    // Tick 59 leaves the age at 59/60 s, tick 60 at 1.0 exactly (`1.0 < 1.0`
+    // is false), tick 61 past it.
+    assert_eq!(live_after[59], 1, "reaped before its second was up");
+    assert_eq!(live_after[60], 0, "still flying at 1.0167 s");
+    assert_eq!(*live_after.last().unwrap(), 0);
+}
+
 /// `Rocket_SweepProjectiles`: a rocket flying through a laid mine sets it off
 /// quietly - the mine shows its explosion and hurts nobody, and the rocket is
 /// spent without a detonation of its own.

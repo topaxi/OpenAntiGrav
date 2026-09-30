@@ -63,6 +63,20 @@ use super::KMH_PER_UNIT_PER_SECOND;
 /// is baked into the executable rather than authored - just not per class.
 pub const BASE_SPEED_KMH: f32 = 500.0;
 
+/// How long a Cannon round that hits nothing stays in the air before the pool
+/// reaps it, in seconds.
+///
+/// **Recovered, confidence 90.** `Cannon_Init` (`0x088648ec`) zeroes the
+/// round's age at `+0x48`, `Cannon_UpdateRound` (`0x0886593c`) adds `dt` to it
+/// at the top of every tick, and `CannonPool_Update` (`0x088582b0`) tests
+/// `1.0 < round+0x48` as the first half of the `||` that opens its teardown
+/// block. A round that timed out with no hit recorded sets neither the wall
+/// (`0x10`) nor the craft (`0x20`) bit, so the teardown plays no sound and
+/// there is no impact to report. Tested against the age at the end of the
+/// tick, strictly greater, the way the pool does; the Rocket's own is
+/// [`super::rocket::LIFETIME_SECONDS`].
+pub const LIFETIME_SECONDS: f32 = 1.0;
+
 /// How far to each side of the nose the two muzzles sit, as a fraction of the
 /// hull's own width.
 ///

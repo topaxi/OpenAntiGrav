@@ -494,8 +494,27 @@ Unchanged because the flat pick is already what the list plays: `SPEEDUPPAD`,
 else), `LEACH`, `MINELAUNCH` and the four travel loops. `~ENGINE` is left flat
 on purpose: Zone's is nine loops at tick zero, but the engine law drives one
 voice's pitch and volume per tick and how it spreads over layers is unread.
-Still unmodelled and flat: **`~BLOWUP`** (`0x15`/`0x1a`/`0x16`, a repeat) and
-**`~ROCKLOCK`** (guards `0x22`).
+`~BLOWUP` and `~ROCKLOCK`, the two cues whose lists **repeat while a handle is
+held**, play as the list runs (2026-09-30, see the next section) and are not in
+this table.
+
+### Two cues that repeat while held: `~BLOWUP` and `~ROCKLOCK` (2026-09-30)
+
+A list with a `0x15`/`0x16` loop has no end, so it cannot be laid down as a
+timeline. `oag_formats::sblk::runner::Runner` runs it as the handler does, one
+master tick at a time, with the four cue parameters and `0x22` guards, and
+`oag_game::audio::sfx::repeating` holds it open from the simulation tick.
+
+| Cue | List | Played as |
+| --- | --- | --- |
+| `~BLOWUP` | `[key-on loop, 0x15, key-on, 0x1a 0, 0x16]` | the loop held from the start, the second waveform re-keyed every **43** ticks (0.166 s) until the explosion ends |
+| `~ROCKLOCK` | `[0x15, guard(p0 == 0), key-on +30, guard(p0 == 1), key-on +15, 0x16]` | one beep per 30 ticks (116 ms) seeking, per 15 (58 ms) once locked; a parameter change takes hold at the next pass |
+
+Evidence and confidence: [`sound.md`](../ghidra/functions/psp-pulse-usa/sound.md#cue-parameters-the-guard-operand-and-the-loop-back-flag-2026-09-30).
+Pinned by `crates/game/tests/sfx_repeating_ground_truth.rs` and rendered to a
+WAV with `OAG_RENDER_DIR`. **Not heard by a human yet**, and the phase of the
+master tick against the game tick is taken as zero (chosen, not measured). A
+title whose tick is not measured (Pure, 2048) keeps the one-shot path.
 
 ### The countdown voice: `ready` and `go`
 
@@ -545,7 +564,7 @@ each, always together), `0x1a` random wait 84, `0x29` key-off 84, `0x04` LFO 75,
 Before the change the single biggest unblocker was `0x1b` (95 cues blocked by it
 alone) then `0x14` (38), `0x04` (28) and `0x1e` (20); the first, second and
 fourth are now modelled. `0x04` is next but its LFO is unread (`_q`); the
-`[0x15, 0x16, 0x1a]` loop is the next audible one (`~BLOWUP`).
+`[0x15, 0x16, 0x1a]` loop was the next audible one (`~BLOWUP`, now run).
 **Not covered:** the circuit's authored sound emitters
 (`sfx::track`) still pick one waveform, and their cues are not routed.
 

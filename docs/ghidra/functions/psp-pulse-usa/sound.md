@@ -554,7 +554,7 @@ the **repeat step**, increments the counter, ends the list when it passes
 | `0x0898eaa8` | `Scream_OpEnd` | 85 | `pc = cue[4] - 1`, returns 0. The stepper's own increment then runs off the end, so **the list ends here** and later commands are not reached by it. Table entry only; Ghidra had no function there (created 2026-09-29). Reading the code is 95; that nothing else reaches the commands after it (a marker seek by `FUN_0898dc4c` is unread) is why 85 |
 | `0x0898e2b0` | `Scream_OpRandomBend` (existing row) | 85 | Returns 0, so it adds no delay. `Scream_SetSoundBend(handler, ((rand % 0x7fff) * 0xffff / 0x7fff - 0x8000) * (s8)operand / 100)`: one draw per execution, applied to the handler and its children. Through `Scream_ComputeVoiceNote` a negative bend scales the descriptor's `+0x08`, a positive one its `+0x09` (semitones), so the audible detune is at most that range - and **zero on a descriptor whose range bytes are zero**: `~SHIELD`, `ROCKET`, `MISSILEEXPWALL` are unaffected, `PLASMAHITSHIP`'s three layers span 5/2, 1/1 and 3/3 |
 | `0x0898dfd0` | `Scream_OpNop14` (existing row) | 82 | `jr ra; li v0,0`. Adds nothing |
-| `0x0898dfe0` | `Scream_OpLoopBack_q` | 65 | Scans backward from the counter for the nearest `0x15`, sets the counter to just before it (the stepper's increment lands on the `0x15`), sets flag `0x40` at `+0x16` the first time and returns 1 the later times (one extra tick on the next delay). A loop with no exit in the list, so it runs until the handler is killed. `_q`: the flag's other users and any exit are unread. `~BLOWUP` is `[key-on loop, 0x15, key-on, 0x1a 0, 0x16]` - the second waveform re-keyed every 43-44 ticks (0.17 s) for as long as the explosion holds the handler - and 20 Pulse cues carry the `[0x15, 0x16, 0x1a]` shape. **Not modelled by the timeline walk** |
+| `0x0898dfe0` | `Scream_OpLoopBack` | 85 | Scans backward from the counter for the nearest `0x15`, sets the counter to just before it (the stepper's increment lands on the `0x15`), sets flag `0x40` at `+0x16` and returns 0 if the flag was clear, returns 1 (one extra tick on the next delay) if it was already set. **`Scream_TickCommandList` clears that flag every tick (`+0x16 &= 0xaf`)**, so the `1` comes only on a *second* loop-back within one tick: a loop that waits on a delay pays nothing and keeps its period exactly, and a loop with no wait cannot spin. No `0x15` behind it kills the handler (returns -1). Corrected 2026-09-30; the earlier reading took the flag for once-per-play. `~BLOWUP` is `[key-on loop, 0x15, key-on, 0x1a 0, 0x16]`: the second waveform re-keyed every **43** ticks (0.166 s), not 43-44, for as long as the explosion holds the handler. See [the parameter section](#cue-parameters-the-guard-operand-and-the-loop-back-flag-2026-09-30) |
 
 `0x1e`/`0x1f`/`0x20`/`0x21` return 0 (`0x1e` disassembled: two stores and
 `li v0,0`), so they add no time either; they matter only to a guard (`0x22`) or
@@ -1036,7 +1036,7 @@ and both come from code this page had not read: the three functions between
 | --- | --- | --- | --- |
 | `0x08993eb4` | `Scream_MasterTick` | 88 | Increments a pending-tick count (`0x08ac3688`) on every call, and while it is positive runs one tick: `++0x08ac35e0`, `Scream_TickHandlers`, the voice commit, and every fourth tick a slower update |
 | `0x08993124` | `Scream_TickHandlers` | 80 | Walks the live handler list (`0x08ac35a0`); a handler whose type nibble is `5` (a playing cue) and that is not paused (`+0x16 & 2`) goes to `Scream_TickCommandList` |
-| `0x0898db80` | `Scream_TickCommandList` | 88 | `handler + 0x48 -= 1`, then `while (delay < 1 && pc != -1) Scream_StepCommandList(handler)` |
+| `0x0898db80` | `Scream_TickCommandList` | 88 | `handler + 0x48 -= 1`, clears the per-tick flags `+0x16 &= 0xaf` (bits `0x40`, the loop-back's, and `0x10`, the key-on's), then `while (delay < 1 && pc != -1) Scream_StepCommandList(handler)` |
 
 **The delay word.** `Scream_StepCommandList` runs the command at `pc`, advances
 `pc`, and - unless the list ended - stores `handler + 0x48 = (s16)next.word1 +
@@ -1149,3 +1149,49 @@ byte order, so `oag_title::SequenceTick` carries it per title: `Psp` for Pulse
   and `Sas_SetVolume`'s call site and the voice table's base were read live
   on 2026-09-06. The cue dispatch and the opcode handlers are still static
   reading only.
+
+## Cue parameters, the guard operand and the loop-back flag (2026-09-30)
+
+Read for `~ROCKLOCK` and `~BLOWUP`, the two Pulse cues whose lists repeat while a
+handle is held (`pulse-weapon-audio` lane). All decompiled from `BOOT.BIN`, no
+live capture.
+
+| Address | Name | Confidence | What it does |
+| --- | --- | --- | --- |
+| `0x0898daf0` | `Scream_SetCueParameter` | 85 | `(handle, index, value)`: for `0 <= index < 4` writes the byte `handler + index + 0x4c`. The handle's type nibble must be 5 (a playing cue); a stale handle writes nothing |
+| `0x08992034` | `Sound_SetCueParameter` | 82 | The public wrapper `HudSight_UpdateTone` calls: takes the sound lock, splits the handle's type nibble (`>> 24 & 0x1f`) and, for a cue, tail-calls `Scream_SetCueParameter`; another type goes through its own table entry at `+0x4c` |
+
+**A handler's four parameter bytes start at zero.** `Scream_StartSound`
+(`0x0898f864`) writes `+0x4c..+0x4f` from the caller's option block when its flag
+`0x40` is set and clears them otherwise; `Sound_PlayNamedInSlot` passes no
+options. It also runs the zero-delay prefix of the list *before it returns*, so
+whatever a caller writes with `Scream_SetCueParameter` straight after opening a
+handle arrives after the first pass of the list has already read zero.
+
+**The guard's operand** (`Scream_OpGuard`, `0x0898e594`) is three bytes,
+`[variable, mode, immediate]`, all signed. A negative variable reads a runtime
+global (`0x08ac3247 - variable`), a non-negative one the handler's own parameter
+byte of that index. Mode 0 skips the next command when `immediate <= variable`,
+mode 1 when `variable != immediate`, mode 2 when `variable <= immediate`, any
+other mode never. Skipping is `pc += 1` on top of the stepper's own increment,
+so the skipped command's **delay is skipped with it**: the next delay loaded is
+that of the command after it.
+
+**`~ROCKLOCK`** (`hud.bnk` cue 6, the same list in `FE.wad` and `Data.wad`) is
+`[0x15, guard(0, 1, 0), key-on (delay 30), guard(0, 1, 1), key-on (delay 15),
+0x16]`. Parameter 0 keeps the first key-on and skips the second, so one beep
+every **30** master ticks (116 ms); parameter 1 skips the first and keeps the
+second, one beep every **15** (58 ms). `HudSight_UpdateTone` (`0x0881b34c`)
+writes 0 while the reticle is seeking and 1 once it is locked, so a lock-on is
+a beeping tone that doubles its tempo on lock. Both key-ons bind the **same**
+waveform (`0xb0c0`, 0.052 s, 48,051 Hz), which retires the "two waveforms, which
+is which" reading `lock-sight.md` carried at confidence 55. A parameter written
+mid-list takes hold at the next pass of the loop, because the guards run before
+the delay, not after it: the key-on already waiting still fires.
+
+**Modelled** by `oag_formats::sblk::runner::Runner` and played by
+`oag_game::audio::sfx::repeating::Playing`; the ground truth is
+`crates/game/tests/sfx_repeating_ground_truth.rs`. **Chosen, not measured (no
+confidence score):** the phase of the master tick against the game tick is taken
+as zero, and a beep is started on the mixer with the sub-tick delay its authored
+tick implies.
