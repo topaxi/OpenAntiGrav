@@ -449,7 +449,11 @@ pub fn build(
             blend_state: None,
             layer: oag_vex::vex::LAYER_DEFAULT,
             node: None,
-            chunk: None,
+            // The mesh object this submesh belongs to: the join key for the
+            // circuit's `.pvs`, whose bitmaps are indexed by exactly this
+            // number (`oag_rcs::hd_pvs`, the `Psp2` dialect). `None` when the
+            // node table did not read, which the PVS test always allows.
+            chunk: submesh.mesh.and_then(|mesh| u32::try_from(mesh).ok()),
             // A Vita material authors no PSP-style reference.
             alpha_test_ref: None,
         });

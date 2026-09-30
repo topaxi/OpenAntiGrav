@@ -14,8 +14,10 @@ use super::super::*;
 /// one function rather than two: a caller pulling them apart would have to
 /// reproduce that ordering itself to get the same picture.
 ///
-/// `has_ps3_geometry` is `ps3_geometry.is_some()` at the call site - only
-/// presence is asked here, never the bytes themselves.
+/// `ps3_geometry` is the `.rcsmodel` beside the `.vex`, and `geometry_name` the
+/// name it was read under: the presence decides which path runs, and the bytes
+/// are asked for one thing only - a 2048-lineage model's mesh-object count, to
+/// check a `.pvs` against.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build(
     archives: &mut oag_assets::Archives,
@@ -23,7 +25,8 @@ pub(super) fn build(
     track_model: &mut Model,
     track_blob: &[u8],
     ai: &AiTrack,
-    has_ps3_geometry: bool,
+    ps3_geometry: Option<&[u8]>,
+    geometry_name: Option<&str>,
     vex_geometry: bool,
     start_position: Option<&StartPosition>,
     report: &mut Vec<String>,
@@ -44,6 +47,7 @@ pub(super) fn build(
     // rather than plain - `TrackStartup::parse` expands either form - so this
     // also runs on real geometry (`vex_geometry`), whose paths are `\`-joined
     // where HD's are `/`-joined; `rfind('/')` alone found nothing on Pulse.
+    let has_ps3_geometry = ps3_geometry.is_some();
     let mut gantry = None;
     // Whether anything named a slot 8 at all, which is what separates "the gantry
     // did not load" (`place` says so itself) from "nothing asked for one", which
@@ -116,7 +120,13 @@ pub(super) fn build(
     let visibility = if vex_geometry {
         TrackVisibility::build(track_model, track_blob, ai)
     } else if has_ps3_geometry {
-        TrackVisibility::from_hd_pvs(archives, track, report)
+        // A 2048-lineage model's `.pvs` is indexed by its mesh objects, whose
+        // count is the check that the file belongs to it; HD's is not asked.
+        let model_chunks = ps3_geometry
+            .filter(|blob| oag_render::mesh::rcs::psp2::is_psp2(blob))
+            .and_then(|blob| oag_rcs::rcsmodel::psp2::parse(blob).ok())
+            .map(|model| model.scene.meshes.len());
+        TrackVisibility::from_hd_pvs(archives, track, geometry_name, model_chunks, report)
     } else {
         None
     };
