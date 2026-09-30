@@ -212,24 +212,31 @@ use oag_ai::probe::{self, Scenario};
 ///   `0.7`/`0.05`/`3.0`. All three rows move again for the same reason the
 ///   entry above gives: this scenario calls `Driver::drive`, so a differential
 ///   that behaves differently is a driver that ends up somewhere different.
+/// - **All three rows regenerated 2026-09-30, for the player's physics.**
+///   `oag_physics::airbrake::evaluate`'s forward `drag` term ran 100x weak,
+///   reading the raw `steerX` on `-1..=1` where the original holds it on
+///   `+/-100`; see `oag-physics`' own determinism gate for the entry. No
+///   driver code changed: every row moves because the AI flies the player's
+///   physics and airbrakes into corners, so the same inputs now carry it
+///   somewhere else.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0xcbb6_08ac_5da5_35db,
-        0x12c9_2d37_5898_4434,
+        0x008d_efff_a9dd_160c,
+        0xde4d_7f1d_28b7_d38f,
     ),
     (
         600,
         Scenario::Field,
-        0x5538_0690_94e7_78a7,
-        0xd556_34d7_2716_cd2d,
+        0x13ef_e6fc_2809_dcfa,
+        0x9b35_d3b1_43b8_8c15,
     ),
     (
         1_800,
         Scenario::Field,
-        0x05ce_bd25_5983_91c3,
-        0x7e84_2fc4_c927_3215,
+        0xe3f0_ec70_da85_aa35,
+        0x53db_00e2_bd7a_d6fc,
     ),
 ];
 
