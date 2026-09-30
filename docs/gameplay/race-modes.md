@@ -750,6 +750,17 @@ did 21 kills in 85 s. Measured causes:
   when the pack is out of reach (`Race::eliminator_pack_scale`, **chosen, not measured**; only
   ever a reduction, so the AI keeps the player's physics). It roughly doubled kills in a
   four-seed sample; the easing parameters were not found to matter.
+**The leader easing, in full (chosen, not measured; no confidence score).** In an Eliminator
+an opponent with nobody ahead of it, whose nearest racing opponent behind is more than
+`PACK_REACH` (60 units of track) back, scales its throttle down linearly to `PACK_MIN_THRUST`
+(0.3) over the next `PACK_EASE_SPAN` (120) units; a craft more than `PACK_LOST` (1,500) behind
+is not counted, and the human's slot is not part of the pack. The throttle is only reduced.
+Four seeds, five game-minutes, parked player: 22 kills and 52 deaths without it, 43 kills and
+93 with it. **Changing the parameters (`PACK_MIN_THRUST` 0.0, 0.3, 0.6; reach 30 to 200) gave
+identical totals**, so the mechanism is not understood: only the presence of any easing
+mattered, and a leader was eased in a small share of ticks. Treat the effect as real in the
+sample but unexplained.
+
 - **Every craft ended holding a weapon.** Eliminator refuses absorption, so a craft with a
   weapon it cannot use stops receiving pickups. `wants_to_fire` needs a craft ahead in a
   20 degree cone, 20 to 200 units, on a straight; 79 % of the consults found nobody ahead
