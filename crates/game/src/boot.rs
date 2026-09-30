@@ -460,7 +460,11 @@ pub fn load_shell(
     // slot came first in source order, which is the same bug
     // `race::hud::hud_font`'s own doc records - see `fonts::role_font`.
     let preferred_language = chosen_language(&languages, options.language.as_deref());
-    let font = load_font(&mut archives, &languages, preferred_language, &mut report);
+    // Omega's faces are HD's at twice the pixel size; see
+    // `oag_display::space::Space::font_texel_scale`. `1.0` for every other source.
+    let texel_scale = oag_display::space::Space::font_texel_scale(archives.layout.platform);
+    let font = load_font(&mut archives, &languages, preferred_language, &mut report)
+        .with_texel_scale(texel_scale);
     steps.lap("font");
     // **`TitleFrame` is appended here, not carried in `profile.fallback_images`
     // itself.** Its own real `src` differs by pressing - `Screen_
@@ -542,16 +546,19 @@ pub fn load_shell(
         preferred_language,
         menu_skin,
         &mut report,
-    );
+    )
+    .map(|atlas| atlas.with_texel_scale(texel_scale));
     let title_font = load_title_font(
         &mut archives,
         &languages,
         preferred_language,
         menu_skin,
         &mut report,
-    );
+    )
+    .map(|atlas| atlas.with_texel_scale(texel_scale));
     let buttons_font =
-        fonts::load_buttons_font(&mut archives, &languages, preferred_language, &mut report);
+        fonts::load_buttons_font(&mut archives, &languages, preferred_language, &mut report)
+            .map(|atlas| atlas.with_texel_scale(texel_scale));
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other

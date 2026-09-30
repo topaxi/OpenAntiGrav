@@ -121,6 +121,43 @@ loading).
 
 ## What a menu-page capture does today
 
+**Invocation (watched working, 2026-09-30).** The source is a positional path,
+the extraction root holding both packages:
+
+```sh
+cargo run -p oag-game -- data/extracted/ps4 --no-audio --menu-page main --screenshot out.png
+# or, after a build: ./target/debug/oag-game data/extracted/ps4 --no-audio --menu-page main --screenshot out.png
+# the Language Selection boot screen:
+./target/debug/oag-game data/extracted/ps4 --no-audio --until "Language Selection" --hold start --screenshot out.png
+```
+
+`--menu-page` takes `main`, `grid-select` or `cell-select`. `just play omega ...`
+maps the keyword `omega` onto `data/extracted/ps4` and forwards the rest; it
+builds `--release`, and was not re-run here. A bare `oag-game --menu-page main`
+with no path, or with `omega` passed as if it were one, reads no source and
+fails with the missing `<SOURCE>` usage error.
+
+**Scale (2026-09-30, `omega-fe-retouch`).** Omega's source used to fall through
+`Space::of` to the PSP's 480x272 grid ("front-end grid 480x272" in the boot
+report), so HD-authored coordinates were drawn on a grid four times too small
+and the disc's own fonts came out huge. Now `Space::OMEGA` (1920x1080, grid
+confidence 85: the legal line at `x=960 y=972` and two `line.gtf` rules at
+`x=160 width=1600`, asserted by `omega_font_scale_ground_truth`). Omega's faces
+are also HD's at twice the pixel size (`helv` line height 64 against 33, `helvb`
+89 against 44, `PS_BUTTONS` 109 against 54; median glyph width, height and
+advance ratio 2.0 on every shared glyph), so its atlases are read at
+`Space::font_texel_scale` 0.5 - **an inference, confidence 60**: the ratio is
+measured, that the PS4 build draws at half size is not (no PS4 text path has
+been read). The main menu now lays out as HD's does; the same still-wrong list
+as HD applies: the Language Selection rows overlap (row pitch comes from
+Pulse's hard-coded `font_line_height` table), and its confirm glyph is a box.
+Screenshots: `data/scratch/omega-fe-retouch/f-{boot,main,grid-select,cell-select}.png`.
+Not fixed here, still visible on `cell-select`: the footer's third prompt draws
+over the "Speed Class" caption, `%d` in "NOCH %d PUNKTE" is not substituted, and
+unresolved ids show their raw names ("Event line", "rc laps line").
+`--race` stills show no HUD at all on Omega at tick 120, before or after this
+change (byte-identical), so whether Omega's HUD shares this path is untested.
+
 `just play omega` boots the front end, reads `data09.psarc`'s ten `FEGlobals`,
 the boot chain and the string table, and stops on **Language Selection** - the
 disc's own real first screen - because German (this build's compiled-in
