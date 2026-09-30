@@ -80,6 +80,12 @@ pub struct Campaign {
     /// `Some` or both are `None`, since they are read off the same archive
     /// in the same call.
     pub grid_layout_fury: Option<Layout>,
+    /// **HD/Fury only.** The flyer cards `Grid Selection` draws behind its
+    /// widgets, decoded - see [`crate::flyer`]. `None` on every other title,
+    /// and on an HD source whose screen file authors no `<Flyer
+    /// name="FlyerModel">`; a card that will not decode is left out of it
+    /// and logged, which draws nothing for that grid.
+    pub flyers: Option<crate::flyer::Flyers>,
 }
 
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]: both live on the front-end
@@ -274,6 +280,7 @@ pub fn load(
         sprites,
         selection_layout: None,
         grid_layout_fury: None,
+        flyers: None,
     })
 }
 
@@ -369,6 +376,37 @@ fn load_hd(
 
     let grids = read_grids(archives, oag_hd::campaign::DEFINITION_ENTRY)?;
     let (selection_layout, grid_layout_fury) = hd_selection_screens(&screens, strings, faces, grid);
+    let flyer_names: Vec<String> = grids
+        .iter()
+        .filter_map(|grid| grid.flyer_name.clone())
+        .collect();
+    // **Only the base campaign's eight cards are decoded.** The pose and cut
+    // are fitted to RPCS3 frames of `grid0`..`grid7`, whose cards are flat,
+    // 115 units wide and at most a few units deep. Fury's eight (`09_blitzed`
+    // and on) are authored at about a third of that scale and as stacked
+    // layers 28 units deep - the settled frames show a lit box, not a flat
+    // card - so this camera draws them as a few stray pixels. None is drawn,
+    // rather than a wrong one: see `docs/ui/campaign-screens.md`.
+    let card_names: Vec<String> = grids
+        .get(oag_hd::campaign::HD_GRID_RANGE)
+        .unwrap_or(&[])
+        .iter()
+        .filter_map(|grid| grid.flyer_name.clone())
+        .collect();
+    let flyers = oag_ui::campaign::flyer::read(&xml, &screens)
+        .into_iter()
+        .find(|widget| widget.name == "FlyerModel")
+        .map(|widget| crate::flyer::Flyers::load(archives, widget, &card_names));
+    if let Some(flyers) = &flyers {
+        for line in &flyers.report {
+            log::warn!("{line}");
+        }
+    } else {
+        log::warn!(
+            "{} authors no <Flyer name=\"FlyerModel\"> - Grid Selection draws no flyer",
+            oag_hd::campaign::SCREEN_ENTRY
+        );
+    }
     // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
     // front-end root - see [`read_footer`]'s own doc. `Cell Help` and the
     // ticker are still unmodelled: `CellMode_Definition.xml` authors no
@@ -402,6 +440,16 @@ fn load_hd(
             Err(error) => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
         }
     }
+    // Each grid's own `Logo.gtf`, which the unlock box under the card names
+    // by grid - see `oag_ui::campaign::hd`'s `UnlockBox`. Keyed by the same
+    // spelling the screen's `flyerlogo` widget authors.
+    for name in &flyer_names {
+        let entry = oag_ui::campaign::flyer::logo_entry(name);
+        match read_hd_texture(archives, &entry) {
+            Ok(blob) => blobs.push((entry, blob)),
+            Err(error) => log::warn!("{entry}: {error:#} - its unlock-box logo draws nothing"),
+        }
+    }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
     for line in report {
@@ -421,6 +469,7 @@ fn load_hd(
         sprites,
         selection_layout,
         grid_layout_fury,
+        flyers,
     })
 }
 
@@ -668,6 +717,7 @@ fn load_omega(
         // rather than assumed to carry HD's own screen unread.
         selection_layout: None,
         grid_layout_fury: None,
+        flyers: None,
     })
 }
 

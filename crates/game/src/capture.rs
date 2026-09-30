@@ -520,6 +520,7 @@ pub fn run(
     // The selection screens' preview mesh, owed after the draw list - see
     // `draw_preview`. `None` on every other page.
     let mut preview_request: Option<PreviewRequest> = None;
+    let mut flyer_shot: Option<campaign_page::FlyerShot> = None;
     // The footer ticker's own clip, `(index in `list`, left, right)` in
     // screen space - set only by the ordinary `--menu-page` arm below
     // (`menu_page`'s own return), since it is the only page kind that reads
@@ -687,7 +688,7 @@ pub fn run(
                 // `records` `--menu-page` arm above already makes - see
                 // `campaign_page`'s own `records` parameter doc.
                 let records = crate::records::load();
-                let list = campaign_page(
+                let (list, shot) = campaign_page(
                     kind,
                     &mut archives,
                     &strings,
@@ -713,6 +714,7 @@ pub fn run(
                     &|text| oag_ui::font::measure(&font, text),
                     &records,
                 )?;
+                flyer_shot = shot;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {
                 // The three EndRace screens - the same "opened over the
@@ -939,18 +941,19 @@ pub fn run(
     // a screenshot should frame what a player would have seen at that size. At
     // the default `--size`, which is the PSP's own shape, every aspect fills the
     // frame and nothing changes.
-    renderer.render(
-        &device,
-        &queue,
+    // A capture is one static frame with no `MenuStage` clock behind it, so
+    // there is nothing here for a value marquee to be mid-scroll of -
+    // `ticker_clip` is the one thing that still needs a clip (see
+    // `capture::menu_page`'s own doc).
+    campaign_page::render_frame(
+        flyer_shot.as_ref(),
+        &mut renderer,
+        (&device, &queue, format),
         &mut encoder,
         drawn,
         &list,
         oag_display::display::viewport((width, height), options.settings.display.aspect),
-        // A capture is one static frame with no `MenuStage` clock behind it,
-        // so there is nothing here for a value marquee to be mid-scroll of -
-        // `ticker_clip` is the one thing here that still needs a clip, on a
-        // `--menu-page` capture whose footer ticker's frozen text is wider
-        // than its own viewport (see `capture::menu_page`'s own doc).
+        ((width, height), space),
         ticker_clip,
     );
     if let (Some(request), Some(race)) = (preview_request, &options.race) {

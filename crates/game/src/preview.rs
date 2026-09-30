@@ -290,6 +290,13 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
     let blob = archives
         .read_name(entry)
         .with_context(|| format!("reading the preview mesh {entry}"))?;
+    // A PS3 `.vex` keeps its geometry in the `.rcsmodel` beside it, and its
+    // materials and textures in other entries of the same archive set - which
+    // is why this takes `Archives` rather than a blob. `build` below is the
+    // PSP/PS2 path and cannot draw one.
+    if oag_render::mesh::geometry_is_external(&blob) {
+        return ps3_model(archives, entry, &blob);
+    }
     let model = oag_render::mesh::build(entry, &blob)
         .with_context(|| format!("decoding the preview mesh {entry}"))?;
     if !model.textures.is_empty()
@@ -303,6 +310,30 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
             })
             .with_context(|| format!("decoding the preview mesh {entry} with its texture set"));
     }
+    Ok(model)
+}
+
+/// [`model`]'s PS3 branch: the scene `.vex` and the `.rcsmodel` beside it,
+/// with every material and `.gtf` read through the same archive set a race
+/// reads them through.
+///
+/// `build_scene` and not `build`: the viewer and the race both take the scene
+/// path, and a flyer is all first-pass (every mesh node addresses a chunk), so
+/// the two give the same model; the scene path is the one the rest of this
+/// project's HD ground truth is pinned against.
+fn ps3_model(archives: &mut oag_assets::Archives, entry: &str, blob: &[u8]) -> Result<Model> {
+    let sibling = oag_render::mesh::rcs::sibling_name(entry)
+        .with_context(|| format!("{entry} names no .rcsmodel"))?;
+    let geometry = archives
+        .read_name(&sibling)
+        .with_context(|| format!("{entry}: reading its {sibling}"))?;
+    let (mut model, report) =
+        oag_render::mesh::rcs::build_scene(entry, blob, &geometry, &mut |path| {
+            archives.read_name(path).ok()
+        })
+        .with_context(|| format!("decoding the preview mesh {entry}"))?;
+    log::info!("preview {entry}: {}", report.describe());
+    model.keep_nearest();
     Ok(model)
 }
 
@@ -584,6 +615,43 @@ impl Preview {
         let Some((view_projection, model_matrix)) = mode3d_view_projection(model, space) else {
             return false;
         };
+        self.draw_matrices(
+            device,
+            queue,
+            encoder,
+            view,
+            viewport,
+            target_size,
+            space,
+            view_projection,
+            model_matrix,
+            seconds,
+        )
+    }
+
+    /// [`Self::draw_mode3d`]'s second half: draws into the full letterboxed
+    /// screen under a camera the caller already built. One seam for every
+    /// 3-D thing a menu places with a pose of its own - a circuit's
+    /// `<Mode3D>` here, a campaign flyer in [`crate::flyer::flyer_view_projection`].
+    ///
+    /// `false` when the model is empty or the screen rectangle is degenerate.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_matrices(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        space: Space,
+        view_projection: Mat4,
+        model_matrix: Mat4,
+        seconds: f32,
+    ) -> bool {
+        if self.model.vertices.is_empty() || self.model.indices.is_empty() {
+            return false;
+        }
         let (x, y, width, height) =
             pixel_rect(space, viewport, [0.0, 0.0, space.size.0, space.size.1]);
         let (max_w, max_h) = (target_size.0 as f32, target_size.1 as f32);

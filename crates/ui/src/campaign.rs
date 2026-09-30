@@ -86,6 +86,7 @@ use crate::language::StringTable;
 use crate::screen::{Screen, Screens};
 
 pub mod draw;
+pub mod flyer;
 pub mod footer;
 pub mod hd;
 pub mod pointer;
@@ -160,9 +161,29 @@ pub struct GridSummary {
     /// [`GridSelection::tier_shows_lock`], `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
     /// "Unlock rules, cell and tier".
     pub locked: bool,
+    /// `FlyerName` (`"01_uplift"`): which `Data/FE/Flyers/<name>/` this grid's
+    /// card, back and logo are read from. HD/Fury only - see
+    /// [`flyer`]. `None` on every Pulse grid.
+    pub flyer_name: Option<String>,
 }
 
 impl GridSummary {
+    /// A tier with nothing in it, for a screen asked to draw before any grid
+    /// has loaded - a stand-in for the absence, not a reading.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            name: String::new(),
+            cell_count: 0,
+            max_points: 0,
+            required_points: 0,
+            gold_medals: 0,
+            points_earned: 0,
+            locked: false,
+            flyer_name: None,
+        }
+    }
+
     /// The fresh-profile reading: every earned figure zero, because there is
     /// no progress to report. See the module doc.
     #[must_use]
@@ -194,6 +215,7 @@ impl GridSummary {
             gold_medals,
             points_earned,
             locked: grid.locked,
+            flyer_name: grid.flyer_name.clone(),
         }
     }
 }

@@ -986,39 +986,157 @@ Measured off the widget names and the panel's own numbers:
 | Thing | HD widget | Reads |
 | --- | --- | --- |
 | page counter | `EventNum`/`GridNum` | `"Event {:02}/{:02}"`, 1-based - the literal template both widgets author |
-| medal fraction | `Medals Title` (`RC_POINTSACH`) / `Points` | `Grid_CountMedalsAtLeast`/`Grid_CellCount`, `"00/06"` shape - same numbers Pulse's own `Medals` field carries |
-| points fraction | `Points Title` (`RC_TOTPOINTSAV`) / `TotPoints` | `points_earned`/`max_points`, `"000/018"` |
+| points achieved | `Medals Title` (`RC_POINTSACH`) / `Points` | a bare number, `0` on a fresh profile. **Corrected 2026-09-30**: this row said `Grid_CountMedalsAtLeast`/`Grid_CellCount`, `"00/06"` - read off the XML's own placeholder shape, not a frame. Every settled RPCS3 frame of an unlocked tier reads a bare `0`. This build draws `points_earned`; the widget is named `Medals Title` and a fresh profile reads `0` under either, so which of the two it is stays unmeasured |
+| points available | `Points Title` (`RC_TOTPOINTSAV`) / `TotPoints` | a bare `max_points`: `18` on `grid0`, `21` on Fury's `grid8` (RPCS3), no `000/` prefix |
 | unlock reason | `Required`/`Required Previous` | two texts for two distinct lock reasons - see below |
 | flyer lock | `Flyer Pad Lock` | gated on `selected_is_locked()` |
 
-**`Required`/`Required Previous` pick between two texts for two distinct
-reasons a tier is locked - chosen, not measured**, on the same terms as the
-glyph rule they read: `Required` (its own idstring `RC_POINTSTOUNL`) shows
-when the tier's own lock is not explained by the previous tile falling
-short; `Required Previous` (a literal string) shows when it is. No capture
-or decompile settles which predicate each is actually bound to; this reuses
-`GridSelection::selected_is_locked`'s own two terms to choose between them
-rather than showing both or neither.
+**`Required`/`Required Previous` are the unlock box's two texts, and since
+2026-09-30 which one shows is measured, not chosen** - on eight settled RPCS3
+frames of a fresh profile: an **unlocked** tier (`grid0`) shows `Required`
+(`RC_POINTSTOUNL`, `"%d MORE POINTS NEEDED TO UNLOCK:"`) over the **next**
+grid's logo; a **locked** one shows `Required Previous` over the **previous**
+grid's, with `RC_POINTS_NEEDED` (`"%d MORE POINTS NEEDED IN:"`, and
+`RC_POINT_NEEDED`, `"1 MORE POINT NEEDED IN:"`, which the string table ships
+beside it) - the widget's authored `string="more points needed from previous"`
+is a placeholder the code overwrites. The figure is the **previous** tier's
+`RequiredPoints` less what it earned (on `grid0`, its own): `10`, `10`, `13`,
+`16`, `19`, `22`, `25`, `30` over `grid0`..`grid7`, which are exactly the
+eight `RequiredPoints` read one tier back. A Fury frame on a profile with three
+points reads `9` where a fresh one reads `12`, so the subtraction is real. A
+locked tier also draws **no** `POINTS ACHIEVED`/`TOTAL POINTS AVAILABLE` and
+neither bullet arrow. **Still chosen, not measured**: an unlocked tier whose
+own requirement is already met, and the last tier, show no box (only the
+fresh-profile frames exist); `RC_POINT_NEEDED` is selected for a figure of 1.
+Pinned by `oag_ui::campaign::hd::unlock::tests`.
 
-**`RC_POINTSTOUNL`'s own string is a raw `%d` template** (`"NOCH %d PUNKTE
-ZUM FREISCHALTEN VON:"` in German - "still %d points needed to unlock
-from:") that nothing in this build's string-table reader formats. `hd.rs`
-substitutes the one concrete figure this screen already carries
-(`required_points`) - **chosen, not measured**, since which number the
-template actually wants (this grid's own requirement, a different one, the
-gap to the previous tile) is not settled by reading the file alone, and
-whether the widget is gated on the grid genuinely being short that many
-points is unmeasured too - this build shows it whenever the lock reason
-picks that text at all.
+**Drawn since 2026-09-30** - see "The flyer behind `Grid Selection`" below.
+The earlier reading that the per-grid `flyerlogo` path was "the same literal
+string on every grid with no per-grid attribute to pick a different one" was
+wrong: the literal is a default, and the executable builds the real path from
+each grid's own `FlyerName`.
 
-**Not drawn, and said so in the loader/draw code**: the 3-D flyer model
-itself (`Data\FE\Flyers\00_flyer.vex`, `<Flyer name="FlyerModel">`) - this
-crate draws a flat 2-D list, not a mesh scene, and wiring a `.vex` flyer
-through `oag_render` behind this screen is out of this pass's scope; and the
-per-grid `flyerlogo` (`Data\FE\Flyers\01_uplift\Logo.gtf`), whose path is
-the **same literal string on every grid** in the file with no per-grid
-attribute to pick a different one, so drawing it would show grid 9's own
-logo under grid 1's name.
+### The flyer behind `Grid Selection`, 2026-09-30
+
+**A "flyer" is a promotional card, not a craft**: a flat quad set (the body is
+115 by 74.8 units, elements a few units deep at most) carrying a wordmark, a
+stripe, a ship silhouette and sponsor marks, with a reflection under it on
+RPCS3. Every grid has one. This section is what is authored, what is chosen,
+and what a player sees now. Drawn by `oag_game::flyer`, through the mesh-in-menu
+seam below; Wipeout HD's `Grid Selection` only.
+
+**The mechanism is one, and it already existed in part.** `oag_game::preview`
+drew a circuit's outline ribbon and (on Pulse) a team's hull behind the race
+box's two screens, but only from a PSP or PS2 `.vex`: HD's own race-setup
+picker does **not** draw its `<Model name="ShipModel">` (`preview_meshes` is
+`false`, `oag_ui::picker::hd` reads the pose and stops). Two changes made it
+general, and `ShipModel` is unblocked by them but not wired:
+
+- `preview::model` now reads a PS3 `.vex` + `.rcsmodel` pair, with every
+  material and `.gtf` through the same `Archives` a race uses;
+- `Preview::draw_matrices` is `draw_mode3d`'s second half with the camera
+  passed in, so a menu that owns a pose draws through the one pass.
+
+**Layering.** `Preview` composites over a finished frame, which would bury
+`Flyer Pad Lock`. `oag_game::flyer::render_list` splits the screen's draw list
+at its backdrop: backdrop, then the card, then chrome and widgets. Live and
+`--menu-page` share it. Headless check: `--menu-page grid-select-hd@3
+--screenshot out.png --size 1920x1080 --no-audio` (base HD tier 3; `grid-select`
+is Fury, `@N` the tier).
+
+**Authored** (`CellMode_Definition.xml`, `DATA06`, and `strings EBOOT.elf`):
+
+| What | Value | Confidence |
+| --- | --- | --- |
+| widget | `<Flyer name="FlyerModel">`, top level (a sibling of the screens), `OriginX/Y` `960`/`540`, `nearZ` `1`, `farZ` `1000`, `x` `80`, `y` `-33.3`, `z` `-200`, `RotX` `0`, `RotY` `1.5`, `RotationCentreOffsetX` `-60`, no `orthoScale` (the two `Campaign Selection` flyers carry `0.75` and `RotY` `0.6f`/`-0.6f`) | 95 |
+| which model | the widget's `Src` is always `Data\FE\Flyers\00_flyer.vex`, a 1.6 KB placeholder (`cardShape`, `card_reflectShape`, a dummy texture). The executable carries `Data/FE/Flyers/%s/`, `%sflyer.vex`, `%sflyer_Back.vex` and `Data\FE\Flyers\%s\Logo.gtf`, and every grid authors `FlyerName="01_uplift"` and so on: that is the `%s` | 85 (the formatting call site is unread) |
+| materials | `basicnonalpha` is `TEX` then `MOV` (colour = the swatch, alpha 0, opaque); `basicalpha` and `scrollingalpha` colour from a swatch `.gtf` and alpha from an elements atlas's red channel times a parameter. No light, no fog: all unlit | 90 (`ps3-microcode.py fp-file`) |
+| animation | 33 `Anim Transform` nodes on `01_uplift`, six-second `LoopEnd`; elements grow in (scale keys from 0.05) and slide to poses that overhang the body | 90 |
+
+**Chosen, not measured, with how each was fitted.** The widget's own pose does
+not reproduce any settled frame (`RotY` `1.5` as radians is an 86 degree turn,
+which is what RPCS3 shows mid-transition), and the native `Flyer` class that
+would say how `x y z`, `RotY` and `RotationCentreOffsetX` combine is unread.
+So `oag_game::flyer` reads the widget and does **not** apply `x y z`, `RotY` or
+the pivot. It uses:
+
+- **field of view `0.545` rad**, **yaw `-0.37`**, **centre `(20.6, 0, -200)`**
+  (the authored `z` kept, since only the ratio of field of view to distance is
+  observable). Fitted by a SIFT planar homography between a head-on render of
+  the card (known scale) and two settled RPCS3 frames (tiers 3 and 5), 47 and
+  75 inliers, then a least-squares fit with pitch held at zero: field of view
+  `0.53` to `0.55`, yaw `-0.33` to `-0.41` across the free-pitch and
+  zero-pitch fits, centre `x` `20.3` to `20.6`, centre `y` `0.0`. Free pitch
+  gave `-0.13` and `+0.04` on the two frames, i.e. noise, so pitch is zero.
+  Overlaying a frame on ours in authored space (RPCS3's frame is the 1920 by
+  1080 grid at 0.94 scale, offset `(39, 28.6)`, read off the padlock's own
+  bounding box) puts wordmark, stripes, silhouettes and sponsor mark within a
+  few pixels of each other. **Tiers 3 and 5 were the fit's own inputs, so
+  their agreement proves nothing**; tiers 0, 1 and 4 were not, and agree side
+  by side (`final/cmp-t0.png`, `cmp-t1.png`, `cmp-t4.png`). Tiers 2, 6 and 7
+  were compared by eye and show the gaps listed under "Not drawn".
+- **the body cut to `x` `-48.3..48.3`, `y` `-28.7..33.7`** (card-local). The
+  elements overhang the body, and every frame shows a clean rectangle: the
+  stripes start cut mid-hatch at authored `x` 751. That rectangle is 0.835 of the
+  authored body about a point 2.5 units high; the mechanism is unread. The
+  pose is baked at the card's settled moment (the latest key of any moving
+  channel, backed off a frame from the `LoopEnd`) first, because a vertex under
+  an `Anim Transform` only has a card-local position once a time is picked.
+  Two traps: one node authors a single key at frame 36,000, which read as a
+  last key wraps every other node back to its collapsed start.
+- **the pointer's confirm target is the drawn card's rectangle** (projected
+  from the cut above), falling back to `Flyer Pad Lock`'s rect when no card
+  loaded. Clicking the card opens `Cell Selection`; the arrows page. Driven live
+  under Xvfb `:96`, mouse only.
+
+**Not drawn, and said so**: the glow around an unlocked card, the floor
+reflection (`card_reflectShape`'s own job, it seems), the flip to
+`flyer_back.vex`, the elements animating in on a page change (the card is
+always settled), the tier change's card swing, and **Fury's eight cards**.
+Fury's (`09_blitzed` onward) are authored at about a third of the base cards'
+scale and 28 units deep, and the settled frames show a lit box, not a flat card;
+the fitted camera draws them as a few stray pixels, so `load_hd` decodes the
+base campaign's eight and Fury draws none, with its logos and unlock box. A
+Fury fit needs its own frames (`data/scratch/hd-flyer/rpcs3-raw/grid-fury-*`) and
+a 3-D (not planar) pose. `Campaign Selection`'s two cards (`Fury_Campaign`,
+`HD_Campaign` in the executable) are likewise undrawn. The white body is also
+slightly wrong on some tiers (`08_meltdown`'s leaves a gap at its left), because
+the cut is one rectangle for every card.
+
+**The body is probably the placeholder's, which this build cannot decode yet.**
+The widget's own `Src` is `00_flyer.vex`, and that is what the runtime draws
+first (`cardShape` at 102.4 by 66.6, `y="-33.3"` being its half height, plus
+`card_reflectShape`, which is where the reflection would come from) with the
+per-grid flyer on top. Its two chunks read at stride 0 with nonsense
+coordinates (`hd_unlit_probe`'s inline-chunk reading does not fit them), so they
+are not drawn; the body here is the per-grid flyer's own `bgplane` cut to the
+measured rectangle, a substitute for that missing asset alone. It shows on the
+tiers where `bgplane` is narrower than the card: on `07_dropzone` and
+`08_meltdown` the body starts 75 or so authored pixels right of the elements,
+and stripe fragments stand outside it; on `07_dropzone` a white slashing
+element crosses the padlock that RPCS3 does not show; on `03_frenzy` the
+`ignition` caption hangs at the bottom edge where RPCS3 hides it, the cut being
+a few units too low there. Decoding the placeholder is the next step, before
+any further fitting.
+
+**Omega: same assets by name, not drawable yet.** Omega's base package carries
+`Data/fe/flyers/01_uplift/flyer.vex`, `flyer.rcsmodel`, `flyer_back.*` and
+`logo.gnf` (353 flyer entries in `data00.psarc`), but its `.rcsmodel` opens with
+`0xedad5cca`, PS4 little-endian, which HD's reader rejects (`version
+0xedad5cca, expected 0x000a0000`; `crates/game/examples/omega_flyer_probe.rs`).
+Its campaign screens also draw through Pulse's path, not `hd_grid_draw_list`. Not
+wired: the Omega lane owns that reader.
+
+**The unlock box and points figures were corrected on the same frames**, see the
+paragraphs under the screen's widget table above.
+
+Evidence: RPCS3 frames `data/scratch/hd-flyer/rpcs3-raw/grid-hd-t0..t7-settled`
+(Xvfb `:91`, silent config, untrimmed, 1600 by 1200), `grid-fury-t0/t1`; ours
+`data/scratch/hd-flyer/final/ours-hd-t0..t7.png` and side by side
+`final/cmp-t*.png`; live `data/scratch/hd-flyer/live/`. Fit scripts
+`data/scratch/hd-flyer/fit/`. Pinned on the disc by
+`crates/game/tests/hd_flyer_ground_truth.rs`; the pose and cut are not pinned,
+being chosen.
 
 ### `Cell Selection` is the same 32-slot staggered hex grid Pulse's is
 
@@ -2016,8 +2134,10 @@ ever builds a `Selection` screen, so their own `Back` still closes the
 campaign the way it always has - `crates/ui/src/campaign/tests.rs` pins both
 titles' own flows).
 
-**Not drawn**: both `Flyer` widgets (the same "flat 2D list, not a mesh
-scene" limitation `Grid Selection`'s own `FlyerModel` already carries) and
+**Not drawn**: both `Flyer` widgets (`Grid Selection`'s own `FlyerModel` was
+the same "flat 2D list, not a mesh scene" limitation until 2026-09-30, see "The
+flyer behind `Grid Selection`"; these two name `Fury_Campaign` and
+`HD_Campaign` in the executable and are not fitted) and
 the medal fraction's own denominator (see the widget table above). The
 selector is drawn, but as a chosen stand-in rather than the disc's own
 animation - see "Drawing the two entries' own names, and the selector" above.
@@ -2710,11 +2830,11 @@ and its own "what is not determined" section.
   that fix: whether `Medal_{x}_{y}`'s own oversized-atlas widget draws
   correctly sized once a real medal exists to show it (untestable on a
   fresh profile).
-- **The 3-D flyer model behind `Grid Selection`** is not drawn at all -
-  `oag_ui` draws a flat 2-D list, and putting a `.vex` mesh behind a 2-D
-  screen needs a render-side mechanism this pass did not build. Whoever
-  picks this up should decide whether that mechanism belongs in
-  `oag_render` generally or is specific to this one screen.
+- ~~**The 3-D flyer model behind `Grid Selection`** is not drawn at all~~
+  **Drawn 2026-09-30** for the base campaign, through the one mesh-in-menu
+  seam `oag_game::preview` now shares - see "The flyer behind `Grid Selection`".
+  Open from it: Fury's eight cards, the glow and reflection, the tier-change
+  swing, and `Campaign Selection`'s pair.
 - ~~The launch path is wired... but not driven live against an HD source~~
   **Driven live, 2026-09-21**, mouse-only under Xvfb :93 with `xdotool`
   (`cargo run -p oag-game -- data/images/hdfury-ps3-eu-dec.iso
@@ -2913,9 +3033,10 @@ authors no `TextInfoIsAlwaysLast` viewport at all).
   Selection`, not `Grid Selection` - see the same section below. `Grid
   Selection` authors no `DifficultyButton` widget anywhere and draws
   `Confirm`/`Back` only, which is the disc's own answer.
-- **The 3-D flyer model behind `Grid Selection`/`Campaign Selection`** -
-  unchanged from the "measured on RPCS3" section above, still a render-side
-  mechanism this pass did not build.
+- ~~**The 3-D flyer model behind `Grid Selection`/`Campaign Selection`**~~ -
+  `Grid Selection`'s base-campaign cards are **drawn, 2026-09-30**, see "The
+  flyer behind `Grid Selection`"; Fury's and `Campaign Selection`'s are still
+  not.
 
 **Recaptured after the fixes above**, all HD, `hdfury-ps3-eu-dec.iso`,
 1280x720, `data/scratch/drive-2026-09-25/hd-campaign/` (not committed, game
@@ -3198,7 +3319,10 @@ reproduce. What a player sees, screen by screen (two or more frames each):
    frame to HD, `Left` back.
 3. **`Grid Selection`** (HD): `Event 01/08`, `POINTS ACHIEVED 00/06`,
    `TOTAL POINTS AVAILABLE 000/018`, the point-cloud flyer. On Fury:
-   `00/07`, `000/021`, a different flyer.
+   `00/07`, `000/021`, a different flyer. **Superseded 2026-09-30**: those
+   are this build's own fractions, which RPCS3 does not show - it reads bare
+   numbers (`0`, `18`), and the flyer is a flat card now drawn for the base
+   campaign; see "The flyer behind `Grid Selection`".
 4. **`Cell Selection`** (HD `grid0`): `Single Race`, `VINETA K`, Venom,
    weapons on, 3 laps, `0/3` points, best `NONE`, the three target medals,
    `10 MORE POINTS NEEDED TO UNLOCK:`, footer `AI DIFFICULTY (NOVICE)`. On

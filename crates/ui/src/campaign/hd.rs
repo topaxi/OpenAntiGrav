@@ -108,25 +108,27 @@
 //!   `crate::campaign::draw::track_line`'s own doc says Pulse needs no such
 //!   fold "unlike Wipeout HD's"; this is the screen that fold was for.
 //! - **No hex tiles to click on `Grid Selection`, so its own pointer
-//!   targets are invented outright** - see [`hd_grid_targets`]'s own doc.
+//!   targets are chosen, not measured** - see [`hd_grid_targets`]'s own doc.
 //!   `Cell Selection`'s own hex targets are unchanged from Pulse's
 //!   [`super::pointer::cell_targets`] and are reused directly, not
 //!   duplicated here.
 //!
 //! # What this does not draw, and says so
 //!
-//! - **The 3-D flyer model itself** (`Data\FE\Flyers\00_flyer.vex`, the
-//!   `<Flyer name="FlyerModel">` widget). This crate draws a flat
-//!   [`crate::frontend::Draw`] list, not a mesh scene - wiring a `.vex`
-//!   flyer through `oag_render` is out of this pass's scope, and nothing
-//!   here pretends otherwise: the screen behind the hex grid and the
-//!   difficulty column is left at the frame's own backdrop.
-//! - **The per-grid flyer logo** (`flyerlogo`, `Data\FE\Flyers\01_uplift\Logo.gtf`
-//!   on both screens) - the path is the same literal string on every grid in
-//!   the file, with no per-grid attribute selecting a different one, so
-//!   drawing it would show grid 9's own logo under grid 1's name. Left
-//!   undrawn rather than guessed at; see `docs/ui/campaign-screens.md`'s HD
-//!   section.
+//! - **The 3-D flyer card** is not drawn by this crate - it is a mesh, and
+//!   `oag_game::flyer` puts it between this list's backdrop and its widgets,
+//!   so `Flyer Pad Lock` and the arrows sit over it. [`flyer`](super::flyer)
+//!   reads the widget and names the archive entries; see
+//!   `docs/ui/campaign-screens.md`'s "The flyer behind `Grid Selection`" for
+//!   what is authored and what is chosen. **Fury's eight cards are not drawn
+//!   at all**: they are authored at another scale and as a lit box, and the
+//!   camera fitted to the base campaign's flat cards does not apply.
+//! - **The per-grid logo is drawn, for another grid's name**: `flyerlogo`
+//!   authors `01_uplift\Logo.gtf` on every grid, and the executable's own
+//!   `Data\FE\Flyers\%s\Logo.gtf` makes that a default - the box under the
+//!   card shows the logo of the grid it is talking about, see `UnlockBox`.
+//!   The two "same literal on every grid" readings this page carried before
+//!   2026-09-30 were wrong about that.
 //! - **`Record` (`MSC_CAMREC`)** - `Cell_SavedRecord`'s own value, which
 //!   this build keeps no saved record for, the same absence
 //!   `crate::campaign::draw::cell_draw_list`'s own `Line5`/`Line8` leave.
@@ -150,6 +152,8 @@ use super::{CellSelection, Event, GridSelection, GridSummary, Layout, hex_rect};
 mod tests;
 
 mod medal;
+mod unlock;
+use unlock::{POINTS_GROUP, UnlockKind, unlock_box};
 // `hd_target_title`/`hd_tinted_medal_draw` are called below; `hd_medal_frame`/
 // `hd_difficulty_id` are not called directly here (only from inside `medal`
 // itself) but need to be in scope for `mod tests`' own `use super::*` to
@@ -231,6 +235,7 @@ pub fn hd_grid_draw_list(
         out.push(fill_draw(fill));
     }
     let locked = model.selected_is_locked();
+    let unlock = unlock_box(model);
     for image in &screen.images {
         // `Flyer Pad Lock` is HD's own single lock glyph for this screen -
         // one padlock over the flyer, not one `Lock_n_0` per tile, since
@@ -242,10 +247,25 @@ pub fn hd_grid_draw_list(
         if image.name.as_deref() == Some("Flyer Pad Lock") && !locked {
             continue;
         }
-        // `flyerlogo` names the same literal per-grid path
-        // (`Data\FE\Flyers\01_uplift\Logo.gtf`) on every grid this screen
-        // shows - see the module doc's "what this does not draw" section.
+        // The two bullet arrows beside the points figures, which a locked
+        // tier does not show at all - see `POINTS_GROUP`.
+        if locked && image.src.ends_with("Subtitle_Arrow_HD.gtf") {
+            continue;
+        }
+        // `flyerlogo` authors `01_uplift\Logo.gtf` as a literal on every
+        // grid; the executable's own `Data\FE\Flyers\%s\Logo.gtf` makes
+        // that a default, and the `%s` is the grid the unlock box names -
+        // see `UnlockBox`.
         if image.name.as_deref() == Some("flyerlogo") {
+            let Some(named) = unlock.as_ref().and_then(|note| note.logo) else {
+                continue;
+            };
+            let mut logo = image.clone();
+            logo.src = super::flyer::logo_entry(named);
+            let Some(placed) = sprites(&logo.src) else {
+                continue;
+            };
+            out.push(image_draw(&logo, placed));
             continue;
         }
         let Some(placed) = sprites(&image.src) else {
@@ -257,47 +277,38 @@ pub fn hd_grid_draw_list(
         layers.body = out;
         return layers;
     };
-    let previous_cleared = model
-        .grids()
-        .get(model.index().wrapping_sub(1))
-        .is_none_or(|previous| previous.points_earned >= previous.required_points);
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
+        if locked && POINTS_GROUP.contains(&name) {
+            continue;
+        }
         let content = match name {
             "EventNum" | "GridNum" => Some(event_counter(model.index(), model.grids().len())),
-            // `Medals Title`'s own child - named "Points" on this screen,
-            // despite carrying the same gold-medal fraction Pulse's own
-            // `Medals` field does (`Grid_CountMedalsAtLeast(grid, 0) /
-            // Grid_CellCount`). Not `selected.points_earned`: that is
-            // `TotPoints`'s own field below, under `Points Title`
-            // (`RC_TOTPOINTSAV`) rather than `Medals Title`
-            // (`RC_POINTSACH`).
-            "Points" => Some(format!(
-                "{:02}/{:02}",
-                selected.gold_medals, selected.cell_count
-            )),
-            "TotPoints" => Some(format!(
-                "{:03}/{:03}",
-                selected.points_earned, selected.max_points
-            )),
-            // Two texts for two distinct reasons a tier is still locked -
-            // **chosen, not measured**: no capture or decompile pins which
-            // predicate each one is actually gated on, so this reuses
-            // `GridSelection::selected_is_locked`'s own two terms (this
-            // tier's own points against its own requirement, and the
-            // previous tier's) to pick between them rather than showing
-            // both or neither. See the module doc.
-            //
-            // `Required`'s own idstring (`RC_POINTSTOUNL`) is the same raw
-            // `%d`-carrying template `hd_cell_draw_list`'s `NextPoints`
-            // substitutes - see that arm's own doc for why
-            // `required_points` is the number filled in.
-            "Required" if locked && previous_cleared => text
-                .string
-                .as_deref()
-                .map(|s| s.replacen("%d", &selected.required_points.to_string(), 1)),
-            "Required Previous" if locked && !previous_cleared => text.string.clone(),
-            "Required" | "Required Previous" => None,
+            // **Two bare numbers, not the fractions this drew before
+            // 2026-09-30.** The XML's own placeholders (`"00/16"`,
+            // `"000/110"`) read as fractions, and this screen drew
+            // `gold_medals/cell_count` and `points_earned/max_points`
+            // from them. Every settled RPCS3 frame of an unlocked tier
+            // reads `POINTS ACHIEVED` over a bare `0` and `TOTAL POINTS
+            // AVAILABLE` over a bare `18` (HD `grid0`) or `21` (Fury
+            // `grid8`) - the tier's `3 * cells`, `Grid_PointsPossible`.
+            // The first is points earned on the label's own terms; the
+            // widget is named `Medals Title`, and a fresh profile reads `0`
+            // under either, so **which of the two it is stays unmeasured**.
+            "Points" => Some(selected.points_earned.to_string()),
+            "TotPoints" => Some(selected.max_points.to_string()),
+            "Required" => unlock
+                .as_ref()
+                .filter(|note| note.kind == UnlockKind::ToUnlock)
+                .and_then(|note| {
+                    text.string
+                        .as_deref()
+                        .map(|s| s.replacen("%d", &note.points.to_string(), 1))
+                }),
+            "Required Previous" => unlock
+                .as_ref()
+                .filter(|note| note.kind == UnlockKind::NeededIn)
+                .map(|note| note.needed_in(strings)),
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
@@ -778,18 +789,22 @@ fn hd_difficulty_button_line(
 /// `Grid Selection`'s pointer targets: the paging arrows, and a confirm
 /// region over the flyer.
 ///
-/// **The confirm rect is invented, and grounded in a real one rather than
-/// picked freely.** This screen authors no hex tile or button widget a
-/// player could click to enter the tier the way Pulse's own hex tiles are -
-/// the flyer itself is what a player would reach for, and nothing gives its
-/// on-screen size (it is a 3-D model, not a 2-D widget with a rect). Rather
-/// than invent a number outright, this reuses `Flyer Pad Lock`'s own
-/// authored rect (`x="934" y="304" width="512" height="512"`) - the padlock
-/// overlay that already sits centred on the flyer when one is locked, so its
-/// rect is a real, disc-authored bound on roughly where the flyer itself is,
-/// not an arbitrary box. **Chosen, not measured.**
+/// **The confirm rect is the drawn card's own screen rectangle when the
+/// caller has one** (`card`, `[x, y, width, height]` in this screen's grid,
+/// which `oag_game::flyer::Flyers::card_rect` projects from the card the
+/// renderer actually draws), so a click lands on what the player sees.
+/// Without one, for a source whose flyers did not load, it falls back to the
+/// measure this screen used before it drew any: `Flyer Pad Lock`'s own
+/// authored rect (`x="934" y="304" width="512" height="512"`), the padlock
+/// that sits centred on the card, a disc-authored bound on roughly where it
+/// is. **Chosen, not measured**, either way: the original's click region is
+/// not read.
 #[must_use]
-pub fn hd_grid_targets(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Target> {
+pub fn hd_grid_targets(
+    layout: &Layout,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    card: Option<[f32; 4]>,
+) -> Vec<Target> {
     let screen = &layout.screen;
     let mut out = Vec::new();
     for image in &screen.images {
@@ -800,6 +815,10 @@ pub fn hd_grid_targets(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>
             _ => continue,
         };
         if let Some(rect) = image_rect(image, sprites) {
+            let rect = match what {
+                What::Hex(_) => card.unwrap_or(rect),
+                _ => rect,
+            };
             out.push(Target { what, rect });
         }
     }

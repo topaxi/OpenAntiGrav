@@ -21,6 +21,7 @@ fn the_selector_draws_the_measured_cyan_tint_not_the_xmls_own_white() {
         gold_medals: 0,
         points_earned: 0,
         locked: false,
+        flyer_name: None,
     }]);
     let layers = grid_draw_list(
         &model,
@@ -62,6 +63,7 @@ fn outline_hexes_draw_the_measured_dim_cyan_tint() {
             gold_medals: 0,
             points_earned: 0,
             locked: false,
+            flyer_name: None,
         },
         GridSummary {
             name: "grid1".to_string(),
@@ -71,6 +73,7 @@ fn outline_hexes_draw_the_measured_dim_cyan_tint() {
             gold_medals: 0,
             points_earned: 0,
             locked: true,
+            flyer_name: None,
         },
     ]);
     let layers = grid_draw_list(
@@ -115,6 +118,7 @@ fn the_page_arrows_grey_out_at_their_own_boundary() {
             gold_medals: 0,
             points_earned: 0,
             locked: false,
+            flyer_name: None,
         })
         .collect::<Vec<_>>();
 

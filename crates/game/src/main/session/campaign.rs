@@ -100,7 +100,10 @@ impl Session {
             &globals,
             title_ref,
         ) {
-            Ok(campaign) => {
+            Ok(mut campaign) => {
+                if let Some(flyers) = campaign.flyers.as_mut() {
+                    flyers.anisotropy = self.anisotropy;
+                }
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
                 // neither of which `Skin.xml`'s own sheet carries - has to
                 // reach the renderer once before anything drawn from it is
@@ -122,6 +125,7 @@ impl Session {
                         title,
                         circuit_names,
                         records,
+                        campaign.flyers,
                     ));
                 }
             }

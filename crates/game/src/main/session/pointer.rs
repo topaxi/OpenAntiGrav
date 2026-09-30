@@ -143,10 +143,12 @@ pub(super) fn campaign_pointer(
                 model.pointer(pointer)
             }
             crate::campaign_stage::Screen::Grid(_) => {
-                let targets =
-                    oag_ui::campaign::hd::hd_grid_targets(campaign.grid_layout(), &|src| {
-                        campaign.sprites.get(src)
-                    });
+                let card = campaign.flyer_card_rect();
+                let targets = oag_ui::campaign::hd::hd_grid_targets(
+                    campaign.grid_layout(),
+                    &|src| campaign.sprites.get(src),
+                    card,
+                );
                 let crate::campaign_stage::Screen::Grid(model) = &mut campaign.screen else {
                     unreachable!("just matched Screen::Grid above")
                 };
