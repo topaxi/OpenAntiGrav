@@ -41,10 +41,22 @@
 //! `Anim Transform` evaluated at the same frame - see
 //! `docs/formats/2048-animation.md`, which is also where each field's
 //! confidence lives. Evaluating one is [`crate::rig`]'s job.
+//!
+//! # The PS4's is the same file with 64-bit pointers
+//!
+//! See [`crate::rcsskeleton`]'s note. In the header the node-id and track
+//! offsets are 8 bytes wide at `+0x10` and `+0x18`, and the duration moves to
+//! `+0x20`; a track is 24 bytes, its channel table offset (`u64`) at `+0x08`
+//! and its own loop length at `+0x14`; a channel's key offset (`u64`) is at
+//! `+0x10`, its rate at `+0x18` and its seconds per key at `+0x1c`. The counts,
+//! the tags and the keys are unchanged. Measured on
+//! `tech_de_ra\track.final.rcsanimclip` (64 tracks; a 376-key 5 Hz rotation
+//! channel whose keys are unit quaternions) and corpus-wide by
+//! `crates/rcs/tests/omega_animation_ground_truth.rs`.
 
 use crate::rcsmodel::psp2::container::{self, u32_at};
 use crate::rcsmodel::psp2::{Error, Result};
-use crate::rcsskeleton::{Kind, SLOTS};
+use crate::rcsskeleton::{Kind, SLOTS, Wire};
 
 /// One channel's keys, evenly spaced from time zero.
 #[derive(Debug, Clone, PartialEq)]
@@ -124,11 +136,13 @@ pub fn parse(file: &[u8]) -> Result<Clip> {
         end: 0,
         len: file.len(),
     })?;
+    let wire = Wire::of(file);
+    let w = wire.width();
     let bound_count = u32_at(section, 0x04, "bound node count")? as usize;
     let track_count = u32_at(section, 0x08, "track count")? as usize;
-    let ids_at = u32_at(section, 0x10, "node ids")? as usize;
-    let tracks_at = u32_at(section, 0x14, "tracks")? as usize;
-    let duration = f32::from_bits(u32_at(section, 0x18, "duration")?);
+    let ids_at = wire.offset(section, 0x10, "node ids")?;
+    let tracks_at = wire.offset(section, 0x10 + w, "tracks")?;
+    let duration = f32::from_bits(u32_at(section, 0x10 + 2 * w, "duration")?);
     if track_count > bound_count {
         return Err(Error::OutOfBounds {
             what: "tracks past the bound node list",
@@ -142,17 +156,20 @@ pub fn parse(file: &[u8]) -> Result<Clip> {
 
     let mut tracks = Vec::with_capacity(track_count);
     for (i, &id) in bound.iter().enumerate().take(track_count) {
-        let at = tracks_at + i * 20;
+        // 20 bytes in the Vita's file, 24 in the PS4's: the table offset is
+        // `w` wide, and what surrounds it (two words before, a word and the
+        // loop length after) is not.
+        let at = tracks_at + i * (16 + w);
         let slots = u32_at(section, at + 0x04, "slot count")? as usize;
-        let table = u32_at(section, at + 0x08, "channel table")? as usize;
-        let track_duration = f32::from_bits(u32_at(section, at + 0x10, "track duration")?);
+        let table = wire.offset(section, at + 0x08, "channel table")?;
+        let track_duration = f32::from_bits(u32_at(section, at + 0x08 + w + 4, "track duration")?);
         let mut channels: [Option<Channel>; SLOTS] = Default::default();
         for (slot, out) in channels.iter_mut().enumerate().take(slots.min(SLOTS)) {
-            let channel = u32_at(section, table + slot * 4, "channel")? as usize;
+            let channel = wire.offset(section, table + slot * w, "channel")?;
             if channel == 0 {
                 continue;
             }
-            *out = Some(read_channel(section, channel)?);
+            *out = Some(read_channel(section, channel, wire)?);
         }
         tracks.push(Track {
             id,
@@ -167,11 +184,14 @@ pub fn parse(file: &[u8]) -> Result<Clip> {
     })
 }
 
-fn read_channel(section: &[u8], at: usize) -> Result<Channel> {
+fn read_channel(section: &[u8], at: usize, wire: Wire) -> Result<Channel> {
+    let w = wire.width();
     let count = u32_at(section, at + 0x08, "key count")? as usize;
     let type_word = u32_at(section, at + 0x0c, "channel type")?;
-    let keys_at = u32_at(section, at + 0x10, "keys")? as usize;
-    let seconds_per_key = f32::from_bits(u32_at(section, at + 0x18, "seconds per key")?);
+    let keys_at = wire.offset(section, at + 0x10, "keys")?;
+    // The rate, then the seconds per key: `+0x14`, `+0x18` in the Vita's, `+0x18`,
+    // `+0x1c` in the PS4's.
+    let seconds_per_key = f32::from_bits(u32_at(section, at + 0x10 + w + 4, "seconds per key")?);
     let kind = Kind::from_type(((type_word >> 16) & 0xff) as u8).ok_or(Error::OutOfBounds {
         what: "channel type byte not seen on the disc",
         end: (type_word >> 16) as usize,

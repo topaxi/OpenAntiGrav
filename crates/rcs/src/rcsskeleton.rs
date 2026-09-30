@@ -43,6 +43,19 @@
 //!
 //! Confidence and the cross-title measurement behind each field are in
 //! `docs/formats/2048-animation.md`.
+//!
+//! # The PS4's is the same file with 64-bit pointers
+//!
+//! Told apart the way the model is, by header word `+0x04`
+//! ([`crate::rcsmodel::psp2::is_ps4`]). Every offset above is 8 bytes wide and
+//! the header pointers move to `+0x10`, `+0x18`, `+0x20` and `+0x28` (the count
+//! stays at `+0x04`); the property block opens with a 64-bit slot count and then
+//! `{ u64 offset of u64[9]; u64 9 }` per node, and a property is
+//! `{ u32 tag; u32 pad; u64 offset of the value }`. The id and parent arrays,
+//! the matrices and every value stay 4-byte. Measured on
+//! `tech_de_ra\track.final.rcsskeleton` (168 nodes: the arrays and the matrix
+//! table close on the section's own length to the byte) and confirmed corpus-wide
+//! by `crates/rcs/tests/omega_animation_ground_truth.rs`.
 
 use crate::rcsmodel::psp2::container::{self, u32_at};
 use crate::rcsmodel::psp2::{Error, Result};
@@ -61,6 +74,49 @@ pub const SLOT_PIVOT: usize = 4;
 pub const SLOT_PIVOT_TRANSLATE: usize = 5;
 /// How many property slots a node has.
 pub const SLOTS: usize = 9;
+
+/// How wide a container's offsets are: the Vita's are `u32` and the PS4's are
+/// `u64`, and that is the whole difference between the two layouts of a
+/// skeleton or a clip apart from where the fields sit.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Wire {
+    /// Whether the file is a PS4 one.
+    pub ps4: bool,
+}
+
+impl Wire {
+    /// The layout of `file`, by the model's own discriminator.
+    pub(crate) fn of(file: &[u8]) -> Self {
+        Self {
+            ps4: crate::rcsmodel::psp2::is_ps4(file),
+        }
+    }
+
+    /// Bytes per offset.
+    pub(crate) fn width(self) -> usize {
+        if self.ps4 { 8 } else { 4 }
+    }
+
+    /// The offset stored at `at`.
+    pub(crate) fn offset(self, section: &[u8], at: usize, what: &'static str) -> Result<usize> {
+        let low = u32_at(section, at, what)? as usize;
+        if !self.ps4 {
+            return Ok(low);
+        }
+        // The high half is zero on every file measured; a value that does not
+        // fit is refused rather than truncated into a plausible offset.
+        match u32_at(section, at + 4, what)? {
+            0 => Ok(low),
+            high => Err(Error::OutOfBounds {
+                what,
+                end: (high as usize)
+                    .saturating_mul(1 << 16)
+                    .saturating_mul(1 << 16),
+                len: section.len(),
+            }),
+        }
+    }
+}
 
 /// A property's value type, the byte above the slot in its tag word.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,19 +282,26 @@ pub fn parse(file: &[u8]) -> Result<Skeleton> {
         end: 0,
         len: file.len(),
     })?;
+    let wire = Wire::of(file);
+    let w = wire.width();
+    // The count stays at `+0x04`; the four offsets follow it in the Vita's
+    // header at `+0x0c` and, 8 bytes wide, from `+0x10` in the PS4's.
+    let first = if wire.ps4 { 0x10 } else { 0x0c };
     let count = u32_at(section, 0x04, "node count")? as usize;
-    let ids_at = u32_at(section, 0x0c, "node ids")? as usize;
-    let parents_at = u32_at(section, 0x10, "node parents")? as usize;
-    let props_at = u32_at(section, 0x14, "node properties")? as usize;
-    let above_at = u32_at(section, 0x18, "node parent matrices")? as usize;
-    let slots = u32_at(section, props_at, "slot count")? as usize;
+    let ids_at = wire.offset(section, first, "node ids")?;
+    let parents_at = wire.offset(section, first + w, "node parents")?;
+    let props_at = wire.offset(section, first + 2 * w, "node properties")?;
+    let above_at = wire.offset(section, first + 3 * w, "node parent matrices")?;
+    let slots = wire.offset(section, props_at, "slot count")?;
 
     let mut nodes = Vec::with_capacity(count.min(section.len() / 8));
     for i in 0..count {
         let id = u32_at(section, ids_at + i * 4, "node id")?;
         let parent = u32_at(section, parents_at + i * 4, "node parent")? as usize;
         let parent = (parent != i && parent < count).then_some(parent);
-        let table = u32_at(section, props_at + 4 + i * 8, "property table")? as usize;
+        // `{ offset of the property table; slot count }` per node, after the
+        // block's own slot count.
+        let table = wire.offset(section, props_at + w + i * 2 * w, "property table")?;
         let above = matrix_at(section, above_at + i * 64, "parent matrix")?;
         let mut node = Node {
             id,
@@ -253,12 +316,14 @@ pub fn parse(file: &[u8]) -> Result<Skeleton> {
             kinds: [None; SLOTS],
         };
         for slot in 0..slots.min(SLOTS) {
-            let property = u32_at(section, table + slot * 4, "property")? as usize;
+            let property = wire.offset(section, table + slot * w, "property")?;
             if property == 0 {
                 continue;
             }
             let tag = u32_at(section, property, "property tag")?;
-            let value = u32_at(section, property + 4, "property value")? as usize;
+            // The value's offset follows the tag: at `+0x04` in the Vita's
+            // property, at `+0x08` (8-aligned) in the PS4's.
+            let value = wire.offset(section, property + w, "property value")?;
             let kind = Kind::from_type(((tag >> 8) & 0xff) as u8);
             node.kinds[slot] = kind;
             match (slot, kind) {
