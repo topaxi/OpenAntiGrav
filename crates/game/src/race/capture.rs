@@ -680,7 +680,7 @@ pub fn capture(
             samples[samples.len() * 9 / 10],
         );
     }
-    scene.render(
+    let stats = scene.render(
         &device,
         &queue,
         &mut encoder,
@@ -705,6 +705,17 @@ pub fn capture(
         None,
     );
     oag_render::perfprobe::report_frame(race.sim.world.tick);
+    // What the captured frame submitted, so a `--pvs true` / `--pvs false`
+    // pair (or `--lod`, or frustum culling) can be compared by count as well as
+    // by picture. The overlay's own figures, which a screenshot cannot show
+    // without drawing them into the picture being compared.
+    log::info!(
+        "frame at tick {}: {} draw(s) submitted, {} culled, {} triangle(s)",
+        race.sim.world.tick,
+        stats.draws_submitted,
+        stats.draws_culled,
+        stats.triangles,
+    );
 
     // The HUD, into the same target. Without this a race screenshot would show
     // the track and no HUD at all, because unlike the front end's capture this

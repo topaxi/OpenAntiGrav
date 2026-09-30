@@ -60,6 +60,9 @@ oag-disc.workspace = true
 # nothing below plays audio. See the workspace manifest for why this codec does
 # not go through `ffmpeg` the way ATRAC3+ does.
 symphonia.workspace = true
+# The Omega Collection's Wwise media is ATRAC9, decoded in process. See the
+# workspace manifest and `crate::wem`.
+atrac9dec.workspace = true
 oag-formats.workspace = true
 # `av1` decodes the movie cache; the composition root is the only crate that
 # plays video. See docs/architecture/adr/0008-av1-movie-cache.md.

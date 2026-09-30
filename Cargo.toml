@@ -138,6 +138,21 @@ bytemuck = "1"
 # demuxer, leaving the other twenty-odd formats and the SIMD paths out.
 symphonia = { version = "0.6", default-features = false, features = ["mp3"] }
 
+# The ATRAC9 decoder, for the Omega Collection's Wwise media: every `.wem` there
+# is ATRAC9 (`oag_formats::wwise::wem`). ADR-0024's order applies and puts a
+# library first: ATRAC9 is Sony's codec, not Wipeout's, so it may not be
+# written here, and a pure-Rust decoder exists, so `ffmpeg` (which ADR-0019
+# reserves for ATRAC3+, where none does) is not needed.
+#
+# **MIT, no dependencies of its own**, a port of LibAtrac9 (also MIT). Young
+# and single-author, so it was measured before it was taken: on a stereo voice
+# clip it and FFmpeg's independent decoder agree to within one least-significant
+# bit on 99.75% of samples, up to polarity (one is the negation of the other),
+# and `crates/game/tests/omega_wem_ground_truth.rs` decodes every `.wem` on the
+# Omega archives with it. Its own README rates multi-channel "partial"; the
+# four- and eight-channel files are measured there too.
+atrac9dec = "0.9"
+
 # Inflate, for the PS3 `.psarc` container. Pure Rust with no C toolchain, the
 # same bar `re_rav1d` is held to. `oag-formats` hand-rolls every *Wipeout*
 # format and the two checksums PNG needs, but deflate is a published standard

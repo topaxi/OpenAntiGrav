@@ -129,9 +129,11 @@ impl TrackVisibility {
     pub fn from_hd_pvs(
         archives: &mut oag_assets::Archives,
         track: &str,
+        geometry_name: Option<&str>,
+        model_chunks: Option<usize>,
         report: &mut Vec<String>,
     ) -> Option<Self> {
-        let name = pvs_name(track);
+        let name = pvs_name(track, geometry_name);
         let blob = match archives.read_name(&name) {
             Ok(blob) => blob,
             Err(_) => {
@@ -139,17 +141,37 @@ impl TrackVisibility {
                 return None;
             }
         };
-        let pvs = match oag_rcs::hd_pvs::Pvs::parse(&blob) {
+        let pvs = match oag_rcs::hd_pvs::Pvs::parse_detect(&blob) {
             Ok(pvs) => pvs,
             Err(e) => {
                 report.push(format!("{name}: {e} - drawing every chunk"));
                 return None;
             }
         };
+        // **A partition of a different model is worse than none.** The 2048
+        // lineage's chunk is a mesh object, and four of the Vita's DLC1
+        // `_reversed` files declare a chunk count that is not their sibling
+        // model's (1,015 against 1,258 on Anulpha Pass) and show no spatial
+        // signal at all - culling by one would hide arbitrary scenery. HD's
+        // files all agree, and its caller passes `None`.
+        if let Some(model) = model_chunks
+            && model != pvs.chunks()
+        {
+            report.push(format!(
+                "{name}: declares {} chunk(s) but its model has {model} mesh object(s), so it \
+                 is not this model's partition - drawing every chunk",
+                pvs.chunks(),
+            ));
+            return None;
+        }
         report.push(format!(
-            "{name}: {} visibility cell(s) over {} chunk(s){}",
+            "{name}: {} visibility cell(s) over {} chunk(s){}{}",
             pvs.cells(),
             pvs.chunks(),
+            match pvs.dialect() {
+                oag_rcs::hd_pvs::Dialect::Ps3 => "",
+                oag_rcs::hd_pvs::Dialect::Psp2 => " (mesh objects, little-endian layout)",
+            },
             match pvs.trailing() {
                 0 => String::new(),
                 n => format!(", plus {n} trailing byte(s) this parser does not read"),
@@ -241,14 +263,52 @@ pub(super) fn visible(
     oag_render::pvs::visible(draw, sections, set, chunks, frustum)
 }
 
-/// The `track.pvs` entry name beside a `track.vex` one.
+/// The `.pvs` entry name for a circuit.
 ///
-/// A path rewrite, the way `oag_render::mesh::rcs::sibling_name` finds the
-/// `.rcsmodel`: the disc pairs the two by name in one directory, and
-/// `track_reversed.vex` has a `track_reversed.pvs` of its own.
-fn pvs_name(vex_name: &str) -> String {
-    match vex_name.rsplit_once('.') {
+/// **Beside the `.rcsmodel` that was actually found when there is one**, the
+/// way `psp2_animation` finds the skeleton: the Omega Collection's
+/// `track.final.rcsmodel` is paired with `track.final.pvs`, and
+/// `track_reversed.vex`'s own is `track_reversed.final.pvs`. Deriving it from
+/// the `.vex` name asked for `track.pvs` and `track_reversed.pvs`, which that
+/// archive does not have, so neither direction of any circuit was ever read.
+/// HD's `track.rcsmodel` gives `track.pvs`, the name the `.vex` gave.
+///
+/// Without a model name it is a path rewrite of the `.vex` one, as before.
+fn pvs_name(vex_name: &str, geometry_name: Option<&str>) -> String {
+    let beside = geometry_name.and_then(|model| {
+        let at = model.len().checked_sub(".rcsmodel".len())?;
+        model[at..]
+            .eq_ignore_ascii_case(".rcsmodel")
+            .then(|| format!("{}.pvs", &model[..at]))
+    });
+    beside.unwrap_or_else(|| match vex_name.rsplit_once('.') {
         Some((stem, _)) => format!("{stem}.pvs"),
         None => format!("{vex_name}.pvs"),
+    })
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::pvs_name;
+
+    #[test]
+    fn the_pvs_sits_beside_the_model_that_was_found() {
+        // Omega's baked outputs carry a `.final` infix, forward and reversed.
+        assert_eq!(
+            pvs_name(
+                r"Data\environments\tech_de_ra\track_reversed.vex",
+                Some(r"Data\environments\tech_de_ra\track_reversed.final.rcsmodel"),
+            ),
+            r"Data\environments\tech_de_ra\track_reversed.final.pvs"
+        );
+        // HD and 2048 use the plain name, which the `.vex` gave as well.
+        assert_eq!(
+            pvs_name("a/track.vex", Some("a/track.rcsmodel")),
+            pvs_name("a/track.vex", None)
+        );
+        assert_eq!(pvs_name("a/track.vex", None), "a/track.pvs");
+        // A model name that is not a `.rcsmodel` falls back to the `.vex`.
+        assert_eq!(pvs_name("a/track.vex", Some("a/track.bin")), "a/track.pvs");
+        assert_eq!(pvs_name("a/track.vex", Some("l")), "a/track.pvs");
     }
 }

@@ -84,8 +84,12 @@ the start line and runs the simulation. What it does **not** do, and why:
   resolve or will not decode and get no texture rather than a neighbour's. The
   screenshot is `data/shots/2048_altima_textured.png`. What is still absent
   from it is unrelated: `.envsettings` does not parse for this title, so the
-  race lights off a stand-in rig, unfogged and without bloom, and `track.pvs`
-  is not this project's HD PVS layout, so every chunk draws.
+  race lights off a stand-in rig, unfogged and without bloom. (`track.pvs` was
+  listed here as not being HD's layout, so every chunk drew. It is that
+  layout's little-endian dialect and culls since 2026-09-30, see
+  [hd-pvs.md](hd-pvs.md); Altima at tick 300 goes from 616 draws and 145,779
+  triangles to 447 and 98,032 with the same pixels, and four DLC1
+  `track_reversed.pvs` files are refused as not their model's.)
   See [2048-rcsmodel.md](2048-rcsmodel.md) and [gxt.md](gxt.md).
 - **The scenery moves, and the craft's airbrakes are on its tail** (since
   2026-09-16). `track.vex` authors no `Anim Transform`; what animates a 2048

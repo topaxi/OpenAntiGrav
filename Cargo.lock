@@ -240,6 +240,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atrac9dec"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35b2862764c73193c0b0aae64e8510cc1177c79a4b5d24726470de479c59fc11"
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2022,6 +2028,7 @@ name = "oag-game"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "atrac9dec",
  "bytemuck",
  "clap",
  "dirs",

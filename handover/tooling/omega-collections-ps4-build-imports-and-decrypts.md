@@ -181,11 +181,16 @@ about a second, decompression-shaped problem on top of it.
   geometry (2048's `.rcsmodel` with 64-bit pointers, all 1,272 entries), the
   skeleton and clip (the Vita's with 8-byte offsets) so the scenery moves, and
   textures with their lightmaps. What it does **not** read or get right:
-  `track.final.pvs` (every chunk draws), Omega's `.bnk` banks (they are Wwise
-  `BKHD` version 118, see Next Steps), the `.EnvSettings` schema (read through
+  the `.EnvSettings` schema (read through
   2048's reader: the patch's `Lighting.Nova prelit scale bias power` and its
   `Tonemap.*` block are unread), and the lightmap's combination, which is HD's
-  own carried over and unmeasured for this title. Evidence and numbers:
+  own carried over and unmeasured for this title. **`track.final.pvs` and the
+  Wwise banks were closed by `omega-pvs-sound` (2026-09-30)**: a cell culls
+  (`draws 1,271 -> 757`, triangles `939,301 -> 619,822` at tick 300 forward;
+  the reversed frames and 2048's are pixel-identical), and the banks, events,
+  media and the `.wem` codec (Sony's ATRAC9) are read, with mono and stereo
+  decoding in process - [`wwise.md`](../../docs/formats/wwise.md),
+  [`hd-pvs.md`](../../docs/formats/hd-pvs.md). Evidence and numbers:
   [`omega-status.md`](../../docs/formats/omega-status.md#racing-a-race-starts-on-this-titles-own-data).
 - **The block-data-location questions below were an extraction bug, not a
   format.** A short read in the extraction tool zeroed most of every entry
@@ -271,25 +276,31 @@ about a second, decompression-shaped problem on top of it.
   (`omega_declaration_ground_truth.rs`, `omega_animation_ground_truth.rs` read
   the five base archives; `data08` carries the front-end scenes and the newer
   copies of most files).
-- **Read `track.final.pvs`** (every chunk still draws: 2.38M triangles, and a
-  debug build spends three to five minutes decoding textures), and check the
-  reversed circuit's `.pvs` name: the loader asks for `track_reversed.pvs` and the
-  archive has `track_reversed.final.pvs`.
-- **Sound, scoped 2026-09-30, not started.** `data00` (base) and `data08`
-  (patch) each hold **53 Wwise `.bnk` banks and 714 / 734 `.wem` media files**
-  (`Data/audio/sound/`, `English(US)/` for speech), `data02` 10 more banks and
-  `data05` one. A bank opens `BKHD` with version word `0x76` (118); the
-  existing reader's "version `1145588546`, expects `3`" is that magic read as a
-  number, so it is a different container from 2048's, not a version drift. A
-  `.wem` is a RIFF/WAVE whose `fmt ` tag is `0xFFFC` (2 channels, 48 kHz on the
-  one sampled), a Wwise-flavoured codec this project has no decoder for and
-  whose identity is unconfirmed. Three pieces, in order: (1) a `BKHD`/`HIRC`
-  reader (bank id, event to media id, `DIDX`/`DATA`), which is a documented
-  format; (2) the `.wem` codec, the unknown that sets the estimate; (3) the map
-  from Wwise events to this project's cue vocabulary, which needs the
-  simulation's own cue list beside the bank's event names. A day for (1), two or
-  three for (2) if the codec is a known Wwise one and open-ended if not, half a
-  day for (3) on one circuit. Nothing here is checked against a running PS4.
+- ~~Read `track.final.pvs`~~ **closed 2026-09-30** (`omega-pvs-sound`), and the
+  reversed name with it: the loader now names the `.pvs` after the model it
+  found. What is left of it: **`CHUNK_PAD`/`CHUNK_TRUST_RADIUS` are HD's, chosen
+  for 12-unit cells and Omega's are about 5.6 apart** (chosen, not measured);
+  the four `zone_N` circuits ship no binary `.pvs` and draw every chunk; the
+  same change **turned culling on for 2048** (Altima tick 300: 616 -> 447 draws,
+  pixel-identical) and refuses four Vita DLC1 `_reversed` files as not their
+  model's - a coordinator decision if a 2048 golden ever moves.
+- ~~Sound, part 1 and 2~~ **closed 2026-09-30**: the `BKHD`/`HIRC` reader
+  (`oag_formats::wwise`, over 107 banks, 0 unresolved media) and the `.wem`
+  codec (**Sony's ATRAC9**, `docs/formats/wwise.md`). The thread's "10 more
+  banks in `data02`" were the old `SBlk` container, not Wwise. **Open in sound:**
+  (1) **multi-channel ATRAC9** - `atrac9dec` refuses all four-, six- and
+  eight-channel files (58 per archive: the soundtrack's stems and a few beds)
+  which FFmpeg decodes; fix the crate or write it up upstream; (2) **map Wwise
+  events to this project's cue vocabulary** - a bank carries event *ids* (hashes)
+  only, so the simulation's cue names and a hash to test them against are
+  needed; (3) **1,450 of 4,957 `Play` actions name an object no shipped bank
+  defines** (`Ship_NGP` 401 of 486; the empty stub banks are the likeliest
+  home); (4) the unread `HIRC` (container playlists, music segments/switches,
+  the rest of node base parameters) and the `smpl` loop points of 173 embedded
+  files; (5) the crate's output is the **negation** of FFmpeg's, sample for
+  sample - which polarity is Sony's is not known. One Tech De Ra cue plays
+  through the mixer to a WAV (`a_tech_de_ra_cue_plays_through_the_mixer`);
+  nothing plays in a race on this title yet.
 - **Decide the mount order with a capture, not a guess**: `oag_omega::EXTRA_CANDIDATES`
   puts the patch ahead of the base because the patch's `.EnvSettings` copies are
   newer (chosen, not measured).

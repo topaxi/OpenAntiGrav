@@ -245,3 +245,81 @@ position it queries is the craft's or the camera's is not established; unioning
 both is what makes that not matter.
 
 Gated on `[graphics] pvs_culling`, the knob that already gates the PSP tier.
+
+## The 2048 lineage's dialect: Wipeout 2048 (Vita) and Omega (PS4)
+
+**The same file, little-endian, with three differences** - `oag_rcs::hd_pvs::Dialect::Psp2`,
+read by `Pvs::parse_detect`, which tells the two apart from header word 2
+(`16` big-endian here, `1` little-endian there; no file can be both). HD's
+`Pvs::parse` is unchanged and still refuses a little-endian file.
+
+| | HD (`Dialect::Ps3`) | 2048 and Omega (`Dialect::Psp2`) |
+| --- | --- | --- |
+| byte order | big-endian | little-endian |
+| header word 2 | 16 | 1 |
+| bitmap bytes per cell | `chunks / 8 + 1` | `ceil(chunks / 8)` |
+| a cell record's 4th float | repeats `z` | 0 |
+| a **chunk** is | a `.rcsmodel` chunk in file order | a `.rcsmodel` **mesh object** (`scene.meshes`) in file order |
+
+Where each was settled (`crates/rcs/tests/psp2_pvs_ground_truth.rs`, over **44**
+Omega files - 34 `track.final.pvs` and 10 zone-mode `trackzone.pvs` in `data00`,
+`data01`, `data02`, `data04` - and the **28** Vita base files):
+
+* **The bitmap width** (confidence 92): four Omega files have a chunk count that
+  divides by eight (`mall/trackzone`, `sol/trackzone`,
+  `04_chenghou_project/track_reversed.final`, `amphiseum/track_reversed.final`).
+  Each is exactly `cells` bytes short of the table under HD's `+ 1` and exact
+  under `ceil`; every other file fits both.
+* **A chunk is a mesh object, not a submesh** (confidence 94): the declared count
+  equals `psp2::Model::scene.meshes.len()` on all 44 Omega files and all but four
+  of the Vita's, and **is not** the submesh count on any (`tech_de_ra`: 2,659 and
+  3,186). Every file also fills its own table to the byte.
+* **Bit `k` is mesh object `k`, LSB first** (confidence 88): for each mesh object
+  placed in world space, the correlation between a cell's bit for object `k + d`
+  and how near the cell is to object `k` is largest at `d = 0` on every one of
+  the 44 Omega files (0.15 to 0.53 at zero, and 55 to 91 percent of that at
+  `d = +-1`; Tech De Ra forward: 0.53 at zero, 0.40 either side). At `d = 0` the
+  nearest 50 mesh objects are 78 to 98 percent visible from a cell.
+* **Node-placed mesh objects carry no partition at all** (confidence 94): the
+  ones a node places (`SubMesh::node`, 1,623 of `tech_de_ra`'s 2,659) are in
+  their node's space, so the near/far test cannot run on them, but their
+  **bits are set in every cell** - 1,623 of 1,623, and the same on Talon's
+  Junction (308) and Altima (694) - so the PVS never culls one and the join has
+  nothing to get wrong there. Only the 1,036 world-placed objects are
+  partitioned (a cell sets 17% of them on average, 56 are set in no cell). The
+  offset correlation, repeated on the bounds the renderer itself produces
+  (`omega_pvs_placement_ground_truth`), peaks at zero on all four circuits
+  tried (0.54 at zero against 0.43 either side on Tech De Ra forward).
+* **The cell positions** are corroborated by the `.pvsxml` beside 34 of the 44
+  Omega files and 8 of the Vita's: a text list of `<origin>` points, usually
+  shorter than the binary and not always in its order (Moa Therma reversed: 445
+  origins for 675 cells), but **every origin it carries is one of the binary's
+  cell records** (within 0.01). The ten `trackzone.pvs` files have none.
+
+**Four Vita DLC1 `_reversed` files do not belong to their sibling model**
+(`Anulpha_Pass`, `Chenghou_Project`, `Moa_Therma` and `Vineta_K`, each
+`track_reversed.pvs`): their declared chunk counts (1,015, 1,713, 1,700, 1,804)
+are not the model's mesh-object counts (1,258, 1,860, 1,706, 1,968), and their
+near/far test shows no spatial signal at all (29% near against 28% far). The
+loader refuses a file whose count disagrees with its model and draws every
+chunk, exactly as it does for a circuit with no `.pvs`.
+
+**What draws is as HD's does**: `oag_render::pvs::ChunkSet` unchanged, with
+`psp2::build` giving every draw call its mesh object as `DrawCall::chunk`, and
+the file named after the `.rcsmodel` that was found (`track.final.rcsmodel`
+gives `track.final.pvs`; deriving it from the `.vex` asked for `track.pvs`, which
+Omega does not have). **`CHUNK_PAD` and `CHUNK_TRUST_RADIUS` are HD's**, chosen for
+its 12-unit cell spacing; Omega's are about 5.6 apart - *chosen, not measured*
+here. Measured effect, tick 300, `tech_de_ra` forward: 1,271 draws and 939,301
+triangles with frustum culling alone, 757 and 619,822 with the PVS; the reversed
+circuit's frames and 2048 Altima's are pixel-identical with it on and off. See
+[omega-status.md](omega-status.md).
+
+**HD's own frames did not move.** Talon's Junction at tick 300, hold accelerate,
+the build before this change against the build after it: the PNGs are
+byte-identical with `--pvs true` and with `--pvs false`, and the load-report line
+(`621 visibility cell(s) over 983 chunk(s), plus 28377 trailing byte(s)`) is
+the same text. After: 588 draws and 255,221 triangles with the PVS, 726 and
+304,328 without. `Pvs::parse` (the HD entry point) is untouched;
+`from_hd_pvs` calls `parse_detect`, which reads little-endian word 2 first and
+falls back to it.

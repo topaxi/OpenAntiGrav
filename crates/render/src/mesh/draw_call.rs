@@ -122,7 +122,9 @@ pub struct DrawCall {
     /// across sources.
     pub node: Option<u32>,
     /// Index of the `.rcsmodel` chunk this draw call came from, in file order,
-    /// or `None` for anything that is not PS3 chunk geometry.
+    /// or `None` for anything that is not PS3 chunk geometry - or, in the 2048
+    /// lineage's container (Vita 2048, Omega), the **mesh object** its submesh
+    /// belongs to, which is what that lineage's `.pvs` addresses.
     ///
     /// **The join key for Wipeout HD's authored PVS.** `track.pvs` carries one
     /// bit per chunk per cell, addressed by exactly this index - see
