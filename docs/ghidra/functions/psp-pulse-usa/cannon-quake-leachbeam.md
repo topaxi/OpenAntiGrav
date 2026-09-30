@@ -3056,3 +3056,28 @@ other than that node - most likely the per-round draw `FUN_0886545c` using
 `round+0x50` directly - which is **unread**. The orientation this engine
 draws is the measured round basis; that the original draws the model with
 it is an inference, confidence 70.
+
+## 2026-09-30: `~QUAKETRAVEL`, `LEACHFAIL` and the Cannon round's lifetime (pulse-weapon-audio lane)
+
+- **`~QUAKETRAVEL` is triggered by `Quake_Update` (`0x0891d268`), confidence 85.**
+  Per road span (two slots): when `Quake_SampleSpan` first reports the span
+  active it spawns `WO_QUAKE`, allocates a `SoundEmitter` (`FUN_08946ce4(0x70)`
+  + `SoundEmitter_Init`) whose `+0x50` points at the span's own matrix and whose
+  radius `+0x38` is `0x44160000` = **600.0**, and plays `~QUAKETRAVEL` (pointer
+  cell `0x08a88554`, string `0x08a88544`, the `lw` at `0x0891d954`), keeping the
+  handle in a per-span table at `0x08abf5ac`. When the span goes inactive it
+  releases the effect, stops the voice (`FUN_089393b8`) and frees the emitter.
+  The earlier "never resolved to a disc string" was a Ghidra string defined one
+  byte early (`@A~QUAKETRAVEL` at `0x08a88542`), which hid the pointer cell.
+  Wired as one held voice at the wave's road midpoint (`Cue::QuakeTravel`).
+- **`LEACHFAIL` is `LeachBeam_InitUnlocked`'s cue (`0x08872da8`), confidence
+  85**: its last call is `Sound_Play(1.0, param_4, ..., "LEACHFAIL", 0)` (pointer
+  cell `0x08a7cc20`, string `0x08a7cc14`), on the emitter `Weapon_FireLeachBeam`
+  passes it - `shooter->emitter`, the one `LEACH` uses. An unlocked fire reaches
+  it; a locked one plays `LEACH` instead. Wired as `Cue::LeachFail`, the
+  player's unlocked arm only (an opponent only fires with a lock).
+- **A Cannon round that hits nothing is reaped at `1.0 < age`, confidence 90.**
+  `Cannon_Init` (`0x088648ec`) zeroes `round+0x48`, `Cannon_UpdateRound`
+  (`0x0886593c`) adds `dt` to it, and `CannonPool_Update` (`0x088582b0`) tests
+  `1.0 < round+0x48` first in its teardown gate. This port let a round fly to the
+  shared 10 s cap, about 9 s too long; it now takes the 1.0 s branch, silently.

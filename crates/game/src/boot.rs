@@ -279,15 +279,13 @@ pub struct Shell {
     /// [`oag_ui::picker`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
-    /// The `KILLS` row's values off the disc's `Eliminations` list and the
-    /// `WEAPONS` row's off its `Weapons` list.
+    /// The `KILLS`/`WEAPONS` rows' values, off the disc's own lists.
     pub race_setup: RaceSetup,
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
     pub title_font: Option<oag_ui::font::Atlas>,
-    /// The PlayStation button-glyph face - see [`Shell::buttons_font`]'s own
-    /// doc.
+    /// The PlayStation button-glyph face (`PS_BUTTONS.fnt` on HD and Omega).
     pub buttons_font: Option<oag_ui::font::Atlas>,
     /// Each font role's face against `Default`, see [`fonts::face_scales`].
     pub face_scales: Vec<(String, f32)>,
@@ -541,25 +539,14 @@ pub fn load_shell(
         &mut report,
     );
     steps.lap("strings");
-    let menu_font = load_menu_font(
+    let (menu_font, title_font, buttons_font) = fonts::load_role_fonts(
         &mut archives,
         &languages,
         preferred_language,
         menu_skin,
+        texel_scale,
         &mut report,
-    )
-    .map(|atlas| atlas.with_texel_scale(texel_scale));
-    let title_font = load_title_font(
-        &mut archives,
-        &languages,
-        preferred_language,
-        menu_skin,
-        &mut report,
-    )
-    .map(|atlas| atlas.with_texel_scale(texel_scale));
-    let buttons_font =
-        fonts::load_buttons_font(&mut archives, &languages, preferred_language, &mut report)
-            .map(|atlas| atlas.with_texel_scale(texel_scale));
+    );
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
@@ -1235,6 +1222,9 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     if !face_scales.is_empty() {
         frontend.set_face_scales(face_scales, font.line_height);
     }
+    if profile.picker_from_loaded_faces {
+        frontend.set_picker_line_height(font.line_height);
+    }
     if !campaign_events.is_empty() {
         frontend.set_campaign(campaign_events);
     }
@@ -1597,7 +1587,7 @@ pub(crate) mod sprites;
 mod steps;
 pub(crate) mod xml;
 
-use fonts::{load_font, load_menu_font, load_title_font};
+use fonts::load_font;
 pub use languages::{chosen_language, load_languages, load_strings};
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};

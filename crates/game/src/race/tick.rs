@@ -348,6 +348,18 @@ impl Race {
                 )),
                 _ => None,
             };
+            // A Missile's own endings: a craft hit plays `MISSILEEXPSHIP`, and
+            // one that outlived its fuse plays `SHURIKENEXPL` - the fuse is the
+            // one impact that struck nothing and spends no blast
+            // (`blast: false`). A missile that spends its bounce budget on a
+            // wall also strikes nothing but does blast, and plays neither: the
+            // pool plays `MISSILEEXPWALL` off a bit this port has not read the
+            // setter of. See `Cue::MissileHitShip` and `Cue::MissileExpire`.
+            if let Some(cue) = weapons::missile_ending_cue(impact) {
+                self.sim
+                    .cues
+                    .push(crate::audio::sfx::CueEvent::at_point(cue, impact.point));
+            }
             if let Some((wall, ship)) = hit_cues {
                 let cue = if impact.struck.is_some() { ship } else { wall };
                 self.sim
@@ -385,12 +397,11 @@ impl Race {
                         projectile.position,
                     ));
                 }
-                // Rides the firing craft's own emitter, not the blade's - see
-                // `Cue::ShurikenHit`'s own doc comment.
+                // On the blade's own emitter - see `Cue::ShurikenHit`.
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
-                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
                         crate::audio::sfx::Cue::ShurikenHit,
-                        usize::from(projectile.owner),
+                        projectile.position,
                     ));
                 }
                 _ => {}

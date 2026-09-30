@@ -148,8 +148,10 @@ pub const MAX_PROJECTILES: usize = 128;
 /// self+0x48`) and reaps it the way this does - that branch reaches the trail
 /// release and no explosion spawner. Adopted 2026-09-16 as
 /// [`rocket::LIFETIME_SECONDS`], tested ahead of this cap the way the
-/// Missile's own timer is; this constant is now the ceiling for the weapons
-/// that have no recovered cap of their own.
+/// Missile's own timer is, and **the Cannon's is `1.0`**
+/// ([`cannon::LIFETIME_SECONDS`], `CannonPool_Update`'s `1.0 < age`); this
+/// constant is now the ceiling for the weapons that have no recovered cap of
+/// their own.
 ///
 /// **A Missile never reaches this**, having detonated at
 /// [`missile::SELF_DETONATE_SECONDS`], but its age is still measured against

@@ -465,6 +465,7 @@ impl Race {
                 projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
                 projectile_flare_orbit: [None; oag_gameplay::projectile::MAX_PROJECTILES],
                 quake_effect: None,
+                quake_point: None,
                 leach_beam_effect: None,
                 leach_charge_effect: None,
                 leach_beam_ribbon: None,

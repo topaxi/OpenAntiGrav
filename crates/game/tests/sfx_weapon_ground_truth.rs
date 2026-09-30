@@ -137,8 +137,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
         lifetime: 5.0,
         ..Default::default()
     };
-    // Owned by slot 0, so `Cue::ShurikenTravel`'s own craft-based placement
-    // (see its doc comment) has somewhere to read a position from.
+    // On the blade's own emitter, so it needs no owner to be heard from.
     let shuriken = oag_gameplay::projectile::Projectile {
         kind: Some(oag_tables::weapons::Weapon::Shuriken),
         position: origin,
@@ -179,22 +178,6 @@ fn the_four_travel_voices_open_together_and_close_together() {
          body did not all open"
     );
 
-    // The `None`-position path: `craft_positions` returns a fixed
-    // `[Option<_>; MAX_SHIPS]` array, so an owner past `MAX_SHIPS` (`8`) - not
-    // merely past this fixture's own field of eight - is nowhere
-    // `craft.get` ever returns `Some` for, which is what stops the
-    // Shuriken's own voice without touching any real craft's own engine -
-    // deactivating a real ship would stop that slot's engine at the same
-    // time, conflating the two.
-    race.sim.world.projectiles.slots[2].owner = 200;
-    audio.race_tick(&mut race);
-    audio.tick();
-    assert_eq!(
-        voices(&audio),
-        idle + 3 + 1,
-        "ShurikenTravel kept sounding with nowhere to be heard from"
-    );
-
     // Clear the rest and confirm every held voice this test opened closes.
     race.sim.world.projectiles.slots[0] = oag_gameplay::projectile::Projectile::default();
     race.sim.world.projectiles.slots[1] = oag_gameplay::projectile::Projectile::default();
@@ -208,6 +191,66 @@ fn the_four_travel_voices_open_together_and_close_together() {
         idle + 1,
         "a held travel voice outlived the projectile or beam that opened it"
     );
+}
+
+/// `~QUAKETRAVEL` is held for as long as a wave travels: `Quake_Update` opens
+/// it on the emitter it gives the span and stops it when the span goes.
+///
+/// The wave is placed on the far side of the circuit from the grid, so no craft
+/// is near enough to draw a `QUAKEHIT` one-shot into the count.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    let mut audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(std::path::PathBuf::from("/dev/null")),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    let voices =
+        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+    let idle = voices(&audio);
+
+    let stats = race.quake_stats().expect("Pulse authors a Quake");
+    let length = race.course().expect("a course").length();
+    race.sim.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+        0,
+        length * 0.5,
+        1.0,
+        &stats,
+    ));
+    race.tick(&PlayerInputs::none());
+    audio.race_tick(&mut race);
+    audio.tick();
+    assert!(race.quake_point().is_some(), "the wave has no road point");
+    assert_eq!(voices(&audio), idle + 1, "~QUAKETRAVEL did not open");
+
+    race.tick(&PlayerInputs::none());
+    audio.race_tick(&mut race);
+    audio.tick();
+    assert_eq!(voices(&audio), idle + 1, "~QUAKETRAVEL did not stay open");
+
+    race.sim.world.quake = None;
+    race.tick(&PlayerInputs::none());
+    audio.race_tick(&mut race);
+    audio.tick();
+    assert_eq!(voices(&audio), idle, "~QUAKETRAVEL outlived the wave");
 }
 
 /// `~AUTOPILOT` and `autopilot_eng` through the whole path, the same shape
@@ -299,5 +342,120 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
         voices(&audio),
         idle,
         "the autopilot expired and its voice kept sounding"
+    );
+}
+
+/// A Pulse race with the audio open and the start-of-race voice dropped, and a
+/// closure-free way to count what is sounding.
+fn race_and_audio() -> (race::Race, oag_game::audio::Audio) {
+    let path = image("pulse-psp-usa.chd").expect("Pulse USA image");
+    let mut loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    loaded.setup.countdown_voice = false;
+    let audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(std::path::PathBuf::from("/dev/null")),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    (race::Race::start(loaded.setup), audio)
+}
+
+fn sounding(audio: &oag_game::audio::Audio) -> usize {
+    audio.output().with_mixer(|mixer| mixer.active_voices())
+}
+
+/// `~ROCKLOCK` through `Audio::race_tick`: the reticle seeks, then locks, and the
+/// tone beeps on the list's own tempo - about every 116 ms seeking and every
+/// 58 ms locked - and stops when the target goes away.
+///
+/// The race locks a grid opponent by itself once a Missile is held (the reticle
+/// reads `Seeking` from the first tick and `Locked` about a second in), so
+/// nothing is placed. Counted as the share of ticks with a voice above the
+/// engine floor: a one-shot per reticle edge, which is what a title with no
+/// program falls back to, leaves the locked window silent.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_lock_tone_runs_through_the_race_and_stops_with_the_target() {
+    if image("pulse-psp-usa.chd").is_none() {
+        return;
+    }
+    let (mut race, mut audio) = race_and_audio();
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    let mut counts = Vec::new();
+    for _ in 0..130 {
+        race.tick(&PlayerInputs::none());
+        audio.race_tick(&mut race);
+        audio.tick();
+        counts.push(sounding(&audio));
+    }
+    assert_eq!(race.sight_state(), oag_race::sight::State::Locked);
+    let floor = *counts[10..].iter().min().unwrap();
+    let share = |window: &[usize]| {
+        window.iter().filter(|&&n| n > floor).count() as f32 / window.len() as f32
+    };
+    let seeking = share(&counts[10..55]);
+    let locked = share(&counts[75..130]);
+    assert!(
+        (0.2..=0.7).contains(&seeking),
+        "seeking beeps are 52 ms in every 116: {seeking}"
+    );
+    assert!(
+        locked >= 0.75,
+        "locked beeps are 52 ms in every 58: {locked}"
+    );
+
+    race.sim.world.ships[0].pickup.weapon = None;
+    for _ in 0..6 {
+        race.tick(&PlayerInputs::none());
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+    assert_eq!(race.sight_state(), oag_race::sight::State::Absent);
+    assert_eq!(sounding(&audio), floor, "the tone outlived its target");
+}
+
+/// `~BLOWUP` through `Audio::race_tick`: while the player's craft is destroyed
+/// the second waveform is re-keyed over the held loop, so more than one voice
+/// sounds at once; releasing the level stops all of it. A flat pick is one
+/// voice.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
+    if image("pulse-psp-usa.chd").is_none() {
+        return;
+    }
+    let (mut race, mut audio) = race_and_audio();
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+    let floor = sounding(&audio);
+    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    assert!(race.craft_is_exploding());
+    let mut peak = 0;
+    for _ in 0..60 {
+        audio.race_tick(&mut race);
+        audio.tick();
+        peak = peak.max(sounding(&audio));
+    }
+    assert!(
+        peak >= floor + 2,
+        "the loop and its re-keys never sounded together: {peak} over {floor}"
+    );
+    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Racing;
+    for _ in 0..2 {
+        audio.race_tick(&mut race);
+        audio.tick();
+    }
+    assert!(
+        sounding(&audio) <= floor,
+        "the explosion outlived its level"
     );
 }

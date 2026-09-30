@@ -22,13 +22,13 @@
 
 use crate::pointer::{Pointer, row_at};
 
-use super::{Frontend, rows::language_rows, states};
+use super::{Frontend, states};
 
 /// How wide a language row's target is, in the screen's own units, at
 /// scale 1. The rows have no authored width - the widget lists names of
 /// any length - and this is the band the old highlight `Fill` covered, so
 /// it is as wide as the picker has ever claimed to be.
-const ROW_WIDTH: f32 = 220.0;
+pub(super) const ROW_WIDTH: f32 = 220.0;
 
 impl Frontend {
     /// Consumes a tick of pointer input, and says whether the screen on
@@ -84,8 +84,8 @@ impl Frontend {
     /// drawn with.
     pub(super) fn language_row_at(&self, at: (f32, f32)) -> Option<usize> {
         let screen = self.screens.language_selection()?;
-        let rows = language_rows(screen.menu.as_ref());
-        let width = ROW_WIDTH * rows.scale;
+        let rows = self.language_rows(screen.menu.as_ref());
+        let width = self.band_width(rows.scale);
         // The drawing anchors the pen at `x` and the alignment decides
         // which way the glyphs run from it; the band follows.
         let left = match rows.align {

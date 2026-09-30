@@ -98,6 +98,7 @@ mod compose;
 mod cue;
 mod engine;
 mod layers;
+mod repeating;
 mod track;
 mod travel;
 pub use announcer::{Announcer, ClassAnnouncer};
@@ -107,6 +108,7 @@ pub use banks::{Banks, Loaded};
 pub use cue::Cue;
 pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
+pub use repeating::Playing;
 pub use track::TrackEmitters;
 use travel::TravelVoices;
 
@@ -142,6 +144,9 @@ pub(super) struct SfxVoices {
     /// What the lock-on reticle was doing last frame, so its two blips fire on
     /// the transitions rather than every frame. See [`Cue::LockOn`].
     sight: oag_race::sight::State,
+    /// The explosion's and the lock-on tone's repeating handles, on a title
+    /// whose bank plays them as the list runs. See [`repeating::Held`].
+    repeating: repeating::Held,
     shield: Vec<VoiceId>,
     /// Whether the shield has already been responded to for this activation.
     ///
@@ -190,6 +195,9 @@ pub(super) struct SfxVoices {
     /// only stable handle each one has. See [`Cue::ShurikenTravel`]'s own
     /// doc comment for why the emitter is the craft's.
     shuriken_travel: TravelVoices,
+    /// `~QUAKETRAVEL`'s held voice, slot 0 of a [`TravelVoices`] for the one
+    /// wave the race ever has. See [`Cue::QuakeTravel`].
+    quake_travel: TravelVoices,
     /// `~LEACHATTACH`'s held voice, while a **locked** beam instance exists -
     /// see [`Cue::LeachAttach`]. `Option<VoiceId>` rather than a
     /// [`TravelVoices`]: the LeachBeam is `crate::race::Race`'s own single
@@ -243,6 +251,7 @@ impl Audio {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
                 last_listener: None,
                 sight: oag_race::sight::State::Absent,
+                repeating: repeating::Held::default(),
                 shield: Vec::new(),
                 shield_open: false,
                 blowup: Vec::new(),
@@ -254,6 +263,7 @@ impl Audio {
                 rocket_travel: TravelVoices::new(),
                 missile_travel: TravelVoices::new(),
                 shuriken_travel: TravelVoices::new(),
+                quake_travel: TravelVoices::new(),
                 leach_attach: None,
                 rng: Rng::new(SFX_SEED),
             }
@@ -395,7 +405,10 @@ impl Audio {
             // than as a level: one voice per transition, because this mixer has
             // no equivalent of the original's cue parameter. See [`Cue::LockOn`].
             let sight = race.sight_state();
-            if sight != voices.sight {
+            let sight_played = voices
+                .repeating
+                .drive_sight(sight, banks, mixer, &mut voices.rng);
+            if !sight_played && sight != voices.sight {
                 let waveform = match sight {
                     oag_race::sight::State::Absent => None,
                     oag_race::sight::State::Seeking => Some(0),
@@ -431,7 +444,11 @@ impl Audio {
             // and for the same reason: case 4 opens a *handle*, so this is a
             // voice's lifetime rather than a one-shot. Dry - it is the player's
             // own craft and the original hands it to the no-emitter path.
-            match (exploding, voices.blowup_open) {
+            let blowup_played =
+                voices
+                    .repeating
+                    .drive_blowup(exploding, banks, mixer, &mut voices.rng);
+            match (exploding && !blowup_played, voices.blowup_open) {
                 (true, false) => {
                     voices.blowup_open = true;
                     if let Some(started) = banks.voices(Cue::Blowup, &mut voices.rng) {
@@ -522,11 +539,8 @@ impl Audio {
                 |p| p.kind == Some(oag_tables::weapons::Weapon::Missile),
                 |p| Some(p.position),
             );
-            // Rides the *firing craft's* own emitter rather than the blade's
-            // - see [`Cue::ShurikenTravel`]'s own doc comment - so `position`
-            // reads `craft[p.owner]` instead of `p.position`. `None` when
-            // that craft has gone (an empty slot, or past `craft`'s own
-            // length), which stops the voice the same way an ended bolt does.
+            // On the blade's own emitter, `300.0` radius - see
+            // [`Cue::ShurikenTravel`].
             voices.shuriken_travel.tick(
                 mixer,
                 banks,
@@ -536,13 +550,19 @@ impl Audio {
                 Cue::ShurikenTravel,
                 Cue::ShurikenTravel.radius(),
                 |p| p.kind == Some(oag_tables::weapons::Weapon::Shuriken),
-                |p| {
-                    craft
-                        .get(usize::from(p.owner))
-                        .copied()
-                        .flatten()
-                        .map(|(pos, _)| pos)
-                },
+                |p| Some(p.position),
+            );
+            // `~QUAKETRAVEL`: one held voice while a wave travels, at its road
+            // midpoint. See [`Cue::QuakeTravel`].
+            voices.quake_travel.follow(
+                0,
+                race.quake_point(),
+                mixer,
+                banks,
+                &mut voices.rng,
+                &listener,
+                Cue::QuakeTravel,
+                Cue::QuakeTravel.radius(),
             );
 
             // `~LEACHATTACH`, held for as long as a **locked** beam instance
@@ -682,6 +702,7 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
+                voices.repeating.stop_all(mixer);
                 for id in voices.autopilot.drain(..) {
                     mixer.stop(id);
                 }
@@ -690,6 +711,7 @@ impl Audio {
                 voices.rocket_travel.stop_all(mixer);
                 voices.missile_travel.stop_all(mixer);
                 voices.shuriken_travel.stop_all(mixer);
+                voices.quake_travel.stop_all(mixer);
                 if let Some(id) = voices.leach_attach.take() {
                     mixer.stop(id);
                 }

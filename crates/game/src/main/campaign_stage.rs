@@ -337,7 +337,7 @@ impl CampaignStage {
     /// draw/pointer functions on. See [`Self::title`]'s own doc.
     #[must_use]
     pub(crate) fn is_hd(&self) -> bool {
-        self.title == oag_hd::TITLE.name
+        oag_game::campaign::draws_hd_campaign(&self.title)
     }
 
     /// Whether `Campaign Selection` was read at all - see

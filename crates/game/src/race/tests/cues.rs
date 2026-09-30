@@ -132,7 +132,7 @@ fn every_cue_has_something_that_raises_it() {
     // `Engaging` join `Blowup` for the same reason it is here: both are read
     // off `Race::autopilot_is_active` directly in `Audio::race_tick`'s own
     // level-and-latch match, never pushed.
-    const BY_LEVEL: [Cue; 11] = [
+    const BY_LEVEL: [Cue; 12] = [
         Cue::Engine,
         Cue::Shield,
         Cue::Blowup,
@@ -142,6 +142,7 @@ fn every_cue_has_something_that_raises_it() {
         Cue::PlasmaTravel,
         Cue::RocketTravel,
         Cue::MissileTravel,
+        Cue::QuakeTravel,
         Cue::LeachAttach,
         Cue::ShurikenTravel,
     ];
@@ -277,6 +278,11 @@ fn every_cue_has_something_that_raises_it() {
     // in the loop above.
     raised.extend(quake_hits_a_craft());
     raised.extend(leach_fires_locked());
+    // The endings and the fizzle recovered 2026-09-30, in `cue_endings.rs`.
+    raised.extend(super::cue_endings::missile_hits_a_craft());
+    raised.extend(super::cue_endings::missile_outlives_its_fuse());
+    raised.extend(super::cue_endings::leach_fires_unlocked());
+    raised.extend(super::cue_endings::shuriken_is_thrown());
 
     for cue in Cue::ALL {
         assert!(

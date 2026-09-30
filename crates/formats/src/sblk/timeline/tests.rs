@@ -14,7 +14,7 @@ use super::{TICKS_PER_SECOND, WalkModel};
 const RECORD_LEN: usize = 32;
 
 /// One grain of a hand-built cue.
-enum Grain {
+pub(crate) enum Grain {
     /// `0x01` key-on of `(offset, length)` at a pan angle, after `delay` ticks.
     KeyOn { offset: u32, angle: u16, delay: u32 },
     /// `0x05` child by cue index, after `delay` ticks.
@@ -29,9 +29,13 @@ enum Grain {
     },
 }
 
-struct Spec(&'static str, i8, Vec<Grain>);
+pub(crate) struct Spec(
+    pub(crate) &'static str,
+    pub(crate) i8,
+    pub(crate) Vec<Grain>,
+);
 
-fn build(specs: &[Spec]) -> Vec<u8> {
+pub(crate) fn build(specs: &[Spec]) -> Vec<u8> {
     let cues = u16::try_from(specs.len()).unwrap();
     let grains: usize = specs.iter().map(|s| s.2.len()).sum();
     let command_offset = SBLK_HEADER_LEN + usize::from(cues) * CUE_LEN;
@@ -125,7 +129,7 @@ fn build(specs: &[Spec]) -> Vec<u8> {
     out
 }
 
-fn key(offset: u32, angle: u16, delay: u32) -> Grain {
+pub(crate) fn key(offset: u32, angle: u16, delay: u32) -> Grain {
     Grain::KeyOn {
         offset,
         angle,
@@ -297,7 +301,7 @@ fn the_tick_is_the_psp_s_measured_rate() {
     assert!((TICKS_PER_SECOND - 258.398_437_5).abs() < 1e-6);
 }
 
-fn raw(opcode: u32, operand: u32, delay: u32) -> Grain {
+pub(crate) fn raw(opcode: u32, operand: u32, delay: u32) -> Grain {
     Grain::Raw {
         opcode,
         operand,

@@ -59,21 +59,35 @@ the addresses.
 
 ## Open
 
-- `MISSILEEXPSHIP`, `~QUAKETRAVEL`, `LEACHFAIL` and the Shuriken's own launch
-  cue still have no recovered trigger and stay unwired - see each `Cue`
-  variant's own doc comment (or, for the ones with no variant, the "leave"
-  reasoning is on the RE page cited above).
-- **Gameplay finding, not an audio-cue gap, left for whoever owns
-  `crates/gameplay/src/projectile/flight.rs`**: `CannonPool_Update` reaps a
-  Cannon round at `1.0 < age` (its own timer, distinct from the Rocket's
-  `5.0 s`), but `flight.rs` has no `Weapon::Cannon`-specific branch the way
-  it does for the Rocket (`rocket::LIFETIME_SECONDS`) - a Cannon round falls
-  through to the generic `MAX_FLIGHT_SECONDS` (`10.0 s`) cap instead. The
-  cue answer is unaffected either way (both ages are silent reaps), but the
-  round itself likely lives roughly 9 seconds longer in this port than the
-  original before it despawns.
+- **2026-09-30 (pulse-weapon-audio lane): the four triggers were all recovered
+  and wired, and the Cannon round now lives 1.0 s.** `Cue::ALL` is 38.
+  `MISSILEEXPSHIP` (`MissilePool_Update`, craft-hit bit `0x20`) and the Missile's
+  fuse cue - which the original's own pointer makes `SHURIKENEXPL` - fire from the
+  impact loop; `LEACHFAIL` from `LeachBeam_InitUnlocked`'s unlocked arm; `SHURIKEN`
+  from `Shuriken_Init`'s throw; `~QUAKETRAVEL` is held while a wave travels. The
+  Shuriken's travel and hit cues moved onto the blade's own 300-unit emitter,
+  which the same read showed exists. Evidence and addresses are on
+  `missile.md`, `shuriken.md` and `cannon-quake-leachbeam.md`, each with a
+  2026-09-30 section; tests are `race::tests::cue_endings`,
+  `sfx_weapon_ground_truth::a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts`
+  and `projectile::tests::a_cannon_round_that_hits_nothing_is_reaped_at_one_second`.
+- **`~QUAKETRAVEL` is one voice, not two**: the original opens one per road span
+  (up to two, when the wave crosses a join). Chosen, not measured. **And it is
+  flat-picked**: the cue authors two loops of one waveform at 30 and 330 degrees
+  (the second bent by 2 semitones), and `TravelVoices::follow` picks one and plays
+  it centred. The same flat pick applies to the other travel loops.
+- **A Missile that spends its bounce budget on a wall plays nothing here**: its
+  teardown plays `MISSILEEXPWALL` off bit `0x10`, whose setter (in `Missile_Update`)
+  is unread. The fuse and craft-hit endings are wired.
+- **HD**: its bank carries `SHURIKENEXPL`, `MISSILEEXPSHIP`, `~QUAKETRAVEL`,
+  `LEACHFAIL` and `SHURIKEN`, so they play there on the strength of Pulse's binary
+  alone; HD's own call sites are unread.
+- **Not heard by a human yet**: none of the newly wired cues has been listened
+  to; only the mixer's counts and the command lists were checked.
+- **Not read**: whether an opponent's Quake or Shuriken launch sounds through the
+  same call sites at the same volume (the port raises them for any craft).
 
 ## Next Steps
 
-1. Recover a trigger for `MISSILEEXPSHIP`, `~QUAKETRAVEL`, `LEACHFAIL` or the
-   Shuriken's launch cue, or record why each stays untriggered on the disc.
+1. Listen to a Missile fuse ending (`SHURIKENEXPL`) once: if it sounds wrong
+   against a PPSSPP capture, the pointer cell `0x08a7c950` is the place to look.

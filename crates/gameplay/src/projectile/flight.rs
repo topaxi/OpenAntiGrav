@@ -10,8 +10,8 @@
 
 use super::{
     FALL_ACCELERATION, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS, MAX_PROJECTILES,
-    Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, disruptor,
-    mine, missile, nearest_hit, plasma, rocket, shuriken,
+    Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon,
+    disruptor, mine, missile, nearest_hit, plasma, rocket, shuriken,
 };
 use oag_core::math::Vec3;
 use oag_physics::{Ray, Raycaster, Surface};
@@ -479,16 +479,22 @@ impl Projectiles {
                 continue;
             }
 
-            // **A rocket that hit nothing is reaped at five seconds, silently.**
-            // `RocketPool_Update`'s second pass, `5.0 < age`, retires it
-            // through the same teardown a wall hit takes - trail released, no
-            // explosion, no blast - so there is no impact to report. See
-            // [`rocket::LIFETIME_SECONDS`]. Tested after the move like the
-            // Missile's own timer above, because the pool's pass runs after
-            // `Rocket_Update`.
-            if kind == Weapon::Rocket
-                && MAX_FLIGHT_SECONDS - projectile.lifetime > rocket::LIFETIME_SECONDS
-            {
+            // **A rocket that hit nothing is reaped at five seconds, and a
+            // Cannon round at one, both silently.** `RocketPool_Update`'s
+            // second pass tests `5.0 < age` and `CannonPool_Update`'s tests
+            // `1.0 < age` (an `||` on its own gate), and each retires the
+            // round through the same teardown a wall hit takes - trail
+            // released, no explosion, no blast - so there is no impact to
+            // report. See [`rocket::LIFETIME_SECONDS`] and
+            // [`cannon::LIFETIME_SECONDS`]. Tested after the move like the
+            // Missile's own timer above, because each pool's pass runs after
+            // its per-round update.
+            let own_lifetime = match kind {
+                Weapon::Rocket => Some(rocket::LIFETIME_SECONDS),
+                Weapon::Cannon => Some(cannon::LIFETIME_SECONDS),
+                _ => None,
+            };
+            if own_lifetime.is_some_and(|limit| MAX_FLIGHT_SECONDS - projectile.lifetime > limit) {
                 *projectile = Projectile::default();
                 continue;
             }
@@ -541,8 +547,8 @@ impl Projectiles {
                 // original reaps a stale rocket silently, exactly as this
                 // does, and since 2026-09-16 the Rocket takes that branch
                 // above at [`rocket::LIFETIME_SECONDS`] and never reaches
-                // this one. A missile never gets here either, having
-                // detonated above.
+                // this one. The Cannon's `1.0` follows it there. A missile
+                // never gets here either, having detonated above.
                 //
                 // **A mine or a bomb never gets here either**, for a different
                 // reason: its countdown is the disc's own `timetodie` and

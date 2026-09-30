@@ -247,6 +247,9 @@ pub struct RaceView {
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
     /// field's own doc comment for why.
     pub(super) quake_effect: Option<psys::Playing>,
+    /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
+    /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
+    pub(super) quake_point: Option<oag_core::math::Vec3>,
     /// The [`weapons::visuals::LEACHBEAM_ENERGY_EFFECT`] instance riding the
     /// craft a beam is fastened to, or `None` when no link is connected.
     ///

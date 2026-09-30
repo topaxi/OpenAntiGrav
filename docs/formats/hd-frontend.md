@@ -606,6 +606,15 @@ NEW TO WIPEOUT? ... Choosing YES below will enable the Pilot Assist option."*
 
 #### What the capture did **not** settle, and what a later one did
 
+**How this build draws that picker anyway (2026-09-30).** Nothing here was watched,
+so it is inference from the XML: the `<Menu>` authors no row pitch, and the rows
+step by one line of the loaded `Default` face (`helv`, 33 units) rather than by
+Pulse's 13-unit table, which printed them over one another. Its confirm prompt
+(`font="menu"`, a role HD declares no slot for) draws through the `Buttons`
+face, the only one holding `FE_CONFIRM_BUTTON`'s codepoint. Both are **chosen,
+not measured**; `oag_title::BootProfile::picker_from_loaded_faces` is the switch
+and `picker_pitch_ground_truth` the test.
+
 **No frame of `Language Selection` was ever caught in the original three
 cold boots.** cold-02's 1.5-second film runs `Sony Computer Entertainment
 presents` (11.77 s) -> black (14.97 s) -> the Studio Liverpool reel already

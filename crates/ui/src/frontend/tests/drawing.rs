@@ -420,6 +420,46 @@ fn the_picker_draws_one_row_per_language() {
     assert!(rows.iter().any(|t| *t == "English"), "{rows:?}");
 }
 
+/// The row `y`s of the language names, in draw order.
+fn picker_row_ys(frontend: &Frontend) -> Vec<f32> {
+    let names = ["Français", "Deutsch", "English"];
+    frontend
+        .draw_list()
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Text { text, y, .. } if names.contains(&text.as_str()) => Some(*y),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_picker_steps_by_the_table_until_told_a_face_height() {
+    let mut frontend = frontend(300);
+    let mut input = Input::new();
+    input.begin_frame(Button::Start.bit());
+    frontend.update(FRAME, &mut input, None);
+    input.begin_frame(0);
+    frontend.update(FRAME, &mut input, None);
+    let ys = picker_row_ys(&frontend);
+    assert_eq!(ys.len(), 3, "{ys:?}");
+    let table = ys[1] - ys[0];
+    assert_eq!(
+        table,
+        13.0 * frontend
+            .language_rows(frontend.language_screen().and_then(|s| s.menu.as_ref()))
+            .scale
+    );
+
+    frontend.set_picker_line_height(33.0);
+    let ys = picker_row_ys(&frontend);
+    let scale = frontend
+        .language_rows(frontend.language_screen().and_then(|s| s.menu.as_ref()))
+        .scale;
+    assert_eq!(ys[1] - ys[0], 33.0 * scale, "{ys:?}");
+    assert_eq!(ys[2] - ys[1], 33.0 * scale, "{ys:?}");
+}
+
 /// Regression for the picker's own row-blank bug: the selected row used to
 /// be recoloured to opaque white, which Pure's white picker backdrop
 /// (`Intro Screen`'s own `Image`, see `insert_backdrop_parent_fills`)
