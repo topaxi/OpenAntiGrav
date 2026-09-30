@@ -511,7 +511,17 @@ emitter - `(bias & 0xff) << 16 | mode | 0xc8000000`, the bias scaled by
 `DAT_08ab0524` and clamped to `[-0x80, 0x7f]`. `Gfx_FlushRenderManager` calls
 it `(mode = 2, bias = 1.0)`; `Texture_BuildBindList` emits mode `2` with a
 computed bias, or mode `0` with none, on the texture's `+0x06 & 0x18` bits.
-Either way level selection is automatic, as it is under wgpu.
+Either way the level is selected by the GE, and **not "automatic, as it is under
+wgpu"** - corrected 2026-09-30. `Gfx_FlushRenderManager` follows the `(2, 1.0)`
+call with **`Gu_TexLodSlope`** (`0x08811694`, confidence 85): its body is
+`0xd0000000 | (float_bits >> 8)`, the `TEXLODSLOPE` word, and its only caller
+passes `0x3b800000` = `1/256`. Slope mode's level is `log2(|z| * slope) + bias`,
+so it follows **depth**, not texel density (level 0 inside about 128 units).
+Measured against PPSSPP at 480x272 the original resolves scenery at the base
+level throughout a race frame - see
+[frame-audit.md](../../../rendering/frame-audit.md), which is why `oag_render`
+now uploads a PSP `.vex` texture with one level. Whether real hardware mips
+scenery past about 128 units is unmeasured.
 
 **This one is a real divergence and it is measured inert.** `oag_render`
 synthesises a **full** box-filtered chain down to 1x1 (`mesh_render::mip_chain`,
@@ -1151,6 +1161,7 @@ previous pass on this subsystem got wrong.
 | `0x088117cc` | function | `Gu_ColorFunc` | 90 |
 | `0x0891f890` | function | `Gfx_BuildBatchStateList` | 90 |
 | `0x088114b0` | function | `Gu_TexLevelMode` | 80 |
+| `0x08811694` | function | `Gu_TexLodSlope` | 85 |
 | `0x088126ac` | function | `Gu_Material` | 90 |
 | `0x088112c8` | function | `Gu_Color` | 88 |
 | `0x08811508` | function | `Gu_TexMapMode` | 88 |
