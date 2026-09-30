@@ -34,6 +34,12 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   goals come only after the gate is green, and only if the brief lists them.
   A long wait on a race that will not finish is a signal to stop and find a
   shorter path, not to wait longer.
+- **Profile.** Every `oag-game` run, headless or windowed, sets
+  `XDG_CONFIG_HOME` (and `XDG_DATA_HOME`/`XDG_STATE_HOME`) to a directory
+  under your scratch dir. Progress, records, ghosts and settings persist
+  automatically, so a run on the default `~/.config/oag` writes into the
+  maintainer's own saves. Found 2026-09-30 when a member's windowed walk
+  shared it.
 - **Audio.** `oag-game` always gets `--no-audio`; emulators run muted. Verify
   sound by writing WAV and inspecting it, never through the speakers.
 - **Processes.** Record the PID of everything you start, and kill only by
