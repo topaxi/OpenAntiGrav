@@ -248,10 +248,11 @@ Screenshots: `data/scratch/drive-2026-09-27/omega-gnf/omega-{boot,main,grid,cell
   front-end asset this lane looked for. Whether it is elsewhere under a
   different name, or genuinely absent from this build of the front end, was
   not chased.
-- **The menu block art** (`MenuSkin::blocks`) - deliberately left `None` (and trying HD's
-  `MENU_BLOCKS` on Omega on 2026-09-30 confirmed why: Omega's own `file2.gtf` decodes with
-  a fill swatch of alpha 0.004, so HD's numbers draw outlines with no fill, text still
-  invisible - the two binaries' blocks are not the same thing).
+- **The menu block art** (`MenuSkin::blocks`) - deliberately left `None` (trying HD's
+  `MENU_BLOCKS` on Omega on 2026-09-30 put HD's geometry squarely on Omega's own `file2.gtf`
+  outline, but the fill swatch HD's loader samples reads alpha 0.004 on Omega's copy - cause
+  unread - so the rows came out as outlines with no fill and the white text still
+  invisible).
   **Its consequence, fixed 2026-09-30:** with no block behind them, Omega's option rows were
   white (`FEGlobals->TextColor`) on a white page (`HD_BG`). Where a row's text cannot be
   read on the page the frame clears to (`menu::rows::text_is_lost_on_page`, lightness within

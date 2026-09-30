@@ -3829,8 +3829,9 @@ half strength or more, **chosen, not measured**), built by `oag_game::campaign::
 the live session and the test both call.
 `crates/game/tests/campaign_pointer_ground_truth.rs` probes the centre and six points at
 0.7 of the circumradius of every occupied hex of every grid on Omega and on HD/Fury and
-requires each to land on its own cell; it fails on the old targets on both. Pulse's hexes
-carry an explicit size and are unaffected in practice.
+requires each to land on its own cell; it fails on the old targets on both. The same probes
+run on `pulse-psp-eu` (480x272 grid) and pass with the old targets and the new ones, so Pulse
+was not broken and is not changed in practice.
 
 Two smaller mouse dead ends on the same screens, fixed together:
 

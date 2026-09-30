@@ -482,8 +482,7 @@ impl NavigationLegend {
     #[must_use]
     pub fn notice(&self, text: &str, faces: &FaceScales) -> Option<Draw> {
         let base = self.prompts.iter().find(|prompt| {
-            prompt.kind == PromptKind::Confirm
-                && face_role(&prompt.font) != Some(crate::language::roles::BUTTONS)
+            prompt.kind == PromptKind::Confirm && prompt.font.eq_ignore_ascii_case("default")
         })?;
         let left = self
             .prompts

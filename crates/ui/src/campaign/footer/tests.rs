@@ -406,3 +406,32 @@ fn the_same_inputs_produce_an_equal_draw_for_the_index_lookup_to_find() {
     let b = ticker_draw(&layout, 3.0, &tips, &FaceScales::default(), &measure);
     assert_eq!(a, b);
 }
+
+/// A refusal line sits one row above the legend, starts where its leftmost
+/// prompt does, and is drawn in the word face (`Confirm`'s), never the button
+/// glyphs'. With no word prompt to take a face from there is no line.
+#[test]
+fn a_notice_is_one_row_above_the_legend_in_its_word_face() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("a legend");
+    let notice = legend
+        .notice("NOT YET", &FaceScales::default())
+        .expect("a notice");
+    let Draw::FacedText {
+        role, x, y, text, ..
+    } = notice
+    else {
+        panic!("the word face draws as FacedText, got {notice:?}");
+    };
+    assert_eq!(role, "Default");
+    assert_eq!(text, "NOT YET");
+    assert!((y - (252.0 - NOTICE_LIFT)).abs() < f32::EPSILON);
+    assert!((x - 348.0).abs() < f32::EPSILON, "the leftmost prompt's x");
+
+    assert!(
+        NavigationLegend::default()
+            .notice("NOT YET", &FaceScales::default())
+            .is_none()
+    );
+}

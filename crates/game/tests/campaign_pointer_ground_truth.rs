@@ -40,12 +40,20 @@ fn open_hd() -> Option<Loaded> {
 }
 
 fn load(archives: &mut oag_assets::Archives, title: &'static oag_title::Title) -> Loaded {
+    load_on(archives, title, [1920.0, 1080.0])
+}
+
+fn load_on(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    grid: [f32; 2],
+) -> Loaded {
     let base = Sheet::build(&[], &mut Vec::new());
     let campaign = oag_game::campaign::load(
         archives,
         &StringTable::default(),
         FaceScales::default(),
-        [1920.0, 1080.0],
+        grid,
         &base,
         &[],
         title,
@@ -87,7 +95,8 @@ fn drawn_hexagons(
     out
 }
 
-fn every_cell_answers_a_pointer_on_its_own_hexagon(loaded: &Loaded) {
+/// HD's and Omega's own measured premise: the texture is padded well past its art.
+fn the_hex_texture_is_padded_past_its_art(loaded: &Loaded) {
     let campaign = &loaded.campaign;
     let outline = campaign
         .sprites
@@ -105,6 +114,10 @@ fn every_cell_answers_a_pointer_on_its_own_hexagon(loaded: &Loaded) {
         art[2],
         art[3]
     );
+}
+
+fn every_cell_answers_a_pointer_on_its_own_hexagon(loaded: &Loaded) {
+    let campaign = &loaded.campaign;
     let mut checked = 0;
     for (index, grid) in campaign.grids.iter().enumerate() {
         let model = CellSelection::new(grid.cells.clone());
@@ -141,6 +154,7 @@ fn every_cell_answers_a_pointer_on_its_own_hexagon(loaded: &Loaded) {
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn omega_cells_answer_a_pointer_on_their_own_hexagon() {
     let Some(omega) = open_omega() else { return };
+    the_hex_texture_is_padded_past_its_art(&omega);
     every_cell_answers_a_pointer_on_its_own_hexagon(&omega);
 }
 
@@ -148,5 +162,23 @@ fn omega_cells_answer_a_pointer_on_their_own_hexagon() {
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn hd_cells_answer_a_pointer_on_their_own_hexagon() {
     let Some(hd) = open_hd() else { return };
+    the_hex_texture_is_padded_past_its_art(&hd);
     every_cell_answers_a_pointer_on_its_own_hexagon(&hd);
+}
+
+/// Pulse authors its hexes at an explicit size in a 480x272 grid, and the
+/// trimmed targets must still answer on every cell: this title is the reference
+/// and was not the one that was broken.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_cells_answer_a_pointer_on_their_own_hexagon() {
+    let Some(source) = oag_testdata::exact("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let opened =
+        oag_game::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
+            .expect("open pulse");
+    let mut archives = opened.archives;
+    let pulse = load_on(&mut archives, oag_pulse::TITLE, [480.0, 272.0]);
+    every_cell_answers_a_pointer_on_its_own_hexagon(&pulse);
 }
