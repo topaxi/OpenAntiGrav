@@ -13,7 +13,10 @@ use oag_tables::race_campaign::{self, Cell};
 
 /// Omega's raceable and Zone circuits, as the front end offers them: declared
 /// by the team/track plugin definition, kept only where the archive set holds
-/// the geometry - the filter `boot::roster::load_tracks` applies.
+/// the geometry. This mirrors `boot::roster::load_tracks` and
+/// `load_zone_tracks` (both private to the boot), because
+/// `oag_game::remix::catalogue` answers only the raceable list and the Zone
+/// split is half of what a cell needs resolved.
 struct Catalogue {
     race: Vec<oag_game::catalogue::Track>,
     zone: Vec<oag_game::catalogue::Track>,
@@ -34,6 +37,8 @@ impl Catalogue {
 
 struct Omega {
     catalogue: Catalogue,
+    /// How many of the listed grids parsed.
+    grids: usize,
     /// Every cell of every parsed grid, with the grid's file index.
     cells: Vec<(usize, Cell)>,
 }
@@ -72,6 +77,7 @@ fn open() -> Option<Omega> {
         .expect("grids/Definition.xml");
     let definition = oag_tables::fexml::text(&definition).expect("expand Definition.xml");
     let mut cells = Vec::new();
+    let mut grids = 0;
     for (index, src) in race_campaign::definition_entries(&definition)
         .into_iter()
         .enumerate()
@@ -82,10 +88,12 @@ fn open() -> Option<Omega> {
         let Ok(grid) = race_campaign::from_blob(&blob) else {
             continue;
         };
+        grids += 1;
         cells.extend(grid.cells.into_iter().map(|cell| (index, cell)));
     }
     Some(Omega {
         catalogue: Catalogue { race, zone },
+        grids,
         cells,
     })
 }
@@ -121,7 +129,10 @@ fn the_first_cell_launches_vineta_k_as_a_venom_race_of_three_laps() {
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn every_parsed_cell_resolves_its_circuits_or_is_refused_for_its_mode() {
     let Some(omega) = open() else { return };
-    assert!(omega.cells.len() > 100, "{} cells", omega.cells.len());
+    // Sixteen of nineteen grids parse (16-18 lack `RequiredPoints`); a fourth
+    // silently failing shows here rather than as a shorter campaign.
+    assert_eq!(omega.grids, 16);
+    assert_eq!(omega.cells.len(), 167);
     let mut unresolved = Vec::new();
     let mut planned = 0;
     let mut refused = Vec::new();
@@ -132,12 +143,15 @@ fn every_parsed_cell_resolves_its_circuits_or_is_refused_for_its_mode() {
             Err(other) => unresolved.push(format!("grid {grid} {}: {other}", cell.name)),
         }
     }
-    println!(
-        "planned {planned}, refused for mode {}: {refused:?}",
-        refused.len()
-    );
     assert!(unresolved.is_empty(), "{unresolved:#?}");
-    assert!(planned > 0);
+    assert_eq!(planned, 142);
+    assert_eq!(refused.len(), 25);
+    assert!(
+        refused
+            .iter()
+            .all(|mode| mode == "NitroBattle" || mode == "Detonator"),
+        "{refused:?}"
+    );
 }
 
 /// The opponents a cell authors are the opponents its mode races with, so

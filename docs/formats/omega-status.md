@@ -31,7 +31,7 @@ census this page builds on.
 | Front-end XML (`Screens::from_xml`) | **yes** | `skin.xml`, `mainmenu_definition.xml`, `cellmode_definition.xml`, `additional_definition.xml` all parse with the same `oag_ui::screen::Screens` reader HD and Pulse/Pure use - confirmed both by `crates/game/examples/omega_frontend_probe.rs` (docs-only sweep) and by this lane's own boot (`Data\Plugins\Frontend\Gui\Skin.xml: 27 screens, 74 globals, 24 LoadXML includes`). |
 | `FEGlobals` menu layout | **yes, bit-identical to HD's** | Ten of ten authored globals match HD's own `skin.xml` to the digit, re-derived directly against `data09.psarc` in `crates/omega/src/frontend.rs` rather than copied - see that module and its ground-truth test. |
 | Boot chain shape | **declared, not measured** | Same eight redirects in the same order as HD's `DATA00`/`DATA05`/`DATA06` family, no dead `LogoFMV`. `Provenance::Declared`: no PS4 emulator exists in this project's toolchain to upgrade it the way HD's RPCS3 capture did. |
-| Campaign schema (`CellMode_Definition.xml`) | **yes, HD's own schema** | `Grid Selection`/`Cell Selection` as `FlyerSelection`/`CellSelection` screens, plain UTF-8 (not Pulse's dictionary-shortened copy). Nineteen grids where HD has sixteen (`oag_omega::campaign::GRID_COUNT`), confirmed by direct listing. Twelve of nineteen parse this lane; the rest fail per-row the same tolerant way a bad HD grid already does (`docs/formats/hd-frontend.md`'s note on `grid_04.xml`'s own broken tag). |
+| Campaign schema (`CellMode_Definition.xml`) | **yes, HD's own schema** | `Grid Selection`/`Cell Selection` as `FlyerSelection`/`CellSelection` screens, plain UTF-8 (not Pulse's dictionary-shortened copy). Nineteen grids where HD has sixteen (`oag_omega::campaign::GRID_COUNT`), confirmed by direct listing. Sixteen of nineteen parse (2026-09-30; twelve when this row was written) - grids 16-18 carry no `RequiredPoints` attribute and are skipped with a logged warning; the rest fail per-row the same tolerant way a bad HD grid already does (`docs/formats/hd-frontend.md`'s note on `grid_04.xml`'s own broken tag). |
 | Plugin definitions | **yes, but split three ways, like 2048's** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml`, not HD's single `Data\Plugins\Frontend\Definition.xml`. New finding, not in `omega-frontend.md`, which only opened the GUI files. |
 
 ## What changed, and what state each is in
@@ -307,6 +307,11 @@ the catalogue resolves and 25 (`NitroBattle`, `Detonator`) are refused for
 their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
 `RequiredPoints` and are skipped by the grid reader (logged).
 
+- **The cell's class reaches Omega's handling.** `--race --class venom` and
+  `--class flash` on Omega log `GravityMul 0.85 for the venom class` against
+  `1 for the flash class` on the same team, so the class is not cosmetic here
+  even though `DEFAULTS.speed_classes` is `None`. Both walked cells are Venom;
+  a Flash or Rapier cell was not walked.
 - **AI count is not a launch option.** `AICount` is 7 on `Race`/`Elimination`/
   `Tournament` and 1 on `Head2Head`; the test asserts every Omega cell's value
   equals `Mode::opponent_count()`, so the field the mode already races with is
@@ -317,7 +322,11 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   `Data\art\published\hdships\<Team>\FE\Logo.gnf` where HD's reader asks
   `Data\Ships\<Team>\FE\Logo.gtf` (`oag_ui::picker::hd::logo_src`), the stat
   blocks do not draw, and `hdships\<Team>\screen.xml` has no slideshow chain.
-  A cell therefore races the default craft (`ag_systems`, chosen, not measured).
+  A cell therefore races whichever team the RACE page holds (`settings.race.team`;
+  `Session::apply_race_team` copies it in): slot 0 was `hdships\Assegai` on the walk,
+  the first entry of the catalogue, which is where `settle` falls when the stored
+  id is not offered (the catalogue lists `AG_Systems`; `DEFAULTS.team` spells it
+  `ag_systems`). **Chosen, not measured.**
 - **The EndRace screens are skipped, not wired.** `EndRace_Definition.xml` is at
   HD's path too, and dispatching Omega through HD's loader draws `EndRace
   Results`, but `--menu-page endrace-menu` then draws no option blocks where
@@ -325,11 +334,9 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   the screens a finished race (autopilot, 3 laps of `01_Track`, about 7,000
   ticks) shows the built-in results table and the next confirm returns to
   `Main Menu`, **not** `Cell Selection` as on HD.
-- **Correction to the lane brief:** Omega has no `Campaign Selection` screen
-  and no flyer cards in this build (`load_omega` passes `selection_layout:
+- **Omega has no `Campaign Selection` screen and no flyer cards in this build** (`load_omega` passes `selection_layout:
   None, grid_layout_fury: None, flyers: None`; `RACE CAMPAIGN` opens `Grid
-  Selection` directly, `Event 01/16`). The `hd-fury-cards` merge drew them for
-  HD only.
+  Selection` directly, `Event 01/16`); the flyer-card work drew them for HD only.
 - **Not Omega's to fix here, seen on the walk:** the HUD is absent in the race
   (`HUD_Components.gtf`/`hdHUD.mip` are not in the archives), 793 of the
   circuit's materials are unresolved (white surfaces on `08_Track`), and the

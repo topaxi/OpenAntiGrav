@@ -167,8 +167,8 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // the team logos sit at `Data\art\published\hdships\<Team>\FE\Logo.gnf`
     // (HD's reader asks `Data\Ships\<Team>\FE\Logo.gtf`), the stat blocks do
     // not draw, and `screen.xml` has no slideshow chain. Left `None` so a
-    // confirmed campaign cell races the default craft rather than opening a
-    // screen a player cannot read; measured 2026-09-30, the open item in
+    // confirmed campaign cell races the RACE page's team (`settings.race.team`)
+    // rather than opening a screen a player cannot read; measured 2026-09-30, the open item in
     // `docs/formats/omega-status.md`.
     team_select: None,
     track_select: None,

@@ -138,7 +138,8 @@ content against `hd-frontend.md`.
   race** (see `docs/formats/omega-status.md`, "Campaign: confirming a cell
   starts its race"). What is left, in the order a player meets it:
   1. **`Team Selection` draws an empty frame on Omega**, so
-     `FRONT_END.team_select` stays `None` and a cell races the default craft.
+     `FRONT_END.team_select` stays `None` and a cell races the RACE page's team
+     (`settings.race.team`: `Assegai` on the walk, the catalogue's first entry).
      Logos are at `hdships\<Team>\FE\Logo.gnf` (HD's reader asks
      `Data\Ships\<Team>\FE\Logo.gtf`), the stat blocks do not draw,
      `screen.xml` has no slideshow chain. Fix the logo path off the title's
@@ -151,8 +152,9 @@ content against `hd-frontend.md`.
      once the blocks draw.
   3. **Omega has no `Campaign Selection` and no flyer cards**
      (`load_omega`: `selection_layout`, `grid_layout_fury`, `flyers` all
-     `None`), and `Grid Selection` draws on a white page. The lead's brief
-     believed otherwise.
+     `None`), and `Grid Selection` draws on a white page. Only the
+     cards and the selection screen are HD-only; the grid, cell and launch
+     code is shared.
   4. Grids 16-18 have no `RequiredPoints` attribute and are skipped; their
      cells never reach the screen.
 
