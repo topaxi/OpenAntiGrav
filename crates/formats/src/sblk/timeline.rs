@@ -187,12 +187,12 @@ struct Walk<'a> {
 
 /// One handler's own frame.
 #[derive(Clone, Copy)]
-struct Frame {
-    start: u32,
-    angle: i32,
-    cue_volume: i8,
-    scale: f32,
-    bend: Option<usize>,
+pub(super) struct Frame {
+    pub(super) start: u32,
+    pub(super) angle: i32,
+    pub(super) cue_volume: i8,
+    pub(super) scale: f32,
+    pub(super) bend: Option<usize>,
 }
 
 impl Bank<'_> {
@@ -317,19 +317,7 @@ impl Bank<'_> {
 
             if KEY_ON_OPCODES.contains(&opcode) {
                 if let Some(sound) = walk.sounds.iter().find(|s| s.command == command) {
-                    let descriptor_angle = self
-                        .block
-                        .get(sound.descriptor as usize + 4..)
-                        .and_then(|tail| tail.get(..2))
-                        .map_or(0, |b| i32::from(self.order.u16(b, 0) as i16));
-                    walk.out.grains.push(Grain {
-                        tick,
-                        sound: sound.clone(),
-                        cue_volume: frame.cue_volume,
-                        scale: frame.scale,
-                        angle: frame.angle + descriptor_angle,
-                        bend: frame.bend,
-                    });
+                    walk.out.grains.push(self.keyed(sound, tick, &frame));
                     started = true;
                 } else {
                     walk.out.unread.push(opcode);
@@ -394,6 +382,24 @@ impl Bank<'_> {
                 }
             }
             pc += 1;
+        }
+    }
+
+    /// The grain a key-on of `sound` starts at `tick` under `frame`: the
+    /// descriptor's `+0x04` pan angle joins the frame's own.
+    pub(super) fn keyed(&self, sound: &Sound, tick: u32, frame: &Frame) -> Grain {
+        let descriptor_angle = self
+            .block
+            .get(sound.descriptor as usize + 4..)
+            .and_then(|tail| tail.get(..2))
+            .map_or(0, |b| i32::from(self.order.u16(b, 0) as i16));
+        Grain {
+            tick,
+            sound: sound.clone(),
+            cue_volume: frame.cue_volume,
+            scale: frame.scale,
+            angle: frame.angle + descriptor_angle,
+            bend: frame.bend,
         }
     }
 
@@ -470,4 +476,4 @@ impl Bank<'_> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

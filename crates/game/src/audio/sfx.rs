@@ -98,6 +98,7 @@ mod compose;
 mod cue;
 mod engine;
 mod layers;
+mod repeating;
 mod track;
 mod travel;
 pub use announcer::{Announcer, ClassAnnouncer};
@@ -107,6 +108,7 @@ pub use banks::{Banks, Loaded};
 pub use cue::Cue;
 pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
+pub use repeating::Playing;
 pub use track::TrackEmitters;
 use travel::TravelVoices;
 
@@ -142,6 +144,9 @@ pub(super) struct SfxVoices {
     /// What the lock-on reticle was doing last frame, so its two blips fire on
     /// the transitions rather than every frame. See [`Cue::LockOn`].
     sight: oag_race::sight::State,
+    /// The explosion's and the lock-on tone's repeating handles, on a title
+    /// whose bank plays them as the list runs. See [`repeating::Held`].
+    repeating: repeating::Held,
     shield: Vec<VoiceId>,
     /// Whether the shield has already been responded to for this activation.
     ///
@@ -243,6 +248,7 @@ impl Audio {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
                 last_listener: None,
                 sight: oag_race::sight::State::Absent,
+                repeating: repeating::Held::default(),
                 shield: Vec::new(),
                 shield_open: false,
                 blowup: Vec::new(),
@@ -395,7 +401,10 @@ impl Audio {
             // than as a level: one voice per transition, because this mixer has
             // no equivalent of the original's cue parameter. See [`Cue::LockOn`].
             let sight = race.sight_state();
-            if sight != voices.sight {
+            let sight_played = voices
+                .repeating
+                .drive_sight(sight, banks, mixer, &mut voices.rng);
+            if !sight_played && sight != voices.sight {
                 let waveform = match sight {
                     oag_race::sight::State::Absent => None,
                     oag_race::sight::State::Seeking => Some(0),
@@ -431,7 +440,11 @@ impl Audio {
             // and for the same reason: case 4 opens a *handle*, so this is a
             // voice's lifetime rather than a one-shot. Dry - it is the player's
             // own craft and the original hands it to the no-emitter path.
-            match (exploding, voices.blowup_open) {
+            let blowup_played =
+                voices
+                    .repeating
+                    .drive_blowup(exploding, banks, mixer, &mut voices.rng);
+            match (exploding && !blowup_played, voices.blowup_open) {
                 (true, false) => {
                     voices.blowup_open = true;
                     if let Some(started) = banks.voices(Cue::Blowup, &mut voices.rng) {
@@ -682,6 +695,7 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
+                voices.repeating.stop_all(mixer);
                 for id in voices.autopilot.drain(..) {
                     mixer.stop(id);
                 }

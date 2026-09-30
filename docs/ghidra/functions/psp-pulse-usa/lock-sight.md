@@ -333,12 +333,14 @@ cue 6 at 2 waveforms, 0.11 s, neither looping - and the parameter is what picks
 which of the two plays. The `~` prefix marks it the way `~MISSILETVL` and
 `~LEACHATTACH` are marked.
 
-**Which waveform each parameter value selects is inference at 55.** That the
-parameter is `0` while seeking and `1` once locked is read; that those index the
-cue's two waveforms in that order is the obvious reading and is not taken off the
-bank's command list, whose selecting opcode is unread - the same gap
-`oag_game::audio::sfx` records for every cue with alternates. If it is the other
-way round the blip and the chime swap and nothing else does.
+**What the parameter selects is read, 2026-09-30.** The cue's list is
+`[0x15, guard(param 0 == 0), key-on (delay 30), guard(param 0 == 1), key-on
+(delay 15), 0x16]`, so the parameter picks a **tempo** rather than one of two
+waveforms: a beep every 30 master ticks (116 ms) while seeking, every 15 (58 ms)
+once locked, both keying the same 0.052 s waveform. The earlier "two waveforms,
+which is which, inference at 55" reading is retired; see
+[`sound.md`](sound.md#cue-parameters-the-guard-operand-and-the-loop-back-flag-2026-09-30)
+for the guard's operand, the parameter store (`0x0898daf0`) and the loop-back.
 
 **This retires the "the lock tone is unidentified, `~ROCKLOCK` at 40" note.** It
 is identified: `_DAT_00275ba4` is the pointer to that string and

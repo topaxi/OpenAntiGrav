@@ -177,6 +177,11 @@ pub enum Cue {
     /// reading rather than a gap in it - whatever an opponent's explosion
     /// sounds like comes from somewhere this pass did not find.
     ///
+    /// **Plays its list as it runs** (`[key-on loop, 0x15, key-on, 0x1a 0,
+    /// 0x16]`): the loop held from the start and the second waveform re-keyed
+    /// every 43 master ticks until the explosion ends, by
+    /// [`super::repeating::Held::drive_blowup`].
+    ///
     /// **The one cue of nine with no confirmed Pure trigger.** The `~BLOWUP`
     /// string exists in Pure's executable and the cue exists on its disc,
     /// but its call site was not found - six search methods that found every
@@ -193,30 +198,19 @@ pub enum Cue {
     /// [`lock-sight.md`](../../../../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md),
     /// confidence 85.
     ///
-    /// **The bank agrees with the reading**: `~ROCKLOCK` lives in `hud.bnk`
-    /// beside `SPEEDUPPAD` and `~BLOWUP`, and it binds exactly **two**
-    /// waveforms, neither looping, 0.11 s apiece - which is what a parameter
-    /// with two values selects between.
+    /// **It is a repeating list, not two blips.** `~ROCKLOCK` (`hud.bnk` cue 6)
+    /// is `[0x15, guard(param 0 == 0), key-on (delay 30), guard(param 0 == 1),
+    /// key-on (delay 15), 0x16]`: a beep every 30 master ticks (116 ms) while
+    /// seeking, every 15 (58 ms) once locked, both binding the same 0.052 s
+    /// waveform. The guard, the parameter write and the loop-back are read in
+    /// `sound.md`'s "Cue parameters" section; the list runs as
+    /// [`oag_formats::sblk::runner::Runner`] and is held open by
+    /// [`super::repeating::Held::drive_sight`], which writes parameter 0 each
+    /// frame and stops the voice when the target goes away.
     ///
-    /// **This port fires them as two edges rather than as one parameterised
-    /// voice**, because this mixer has no cue parameters: waveform `0` on
-    /// entering [`oag_race::sight::State::Seeking`] and waveform `1` on
-    /// entering [`oag_race::sight::State::Locked`]. With two 0.11 s
-    /// non-looping waveforms the audible result is the same pair of blips; what
-    /// is lost is the original's ability to switch mid-voice, which at that
-    /// length it never gets to use. Recorded rather than smoothed over.
-    ///
-    /// **Which waveform is which is inference, at 55.** What is read is that the
-    /// parameter takes `0` while seeking and `1` once locked; that those values
-    /// index the cue's two waveforms *in that order* is the obvious reading,
-    /// not one taken off the bank's command list. This is a different gap from
-    /// the one `Banks::pick` closes: `0x19` decodes which *randomly-chosen*
-    /// alternate a multi-waveform cue plays, and `LockOn`'s two waveforms are
-    /// never reached that way - `pick_at` selects between them by the
-    /// seeking/locked parameter above, a mapping no command-list reading would
-    /// recover either way. If the two turn out to be the other way round, the
-    /// seeking blip and the lock chime are swapped and nothing else changes.
-    /// `--sound` writes a WAV and settles it by ear.
+    /// **A title with no measured tick** builds no program and falls back to
+    /// one blip per forward edge (waveform `0` seeking, `1` locked), the
+    /// behaviour this cue had before the list was run.
     ///
     /// Pure's own `HudSight_UpdateTone` is a near line-for-line match: same
     /// three-state toggle, same `0x400` volume, same choice to call the
@@ -818,6 +812,7 @@ impl Cue {
             Self::Engine
                 | Self::Shield
                 | Self::Blowup
+                | Self::LockOn
                 | Self::Autopilot
                 | Self::PlasmaTravel
                 | Self::RocketTravel
@@ -825,6 +820,18 @@ impl Cue {
                 | Self::LeachAttach
                 | Self::ShurikenTravel
         )
+    }
+
+    /// Whether this cue's list repeats while it is held, so it plays as the
+    /// list runs rather than as one timeline laid down or one waveform picked.
+    ///
+    /// `~BLOWUP` (`[key-on loop, 0x15, key-on, 0x1a, 0x16]`, the second
+    /// waveform re-keyed every 43 master ticks) and `~ROCKLOCK` (a guard on
+    /// cue parameter 0 in front of each of two key-ons, inside a `0x15`/`0x16`
+    /// loop). See `oag_formats::sblk::runner`.
+    #[must_use]
+    pub fn repeats(self) -> bool {
+        matches!(self, Self::Blowup | Self::LockOn)
     }
 
     /// How far this cue's voice can be heard, for a cue that carries its own

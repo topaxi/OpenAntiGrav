@@ -31,6 +31,7 @@ use oag_audio::spatial::{pan_of_angle, pan_volume_gain};
 use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_core::Rng;
 use oag_formats::sblk::Bank;
+use oag_formats::sblk::runner::Runner;
 use oag_formats::sblk::timeline::WalkModel;
 use oag_title::SequenceTick;
 
@@ -186,46 +187,15 @@ pub(super) fn timelines(
         return Ok(None);
     }
 
-    let mut pcm: BTreeMap<u32, Vec<i16>> = BTreeMap::new();
-    let mut sounds: BTreeMap<(u32, u32), Arc<Sound>> = BTreeMap::new();
+    let mut decoder = Decoder::default();
     let mut out = Vec::with_capacity(all.len());
     for timeline in &all {
         let mut layers = Vec::with_capacity(timeline.grains.len());
         for grain in &timeline.grains {
-            let samples = match pcm.get(&grain.sound.offset) {
-                Some(samples) => samples,
-                None => {
-                    let decoded = decode_waveform(bank, &grain.sound, name)?;
-                    pcm.entry(grain.sound.offset).or_insert(decoded)
-                }
-            };
-            if samples.is_empty() {
+            let Some(layer) = decoder.layer(bank, name, grain, ticks_per_second)? else {
                 return Ok(None);
-            }
-            let gain = grain.scale * pan_volume_gain(grain.cue_volume, grain.sound.volume);
-            let key = (grain.sound.offset, gain.to_bits());
-            let sound = match sounds.get(&key) {
-                Some(sound) => Arc::clone(sound),
-                None => {
-                    let sound = Arc::new(
-                        Sound::new(samples.clone(), 1, grain.sound.sample_rate())?
-                            .with_pan_volume_gain(gain),
-                    );
-                    sounds.insert(key, Arc::clone(&sound));
-                    sound
-                }
             };
-            layers.push(Layer {
-                sound,
-                looping: grain.sound.is_looping(),
-                delay: f64::from(grain.tick) / ticks_per_second,
-                angle: grain.angle,
-                bend: grain.bend.map(|draw| Bend {
-                    draw,
-                    down: grain.sound.bend_down,
-                    up: grain.sound.bend_up,
-                }),
-            });
+            layers.push(layer);
         }
         out.push(Timeline {
             layers,
@@ -233,6 +203,107 @@ pub(super) fn timelines(
         });
     }
     Ok(Some(out))
+}
+
+/// Decoded waveforms shared across the grains of one cue: the samples once per
+/// waveform, the [`Sound`] once per waveform and gain.
+#[derive(Default)]
+struct Decoder {
+    pcm: BTreeMap<u32, Vec<i16>>,
+    sounds: BTreeMap<(u32, u32), Arc<Sound>>,
+}
+
+impl Decoder {
+    /// One grain as a [`Layer`], or `None` when its waveform decodes to nothing.
+    fn layer(
+        &mut self,
+        bank: &Bank,
+        name: &str,
+        grain: &oag_formats::sblk::timeline::Grain,
+        ticks_per_second: f64,
+    ) -> anyhow::Result<Option<Layer>> {
+        let samples = match self.pcm.get(&grain.sound.offset) {
+            Some(samples) => samples,
+            None => {
+                let decoded = decode_waveform(bank, &grain.sound, name)?;
+                self.pcm.entry(grain.sound.offset).or_insert(decoded)
+            }
+        };
+        if samples.is_empty() {
+            return Ok(None);
+        }
+        let gain = grain.scale * pan_volume_gain(grain.cue_volume, grain.sound.volume);
+        let key = (grain.sound.offset, gain.to_bits());
+        let sound = match self.sounds.get(&key) {
+            Some(sound) => Arc::clone(sound),
+            None => {
+                let sound = Arc::new(
+                    Sound::new(samples.clone(), 1, grain.sound.sample_rate())?
+                        .with_pan_volume_gain(gain),
+                );
+                self.sounds.insert(key, Arc::clone(&sound));
+                sound
+            }
+        };
+        Ok(Some(Layer {
+            sound,
+            looping: grain.sound.is_looping(),
+            delay: f64::from(grain.tick) / ticks_per_second,
+            angle: grain.angle,
+            bend: grain.bend.map(|draw| Bend {
+                draw,
+                down: grain.sound.bend_down,
+                up: grain.sound.bend_up,
+            }),
+        }))
+    }
+}
+
+/// A cue whose list repeats, ready to be played for as long as it is held.
+///
+/// The list itself is an [`oag_formats::sblk::runner::Runner`]; every waveform
+/// it can key on is decoded here, once, so a tick never decodes.
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub(super) runner: Runner,
+    /// The layer each key-on command starts, by its command index.
+    pub(super) layers: BTreeMap<usize, Layer>,
+    pub(super) ticks_per_second: f64,
+}
+
+/// `name` as a [`Program`], when the title's tick is measured, the list is
+/// one a runner runs and every waveform it keys on decodes and pans.
+///
+/// # Errors
+///
+/// A waveform the list reaches does not decode.
+pub(super) fn program(
+    bank: &Bank,
+    name: &str,
+    tick: SequenceTick,
+) -> anyhow::Result<Option<Program>> {
+    let Some(ticks_per_second) = tick.ticks_per_second() else {
+        return Ok(None);
+    };
+    let Some(runner) = bank.cue_named(name).and_then(|cue| bank.cue_runner(&cue)) else {
+        return Ok(None);
+    };
+    let mut decoder = Decoder::default();
+    let mut layers = BTreeMap::new();
+    for grain in runner.key_ons() {
+        if pan_of_angle(grain.angle).is_none() {
+            return Ok(None);
+        }
+        let Some(layer) = decoder.layer(bank, name, grain, ticks_per_second)? else {
+            return Ok(None);
+        };
+        layers.insert(grain.sound.command, layer);
+    }
+    Ok(Some(Program {
+        runner,
+        layers,
+        ticks_per_second,
+    }))
 }
 
 /// Where the voices of one play go: gain and pan from the cue's placement.
