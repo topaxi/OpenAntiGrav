@@ -217,6 +217,12 @@ impl Shake {
         self.timer > 0.0
     }
 
+    /// The magnitude the shake was armed with, before the envelope.
+    #[must_use]
+    pub fn magnitude(&self) -> f32 {
+        self.magnitude
+    }
+
     /// The envelope's value at `progress` (`0..1` through the shake's
     /// duration), piecewise-linear between [`ENVELOPE_POS`]'s three keys.
     fn envelope(&self, progress: f32) -> f32 {

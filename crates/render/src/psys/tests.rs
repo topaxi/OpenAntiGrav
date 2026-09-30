@@ -55,8 +55,10 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             atlas: Atlas::SINGLE,
             frames: FrameAdvance::Still,
             sheet_rect: None,
+            template: false,
         }],
         roots: vec![0],
+        skipped_templates: 0,
     })
 }
 

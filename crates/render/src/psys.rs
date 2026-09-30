@@ -313,6 +313,8 @@ pub struct EmitterSpec {
     /// `[u0, v0, u1, v1]`; `None` until a library places it, and for every
     /// emitter drawn with the procedural profile.
     pub sheet_rect: Option<[f32; 4]>,
+    /// Built from a sprite template, not an emitter record - see [`template`].
+    pub template: bool,
 }
 
 /// A parsed `.pob` ready to play: the root emitter first, then the tree
@@ -327,6 +329,8 @@ pub struct Effect {
     /// Which emitters start on [`System::ignite`]: the root and its sibling
     /// chain, but not a child, which starts when its parent's particle does.
     roots: Vec<usize>,
+    /// See [`Effect::skipped_templates`].
+    skipped_templates: usize,
 }
 
 /// Something in a `.pob` this module cannot play.
@@ -435,11 +439,14 @@ impl Effect {
         }
         let roots = (0..emitters.len()).filter(|&i| !is_child[i]).collect();
 
-        Ok(Self {
+        let mut effect = Self {
             name: system.name,
             emitters,
             roots,
-        })
+            skipped_templates: 0,
+        };
+        effect.add_templates(&records, scale);
+        Ok(effect)
     }
 
     /// The emitters [`System::ignite`] starts.
@@ -581,6 +588,7 @@ impl EmitterSpec {
             atlas: Atlas::of(record),
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
             sheet_rect: None,
+            template: false,
         })
     }
 }
@@ -1745,37 +1753,15 @@ fn sphere_direction(rng: &mut Rng) -> Vec3 {
     Vec3::new(r * cos_p, r * sin_p, z)
 }
 
-/// Six vertices - two triangles - for one camera-facing quad.
-fn quad(
-    centre: Vec3,
-    right: Vec3,
-    up: Vec3,
-    cap: f32,
-    colour: [f32; 3],
-    alpha: f32,
-) -> [GpuVertex; 6] {
-    let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
-        position: (centre + right * sx + up * sy).to_array(),
-        normal: [0.0, 0.0, 1.0],
-        colour: [colour[0], colour[1], colour[2], alpha],
-        texcoord: [u, v],
-        // The `lit` slot is repurposed by this pipeline: particles are
-        // emissive (never lit by the mesh rig), so it carries the cap
-        // fraction the fragment profile needs - see `sparks.wgsl`.
-        lit: cap,
-        ..bytemuck::Zeroable::zeroed()
-    };
-    let bl = corner(-1.0, -1.0, 0.0, 1.0);
-    let br = corner(1.0, -1.0, 1.0, 1.0);
-    let tl = corner(-1.0, 1.0, 0.0, 0.0);
-    let tr = corner(1.0, 1.0, 1.0, 0.0);
-    [bl, br, tl, br, tr, tl]
-}
-
 mod pipeline;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, MAX_VERTICES, Pipeline};
 
 mod riding;
+
+mod quad;
+use quad::quad;
+
+mod template;
 
 #[cfg(test)]
 mod tests;

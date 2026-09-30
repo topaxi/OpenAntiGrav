@@ -1020,3 +1020,23 @@ the segment walk was not stepped. `ParticleSystem_PrepareResource_q` bakes the
 channels, prepares the textures, registers the atlas grid in a global list
 and recurses into the child, death and sibling records; the list's reader is
 not traced, hence the `_q`.
+
+### The instance initialiser and the sprite templates (2026-09-30)
+
+`FUN_088f58a4` (`0x088f58a4`, **`ParticleSystem_InitInstance`**, confidence 80)
+is what turns a resource into a live emitter instance: it copies the matrix,
+sets `dt`-to-ticks, splits `+0x9a0` into the atlas grid, calls
+`ParticleSystem_DeriveScaledParams`, recurses into the `+0x94c` sibling, and -
+the part nothing had read - **makes one particle per sprite template** in the
+list at `+0x9a8`, gated on `+0x9a4`. The record layout, the corpus and what is
+played are in [pob.md](../../../formats/pob.md), "The sprite templates at
+`+0x9a4`/`+0x9a8`". Severity multiplies a template's size like any particle's
+(`shazam` `3.9 * 2.4 = 9.36`, live).
+
+`ParticleSystem_DrawParticle` (`0x089186bc`) reads a template's render mode at
+record `+0x874` and its blend class at `+0x878`, and binds the record's own
+texture words at `+0x890`.
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x088f58a4` | `ParticleSystem_InitInstance` | 80 |

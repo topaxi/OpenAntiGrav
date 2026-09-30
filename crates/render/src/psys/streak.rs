@@ -65,6 +65,7 @@ impl Effect {
             spec.streak = StreakDraw::Procedural;
             spec.frames = super::FrameAdvance::Still;
         }
+        self.mute_templates();
     }
 }
 

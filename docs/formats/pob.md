@@ -1272,3 +1272,56 @@ ones that animate - `hi > 0` and a grid of more than one frame - are:
 - `WO_PLASMA_HEAD`.
 
 The PS2 and HD corpora parse unchanged (`pob_ground_truth.rs`).
+
+### The sprite templates at `+0x9a4`/`+0x9a8` - 2026-09-30
+
+An emitter can carry **sprite templates**: records the instance turns into one
+particle each the moment it exists. Found off a live struck craft (a
+`ParticleSystem_DrawParticle` log naming two particles, `shazam` and `glow`,
+that no emitter in the tree owned), then read off the instance initialiser
+`FUN_088f58a4` (`ParticleSystem_InitInstance`, confidence **80**):
+
+```c
+if (res->+0x9a4 != 0) {                       /* a gate, not a count */
+    for (r = res->+0x9a8; r != 0; r = r->+0x8cc)
+        list_push(instance->+0x1b0, InitParticleFields(alloc(0x80), r, instance));
+}
+```
+
+`+0x9a8` and the record's `+0x8cc` are resource-base-relative offsets, the same
+convention `+0x94c` uses. The record is **not an emitter**; `0x900` bytes, and
+confidence **85** for each field below, every one matched against the live
+particle:
+
+| offset | field | evidence |
+| --- | --- | --- |
+| `+0x00` | name (`shazam`, `glow`, `ring`, `BANG`, `PLASMA_GLOW`, `shazzam`...) | the live log |
+| `+0x10` | size channel, the emitter's channel-block format | `shazam`: `3.9` held to 0.287, then to 0; live `9.36 = 3.9 * 2.4` |
+| `+0x1d0` | alpha channel, `0..255` | live colour alpha `ff` while its hold lasts |
+| `+0x390` | roll channel | read by `InitParticleFields` |
+| `+0x470` | 256-entry colour table, walked over the life | `glow`'s `fff5f5ff` to `ffe3f2ff` over 15 of 40 ticks |
+| `+0x874`, `+0x878` | render mode index, blend class (`2`: additive billboard) | `ParticleSystem_DrawParticle`'s reads |
+| `+0x880`, `+0x884` | atlas grid, flags | `InitParticleFields` |
+| `+0x888`, `+0x88c` | lifetime centre and spread, ticks | `shazam` 6, `glow` 40; live |
+| `+0x8cc` | next record | the initialiser's loop |
+
+The other two channel blocks (`+0xf0`, `+0x2b0`) are constant in every record
+read. **A channel's `period` is a loop in ticks** (the `glow`'s is 10 over its
+40-tick life): the live size peaked at ticks 2-3 and again at 12-13, `v` at
+`fract(age / 10)`. The sprite is the parent emitter's own; both records point at
+the pool the emitters do.
+
+**Where they are.** 28 on the PSP disc, on 20 effects (31 in the PS2 port's, unread): the collision sparks'
+`shazam` (on `WO_SHIP_COLL_SPARK`) and `glow` (on the `_TRAIL`), the Plasma's
+`PLASMA_GLOW` (half-size 36), the Mine's `ring` and `BANG`, the Missile's `glow`
+and `booga` (72 to 100), the Quake's and the Repulser's `shazzam`, the Shuriken's
+`glow`, the ship explosions' `Glow`, the absorb effect's `glow`. **None of it
+was drawn before this**: the parser never reached them. The struck hull's warm
+envelope in the original is this pair. Read by `oag_vex::pob::initial`,
+played by `oag_render::psys::template`; pinned by
+`crates/assets/tests/pob_initial_particles_ground_truth.rs`.
+
+**Not played:** a template on an emitter that is itself a child (it would start
+with the child's own instances; `Effect::skipped_templates` counts them), and
+the two constant channels. **The PS2 and HD files are muted**: the layout is
+read off Pulse's PSP executable alone.

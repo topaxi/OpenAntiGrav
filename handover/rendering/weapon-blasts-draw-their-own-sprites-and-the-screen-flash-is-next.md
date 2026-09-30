@@ -136,6 +136,8 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
 
 ## Next Steps
 
+- **Effects that gained sprite templates 2026-09-30** (Plasma, Mine, Missile, Quake, Repulser, Shuriken, absorb, ship explosions; see the hull-sparks thread): Plasma, Mine and the Quake were re-shot against the original and read right, the others were not.
+
 - Play the craft explosion's own effects and shake off the triggers in
   `screen-flash-callers.md`, and port the destroy camera: the player's state-5
   wash is left out until then (its falloff is measured against that camera).
