@@ -90,6 +90,12 @@ the `6.0` are untouched.
   single-seeded run as contact evidence.** There `grounded` is `1.0` on all 2,977
   ticks and every disagreement points one way, which is that same drift.
 
+- **Re-measured 2026-09-30 after two fixes elsewhere, and unchanged.** The
+  replay now arms speed pads and the airbrake's forward term is no longer 100x
+  weak (see [engine.md](../../docs/ghidra/functions/psp-pulse-usa/engine.md#the-raw-steerx-is-on-the-100-scale-too));
+  at `--reseed 60` ours still lifts off at 1606 against the original's 1595.
+  No pad falls in the 1560-1620 window, so neither fix was a candidate here.
+
 ## Next Steps
 
 - **The next target is `oag_physics::wall::resolve` around tick 1583, not a

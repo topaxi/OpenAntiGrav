@@ -961,6 +961,15 @@ these are **reset rather than carried**, because the capture does not have them:
 | `stun_timer` | not stunned - true on every capture so far, and checked |
 | `mag_lock_blend`, `mag_contact` | no magstrip hold |
 
+One field is **restored rather than reset**, since 2026-09-30: `pad_timer` and
+`pad_direction`, the speed-pad boost. No capture records them, but they are a
+pure function of the recorded positions and `dt`, so the replay walks the
+recording through the same swept pad test and the same timer rule
+(`oag_physics::engine::speedup_pad` itself) and seeds each window with what the
+original was carrying. A window that opens mid-boost keeps its boost;
+`pad_crossing_ground_truth.rs` pins that at five-tick reseeds, where a reset
+timer comes out about 10 % short of the recorded gain.
+
 So a window that begins one tick after the original landed starts as though it
 had not, and `--reseed 12` would assert that five times a second. Choose `N`
 large enough that a window is mostly *simulation* rather than mostly
@@ -1233,6 +1242,33 @@ Scored with `--script-lead 2`:
 | Position, ticks 0-255 (this capture's own clean window) | 47.76 max (tick 255) / 13.28 mean | - |
 | Position, whole run | 1,245 at tick 1,628, growing | **28.86** at tick 1,739, bounded |
 | Orientation, worst axis | - | **0.4858** rad at tick 1,129, bounded |
+
+> **Superseded 2026-09-30: the 44.1 below was two bugs, and the clean window
+> now tracks to 4.6 units at tick 240.** Neither was the force law's shape.
+> The replay never set `Environment::pad_hit`, so the speed pad the original
+> crosses at tick 161 (forward acceleration 31.7 to 273.2 units/s^2, eight
+> crossings over the lap) gave our craft nothing; and
+> `oag_physics::airbrake::evaluate` multiplied its forward `drag` term by
+> `steerX` on `-1..=1` where the original reads it on `+/-100`
+> ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-raw-steerx-is-on-the-100-scale-too)).
+> Re-measured on this capture, `--script-lead 2`:
+>
+> | Single-seeded position error | before | pads fixed | both fixed |
+> | --- | ---: | ---: | ---: |
+> | tick 120 | 3.69 | 3.69 | **0.94** |
+> | tick 180 | 17.42 | 11.00 | **3.19** |
+> | tick 240 | 43.91 | 14.94 | **4.63** |
+> | first tick over 5 units | 136 | 136 | **258** (after the wall at 256) |
+> | first tick over 10 units | 171 | 173 | **404** |
+>
+> Under `--reseed 60` the whole-lap maximum is unchanged (it sits on wall
+> events near tick 1,139 and 1,739), but the typical window halves: median
+> position error 0.74 to 0.35 units on this capture, and mean 0.21 to 0.11 on
+> `talons-junction-time-trial-lap.csv`. The one-tick localisation that found the
+> airbrake term: with an airbrake held into a turn the original kept about
+> `0.19 * speed` units/s^2 of forward push our step lost, on every such tick,
+> and on no tick without one. `crates/trace/tests/lap_window_ground_truth.rs`
+> fails if either fix is dropped.
 
 The ticks-0-170 row is consistent with 2026-07-29's 6.54 max / 2.41 mean -
 similar order of magnitude on a different lap through the same opening

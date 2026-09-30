@@ -630,6 +630,40 @@ something written elsewhere:
   function's own ramp output). Unifying the two is a natural-looking tidy-up
   that would diverge; `crates/physics/src/airbrake.rs` pins it with a test.
 
+#### The raw steerX is on the 100 scale too
+
+**`*(craft+0x78) + 0x0` holds the stick on `+/-100`, so the `drag` term's
+`|steerX|` is `100` at full deflection, not `1`.** Confidence **92**: an
+instruction-level read, a runtime fit, and a one-tick capture residual, each
+independent of the others.
+
+- **The read.** `Ship_UpdateSteering` loads the same field
+  (`0x088487a0: lwc1 f14,0x0(a1)`, `a1 = *(craft+0x78)`) and compares it
+  straight against the ramped state `craft+0x2c0`
+  (`0x088487b8: c.le.s f14,f15`) with no scale between them. Every capture shows
+  `craft+0x2c0` ramping out to `+/-100` (and briefly past it, which the
+  falloff-back branch then corrects), so its target is on the same scale. The
+  sibling `+0x10` pitch axis was measured live at `+/-100` ([the pitch
+  axis](#the-pitch-axis-read-at-runtime)).
+- **The fit.** [cornering-ground-truth.md](../../../physics/cornering-ground-truth.md)
+  measured this term at `1.03`-`1.07` of the read value with `steerX` recovered
+  as `+/-100` (`scripts/trace-cornering.py`'s `steer_targets`).
+- **The residual.** Seeded from `talons-junction-clean-lap.csv` one tick at a
+  time, with one airbrake at `100` and the stick held, the original's forward
+  acceleration exceeded our step's by `0.17`-`0.19 * speed` units/s^2 - the full
+  term is `speed * 100 * 2.0 * 100 * 1e-5 = 0.2 * speed` for this handling
+  file - and by nothing on ticks without an airbrake.
+
+`crates/physics/src/airbrake.rs` multiplied by `ShipControls::steer_x` on
+`-1..=1` from the day the term was written until 2026-09-30, so the one term
+this page records as runtime-confirmed ran **100x weak** in the port, and a
+craft braking one side into a corner lost speed the original keeps. Fixed by
+scaling the axis by `CONTROL_RANGE` at the use site, the way `engine.rs`
+already does for the pitch axis. Effect on the reference lap, single-seeded:
+position error at tick 240 from 14.9 to 4.6 units (with the replay's speed
+pads also fixed; see [oag-trace.md](../../../tools/oag-trace.md)). The AI flies
+the same step, so it brakes into corners with the same, stronger push.
+
 Also visible here and consistent with the accumulator survey below: the whole
 block writes `.xyz` of the world force and only `.y` of the angular-local
 accumulator - `0x0884cf6c` stores a single word into the `.y` lane of a quad
