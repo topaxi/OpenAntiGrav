@@ -101,7 +101,8 @@ impl Race {
         );
         let ribbon = ribbon.get_or_insert_with(|| oag_render::beam::Ribbon::new(rng));
         let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
-        let at = ribbon.energy_point(owner, target, beam.range);
+        let spline = &self.sim.spline;
+        let at = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
 
         // `LEACHENERGY`: the same pulse block that re-spawns
         // `WO_LEACHBEAM_ENERGY` below, per `LeachBeam_Advance`'s own reading
@@ -270,7 +271,8 @@ impl Race {
             range: beam.range,
             alpha,
         };
-        oag_render::beam::build(ribbon, &frame)
+        let spline = &self.sim.spline;
+        oag_render::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
     }
 
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling

@@ -256,6 +256,32 @@ impl Spline {
         best.map(|(index, distance)| (index, &self.samples[index], distance))
     }
 
+    /// What `AiTrack_LocatePosition(100.0, track, &frame, position, ...)` hands
+    /// `LeachBeam_KeepInTrack`: the nearest sample's frame, in the running
+    /// game's **lifted** form (`pos -= 3.0 * down`, see [`Self::track_sample`]),
+    /// or `None` when nothing lies within `100.0`.
+    ///
+    /// **Chosen, not measured:** `100.0` is the call's first argument, read as
+    /// a search radius, and the frame is the nearest of four samples a segment
+    /// rather than the original's own interpolation along the segment.
+    #[must_use]
+    pub fn tube_frame(&self, position: Vec3) -> Option<oag_render::beam::TubeFrame> {
+        /// `AiTrack_LocatePosition`'s first argument in `LeachBeam_KeepInTrack`.
+        const LOCATE_RADIUS: f32 = 100.0;
+        let (_, sample, distance) = self.nearest(position)?;
+        if distance > LOCATE_RADIUS {
+            return None;
+        }
+        let track = Self::track_sample(sample);
+        Some(oag_render::beam::TubeFrame {
+            pos: track.position,
+            down: track.down,
+            lateral: Vec3::from_array(sample.lateral),
+            half_width_left: sample.half_width_left,
+            half_width_right: sample.half_width_right,
+        })
+    }
+
     /// Distance from `position` to the nearest sample, or `None` on an empty track.
     ///
     /// Distance to a *sample*, not to the curve: at four samples per segment the two
