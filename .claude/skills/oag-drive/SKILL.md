@@ -15,12 +15,14 @@ the work in isolated worktrees.
 
    | model | slots |
    | --- | --- |
+   | haiku | 0.5 |
    | sonnet | 1 |
    | opus | 2 |
 
    Explain in one line: the budget caps *concurrent* members, an opus member
    costs two, so a budget of 3 is either three sonnets or one opus and one
-   sonnet. You are excluded from the budget.
+   sonnet. You are excluded from the budget. Haiku is only for purely
+   mechanical `oag-docs` sweeps (see "The roster").
 
 2. **Ask how many slots to drive** with `AskUserQuestion`. Offer 2, 3 and 4, and
    say what each means in practice (2 is easy to supervise; 3 is the usual
@@ -35,7 +37,7 @@ the work in isolated worktrees.
    lead immediately regardless of the tick, so nothing waits on it:
 
    > `1h Check subagent slot occupation and status. Run ListAgents and total the
-   > running cost (sonnet 1 slot, opus 2, budget N). For each finished member:
+   > running cost (haiku 0.5 slot, sonnet 1, opus 2, budget N). For each finished member:
    > verify its diff, merge into main, run the right gate, then remove its
    > worktree and branch. Only spawn a replacement when usage is under N, then
    > fill to N - never replace one-for-one. Keep lanes disjoint by Ghidra binary
@@ -191,34 +193,51 @@ touching the tail that actually sets the wall clock.
 - **Prefer player-facing value.** The user's standing instruction. A pass that
   produces only another analysis document is a weak pass.
 
+## The roster
+
+Spawn every member as a named member (no `isolation` flag) of one of these
+agent types, defined under `.claude/agents/`. Each carries its role's
+guidance and tells the member to read
+[`member-rules.md`](member-rules.md) first. That file holds the shared
+boilerplate that used to be pasted into every brief: step zero, safety on a
+shared machine, the `flock -o` gate, commits and the report format.
+
+| agent | model / effort | use for |
+| --- | --- | --- |
+| `oag-re` | opus / high | recovering behaviour from an executable in Ghidra: decompile, name, verify live, evidence pages |
+| `oag-wire` | sonnet / xhigh | ready-to-wire threads: the RE is done, wire it so a player sees or hears it |
+| `oag-format` | sonnet / xhigh | a file family to decode: census, reader, every-file ground truth, format page |
+| `oag-capture` | sonnet / high | a question only the running original can answer: PPSSPP, PCSX2 or RPCS3 measurement |
+| `oag-docs` | sonnet / medium | docs and handover audits with no code logic change; spawn with `model: haiku` (0.5 slot) only for purely mechanical sweeps such as link fixes or index cleanup |
+
+Pick by the lane's **main output**, not by its subject. A lane that is mostly
+wiring with one small decompile is `oag-wire`, and the member reads the RE
+rules in `oag-re`'s file if it needs them. Overriding `model` at spawn time
+works (a hard RE lane on sonnet to save a slot, say); say so in the report.
+Sonnet at xhigh is the default workhorse. The maintainer found xhigh a
+significant improvement for Sonnet 5.5 on 2026-09-30.
+
 ## The brief
 
-Members inherit none of your context. Every brief needs:
+Members inherit none of your context. `member-rules.md` covers the shared
+rules, so the brief carries only what is specific to the lane:
 
-1. **Step zero**: `git merge main`, then `just link-data`. Worktrees have been
-   created from a stale base; members that skipped this reported numbers that did
-   not reproduce.
-2. **Build discipline**: build once, avoid `cargo build --release` unless needed,
-   and **stop and report** on `No space left on device` or `rustc-LLVM ERROR: IO
-   failure on output stream` rather than retrying - those are not flaky compile
-   errors. Do not have members check or report free space.
-3. **The lane**, and who owns the lanes they may not touch.
-4. **What is already established**, with a "do not re-derive this" marker. Cite
+1. **The lane-specific values `member-rules.md` refers to**: the `<lane>` name
+   (worktree, branch and scratch directory), the member's Xvfb display `:9N`,
+   and any emulator ports. Say which displays and ports other members hold.
+2. **The lane**, in priority order, and who owns the lanes they may not touch,
+   by crate and by Ghidra function set.
+3. **What is already established**, with a "do not re-derive this" marker. Cite
    the scratch reports and doc pages by path.
-5. **The hard rules** that apply (see below).
-6. **The gate and the current baseline failure count**, so a member can tell its
-   own breakage from inherited red. State the exact expected failures by name.
-   **Give them the `flock -o`-wrapped commands, not the bare ones** (see
-   "Serialise gates with `flock`"), and say in the brief that the gate may sit
-   for minutes before it starts because another member holds the lock - that is
-   correct behaviour, not a hang, and they must wait it out rather than
-   reaching for a bare `just`.
-7. **Commit early and often; do not merge to main - the coordinator merges.**
-8. **Do not end a turn waiting for a background job to notify you.** This has
-   happened to sixteen members and not one was ever woken; every case needed a
-   manual resume. Tell them to read the job's output file directly.
-9. **Report format**: full findings to a named scratch path, return only that
-   path plus at most 15 lines. Long returns silently fail to arrive.
+4. **The hard rules below that apply** and are not already in
+   `member-rules.md`, such as the regression gate or golden hashes for a
+   racing lane.
+5. **The baseline failure count**, naming the exact expected failures, so a
+   member can tell its own breakage from inherited red.
+
+If a new failure mode shows up mid-drive, relay it to the running members at
+once, then add it to `member-rules.md` so the next spawn inherits it. Don't
+bury it in one brief.
 
 ## Hard rules to put in briefs, as they apply
 
