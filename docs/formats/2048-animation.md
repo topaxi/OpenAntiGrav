@@ -273,14 +273,15 @@ one property:   { u32 tag; u32 pad; u64 offset of the value }
 The id and parent arrays, the matrices and every value stay 4-byte. On
 `tech_de_ra` (168 nodes) the arrays and the matrix table close on the section's
 length to the byte. Over all 110 skeletons of Omega's five base archives
-(`crates/rcs/tests/omega_animation_ground_truth.rs`) **every one of the 20,102
+(`crates/rcs/tests/omega_animation_ground_truth.rs`) **every one of the 14,823
 written model bind matrices composes exactly from the skeleton's scale,
 rotation and translation through the hierarchy** - the closure that pins the
 parent array, the root marker, the parent matrices and the composition order at
 once. Not every model node is in the skeleton (`tech_de_ra`'s model lists
 1,702 against its 168), so "every node is named" is the Vita's closure and not
-this one; the nodes with **no** matrix of their own, 12,310 of them on the
-2048 Zone circuits, **are** all named, which is what places them.
+this one; the nodes with **no** matrix of their own (12,310 mesh objects hang from
+them, on the 2048 Zone models and a few props) **are** all named, which is
+what places them.
 
 ## `.rcsanimclip`
 

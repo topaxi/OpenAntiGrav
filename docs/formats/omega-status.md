@@ -378,7 +378,7 @@ a PS4 mount them.
   and is counted (`Report::unplaced`): 3,220 submeshes on `data00` and 15,035
   on `data04` while the skeleton did not decode, all in 2048's `trackZone`
   (Zone mode) models and a few props on `cathedral`/`mall`/`tower`. With the
-  skeleton read there are none: the skeleton names every one (below).
+  skeleton read the census finds none: the skeleton names every one (below).
 - **Skeleton and clip decode, and the scenery moves** (`omega-catchup`,
   2026-09-30). The PS4's are the Vita's files with 8-byte offsets
   ([`2048-animation.md`](2048-animation.md#rcsskeleton)); `tech_de_ra` is 168
@@ -387,9 +387,11 @@ a PS4 mount them.
   matrix. The camera droid `CamBot_New2` behind the start line is upright and
   facing the grid at tick 0 and has dropped and turned away by tick 1800
   (`data/scratch/omega-catchup/droid-crop.png`, from `droid-t0.png` and
-  `droid-t1800.png`, the same camera pose). Every node with no matrix of its
-  own on Omega's base archives (12,310, all on 2048's Zone models and a few
-  props) is named by its skeleton, so **none is left unplaced any more**. What is
+  `droid-t1800.png`, the same camera pose). The 12,310 mesh objects on nodes with no matrix of their own across Omega's base
+  archives (2048's Zone models and a few props) are all on nodes its skeleton
+  names, so the census leaves none unplaced; **`Report::unplaced` itself was not
+  re-measured through the render path on such a model** (no Omega race loads a
+  Zone model). What is
   *not* checked: the rotors' spin and the crowd against a reference (nothing
   to compare with), and the shader's node-table ceiling on the Zone models,
   which no race here loads.
@@ -435,12 +437,23 @@ a PS4 mount them.
   (`every_reversed_circuit_pairs_with_its_reversed_collision`). `tech_de_ra`
   reversed: 12,880 vertices, 20,757 triangles, 29,104 k-d nodes, four colliders,
   and the craft rides it (`grounded 1.0`, 27.1 units/s after 300 ticks,
-  `data/scratch/omega-catchup/rev-t300.png`). The other titles are untouched:
-  Pulse, Pure and HD author collision in the `.vex`, so the sibling is never
-  asked. 2048's base and DLC packages ship `track_reversed.vex` (4 in
-  `data.psarc`) beside **no** `track_col_reversed.col` (only the 14 forward
-  `track_col.col`), so its reversed circuits still find no collision, as before;
-  whether they are meant to reuse the forward one is not measured here.
+  `data/scratch/omega-catchup/rev-t300.png`). **This also changes 2048, on
+  purpose.** Its packages ship `track_col_reversed.col` for 12 of their
+  reversed circuits (3 in the base package, 5 in `dlc1`, 4 in `dlc2`; an earlier
+  version of this note said none, from a listing cut short). Of the 12
+  `track_reversed.vex` a race can name, five author their collision in the
+  `.vex` (Anulpha Pass, Metropia, Talon's Junction, Ubermall, Vineta K) and the
+  sibling is never asked, so those are unchanged; **five had no collision at
+  all and now load the authored one** (Amphiseum, Modesto Heights, Sebenco
+  Climb, Sol 2, Tech De Ra - the last with the same 12,880 vertices as Omega's,
+  and a 2048 race on it grounds, `grounded 1`, 23.1 units/s at tick 300); two
+  (Chenghou Project, Moa Therma) do not load for an older reason (`decoded to no
+  triangles`). Pulse, Pure and HD author collision in the `.vex` and are
+  unaffected. The "before" for those five is read from the old `sibling_name`,
+  not observed: this was not re-run on the old tree. If 2048 must stay
+  byte-identical, the pairing is one branch in `kdcol::sibling_name` to gate on
+  the title; it was left on because a reversed race with no ground is a defect
+  and the file is the disc's own.
 - **Defaults are chosen, not measured:** `tech_de_ra` and `ag_systems`. Zone,
   boost, speed classes and every per-team variant table stay `None`.
 
