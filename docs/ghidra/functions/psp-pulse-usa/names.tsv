@@ -1156,3 +1156,4 @@
 0x088407b0	function	Ship_SpawnExplosionBig	80	screen-flash-callers.md
 0x08876300	function	Repulser_SpawnWaves	62	screen-flash-callers.md
 0x088f58a4	function	ParticleSystem_InitInstance	80	particle-system.md
+0x088f7e64	function	ParticleSystem_UpdateParticleFields	85	particle-system.md

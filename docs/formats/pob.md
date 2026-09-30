@@ -1305,11 +1305,31 @@ particle:
 | `+0x888`, `+0x88c` | lifetime centre and spread, ticks | `shazam` 6, `glow` 40; live |
 | `+0x8cc` | next record | the initialiser's loop |
 
-The other two channel blocks (`+0xf0`, `+0x2b0`) are constant in every record
-read. **A channel's `period` is a loop in ticks** (the `glow`'s is 10 over its
-40-tick life): the live size peaked at ticks 2-3 and again at 12-13, `v` at
-`fract(age / 10)`. The sprite is the parent emitter's own; both records point at
-the pool the emitters do.
+**`+0xf0` is the sprite's stretch, and `+0x390` its roll - both played since
+2026-09-30.** `ParticleSystem_UpdateParticleFields` (`0x088f7e64`) turns the
+`+0xf0` block into the quad's aspect (`v > 0`: `1 + v`; `v <= 0`: size times
+`1 - v`, aspect `1 / (1 - v)`), and every template draws as class 3, a
+`ParticleSystem_DrawRotatedSprite` quad `aspect * size` wide and `size` tall,
+turned by the roll. Live on a struck craft: `shazam` aspect `1.500`, roll `0`
+(`+0xf0` = `0.5`); `glow` aspect `1.700` (`0.7`), roll `2 pi` falling as its
+nine-key channel says (flags `0x30`: angle, not rate, random start). The
+`+0x2b0` block is the atlas-frame rate, constant `1.0` and unused on a one-cell
+grid. Corpus: all 31 PSP templates are class 3 and author a `+0xf0` block - constant
+`0.5` on the `shazam`s, `0.7` on the `glow`s of the collision and death sparks,
+`1` on the Quake's `shazzam`, `5` on the Repulser's, `20` on the missile's
+`redbar`, `0.2` on the welder and fx-node glows, keyed on `BANG` (`1..20`) and
+the Plasma's `PLASMA_GLOW` (`0..1`), `0` elsewhere. A non-zero roll is authored
+on the sparks' `glow`s (keyed angle), the Missile explosion's `glow` (a constant
+rate of `1` rad per tick) and `booga` (keyed, `0..0.52`), and `redbar`
+(periodic, `0.03`). Flags at `+0x884`: `0x10` random start angle, `0x20` the roll
+channel is the angle, `0x08` a coin picks each particle's turning sense. See
+[particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md),
+"The per-tick field update". **A channel's `period` is a loop in ticks** (the
+`glow`'s is 10 over its 40-tick life): the live size peaked at ticks 2-3 and
+again at 12-13, `v` at `fract(age / 10)`. The sprite is the parent emitter's
+own; both records point at the pool the emitters do (the shared `orange_glow2`
+64x64 pool on the collision sparks - read off the live record's pixel and
+palette pointers).
 
 **Where they are.** 28 on the PSP disc, on 20 effects (31 in the PS2 port's, unread): the collision sparks'
 `shazam` (on `WO_SHIP_COLL_SPARK`) and `glow` (on the `_TRAIL`), the Plasma's
@@ -1322,6 +1342,10 @@ played by `oag_render::psys::template`; pinned by
 `crates/assets/tests/pob_initial_particles_ground_truth.rs`.
 
 **Not played:** a template on an emitter that is itself a child (it would start
-with the child's own instances; `Effect::skipped_templates` counts them), and
-the two constant channels. **The PS2 and HD files are muted**: the layout is
-read off Pulse's PSP executable alone.
+with the child's own instances; `Effect::skipped_templates` counts them).
+**The PS2 and HD files are muted**: the layout is read off Pulse's PSP
+executable alone. **A template's first draw is at age 0**: the instance's first
+update makes the particle and draws it before anything ages it (live: `glow`
+`0.75` then `3.18`, `shazam` `9.36` twice), so `oag_render::psys` skips the
+first tick's ageing for a template particle. An emitter's particles are not
+treated that way - unmeasured.

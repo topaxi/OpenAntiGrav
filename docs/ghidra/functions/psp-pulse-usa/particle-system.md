@@ -676,6 +676,15 @@ it was not available before.
 **Closed the same day: `particle+0x64` is a hard-coded `1.0f`, not a resource
 field at all.** Confidence **88**.
 
+> **Corrected 2026-09-30.** `1.0f` is only the *initial* store. The per-tick
+> field update `ParticleSystem_UpdateParticleFields` (`0x088f7e64`, below)
+> overwrites it every tick from the resource's `+0xf0` block, and a live
+> struck craft read `shazam` at `1.5` and `glow` at `1.7`. The search this
+> section ran for a store to `+0x64` covered `ParticleSystem_UpdateParticles`
+> and the initialiser, and missed the routine both of them call for the field
+> sampling. Whether an *emitter's* particles ever get a value other than `1.0`
+> is unread - see "Open" at the end of the new section.
+
 `ParticleSystem_InitParticleFields` (`0x088f79b4`) - the per-particle field
 initialiser, sitting immediately after `ParticleSystem_InitParticle` in the
 binary - writes it directly:
@@ -1040,3 +1049,62 @@ texture words at `+0x890`.
 | Address | Name | Confidence |
 | --- | --- | ---: |
 | `0x088f58a4` | `ParticleSystem_InitInstance` | 80 |
+
+### The per-tick field update, and what `particle+0x64` is (2026-09-30)
+
+`FUN_088f7e64` (**`ParticleSystem_UpdateParticleFields`**, `0x088f7e64`, confidence
+**85**) is the routine that samples a particle's channels. `ParticleSystem_InitParticleFields`
+calls it once with `dt = 0` as its last act, and the particle update calls it
+with the tick's `dt` for every live particle, *before* it takes the tick off the
+particle's life. So the state a frame draws was sampled at the age the particle
+had going **into** that frame: a particle born during the game logic is drawn
+at age 0 that frame, and at `1 / life` the next. (Live: `glow` half-size
+`0.75` then `3.18`; `shazam` `9.36` twice.) Per call, off the resource record
+(`res`, the derived layout every template is stored in):
+
+| Field written | Offset | From |
+| --- | --- | --- |
+| drawn half-size | `+0x30` | `res+0x10` block at the normalised age, times the instance severity |
+| colour RGB | `+0x34..0x36` | `res+0x470` table at `age * 255.999`, unless `res+0x870 == 2` |
+| colour alpha | `+0x37` | `res+0x1d0` block |
+| atlas frame | `+0x58` | the `res+0x2b0` block, accumulated (only when the grid has more than one cell) |
+| roll | `+0x5c` | the `res+0x390` block; see below |
+| **aspect** | **`+0x64`** | **the `res+0xf0` block**: `v > 0` stores `1 + v`; `v <= 0` multiplies the size by `1 - v` and stores `1 / (1 - v)` |
+
+**The roll law.** `res+0x394 == 3` (random mode): the angle advances by the
+rate chosen at spawn. Otherwise, with `res+0x884 & 0x20` **set** the channel's
+value times `dt` *is* the angle this tick (an absolute keyed angle), and
+**clear** it is a rate that accumulates into the angle, the other way for a
+particle whose spawn-time coin (`res+0x884 & 0x08`) came up odd. Flag `0x10`
+starts the angle at `Psys_RandFloatRange(0, 2 pi)`. The draw is
+`ParticleSystem_DrawRotatedSprite`: half-height `size`, half-width
+`aspect * size`, turned by the roll.
+
+**Measured on a struck craft** (PPSSPP, 2026-09-30, `ParticleSystem_DrawParticle`
+log, locators 0, 2 and 5, frame by frame):
+
+| Particle | Template block | Drawn |
+| --- | --- | --- |
+| `shazam` | `+0xf0` constant `0.5`, roll `0..0`, flags `0` | aspect `1.500`, roll `0.000` |
+| `glow` | `+0xf0` constant `0.7`, roll keyed `0..2 pi` over nine keys, flags `0x30` | aspect `1.700`, roll `6.28, 5.60, 4.81, 4.13, 3.35, 2.65, 1.91, 1.24` at ticks 0..7 |
+
+The glow's angles are the roll channel's keys at `tick / 40` times `2 pi`
+(`1.0` falling to `0.192` by key `0.174`, so `5.55` at tick 1 against the
+`5.60` read on a variable timestep).
+
+**Why it matters.** Both templates are drawn **stretched**: the `glow` is 1.7
+times wider than tall and turning, the `shazam` 1.5 times. A square quad of the
+same size shows 0.59 and 0.67 of the area, which is the brightness the port was
+missing once the camera and the pick sequence were matched. Every one of the
+31 PSP templates draws as class 3 and carries a `+0xf0` block.
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x088f7e64` | `ParticleSystem_UpdateParticleFields` | 85 |
+
+**Open.** 45 of the 76 PSP emitters draw as class 3 too, 23 of them author a
+roll (`WO_SHIP_COLL_SPARK_DAMAGE`'s own smoke root: random `0..0.105` rad per
+tick), and **none of that is played**: an emitter's flags live at a different
+word than a template's `res+0x884`, and which derived word each emitter flag
+becomes (and what feeds the derived `+0xf0` for an emitter) is unread. Capture
+`particle+0x5c` and `+0x64` of a live emitter particle first.
