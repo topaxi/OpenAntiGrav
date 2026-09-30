@@ -113,6 +113,18 @@ pub(super) fn upload_rgba(
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
+/// [`upload`], once per distinct texture across an open
+/// [`super::pipeline_cache::Scope`] - see
+/// [`super::pipeline_cache::cached_texture_view`].
+pub(super) fn upload_shared(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &std::sync::Arc<ModelTexture>,
+    blocks: bool,
+) -> wgpu::TextureView {
+    super::pipeline_cache::cached_texture_view(texture, || upload(device, queue, texture, blocks))
+}
+
 /// Uploads one [`ModelTexture`], in the form it came in.
 ///
 /// `blocks` is whether the device has `TEXTURE_COMPRESSION_BC`. Without it a

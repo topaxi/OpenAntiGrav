@@ -419,6 +419,9 @@ pub fn capture(
     // attachment whose size does not match the colour one is a validation
     // error, not a bad picture.
     let scene_size = presented.map_or((width, height), |state| state.scene_size);
+    // The same build cache the windowed launch opens (`main::stage`), so a
+    // capture builds - and measures - the scene the way a player's does.
+    let cache_scope = mesh_render::BuildCacheScope::open();
     let mut scene = Scene::new(
         &device,
         &queue,
@@ -459,6 +462,9 @@ pub fn capture(
         shadows,
         shadow_hulls,
     )?;
+    let (texture_calls, texture_hits) = cache_scope.texture_counts();
+    log::info!("race scene build cache: texture upload {texture_hits}/{texture_calls} reused");
+    drop(cache_scope);
     scene.attach_ripples(ripples);
     scene.prepare_ghost(
         &device,

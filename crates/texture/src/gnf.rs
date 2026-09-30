@@ -497,3 +497,6 @@ mod search_tests;
 
 #[cfg(test)]
 mod micro_tile_tests;
+
+#[cfg(test)]
+mod chain_tests;

@@ -320,3 +320,52 @@ impl ModelTexture {
         }
     }
 }
+
+impl ModelTexture {
+    /// This texture's name and size with none of its texels.
+    ///
+    /// What a [`Model`](super::Model) keeps in a slot once the GPU holds the
+    /// picture: `label` and the dimensions stay for anything that reports on the
+    /// slot, and [`Self::cpu_bytes`] reads 0.
+    #[must_use]
+    fn released(&self) -> Self {
+        Self {
+            label: self.label.clone(),
+            width: self.width,
+            height: self.height,
+            texels: Texels::Rgba8(Vec::new()),
+            mip_count: self.mip_count,
+        }
+    }
+}
+
+impl super::Model {
+    /// Drops the CPU copy of every texture, keeping each slot occupied.
+    ///
+    /// **Call it once the model has been uploaded** (`mesh_render::build`):
+    /// after that the texels exist on the GPU and the model only needs the slot
+    /// to say a texture was decoded there. Left alone, a model keeps its whole
+    /// decoded set alive for the life of the race - Tech De Ra's was 2.3 GiB of
+    /// BC7 blocks a second time, and 6.8 GiB before those were passed through.
+    /// A slot stays `Some` so every count and `all(is_none)` check a caller
+    /// makes still reads what it did; a texture another owner still holds
+    /// (`Arc`) is freed when that owner lets go.
+    pub fn release_texels(&mut self) {
+        let release = |slots: &mut TextureSlots| {
+            let mut stubs: std::collections::HashMap<usize, std::sync::Arc<ModelTexture>> =
+                std::collections::HashMap::new();
+            for slot in slots.iter_mut().flatten() {
+                let key = std::sync::Arc::as_ptr(slot) as usize;
+                *slot = stubs
+                    .entry(key)
+                    .or_insert_with(|| std::sync::Arc::new(slot.released()))
+                    .clone();
+            }
+        };
+        release(&mut self.textures);
+        release(&mut self.lightmaps);
+    }
+}
+
+#[cfg(test)]
+mod tests;
