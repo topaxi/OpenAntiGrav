@@ -905,6 +905,8 @@ pub fn build(
         texture_binds.push(bind(&albedo, &lightmap, label));
     }
 
+    texture::log_census(model, blocks);
+
     let placeholder = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("placeholder"),
         size: std::mem::size_of::<Uniforms>() as u64,

@@ -171,6 +171,16 @@ pub enum Error {
         /// Blocks in the base level's own grid with no valid mode bit.
         count: usize,
     },
+    /// The bytes after the header are not exactly one surface's mip chain in
+    /// the tile-padded layout [`Texture::block_levels`] reads - a cubemap, an
+    /// array or a volume, or a file with trailing bytes. Refused rather than
+    /// read as its first surface, which would be a wrong picture.
+    ChainLayout {
+        /// Bytes one 2D chain occupies.
+        expected: usize,
+        /// Bytes the file holds past its header.
+        found: usize,
+    },
 }
 
 impl fmt::Display for Error {
@@ -188,6 +198,10 @@ impl fmt::Display for Error {
             Self::DataOutOfBounds { need, got } => {
                 write!(f, "pixel data needs {need} bytes, got {got}")
             }
+            Self::ChainLayout { expected, found } => write!(
+                f,
+                "the file holds {found} bytes past its header but one 2D mip chain is {expected}"
+            ),
             Self::CorruptBlocks { count } => write!(
                 f,
                 "{count} block(s) in the base level have no valid BC7 mode bit - refusing rather than decoding around missing bytes, see docs/formats/gnf.md"
@@ -434,6 +448,36 @@ impl Texture {
     pub fn decode(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
         decode::decode(self, blob)
     }
+}
+
+impl Texture {
+    /// The BC7 blocks of every mip level, untiled into row-major order and
+    /// still compressed - what a GPU with block compression takes as it is.
+    ///
+    /// One entry per level, base first, each `ceil(w/4) * ceil(h/4)` blocks of
+    /// 16 bytes. **Unlike [`Self::decode`] this refuses a corrupt block in
+    /// any level, not only the base**: a decoded picture can draw from its
+    /// base alone, but a chain with a hole in it would sample garbage at
+    /// distance.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Tiled`] for any tile mode but `Thin_1DThin`,
+    /// [`Error::UnsupportedFormat`] for anything but BC7,
+    /// [`Error::DataOutOfBounds`] for a blob shorter than its chain, and
+    /// [`Error::CorruptBlocks`] as above.
+    pub fn block_levels(&self, blob: &[u8]) -> Result<Vec<Vec<u8>>> {
+        decode::block_levels(self, blob)
+    }
+}
+
+/// Decodes one level of [`Texture::block_levels`] to RGBA8 texels.
+///
+/// For a device without BC support and for anything that wants to read the
+/// texels. `None` for a level shorter than `width` x `height` implies.
+#[must_use]
+pub fn decode_bc7_level(blocks: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
+    decode::bc7_level(blocks, width, height)
 }
 
 fn u32_le(data: &[u8], at: usize) -> u32 {
