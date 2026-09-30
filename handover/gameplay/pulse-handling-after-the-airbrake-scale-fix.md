@@ -28,8 +28,9 @@ they belong:
   `09_Track` 93.0 to 89.9, `07_Track` 52.9 to 50.0, `10_Track` 79.8 to 94.4,
   `05_Track` 86.6 to 81.2. Per-lap shield on `05_Track`: `1.8 1.9 90.0` to
   `2.0 1.8 2.4`.
-- **Open from that work: `07_Track` FLASH went `Died` to `Eliminated`** (contact
-  864 to 869, not traced), and **a craft that clips `05_Track`'s crest is never
+- **Open from that work: `07_Track` FLASH reads `Died` to `Eliminated`**, which
+  is a window artefact (a second wreck at tick 17834, 166 ticks before the cut,
+  respawn 167); and **a craft that clips `05_Track`'s crest is never
   rescued**: it slides back on a ~60-tick cycle for up to 5,000 ticks, never
   stopped two seconds and never far from the line, so neither rescue fires.
   That is race rules. Ace sits below Elite on four of five seeds in
@@ -61,5 +62,6 @@ they belong:
 2. Fit the no-airbrake forward residual against `speed^2` and `speed` over
    ticks 36-50 and 83-99 of the clean lap (airbrakes off, wall-free) to see
    whether it is the quadratic drag or the rolling resistance.
-3. Trace why `07_Track` FLASH now ends `Eliminated`, and give a craft that clips
-   `05_Track`'s crest lip a rescue (see the second open bullet).
+3. Give a craft that clips `05_Track`'s crest lip a rescue (see the second open
+   bullet). `bend_angle` flattens onto world Y; a past-vertical bank would need
+   the line's own frame.

@@ -156,9 +156,12 @@
 //! above lost come back - `05_Track` VENOM and FLASH and `14_Track` RAPIER
 //! `Died` to `CleanLap` - because the Ace no longer brakes 7 units/s at the
 //! foot of `05_Track`'s hill and arrives at its crest lip above the ~70 units/s
-//! that clears it. One row is worse: `07_Track` FLASH `Died` to `Eliminated`
-//! (contact 864 to 869, **not traced**; the circuit already `Died` on all four
-//! classes). Clean-lap times fell by 1-2 s on the circuits with a valley in
+//! that clears it. One row reads worse: `07_Track` FLASH `Died` to
+//! `Eliminated` (contact 864 to 869), which is **a window artefact, traced**:
+//! both trees wreck once mid-run (ticks 9539 and 9266) and the new one wrecks a
+//! second time at tick 17834, 166 ticks before the 18,000-tick window closes,
+//! and a respawn takes 167. It is the same drive with the wreck landing on the
+//! wrong side of the cut. Clean-lap times fell by 1-2 s on the circuits with a valley in
 //! them (`06_Track` and `09_Track` by up to 130 ticks), and `13_Track` RAPIER
 //! and PHANTOM took more contact (1129 to 1555, 641 to 1347; both `Died`
 //! before and after). Totals over the 48 rows: contact 17357 to 13834

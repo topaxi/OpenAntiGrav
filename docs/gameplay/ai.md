@@ -1,3 +1,23 @@
+`05_Track` VENOM and FLASH and `14_Track` RAPIER are `CleanLap` again. One row
+reads worse than before the airbrake fix, `07_Track` FLASH `Died` to
+`Eliminated` (contact 854 to 869), and it is **a window artefact**: both trees
+wreck once mid-run and the new one wrecks a second time at tick 17834, 166 ticks
+before the 18,000-tick window closes, while a respawn takes 167. `06_Track` and
+`09_Track` lap 1-2 s quicker on every class they were `CleanLap` on. `13_Track`
+RAPIER and PHANTOM took more contact (1129 to 1555, 641 to 1347), already `Died`
+either way; that is not explained by the change, which drops only three samples
+above 0.005 on that circuit's driven line.
+
+**Checked for real corners being discounted.** The world-Y flattening would
+misread a banked or past-vertical corner as a valley, so every sample the change
+took from above 0.01 to under half was listed on all twelve circuits (lone Ace,
+VENOM, the samples its driver actually reads). Every one has a chord with a
+climb of at least 0.06 (about 3.5 degrees); none is level ground, and the
+largest (`02_Track`, 0.034 over 60 samples at a 59-to-37 degree drop;
+`06_Track`, 0.028 over a steepening climb) are the foot of a slope. No evidence
+of a dropped banked turn, on those twelve lines. It is a world-Y approximation:
+a section that banks past vertical would need the line's own frame.
+
 # Opponent AI
 
 What drives the seven other craft. **A basic driver does, as of 2026-08-11**:
