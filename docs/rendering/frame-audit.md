@@ -272,7 +272,13 @@ own draws.
 **Result: absent.** Six dumps over four poses on one boot (`talon-fast` twice,
 `talon-mid`, `talon-mid2` twice, the start grid) and a cold second boot at the
 fast pose: no PRIM of any of the seven carries a roof signature (0 hits, not a
-near miss). Positive control, same method: 88 to 98 % of our static batches find
+near miss). A moving mesh's box changes with its rotation, so the absence was
+re-checked with numbers a rotation cannot change: **no dump holds a single
+143-vertex PRIM** (the slabs' main batch, in all four roof nodes), and the only
+22/35/71-vertex PRIMs whose longest vertex-to-vertex distance comes within 5 % of
+a slab's are a 35-vertex object at one fixed world box in three dumps taken
+seconds apart (principal extents 264 x 117 x 71 against the slab's 264 x 30 x 2.5,
+so not the slab, and not moving). Positive control, same method: 88 to 98 % of our static batches find
 their twin in the original's list (135 of 153 at `talon-fast`, 151 of 157 at the
 grid, 182 of 188 at `talon-mid2`, 265 of 271 on the second boot; 97 of 152 at the
 second fast dump, where the craft had drifted 5 units/s off the pose), so the
@@ -291,8 +297,9 @@ needs no trustworthy bound. Applying it to moving draws (frustum still exempt):
 | start grid (at rest) | 214 / 21 | 18 / 18 |
 | `talon-mid` (at rest) | 214 / 24 | 0 / 0 |
 
-Every moving batch the original submits survives the rule, and the sixteen roof
-batches go (16 roof draws before, 0 after, at all of the poses rendered). The
+Every moving batch whose signature the original's list contains survives the
+rule (the dropped ones are "no signature match", which for a moving batch is
+weaker than "not submitted"), and the sixteen roof batches go (16 roof draws before, 0 after, at all of the poses rendered). The
 original's own frame omits what its sections hide, and the section mask is
 authored data. **Confidence 75**: four poses on Talon's Junction, one circuit; the original's loader has not been read doing the
 walk (`docs/formats/track.md`), and the signature is a match by shape and not by
@@ -301,7 +308,7 @@ still exists (21 to 24 at the rest poses): the original frustum-culls by a real
 bound, which we cannot. At `talon-mid` the original draws no moving batch at all,
 so that pose confirms nothing for the rule.
 
-**Seen as a player.** `data/scratch/pulse-factory-roofs/b/cmp_fast0.png`: the
+**Seen as a player.** `data/shots/frame-audit/talon-fast/roofs-orig-before-after.png`: the
 original, ours before and ours after at the fast pose. The dark slabs left of the
 silo are gone and the grass, the silo and the trees read as the original's.
 

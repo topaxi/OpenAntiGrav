@@ -612,11 +612,12 @@ pub fn visible(
     // The authored section mask is structural - it keys on the draw's node,
     // not on where the geometry is - so it holds for a draw the shader moves
     // exactly as for a static one. **The original hides a moving mesh by its
-    // section too**: at four poses on Talon's Junction, every one of the 16
-    // to 78 moving draws the original's GE list contained was still drawn
-    // under this rule, while the rule dropped 133 to 193 of the 214 moving
-    // draws the original did not submit - among them the sixteen batches of
-    // the slab transports that drew as dark roofs beside the straight. See
+    // section too**: at four poses on Talon's Junction, every moving draw
+    // whose shape signature the original's GE list contained (16 to 78 of
+    // them) was still drawn under this rule, while the rule dropped 133 to
+    // 193 of the 214 moving draws with no signature match - among them the
+    // sixteen batches of the slab transports that drew as dark roofs beside
+    // the straight, absent from every dump by vertex count alone. See
     // `docs/rendering/frame-audit.md` section 3.
     if let Some(set) = visible_set
         && !set.allows(sections)
