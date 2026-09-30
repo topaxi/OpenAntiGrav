@@ -109,6 +109,13 @@ fn in_table(name: Option<&str>, y: f32) -> bool {
         name,
         Some("zonetopline" | "topbarcenter" | "boostimg" | "tablehighlight")
     ) || row_of(y).is_some()
+        || is_top_rule(y)
+}
+
+/// The anonymous right half of `zonetopline`, nested in it at the same `y` (91) as the
+/// named left half - a rule one pixel above the first row.
+fn is_top_rule(y: f32) -> bool {
+    (FIRST_ROW_Y - 1.0..FIRST_ROW_Y).contains(&y)
 }
 
 /// One `EndRace Results` draw list: the backdrop, then the layout's own fills,

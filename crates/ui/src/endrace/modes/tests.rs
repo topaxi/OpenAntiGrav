@@ -16,7 +16,9 @@ fn xml() -> String {
 <Text name="BigTopText"><Values idstring="ER_RES" x="240" y="19"></Values></Text>
 <Text name="Line1"><Values string="race complete!" x="240" y="50"></Values></Text>
 <Text name="table">
-<Image name="zonetopline"><Values x="0" y="91" width="240" height="1" Color1="0x00ffffff" Color2="0x00ffffff" Color3="0xffffffff" Color4="0xffffffff"></Values></Image>
+<Image name="zonetopline"><Values x="0" y="91" width="240" height="1" Color1="0x00ffffff" Color2="0x00ffffff" Color3="0xffffffff" Color4="0xffffffff"></Values>
+<Image><Values x="240" y="91" width="240" height="1" Color1="0xffffffff" Color2="0xffffffff" Color3="0x00ffffff" Color4="0x00ffffff"></Values></Image>
+</Image>
 "#,
     );
     for row in 1..=8 {
@@ -492,7 +494,7 @@ fn a_race_with_no_lap_hides_the_table() {
         !rects(&layers)
             .iter()
             .any(|rect| rect[1] == 75.0 || rect[1] == 91.0 || rect[1] == 77.0),
-        "no header bar, top rule or icon"
+        "no header bar, top rule (both halves) or icon"
     );
     assert!(!text_list(&layers).contains(&"Lap".to_string()));
 }

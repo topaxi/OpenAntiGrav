@@ -612,15 +612,12 @@ RESULTS AGAIN`. Frames: `data/reference/psp-tournament/er1.png`, `er2.png`,
 
 **Differences from our draw, found by the comparison** (not changed here):
 
-- Team cells show the team's **display name**, mixed case: `AG Systems`,
-  `Goteki 45`, `EG-X`. The real path (`crate::race::slot_teams`, called from
-  `Session::build_endrace`, not measured live in this project's own run)
-  returns grid-roster **folder ids** (`AG_Systems` per `oag_texture::ship_skin`'s
-  header), so it would print an id, not the display name. The synthetic
-  `--menu-page` render's `AG-SYSTEMS` is a literal in
-  `capture/endrace_page.rs` and is not evidence either way. A source for the
-  display name exists (`catalogue::Team::name`); the fix needs the catalogue at
-  the `Session::build_endrace` call site, which is outside this pass's lane.
+- ~~Team cells show the team's **display name**~~ **Fixed 2026-09-30**: the roster's folder
+  ids (`AG_Systems`) are resolved through the string table at draw time
+  (`oag_ui::endrace`'s cell text, shared with the new Eliminator table), which is the
+  original's own `localise(craft+0x798)`; a live Eliminator run showed `AG SYSTEMS`,
+  `EG-X` and `GOTEKI 45` on this build's own screen. It was not the catalogue the fix
+  needed after all - the string table already carries every team under its folder id.
 - Every table cell and header draws in the mixed-case `Default` font. Ours
   uses the upper-case front-end font, exactly as it already does on the
   ordinary per-lap `EndRace Results` table (`results-01.png` shows the same

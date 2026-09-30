@@ -4,10 +4,11 @@ Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, `pulse-psp-usa.chd`, UCUS-98
 image base `0x08804000`. This is the code half of
 [`docs/formats/endrace-screens.md`](../../../formats/endrace-screens.md), which
 reads the XML these functions fill in; that page has the widget tables, this
-one has the addresses and the evidence. **Nothing here is runtime-verified**
-beyond the single capture `docs/ui/campaign-screens.md` already has (a
-`grid0_3_2` Time Trial, no medal) - every score below is capped accordingly,
-and the breakpoint that would raise it is named at each open item.
+one has the addresses and the evidence. **Runtime-verified so far**: the single `grid0_3_2` Time Trial capture
+`docs/ui/campaign-screens.md` holds (twice), the loyalty law on two live races, and - added
+2026-09-30 - an Eliminator race's whole `EndRace Results` table, the `+0x2c` visible-bit
+polarity, and the third column's writer (each named at its own section). Everything else on
+this page is a decompile, and its score is capped accordingly.
 
 ## The registration pattern, again
 
@@ -37,7 +38,7 @@ mechanism below instead.
 
 | | `EndRace Results` | `EndRace Rewards` | `EndRace Menu` |
 | --- | --- | --- | --- |
-| `Update` (word 9) | `0x088da530` (not decompiled this pass) | `0x088dd2b8` | `0x088d8338` (not decompiled this pass) |
+| `Update` (word 9) | `0x088da530` (decompiled 2026-09-30, see below) | `0x088dd2b8` | `0x088d8338` (not decompiled this pass) |
 | `OnEnter` (word 29) | `0x088d98cc` | `0x088dbbd4` | `0x088d81dc` |
 | `OnExit` (word 31) | `0x088d92e0` (not decompiled this pass) | `0x088dbb5c` (not decompiled this pass) | `0x088d8248` (not decompiled this pass) |
 | `CommitSelection` (word 39) | `0x088902c8` (shared base, not overridden) | `0x088902c8` (shared base) | `0x088902c8` (shared base) |
@@ -86,8 +87,8 @@ lap number (1-based, up to 5 shown):
 | --- | --- | --- | --- |
 | `+0x13` | byte | `lap{n}.0` | decimal |
 | `+0xc` | 4 bytes | `lap{n}.1` | the centisecond time formatter `race-campaign.md` already names, `FUN_088196e4` |
-| `+0x10` | 2 bytes | `lap{n}.2` | decimal - meaning not determined, see the formats page |
-| `+0x12` | byte (flag) | hides `perfectlap{n}` when nonzero | - |
+| `+0x10` | 2 bytes | `lap{n}.2` | decimal - **the speedup pads entered on the lap** (see "The third column counts speedup pads entered" below) |
+| `+0x12` | byte (flag) | **shows** `perfectlap{n}` when nonzero (bit `0x4` is the visible bit) | - |
 
 The totals row (`tablebg{n+1}`, `n` = laps shown) reads
 `g_endrace_result + 0x114c` (a time) and `g_endrace_result + 0x1148` (a

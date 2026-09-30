@@ -146,6 +146,14 @@ fn every_table_row_nests_one_tile_and_two_rules_and_nothing_else_sits_in_its_ban
             rules[row - 1] += 1;
         }
     }
+    // `zonetopline`'s own right half: an unnamed rule nested at the same `y` (91) as the
+    // named left half, which `table_layers` must hide with it.
+    let top_rules = results
+        .fills
+        .iter()
+        .filter(|fill| fill.name.is_none() && (fill.y - 91.0).abs() < 0.01)
+        .count();
+    assert_eq!(top_rules, 1, "one nested half beside zonetopline");
     assert_eq!(tiles, [1; 8], "one hex_bg tile per row");
     assert_eq!(rules, [2; 8], "two fading rules per row");
 

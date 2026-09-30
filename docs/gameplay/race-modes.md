@@ -712,6 +712,23 @@ Custom Race outside the campaign still has no cell to read, so
 real values, not an invented one, and still the only figure a `--mode
 eliminator` run with no campaign cell in play can have.
 
+### A measured contradiction: a custom race's kill target read 5, not 10 (2026-09-30)
+
+`Hud_BindWidgets` (`0x0881fbec`) formats `KillsText` as `"%s (%d)"` of `IG_HUD_KILLS` and
+the kill target: the campaign cell's gold (`cell+0xa0`) when one is in play, and
+`DAT_08b30fb0` (`0x08b30f90 + 0x20`) otherwise. A PPSSPP Eliminator race started from the
+**Racebox** (no cell, Venom, Assegai) drew **`KILLS (5)`** in the top-right corner, and the
+race ended when the leading AI craft reached exactly **5 kills** (the `EndRace Results`
+struct read `EG-X` 5/5 in a table of 5, 4, 3, 3, 2, 2, 1, 0). So the non-campaign target
+that run used was **5**, not the `10` this page and
+`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` carry from `FEData.wad`'s
+`<Targets Elimination="10">` record. Two independent readings agree (the HUD's own text and
+the race's end state); `DAT_08b30fb0` itself was not read, and what writes it - a per-track,
+per-class or per-difficulty value, or a different default - is **not determined**. Confidence
+**85** that 5 is what a Racebox Eliminator on Venom uses. Not changed here: the constant is
+`crates/race`'s. It also bears on this build's Eliminator, which reached no 10-kill finish in
+8 game-minutes with the player parked (the original's AI needed 85 s for 5).
+
 ### What is deliberately out of scope
 
 - **Per-cell AI-skill resolution.** `AI_ResolveSkillScale`'s own
