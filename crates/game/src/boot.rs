@@ -1580,7 +1580,7 @@ mod options;
 mod progress;
 mod provenance;
 pub(crate) mod roster;
-mod scene;
+pub mod scene;
 mod screens;
 pub use screens::RaceSetup;
 pub(crate) mod sprites;
