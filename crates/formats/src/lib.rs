@@ -11,7 +11,8 @@
 //! [`wad`] is the archive container Pure and Pulse use on PSP and PS2, and
 //! [`psarc`] the one Wipeout HD uses on PS3; [`lzss`] is the compression a PS2
 //! WAD entry carries and [`pure_dlc`] the encryption a Pure PSN pack does.
-//! [`sblk`] and [`ps2_music`] are archives too - of sound rather than of files.
+//! [`sblk`] and [`ps2_music`] are archives too - of sound rather than of files,
+//! and [`wwise`] is the same for the PS4 Omega Collection's Audiokinetic banks.
 //!
 //! [`byte_order`] and [`swizzle`] are the layer under all of them: which end of
 //! a word comes first, and where in memory a texel actually sits. Both are byte
@@ -44,6 +45,7 @@ pub mod sblk_coverage;
 pub mod signature;
 pub mod swizzle;
 pub mod wad;
+pub mod wwise;
 
 pub use byte_order::ByteOrder;
 pub use signature::{Signature, identify};
