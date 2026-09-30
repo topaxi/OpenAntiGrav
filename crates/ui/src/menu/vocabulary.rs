@@ -270,13 +270,14 @@ pub enum ValueSource {
     /// `oag_game::screen`.
     ScreenFilters,
     /// The kill targets the race box's `KILLS` row offers, off the disc's own
-    /// `Eliminations` list (`oag_game::boot::RaceSetup::kill_targets`). Empty on a
-    /// title that reads no such list, which draws the row unusable.
+    /// `Eliminations` list (`oag_game::boot::RaceSetup::kill_targets`). Empty only
+    /// if the list will not read: a title that names no such list has the row
+    /// dropped instead (`Definition::drop_rows_picked_on_screen`).
     KillTargets,
     /// The two states of the race box's `WEAPONS` row, off the disc's own
     /// `Weapons` list: stored as its `On`/`Off`, shown as its `FE_ON`/`FE_OFF`
-    /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty on a title
-    /// that reads no such list, which draws the row unusable.
+    /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty only if the
+    /// list will not read; a title with no such list has the row dropped.
     Weapons,
 }
 

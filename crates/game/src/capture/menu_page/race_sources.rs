@@ -110,6 +110,29 @@ mod tests {
         assert_eq!(shown(&model, "ai.difficulty"), "novice");
     }
 
+    /// The recurrence guard for the blank SPEED CLASS: every row on the RACE
+    /// page that draws its list from a source has something in it after
+    /// `supply`, so a new `values_from` row the capture forgets fails here
+    /// instead of drawing blank in a still.
+    #[test]
+    fn every_race_page_row_that_reads_a_source_is_supplied() {
+        let model = pulse_page();
+        for entry in &model.page().entries {
+            if let oag_ui::menu::Entry::Choice {
+                source: Some(source),
+                values,
+                label,
+                ..
+            } = entry
+            {
+                assert!(
+                    !values.is_empty(),
+                    "{label} reads {source:?} and the capture never supplied it"
+                );
+            }
+        }
+    }
+
     /// WEAPONS is greyed and shows the mode's own answer in every mode but a
     /// single race, which `Mode::weapons_enabled` says too - the pin in
     /// `menu.toml` and the simulation cannot drift apart without this failing.

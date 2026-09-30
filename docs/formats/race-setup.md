@@ -91,7 +91,7 @@ allows a pick comes back:
 | --- | --- | --- |
 | 5 (Time Trial), 10 (Speed Lap), 6 (Zone), 9 (Head2Head), 0xf | greyed | forced `FE_OFF` |
 | 8 (Elimination), 0x12 | greyed | forced `FE_ON` |
-| 3, 4 (Single Race, Tournament), 0xc, 0xe, 0x10 | **enabled** | the player's pick |
+| 3, 4 (Single Race and Tournament; which is which is unread), 0xc, 0xe, 0x10 | **enabled** | the player's pick |
 
 Three independent sources agree on the first row: `Race_ReadSetupOptions`' weapons-off set
 (`shield.md`), `Mode::weapons_enabled`, and the 2026-08-10 PPSSPP observation of the greyed `OFF`
@@ -101,7 +101,9 @@ Eliminator's greyed `ON` is read from the routine alone (index 8 is the one that
 default. The two entries are `idstring="FE_ON" value="On"` and `idstring="FE_OFF" value="Off"`;
 `Race_ReadSetupOptions` compares the value against `"On"`. This build stores `On`/`Off`
 (`race.weapons`, empty = untouched = `On`), shows the disc's own `FE_ON`/`FE_OFF` strings, and
-offers the pick in a single race only, the one mode of its five that is in the third row.
+offers the pick in a single race only, the one mode of its five that is in the third row (the
+mapping of indices 3 and 4 to Single Race and Tournament is by elimination against the greyed
+rows and the 2026-08-10 capture, not read).
 
 Two `<Text>` widgets sit at coordinates already occupied by a list and are
 swapped in for particular modes: `Zone` over the `Class` row, and
