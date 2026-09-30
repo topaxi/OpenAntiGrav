@@ -114,3 +114,17 @@ fn only_the_shurikens_class_3_emitters_are_not_square() {
             .all(|(_, e)| !authors_a_roll(e))
     );
 }
+
+/// `ParticleSystem_DrawEmitterPool` draws no pool particle of an instance
+/// whose atlas grid is past 16 cells. The port draws whatever it is given, so
+/// this pins that no PSP emitter is one the original would not draw.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn no_psp_emitter_has_an_atlas_grid_past_sixteen_cells() {
+    let too_big: Vec<(String, String, (u16, u16))> = emitters()
+        .into_iter()
+        .filter(|(_, e)| u32::from(e.atlas_grid.0) * u32::from(e.atlas_grid.1) > 16)
+        .map(|(system, e)| (system, e.name, e.atlas_grid))
+        .collect();
+    assert!(too_big.is_empty(), "{too_big:?}");
+}

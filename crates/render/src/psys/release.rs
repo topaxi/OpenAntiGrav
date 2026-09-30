@@ -39,6 +39,25 @@ impl Stage {
         }
     }
 
+    /// Live particles across every instance playing `effect`, by identity.
+    ///
+    /// What a caller that owns one effect asks to see whether the instance it
+    /// let go of is really gone - a [`Self::kill`] empties it, a
+    /// [`Self::detach`] leaves its particles to finish.
+    #[must_use]
+    pub fn alive_of_effect(&self, effect: &std::sync::Arc<super::Effect>) -> usize {
+        self.instances
+            .iter()
+            .filter(|instance| {
+                instance
+                    .effect
+                    .as_ref()
+                    .is_some_and(|held| std::sync::Arc::ptr_eq(held, effect))
+            })
+            .map(|instance| instance.system.alive_count())
+            .sum()
+    }
+
     /// Ends an attached instance outright: its emitters stop and every
     /// particle it holds goes with it, at once.
     ///

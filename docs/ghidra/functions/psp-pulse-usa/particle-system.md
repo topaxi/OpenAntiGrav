@@ -1072,13 +1072,16 @@ instance:
   `ParticleSystem_Destroy` (`0x088f42b8`).
 - **`now != 0`**: `ParticleSystem_StopAndClear` (`0x088f4790`) zeroes the
   remaining duration (`+0x138`), clears `+0x160` bits `1` and `0x10`
-  (emitting, and the looping mode), frees the live particle list at `+0x1b0`
+  (emitting, and the looping mode), frees the **template** list at `+0x1b0`
   (`FUN_088f48c0`) and recurses into the death and sibling instances
-  (`+0x1a8`, `+0x1a4`). The instance then reports itself dead on its next
-  `ParticleSystem_Update`.
+  (`+0x1a8`, `+0x1a4`). The instance then reports itself dead (bit `8`) on the
+  first `ParticleSystem_Update` after its pool count (`+0x140`), its child
+  instances and its template list (`+0x1b0`) are all empty and the duration
+  (`+0x138`) is spent - the tail of `0x088f5b9c`, read 2026-09-30 - so the
+  emitters' own particles live out their lives first.
 
 `ParticleSystem_Destroy` releases the handle (`FUN_088f2460`), frees the
-**live particle list** (`FUN_088f7e38` on each entry of `+0x1b0`), destroys the
+**template list** (`FUN_088f7e38` on each entry of `+0x1b0`) and the pool (`FUN_088f45a0`), destroys the
 death, sibling and per-particle-child instances, and returns the instance to
 the pool (`FUN_08946d00`).
 
@@ -1198,7 +1201,7 @@ into one. A **template** is a `0x90`-byte record in the list at instance
 `+0x1b0`, linked by `+0x78`, sampled by `ParticleSystem_UpdateParticleFields`
 and drawn one at a time by `ParticleSystem_DrawParticle`. An **emitter's own
 particle** is a slot of the pool at instance `+0x74` (`0xa0` bytes a slot, the
-particle at `slot + 0x10`), integrated by `ParticleSystem_UpdateParticles` and
+particle pointer is `slot + 0x10`, and every `particle+` offset below is from it), integrated by `ParticleSystem_UpdateParticles` and
 drawn a whole instance at a time. The offsets are the same layout shifted by
 `0x40` (template `+0x30` size, `+0x34` colour, `+0x4c` life; pool `+0x70`,
 `+0x74`, `+0x8c`), which is how a read of one was mistaken for the other.
@@ -1209,8 +1212,8 @@ drawn a whole instance at a time. The offsets are the same layout shifted by
 | `0x08918bf8` | `ParticleSystem_DrawEmitterPool` | pushes the matrix, binds the sprite, applies the blend class (`res+0xc0`), then **switches on `res+0xb8`**: index `0` and `1` to `FUN_089194d0`, `2` (class 3) to `ParticleSystem_DrawRolledQuads`, `5` (class 6) to `FUN_08917c7c`, `6` (class 7) to `FUN_08918160`, and every other index draws nothing. Only when the atlas grid is at most 16 cells: a larger grid draws no particle here at all |
 | `0x089178c0` | `ParticleSystem_DrawRolledQuads` | the class 3 batch: one quad a live particle, six vertices each, one `Gu_DrawArray` |
 
-**`ParticleSystem_DrawRolledQuads`.** `h` is the particle's size (`slot+0x70`
-as a float), `w = h * *(float *)(res + 0x4c8)`, and the roll is `slot+0x50`,
+**`ParticleSystem_DrawRolledQuads`.** `h` is the particle's size (`particle+0x70`
+as a float), `w = h * *(float *)(res + 0x4c8)`, and the roll is `particle+0x50`,
 turned to radians by the VFPU's `2/pi`. The four vertices are built in
 registers as `C700 = (-w, -h, w, h)` times `(cos, -sin, cos, -sin)` and
 `(sin, cos, sin, cos)`, added to the view-space position, so the quad's two
@@ -1238,14 +1241,14 @@ read here; that the same word is a streak's stretch is the obvious reading and
 it is **unread**.
 
 **The roll, off `ParticleSystem_InitParticle` and `ParticleSystem_UpdateParticles`**
-(slot offsets; the first reads are the `0x88f6e6c` decompile's, confidence
+(particle offsets, from the pointer `UpdateParticles` walks, `0x10` past the slot; the first reads are the `0x88f6e6c` decompile's, confidence
 **80**, static):
 
 | What | Law |
 | --- | --- |
-| start angle, `slot+0x50` | `Psys_RandFloatRange(-pi, pi)` under emitter flag `0x4`, else `0`; unless the class is 6 or 7, whose `+0x50` is the streak's other end |
-| the coin | flag `0x8` adds `2` to the byte at `slot+0x81` when `FUN_088f8e18` says so (bit 1 set: flipped) |
-| rate, `slot+0x9c` | the `res+0x698` channel: mode `0` (keyframed) leaves `0`; mode `2` its constant (the `hi` word, `+0x6a8`); mode `3` `Psys_RandFloatRange(lo, hi)` **once, here**; all negated when the coin bit is set |
+| start angle, `particle+0x50` | `Psys_RandFloatRange(-pi, pi)` under emitter flag `0x4`, else `0`; unless the class is 6 or 7, whose `+0x50` is the streak's other end |
+| the coin | flag `0x8` adds `2` to the byte at `particle+0x81` when `FUN_088f8e18` says so (bit 1 set: flipped) |
+| rate, `particle+0x9c` | the `res+0x698` channel: mode `0` (keyframed) leaves `0`; mode `2` its constant (the `hi` word, `+0x6a8`); mode `3` `Psys_RandFloatRange(lo, hi)` **once, here**; all negated when the coin bit is set |
 | per tick, `DAT_08b6206c` (class 3 only) | channel not keyframed (`DAT_08b6206a` clear): `roll += rate * dt`. Keyframed: `roll -= v * dt` when the coin bit is **clear** and `roll += v * dt` when it is **set**, `v` the baked rotation component of the channel vector **before** this tick's integration - the value at the age the tick began with |
 
 `dt` is the instance's tick count (`instance+0xc`, the same `dt` velocity is
@@ -1264,7 +1267,7 @@ about them: an emitter's particle has no `+0x64` (its aspect is `res+0x4c8`).
 **Still open.** Whether an emitter's first draw is at age 0 as a template's is
 (unmeasured, not played); which of `ParticleSystem_Update`'s orderings puts a
 pool particle's spawn before or after its first integration; the class 6 and 7
-batch routines' use of `+0x4c8`; and a live read of `slot+0x50` over a few ticks
+batch routines' use of `+0x4c8`; and a live read of `particle+0x50` over a few ticks
 on a flipped and an unflipped keyframed particle, which would make the sign
 measured.
 

@@ -55,7 +55,7 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
   template's (`ParticleSystem_DrawRolledQuads`): roll always a rate, aspect the
   constant `+0x4c8`, the quad the turned unit square scaled in screen `x`
   (a parallelogram once the aspect is not 1). Confidence 80 from the
-  instructions. Open: a live read of `slot+0x50` over a few ticks on a flipped
+  instructions. Open: a live read of `particle+0x50` over a few ticks on a flipped
   and an unflipped keyframed particle, which would make the keyframed sign
   (the reverse of the constant one) measured; the four keyframed emitters are
   `WO_LEACHBEAM_CHARGING`'s `RINGS`, `WO_MISSILE_EXPLO`'s `drift_down`,
@@ -90,7 +90,7 @@ Frames are in `data/scratch/hit-sparks/` (gitignored):
 
 ## Next Steps
 
-- Measure the emitter roll live: log `slot+0x50` and the byte at `slot+0x81`
+- Measure the emitter roll live: log `particle+0x50` and the byte at `particle+0x81`
   of one `WO_SHIP_COLL_SPARK_DAMAGE` smoke particle (random rate, coin) and of
   a `WO_MISSILE_EXPLO` `drift_down` (keyed) over three ticks.
 - Read the class 6 and 7 batch routines (`FUN_08917c7c`, `FUN_08918160`) for
