@@ -110,6 +110,15 @@ The split is asymmetric, and both halves matter:
   two changes touch crates that interact, re-gate: that combination has been
   tested nowhere.
 
+**Never merge into the main checkout while the lead's own gate is running
+on it.** The gate compiles the working tree as it finds it, so a merge
+landing mid-run produces a half-old, half-new tree. On 2026-09-30 that read
+as six `E0425`/`E0599` compile errors against code that was fine. Either
+hold the next merge until the gate finishes, or gate a detached worktree
+(`git worktree add --detach ../OpenAntiGrav-worktrees/lead-gate <sha>`, then
+`just link-data`) so merges can keep landing. A red lead gate that overlapped
+a merge proves nothing; re-run it.
+
 **Prefer `nice -n 10 ionice -c 3` for the lead's own gate.** The lead's run is
 never on the critical path - members are the ones blocked on their own results.
 
