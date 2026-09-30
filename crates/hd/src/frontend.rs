@@ -341,6 +341,7 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     chain: BOOT_CHAIN,
     reel: None,
     menu_backdrop: None,
+    menu_scene: false,
     picker_backdrop_parent: None,
     picker_from_loaded_faces: true,
     fallback_globals: &[],

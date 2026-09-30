@@ -143,6 +143,10 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     // (`Top FE Screen`/`FE Screen`), not a looping movie - no entry to name,
     // on the same terms `oag_hd::frontend::BOOT`'s own `None` states.
     menu_backdrop: None,
+    // The `BackgroundAnim` scene is the only backdrop Omega can have: it ships
+    // no `.points2` clouds for the Fury widget. See
+    // `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md`.
+    menu_scene: true,
     picker_backdrop_parent: None,
     picker_from_loaded_faces: true,
     fallback_globals: &[],

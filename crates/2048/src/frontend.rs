@@ -263,6 +263,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     // 2048's persistent background is `<FE3DCanvas>` (see `TOUCH`), not a
     // looping video - unlike Pulse's `Backdrop.PMF`.
     menu_backdrop: None,
+    menu_scene: false,
     // No language-picker screen sits in this chain at all; the 17 plugins in
     // `LANGUAGE_PLUGINS` are read for their `<Font>`/string-table roles, not
     // for a picker screen this boot walks.
