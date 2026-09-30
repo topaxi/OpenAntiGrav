@@ -2,7 +2,7 @@
 categories: [rendering, frontend]
 ---
 
-# The camera shake on impact reproduces its two-rotation shape now; two composition details are open
+# The camera shake on impact is measured against the original and matches; a hard hit and the motion blur are open
 
 A hard wall hit in the original visibly shakes the camera/HUD; `oag_render` has no shake at all.
 
@@ -40,15 +40,25 @@ Two things this pass could not settle from the two evidence pages alone, carried
 - **What each basis row physically represents** (world right/up/forward directly, vs. the transposed "columns are world axes" reading `positional-audio.md` established for the active camera elsewhere) - confidence ~55, the same open item `collision-shake.md` already carried, now also determining what this engine's own `base.row(1)`/`base.row(2)` substitution numerically means relative to the original's own struct offsets rather than only what a from-scratch implementation should read.
 - **The handedness of the two rotations** - whether `row2` should be rotated forward by the first quaternion (what `rotation()` does) or by its inverse before becoming the second axis, and whether each angle's sign matches the disc's own VU convention or its mirror. Neither is recoverable from disassembly/decompile alone; both are named choices in `shake.rs`'s module doc comment, carried the same way `oag_render::roll::ROLL_DIRECTION` carries its own unmeasured sign - a one-line fix (negate the angle, or use the inverse quaternion) if a play-test or capture ever shows the shake twisting the wrong way.
 
+**2026-09-30: measured against the running original (PSP Pulse, PPSSPP), and the port was wrong in four ways, all fixed.** Full method, numbers and capture names are in [`collision-shake.md`](../../docs/ghidra/functions/ps2-pulse-eu/collision-shake.md)'s "Measured against the original" section; the constants that pin it are in `crates/render/tests/shake_ground_truth.rs` (23 calls, two boots, fit to `3e-7`, runs in the normal suite). The measurement is one call's own input and output (the camera basis at `Camera_SubmitScene`'s entry and after its shake block), so it is independent of the original's variable timestep.
+
+- **The oscillator is a cosine**, not a sine: at impact the second rotation is `0.1 * magnitude` and the first `0.35 * magnitude`, where the port had `0` and `0.25`. (`0x0897e030` is `cosf`.)
+- **The rotation sense is opposite** to the right-handed Rodrigues formula: `shake::SENSE = -1`. This was one of the two named handedness choices; the other (re-read the second axis after the first rotation) was right as written and is now measured (`5e-7` against `3e-3` for the alternative).
+- **The axes are the camera's own up and forward in world coordinates**: the basis rows are `(left, up, forward)`. `Race::view` passed a view matrix's rows 1 and 2 (up and *back*, as world vectors) into a rotation it then left-multiplied onto the view (a view-space operation): the wrong second axis for any heading but one. `Shake::apply(view)` now does the whole composition, eye fixed; `an_active_shake_never_moves_the_camera_eye` still passes.
+- **Timing**: the original arms before the same frame's submit and decrements after, so the first frame after an arm shows the full timer. `Race::tick` advanced the shake at the end of the tick, one tick in; it now advances first.
+- **No accumulation**: the basis is rebuilt each frame (the next call's entry basis matches the last to `9e-5` while the copy-out differed by up to `0.1`), and the shake is applied before the copy-out. Closes the "read back before or after the copy-out" item for the PSP.
+
+**Judged as a player would** (original forced-armed at magnitude `0.3`, ours forced-armed the same, same start pose, frames before, at impact, `+2`, `+4`, `+7`, settled; `data/scratch/pulse-camera-shake/shots/`): the scene shifts and rolls the same way on both and settles within about `0.4` s. **One difference that is not the shake's**: ours blurs the whole frame on the first shaken frame (the velocity-buffer motion blur reads the one-frame view jump as fast camera motion), the original does not blur there. See Open.
+
 ## Open
 
-- What each basis row physically represents, and the composition handedness - both above, both flagged in `shake.rs`'s own doc comment, neither blocking the shape this pass reproduces.
-- Whether the shake's basis-row writes are read back (and so accumulate) before or after the per-frame copy-out/orthogonalise pass in `FUN_0013e280` - order suggests they're read before, not traced further.
+- **A motion-blur flash on the first frame of a hard hit**: the velocity-buffer blur ([ADR-0030](../../docs/architecture/adr/0030-velocity-buffer-motion-blur.md)) sees the shake's up-to-six-degree view jump as camera motion and smears the whole frame on impact (severity near `1`; an ordinary scrape is under a degree and unaffected). The original shows no such blur. Fix in the blur's matrices (take the previous and current view without the shake), not in the shake. Not touched here: a render-lane change.
+- **A real hard hit was not produced** (the original's scrapes arm at severity `0.005`-`0.08`; magnitude `0.3` was forced). The apply side is settled; the arming side at severity near `1`, and the `min(|impulse| * 0.0125, 1)` severity into it, are read from the disassembly and not measured.
+- The internal (cockpit) view goes through the same submit function and was not captured separately; the PS2 binary was not checked at runtime.
 - Whether Pure, HD/Fury and 2048 carry the same mechanism - a maintainer's guess that it continues into newer titles, not yet checked on any of them.
-- Whether the shake reads right on screen against the real games - the before/during/after triple above shows *a* rotation at the right moment, not that its direction or magnitude match a captured original; nobody has yet compared this implementation's motion against a capture or a play session, only against the recovered arithmetic and, now, its own screen presence.
 
 ## Next Steps
 
+- Take the blur fix above once the render lane is free: build the blur's previous/current view from the pre-shake matrices.
 - Check HD/Fury and 2048 for the same collision-response shape (a `min(|impulse| * k, 1)` severity feeding both a spark trigger and a camera-shake arm) if/when either title's collision path is read for other reasons - not worth a dedicated pass on its own yet.
-- Play-test or capture-compare the landed implementation against the real games at some point, the way `crates/game/tests/chase_camera_ground_truth.rs` did for the chase camera - nothing here has been checked against a running original yet, only against its decompiled arithmetic and this pass's own before/during/after screenshots.
-- If a future capture shows the shake twisting the wrong way, the fix is one of the two handedness choices above, not a re-read of the evidence.
+- If a hard wall hit can be produced in the original (full speed into a wall, or a weapon hit), capture its `Camera_ArmShake` arguments once to confirm `magnitude = severity * 0.3` at the top of the range; `cam_arm.py`-style, one breakpoint at `0x08878750`.

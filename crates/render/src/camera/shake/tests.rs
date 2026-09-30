@@ -93,43 +93,48 @@ fn a_stronger_hit_rotates_further_at_the_moment_of_impact() {
     let mut strong = Shake::new();
     strong.arm(1.0, Side::Elsewhere, &mut rng());
     let (row1, row2) = rows();
-    // At progress 0 the oscillator term (`sin(0) = 0`) drops out and only the
-    // envelope survives, so the two rotations compare directly by angle.
+    // Both terms scale with magnitude, so the stronger hit rotates further.
     let weak_angle = weak.rotation(row1, row2).to_axis_angle().1;
     let strong_angle = strong.rotation(row1, row2).to_axis_angle().1;
     assert!(strong_angle > weak_angle);
 }
 
-/// At the moment of impact the oscillator (`sin(0 * BASE_FREQUENCY) = 0`) is
-/// exactly zero, so the second call's angle is exactly zero and its rotation
-/// is the identity - `rotation()` collapses to the single `row1` rotation by
-/// the envelope term alone. Pins the per-mode angle arithmetic without
-/// touching either open handedness question.
+/// At the moment of impact the oscillator is a cosine at zero, so it is at full
+/// size: the first rotation is `(0.25 + 0.1) * magnitude` about `up`, the
+/// second `0.1 * magnitude` about `forward`, both in the original's sense.
+/// Measured: `3e-7` against the running original, see
+/// `crates/render/tests/shake_ground_truth.rs`.
 #[test]
-fn at_the_moment_of_impact_only_row1_contributes() {
+fn at_the_moment_of_impact_both_rotations_contribute() {
     let mut shake = Shake::new();
     shake.arm(1.0, Side::Elsewhere, &mut rng());
-    let (row1, row2) = rows();
-    let expected = quat_from_axis_angle(row1, MAGNITUDE_SCALE * 0.25);
-    assert!(shake.rotation(row1, row2).abs_diff_eq(expected, 1e-5),);
+    let (up, forward) = rows();
+    let m = MAGNITUDE_SCALE;
+    let first = quat_from_axis_angle(up, SENSE * 0.35 * m);
+    let second = quat_from_axis_angle(first * forward, SENSE * 0.1 * m);
+    assert!(
+        shake
+            .rotation(up, forward)
+            .abs_diff_eq(second * first, 1e-5)
+    );
 }
 
-/// The two modes share every number except the sign of the first rotation's
-/// angle - `Camera_ArmShake`'s own `mode = 3` vs `mode = 1` branch, both
-/// still driven by the same envelope and oscillator terms.
+/// The two modes differ only in the sign of the first rotation's angle -
+/// `Camera_ArmShake`'s own `mode = 3` vs `mode = 1` branch. The second angle
+/// (the oscillator alone) is shared.
 #[test]
 fn ahead_negates_only_the_first_angle() {
     let mut ahead = Shake::new();
     ahead.arm(1.0, Side::Ahead, &mut rng());
-    let mut elsewhere = Shake::new();
-    elsewhere.arm(1.0, Side::Elsewhere, &mut rng());
-    let (row1, row2) = rows();
-    // At progress 0 the oscillator drops out, so `Ahead`'s single surviving
-    // rotation is exactly `Elsewhere`'s, negated.
-    let ahead_angle = ahead.rotation(row1, row2).to_axis_angle();
-    let elsewhere_angle = elsewhere.rotation(row1, row2).to_axis_angle();
-    assert!((ahead_angle.1 - elsewhere_angle.1).abs() < 1e-5);
-    assert!(ahead_angle.0.abs_diff_eq(-elsewhere_angle.0, 1e-4));
+    let (up, forward) = rows();
+    let m = MAGNITUDE_SCALE;
+    let first = quat_from_axis_angle(up, -SENSE * 0.35 * m);
+    let second = quat_from_axis_angle(first * forward, SENSE * 0.1 * m);
+    assert!(
+        ahead
+            .rotation(up, forward)
+            .abs_diff_eq(second * first, 1e-5)
+    );
 }
 
 /// Two rotations about two different vectors do not commute - swapping which
@@ -140,12 +145,10 @@ fn ahead_negates_only_the_first_angle() {
 fn the_two_rotations_do_not_commute() {
     let mut shake = Shake::new();
     shake.arm(1.0, Side::Elsewhere, &mut rng());
-    // Advance somewhat so the oscillator term is nonzero and the second
-    // rotation actually contributes something to compare against.
     shake.advance(DURATION_SECONDS * 0.1);
-    let (row1, row2) = rows();
-    let in_order = shake.rotation(row1, row2);
-    let swapped = shake.rotation(row2, row1);
+    let (up, forward) = rows();
+    let in_order = shake.rotation(up, forward);
+    let swapped = shake.rotation(forward, up);
     assert_ne!(in_order, swapped);
 }
 

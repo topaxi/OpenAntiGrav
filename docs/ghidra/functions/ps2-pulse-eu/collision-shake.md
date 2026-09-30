@@ -156,7 +156,7 @@ full** (not just at call-shape depth) to settle what it actually perturbs:
   armed, then walks the three-keyframe falloff table above to get the current
   envelope value.
 - Drives **two** damped, phase-offset oscillations from it via `FUN_0020cf50`
-  (a `sin`-shaped call, unread beyond that) - one at a base frequency
+  (read as `sin`-shaped here at first; **it is the cosine** - measured 2026-09-30, see "Measured against the original") - one at a base frequency
   (`DAT_0027e7e0`), one at `1.5x` that frequency and phase-shifted by the
   armed random `shake_phase_rng`.
 - `shake_mode` (`1`/`3`/else) selects which of three ways the envelope and the
@@ -255,6 +255,71 @@ finding above does not depend on it.
 
 - Decrements `shake_timer` by a per-call constant (`+0x1d4`) on the way out.
 
+## Measured against the original, PSP Pulse USA (2026-09-30)
+
+**Method.** PPSSPP v1.20.4 under Xvfb, Pulse PSP (USA) in a Talon's Junction Time Trial, its websocket
+debugger. `Camera_SubmitScene` (`0x08878874`) is the PSP's apply site. Only the most recently armed
+breakpoint fires on this build, so two breakpoints were swapped within one call: one at the entry
+(read the camera struct, `0x130` bytes from the `a0` camera pointer: the basis rows `+0x40/+0x50/+0x60`
+and the shake fields), one at `0x08878af0`, after the shake block and before the copy-out
+(read `+0x40..+0x70` again). The pair is the shake's own input and output for one call, so a variable
+timestep and the craft's motion do not enter. Scripts and raw captures: `data/scratch/pulse-camera-shake/`
+(`cam_capture2.py`, `fit4.py`; `cap2`, `cap5`, `cap7`).
+
+PSP camera struct offsets, the PS2's `+0x190..+0x1d4` block at its PSP place: `shake_timer +0xe4`, reciprocal
+duration `+0xe0`, falloff values `+0xe8`, positions `+0xf4`, reciprocal gaps `+0x100`, count `+0x10c`,
+period/fraction `+0x110/+0x114` (`0`, `1.0` on every capture), mode `+0x118`, magnitude `+0x11c`,
+phase `+0x120`, per-call decrement `+0x124`; base frequency `0x08ab1098` (`30.0`).
+
+**Captures.** `cap2`: a real wall scrape, `cross`+`left`, 300 calls, the shake armed on nearly every call
+at magnitude `0.0009` to `0.025`. `cap5` and `cap7`: a second boot each of a stationary craft with the shake
+fields **forced** at the entry breakpoint (`0.3` mode 1 and `0.15` mode 3; `0.2` mode 1 and `0.3` mode 3),
+the whole envelope table written as `Camera_ArmShake` writes it, so a full-strength rotation and the
+whole `0.6` s decay are measured. A forced arm measures the apply side only.
+
+**Findings**, each against the model in `crates/render/src/camera/shake.rs` fit to every active call (72
+per forced capture, 280 on the scrape), error the largest absolute difference of a basis component:
+
+| Model | Error (forced, `0.3`) |
+| --- | ---: |
+| cosine oscillator, `Rodrigues(axis, -angle)`, second axis re-read after the first rotation - **the shipped one** | **3e-7** (float noise; worst 5.5e-7) |
+| the same, second axis kept from before the first rotation | 2.8e-4 mean, 3.1e-3 worst |
+| sine oscillator (what the code had) | 1.0e-2 |
+| right-handed sense (`+angle`) | 4.7e-2 |
+
+1. **The oscillator is a cosine, not a sine.** At progress `0` the original's second rotation is `0.1 *
+   magnitude` and its first `(0.25 + 0.1) * magnitude`, read straight off the rotation vector between the two
+   basis snapshots (`0.3500`, `0.0999` times magnitude, at every magnitude). The call the block makes
+   at `0x0897e030` is Ghidra's `cosf` (`names.tsv`, `particle-system.md`), so this was a misread of the call
+   shape, not of the arithmetic. Plain radians, argument `progress * 30`.
+2. **The sense is opposite to the right-handed Rodrigues formula.** The basis rows are
+   `(left, up, forward)` and `cross(row0, row1) = row2` on every recorded tick
+   ([engine.md](../psp-pulse-usa/engine.md)), so the numbers are a right-handed world and this is a fact
+   about which way the camera turns. Mode 1: the camera rotates about its own up by `-(envelope +
+   oscillator)`; mode 3 (`Ahead`): `+(envelope + oscillator)`; the second rotation, by `-oscillator`, in both.
+3. **The two axes are the camera's own up (`+0x50`) and then its forward (`+0x60`) in world coordinates,
+   the second as the first rotation left it** - the two-rotation shape the 2026-09-05 section recovered,
+   now with the handedness fixed. The basis rows are the camera's up and forward, **not** a view matrix's
+   rows: a right-handed view matrix's rows are right, up and *back*, so a port reading `view.row(2)` has the
+   wrong sign, and feeding world-space axes into a view-space multiply mixes frames.
+4. **No accumulation.** With the craft at rest the entry basis of call `n + 1` is identical to call `n`'s to
+   `9e-5` (hover drift) while the copy-out differs from it by up to `0.1`: the camera update rebuilds the
+   basis every frame, so the in-place rotation is per-frame only. This closes "whether the basis-row writes
+   are read back before or after the copy-out" for the PSP: the shake is applied before the copy-out
+   (`0x08878af0` precedes the `lv.q` at `0x08878af4`), and does not persist into the next frame. The
+   PS2's `FUN_0013e280` was not checked at runtime.
+5. **Timing.** The per-call decrement (`+0x124`) is the frame's measured `dt` (`0.0167 +- 0.0003`), not a
+   constant. `Camera_ArmShake` runs during the craft update, before the same frame's submit, so the first
+   frame after an arm sees the full `0.6` s timer (progress `0`), and the decrement comes after the use.
+   `Camera_ArmShake` itself (`0x08878750`), broken on during a scrape: `f12` the magnitude, `f13 = 0.6` on
+   every one of 40 calls, `a1` the mode. It is called on nearly every frame of a scrape, at small severity
+   (`0.0015` to `0.025` magnitude, so severity `0.005` to `0.08`): the visible shake of an ordinary
+   scrape is under a degree, and only a hard hit (severity near `1`) reaches `0.3`, six degrees.
+
+**Not covered:** the third `shake_mode` combination (nothing arms it), a hard wall hit (a real hit at
+severity near `1` was not produced; the forced arm stands in for it), the PS2 binary at runtime, and the
+internal (cockpit) view, whose submit goes through the same function.
+
 ## `ShipShield_Hit` (`0x00169af8`) - the same mechanism the PSP has, at a different address
 
 **Decompiled in full**, four stores:
@@ -282,15 +347,12 @@ which stays a separate, open question.
 
 ## Not determined
 
-- What each basis row physically represents (world right/up/forward directly,
-  or the transposed reading `positional-audio.md` establishes for the active
-  camera elsewhere) - see the axis section above; confidence ~55, and not
-  needed to answer which registers/offsets carry the rotation axis.
-- Whether `s2+0x40..0x60` is mutated in place by the shake *before* the
-  `0x13e648` copy-out to the render slot and the `0x13e784`+
-  normalise/orthogonalise pass, and whether that perturbation therefore
-  accumulates frame to frame rather than being reset upstream - order
-  suggests yes, not traced further.
+- ~~What each basis row physically represents~~ **Answered for the PSP, 2026-09-30**: the rows are
+  `(left, up, forward)` in world coordinates and the shake rotates those vectors - see "Measured against
+  the original".
+- ~~Whether `s2+0x40..0x60` is mutated in place by the shake before the copy-out, and whether it
+  accumulates~~ **Answered for the PSP, 2026-09-30**: mutated in place before the copy-out, and it does
+  **not** accumulate - see "Measured against the original". Not checked on the PS2 at runtime.
 - `FUN_0020cf50`/`FUN_0025cbb0`/`FUN_0025ca48`/`FUN_00159268`/`FUN_001cc100` -
   read only for the one call shape each was seen in here (`FUN_0025cbb0` and
   `FUN_0025ca48` now decompiled in full, the other three not), none renamed.
@@ -304,7 +366,7 @@ which stays a separate, open question.
   vec4s; not chased further since the PSP page already reads it as cyan
   `(0, 1, 1, 1)` and the point here was the structural match, not the value.
 - `FUN_00153328`, `ShipShield_Hit`'s other caller - not read at all.
-- **Nothing here was verified at runtime.**
+- **Verified at runtime on the PSP 2026-09-30** (the section above); the PS2 binary was not.
 
 ## History
 
@@ -342,3 +404,9 @@ which stays a separate, open question.
   module's rotation arithmetic is left as a known simplification rather than
   rewritten to a shape (axis input into `Shake::rotation`) this pass did not
   scope.
+- 2026-09-30: measured against the running PSP original (see "Measured against the original"). The
+  oscillator is a cosine, the rotation sense is opposite to the right-handed formula, the second axis is
+  re-read after the first rotation, the basis is rebuilt each frame (no accumulation), and the first frame
+  after an arm sees the full timer. `Shake::rotation` was wrong on the first two and on which vectors it
+  was given, `Race::view` on frames and on the order of advance and arm; both are fixed and pinned by
+  `crates/render/tests/shake_ground_truth.rs`.
