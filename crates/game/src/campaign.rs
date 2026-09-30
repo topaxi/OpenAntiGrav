@@ -15,6 +15,8 @@ use oag_ui::picker::FaceScales;
 
 use crate::sprite::Sheet;
 
+pub mod launch;
+
 /// `Data\Plugins\PI001\GUI\CellMode_Definition.xml` - the file Pulse's own
 /// `Grid Selection` and `Cell Selection` are authored in. See
 /// [`oag_hd::campaign::SCREEN_ENTRY`] for Wipeout HD/Fury's own copy, at a

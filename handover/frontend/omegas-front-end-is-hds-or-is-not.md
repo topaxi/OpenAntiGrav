@@ -134,6 +134,30 @@ content against `hd-frontend.md`.
   Turning that into a real campaign-map render is `campaign-map`/2048-lane
   work, not started here (PSARC/GNF only, per this lane's own boundary).
 
+- **2026-09-30, `omega-campaign-launch`: a confirmed campaign cell starts its
+  race** (see `docs/formats/omega-status.md`, "Campaign: confirming a cell
+  starts its race"). What is left, in the order a player meets it:
+  1. **`Team Selection` draws an empty frame on Omega**, so
+     `FRONT_END.team_select` stays `None` and a cell races the RACE page's team
+     (`settings.race.team`: `Assegai` on the walk, the catalogue's first entry).
+     Logos are at `hdships\<Team>\FE\Logo.gnf` (HD's reader asks
+     `Data\Ships\<Team>\FE\Logo.gtf`), the stat blocks do not draw,
+     `screen.xml` has no slideshow chain. Fix the logo path off the title's
+     ship dir, find why the blocks do not draw, then set `team_select`.
+  2. **The EndRace screens stay unwired**: `EndRace Menu` draws no option
+     blocks through HD's loader, so `RETURN TO GRID` is unreachable and a
+     finished race returns to `Main Menu`. Set `endrace_entry` and dispatch
+     Omega in `oag_game::endrace::load`, `session::endrace` and
+     `capture::endrace_page` (all three test `title.name == oag_hd::TITLE.name`)
+     once the blocks draw.
+  3. **Omega has no `Campaign Selection` and no flyer cards**
+     (`load_omega`: `selection_layout`, `grid_layout_fury`, `flyers` all
+     `None`), and `Grid Selection` draws on a white page. Only the
+     cards and the selection screen are HD-only; the grid, cell and launch
+     code is shared.
+  4. Grids 16-18 have no `RequiredPoints` attribute and are skipped; their
+     cells never reach the screen.
+
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 swept 2026-09-21 from a player observation ("the Omega menu looks like HD/Fury's"); `FEGlobals` matches HD's to the digit and this project's own screen reader parses it unchanged, but which of the patch's four archives the runtime actually loads is the one open question HD's own six-copy version needed an RPCS3 capture to close

@@ -371,6 +371,13 @@ was rather than opening `Cell Selection` or `Team Selection`. See "Grid
 tiers and cells lock and unlock" above for the predicate and why this is
 chosen, not measured, on the exact refusal mechanism.
 
+**Omega launches through the same function, 2026-09-30.** The mapping above is
+`oag_game::campaign::launch::plan_cell` (cell and a circuit resolver in; mode,
+circuits, class, laps, kill target out) and `Session::launch_campaign_cell`
+applies its plan. A disc-backed test holds Omega's 167 parsed cells to it; see
+[`omega-status.md`](../formats/omega-status.md#campaign-confirming-a-cell-starts-its-race-2026-09-30)
+for what a walk found (no `Team Selection`, no EndRace screens yet).
+
 `Cell Help` (`triangle`) is modelled as a boolean toggle
 (`CellSelection::help_open`) that suspends movement while open, matching
 the disc's own `Watch` element redirecting every directional press back to

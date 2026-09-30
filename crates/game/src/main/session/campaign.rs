@@ -290,91 +290,58 @@ impl Session {
         cell: oag_tables::race_campaign::Cell,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
     ) {
-        let Some(mode) = oag_game::campaign::race_mode_for_cell(cell.mode.clone()) else {
-            warn!(
-                "{} is {} - not one of the modes this engine can run yet, so {} cannot launch",
-                cell.mode, cell.mode, cell.name
-            );
-            return;
-        };
-        let is_tournament = mode == oag_race::Mode::Tournament;
-        let track_ids: Vec<String> = if is_tournament {
-            cell.tournament_tracks.clone()
-        } else {
-            cell.track.clone().into_iter().collect()
-        };
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
-        if track_ids.is_empty() {
-            warn!("{} names no track - cannot launch", cell.name);
-            return;
-        }
-        let mut leg_entries = Vec::with_capacity(track_ids.len());
-        for track_id in &track_ids {
-            let Some(entry) = shell
-                .track(mode, track_id)
-                .map(oag_game::catalogue::Track::entry_name)
-            else {
-                warn!(
-                    "this source does not offer {track_id:?} - {} cannot launch",
-                    cell.name
-                );
+        // The pure half - mode, circuits, class, laps, kill target - is
+        // `oag_game::campaign::launch::plan_cell`, so a disc-backed test holds
+        // it to every cell a title ships. A `Zone` cell's own `class` is the
+        // literal string `"Zone"`, not a speed class, and nothing in this
+        // engine resolves a Zone handling block of its own yet, so it races at
+        // whatever the RACE page last had selected - chosen, not measured,
+        // and logged below so the substitution is never silent.
+        let plan = match oag_game::campaign::launch::plan_cell(
+            &cell,
+            &self.settings.race.class,
+            |mode, id| {
+                shell
+                    .track(mode, id)
+                    .map(oag_game::catalogue::Track::entry_name)
+            },
+        ) {
+            Ok(plan) => plan,
+            Err(refusal) => {
+                warn!("{}: {refusal}", cell.name);
                 return;
-            };
-            leg_entries.push(entry);
-        }
-        let entry = leg_entries[0].clone();
-        // A `Zone` cell's own `class` is the literal string `"Zone"`, not a
-        // speed class - see `oag_tables::race_campaign::Cell::speed_class`'s
-        // own doc. Nothing in this engine resolves a Zone handling block of
-        // its own yet (`docs/gameplay/race-modes.md`'s own "every title
-        // ships one Zone handling block, and this engine does not read it"),
-        // so the class a Zone cell races under falls back to whatever the
-        // RACE page last had selected - chosen, not measured, and reported
-        // so the substitution is never silent.
-        let class = match cell.speed_class() {
-            Some(_) => cell.class.clone(),
-            None => {
-                let fallback = self.settings.race.class.clone();
-                warn!(
-                    "{}'s own class {:?} is not a speed class - racing at {fallback:?} instead, \
-                     chosen not measured",
-                    cell.name, cell.class
-                );
-                fallback
             }
         };
+        if plan.class_is_fallback {
+            warn!(
+                "{}'s own class {:?} is not a speed class - racing at {:?} instead, \
+                 chosen not measured",
+                cell.name, cell.class, plan.class
+            );
+        }
+        let mode = plan.mode;
+        let is_tournament = mode == oag_race::Mode::Tournament;
+        let first_track = if is_tournament {
+            cell.tournament_tracks.first()
+        } else {
+            cell.track.as_ref()
+        }
+        .cloned()
+        .unwrap_or_default();
         let Some(mut race_options) = self.race_options.take() else {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
-        race_options.track = Some(entry);
+        race_options.track = Some(plan.leg_entries[0].clone());
         race_options.mode = mode;
-        race_options.class = class;
-        // Elimination's own kill target is the cell's gold target - see
-        // `oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`'s own doc, which
-        // this is the caller that retires the default in favour of.
+        race_options.class = plan.class;
         race_options.weapons_override = None;
-        race_options.eliminator_kill_target = (mode == oag_race::Mode::Eliminator)
-            .then(|| u32::try_from(cell.gold).ok())
-            .flatten();
-        // Only for the modes whose own `Mode::laps_target` already returns
-        // `Some` - see `race::Options::laps_override`'s own doc for why
-        // `SpeedLap`/`Zone` must never take their own `laps` attribute this
-        // way. Tournament included: its own cell carries the identical
-        // 3/4/4/5 census every leg races under - see `Mode::Tournament`'s
-        // own doc comment. Head2Head included too, on the same census -
-        // `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
-        race_options.laps_override = matches!(
-            mode,
-            oag_race::Mode::TimeTrial
-                | oag_race::Mode::SingleRace
-                | oag_race::Mode::Tournament
-                | oag_race::Mode::Head2Head
-        )
-        .then_some(cell.laps)
-        .flatten();
+        race_options.eliminator_kill_target = plan.eliminator_kill_target;
+        race_options.laps_override = plan.laps_override;
+        let leg_entries = plan.leg_entries;
         // `AI_ResolveSkillScale`'s campaign-cell branch
         // (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`,
         // `0x08834df4`) - resolved once here, against the first leg's own
@@ -383,7 +350,7 @@ impl Session {
         // every leg at the position its first track's own curve gives -
         // chosen, not measured, on the multi-leg case only.
         let ai_skill_scale = difficulty.and_then(|rung| {
-            let location = shell.track(mode, &track_ids[0])?.location.clone();
+            let location = shell.track(mode, &first_track)?.location.clone();
             self.resolve_campaign_ai_skill_scale(&cell, rung, &location)
         });
         self.race_options = Some(race_options);
