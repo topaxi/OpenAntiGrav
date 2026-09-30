@@ -799,7 +799,15 @@ impl Frontend {
                 continue;
             }
             let scale = text.scale.max(0.5);
-            out.push(Draw::Text {
+            // A button-glyph prompt draws in the `Buttons` face where the title
+            // reads its picker from the loaded faces - see
+            // `oag_title::BootProfile::picker_from_loaded_faces`.
+            let button_glyph = self.picker_line_height.is_some()
+                && matches!(
+                    text.name.as_deref(),
+                    Some("ControlTextConfirmButton" | "ControlTextBackButton")
+                );
+            let draw = Draw::Text {
                 x: text.x,
                 // Nudged into the viewport. The XML's coordinates are absolute
                 // within the real screen's widget tree, and we do not apply
@@ -829,6 +837,28 @@ impl Frontend {
                 align: Align::parse(&text.align),
                 text: body.to_string(),
                 wrap_width: text.wrap_width,
+            };
+            out.push(match draw {
+                Draw::Text {
+                    x,
+                    y,
+                    scale,
+                    color,
+                    align,
+                    text,
+                    ..
+                } if button_glyph => Draw::FacedText {
+                    role: crate::language::roles::BUTTONS,
+                    x,
+                    y,
+                    scale,
+                    color,
+                    border: None,
+                    align,
+                    text,
+                    wrap_width: None,
+                },
+                other => other,
             });
         }
 

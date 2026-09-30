@@ -114,7 +114,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     menu_backdrop: Some(crate::names::BACKDROP_MOVIE),
     // The picker carries its own background on this title.
     picker_backdrop_parent: None,
-    picker_row_pitch_from_face: false,
+    picker_from_loaded_faces: false,
     // Pulse's own `Skin.xml` declares every global its screens name.
     fallback_globals: &[],
     // No src-less widget found on this title yet.

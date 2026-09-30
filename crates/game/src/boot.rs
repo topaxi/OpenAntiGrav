@@ -1223,7 +1223,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     if !face_scales.is_empty() {
         frontend.set_face_scales(face_scales, font.line_height);
     }
-    if profile.picker_row_pitch_from_face {
+    if profile.picker_from_loaded_faces {
         frontend.set_picker_line_height(font.line_height);
     }
     if !campaign_events.is_empty() {

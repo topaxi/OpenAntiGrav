@@ -182,9 +182,18 @@ pub struct BootProfile {
     /// child screen with no fill of its own and would otherwise draw on black -
     /// Pure's, which sits on `Intro Screen`'s white.
     pub picker_backdrop_parent: Option<&'static str>,
-    /// Whether the language picker's row pitch is one line of the `Default`
-    /// face this build loaded, rather than `oag_ui`'s hard-coded table of
-    /// Pulse's line heights.
+    /// Whether the language picker is drawn from the faces this build loaded
+    /// rather than from `oag_ui`'s hard-coded table of Pulse's line heights and
+    /// Pulse's `menu` face.
+    ///
+    /// Two things follow. The row pitch is one line of the loaded `Default`
+    /// face. And the picker's `ControlTextConfirmButton`/`ControlTextBackButton`
+    /// draw in the `Buttons` face: their strings are button-glyph codepoints
+    /// (`FE_CONFIRM_BUTTON` is `"\u{3b5}"`, present only in `PS_BUTTONS.fnt`),
+    /// they author `font="menu"`, and HD's language plugins declare no `menu`
+    /// role at all, so the glyph would otherwise draw as an empty box. The
+    /// original's own picker was never watched on HD, so which face it draws
+    /// them in is **chosen, not measured**.
     ///
     /// The picker's `<Menu>` states no pitch (the disc authors x, y, scale,
     /// colour and alignment only), so the step is one line of the widget's own
@@ -192,7 +201,7 @@ pub struct BootProfile {
     /// 13 against a 33 or 64 unit face and the rows print over each other.
     /// `false` keeps the table, which is what Pulse, Pure and 2048 draw
     /// against captures matched with it.
-    pub picker_row_pitch_from_face: bool,
+    pub picker_from_loaded_faces: bool,
     /// `FEGlobals` this title's own `Skin.xml` leaves undeclared, measured.
     ///
     /// Merged in only for keys the disc does not declare; a real declaration
@@ -272,7 +281,7 @@ mod tests {
         reel: None,
         menu_backdrop: None,
         picker_backdrop_parent: None,
-        picker_row_pitch_from_face: false,
+        picker_from_loaded_faces: false,
         fallback_globals: &[],
         fallback_images: &[],
     };

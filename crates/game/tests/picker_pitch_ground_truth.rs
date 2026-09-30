@@ -4,7 +4,7 @@
 //! The picker's `<Menu>` authors no pitch (x, y, scale, colour, alignment
 //! only), so the step is an inference - one line of the widget's own font -
 //! but its input, the face height, is read off the disc. Dropping
-//! `oag_title::BootProfile::picker_row_pitch_from_face` or the
+//! `oag_title::BootProfile::picker_from_loaded_faces` or the
 //! `set_picker_line_height` call in `boot::load_shell` puts the step back at
 //! 13 x the menu scale and fails here.
 //!
@@ -72,6 +72,34 @@ fn rows_and_pitch(source: &str) -> Option<(Vec<f32>, f32)> {
     Some((ys, loaded.font.line_height * scale))
 }
 
+/// The picker's confirm prompt's glyph draws in the `Buttons` face, not as a
+/// plain `Draw::Text` in a face that has no such codepoint (an empty box).
+fn check_confirm_glyph(source: &str) {
+    let Some(loaded) = load(source) else { return };
+    let mut frontend = loaded.frontend;
+    let mut input = Input::new();
+    input.begin_frame(Button::Start.bit());
+    frontend.update(1.0 / 60.0, &mut input, None);
+    input.begin_frame(0);
+    frontend.update(1.0 / 60.0, &mut input, None);
+    let glyph = loaded.strings.get_or_id("FE_CONFIRM_BUTTON").to_string();
+    assert_eq!(glyph.chars().count(), 1, "{glyph:?}");
+    let draws = frontend.draw_list();
+    assert!(
+        draws.iter().any(|d| matches!(
+            d,
+            Draw::FacedText { role, text, .. } if *role == "Buttons" && *text == glyph
+        )),
+        "{source}: no Buttons-face draw of {glyph:?}"
+    );
+    assert!(
+        !draws
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if *text == glyph)),
+        "{source}: the glyph also draws as plain text"
+    );
+}
+
 fn check(source: &str) {
     let Some((ys, pitch)) = rows_and_pitch(source) else {
         return;
@@ -97,4 +125,16 @@ fn hd_picker_rows_step_by_the_default_face() {
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn omega_picker_rows_step_by_the_default_face() {
     check("data/extracted/ps4");
+}
+
+#[test]
+#[ignore = "needs the extracted HD data"]
+fn hd_picker_confirm_glyph_draws_in_the_buttons_face() {
+    check_confirm_glyph("data/extracted/ps3/hdfury-eu");
+}
+
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_picker_confirm_glyph_draws_in_the_buttons_face() {
+    check_confirm_glyph("data/extracted/ps4");
 }
