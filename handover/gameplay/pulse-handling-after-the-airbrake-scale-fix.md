@@ -15,32 +15,25 @@ they belong:
 
 ## Open
 
-- **The AI is slower to adapt than the physics, and one test is red for it.**
-  The drivers fly the player's physics and were tuned against the weak term.
-  `ai_clean_lap_gate`'s BASELINE was re-recorded for the change (commit
-  `afaba9c7`, which names the four status changes: `05_Track` FLASH and VENOM
-  and `14_Track` RAPIER `CleanLap` to `Died`, `13_Track` RAPIER losing its
-  clean lap). **`difficulty_ground_truth::every_difficulty_is_quicker_than_the_one_below_it`
-  fails and was deliberately not touched**: Ace's leader mean is 6683 against
-  Elite's 6829 over five seeds, 2.14 % under against a 2.0 % tolerance (before
-  the fix: 6728 against 6773, 0.66 % under). The pair was already inside the
-  noise the test's own doc comment records; the airbrake push moved it just
-  past the line. Both belong to whoever holds the AI lane.
-- **Shield, VENOM, one lone Ace, `ai_clean_lap_board`** (before -> after,
-  end-of-run shield; per-lap wall charge in brackets). Unchanged within noise
-  on ten circuits. `05_Track` is the outlier: end 66.1 -> 86.6 (three
-  respawns in the run; whether a respawn refills the pool was not checked), but wall charge 13.7 -> 96.0 and laps `1.9 1.4 2.0` ->
-  `1.8 1.9 90.0` - a lap-3 wall grind. `10_Track`: end 94.8 -> 79.8, laps
-  `0.0 0.0 0.0` -> `0.0 7.6 7.6` with no wall charge, so not walls. Both
-  boards are in the lane's scratch directory (`board-before.txt`,
-  `board-after.txt`), not tracked.
-- **`05_Track` respawns went from 1 to 3** in
-  `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
-  (lost at ticks 186, 637, 2412; before: 407). Still a clean lap, all twelve
-  circuits still clean. The craft now carries more speed through an airbraked
-  corner, as the original does, so the driver that was tuned against the weak
-  term may now arrive too fast. That is AI driving, not physics - the physics
-  moved toward the capture.
+- **The AI side is closed (2026-09-30, `ai-retune`), by something other than the
+  airbrake.** The drivers had no airbrake model to update and were not arriving
+  at corners faster; the three lost rows were `05_Track`'s crest lip, where a
+  driver that braked at the foot of the hill arrived 3 units/s under the ~70 it
+  needs. `Line::curvature` now reads only a convex pitch change as a bend
+  (`docs/gameplay/ai.md`, "A valley is not a corner"). Result: `05_Track`
+  VENOM and FLASH and `14_Track` RAPIER `CleanLap` again, `Died` rows 14 to 10
+  of 48, `05_Track` respawns 3 to 0 in the lone-craft test,
+  `difficulty_ground_truth` green at the unchanged 2.0 % (Ace 1.85 % under Elite,
+  thin). End-of-run shield, VENOM lone Ace: unchanged within 3 on ten circuits;
+  `09_Track` 93.0 to 89.9, `07_Track` 52.9 to 50.0, `10_Track` 79.8 to 94.4,
+  `05_Track` 86.6 to 81.2. Per-lap shield on `05_Track`: `1.8 1.9 90.0` to
+  `2.0 1.8 2.4`.
+- **Open from that work: `07_Track` FLASH went `Died` to `Eliminated`** (contact
+  864 to 869, not traced), and **a craft that clips `05_Track`'s crest is never
+  rescued**: it slides back on a ~60-tick cycle for up to 5,000 ticks, never
+  stopped two seconds and never far from the line, so neither rescue fires.
+  That is race rules. Ace sits below Elite on four of five seeds in
+  `difficulty_ground_truth`; the gap is the pace ceiling, not a driving fault.
 - **A small residual without airbrakes, now the largest one left in the clean
   window.** The one-tick walk (`oag-trace run --reseed 2`, odd rows) shows the
   original decelerating 2-7 units/s^2 more than we do above about 70 units/s
@@ -68,6 +61,5 @@ they belong:
 2. Fit the no-airbrake forward residual against `speed^2` and `speed` over
    ticks 36-50 and 83-99 of the clean lap (airbrakes off, wall-free) to see
    whether it is the quadratic drag or the rolling resistance.
-3. Give the AI lane the `05_Track` regression (respawn ticks above, the lap-3
-   wall grind) and the Ace/Elite ordering; the driver should brake less or
-   later into airbraked corners now that the airbrake no longer costs speed.
+3. Trace why `07_Track` FLASH now ends `Eliminated`, and give a craft that clips
+   `05_Track`'s crest lip a rescue (see the second open bullet).
