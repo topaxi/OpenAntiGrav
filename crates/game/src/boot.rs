@@ -279,15 +279,13 @@ pub struct Shell {
     /// [`oag_ui::picker`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
-    /// The `KILLS` row's values off the disc's `Eliminations` list and the
-    /// `WEAPONS` row's off its `Weapons` list.
+    /// The `KILLS`/`WEAPONS` rows' values, off the disc's own lists.
     pub race_setup: RaceSetup,
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
     pub title_font: Option<oag_ui::font::Atlas>,
-    /// The PlayStation button-glyph face - see [`Shell::buttons_font`]'s own
-    /// doc.
+    /// The PlayStation button-glyph face (`PS_BUTTONS.fnt` on HD and Omega).
     pub buttons_font: Option<oag_ui::font::Atlas>,
     /// Each font role's face against `Default`, see [`fonts::face_scales`].
     pub face_scales: Vec<(String, f32)>,
