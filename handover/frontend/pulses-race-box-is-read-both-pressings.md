@@ -229,9 +229,10 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
    five - `RACE TYPE`, `SPEED CLASS`, `WEAPONS`, `AI DIFFICULTY`, `KILLS` -
    against this build's three (`MODE`, `SPEED CLASS`, `AI DIFFICULTY`;
    `TEAM`/`VARIANT`/`TRACK` are correctly dropped, per "The flow" above).
-   `WEAPONS` (an on/off toggle, separate from `Mode::weapons_enabled`'s
-   per-mode default) and `KILLS` (an Eliminator kill-limit) have no setting
-   anywhere in this crate to back a row with. Shared with the PSP build
+   **2026-09-30: `KILLS` now has its row** (`race.kill_target`, values off
+   the disc's `Eliminations` list, greyed outside an Eliminator). `WEAPONS`
+   (an on/off toggle, separate from `Mode::weapons_enabled`'s per-mode
+   default) still has no setting anywhere in this crate to back a row with. Shared with the PSP build
    (same `menu.toml`), so not a PS2-only gap; a settings + UI addition
    rather than a small fix, so left for whoever picks up this thread next
    rather than built here. See

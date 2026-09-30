@@ -189,6 +189,19 @@ setting = "ai.difficulty"
 values = ["novice", "skilled", "elite", "ace"]
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
 
+# The race box's `KILLS` row: the values are the disc's own `Eliminations` list
+# (`oag_game::boot::screens::read_kill_targets`), so a title that reads none
+# draws the row unusable instead of offering numbers nothing authored. The
+# original draws the row greyed in every mode but Eliminator and enables it
+# there (`docs/formats/race-setup.md`), which is what `disabled_by` does here.
+[[page.entry]]
+kind = "choice"
+label = "KILLS"
+string_id = "OAG_RACE_KILLS"
+setting = "race.kill_target"
+values_from = "kill_targets"
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race"] }
+
 [[page.entry]]
 kind = "choice"
 label = "TEAM"

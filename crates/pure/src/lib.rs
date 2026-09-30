@@ -186,6 +186,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,
+    race_setup: None,
     // Pure ships neither `FE\forward.vex` nor `ship_FE.vex`; both screens
     // preview with the stills the entry's own `screen.xml` authors.
     preview_meshes: false,

@@ -426,6 +426,12 @@ pub struct FrontEnd {
     /// which only `DATA06` carries. `None` on every other title, whose
     /// track screen is in [`Self::race_box`] or unread.
     pub track_select: Option<&'static str>,
+    /// The definition holding the race box's `Single Player` screen, the page
+    /// whose lists are the settings a custom race is set up with. Read for
+    /// one thing today: the `Eliminations` list, the kill targets the
+    /// `KILLS` row offers (see `oag_game::boot::kill_targets`). `None` on a
+    /// title whose setup page is unread, which shows no kill target to pick.
+    pub race_setup: Option<&'static str>,
     /// Whether this title's race-setup screens preview an entry with a
     /// rendered mesh.
     ///

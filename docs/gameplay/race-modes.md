@@ -725,8 +725,11 @@ Evidence page: [eliminator-kill-target.md](../ghidra/functions/psp-pulse-usa/eli
 
 The XML authors `Default="10"` on that list and the running screen does not honour it (why is
 not determined). `oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` is therefore **5**, the
-list's first entry; a campaign cell's gold (10, 7 or 5) still wins. **Open**: this build's race
-page has no `KILLS` row, so 10 to 25 cannot be chosen from a Custom Race.
+list's first entry; a campaign cell's gold (10, 7 or 5) still wins. This build's RACE page
+now has the `KILLS` row (2026-09-30): its values are read off the disc's own `Eliminations`
+list, it is greyed outside an Eliminator, and the pick is the Eliminator's kill target
+(`oag_game::settings::Race::eliminator_kill_target`). RACE REMIX has no such row and keeps the
+default.
 
 ### Who is credited with a kill, and why this build's Eliminator does not finish (2026-09-30)
 

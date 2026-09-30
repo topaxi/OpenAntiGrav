@@ -50,8 +50,9 @@ Two sources therefore feed the target, and only one is a fallback:
 1. a campaign cell's gold figure (`cell+0xa0`), when `DAT_08b30ffc` is set;
 2. otherwise the `KILLS` list's selected entry: 5, 10, 15, 20 or 25, **5 on a fresh profile**.
 
-`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` is now 5, the list's first entry. This build
-has no `KILLS` row on its race page yet, so a player cannot pick the other four (open).
+`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` is now 5, the list's first entry. This build's
+RACE page has the `KILLS` row since 2026-09-30 (see [race-setup.md](../../../formats/race-setup.md)),
+so the other four can be picked.
 
 ## Who is credited with a kill (`Ship_Damage`, confidence 85)
 

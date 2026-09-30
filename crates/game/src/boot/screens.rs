@@ -435,3 +435,59 @@ fn with_served_gaps(
     );
     strings
 }
+
+/// The kill targets the race box's `KILLS` row offers, in the order the disc's
+/// own `Eliminations` list authors them (`5`, `10`, `15`, `20`, `25` on
+/// Pulse), off `name` - [`oag_title::FrontEnd::race_setup`]. Empty when the
+/// title names no such file, or it will not read (reported), which leaves the
+/// row unusable rather than offering values nothing authored.
+pub(super) fn read_kill_targets(
+    archives: &mut oag_assets::Archives,
+    name: Option<&str>,
+    report: &mut Vec<String>,
+) -> Vec<String> {
+    let Some(name) = name else {
+        return Vec::new();
+    };
+    let xml = archives
+        .read_name(name)
+        .map_err(anyhow::Error::from)
+        .and_then(|blob| {
+            fexml::text(&blob).map_err(|e| anyhow::anyhow!("reading the front-end XML: {e}"))
+        });
+    match xml {
+        Ok(xml) => eliminations(&xml),
+        Err(error) => {
+            report.push(format!("{name}: {error:#} - no KILLS row values"));
+            Vec::new()
+        }
+    }
+}
+
+/// The `string` of every entry of the list named `Eliminations`, unparsed.
+fn eliminations(xml: &str) -> Vec<String> {
+    let Some(at) = xml.find("name=\"Eliminations\"") else {
+        return Vec::new();
+    };
+    let list = &xml[at..];
+    let list = &list[..list.find("</List>").unwrap_or(list.len())];
+    list.split("string=\"")
+        .skip(1)
+        .filter_map(|rest| rest.split('"').next())
+        .map(str::to_string)
+        .collect()
+}
+
+#[cfg(test)]
+mod kill_target_tests {
+    use super::eliminations;
+
+    #[test]
+    fn the_list_is_read_in_authored_order_and_nothing_else() {
+        let xml = r#"<List name="Weapons"><Data string="FE_ON"/></List>
+<List name="Eliminations" focus="true" global="Eliminations"><Anim x="250"/><Data string="5"/><Data string="10"/><Data string="25"/></List>
+<Text string="later"/>"#;
+        assert_eq!(eliminations(xml), ["5", "10", "25"]);
+        assert!(eliminations("<List name=\"Mode\"/>").is_empty());
+    }
+}

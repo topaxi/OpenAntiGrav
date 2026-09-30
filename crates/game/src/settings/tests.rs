@@ -645,3 +645,17 @@ fn hd_opens_ship_select_on_concept1_until_a_model_is_picked() {
     };
     assert_eq!(stored.opening_variant(oag_hd::TITLE), "_n1");
 }
+
+/// The KILLS row reaches a launch only in an Eliminator, and only once touched.
+#[test]
+fn the_kills_pick_is_an_eliminator_launch_option_only() {
+    use oag_race::Mode;
+    let untouched = Race::default();
+    assert_eq!(untouched.eliminator_kill_target(Mode::Eliminator), None);
+    let picked = Race {
+        kill_target: "15".to_string(),
+        ..Race::default()
+    };
+    assert_eq!(picked.eliminator_kill_target(Mode::Eliminator), Some(15));
+    assert_eq!(picked.eliminator_kill_target(Mode::TimeTrial), None);
+}

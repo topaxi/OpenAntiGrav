@@ -646,6 +646,8 @@ pub(crate) struct Shell {
     /// circuits are: the strings do not change while the game runs, and the
     /// string table is not kept past boot.
     pub(crate) modes: Vec<menu::Choice>,
+    /// The `KILLS` row's values, off the disc's own `Eliminations` list.
+    pub(crate) kill_targets: Vec<menu::Choice>,
     pub(crate) font: oag_ui::font::Atlas,
     pub(crate) sprites: oag_game::sprite::Sheet,
     /// The front end's own `FEGlobals` table, carried from `boot::Shell`'s
@@ -768,6 +770,9 @@ impl Shell {
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),
+            kill_targets: (boot_shell.kill_targets.iter())
+                .map(menu::Choice::plain)
+                .collect(),
             // The disc's own names for its stylings, so the row offers what the
             // source has rather than a list this build holds.
             front_end_styles: boot_shell

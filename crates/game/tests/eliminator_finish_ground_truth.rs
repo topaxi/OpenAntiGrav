@@ -65,3 +65,28 @@ fn a_parked_player_eliminator_reaches_a_finish() {
     );
     assert_eq!(kills[0], 0, "the parked player cannot have scored");
 }
+
+/// The target a launch carries is the one the race ends on, not a constant:
+/// 3 here, where the test above ends on 2, so a KILLS pick dropped on the way
+/// into `Options` (leaving the default 5) ends on neither and fails one of the
+/// two bounds below.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_chosen_kill_target_is_what_the_eliminator_ends_on() {
+    let Some(mut race) = loaded_eliminator(Some(3)) else {
+        return;
+    };
+    let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());
+    let mut best_when_ended = None;
+    for _ in 0..TICKS * 3 {
+        race.tick(&parked);
+        if race.sim.world.primary_race().finished {
+            best_when_ended = (0..race.sim.world.ship_count as usize)
+                .map(|slot| race.sim.world.ships[slot].standing.kills)
+                .max();
+            break;
+        }
+    }
+    let best = best_when_ended.expect("the race ends within eighteen game-minutes");
+    assert!((3..5).contains(&best), "ended with a best of {best} kills");
+}

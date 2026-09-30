@@ -186,6 +186,7 @@ impl Session {
             teams: team_choices,
             languages: Vec::new(),
             modes: menu::mode_choices(&strings),
+            kill_targets: Vec::new(),
             entries: None,
             front_end_styles: Vec::new(),
             font: font::Atlas::build(),
