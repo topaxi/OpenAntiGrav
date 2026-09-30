@@ -32,15 +32,17 @@ pub struct DrawCall {
     /// Whether this draw's geometry is moved per frame by an `Anim Transform`,
     /// which makes [`Self::bounds`] a statement about time zero only.
     ///
-    /// Set, the draw skips culling entirely - both the PVS mask and the frustum
-    /// test - because neither has a bound it could trust. A moving object's
-    /// world-space extent is its whole authored path, and on the widest node
-    /// measured that is 5,000 units, so a bounding sphere honest enough to be
-    /// safe would swallow most of the circuit and cull nothing anyway.
+    /// Set, the draw skips the **frustum** test, because it has no bound it
+    /// could trust. A moving object's world-space extent is its whole authored
+    /// path, and on the widest node measured that is 5,000 units, so a bounding
+    /// sphere honest enough to be safe would swallow most of the circuit and
+    /// cull nothing anyway. The authored **PVS mask still applies**: it keys
+    /// on the draw's node, not on its position, and the original's own frame
+    /// omits the moving meshes its sections hide (`oag_render::pvs::visible`).
     ///
     /// 474 of a circuit's ~6,800 meshes carry it, so what this costs is about
-    /// 7% of the geometry drawn unculled - against a moving object vanishing
-    /// when the tests disagree with where it actually is. See
+    /// 7% of the geometry drawn past the frustum - against a moving object
+    /// vanishing when the test disagrees with where it actually is. See
     /// `docs/rendering/scenery-animation.md`.
     pub moving: bool,
     /// Whether this batch is drawn single-sided, from its own `pass_mask`.

@@ -1595,6 +1595,39 @@ CPU store. Before trusting an absence, cross-check the target's own value
 before and after the window, the way this session did by accident rather
 than by original design; a changed value with a silent log is the tell that
 
+## Reading the frame's GE list: `gpu.record.dump`
+
+**Measured 2026-09-30, PPSSPP v1.20.4, `UCUS98712`.** The websocket answers
+`gpu.record.dump` with a `data:` URI holding a PPSSPP GE dump (`.ppdmp`) of the next
+frame the GPU draws - about 0.2 to 0.9 s, 500 to 750 KB, with the CPU running and
+no stepping. It is the one instrument here that shows **which batches the original
+submits**, and the reason it is needed: the original draws through compiled call
+lists (`Mesh_CompileBatchSet`/`Mesh_DrawBatchSet` in
+[mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md)), so a breakpoint on
+`Gu_DrawArray` does not fire per draw, and a screenshot cannot tell a hidden mesh
+from a culled one.
+
+`scripts/psp-ge-dump.py dump` saves the file and `census` reads it: one record per
+PRIM with its vertex count and its world-space bounding box under the world matrix
+in force (the GE's fixed-point positions are scaled by it, so a box only makes sense
+after the transform). A batch is then recognised by **(vertex count, sorted box
+extents)**, taken off this project's own draws in the same way, which survives the
+matrix and needs no address. The layout the script reads is in its docstring.
+
+Two traps:
+
+- **A pose placed at speed is not the pose dumped.** `psp-drive.py place --speed 41
+  --settle 40` left the craft 23 units from where it was placed before the dump ran.
+  Place at `--speed 0 --settle 12` (the craft then drifts under a unit), dump, and
+  take the ours-side pose from a `psp-trace.py --camera` capture of the same resting
+  craft.
+- **A moving batch's box depends on the animation phase**: our side reads the rest
+  geometry, the original's is after the node's transform, so a rotating or scaling
+  mesh can miss its twin. Use the signature to prove a batch is *present*, and treat
+  a miss on a moving one as weaker than a miss on a static one (static twins
+  matched 88 to 98 % at well-posed dumps; method and results:
+  [frame-audit.md](../rendering/frame-audit.md) section 3).
+
 ## Halting on a hot function silently voids a timed capture
 
 **Measured 2026-08-28.** An execution breakpoint on `Gfx_BindTexture` -

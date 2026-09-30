@@ -23,10 +23,14 @@ of it the same day; see `frame-audit.md`.
   `*_shinemap` batches (their `+0x1a8` is 0, the view-matrix matcap, unread), the
   original's replace-then-add against our single additive redraw, fog on the pass,
   the airbrakes' flap deflection, and the wreck model (`+0x8b8`, same flags).
-- **Factory roofs on the Talon straight.** At `(161,-47,-185)` heading
-  `-0.94,-0.09,-0.34` ours draws dark bowl shapes (track draws 1381-1391, PVS on)
-  where the original shows terrain. Not traced: draw order versus terrain,
-  a PVS section the original culls, or our section placement.
+- ~~**Factory roofs on the Talon straight.**~~ **Fixed 2026-09-30.** The roofs are
+  draws 1479..1494 (four animated slab transports, `track.vex` nodes 789, 793, 804,
+  806), not 1381..1391; the original's GE list never contains them (`psp-ge-dump.py`,
+  seven dumps, four poses, two boots), and `oag_render::pvs::visible` had exempted
+  every moving draw from the section mask as well as the frustum. The mask now
+  applies (`frame-audit.md` section 3). Still open on it: 21 to 24 moving draws at
+  rest poses that pass the mask and the original does not submit (its frustum uses a
+  bound for moving meshes that we lack), and one circuit only.
 - **Whether real PSP hardware shows level 1 past about 256 units.** The game
   programs slope mode with slope `1/256` and bias 1; the renderer now applies
   that law to the disc's levels, and PPSSPP's GPU backends do not, so no frame of
@@ -40,8 +44,9 @@ of it the same day; see `frame-audit.md`.
 
 ## Next Steps
 
-- Bisect the factory roofs by draw index (`OAG_LO`/`OAG_HI`-style filter on the
-  opaque loop) against a capture with the terrain's own layer, before touching
-  PVS placement.
+- Repeat the roofs measurement on another circuit (Metropia, Tech De Ra) with
+  `scripts/psp-ge-dump.py`: the rule was measured on Talon's Junction alone, and a
+  moving draw the original submits but a section hides would show as a matched
+  signature lost by the mask.
 - Capture Pure at one pose with `psp-trace.py` and confirm or scope the slope
   rule; read `Texture_BuildBindList`'s mode/bias branch.
