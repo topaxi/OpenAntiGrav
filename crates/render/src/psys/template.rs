@@ -1,0 +1,120 @@
+//! The sprite templates an emitter starts with, played as one-shot emitters.
+//!
+//! `oag_vex::pob::Emitter::initial_particles` reads what
+//! `FUN_088f58a4` (the emitter instance's initialiser) makes a particle from
+//! the moment an instance exists: a white `shazam` flash on the collision
+//! sparks, a `glow` on nearly every effect, the Quake's 100-unit `shazzam`,
+//! the Plasma's `PLASMA_GLOW`. The record is an emitter reduced to its
+//! particle: a size channel, an alpha channel, a colour table walked over the
+//! particle's life, a lifetime, a blend and a draw class. So it is translated
+//! by the same [`EmitterSpec::from_record`] every emitter is, into a spec that
+//! emits once, at the first update, with no speed - and started with the root
+//! that owns it.
+//!
+//! **A template on an emitter that is itself a child is not played**: it would
+//! have to start with that child's own instances, and no consumer here carries
+//! that. [`Effect::skipped_templates`] counts them.
+//!
+//! **Pulse on the PSP only**, the layout being read off that executable alone:
+//! every other source calls [`Effect::without_pulse_psp_draw`], which mutes the
+//! templates it added.
+//!
+//! The sprite is the parent emitter's own: both records point at the pool the
+//! emitters do. Severity multiplies a template's size as it does any
+//! particle's - the live capture's `shazam` reads `3.9 * 2.4 = 9.36`.
+//!
+//! **A looping size channel is unrolled.** A record's channel authors a
+//! `period` in ticks (the `glow`'s is ten, over a forty-tick life): the live
+//! particle's size peaked twice in sixteen frames, `v` at `fract(age / 10)`.
+//! [`unroll`] repeats the keys over the normalised life, which is the same
+//! curve without giving the pool a second notion of age.
+
+use oag_vex::pob::{self, Channel, ChannelMode};
+
+use super::{ColourScale, Effect, EmitterSpec};
+
+impl Effect {
+    /// Appends a one-shot spec for every template on a root emitter, and
+    /// starts each with the effect.
+    pub(super) fn add_templates(&mut self, records: &[pob::Emitter], scale: ColourScale) {
+        let parents: Vec<usize> = self.roots.clone();
+        for parent in parents {
+            for template in &records[parent].initial_particles {
+                if self.emitters.len() >= super::MAX_EMITTER_STATES {
+                    return;
+                }
+                let sprite = self.emitters[parent].sprite.clone();
+                let Ok(mut spec) = EmitterSpec::from_record(template, scale, sprite) else {
+                    continue;
+                };
+                let life = spec.lifetime_ticks.0.max(1.0);
+                spec.template = true;
+                spec.size = unroll(&spec.size, life);
+                spec.alpha = unroll(&spec.alpha, life);
+                spec.atlas = super::Atlas::SINGLE;
+                self.roots.push(self.emitters.len());
+                self.emitters.push(spec);
+            }
+        }
+        self.skipped_templates = records
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !self.roots.contains(index))
+            .map(|(_, record)| record.initial_particles.len())
+            .sum();
+    }
+
+    /// Templates on child emitters, which are not played - see
+    /// [this module](self).
+    #[must_use]
+    pub fn skipped_templates(&self) -> usize {
+        self.skipped_templates
+    }
+
+    /// Mutes the templates, with everything else
+    /// [`Self::without_pulse_psp_draw`] takes back.
+    pub(super) fn mute_templates(&mut self) {
+        for spec in self.emitters.iter_mut().filter(|spec| spec.template) {
+            spec.per_emission = (0, 0);
+        }
+    }
+}
+
+/// `channel`, repeated over a particle life of `life_ticks`, when it authors a
+/// period; `channel` unchanged otherwise.
+pub(super) fn unroll(channel: &Channel, life_ticks: f32) -> Channel {
+    let period = channel.period;
+    if period <= 0.0 || channel.mode != ChannelMode::Keyframed || channel.keys.len() < 2 {
+        return channel.clone();
+    }
+    let cycles = life_ticks / period;
+    let mut keys: Vec<(f32, f32)> = Vec::new();
+    let mut cycle = 0.0_f32;
+    'cycles: while cycle < cycles {
+        for &(t, v) in &channel.keys {
+            let at = (cycle + t) / cycles;
+            if at >= 1.0 {
+                let end = (cycles - cycle) / 1.0;
+                keys.push((1.0, channel.value_at(end.min(1.0))));
+                break 'cycles;
+            }
+            match keys.last() {
+                Some(&(last, _)) if at <= last + 1.0e-6 => {}
+                _ => keys.push((at, v)),
+            }
+        }
+        cycle += 1.0;
+    }
+    if keys.last().is_none_or(|&(t, _)| t < 1.0) {
+        let last = keys.last().map_or(0.0, |&(_, v)| v);
+        keys.push((1.0, last));
+    }
+    Channel {
+        period: 0.0,
+        keys,
+        ..channel.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests;

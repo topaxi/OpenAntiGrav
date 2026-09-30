@@ -88,7 +88,12 @@ fn the_collision_spark_effect_matches_the_values_it_replaced() {
     };
     let effect = effect(&mut archive, sparks::DAMAGE_EFFECT);
 
-    let names: Vec<&str> = effect.emitters.iter().map(|e| e.name.as_str()).collect();
+    let names: Vec<&str> = effect
+        .emitters
+        .iter()
+        .filter(|e| !e.template)
+        .map(|e| e.name.as_str())
+        .collect();
     assert_eq!(
         names,
         [
@@ -98,8 +103,9 @@ fn the_collision_spark_effect_matches_the_values_it_replaced() {
             "WO_SHIP_COLL_SPARK_TRAIL"
         ]
     );
-    // All four are peers, so all four start with the burst.
-    assert_eq!(effect.roots(), [0, 1, 2, 3]);
+    // All four are peers, so all four start with the burst - and so do the
+    // two sprite templates the sparks and the ember carry, appended after.
+    assert_eq!(effect.roots(), [0, 1, 2, 3, 4, 5]);
 
     let smoke = &effect.emitters[0];
     assert_eq!(smoke.duration_ticks, 32.0);
@@ -340,9 +346,10 @@ fn a_collision_burst_fills_the_pool_and_both_blend_classes() {
 
     system.ignite(&effect, Vec3::ZERO, sparks::severity(80.0));
     // The first tick is every emitter's first emission: 1 smoke + 3 sparks
-    // + 2 bits + 1 ember.
+    // + 2 bits + 1 ember, and the two sprite templates the sparks and the
+    // ember start with (`shazam`, `glow` - see `psys::template`).
     system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
-    assert_eq!(system.alive_count(), 7);
+    assert_eq!(system.alive_count(), 9);
 
     let mut peak = 0;
     for _ in 0..4 {
@@ -372,7 +379,7 @@ fn a_collision_burst_fills_the_pool_and_both_blend_classes() {
         system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
     }
     assert!(!system.is_running(), "the burst never ended");
-    assert!(peak > 7, "the pool never grew past the first emission");
+    assert!(peak > 9, "the pool never grew past the first emission");
 }
 
 /// Every effect on the disc, run until it drains.

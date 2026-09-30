@@ -470,6 +470,7 @@ pub const MAX_CHANNEL_KEYS: usize = (CHANNEL_LEN - 0x14) / 8;
 /// [`flags::LOOPING`] alone runs longer than the rest of this module's
 /// constants put together.
 pub mod flags;
+mod initial;
 
 /// An emitter's own embedded sprite texture, addressed positionally rather
 /// than through the slot table - see the module's own doc comment for the
@@ -695,6 +696,12 @@ pub struct Emitter {
     /// [`Emitter::child_spawn_probability`]. Same indexing as
     /// [`Emitter::death_child`].
     pub particle_child: Option<usize>,
+    /// `+0x9a8`'s list: the sprite templates this emitter's instance creates
+    /// a particle from the moment it starts - see [`initial`]. Each is an
+    /// [`Emitter`] holding only the fields a template has, read as a one-shot
+    /// emitter (`duration_ticks` 1, one particle) so a consumer plays it with
+    /// the machinery it already has. Empty for nearly every emitter.
+    pub initial_particles: Vec<Emitter>,
 }
 
 impl Emitter {
@@ -822,6 +829,7 @@ fn emitter_placeholder() -> Emitter {
         modifiers: Vec::new(),
         death_child: None,
         particle_child: None,
+        initial_particles: Vec::new(),
     }
 }
 
@@ -899,6 +907,7 @@ fn parse_emitter(
         modifiers,
         death_child: None,
         particle_child: None,
+        initial_particles: initial::parse_list(data, order, base, record),
     };
 
     // Zero is "no pointer": it would name the root, which is never a child
