@@ -15,6 +15,25 @@ they belong:
 
 ## Open
 
+- **The AI is slower to adapt than the physics, and one test is red for it.**
+  The drivers fly the player's physics and were tuned against the weak term.
+  `ai_clean_lap_gate`'s BASELINE was re-recorded for the change (commit
+  `afaba9c7`, which names the four status changes: `05_Track` FLASH and VENOM
+  and `14_Track` RAPIER `CleanLap` to `Died`, `13_Track` RAPIER losing its
+  clean lap). **`difficulty_ground_truth::every_difficulty_is_quicker_than_the_one_below_it`
+  fails and was deliberately not touched**: Ace's leader mean is 6683 against
+  Elite's 6829 over five seeds, 2.14 % under against a 2.0 % tolerance (before
+  the fix: 6728 against 6773, 0.66 % under). The pair was already inside the
+  noise the test's own doc comment records; the airbrake push moved it just
+  past the line. Both belong to whoever holds the AI lane.
+- **Shield, VENOM, one lone Ace, `ai_clean_lap_board`** (before -> after,
+  end-of-run shield; per-lap wall charge in brackets). Unchanged within noise
+  on ten circuits. `05_Track` is the outlier: end 66.1 -> 86.6 (it respawns
+  and refills), but wall charge 13.7 -> 96.0 and laps `1.9 1.4 2.0` ->
+  `1.8 1.9 90.0` - a lap-3 wall grind. `10_Track`: end 94.8 -> 79.8, laps
+  `0.0 0.0 0.0` -> `0.0 7.6 7.6` with no wall charge, so not walls. Both
+  boards are in the lane's scratch directory (`board-before.txt`,
+  `board-after.txt`), not tracked.
 - **`05_Track` respawns went from 1 to 3** in
   `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
   (lost at ticks 186, 637, 2412; before: 407). Still a clean lap, all twelve
@@ -49,5 +68,6 @@ they belong:
 2. Fit the no-airbrake forward residual against `speed^2` and `speed` over
    ticks 36-50 and 83-99 of the clean lap (airbrakes off, wall-free) to see
    whether it is the quadratic drag or the rolling resistance.
-3. Give the `05_Track` regression to whoever holds the AI lane, with the three
-   tick numbers above.
+3. Give the AI lane the `05_Track` regression (respawn ticks above, the lap-3
+   wall grind) and the Ace/Elite ordering; the driver should brake less or
+   later into airbraked corners now that the airbrake no longer costs speed.
