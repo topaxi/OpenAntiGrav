@@ -179,6 +179,10 @@ impl Drawable {
             .filter(|draw| model.lod_groups.shows_nearest(draw))
             .map(|draw| draw.range.clone())
             .collect();
+        // The pictures are on the GPU now; the model keeps its slots and drops
+        // the texels it decoded them from.
+        let mut model = model;
+        model.release_texels();
         Ok(Self {
             opaque_ranges,
             lod: oag_render::mesh::LodSwitch::new(&model.lod_groups),

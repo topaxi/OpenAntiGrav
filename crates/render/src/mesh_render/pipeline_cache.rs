@@ -61,6 +61,20 @@ impl Key {
 struct Cache {
     shader: Option<wgpu::ShaderModule>,
     pipelines: HashMap<Key, wgpu::RenderPipeline>,
+    /// One upload per distinct decoded texture across the whole scene, keyed
+    /// by the `Arc`'s address. The `Weak` is what makes the address a safe
+    /// key: it keeps the allocation reserved after every strong owner lets go
+    /// (`Model::release_texels` drops them one drawable at a time), so no
+    /// other texture can be handed the same address while the entry lives.
+    textures: HashMap<
+        usize,
+        (
+            std::sync::Weak<crate::mesh::ModelTexture>,
+            wgpu::TextureView,
+        ),
+    >,
+    texture_calls: u32,
+    texture_hits: u32,
     shader_calls: u32,
     shader_hits: u32,
     pipeline_calls: u32,
@@ -95,6 +109,12 @@ impl Scope {
     #[must_use]
     pub fn shader_counts(&self) -> (u32, u32) {
         with_open_cache(|cache| (cache.shader_calls, cache.shader_hits))
+    }
+
+    /// `(texture uploads: calls, reused)` over this scope's life so far.
+    #[must_use]
+    pub fn texture_counts(&self) -> (u32, u32) {
+        with_open_cache(|cache| (cache.texture_calls, cache.texture_hits))
     }
 
     /// `(render pipeline: calls, reused, distinct pipelines built)` over this
@@ -188,6 +208,36 @@ pub(crate) fn cached_pipeline(
             let pipeline = create();
             cache.pipelines.insert(key, pipeline.clone());
             pipeline
+        }
+    })
+}
+
+/// One texture's view: shared for the life of an open [`Scope`] with every
+/// earlier call that named the same decoded texture, uploaded afresh with none
+/// open. `upload` runs only on a miss.
+///
+/// **This is what stops eight craft of three teams uploading eight copies of
+/// three liveries.** `mesh_render::build` already uploads once per texture
+/// within a model; the scene builds a model per craft, and a team's craft share
+/// their decoded textures by `Arc` but not their GPU copies.
+pub(crate) fn cached_texture_view(
+    texture: &std::sync::Arc<crate::mesh::ModelTexture>,
+    upload: impl FnOnce() -> wgpu::TextureView,
+) -> wgpu::TextureView {
+    CACHE.with(|cell| match cell.borrow_mut().as_mut() {
+        None => upload(),
+        Some(cache) => {
+            let key = std::sync::Arc::as_ptr(texture) as usize;
+            cache.texture_calls += 1;
+            if let Some((_, view)) = cache.textures.get(&key) {
+                cache.texture_hits += 1;
+                return view.clone();
+            }
+            let view = upload();
+            cache
+                .textures
+                .insert(key, (std::sync::Arc::downgrade(texture), view.clone()));
+            view
         }
     })
 }

@@ -113,6 +113,18 @@ pub(super) fn upload_rgba(
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
+/// [`upload`], once per distinct texture across an open
+/// [`super::pipeline_cache::Scope`] - see
+/// [`super::pipeline_cache::cached_texture_view`].
+pub(super) fn upload_shared(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &std::sync::Arc<ModelTexture>,
+    blocks: bool,
+) -> wgpu::TextureView {
+    super::pipeline_cache::cached_texture_view(texture, || upload(device, queue, texture, blocks))
+}
+
 /// Uploads one [`ModelTexture`], in the form it came in.
 ///
 /// `blocks` is whether the device has `TEXTURE_COMPRESSION_BC`. Without it a
@@ -141,19 +153,9 @@ pub(super) fn upload(
         // `first()` rather than `[0]`: `Texels::Blocks` is a public variant, and
         // an empty chain built elsewhere should decode to nothing and bind a
         // blank rather than panic here. `skin::blocks` never produces one.
-        let decoded = levels.first().and_then(|base| {
-            // `linear` is inert here: `format.as_gtf()` is always one of the
-            // three block-compressed formats this arm exists for, which the
-            // decoder does not consult the flag for.
-            oag_texture::gtf::decode_level(
-                format.as_gtf(),
-                base,
-                texture.width,
-                texture.height,
-                0,
-                true,
-            )
-        });
+        let decoded = levels
+            .first()
+            .and_then(|base| format.decode_level(base, texture.width, texture.height));
         let rgba: Vec<u8> = decoded.into_iter().flatten().flatten().collect();
         // A chain that decoded to nothing binds a blank rather than sending
         // `mip_chain` off the end of an empty buffer.
@@ -226,4 +228,77 @@ pub(super) fn upload(
         );
     }
     gpu.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+/// Bytes a texture occupies once uploaded, mip chain included.
+///
+/// Arithmetic, not a readback: [`upload`] is the one place a texture reaches
+/// the GPU and this mirrors its three outcomes - the disc's own blocks and
+/// chain, blocks decoded back to RGBA8 on an adapter without
+/// `TEXTURE_COMPRESSION_BC`, and RGBA8 with the box-filtered chain.
+fn gpu_bytes(texture: &ModelTexture, blocks: bool) -> u64 {
+    if let (Texels::Blocks { levels, .. }, true) = (&texture.texels, blocks) {
+        return levels.iter().map(|level| level.len() as u64).sum();
+    }
+    let mut levels = mip_chain_dims(texture.width, texture.height);
+    if let Some(max) = texture.mip_count {
+        levels.truncate(max as usize);
+    }
+    levels.iter().map(|(w, h)| u64::from(w * h) * 4).sum()
+}
+
+/// The size of every level [`mip_chain`] builds, without building it.
+fn mip_chain_dims(width: u32, height: u32) -> Vec<(u32, u32)> {
+    let mut levels = vec![(width, height)];
+    while let Some(&(w, h)) = levels.last() {
+        if w == 1 && h == 1 {
+            break;
+        }
+        levels.push(((w / 2).max(1), (h / 2).max(1)));
+    }
+    levels
+}
+
+/// Logs what one model's textures cost, on the CPU and on the GPU.
+///
+/// **One line per model, in the loader report**, so a change to how textures
+/// are held or uploaded shows in the same place the rest of a load is
+/// reported. Each distinct texture is counted once however many material
+/// slots share its `Arc`; `cpu` is what the [`Model`](crate::mesh::Model)
+/// keeps alive after the upload and `gpu` what [`upload`] sends.
+pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool) {
+    let mut seen = std::collections::HashSet::new();
+    let mut counts = [0usize; 2];
+    let mut cpu = [0u64; 2];
+    let mut gpu = [0u64; 2];
+    let mut compressed = 0usize;
+    for (role, slots) in [(0, &model.textures), (1, &model.lightmaps)] {
+        for texture in slots.iter().flatten() {
+            if !seen.insert(std::sync::Arc::as_ptr(texture) as usize) {
+                continue;
+            }
+            counts[role] += 1;
+            cpu[role] += texture.cpu_bytes();
+            gpu[role] += gpu_bytes(texture, blocks);
+            compressed += usize::from(matches!(texture.texels, Texels::Blocks { .. }) && blocks);
+        }
+    }
+    if counts == [0, 0] {
+        return;
+    }
+    let mib = |bytes: u64| bytes as f64 / (1024.0 * 1024.0);
+    log::info!(
+        "{}: texture memory - {} albedo + {} lightmap texture(s), {compressed} block-compressed; \
+         CPU kept {:.1} + {:.1} MiB, GPU uploaded {:.1} + {:.1} MiB (albedo + lightmap); \
+         geometry {:.1} MiB vertices + {:.1} MiB indices, CPU and GPU each",
+        model.label,
+        counts[0],
+        counts[1],
+        mib(cpu[0]),
+        mib(cpu[1]),
+        mib(gpu[0]),
+        mib(gpu[1]),
+        mib((model.vertices.len() * std::mem::size_of::<crate::mesh::GpuVertex>()) as u64),
+        mib((model.indices.len() * 4) as u64),
+    );
 }

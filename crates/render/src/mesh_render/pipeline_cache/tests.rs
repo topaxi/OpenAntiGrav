@@ -205,3 +205,66 @@ fn with_no_scope_open_every_build_creates_its_own_shader_and_pipelines() {
     let b = shared_shader_module(&device);
     assert_ne!(a, b, "with no scope open, the shader module is not cached");
 }
+
+/// Two models naming one decoded texture - a team's craft - upload it once
+/// inside a scope, and a model naming a *different* texture uploads its own.
+#[test]
+fn a_texture_shared_by_two_models_is_uploaded_once_per_scope() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let shared = std::sync::Arc::new(crate::mesh::ModelTexture::rgba8(
+        "shared".into(),
+        1,
+        1,
+        vec![255; 4],
+        None,
+    ));
+    let other = std::sync::Arc::new(crate::mesh::ModelTexture::rgba8(
+        "other".into(),
+        1,
+        1,
+        vec![0; 4],
+        None,
+    ));
+    let mut a = triangle_model();
+    a.textures = vec![Some(shared.clone())];
+    let mut b = triangle_model();
+    b.textures = vec![Some(shared.clone())];
+    let mut c = triangle_model();
+    c.textures = vec![Some(other)];
+
+    let scope = Scope::open();
+    build_once(&device, &queue, &a);
+    build_once(&device, &queue, &b);
+    build_once(&device, &queue, &c);
+    assert_eq!(scope.texture_counts(), (3, 1), "3 asked for, 1 reused");
+}
+
+/// An adapter without `TEXTURE_COMPRESSION_BC` gets a decoded picture from a
+/// BC7 chain rather than nothing - the default device asks for no features.
+#[test]
+fn a_bc7_chain_uploads_on_a_device_without_block_compression() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert!(
+        !device
+            .features()
+            .contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
+    );
+    let texture = crate::mesh::ModelTexture {
+        label: "bc7".into(),
+        width: 4,
+        height: 4,
+        texels: crate::mesh::Texels::Blocks {
+            format: crate::mesh::BlockFormat::Bc7,
+            levels: vec![vec![1; 16]],
+        },
+        mip_count: None,
+    };
+    let view = crate::mesh_render::texture::upload(&device, &queue, &texture, false);
+    drop(view);
+}

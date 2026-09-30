@@ -509,9 +509,11 @@ impl Stage {
         scene.attach_ripples(ripples);
         let (shader_calls, shader_hits) = cache_scope.shader_counts();
         let (pipeline_calls, pipeline_hits, pipelines) = cache_scope.pipeline_counts();
+        let (texture_calls, texture_hits) = cache_scope.texture_counts();
         info!(
             "race scene build cache: shader {shader_hits}/{shader_calls} reused, pipeline \
-             {pipeline_hits}/{pipeline_calls} reused ({pipelines} distinct built)"
+             {pipeline_hits}/{pipeline_calls} reused ({pipelines} distinct built), texture \
+             upload {texture_hits}/{texture_calls} reused"
         );
         drop(cache_scope);
         // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.

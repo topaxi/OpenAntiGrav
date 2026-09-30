@@ -34,7 +34,7 @@ use anyhow::Result;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel::psp2;
-use oag_texture::{gnf, gxt};
+use oag_texture::gxt;
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
@@ -255,28 +255,10 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
     ))
 }
 
-/// Decodes one material's diffuse `.gnf` - the PS4 Omega Collection's texture
-/// container, which its `.rcsmodel` names where 2048's names a `.gxt`.
-///
-/// **The same rule as [`decode_gxt_texture`]**: a `.gnf` that will not parse,
-/// or that [`oag_texture::gnf`] refuses (a corrupt base level, a format with no
-/// block decoder), draws nothing rather than something.
-fn decode_gnf_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
-    let parsed = gnf::Texture::parse(blob).ok()?;
-    let rgba = parsed.decode(blob).ok()?;
-    Some(ModelTexture::rgba8(
-        label.to_string(),
-        parsed.width,
-        parsed.height,
-        rgba.into_iter().flatten().collect(),
-        None,
-    ))
-}
-
 /// Decodes a material's diffuse texture in whichever container its path names.
 fn decode_material_texture(path: &str, blob: &[u8]) -> Option<ModelTexture> {
     if path.to_ascii_lowercase().ends_with(".gnf") {
-        decode_gnf_texture(path, blob)
+        ModelTexture::from_gnf(path, blob)
     } else {
         decode_gxt_texture(path, blob)
     }

@@ -86,9 +86,9 @@ pub enum Texels {
 
 /// A block-compressed texel format, as the disc stores it.
 ///
-/// The three the DXT family covers and the three Wipeout HD ships; the names
-/// are the hardware's rather than the file's, because that is the side this
-/// binds to.
+/// The three the DXT family covers and the three Wipeout HD ships, and BC7,
+/// which the PS4's `.gnf` textures are almost all in; the names are the
+/// hardware's rather than the file's, because that is the side this binds to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockFormat {
     /// DXT1: 8 bytes per 4x4 block.
@@ -97,6 +97,8 @@ pub enum BlockFormat {
     Bc2,
     /// DXT4/5: 16 bytes, interpolated alpha.
     Bc3,
+    /// BC7: 16 bytes, the PS4 Omega Collection's own.
+    Bc7,
 }
 
 impl BlockFormat {
@@ -111,14 +113,21 @@ impl BlockFormat {
         }
     }
 
-    /// The `.gtf` format byte this came from, for a decode back to RGBA8.
+    /// A level's blocks decoded back to RGBA8 texels, for an adapter without
+    /// block compression and for a consumer that reads texels.
+    ///
+    /// `None` for blocks that stop short of `width` x `height`.
     #[must_use]
-    pub const fn as_gtf(self) -> oag_texture::gtf::Format {
-        match self {
+    pub fn decode_level(self, blocks: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
+        let gtf = match self {
             Self::Bc1 => oag_texture::gtf::Format::Dxt1,
             Self::Bc2 => oag_texture::gtf::Format::Dxt23,
             Self::Bc3 => oag_texture::gtf::Format::Dxt45,
-        }
+            Self::Bc7 => return oag_texture::gnf::decode_bc7_level(blocks, width, height),
+        };
+        // `linear` is inert: the decoder does not consult the flag for a
+        // block-compressed format.
+        oag_texture::gtf::decode_level(gtf, blocks, width, height, 0, true)
     }
 
     /// What the texture is bound as.
@@ -133,6 +142,7 @@ impl BlockFormat {
             Self::Bc1 => wgpu::TextureFormat::Bc1RgbaUnorm,
             Self::Bc2 => wgpu::TextureFormat::Bc2RgbaUnorm,
             Self::Bc3 => wgpu::TextureFormat::Bc3RgbaUnorm,
+            Self::Bc7 => wgpu::TextureFormat::Bc7RgbaUnorm,
         }
     }
 
@@ -141,7 +151,7 @@ impl BlockFormat {
     pub const fn block_len(self) -> u32 {
         match self {
             Self::Bc1 => 8,
-            Self::Bc2 | Self::Bc3 => 16,
+            Self::Bc2 | Self::Bc3 | Self::Bc7 => 16,
         }
     }
 }
@@ -177,6 +187,40 @@ impl ModelTexture {
             // Unmeasured for the decode-and-box-filter fallback: the same gap
             // `mip_count`'s own doc names, just not chased here - this path
             // is HD's, and the thread that measured the PSP one is Pulse's.
+            mip_count: None,
+        })
+    }
+
+    /// Decodes one `.gnf` blob, or says `None` for one this build cannot.
+    ///
+    /// **A BC7 chain the file authors keeps its blocks**, the way
+    /// [`Self::from_gtf`] keeps a DXT one: 1 byte a texel on the CPU and on the
+    /// GPU where the decoded picture is 4, and the authored chain in place of a
+    /// box-filtered one. The conditions are [`Self::gtf_blocks`]'s: a chain of
+    /// two levels or more, and a base on the block grid, which
+    /// [`oag_texture::gnf::Texture::block_levels`] adds its own refusals to
+    /// (a corrupt block in any level, a file that is not one 2D chain). Any
+    /// other texture the decoder accepts falls back to RGBA8, and one it
+    /// refuses draws nothing.
+    #[must_use]
+    pub fn from_gnf(label: &str, blob: &[u8]) -> Option<Self> {
+        let parsed = oag_texture::gnf::Texture::parse(blob).ok()?;
+        let blocks = (parsed.width % 4 == 0 && parsed.height % 4 == 0)
+            .then(|| parsed.block_levels(blob).ok())
+            .flatten()
+            .filter(|levels| levels.len() > 1);
+        let texels = match blocks {
+            Some(levels) => Texels::Blocks {
+                format: BlockFormat::Bc7,
+                levels,
+            },
+            None => Texels::Rgba8(parsed.decode(blob).ok()?.into_iter().flatten().collect()),
+        };
+        Some(Self {
+            label: label.to_string(),
+            width: parsed.width,
+            height: parsed.height,
+            texels,
             mip_count: None,
         })
     }
@@ -232,6 +276,15 @@ impl ModelTexture {
         }
     }
 
+    /// Bytes of texel data this texture holds on the CPU.
+    #[must_use]
+    pub fn cpu_bytes(&self) -> u64 {
+        match &self.texels {
+            Texels::Rgba8(rgba) => rgba.len() as u64,
+            Texels::Blocks { levels, .. } => levels.iter().map(|level| level.len() as u64).sum(),
+        }
+    }
+
     /// The base level as RGBA8, or `None` for one still in its blocks.
     ///
     /// For a consumer that reads texels on the CPU rather than binding them and
@@ -259,17 +312,7 @@ impl ModelTexture {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(std::borrow::Cow::Borrowed(rgba)),
             Texels::Blocks { format, levels } => {
-                // `linear` is inert here: `Texels::Blocks` only ever wraps a
-                // block-compressed `format`, which the decoder does not
-                // consult the flag for.
-                let decoded = oag_texture::gtf::decode_level(
-                    format.as_gtf(),
-                    levels.first()?,
-                    self.width,
-                    self.height,
-                    0,
-                    true,
-                )?;
+                let decoded = format.decode_level(levels.first()?, self.width, self.height)?;
                 Some(std::borrow::Cow::Owned(
                     decoded.into_iter().flatten().collect(),
                 ))
@@ -277,3 +320,52 @@ impl ModelTexture {
         }
     }
 }
+
+impl ModelTexture {
+    /// This texture's name and size with none of its texels.
+    ///
+    /// What a [`Model`](super::Model) keeps in a slot once the GPU holds the
+    /// picture: `label` and the dimensions stay for anything that reports on the
+    /// slot, and [`Self::cpu_bytes`] reads 0.
+    #[must_use]
+    fn released(&self) -> Self {
+        Self {
+            label: self.label.clone(),
+            width: self.width,
+            height: self.height,
+            texels: Texels::Rgba8(Vec::new()),
+            mip_count: self.mip_count,
+        }
+    }
+}
+
+impl super::Model {
+    /// Drops the CPU copy of every texture, keeping each slot occupied.
+    ///
+    /// **Call it once the model has been uploaded** (`mesh_render::build`):
+    /// after that the texels exist on the GPU and the model only needs the slot
+    /// to say a texture was decoded there. Left alone, a model keeps its whole
+    /// decoded set alive for the life of the race - Tech De Ra's was 2.3 GiB of
+    /// BC7 blocks a second time, and 6.8 GiB before those were passed through.
+    /// A slot stays `Some` so every count and `all(is_none)` check a caller
+    /// makes still reads what it did; a texture another owner still holds
+    /// (`Arc`) is freed when that owner lets go.
+    pub fn release_texels(&mut self) {
+        let release = |slots: &mut TextureSlots| {
+            let mut stubs: std::collections::HashMap<usize, std::sync::Arc<ModelTexture>> =
+                std::collections::HashMap::new();
+            for slot in slots.iter_mut().flatten() {
+                let key = std::sync::Arc::as_ptr(slot) as usize;
+                *slot = stubs
+                    .entry(key)
+                    .or_insert_with(|| std::sync::Arc::new(slot.released()))
+                    .clone();
+            }
+        };
+        release(&mut self.textures);
+        release(&mut self.lightmaps);
+    }
+}
+
+#[cfg(test)]
+mod tests;
