@@ -229,6 +229,34 @@ override receives_shadow: f32 = 0.0;
 // `mesh_render::PSP_TEXLOD_SLOPE` for the recovered values and their limits.
 override texlod_slope: f32 = 0.0;
 override texlod_bias: f32 = 0.0;
+// The sampler's `anisotropy_clamp`, for `sample_at_slope_level`. 1 is off.
+override aniso_max: f32 = 1.0;
+
+// Samples `albedo` at mip level `lod` and still takes an anisotropic footprint.
+// `textureSampleLevel` is an explicit level and the hardware then filters
+// isotropically, so the sampler's `anisotropy_clamp` does nothing. This uses
+// `textureSampleGrad` instead, with the screen-space derivatives of `uv`
+// scaled by one factor so the level the hardware picks is `lod`: that level
+// is `log2(major / probes)` with `probes = min(ceil(major / minor), clamp)`,
+// and a common scale leaves the ratio, and so the probe count, alone. The
+// footprint's shape and direction are the surface's own; only its size is
+// the slope law's. A constant `uv` has no footprint to widen, so it takes the
+// explicit level.
+fn sample_at_slope_level(uv: vec2<f32>, lod: f32) -> vec4<f32> {
+    let dx = dpdx(uv);
+    let dy = dpdy(uv);
+    let size = vec2<f32>(textureDimensions(albedo, 0));
+    let px = length(dx * size);
+    let py = length(dy * size);
+    let major = max(px, py);
+    let minor = min(px, py);
+    if major < 1.0e-6 {
+        return textureSampleLevel(albedo, albedo_sampler, uv, lod);
+    }
+    let probes = min(ceil(major / max(minor, 1.0e-6)), aniso_max);
+    let scale = exp2(lod) * probes / major;
+    return textureSampleGrad(albedo, albedo_sampler, uv, dx * scale, dy * scale);
+}
 
 override flame_shading: f32 = 0.0;
 override flame_rim_power: f32 = 0.0;
@@ -1163,7 +1191,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             log2(max(in.view_depth * texlod_slope, 1.0e-6)) + texlod_bias + scene.fog.texlod_shift,
             0.0,
         );
-        first = textureSampleLevel(albedo, albedo_sampler, first_uv, lod);
+        first = sample_at_slope_level(first_uv, lod);
     } else {
         first = textureSample(albedo, albedo_sampler, first_uv);
     }
