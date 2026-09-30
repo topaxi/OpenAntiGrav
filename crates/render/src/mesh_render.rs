@@ -374,7 +374,7 @@ pub fn build(
     if receives_shadow != ShadowReceiver::Never {
         constants.push(("receives_shadow", receives_shadow.constant()));
     }
-    constants.extend(texlod::constants(model));
+    constants.extend(texlod::constants(model, anisotropy));
     if let Some(flame) = model.flame {
         constants.extend([
             ("flame_shading", 1.0),

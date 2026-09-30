@@ -35,12 +35,12 @@ use oag_render::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_S
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
 
-fn vertex(position: [f32; 3]) -> GpuVertex {
+fn vertex(position: [f32; 3], texcoord: [f32; 2]) -> GpuVertex {
     GpuVertex {
         position,
         normal: [0.0, 0.0, 1.0],
         colour: [1.0, 1.0, 1.0, 1.0],
-        texcoord: [0.0, 0.0],
+        texcoord,
         lightmap_texcoord: [0.0, 0.0],
         lit: 1.0,
         anim: 0,
@@ -55,9 +55,63 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
     }
 }
 
+/// How the test quad maps the texture onto itself.
+#[derive(Clone, Copy)]
+enum Texcoords {
+    /// One coordinate everywhere: no screen-space derivative at all.
+    Constant,
+    /// Strongly anisotropic: `dpdx` many times `dpdy`.
+    Stretched,
+    /// The same shape at a fraction of a texel per pixel, so the footprint is
+    /// narrower than one texel of level 0 and there is nothing to widen.
+    Gentle,
+}
+
+/// Everything a draw varies besides the depth.
+#[derive(Clone, Copy)]
+struct Setup {
+    detail: TextureDetail,
+    anisotropy: Anisotropy,
+    texcoords: Texcoords,
+}
+
+impl Setup {
+    /// The two things a level is asserted under: no derivative at all, and a
+    /// stretched footprint at every anisotropy setting. The level is the slope
+    /// law's in every one, so any of them drifting fails the same assertion.
+    fn all(detail: TextureDetail) -> Vec<Self> {
+        let mut setups = vec![Self {
+            detail,
+            anisotropy: Anisotropy::Off,
+            texcoords: Texcoords::Constant,
+        }];
+        setups.extend(
+            [
+                Anisotropy::Off,
+                Anisotropy::X2,
+                Anisotropy::X4,
+                Anisotropy::X16,
+            ]
+            .map(|anisotropy| Self {
+                detail,
+                anisotropy,
+                texcoords: Texcoords::Stretched,
+            }),
+        );
+        setups
+    }
+}
+
 /// One quad in [`Model::draws`], scaled by `depth` so it still covers the
 /// centre pixel once the projection divides by it.
-fn model(albedo: Arc<ModelTexture>, depth: f32) -> Model {
+fn model(albedo: Arc<ModelTexture>, depth: f32, texcoords: Texcoords) -> Model {
+    let [a, b, c] = match texcoords {
+        Texcoords::Constant => [[0.0, 0.0]; 3],
+        // Sixteen repeats across the base against a fraction of one down it: a
+        // long thin footprint at every depth, so the sampler has an axis to widen.
+        Texcoords::Stretched => [[0.0, 0.0], [64.0, 0.0], [32.0, 1.0]],
+        Texcoords::Gentle => [[0.0, 0.0], [4.0, 0.0], [2.0, 0.25]],
+    };
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
@@ -100,9 +154,9 @@ fn model(albedo: Arc<ModelTexture>, depth: f32) -> Model {
         anim_nodes: Vec::new(),
         emissive: Vec::new(),
         vertices: vec![
-            vertex([-0.9 * depth, -0.9 * depth, 0.5]),
-            vertex([0.9 * depth, -0.9 * depth, 0.5]),
-            vertex([0.0, 0.9 * depth, 0.5]),
+            vertex([-0.9 * depth, -0.9 * depth, 0.5], a),
+            vertex([0.9 * depth, -0.9 * depth, 0.5], b),
+            vertex([0.0, 0.9 * depth, 0.5], c),
         ],
     }
 }
@@ -146,9 +200,18 @@ fn level_at(
     queue: &wgpu::Queue,
     texture: Arc<ModelTexture>,
     depth: f32,
-    detail: TextureDetail,
+    setup: Setup,
 ) -> usize {
-    let texel = draw(device, queue, &model(texture, depth), depth, detail);
+    let image = draw(
+        device,
+        queue,
+        &model(texture, depth, setup.texcoords),
+        depth,
+        setup,
+    );
+    // Dead centre of the triangle.
+    let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
+    let texel = &image[at..at + 4];
     (0..3).max_by_key(|&channel| texel[channel]).unwrap()
 }
 
@@ -167,12 +230,16 @@ fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
 /// Asserts each `(depth, level)` under `detail`.
 fn assert_levels(detail: TextureDetail, expected: &[(f32, usize)]) {
     let Some((device, queue)) = gpu() else { return };
-    for &(depth, level) in expected {
-        assert_eq!(
-            level_at(&device, &queue, chain(), depth, detail),
-            level,
-            "{detail} at view depth {depth}"
-        );
+    for setup in Setup::all(detail) {
+        for &(depth, level) in expected {
+            assert_eq!(
+                level_at(&device, &queue, chain(), depth, setup),
+                level,
+                "{detail} at view depth {depth}, anisotropy {}, {:?} texcoords",
+                setup.anisotropy,
+                matches!(setup.texcoords, Texcoords::Stretched)
+            );
+        }
     }
 }
 
@@ -193,7 +260,13 @@ fn a_chain_is_sampled_at_the_level_the_slope_law_names() {
     // on its one level at every depth, so the levels above were the rule's.
     for depth in [64.0, 512.0, 100_000.0] {
         assert_eq!(
-            level_at(&device, &queue, plain(), depth, TextureDetail::Original),
+            level_at(
+                &device,
+                &queue,
+                plain(),
+                depth,
+                Setup::all(TextureDetail::Original)[0]
+            ),
             0,
             "a model without Texels::Chain keeps the sampler's own selection"
         );
@@ -228,7 +301,10 @@ fn maximum_texture_detail_is_level_zero_at_every_depth() {
 fn texture_detail_leaves_a_model_without_a_chain_alone() {
     let Some((device, queue)) = gpu() else { return };
     for detail in TextureDetail::ALL {
-        assert_eq!(level_at(&device, &queue, plain(), 512.0, detail), 0);
+        assert_eq!(
+            level_at(&device, &queue, plain(), 512.0, Setup::all(detail)[0]),
+            0
+        );
     }
 }
 
@@ -268,21 +344,21 @@ fn uniforms(depth: f32) -> Vec<u8> {
 }
 
 /// Draws `model`'s one opaque call into a `SIZE`x`SIZE` target cleared to
-/// transparent black, and answers the centre texel - so a discarded fragment
+/// transparent black, and answers every texel - so a discarded fragment
 /// reads as the clear and a kept one does not.
 fn draw(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &Model,
     depth: f32,
-    detail: TextureDetail,
-) -> [u8; 4] {
+    setup: Setup,
+) -> Vec<u8> {
     let built = mesh_render::build(
         device,
         queue,
         model,
         FORMAT,
-        Anisotropy::Off,
+        setup.anisotropy,
         1,
         mesh_render::Depth::Scene,
         mesh_render::TRANSPARENT_BLEND,
@@ -298,7 +374,7 @@ fn draw(
     )
     .expect("building the mesh pipeline");
     let mut scene = Scene::off();
-    scene.fog.texlod_shift = detail.level_shift();
+    scene.fog.texlod_shift = setup.detail.level_shift();
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -407,7 +483,66 @@ fn draw(
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("draining the queue");
     let mapped = readback.slice(..).get_mapped_range().expect("mapping");
-    // Dead centre of the triangle.
-    let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
-    [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+    mapped[..].to_vec()
+}
+
+/// Level 0 is alternating black and white columns; the levels under it are the
+/// mid grey a box filter makes of them.
+fn striped() -> Arc<ModelTexture> {
+    let column = |x: usize| if x.is_multiple_of(2) { 0 } else { 255 };
+    let base: Vec<u8> = (0..16)
+        .flat_map(|texel| [column(texel % 4); 3].into_iter().chain([255]))
+        .collect();
+    Arc::new(ModelTexture::chain(
+        "stripes".into(),
+        4,
+        4,
+        vec![
+            base,
+            [128, 128, 128, 255].repeat(4),
+            vec![128, 128, 128, 255],
+        ],
+    ))
+}
+
+/// How many pixels of the drawn triangle differ between anisotropy off and 16x.
+fn pixels_moved_by_anisotropy(texcoords: Texcoords, depth: f32) -> usize {
+    let Some((device, queue)) = gpu() else {
+        return usize::MAX;
+    };
+    let with = |anisotropy| {
+        draw(
+            &device,
+            &queue,
+            &model(striped(), depth, texcoords),
+            depth,
+            Setup {
+                detail: TextureDetail::Original,
+                anisotropy,
+                texcoords,
+            },
+        )
+    };
+    let (off, sixteen) = (with(Anisotropy::Off), with(Anisotropy::X16));
+    off.chunks(4)
+        .zip(sixteen.chunks(4))
+        .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 2))
+        .count()
+}
+
+#[test]
+fn anisotropy_widens_the_footprint_where_the_surface_is_foreshortened() {
+    // Level 0 at depth 64, four texels a pixel along the long axis: sixteen
+    // stripes' worth of aliasing that only the probes along it can average.
+    assert!(
+        pixels_moved_by_anisotropy(Texcoords::Stretched, 64.0) > 100,
+        "16x must change a foreshortened surface at the slope law's own level"
+    );
+}
+
+#[test]
+fn anisotropy_leaves_a_footprint_narrower_than_a_texel_alone() {
+    // The same shape at a tenth of a texel a pixel: nothing to widen, and the
+    // sampler must not blur a magnified surface for the sake of a ratio.
+    assert_eq!(pixels_moved_by_anisotropy(Texcoords::Gentle, 64.0), 0);
 }

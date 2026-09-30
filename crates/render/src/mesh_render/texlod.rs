@@ -1,5 +1,6 @@
 //! The GE's texture level selection for a PSP `.vex` model.
 
+use super::Anisotropy;
 use crate::mesh::{Model, Texels};
 
 /// The GE's texture level slope, as Pulse programs it: `1/256`.
@@ -108,13 +109,14 @@ impl From<TextureDetail> for String {
 }
 
 /// The pipeline constants `mesh.wgsl` reads to select a level by the GE's slope
-/// rule: `texlod_slope` and `texlod_bias`, for a model that carries the disc's
-/// own mip chains ([`Texels::Chain`], which is a PSP `.vex` model), and nothing
+/// rule: `texlod_slope` and `texlod_bias`, plus `aniso_max` (the sampler's
+/// clamp, so the explicit level keeps an anisotropic footprint), for a model
+/// that carries the disc's own mip chains ([`Texels::Chain`], which is a PSP `.vex` model), and nothing
 /// for every other.
 ///
 /// Decided from the textures alone so no caller has to say which title it is
 /// drawing; `crates/render/tests/psp_slope_lod.rs` fails if it stops.
-pub(super) fn constants(model: &Model) -> Vec<(&'static str, f64)> {
+pub(super) fn constants(model: &Model, anisotropy: Anisotropy) -> Vec<(&'static str, f64)> {
     let chained = model
         .textures
         .iter()
@@ -124,6 +126,7 @@ pub(super) fn constants(model: &Model) -> Vec<(&'static str, f64)> {
         vec![
             ("texlod_slope", f64::from(PSP_TEXLOD_SLOPE)),
             ("texlod_bias", f64::from(PSP_TEXLOD_BIAS)),
+            ("aniso_max", f64::from(anisotropy.clamp())),
         ]
     } else {
         Vec::new()

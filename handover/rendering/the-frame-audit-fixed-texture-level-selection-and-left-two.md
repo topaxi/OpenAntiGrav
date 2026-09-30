@@ -31,11 +31,6 @@ of it the same day; see `frame-audit.md`.
   the emulator can confirm the far field. Two things stay unread: that our
   `clip.w` is the GE's `|z|`, and `Texture_BuildBindList`'s per-texture mode and
   bias. A hardware capture or PPSSPP's software renderer would say.
-- **`--anisotropy` barely changes a PSP `.vex` model any more**: the slope law
-  samples an explicit level, which takes no anisotropic footprint (602 pixels
-  differ off against `16x` on the derivative path, 5.6 on the law; measured on
-  the Talon straight, see `frame-audit.md`). `textureSampleGrad` with gradients
-  scaled to the law's level would keep both; not tried.
 - **Wipeout Pure shares the slope rule**; its pre-swizzled textures keep a
   synthesised chain. Unmeasured against a Pure capture.
 - The cyan strip lights and the start gantry differ between the two sides by
