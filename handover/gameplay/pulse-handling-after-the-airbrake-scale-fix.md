@@ -28,8 +28,8 @@ they belong:
   past the line. Both belong to whoever holds the AI lane.
 - **Shield, VENOM, one lone Ace, `ai_clean_lap_board`** (before -> after,
   end-of-run shield; per-lap wall charge in brackets). Unchanged within noise
-  on ten circuits. `05_Track` is the outlier: end 66.1 -> 86.6 (it respawns
-  and refills), but wall charge 13.7 -> 96.0 and laps `1.9 1.4 2.0` ->
+  on ten circuits. `05_Track` is the outlier: end 66.1 -> 86.6 (three
+  respawns in the run; whether a respawn refills the pool was not checked), but wall charge 13.7 -> 96.0 and laps `1.9 1.4 2.0` ->
   `1.8 1.9 90.0` - a lap-3 wall grind. `10_Track`: end 94.8 -> 79.8, laps
   `0.0 0.0 0.0` -> `0.0 7.6 7.6` with no wall charge, so not walls. Both
   boards are in the lane's scratch directory (`board-before.txt`,
