@@ -22,17 +22,42 @@ fn effect() -> Option<Effect> {
     Some(Effect::parse(&blob, ColourScale::Full).expect("parse"))
 }
 
-/// The half-size of the widest additive quad this tick drew, in world units.
-fn widest(system: &System, effect: &Effect) -> f32 {
+/// `(half-width, half-height)` of every additive quad this tick drew, in
+/// world units and the camera's own right and up. A template is a
+/// `DrawRotatedSprite` quad: `size` tall and `aspect * size` wide before its
+/// roll turns it.
+fn extents(system: &System, effect: &Effect) -> Vec<(f32, f32)> {
     let (additive, _) = system.vertices(effect, Vec3::X, Vec3::Y);
+    let half = |quad: &[oag_render::mesh::GpuVertex], axis: usize| {
+        let values = quad.iter().map(|v| v.position[axis]);
+        (values.clone().fold(f32::MIN, f32::max) - values.fold(f32::MAX, f32::min)) * 0.5
+    };
     additive
         .chunks(6)
-        .map(|quad| {
-            let xs = quad.iter().map(|v| v.position[0]);
-            let (lo, hi) = xs.fold((f32::MAX, f32::MIN), |(l, h), x| (l.min(x), h.max(x)));
-            (hi - lo) * 0.5
-        })
+        .map(|quad| (half(quad, 0), half(quad, 1)))
+        .collect()
+}
+
+/// The half-height of the `shazam` quad: the one drawn exactly 1.5 times as
+/// wide as it is tall (its `+0xf0` block's `0.5`, roll zero), which is its size
+/// channel's value. The `glow` beside it is turning, so its box is neither.
+fn tallest(system: &System, effect: &Effect) -> f32 {
+    extents(system, effect)
+        .into_iter()
+        .filter(|&(w, h)| h > 0.0 && (w / h - 1.5).abs() < 1.0e-3)
+        .map(|(_, height)| height)
         .fold(0.0, f32::max)
+}
+
+/// A struck locator's effect `ticks` updates in, at severity 2.4.
+fn system_at(effect: &Effect, ticks: usize) -> System {
+    let mut rng = Rng::new(1);
+    let mut system = System::new();
+    system.ignite(effect, Vec3::ZERO, 2.4);
+    for _ in 0..ticks {
+        system.advance(effect, 1.0 / TICK_HZ, Vec3::ZERO, Vec3::Y, &mut rng);
+    }
+    system
 }
 
 #[test]
@@ -57,18 +82,27 @@ fn a_struck_locators_shazam_flash_is_3_9_times_severity_and_shrinks() {
     let mut sizes = Vec::new();
     for _ in 0..8 {
         system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
-        sizes.push(widest(&system, &effect));
+        sizes.push(tallest(&system, &effect));
     }
     // The live sequence's first two frames: 3.9 * 2.4 held to 0.287 of the
     // six-tick life, then a linear fall.
     assert!((sizes[0] - 9.36).abs() < 0.05, "{sizes:?}");
+    // Live: `shazam` drew aspect 1.500 (its `+0xf0` block's `0.5`), so the quad
+    // is 1.5 times as wide as it is tall.
+    let first = extents(&system_at(&effect, 1), &effect);
+    assert!(
+        first
+            .iter()
+            .any(|&(w, h)| (h - 9.36).abs() < 0.05 && (w - 14.04).abs() < 0.05),
+        "{first:?}"
+    );
     assert!(sizes[2] < sizes[1] && sizes[3] < sizes[2], "{sizes:?}");
     // And the dark side of it: the same burst at severity 1 is 3.9, not 9.36 -
     // the size follows the severity, the count does not.
     let mut gentle = System::new();
     gentle.ignite(&effect, Vec3::ZERO, 1.0);
     gentle.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut Rng::new(1));
-    assert!((widest(&gentle, &effect) - 3.9).abs() < 0.05);
+    assert!((tallest(&gentle, &effect) - 3.9).abs() < 0.05);
 }
 
 #[test]
