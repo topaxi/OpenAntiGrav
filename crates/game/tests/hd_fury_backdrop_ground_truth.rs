@@ -37,9 +37,13 @@ fn fury(image: &Path) -> std::sync::Arc<boot::fury::FuryAssets> {
     };
     let (shell, _archives, _title) =
         boot::load_shell(&options).expect("HD's front end is wired; see ADR-0025");
-    shell
+    match &*shell
         .fury_backdrop
         .expect("the Fury style authors a BackgroundAnimFury widget")
+    {
+        boot::backdrop::MenuBackdrop::Fury(assets) => std::sync::Arc::clone(assets),
+        boot::backdrop::MenuBackdrop::Scene(_) => panic!("the Fury style draws the Fury widget"),
+    }
 }
 
 /// One RPCS3 frame: the static path and clock the clip held, the fovy the

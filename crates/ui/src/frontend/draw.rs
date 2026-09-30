@@ -128,6 +128,11 @@ pub enum Draw {
     /// reason [`crate::menu::Picture`] boxes it: a `Draw` is otherwise a few
     /// words and this is two matrices and nine constants.
     FuryBackdrop(Box<crate::backdrop::Frame>),
+    /// The HD-style `BackgroundAnim` scene, drawn and filtered into a grey
+    /// drawing, composited here in the list's order. Like
+    /// [`Self::FuryBackdrop`] it is what the page sits on, not part of it -
+    /// see [`crate::scene_backdrop::Frame`].
+    SceneBackdrop(Box<crate::scene_backdrop::Frame>),
     /// One of the front end's own images, from the sprite sheet.
     Sprite {
         /// Where it goes on the 480x272 screen: `[x, y, width, height]`.

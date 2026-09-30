@@ -67,9 +67,8 @@ pub struct Boot {
     pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
     /// Its footer's scrolling tip ticker layout - see [`Shell::ticker`].
     pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
-    /// The Fury menu backdrop's clouds and settings, on a Fury-style HD source
-    /// - see [`fury::load`]. `None` everywhere else.
-    pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
+    /// The style's animated menu backdrop - see [`backdrop::load`]. `None` where none.
+    pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
@@ -269,9 +268,8 @@ pub struct Shell {
     /// Campaign's own footer already reads, so a live session's two footers
     /// cannot disagree about what a save file honestly has to show.
     pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
-    /// The Fury menu backdrop's settings, clouds and tints, read here for the
-    /// same reason the frame is; `None` on every source but a Fury-style HD.
-    pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
+    /// The style's menu backdrop, read here for the same reason the frame is.
+    pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
     /// The race box's two selection screens, read off the same XML the
     /// frame was - `Track Creation` and `Team Selection` on Pulse - with
     /// every string resolved. `None` on a title that authors neither, which
@@ -766,9 +764,9 @@ pub fn load_shell(
         .read_name(front_end.root)
         .ok()
         .and_then(|b| expand(&b).ok());
-    let fury_backdrop = fury::load(
+    let fury_backdrop = backdrop::load(
         &mut archives,
-        sprites::fury_style(&screens),
+        (sprites::fury_style(&screens), profile.menu_scene),
         skin_xml.as_deref(),
         &mut report,
     );
@@ -1570,6 +1568,7 @@ fn load_second_movie(
     }
 }
 
+pub mod backdrop;
 mod campaign2048;
 pub mod fonts;
 pub mod fury;
@@ -1581,6 +1580,7 @@ mod options;
 mod progress;
 mod provenance;
 pub(crate) mod roster;
+pub mod scene;
 mod screens;
 pub use screens::RaceSetup;
 pub(crate) mod sprites;

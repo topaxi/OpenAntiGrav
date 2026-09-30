@@ -464,3 +464,12 @@
 0x0062e098	function	Scream_TickHandlers	82	sound.md
 0x006253d0	function	Scream_TickCommandList	88	sound.md
 0x00625218	function	Scream_StepCommandList	88	sound.md
+0x0017d350	function	BackgroundAnim_Construct	80	menu-backdrop-scene.md
+0x0017d3f0	function	BackgroundAnim_StaticInit	82	menu-backdrop-scene.md
+0x0017ca38	function	BackgroundAnim_Load	80	menu-backdrop-scene.md
+0x0017af80	function	BackgroundAnim_Update	82	menu-backdrop-scene.md
+0x0017bac0	function	BackgroundAnim_AdvanceClock	72	menu-backdrop-scene.md
+0x0017be68	function	BackgroundAnim_Render	80	menu-backdrop-scene.md
+0x0017d690	function	BackgroundAnim_ParseScreenSetting	85	menu-backdrop-scene.md
+0x001d35e8	function	ModelItem_RenderScene	65	menu-backdrop-scene.md
+0x003e3e50	function	Post_ScreenBlur	62	menu-backdrop-scene.md

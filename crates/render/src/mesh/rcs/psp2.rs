@@ -286,9 +286,44 @@ pub fn build(
     animation: Option<&Animation>,
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
+    build_planned(
+        label,
+        model_blob,
+        &|scene| placement::plan(scene, animation),
+        textures,
+    )
+}
+
+/// [`build`], with the motion taken from the `.vex` the model was exported
+/// beside - see [`placement::plan_from_vex`]. What Omega's front-end scene
+/// needs: it ships no `.rcsskeleton` or `.rcsanimclip`.
+///
+/// # Errors
+///
+/// Propagates [`psp2::parse`].
+pub fn build_with_vex(
+    label: &str,
+    model_blob: &[u8],
+    vex_blob: &[u8],
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
+    build_planned(
+        label,
+        model_blob,
+        &|scene| placement::plan_from_vex(scene, vex_blob),
+        textures,
+    )
+}
+
+fn build_planned(
+    label: &str,
+    model_blob: &[u8],
+    planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
     let decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
-    let plan = placement::plan(&decoded.scene, animation);
+    let plan = planner(&decoded.scene);
 
     let mut model = Model::none(label);
     let mut report = Report {

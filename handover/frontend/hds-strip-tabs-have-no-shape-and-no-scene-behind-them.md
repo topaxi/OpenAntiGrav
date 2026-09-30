@@ -32,6 +32,8 @@ categories: [frontend, rendering]
 
 ## Still fully open
 
+**2026-09-30: the HD style's `<BackgroundAnim>` is read and drawn for Omega** ([menu-backdrop-scene.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md)): the ring was the wrong reading, it is a fly-through of the scene's own camera filtered into a grey drawing. HD itself still draws nothing there.
+
 **HD's `Top FE Screen` carries a `<BackgroundAnim>` and this build draws nothing there at all - the prerequisite decoder has landed, and the blocker moved downstream, to material/shader.** `.vex`/`.rcsmodel` decoding was the thing this thread said it was blocked on ([a-chunk-header-is-0x20-bytes-and-then.md](../tooling/a-chunk-header-is-0x20-bytes-and-then.md), 2026-08-25, landed); it has, and `FrontEndScene_HD_ATG.vex` now parses and draws end to end:
 
 ```sh

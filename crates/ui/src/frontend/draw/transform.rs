@@ -35,7 +35,7 @@ impl Draw {
             // of a rule that fades in from the left would expect. Fading
             // both edges is [`Self::fade`]'s job, not this accessor's.
             Self::GradientFill { left, .. } => Some(left),
-            Self::Video { .. } | Self::FuryBackdrop(_) => None,
+            Self::Video { .. } | Self::FuryBackdrop(_) | Self::SceneBackdrop(_) => None,
         }
     }
 
@@ -102,7 +102,7 @@ impl Draw {
             }
             // A movie and the point-cloud pass have no alpha channel to fade
             // and are never part of a page.
-            Self::Video { .. } | Self::FuryBackdrop(_) => {}
+            Self::Video { .. } | Self::FuryBackdrop(_) | Self::SceneBackdrop(_) => {}
         }
     }
 

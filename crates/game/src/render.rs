@@ -22,6 +22,7 @@ mod backdrop;
 mod face;
 mod quad;
 mod resources;
+mod scene;
 mod text;
 mod video;
 
@@ -38,6 +39,7 @@ use text::GlyphSlot;
 use video::Video;
 
 pub use backdrop::FuryBackdrop;
+pub use scene::SceneBackdrop;
 
 /// Shared with both shaders.
 #[repr(C)]
@@ -183,6 +185,8 @@ pub struct Renderer {
     /// them - see [`Self::set_fury_backdrop`]. `None` draws a
     /// `Draw::FuryBackdrop` as nothing, which is the honest absence.
     fury: Option<FuryBackdrop>,
+    /// The HD-style scene backdrop - see [`Self::set_scene_backdrop`].
+    scene: Option<SceneBackdrop>,
     /// What the pipelines were built for, kept so the backdrop's composite
     /// can be built later against the same target.
     target_format: wgpu::TextureFormat,
@@ -435,23 +439,11 @@ impl Renderer {
             sprites: (sprites.width, sprites.height),
             video,
             fury: None,
+            scene: None,
             target_format: format,
             quads: Vec::new(),
             space: Space::PSP,
         })
-    }
-
-    /// Uploads the Fury backdrop's clouds and builds its passes.
-    ///
-    /// Called once, by whoever built the menus, with the clouds the boot read
-    /// off the disc; from then on a `Draw::FuryBackdrop` in a list draws.
-    pub fn set_fury_backdrop(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        clouds: &[oag_rcs::points2::PointCloud],
-    ) {
-        self.fury = Some(FuryBackdrop::new(device, queue, self.target_format, clouds));
     }
 
     /// Replaces the sprite sheet every later draw samples.
@@ -647,10 +639,14 @@ impl Renderer {
         // Where the Fury backdrop sits, the same way: its passes run before
         // this one and its composite is drawn at its place in the order.
         let mut fury_at = None;
+        let mut scene_at = None;
         for (index, draw) in list.iter().enumerate() {
             match draw {
                 Draw::FuryBackdrop(frame) => {
                     fury_at = Some((self.quads.len() as u32, frame.as_ref()));
+                }
+                Draw::SceneBackdrop(frame) => {
+                    scene_at = Some((self.quads.len() as u32, frame.as_ref()));
                 }
                 Draw::Fill { rect, color } => self.push_solid(*rect, *color, [0.0, 0.0]),
                 Draw::ChamferedFill {
@@ -859,15 +855,14 @@ impl Renderer {
                 mapped_at_creation: false,
             });
         }
-        if let (Some((_, frame)), Some(fury)) = (&fury_at, &mut self.fury) {
-            fury.prepare(
-                device,
-                queue,
-                encoder,
-                frame,
-                (viewport.2 as u32, viewport.3 as u32),
-            );
-        }
+        self.prepare_backdrops(
+            (device, queue, encoder),
+            (
+                fury_at.map(|(_, frame)| frame),
+                scene_at.map(|(_, frame)| frame),
+            ),
+            (viewport.2 as u32, viewport.3 as u32),
+        );
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("frame"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -896,9 +891,10 @@ impl Renderer {
         // Quads behind a picture, the picture, then the quads in front of it -
         // for each of the two pictures a list can carry, in the order the
         // list puts them, so the list's own order is honoured.
-        let mut cuts: Vec<(u32, bool)> = Vec::new();
-        cuts.extend(video_at.map(|at| (at, true)));
-        cuts.extend(fury_at.map(|(at, _)| (at, false)));
+        let mut cuts: Vec<(u32, backdrop::Cut)> = Vec::new();
+        cuts.extend(video_at.map(|at| (at, backdrop::Cut::Video)));
+        cuts.extend(fury_at.map(|(at, _)| (at, backdrop::Cut::Fury)));
+        cuts.extend(scene_at.map(|(at, _)| (at, backdrop::Cut::Scene)));
         cuts.sort_unstable();
         let mut drawn = 0;
         let draw_quads = |pass: &mut wgpu::RenderPass<'_>, range: std::ops::Range<u32>| {
@@ -909,17 +905,22 @@ impl Renderer {
                 pass.draw(0..6, range);
             }
         };
-        for (at, is_video) in cuts {
+        for (at, cut) in cuts {
             draw_quads(&mut pass, drawn..at);
             drawn = at;
-            match (is_video, &self.video, &self.fury, &fury_at) {
-                (true, Some(video), ..) => {
+            match (cut, &self.video, &self.fury, &fury_at) {
+                (backdrop::Cut::Video, Some(video), ..) => {
                     pass.set_pipeline(&video.pipeline);
                     pass.set_bind_group(0, &video.bind_group, &[]);
                     pass.draw(0..6, 0..1);
                 }
-                (false, _, Some(fury), Some((_, frame))) => {
+                (backdrop::Cut::Fury, _, Some(fury), Some((_, frame))) => {
                     fury.composite(&mut pass, frame.tint);
+                }
+                (backdrop::Cut::Scene, ..) => {
+                    if let Some(scene) = &self.scene {
+                        scene.composite(&mut pass);
+                    }
                 }
                 _ => {}
             }

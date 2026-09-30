@@ -105,14 +105,11 @@ pub(crate) struct MenuStage {
     /// rebuilt, so the loop never restarts on the handoff. See
     /// [`menu_playhead`].
     pub(crate) backdrop: Option<Backdrop>,
-    /// The Fury style's point-cloud backdrop, when this source has one -
-    /// the model, ticked here off the same fixed step the movie is; the
-    /// clouds themselves are in [`Self::renderer`]. `None` on every other
-    /// source, and then the rows sit on the movie or on the page's clear.
-    pub(crate) fury: Option<oag_ui::backdrop::Fury>,
-    /// The per-screen tints the widget is authored with, read once off the
-    /// skin - empty when there is no widget, and then never read.
-    pub(crate) fury_tints: oag_ui::backdrop::Tints,
+    /// The style's animated backdrop, when this source has one - the model,
+    /// ticked here off the same fixed step the movie is; its GPU side is in
+    /// [`Self::renderer`]. `None` on every other source, and then the rows sit
+    /// on the movie or on the page's clear.
+    pub(crate) styled: Option<oag_game::boot::backdrop::Live>,
     /// The race box's selection screen over this page, when one is open -
     /// see [`crate::picker_stage`]. Like [`Self::prompt`], it takes the
     /// tick's input whole while it is `Some`, and it is drawn instead of
@@ -240,8 +237,8 @@ impl MenuStage {
         }
         // One clip frame per tick: the original counts its clip up once per
         // rendered frame at sixty, and the stage's step is the same sixty.
-        if let Some(fury) = &mut self.fury {
-            fury.tick();
+        if let Some(styled) = &mut self.styled {
+            styled.tick(self.menu.depth() == 1);
         }
         // The same fixed `dt` the backdrop is stepped with, and for the same
         // reason: nothing on this stage reads the wall clock, so two runs of
@@ -448,14 +445,14 @@ impl MenuStage {
             // planes would be a green rectangle rather than a missing picture.
             _ => None,
         };
-        // The movie where there is one, else the Fury backdrop's frame for this
-        // tick - sized to the viewport (sprite size and colours scale with the
-        // picture's line count), tinted `Main Menu` at the root, else `default`.
+        // The movie where there is one, else the style's backdrop for this tick
+        // - sized to the viewport, for the root (`Main Menu`) or any other page.
         let shown = shown.map(menu::Picture::from).or_else(|| {
-            let fury = self.fury.as_ref()?;
-            let (_, _, w, h) = viewport;
-            let tint = self.fury_tints.for_root(self.menu.depth() == 1);
-            Some(menu::Picture::from(fury.frame(h, w / h, tint)))
+            Some(
+                self.styled
+                    .as_ref()?
+                    .picture(viewport, self.menu.depth() == 1),
+            )
         });
         // A selection screen replaces the rows outright, in the same frame; its
         // preview goes on last, a 3D pass over the finished picture. No marquee,
