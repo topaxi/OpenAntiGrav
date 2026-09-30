@@ -372,6 +372,22 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws: the session hands the
+            // preset to `Race::set_texture_detail` every frame, which writes
+            // it into the scene uniform the fragment stage reads.
+            "graphics.texture_detail" => {
+                match text.parse::<oag_render::mesh_render::TextureDetail>() {
+                    Ok(detail) => {
+                        if let Some(profile) = self.render_profile_mut() {
+                            profile.texture_detail = detail;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("ignoring {setting} = {text:?}: {e}");
+                        return;
+                    }
+                }
+            }
             // Applied by the next frame the race draws, which reads the
             // tier fresh - the pass is built with every race whatever this
             // says, the same shape `graphics.motion_blur` above has. See

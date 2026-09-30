@@ -967,6 +967,21 @@ string_id = "OAG_GRAPHICS_MODEL_DETAIL"
 setting = "graphics.model_detail"
 values = ["original", "high", "maximum"]
 
+# How far out a PSP `.vex` model keeps its finer texture levels. `original` is
+# the recovered rule - the GE's slope law, `Gu_TexLodSlope` at 1/256 with bias 1,
+# over the mip levels the disc authors: level 1 from 256 units of view depth,
+# level 2 from 512 - and the default. `high` doubles the depth of every step and
+# `maximum` always samples level 0; both are this project's own, chosen rather
+# than measured. One multiplier on the law, not a second code path. See
+# `docs/rendering/frame-audit.md`. Applies live: the session hands the preset to
+# the race every frame and the fragment stage reads it from the scene uniform.
+[[page.entry]]
+kind = "choice"
+label = "TEXTURE DETAIL"
+string_id = "OAG_GRAPHICS_TEXTURE_DETAIL"
+setting = "graphics.texture_detail"
+values = ["original", "high", "maximum"]
+
 # A simulation of the display the title ran on, drawn over the finished frame
 # - menus, HUD and all - just before brightness and gamma. The list is
 # supplied at runtime: `off`, the presets built into the binary (the PSP's

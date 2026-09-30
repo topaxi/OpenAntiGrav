@@ -246,6 +246,17 @@ pub struct RenderProfile {
     /// count goes down. Read fresh every frame, so the row applies live.
     #[serde(default)]
     pub model_detail: oag_render::mesh::ModelDetail,
+    /// How far out a PSP `.vex` model keeps its finer texture levels:
+    /// `original`, `high` or `maximum`.
+    ///
+    /// **`original` is the recovered rule and the default** - the GE's slope
+    /// law, `Gu_TexLodSlope` at `1/256` with bias 1, over the mip levels the
+    /// disc authors. `high` doubles the depth of every level step and `maximum`
+    /// never steps; both are this project's own, chosen rather than measured.
+    /// One multiplier on the law - see [`oag_render::mesh_render::TextureDetail`].
+    /// Read fresh every frame, so the row applies live.
+    #[serde(default)]
+    pub texture_detail: oag_render::mesh_render::TextureDetail,
 }
 
 /// See [`RenderProfile::screen_filter`]: `off`.
@@ -273,6 +284,7 @@ impl Default for RenderProfile {
             screen_filter: default_screen_filter(),
             screen_filter_strength: oag_display::display::FilterStrength::default(),
             model_detail: oag_render::mesh::ModelDetail::default(),
+            texture_detail: oag_render::mesh_render::TextureDetail::default(),
         }
     }
 }
@@ -304,7 +316,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 11] = [
+pub(super) const PROFILE_KEYS: [&str; 12] = [
     "render_scale",
     "target_fps",
     "minimum_resolution",
@@ -316,6 +328,7 @@ pub(super) const PROFILE_KEYS: [&str; 11] = [
     "screen_filter",
     "screen_filter_strength",
     "model_detail",
+    "texture_detail",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

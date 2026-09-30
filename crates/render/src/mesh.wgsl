@@ -71,7 +71,10 @@ struct Fog {
     // colour in by it. The distance is the clip-space w its vertex programs
     // write into the interpolant, i.e. view depth, not radial distance.
     curve: f32,
-    _pad2: f32,
+    // Levels added to the PSP slope law's - the player's TEXTURE DETAIL, see
+    // `mesh_render::TextureDetail::level_shift`. 0.0 is the recovered law, and
+    // what a zeroed buffer holds.
+    texlod_shift: f32,
 };
 
 // The light rig a Wipeout HD circuit authors in its own `.envsettings`, or the
@@ -1152,10 +1155,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // **Pulse's slope-mode level selection**: `log2(|z| * slope) + bias` off view
     // depth, clamped to the levels the texture has - the GE's rule, in place of
     // the derivatives `textureSample` would use. On only for a model carrying
-    // the disc's own chains; see `mesh_render::PSP_TEXLOD_SLOPE`.
+    // the disc's own chains; see `mesh_render::PSP_TEXLOD_SLOPE`. The player's
+    // TEXTURE DETAIL shifts the level, which is one multiplier on the law.
     var first: vec4<f32>;
     if texlod_slope > 0.0 {
-        let lod = max(log2(max(in.view_depth * texlod_slope, 1.0e-6)) + texlod_bias, 0.0);
+        let lod = max(
+            log2(max(in.view_depth * texlod_slope, 1.0e-6)) + texlod_bias + scene.fog.texlod_shift,
+            0.0,
+        );
         first = textureSampleLevel(albedo, albedo_sampler, first_uv, lod);
     } else {
         first = textureSample(albedo, albedo_sampler, first_uv);
