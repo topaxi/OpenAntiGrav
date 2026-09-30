@@ -62,6 +62,9 @@ enum Texcoords {
     Constant,
     /// Strongly anisotropic: `dpdx` many times `dpdy`.
     Stretched,
+    /// The same shape at a fraction of a texel per pixel, so the footprint is
+    /// narrower than one texel of level 0 and there is nothing to widen.
+    Gentle,
 }
 
 /// Everything a draw varies besides the depth.
@@ -107,6 +110,7 @@ fn model(albedo: Arc<ModelTexture>, depth: f32, texcoords: Texcoords) -> Model {
         // Sixteen repeats across the base against a fraction of one down it: a
         // long thin footprint at every depth, so the sampler has an axis to widen.
         Texcoords::Stretched => [[0.0, 0.0], [64.0, 0.0], [32.0, 1.0]],
+        Texcoords::Gentle => [[0.0, 0.0], [4.0, 0.0], [2.0, 0.25]],
     };
     Model {
         airbrakes: [None, None],
@@ -198,13 +202,16 @@ fn level_at(
     depth: f32,
     setup: Setup,
 ) -> usize {
-    let texel = draw(
+    let image = draw(
         device,
         queue,
         &model(texture, depth, setup.texcoords),
         depth,
         setup,
     );
+    // Dead centre of the triangle.
+    let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
+    let texel = &image[at..at + 4];
     (0..3).max_by_key(|&channel| texel[channel]).unwrap()
 }
 
@@ -337,7 +344,7 @@ fn uniforms(depth: f32) -> Vec<u8> {
 }
 
 /// Draws `model`'s one opaque call into a `SIZE`x`SIZE` target cleared to
-/// transparent black, and answers the centre texel - so a discarded fragment
+/// transparent black, and answers every texel - so a discarded fragment
 /// reads as the clear and a kept one does not.
 fn draw(
     device: &wgpu::Device,
@@ -345,7 +352,7 @@ fn draw(
     model: &Model,
     depth: f32,
     setup: Setup,
-) -> [u8; 4] {
+) -> Vec<u8> {
     let built = mesh_render::build(
         device,
         queue,
@@ -476,7 +483,66 @@ fn draw(
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("draining the queue");
     let mapped = readback.slice(..).get_mapped_range().expect("mapping");
-    // Dead centre of the triangle.
-    let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
-    [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+    mapped[..].to_vec()
+}
+
+/// Level 0 is alternating black and white columns; the levels under it are the
+/// mid grey a box filter makes of them.
+fn striped() -> Arc<ModelTexture> {
+    let column = |x: usize| if x % 2 == 0 { 0 } else { 255 };
+    let base: Vec<u8> = (0..16)
+        .flat_map(|texel| [column(texel % 4); 3].into_iter().chain([255]))
+        .collect();
+    Arc::new(ModelTexture::chain(
+        "stripes".into(),
+        4,
+        4,
+        vec![
+            base,
+            [128, 128, 128, 255].repeat(4),
+            vec![128, 128, 128, 255],
+        ],
+    ))
+}
+
+/// How many pixels of the drawn triangle differ between anisotropy off and 16x.
+fn pixels_moved_by_anisotropy(texcoords: Texcoords, depth: f32) -> usize {
+    let Some((device, queue)) = gpu() else {
+        return usize::MAX;
+    };
+    let with = |anisotropy| {
+        draw(
+            &device,
+            &queue,
+            &model(striped(), depth, texcoords),
+            depth,
+            Setup {
+                detail: TextureDetail::Original,
+                anisotropy,
+                texcoords,
+            },
+        )
+    };
+    let (off, sixteen) = (with(Anisotropy::Off), with(Anisotropy::X16));
+    off.chunks(4)
+        .zip(sixteen.chunks(4))
+        .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 2))
+        .count()
+}
+
+#[test]
+fn anisotropy_widens_the_footprint_where_the_surface_is_foreshortened() {
+    // Level 0 at depth 64, four texels a pixel along the long axis: sixteen
+    // stripes' worth of aliasing that only the probes along it can average.
+    assert!(
+        pixels_moved_by_anisotropy(Texcoords::Stretched, 64.0) > 100,
+        "16x must change a foreshortened surface at the slope law's own level"
+    );
+}
+
+#[test]
+fn anisotropy_leaves_a_footprint_narrower_than_a_texel_alone() {
+    // The same shape at a tenth of a texel a pixel: nothing to widen, and the
+    // sampler must not blur a magnified surface for the sake of a ratio.
+    assert_eq!(pixels_moved_by_anisotropy(Texcoords::Gentle, 64.0), 0);
 }
