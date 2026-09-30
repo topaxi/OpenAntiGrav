@@ -322,8 +322,12 @@ impl Race {
         else {
             return;
         };
-        for slot in 0..self.sim.world.ship_count as usize {
-            if slot == impact.owner as usize || !hits[slot].landed {
+        for (slot, hit) in hits
+            .iter()
+            .enumerate()
+            .take(self.sim.world.ship_count as usize)
+        {
+            if slot == impact.owner as usize || !hit.landed {
                 continue;
             }
             let ship = &self.sim.world.ships[slot];

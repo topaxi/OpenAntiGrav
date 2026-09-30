@@ -126,9 +126,9 @@ pub struct RaceSim {
     /// The slot whose weapon last got through to each craft, `None` while
     /// nobody's has. Eliminator-only bookkeeping - see `crate::race::eliminator`.
     pub(super) last_damager: [Option<u8>; oag_gameplay::MAX_SHIPS],
-    /// The tick, plus one, on which a weapon hit last got through to each craft
-    /// - `0` for never. What tells [`Self::last_damager`]'s credit apart from
-    /// a death by wall: see `crate::race::eliminator`. Hashed.
+    /// The tick, plus one, on which a weapon hit last got through to each craft,
+    /// or `0` for never. It is what tells [`Self::last_damager`]'s credit apart
+    /// from a death by wall: see `crate::race::eliminator`. Hashed.
     pub(super) last_weapon_hit: [u64; oag_gameplay::MAX_SHIPS],
     /// Seconds left before an Eliminated craft returns to the race, once it
     /// has reached that state - see `crate::race::eliminator`. Hashed: a
