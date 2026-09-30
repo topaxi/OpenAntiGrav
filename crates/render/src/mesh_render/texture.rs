@@ -75,6 +75,28 @@ pub(super) fn upload_rgba(
     if let Some(max_levels) = max_levels {
         mips.truncate(max_levels as usize);
     }
+    upload_levels(
+        device,
+        queue,
+        label,
+        mips.iter()
+            .map(|(w, h, texels)| (*w, *h, texels.as_slice())),
+    )
+}
+
+/// Uploads a chain the caller already holds, one `(width, height, texels)` per
+/// level, base first, and returns its view.
+///
+/// The shared tail of [`upload_rgba`], which builds its own chain, and of the
+/// disc-authored [`Texels::Chain`], which does not: the level count is the
+/// iterator's, so both cap and complete chains go through the same writes.
+fn upload_levels<'a>(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: &str,
+    levels: impl ExactSizeIterator<Item = (u32, u32, &'a [u8])> + Clone,
+) -> wgpu::TextureView {
+    let (width, height, _) = levels.clone().next().expect("a chain has a base level");
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
         size: wgpu::Extent3d {
@@ -82,14 +104,14 @@ pub(super) fn upload_rgba(
             height,
             depth_or_array_layers: 1,
         },
-        mip_level_count: mips.len() as u32,
+        mip_level_count: levels.len() as u32,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: FORMAT,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
-    for (level, (mip_width, mip_height, mip_rgba)) in mips.iter().enumerate() {
+    for (level, (mip_width, mip_height, mip_rgba)) in levels.enumerate() {
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &texture,
@@ -101,11 +123,11 @@ pub(super) fn upload_rgba(
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(mip_width * 4),
-                rows_per_image: Some(*mip_height),
+                rows_per_image: Some(mip_height),
             },
             wgpu::Extent3d {
-                width: *mip_width,
-                height: *mip_height,
+                width: mip_width,
+                height: mip_height,
                 depth_or_array_layers: 1,
             },
         );
@@ -137,6 +159,20 @@ pub(super) fn upload(
     texture: &ModelTexture,
     blocks: bool,
 ) -> wgpu::TextureView {
+    if let Texels::Chain(levels) = &texture.texels {
+        return upload_levels(
+            device,
+            queue,
+            &texture.label,
+            levels.iter().enumerate().map(|(level, texels)| {
+                (
+                    (texture.width >> level).max(1),
+                    (texture.height >> level).max(1),
+                    texels.as_slice(),
+                )
+            }),
+        );
+    }
     let Texels::Blocks { format, levels } = &texture.texels else {
         let rgba = texture.rgba().expect("the other arm is Texels::Blocks");
         return upload_rgba(
@@ -238,6 +274,9 @@ pub(super) fn upload(
 /// `TEXTURE_COMPRESSION_BC`, and RGBA8 with the box-filtered chain.
 fn gpu_bytes(texture: &ModelTexture, blocks: bool) -> u64 {
     if let (Texels::Blocks { levels, .. }, true) = (&texture.texels, blocks) {
+        return levels.iter().map(|level| level.len() as u64).sum();
+    }
+    if let Texels::Chain(levels) = &texture.texels {
         return levels.iter().map(|level| level.len() as u64).sum();
     }
     let mut levels = mip_chain_dims(texture.width, texture.height);

@@ -554,25 +554,31 @@ fn build_class(
         .into_iter()
         .map(|slot| {
             slot.map(|t| {
-                std::sync::Arc::new(ModelTexture::rgba8(
-                    // The runtime path first: it is present on tracks *and*
-                    // ships, where the node-header name is the artists'
-                    // `Z:/...` authoring path and is absent altogether on every
-                    // track texture.
-                    t.asset_path
-                        .as_deref()
-                        .or(t.name.as_deref())
-                        .and_then(|n| n.rsplit(['/', '\\']).next())
-                        .unwrap_or("?")
-                        .to_string(),
-                    u32::from(t.width),
-                    u32::from(t.height),
-                    t.to_rgba(),
-                    // The one level the running original samples, whatever
-                    // chain the file declares - see `ModelTexture::mip_count`'s
-                    // doc and `docs/rendering/frame-audit.md`.
-                    Some(PSP_SAMPLED_LEVELS),
-                ))
+                let label = t
+                    .asset_path
+                    .as_deref()
+                    .or(t.name.as_deref())
+                    .and_then(|n| n.rsplit(['/', '\\']).next())
+                    .unwrap_or("?")
+                    .to_string();
+                let (width, height) = (u32::from(t.width), u32::from(t.height));
+                // The levels the disc authors, when they were read: the chain
+                // is the game's and so is the rule that picks among them -
+                // see `Texels::Chain`. A texture whose levels are not read (a
+                // pre-swizzled Pure one) keeps the box-filtered chain, capped
+                // at the depth it declares; `.max(1)`: a 0 would upload no
+                // base level at all.
+                if t.levels.len() + 1 == usize::from(t.mip_count.max(1)) {
+                    std::sync::Arc::new(ModelTexture::chain(label, width, height, t.levels_rgba()))
+                } else {
+                    std::sync::Arc::new(ModelTexture::rgba8(
+                        label,
+                        width,
+                        height,
+                        t.to_rgba(),
+                        Some(u32::from(t.mip_count).max(1)),
+                    ))
+                }
             })
         })
         .collect();
@@ -912,7 +918,7 @@ mod draw_call;
 pub use draw_call::{Bounds, DrawCall};
 
 mod model_texture;
-pub use model_texture::{BlockFormat, ModelTexture, PSP_SAMPLED_LEVELS, Texels, TextureSlots};
+pub use model_texture::{BlockFormat, ModelTexture, Texels, TextureSlots};
 
 mod flame;
 pub mod groups;

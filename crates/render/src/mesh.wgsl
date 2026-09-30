@@ -221,6 +221,12 @@ override linear_out: f32 = 0.0;
 // out of both - see `mesh_render::ShadowReceiver`.
 override receives_shadow: f32 = 0.0;
 
+// The GE's texture level slope and bias for a PSP `.vex` model, off by default
+// (0 = the sampler's own derivative-driven selection). See
+// `mesh_render::PSP_TEXLOD_SLOPE` for the recovered values and their limits.
+override texlod_slope: f32 = 0.0;
+override texlod_bias: f32 = 0.0;
+
 override flame_shading: f32 = 0.0;
 override flame_rim_power: f32 = 0.0;
 override flame_rim_scale: f32 = 0.0;
@@ -1143,7 +1149,17 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let ramp_facing = dot(view_dir, n);
     let ramp_uv = vec2<f32>(ramp_facing, ramp_facing);
     let first_uv = select(in.texcoord, ramp_uv, ramp_sheen);
-    let first = textureSample(albedo, albedo_sampler, first_uv);
+    // **Pulse's slope-mode level selection**: `log2(|z| * slope) + bias` off view
+    // depth, clamped to the levels the texture has - the GE's rule, in place of
+    // the derivatives `textureSample` would use. On only for a model carrying
+    // the disc's own chains; see `mesh_render::PSP_TEXLOD_SLOPE`.
+    var first: vec4<f32>;
+    if texlod_slope > 0.0 {
+        let lod = max(log2(max(in.view_depth * texlod_slope, 1.0e-6)) + texlod_bias, 0.0);
+        first = textureSampleLevel(albedo, albedo_sampler, first_uv, lod);
+    } else {
+        first = textureSample(albedo, albedo_sampler, first_uv);
+    }
     let second = textureSample(lightmap, albedo_sampler, in.texcoord);
     let picture = select(first, second, (in.slots & 2u) != 0u);
     let coverage = select(first, second, (in.slots & 4u) != 0u);

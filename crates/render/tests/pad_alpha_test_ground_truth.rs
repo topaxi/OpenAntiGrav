@@ -90,7 +90,27 @@ fn a_pure_speedup_pad_draws_visible_pixels() {
         .read_name(name)
         .unwrap_or_else(|e| panic!("reading {name}: {e}"));
 
-    let model = mesh::build_pads(name, &blob, None).unwrap_or_else(|e| panic!("{name}: {e}"));
+    let mut model = mesh::build_pads(name, &blob, None).unwrap_or_else(|e| panic!("{name}: {e}"));
+    // **This guard is about the discard operator, not about level selection.**
+    // The orbit framing below is a viewer's, hundreds of units from every pad,
+    // where the GE's slope rule would pick a coarse authored level - and a
+    // coarse level of the glow texture has alpha above 0 nearly everywhere, so
+    // `GU_GREATER` 0 keeps the plate whole and the two captures below stop
+    // differing for a reason that is not the operator. Base level only keeps
+    // the comparison about what it names. `psp_slope_lod.rs` owns the selection.
+    for slot in &mut model.textures {
+        if let Some(texture) = slot
+            && let mesh::Texels::Chain(levels) = &texture.texels
+        {
+            *slot = Some(std::sync::Arc::new(mesh::ModelTexture::rgba8(
+                texture.label.clone(),
+                texture.width,
+                texture.height,
+                levels[0].clone(),
+                None,
+            )));
+        }
+    }
     assert!(
         !model.indices.is_empty(),
         "{name} authors no Speedup Pad geometry, so this test is not exercising the \

@@ -46,7 +46,9 @@ fn texture(label: &str) -> Option<std::sync::Arc<ModelTexture>> {
 fn rgba(texture: &ModelTexture) -> &[u8] {
     match &texture.texels {
         Texels::Rgba8(bytes) => bytes,
-        Texels::Blocks { .. } => panic!("apply never produces a block-compressed texture"),
+        Texels::Chain(_) | Texels::Blocks { .. } => {
+            panic!("apply never produces a block-compressed or chained texture")
+        }
     }
 }
 

@@ -4,8 +4,9 @@
 [frame-audit.md](../../docs/rendering/frame-audit.md). Three circuits matched to
 the original at 480x272 with no filters on either side; sky, fog and tone agree
 within 5 %, and the one measured difference a player would see across the board
-was soft scenery, fixed by uploading a PSP `.vex` texture with one mip level
-(`mesh::PSP_SAMPLED_LEVELS`, ground truth
+was soft scenery, fixed by uploading a PSP `.vex` texture with the mip levels the
+disc authors and selecting among them by the GE's recovered slope law
+(`Texels::Chain`, `mesh_render::PSP_TEXLOD_SLOPE`; tests `psp_slope_lod.rs` and
 `psp_texture_levels_ground_truth.rs`). Two differences are traced only as far as
 a lead.
 
@@ -23,15 +24,32 @@ a lead.
   `-0.94,-0.09,-0.34` ours draws dark bowl shapes (track draws 1381-1391, PVS on)
   where the original shows terrain. Not traced: draw order versus terrain,
   a PVS section the original culls, or our section placement.
-- **Whether real PSP hardware mips scenery past about 128 units.** The game
-  programs slope mode with slope `1/256`; PPSSPP's GPU backends do not implement
-  that law, and the fix reproduces what PPSSPP draws. A hardware capture or the
-  software renderer would say.
-- **Wipeout Pure shares the one-level line**, unmeasured against a Pure capture.
+- **Whether real PSP hardware shows level 1 past about 256 units.** The game
+  programs slope mode with slope `1/256` and bias 1; the renderer now applies
+  that law to the disc's levels, and PPSSPP's GPU backends do not, so no frame of
+  the emulator can confirm the far field. Two things stay unread: that our
+  `clip.w` is the GE's `|z|`, and `Texture_BuildBindList`'s per-texture mode and
+  bias. A hardware capture or PPSSPP's software renderer would say.
+- **Wipeout Pure shares the slope rule**; its pre-swizzled textures keep a
+  synthesised chain. Unmeasured against a Pure capture.
 - The cyan strip lights and the start gantry differ between the two sides by
   timing only; a comparison that needs them should pin the same tick after GO.
 
 ## Next Steps
+
+- **TEXTURE DETAIL (not started)**, the maintainer's request 2026-09-30: a
+  `graphics.texture_detail` setting beside MODEL DETAIL with the same shape.
+  `original` is `PSP_TEXLOD_SLOPE`/`PSP_TEXLOD_BIAS` as they stand (default);
+  `high` doubles the distance before each level step; `maximum` always samples
+  level 0. One multiplier on the law: scale `texlod_slope` in
+  `mesh_render/texlod.rs::constants` (`original` x1, `high` x0.5, `maximum` a slope
+  so small the level clamps to 0). `high` and `maximum` are labelled chosen, not
+  measured, in the `menu.toml` comment. Needs a `menu.toml` row with `string_id`
+  plus `english.toml` text (`just check-strings`), pointer support like its
+  neighbours, a test per preset, and live application if MODEL DETAIL applies
+  live. Model this on `[render_profiles.<title>] model_detail` and
+  `--lod`. Also check `--anisotropy` against the slope law: `textureSampleLevel`
+  with an anisotropic sampler is accepted but was not looked at.
 
 - Live-read the hull model's `+0x1a8` and the `+0x48`/`+0x70` light lists off the
   trace's entity pointer (the `craft+0x8b4` read this pass did not resolve to a
@@ -40,5 +58,5 @@ a lead.
 - Bisect the factory roofs by draw index (`OAG_LO`/`OAG_HI`-style filter on the
   opaque loop) against a capture with the terrain's own layer, before touching
   PVS placement.
-- Capture Pure at one pose with `psp-trace.py` and confirm or scope the
-  one-level cap.
+- Capture Pure at one pose with `psp-trace.py` and confirm or scope the slope
+  rule; read `Texture_BuildBindList`'s mode/bias branch.

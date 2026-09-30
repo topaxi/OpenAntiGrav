@@ -519,9 +519,12 @@ passes `0x3b800000` = `1/256`. Slope mode's level is `log2(|z| * slope) + bias`,
 so it follows **depth**, not texel density (level 0 inside about 128 units).
 Measured against PPSSPP at 480x272 the original resolves scenery at the base
 level throughout a race frame - see
-[frame-audit.md](../../../rendering/frame-audit.md), which is why `oag_render`
-now uploads a PSP `.vex` texture with one level. Whether real hardware mips
-scenery past about 128 units is unmeasured.
+[frame-audit.md](../../../rendering/frame-audit.md). `oag_render` now uploads
+a PSP `.vex` texture with the levels the disc authors and selects among them by
+this rule (`mesh_render::PSP_TEXLOD_SLOPE`), so scenery is level 0 inside about
+128 units, as the emulator draws it, and level 1 from 256. Whether real hardware
+shows that is unmeasured, and the per-texture `Texture_BuildBindList` emission
+(mode 0 or 2 with a computed bias) is still unread.
 
 **This one is a real divergence and it is measured inert.** `oag_render`
 synthesises a **full** box-filtered chain down to 1x1 (`mesh_render::mip_chain`,
