@@ -289,6 +289,52 @@ in the corrected extraction, across all nine archives - not a reading
 artefact. See `data/scratch/drive-2026-09-27/omega-psarc.md` for the exact
 decode results and the full census.
 
+## Campaign: confirming a cell starts its race, 2026-09-30
+
+`omega-campaign-launch`, walked windowed under Xvfb by mouse: `RACE CAMPAIGN`,
+`Grid Selection` (a click on the flyer's authored `Flyer Pad Lock` rect),
+`Cell Selection` (a hover, then a second click on the hex), then a running race.
+Two cells, two modes, two circuits: grid 0's `Race` on `01_Track` (Vineta K,
+Venom, 3 laps, 8 craft) and its `Speed Lap` on `08_Track` (7 laps, solo).
+`Session::launch_campaign_cell` needed **no Omega arm**: the cell's circuit id
+resolves through the teams/track plugin catalogue (`Data\Plugins\teams\Definition.xml`,
+38 circuits, the archive-filtered list every title's shell builds), and the
+mode, class and laps mapping is HD's. What was added is a test: the mapping is
+now `oag_game::campaign::launch::plan_cell`, a pure function the session applies,
+and `crates/game/tests/omega_campaign_launch_ground_truth.rs` holds it to the
+disc: of the 167 cells in the 16 grids that parse, **142 launch onto a circuit
+the catalogue resolves and 25 (`NitroBattle`, `Detonator`) are refused for
+their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
+`RequiredPoints` and are skipped by the grid reader (logged).
+
+- **AI count is not a launch option.** `AICount` is 7 on `Race`/`Elimination`/
+  `Tournament` and 1 on `Head2Head`; the test asserts every Omega cell's value
+  equals `Mode::opponent_count()`, so the field the mode already races with is
+  the authored one. Nothing reads `AICount` for any title.
+- **Team Selection is skipped, not wired.** `Team_Selection_Definition.xml` is
+  in `data09.psarc` at HD's path and naming it in `oag_omega::frontend::FRONT_END`
+  makes the screen read, but it draws an empty frame: the logos are at
+  `Data\art\published\hdships\<Team>\FE\Logo.gnf` where HD's reader asks
+  `Data\Ships\<Team>\FE\Logo.gtf` (`oag_ui::picker::hd::logo_src`), the stat
+  blocks do not draw, and `hdships\<Team>\screen.xml` has no slideshow chain.
+  A cell therefore races the default craft (`ag_systems`, chosen, not measured).
+- **The EndRace screens are skipped, not wired.** `EndRace_Definition.xml` is at
+  HD's path too, and dispatching Omega through HD's loader draws `EndRace
+  Results`, but `--menu-page endrace-menu` then draws no option blocks where
+  HD's draws three, so the way back (`RETURN TO GRID`) is unreachable. Without
+  the screens a finished race (autopilot, 3 laps of `01_Track`, about 7,000
+  ticks) shows the built-in results table and the next confirm returns to
+  `Main Menu`, **not** `Cell Selection` as on HD.
+- **Correction to the lane brief:** Omega has no `Campaign Selection` screen
+  and no flyer cards in this build (`load_omega` passes `selection_layout:
+  None, grid_layout_fury: None, flyers: None`; `RACE CAMPAIGN` opens `Grid
+  Selection` directly, `Event 01/16`). The `hd-fury-cards` merge drew them for
+  HD only.
+- **Not Omega's to fix here, seen on the walk:** the HUD is absent in the race
+  (`HUD_Components.gtf`/`hdHUD.mip` are not in the archives), 793 of the
+  circuit's materials are unresolved (white surfaces on `08_Track`), and the
+  menu backdrop is white.
+
 ## Racing: a race starts, on this title's own data
 
 **Try:** `oag-game data/extracted/ps4 --race
