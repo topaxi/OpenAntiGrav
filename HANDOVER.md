@@ -629,7 +629,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [A fired Cannon round: the body, its impact, its bolt streak and its muzzle flash are all drawn now](handover/gameplay/a-fired-cannon-round-is-drawn-by-nothing.md) - **2026-09-17: both hand-built quads landed.** The bolt is two crossed camera-facing ribbons between the round's last/current position, fixed white; the flash is one quad.
 - [Both lockable weapons draw their reticle now, and the black background behind it is gone](handover/gameplay/the-missile-fires-without-a-lock-now-and.md)
 - [Pure and HD lock on too, and it cost two axes rather than any new recovery](handover/gameplay/pure-and-hd-lock-on-too-and-two-axes.md)
-- [The camera shake on impact reproduces its two-rotation shape now; two composition details are open](handover/rendering/the-originals-camera-hud-shake-on-impact-is.md)
+- [The camera shake on impact is measured against the original and matches; a hard hit and the motion blur are open](handover/rendering/the-originals-camera-hud-shake-on-impact-is.md)
 - [PVS culling: three ceilings, one of them invented](handover/rendering/pvs-culling-three-ceilings-one-of-them-invented.md)
 - [The HUD's four remaining items](handover/frontend/the-huds-four-remaining-items.md)
 - [The lap count is per speed class, and three of four classes raced short](handover/gameplay/the-lap-count-is-per-speed-class.md) - 2026-09-09; `Mode::SINGLE_RACE_LAPS = 3` was a guess carried over from the time trial, retired by the campaign census: 3 Venom, 4 Flash, 4 Rapier.

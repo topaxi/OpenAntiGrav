@@ -130,14 +130,9 @@ impl Race {
     /// shake's phase is randomised, so a matched-pose comparison must not see
     /// it. See `oag_render::camera::shake`.
     ///
-    /// The shake's two rotations are read off `base`'s own rows 1 and 2 -
-    /// this engine's closest live analogue to the camera basis rows
-    /// `Camera_SubmitScene` re-reads every tick, since nothing here keeps a
-    /// persisted per-camera basis object the way the original does; see
-    /// `oag_render::camera::shake`'s "modeling choice" section for what that
-    /// substitution does and does not claim. They are read from `base`
-    /// *before* the shake perturbs it, matching the original's own read of
-    /// its basis at the top of the same function that then rotates it.
+    /// The shake turns the camera about its own up and forward as it stands in
+    /// `base` this tick, in the original's own order and sense: see
+    /// `oag_render::camera::shake`, measured against the running original.
     #[must_use]
     pub fn view(&self) -> Mat4 {
         if let Some(over) = &self.view.camera_override {
@@ -158,18 +153,9 @@ impl Race {
         } else {
             self.view.camera.view(target, &self.view.chase_params)
         };
-        if self.view.shake.active() {
-            // A view matrix is the inverse of the camera's world transform, so
-            // rotating the camera's own basis by `Q` post-multiplies `Q` into
-            // that transform and pre-multiplies `Q`'s inverse into its
-            // inverse - see `oag_render::camera::shake`'s module documentation
-            // for what the rotation itself reproduces.
-            let row1 = base.row(1).truncate();
-            let row2 = base.row(2).truncate();
-            Mat4::from_quat(self.view.shake.rotation(row1, row2).inverse()) * base
-        } else {
-            base
-        }
+        // The camera turned about its own up and forward, the eye fixed:
+        // see `oag_render::camera::shake::Shake::apply`.
+        self.view.shake.apply(base)
     }
 
     /// The camera's own world position, from the view matrix it produces.

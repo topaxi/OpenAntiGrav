@@ -38,6 +38,16 @@ impl Race {
     ///
     /// [`PlayerInputs`]: oag_gameplay::PlayerInputs
     pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluated {
+        // Decays every tick regardless of contact, like `Camera_ArmShake`'s own
+        // `shake_timer`, and **first**: the original arms the shake while it
+        // updates the craft and reads the full `0.6` s timer in the same
+        // frame's `Camera_SubmitScene`, decrementing after. Advancing here, before
+        // anything this tick can arm it, gives the same order - the frame an
+        // impact lands in shows the shake at progress 0 and the next one at
+        // one tick - where advancing at the end of the tick would show the
+        // impact frame already one tick in. Measured 2026-09-30, see
+        // `oag_render::camera::shake`.
+        self.view.shake.advance(self.sim.dt);
         // The one craft a person is flying this tick. `0` under
         // `World::SINGLE_PLAYER`, which is every session this engine starts, so
         // reading it changes nothing and hard-coding it would have cost the
@@ -700,11 +710,6 @@ impl Race {
         // different extent in a screenshot than in a window at the same tick
         // count. **After the camera**, because it projects through it.
         self.update_sight();
-
-        // Decays every tick regardless of contact, the same as
-        // `Camera_ArmShake`'s own `shake_timer` - see
-        // `oag_render::camera::shake`.
-        self.view.shake.advance(self.sim.dt);
 
         // After every writer of the shield pool this tick has run - the wall
         // contact above, the weapon damage inside `projectile::step`, and the

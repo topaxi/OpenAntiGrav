@@ -431,6 +431,21 @@ Two things a first race capture found:
   consecutive hits. Why is not established. A time trial has exactly one, which
   is a further reason to prefer it for a first capture.
 
+### Pairing an entry and an exit of one call: swap the breakpoint inside the call
+
+Because only the newest breakpoint fires, reading a function's input and its output in the *same* call
+is done by swapping: at the entry hit read the input, `cpu.breakpoint.remove` the entry, `add` the exit
+address, `cpu.resume`, wait for the pc to equal the exit (the stepping-rebroadcast rule above still
+applies), read the output, swap back and resume to the next entry. The pair is one call's own input and
+output, which is what a per-frame comparison against the original's variable timestep needs. Used for
+`Camera_SubmitScene` (`0x08878874` entry, `0x08878af0` after its shake block) in
+`docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`, 2026-09-30; about two round trips a call, 300 calls
+in under ten minutes. **Memory can be written while stopped at the entry**, which makes a *forced* input
+possible (the shake's struct fields were rewritten there to arm a full-strength shake on a craft at rest);
+write every field the function reads, or it reads the stale ones (a first forced arm left the falloff
+positions zero and measured no envelope at all). Screenshots of the stopped emulator show a frame or two
+behind the stopped call.
+
 ## What the API gives you
 
 | Command | Notes |
