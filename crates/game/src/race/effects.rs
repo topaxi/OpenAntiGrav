@@ -54,7 +54,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming
 /// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 25] = [
+pub const RACE_EFFECTS: [&str; 26] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     MISSILE_FLARE_EFFECT,
@@ -68,6 +68,7 @@ pub const RACE_EFFECTS: [&str; 25] = [
     PLASMA_LIGHTNING_COLLAPSE_EFFECT,
     SHURIKEN_FLARE_EFFECT,
     SHURIKEN_BOUNCE_EFFECT,
+    SHURIKEN_EXPIRE_EFFECT,
     TRACK_BLAST_EFFECT,
     CRAFT_BLAST_EFFECT,
     MISSILE_EXPLO_EFFECT,

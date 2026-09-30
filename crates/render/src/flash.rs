@@ -44,27 +44,173 @@ pub struct Kind {
     pub near: f32,
     /// `+0x50`: gone beyond it; `0` means no falloff at all.
     pub far: f32,
-    /// `+0x70` at time 0 and `+0x80` at time 1, RGBA in `0..=1`.
-    pub keys: [[f32; 4]; 2],
+    /// The colour keys, `(time, RGBA)` with time in `0..=1` of the duration
+    /// (`+0xb0..` and `+0x70..`): two for every kind but 7, which authors
+    /// three. `ScreenFlash_Update` walks them as a piecewise-linear ramp.
+    pub keys: &'static [(f32, [f32; 4])],
+    /// `+0x49`: additive when set, alpha-over when not. Only kind 11 clears
+    /// it, and it has no caller; [`crate::flash::Pipeline`] draws additive only.
+    pub additive: bool,
 }
 
-/// Kind 0: `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`), a Rocket that
-/// struck a craft - yellow fading to red.
-pub const ROCKET_CRAFT_HIT: Kind = Kind {
-    duration: 0.5,
-    near: 75.0,
-    far: 200.0,
-    keys: [[1.0, 1.0, 0.0, 0.6], [1.0, 0.0, 0.0, 0.0]],
-};
+const fn kind(
+    duration: f32,
+    near: f32,
+    far: f32,
+    keys: &'static [(f32, [f32; 4])],
+    additive: bool,
+) -> Kind {
+    Kind {
+        duration,
+        near,
+        far,
+        keys,
+        additive,
+    }
+}
+
+/// Kind 0, yellow fading to red, alpha `0.6`. Started by five callers:
+/// `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`), `Missile_SpawnExplosion`
+/// (`0x08868d50`), the Shuriken teardown `FUN_08870c78`, the craft explosion
+/// `FUN_0883e064` (state 5), and `FUN_088407b0` for every craft but the
+/// player's own.
+pub const BLAST: Kind = kind(
+    0.5,
+    75.0,
+    200.0,
+    &[(0.0, [1.0, 1.0, 0.0, 0.6]), (1.0, [1.0, 0.0, 0.0, 0.0])],
+    true,
+);
+
+/// Kind 1: `PlasmaBlast_Construct` (`0x0885fd90`) - violet fading to blue.
+pub const PLASMA: Kind = kind(
+    1.25,
+    100.0,
+    300.0,
+    &[(0.0, [0.7, 0.1, 1.0, 0.7]), (1.0, [0.0, 0.0, 1.0, 0.0])],
+    true,
+);
+
+/// Kind 2: the Repulser's construct, `FUN_08876300`. **Unwired**: the
+/// Repulser is not built.
+pub const REPULSER: Kind = kind(
+    0.4,
+    100.0,
+    300.0,
+    &[(0.0, [0.0, 0.2, 1.0, 0.5]), (1.0, [0.0, 0.2, 1.0, 0.0])],
+    true,
+);
+
+/// Kind 3: `BombBlast_Construct` (`0x08872078`) - orange fading to red.
+pub const BOMB: Kind = kind(
+    0.75,
+    100.0,
+    300.0,
+    &[(0.0, [1.0, 0.5, 0.0, 0.7]), (1.0, [1.0, 0.0, 0.0, 0.0])],
+    true,
+);
 
 /// Kind 4: `Quake_Update` (`0x0891d268`), re-started every frame the wave
 /// runs - an orange tint.
-pub const QUAKE: Kind = Kind {
-    duration: 0.4,
-    near: 0.0,
-    far: 300.0,
-    keys: [[1.0, 0.2, 0.0, 0.5], [1.0, 0.2, 0.0, 0.0]],
-};
+pub const QUAKE: Kind = kind(
+    0.4,
+    0.0,
+    300.0,
+    &[(0.0, [1.0, 0.2, 0.0, 0.5]), (1.0, [1.0, 0.2, 0.0, 0.0])],
+    true,
+);
+
+/// Kind 5. **No caller**: the search for a direct call, a `jalr` through a
+/// register holding `0x088f00c0` and the address as data found none.
+pub const UNCALLED_5: Kind = kind(
+    0.4,
+    0.0,
+    0.0,
+    &[(0.0, [1.0, 0.7, 0.0, 0.5]), (1.0, [0.3, 0.0, 0.0, 0.0])],
+    true,
+);
+
+/// Kind 6: white over a second, no falloff. `Ship_SetState` case 3
+/// (`0x088441fc`, entering state 3 from another state) and
+/// `Ship_UpdateRespawn` (`0x08847a2c`, when its timer runs out), both only for
+/// the craft whose `+0x368` is zero - the local player.
+pub const RESET: Kind = kind(
+    1.0,
+    0.0,
+    0.0,
+    &[(0.0, [1.0, 1.0, 1.0, 1.0]), (1.0, [0.0, 0.0, 0.0, 0.0])],
+    true,
+);
+
+/// Kind 7: white, then yellow at a tenth of its two seconds, then red to
+/// nothing. The player's own craft's big explosion, `FUN_088407b0`.
+pub const PLAYER_DESTROYED: Kind = kind(
+    2.0,
+    0.0,
+    0.0,
+    &[
+        (0.0, [1.0, 1.0, 1.0, 1.0]),
+        (0.1, [1.0, 1.0, 0.0, 0.8]),
+        (1.0, [1.0, 0.0, 0.0, 0.0]),
+    ],
+    true,
+);
+
+/// Kind 8: `Mine_SpawnExplosion` (`0x08867f1c`) - yellow to nothing.
+pub const MINE: Kind = kind(
+    0.4,
+    50.0,
+    200.0,
+    &[(0.0, [1.0, 1.0, 0.0, 0.4]), (1.0, [0.0, 0.0, 0.0, 0.0])],
+    true,
+);
+
+/// Kind 9: `Race_CreateModeObject` (`0x0882112c`), unconditionally on
+/// building the race scene - a two second white fade in. **Unwired**: the
+/// original hides it behind the intro fly-through, which this port does not
+/// have, so there is no moment to place it at that was measured.
+pub const MODE_START: Kind = kind(
+    2.0,
+    0.0,
+    0.0,
+    &[(0.0, [1.0, 1.0, 1.0, 1.0]), (1.0, [0.0, 0.0, 0.0, 0.0])],
+    true,
+);
+
+/// Kind 10: `RaceMode_UpdateIntro_q` (`0x08829e6c`), when the intro
+/// camera's pass ends, 0.7 s of white. **Unwired**, for kind 9's reason.
+pub const INTRO_END: Kind = kind(
+    0.7,
+    0.0,
+    0.0,
+    &[(0.0, [1.0, 1.0, 1.0, 1.0]), (1.0, [0.0, 0.0, 0.0, 0.0])],
+    true,
+);
+
+/// Kind 11, the one alpha-over wash. **No caller**, like [`UNCALLED_5`].
+pub const UNCALLED_11: Kind = kind(
+    0.5,
+    0.0,
+    0.0,
+    &[(0.0, [0.8, 0.8, 0.8, 1.0]), (1.0, [0.01, 0.01, 0.01, 0.01])],
+    false,
+);
+
+/// Every kind, indexed by the `a1` `ScreenFlash_Start` takes.
+pub const KINDS: [Kind; 12] = [
+    BLAST,
+    PLASMA,
+    REPULSER,
+    BOMB,
+    QUAKE,
+    UNCALLED_5,
+    RESET,
+    PLAYER_DESTROYED,
+    MINE,
+    MODE_START,
+    INTRO_END,
+    UNCALLED_11,
+];
 
 impl Kind {
     /// `ScreenFlash_DistanceFalloff` for a flash at `at` seen from `eye`.
@@ -77,10 +223,18 @@ impl Kind {
         (1.0 - (distance - self.near) / (self.far - self.near)).clamp(0.0, 1.0)
     }
 
-    /// The keys lerped at `t`, the node's one segment between times 0 and 1.
+    /// The keys walked at `t`, as `ScreenFlash_Update` does: the first key
+    /// whose time is at or past `t` closes the segment, and past the last
+    /// one the last key holds.
     fn colour_at(&self, t: f32) -> [f32; 4] {
-        let [a, b] = self.keys;
-        std::array::from_fn(|i| a[i] + t * (b[i] - a[i]))
+        for pair in self.keys.windows(2) {
+            let [(t0, from), (t1, to)] = [pair[0], pair[1]];
+            if t <= t1 {
+                let f = (t - t0) / (t1 - t0);
+                return std::array::from_fn(|i| from[i] + f * (to[i] - from[i]));
+            }
+        }
+        self.keys[self.keys.len() - 1].1
     }
 }
 
@@ -113,7 +267,7 @@ impl ScreenFlash {
     /// One `ScreenFlash_Update` of `dt` seconds, seen from `eye`.
     pub fn advance(&mut self, dt: f32, eye: Vec3) {
         if let Some((kind, at)) = self.pending.take() {
-            let mut first = kind.keys[0];
+            let mut first = kind.keys[0].1;
             first[3] *= kind.falloff(at, eye);
             if strength(self.colour) < strength(first) {
                 self.running = Some((kind, at, 0.0));

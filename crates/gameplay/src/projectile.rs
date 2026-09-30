@@ -499,12 +499,12 @@ impl Projectiles {
     /// or a determinism reference stops being a question about the weapon that
     /// changed.
     ///
-    /// **`fuse` is read and what running out *does* is not.** Unlike a mine's
-    /// `timetodie`, which detonates, a blade that times out is **reaped**
-    /// silently here - the Rocket's own pool behaviour, chosen because
-    /// `Shuriken_Update` only counts `+0x48` up and the teardown that would read
-    /// it was not followed. `WO_SHURIKEN_EXPIRE` is authored on the disc and
-    /// stays unwired for the same reason. See
+    /// **What running out does is presentation only.** Unlike a mine's
+    /// `timetodie`, which detonates and spends a blast, a blade whose fuse ends
+    /// reports an [`Impact`] with `blast: false` - `ShurikenPool_Update`
+    /// (`0x0886ff38`) raises the destroy bit at `fuse < age` and its teardown,
+    /// `FUN_08870c78`, plays `WO_SHURIKEN_EXPIRE` and a screen flash and calls
+    /// nothing that spends damage, the Plasma's shape. See
     /// `oag_tables::weapons::ShurikenStats`.
     pub fn throw(&mut self, position: Vec3, velocity: Vec3, owner: u8, fuse: f32) -> bool {
         self.place(Weapon::Shuriken, position, velocity, owner, None, 0.0, fuse)

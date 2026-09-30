@@ -126,6 +126,7 @@ mod bomb_blast;
 mod camera;
 mod capture;
 pub mod countdown;
+mod craft_flash;
 mod drawable;
 mod effect_names;
 mod effects;

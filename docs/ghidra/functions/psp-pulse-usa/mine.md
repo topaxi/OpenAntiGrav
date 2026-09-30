@@ -1148,3 +1148,21 @@ row, negated". It is `-craft[+0xb10]`, and live it is `(0.0002, 0.9998,
   without the pooled entity's residue.
 - **HD's Mine and Bomb** keep the frozen craft pose: HD is a different
   binary and neither of its poses was read. Chosen, not measured.
+
+## The Mine trips on its own layer too, measured live (2026-09-30)
+
+On PPSSPP (Talon's Junction, the player stationary on the start line) a Mine
+laid with the fire bit went off **29 frames** later and a Bomb **30**, each
+centred on the craft that laid it, each calling `ScreenFlash_Start` from its own
+explosion function (`Mine_SpawnExplosion` kind 8, `BombBlast_Construct` kind 3;
+[screen-flash-callers.md](screen-flash-callers.md), "Measured live"). Nobody else
+was near. So the layer trips its own charge after about 0.5 s: the Bomb's
+`Bomb_InArmingDelay` is the recovered reason (above), and this is the first
+observation of the same for the Mine, whose `Mine_SweepCraftTrigger` was not
+read for the point.
+
+`oag_gameplay::projectile::mine::triggered_by` still excludes the owner for good,
+labelled as this engine's choice. **That choice now has a measurement against
+it.** Changing it is a gameplay change (a craft reversing into its own cluster
+takes a blast in the original) and needs the racing gate; it is left for a lane
+that owns it.

@@ -30,7 +30,7 @@ pub(super) use visuals::bounced_this_tick;
 // path: `visuals.rs` reaches all three directly by their bare names.
 #[cfg(test)]
 pub(super) use visuals::{
-    bounce_effect_for, flare_effect_for, missile_flare_anchors, plasma_flare_scale,
+    bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors, plasma_flare_scale,
 };
 
 /// The far plane the reticle's own projection uses.

@@ -251,6 +251,7 @@ impl Race {
                 .racing_line
                 .nearest(pose.position, 0, self.sim.racing_line.len()) as u32;
 
+        self.flash_player_reset(slot);
         self.sim.respawns[slot] += 1;
         self.sim.respawns_in_a_row[slot] += 1;
         self.sim.respawn_cooldown[slot] = RESPAWN_COOLDOWN_TICKS;

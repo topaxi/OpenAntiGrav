@@ -1,4 +1,4 @@
-# Weapon blasts draw their own sprites and wash the screen; the other flash kinds are next
+# Weapon blasts draw their own sprites and wash the screen; every flash kind with a caller is wired
 
 2026-09-24. The Quake's crest and a close Rocket blast drew as white
 blowouts where the original draws orange fire. Measured, not re-tinted:
@@ -76,14 +76,25 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
   fire shows more of its 4x4 texture and reads redder
   (`rocket-main-vs-frames.png`). It also animates the Shuriken, Plasma head
   and ship explosions, none of which were re-shot.
-- **The other ten flash kinds are not wired.** The table is read (see the
-  doc page). Their callers are the next read; each passes its kind in `a1`:
-  - `Mine_SpawnExplosion`, `Missile_SpawnExplosion`, `BombBlast_Construct`
-    and `PlasmaBlast_Construct`;
-  - `Ship_SetState` and `Ship_UpdateRespawn`;
-  - `Race_CreateModeObject`;
-  - `FUN_08829e6c`, `FUN_0883e064`, `FUN_088407b0`, `FUN_08870c78` and
-    `FUN_08876300`.
+- **The other flash kinds: wired 2026-09-30.** All fifteen callers of
+  `ScreenFlash_Start` are read in
+  [screen-flash-callers.md](../../docs/ghidra/functions/psp-pulse-usa/screen-flash-callers.md)
+  and every kind with a caller is started off its own trigger (Missile,
+  Shuriken, Plasma, Bomb, Mine detonations; craft explosions; the player's
+  reset), checked live on PPSSPP for the kind, the `ra` and the timing. Plasma's
+  wash matches the original within 5 counts a channel over 38 frames. Still
+  unwired: kind 2 (the Repulser is not built), kinds 9 and 10 (the intro
+  fly-through this port lacks), kinds 5 and 11 (no caller anywhere).
+- **The Shuriken's end plays `WO_SHURIKEN_EXPIRE`** (`ShurikenPool_Update`
+  `0x0886ff38`, teardown `0x08870c78`), fuse or craft hit, with the kind-0 wash.
+  Its `SHURIKENEXPL` cue is not played.
+- **The craft's explosion particles are not played** (`WO_SHIP_FXNODE_EXPLO`,
+  `WO_SHIP_DEATH_SPARKS`, `WO_SHIP_EXPLOSION`), nor `Camera_ArmShake`, nor the
+  destroy camera (`Camera_SetMode(5)`, measured 168.7 units from the wreck).
+  Only the washes are.
+- **A close track hit (`WO_ROCKET_EXPLO_TRACK`) washes nothing**: `Rocket_Update`
+  calls no `ScreenFlash_Start`. The capture this thread asked for is therefore a
+  check that nothing washes, not a measurement to make.
 - **Flash details not reproduced:**
   - the `g_display+0x5dec` gate on the draw is unread;
   - the Quake's `A` edge is taken as `left`. That is chosen: which of
@@ -125,12 +136,14 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
 
 ## Next Steps
 
-- Read the flash kinds' remaining callers, starting with the Mine, Missile,
-  Bomb and Plasma detonations: the same `ScreenFlash_Start` call and the same
-  `oag_render::flash` consumer, one `Kind` constant each.
-- Capture a close track hit (`WO_ROCKET_EXPLO_TRACK`) in PPSSPP. None was
-  captured at player size: scenario A detonated 402 units away.
+- Play the craft explosion's own effects and shake off the triggers in
+  `screen-flash-callers.md`, and port the destroy camera: the player's state-5
+  wash is left out until then (its falloff is measured against that camera).
+- Read `Repulser_SpawnWaves` (`0x08876300`) with the Repulser itself when it is
+  built; it starts kind 2.
+- The Missile and Shuriken washes were placed, not seen: both detonated past
+  `far` in the capture. A close one would show kind 0 beside the Rocket's.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-24: particles draw their own `GU_TFX_MODULATE`d sprites, the sprite offsets are base-relative, and the Quake's `/ 50` is its extent co-factor. Second pass, Pulse PSP only: `ScreenFlash_Update` is read and drawn (`oag_render::flash`, matched to PPSSPP frame by frame), streaks sample their sprite as `DrawStreak`'s wedge and `DrawCappedStreak`'s bar, and the atlas frame advances. Open: the other ten flash kinds' callers.
+2026-09-30: every flash kind with a caller is wired and checked live. 2026-09-24: particles draw their own `GU_TFX_MODULATE`d sprites, the sprite offsets are base-relative, and the Quake's `/ 50` is its extent co-factor. Second pass, Pulse PSP only: `ScreenFlash_Update` is read and drawn (`oag_render::flash`, matched to PPSSPP frame by frame), streaks sample their sprite as `DrawStreak`'s wedge and `DrawCappedStreak`'s bar, and the atlas frame advances. Open: the Rocket and Quake looks against the original.

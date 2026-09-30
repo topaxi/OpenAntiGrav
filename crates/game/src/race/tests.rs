@@ -18,6 +18,7 @@ mod autopilot;
 mod camera;
 mod cannon_draw;
 mod countdown;
+mod craft_flash;
 mod cue_endings;
 mod cues;
 mod eliminator;

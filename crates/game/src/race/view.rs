@@ -107,6 +107,8 @@ pub struct RaceView {
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
     /// source alone - see `options::Setup::screen_flash`.
     pub(super) screen_flash: Option<oag_render::flash::ScreenFlash>,
+    /// The washes a craft's state edges start - see `race::craft_flash`.
+    pub(super) craft_flashes: super::craft_flash::CraftFlashes,
     /// See `Setup::absorb_burst`.
     pub(super) absorb_burst: Option<super::absorb::AbsorbBurst>,
     /// See `Setup::absorb_anchors`.

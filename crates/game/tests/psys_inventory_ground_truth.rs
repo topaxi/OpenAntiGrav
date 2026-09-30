@@ -63,17 +63,25 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
         "a sibling of the `_TRAIL` the damage tree embeds, and nothing reads \
          which effect or emitter references it.",
     ),
+    // The three below have their triggers recovered (2026-09-30,
+    // `docs/ghidra/functions/psp-pulse-usa/screen-flash-callers.md`) and are
+    // not played: this engine has the destroyed states
+    // (`oag_physics::CraftState`) and starts their screen flashes
+    // (`race::craft_flash`), but no craft explosion particles yet.
     (
         "WO_SHIP_EXPLOSION",
-        "no craft destruction in this engine; eliminations are not built.",
+        "spawned by `Ship_SpawnExplosionBig` (`0x088407b0`), 1.5 s after the \
+         craft goes out (`Ship_UpdateDestroyed`); not played, only its wash.",
     ),
     (
         "WO_SHIP_DEATH_SPARKS",
-        "same - the death path does not exist.",
+        "spawned by `Ship_SpawnExplosionSmall` (`0x0883e064`) at each of ten \
+         `Fx` nodes, on `Ship_SetState` state 5; not played.",
     ),
     (
         "WO_SHIP_FXNODE_EXPLO",
-        "plays at a hull `Fx` locator; which node and on what event is unread.",
+        "spawned beside `WO_SHIP_DEATH_SPARKS` by `Ship_SpawnExplosionSmall`, \
+         at each `Fx` node; not played.",
     ),
     // **Not `WO_CANNON_SPARKS`** - that one is wired, off `Cannon_UpdateRound`
     // (`0x0886593c`), on the wall/track hit path only. The Cannon landed
@@ -100,14 +108,10 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
          hang it. Playing the head's file at a second point instead would be \
          invention wearing a real asset.",
     ),
-    (
-        "WO_SHURIKEN_EXPIRE",
-        "a blade dies on its authored `fuse` and this build reaps it silently, \
-         which is what the Rocket's own pool does. `Shuriken_Update` only \
-         counts `+0x48` up; the teardown that would read it - and play this - \
-         was not followed, so whether a timed-out blade shows anything at all \
-         is unread. See `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.",
-    ),
+    // **Not `WO_SHURIKEN_EXPIRE`** - wired 2026-09-30 off `ShurikenPool_Update`
+    // (`0x0886ff38`): the teardown `FUN_08870c78` spawns it at the blade on
+    // both endings, a fuse running out and a craft hit. See
+    // `oag_game::race::SHURIKEN_EXPIRE_EFFECT`.
     ("WO_REPULSER", "the Repulser is not built."),
     ("WO_REPULSER_BLAST", "the Repulser is not built."),
     // **Not `WO_BOMB_SMOKERING`** - wired 2026-09-23, off `Bomb_Detonate`
@@ -166,15 +170,15 @@ const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
     ),
     (
         "WO_SHIP_EXPLOSION_DEBRIS",
-        "no craft destruction in this engine.",
+        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
     ),
     (
         "WO_SHIP_EXPLO_SMOKE",
-        "no craft destruction in this engine.",
+        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
     ),
     (
         "WO_SHIP_FXNODE_BIGEXPLO",
-        "no craft destruction in this engine.",
+        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
     ),
 ];
 
@@ -196,6 +200,7 @@ const PSP_WIRED: &[&str] = &[
     "WO_MISSILE_EXPLO",
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
+    "WO_SHURIKEN_EXPIRE",
     "WO_WEAPON_ABSORB",
     // `Ship_Damage`'s weapon branch on a LeachBeam drain (`craft+0x138 == 7`);
     // see `oag_game::race::hit_sparks`.

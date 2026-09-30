@@ -1150,3 +1150,8 @@
 0x0881d458	function	Hud_UpdatePositionCluster	78	hud-kill-column.md
 0x0898daf0	function	Scream_SetCueParameter	85	sound.md
 0x08992034	function	Sound_SetCueParameter	82	sound.md
+0x0886ff38	function	ShurikenPool_Update	85	screen-flash-callers.md
+0x08870c78	function	Shuriken_SpawnExpiry	85	screen-flash-callers.md
+0x0883e064	function	Ship_SpawnExplosionSmall	80	screen-flash-callers.md
+0x088407b0	function	Ship_SpawnExplosionBig	80	screen-flash-callers.md
+0x08876300	function	Repulser_SpawnWaves	62	screen-flash-callers.md

@@ -170,6 +170,17 @@ pub const SHURIKEN_FLARE_EFFECT: &str = "WO_SHURIKEN_HEAD";
 /// and played through the same generalised gate: a bounce is a moment.
 pub const SHURIKEN_BOUNCE_EFFECT: &str = "WO_SHURIKEN_BOUNCE";
 
+/// What a blade plays where it ends, whether its fuse ran out or a craft took it.
+///
+/// **Recovered, confidence 85, 2026-09-30.** `ShurikenPool_Update`
+/// (`0x0886ff38`) raises the destroy bit at `fuse < age` (its `+0x174` against
+/// the blade's `+0x48` clock) and its teardown, `FUN_08870c78`, spawns
+/// `WO_SHURIKEN_EXPIRE` (fourcc `SHEX`) at the blade's position with an
+/// identity basis, starts `ScreenFlash_Start(0)` there, and plays the
+/// `SHURIKENEXPL` cue. It calls nothing that spends damage. See
+/// `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
+pub const SHURIKEN_EXPIRE_EFFECT: &str = "WO_SHURIKEN_EXPIRE";
+
 /// The explosion a rocket that hits **track geometry** plays.
 ///
 /// **Recovered, confidence 72.** Both of `Rocket_Update`'s (`0x0885d2a8`)
