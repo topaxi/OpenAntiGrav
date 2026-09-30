@@ -42,6 +42,9 @@ pub enum Picture {
     /// The Fury backdrop's frame - see [`crate::backdrop`]. Boxed: two
     /// matrices and nine constants beside a 32-byte movie frame.
     Fury(Box<crate::backdrop::Frame>),
+    /// The HD-style `BackgroundAnim` scene's frame - see
+    /// [`crate::scene_backdrop`].
+    Scene(Box<crate::scene_backdrop::Frame>),
 }
 
 impl From<Backdrop> for Picture {
@@ -53,6 +56,12 @@ impl From<Backdrop> for Picture {
 impl From<crate::backdrop::Frame> for Picture {
     fn from(frame: crate::backdrop::Frame) -> Self {
         Self::Fury(Box::new(frame))
+    }
+}
+
+impl From<crate::scene_backdrop::Frame> for Picture {
+    fn from(frame: crate::scene_backdrop::Frame) -> Self {
+        Self::Scene(Box::new(frame))
     }
 }
 
@@ -71,6 +80,7 @@ impl Picture {
                 source: crate::frontend::Video::Backdrop,
             },
             Self::Fury(frame) => Draw::FuryBackdrop(frame),
+            Self::Scene(frame) => Draw::SceneBackdrop(frame),
         }
     }
 }

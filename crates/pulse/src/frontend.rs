@@ -112,6 +112,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
         crate::names::DEVPUB_REEL,
     )),
     menu_backdrop: Some(crate::names::BACKDROP_MOVIE),
+    menu_scene: false,
     // The picker carries its own background on this title.
     picker_backdrop_parent: None,
     picker_from_loaded_faces: false,

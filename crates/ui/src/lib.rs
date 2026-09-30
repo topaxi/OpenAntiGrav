@@ -23,6 +23,7 @@ pub mod picker;
 pub mod placeholder;
 pub mod pointer;
 pub mod prompt;
+pub mod scene_backdrop;
 pub mod screen;
 pub mod state_machine;
 pub mod strings;

@@ -431,24 +431,15 @@ impl Session {
             &self.gpu.queue,
             shell.buttons_font.clone(),
         );
-        // The Fury backdrop's clouds, uploaded once per menu stage the same
-        // way the sprite sheet is; the model that flies past them is built
-        // below, from the same assets.
+        // The style's backdrop, uploaded once per menu stage the same way the
+        // sprite sheet is; the model that moves is built from the same assets.
         if let Some(assets) = &shell.fury_backdrop {
-            renderer.set_fury_backdrop(&self.gpu.device, &self.gpu.queue, &assets.clouds);
+            assets.install(&mut renderer, &self.gpu.device, &self.gpu.queue);
         }
-        let fury = shell.fury_backdrop.as_ref().and_then(|assets| {
-            oag_ui::backdrop::Fury::new(
-                assets.settings.clone(),
-                assets.first,
-                oag_game::boot::fury::SEED,
-            )
-        });
-        let fury_tints = shell
+        let styled = shell
             .fury_backdrop
             .as_ref()
-            .map(|assets| assets.tints.clone())
-            .unwrap_or_default();
+            .and_then(|assets| assets.live());
         // **The picture moves across as well as the playhead**, and it has to,
         // because the renderer does not. A fresh `Renderer` is fresh planes:
         // zeroed, which is green rather than black, so the first menu frame
@@ -515,8 +506,7 @@ impl Session {
                 prompt: None,
                 picker: None,
                 campaign: None,
-                fury,
-                fury_tints,
+                styled,
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),
                     rect: shape.rect,

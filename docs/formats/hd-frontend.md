@@ -1896,7 +1896,8 @@ feedback trail, tinted by that row. Read in full on
 [menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md);
 `oag_ui::backdrop` and `oag_game::render::backdrop` draw it, and
 `oag_hd::frontend::names::FURY_CLOUDS`/`FURY_SETTINGS` name the files. The HD
-style's `<BackgroundAnim>` above stays unread and undrawn.
+style's `<BackgroundAnim>` above stays undrawn on HD; it is read in
+[menu-backdrop-scene.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md) and drawn for Omega.
 
 ### `picker_backdrop_parent: None`, with a caveat
 
