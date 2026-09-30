@@ -20,6 +20,7 @@ mod motion;
 mod per_slot;
 mod queries;
 mod scratch;
+mod shine;
 mod weapon_models;
 mod weapon_quads;
 
@@ -143,6 +144,8 @@ pub struct Scene {
     shield_cockpit: Option<Drawable>,
     /// The absorb, then the LeachBeam hull overlay per slot - see [`absorb_overlay`].
     absorb_overlay: [Vec<Option<Drawable>>; 2],
+    /// The hull's environment-mapped extra pass per slot - see [`shine`].
+    shine: Vec<Option<Drawable>>,
     /// HD's absorb shell per slot - see [`absorb_shell`].
     absorb_shell: Vec<Option<Drawable>>,
     /// One drawable per projectile slot, for rockets drawn as their own
@@ -673,6 +676,7 @@ impl Scene {
             None => None,
         };
         let absorb_overlay = [slots.absorb_overlays()?, slots.leach_overlays()?];
+        let shine = slots.shines()?;
         let shell = |l: &crate::livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;
@@ -832,6 +836,7 @@ impl Scene {
             shield,
             shield_cockpit,
             absorb_overlay,
+            shine,
             absorb_shell,
             rockets,
             mines,

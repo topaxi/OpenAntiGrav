@@ -41,7 +41,8 @@ pub struct Material {
     /// The `u32` at `+0x08`: the second texture of the `0x2000` extra pass.
     ///
     /// Zero on every material of `07_Track`, so the pass it belongs to is not
-    /// exercised there and this stays unread by the renderer.
+    /// exercised there. A Pulse hull's materials name `envtest4bit.tga` here
+    /// (or `envmap_stripe2.tga`), which `oag_render::shine` draws.
     pub second_texture: u32,
 }
 

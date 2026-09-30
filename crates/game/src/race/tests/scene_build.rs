@@ -61,6 +61,7 @@ fn livery() -> Livery {
         absorb: Vec::new(),
         absorb_overlay: None,
         leach_overlay: None,
+        shine: None,
         absorb_shell: None,
         boost_uv: None,
         engine_light: None,

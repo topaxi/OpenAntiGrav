@@ -2187,3 +2187,138 @@ itself asks for.
 - `header_flags & 0x10`, which disables the test outright, is authored by **no
   batch on any of the three discs**. The branch is real in the decompile and
   dead in the data.
+
+## The hull's extra pass: six batches under uvgen 2, read live
+
+2026-09-30, PPSSPP v1.20.4 under Xvfb, Talon's Junction TIME TRIAL / VENOM,
+Assegai (`Data\Ships\Assegai\Ship.vex`), craft stationary on the grid. Three
+independent freezes of the CPU, each walked from the master GE list
+(`sceGu` context `0x08adc3ac`: `+0x08` start, `+0x0c` write pointer) through
+every `CALL` into the compiled lists in VRAM. Runtime trace, so the rubric's 94
+ceiling applies; one title, one team, one track.
+
+### Finding the hull model: the right hop (closes the thread's `craft+0x8b4` miss)
+
+`Ship_LoadModel` (`0x08843258`) takes the **ship entity**, not the craft
+`Ship_UpdateCraft` takes in `a0`. The hop is `craft = a0 -> +0x1c4` (the entity;
+`entity+0x94` points back at the craft, the reciprocal check
+`scripts/psp_trace_fields.py` already uses) `-> +0x8b4` (the hull model) and
+`+0x8b8` (the wreck model), `+0x8c8` (the shield). Live: craft `0x09a03cb0`,
+entity `0x09a02cf0`, hull `0x09a15470`, wreck `0x09a357e0`. The earlier read took
+`+0x8b4` off the craft itself, which holds a different object.
+
+| Read live on the hull model | Value | Reading |
+| --- | --- | --- |
+| `model+0x08` (parent) | the entity | set by `Ship_LoadModel` before `Vex_LoadModel` |
+| `entity+0x04` (class token) | `0x08a6bfc0` | the `FUN_08a6bfc0` class `Vex_LoadModel`'s walk at `0x08913048` compares against |
+| `model+0x1a8` | **1** (hull and wreck) | the walk matched on its first step: the **fixed basis** branch |
+| `model+0x1ac..+0x1c0` | `(0.955336, -0.248672, -0.159670)`, `(0.0, 0.540302, -0.841471)` | exactly the `dir0`/`dir1` recovered above, `dir1.x == 0`: the first live confirmation of the `vmmul` operand order |
+| list A `model+0x48` | `0x63/64/65` dir0, `0x5f000000`, `0x66/67/68` dir1, `0x60000000`, `0x0b000000` | as recovered |
+| list B `model+0x70` | `0x63/64/65` dir0, `0x5f000001`, `0x63/64/65` **dir1**, `0x5f000001` | the load-time "light 0 written twice" bug is a runtime fact |
+
+So **the hull takes the same load-time, fixed-basis light pair the boost plume
+was read on**, and the runtime branch (view-matrix matcap) is not the hull's.
+Confidence **92** (live values match the instruction-level recovery bit for bit).
+
+### What the recorded GE list shows for the hull
+
+Per `PRIM`, tracking `TEXMAPMODE` (`0xc0`), `TEXSHADELS` (`0xc1`), the
+`0x63..0x68` light registers, `TSIZE0`/`TBP0`/`CLUT`, `BLENDMODE`/`FIXA`/`FIXB`,
+depth and pixel-mask state, and the last `WORLDMATRIX` translation (which pins
+a draw to the hull: `(8.4, -50.1, -197.0)` against the craft at
+`(8.88, -50.06, -196.47)`):
+
+- **Six hull batches draw under `TEXMAPMODE` 2**, `LS0 = 0`, `LS1 = 1`, with
+  lights 0 and 1 holding `dir0` and `dir1`, `LIGHTING` off, a single 64x64
+  4-bit texture (`TPF` 4, `TBP0 0x1abdc0`, a 16-entry grey palette) and **no
+  authored UVs read**. Their vertex counts are 133, 123, 47, 5, 5 and 39.
+- **Every one of them also draws again** under `TEXMAPMODE` 0, lit, with the
+  batch's own texture, blend on and - for the five - `ZTEST` `EQUAL` with depth
+  writes off. The extra draw comes first in the list, the ordinary one after.
+- The other hull batches (`self_illuminatedShape`, `glowingShape`, the two
+  opaque `shipShape` batches, `lodShape`) draw once, under mode 0.
+
+### Which batches: the `0x2000` bit, and the second texture
+
+This is the pass `vex.md` records as "the `0x2000` extra pass and its second
+texture index at material `+0x08`", never drawn until now. `Assegai\Ship.vex`
+(`crates/vex/examples/ship_shine_probe.rs`):
+
+| Mesh | Mesh flags | `0x2000` batches (`pass_mask`) | Vertices | Material -> second texture |
+| --- | --- | --- | --- | --- |
+| `shipShape` | `0x3001` | materials 1, 2, 3 (`0x3001`) | 47, 123, 133 | `envtest4bit.tga` |
+| `Airbrake_RightShape`, `Airbrake_LeftShape` | `0x3001` | material 0 (`0x3001`) | 5 each | `envtest4bit.tga` |
+| `canopyShape` | `0x322a` | material 0 (`0x322a`, list B) | 39 | `envtest4bit.tga` |
+
+The vertex counts are the live ones, batch for batch. `envtest4bit.tga` is 64x64,
+4 bit, black with three soft white highlights - a specular glint map, not a grey
+ramp. **Seven teams' six batches all name it; AG_Systems, Goteki and Piranha's
+canopy names `envmap_stripe2.tga` instead** (`shine_ground_truth.rs`), which is
+why the texture must come from the material and not be named in code.
+
+The loop is `FUN_0890db54` (`Mesh_DrawExtraPassBatches`, 85): for every batch
+with `*batch & 0x2000` and the pass mask, `Mesh_SetBatchDrawState`, then
+`Gu_CallList(texture_array[material.+0x08] + 0xc0)` - the **second** texture's
+bind list - then `Mesh_EmitDrawArray`. Its bracket is `FUN_0890d508`
+(`Mesh_CompileExtraPass`, 85): `Mesh_BeginTransparentPass`, the loop,
+`Mesh_EndTransparentPass`; `Mesh_CompileDisplayLists` builds it when the **mesh**
+flag word has `0x2000`. So the recorded mode-2 `PRIM`s (66 to 73 a frame on
+Talon) are this pass - on the hull and on whatever scenery also carries the bit;
+only the hull's six were identified here.
+
+### The blend is chosen by a bit the loader writes
+
+`Mesh_SetBatchDrawState` picks replace or add on `batch byte 3 & 0x10`. **The disc
+authors `0x00` there on all six batches**, yet live the five `shipShape`/airbrake
+batches draw with `FIXB = 0` (replace, depth write on, `ZTEST` 6) and the canopy
+with `FIXB = 0xffffff` (add, depth write off, depth test off). The runtime headers
+say why: byte 3 is `0x10` on those five and `0x00` on the canopy.
+
+`Mesh_CountBatchesPerList` (`0x0890e7a8`), read this pass beyond its counting,
+**writes it**: for every **list-A** batch (`pass_mask & 1`) with `pass_mask &
+0x2000` and **without** `pass_mask & 0x800`, `byte3 |= 0x10`. List-B batches (the
+canopy) are never touched. Confirmed against the runtime headers of all fourteen
+hull batches: only the five carry it. **This corrects `Batch::is_additive_blend`'s
+premise**: the on-disc bit is 0 on every sampled batch because the loader, not the
+file, sets it - "the replace branch is dead in the data" was true of the file and
+false of the running game. Confidence **92**.
+
+### What the pass does to a pixel
+
+Five replace batches: the pass writes `env(u, v)` (texture x white, lighting off,
+alpha masked by `Gu_PixelMask` `0xff000000`) over the hull and writes depth; the
+batch's own pass then **adds** `lit * texture` at equal depth. The canopy adds
+both. Either way the pixel is `env + lit * texture`, clamped once. The two
+coordinates are `u = (1 + dot(L0, N)) / 2`, `v = (1 + dot(L1, N)) / 2` with `N`
+the ship-rotated normal and `L0`/`L1` the fixed basis - so the glints move with
+the ship and never with the camera. Confidence **80** on the composite (the
+blend, depth and pixel-mask registers are read live; the arithmetic of "replace
+then add equals add" is ours).
+
+### Implementation: `oag_render::shine`
+
+`mesh::build` collects the batches into `Model::shine_draws` (same index ranges,
+the second texture), `oag_render::shine::build` makes the pass's model and
+`shine::write` the per-frame coordinates through `texgen::environment_map` over
+the craft's model matrix and `texgen::ENV_BASIS_0`/`ENV_BASIS_1`; the game draws
+it after the hulls through the absorb overlay's plumbing (`Depth::Overlay`,
+additive). **Chosen, not measured**: one additive redraw stands in for replace
+then add (identical for the five; the canopy's depth test is on); no fog on the
+pass; the airbrakes' five-vertex batches are not deflected with their flaps.
+Eight teams, six batches each, all matched to their hull's own draws:
+`crates/game/tests/shine_ground_truth.rs`.
+
+Matched pose, Talon's Junction, Assegai, `talon-mid2` (mean of the spine box,
+RGB): original `(153, 154, 95)`, ours without the pass `(135, 139, 85)`, with it
+`(143, 148, 94)`; `talon-fast` ship box `(155.6, 173.2, 170.5)` against
+`(149.1, 161.7, 158.9)` and `(150.8, 163.4, 160.8)`. It moves every measured
+region toward the original and closes roughly a third to a half of the gap; the
+rest is not this pass (the flare's bloom, and pose and camera differences the
+audit records).
+
+### Names
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0890db54` | `Mesh_DrawExtraPassBatches` | 85 |
+| `0x0890d508` | `Mesh_CompileExtraPass` | 85 |

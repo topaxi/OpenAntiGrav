@@ -95,4 +95,18 @@ impl Drawable {
         }));
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
     }
+
+    /// Uploads this model's vertices with texture coordinates generated for a
+    /// craft posed by `ship` - [`oag_render::shine::write`], the environment-mapped
+    /// shine pass, whose coordinates follow the craft's rotation and so cannot be
+    /// baked. From the model's own vertices every time, like [`Self::write_overlay`].
+    pub(in crate::race) fn write_environment_map(
+        &self,
+        queue: &wgpu::Queue,
+        ship: oag_core::math::Mat4,
+        scratch: &mut Vec<mesh::GpuVertex>,
+    ) {
+        oag_render::shine::write(&self.model, scratch, ship);
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
+    }
 }

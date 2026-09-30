@@ -57,6 +57,7 @@ pub mod ripple;
 pub mod roll;
 pub mod shadow;
 pub mod shield;
+pub mod shine;
 pub mod sparks;
 pub mod texgen;
 pub mod timing;

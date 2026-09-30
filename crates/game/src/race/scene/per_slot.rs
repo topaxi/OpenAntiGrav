@@ -43,6 +43,18 @@ impl Build<'_> {
         )
     }
 
+    /// The hull's extra pass per slot: the `0x2000` batches again under their
+    /// second texture, tested `LessEqual` against the hull's own depth and
+    /// added to it through [`oag_render::shine::BLEND`] - see `shine`.
+    pub(super) fn shines(&self) -> Result<Vec<Option<Drawable>>> {
+        self.drawables(
+            |l| l.shine.clone(),
+            oag_render::shine::BLEND,
+            mesh_render::Depth::Overlay,
+            mesh_render::ShadowReceiver::Never,
+        )
+    }
+
     /// One drawable per slot from the model `pick` takes out of that slot's
     /// livery, blended with `blend` and written into the glow mask;
     /// `None` for a slot with no model or an empty one. A grid wider than the

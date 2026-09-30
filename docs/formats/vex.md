@@ -1338,9 +1338,14 @@ Three bits are legible:
 The `0x2000` correlation is the useful one: a bit whose name was guessed from
 `pass_mask` turns out to select precisely the textures whose *artist-given name*
 says they are environment maps. **Confidence 75** - two independent namings
-agreeing, with no code read behind it. `second_texture` is nonetheless 0 on
-every `07_Track` material, so the pass is not exercised there and the renderer
-does not implement it.
+agreeing, with no code read behind it - since read: `FUN_0890db54`
+(`Mesh_DrawExtraPassBatches`) draws every batch with `pass_mask & 0x2000`
+under `TEXMAPMODE` 2 with the texture at `+0x08`, and a recorded GE list on a
+live Assegai hull shows it doing so (`mesh-draw.md`, "The hull's extra pass").
+`second_texture` is 0 on every `07_Track` material, so the pass is not
+exercised there; **a Pulse hull draws it** (`oag_render::shine`), a track does
+not yet. On a hull the texture is `envtest4bit.tga` (and `envmap_stripe2.tga`
+for three teams' canopies), not a `*_shinemap`.
 
 ### Ship lights: one shared texture, not a mesh-naming convention
 
