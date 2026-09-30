@@ -500,7 +500,7 @@ capture of a craft-hit Rocket shows for its first frames (screen mean
 kind 4 is the orange tint the Quake capture opens with. That match is why
 the name clears 70. The per-frame consumer - the blend, the distance
 falloff, the key interpolation - is read below, and `oag_render::flash`
-draws kinds 0 and 4 on Pulse's PSP source.
+draws every kind with a caller on Pulse's PSP source.
 
 ## Open, deliberately
 
@@ -954,11 +954,13 @@ units. `+0x48` is copied but never read by Update or Draw.
 | 10 | 0.7 | none | (1, 1, 1, 1) | (0, 0, 0, 0) | additive |
 | 11 | 0.5 | none | (0.8, 0.8, 0.8, 1) | (0.01, 0.01, 0.01, 0.01) | alpha-over |
 
-Only kinds 0 and 4 have a caller read here: the craft-hit Rocket and the
-Quake. The Quake calls `ScreenFlash_Start(4, A)` **every frame** its wave's
-instance exists (`0x0891dc7c`, inside the per-span loop). `A` is the first
+All fifteen callers are read in [screen-flash-callers.md](screen-flash-callers.md)
+(2026-09-30): which weapon or craft event passes each kind and what gates it. Kinds
+5 and 11 have no caller. The Quake calls `ScreenFlash_Start(4, A)` **every frame**
+its wave's instance exists (`0x0891dc7c`, inside the per-span loop). `A` is the first
 of `Quake_SampleSpan`'s two edge points, which makes the replacement rule
-what keeps the tint up.
+what keeps the tint up. Kind 7 authors three keys, not two - white, yellow at
+`t = 0.1`, red to nothing - which the table above cannot show in one row.
 
 **Measured.** The PPSSPP capture of a craft-hit Rocket 51 units from the eye
 is `data/scratch/fx-brightness/ppsspp-rocket/scenarioB`, gitignored. Kind 0

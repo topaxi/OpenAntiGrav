@@ -278,3 +278,36 @@ fn the_plasma_flare_scale_halves_in_the_cockpit() {
         "an empty slot stays neutral even with cockpit set"
     );
 }
+
+/// Every weapon's detonation starts the flash `ScreenFlash_Start`'s caller
+/// passes, and a Rocket that hit the track, a Cannon round and the Quake start
+/// none from the impact path.
+///
+/// Drop a row from `flash_for` and the matching arm here fails: this is the
+/// wiring's own guard, since the flash is render-only and nothing else in the
+/// suite would notice one going quiet.
+#[test]
+fn each_detonation_starts_its_own_screen_flash() {
+    use crate::race::weapons::flash_for;
+    use oag_render::flash;
+    use oag_tables::weapons::Weapon;
+
+    for weapon in Weapon::ALL {
+        for struck in [false, true] {
+            let expected = match (weapon, struck) {
+                (Weapon::Rocket, true) => Some(flash::BLAST),
+                (Weapon::Rocket, false) => None,
+                (Weapon::Missile | Weapon::Shuriken, _) => Some(flash::BLAST),
+                (Weapon::Plasma, _) => Some(flash::PLASMA),
+                (Weapon::Bomb, _) => Some(flash::BOMB),
+                (Weapon::Mine, _) => Some(flash::MINE),
+                _ => None,
+            };
+            assert_eq!(
+                flash_for(weapon, struck),
+                expected,
+                "{weapon:?} (struck: {struck}) starts the wrong flash"
+            );
+        }
+    }
+}

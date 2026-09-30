@@ -476,6 +476,7 @@ impl Race {
                 hd_plasma_blast,
                 pulse_laid_pose,
                 screen_flash: screen_flash.then(oag_render::flash::ScreenFlash::default),
+                craft_flashes: Default::default(),
                 absorb_burst,
                 absorb_anchors,
                 absorb_bursts: Vec::new(),

@@ -9,9 +9,11 @@
 
 mod cannon;
 mod flares;
+mod flash;
 mod laid;
 pub(crate) use cannon::{CannonAssets, CannonDraw};
 pub(in crate::race) use flares::*;
+pub(in crate::race) use flash::flash_for;
 
 use super::*;
 
@@ -426,11 +428,13 @@ impl Race {
         if kind == oag_tables::weapons::Weapon::Bomb {
             self.spawn_bomb_blast_model(at, orientation);
         }
-        // `Rocket_SpawnCraftExplosion_q` starts the yellow wash at the blast's
-        // own position, whether or not its effect loaded - see
-        // `oag_render::flash`.
-        if let (CRAFT_BLAST_EFFECT, Some(flash)) = (name, &mut self.view.screen_flash) {
-            flash.start(oag_render::flash::ROCKET_CRAFT_HIT, at);
+        // Each detonation's own `ScreenFlash_Start`, whether or not its
+        // effect loaded - see [`flash_for`] and `oag_render::flash`.
+        if let (Some(kind), Some(flash)) = (
+            flash_for(kind, struck.is_some()),
+            &mut self.view.screen_flash,
+        ) {
+            flash.start(kind, at);
         }
         let Some(effect) = self.view.effects.get(name).cloned() else {
             return;
@@ -510,6 +514,9 @@ impl Race {
             oag_tables::weapons::Weapon::Missile => Some((MISSILE_EXPLO_EFFECT, point)),
             oag_tables::weapons::Weapon::Mine => Some((MINE_EXPLO_EFFECT, point)),
             oag_tables::weapons::Weapon::Bomb => Some((BOMB_SMOKERING_EFFECT, point)),
+            // `FUN_08870c78`, the blade's teardown: a fuse running out and a
+            // craft hit both reach it.
+            oag_tables::weapons::Weapon::Shuriken => Some((SHURIKEN_EXPIRE_EFFECT, point)),
             oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
                 Some((CANNON_SPARKS_EFFECT, point))
             }

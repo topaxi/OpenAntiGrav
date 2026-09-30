@@ -251,10 +251,12 @@ spent even if it were decoded.
 
 ## What is not verified
 
-- **What ends a shuriken.** `fuse` is authored at `2` on both shipped tables and
-  nothing here reads its consumer; the pool teardown was not followed, so where
-  `WO_SHURIKEN_EXPIRE` is played and whether the end spends `blastdamage` are
-  both open. This is the first thing to read next.
+- **What ends a shuriken: read 2026-09-30.** `ShurikenPool_Update`
+  (`0x0886ff38`) destroys a blade when its `fuse` is below its clock, or on
+  `Shuriken_Update`'s craft-hit flag, and both reach the teardown
+  `Shuriken_SpawnExpiry` (`0x08870c78`): `WO_SHURIKEN_EXPIRE`, a kind-0 screen
+  flash, `SHURIKENEXPL`, and nothing that spends damage. See
+  [screen-flash-callers.md](screen-flash-callers.md). Built, less the sound.
 - **Which of the two damages a craft hit spends**, and whether a hit ends the
   blade or lets it carry on. Nothing read says.
 - **`0x08877830`**, the class-speed lookup, is deliberately unnamed: it was not

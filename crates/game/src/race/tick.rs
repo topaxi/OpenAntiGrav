@@ -464,6 +464,7 @@ impl Race {
         // left mid-explosion for the lap counter to read. See
         // `crate::race::eliminator`.
         self.tick_destroyed_craft();
+        self.advance_craft_flashes();
 
         self.sim.world.tick += 1;
 

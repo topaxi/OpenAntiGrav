@@ -929,3 +929,44 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
         "the firing craft took damage from its own expired missile"
     );
 }
+
+/// A blade whose fuse runs out reports where it ended, and spends no blast.
+///
+/// `ShurikenPool_Update`'s teardown plays `WO_SHURIKEN_EXPIRE` and starts a
+/// screen flash, and reaches nothing that spends damage. Before 2026-09-30 the
+/// blade was reaped silently, which is why nothing could show it.
+#[test]
+fn a_blade_whose_fuse_runs_out_reports_an_impact_that_spends_no_blast() {
+    let geometry = CollisionWorld::new();
+    let ships: Vec<crate::world::Ship> = Vec::new();
+    let mut projectiles = Projectiles::new();
+    assert!(projectiles.throw(Vec3::ZERO, Vec3::Z * 50.0, 3, 2.0));
+
+    let mut ticks = 0_usize;
+    let mut ended = None;
+    while ended.is_none() {
+        let impacts = projectiles.advance(
+            1.0 / 60.0,
+            &geometry,
+            &ships,
+            None,
+            None,
+            None,
+            TriggerRadii::default(),
+            "VENOM",
+        );
+        ticks += 1;
+        ended = impacts.into_iter().flatten().next();
+        assert!(ticks < 300, "the blade never ended");
+    }
+    let impact = ended.expect("an impact");
+    assert_eq!(impact.kind, Weapon::Shuriken);
+    assert_eq!(impact.owner, 3);
+    assert_eq!(impact.struck, None);
+    assert!(!impact.blast, "a fuse spends no blast");
+    assert!(
+        (ticks as f32 / 60.0 - 2.0).abs() <= 2.0 / 60.0,
+        "it flew {ticks} ticks, not its authored two seconds"
+    );
+    assert!(impact.point.z > 50.0, "the impact is where the blade was");
+}

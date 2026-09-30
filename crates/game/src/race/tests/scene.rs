@@ -539,6 +539,12 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
          hemisphere and shockwave `.vex` models `ignite_blast` spawns \
          separately, see `bomb_blast`"
     );
+    assert_eq!(
+        race.blast_for(Weapon::Shuriken, point, None),
+        Some((SHURIKEN_EXPIRE_EFFECT, point)),
+        "the blade's teardown (FUN_08870c78) plays WO_SHURIKEN_EXPIRE at the \
+         blade, on a fuse running out and on a craft hit alike"
+    );
     // The Plasma's detonation is its own authored file, not the bolt's
     // riding flare replayed at the impact - the same distinction the Rocket's
     // two-file split above exists for.

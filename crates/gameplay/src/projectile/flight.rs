@@ -524,7 +524,14 @@ impl Projectiles {
                 // "What is not verified" for the flagged tension with that
                 // branch's own `blast: true`, carried forward rather than
                 // fixed here.
-                if kind == Weapon::Plasma {
+                //
+                // **The Shuriken's fuse is the same shape, read 2026-09-30.**
+                // `ShurikenPool_Update` (`0x0886ff38`) sets the destroy bit at
+                // `fuse < age` and its teardown, `FUN_08870c78`, plays
+                // `WO_SHURIKEN_EXPIRE` and starts `ScreenFlash_Start(0)` at the
+                // blade. It calls nothing that spends damage, so the ending is
+                // `blast: false`, like the Plasma's.
+                if matches!(kind, Weapon::Plasma | Weapon::Shuriken) {
                     impacts[index] = Some(Impact {
                         point: projectile.position,
                         kind,
