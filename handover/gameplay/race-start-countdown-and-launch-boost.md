@@ -550,6 +550,16 @@ In short:
 
 ## Open
 
+- **What the Pulse gantry does after `GO`, and what drives it (2026-09-30).** Measured on
+  PPSSPP with the craft not driven: `GO` keeps strobing on the panel for at least 21 s of
+  race clock, with no exit, no `3 2 1` replay and no `Board` dressing (start-gantry.md,
+  "What the original does after `GO`"). Ours loops the authored frames 216-349
+  (`race::gantry::GO_LOOP`, chosen, not measured). Unknown: whether the strobe is a loop, a
+  per-state write or the gated accumulator, what (if anything) later swaps the panel to the
+  `Board`/banner (lap, distance, a trigger), and whether HD's glyph shows the same stray strip
+  past 6.000 s (its +10.004 teleport says likely; its countdown was never captured). Also
+  noticed: ours draws the chevron HUD hexagon over the banner's left end on a stationary
+  craft from tick ~460; the original's stationary frames show none.
 - ~~What places the countdown's `Cockpit321Go` widget~~ **Answered in two parts, and
   both stand.** (2026-09-06, second pass) `Hud_BindWidgets` (`0x0881fbec`) resolves
   `"HUD->ReadyGo"`/`"HUD->Cockpit321Go"` the same `"HUD->"`-lookup way `HudSight_Bind`
