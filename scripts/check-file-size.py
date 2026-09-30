@@ -156,7 +156,6 @@ BASELINE = {
     "crates/view/src/main.rs": 1152,
     "crates/ai/tests/closed_loop.rs": 1146,
     "crates/physics/src/hover.rs": 1103,
-    "crates/ui/src/font.rs": 1094,
     "crates/trace/src/compare.rs": 1038,
 }
 
