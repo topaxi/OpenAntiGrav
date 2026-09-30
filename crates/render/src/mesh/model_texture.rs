@@ -13,25 +13,6 @@
 /// [`ModelTexture`] for why the sharing is an `Arc`.
 pub type TextureSlots = Vec<Option<std::sync::Arc<ModelTexture>>>;
 
-/// How many mip levels a PSP `.vex` texture reaches the GPU with: **one**.
-///
-/// **Measured against PPSSPP 1.20.4 at the PSP's own 480x272, 2026-09-30, and
-/// not read off the binary.** The game sets `TEXLEVEL` to slope mode with a
-/// bias (`Gu_TexLevelMode`, `mesh-draw.md`) and asks for trilinear filtering,
-/// yet in a matched frame the running original resolves every scenery texel at
-/// its base level: the high-frequency energy (Laplacian standard deviation) of
-/// four regions of Talon's Junction reads 11.3 / 3.9 / 11.5 / 13.1 in the
-/// original, 8.2 / 2.6 / 8.2 / 10.7 with the full box-filtered chain and
-/// 10.3 / 3.8 / 11.4 / 13.0 with the base level alone. Far track, where a chain
-/// would have cost the most sharpness, agrees too (16.0 against 15.9). So the
-/// chain a hardware sampler would walk here is not what the picture shows.
-/// Whether real PSP hardware agrees is unmeasured: the reference is the
-/// emulator, and its slope-mode level selection is what this reproduces.
-///
-/// The authored depth stays parsed as `Texture::mip_count` in `oag-vex`; the
-/// depth was never what differed.
-pub const PSP_SAMPLED_LEVELS: u32 = 1;
-
 /// A texture decoded from the model.
 ///
 /// **Held by `Arc` everywhere, because a slot is not a texture.** The slots in
@@ -63,11 +44,11 @@ pub struct ModelTexture {
     /// the GE has nowhere to sample a level past what was uploaded. Wired for
     /// the PSP `.vex` embedded-texture path first.
     ///
-    /// **The PSP `.vex` path passes [`PSP_SAMPLED_LEVELS`], not the authored
-    /// depth.** Capping at the authored depth (`hub_banner_GLOW.tga`, 128x128,
-    /// `mip_count = 5`) changed 24 of 518,400 pixels and left the blur this
-    /// field was added to chase; the blur was level *selection* - the running
-    /// original samples the base level - which is what one level reproduces.
+    /// **A PSP `.vex` texture does not use this**: it arrives as
+    /// [`Texels::Chain`], the disc's own levels, and the blur this field was
+    /// added to chase was level *selection*, not chain depth - see
+    /// `docs/rendering/frame-audit.md`. What still passes a `Some` here is a
+    /// pre-swizzled Pure texture whose levels are not read.
     pub mip_count: Option<u32>,
 }
 
@@ -86,6 +67,15 @@ pub enum Texels {
     /// Straight RGBA8, base level only. The renderer box-filters its own mip
     /// chain from this.
     Rgba8(Vec<u8>),
+    /// **The disc's own mip chain**, expanded to RGBA8, base first: level `n`
+    /// is `max(width >> n, 1)` by `max(height >> n, 1)`.
+    ///
+    /// The PSP `.vex` textures, whose levels are authored bytes in the file
+    /// (`oag_vex::vex::EmbeddedTexture::levels`) and were being thrown away and
+    /// re-derived by box filter. **Its presence on a model is also what turns
+    /// on the GE's slope level selection**, `texlod_slope` in `mesh.wgsl`: the
+    /// levels are the game's and so is the rule that picks among them.
+    Chain(Vec<Vec<u8>>),
     /// The disc's own blocks and the disc's own mip chain, base level first,
     /// uploaded without a decode.
     ///
@@ -292,11 +282,24 @@ impl ModelTexture {
         }
     }
 
+    /// One PSP `.vex` texture with the levels the disc authors, base first.
+    #[must_use]
+    pub fn chain(label: String, width: u32, height: u32, levels: Vec<Vec<u8>>) -> Self {
+        Self {
+            label,
+            width,
+            height,
+            texels: Texels::Chain(levels),
+            mip_count: None,
+        }
+    }
+
     /// Bytes of texel data this texture holds on the CPU.
     #[must_use]
     pub fn cpu_bytes(&self) -> u64 {
         match &self.texels {
             Texels::Rgba8(rgba) => rgba.len() as u64,
+            Texels::Chain(levels) => levels.iter().map(|level| level.len() as u64).sum(),
             Texels::Blocks { levels, .. } => levels.iter().map(|level| level.len() as u64).sum(),
         }
     }
@@ -311,6 +314,7 @@ impl ModelTexture {
     pub fn rgba(&self) -> Option<&[u8]> {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(rgba),
+            Texels::Chain(levels) => levels.first().map(Vec::as_slice),
             Texels::Blocks { .. } => None,
         }
     }
@@ -327,6 +331,7 @@ impl ModelTexture {
     pub fn to_rgba(&self) -> Option<std::borrow::Cow<'_, [u8]>> {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(std::borrow::Cow::Borrowed(rgba)),
+            Texels::Chain(levels) => levels.first().map(|l| std::borrow::Cow::Borrowed(&l[..])),
             Texels::Blocks { format, levels } => {
                 let decoded = format.decode_level(levels.first()?, self.width, self.height)?;
                 Some(std::borrow::Cow::Owned(

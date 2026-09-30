@@ -3,7 +3,7 @@
 Read 2026-09-30, PPSSPP v1.20.4 (`pulse-psp-usa.chd`) against `oag-game --race`.
 The question was which visible differences a player would notice first, and
 whether their cause could be traced in the data or the decompile. **One was fixed
-(texture level selection, below); everything else measured close, and the
+(texture level selection, below, later given the hardware's own law); everything else measured close, and the
 remainder is ranked with what was ruled out.**
 
 ## How the two sides were matched
@@ -46,7 +46,7 @@ recorded.
 
 | # | Difference | Size | Cause | Status |
 | ---: | --- | --- | --- | --- |
-| 1 | **Scenery, trees, mountains and track surface drawn soft** | Laplacian standard deviation in four regions of one frame: original 13.4 / 6.1 / 14.9 / 7.5, ours before 10.8 / 4.4 / 11.3 / 6.3, ours after 12.7 / 6.2 / 15.5 / 8.2 | our box-filtered mip chain, where the original resolves the base level | **fixed** (`PSP_SAMPLED_LEVELS`) |
+| 1 | **Scenery, trees, mountains and track surface drawn soft** | Laplacian standard deviation in four regions of one frame: original 13.4 / 6.1 / 14.9 / 7.5, ours before 10.8 / 4.4 / 11.3 / 6.3, ours after 12.7 / 6.2 / 15.5 / 8.2 | our box-filtered mip chain, where the original resolves the base level | **fixed** (the disc's levels, selected by the GE's slope law) |
 | 2 | Hull sheen: a whiter, glossier spine and canopy in the original | spine mean 143,139,113 against 91,77,53 at tick 0, but 191,193,143 against 143,144,76 at tick 90 and the close crops read nearly equal once the flare's bloom is in | part flare bloom (state), part unconfirmed: `Ship.vex` has one transparent batch (`Glass_ADD.tga`, 8x8) that the GE draws under environment-mapped UVs and `oag_render::texgen` has no caller | open, see below |
 | 3 | Dark bowl-shaped objects on the grass left of Talon's straight at (161,-47,-185) | a few percent of the frame | draws 1381-1391 of the track (`factory_floor_01_rp_shinemap`, `Building_05`, `Building_07`, `energy_GLOW`, `piston_end_shinemap`) are factory roofs at 37-100 units; the original's terrain hides them, ours does not | open |
 | 4 | Track neon strips and the start gantry | animated | timing (trap 3), not measured as a defect | not a defect on this evidence |
@@ -74,29 +74,60 @@ most: 16.0 against the original's 15.9, and 12.8 for the chain. `AnisotropyLevel
 was 4 in the copied profile for the first pass and 0 for the confirming one; the
 result did not move, so it is not the emulator sharpening oblique floor.
 
-**What the binary says, and how far it goes.** `Gfx_FlushRenderManager` programs
-the texture unit once per frame: `Gu_TexFilter(7, 1)` (trilinear minify,
-bilinear magnify), `Gu_TexLevelMode(2, 1.0)` (slope mode, bias 1.0) and one call
-to a `0xd0` `TEXLODSLOPE` emitter, **`Gu_TexLodSlope`** (`0x08811694`), with the
-float `0x3b800000` = `1/256`. That emitter is the only one in the binary, and this
-is its only call. The GE's slope law is `level = log2(|z| * slope) + bias`, which
-depends on **depth, not on texel density**: with a slope of `1/256` a texture stays
-at level 0 until about 128 world units from the eye and reaches level 1 near 256.
-So the original's picture is not "no mips", it is a very coarse depth-driven
-selection that a 480x272 race frame barely leaves level 0 for. **PPSSPP's GPU
-backends do not implement slope mode as the GE does** - whether real PSP hardware
-mips distant scenery beyond about 128 units is unmeasured here, and the reference
-this project compares against is the emulator. `PSP_SAMPLED_LEVELS = 1` reproduces
-what that reference draws. The mode-0 (auto) branch `Texture_BuildBindList` takes
-on the `+0x06 & 0x18` bits was not separated out; every texture in these frames
-matched the base level.
+**What the binary says.** `Gfx_FlushRenderManager` programs the texture unit
+once per frame: `Gu_TexFilter(7, 1)` (trilinear minify, bilinear magnify),
+`Gu_TexLevelMode(2, 1.0)` (slope mode, bias 1.0) and one call to a `0xd0`
+`TEXLODSLOPE` emitter, **`Gu_TexLodSlope`** (`0x08811694`), with the float
+`0x3b800000` = `1/256`. That emitter is the only one in the binary, and this is
+its only call. The GE's slope law is `level = log2(|z| * slope) + bias`, which
+depends on **depth, not on texel density**: level 0 up to a view depth of 128,
+level 1 at 256, level 2 at 512. That is why a 480x272 race frame barely leaves
+level 0, and why PPSSPP, whose GPU backends do not implement slope mode, draws
+level 0 everywhere.
 
-The change is one line, `mesh::PSP_SAMPLED_LEVELS`, passed where the `.vex` loader
-used to pass the authored `mip_count`. It also halves the GPU memory those
-textures held. It applies to every title that loads a `.vex` with embedded
-textures: **Wipeout Pure is unmeasured** against its own capture and shares the
-line. `crates/render/tests/psp_texture_levels_ground_truth.rs` fails if a circuit's
-textures are uploaded with more levels again.
+**Implemented as the game's rule, 2026-09-30 follow-up.** The first fix capped
+every PSP `.vex` texture at one level, which is PPSSPP's behaviour. The law is
+now in the shader:
+
+- **The levels are the disc's, not ours.** The texel block of a `.vex` texture
+  carries every declared level after the base, at the padded stride the sum-check
+  on `texture_row_stride` establishes. `oag_vex::vex::EmbeddedTexture::levels` reads
+  them (all 135 textures of `16_Track`, and the level 1 of most differs from a box
+  filter of the base, which is asserted), and `Texels::Chain` carries them to the
+  GPU in place of the box-filtered chain this project used to make. A pre-swizzled
+  Pure texture keeps a synthesised chain capped at its declared depth.
+- **The selection is the game's**: `mesh.wgsl` takes
+  `textureSampleLevel(..., max(log2(view_depth / 256) + 1, 0))` when the model
+  carries a chain (`texlod_slope`/`texlod_bias` pipeline constants, from
+  `mesh_render::PSP_TEXLOD_SLOPE` and `PSP_TEXLOD_BIAS`), clamped to the levels
+  that exist by the sampler. The fractional part blends two levels, as the
+  trilinear filter asks. **Chosen, not measured**: `|z|` is the vertex's view
+  depth (`clip.w`) - an unverified reading of the GE's own `z` - and
+  `Texture_BuildBindList` emits its own mode and bias per texture, unread, so a
+  texture on its mode-0 branch may not follow this rule. The two constants are
+  recovered (confidence 85 on the emitter, and the values are read off the
+  call), the mapping to our depth is not.
+- **Proof.** `crates/render/tests/psp_slope_lod.rs` draws one quad with a
+  red/green/blue three-level chain at view depths 64, 128, 256, 512 and 100,000
+  and reads levels 0, 0, 1, 2, 2; a model without `Texels::Chain` stays on level
+  0. Disabling the constants fails it at depth 256.
+
+**Near field kept, far field softens.** Same four Talon-mid regions as above,
+luma Laplacian standard deviation: original 13.45 / 6.13 / 14.94 / 7.54, base
+level only 12.73 / 6.24 / 15.47 / 8.19, slope law 12.73 / 6.24 / 15.08 / 8.19.
+Three regions sit under 128 units and are byte-for-byte the base level; the
+horizon strip, which reaches past it, moves from 15.47 to 15.08 - nearer the
+original's 14.94. A long-straight frame (`--pose -297.96,-50.5,-172.83`, Talon,
+`--ticks 1`, no original: PPSSPP draws level 0 here by construction) reads, base
+level against slope law, 24.51 to 22.77 and 28.36 to 26.40 in two strips past
+about 256 units (whole frame 16.74 to 16.56, 74 pixels differing by more than
+1 %). That gap is the level 1 the hardware rule selects and the emulator does
+not; whether real hardware shows it is still unmeasured.
+
+The change applies to every title that loads a `.vex` with embedded textures:
+**Wipeout Pure is unmeasured** against its own capture and shares the rule.
+`crates/render/tests/psp_texture_levels_ground_truth.rs` fails if a circuit's
+textures stop arriving as the disc's own chain.
 
 ## 2. The hull's sheen (open)
 

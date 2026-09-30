@@ -138,8 +138,9 @@ the original's own compositing does - not traced this session either.
 the blur was `TEXLEVEL` after all, but not as a bias. Matched frames at 480x272
 show the original resolving every scenery texture at its base level, while ours
 walked a box-filtered chain (trees, mountains and road read 15-30 % softer by
-Laplacian energy). A PSP `.vex` texture now reaches the GPU with one level
-(`mesh::PSP_SAMPLED_LEVELS`). The game programs slope mode with a `1/256` slope
+Laplacian energy). A PSP `.vex` texture now reaches the GPU with the levels the
+disc authors, picked by the game's rule (`Texels::Chain`,
+`mesh_render::PSP_TEXLOD_SLOPE`): slope mode with a `1/256` slope
 (`Gu_TexLodSlope`, `0x08811694`), a depth-driven law that stays at level 0 inside
 about 128 units. Post-processing was ruled out too: bloom on and off left the
 trees identical. Nothing in this thread is open.

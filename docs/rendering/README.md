@@ -52,7 +52,7 @@
   `Anim Transform`s on the twelve circuits both titles ship. See
   [`2048-animation.md`](../formats/2048-animation.md)
 - **Pulse's frame against the original's, matched and ranked** (2026-09-30): sky,
-  fog and tone agree within 5 %; scenery textures now sample one mip level as the
+  fog and tone agree within 5 %; scenery textures now use the disc's mip levels picked by the GE slope law, as the
   original's do. See [`frame-audit.md`](frame-audit.md)
 - **Pulse's glow mask and hull lights, measured live** (2026-09-23): the
   bloom runs every race frame, the mask is the GE stencil, and the hull is

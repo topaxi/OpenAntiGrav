@@ -6,13 +6,29 @@
 
 use anyhow::Result;
 
-use crate::mesh::{GpuVertex, Model};
+use crate::mesh::{GpuVertex, Model, Texels};
 
 mod blend;
 mod hull_lights;
 mod spu_light;
 mod tables;
 mod uniforms;
+
+/// The GE's texture level slope, as Pulse programs it: `1/256`.
+///
+/// `Gfx_FlushRenderManager` calls `Gu_TexLevelMode(2, 1.0)` - slope mode, bias
+/// `1.0` - and then `Gu_TexLodSlope(0x3b800000)` once per frame; nothing else in
+/// the binary emits `TEXLODSLOPE`. In slope mode the level is
+/// `log2(|z| * slope) + bias`, a function of **view depth** alone: level 0 up to
+/// `z = 128`, level 1 at `z = 256`, level 2 at `z = 512`. Recovered from the
+/// binary (confidence 85 on the two values, see `mesh-draw.md`), **not** measured
+/// off the GE: `|z|` here is the vertex's view-space depth (`clip.w`), an
+/// unverified reading of the GE's own `z`, and the game's per-texture
+/// `Texture_BuildBindList` emits its own mode and bias, unread.
+pub const PSP_TEXLOD_SLOPE: f32 = 1.0 / 256.0;
+
+/// The bias of [`PSP_TEXLOD_SLOPE`]'s call, in levels.
+pub const PSP_TEXLOD_BIAS: f32 = 1.0;
 
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 pub use hull_lights::{HULL_LIGHTS, HullLights, ge_channel};
@@ -371,6 +387,19 @@ pub fn build(
     }
     if receives_shadow != ShadowReceiver::Never {
         constants.push(("receives_shadow", receives_shadow.constant()));
+    }
+    // A fifth, and the same kind of fact: a model carrying the disc's own mip
+    // chains is a PSP `.vex` one, and the level it samples is picked by the
+    // GE's slope rule rather than by screen-space derivatives - see
+    // [`PSP_TEXLOD_SLOPE`].
+    if model
+        .textures
+        .iter()
+        .flatten()
+        .any(|texture| matches!(texture.texels, Texels::Chain(_)))
+    {
+        constants.push(("texlod_slope", f64::from(PSP_TEXLOD_SLOPE)));
+        constants.push(("texlod_bias", f64::from(PSP_TEXLOD_BIAS)));
     }
     if let Some(flame) = model.flame {
         constants.extend([

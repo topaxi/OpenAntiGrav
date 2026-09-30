@@ -33,20 +33,46 @@ pub struct EmbeddedTexture {
     pub height: u16,
     /// 4 or 8.
     pub bits_per_pixel: u8,
-    /// Number of mip levels present. Only the base level is decoded.
+    /// Number of mip levels the header declares.
     pub mip_count: u8,
     /// Palette, RGBA8888.
     pub palette: Vec<[u8; 4]>,
     /// Base-level pixel indices, one per pixel.
     pub indices: Vec<u8>,
+    /// The disc's own levels below the base, in order: level 1 first, each
+    /// `max(width >> n, 1)` by `max(height >> n, 1)` pixel indices into the
+    /// same [`palette`](Self::palette).
+    ///
+    /// **Authored, not derived**: they are the bytes that follow the base level
+    /// in the texel block, at the padded stride the sum-check in
+    /// [`texture_row_stride`] establishes. Empty for a texture declaring one
+    /// level, and for a **pre-swizzled** one (version 4 and below), whose
+    /// levels this reader does not unswizzle.
+    pub levels: Vec<Vec<u8>>,
 }
 
 impl EmbeddedTexture {
     /// Expands the base level to RGBA8888.
     #[must_use]
     pub fn to_rgba(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.indices.len() * 4);
-        for &i in &self.indices {
+        self.expand(&self.indices)
+    }
+
+    /// Every level the disc authors, base first, expanded to RGBA8888.
+    ///
+    /// One entry when the texture declares one level or its levels are not
+    /// read; see [`Self::levels`].
+    #[must_use]
+    pub fn levels_rgba(&self) -> Vec<Vec<u8>> {
+        std::iter::once(&self.indices)
+            .chain(&self.levels)
+            .map(|indices| self.expand(indices))
+            .collect()
+    }
+
+    fn expand(&self, indices: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(indices.len() * 4);
+        for &i in indices {
             let c = self
                 .palette
                 .get(i as usize)
@@ -217,6 +243,47 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // 4-bit odd width, where the last byte carries a pixel past the end.
         indices.resize(pixels, 0);
 
+        // The levels below the base, when the texels are in row order: each
+        // follows the last at its own padded stride (the sum-check on
+        // `texture_row_stride` is what says so). Stops at the first level the
+        // block cannot hold, so a short block yields fewer levels rather than
+        // padded ones.
+        let mut levels = Vec::new();
+        if !swizzled {
+            let mut offset = stride * usize::from(height);
+            for level in 1..u32::from(mip_count) {
+                let (w, h) = (
+                    (width >> level).max(1),
+                    usize::from((height >> level).max(1)),
+                );
+                let (row, stride) = (
+                    texture_row_bytes(w, bits_per_pixel),
+                    texture_row_stride(w, bits_per_pixel),
+                );
+                let mut plane = Vec::with_capacity(usize::from(w) * h);
+                for y in 0..h {
+                    let at = offset + y * stride;
+                    let Some(line) = texels.get(at..at + row) else {
+                        break;
+                    };
+                    if bits_per_pixel == 8 {
+                        plane.extend_from_slice(line);
+                    } else {
+                        for &b in line {
+                            plane.push(b & 0x0f);
+                            plane.push(b >> 4);
+                        }
+                    }
+                }
+                if plane.len() < usize::from(w) * h {
+                    break;
+                }
+                plane.truncate(usize::from(w) * h);
+                levels.push(plane);
+                offset += stride * h;
+            }
+        }
+
         out.push(Some(EmbeddedTexture {
             name: node.name,
             asset_path: cstr_at(p, TEXTURE_ASSET_PATH),
@@ -226,6 +293,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
             mip_count,
             palette,
             indices,
+            levels,
         }));
         at = end;
     }
