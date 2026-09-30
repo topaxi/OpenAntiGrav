@@ -708,26 +708,69 @@ sets `Options::eliminator_kill_target` to `cell.gold`, so the campaign's own
 `10`/`7`/`5` reach `Race::start` per race rather than one flat figure. A
 Custom Race outside the campaign still has no cell to read, so
 `Options::eliminator_kill_target: None` still falls back to
-`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`'s `10` - one of the three
-real values, not an invented one, and still the only figure a `--mode
-eliminator` run with no campaign cell in play can have.
+`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`, **5** as of 2026-09-30 (the race box's
+first `KILLS` entry, see below) - the only figure a `--mode eliminator` run with no campaign
+cell in play can have.
 
-### A measured contradiction: a custom race's kill target read 5, not 10 (2026-09-30)
+### The kill target of a non-campaign Eliminator is the race box's `KILLS` row, and it starts on 5 (2026-09-30)
 
 `Hud_BindWidgets` (`0x0881fbec`) formats `KillsText` as `"%s (%d)"` of `IG_HUD_KILLS` and
 the kill target: the campaign cell's gold (`cell+0xa0`) when one is in play, and
-`DAT_08b30fb0` (`0x08b30f90 + 0x20`) otherwise. A PPSSPP Eliminator race started from the
-**Racebox** (no cell, Venom, Assegai) drew **`KILLS (5)`** in the top-right corner, and the
-race ended when the leading AI craft reached exactly **5 kills** (the `EndRace Results`
-struct read `EG-X` 5/5 in a table of 5, 4, 3, 3, 2, 2, 1, 0). So the non-campaign target
-that run used was **5**, not the `10` this page and
-`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` carry from `FEData.wad`'s
-`<Targets Elimination="10">` record. Two independent readings agree (the HUD's own text and
-the race's end state); `DAT_08b30fb0` itself was not read, and what writes it - a per-track,
-per-class or per-difficulty value, or a different default - is **not determined**. Confidence
-**85** that 5 is what a Racebox Eliminator on Venom uses. Not changed here: the constant is
-`crates/race`'s. It also bears on this build's Eliminator, which reached no 10-kill finish in
-8 game-minutes with the player parked (the original's AI needed 85 s for 5).
+`DAT_08b30fb0` otherwise. **`DAT_08b30fb0` has one writer**, `RaceBox_ApplySetupGlobals`
+(`0x088e5ff4`, the race box's commit), which `atoi`s the selected entry of the `Eliminations`
+list - `5`, `10`, `15`, `20`, `25` - into it. A fresh profile's Racebox, with `RACE TYPE
+ELIMINATOR` chosen and the row untouched, shows **`KILLS 5`**, and a Racebox Eliminator ends at
+exactly 5 kills. Confidence 90; the widget identification (`+0x120` is `Eliminations`) is 78.
+Evidence page: [eliminator-kill-target.md](../ghidra/functions/psp-pulse-usa/eliminator-kill-target.md).
+
+The XML authors `Default="10"` on that list and the running screen does not honour it (why is
+not determined). `oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` is therefore **5**, the
+list's first entry; a campaign cell's gold (10, 7 or 5) still wins. **Open**: this build's race
+page has no `KILLS` row, so 10 to 25 cannot be chosen from a Custom Race.
+
+### Who is credited with a kill, and why this build's Eliminator does not finish (2026-09-30)
+
+`Ship_Damage` (`0x088439ac`): on the blow that empties the shield, in mode 8, **when the damage
+source is a weapon**, the victim's recorded last attacker gets `+0x8d8` (kills) raised, unless
+it is the victim. A wall finishing a craft off credits nobody; a wall scrape earlier does not
+erase the attacker. This build used to clear the attacker on any wall contact and credit
+only a direct hit, never splash: a third of deaths credited nobody. Now credited on the fatal
+weapon blow, splash included (`oag_game::race::eliminator`).
+
+**With the player parked on `16_Track` this build's field reaches about 11 kills in five
+game-minutes, averaged over four seeds (5, 9, 16, 13), nearly all of them spread over seven
+craft.** Five kills for one craft is a long wait; two takes half a minute to a few. The original
+did 21 kills in 85 s. Measured causes:
+
+- **The field strings out.** Identical craft on one racing line: the spread between first and
+  last was 118 units at the start and 3,900 by minute six. The original's AI only fires readily at
+  a craft **inside 100 units ahead** (`WeaponAi`'s skill index is 3 there, else 0, times the
+  Eliminator rate table `0.001..0.1` times 5), so it depends on a dense field, and gets one from
+  an AI known to cheat. This build gets some density from a leader that eases off the throttle
+  when the pack is out of reach (`Race::eliminator_pack_scale`, **chosen, not measured**; only
+  ever a reduction, so the AI keeps the player's physics). It roughly doubled kills in a
+  four-seed sample; the easing parameters were not found to matter.
+**The leader easing, in full (chosen, not measured; no confidence score).** In an Eliminator
+an opponent with nobody ahead of it, whose nearest racing opponent behind is more than
+`PACK_REACH` (60 units of track) back, scales its throttle down linearly to `PACK_MIN_THRUST`
+(0.3) over the next `PACK_EASE_SPAN` (120) units; a craft more than `PACK_LOST` (1,500) behind
+is not counted, and the human's slot is not part of the pack. The throttle is only reduced.
+Four seeds, five game-minutes, parked player: 22 kills and 52 deaths without it, 43 kills and
+93 with it. **Changing the parameters (`PACK_MIN_THRUST` 0.0, 0.3, 0.6; reach 30 to 200) gave
+identical totals**, so the mechanism is not understood: only the presence of any easing
+mattered, and a leader was eased in a small share of ticks. Treat the effect as real in the
+sample but unexplained.
+
+- **Every craft ended holding a weapon.** Eliminator refuses absorption, so a craft with a
+  weapon it cannot use stops receiving pickups. `wants_to_fire` needs a craft ahead in a
+  20 degree cone, 20 to 200 units, on a straight; 79 % of the consults found nobody ahead
+  inside `AWARENESS_RANGE` (120).
+- **Wall deaths.** In a 330 s parked run 9 of 20 deaths had no weapon hit in the last second.
+
+The original's decision is `WeaponAi_DecideFireOrAbsorb` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)),
+still unported. Guarded by `crates/game/tests/eliminator_finish_ground_truth.rs`
+(a parked-player Eliminator reaches a finish at a target of 2; five is not reachable in six
+minutes).
 
 ### What is deliberately out of scope
 

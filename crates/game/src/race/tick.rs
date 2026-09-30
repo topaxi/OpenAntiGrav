@@ -239,15 +239,6 @@ impl Race {
         if evaluated.shield.absorbed {
             self.view.shield[player].hit();
         }
-        // Eliminator's own kill-attribution rule, applied here for the same
-        // reason the shield edges above are: a wall contact that actually
-        // cost the pool clears whatever weapon last hit this craft, so a
-        // death that follows credits nobody rather than the shot from
-        // earlier. See `crate::race::eliminator`'s module doc comment.
-        if evaluated.shield.lost > 0.0 {
-            self.sim.last_damager[player] = None;
-        }
-
         // **After the craft moved and before the race rules.** A rocket fired
         // this tick was spawned from the pose the tick *started* at, in
         // `spend_pickup`, so flying it here gives it a full tick of travel from
@@ -290,6 +281,9 @@ impl Race {
             if hit.absorbed {
                 self.view.shield[slot].hit();
             }
+            if hit.landed {
+                self.sim.last_weapon_hit[slot] = self.sim.world.tick + 1;
+            }
         }
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
@@ -309,6 +303,7 @@ impl Race {
             if let Some(struck) = impact.struck {
                 self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
+            self.credit_blast(impact, &hits);
             self.ignite_blast(
                 impact.kind,
                 impact.point,

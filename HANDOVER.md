@@ -648,6 +648,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The barrel roll is playable; its visual is read but not drawn](handover/rendering/the-barrel-roll-is-read-and-unimplemented.md) - `oag_physics::barrel_roll` has the tap history, the shield-gated arm (8% of shield, refused at or below cost), the self-completing phase ramp.
 - [The barrel roll has a drawing job, and the original's own recipe for it](handover/rendering/the-barrel-roll-has-a-drawing-job.md) - drawn and on screen since 2026-09-06: a symmetric quadratic ease on `ShipState::roll_phase`, then `eased * 6.28` radians about the craft's **nose** on its display matrix.
 - [Sideshift has no runtime leg](handover/gameplay/sideshift-has-no-runtime-leg.md)
+- [A parked-player Eliminator cannot finish a five-kill event](handover/gameplay/eliminator-cannot-finish-a-five-kill-event.md) - 2026-09-30: kill credit and the kill target (5) are now the original's; the field still strings out and reaches about 11 kills in five minutes against the original's 21 in 85 s. Open: why the chosen pack-easing leader works, wall deaths, the unported WeaponAi decision.
 - [Task #31 residual: the unguarded `slice(..)` in the race's draw path](handover/rendering/task-31-residual-the-unguarded-slice-in-the.md)
 - [MONITOR has only ever run on a one-screen machine](handover/tooling/monitor-has-only-ever-run-on-a-one.md)
 - [Where Pulse's language picker belongs is unevidenced](handover/frontend/where-pulses-language-picker-belongs-is-unevidenced.md)

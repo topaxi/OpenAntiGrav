@@ -105,6 +105,10 @@ impl RaceSim {
             }
         }
 
+        for tick in self.last_weapon_hit {
+            hasher.write_u64(tick);
+        }
+
         hasher.finish()
     }
 }

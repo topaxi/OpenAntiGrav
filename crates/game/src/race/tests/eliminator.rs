@@ -114,3 +114,42 @@ fn the_players_destruction_in_a_single_race_still_ends_it() {
     );
     assert!(race.finished());
 }
+
+/// Two craft in play, `victim` recorded as last struck by `killer`, its last
+/// weapon hit `age` ticks ago.
+fn struck(age: u64) -> Race {
+    let mut race = eliminator();
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.tick = 5000;
+    race.sim.last_damager[1] = Some(0);
+    race.sim.last_weapon_hit[1] = 5000 + 1 - age;
+    race
+}
+
+/// `Ship_Damage` credits the kill on a weapon's fatal blow.
+#[test]
+fn a_kill_is_credited_when_a_weapon_hit_finished_the_craft() {
+    let mut race = struck(29);
+    race.credit_kill(1);
+    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+}
+
+/// A wall that finishes a craft off, long after the last weapon hit, credits
+/// nobody - and, unlike the rule this replaced, the earlier hit is still what
+/// decides it rather than a scrape having wiped the attacker.
+#[test]
+fn a_death_long_after_the_last_weapon_hit_credits_nobody() {
+    let mut race = struck(1800);
+    race.credit_kill(1);
+    assert_eq!(race.sim.world.ships[0].standing.kills, 0);
+}
+
+/// Nobody is credited with their own death.
+#[test]
+fn a_craft_is_never_credited_with_its_own_death() {
+    let mut race = struck(10);
+    race.sim.last_damager[1] = Some(1);
+    race.credit_kill(1);
+    assert_eq!(race.sim.world.ships[1].standing.kills, 0);
+}

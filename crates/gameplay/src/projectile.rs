@@ -92,7 +92,7 @@ pub use geometry::hull_radius;
 use geometry::{SweepHit, nearest_hit};
 pub use hit::WeaponHit;
 
-pub use blast::{BlastStats, blast};
+pub use blast::{BlastStats, blast, blast_stats};
 pub use mine::TriggerRadii;
 pub use rocket::{LIFETIME_SECONDS as ROCKET_LIFETIME_SECONDS, ROCKET_SHOTS, launch};
 

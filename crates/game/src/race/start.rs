@@ -370,6 +370,7 @@ impl Race {
                 eliminator_kill_target: eliminator_kill_target
                     .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
                 last_damager: [None; oag_gameplay::MAX_SHIPS],
+                last_weapon_hit: [0; oag_gameplay::MAX_SHIPS],
                 respawn_delay: [0.0; oag_gameplay::MAX_SHIPS],
                 rolls_armed: [0; oag_gameplay::MAX_SHIPS],
                 rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
