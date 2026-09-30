@@ -184,6 +184,18 @@ and shader module compare equal to the first's - `wgpu::RenderPipeline` and
 `wgpu::ShaderModule` both compare by handle, not content, so a stale-cache bug
 that handed back the wrong pipeline would fail these, not just look plausible.
 
+**A weapon pool is one drawable and 127 names for it.** `race/scene/weapon_models.rs`
+builds `MAX_PROJECTILES` (128) drawables per weapon model, one per pool slot,
+and the first is built whole with `Drawable::new` while the other 127 come from
+`Drawable::instance` (`race/drawable/instance.rs`): the same vertex and index
+buffers, textures, pipelines and fog buffer (reference-counted `wgpu` handles),
+plus a uniform buffer of their own for the slot's matrix, plus their own
+animation buffers when the model animates, because a Plasma blast scrubs one
+clock per slot. Built whole, a slot cost about 200 kB with the cache open (and
+about 7 MiB without it); shared, roughly 40 kB. Headless Pulse peaks at about
+340 MiB, HD at about 720, from 545 and 885 with a whole drawable per slot, and
+the frames are byte-identical (`race::tests::scene_build` pins the sharing).
+
 **Pixels checked unchanged, not just assumed:** `--race --screenshot ...
 --ticks 90 --hold cross --no-audio` on Pulse PSP, Pulse PS2 and Wipeout HD
 Fury, once against this commit and once against its parent (the tree
