@@ -1018,12 +1018,11 @@ each grid's own `FlyerName`.
 
 ### The flyer behind `Grid Selection`, 2026-09-30
 
-**A "flyer" is a promotional card, not a craft**: a flat quad set (the body is
-115 by 74.8 units, elements a few units deep at most) carrying a wordmark, a
-stripe, a ship silhouette and sponsor marks, with a reflection under it on
-RPCS3. Every grid has one. This section is what is authored, what is chosen,
-and what a player sees now. Drawn by `oag_game::flyer`, through the mesh-in-menu
-seam below; Wipeout HD's `Grid Selection` only.
+**A "flyer" is a promotional card, not a craft**: a wordmark, a stripe, a ship
+silhouette and sponsor marks on a flat rectangle, with a reflection under it on
+RPCS3. Every grid has one, the base campaign's flat and Fury's built from
+layers. Drawn by `oag_game::flyer`, through the mesh-in-menu seam below, for
+**all sixteen grids**; Wipeout HD's `Grid Selection` only.
 
 **The mechanism is one, and it already existed in part.** `oag_game::preview`
 drew a circuit's outline ribbon and (on Pulse) a team's hull behind the race
@@ -1033,7 +1032,8 @@ picker does **not** draw its `<Model name="ShipModel">` (`preview_meshes` is
 general, and `ShipModel` is unblocked by them but not wired:
 
 - `preview::model` now reads a PS3 `.vex` + `.rcsmodel` pair, with every
-  material and `.gtf` through the same `Archives` a race uses;
+  material and `.gtf` through the same `Archives` a race uses
+  (`preview::model_named` also answers each texture slot's path);
 - `Preview::draw_matrices` is `draw_mode3d`'s second half with the camera
   passed in, so a menu that owns a pose draws through the one pass.
 
@@ -1041,83 +1041,139 @@ general, and `ShipModel` is unblocked by them but not wired:
 `Flyer Pad Lock`. `oag_game::flyer::render_list` splits the screen's draw list
 at its backdrop: backdrop, then the card, then chrome and widgets. Live and
 `--menu-page` share it. Headless check: `--menu-page grid-select-hd@3
---screenshot out.png --size 1920x1080 --no-audio` (base HD tier 3; `grid-select`
-is Fury, `@N` the tier).
+--screenshot out.png --size 1920x1080 --no-audio` (base HD tier 3;
+`grid-select@N` is Fury's tier `N`).
 
-**Authored** (`CellMode_Definition.xml`, `DATA06`, and `strings EBOOT.elf`):
+#### What the disc authors
 
 | What | Value | Confidence |
 | --- | --- | --- |
-| widget | `<Flyer name="FlyerModel">`, top level (a sibling of the screens), `OriginX/Y` `960`/`540`, `nearZ` `1`, `farZ` `1000`, `x` `80`, `y` `-33.3`, `z` `-200`, `RotX` `0`, `RotY` `1.5`, `RotationCentreOffsetX` `-60`, no `orthoScale` (the two `Campaign Selection` flyers carry `0.75` and `RotY` `0.6f`/`-0.6f`) | 95 |
-| which model | the widget's `Src` is always `Data\FE\Flyers\00_flyer.vex`, a 1.6 KB placeholder (`cardShape`, `card_reflectShape`, a dummy texture). The executable carries `Data/FE/Flyers/%s/`, `%sflyer.vex`, `%sflyer_Back.vex` and `Data\FE\Flyers\%s\Logo.gtf`, and every grid authors `FlyerName="01_uplift"` and so on: that is the `%s` | 85 (the formatting call site is unread) |
-| materials | `basicnonalpha` is `TEX` then `MOV` (colour = the swatch, alpha 0, opaque); `basicalpha` and `scrollingalpha` colour from a swatch `.gtf` and alpha from an elements atlas's red channel times a parameter. No light, no fog: all unlit | 90 (`ps3-microcode.py fp-file`) |
-| animation | 33 `Anim Transform` nodes on `01_uplift`, six-second `LoopEnd`; elements grow in (scale keys from 0.05) and slide to poses that overhang the body | 90 |
+| widget | `<Flyer name="FlyerModel">`, top level (a sibling of the screens), `OriginX/Y` `960`/`540`, `nearZ` `1`, `farZ` `1000`, `obeySafeZone` `true`, `x` `80`, `y` `-33.3`, `z` `-200`, `RotX` `0`, `RotY` `1.5`, `RotationCentreOffsetX` `-60`, no `orthoScale` (the two `Campaign Selection` flyers carry `0.75` and `RotY` `0.6f`/`-0.6f`) | 95 |
+| which model | the widget's `Src` is always `Data\FE\Flyers\00_flyer.vex`, a 1.6 KB placeholder (`cardShape`, `card_reflectShape`, two dummy textures the runtime swaps for the flyer's picture). The executable carries `Data/FE/Flyers/%s/`, `%sflyer.vex`, `%sflyer_Back.vex` and `Data\FE\Flyers\%s\Logo.gtf`, and every grid authors `FlyerName="01_uplift"` and so on: that is the `%s`. The class is `Flyer_Item` (`Flyer_Item.cpp`), a `Model_Item` (`Model_Item.cpp`); its loader `0x001a2ba8` formats the two paths and stores the front and back models at `+0x224`/`+0x228` | 85 (the formatting call site is read, the loop through it is not) |
+| the flyer's own camera | every `flyer.vex` carries a `Transform` `camera1` parenting a `Camera` `cameraShape1` (`oag_vex::camera`): a translation `(0, 0, z)` with `z` `92.4957` on the eight base grids and `12.0` on Fury's eight and on both campaign cards. `Flyer_Item`'s loader also stores the camera node at `+0x22c`/`+0x230`, and its render function (`0x001a2510`) puts that node's matrix in the view stack. The `Camera` payload's `+0x1c` word is the card's aspect ratio to four digits (`1.5380` base, `1.5389` Fury, `1.0833` campaign) | 90 |
+| the widget's field of view | `Flyer_Item`'s render function `0x001a2510` builds a perspective matrix from `tanf(0.5)` (a literal at `0x008acf4c`, the half angle) and the aspect global `1.7778`: a vertical field of view of **1.0 rad**. A planar fit of four base frames with the focal length left free lands on 0.90 to 1.03 rad independently. `Model_Item`'s own render function (`0x001d35e8`) takes `tanf(field * scale)` from a widget field instead | 90 |
+| materials | the base campaign's are `basicnonalpha` (`TEX` then `MOV`, alpha 0, opaque), `basicalpha` and `scrollingalpha` (colour from a swatch `.gtf`, alpha from an elements atlas's red channel times a parameter): unlit. **Fury's are `simpletexture`, `simpletextureandtexturealpha` and `simpletextureandtexturealphauvoffsetscale`**, which compute `(constantAmbientColour + saturate(N.L) * directionalLight0Colour) * texture`, the light direction and both colours patched by name hash (`0x02df31e5`, `0x2dba643d`, `0x81db67ea`) | 90 (`ps3-microcode.py fp-file`) |
+| loop | `Flyer_Item`'s constructor (`0x001a2060`) holds `6.0` at `+0x234` and `3.0` at `+0x238`, and the render function wraps a time past `6.0` back by `3.0`: the card loops over `[3, 6)`. Each node keeps its own `LoopEnd` (`6.0` on the base cards, `4.0` on Fury's) | 80 |
+| animation | 33 `Anim Transform` nodes on `01_uplift`, 34 on `09_blitzed`; elements grow in (scale keys from 0.05) and slide to poses that overhang the frame | 90 |
 
-**Chosen, not measured, with how each was fitted.** The widget's own pose does
-not reproduce any settled frame (`RotY` `1.5` as radians is an 86 degree turn,
-which is what RPCS3 shows mid-transition), and the native `Flyer` class that
-would say how `x y z`, `RotY` and `RotationCentreOffsetX` combine is unread.
-So `oag_game::flyer` reads the widget and does **not** apply `x y z`, `RotY` or
-the pivot. It uses:
+Addresses are read in Ghidra (`/hdfury/EBOOT-ps3-hdfury-eu.elf`) and **not
+renamed**: none has a `names.tsv` row.
 
-- **field of view `0.545` rad**, **yaw `-0.37`**, **centre `(20.6, 0, -200)`**
-  (the authored `z` kept, since only the ratio of field of view to distance is
-  observable). Fitted by a SIFT planar homography between a head-on render of
-  the card (known scale) and two settled RPCS3 frames (tiers 3 and 5), 47 and
-  75 inliers, then a least-squares fit with pitch held at zero: field of view
-  `0.53` to `0.55`, yaw `-0.33` to `-0.41` across the free-pitch and
-  zero-pitch fits, centre `x` `20.3` to `20.6`, centre `y` `0.0`. Free pitch
-  gave `-0.13` and `+0.04` on the two frames, i.e. noise, so pitch is zero.
-  Overlaying a frame on ours in authored space (RPCS3's frame is the 1920 by
-  1080 grid at 0.94 scale, offset `(39, 28.6)`, read off the padlock's own
-  bounding box) puts wordmark, stripes, silhouettes and sponsor mark within a
-  few pixels of each other. **Tiers 3 and 5 were the fit's own inputs, so
-  their agreement proves nothing**; tiers 0, 1 and 4 were not, and agree side
-  by side (`final/cmp-t0.png`, `cmp-t1.png`, `cmp-t4.png`). Tiers 2, 6 and 7
-  were compared by eye and show the gaps listed under "Not drawn".
-- **the body cut to `x` `-48.3..48.3`, `y` `-28.7..33.7`** (card-local). The
-  elements overhang the body, and every frame shows a clean rectangle: the
-  stripes start cut mid-hatch at authored `x` 751. That rectangle is 0.835 of the
-  authored body about a point 2.5 units high; the mechanism is unread. The
-  pose is baked at the card's settled moment (the latest key of any moving
-  channel, backed off a frame from the `LoopEnd`) first, because a vertex under
-  an `Anim Transform` only has a card-local position once a time is picked.
-  Two traps: one node authors a single key at frame 36,000, which read as a
-  last key wraps every other node back to its collapsed start.
-- **the pointer's confirm target is the drawn card's rectangle** (projected
-  from the cut above), falling back to `Flyer Pad Lock`'s rect when no card
-  loaded. Clicking the card opens `Cell Selection`; the arrows page. Driven live
-  under Xvfb `:96`, mouse only.
+#### What a card is: the flyer's camera image on a flat rectangle
 
-**Not drawn, and said so**: the glow around an unlocked card, the floor
-reflection (`card_reflectShape`'s own job, it seems), the flip to
-`flyer_back.vex`, the elements animating in on a page change (the card is
-always settled), the tier change's card swing, and **Fury's eight cards**.
-Fury's (`09_blitzed` onward) are authored at about a third of the base cards'
-scale and 28 units deep, and the settled frames show a lit box, not a flat card;
-the fitted camera draws them as a few stray pixels, so `load_hd` decodes the
-base campaign's eight and Fury draws none, with its logos and unlock box. A
-Fury fit needs its own frames (`data/scratch/hd-flyer/rpcs3-raw/grid-fury-*`) and
-a 3-D (not planar) pose. `Campaign Selection`'s two cards (`Fury_Campaign`,
-`HD_Campaign` in the executable) are likewise undrawn. The white body is also
-slightly wrong on some tiers (`08_meltdown`'s leaves a gap at its left), because
-the cut is one rectangle for every card.
+**The card is flat, and the flyer scene is flattened through its own camera
+before it is turned on the screen.** Four things in the settled RPCS3 frames
+say so, and a fifth is that it reproduces them:
 
-**The body is probably the placeholder's, which this build cannot decode yet.**
-The widget's own `Src` is `00_flyer.vex`, and that is what the runtime draws
-first (`cardShape` at 102.4 by 66.6, `y="-33.3"` being its half height, plus
-`card_reflectShape`, which is where the reflection would come from) with the
-per-grid flyer on top. Its two chunks read at stride 0 with nonsense
-coordinates (`hd_unlit_probe`'s inline-chunk reading does not fit them), so they
-are not drawn; the body here is the per-grid flyer's own `bgplane` cut to the
-measured rectangle, a substitute for that missing asset alone. It shows on the
-tiers where `bgplane` is narrower than the card: on `07_dropzone` and
-`08_meltdown` the body starts 75 or so authored pixels right of the elements,
-and stripe fragments stand outside it; on `07_dropzone` a white slashing
-element crosses the padlock that RPCS3 does not show; on `03_frenzy` the
-`ignition` caption hangs at the bottom edge where RPCS3 hides it, the cut being
-a few units too low there. Decoding the placeholder is the next step, before
-any further fitting.
+1. **Every frame starts at the same column.** Whatever the card is made of,
+   on all fourteen settled frames, base campaign and Fury alike, the card's
+   left edge is at raw pixel 742 to 746 (the dark `07_dropzone` needs a lower
+   brightness threshold to read the same), which is authored 748 to 752. The
+   stripes are cut mid-hatch there and the reflection under the card starts
+   at it too, on flyers whose geometry has nothing else in common.
+2. **The elements that overhang a flyer's frame are not there.** One node's
+   last key puts a bar 90 units left of a base card and another a strip 160
+   to its right; a Fury card's dark layers and its parked glitch panel sit
+   outside its frame. RPCS3 shows a clean rectangle on all sixteen.
+3. **Layers show no parallax.** A Fury card's wordmark is 8 units nearer the
+   camera than its frame. Turned by the settled yaw as a 3-D stack it would
+   slide 2 units sideways against the frame; measured on `impact`, the
+   wordmark starts 82 px from the frame's edge in RPCS3, 80 px in a flat warp
+   of the head-on image and 68 px in the fitted 3-D stack (two-thirds-scale
+   comparison crops).
+4. **The camera's image is the card.** The camera's `+0x1c` word is the
+   card's aspect to four digits, and `hd_campaign`'s background is 22.2 by
+   20.4 units at 32 from its camera, which at the window found below is
+   exactly the picture's height.
+5. **A flat card reproduces it.** One pose for all sixteen (below) puts the
+   card's left edge at authored column 747, where the frames put it (750), and
+   fits six frames at a mean correlation of 0.91.
+
+So `oag_game::flyer::clip::flatten` puts every vertex where its own camera
+sees it (`u = x / -z / window_tan * card_height / 2`), `clip::clip` cuts the
+result to the card's rectangle, and the card stands in front of the widget's
+camera at a pose. Every layer of a flyer is a quad at one depth, parallel to
+the picture, so the flattening is affine per triangle and texture coordinates
+need no correction. The nodes are posed first, at one moment
+(`clip::bake`).
+
+#### What is chosen, not measured
+
+No confidence score: each was fitted to settled RPCS3 frames of `Grid
+Selection` (base tiers 0, 1, 4, 5 and Fury tiers 0, 1; `1600x1200` raw, mapped
+to the authored grid by the padlock's own bounding box, `0.94` and offset
+`(39, 28.6)`), by warping the head-on render of the card's own camera image
+onto the frame and maximising the correlation of blurred redness (Fury) or
+luminance (base), inside the padlock's and the left column's exclusions.
+
+| What | Value | Fitted |
+| --- | --- | --- |
+| pose (`GRID_POSE`) | yaw `-0.289`, centre `22.0` units right and `111.1` in front of the widget's camera, none up; in card units, one pose for all sixteen | four starts converge on yaw `-0.288..-0.298`, `tx 21.96..21.99`, `dist 111.3..111.6` |
+| card height (`CARD_HEIGHT`) | 66.6 units, its width the camera's `+0x1c` times that (102.4) | the placeholder's `cardShape` spans 102.4 by 66.6 |
+| window (`HD_WINDOW`, `FURY_WINDOW`) | tangent of half the vertical field of view the card shows of its camera's image: `0.346` on the base grids, `0.321` on Fury's and on the two `Campaign Selection` cards | fitted; the camera's `+0x20` word moves with the first two (`0x4f15`, `0x4a2c`; proportionality gives `0.344`, `0.323`) and **not** with the campaign cards' (`0x3621` would give `0.236`, where `hd_campaign`'s own geometry says `0.319`), so it is not what sets them |
+| moment (`SETTLED_SECONDS`) | 3.0 s | the widget's own loop start, `[3, 6)`: after the elements are in, before the glitch a Fury card flashes at `3.63..4.0` s of its four-second loop, and with `10_impact`'s ship silhouette assembled (at 2.5 s it is still in pieces); the base cards differ from their old "latest key" moment by about 1 percent of pixels |
+
+The widget's own `x y z`, `RotY` and `RotationCentreOffsetX` are **read and
+not applied**: `RotY="1.5"` read as radians is an 86 degree turn, which is
+what RPCS3 shows mid-transition, and the native code that settles it
+(`Model_Item`'s update, `0x001d3f08`, reads `x y z` at `+0xac..+0xb4`, three
+rotations at `+0xb8..+0xc0` and the pivot at `+0xc4`) is AltiVec-heavy and
+unread. Trying them as start values needs that function.
+
+**The window differs by 8 percent between the base grids and Fury's.** The base
+camera frames the artwork (on `04_vertigo` the elements run to `+-48` units and
+the window is `+-48.9` wide at the picture's own depth) and Fury's frames its
+background plane exactly (`0.321` against `0.319` from geometry). The
+proportionality with the camera's `+0x20` word that two points suggested fails
+on the campaign cards, so the two windows are constants per campaign.
+
+#### The shell: `00_flyer.vex` is the card, not a stand-in
+
+The widget's `Src` is drawn by `Flyer_Item` as the card itself: `cardShape` (a
+102.4 by 66.6 rectangle with a chamfered top-left corner and a few notches
+along its left and right edges, 6,783.6 of the rectangle's 6,819.8 square
+units, at `y` `0` to `66.6`) and `card_reflectShape` (`y` `-33.3` to `0`, the
+lower half mirrored, its vertex alpha `0x4c` at the card's bottom edge, `0x26`
+a third of the way down and `0` at the bottom). `oag_game::flyer::shell` reads
+both: the front face's twenty-five triangles cut the flattened picture to the
+card's outline (`clip::clip_to_shape`), and `clip::reflect` adds the mirrored
+copy, alpha-blended and faded by the recovered alpha. The layout of the inline
+chunks they sit in is on `docs/formats/rcsmodel.md`. The earlier lane's "two
+chunks read at stride 0" was one of three surfaces: the scene builder already
+drew `cardShape`'s front face (114 vertices) and the reflection; the 26-vertex
+back face is the one with no recoverable stride.
+
+#### Not drawn, and said so
+
+- **The card's body colour.** The shell's front face is textured with
+  `flyer_dummy_front.gtf`, a 128 by 128 green debug picture the runtime swaps
+  for the flyer's picture (`flyer_dummy_` is a format string in the executable);
+  ours draws no body under a card, so a flyer whose artwork does not cover its
+  face shows black there where RPCS3 shows the mid-transition grey.
+- **The glow around the card and the bloom on Fury's reds.** RPCS3's Fury
+  frames are brighter and saturated where ours are the texture's own colour.
+- **The light on Fury's cards.** Its materials are lit (above) and the three
+  parameters are written by code nobody has found: their names sit in a table
+  at `0x007b3658`/`0x007b36b8`/`0x007b36e0` whose only reference is another
+  table, and the front end loads no circuit settings file. Drawn unlit
+  (`lit = 0`), the ship silhouette on `10_impact` is flat white where RPCS3
+  shades its facets.
+- **The effects a Fury card plays over itself**, hidden by texture name
+  (`UNREAD_EFFECTS`: `loops`, `flashes`, `noise_bar`, `failscreen`,
+  `crash_screen`): a glitch panel with noise bars, rings and flashes, each a
+  quad whose UV offset and scale or alpha a native parameter animates. Drawn
+  at rest they came out as solid white discs, white bars and a brown static
+  panel where RPCS3 shows nothing at three different moments.
+- The flip to `flyer_back.vex` (its camera is 97.15 from the card on
+  `01_uplift`, not 92.5), the elements animating in on a page change, the
+  idle loop, and the tier change's card swing.
+- `Campaign Selection`'s two cards draw through this path since the same day -
+  see "The two cards".
+
+Fury's cards were "not drawn" until 2026-09-30 on the reading that they were
+"a lit box at a third of the scale": they are layered scenes framed from 12
+units where the base cards' are framed from 92.5, and once each is seen through
+its own camera the two families share one card.
 
 **Omega: same assets by name, not drawable yet.** Omega's base package carries
 `Data/fe/flyers/01_uplift/flyer.vex`, `flyer.rcsmodel`, `flyer_back.*` and
@@ -1131,12 +1187,14 @@ wired: the Omega lane owns that reader.
 paragraphs under the screen's widget table above.
 
 Evidence: RPCS3 frames `data/scratch/hd-flyer/rpcs3-raw/grid-hd-t0..t7-settled`
-(Xvfb `:91`, silent config, untrimmed, 1600 by 1200), `grid-fury-t0/t1`; ours
-`data/scratch/hd-flyer/final/ours-hd-t0..t7.png` and side by side
-`final/cmp-t*.png`; live `data/scratch/hd-flyer/live/`. Fit scripts
-`data/scratch/hd-flyer/fit/`. Pinned on the disc by
-`crates/game/tests/hd_flyer_ground_truth.rs`; the pose and cut are not pinned,
-being chosen.
+and `grid-fury-t0/t1-settled` (Xvfb `:91`, silent config, untrimmed, 1600 by
+1200); ours `data/scratch/hd-fury-cards/final/` and side by side
+`data/scratch/hd-fury-cards/exp/cmp-m-*.png`; the joint fit
+`data/scratch/hd-fury-cards/fit/joint_m2.py`. Pinned on the disc by
+`crates/game/tests/hd_flyer_ground_truth.rs` (all sixteen cards decode, each
+authors its camera, the widget's values); the flattening and the pose's left
+edge by `oag_game::flyer`'s unit tests. The pose, the window and the moment
+are chosen and are not pinned to the frames.
 
 ### `Cell Selection` is the same 32-slot staggered hex grid Pulse's is
 
@@ -1978,7 +2036,7 @@ disagreement on a different file) settles it:
 | `Bracket` | `x="160" y="170" Width="1595" Height="780"`, the frame both flyers sit inside |
 | `campaignList` (`List`) | idstring `FE_CAMPAIGNLIST`, two `<Entry>`s: `String="FE_RC_FURY"` then `String="FE_RC_HD"` - **Fury first**, matching the measured default. The list's own `<Values>` sits at `y="-500"`, off screen (the file's own comment on that line reads `<!-- -500 for y so it's off screen!! -->`) - that position drives the widget's internal selection state only, never meant to be drawn there. **The two entries' own names are drawn anyway**, at a chosen position - see "Drawing the two entries' own names" below. |
 | `<Redirect>` | `campaignList == FE_RC_FURY -> "Grid Selection Fury"`; `== FE_RC_HD -> "Grid Selection"`; `<Default goto="To Be Done">` - a third branch that is evidence about the build (an unfinished fallback) even though nothing observed here can fire it |
-| `FuryCampaignFlyerModel` / `HDCampaignFlyerModel` (`Flyer`) | `OriginX="640"`/`"1280"` - Fury left, `Wipeout HD` right, both `Src="Data\FE\Flyers\00_flyer.vex"`. **Not the per-campaign models the disc otherwise ships** (`/data/fe/flyers/fury_campaign/flyer.vex`, `/data/fe/flyers/hd_campaign/flyer.vex`, both present in `hd-files.txt`) - this screen's own XML points both widgets at the same generic flyer regardless, so whatever tells the two apart on the real screen is not in this file. Not drawn either way - see "not drawn" below. |
+| `FuryCampaignFlyerModel` / `HDCampaignFlyerModel` (`Flyer`) | `OriginX="640"`/`"1280"` - Fury left, `Wipeout HD` right, both `Src="Data\FE\Flyers\00_flyer.vex"`. **Not the per-campaign models the disc otherwise ships** (`/data/fe/flyers/fury_campaign/flyer.vex`, `/data/fe/flyers/hd_campaign/flyer.vex`) - this screen's own XML points both widgets at the same placeholder, as `Grid Selection`'s does, and the executable's `Flyer_Item` loader replaces it (`Src` is the dummy, the campaign's own folder the model). Drawn - see "The two cards". |
 | `MedalImageFury`/`MedalImageHD` | `Hexmedal_HD.mip`, plus `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` (idstring `RC_GM`, `"GOLD MEDALS"` - the same idstring `Grid Selection`'s own `Medals Title` already resolves) and `NumMedalsTextFury`/`NumMedalsTextHD` (idstring `RB_EVENT_TYPE` - a reused/generic idstring this build does not trust as content, the same "idstring is a placeholder slot, not the text" reading `Line{n}` already gets elsewhere in this module). **Closed, 2026-09-25** - see "Wipeout HD/Fury: the `GOLD MEDALS` denominator" below: RPCS3 reads `"0 / 87"` on the `Wipeout HD` side and `"0 / 80"` on `Fury`'s, and both are exactly the campaign's own total cell count, now drawn as `{earned} / {total}` by `selection::draw_list`. |
 
 **The subtitle and both `GOLD MEDALS` labels are hand-placed, not read
@@ -2001,6 +2059,11 @@ cross-checked against an RPCS3 frame for the two visible strings
 (`ScreenTitle`, the subtitle) and the medal fraction's numerator shape.
 
 ### Drawing the two entries' own names, and the selector, 2026-09-21
+
+**Superseded 2026-09-30 for a source that draws the two flyer cards** - see
+"The two cards" below: with the cards drawn, the outline and the names are not
+(`draw_list`'s `cards` flag), and only the selected campaign's medal counter
+is. What follows is what a source with no card still draws.
 
 The first pass at this screen (above) left `campaignList`'s own two entries
 undrawn, on the same "drives selection, never drawn" reasoning `Grid
@@ -2025,8 +2088,7 @@ the widget table above), so there is no authored on-screen position to read.
 Each `x` is the centre of its own half of `Bracket`'s own rect (the same
 split `CampaignSelection::pointer`'s own click targets and
 `selector_outline` both use), and `y` sits above the gold-medal labels,
-inside the Bracket, in the space the (undrawn) 3D flyer card would otherwise
-fill. **The first version of this fix left-aligned each name at the
+inside the Bracket, in the space the 3D flyer card fills where one is drawn. **The first version of this fix left-aligned each name at the
 gold-medal label's own `x` (755/1395)** - at that anchor `"FURY CAMPAIGN"`
 runs past the Bracket's own midpoint and is cut by `selector_outline`'s own
 border, caught by looking at the resulting capture rather than measured off
@@ -2134,18 +2196,66 @@ ever builds a `Selection` screen, so their own `Back` still closes the
 campaign the way it always has - `crates/ui/src/campaign/tests.rs` pins both
 titles' own flows).
 
-**Not drawn**: both `Flyer` widgets (`Grid Selection`'s own `FlyerModel` was
-the same "flat 2D list, not a mesh scene" limitation until 2026-09-30, see "The
-flyer behind `Grid Selection`"; these two name `Fury_Campaign` and
-`HD_Campaign` in the executable and are not fitted) and
-the medal fraction's own denominator (see the widget table above). The
-selector is drawn, but as a chosen stand-in rather than the disc's own
-animation - see "Drawing the two entries' own names, and the selector" above.
+**Drawn since 2026-09-30**: both `Flyer` widgets - see "The two cards". Not
+drawn: the medal fraction's own denominator (see the widget table above), the
+cards' reflection, glow and light, and the cards' own animation on a selection
+change.
+
+### The two cards, 2026-09-30
+
+`FuryCampaignFlyerModel` and `HDCampaignFlyerModel` draw the two flyers the
+disc ships for them (`Data/FE/Flyers/fury_campaign/flyer.vex` and
+`hd_campaign/flyer.vex`), through the same flat-card path `Grid Selection`'s
+sixteen use ("What a card is" in "The flyer behind `Grid Selection`"), each
+seen through its own camera (both at 12 units, `+0x1c` `1.0833`).
+
+**The widgets' own numbers place them, with `orthoScale` as a scale on
+everything**: a card stands `z / orthoScale` in front of the camera (`70 /
+0.75 = 93.3` units, at the same vertical field of view of 1.0 rad), its pivot
+is `RotationCentreOffsetX / orthoScale` (`-40` on Fury's, `+40` on `HD`'s) and
+its `x` and `y` scale the same way. `oag_game::flyer::campaign_pose` computes
+the pose:
+
+- **Face on**, `RotY` `0`: centre `(0, -11.1, -93.3)`. The `-11.1` is the
+  widget's `y="-33.3"` over `0.75` (`-44.4`) plus half the card's height
+  (`33.3`): the placeholder's `cardShape` runs from `0` up by `66.6`, and `y`
+  is what centres it - so `Grid Selection`'s `y="-33.3"` is the same fact, and
+  its fitted `ty` of `0` agrees. Measured on RPCS3, the selected Fury card is
+  centred on `OriginX` (`639.4` against `640`), `212` down from the top and
+  `93.4` units away by its height (`710` pixels for `66.6` units at 1.0 rad).
+- **Turned**, `RotY` `+-0.6`: the card swings about its pivot, which puts it
+  22.6 units farther back and 7.0 units toward its pivot. Measured, `HD`'s
+  left edge sits at authored column 1105 with Fury selected, where the
+  authored numbers put it within 40.
+
+**Chosen, not measured**: that the selected card is the one with `RotY` `0` -
+the widget authors only the turned pose, and an RPCS3 frame with Fury selected
+shows Fury facing front and `HD` turned, the reverse with `HD` selected; that
+the composition is a pivot turn with the model moved after it; and
+`CAMPAIGN_STRETCH`, `1.048`. The cards stand 800 by 710 authored pixels
+(aspect 1.13) where the camera says 1.083, and the wordmark on Fury's is 5
+percent wider than the camera's aspect makes it, so the picture is stretched
+rather than shown wider. The window (`FURY_WINDOW`, 0.321) is Fury's: it
+matches `hd_campaign`'s own geometry at 0.319.
+
+`selection_shows` gives both cards to `flyer::render_list`, between the
+backdrop and the widgets, and `--menu-page campaign-select@1` selects `HD`.
+The selected campaign's `GOLD MEDALS` counter is the only one drawn (an RPCS3
+frame with Fury selected has none beside `HD`'s turned card, and one with `HD`
+selected none beside Fury's).
+
+Pinned on the disc by `campaign_selections_cards_land_where_rpcs3_shows_them`
+in `crates/game/tests/hd_flyer_ground_truth.rs` (both selections, against the
+measured columns), and by `oag_ui::campaign::selection`'s tests for the stand-ins
+and counters. Evidence: RPCS3 `campaign-settled-a`/`-b` and `campaign-right` in
+`data/scratch/hd-flyer/rpcs3-raw/`; ours and the comparisons
+`data/scratch/hd-fury-cards/exp/cmp-cs-sel0.png`, `cmp-cs-sel1.png`.
 
 ### Verification
 
 - Headless `--menu-page campaign-select` against `hdfury-ps3-eu-dec.iso`,
-  `--size 1920x1080`: draws the screen's own title, subtitle, both entries'
+  `--size 1920x1080` (before 2026-09-30; now the two cards, see "The two
+  cards"): draws the screen's own title, subtitle, both entries'
   own names (`"FURY CAMPAIGN"`/`"HD CAMPAIGN"`), a white selector outline
   around the default-selected `Fury` half, and both campaigns' `GOLD MEDALS`
   reading - `Fury`'s own label is genuinely invisible (black text on black
@@ -2833,8 +2943,9 @@ and its own "what is not determined" section.
 - ~~**The 3-D flyer model behind `Grid Selection`** is not drawn at all~~
   **Drawn 2026-09-30** for the base campaign, through the one mesh-in-menu
   seam `oag_game::preview` now shares - see "The flyer behind `Grid Selection`".
-  Open from it: Fury's eight cards, the glow and reflection, the tier-change
-  swing, and `Campaign Selection`'s pair.
+  Fury's eight cards and `Campaign Selection`'s pair followed the same day.
+  Open from it: the card's own body and reflection, the glow and the
+  tier-change swing.
 - ~~The launch path is wired... but not driven live against an HD source~~
   **Driven live, 2026-09-21**, mouse-only under Xvfb :93 with `xdotool`
   (`cargo run -p oag-game -- data/images/hdfury-ps3-eu-dec.iso
@@ -3034,9 +3145,8 @@ authors no `TextInfoIsAlwaysLast` viewport at all).
   Selection` authors no `DifficultyButton` widget anywhere and draws
   `Confirm`/`Back` only, which is the disc's own answer.
 - ~~**The 3-D flyer model behind `Grid Selection`/`Campaign Selection`**~~ -
-  `Grid Selection`'s base-campaign cards are **drawn, 2026-09-30**, see "The
-  flyer behind `Grid Selection`"; Fury's and `Campaign Selection`'s are still
-  not.
+  `Grid Selection`'s sixteen cards are **drawn, 2026-09-30**, see "The flyer
+  behind `Grid Selection`" and "The two cards".
 
 **Recaptured after the fixes above**, all HD, `hdfury-ps3-eu-dec.iso`,
 1280x720, `data/scratch/drive-2026-09-25/hd-campaign/` (not committed, game

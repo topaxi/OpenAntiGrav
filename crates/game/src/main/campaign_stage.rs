@@ -243,23 +243,32 @@ impl CampaignStage {
         }
     }
 
-    /// The `FlyerName` of the tier `Grid Selection` has selected, and so of
-    /// the card to draw behind it - `None` on any other screen, which draws no
-    /// card, and on a tier that names none.
-    pub(crate) fn flyer_name(&self) -> Option<&str> {
-        let Screen::Grid(model) = &self.screen else {
-            return None;
+    /// The flyer cards the current screen shows behind its widgets: the
+    /// selected tier's on `Grid Selection`, both campaigns' on `Campaign
+    /// Selection`, none on any other screen or on a tier that names none.
+    pub(crate) fn flyer_shows(&self) -> Vec<oag_game::flyer::Show> {
+        let Some(flyers) = &self.flyers else {
+            return Vec::new();
         };
-        model.selected()?.flyer_name.as_deref()
+        match &self.screen {
+            Screen::Grid(model) => model
+                .selected()
+                .and_then(|grid| grid.flyer_name.as_deref())
+                .map(oag_game::flyer::Flyers::grid_show)
+                .into_iter()
+                .collect(),
+            Screen::Selection(model) => flyers.selection_shows(model.selected()),
+            Screen::Cell { .. } => Vec::new(),
+        }
     }
 
     /// The selected card's rectangle on the HD grid, for the pointer - `None`
     /// when no card is drawn, which leaves the pointer on its fallback rect.
     pub(crate) fn flyer_card_rect(&self) -> Option<[f32; 4]> {
-        let flyers = self.flyers.as_ref()?;
-        flyers
-            .has(self.flyer_name()?)
-            .then(|| flyers.card_rect(oag_display::space::Space::HD))
+        let show = self.flyer_shows().into_iter().next()?;
+        self.flyers
+            .as_ref()?
+            .card_rect(&show, oag_display::space::Space::HD)
     }
 
     /// Advances the ticker's own clock - called once a frame from

@@ -2,7 +2,7 @@
 //! are a colour - split out of [`super`] under the 1,000-line rule, as
 //! [`super::stride`] is: one `impl Mesh` block about one question.
 
-use super::{Mesh, NORMAL_OFFSET, SubMesh, TexcoordFormat};
+use super::{Error, Mesh, NORMAL_OFFSET, Result, SubMesh, TexcoordFormat};
 
 /// The one inline stride whose tail may be a colour rather than a coordinate
 /// - see [`Mesh::texcoords`].
@@ -46,5 +46,45 @@ impl Mesh {
             Ok(early) if early.iter().all(finite) => early,
             _ => tail,
         }
+    }
+}
+
+impl Mesh {
+    /// The four colour bytes an inline stride-18 vertex ends in, `R G B A`, one
+    /// per vertex.
+    ///
+    /// **Read only for the chunk that says what it carries there.** `00_flyer`'s
+    /// two surfaces are the worked case: `card_reflectShape`'s tail is `ff ff
+    /// ff 4c` at the card's bottom edge, `ff ff ff 26` a third of the way down
+    /// and `ff ff ff 00` at the bottom - an alpha ramp, the reflection's fade -
+    /// and `cardShape`'s is `ff ff ff ff` on its front face and `70 70 70 ff`
+    /// on some of its edge geometry. Nothing here says the last four bytes are
+    /// a colour on *every* inline chunk (see [`Self::inline_uv_before_colour`]:
+    /// they are two halves on most), so this answers the bytes and leaves the
+    /// meaning to a caller that knows the chunk.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::OutOfBounds`] when the buffer leaves the file, and
+    /// [`Error::UnknownChunkLayout`] for a described chunk, whose colours a
+    /// declaration places and this does not.
+    pub fn inline_colours(&self, data: &[u8], submesh: &SubMesh) -> Result<Vec<[u8; 4]>> {
+        if self.decl.is_some() {
+            return Err(Error::UnknownChunkLayout { got: 0x05, at: 0 });
+        }
+        let end = submesh.vertex_offset + STRIDE * submesh.vertex_count;
+        if end > data.len() {
+            return Err(Error::OutOfBounds {
+                what: "a vertex buffer",
+                end,
+                len: data.len(),
+            });
+        }
+        Ok((0..submesh.vertex_count)
+            .map(|k| {
+                let at = submesh.vertex_offset + k * STRIDE + STRIDE - 4;
+                [data[at], data[at + 1], data[at + 2], data[at + 3]]
+            })
+            .collect())
     }
 }

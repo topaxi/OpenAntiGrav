@@ -570,6 +570,7 @@ impl MenuStage {
                                     frozen_race,
                                     &|src| campaign.sprites.get(src),
                                     &footer_overlay,
+                                    !campaign.flyer_shows().is_empty(),
                                 )
                             }
                             None => oag_ui::menu::Layers::default(),
@@ -709,10 +710,15 @@ impl MenuStage {
             } else {
                 wgpu::LoadOp::Clear(wgpu::Color::BLACK)
             };
-            // `Grid Selection`'s flyer card goes between the backdrop and the
-            // widgets; every other campaign screen has none, which makes this
-            // exactly `Renderer::render_with`.
-            let card = campaign.flyers.as_ref().zip(campaign.flyer_name());
+            // The flyer cards go between the backdrop and the widgets -
+            // `Grid Selection`'s one, `Campaign Selection`'s two; every other
+            // campaign screen has none, which makes this exactly
+            // `Renderer::render_with`.
+            let shows = campaign.flyer_shows();
+            let cards = campaign
+                .flyers
+                .as_ref()
+                .map(|flyers| (flyers, shows.as_slice()));
             oag_game::flyer::render_list(
                 &mut self.renderer,
                 load,
@@ -721,7 +727,7 @@ impl MenuStage {
                 view,
                 (&list, split),
                 (viewport, target_size, self.skin.space()),
-                card.filter(|_| !frozen_race),
+                cards.filter(|_| !frozen_race),
                 clip,
             );
             return Ok(());

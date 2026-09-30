@@ -494,6 +494,27 @@ fn the_inline_chunk_layout_names_its_buffers_in_the_chunk_header() {
     assert_eq!(mesh.positions(&data, &sub, 18).map(|p| p.len()), Ok(64));
 }
 
+/// The last four bytes of an inline stride-18 vertex read as a colour, one per
+/// vertex, and a described chunk refuses.
+#[test]
+fn an_inline_chunks_tail_reads_as_four_colour_bytes() {
+    let mut data = inline_model(4, 18);
+    for (k, alpha) in [0x4cu8, 0x26, 0x00, 0xff].into_iter().enumerate() {
+        let at = 0x300 + k * 18 + 14;
+        data[at..at + 4].copy_from_slice(&[0xff, 0xff, 0xff, alpha]);
+    }
+    let model = Model::parse(&data).expect("a model");
+    let mesh = &model.meshes[0];
+    let colours = mesh
+        .inline_colours(&data, &mesh.submeshes[0])
+        .expect("inside the file");
+    assert_eq!(
+        colours.iter().map(|c| c[3]).collect::<Vec<_>>(),
+        [0x4c, 0x26, 0x00, 0xff]
+    );
+    assert!(colours.iter().all(|c| c[..3] == [0xff; 3]));
+}
+
 /// A layout byte that is neither is reported, not read as one of them.
 #[test]
 fn an_unknown_chunk_layout_is_an_error_rather_than_a_guess() {

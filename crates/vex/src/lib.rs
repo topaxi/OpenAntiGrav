@@ -24,6 +24,7 @@
 //!
 //! See [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md).
 
+pub mod camera;
 pub mod cloud;
 pub mod collision;
 pub mod fog;

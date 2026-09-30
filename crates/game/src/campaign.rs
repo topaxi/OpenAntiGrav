@@ -380,23 +380,36 @@ fn load_hd(
         .iter()
         .filter_map(|grid| grid.flyer_name.clone())
         .collect();
-    // **Only the base campaign's eight cards are decoded.** The pose and cut
-    // are fitted to RPCS3 frames of `grid0`..`grid7`, whose cards are flat,
-    // 115 units wide and at most a few units deep. Fury's eight (`09_blitzed`
-    // and on) are authored at about a third of that scale and as stacked
-    // layers 28 units deep - the settled frames show a lit box, not a flat
-    // card - so this camera draws them as a few stray pixels. None is drawn,
-    // rather than a wrong one: see `docs/ui/campaign-screens.md`.
-    let card_names: Vec<String> = grids
-        .get(oag_hd::campaign::HD_GRID_RANGE)
-        .unwrap_or(&[])
+    // Every card: the base campaign's eight, Fury's eight and the two
+    // `Campaign Selection` cards, each with the window of its camera's image
+    // it shows.
+    let grid_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
+        let window = if oag_hd::campaign::HD_GRID_RANGE.contains(&index) {
+            crate::flyer::HD_WINDOW
+        } else {
+            crate::flyer::FURY_WINDOW
+        };
+        Some(crate::flyer::CardSpec {
+            flyer: grid.flyer_name.clone()?,
+            window,
+            stretch: 1.0,
+        })
+    });
+    let campaign_cards = [
+        oag_ui::campaign::flyer::FURY_CAMPAIGN_FLYER,
+        oag_ui::campaign::flyer::HD_CAMPAIGN_FLYER,
+    ]
+    .map(|name| crate::flyer::CardSpec {
+        flyer: name.to_string(),
+        window: crate::flyer::FURY_WINDOW,
+        stretch: crate::flyer::CAMPAIGN_STRETCH,
+    });
+    let cards: Vec<crate::flyer::CardSpec> = grid_cards.chain(campaign_cards).collect();
+    let widgets = oag_ui::campaign::flyer::read(&xml, &screens);
+    let flyers = widgets
         .iter()
-        .filter_map(|grid| grid.flyer_name.clone())
-        .collect();
-    let flyers = oag_ui::campaign::flyer::read(&xml, &screens)
-        .into_iter()
-        .find(|widget| widget.name == "FlyerModel")
-        .map(|widget| crate::flyer::Flyers::load(archives, widget, &card_names));
+        .any(|widget| widget.name == oag_ui::campaign::flyer::GRID_WIDGET)
+        .then(|| crate::flyer::Flyers::load(archives, widgets, &cards));
     if let Some(flyers) = &flyers {
         for line in &flyers.report {
             log::warn!("{line}");
