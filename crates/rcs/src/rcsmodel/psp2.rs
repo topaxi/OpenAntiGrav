@@ -829,6 +829,26 @@ fn one(
             }
         }
     }
+    // The lightmap coordinate, from the record's own declaration only: keyed by
+    // stride it was invisible. Halves like every other coordinate set here.
+    let mut lightmap_texcoords = Vec::new();
+    if let Some(off) = own
+        .and_then(|decl| decl.lightmap_texcoord())
+        .filter(|attr| attr.components == 2 && attr.gxm_type == vertex_decl::PS4_HALF2)
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 4
+    {
+        lightmap_texcoords.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            let uv = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+            lightmap_texcoords.push(if uv[0].is_finite() && uv[1].is_finite() {
+                uv
+            } else {
+                [0.0, 0.0]
+            });
+        }
+    }
     let mut tangents = Vec::new();
     let tangent_offset = own.or(by_stride).and_then(|decl| {
         let attr = decl.attribute(vertex_decl::TANGENT_HASH)?;
@@ -857,7 +877,7 @@ fn one(
         positions,
         normals,
         texcoords,
-        lightmap_texcoords: Vec::new(),
+        lightmap_texcoords,
         non_finite_texcoords,
         tangents,
         stride,

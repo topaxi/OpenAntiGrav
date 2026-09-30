@@ -20,10 +20,11 @@
 //!
 //! - **the pointer resolves, and the stride agrees**: the declaration it
 //!   reaches states the stride the buffer packing independently gave;
-//! - **the control group**: a submesh's material names an `-lmap.gnf` *if and
-//!   only if* its own declaration carries `lightmapUV`. The material half is
-//!   read out of the material's own extent and the declaration half out of the
-//!   pointer, and neither knows about the other.
+//! - **the control group**: a submesh's material names a `lightmap` sampler
+//!   (by its name hash, which always binds an `-lmap.gnf`) *if and only if* its
+//!   own declaration carries `lightmapUV`. The material half is read out of
+//!   the sampler table and the declaration half out of the pointer, and
+//!   neither knows about the other.
 //!
 //! One archive per test, so the sweep parallelises across tests.
 
@@ -56,6 +57,9 @@ struct Survey {
     resolved: usize,
     /// Submeshes whose own declaration carries `lightmapUV`.
     lightmapped: usize,
+    /// Vertices of lightmapped submeshes, and how many sit in `0..=1`.
+    lightmap_vertices: usize,
+    lightmap_vertices_in_unit: usize,
     /// Files that state a material count or yielded a material.
     table_files: usize,
     /// Of those, files where the materials read are not exactly the count stated.
@@ -112,16 +116,39 @@ fn sweep(name: &str) -> Option<Survey> {
             survey.lightmapped += usize::from(has_uv);
             any |= has_uv;
             if let Some(m) = s.material {
-                let names_one = model.materials[m]
-                    .textures
-                    .iter()
-                    .any(|t| t.to_ascii_lowercase().ends_with("-lmap.gnf"));
+                let material = &model.materials[m];
+                let names_one = material.lightmap.is_some();
+                // The sampler-hash reading and the file-name reading agree.
+                if let Some(path) = &material.lightmap {
+                    assert!(
+                        path.to_ascii_lowercase().ends_with("-lmap.gnf"),
+                        "{model_path}: the lightmap sampler binds {path}"
+                    );
+                }
                 if names_one != has_uv {
                     *survey
                         .off_diagonal
                         .entry(format!("{model_path} names:{names_one} decl:{has_uv}"))
                         .or_default() += 1;
                 }
+            }
+            // A submesh with a lightmapUV decodes one coordinate per vertex, all
+            // finite; how many sit inside the atlas is counted.
+            if has_uv {
+                assert_eq!(
+                    s.lightmap_texcoords.len(),
+                    s.positions.len(),
+                    "{model_path}: submesh at {:#x}",
+                    s.record
+                );
+                survey.lightmap_vertices += s.lightmap_texcoords.len();
+                survey.lightmap_vertices_in_unit += s
+                    .lightmap_texcoords
+                    .iter()
+                    .filter(|uv| uv.iter().all(|c| (0.0..=1.0).contains(c)))
+                    .count();
+            } else {
+                assert!(s.lightmap_texcoords.is_empty(), "{model_path}");
             }
         }
         survey.files_with_a_lightmap += usize::from(any);
@@ -145,6 +172,12 @@ fn every_record_resolves(name: &str, files: usize, submeshes: usize, lightmapped
         survey.off_diagonal.is_empty(),
         "{name}: material and declaration disagree about a lightmap: {:#?}",
         survey.off_diagonal
+    );
+    // An atlas coordinate: every decoded one lies inside the atlas, on 17.97M
+    // vertices, which a misplaced attribute offset would not do.
+    assert_eq!(
+        survey.lightmap_vertices_in_unit, survey.lightmap_vertices,
+        "{name}: a lightmapUV outside 0..=1"
     );
     assert_eq!(
         (survey.files, survey.submeshes, survey.lightmapped),

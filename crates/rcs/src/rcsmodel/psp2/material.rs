@@ -171,14 +171,32 @@ pub struct Material {
     /// byte extent, in ascending address order - see the module doc for why
     /// this is a scan rather than a decoded sampler array.
     pub textures: Vec<String>,
+    /// The `.gnf` bound to the material's **`lightmap` sampler**, by the
+    /// sampler's own name hash - a PS4 material only; `None` on every Vita
+    /// one, whose sampler table is not read (see [`read`]).
+    ///
+    /// Also one of [`Self::textures`], last in its ranking. A submesh's
+    /// declaration carries `lightmapUV` if and only if its material has one of
+    /// these: 50,042 of 226,381 submeshes over Omega's five base archives, no
+    /// exception in either direction
+    /// (`crates/rcs/tests/omega_declaration_ground_truth.rs`).
+    pub lightmap: Option<String>,
 }
 
 impl Material {
-    /// The first texture found - this reading's answer for "the" diffuse
-    /// texture. Ordinal, not semantic; see the module doc.
+    /// The first texture found that is not the lightmap - this reading's
+    /// answer for "the" diffuse texture. Ordinal, not semantic; see the module
+    /// doc.
+    ///
+    /// A material that names only a lightmap has no diffuse one. None of
+    /// `tech_de_ra`'s 461 does, so on every circuit measured this is the first
+    /// texture, as it always was.
     #[must_use]
     pub fn diffuse_texture(&self) -> Option<&str> {
-        self.textures.first().map(String::as_str)
+        self.textures
+            .iter()
+            .map(String::as_str)
+            .find(|path| Some(*path) != self.lightmap.as_deref())
     }
 }
 
@@ -308,6 +326,7 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 name,
                 technique,
                 textures,
+                lightmap: None,
             }
         })
         .collect()
@@ -372,9 +391,10 @@ fn sampler_rank(hash: u32) -> u8 {
 /// against the entry's own sampler hash the same material gives `Diffuse` ->
 /// `track_de_ra.gnf`, `Normal` -> `ds_track_n.gnf` and `lightmap` -> the
 /// per-object `-lmap.gnf`, which is the role a person would give each.
-fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
+fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> (Vec<String>, Option<String>) {
     let to = to.min(cpu.len());
     let mut found: Vec<(u8, usize, String)> = Vec::new();
+    let mut lightmap: Option<(usize, String)> = None;
     let mut at = from.next_multiple_of(8).max(PS4_SAMPLER_POINTER);
     while at + 8 <= to {
         if let Some(target) = u64_at(cpu, at)
@@ -385,13 +405,19 @@ fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
             && ends_with_ci(&path, ".gnf")
             && !found.iter().any(|(_, _, p)| *p == path)
         {
-            let rank = u32_at(cpu, at - PS4_SAMPLER_POINTER).map_or(1, sampler_rank);
-            found.push((rank, at, path));
+            let hash = u32_at(cpu, at - PS4_SAMPLER_POINTER);
+            if hash == Some(crate::rcsmaterial::LIGHTMAP_SAMPLER) && lightmap.is_none() {
+                lightmap = Some((at, path.clone()));
+            }
+            found.push((hash.map_or(1, sampler_rank), at, path));
         }
         at += 8;
     }
     found.sort_by_key(|&(rank, at, _)| (rank, at));
-    found.into_iter().map(|(_, _, path)| path).collect()
+    (
+        found.into_iter().map(|(_, _, path)| path).collect(),
+        lightmap.map(|(_, path)| path),
+    )
 }
 
 fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
@@ -497,10 +523,14 @@ pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
             .get(next)
             .map_or_else(|| site.saturating_add(TAIL_SCAN_LIMIT), |(at, _)| *at)
     };
-    let build = |(site, name): &(usize, String)| Material {
-        name: name.clone(),
-        technique: None,
-        textures: gnf_textures_in(cpu, site + 8, extent_end(*site)),
+    let build = |(site, name): &(usize, String)| {
+        let (textures, lightmap) = gnf_textures_in(cpu, site + 8, extent_end(*site));
+        Material {
+            name: name.clone(),
+            technique: None,
+            textures,
+            lightmap,
+        }
     };
     match ps4_table(cpu, &sites) {
         Some(order) => order.into_iter().map(|i| build(&sites[i])).collect(),
