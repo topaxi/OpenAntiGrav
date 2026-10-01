@@ -312,3 +312,191 @@ fn both_palettes_settle_to_the_same_unmeasured_target() {
     assert_eq!(PULSE_PALETTE.target, HD_PALETTE.target);
     assert_eq!(HD_PALETTE.target, TARGET_COLOUR);
 }
+
+/// The live object, frame by frame: `ShipShield_Update`'s own `dt` argument and
+/// the colour, swell and clock it found on entry, read off PPSSPP (Time Trial,
+/// Talon's Junction, Venom, fire bit `0x20` at speed 106; `psp-weapon-pair.py
+/// shield --probe shield`, 2026-10-01). 30 of the 200 frames logged.
+///
+/// Fed the same `dt` values, [`ShipShield::advance`] reproduces every one: the
+/// activation, the `0.15` fade, the `0.2` swell and the clock are the original's
+/// own, and **nothing between `Shield_Fire` and the first drawn frame delays the
+/// shell**. The shell's apparent onset in the original is later than a 60 Hz
+/// tick-for-tick run's because the original's `dt` is a measured frame time that
+/// jitters about `1/59.94` s: `(int)(dt / SUBSTEP)` is `0` on 47 of the 200 frames
+/// logged (`dt` under `1/60`), so those frames advance neither lerp. That is the
+/// emulator's frame-timer jitter acting on the original's variable timestep, not a
+/// rule of the game, and a fixed 60 Hz engine does not reproduce it.
+const LIVE_DT: [f32; 30] = [
+    0.0166790001,
+    0.0167859998,
+    0.0165890008,
+    0.0166720003,
+    0.0166829992,
+    0.016694,
+    0.0166779999,
+    0.0166829992,
+    0.0166800003,
+    0.0172600001,
+    0.0160610005,
+    0.0166209992,
+    0.0169319995,
+    0.0164410006,
+    0.0166779999,
+    0.0167720001,
+    0.0165890008,
+    0.0166829992,
+    0.0166880004,
+    0.0166890007,
+    0.0166730005,
+    0.0166779999,
+    0.0166810006,
+    0.0169600006,
+    0.0164119992,
+    0.0166779999,
+    0.0168650001,
+    0.0165020004,
+    0.0166820008,
+    0.0166859999,
+];
+const LIVE_COLOUR: [f32; 30] = [
+    0.0,
+    0.150000006,
+    0.277500033,
+    0.277500033,
+    0.385875046,
+    0.477993786,
+    0.556294739,
+    0.622850537,
+    0.679422975,
+    0.727509558,
+    0.768383145,
+    0.768383145,
+    0.768383145,
+    0.803125679,
+    0.803125679,
+    0.832656801,
+    0.857758284,
+    0.857758284,
+    0.879094541,
+    0.897230387,
+    0.912645817,
+    0.925748944,
+    0.936886609,
+    0.946353614,
+    0.954400599,
+    0.954400599,
+    0.96124053,
+    0.967054427,
+    0.967054427,
+    0.971996248,
+];
+const LIVE_SWELL: [f32; 30] = [
+    0.699999988,
+    0.75999999,
+    0.807999969,
+    0.807999969,
+    0.846399963,
+    0.877119958,
+    0.901695967,
+    0.921356797,
+    0.93708545,
+    0.949668348,
+    0.959734678,
+    0.959734678,
+    0.959734678,
+    0.967787743,
+    0.967787743,
+    0.97423017,
+    0.979384124,
+    0.979384124,
+    0.983507276,
+    0.986805797,
+    0.989444613,
+    0.991555691,
+    0.993244529,
+    0.994595647,
+    0.995676517,
+    0.995676517,
+    0.996541202,
+    0.997232974,
+    0.997232974,
+    0.997786403,
+];
+const LIVE_CLOCK: [f32; 30] = [
+    0.0,
+    0.0166790001,
+    0.033464998,
+    0.0500539988,
+    0.0667259991,
+    0.0834089965,
+    0.100102998,
+    0.116780996,
+    0.133463994,
+    0.150143996,
+    0.167403996,
+    0.183465004,
+    0.200085998,
+    0.217017993,
+    0.233458996,
+    0.250137001,
+    0.266909003,
+    0.283497989,
+    0.300181001,
+    0.316868991,
+    0.333557993,
+    0.350230992,
+    0.366908997,
+    0.383589983,
+    0.400549978,
+    0.416961968,
+    0.433639973,
+    0.450504959,
+    0.467006952,
+    0.483688951,
+];
+
+#[test]
+fn the_live_objects_fade_swell_and_clock_are_reproduced_from_its_own_dts() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    for i in 0..30 {
+        assert!(
+            (shield.rgba[0] - LIVE_COLOUR[i]).abs() < 1e-5,
+            "frame {i}: colour {} against the live {}",
+            shield.rgba[0],
+            LIVE_COLOUR[i]
+        );
+        assert!(
+            (shield.swell - LIVE_SWELL[i]).abs() < 1e-5,
+            "frame {i}: swell {} against the live {}",
+            shield.swell,
+            LIVE_SWELL[i]
+        );
+        assert!(
+            (shield.time - LIVE_CLOCK[i]).abs() < 1e-5,
+            "frame {i}: clock {} against the live {}",
+            shield.time,
+            LIVE_CLOCK[i]
+        );
+        shield.advance(LIVE_DT[i]);
+    }
+}
+
+/// The same 30 frames at a fixed 60 Hz are ahead of the live object: this engine
+/// takes a substep every tick where the live frame timer dropped a quarter of
+/// them. Pinned so the difference is a stated number and not a surprise.
+#[test]
+fn a_fixed_60_hz_shield_runs_ahead_of_the_jittered_live_one() {
+    let mut fixed = ShipShield::new();
+    fixed.activate();
+    for _ in 0..29 {
+        fixed.advance(DT);
+    }
+    assert!(
+        fixed.rgba[0] > LIVE_COLOUR[29] + 0.015,
+        "fixed {} against live {}",
+        fixed.rgba[0],
+        LIVE_COLOUR[29]
+    );
+}
