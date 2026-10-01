@@ -87,7 +87,14 @@ INGAME_CLOCK = 0x40
 CAMERA_BREAK = 0x0883C13C
 BOMB_INIT = 0x08863188
 SHIELD_UPDATE = 0x0885E254
+# `FUN_089194d0` and `ParticleSystem_DrawRolledQuads` (instance in a0, view matrix in a1): the
+# whole-instance draws of a pool-emitter's particles for render modes 0/1 (a plain square quad) and
+# 2 (the rolled quad). Hit once per live instance per frame.
+FLARE_DRAW = 0x089194D0
+ROLLED_DRAW = 0x089178C0
 PROBES = {
+    "flare": FLARE_DRAW,
+    "rolled": ROLLED_DRAW,
     "spawns": PSYS_SPAWN,
     "rocket": ROCKET_UPDATE,
     "sweep": ROCKET_PROBE_RESULT,
@@ -198,6 +205,31 @@ def _probe_loop(dbg, kind, address, frames, start, out):
             entry["matrix"] = list(struct.unpack_from("<16f", blob, 0x60))
             entry["fuse"] = struct.unpack_from("<f", blob, 0x48)[0]
             entry["owner"] = struct.unpack_from("<I", blob, 0x40)[0]
+        elif kind in ("flare", "rolled"):
+            instance = regs["a0"]
+            entry["instance"] = instance
+            entry["view"] = list(struct.unpack("<16f", dbg.read(regs["a1"], 64)))
+            head = dbg.read(instance, 0x180)
+            entry["resource"] = struct.unpack_from("<I", head, 0x20)[0]
+            entry["scale_params"] = list(struct.unpack_from("<7f", head, 0x28))
+            entry["age_words"] = list(struct.unpack_from("<4I", head, 0x138))
+            pool = struct.unpack_from("<I", head, 0x74)[0]
+            entry["particles"] = []
+            while ram(pool):
+                block = dbg.read(pool, 0x10 + 32 * 0xA0)
+                mask = struct.unpack_from("<I", block, 0)[0]
+                for slot in range(32):
+                    if not mask & (0x80000000 >> slot):
+                        continue
+                    base = 0x10 + slot * 0xA0
+                    pos = struct.unpack_from("<4f", block, base + 0x40)
+                    roll = struct.unpack_from("<f", block, base + 0x50)[0]
+                    size = struct.unpack_from("<f", block, base + 0x70)[0]
+                    rgba = list(block[base + 0x74:base + 0x78])
+                    frame = struct.unpack_from("<I", block, base + 0x78)[0]
+                    entry["particles"].append({"pos": pos, "roll": roll, "size": size,
+                                               "rgba": rgba, "frame": frame})
+                pool = dbg.read_u32(pool + 0x1410)
         elif kind == "sweep":
             entry["v0"] = regs["v0"]
             entry["s"] = [regs["s%d" % i] for i in range(8)]
