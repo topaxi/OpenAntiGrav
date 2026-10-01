@@ -10,7 +10,6 @@ use oag_gameplay::projectile;
 use oag_gameplay::world::World;
 use oag_physics::DamageRules;
 use oag_physics::params::Dimensions;
-use oag_tables::weapons::Weapon;
 
 mod determinism_support;
 use determinism_support::{TICK, corridor, weapon_stats};
@@ -60,21 +59,20 @@ fn run_volley(ticks: u32) -> (u64, u64) {
         Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
 
     // The volley the front end fires, built the way `race::weapons` builds it.
-    let shots = projectile::launch(
+    let fired = projectile::fire_rocket(
+        &mut world.projectiles,
         &world.ships[0].physics,
         &world.ships[0].handling.dimensions,
         &stats,
         "VENOM",
+        0,
     )
     .expect("Pulse's weapon table authors a Venom rocket speed");
-    for (position, velocity) in shots {
-        assert!(
-            world
-                .projectiles
-                .spawn(Weapon::Rocket, position, velocity, 0),
-            "the pool refused a shot, so this scenario is not flying a full volley"
-        );
-    }
+    assert_eq!(
+        fired,
+        projectile::ROCKET_SHOTS,
+        "the pool refused a shot, so this scenario is not flying a full volley"
+    );
 
     let mut trajectory = oag_core::hash::StateHasher::new();
     for _ in 0..ticks {

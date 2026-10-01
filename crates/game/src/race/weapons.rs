@@ -225,30 +225,20 @@ impl Race {
                     // slot each rocket lands in, and the slot is hashed state.
                     // `None` where the table authors a speed per class and
                     // this race's rung is outside them: no shot, rather than a
-                    // shot at some other rung's speed.
-                    let Some(shots) = oag_gameplay::projectile::launch(
-                        &ship.physics,
-                        &ship.handling.dimensions,
+                    // shot at some other rung's speed. A partial volley is
+                    // better than a pickup that survives having fired two of
+                    // three, so any rocket getting away spends it.
+                    let (physics, dimensions) = (&ship.physics, &ship.handling.dimensions);
+                    let Some(fired) = oag_gameplay::projectile::fire_rocket(
+                        &mut self.sim.world.projectiles,
+                        physics,
+                        dimensions,
                         &stats,
                         &self.sim.class,
+                        0,
                     ) else {
                         return;
                     };
-                    // Spent on the *first* shot getting away. A partial volley
-                    // is better than a pickup that survives having fired two of
-                    // three, and the array cannot fill from one press in a race
-                    // this engine can currently run.
-                    let mut fired = 0;
-                    for (position, velocity) in shots {
-                        if self.sim.world.projectiles.spawn(
-                            oag_tables::weapons::Weapon::Rocket,
-                            position,
-                            velocity,
-                            0,
-                        ) {
-                            fired += 1;
-                        }
-                    }
                     if fired == 0 {
                         // Every slot was taken. Keep the pickup rather than
                         // spend it on a volley that never left - the same rule

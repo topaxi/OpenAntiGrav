@@ -40,6 +40,22 @@ pub const ROCKET_SHOTS: usize = 3;
 /// strictly greater, the way the pool does.
 pub const LIFETIME_SECONDS: f32 = 5.0;
 
+/// How much slower than the class a rocket leaves, until its first surface hit.
+///
+/// **Measured 2026-10-01, confidence 88** (Pulse PSP on PPSSPP, Venom, six
+/// rockets over two runs): the first four updates read 166.67 units/s, which is
+/// 0.75 x `venomspeed` 800 km/h / 3.6. `Rocket_Init` copies the craft's display
+/// matrix into the rocket and scales its direction row by `SpeedForClass / 3.6`;
+/// that matrix carries `g_craft_scale` (0.75), so the row is 0.75 long. The first
+/// surface-probe hit in `Rocket_Update` renormalises it to the class speed (the
+/// divide at `0x0885d6c8`), which is the step to 222.22 units/s. `launchSpeed`
+/// plays no part. Why the step lands on the fourth update was not separated
+/// from the age. Measured on Venom only; Flash, Rapier and Phantom were not run.
+/// See `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s 2026-10-01 section.
+///
+/// It is [`oag_physics::hover::TARGET_GLOBAL_SCALE`], the same global.
+pub const LAUNCH_SPEED_SCALE: f32 = oag_physics::hover::TARGET_GLOBAL_SCALE;
+
 /// Where a craft launches its rockets from, and how fast.
 ///
 /// Returns [`ROCKET_SHOTS`] `(position, velocity)` pairs in the original's own
@@ -66,6 +82,8 @@ pub const LIFETIME_SECONDS: f32 = 5.0;
 ///   part is recovered. Pushing that origin forward by the hull's own extent,
 ///   so a rocket starts outside the craft that fired it, is this engine's, and
 ///   it uses the craft's *unrotated* forward so the three still share it.
+/// - **The launch speed is 0.75 x the class speed, and the class speed alone
+///   afterwards, measured 2026-10-01.** See [`LAUNCH_SPEED_SCALE`].
 /// - **The speed is the class's alone, measured 2026-10-01** (Pulse PSP on
 ///   PPSSPP, Venom, Time Trial on Talon's Junction): a live `Rocket_Update`
 ///   probe reads 222.22 units/s, which is `venomspeed` 800 km/h divided by 3.6,
@@ -102,7 +120,7 @@ pub fn launch(
     let up = state.body.up();
     let nose = state.body.position
         + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
-    let speed = stats.speed_for_named(class)? / KMH_PER_UNIT_PER_SECOND;
+    let speed = stats.speed_for_named(class)? / KMH_PER_UNIT_PER_SECOND * LAUNCH_SPEED_SCALE;
 
     // The original's own order. A zero `spread` collapses all three onto the
     // same ray rather than erroring: that is a file that authors no fan, not a
@@ -112,3 +130,42 @@ pub fn launch(
         (nose, direction * speed)
     }))
 }
+
+/// Puts a volley in the air, each rocket carrying the class speed it will be
+/// renormalised to on its first surface hit.
+///
+/// [`launch`] leaves at [`LAUNCH_SPEED_SCALE`] x the class speed; the class speed
+/// itself rides in [`super::Projectile::launch_speed_kmh`] so the flight can
+/// pin to it (see [`super::Projectiles::advance`]'s Rocket arm). One entry point
+/// for both halves, so dropping either is a failing test and not a quiet change.
+///
+/// Returns how many left, or `None` where the table authors no speed for this
+/// race's class.
+pub fn fire(
+    projectiles: &mut super::Projectiles,
+    state: &ShipState,
+    dimensions: &Dimensions,
+    stats: &RocketStats,
+    class: &str,
+    owner: u8,
+) -> Option<usize> {
+    let class_kmh = stats.speed_for_named(class)?;
+    let shots = launch(state, dimensions, stats, class)?;
+    let mut fired = 0;
+    for (position, velocity) in shots {
+        if projectiles.spawn_guided(
+            oag_tables::weapons::Weapon::Rocket,
+            position,
+            velocity,
+            owner,
+            None,
+            class_kmh,
+        ) {
+            fired += 1;
+        }
+    }
+    Some(fired)
+}
+
+#[cfg(test)]
+mod tests;

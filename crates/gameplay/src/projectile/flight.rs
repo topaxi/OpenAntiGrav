@@ -201,6 +201,14 @@ impl Projectiles {
                         age,
                     ))
                 })
+            } else if kind == Weapon::Rocket && projectile.launch_speed_kmh > 0.0 {
+                // **The Rocket leaves slower than it cruises and is pinned on its
+                // first surface hit** - `Rocket_Update` renormalises to
+                // `SpeedForClass / 3.6` on the probe-hit arm and only there, so
+                // this feeds `speed_units_on_surface` below and nothing else (a
+                // Rocket has no target to steer toward). The class speed rides
+                // in `launch_speed_kmh`; see [`rocket::LAUNCH_SPEED_SCALE`].
+                Some(projectile.launch_speed_kmh)
             } else {
                 None
             };
@@ -264,9 +272,11 @@ impl Projectiles {
                     // a Plasma's speed** - `Plasma_Update`'s `0x7f` (no floor)
                     // arm does not rescale, so a bolt fired over a gap keeps
                     // its launch speed, unchanged, until the track comes back
-                    // under it. A Rocket and a Shuriken never reach a `Some`
-                    // here at all: `pinned_kmh` is `None` for both, so they
-                    // fall to `projectile.velocity.length()`, same as always.
+                    // under it. A Shuriken never reaches a `Some` here:
+                    // `pinned_kmh` is `None`, so it falls to
+                    // `projectile.velocity.length()`, same as always. **A
+                    // Rocket does, since 2026-10-01**: its class speed, which
+                    // is the step from its 0.75 launch to the cruise.
                     let speed = pinned_kmh.map_or_else(
                         || projectile.velocity.length(),
                         missile::speed_units_on_surface,

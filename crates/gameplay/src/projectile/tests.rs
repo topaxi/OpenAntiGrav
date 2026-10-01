@@ -557,14 +557,14 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
             (nose - state.body.position).dot(forward) > 0.0,
             "the launch point is behind the craft: {nose:?}"
         );
-        // One speed, unchanged by the fan: the class's alone (measured
+        // One speed, unchanged by the fan: 0.75 x the class's alone (measured
         // 2026-10-01; `launchSpeed="50"` plays no part), converted out of the
         // km/h the file authors it in. Spelled as the arithmetic rather than
-        // as `166.67` so the unit is legible - this assertion is the guard
+        // as `125.0` so the unit is legible - this assertion is the guard
         // against the 3.6x reappearing and against `launchSpeed` joining in.
         assert!(
-            (velocity.length() - 600.0 / KMH_PER_UNIT_PER_SECOND).abs() < 1e-2,
-            "expected 600 km/h as units per second, got {}",
+            (velocity.length() - 600.0 * 0.75 / KMH_PER_UNIT_PER_SECOND).abs() < 1e-2,
+            "expected 0.75 x 600 km/h as units per second, got {}",
             velocity.length()
         );
     }
