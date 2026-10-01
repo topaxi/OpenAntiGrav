@@ -3,6 +3,7 @@
 //!
 //! ```sh
 //! cargo run -q -p oag-vex --example ship_shine_probe -- data/images/pulse-psp-usa.chd Assegai
+//! cargo run -q -p oag-vex --example ship_shine_probe -- data/images/pulse-psp-usa.chd 'Data\Environments\03_Track\track.vex'
 //! ```
 
 use oag_vex::vex;
@@ -12,7 +13,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let image = args.next().ok_or("usage: ship_shine_probe IMAGE TEAM")?;
     let team = args.next().unwrap_or_else(|| "Assegai".to_string());
     let mut archives = oag_pulse::open(&image)?;
-    let blob = archives.read_name(&format!(r"Data\Ships\{team}\Ship.vex"))?;
+    let blob = if team.ends_with(".vex") {
+        archives.read_name(&team)?
+    } else {
+        archives.read_name(&format!(r"Data\Ships\{team}\Ship.vex"))?
+    };
     let nodes = vex::nodes(&blob)?;
     let textures = vex::textures(&blob)?;
     for (i, t) in textures.iter().enumerate() {

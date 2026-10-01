@@ -858,6 +858,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) camera_fov: Option<f32>,
 
+    /// Leave out a Pulse hull's `0x2000` environment-mapped extra pass
+    /// (`oag_render::shine`): the headless way to measure what the pass adds,
+    /// by rendering the same frame with and without it.
+    #[arg(long)]
+    pub(crate) no_hull_shine: bool,
+
     /// Render from a camera given outright, as nine comma-separated numbers:
     /// `eye_x,eye_y,eye_z,fwd_x,fwd_y,fwd_z,up_x,up_y,up_z`.
     ///

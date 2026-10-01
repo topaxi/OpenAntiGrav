@@ -276,9 +276,7 @@ impl Scene {
             light,
             ..scene
         };
-        for drawable in self.ships.iter() {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&ship_scene));
-        }
+        self.write_ship_scenes(queue, &ship_scene);
         // The scenery: both animation mechanisms off the one clock.
         for drawable in [
             Some(&self.track),
