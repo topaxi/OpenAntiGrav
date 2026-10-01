@@ -336,7 +336,9 @@ impl Race {
             world.ship_count = 1;
         }
 
-        let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
+        let camera_view = oag_display::display::CameraView::default();
+        let chase_params = super::access::chase_block_for(camera_view, chase, chase_close);
+        let camera = Chase::snapped(target_of(&world.ships[0]), &chase_params);
 
         let race = Self {
             sim: RaceSim {
@@ -412,7 +414,7 @@ impl Race {
                 scheme: ControlScheme::default(),
             },
             view: RaceView {
-                chase_params: chase,
+                chase_params,
                 chase_far: chase,
                 chase_close,
                 internal_params: internal,
@@ -420,7 +422,7 @@ impl Race {
                 // `set_boost_fov_kick` gives: `Setup` is what a *headless* race
                 // needs and a display preference must not be in front of a caller
                 // with no screen. `set_camera_view` is what applies the player's.
-                camera_view: oag_display::display::CameraView::default(),
+                camera_view,
                 camera,
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),

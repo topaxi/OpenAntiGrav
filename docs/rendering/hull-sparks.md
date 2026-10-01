@@ -57,7 +57,10 @@ the opposite sign and small.
 1. **Different camera views were compared.** A fresh PPSSPP profile
    here cycled `OPT_CLOSE` -> `OPT_FAR` -> `OPT_INT` with SELECT, and the profile
    that had been copied from the earlier lane sat on `OPT_CLOSE`; the port's
-   setting is `far`, which is also what every capture under `data/traces/` used.
+   setting was `far` (the project's default until 2026-10-01; the default is now
+   `close`, which is what a fresh original profile starts on - see
+   [camera.md](../ghidra/functions/psp-pulse-usa/camera.md#the-default-view-is-opt_close-measured-2026-10-01)
+   - so a comparison against an `OPT_FAR` capture passes `--camera-view far`).
    With the craft 1.4x larger on screen, the same world-space sprites cover 2x
    the pixels. Every measurement on this page has the original on `OPT_FAR`
    (press SELECT twice from `OPT_CLOSE`).
