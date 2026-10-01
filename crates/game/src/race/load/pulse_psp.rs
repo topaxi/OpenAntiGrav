@@ -67,6 +67,18 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
     {
         stamp(model);
     }
+    // The Bomb's blast dome: `hemisphere_disperse1_ADD_GLOW`, a transparent batch with the
+    // glow bit, which the original's state list stamps (`0x50`) like the arch lights. The
+    // shockwave beside it has no glow bits, so for it the flag is a no-op.
+    for model in [
+        &mut loaded.bomb_blast_models.hemisphere,
+        &mut loaded.bomb_blast_models.shockwave,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        stamp(model);
+    }
     for livery in &mut loaded.liveries {
         stamp(&mut livery.hull);
         if let Some(wreck) = &mut livery.wreck {
