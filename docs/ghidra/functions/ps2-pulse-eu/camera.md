@@ -15,9 +15,9 @@ PS2 equivalent and confirms the cycle in a second binary.
 | `0x0014f208` | `Camera_UpdatePlayerView` | 88 |
 | `0x002db350` | `g_settings` | 78 |
 | `0x0013e280` | `Camera_SubmitScene` | 80 |
-| `0x00158568` | `Ship_UpdateCameraRigs` | 88 |
+| `0x00158568` | `Ship_UpdateCameraRigs` | 95 |
 | `0x00150d20` | `Craft_Construct` | 80 |
-| `0x0027e8cc` | `g_craft_scale` (data) | 88 |
+| `0x0027e8cc` | `g_craft_scale` (data) | 95 |
 
 The parameter blocks themselves are parsed by the five
 `HandlingXml_Parse*Camera` functions, documented in
@@ -145,10 +145,37 @@ extra `up.y` factor on that term.
 look-at `+0x3c`/`+0x40`, each from its own block, so the PS2's authored far
 look-at `(6, 28)` against the PSP's `(0, 20)` reaches the aim point as authored.
 
-Confidence **88** that the PS2's external eye and look-at are scaled by `0.75`
-about the craft, after the spring: the write, the reciprocal pair, the four
-reads in the rig and the PSP's measured twin (eye `(-11.25, +3.0)` on a running
-PPSSPP) all agree; not higher because nothing here was read from a running PS2.
+### Measured live, 2026-10-01
+
+A running PCSX2 (`v2.7`, PINE, own data path and display) loaded the harness's
+race savestate (slot 1, Assegai-class authored blocks). At boot the ELF's
+`0x0027e8cc` reads `0x3f800000` (`1.0`); after the state loads it reads
+`0x3f400000` (`0.75`) and `0x0027e8d0` reads `0x3faaaaab`, so the constructor's
+store is real. The craft was found by signature in the state's EE RAM
+(`scripts/pcsx2-camera-eye.py find`: the one address whose rig-published far and
+close eyes sit `14.562` and `11.643` from the body at `*(craft+0x824)+0x30`), then
+read live (`scripts/pcsx2-camera-eye.py live`) in the craft's own right/up/forward
+axes, `craft+0x404` forward, `+0x408` up:
+
+| Eye (craft+) | Forward | Up | Distance | Authored block x 0.75 |
+| --- | ---: | ---: | ---: | --- |
+| close (`+0x860`) | -11.250 | +3.000 | 11.643 | `(-15, +4)` -> `(-11.25, +3.0)` |
+| far (`+0x850`) | -14.250 | +3.000 | 14.562 | `(-19, +4)` -> `(-14.25, +3.0)` |
+
+Identical to Pulse PSP's live measurement (`(-11.25, +3.0)`, 11.643), to three
+decimals, at rest; moving, the close eye holds 11.639-11.643 across a 5-second
+run while the far eye relaxes onto 14.562 as its spring settles (it read 14.70
+then 14.64, 14.58, 14.565, 14.562 as the craft pulled away from a standstill:
+the far rig keeps its own sprung state, which is why the far figure lags). The
+savestate flies the close view (the saved frame shows the craft well inside the
+frame); whether that is a cold-boot default is not established, the state's own
+profile history being unknown.
+
+Confidence **95** that the PS2's external eye and look-at are scaled by `0.75`
+about the craft, after the spring: the write, the reciprocal pair, the four reads
+in the rig, a live read of the global and a live read of both eyes at exactly
+the authored block times `0.75`, on two binaries (this and the PSP's) that agree.
+Not 100: the look-at point was not read live, only the eye.
 The earlier "does not reach its eye the way the PSP does" reading stands retired.
 `Camera_UpdatePlayerView`'s probe-and-low-pass remains a separate wall pull-in
 (`min(L - 1, 3)` along the ray, low-passed at `0.5` into `0x0027e8b0`), a no-op in
@@ -375,4 +402,6 @@ than, say, a shadow-volume or reflection-clip use.
   section for the full trace.
 - 2026-10-01: the chase eye is scaled on the PS2 too: see the correction section.
   `FUN_00158568` named `Ship_UpdateCameraRigs`, `FUN_00150d20` `Craft_Construct`,
-  `DAT_0027e8cc` `g_craft_scale`.
+  `DAT_0027e8cc` `g_craft_scale`. Read live on PCSX2 the same day: both eyes sit at
+  the authored blocks times 0.75, the PSP's measured numbers exactly
+  (`scripts/pcsx2-camera-eye.py`).

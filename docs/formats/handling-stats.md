@@ -367,13 +367,18 @@ racing title authors both blocks with the same seven attributes, and the global
 | HD and 2048's `Data\art\published\hdships\<Team>\` | identical on all 39 files |
 | 2048's own `Data\HandlingStats\<team>\<n>\` | `<n>` is the four craft a team flies (see [2048-status.md](2048-status.md)). Both blocks carry an extra `head_tilt` attribute, **which `ExternalCamera::from_node` ignores**, and they differ between the four craft of one team and from HD's |
 
-What the authored offsets mean at runtime is a per-title fact: Pulse PSP applies a
-0.75 craft scale to the eye (measured, [camera.md](../ghidra/functions/psp-pulse-usa/camera.md)),
-Pulse PS2's camera function has no such multiply, and Pure, HD and 2048 are
-unmeasured. Pulse's authored close is 4/3 of what the player sees, and HD's and
-2048's authored offsets are close to the distance Pulse's player sees, which is a
-reason to measure them rather than assume the scale carries over. Not read: Pulse's
-and Pure's DLC teams, which live in `data/dlc/`.
+What the authored offsets mean at runtime is **one number on every title**: each
+binary's craft constructor writes `0.75` into a global that its chase rig multiplies
+both the eye and the look-at by, about the craft. Pulse PSP measured it live
+([camera.md](../ghidra/functions/psp-pulse-usa/camera.md)), Pulse PS2 measured it
+live too (both eyes at the authored blocks times 0.75, [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md)),
+and Pure ([camera.md](../ghidra/functions/psp-pure-usa/camera.md)), HD
+([camera.md](../ghidra/functions/ps3-hdfury-eu/camera.md)) and 2048
+([camera.md](../ghidra/functions/vita-2048-eu-v104/camera.md)) are read statically.
+HD and 2048 write `0.7` instead in game mode 14 (Detonator). So Pulse's authored
+close is 4/3 of what the player sees, and so are HD's and 2048's: their shorter
+authored offsets are shorter on screen too. Not read: Pulse's and Pure's DLC teams,
+which live in `data/dlc/`.
 
 ## A second file shares the parser: `Data\XML\HandlingStats.xml`
 

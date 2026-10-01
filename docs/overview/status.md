@@ -196,7 +196,7 @@ transferred to EU, so EU's count includes names that add no page.
 
 | Binary | names.tsv rows | below 70 (`_q`) | Evidence pages | Emulator harness | Newest dated page |
 | --- | ---: | ---: | ---: | --- | --- |
-| [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 194 (167 fn, 27 data) | 1 (0%) | 17 | `pcsx2-drive.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` | 2026-10-01, [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md) |
+| [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 194 (167 fn, 27 data) | 1 (0%) | 17 | `pcsx2-drive.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` (+1 measurement script) | 2026-10-01, [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md) |
 | [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 454 (403 fn, 51 data) | 18 (3%) | 42 | `rpcs3-drive.py`, `rpcs3-spu-job-binary-dump.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+4 measurement scripts) | 2026-10-01, [camera.md](../ghidra/functions/ps3-hdfury-eu/camera.md) |
 | [ps4-omega-eu](../ghidra/functions/ps4-omega-eu/) | 51 (51 fn, 0 data) | 0 (0%) | 9 | none | 2026-09-16, [plasma.md](../ghidra/functions/ps4-omega-eu/plasma.md) |
 | [psp-pulse-eu](../ghidra/functions/psp-pulse-eu/) | 430 (413 fn, 17 data) | 74 (17%) | 4 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-trace.py`, `psp_trace_fields.py` (+19 measurement scripts) | 2026-09-23, [lighting.md](../ghidra/functions/psp-pulse-eu/lighting.md) |
