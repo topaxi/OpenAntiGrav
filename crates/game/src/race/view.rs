@@ -54,6 +54,9 @@ pub struct RaceView {
     pub(super) shake_rng: Rng,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
+    /// The spectator director that flies the camera behind the end-race panels, `None` on a
+    /// title it was not read for. See [`super::finish_camera`].
+    pub(super) finish_camera: Option<super::finish_camera::FinishCamera>,
     /// The external block the chase camera is currently flying, which is
     /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
     /// [`Self::camera_view`] names. Kept as its own field rather than looked up

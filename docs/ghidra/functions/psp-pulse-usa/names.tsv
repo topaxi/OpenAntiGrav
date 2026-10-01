@@ -1191,3 +1191,6 @@
 0x08880c04	function	Camera_UpdateSpectatorView	85	camera.md
 0x0887fd3c	function	Camera_UpdateSpectator	70	camera.md
 0x08880168	function	Camera_RepickNearSubject	62	camera.md
+0x08848664	function	Craft_SetAutopilotBlend	90	race-finish.md
+0x08880a58	function	Camera_PickSubject	80	race-finish.md
+0x08880b38	function	Camera_PickRandomMode	75	race-finish.md

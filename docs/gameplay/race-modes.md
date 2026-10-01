@@ -973,12 +973,16 @@ Three things happen on that tick, and they are in three layers on purpose:
    and never revised. `Race::tick` itself is unchanged and goes on stepping if
    something keeps calling it, which is what keeps the trace harness and the
    headless capture honest.
-3. **The composition root stops stepping it.** `Session::frame` stops calling
-   `tick` once `Race::finished` answers yes, the HUD is replaced by the results
-   table, and X or escape hands the window back to the menus. That is the same
-   place the camera cycle is handled, and for the same reason: a race that
-   stopped itself inside `tick` would change what every fixed-tick-count caller
-   produces.
+3. **The composition root stops stepping it - unless the player crossed the line.**
+   `Session::frame` stops calling `tick` once `Race::finished` answers yes, the HUD
+   is replaced by the results table, and X or escape hands the window back to the
+   menus. That is the same place the camera cycle is handled, and for the same
+   reason: a race that stopped itself inside `tick` would change what every
+   fixed-tick-count caller produces. **Since 2026-10-01 a finish by the line keeps
+   being stepped** (`Race::runs_on_after_the_line`): the original keeps the race
+   running behind the panels with the player's craft flown by the AI, see
+   [after-the-finish.md](after-the-finish.md). A wreck, an Eliminator target and a
+   Zone run still stand still.
 
 **The table is ours and is labelled as one.** The original ends a race in a
 sequence of screens whose names are recovered - `"Race End Photo"`,

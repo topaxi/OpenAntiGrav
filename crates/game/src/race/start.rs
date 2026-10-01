@@ -453,6 +453,13 @@ impl Race {
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),
                 camera_override,
+                finish_camera: (!destroy_stations.is_empty()).then(|| {
+                    super::finish_camera::FinishCamera::new(
+                        destroy_stations.clone(),
+                        destroy_focus_rate,
+                        super::finish_camera::SPECTATOR_SEED,
+                    )
+                }),
                 // Cold, then snapped on the first tick. A race starts from a standing
                 // start with no thrust, so there is nothing to snap *to* here.
                 //

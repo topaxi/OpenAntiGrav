@@ -1846,3 +1846,28 @@ with `python3`, not `uv run --with websocket-client`, which needs the network).
   hit until something draws through `ParticleSystem_DrawRolledQuads`, so in one run it fired at
   frame 72.9 and not 8, the craft 70 frames further down the road. Read the logged
   `detonation` row for where the blast went.
+
+## The original's race after the finish: `psp-postrace.py` (2026-10-01)
+
+`scripts/psp-postrace.py` gets a whole race finished without steering and logs what follows the line: it gives
+the player's weapon record the Autopilot pickup (fire bit `0x1000`) and raises the record's countdown
+(`+0x148`) to `1e9`, so the original's own autopilot flies the laps at 1.00x, then breaks in
+`Weapons_DispatchFire` once a frame on the final lap and logs every craft (state, control record,
+driver, body, crossings), the manager's mode state, the HUD's hidden flag and the camera object, with
+photographs. See [after-the-finish.md](../gameplay/after-the-finish.md) for what it found.
+
+- **`--disarm-x X`** stops the pickup and releases thrust as the craft passes `x` on the start straight (`--disarm-z` pins
+  the straight), so only the game's own post-finish driver is left. Without it a finish reads the same, but the pickup
+  could be what flies the craft.
+- **`--probe setstate|ctl|scale`** swaps the per-frame breakpoint for `Ship_SetState`, or for a **break-on-write**
+  memory watchpoint (`memory.breakpoint.add ... enabled=True, write=True`) on the player's control record or on
+  `craft+0x1d4`, and logs the writer's `pc` and `ra`. A watchpoint armed with `enabled=True` stops the CPU on the write;
+  the stop arrives as a bare `cpu.stepping` with an unknown `pc`, so the wait takes any stop and reads `cpu.status`.
+- **A resume can be answered by a stop the wait never sees**: `cpu.status` then says the CPU is stopped at the
+  breakpoint's own address while `wait_for_break` times out. The script's `hits()` yields that stop instead of raising.
+- **The weapon pickup's autopilot runs only 4.95 s unless its timer is raised**; the timer lives at `record+0x148`.
+- **From `Race End Photo` the pause menu does not exist**: `psp-drive.py restart` and the script's restart walk both
+  press into the end-race panels. `cross` five times lands on `Main Menu` (`Race End Photo`, `EndRace Results`, `Rewards`,
+  `Menu`), then `psp-drive.py menu`.
+- A second `x` on a long race is not unique: the circuit passes the same `x` away from the start straight, and a
+  disarm there flies the craft into a wall. Pin `z` too.

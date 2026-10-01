@@ -386,13 +386,12 @@ pub fn capture(
     let mut finished_early = false;
     for tick in 0..driven {
         advance_one_tick(&mut race, &mut held, audio, options, tick);
-        // The race ended inside the requested tick count, so the rest of it is
-        // not driven - exactly as the window stops stepping a finished race, and
-        // for the same reason: a board taken at the last crossing drawn over a
-        // world that went on moving for another two thousand ticks would be a
-        // picture of two different moments. Said out loud, because a capture
-        // that quietly ran short would otherwise look like a lost tick.
-        if race.finished() {
+        // The race ended inside the requested tick count, so the rest is not
+        // driven, as the window stops stepping a finished race - except after the
+        // player's own last crossing, which the window steps on
+        // ([`Race::runs_on_after_the_line`]). Said out loud, because a capture
+        // that quietly ran short would look like a lost tick.
+        if race.finished() && !race.runs_on_after_the_line() {
             println!(
                 "the race finished on tick {} of the {} asked for; the rest are not driven",
                 race.sim.world.tick, options.ticks

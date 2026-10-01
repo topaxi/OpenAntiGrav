@@ -566,11 +566,10 @@ impl Session {
                     if stage.endrace.is_none() {
                         pointer::press_for_click(&mut self.controls, &pointer);
                     }
-                    // **The race is over, so nothing is stepped.** The world is
-                    // left exactly as the finishing tick left it and the frame
-                    // loop goes on drawing it under the results table, which is
-                    // what makes "the race is complete" a state rather than a
-                    // banner over a race that is still going.
+                    // **A race that ended any way but the line is over, so
+                    // nothing is stepped.** The world is left exactly as the
+                    // finishing tick left it and the frame loop goes on drawing it
+                    // under the results table.
                     //
                     // Stopping here rather than inside `Race::tick` is
                     // deliberate: the tick is what the trace harness, the
@@ -585,6 +584,17 @@ impl Session {
                     // the player looked at it. Nothing this call touches is
                     // `World` state, so "nothing is stepped" is still true of
                     // the thing that sentence is about.
+                    // **Except when the player crossed the line**, where the
+                    // original keeps the race running behind the panels: the
+                    // opponents go on lapping and the player's craft is flown by
+                    // the AI. Neutral input, because the panels consume the pad
+                    // and a craft that is not the player's must not read it. The
+                    // standings and the board were frozen at the line, so
+                    // nothing the panels show moves. See
+                    // `Race::runs_on_after_the_line`.
+                    if stage.race.runs_on_after_the_line() {
+                        stage.race.tick(&oag_gameplay::PlayerInputs::none());
+                    }
                     self.audio.race_tick(&mut stage.race);
                     // `stage`'s own last use - the reborrow inside
                     // `Session::tick_endrace` is legal from here on, the

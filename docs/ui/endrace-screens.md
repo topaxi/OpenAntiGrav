@@ -29,7 +29,8 @@ still-visible, darkened race scene - the picture `crate::main::menu_stage`'s
 own `frozen_race` compositing already gives a *paused* race. This build does
 not reuse that mechanism: a finished race's own scene is already left exactly
 as the finishing tick left it (`RaceStage::draw_hud`'s pre-existing doc, unchanged
-by this work) - the world simply stops being ticked, and
+by this work) - the world stopped being ticked (it keeps being ticked since 2026-10-01 when the player
+crossed the line, as the original does; see [after-the-finish.md](../gameplay/after-the-finish.md)), and
 `oag_game::scoreboard::Overlay` already draws its own results table over that
 frozen frame this same way. `crate::race_stage::endrace::EndRaceRuntime` reuses
 that same mechanism rather than transitioning to `Stage::Menu`: it is drawn from

@@ -707,3 +707,13 @@ countdown; the frame before the throttle word steps `craft+0x1c0` reads `0x1`, `
 Confidence **90** for all three names: every instruction is read, the effects are watched
 live on four runs, and the PS2 build was not compared. `Ship_SetState`'s remote-craft
 guard (`entity+0x368 != 1`) is from the decompile only.
+
+## Correction 2026-10-01: the finished craft is not handed over by `Race_FinishAllCrafts`
+
+The paragraph above ("`Race_FinishAllCrafts` is the flag: every craft is switched to `autopilot_input`... **the original
+drives the player's craft itself after the finish line**") is right about the behaviour and wrong about the mechanism in
+Single Race and Time Trial. Live captures (PPSSPP, `16_Track`, four runs) show the function never runs there: its
+`manager+0x1a78` flag stays `0`, the player's `entity+0x368` stays `0` and no craft's driver pointer changes. Each craft is put
+in state 2 at **its own** crossing by `FUN_088418e0`, and the AI takes it through the autopilot weight `craft+0x1d4`. The function
+itself is unchanged; see [race-finish.md](race-finish.md) and
+[after-the-finish.md](../../../gameplay/after-the-finish.md).

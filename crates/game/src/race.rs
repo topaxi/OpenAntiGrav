@@ -134,6 +134,7 @@ mod effects;
 mod eliminator;
 pub mod engine_light;
 mod field;
+pub mod finish_camera;
 pub mod gantry;
 mod hash;
 mod held_buttons;
