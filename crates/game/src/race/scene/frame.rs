@@ -428,7 +428,7 @@ impl Scene {
         self.write_ghost(race, queue, view_projection, prev_vp);
         oag_render::perfprobe::mark("ship+shield-write");
         let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
-            self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
+            self.write_weapon_models(race, &prev, queue, view_projection, prev_vp, seconds);
         let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
         let (bomb_hemisphere_active, bomb_shockwave_active) =
             self.write_bomb_blasts(race, queue, view_projection);

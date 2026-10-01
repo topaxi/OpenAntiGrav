@@ -75,6 +75,10 @@ ROCKET_UPDATE = 0x0885D2A8
 CYCLES_PER_FRAME = 222_000_000 / 59.940059940059946
 MINE_POSE_NODE = 0x08859CE4
 BOMB_NODE = 0x08863390
+# `g_ingame` (a pointer): its `+0x40` is the one animation clock every `Anim Transform`
+# and texture transform reads (`anim-transform.md`).
+G_INGAME = 0x08AB0818
+INGAME_CLOCK = 0x40
 CAMERA_BREAK = 0x0883C13C
 PROBES = {"spawns": PSYS_SPAWN, "rocket": ROCKET_UPDATE, "mine": MINE_POSE_NODE}
 
@@ -299,6 +303,9 @@ def main():
                 print("gave up: no GO or no fire within %d frames" % frame, file=sys.stderr)
                 break
             row = {"frame": frame, "throttle": throttle, "speed": speed, "pos": position}
+            ingame = dbg.read_u32(G_INGAME)
+            if ram(ingame):
+                row["clock"] = struct.unpack("<f", dbg.read(ingame + INGAME_CLOCK, 4))[0]
             if node:
                 row["camera"] = camera_eye(dbg, node)
             if go is None and throttle > 0.0 and args.fire_frame is None:
