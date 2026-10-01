@@ -14,9 +14,10 @@
 //! (`docs/ghidra/functions/psp-pulse-usa/ship-wreck-model.md`). This proves the
 //! loader finds every team's wreck under the name the original assembles, that
 //! none of the eight authors the `0x2000` flag a hull's meshes carry (so the
-//! wreck has no extra pass), and that the swap reaches the picture: the frame
-//! of a wrecked opponent differs with and without it, and does not while the
-//! craft is still in its explosion (state 4 keeps the hull).
+//! wreck has no extra pass), and that the swap reaches the frame: a wrecked
+//! opponent's frame submits exactly the wreck's triangles in place of the hull's
+//! finest tier and extra pass, and the same frame during the explosion (state 4)
+//! is the hull's, pixel for pixel.
 
 use oag_game::livery::{self, LoadContext};
 use oag_race::Mode;
@@ -117,15 +118,17 @@ fn a_zone_race_loads_the_zone_wreck_where_the_disc_has_one() {
     }
 }
 
+/// One frame of the grid with slot 7's craft destroyed at the end of tick 40:
+/// its pixels, and the triangle count the frame's own log line reports.
 fn frame(
     image: &std::path::Path,
     scratch: &std::path::Path,
     name: &str,
     ticks: &str,
     flag: &[&str],
-) -> Vec<u8> {
+) -> (Vec<u8>, u64) {
     let out = scratch.join(format!("{name}.png"));
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+    let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
         .args(["--race", "--no-audio", "--size", "480x272"])
         .args(["--render-scale", "100", "--msaa", "off"])
@@ -138,34 +141,75 @@ fn frame(
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_DATA_HOME", scratch.join("data"))
         .env("XDG_STATE_HOME", scratch.join("state"))
-        .status()
+        .output()
         .expect("running oag-game");
-    assert!(status.success(), "oag-game {name}");
-    std::fs::read(&out).expect("reading the screenshot")
+    assert!(run.status.success(), "oag-game {name}");
+    let log = String::from_utf8_lossy(&run.stderr);
+    let triangles = log
+        .lines()
+        .find(|line| line.contains("frame at tick"))
+        .and_then(|line| line.split(", ").nth(2))
+        .and_then(|part| part.split(' ').next())
+        .and_then(|count| count.parse().ok())
+        .unwrap_or_else(|| panic!("{name}: no frame statistics in the log:\n{log}"));
+    (
+        std::fs::read(&out).expect("reading the screenshot"),
+        triangles,
+    )
 }
 
-/// Slot 7's craft is destroyed at the end of tick 40. Tick 60 is inside its
+fn triangles(model: &oag_render::mesh::Model, nearest_only: bool) -> u64 {
+    model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .filter(|draw| !nearest_only || model.lod_groups.shows_nearest(draw))
+        .map(|draw| u64::from(draw.range.end - draw.range.start) / 3)
+        .sum()
+}
+
+/// Slot 7 (a Piranha) is destroyed at the end of tick 40. Tick 60 is inside its
 /// half-second explosion (state 4, which keeps the hull) and tick 100 is past
-/// the edge into state 5, where the wreck is the live model. Dropping the
-/// loader, the swap or the draw leaves the second pair equal.
+/// the edge into state 5, where the wreck is the live model.
+///
+/// The frame's triangle count is what pins the draw: with the wreck the frame
+/// loses the hull's finest tier and its extra pass and gains the wreck, exactly.
+/// Dropping the loader, the swap, the hull skip, the pass skip or the wreck's
+/// own draw each moves that number. (The pixels alone cannot say: a frame with
+/// the hull skipped and no wreck drawn still differs from one with the hull.)
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
 fn the_wreck_replaces_the_hull_from_state_5_and_not_before() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
+    let Some((liveries, _)) = load(true, Mode::SingleRace) else {
+        return;
+    };
+    let piranha = liveries
+        .iter()
+        .find(|l| l.team == "Piranha")
+        .expect("Piranha is on the grid");
+    let hull = triangles(&piranha.hull, true);
+    let pass = piranha
+        .shine
+        .as_ref()
+        .map_or(0, |model| triangles(model, false));
+    let wreck = triangles(&piranha.wreck.as_ref().expect("a wreck").model, false);
+
     let scratch = std::env::temp_dir().join(format!("oag-wreck-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
-    let exploding = frame(&image, &scratch, "exploding", "60", &[]);
-    let exploding_hull = frame(
+    let (exploding, exploding_tris) = frame(&image, &scratch, "exploding", "60", &[]);
+    let (exploding_hull, exploding_hull_tris) = frame(
         &image,
         &scratch,
         "exploding-hull",
         "60",
         &["--no-hull-wreck"],
     );
-    let wrecked = frame(&image, &scratch, "wrecked", "100", &[]);
-    let wrecked_hull = frame(
+    let (wrecked, wrecked_tris) = frame(&image, &scratch, "wrecked", "100", &[]);
+    let (_, hulled_tris) = frame(
         &image,
         &scratch,
         "wrecked-hull",
@@ -173,9 +217,20 @@ fn the_wreck_replaces_the_hull_from_state_5_and_not_before() {
         &["--no-hull-wreck"],
     );
     std::fs::remove_dir_all(&scratch).ok();
+
     assert_eq!(
         exploding, exploding_hull,
         "the wreck replaced the hull during the explosion"
     );
-    assert_ne!(wrecked, wrecked_hull, "the wreck drew nothing in state 5");
+    assert_eq!(exploding_tris, exploding_hull_tris);
+    assert_eq!(
+        hulled_tris, exploding_hull_tris,
+        "the hull frame moved between ticks 60 and 100"
+    );
+    assert_eq!(
+        hulled_tris - wrecked_tris,
+        hull + pass - wreck,
+        "a wrecked craft draws its wreck in place of its hull and the hull's extra pass"
+    );
+    assert_ne!(wrecked, exploding, "the wreck drew nothing in state 5");
 }

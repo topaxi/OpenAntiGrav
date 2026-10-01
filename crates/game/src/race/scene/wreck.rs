@@ -9,7 +9,8 @@
 //! `Destroyed` (state 4, the explosion) and is replaced from the tick the craft
 //! reaches `Eliminated` until it is put back `Racing`. Seen on a running
 //! original: the hull is drawn in state 4, a dark scorched model in states 5
-//! and 6 (`wreck-model.md`'s captures).
+//! and 6 (`docs/ghidra/functions/psp-pulse-usa/ship-wreck-model.md`, "Measured on a
+//! running original").
 
 use oag_physics::CraftState;
 
