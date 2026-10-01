@@ -146,6 +146,11 @@ pub struct Scene {
     absorb_overlay: [Vec<Option<Drawable>>; 2],
     /// The hull's environment-mapped extra pass per slot - see [`shine`].
     shine: Vec<Option<Drawable>>,
+    /// The circuit's own extra pass - see [`shine::TrackShine`].
+    track_shine: Option<shine::TrackShine>,
+    /// This frame's animation clock, in seconds: set where the frame reads it,
+    /// read where the circuit's extra pass samples its animated nodes.
+    anim_clock: std::cell::Cell<f32>,
     /// HD's absorb shell per slot - see [`absorb_shell`].
     absorb_shell: Vec<Option<Drawable>>,
     /// One drawable per projectile slot, for rockets drawn as their own
@@ -488,6 +493,16 @@ impl Scene {
             })
             .transpose()?;
         let measured_mask = track_model.stamps_glow; // see `bloom` below
+        let track_shine = shine::TrackShine::build(
+            device,
+            queue,
+            &track_model,
+            format,
+            anisotropy,
+            sample_count,
+            zone_art,
+            shadow_maps,
+        )?;
         let track = Drawable::new(
             device,
             queue,
@@ -837,6 +852,8 @@ impl Scene {
             shield_cockpit,
             absorb_overlay,
             shine,
+            track_shine,
+            anim_clock: std::cell::Cell::new(0.0),
             absorb_shell,
             rockets,
             mines,

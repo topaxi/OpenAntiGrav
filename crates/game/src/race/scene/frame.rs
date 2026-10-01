@@ -146,6 +146,7 @@ impl Scene {
         // still-frame comparison wants a chosen time, not a freeze; a stale
         // `false` in a settings file wants nothing at all.
         let seconds = anim_seconds.unwrap_or(race.sim.world.tick as f32 / 60.0);
+        self.anim_clock.set(seconds);
         // Fog, sampled where the eye is. `oag_vex::fog::sample` reimplements
         // `FogCube_Sample`: the camera is transformed into the volume's space,
         // rejected if outside, and all six parameters interpolated across the
@@ -772,7 +773,7 @@ impl Scene {
         if let Some(sky) = &self.sky {
             let _ = sky.draw(&mut pass, None, None, None, None);
         }
-        let mut stats = self.track.draw(
+        let mut stats = self.draw_track(
             &mut pass,
             self.visibility.as_ref().map(|v| &v.sections),
             visible_set.as_ref(),

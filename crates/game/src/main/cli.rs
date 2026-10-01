@@ -864,6 +864,11 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) no_hull_shine: bool,
 
+    /// Leave out a Pulse circuit's own extra pass: its `*_shinemap` batches
+    /// under their chrome map, which `oag_render::shine::build_track` draws.
+    #[arg(long)]
+    pub(crate) no_track_shine: bool,
+
     /// Render from a camera given outright, as nine comma-separated numbers:
     /// `eye_x,eye_y,eye_z,fwd_x,fwd_y,fwd_z,up_x,up_y,up_z`.
     ///

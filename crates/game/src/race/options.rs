@@ -121,6 +121,9 @@ pub struct Options {
     /// the headless way to take the pass out of a frame and so measure what it
     /// adds.
     pub hull_shine: bool,
+    /// Whether a Pulse circuit's own extra pass is drawn: its `*_shinemap`
+    /// batches under their chrome map. `false` is `--no-track-shine`.
+    pub track_shine: bool,
     /// Speed class the handling parameters are read for, spelled the way the
     /// disc spells it.
     ///
@@ -349,6 +352,7 @@ impl Default for Options {
             // comment. Only `race::load_event` ever sets this.
             grid_teams: Vec::new(),
             hull_shine: true,
+            track_shine: true,
             // The rung every measured title shares, named rather than
             // defaulted from an enum: a title whose ladder was never read must
             // not silently inherit one that was.

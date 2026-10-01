@@ -4,7 +4,7 @@
 
 use oag_render::mesh;
 
-use super::{Drawable, SceneStats};
+use super::{ChunkSet, DrawSections, Drawable, Frustum, SceneStats, VisibleSet};
 
 impl Drawable {
     /// Draws the absorb overlay: every draw of every list through the
@@ -108,5 +108,79 @@ impl Drawable {
     ) {
         oag_render::shine::write(&self.model, scratch, ship);
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
+    }
+
+    /// Uploads this model's vertices with texture coordinates generated for
+    /// the camera `view` - [`oag_render::shine::write_view`], a circuit's extra
+    /// pass, whose coordinates follow the camera and so cannot be baked.
+    pub(in crate::race) fn write_view_map(
+        &self,
+        queue: &wgpu::Queue,
+        view: oag_core::math::Mat4,
+        seconds: f32,
+        scratch: &mut Vec<mesh::GpuVertex>,
+    ) {
+        oag_render::shine::write_view(&self.model, scratch, view, seconds);
+        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
+    }
+
+    /// Draws a circuit's extra pass: each of this model's draws when the
+    /// circuit draw `sources[i]` of `track` is drawn - its level-of-detail
+    /// child on, its section allowed, its bound in the frustum - through the
+    /// pipelines built with this drawable's own blend.
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::race) fn draw_track_shine(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        track: &Drawable,
+        sources: &[usize],
+        sections: Option<&DrawSections>,
+        set: Option<&VisibleSet>,
+        chunks: Option<&ChunkSet>,
+        frustum: Option<&Frustum>,
+    ) -> SceneStats {
+        let mut stats = SceneStats::default();
+        if self.model.indices.is_empty() {
+            return stats;
+        }
+        let opaque: &[u64] = sections.map_or(&[], |s| &s.opaque[..]);
+        pass.set_bind_group(0, &self.uniform_bind, &[]);
+        pass.set_bind_group(2, &self.fog_bind, &[]);
+        pass.set_bind_group(3, &self.anim_bind, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
+        let mut current: Option<&wgpu::RenderPipeline> = None;
+        let mut last_bound: Option<usize> = None;
+        for (draw, &source) in self.model.draws.iter().zip(sources) {
+            let circuit = &track.model.draws[source];
+            if !track.lod_shows(circuit)
+                || !oag_render::pvs::visible(
+                    circuit,
+                    DrawSections::at(opaque, source),
+                    set,
+                    chunks,
+                    frustum,
+                )
+            {
+                continue;
+            }
+            let pipeline = &self.blend_pipeline[usize::from(draw.culled)];
+            if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                pass.set_pipeline(pipeline);
+                current = Some(pipeline);
+            }
+            stats.draws_submitted += 1;
+            stats.triangles += (draw.range.end - draw.range.start) / 3;
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+        }
+        stats
     }
 }

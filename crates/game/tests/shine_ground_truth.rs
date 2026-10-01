@@ -161,3 +161,26 @@ fn the_extra_pass_changes_the_grid_frame() {
     std::fs::remove_dir_all(&scratch).ok();
     assert_ne!(with, without, "the hull's extra pass drew nothing");
 }
+
+/// A circuit's own pass reaches the frame: the grid frame of `07_Track`,
+/// whose tunnel rims and walls carry chrome-mapped batches in view from the
+/// grid, differs with and without it (`--no-track-shine`).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn the_circuits_extra_pass_changes_the_grid_frame() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-track-shine-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let track = ["--track", r"Data\Environments\07_Track\track.vex"];
+    let with = grid_frame(&image, &scratch, "with", &track);
+    let without = grid_frame(
+        &image,
+        &scratch,
+        "without",
+        &["--track", track[1], "--no-track-shine"],
+    );
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_ne!(with, without, "the circuit's extra pass drew nothing");
+}

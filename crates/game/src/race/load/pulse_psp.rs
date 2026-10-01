@@ -72,6 +72,24 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
             stamp(model);
         }
     }
+    loaded
+        .report
+        .push(match oag_render::shine::build_track(&loaded.track_model) {
+            Some(pass) => format!(
+                "track shine: {} chrome-map batches drawn, {} left undrawn (animated nodes or \
+             outside the opaque list)",
+                pass.model.draws.len(),
+                pass.skipped
+            ),
+            None if loaded.track_model.shine_draws.is_empty() => {
+                "track shine: off, or the circuit authors none".into()
+            }
+            None => format!(
+                "track shine: none drawn, {} batches left undrawn (animated nodes or outside \
+             the opaque list)",
+                loaded.track_model.shine_draws.len()
+            ),
+        });
     loaded.report.push(
         "glow mask: the track, sky, pads, hulls, plumes and shields stamp it as the \
          original's stencil does"

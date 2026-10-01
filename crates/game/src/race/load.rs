@@ -940,6 +940,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ripples: ripple::Ripples::default(),
         report,
     };
+    if !(pulse_psp && options.track_shine) {
+        loaded.track_model.shine_draws.clear();
+    }
     pulse_psp::finish(&mut loaded, pulse_psp, &track_blob);
     Ok(loaded)
 }

@@ -8,7 +8,80 @@
 
 use super::*;
 
+/// A circuit's extra pass: its drawable and, for each draw of it, the circuit
+/// draw it redraws - the key the circuit's own section mask, level-of-detail
+/// child and frustum bound are looked up by, so the pass shows exactly what
+/// the circuit shows.
+#[derive(Debug)]
+pub(super) struct TrackShine {
+    drawable: Drawable,
+    sources: Vec<usize>,
+}
+
+impl TrackShine {
+    /// `None` when the circuit authors no drawable shine batch.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn build(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        track: &Model,
+        format: wgpu::TextureFormat,
+        anisotropy: Anisotropy,
+        sample_count: u32,
+        zone_art: &mesh_render::zone::StageArt,
+        shadow_maps: mesh_render::ShadowMaps<'_>,
+    ) -> Result<Option<Self>> {
+        let Some(pass) = oag_render::shine::build_track(track) else {
+            return Ok(None);
+        };
+        let drawable = Drawable::new(
+            device,
+            queue,
+            pass.model,
+            format,
+            anisotropy,
+            sample_count,
+            mesh_render::Depth::Overlay,
+            oag_render::shine::BLEND,
+            mesh_render::GlowMask::Written,
+            zone_art,
+            shadow_maps,
+            mesh_render::ShadowReceiver::Never,
+        )?;
+        Ok(Some(Self {
+            drawable,
+            sources: pass.sources,
+        }))
+    }
+}
+
 impl Scene {
+    /// Draws the circuit, then its extra pass over it: the pass is tested
+    /// against the circuit's depth, so it follows the circuit and precedes
+    /// everything drawn after it.
+    pub(super) fn draw_track(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        sections: Option<&DrawSections>,
+        set: Option<&VisibleSet>,
+        chunks: Option<&ChunkSet>,
+        frustum: Option<&Frustum>,
+    ) -> SceneStats {
+        let mut stats = self.track.draw(pass, sections, set, chunks, frustum);
+        if let Some(shine) = &self.track_shine {
+            stats.add(shine.drawable.draw_track_shine(
+                pass,
+                &self.track,
+                &shine.sources,
+                sections,
+                set,
+                chunks,
+                frustum,
+            ));
+        }
+        stats
+    }
+
     /// The slots whose shine pass draws this frame - the same craft the hull
     /// itself is drawn for.
     fn shines<'a>(&'a self, race: &'a Race) -> impl Iterator<Item = (usize, &'a Drawable)> + 'a {
@@ -43,7 +116,8 @@ impl Scene {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(ship_scene));
         }
         let shine = shine_scene(ship_scene);
-        for pass in self.shine.iter().flatten() {
+        let track_shine = self.track_shine.iter().map(|t| &t.drawable);
+        for pass in self.shine.iter().flatten().chain(track_shine) {
             queue.write_buffer(&pass.fog, 0, bytemuck::bytes_of(&shine));
         }
     }
@@ -60,6 +134,15 @@ impl Scene {
         prev: &motion::Snapshot,
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
+        if let Some(track) = &self.track_shine {
+            let view = race.view();
+            let seconds = self.anim_clock.get();
+            track
+                .drawable
+                .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
+            track.drawable.write_node_anims(queue, seconds);
+            track.drawable.write_view_map(queue, view, seconds, scratch);
+        }
         for (slot, shine) in self.shines(race) {
             let ship = race.ship_model_matrix_of(slot);
             shine.write(

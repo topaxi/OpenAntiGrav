@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => println!("texture {i}: undecoded"),
         }
     }
+    let texture_filter = std::env::var("PROBE_TEXTURE").unwrap_or_else(|_| "envtest".to_string());
     if let Some(out) = args.next() {
         let second = textures
             .iter()
@@ -36,9 +37,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .find(|t| {
                 t.asset_path
                     .as_deref()
-                    .is_some_and(|p| p.contains("envtest"))
+                    .is_some_and(|p| p.contains(texture_filter.as_str()))
             })
-            .ok_or("no envtest texture")?;
+            .ok_or("no texture matches PROBE_TEXTURE (default envtest)")?;
         let rgba = second.to_rgba();
         let mut ppm = format!("P6 {} {} 255\n", second.width, second.height).into_bytes();
         for px in rgba.chunks(4) {
