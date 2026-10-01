@@ -3,9 +3,25 @@
 //! `ParticleSystem_SpawnBurst` switches on the emitter's shape (`+0x30`) and
 //! each emit function places the particle's spawn offset in the emitter's own
 //! frame before `ParticleSystem_InitParticle` carries it through the node
-//! matrix. Two shapes are read and implemented here; the rest stay at the
+//! matrix. Three shapes are read and implemented here; the rest stay at the
 //! anchor, as every shape did before:
 //!
+//! - **Shape 3, a ring or a disc.** `FUN_088fc634`, read at decompiler level
+//!   on 2026-10-01 and confirmed live on `WO_BOMB_SMOKERING`: with `r` the
+//!   scaled extent (`DAT_08ab2290`) and `phi` drawn `U(0, 2 pi)` per particle,
+//!   `+0x3c` `0` places it at `(r cos phi, 0, r sin phi)` - a **ring** of radius
+//!   `r` in the frame's `XZ` plane, its `Y` the cone's axis; `1` at a radius
+//!   `Psys_RandSpread(r, +0x40)`; `2` anywhere in the **disc** (a point drawn in
+//!   the square `[-r, r]^2` until it lies inside the circle). Read on the
+//!   Bomb's smoke ring: its first particles sit 13.0 to 13.6 units from the
+//!   blast centre on the horizontal plane at an authored extent of 12.94, with
+//!   a vertical offset under a unit, and a ring-shaped smoke wall follows.
+//!   Until then shape 3 was a point, on the strength of the collision sparks'
+//!   extents of at most 0.1; the corpus authors `12.9` on the Bomb's smoke and
+//!   the ship explosion's root, `10` on its debris, `13.6` on the Repulser's
+//!   blast and `5.1` on the Rocket's own debris. **Not played:** flag
+//!   `0x200000`, which steps `phi` evenly (`2 pi / count`) from a random
+//!   start instead of drawing it - only `WO_REPULSER_BLAST` carries it.
 //! - **Shape 1, a line (or a flat rectangle).** `FUN_088fcfec`, read at
 //!   instruction level on 2026-09-24: while `+0x3c` is `0..=2` the offset is
 //!   `(U(-e, e), 0, U(-z, z))`, `e` the scaled extent global
@@ -76,6 +92,15 @@ pub enum Spawn {
         /// `+0x40`, never scaled.
         depth: f32,
     },
+    /// Shape 3: a ring or a disc in the frame's `XZ` plane, see [this module](self).
+    Ring {
+        /// `+0x34`, before scaling.
+        extent: f32,
+        /// `+0x40`, scaled like `extent`; only read under `mode == 1`.
+        spread: f32,
+        /// `+0x3c`: `0` the ring, `1` the ring spread, `2` the disc.
+        mode: u32,
+    },
     /// Shapes 4 and 7: out along the particle's own direction.
     Sphere {
         /// `+0x34`, before scaling.
@@ -96,6 +121,11 @@ impl Spawn {
             (1, 0..=2) => Self::Line {
                 extent: record.extent,
                 depth: if depth.is_finite() { depth } else { 0.0 },
+            },
+            (3, mode @ 0..=2) => Self::Ring {
+                extent: record.extent,
+                spread: if depth.is_finite() { depth } else { 0.0 },
+                mode,
             },
             (4 | 7, mode) => Self::Sphere {
                 extent: record.extent,
@@ -130,6 +160,31 @@ impl Spawn {
                 let x = e * signed(rng);
                 let z = depth * signed(rng);
                 across * x + across.cross(up) * z
+            }
+            Self::Ring {
+                extent,
+                spread,
+                mode,
+            } => {
+                let e = (extent * scale).max(1e-5);
+                let z_axis = across.cross(up);
+                if mode >= 2 {
+                    // A point of the square until it is in the circle: the original's own
+                    // rejection loop, so the disc is uniform.
+                    loop {
+                        let (x, z) = (e * signed(rng), e * signed(rng));
+                        if x * x + z * z <= e * e {
+                            return across * x + z_axis * z;
+                        }
+                    }
+                }
+                let radius = if mode == 1 {
+                    e + spread * scale * signed(rng)
+                } else {
+                    e
+                };
+                let phi = rng.next_f32() * std::f32::consts::TAU;
+                across * (radius * phi.cos()) + z_axis * (radius * phi.sin())
             }
             Self::Sphere {
                 extent,

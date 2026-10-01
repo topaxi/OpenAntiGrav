@@ -583,3 +583,47 @@ fn every_psp_sprite_fits_one_sheet_and_the_quake_fire_is_orange() {
         "fireballs' sprite should be orange, summed rgb ({r}, {g}, {b})"
     );
 }
+
+/// Shape 3 places a particle on a ring or in a disc round the anchor, not at it
+/// (`FUN_088fc634`, read 2026-10-01). The Bomb's smoke ring authors an extent of
+/// 12.94 with an exact radius, and the original's first particles were read at 13.0
+/// to 13.6 units from the blast centre on the horizontal plane (`PPSSPP`,
+/// `psp-weapon-pair.py --probe rolled --detonate-bomb-at`); placed at the anchor, as
+/// every shape 3 was until then, the smoke was a puff where the original's is a wall.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_bombs_smoke_ring_is_born_on_a_ring_of_its_extent() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let effect = effect(&mut archive, "WO_BOMB_SMOKERING");
+    let mut rng = Rng::new(11);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    let dt = 1.0 / TICK_HZ;
+    let mut checked = 0;
+    for _ in 0..4 {
+        system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
+    }
+    let (_, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
+    // The `debris` emitter beside it has no extent, so its quads sit at the anchor; the
+    // smoke's must be on the ring and nothing may lie between the two.
+    for quad in alpha_over.chunks(6) {
+        let centre = quad
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from(v.position))
+            / 6.0;
+        let horizontal = centre.x.hypot(centre.z);
+        if horizontal < 4.0 {
+            continue;
+        }
+        // The ring is 12.94; a particle that has drifted a few ticks sits a little out.
+        assert!(
+            (12.0..16.0).contains(&horizontal),
+            "a smoke particle {horizontal} units from the anchor: {centre}"
+        );
+        assert!(centre.y.abs() < 2.0, "{centre}");
+        checked += 1;
+    }
+    assert!(checked >= 4, "{checked} smoke quads");
+}

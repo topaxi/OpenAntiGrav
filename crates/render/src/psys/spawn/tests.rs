@@ -49,3 +49,40 @@ fn frame_x_is_made_perpendicular_to_up() {
     assert!(fallback.dot(Vec3::Y).abs() < 1e-6);
     assert!((fallback.length() - 1.0).abs() < 1e-6);
 }
+
+#[test]
+fn an_exact_ring_sits_on_its_radius_in_the_frame_xz_plane() {
+    let ring = Spawn::Ring {
+        extent: 12.94,
+        spread: 0.0,
+        mode: 0,
+    };
+    let mut rng = Rng::new(5);
+    let mut seen_x = [false; 2];
+    for _ in 0..200 {
+        let offset = ring.offset(1.0, Vec3::Y, Vec3::X, Vec3::Y, &mut rng);
+        assert!(offset.y.abs() < 1e-5, "{offset}");
+        assert!((offset.length() - 12.94).abs() < 1e-3, "{offset}");
+        seen_x[usize::from(offset.x > 0.0)] = true;
+    }
+    assert_eq!(seen_x, [true, true], "all the way round, not one side");
+}
+
+#[test]
+fn a_disc_fills_its_circle_and_stays_inside_it() {
+    let disc = Spawn::Ring {
+        extent: 5.12,
+        spread: 0.0,
+        mode: 2,
+    };
+    let mut rng = Rng::new(9);
+    let mut inner = 0;
+    for _ in 0..500 {
+        let offset = disc.offset(1.0, Vec3::Y, Vec3::X, Vec3::Y, &mut rng);
+        assert_eq!(offset.y, 0.0);
+        assert!(offset.length() <= 5.12 + 1e-4);
+        inner += usize::from(offset.length() < 2.56);
+    }
+    // A uniform disc has a quarter of its area inside half its radius.
+    assert!((90..170).contains(&inner), "{inner} of 500");
+}

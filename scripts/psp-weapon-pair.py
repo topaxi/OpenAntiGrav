@@ -142,7 +142,7 @@ def camera_eye(dbg, node):
     return {"right": m[0:3], "up": m[4:7], "fwd": m[8:11], "eye": [-m[12], -m[13], -m[14]]}
 
 
-def probe_after_fire(dbg, kind, frames, log):
+def probe_after_fire(dbg, kind, frames, log, detonate=None):
     """Break at `kind`'s address for `frames` frames after the fire, logging each hit.
 
     Run inside the `Weapons_DispatchFire` stop that wrote the fire word. Only the
@@ -155,19 +155,24 @@ def probe_after_fire(dbg, kind, frames, log):
     start = dbg.call("cpu.status")["ticks"]
     out = log.setdefault(kind, [])
     try:
-        _probe_loop(dbg, kind, address, frames, start, out)
+        _probe_loop(dbg, kind, address, frames, start, out, detonate)
     except TimeoutError:
         log[kind + "_quiet_after"] = out[-1]["frame"] if out else 0.0
         print("probe quiet: no further hit within 20 s of wall clock", file=sys.stderr)
 
 
-def _probe_loop(dbg, kind, address, frames, start, out):
+def _probe_loop(dbg, kind, address, frames, start, out, detonate=None):
     for _, _ in dbg.each_hit(address, 100000, timeout=20.0):
         now = (dbg.call("cpu.status")["ticks"] - start) / CYCLES_PER_FRAME
         if now > frames:
             break
         regs = gpr(dbg)
         entry = {"frame": round(now, 2), "ra": regs["ra"]}
+        if detonate and not detonate["done"] and now >= detonate["at"]:
+            detonate["done"] = True
+            body = detonate["body"]
+            here = struct.unpack("<3f", dbg.read(body + 0x30, 12))
+            entry["detonation"] = detonate_bomb(dbg, body, here, detonate["previous"], detonate["ahead"])
         if kind == "spawns":
             name = dbg.read_cstring(regs["a1"], 40) if ram(regs["a1"]) else None
             entry["name"] = name
@@ -244,6 +249,33 @@ def _probe_loop(dbg, kind, address, frames, start, out):
             entry["prev"] = list(struct.unpack_from("<3f", blob, 0xF0))
             entry["normal"] = list(struct.unpack_from("<3f", blob, 0x100))
         out.append(entry)
+
+
+BOMB_POOL = 0x08B3BF90
+BOMB_SLOTS, BOMB_COUNT, BOMB_POSITION, BOMB_AGE = 0x44, 0xC4, 0xB0, 0xC0
+
+
+def detonate_bomb(dbg, body, position, previous, ahead):
+    """Move the first laid Bomb `ahead` units down the craft's travel and run its fuse out.
+
+    `Bomb_Detonate` reads the position at `bomb+0xb0` (`FUN_088633c0`) and `Bomb_AdvanceFuse`
+    returns `age (+0xc0) < timetodie`, so a huge age is a detonation on the next pool update,
+    wherever the bomb is. Needs the CPU stopped.
+    """
+    pool = dbg.read_u32(BOMB_POOL)
+    if not ram(pool):
+        return {"error": "no bomb pool", "pool": pool}
+    count = dbg.read_u32(pool + BOMB_COUNT)
+    bomb = dbg.read_u32(pool + BOMB_SLOTS)
+    if not count or not ram(bomb):
+        return {"error": "no laid bomb", "count": count, "bomb": bomb}
+    here = struct.unpack("<4f", dbg.read(bomb + BOMB_POSITION, 16))
+    step = [a - b for a, b in zip(position, previous or position)]
+    length = sum(c * c for c in step) ** 0.5 or 1.0
+    target = [position[i] + step[i] / length * ahead for i in range(3)]
+    dbg.write(bomb + BOMB_POSITION, struct.pack("<4f", target[0], target[1], target[2], here[3]))
+    dbg.write_u32(bomb + BOMB_AGE, struct.unpack("<I", struct.pack("<f", 1000.0))[0])
+    return {"bomb": bomb, "count": count, "was": here, "now": target}
 
 
 def place_window(display):
@@ -323,6 +355,13 @@ def main():
                         "bit, e.g. 0x1ac=5 for the Mine's round counter, which the pickup's arm "
                         "function sets and a hand-set fire bit does not")
     parser.add_argument("--place-window", action="store_true")
+    parser.add_argument("--detonate-bomb-at", type=int, metavar="K",
+                        help="at stop frame fire+K, move the first laid Bomb to --detonate-ahead units "
+                        "ahead of the craft along its travel and set its age past its fuse, so "
+                        "`BombPool_Update` detonates it there: the owner only trips its own charge "
+                        "when stationary and at the craft, which puts the camera inside the blast")
+    parser.add_argument("--detonate-ahead", type=float, default=120.0,
+                        help="how far ahead of the craft, in units, --detonate-bomb-at puts the blast")
     parser.add_argument("--ge-dump-k", type=int, metavar="K",
                         help="ask for a GE dump (`gpu.record.dump`, a .ppdmp of the next frame the GPU "
                         "draws) at stop frame fire+K, written to OUT/ge.ppdmp. The request is sent "
@@ -368,6 +407,7 @@ def main():
         probe_pending = False
         dump_ticket = None
         dump_reply = []
+        last_position = previous_position = None
         frame = 0
         for _, _ in dbg.each_hit(WEAPONS_DISPATCH_FIRE, 6000, timeout=args.timeout):
             manager = dbg.read_u32(RACE_MANAGER)
@@ -394,6 +434,7 @@ def main():
                 print("gave up: no GO or no fire within %d frames" % frame, file=sys.stderr)
                 break
             row = {"frame": frame, "throttle": throttle, "speed": speed, "pos": position}
+            previous_position, last_position = last_position, position
             ingame = dbg.read_u32(G_INGAME)
             if ram(ingame):
                 row["clock"] = struct.unpack("<f", dbg.read(ingame + INGAME_CLOCK, 4))[0]
@@ -435,6 +476,9 @@ def main():
             if fire_frame is not None:
                 k = frame - fire_frame
                 row["since_fire"] = k
+                if args.detonate_bomb_at is not None and k == args.detonate_bomb_at:
+                    row["detonation"] = detonate_bomb(dbg, body, position, previous_position,
+                                                      args.detonate_ahead)
                 if args.ge_dump_k is not None and k == args.ge_dump_k:
                     dump_ticket = dbg.send("gpu.record.dump")
                     _receive = dbg._recv
@@ -459,7 +503,16 @@ def main():
             log["frames"].append(row)
             frame += 1
         if probe_pending:
-            probe_after_fire(dbg, args.probe, args.probe_frames, log)
+            detonate = None
+            if args.detonate_bomb_at is not None:
+                # `previous` is where the craft was a frame before the fire: the direction of
+                # travel the blast is placed along; `at` is in frames after the fire.
+                detonate = {"at": float(args.detonate_bomb_at), "ahead": args.detonate_ahead,
+                            "body": body, "previous": previous_position, "done": False}
+                # `detonate_bomb` steps from `previous` to the position it is given, so hand it a
+                # `previous` that is the fire frame's own position.
+                detonate["previous"] = last_position if previous_position is None else previous_position
+            probe_after_fire(dbg, args.probe, args.probe_frames, log, detonate)
         dbg.resume()
         if dump_ticket is not None:
             end = time.time() + 120
