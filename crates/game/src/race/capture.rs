@@ -397,7 +397,9 @@ pub fn capture(
         // lost tick.
         if race.finished()
             && race.runs_on_after_the_line()
-            && race.sim.world.ships[race.player_slot()].standing.finish_tick
+            && race.sim.world.ships[race.player_slot()]
+                .standing
+                .finish_tick
                 == Some(race.sim.world.tick)
         {
             println!(
