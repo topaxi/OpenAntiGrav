@@ -80,17 +80,21 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   view for a moving craft on either side; the detonation animator itself still has no original
   picture (the owner trips its own charge only when stationary, and then at the craft, so a
   picture of it needs the craft stationary and the camera is inside the blast).
-- *Pulse Shield* - **pictured**. Matches: violet to blue, size against the craft.
-  **Onset resolved 2026-10-01 (second pass)**: a live `ShipShield_Update` probe shows nothing
-  delays the shell - the object, its models and its colour, swell and clock match
-  `ShipShield::advance` frame for frame on the same `dt` values (a test pins 30 live frames).
-  The original's later onset is its jittered frame `dt`: `(int)(dt/substep)` is 0 on 47 of 200
-  frames, so it took 0.765 substeps a frame against ours 1.0 (`shield-pickup.md`). Not
-  reproduced and not chosen. Still differs: **brightness and banding**, ours dimmer at settled
-  state (about a third of the original's mean pixel change by one rough measure); unexplained,
-  and a frame-for-frame comparison needs the animation clock pinned on both sides (the shell's
-  texture scrolls on it). Candidate: how `mesh+0x6c` (the colour `Image_SetVertexColours` writes)
-  reaches the draw against ours multiplying the authored vertex colours.
+- *Pulse Shield* - **matched 2026-10-01 (third pass)**, pixel for pixel at a pinned
+  clock. The "ours dimmer, banding softer" gap was two defects, both fixed:
+  `pulse_shield_test_ADD` (flags `0xe5`, pre-swizzled) was decoded linearly, and the
+  shell's authored `u` scroll was never written. Against the original's own frame
+  (hull-less difference, same craft and tick, clock pinned and one display frame
+  allowed for) the per-channel correlation is **0.90 to 0.93**, ours about 10 % brighter.
+  The shell's GE state is read (lighting on with the shield colour as the scene ambient,
+  additive, no stencil so no glow stamp, cull off) and the `mesh+0x6c` candidate is closed.
+  Onset (the frame timer) was resolved earlier. Still open: the cockpit sphere
+  (`vr_shield_cockpit.vex`, `noise1_ADD`) is not compared and its texture transform is not
+  written either; HD's steady-state colour (its own thread); the PS2 shell (its thread).
+  Evidence: `shield-pickup.md`'s third-pass section. **The decoder fix also changes**
+  every flagged `.vex` texture on Pulse PSP (84 nodes: all shield shells, the mine, bomb,
+  shuriken, cage and mag-effect textures, and the front-end ship models): a Mine/Bomb/FE-ship
+  comparison taken before 2026-10-01 read them scrambled.
 - *Resolved 2026-10-01 (camera lane)*: the original's craft looked about 1.4 x
   larger because its fresh profile flies `OPT_CLOSE` and ours defaulted to `far`;
   the default is now `close` and a three-tick native comparison agrees. Pass
@@ -111,9 +115,10 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
    `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs` made them
    this pass) and the photographed set.
 2. ~~Mine/Bomb drop point; the Bomb's ring and shaft~~ - done 2026-10-01, second pass.
-3. ~~What delays the shield's first visible frame~~ - nothing does; the frame timer
-   (above). Open instead: the shell's settled brightness, with the animation clock pinned on
-   both sides (`--anim-seconds` on ours, `clock` in the harness rows) and `mesh+0x6c`'s path
-   into the draw (`mesh-draw.md`).
+3. ~~What delays the shield's first visible frame~~ - the frame timer. ~~The shell's settled
+   brightness and banding~~ - done 2026-10-01 (third pass): texture swizzle and scroll.
+   Next: the cockpit sphere's own transform and a frame of it (the cockpit camera), and a
+   re-look at the Mine and Bomb against the original now that their textures decode as the
+   GE reads them.
 4. Optional: re-run the Rocket probe on Flash to confirm 0.75 x class on a second
    speed class.
