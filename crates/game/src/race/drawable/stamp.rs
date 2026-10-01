@@ -29,7 +29,7 @@ impl Drawable {
         let Some(stamp) = &self.stamp_pipeline else {
             return;
         };
-        let mut current: Option<usize> = None;
+        let mut current: Option<&wgpu::RenderPipeline> = None;
         let mut last_bound: Option<usize> = None;
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
             if !self.lod_shows(draw)
@@ -43,11 +43,11 @@ impl Drawable {
             {
                 continue;
             }
-            let culled = usize::from(draw.culled);
-            if current != Some(culled) {
+            let pipeline = stamp.select(draw);
+            if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
                 oag_render::perfprobe::pipeline_set();
-                pass.set_pipeline(&stamp[culled]);
-                current = Some(culled);
+                pass.set_pipeline(pipeline);
+                current = Some(pipeline);
             }
             let slot = draw
                 .texture

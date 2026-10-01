@@ -1717,10 +1717,24 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
 // alpha - the value the blend reads). A batch without the glow bits carries
 // `glow == 0` and never stamps: the original disables the stencil test for it,
 // which keeps the mask. See `docs/rendering/glow-mask.md`.
+//
+// **The additive class also tests colour** - `Gfx_BuildBatchStateList`'s
+// `0x200` branch turns the GE colour test on, `NOTEQUAL` against black, and a
+// GE dump of Outpost 7 shows it on every additive glow draw and off on the
+// alpha-over ones - so a black texel of an additive quad stamps nothing.
+// `stamp_colour_test` is that branch's constant, set on the pipeline pair
+// that draws the additive batches. Whether the GE tests before or after the
+// fog is unread; this tests the lit texel, before the fog.
+override stamp_colour_test: f32 = 0.0;
+
+fn stamp_discards(shaded: vec4<f32>, glow: f32) -> bool {
+    let black = max(shaded.r, max(shaded.g, shaded.b)) < 0.5 / 255.0;
+    return shaded.a <= alpha_test_ref || glow <= 0.0 || (stamp_colour_test > 0.5 && black);
+}
+
 @fragment
 fn fs_main_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
-    let shaded = lit_texel(in);
-    if shaded.a <= alpha_test_ref || in.glow <= 0.0 {
+    if stamp_discards(lit_texel(in), in.glow) {
         discard;
     }
     return vec4<f32>(0.0, 0.0, 0.0, in.glow);
@@ -1728,8 +1742,7 @@ fn fs_main_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
-    let shaded = lit_texel(in);
-    if shaded.a <= alpha_test_ref || in.glow <= 0.0 {
+    if stamp_discards(lit_texel(in), in.glow) {
         discard;
     }
     return MrtOutput(vec4<f32>(0.0, 0.0, 0.0, in.glow), velocity_of(in));

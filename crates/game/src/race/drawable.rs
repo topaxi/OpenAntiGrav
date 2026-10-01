@@ -32,7 +32,7 @@ pub(super) struct Drawable {
     authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])>,
     /// The alpha-only glow-mask stamp for blended batches - see
     /// `mesh_render::Built::stamp_pipeline` and [`Self::draw_stamps`].
-    stamp_pipeline: Option<[wgpu::RenderPipeline; 2]>,
+    stamp_pipeline: Option<mesh_render::Stamp>,
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,

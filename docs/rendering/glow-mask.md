@@ -176,7 +176,11 @@ alpha test `GREATER 0`, and the blend equation untouched. That is rule 2 above
 holding for a blended batch exactly as for an opaque one - the state list sets
 the stencil from `pass_mask & 0xc0` whatever the blend class - and rule 3
 (a blended batch **without** the bits leaves the mask) is the same dump's other
-half: every other blended draw reads `STENCILTEST` off. Confidence **90**: two
+half: the transparent-class batches that carry no glow bits - the light shafts,
+`pass_mask` `0x1222`, grid prims 705 to 737 - read `STENCILTEST` off. (The
+chrome-map extra pass and its EQUAL ordinary pass are blended too, with the
+stencil **on** and ref `4`; they are not transparent-class batches, and the
+second re-stamps the base over the first's ref.) Confidence **90**: two
 batch classes, both reads agreeing with the texture bytes `texture_bytes`
 already extracts (`0xfa`, `0xaf`; `col_arrows1_GLOW_ADD`'s `0x8d` is stamped by a draw in the dump that no pixel of this frame shows).
 
@@ -193,9 +197,13 @@ alpha test and the blended pipelines' depth state - and
 after their colour. `mesh.wgsl`'s `fs_main_stamp` discards a fragment whose
 vertex glow is `0` (a batch without the bits) or that fails the alpha test. It
 reuses `GpuVertex::glow`, which already carried the byte for transparent
-batches. The colour test the original applies to its additive batches is not
-applied to the stamp, so a black texel inside an additive batch stamps here
-where the original's does not.
+batches. **The additive class also runs the GE's colour test** (`NOTEQUAL`
+against black; `Gfx_BuildBatchStateList`'s `0x200` branch, and on in every
+additive glow draw of the dump, off in the alpha-over ones), so the additive
+pipeline pair sets `stamp_colour_test` and a black texel stamps nothing. Where
+the GE places that test relative to the fog is unread; ours tests the lit texel
+before the fog. That test took the over-stamped pixels around the laser
+(`0xaf`, original `4`) from 567 to 61 on the frame below.
 
 Measured against the original's own frame at the same pose (`track_reversed.vex`
 at `pose-from`, 480 x 272, the original's mask read out of EDRAM):
@@ -205,6 +213,30 @@ at `pose-from`, 480 x 272, the original's mask read out of EDRAM):
 | mask pixels `>= 100`, rows 45 to 195 | 286 | 5,739 | 6,066 |
 | mean abs mask difference, rows 45 to 195 | 17.9 | 9.25 | - |
 | mean abs RGB difference over the original's mask `>= 100` | 65.7 | 44.1 | - |
+
+Per pixel, rows 45 to 195 at that pose: ours is set where the original reads `4` on
+721 pixels (649 of them `0xfa` inside the arches, which animate - ours at ticks 1, 60,
+120, 200, 300 and 400 holds 3,153 to 368 pixels at `0xfa` against the original's 4,076,
+so a fixed tick cannot be compared pixel for pixel) and reads `4` where the original is
+set on 1,707.
+
+**A cross-check on a different circuit**, Talon's Junction's second grid (craft at rest
+at `(-130.05, -49.59, -175.34)`, `track_reversed.vex` - mean abs RGB difference to the
+original 14.6 against 21.5 on `track.vex`, which is how the file was told). Rows 45 to
+195, original / ours / ours without the stamp:
+
+| Mask value | original | ours | without the pass |
+| ---: | ---: | ---: | ---: |
+| `0xaf` (the laser) | 710 | 1,061 | 0 |
+| `0x8b` | 109 | 175 | 0 |
+| `0xff` | 1,860 | 1,676 | - |
+
+Ours is set where the original reads `4` on 388 pixels (244 of them the laser's `0xaf`)
+and reads `4` where the original is set on 119. So the laser is about 1.5 x too wide
+here: the colour test as placed is not the whole of the original's edge. (The
+`0xaf`-on-20-pixels row of the Talon table above was a frame after the laser had
+mostly gone; the laser is animated, so one tick of ours and one of the original agree
+on neither width nor timing.)
 
 `crates/game/tests/glow_stamp_ground_truth.rs` pins it on the disc (arch lights
 at `0xfa` and the laser at `0xaf`, zero of each without the pass); the

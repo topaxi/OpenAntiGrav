@@ -21,6 +21,7 @@ pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 pub use glow_mask::GlowMask;
 pub use hull_lights::{HULL_LIGHTS, HullLights, ge_channel};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
+pub use stamp::Stamp;
 pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
 pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
@@ -161,8 +162,8 @@ pub struct Built {
     /// Alpha-only pass that stamps a blended batch's glow byte into the mask,
     /// drawn over [`Model::transparent_draws`] after their colour - see
     /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
-    /// `culled as usize` like [`Built::blend_pipeline`].
-    pub stamp_pipeline: Option<[wgpu::RenderPipeline; 2]>,
+    /// `culled as usize` like [`Built::blend_pipeline`], one pair per blend class.
+    pub stamp_pipeline: Option<Stamp>,
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
