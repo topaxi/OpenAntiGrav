@@ -230,8 +230,7 @@ fragment passes the test, and prim 330's reset is a `REPLACE` on stencil *fail*.
 software renderer (`DrawPixel.cpp`) runs every stencil outcome on every pixel,
 which is what the PSP's raster does. This page treats the software renderer as the
 reference, as it does for every EDRAM figure above, and the white blob a player sees
-on PPSSPP's OpenGL backend as that backend's approximation. No PSP hardware was
-available to arbitrate; that is the one thing that would.
+on PPSSPP's OpenGL backend as that backend's approximation. No PSP hardware was available to arbitrate; that is the one thing that would. **The maintainer confirmed the software renderer as the reference on 2026-10-01**: PPSSPP comparisons of anything that depends on the stencil-held glow mask use the software renderer, and the OpenGL backend's look is not a target.
 
 **What ours does now.** `hull_overlay::stamps_mask`: the overlay writes `0xff`
 only over a batch with a glow of its own (`GpuVertex::glow` above the neutral
