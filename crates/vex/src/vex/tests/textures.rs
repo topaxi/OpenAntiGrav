@@ -186,3 +186,73 @@ fn a_material_reads_flags_and_both_texture_indices() {
         })]
     );
 }
+
+/// One flagged 64x16 4-bit texture with two declared levels, as a file of the
+/// given version: `class` is that version's `Texture` id (`0x3c1` at 6, `0x373`
+/// at 4).
+fn flagged_file(version: u32, class: u32, texels: &[u8]) -> Vec<u8> {
+    let mut payload = vec![0u8; 0x10];
+    payload[0..2].copy_from_slice(&64u16.to_le_bytes());
+    payload[2..4].copy_from_slice(&16u16.to_le_bytes());
+    payload[4] = 4; // bits per pixel
+    payload[5] = 2; // mip count
+    payload[6] = 0xe5; // flags: bit 0, already swizzled
+    payload[8..12].copy_from_slice(&64u32.to_le_bytes()); // 16 palette entries
+    payload[12..16].copy_from_slice(&(texels.len() as u32).to_le_bytes());
+    let mut tree: Vec<u8> = Vec::new();
+    tree.extend(class.to_le_bytes());
+    tree.extend(0x10u16.to_le_bytes());
+    tree.extend(0u16.to_le_bytes());
+    tree.extend((payload.len() as u32).to_le_bytes());
+    tree.extend(0u32.to_le_bytes());
+    tree.extend(&payload);
+    let mut data = Vec::new();
+    data.extend(version.to_le_bytes());
+    data.extend((tree.len() as u32).to_le_bytes());
+    data.extend((64 + texels.len() as u32).to_le_bytes());
+    data.extend(MAGIC);
+    data.extend(tree);
+    data.extend((0..16u8).flat_map(|i| [i, 0, 0, 255]));
+    data.extend(texels);
+    data
+}
+
+/// A flagged texture is unswizzled on every version, but only a version 5 and
+/// later one hands on its authored levels: version 4 (Pure, Pulse's wrecks)
+/// keeps its renderer-synthesised chain, as it did before 2026-10-01.
+#[test]
+fn a_flagged_texture_is_unswizzled_and_only_version_six_keeps_its_levels() {
+    // Level 0: 64x16 at stride 32 (2 block columns, 2 block rows), level 1:
+    // 32x8 at stride 16 (one block, so it is its own swizzle).
+    let linear0: Vec<u8> = (0..32 * 16).map(|i| (i % 251) as u8).collect();
+    let level1: Vec<u8> = (0..16 * 8).map(|i| (i * 7 % 253) as u8).collect();
+    let mut swizzled0 = Vec::new();
+    for block_row in 0..2 {
+        for block_col in 0..2 {
+            for row in 0..8 {
+                let at = (block_row * 8 + row) * 32 + block_col * 16;
+                swizzled0.extend_from_slice(&linear0[at..at + 16]);
+            }
+        }
+    }
+    let texels: Vec<u8> = swizzled0.iter().chain(&level1).copied().collect();
+    let nibbles = |b: &[u8]| -> Vec<u8> { b.iter().flat_map(|v| [v & 15, v >> 4]).collect() };
+
+    let six = textures(&flagged_file(6, 0x3c1, &texels))
+        .expect("v6")
+        .remove(0)
+        .expect("decodes");
+    assert_eq!(six.indices, nibbles(&linear0), "level 0 unswizzled");
+    assert_eq!(
+        six.levels,
+        vec![nibbles(&level1)],
+        "the authored level, kept"
+    );
+
+    let four = textures(&flagged_file(4, 0x373, &texels))
+        .expect("v4")
+        .remove(0)
+        .expect("decodes");
+    assert_eq!(four.indices, six.indices, "level 0 is the same on both");
+    assert!(four.levels.is_empty(), "version 4 keeps no authored levels");
+}

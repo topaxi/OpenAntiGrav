@@ -46,8 +46,9 @@ pub struct EmbeddedTexture {
     /// **Authored, not derived**: they are the bytes that follow the base level
     /// in the texel block, at the padded stride the sum-check in
     /// [`texture_row_stride`] establishes. Empty for a texture declaring one
-    /// level, and for a **pre-swizzled** one (version 4 and below), whose
-    /// levels this reader does not unswizzle.
+    /// level. A pre-swizzled node (flags bit 0) of version 5 or later has each
+    /// level unswizzled on its own first; a version-4 one keeps none (its
+    /// chain is synthesised).
     pub levels: Vec<Vec<u8>>,
 }
 
@@ -188,33 +189,55 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         let pixels = usize::from(width) * usize::from(height);
         let row = texture_row_bytes(width, bits_per_pixel);
         let stride = texture_row_stride(width, bits_per_pixel);
-        // **The pre-swizzle flag, read on version 4 and below only.**
+        // **The pre-swizzle flag.** Bit 0 of the flags byte at `+0x06` means the
+        // texel block is already in the GE's 16-byte by 8-row block order, so a
+        // literal read comes out scrambled.
         //
-        // Bit 0 of the flags byte at `+0x06` means the texels are already in the
-        // GE's 16-byte by 8-row block order, so a literal read comes out
-        // scrambled - which is what every Pure model texture looked like, the
-        // flag being `0x61` there against Pulse's `0xe4`.
+        // **Acted on for every version, since 2026-10-01** (the levels below the base
+        // only from version 5, see below). It was gated to version 4
+        // and below (Pure) because a sweep found the bit on 88 Pulse PSP nodes
+        // and nothing said what it meant there. A live PPSSPP capture of Pulse's
+        // shield shell (`pulse_shield_test_ADD`, flags `0xe5`) settled it: the
+        // GE reads every Pulse texture swizzled (`TEXMODE` bit 0 on every draw),
+        // the shell's bytes in RAM are the file's, byte for byte, at every level,
+        // while an unflagged hull texture is reordered by the loader. So a
+        // flagged node is swizzled in the file, and a linear read of it is the
+        // noise that made the shell's bands dim and soft. Rendering the shell's
+        // draw from the dump with the unswizzled texture reproduces the
+        // original's pixels (blue channel within 0.1 %); with the linear one it
+        // does not. See `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
         //
-        // **Gated on the version rather than read unconditionally**, and that is
-        // not caution for its own sake: a corpus sweep found bit 0 set on 88 of
-        // Pulse PSP's 5,375 `Texture` nodes and 120 of the PS2 pressing's 8,972,
-        // on ship liveries and effects rather than on the font atlases the
-        // original claim was about. So reading it on version 6 would change what
-        // those 88 decode to, and no ground-truth screenshot covers the one model
-        // that changed - the regression would pass `just test-data`. Whether
-        // those nodes really are swizzled is an open question with its own row on
-        // `docs/formats/pure-status.md`; this change deliberately does not
-        // settle it, and version 4 is the generation where the evidence is
-        // unambiguous.
-        let swizzled = matches!(classes.version, 0..=4)
-            && p.get(6)
-                .is_some_and(|flags| flags & oag_formats::swizzle::FLAG_SWIZZLED != 0);
+        // **Each level is swizzled on its own**, at its own padded stride - the
+        // GE is handed a separate address per level - so each is unswizzled
+        // separately and the result is laid out exactly like an unflagged block.
+        // A level under 8 rows tall with a stride past 16 bytes is copied through
+        // (no such level exists on a flagged Pulse texture; unverified).
+        let swizzled = p
+            .get(6)
+            .is_some_and(|flags| flags & oag_formats::swizzle::FLAG_SWIZZLED != 0);
+        // **Version 4 and below (Pure, Pulse's Zone wrecks) keep exactly what
+        // they had before 2026-10-01**: the base level unswizzled as one block and
+        // no authored levels, so the renderer synthesises their chain (the
+        // documented Pure behaviour in `docs/rendering/frame-audit.md`). Their
+        // levels are swizzled like any other (236 of 236 flagged levels
+        // across both versions agree), but handing them on would switch Pure onto
+        // the slope level rule, a change nothing here measured.
+        let authored_levels = classes.version >= 5;
         let linear;
-        let texels = if swizzled {
+        let texels = if swizzled && !authored_levels {
             linear = oag_formats::swizzle::unswizzle(
                 &data[at + clut_size..end],
                 stride,
                 usize::from(height),
+            );
+            &linear[..]
+        } else if swizzled {
+            linear = unswizzle_levels(
+                &data[at + clut_size..end],
+                width,
+                height,
+                bits_per_pixel,
+                mip_count,
             );
             &linear[..]
         } else {
@@ -249,7 +272,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // block cannot hold, so a short block yields fewer levels rather than
         // padded ones.
         let mut levels = Vec::new();
-        if !swizzled {
+        if !swizzled || authored_levels {
             let mut offset = stride * usize::from(height);
             for level in 1..u32::from(mip_count) {
                 let (w, h) = (
@@ -301,6 +324,35 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     Ok(out)
 }
 
+/// Unswizzles a texel block level by level, returning it in row order.
+///
+/// Each level of a pre-swizzled block is swizzled separately, at its own padded
+/// stride (`texture_row_stride`), which is how the GE reads it: one address and
+/// one buffer width per level. A level the block is too short to hold ends the
+/// walk, and what remains is copied through.
+fn unswizzle_levels(
+    block: &[u8],
+    width: u16,
+    height: u16,
+    bits_per_pixel: u8,
+    mip_count: u8,
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(block.len());
+    let mut offset = 0;
+    for level in 0..u32::from(mip_count.max(1)) {
+        let w = (width >> level).max(1);
+        let h = usize::from((height >> level).max(1));
+        let stride = texture_row_stride(w, bits_per_pixel);
+        let Some(plane) = block.get(offset..offset + stride * h) else {
+            break;
+        };
+        out.extend_from_slice(&oag_formats::swizzle::unswizzle(plane, stride, h));
+        offset += stride * h;
+    }
+    out.extend_from_slice(&block[offset.min(block.len())..]);
+    out
+}
+
 /// How many bytes of one texture row hold actual picture, before padding.
 #[must_use]
 pub fn texture_row_bytes(width: u16, bits_per_pixel: u8) -> usize {
@@ -326,10 +378,60 @@ pub fn texture_row_bytes(width: u16, bits_per_pixel: u8) -> usize {
 ///
 /// What this is *not*: swizzling. A swizzled PSP texture is reordered into
 /// 16-byte by 8-row blocks, and reading it row-wise would corrupt every texture
-/// wider than the block rather than only the narrow ones. Every 64-pixel-wide
-/// 4-bit texture on the disc decodes correctly read row-wise, so this data is
-/// linear with padded rows.
+/// wider than the block rather than only the narrow ones. Every **unflagged**
+/// 64-pixel-wide 4-bit texture on the disc decodes correctly read row-wise, so
+/// that data is linear with padded rows; a node with flags bit 0 is the
+/// swizzled case (`pulse_bomb.tga` is 64 wide, 4-bit and flagged, and reads as
+/// sheared noise row-wise - see `unswizzle_levels`).
 #[must_use]
 pub fn texture_row_stride(width: u16, bits_per_pixel: u8) -> usize {
     texture_row_bytes(width, bits_per_pixel).next_multiple_of(16)
+}
+
+#[cfg(test)]
+mod swizzle_tests {
+    use super::unswizzle_levels;
+
+    /// The GE's block order, written the loader's way round.
+    fn swizzle(linear: &[u8], stride: usize, height: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        for block_row in 0..height / 8 {
+            for block_col in 0..stride / 16 {
+                for row in 0..8 {
+                    let at = (block_row * 8 + row) * stride + block_col * 16;
+                    out.extend_from_slice(&linear[at..at + 16]);
+                }
+            }
+        }
+        out
+    }
+
+    /// Each level is swizzled on its own, at its own padded stride: a 64x32
+    /// 4-bit texture has levels of stride 32, 16, 16 and 16 bytes.
+    #[test]
+    fn every_level_is_unswizzled_at_its_own_stride() {
+        let levels: [(usize, usize); 4] = [(32, 32), (16, 16), (16, 8), (16, 8)];
+        let mut linear = Vec::new();
+        let mut swizzled = Vec::new();
+        let mut seed = 1u32;
+        for (stride, height) in levels {
+            let plane: Vec<u8> = (0..stride * height)
+                .map(|_| {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    (seed >> 24) as u8
+                })
+                .collect();
+            swizzled.extend(swizzle(&plane, stride, height));
+            linear.extend(plane);
+        }
+        assert_ne!(swizzled, linear, "level 0 is a real permutation");
+        assert_eq!(unswizzle_levels(&swizzled, 64, 32, 4, 4), linear);
+    }
+
+    /// A block shorter than its declared levels is returned whole, never cut.
+    #[test]
+    fn a_short_block_is_not_truncated() {
+        let block = vec![7u8; 100];
+        assert_eq!(unswizzle_levels(&block, 64, 32, 4, 4).len(), 100);
+    }
 }

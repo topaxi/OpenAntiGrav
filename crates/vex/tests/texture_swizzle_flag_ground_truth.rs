@@ -12,6 +12,12 @@
 //! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
 //! release check wants: a skipped ground-truth test is green and proves nothing.
 //!
+//! **Settled 2026-10-01**: bit 0 is the pre-swizzle flag on Pulse too, and
+//! `vex::textures` acts on it on every version - see
+//! `shield_texture_swizzle_ground_truth.rs` and
+//! `docs/formats/pure-status.md`. The text below is the question as it stood
+//! when this sweep was written; the distribution it pins is unchanged.
+//!
 //! # The question this exists to answer
 //!
 //! `docs/formats/pure-status.md` records, at confidence 88, that

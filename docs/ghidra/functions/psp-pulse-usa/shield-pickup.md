@@ -523,7 +523,7 @@ What differs, named and not fixed:
    delays it in the original (the arm function's own timer, or the `active` flag
    being set late). Not read. This is the same size as the delay ours already
    carries from somewhere; which part of it is the original's is open.
-2. *Banding and brightness.* The original's concentric cyan bands are sharper
+2. *Banding and brightness.* **Resolved 2026-10-01, third pass: see "The shell's own GE state" below** (a linearly decoded texture and a texture that did not scroll). The original's concentric cyan bands are sharper
    and its shell reads as brighter and more opaque at fire+50 to +150 than ours.
    Not measured in numbers (a colour comparison needs the same camera framing
    first). Candidate: the sinusoidal alpha `(n * 0.25 + 0.75)` or the model's
@@ -567,6 +567,123 @@ What differs, named and not fixed:
   (written by `Image_SetVertexColours`, `0x089122b4`) reaches the draw - read on
   `mesh-draw.md` as an ambient colour on batches with normals and no vertex colours - against
   how ours multiplies the authored vertex colours.
+
+## 2026-10-01, third pass: the shell's own GE state, and why ours looked dim
+
+Method: `scripts/psp-ge-dump.py`-style `gpu.record.dump` frames of a raised
+shield on Talon's Junction (Time Trial, Venom, Assegai, craft stationary on the
+grid, PPSSPP v1.20.4 with the **software renderer**, so EDRAM is the real
+framebuffer), at three shield clocks, plus the displayed frame read out of EDRAM
+at `0x04000000`/`0x04088000` and the same frame again after hiding the shell in
+place (`obj+0x74 = 0` and bit 2 of both models' `+0x2c` cleared, about 0.7 s of
+game time, restored afterwards). The difference of the two frames is the shell's
+own contribution, camera and craft unchanged. Harness: `data/scratch/pulse-shield-look/scripts/`
+(`shield_cap.py`, `ge_prims.py`, `emu_shell.py`); raw frames stay under `data/`.
+
+### What the shell's two draws set (read off the dumps, three clocks agree)
+
+The shell is two strips - 109 vertices (107 triangles) and 50 (48), the two
+`--draws` batches of `shipshield.vex` - drawn after the hull:
+
+| GE state | Value | Meaning here |
+| --- | --- | --- |
+| `VTYPE` | `0x13d` | `u8` UV, `RGBA8888` colour, `s8` normal, `s16` position |
+| lighting | on, all four lights off, `MATERIALUPDATE = 7`, material alpha `0xff` | the vertex colour **replaces** the material's ambient, diffuse and specular; no light adds anything, so the lit colour is `scene ambient x vertex colour` |
+| `AMBIENTCOLOR` / `AMBIENTALPHA` (`0x5c`/`0x5d`) | `(0xfe, 0xfe, 0xfe)` and `0xdc`, `0xfe`, `0xe0` at the three dumps | **this is where `ShipShield_Update`'s `set_model_colour` lands**: rgb is `rgba.rgb`, alpha is `rgba.a x (0.75 + 0.25 sin t)`. The alphas match `sin` of the shield's own clock at all three (peak `0xfe` at `t = pi/2`; `0x83` at `t = 4.37`) |
+| `TEXFUNC` | `0x100`: modulate, texture alpha used | colour and alpha both multiply the texel |
+| blend | `0xa2`: `SRC_ALPHA` and fixed white (`FIXB = 0xffffff`), add | `src.rgb x src.a + dst` - `mesh_render::ADDITIVE_BLEND` exactly |
+| alpha test | `GREATER 0`; colour test `NOTEQUAL 0` | |
+| depth | test `GREATER` (the PSP's `Less`), write off | |
+| stencil | **off** | so the shell does **not** stamp the glow mask (confirms the `0x1232` reading) |
+| cull | **off** | both faces add |
+| fog | on, `FOG1 = 1850`, `FOG2 = 1/1428` | inert: the shell is about 30 units from the eye |
+| `TEXLEVEL` / `TEXLODSLOPE` | mode 2 (slope), bias `0x0a`; `1/256` | level 0 at this depth; ours picks level 0 too (`--texture-detail maximum` changes no pixel) |
+| `TEXOFFSET` `u` | `0.4737`, `0.1031`, `0.6455` at clocks `135.18`, `136.79`, `138.30` | the authored track of `shipshield.vex` (frames 1 to 59, `0` to `251/256`, 59-frame loop), sampled at those clocks to within the dump's timing error |
+
+**The candidate this thread carried is closed**: the colour does not reach the
+draw through `mesh+0x6c` as some other term. It is the GE's scene ambient colour
+with the model's own vertex colours as the material, which is *exactly* what
+`Drawable::tint` already does (vertex colour x `ShipShield::colour`). Authored
+vertex colours arrive untouched (`(255,255,255,255)` and `(27,0,209,0)` on
+alternating rings - the `rgba 0.55, 0.50, 0.91, 0.50` average `--draws` prints).
+Confidence **92** (three dumps, every field constant across them where the law
+says it is, varying where it says it varies).
+
+### The two defects, and what each was worth
+
+1. **The texture was decoded linearly.** `pulse_shield_test_ADD.tga` carries
+   flags `0xe5` - bit 0, "already swizzled" - and `vex::textures` read bit 0 on
+   version 4 and below only. In the dump the shell's level-0 bytes in RAM are
+   **byte-identical to the file's**, and so are levels 1 to 3; `TEXMODE` bit 0
+   (swizzle) is set on every draw of the frame; and the unflagged hull textures'
+   bytes in RAM are the file's bytes *reordered* (the loader swizzles them -
+   `Texture_BindEmbeddedData`/`Texture_SwizzleForGe`, see
+   [psp-texture.md](../../../formats/psp-texture.md)). So the GE reads the shell's
+   texture swizzled and ours read it as noise. Read linearly it is a random
+   speckle with two bright bars; read as the GE reads it, a structured band
+   pattern. Fixed in `vex::textures` (every version, each level unswizzled at
+   its own stride; `shield_texture_swizzle_ground_truth.rs`).
+2. **The texture did not scroll.** `Drawable::write_anims` was never called for
+   the shells, so the authored `u` track (a full texture width in 0.98 s) stood
+   at offset 0. Fixed in `race/scene/frame.rs`
+   (`shield_shell_scroll_ground_truth.rs`: 8,486 pixels move between two clocks
+   with the write, 276 without).
+
+### The comparison, pinned clock, matched frame
+
+Same craft, circuit and tick on both sides; the clock pinned (`--anim-seconds`
+set to the `g_ingame+0x40` read at the pause, shield `time` equal to the object's
+`+0x78`); each side differenced against its own no-shell frame, over the shell's
+box, per channel (correlation / least-squares scale `k`, original = `k` x ours):
+
+| Frame | Before (linear texture, no scroll) | Texture fixed, still no scroll | Both fixes, clock as read | Both fixes, clock one frame (0.015 s) earlier |
+| --- | --- | --- | --- | --- |
+| shield clock 0.65 s | R .36 G .48 B .51 (k 1.2 / 1.2 / .92) | R .92 G .91 B .93 (k .90 / .86 / .88) | same | not needed |
+| shield clock 1.75 s | R .22 G .24 B .37 | R .13 G .18 B .29 | R .62 G .60 B .72 | **R .92 G .90 B .91 (k .90 / .86 / .91)** |
+
+The last column is the display lag: the frame in EDRAM was drawn one frame before
+the state read at the pause, and the texture's scroll is fast enough (a width in
+0.98 s) to show a one-frame shift. A frame-by-frame sweep of the offset gives one
+peak (0.92) at -0.015 s and nothing above 0.75 elsewhere in +-0.06 s.
+
+**"Ours is about a third as bright" was a phase artefact.** At a pinned clock
+the shell's blue energy was within 10 % either way even before the fix
+(blue, shell box: original 594k against ours 605k at 0.65 s, 666k against 677k at 1.75 s), and a
+dump-driven rasteriser of the original's two draws with the *unswizzled*
+texture reproduces the original's frame's blue sum to 0.1 % (668,952 against
+668,372; 639,069 against 639,404), against 20 % off with the linear one. The
+earlier measure compared different texture phases (a scroll the engine did not
+have) with a noisy pixel-change metric. Confidence **90** that the settled
+brightness and banding gap is these two defects.
+
+**The per-level rule was checked on every flagged node**, version 4 and 6, across
+`Data.wad`, `FEData.wad`, `BEData.wad` and `FE.wad` (88 nodes, 236 levels below the
+base): each decoded level is compared against a 2x box-downsample of the decoded level
+above it, and against the linear reading of the same bytes. The unswizzled level matches
+at least as well on **236 of 236** (mean absolute RGB difference 3.5 against 8.1). The 13
+version-4 nodes (Pulse's Zone shipwrecks, flags `0x61`) and Pure's 1,806 already took
+the swizzled branch before 2026-10-01, with level 0 unswizzled as one block and no
+authored levels (the renderer synthesises their chain, as `frame-audit.md` records for
+Pure). **That is kept exactly**: `vex::textures` hands on authored levels only from
+version 5, because handing Pure's on would switch it onto the slope level rule, which
+nothing measured. A unit test pins both (`a_flagged_texture_is_unswizzled_and_only_version_six_keeps_its_levels`).
+
+Base-level coherence of every flagged node, decoded reading against the linear one
+(neighbour difference of palette luminance): Pulse USA and EU, 88 nodes, **69 smoother
+decoded, 19 identical (32-wide or flat), 0 smoother linear**; Pure USA and EU, 1,806
+nodes (the reading it has had since 2026-08-12), 1,543 smoother decoded, 248 identical,
+**15 smoother linear** - all `col_banners*_ADD_GLOW`/`AAdc_BaseTexture`-style 128x32
+or 64x64 textures (e.g. `col_banners2_ADD_GLOW` 22.9 against 7.0). Pure's reading is
+unchanged here and those 15 are an observation for whoever audits Pure's textures, not
+a finding. Nothing else reads this `.vex` texture block: PS2 `.vex` scenes carry no
+texels and HD's are big-endian and skipped (`embedded` is false for both).
+
+Residual, reported and not tuned toward: ours reads 10 to 14 % brighter in the
+fit (k about .9), the hull occludes the shell in ours over the craft's own box,
+and the emulator frame lags the pause by one frame. No term was adjusted.
+
+Frames, dumps and the numbers: `data/scratch/pulse-shield-look/` (`off2`, `off3`,
+`ours6`; `report.md`).
 
 ## What is not verified
 

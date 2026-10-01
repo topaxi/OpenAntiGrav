@@ -408,6 +408,8 @@ impl Scene {
                 prev_vp * prev.ship(slot, race) * Mat4::from_scale(Vec3::splat(state.scale())),
             );
             shell.tint(queue, state.colour(), recoloured);
+            // The authored `u` scroll, on the global clock (shield-pickup.md).
+            shell.write_anims(queue, seconds);
         }
         // The cockpit sphere, which replaces the player's shell rather than
         // joining it - `ShipShield_Update` draws one *or* the other and hides

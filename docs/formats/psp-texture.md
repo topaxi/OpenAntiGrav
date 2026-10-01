@@ -148,6 +148,13 @@ unswizzled.
 The rest, including the 512x128 Pulse logo and the 256x256 icon sheet, have bit
 0 clear and are genuinely linear, which is why decoding them literally worked.
 
+**The same rule holds for the `.vex` `Texture` node's flags byte at `+0x06`, on
+Pulse's version-6 models too** (measured live 2026-10-01, see
+[shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md#2026-10-01-third-pass-the-shells-own-ge-state-and-why-ours-looked-dim)):
+a flagged node's bytes in RAM are the file's, and the GE reads them swizzled; an
+unflagged node's are reordered by the loader. Each mip level is swizzled on its
+own, at its own padded stride.
+
 `+0x08` is the complement of bit 0 of `+0x07` on every texture, so it is one
 flag stated twice rather than two.
 

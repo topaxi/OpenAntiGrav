@@ -229,3 +229,6 @@
 0x00158568	function	Ship_UpdateCameraRigs	95	camera.md
 0x00150d20	function	Craft_Construct	80	camera.md
 0x0027e8cc	data	g_craft_scale	95	camera.md
+0x00169418	function	ShipShield_Activate	85	shield-pickup.md
+0x001695d8	function	ShipShield_Deactivate	80	shield-pickup.md
+0x00169658	function	ShipShield_Update	88	shield-pickup.md

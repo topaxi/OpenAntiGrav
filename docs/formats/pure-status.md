@@ -74,7 +74,7 @@ Counts below are over all three archives, 1,229 entries, unless stated.
 | [`.vex` mesh batches](vex.md#vertex-format) | reads (v4) | **11,025/11,025** v4 mesh nodes walk: 20,832 batches, 2,116,976 vertices, same batch header, same `vertex_type` encoding, same per-batch `f32` scale. Every decoded vertex falls inside the batch's **own declared bounding box**, **20,832/20,832** | 94 |
 | [`.vex` mesh batches](#version-3-shortens-the-batch-header) | **breaks** (v3) | 8 of 26 v3 mesh nodes walk under the Pulse header; a shifted-header hypothesis raises that to 23 of 26 | 65 |
 | [`.vex` embedded textures](vex.md) | reads | `sum(clut_size + texel_size)` over `Texture` nodes equals the declared texture-block length on **156/156** v4 files, to the byte | 92 |
-| [`.vex` embedded textures](#pures-model-textures-ship-pre-swizzled) | reads | Pure sets the pre-swizzle flag on model textures. `vex::textures` reads `+0x06` and unswizzles **on version <= 4 only** since 2026-08-12; version 6 is deliberately untouched | 88 |
+| [`.vex` embedded textures](#pures-model-textures-ship-pre-swizzled) | reads | Pure sets the pre-swizzle flag on model textures. `vex::textures` reads `+0x06` and unswizzles on **every version** since 2026-10-01 (version <= 4 only from 2026-08-12); version 4 keeps its base-level-only reading and a synthesised chain, and Pulse's 75 flagged version-6 nodes now unswizzle each authored level at its own stride | 88 |
 | `WO Track` payload | reads | 16 nodes carry the magic; version `0x103` against Pulse's `0x105`; `encoded_len == payload length` exact on **16/16** under the documented layout, reserved block included. Reported separately, see [below](#reported-elsewhere) | 94 |
 | [Collision geometry](collision.md#the-same-format-is-in-wipeout-pure) | reads | None of Pulse's five class IDs appears. All three that do are now named - `0x36b` floor, `0x36c` wall, `0x37f` reset - by the [class-name table index](#the-renumbering-is-a-table-index-and-both-executables-carry-the-table), with floor and wall independently corroborated by a facing statistic and reset by a ship respawning on Pure's own circuit | 94 |
 | [Front-end XML](fexml.md) | reads | 291 XML entries across the three archives. **Zero** begin `<code`, so the name shortening is a Pulse-era addition and `--expand` is correctly a no-op on Pure | 94 |
@@ -309,6 +309,21 @@ it covers 0.2 % of Pure's geometry, so nothing depends on it.
 > `crates/texture/tests/texture_swizzle_flag_ground_truth.rs`, which measures
 > and pins the distribution.
 >
+> **Settled 2026-10-01: bit 0 means "already swizzled" on Pulse too, and
+> `vex::textures` now reads it on every version.** A GE dump of Pulse's shield
+> shell (flags `0xe5`) shows the GE reading every texture swizzled, the shell's
+> bytes in RAM equal to the file's at all four levels, and an unflagged hull
+> texture's bytes in RAM reordered by the loader. A corpus check (neighbour
+> difference of the palette luminance, linear against unswizzled) finds every
+> non-degenerate flagged texture smoother unswizzled (56 of 56, ratios 0.27 to
+> 0.85; the 8 others are 32-wide or flat textures whose swizzle is the identity)
+> and 4,111 unflagged ones smoother linear against 333 (a handful of them markedly smoother unswizzled, ratios 0.64 to 0.8 - repeating wall and grid textures where a block reordering can look smooth - and they are not flagged, so nothing here touches them).
+> The affected Pulse PSP nodes (version 6) are the shield shells, `Pulse_Bomb.vex`'s
+> three textures, the shuriken, cage and mag-effect textures and seven ship-shaped
+> models whose use is unidentified (not `ship_FE.vex`, whose menu render is
+> pixel-identical before and after, and not race hulls, which are `0xe4`). Version-4
+> nodes keep exactly their old reading. The paragraph below is kept as the history.
+>
 > The consequence is the part that matters: **making `vex::textures` read
 > `+0x06` is not free for Pulse.** It changes what 88 PSP nodes decode to, and a
 > ground-truth screenshot of a circuit need not cover the one model that
@@ -327,7 +342,7 @@ is set only on [font atlases](fnt.md#the-texels-are-stored-already-swizzled).
 On Pure it is set on model textures too: the Feisar ship's five embedded
 textures read flags `0x61`, where Pulse's eight read `0xe4`.
 
-**Implemented 2026-08-12, gated on the version word.**
+**Implemented 2026-08-12, gated on the version word; the gate was removed 2026-10-01 (see above).**
 [`vex::textures`](../../crates/vex/src/vex.rs) now reads `+0x06` and
 unswizzles through `texture::unswizzle` when bit 0 is set **and the file's
 version is 4 or below**. That is the generation where the evidence is
