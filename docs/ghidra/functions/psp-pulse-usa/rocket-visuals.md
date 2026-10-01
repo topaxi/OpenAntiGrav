@@ -811,13 +811,14 @@ from: **`WO_ROCKET_SHAZZAM` is the glow**, one big soft flash a tick on every
 rocket, and the ring sprites are the fine orange structure round it.
 
 **Cause 1: the flare's sprite was not a disc.** `WO_ROCKET_FLARE`'s root has an
-embedded sprite like the other 29, a 128x64, 4-level, **4 bits a pixel** header, and
+embedded sprite like the other 29, a 128x64, 4-level, **4 bits a pixel** header (a
+4x4 atlas of ragged orange rings, a black-to-orange 16-entry palette, alpha 255), and
 `oag_vex::pob::texture::parse_at` refused every header whose depth was not 8, so the
 root drew the procedural radial disc: white and bright at the core where the
-original draws ragged orange rings. See
-[`pob.md`](../../../formats/pob.md#four-bits-a-pixel-2026-10-01)
-for the layout, the six roots and five children it also gives their sprites, and the
-sprite sheet. Commit `be52fc48`.
+original draws rings. Found independently on this lane and on `pulse-wreck-2` the same
+day (from a Bomb's `FIRE`, there); the wreck lane's reader merged first and is the one
+on main - see [`pob.md`](../../../formats/pob.md) for the layout, the twelve 4-bit
+sprites and the six roots that looked textureless.
 
 **Cause 2: a pool particle's spawn tick aged it.** Ours spawned a particle and
 integrated it in the same tick, so its first draw was a tick old and a particle with a
@@ -827,7 +828,7 @@ irregular ticks (float rounding decided which). Read live: the first draw is the
 channel at age 0, the flash is drawn once or twice, and the original's death rule is
 "dead the update its life runs out". The spawn tick no longer ages or moves a pool
 particle (`Particle::fresh`, which templates already had) and death keeps its
-after-ageing test, with a rounding epsilon. Commit `606b6d2f`. This is the shared
+after-ageing test, with a rounding epsilon. This is the shared
 `psys` machinery, so every pool effect changes by one tick of age at its first draw
 (the Rocket's own explosions and the craft-hit blast included); the two numbers the
 original gives to check it against are the flare's `1.05` and the SHAZZAM draw count.

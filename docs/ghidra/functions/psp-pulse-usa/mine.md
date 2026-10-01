@@ -1346,7 +1346,7 @@ the smoke ring spawns on a ring 12.94 units in radius round the blast (`psys` sh
 read live on this effect: 13.0 to 13.6 units from the centre) where ours spawned it at the
 anchor, and the dome stamps the glow mask (`hemisphere_disperse1_ADD_GLOW`, stencil `80`
 in the GE list). The debris emitter's rock sprites now exist at all (4-bit textures,
-[`pob.md`](../../../formats/pob.md#four-bits-a-pixel-2026-10-01)). **Still different**: the
+[`pob.md`](../../../formats/pob.md)). **Still different**: the
 dome reads yellow and opaque in the original and white and thin in ours, and the original's
 smoke is denser and a little larger at fire+50; neither cause is isolated. The dome's palette
 is read (`(255,253,238,80)` through `(252,151,0,80)` and then alpha `0`: every visible texel
