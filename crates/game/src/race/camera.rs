@@ -480,6 +480,6 @@ impl Race {
             let widen = 1.0 + self.view.boost_kick * self.view.boost_fov_kick.gain();
             2.0 * ((authored * 0.5).tan() * widen).atan()
         };
-        oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
+        oag_render::camera::fit_vertical_fov(kicked, self.view.camera_aspect, aspect)
     }
 }
