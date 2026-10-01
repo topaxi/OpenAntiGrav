@@ -1070,11 +1070,9 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // Bank-to-yaw: a body-local yaw term proportional to how far the right axis
     // has tipped out of the world horizontal, and cancelled by a magstrip lock
     // like the rest of the suspension.
-    let local_angular_torque = Vec3::new(
-        0.0,
-        BANK_TO_YAW_GAIN * right.y * (1.0 - state.mag_lock_blend),
-        0.0,
-    );
+    // Skipped on the grid: `craft+0x2a4 != 0` guards it, see `ShipState::on_grid`.
+    let bank = BANK_TO_YAW_GAIN * right.y * (1.0 - state.mag_lock_blend);
+    let local_angular_torque = Vec3::new(0.0, if state.on_grid { 0.0 } else { bank }, 0.0);
 
     // Two probes both penetrating would each ask for a teleport, and applying
     // both would move the body twice as far as either wanted. The larger

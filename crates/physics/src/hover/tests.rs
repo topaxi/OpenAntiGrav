@@ -459,6 +459,33 @@ fn the_alignment_torque_never_has_a_pitch_component() {
     );
 }
 
+/// A banked craft on the grid gets no bank-to-yaw coupling, and the same craft
+/// racing does: `Ship_HoverTwoPoint` guards the term with `craft+0x2a4 != 0`.
+/// Measured on PPSSPP, the original's craft holds its heading dead still through
+/// the countdown on a banked start and yaws from GO, see
+/// `docs/physics/grid-state.md`.
+#[test]
+fn the_bank_to_yaw_coupling_is_skipped_on_the_grid_and_only_there() {
+    let world = flat_floor();
+    let handling = test_handling();
+    let mut state = state_at(3.0);
+    state.body.orientation = oag_core::math::Quat::from_rotation_z(0.2);
+
+    let racing = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
+    assert!(
+        racing.local_angular_torque.y.abs() > 1.0,
+        "a banked craft yaws"
+    );
+
+    state.on_grid = true;
+    let held = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
+    assert_eq!(held.local_angular_torque, Vec3::ZERO);
+    // Only that term: the surface alignment still levels a craft on the grid,
+    // which is what the original's pitch and roll settle through the countdown
+    // shows.
+    assert_eq!(held.alignment_torque, racing.alignment_torque);
+}
+
 #[test]
 fn an_airborne_ship_gets_none_of_the_grounded_terms() {
     let world = flat_floor();

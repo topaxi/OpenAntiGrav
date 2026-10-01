@@ -552,6 +552,27 @@ pub struct ShipState {
     /// straight from `LEFT` to `RIGHT` with no neutral tick between them is one
     /// tap and not none. See [`crate::barrel_roll::advance_gesture`].
     pub roll_axis_zone: Option<crate::barrel_roll::TapDirection>,
+    /// The craft is in the original's **grid state**, `craft+0x2a4 == 0`: placed
+    /// on the start line and held until the green light.
+    ///
+    /// `Race_PlaceGrid` puts every craft in state `0` and `Race_StartRacing`
+    /// moves every craft to state `1` (`FUN_08848590`, `0x08848590`). Of the
+    /// terms in `Ship_UpdateCraft`'s force law, `Ship_HoverTwoPoint`'s epilogue is
+    /// the one this field gates: the bank-to-yaw coupling is skipped in state `0`
+    /// (`if (craft+0x2a4 != 0)` at `0x0884ad2c`-`0x0884ad40`), which is why a
+    /// craft on a banked grid holds its heading dead still through the whole
+    /// countdown and starts to yaw at GO. Measured on PPSSPP 2026-10-01, see
+    /// `docs/physics/grid-state.md`.
+    ///
+    /// Written by the race, which owns the countdown clock; physics only reads
+    /// it. `false` for every craft that was never on a grid, so a bare physics
+    /// test and a respawn mid-race see the racing law.
+    ///
+    /// **Not the only thing state `0` changes**, and the rest is not ported
+    /// here: the damping on the roll axis is `-5` rather than `-2`, the
+    /// `rebound` base is `1.0` rather than the hull's, and the control record's
+    /// airbrakes are forced to full. See `docs/physics/grid-state.md`.
+    pub on_grid: bool,
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
@@ -776,6 +797,7 @@ impl Default for ShipState {
             // it, so this is faithfulness rather than a behaviour change. See
             // `docs/ghidra/functions/psp-pulse-usa/engine.md`.
             time_since_landing: 10.0,
+            on_grid: false,
             time_airborne: 0.0,
             mag_lock_blend: 0.0,
             pad_timer: 0.0,
