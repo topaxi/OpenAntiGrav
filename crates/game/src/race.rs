@@ -127,6 +127,7 @@ mod camera;
 mod capture;
 pub mod countdown;
 mod craft_flash;
+mod destroy_camera;
 mod drawable;
 mod effect_names;
 mod effects;

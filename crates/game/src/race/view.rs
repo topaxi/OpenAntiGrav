@@ -112,6 +112,9 @@ pub struct RaceView {
     /// The explosion and sparks a craft throws as it goes out - see
     /// `race::wreck_fx`.
     pub(super) wreck_fx: super::wreck_fx::WreckFx,
+    /// The camera the player is cut to when their craft goes out - see
+    /// `race::destroy_camera`.
+    pub(super) destroy_camera: super::destroy_camera::DestroyCamera,
     /// See `Setup::absorb_burst`.
     pub(super) absorb_burst: Option<super::absorb::AbsorbBurst>,
     /// See `Setup::absorb_anchors`.

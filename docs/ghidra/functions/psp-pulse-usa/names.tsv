@@ -1182,3 +1182,9 @@
 0x08848590	function	Craft_SetState	90	grid.md
 0x088486d4	function	Craft_EnterGridState	90	grid.md
 0x088486e4	function	Craft_ReleaseFromGrid	90	grid.md
+0x0888058c	function	Camera_SetSubject	85	camera.md
+0x0887fedc	function	Camera_PickStation	88	camera.md
+0x08880984	function	Camera_FramingFov	88	camera.md
+0x08880c04	function	Camera_UpdateSpectatorView	85	camera.md
+0x0887fd3c	function	Camera_UpdateSpectator	70	camera.md
+0x08880168	function	Camera_RepickNearSubject	62	camera.md

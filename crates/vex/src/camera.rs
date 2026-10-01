@@ -12,12 +12,28 @@
 //!   +0x04  u32   0x20
 //!   +0x08  u32   0x22
 //!   +0x0c  f32   1/60         (0.016667, the same on every flyer front)
-//!   +0x10  f32[3] 0
+//!   +0x10  f32[3] 0 on a Wipeout HD flyer; the AIM POINT in world space on a
+//!                Wipeout Pulse circuit (see "The aim point" below)
 //!   +0x1c  f32   1.5380 on the eight base grids, 1.5389 on the eight Fury
 //!                grids, 1.0833 on `Fury_Campaign` and `HD_Campaign`
 //!   +0x20  u32   0x4f15, 0x4a2c, 0x3621 respectively
 //!   +0x24  u32[3] 0
 //! ```
+//!
+//! # The aim point
+//!
+//! **On a Wipeout Pulse circuit's `track.vex` the three floats at `+0x10` are
+//! not zero: they are a world-space point the artist aimed the camera at**
+//! ([`Camera::aim`]), and the position beside it is the node's own transform
+//! translation. Read 2026-10-01 off Talon's Junction (`16_Track`, ten cameras)
+//! and checked against the running original: the camera the game fixes on a
+//! wrecked player craft (`FUN_0887fedc`) keeps its eye at the node's world
+//! translation (`468.3436, -22.8052, -39.8696`, exactly) and picks, among the
+//! ten, the one whose **aim point** is nearest the craft, which is the `+0xa0`
+//! of its runtime object and is this payload's `+0x10..+0x1c`
+//! (`344.1187, -43.1941, -137.0839`, exactly). The aim is already in world
+//! space - it is not run through [`Camera::to_world`]. See
+//! `docs/ghidra/functions/psp-pulse-usa/camera.md`, "The destroy camera".
 //!
 //! # What is read and what is not
 //!
@@ -60,6 +76,9 @@ pub struct Camera {
     /// The node's own world transform, row-major with the translation in row
     /// 3, from [`vex::world_transforms`].
     pub to_world: [f32; 16],
+    /// The three `f32`s at `+0x10`: the point the camera was aimed at, in world
+    /// space, on a Pulse circuit; zero on a Wipeout HD flyer. See the module docs.
+    pub aim: [f32; 3],
     /// The `f32` at `+0x1c`. Not interpreted - see the module docs.
     pub value_1c: f32,
     /// The `u32` at `+0x20`. Not interpreted - see the module docs.
@@ -83,6 +102,11 @@ impl Camera {
         Some(Self {
             name,
             to_world,
+            aim: [
+                f32::from_bits(order.u32(payload, 0x10)),
+                f32::from_bits(order.u32(payload, 0x14)),
+                f32::from_bits(order.u32(payload, 0x18)),
+            ],
             value_1c: f32::from_bits(order.u32(payload, 0x1c)),
             value_20: order.u32(payload, 0x20),
         })
@@ -146,6 +170,19 @@ mod tests {
         assert_eq!(camera.value_1c, 1.538);
         assert_eq!(camera.value_20, 0x4f15);
         assert_eq!(camera.position(), [0.0, 0.0, 0.0]);
+    }
+
+    /// Talon's Junction's eighth camera: its payload's `+0x10` is the aim point
+    /// the running original keeps at `+0xa0` of the camera it fixes on a wreck.
+    #[test]
+    fn the_aim_point_is_the_three_floats_at_0x10() {
+        let mut bytes = payload(1.538);
+        for (i, v) in [344.1187_f32, -43.1941, -137.0839].iter().enumerate() {
+            bytes[0x10 + 4 * i..0x14 + 4 * i].copy_from_slice(&v.to_le_bytes());
+        }
+        let camera = Camera::parse(None, &bytes, vex::matrix::IDENTITY, ByteOrder::Little)
+            .expect("a full payload");
+        assert_eq!(camera.aim, [344.1187, -43.1941, -137.0839]);
     }
 
     #[test]

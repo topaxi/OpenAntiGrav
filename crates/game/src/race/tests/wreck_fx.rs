@@ -6,7 +6,9 @@
 
 use super::*;
 use crate::livery::SparkAnchor;
-use crate::race::wreck_fx::{DEATH_SPARKS_EFFECT, FXNODE_EXPLO_EFFECT, WreckFx};
+use crate::race::wreck_fx::{
+    DEATH_SPARKS_EFFECT, EXPLOSION_DROP, EXPLOSION_EFFECT, FXNODE_EXPLO_EFFECT, WreckFx,
+};
 use oag_physics::CraftState;
 
 fn locators(count: usize) -> Vec<SparkAnchor> {
@@ -74,4 +76,50 @@ fn the_wreck_effects_are_let_go_once_they_stop_emitting() {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
     assert_eq!(race.wreck_fx_riding_for_tests(), 0);
+}
+
+/// The big blast is thrown 1.5 s after the state 5 edge, not on it, at the
+/// live model's matrix moved `EXPLOSION_DROP` of its own rows along `-up`:
+/// `FUN_088407b0`'s `Psys_Spawn_q(.., "WO_SHIP_EXPLOSION", .., &matrix)`.
+#[test]
+fn the_big_explosion_follows_after_the_delay_below_the_craft() {
+    let mut race = race_with_wreck_locators();
+    let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
+    let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses");
+    race.view.effects.insert(EXPLOSION_EFFECT, effect);
+    go_out(&mut race, 3);
+    let wrecked_at = race.sim.world.ships[3].physics.body.position;
+    let up = race.sim.world.ships[3].physics.body.orientation * Vec3::Y;
+    let after_the_nodes = race.wreck_fx_started_for_tests();
+    assert_eq!(race.wreck_explosion_at_for_tests(), None, "not on the edge");
+    for _ in 0..80 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    assert_eq!(race.wreck_fx_started_for_tests(), after_the_nodes);
+    // Put back on the track meanwhile, as an Eliminator craft is: the blast
+    // still goes where the wreck lies.
+    race.sim.world.ships[3].physics.body.position += Vec3::new(500.0, 0.0, 0.0);
+    for _ in 0..20 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    let at = race
+        .wreck_explosion_at_for_tests()
+        .expect("thrown by 1.5 s after the edge");
+    assert_eq!(race.wreck_fx_started_for_tests(), after_the_nodes + 1);
+    let below = (wrecked_at - at).dot(up);
+    let expect = EXPLOSION_DROP * oag_render::exhaust::CRAFT_ROW_SCALE;
+    assert!(
+        (below - expect).abs() < 1e-3,
+        "{below} below, expected {expect}"
+    );
+}
+
+/// A source with no wreck read throws no big blast either.
+#[test]
+fn a_source_with_no_wreck_throws_no_big_explosion() {
+    let mut race = race_with_wreck_locators();
+    race.view.wreck_fx = WreckFx::new(Vec::new());
+    race.throw_wreck_explosion(3, Mat4::IDENTITY);
+    assert_eq!(race.wreck_explosion_at_for_tests(), None);
 }

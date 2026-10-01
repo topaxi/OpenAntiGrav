@@ -92,26 +92,34 @@ the hull's 845 to 1,497; locators 4 (Assegai, Triakis), 7 (Piranha), 8 (EGX), 9
 (AG_Systems) or 10 (Qirex, Feisar, Goteki). `zonewreck.vex` exists beside
 `zone.vex` (Assegai: 2 meshes, 182 triangles).
 
-**Camera.** For the local player state 4 also puts the camera in mode 5 (a high
-pull-back, `Camera_SetMode(DAT_08b32c64, 5)`); this port keeps its chase camera,
-so a player wreck frames differently from the original's. The opponent wreck above
-is seen from the ordinary chase camera, which is why it is the comparison.
+**Camera.** For the local player state 4 also puts the camera in mode 5,
+`Camera_SetMode(DAT_08b32c64, 5)`. It is not a high pull-back: it is a fixed camera at one
+of the circuit's authored `Camera` nodes, zoomed to frame the wreck - read and ported
+2026-10-01, see [camera.md](camera.md), "The destroy camera". The opponent wreck above is
+seen from the ordinary chase camera, which is why it was the first comparison.
 
 ## What this port does
 
 `oag_game::race::scene::wreck` draws `shipwreck.vex` (`zonewreck.vex` in Zone)
 instead of the hull while the craft is `CraftState::Eliminated`, which is case 5;
-the hull stays through `Destroyed`. The engine flare quad is not drawn on a wreck
+the hull stays through `Destroyed`. The player's camera cuts to the circuit's own camera
+for it ([camera.md](camera.md)), and `WO_SHIP_EXPLOSION` goes off 1.5 s later
+([screen-flash-callers.md](screen-flash-callers.md)). The engine flare quad is not drawn on a wreck
 (**seen**, mechanism unread: `Exhaust_Update` has no state test, so it is probably
 the hull's node going invisible). `race::wreck_fx` throws the two particles at each
 wreck locator on that edge. Pulse on a PSP disc only. Side by side with the
-capture, the wreck's shape, pose, scorch and fire glints agree; the first frames'
-fireballs are whiter in ours than the original's warm orange (not chased).
+capture, the wreck's shape, pose, scorch and fire glints agree. **The fireballs**
+read white until 2026-10-01 because the `FIRE` emitter of `WO_SHIP_FXNODE_EXPLO` (and
+`SHIP_DEBRIS` of `WO_SHIP_EXPLOSION`) author a **4 bits per pixel** sprite that the `.pob`
+reader refused, so they drew the procedural white disc: `FIRE`'s colour table is white all
+life, so its flame colour is its texture's. A GE dump of the original (`scripts/psp-ge-dump.py`,
+the `0x11e` batches) shows the additive draw binding a 128x64 `CLUT4` texture
+([pob.md](../../../formats/pob.md), "Four bits per pixel"). With it the first frames match the
+original's. At 160 to 180 frames the explosion's fire is still brighter and longer in ours
+(fire-coloured pixels 2.2x to 2.4x the original's) and its smoke thinner; open.
 
 ## Not read
 
-- `WO_SHIP_EXPLOSION`'s placement: `FUN_088407b0` builds a matrix (`local_370`)
-  and a parent node for it; not played.
 - What `0x1000000` in the wreck's word at state 6 is.
 - The wreck's two authored `Trail` nodes ([`exhaust.md`](exhaust.md)): whether a
   ribbon draws from them was not looked for.

@@ -24,22 +24,30 @@
 //! is put back, so the flash follows those rather than a state number this
 //! engine does not have. **Chosen, not measured:**
 //!
-//! - the player's own state-5 wash is not started, see the comment in
-//!   [`Race::advance_craft_flashes`]: the original's active camera is 168.7
-//!   units away by then (measured live), this port's is 11.6;
+//! - the player's own state-5 wash is started like any craft's now that the
+//!   destroy camera ([`super::destroy_camera`]) is the active camera by then;
 //! - every [`Race::respawn`] of the player flashes kind 6, including the
 //!   invented off-track rescue, because a teleport is what the player sees;
 //! - the big explosion's flash is armed at the state 5 edge and fires
 //!   [`BLOWUP_DELAY`] later whether or not the craft has been put back by
-//!   then, at the position it was wrecked.
+//!   then, at the position it was wrecked;
+//! - the player's own two shakes at the explosions are armed as the original's
+//!   `Camera_ArmShake` calls do: `(0.3, 0.4, mode 3)` on the state 5 edge and
+//!   `(0.8, 0.6, mode 1)` with the big explosion, and a running shake is
+//!   cancelled as state 4 begins. The first is left out where the race ends
+//!   on that edge (everything but an Eliminator), since the finished race is
+//!   not stepped and would hold it at its largest frame.
 //!
 //! The state 5 edge also throws `WO_SHIP_FXNODE_EXPLO` and
 //! `WO_SHIP_DEATH_SPARKS` at each wreck node ([`super::wreck_fx`]).
-//! `WO_SHIP_EXPLOSION`, 1.5 s later, is not played: its placement is unread.
+//! `WO_SHIP_EXPLOSION`, [`BLOWUP_DELAY`] later, is thrown with the big flash,
+//! at the live model's matrix ([`Race::throw_wreck_explosion`]).
 
-use oag_core::math::Vec3;
+use oag_core::math::{Mat4, Vec3};
 use oag_gameplay::MAX_SHIPS;
 use oag_physics::CraftState;
+use oag_race::Mode;
+use oag_render::camera::shake::Side;
 
 use super::Race;
 
@@ -47,12 +55,21 @@ use super::Race;
 /// 5 writes `1.5` to the state timer and `Ship_UpdateDestroyed` counts it down.
 pub(super) const BLOWUP_DELAY: f32 = super::eliminator::DESTROYED_DWELL;
 
+/// `FUN_0883e064`'s `Camera_ArmShake(0.3, 0.4, camera, 3)` at state 5, read
+/// 2026-10-01: (magnitude, duration in seconds, side).
+const STATE_5_SHAKE: (f32, f32, Side) = (0.3, 0.4, Side::Ahead);
+
+/// `FUN_088407b0`'s `Camera_ArmShake(0.8, 0.6, camera, 1)` at state 6.
+const STATE_6_SHAKE: (f32, f32, Side) = (0.8, 0.6, Side::Elsewhere);
+
 /// Per-craft edge state for [`Race::advance_craft_flashes`].
 #[derive(Debug, Clone, Default)]
 pub(super) struct CraftFlashes {
     previous: [CraftState; MAX_SHIPS],
-    /// Seconds left before the big explosion, and where the craft was wrecked.
-    blowup: [Option<(f32, Vec3)>; MAX_SHIPS],
+    /// Seconds left before the big explosion, where the craft was wrecked and
+    /// the model matrix it was wrecked with - the explosion is placed with it,
+    /// and an Eliminator craft has been put back on the track by then.
+    blowup: [Option<(f32, Vec3, Mat4)>; MAX_SHIPS],
 }
 
 impl Race {
@@ -68,28 +85,37 @@ impl Race {
             let was = std::mem::replace(&mut self.view.craft_flashes.previous[slot], state);
             let out_of_the_race_now =
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
-            if out_of_the_race_now {
-                // **Not the player's own.** Kind 0 falls off with distance
-                // from the *active* camera, and by state 5 the original has
-                // put the player in its destroy camera (`Camera_SetMode(5)`),
-                // measured live at 168.7 units from the wreck: a falloff of
-                // 0.25, so a faint tint. This port keeps the chase camera,
-                // 11.6 units away, where the same flash would be four times
-                // as strong. Skipped until that camera is ported.
-                if slot != player {
-                    self.start_flash(oag_render::flash::BLAST, position);
-                }
-                self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position));
-                self.throw_wreck_fx(slot);
+            if slot == player && was != CraftState::Destroyed && state == CraftState::Destroyed {
+                // `Ship_SetState` case 4, the local player's half: it zeroes
+                // the camera's shake duration, cancelling a running one.
+                self.view.shake.cancel();
             }
-            if let Some((left, at)) = &mut self.view.craft_flashes.blowup[slot] {
+            if out_of_the_race_now {
+                // Kind 0 falls off with distance from the *active* camera,
+                // and by state 5 the original has put the player in its
+                // destroy camera ([`super::destroy_camera`]); the flash reads
+                // this port's own active camera in the same way.
+                self.start_flash(oag_render::flash::BLAST, position);
+                let model = super::drawable::model_matrix_of(&self.sim.world.ships[slot]);
+                self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
+                self.throw_wreck_fx(slot);
+                // **Not where the race ends on this very tick**: a finished race
+                // is not stepped, so the shake would be held for good at its
+                // first and largest frame - a tilt of six degrees under a
+                // four-degree field, a different scene under the results.
+                // Chosen, not measured. The original goes on running.
+                if slot == player && self.sim.world.mode() == Mode::Eliminator {
+                    self.arm_player_blast_shake(STATE_5_SHAKE);
+                }
+            }
+            if let Some((left, at, model)) = &mut self.view.craft_flashes.blowup[slot] {
                 // The edge tick's own `dt` is not counted: the timer is armed
                 // by the case-5 write, and the first subtraction is next frame's.
                 if !out_of_the_race_now {
                     *left -= dt;
                 }
                 if *left <= 0.0 {
-                    let at = *at;
+                    let (at, model) = (*at, *model);
                     self.view.craft_flashes.blowup[slot] = None;
                     let kind = if slot == player {
                         oag_render::flash::PLAYER_DESTROYED
@@ -97,9 +123,22 @@ impl Race {
                         oag_render::flash::BLAST
                     };
                     self.start_flash(kind, at);
+                    self.throw_wreck_explosion(slot, model);
+                    if slot == player {
+                        self.hold_destroy_camera();
+                        self.arm_player_blast_shake(STATE_6_SHAKE);
+                    }
                 }
             }
         }
+    }
+
+    /// `Camera_ArmShake(magnitude, duration, camera, mode)` as the craft's two
+    /// explosions call it, for the local player only.
+    fn arm_player_blast_shake(&mut self, (magnitude, duration, side): (f32, f32, Side)) {
+        self.view
+            .shake
+            .arm_with(magnitude, duration, side, &mut self.view.shake_rng);
     }
 
     /// The local player was put back on the track: `Ship_SetState` case 3 and

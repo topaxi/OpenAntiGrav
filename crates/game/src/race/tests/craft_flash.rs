@@ -21,24 +21,27 @@ fn drawn(race: &mut Race) -> Option<[f32; 4]> {
 }
 
 /// The explosion ending starts the yellow kind-0 wash, and only then - for
-/// an opponent. The player's own is left out with the destroy camera.
+/// the player as for an opponent, now that the destroy camera is the active
+/// camera the wash's falloff is measured from.
 #[test]
 fn a_craft_going_out_of_the_race_washes_the_screen_yellow() {
     let mut race = with_flash();
     let at = race.sim.world.ships[3].physics.body.position;
     race.view.screen_flash = Some(oag_render::flash::ScreenFlash::default());
 
+    let player_at = race.sim.world.ships[0].physics.body.position;
     race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
     race.advance_craft_flashes();
+    assert_eq!(drawn(&mut race), None, "state 4 starts no wash");
     race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
     race.advance_craft_flashes();
-    assert_eq!(
-        drawn(&mut race),
-        None,
-        "the player's own state 5 washes nothing"
-    );
+    let flash = race.view.screen_flash.as_mut().unwrap();
+    flash.advance(DT, player_at);
+    let colour = flash.colour().expect("the player's own state 5 washes too");
+    assert_eq!(colour[2], 0.0, "yellow to red: never any blue");
     race.sim.world.ships[0].physics.craft_state = CraftState::Racing;
     race.advance_craft_flashes();
+    race.view.screen_flash = Some(oag_render::flash::ScreenFlash::default());
 
     race.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
     race.advance_craft_flashes();

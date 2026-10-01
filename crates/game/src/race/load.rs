@@ -863,6 +863,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             absorb_anchors,
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
+            destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
             slot_teams: slot_teams.clone(),
             collision,
             handling,

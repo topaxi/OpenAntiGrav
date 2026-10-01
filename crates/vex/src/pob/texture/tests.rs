@@ -141,3 +141,79 @@ fn too_short_a_blob_is_refused() {
     let data = vec![0u8; TEXTURE_HEADER_LEN - 1];
     assert_eq!(parse_at(&data, ByteOrder::Little, 0, 0), None);
 }
+
+/// A 4 bpp header the way `WO_SHIP_FXNODE_EXPLO`'s `FIRE` writes one: 16
+/// palette entries, two pixels to a byte. Hand-authored, per ADR-0006.
+fn fixture_4bpp(width: u16, height: u16) -> Vec<u8> {
+    let palette_bytes = 64u32;
+    let pixel_bytes = u32::from(width) * u32::from(height) / 2;
+    let palette_offset = TEXTURE_HEADER_LEN;
+    let pixel_offset = palette_offset + palette_bytes as usize;
+    let mut data = vec![0u8; pixel_offset + pixel_bytes as usize];
+    data[0..2].copy_from_slice(&width.to_le_bytes());
+    data[2..4].copy_from_slice(&height.to_le_bytes());
+    data[4] = 4;
+    data[5] = 1;
+    data[8..12].copy_from_slice(&palette_bytes.to_le_bytes());
+    data[12..16].copy_from_slice(&pixel_bytes.to_le_bytes());
+    data[16..20].copy_from_slice(&(pixel_offset as u32).to_le_bytes());
+    data[20..24].copy_from_slice(&(palette_offset as u32).to_le_bytes());
+    for (i, entry) in data[palette_offset..pixel_offset].chunks_mut(4).enumerate() {
+        entry.copy_from_slice(&[i as u8 * 16, 0, 0, 255]);
+    }
+    for (i, byte) in data[pixel_offset..].iter_mut().enumerate() {
+        // Pixel 2i is the low nibble and holds i % 16; pixel 2i+1 the high
+        // nibble and holds 15 - i % 16.
+        *byte = (i % 16) as u8 | ((15 - i % 16) as u8) << 4;
+    }
+    data
+}
+
+/// The header `FIRE` carries - 128x64, 4 bpp, 16 colours - was refused when
+/// only 8 bpp parsed, which left its emitter drawn as a white disc.
+#[test]
+fn a_four_bit_header_parses_with_half_a_byte_a_pixel() {
+    let data = fixture_4bpp(128, 64);
+    let texture = parse_at(&data, ByteOrder::Little, 0, 0).expect("a 4 bpp header");
+    assert_eq!(texture.bits_per_pixel, 4);
+    assert_eq!((texture.width, texture.height), (128, 64));
+    assert_eq!(texture.palette.len(), 64);
+    assert_eq!(texture.indices.len(), 128 * 64 / 2);
+}
+
+/// Low nibble first: the left pixel of a byte is its low half.
+#[test]
+fn rgba8_unpacks_the_low_nibble_first() {
+    let data = fixture_4bpp(16, 8);
+    let texture = parse_at(&data, ByteOrder::Little, 0, 0).expect("a 4 bpp header");
+    let rgba = texture.rgba8();
+    assert_eq!(rgba.len(), 16 * 8 * 4);
+    // Byte 0 is 0 | 15 << 4: pixel 0 is index 0, pixel 1 is index 15.
+    assert_eq!(rgba[..4], [0, 0, 0, 255]);
+    assert_eq!(rgba[4..8], [240, 0, 0, 255]);
+    // Byte 1 is 1 | 14 << 4.
+    assert_eq!(rgba[8..12], [16, 0, 0, 255]);
+    assert_eq!(rgba[12..16], [224, 0, 0, 255]);
+}
+
+/// The swizzle flag works on bytes: at 4 bpp a row is `width / 2` of them.
+#[test]
+fn a_swizzled_four_bit_texture_uses_half_width_rows() {
+    // 64 wide is 32 bytes a row: two 16-byte blocks. The stream's second
+    // 16 bytes are block 0's second row, so linear byte 16 (row 0, block 1)
+    // comes from stream byte 128.
+    let mut data = fixture_4bpp(64, 8);
+    data[6] = 1;
+    let texture = parse_at(&data, ByteOrder::Little, 0, 0).expect("a 4 bpp header");
+    let rgba = texture.rgba8();
+    let stored = texture.indices[128];
+    assert_eq!(rgba[32 * 4], (stored & 0x0f) * 16);
+    assert_eq!(rgba[33 * 4], (stored >> 4) * 16);
+}
+
+#[test]
+fn a_depth_other_than_four_or_eight_is_still_refused() {
+    let mut data = fixture(0, 16, 8, 1);
+    data[4] = 16;
+    assert!(parse_at(&data, ByteOrder::Little, 0, 0).is_none());
+}

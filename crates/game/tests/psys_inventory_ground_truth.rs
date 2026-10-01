@@ -63,17 +63,6 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
         "a sibling of the `_TRAIL` the damage tree embeds, and nothing reads \
          which effect or emitter references it.",
     ),
-    // `WO_SHIP_EXPLOSION` has its trigger recovered (2026-09-30,
-    // `docs/ghidra/functions/psp-pulse-usa/screen-flash-callers.md`) and is not
-    // played: the matrix `FUN_088407b0` places it with is unread. Its two
-    // siblings at the state 5 edge are wired (`race::wreck_fx`, read and
-    // captured 2026-10-01).
-    (
-        "WO_SHIP_EXPLOSION",
-        "spawned by `Ship_SpawnExplosionBig` (`0x088407b0`), 1.5 s after the \
-         craft goes out (`Ship_UpdateDestroyed`); seen live at that moment, \
-         not played - the matrix it is placed with is unread.",
-    ),
     // **Not `WO_CANNON_SPARKS`** - that one is wired, off `Cannon_UpdateRound`
     // (`0x0886593c`), on the wall/track hit path only. The Cannon landed
     // 2026-09-08 (round + model), the sparks 2026-09-09.
@@ -200,6 +189,8 @@ const PSP_WIRED: &[&str] = &[
     // `oag_game::race::wreck_fx`.
     "WO_SHIP_FXNODE_EXPLO",
     "WO_SHIP_DEATH_SPARKS",
+    // The big blast 1.5 s later, at the live model's matrix - the same module.
+    "WO_SHIP_EXPLOSION",
 ];
 
 /// The PS2 carries all ten of the PSP's plus its own engine flare.

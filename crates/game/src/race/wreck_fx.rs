@@ -10,6 +10,18 @@
 //! the live model, and for each spawns `WO_SHIP_FXNODE_EXPLO` and then
 //! `WO_SHIP_DEATH_SPARKS` through `Psys_Spawn_q`, parented to the node.
 //!
+//! **The big explosion.** `Ship_UpdateDestroyed` calls `FUN_088407b0`
+//! (`Ship_SpawnExplosionBig`) as state 5 times out, 1.5 s later. It copies the
+//! live model's world matrix (`FUN_089451dc`: `node+0x3c`, `+0x40`), subtracts
+//! `DAT_08ab0de8` times the matrix's own second row from its translation
+//! (read 4.0, statically and live), and calls `Psys_Spawn_q(world_root,
+//! "WO_SHIP_EXPLOSION", 'EXPL', &matrix, 0, 0)`: flags `0` copy the matrix into
+//! the instance and the parent is the particle world root `DAT_08ab2248`, so
+//! the blast is placed in the world and does not ride the craft. Read live on
+//! PPSSPP (Talon's Junction, Venom, the player's craft put into state 4): the
+//! matrix's rows were 0.75 long (the craft model scale), its translation was
+//! the craft's node position moved 2.9995 units along `-up`, i.e. `4.0 * 0.7499`.
+//!
 //! Read live on PPSSPP (2026-10-01, Talon's Junction, `Ship_SetState(entity, 4)`
 //! called on a grid opponent, a Piranha): at the state 5 edge, 7 pairs of those
 //! two names in a row, one pair per node, each parented to a distinct node;
@@ -36,6 +48,15 @@ pub const FXNODE_EXPLO_EFFECT: &str = "WO_SHIP_FXNODE_EXPLO";
 
 /// The sparks beside it.
 pub const DEATH_SPARKS_EFFECT: &str = "WO_SHIP_DEATH_SPARKS";
+
+/// The big blast, 1.5 s after the state 5 edge.
+pub const EXPLOSION_EFFECT: &str = "WO_SHIP_EXPLOSION";
+
+/// How far below the craft's model origin the big blast is placed, in the
+/// model's own rows: `FUN_088407b0` subtracts `DAT_08ab0de8` (`4.0`, read in
+/// `.data` and live) times the world matrix's second row, which is `0.75`
+/// long, so about three world units.
+pub const EXPLOSION_DROP: f32 = 4.0;
 
 /// The loop bound `FUN_0883e064` and `Ship_GatherCollisionFxNodes` share.
 const MAX_NODES: usize = 10;
@@ -75,6 +96,8 @@ pub(super) struct WreckFx {
     riding: Vec<Riding>,
     /// How many have started, ever - for tests.
     started: u32,
+    /// Where the big blast last went, for tests.
+    last_explosion_at: Option<Vec3>,
 }
 
 impl WreckFx {
@@ -83,6 +106,7 @@ impl WreckFx {
             anchors,
             riding: Vec::new(),
             started: 0,
+            last_explosion_at: None,
         }
     }
 }
@@ -117,6 +141,30 @@ impl Race {
         }
     }
 
+    /// `FUN_088407b0`'s `WO_SHIP_EXPLOSION`, when state 5 times out: placed in
+    /// the world at the wreck's model matrix, `EXPLOSION_DROP` rows below its
+    /// origin, and let go. `model` is the matrix the craft was wrecked with
+    /// (a wreck lies still, so it is the one the original reads 1.5 s on; a
+    /// craft put back on the track in between is not where the blast goes). A
+    /// source with no wreck read (every title but Pulse) throws nothing.
+    pub(super) fn throw_wreck_explosion(&mut self, slot: usize, model: Mat4) {
+        if self.view.wreck_fx.anchors.get(slot).is_none() {
+            return;
+        }
+        let Some(effect) = self.view.effects.get(EXPLOSION_EFFECT).cloned() else {
+            return;
+        };
+        let at = model.transform_point3(Vec3::new(0.0, -EXPLOSION_DROP, 0.0));
+        let up = model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y);
+        // Chosen, not measured: scale `1.0`, as for the node effects.
+        let Some(playing) = self.view.stage.play(&effect, at, 1.0) else {
+            return;
+        };
+        self.view.stage.orient(playing, up);
+        self.view.wreck_fx.started += 1;
+        self.view.wreck_fx.last_explosion_at = Some(at);
+    }
+
     /// Keeps every emitting wreck effect on its locator, letting go once it
     /// stops emitting. Before `Stage::advance`, like the hit sparks.
     pub(super) fn advance_wreck_fx(&mut self) {
@@ -146,6 +194,13 @@ impl Race {
     #[must_use]
     pub fn wreck_fx_riding_for_tests(&self) -> usize {
         self.view.wreck_fx.riding.len()
+    }
+
+    /// Where the big blast last went, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn wreck_explosion_at_for_tests(&self) -> Option<Vec3> {
+        self.view.wreck_fx.last_explosion_at
     }
 
     /// How many wreck effects have ever started, for tests.
