@@ -96,9 +96,11 @@ falsifier.
   Read from the decompile, **not watched**, confidence 80. That is the original's AI
   getting a launch boost the player cannot earn without a thrust edge in the window,
   and the maintainer's rule is that the AI obeys the player's physics.
-- Applied wherever the disc authors `<StartBoost>`: Pulse's two PSP discs and the PS2
-  one. **Measured on Pulse PSP USA only**; the other two are the same file and the
-  same engine by extension, chosen, not measured. Pure authors none, so it has none.
+- **Applied on Pulse PSP only** (`is_pulse_psp`: the USA and EU discs), where it was
+  measured (USA). Pulse PS2's and Wipeout HD's `HandlingStats.xml` author the same
+  `<StartBoost>` and the loader reads it, but neither was watched, so the loader drops
+  it for them and says so in its report; `only_pulse_psp_gets_the_launch_boost` pins
+  this. Pure authors none.
 - The craft enters state 1 a tick before thrust is released, so
   `ShipState::on_grid` falls one tick earlier than it did
   (`thrust_gated(tick + 1)`); the yaw coupling gains the same tick and its first-30-tick
@@ -122,7 +124,10 @@ run the window again with the persisted grade: the timer is zeroed whenever
 down at `k = 100`, respawns through state 3 for two frames and is back in state 1):
 `player+0x888` holds `1.702` through it and the multiplier stays `1.0`.
 `Ship_UpdateStartBoost` is evidently not called in state 3, so the reset branch never
-runs. The port runs the window once, at the start.
+runs. The port runs the window once, at the start: `Ship::place_at`, which every respawn goes
+through, rebuilds the physics state from its default and **carries `launch` across**
+(`a_respawn_does_not_replay_the_launch_window`; without the carry a released craft with
+an idle state opens a fresh window at `normalMul` after every respawn).
 
 ## The three other state-0 terms, tried and left out
 

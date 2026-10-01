@@ -632,8 +632,9 @@ In short:
   second (`Ship_UpdateStartBoost`). A held-through start is a stall, which is the
   "no false-start penalty" this thread measured: it is a smaller boost, not a stall of
   the engine. Watched live on five launches and ported; see
-  [launch-boost.md](../../docs/physics/launch-boost.md). HD's `StartBoost`, which this
-  bullet cites as AI-only tuning, is the same element and not yet read there; the AI half
+  [launch-boost.md](../../docs/physics/launch-boost.md). HD's `HandlingStats.xml` authors the same `<StartBoost>` element (the race loader
+  reads it), so the "AI-only tuning" reading cited above is not the whole story there; it
+  is not applied to HD, unmeasured. The AI half
   of Pulse's (a grade 3 for non-human craft, times a per-slot table) is read and not
   ported or watched.
 - The billboard thread's own top open item - the mode-descriptor pointer replacing
