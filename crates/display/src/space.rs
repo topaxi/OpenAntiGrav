@@ -39,6 +39,42 @@
 ///   not being a flat scaling does not stop that PS2 sweep from working.
 pub const SCREEN: (f32, f32) = (480.0, 272.0);
 
+/// The aspect ratio the PS2 engine builds its 3D projection at: `640 / 448`.
+///
+/// `Camera_SubmitScene` (`0x0013e280`) loads this literal (`0x3fb6db6e` at
+/// `0x0013e604`) and passes it to the perspective build, widening it by `4/3`
+/// only when the `Aspect Ratio` option reads `16:9` - see
+/// `docs/ps2/aspect-ratio.md`. It is the PS2's own frame, 640 by 448, and not
+/// the PSP's 480 by 272. Read live off a running PCSX2, 2026-10-01: the race
+/// camera's matrix has `m11 / m00 = 1.42857` exactly and a vertical field of
+/// `60.00000` degrees against the craft's `<ExternalCameraClose fov="60">`.
+///
+/// **Not the option's `16:9` widen**: that multiply is not implemented here, and
+/// the option's out-of-box value is unmeasured, so this is the `4:3` setting's
+/// number (the one the savestate flew).
+pub const PS2_CAMERA_ASPECT: f32 = 640.0 / 448.0;
+
+/// The viewport shape an authored `fov` is defined at, for the executable that
+/// runs the race.
+///
+/// The PSP's own 480/272 for every platform but the PS2, whose engine builds the
+/// projection at [`PS2_CAMERA_ASPECT`]. **Only the PS2 is measured**; every
+/// other source keeps the PSP's shape, which is the project's long-standing
+/// choice rather than a reading of those titles' own projection (HD's and
+/// 2048's are not read here).
+///
+/// This is the aspect `oag_game::race`'s `fit_vertical_fov` holds the horizontal
+/// field at, so it only changes what a window *narrower* than the PSP's draws:
+/// at or above it the authored vertical field is kept whichever constant is
+/// used.
+#[must_use]
+pub fn camera_authored_aspect(platform: oag_disc::Platform) -> f32 {
+    match platform {
+        oag_disc::Platform::Ps2 => PS2_CAMERA_ASPECT,
+        _ => SCREEN.0 / SCREEN.1,
+    }
+}
+
 /// The coordinate space a source's front-end XML places widgets in, and what
 /// that space is displayed as.
 ///
@@ -328,6 +364,30 @@ mod tests {
         assert_eq!(Space::font_texel_scale(Platform::Ps4), 0.5);
         for other in [Platform::Psp, Platform::Ps2, Platform::Ps3, Platform::Vita] {
             assert_eq!(Space::font_texel_scale(other), 1.0);
+        }
+    }
+
+    /// The literal `Camera_SubmitScene` loads at `0x0013e604`, bit for bit.
+    #[test]
+    fn the_ps2_camera_aspect_is_the_literal_the_engine_loads() {
+        assert_eq!(PS2_CAMERA_ASPECT.to_bits(), 0x3fb6_db6e);
+        assert_eq!(
+            camera_authored_aspect(oag_disc::Platform::Ps2).to_bits(),
+            0x3fb6_db6e
+        );
+    }
+
+    /// Every platform but the PS2 keeps the shape this project has always
+    /// fitted the field of view to - the same expression `AUTHORED_ASPECT` is,
+    /// so the PSP's projection cannot move.
+    #[test]
+    fn every_other_platform_keeps_the_psps_authored_aspect() {
+        use oag_disc::Platform;
+        for platform in [Platform::Psp, Platform::Ps3, Platform::Vita, Platform::Ps4] {
+            assert_eq!(
+                camera_authored_aspect(platform).to_bits(),
+                (SCREEN.0 / SCREEN.1).to_bits()
+            );
         }
     }
 }

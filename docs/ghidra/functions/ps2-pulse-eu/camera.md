@@ -181,6 +181,66 @@ The earlier "does not reach its eye the way the PSP does" reading stands retired
 (`min(L - 1, 3)` along the ray, low-passed at `0.5` into `0x0027e8b0`), a no-op in
 open air; it is not implemented here.
 
+## The projection the race renders with, measured 2026-10-01
+
+Read live off a running PCSX2 (own data path, PINE), on the race savestate the
+eye was measured on (Assegai, `16_Track`, at rest on the grid, `OPT_CLOSE`,
+game option `Aspect Ratio` = `0` = `4:3`, PCSX2 `AspectRatio = Stretch` at a
+640x448 window so the frame is 1:1). The camera object `Camera_SubmitScene`
+runs on was found by signature: the address `a` where `*(a + 0x110)` is the fov
+and `a + 0xd0 .. +0x10c` is a perspective matrix. It sits at `0x609bb0` in
+that state.
+
+| Read | Value |
+| --- | --- |
+| `*(a + 0x110)` fov | `60.000004` degrees (`craft + 0x8e0`, the close tripod's `params + 0x60`, `+ craft + 0x820` = `5.9e-6`) |
+| matrix `m00`, `m11` | `1.21244`, `1.73205` |
+| `m11 / m00` | `1.42857` = `10/7` = `640/448` |
+| vertical field `2 atan(1 / m11)` | `60.0000` degrees |
+| eye, in the craft's forward/up/right axes | `(-11.250, +3.000, 0.000)`: the rig's scaled close eye, unmoved by `Camera_UpdatePlayerView`'s pull-in |
+| `DAT_00284fe8` | `0` (`4:3`) |
+
+Identical on two loads of the state and again 30 frames after each
+(`data/scratch/ps2-framing/scripts/cam_live.py`). Confidence **95** that the
+PS2 race renders a vertical field of exactly the authored `fov` at aspect `10/7`
+with the eye of the rig, at the `4:3` setting: a live read of the matrix itself,
+twice, agreeing with the literal `0x3fb6db6e` at `0x0013e604` the decompile
+shows. Not higher: one circuit, one team, one craft at rest (so the speed term
+`craft + 0x820` was read at `0`, not exercised).
+
+**A second perspective matrix in the same RAM is not the race camera.** Searching
+for a matrix with `m11 / m00 = 10/7` also finds `0x2f9080`, with a vertical field
+of exactly `65` degrees, near `1` and far `100`. `65` is the engine's own
+default field when no camera station is set (`Camera_FramingFov` on the PSP) and
+the near formula's reference value; it is another camera's projection, and
+reading it as the race's would have the craft drawn at the wrong size by `1.08`.
+
+### What that does to the framing, measured against ours
+
+At the same eye, a hull's apparent width in the frame goes as
+`1 / (tan(fov/2) * aspect)`. The original's horizontal half-tangent is
+`tan 30 * 10/7 = 0.825` in a 640-wide frame; the race fitted the PSP's `480/272`
+to every source, so ours was `tan 30 * 1.765 = 1.019` and drew the hull
+`0.825 / 1.019 = 0.81` as wide. Measured on the craft, original (this state)
+against ours, both 640x448, same eye: wing span in the crops
+`data/scratch/ps2-framing/shots/crops_orig_before_after.png` (3x, read by eye,
+about +-3 px of 375): original 375, ours before 305 (0.81, as predicted), ours
+after 375 (1.00). Same vertical span. **The `38 % against 23 %` of the shield
+lane's report is not reproduced: this matched-pose pair gives 25.5 % against
+20.5 % of the frame width before the fix** (`0.81`), and `25.5 %` against
+`25.5 %` after, in a 640x448 window with the viewport set to `free`.
+
+Fixed 2026-10-01 for the PS2 source only: `oag_display::space::camera_authored_aspect`
+returns `640/448` for the PS2 and the PSP's `480/272` for everything else, and
+`Race::vertical_fov` fits to it. It changes only a window **narrower than the
+PSP's shape** (`fit_vertical_fov` keeps the authored vertical field at or above
+it, whichever constant is used), so the default presentation, a `30:17`
+viewport, is unchanged and still shows the hull at `0.81` of the original's
+`4:3`-option frame. That remainder is not a camera term: the original's `4:3`
+frame is `640/448` shown anamorphically at whatever the display is, and ours
+presents the field at the viewport's own shape. See
+[aspect-ratio.md](../../../ps2/aspect-ratio.md).
+
 ## The `Aspect Ratio` option's widen, at one address inside `Camera_SubmitScene`
 
 `docs/ps2/aspect-ratio.md` ("What the option changes: one multiply, in the

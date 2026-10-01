@@ -276,6 +276,17 @@ them was scaled, and both are the disc's own doing rather than a decision here:
   reading above is unaffected: the mode moves the picture in the raster and
   corrects its pixels, and resizes nothing.
 - **`default="100"`**, and therefore which setting a fresh memory card gets.
+  **2026-10-01:** `DAT_00284fe8` reads `0` (`4:3`) on a cold boot with an empty
+  profile at every poll from 15 s to 150 s, and on the race savestate. Not a
+  resolution: the settings load had not necessarily run at those polls.
+- **The race camera's aspect is `10/7` at `4:3`, read live.** The matrix the race
+  renders with has `m11 / m00 = 1.42857` and a vertical field of the authored
+  60 degrees; see [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md), "The
+  projection the race renders with". This build now fits a PS2 source's field to
+  that shape. The anamorphic part is **not** reproduced: the original's frame is
+  `640/448` shown at whatever the display is (the 2D art assumes ~16:9), so at the
+  `4:3` option a 16:9 display stretches the world 1.24x wide, and ours presents
+  the projection at the viewport's own shape instead.
 - **The original's default size for an `<Image>` with no `width`/`height`.**
   Reading it in the PS2 front-end widget code would turn the 70 above into a
   measurement.
