@@ -59,10 +59,21 @@ impl Race {
         // runs `Ship_HoverFourCorner` (`Ship_UpdateHover`, `0x0884870c`), whose
         // own epilogue was not read for the guard, and this port flies Zone on
         // the two-point law regardless. Measured on a Time Trial only.
+        //
+        // **One tick before thrust is released**, not the same one: the craft
+        // enters state 1 on the frame *before* the throttle word steps
+        // (`flags_1c0` and `state_2a4` read `0x1`/`1` there on four live runs,
+        // `docs/physics/grid-state.md`), so the coupling and the launch boost's
+        // clock both start a tick ahead of the first thrust. Measured on Pulse PSP.
         let on_grid =
-            RaceState::thrust_gated(self.sim.world.tick) && self.sim.world.mode() != Mode::Zone;
+            RaceState::thrust_gated(self.sim.world.tick + 1) && self.sim.world.mode() != Mode::Zone;
+        // The launch boost's clock starts at the same tick in every mode, Zone
+        // included (it has a countdown; its auto-speed is not multiplied yet, see
+        // `oag_physics::engine::engine`).
+        let released = !RaceState::thrust_gated(self.sim.world.tick + 1);
         for ship in &mut self.sim.world.ships {
             ship.physics.on_grid = on_grid;
+            ship.physics.released = released;
         }
         // The one craft a person is flying this tick. `0` under
         // `World::SINGLE_PLAYER`, which is every session this engine starts, so
@@ -242,6 +253,7 @@ impl Race {
             pad_hit,
             thrust_scale,
             class_gravity_scale: self.sim.class_gravity_scale,
+            start_boost: self.sim.start_boost,
             // The mode's own `Weapons`/`Damage` defaults, which decide both what
             // a wall costs the energy pool and whether it recovers - a time trial
             // and a speed lap run with both off, so their pool floors at 20 and

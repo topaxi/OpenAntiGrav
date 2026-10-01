@@ -418,6 +418,7 @@ impl Race {
                 // uses them.
                 pad_hit,
                 class_gravity_scale: self.sim.class_gravity_scale,
+                start_boost: self.sim.start_boost,
                 damage_rules,
                 ..Environment::default()
             };

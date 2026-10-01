@@ -284,6 +284,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         pad_tunables,
         special,
         class_gravity_scale,
+        start_boost,
         zone,
         weapon_pad_refresh,
     } = global::resolve(&mut archives, options, &mut report);
@@ -692,6 +693,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `without_pulse_psp_draw` and `oag_render::flash` for what others keep.
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
+    // The launch boost is measured on Pulse PSP only; Pulse PS2 and HD author the
+    // same element and are left without it, not applied by extension.
+    let start_boost = start_boost.filter(|_| extents);
+    if !extents {
+        report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
+    }
     for name in RACE_EFFECTS {
         match particle_effect(&mut archives, name) {
             Ok((mut effect, note)) => {
@@ -900,6 +907,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             allowed_weapons: Vec::new(),
             weapon_pad_refresh,
             class_gravity_scale,
+            start_boost,
             pose_override,
             camera_override: options.camera,
         },

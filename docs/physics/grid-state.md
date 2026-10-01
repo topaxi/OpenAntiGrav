@@ -1,7 +1,8 @@
 # The grid state: what a craft on the start line does differently
 
-**Status: one term ported (the bank-to-yaw coupling), three read and left, one
-launch effect measured and not implemented.** Measured on Pulse PSP (USA) in
+**Status: one term ported (the bank-to-yaw coupling), three read, tried and left
+out, and the launch effect that was measured here ported on its own page
+([launch-boost.md](launch-boost.md)).** Measured on Pulse PSP (USA) in
 PPSSPP 1.20.4, 2026-10-01, Time Trial, Venom, Assegai, `16_Track`; the Single
 Race grid on the same circuit.
 
@@ -60,9 +61,9 @@ from the decompile on 2026-10-01:
 | Where | State 0 | State 1 | Ported |
 | --- | --- | --- | --- |
 | `Ship_HoverTwoPoint`'s epilogue, `0x0884ad2c  lw a2,0x2a4(s0)` / `0x0884ad30  beq a2,zero,0x0884ad78`: `craft+0x2a4 != 0` guards `localAngular.y += 30 * right.y * (1 - magLockBlend)` | **skipped** | applied | **yes**, `ShipState::on_grid`, read in `hover::evaluate` |
-| `Ship_ApplyAngularDamping` (`0x08848ed0`): the roll-axis coefficient | `-5` | `-2` | no |
-| `Ship_HoverTwoPoint`'s head: the `rebound` base in the spring's damping factor | `1.0` | `handling+4` | no |
-| `Ship_UpdateCraft`'s control record, while `craft+0x1c0 & 2`: `+8` and `+0xc` forced to `100.0`, `+0`, `+4` and `+0x10` zeroed | both airbrakes full (the brake rises with them), no steering, no thrust | the live record | no, only thrust is gated (`RaceState::thrust_gated`) |
+| `Ship_ApplyAngularDamping` (`0x08848ed0`): the roll-axis coefficient | `-5` | `-2` | no: tried, indistinguishable from nothing |
+| `Ship_HoverTwoPoint`'s head: the `rebound` base in the spring's damping factor | `1.0` | `handling+4` | no: tried, indistinguishable from nothing |
+| `Ship_UpdateCraft`'s control record, while `craft+0x1c0 & 2`: `+8` and `+0xc` forced to `100.0`, `+0`, `+4` and `+0x10` zeroed | both airbrakes full (the brake rises with them), no steering, no thrust | the live record | no: tried on top of the boost and it moves neither the pose nor the launch, see [launch-boost.md](launch-boost.md#the-three-other-state-0-terms-tried-and-left-out) |
 
 The bank-to-yaw coupling is the one that moves the pose: on a start banked
 `1.1` degrees (`right.y = -0.0191` on this slot) it is a torque of `0.573` every
@@ -167,14 +168,13 @@ on the first thrust frame. That is the `x1.2` and not a rebuild of the force law
 the old captures under `data/traces/` were all taken by pressing late, which is
 why the engine's launch acceleration matched them to 2 %.
 
-Consequence for any matched-state comparison started from a held-thrust GO: ours
-is `3.1` units/s slower at GO + 20 and `18` units behind at GO + 120 (`106.1`
-against `124.5` on x; speeds `100.5` and `106.6`), the largest term left.
-`grade 0, 1, 2, 3` (`player+0x36c`) and the four XML values
-(`windowStart`, `overallDuration`, `stallMul`, `normalMul`, `boostMul`) are what
-decide `1.2` against `1.4`, and which of them the reaction time selects was not
-read here. Not implemented: it is its own thread, with the measurement above as
-its starting point.
+**Ported since, and the open question answered**: the grade is selected by *when the
+thrust first lands*, not by a reaction time, and the window and the three multipliers
+are the disc's `<StartBoost>`. See [launch-boost.md](launch-boost.md): five launches
+watched, held through the countdown is within 0.4 units of the original at 120 frames
+(it was 18 behind). The `craft+0x2d8`/`+0x2dc` pair that "runs 100 to 0" over the same
+window is not a boost percentage: it is the airbrake flaps' visual position
+(`Ship_UpdateAirbrakes`) releasing from the grid's forced-full.
 
 ## The second circuit: `01_Track` (Basilico Black), Time Trial and Single Race
 

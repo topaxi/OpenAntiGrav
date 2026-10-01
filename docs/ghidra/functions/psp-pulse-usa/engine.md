@@ -768,7 +768,7 @@ if (t < g_boost_overallDuration + 0.5) {
         case 0: craft+0x294 = g_boost_normalMul
         case 1: craft+0x294 = g_boost_stallMul
         case 2: craft+0x294 = g_boost_boostMul
-        case 3: craft+0x294 = g_boost_boostMul * perClassTable[...]
+        case 3: craft+0x294 = g_boost_boostMul * perSlotTable[player+0x914]
         }
     } else {
         craft+0x294 = 1.0                            // window over
@@ -777,7 +777,26 @@ if (t < g_boost_overallDuration + 0.5) {
 }
 ```
 
-The four globals are XML-loaded, not literals. `Xml_ReadBoostSettings`
+**The grade is written by `Race_UpdateLaunchGrade` (`0x0882773c`), once per racing
+frame, from the seconds since GO and the first-thrust edge `Ship_UpdateEngine` raises at
+`0x0884c5f8`-`0x0884c630` (`craft+0x2d4` latch, `craft+0x2d5` one-shot)**; it is
+called from every mode's racing update (`FUN_0882246c`, `FUN_08823270`,
+`FUN_08823b4c`, `FUN_0882798c`). With `c = race_manager+0x2bc` (zeroed by
+`RaceMode_UpdateCountdown` while it counts down): an edge before `windowStart` or in
+`[windowEnd, stallEnd)` writes grade 1, in `[windowStart, windowEnd)` grade 2 (plus
+`FUN_08904fd4`, an exhaust-flare call, for a human craft), in `[stallEnd, overall)`
+grade 0; grade 3 is written to every craft with `player+0x368 != 0` on every frame of the
+perfect window, edge or not. So the "reaction time" is the time of the first thrust, and
+the grade starts at 0, which is why the frame thrust first lands still reads
+`normalMul`. **Watched live on five launches** (held through, first thrust 11, 25, 31
+and 81 frames after release): grades 1, 2, 1, 0 and unwritten, multipliers and engine
+output as the law says, sixty boosted frames each; see
+[launch-boost.md](../../../physics/launch-boost.md). Confidence **92** for the human
+path (decompile, and the five runs); **80** for grade 3 (decompile only, not watched).
+Zone's four-corner branch joins the same tail (`0x0884c918`), so the original grades a Zone launch too; not watched, left out of the port. A respawn does **not** replay the window, though the reset branch reads as if it would:
+watched, the timer holds through state 3.
+
+The seven globals are XML-loaded, not literals. `Xml_ReadBoostSettings`
 (`0x088390b4`) fills them by attribute name, which is what pins their meaning:
 
 | Global | Attribute |
@@ -790,10 +809,10 @@ The four globals are XML-loaded, not literals. `Xml_ReadBoostSettings`
 | `0x08ab0d84` | `normalMul` |
 | `0x08ab0d88` | `boostMul` |
 
-The numeric values live in a disc XML file, not in the executable - all four
-addresses read as zero in the image. That is not an unrecovered code gap; it is
-data, and it also means that with nothing supplying `overallDuration` the window
-test falls straight through to the `= 1.0` branch.
+The numeric values live in the disc's `<StartBoost>` element, not in the executable -
+all seven addresses read as zero in the image, and `oag_tables::handling::StartBoost`
+parses them. With nothing supplying `overallDuration` the window test falls straight
+through to the `= 1.0` branch.
 
 **So `craft+0x294 == 1.0` for the whole of a normal lap.** Confidence **88**:
 three writers agree, the constructor identification is corroborated by seven

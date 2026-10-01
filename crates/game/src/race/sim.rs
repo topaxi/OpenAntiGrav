@@ -264,6 +264,8 @@ pub struct RaceSim {
     pub(super) countdown_voice: bool,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
+    /// The launch boost's parameters - see [`Setup::start_boost`].
+    pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
     pub(super) speedup_pads: Vec<oag_vex::pads::PadVolume>,
     /// Distance from the ship to each pad, one entry per pad, in track units.

@@ -21,11 +21,9 @@
 //!   first 30 ticks. That coupling is skipped in the grid state and is the one
 //!   thing that differs before and after.
 //!
-//! **What is not pinned here, and is open**: the original launches with a
-//! multiplier of `1.4` for a frame and then `1.2` for 58 frames on thrust held
-//! through the countdown (`craft+0x294`, `Ship_UpdateStartBoost`), which this
-//! engine does not implement, so ours is slower off the line: 106.6 units/s at
-//! GO + 120 ticks against ours 100.5.
+//! The launch boost (`craft+0x294`, `Ship_UpdateStartBoost`) that the original
+//! applies on thrust held through the countdown is its own test,
+//! `launch_boost_ground_truth.rs`.
 
 use oag_core::math::Vec3;
 use oag_game::race;

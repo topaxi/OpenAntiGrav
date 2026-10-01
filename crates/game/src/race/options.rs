@@ -525,6 +525,9 @@ pub struct Setup {
     /// it reaches `oag_physics::forces::Environment` every tick and a headless
     /// race must fall the same way a drawn one does.
     pub class_gravity_scale: f32,
+    /// The disc's `<StartBoost>`, `None` where it authors none: the launch boost.
+    /// Presence is the only gate. See `oag_physics::launch`.
+    pub start_boost: Option<oag_physics::launch::StartBoost>,
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
     /// The same seven from `<ExternalCameraClose>`: the nearer of the two
