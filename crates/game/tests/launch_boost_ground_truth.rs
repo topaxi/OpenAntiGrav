@@ -149,7 +149,10 @@ fn each_launch_matches_the_original_off_the_line() {
 /// the same table serves a start that runs along `+X` and one along `+Z`. This is
 /// the comparison the previous lane's report called the largest term left: ours
 /// was 18 units behind at 120 frames before the boost.
-const HELD: [(&str, [(u64, f32, f32); 3]); 2] = [
+/// `(offset, speed, distance)` rows for one circuit.
+type HeldRows = [(u64, f32, f32); 3];
+
+const HELD: [(&str, HeldRows); 2] = [
     (
         "Data\\Environments\\16_Track\\track.vex",
         [
