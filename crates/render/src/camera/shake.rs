@@ -251,17 +251,25 @@ impl Shake {
         second * first
     }
 
-    /// `view` with this tick's shake applied: the camera turned about its own
-    /// up and forward by [`Self::rotation`], its eye exactly where it was.
+    /// The shake as a world-space transform on the camera: `view * matrix(view)`
+    /// is `view` with this tick's shake applied - the camera turned about its
+    /// own up and forward by [`Self::rotation`], its eye exactly where it was.
+    /// [`Mat4::IDENTITY`] when no shake is active.
     ///
     /// The camera's up and forward are read off `view` itself (a right-handed
     /// view matrix's rows are right, up and back in world coordinates), so
     /// the rotation is always about the axes the camera has *this* frame, as
     /// the original re-reads them every frame.
+    ///
+    /// A world-space factor on the right of the view is what lets the motion
+    /// blur take the shake out of its velocity: the previous tick's unshaken
+    /// view times this tick's matrix measures the same scene through the same
+    /// shake, so a camera that holds still reads as still however hard it is
+    /// shaking. See `oag_game::race::Race::shake_matrix`.
     #[must_use]
-    pub fn apply(&self, view: Mat4) -> Mat4 {
+    pub fn matrix(&self, view: Mat4) -> Mat4 {
         if !self.active() {
-            return view;
+            return Mat4::IDENTITY;
         }
         let up = view.row(1).truncate();
         let forward = -view.row(2).truncate();
@@ -269,9 +277,15 @@ impl Shake {
         let eye = view.inverse().w_axis.truncate();
         // The camera's world transform `C` becomes `T(eye) * R * T(-eye) * C`,
         // so the view, its inverse, becomes `V * T(eye) * R^-1 * T(-eye)`.
-        view * Mat4::from_translation(eye)
+        Mat4::from_translation(eye)
             * Mat4::from_quat(world.inverse())
             * Mat4::from_translation(-eye)
+    }
+
+    /// `view` with this tick's shake applied: see [`Self::matrix`].
+    #[must_use]
+    pub fn apply(&self, view: Mat4) -> Mat4 {
+        view * self.matrix(view)
     }
 }
 

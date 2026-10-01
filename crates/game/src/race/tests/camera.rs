@@ -500,3 +500,39 @@ fn an_active_shake_does_rotate_the_view() {
     );
     assert_ne!(race.view(), level);
 }
+
+/// The motion blur must not read the impact shake as camera motion. With the
+/// craft and camera still, the previous tick's unshaken view-projection seen
+/// through this tick's shake is exactly the current shaken one, so every
+/// point's clip-space velocity is zero. A blur built from the shaken views (the
+/// bug: the shake's view jump read as the world flying past, smearing the whole
+/// frame on impact) fails this, as does dropping the shake from the previous
+/// side.
+#[test]
+fn an_active_shake_adds_no_velocity_to_a_still_camera() {
+    let mut race = Race::start(setup(Handling::default()));
+    let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
+    let previous_unshaken = projection * race.view_unshaken();
+    race.view.shake.arm(
+        1.0,
+        oag_render::camera::shake::Side::Elsewhere,
+        &mut Rng::new(1),
+    );
+    let current = projection * race.view();
+    assert_ne!(
+        current, previous_unshaken,
+        "the shake is not doing anything"
+    );
+    let previous = race.blur_previous_view_projection(previous_unshaken);
+    let ahead = race.ship().physics.body.position + race.ship().physics.body.forward() * 20.0;
+    for point in [
+        ahead,
+        ahead + Vec3::new(8.0, 3.0, -2.0),
+        ahead - Vec3::Y * 4.0,
+    ] {
+        let now = current * point.extend(1.0);
+        let before = previous * point.extend(1.0);
+        let moved = (now.truncate() / now.w - before.truncate() / before.w).length();
+        assert!(moved < 1e-4, "clip-space velocity {moved} at {point}");
+    }
+}

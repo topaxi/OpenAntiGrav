@@ -65,18 +65,27 @@ impl Scene {
         hd_bloom_timestamps: Option<oag_render::post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
-        let view_projection = race.projection(aspect, self.far, fov) * race.view();
+        let projection = race.projection(aspect, self.far, fov);
+        let view_projection = projection * race.view();
         // The previous tick's camera and model matrices, promoted from the
         // last frame that rendered a different tick - what every drawable's
         // `prev_mvp` velocity is measured against. See [`MotionState`].
+        //
+        // **The snapshot holds the camera without the impact shake**, and the
+        // previous one is then seen through *this* tick's shake: the shake is
+        // a camera-wide rotation of up to six degrees arriving in one tick,
+        // which the velocity buffer would otherwise read as the world flying
+        // past and smear the whole frame (the original does not blur it).
+        // The picture itself is still drawn through the shaken
+        // `view_projection`.
         let prev = MotionState::advance(
             &self.motion,
             race,
             &self.weapon_quads.draw,
-            view_projection,
+            projection * race.view_unshaken(),
             usize::from(race.ship_count()),
         );
-        let prev_vp = prev.view_projection;
+        let prev_vp = race.blur_previous_view_projection(prev.view_projection);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // Recorded before the offset is applied - see `Scene::record_frame`.
         self.record_frame(

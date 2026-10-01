@@ -135,12 +135,31 @@ impl Race {
     /// `oag_render::camera::shake`, measured against the running original.
     #[must_use]
     pub fn view(&self) -> Mat4 {
+        let base = self.view_unshaken();
+        if self.view.camera_override.is_some() {
+            return base;
+        }
+        // The camera turned about its own up and forward, the eye fixed:
+        // see `oag_render::camera::shake::Shake::apply`.
+        self.view.shake.apply(base)
+    }
+
+    /// [`Self::view`] without the impact shake: where the camera is really
+    /// pointed this tick.
+    ///
+    /// What the velocity-buffer motion blur measures camera motion with
+    /// ([ADR-0030](../../../../docs/architecture/adr/0030-velocity-buffer-motion-blur.md)):
+    /// the shake turns the view by up to six degrees in one tick, which is
+    /// not the camera moving, and the original does not blur it (measured
+    /// 2026-09-30, the thread this closes). See [`Self::blur_previous_view_projection`].
+    #[must_use]
+    pub fn view_unshaken(&self) -> Mat4 {
         if let Some(over) = &self.view.camera_override {
             // A view matrix is the inverse of the camera's world transform.
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
         }
         let target = target_of(self.ship());
-        let base = if self.view.camera_view == oag_display::display::CameraView::Internal {
+        if self.view.camera_view == oag_display::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
             // snap: the cockpit is bolted to the hull. The roll phase rides
             // along so the cockpit view rolls with the manoeuvre too - see
@@ -152,10 +171,26 @@ impl Race {
             )
         } else {
             self.view.camera.view(target, &self.view.chase_params)
-        };
-        // The camera turned about its own up and forward, the eye fixed:
-        // see `oag_render::camera::shake::Shake::apply`.
-        self.view.shake.apply(base)
+        }
+    }
+
+    /// The previous tick's camera, for the blur's `prev_mvp`: the unshaken
+    /// view-projection the last tick stored, seen through *this* tick's shake.
+    ///
+    /// The shake is a world-space factor on the right of the view
+    /// ([`oag_render::camera::shake::Shake::matrix`]), so the previous and the
+    /// current frame carry the same one and it drops out of every velocity:
+    /// a camera that holds still reads as still however hard it shakes. Taken
+    /// from `view_unshaken()`, never from `view()` - a snapshot of the shaken
+    /// view is what smeared the whole frame on impact. Identity shake (none
+    /// active, or a camera override, which the shake does not reach) returns
+    /// `previous_unshaken` untouched.
+    #[must_use]
+    pub fn blur_previous_view_projection(&self, previous_unshaken: Mat4) -> Mat4 {
+        if self.view.camera_override.is_some() {
+            return previous_unshaken;
+        }
+        previous_unshaken * self.view.shake.matrix(self.view_unshaken())
     }
 
     /// The camera's own world position, from the view matrix it produces.

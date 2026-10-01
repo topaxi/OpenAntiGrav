@@ -435,6 +435,19 @@ stateless across frames, so that method is gone and the cache to invalidate
 is `race::scene::frame::MotionState` instead. Whoever wires a cut clears the
 snapshot there, and the frame after it measures zero.
 
+**The impact shake (solved 2026-10-01).** The shake turns the view by up to six
+degrees in one tick, and a velocity buffer built from the shaken views reads
+that as the world flying past: the first frame of a hard hit smeared whole,
+which the original does not (seen against PPSSPP, 2026-09-30). The snapshot now
+holds the camera *without* the shake (`Race::view_unshaken`) and the previous
+tick is multiplied by this tick's shake factor (`Race::blur_previous_view_projection`,
+the world-space matrix `Shake::matrix`), so both sides of every velocity carry
+the same shake and it cancels; the picture is still drawn through the shaken
+view. Pinned by `an_active_shake_adds_no_velocity_to_a_still_camera`. Screenshot
+pair, forced severity 1.0 on tick 120, blur high, the same race, before and
+after the fix: the frame one tick after the arm is whole-frame blur before,
+sharp after.
+
 [`MAX_STRETCH`]: ../../crates/render/src/post/motion_blur.rs
 
 ## Settle these before writing any shader
