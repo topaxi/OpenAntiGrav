@@ -34,6 +34,7 @@ Raw captures are derived game data: write them under `data/`, never commit them.
 """
 
 import argparse
+import base64
 import json
 import struct
 import subprocess
@@ -322,6 +323,11 @@ def main():
                         "bit, e.g. 0x1ac=5 for the Mine's round counter, which the pickup's arm "
                         "function sets and a hand-set fire bit does not")
     parser.add_argument("--place-window", action="store_true")
+    parser.add_argument("--ge-dump-k", type=int, metavar="K",
+                        help="ask for a GE dump (`gpu.record.dump`, a .ppdmp of the next frame the GPU "
+                        "draws) at stop frame fire+K, written to OUT/ge.ppdmp. The request is sent "
+                        "while the CPU is stopped and answered after it resumes - a synchronous "
+                        "request would wait for a frame that cannot draw")
     parser.add_argument("--edram", action="store_true",
                         help="also write both EDRAM framebuffers (0x04000000 and 0x04088000, 480x272 "
                         "at stride 512, RGBA8888, alpha = the bloom's glow mask) beside each shot. "
@@ -360,6 +366,8 @@ def main():
         fire_frame = None
         announced = None
         probe_pending = False
+        dump_ticket = None
+        dump_reply = []
         frame = 0
         for _, _ in dbg.each_hit(WEAPONS_DISPATCH_FIRE, 6000, timeout=args.timeout):
             manager = dbg.read_u32(RACE_MANAGER)
@@ -427,6 +435,17 @@ def main():
             if fire_frame is not None:
                 k = frame - fire_frame
                 row["since_fire"] = k
+                if args.ge_dump_k is not None and k == args.ge_dump_k:
+                    dump_ticket = dbg.send("gpu.record.dump")
+                    _receive = dbg._recv
+
+                    def _spy(_receive=_receive, ticket=dump_ticket):
+                        message = _receive()
+                        if message and message.get("ticket") == ticket:
+                            dump_reply.append(message)
+                        return message
+
+                    dbg._recv = _spy
                 if k in shots:
                     name = "k%03d.png" % k
                     row["shot"] = name if shoot(args.display, args.out / name) else None
@@ -442,6 +461,16 @@ def main():
         if probe_pending:
             probe_after_fire(dbg, args.probe, args.probe_frames, log)
         dbg.resume()
+        if dump_ticket is not None:
+            end = time.time() + 120
+            while not dump_reply and time.time() < end:
+                dbg._recv()
+            if dump_reply:
+                _, b64 = dump_reply[0]["uri"].split(",", 1)
+                (args.out / "ge.ppdmp").write_bytes(base64.b64decode(b64))
+                print("wrote %s" % (args.out / "ge.ppdmp"), file=sys.stderr)
+            else:
+                print("no GE dump arrived", file=sys.stderr)
     finally:
         dbg.hold(cross=False)
         (args.out / "log.json").write_text(json.dumps(log, indent=1))
