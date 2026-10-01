@@ -70,6 +70,7 @@ impl Race {
             hit_spark_anchors,
             wreck_anchors,
             destroy_stations,
+            intro_camera,
             slot_teams,
             ..
         } = setup;
@@ -452,6 +453,9 @@ impl Race {
                 camera,
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),
+                intro: intro_camera
+                    .filter(|_| camera_override.is_none())
+                    .map(super::intro_camera::IntroCamera::new),
                 camera_override,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(

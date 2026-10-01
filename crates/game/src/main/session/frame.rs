@@ -622,6 +622,16 @@ impl Session {
                     // itself sits frozen at whatever tick `Start` caught it on.
                     self.audio.race_tick(&mut stage.race);
                 }
+                // **The pre-race flyby steps instead of the world**: the circuit's own
+                // camera animation, held to its end or a held Cross, with the grid
+                // standing at its first tick. The countdown's 272 ticks start when it
+                // ends - the original's does too. See `race::intro_camera`. After the
+                // paused and finished arms, so Start still pauses it; and never reached
+                // by a headless run, whose loop drives `Race::tick` from tick 0.
+                Stage::Race(stage) if !self.no_intro && stage.race.intro_to_play() => {
+                    stage.race.begin_intro();
+                    stage.race.tick_intro(&inputs);
+                }
                 Stage::Race(stage) => {
                     // Outside `Race::tick`, so this cannot reach the hash: it
                     // tops the slot up the way a pad grant would, and only when

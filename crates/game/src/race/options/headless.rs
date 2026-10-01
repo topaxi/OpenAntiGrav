@@ -79,6 +79,7 @@ impl Setup {
             hit_spark_anchors: Vec::new(),
             wreck_anchors: Vec::new(),
             destroy_stations: Vec::new(),
+            intro_camera: None,
             slot_teams: Vec::new(),
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,

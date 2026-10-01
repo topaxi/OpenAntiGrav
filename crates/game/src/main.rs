@@ -536,6 +536,7 @@ fn main() -> Result<()> {
         pick_language,
         measure_race_load: cli.measure.measure_race_load,
         give,
+        no_intro: cli.no_intro,
         autopilot,
         autopilot_pilot,
         autopilot_skill,

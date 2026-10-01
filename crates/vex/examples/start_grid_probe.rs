@@ -27,17 +27,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("   attributes {:?}", vex::node_attributes(&blob, node));
         if node.class_id == 0x3c0 {
             let anim = vex::anim_transform_of(&blob, node).expect("decodes");
-            println!("   keys: t {:?} r {:?} s {:?} loop {}", anim.translation.times.len(), anim.rotation.times.len(), anim.scale.times.len(), anim.loop_seconds);
+            println!(
+                "   keys: t {:?} r {:?} s {:?} loop {}",
+                anim.translation.times.len(),
+                anim.rotation.times.len(),
+                anim.scale.times.len(),
+                anim.loop_seconds
+            );
         }
         if node.class_id == 0x3dd || node.class_id == 0xf7 {
             let p = &blob[node.payload()];
             for chunk in p.chunks(16) {
-                println!("   {}", chunk.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
+                println!(
+                    "   {}",
+                    chunk
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                );
             }
         }
     }
     if let Some(path) = args.next() {
-        let camera = nodes.iter().position(|n| n.class_id == 0x3dd).ok_or("no gridCamera")?;
+        let camera = nodes
+            .iter()
+            .position(|n| n.class_id == 0x3dd)
+            .ok_or("no gridCamera")?;
         let mut out = String::new();
         for frame in 0..=1500u32 {
             let world = vex::world_transforms_at(&blob, &nodes, frame as f32 / 60.0);

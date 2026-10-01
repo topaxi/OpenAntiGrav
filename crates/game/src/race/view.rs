@@ -54,6 +54,9 @@ pub struct RaceView {
     pub(super) shake_rng: Rng,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
+    /// The circuit's pre-race flyby, `None` where it has none or a pose was imposed. See
+    /// [`super::intro_camera`].
+    pub(super) intro: Option<super::intro_camera::IntroCamera>,
     /// The spectator director that flies the camera behind the end-race panels, `None` on a
     /// title it was not read for. See [`super::finish_camera`].
     pub(super) finish_camera: Option<super::finish_camera::FinishCamera>,

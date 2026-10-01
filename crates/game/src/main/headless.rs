@@ -513,6 +513,7 @@ pub(crate) fn run_race(
                 autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.autopilot_skill,
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
+                intro_ticks: cli.intro_ticks,
                 force_wreck: crate::args::force_wreck(cli.wreck.force_wreck.as_deref())?,
                 path,
                 ticks: cli.ticks,
@@ -594,6 +595,7 @@ pub(crate) fn run_race(
         // transition to time.
         measure_race_load: None,
         give,
+        no_intro: cli.no_intro,
         autopilot: cli.autopilot,
         autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
         autopilot_skill: cli.autopilot_skill,

@@ -125,11 +125,7 @@ impl GridCamera {
         let m = world[self.camera];
         Pose {
             eye: [m[12], m[13], m[14]],
-            rows: [
-                [m[0], m[1], m[2]],
-                [m[4], m[5], m[6]],
-                [m[8], m[9], m[10]],
-            ],
+            rows: [[m[0], m[1], m[2]], [m[4], m[5], m[6]], [m[8], m[9], m[10]]],
         }
     }
 

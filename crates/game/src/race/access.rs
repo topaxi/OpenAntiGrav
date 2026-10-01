@@ -204,9 +204,15 @@ impl Race {
             .finish_camera
             .as_ref()
             .map_or(0, finish_camera::FinishCamera::cuts);
+        let intro = self
+            .view
+            .intro
+            .as_ref()
+            .map_or(0, intro_camera::IntroCamera::cuts);
         self.sim.respawns[0]
             .wrapping_add(self.view.destroy_camera.cuts)
             .wrapping_add(spectator)
+            .wrapping_add(intro)
     }
 
     /// The same, for any craft on the grid.

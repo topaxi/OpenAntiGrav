@@ -173,6 +173,7 @@ fn setup(handling: Handling) -> Setup {
         hit_spark_anchors: Vec::new(),
         wreck_anchors: Vec::new(),
         destroy_stations: Vec::new(),
+        intro_camera: None,
         slot_teams: Vec::new(),
         trail_sparks: false,
         spark_anchors: Vec::new(),
