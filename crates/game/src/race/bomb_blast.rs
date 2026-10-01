@@ -55,17 +55,16 @@
 //! carries on the original's own bomb entity is not established; only which
 //! *slot* of the basis the authored models expect it to fill is.
 //!
-//! **The shockwave's fading alpha stays unapplied, and now for a measured reason
-//! (2026-10-01).** `BombBlast_Update` stamps a white word whose alpha is the `+0xf4`
-//! ease (`1.0 -> 0.0`) onto the shockwave's meshes through `Image_SetVertexColours`
-//! (`mesh+0x6c`, `0x089122b4`), which is the GE's scene ambient colour for a batch
-//! with normals and **no** vertex colours (`shield-pickup.md`, third pass). The
-//! shockwave's batches carry authored vertex colours (`0xffc8f9ff`, `0x27ff`, `0x4aff`,
-//! `0xffffffff`), and a GE dump of the original's ship-explosion ring (frames about 123
-//! and 148, past the point where the ease reads `0.94` and `0.57`) shows its three strips
-//! drawn with those colours untouched and ambient alpha `0xff`. So the word does not
-//! reach the draw and the ring does not fade by alpha; applying the ease would be an
-//! invention. It is kept as a constant and a test, with no caller.
+//! **The shockwave's fading alpha is applied (2026-10-01).** `BombBlast_Update` stamps a white word whose alpha
+//! is the `+0xf4` ease (`1.0 -> 0.0`) onto the shockwave's meshes through `Image_SetVertexColours` (`mesh+0x6c`,
+//! `0x089122b4`). It reaches the GE as the **ambient light's** alpha: the ring's strips are drawn with lighting
+//! on, no lights, `MATERIALUPDATE` `7` (the vertex colours are the material) and `0x5d` (ambient light alpha)
+//! written just before each strip - `0xf4` and `0xb8` in two dumps of the ship explosion's ring, which are
+//! the ease at `0.957` and `0.722` - so the drawn alpha is the vertex alpha times the ease, which is what
+//! [`Drawable::tint`] does with `[1, 1, 1, alpha]`. (A first reading of this paragraph read the **material**
+//! ambient registers `0x55`/`0x58` instead, found them untouched and called the fade a no-op; the ring's
+//! authored vertex words are indeed untouched in the buffer, as a lit material would leave them.) It was
+//! recovered and left unapplied until the ship explosion's own shockwave needed the same mechanism.
 //!
 //! # The ship explosion's shockwave (2026-10-01)
 //!
@@ -74,8 +73,7 @@
 //! logged live on PPSSPP: at the craft's own position (the matrix's translation,
 //! before the explosion effect's `4.0` drop), basis from the matrix's up row
 //! (the same Gram-Schmidt against `(0, 0, 1)` the Bomb's basis uses), **uniform**
-//! scale easing `0.1 -> 20` at `0.05` a tick, an alpha `1 -> 0` at `0.02` that, like the
-//! Bomb's, does not reach the draw, retired at `1.5 s`. Live: scale `0.1, 1.095, 2.04, 2.938, 3.791, 4.602`, alpha
+//! scale easing `0.1 -> 20` at `0.05` a tick, an alpha `1 -> 0` at `0.02` (applied, as above), retired at `1.5 s`. Live: scale `0.1, 1.095, 2.04, 2.938, 3.791, 4.602`, alpha
 //! `1, 0.98, 0.9604, 0.9412 ...`, age `1.3343` at scale `18.545` and alpha
 //! `0.3569`. The ring is `5.37` units across its radius at scale `1`, so by the
 //! fifth tick it spans the whole start grid, flat at the craft's height - which a
@@ -129,10 +127,8 @@ pub(super) const SHOCKWAVE_SCALE: Ease = Ease {
 /// ease alone in `BombBlast_Update`.
 pub(super) const SHOCKWAVE_SCALE_DELAY_SECONDS: f32 = 0.1;
 
-/// The shockwave's own fading alpha ease, `+0xf4`/`+0xf8`/`+0xfc` - recovered, and
-/// **not applied**: see this module's own doc comment. Reached only by
-/// `bomb_blast::tests::the_shockwave_alpha_ease_fades_from_opaque_to_nothing`.
-#[allow(dead_code)]
+/// The shockwave's own fading alpha ease, `+0xf4`/`+0xf8`/`+0xfc`, applied as
+/// [`Drawable::tint`]'s alpha - see this module's own doc comment.
 pub(super) const SHOCKWAVE_ALPHA: Ease = Ease {
     start: 1.0,
     target: 0.0,
@@ -145,6 +141,13 @@ pub(super) const SHIP_SHOCKWAVE_SCALE: Ease = Ease {
     start: 0.1,
     target: 20.0,
     rate: 0.05,
+};
+
+/// The ship explosion's shockwave alpha ease: `1.0`, `0.0` and `DAT_08ab0f28` = `0.02`.
+pub(super) const SHIP_SHOCKWAVE_ALPHA: Ease = Ease {
+    start: 1.0,
+    target: 0.0,
+    rate: 0.02,
 };
 
 /// When `FUN_0885efc4` retires the ship explosion's shockwave, in seconds (`1.5 <= age`).
@@ -223,6 +226,7 @@ pub(super) struct BombBlast {
     pub(super) age: f32,
     pub(super) hemisphere_scale: f32,
     pub(super) shockwave_scale: f32,
+    pub(super) shockwave_alpha: f32,
 }
 
 /// Which of the two objects a [`BombBlast`] slot holds - both are `Bomb_Shockwave.vex`.
@@ -241,6 +245,8 @@ pub(super) struct BombBlastDraw {
     pub(super) hemisphere_visible: bool,
     pub(super) shockwave_matrix: Mat4,
     pub(super) shockwave_visible: bool,
+    /// The alpha [`Drawable::tint`] multiplies the shockwave's vertex colours by.
+    pub(super) shockwave_alpha: f32,
 }
 
 impl Race {
@@ -269,6 +275,7 @@ impl Race {
             age: 0.0,
             hemisphere_scale: HEMISPHERE_SCALE.start,
             shockwave_scale: SHOCKWAVE_SCALE.start,
+            shockwave_alpha: SHOCKWAVE_ALPHA.start,
         });
     }
 
@@ -286,6 +293,7 @@ impl Race {
             age: 0.0,
             hemisphere_scale: HEMISPHERE_SCALE.start,
             shockwave_scale: SHIP_SHOCKWAVE_SCALE.start,
+            shockwave_alpha: SHIP_SHOCKWAVE_ALPHA.start,
         });
     }
 
@@ -302,12 +310,14 @@ impl Race {
             blast.age += dt;
             if blast.kind == BlastKind::ShipExplosion {
                 blast.shockwave_scale = SHIP_SHOCKWAVE_SCALE.step(blast.shockwave_scale);
+                blast.shockwave_alpha = SHIP_SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
                 if blast.age >= SHIP_SHOCKWAVE_LIFETIME_SECONDS {
                     *slot = None;
                 }
                 continue;
             }
             blast.hemisphere_scale = HEMISPHERE_SCALE.step(blast.hemisphere_scale);
+            blast.shockwave_alpha = SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
             if blast.age > SHOCKWAVE_SCALE_DELAY_SECONDS {
                 blast.shockwave_scale = SHOCKWAVE_SCALE.step(blast.shockwave_scale);
             }
@@ -330,6 +340,7 @@ impl Race {
                         shockwave_matrix: bomb_blast_basis(blast.position, blast.dir)
                             * Mat4::from_scale(Vec3::splat(blast.shockwave_scale)),
                         shockwave_visible: true,
+                        shockwave_alpha: blast.shockwave_alpha,
                     };
                 }
                 let basis = bomb_blast_basis(blast.position, blast.dir);
@@ -354,6 +365,7 @@ impl Race {
                             blast.shockwave_scale,
                         )),
                     shockwave_visible: true,
+                    shockwave_alpha: blast.shockwave_alpha,
                 }
             })
         })

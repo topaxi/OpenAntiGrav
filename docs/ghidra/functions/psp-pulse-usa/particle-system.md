@@ -1387,7 +1387,8 @@ matrix is the hull's own, rows `0.75` long (read live on all four of its resourc
 | fireball: horizontal spread / centroid rise at tick 40 | `0.79` / `0.73` | `1.11` / `0.89` |
 | debris: centroid rise at ticks 24, 40, 56 | `0.78, 0.72, 0.69` | **`1.03, 1.00, 0.98`** |
 
-Sizes are **not** scaled: the fireball's half-size is `2 + 9 * age` of its life (`2.06` at birth, then
+The smoke ring's RMS radius reads the same on two more boots (`poolB` ticks 8 to 14 `14.5, 14.7, 14.8, 14.9`, `poolC` ticks 8 to
+12 `13.9, 14.0, 14.1`, against ours `13.8, 13.9, 14.1, 14.2`), three boots in all. Sizes are **not** scaled: the fireball's half-size is `2 + 9 * age` of its life (`2.06` at birth, then
 `+0.1155` a frame, matching the authored channel) on both sides, and so are the lifetime and the alpha ramp
 (`0.96 / 0.96, 0.89 / 0.90, 0.78 / 0.80` at ticks 28, 34, 40). A **child** instance (`trail`, the debris's
 per-particle child, `0x91ae580`) reads a matrix of unit rows, so a child spawn takes no scale. `1.0` is every
@@ -1405,13 +1406,17 @@ lost to age. The rule that fits all of them and every `duration 1` burst (`WO_RO
 once, drawn exactly once) is: emit on the first update unconditionally, then only while more than one tick of
 the duration is left - `d - 1` emissions for `d >= 2`, `1` for `1`. Ported as `EmitterSpec::short_run`.
 Confidence **80** (three emitters, two boots; the `duration 1` case is the corpus's behaviour rather than a
-separate measurement).
+separate measurement). It agrees with the Bomb's ring: `WO_BOMB_SMOKERING` authors `duration 20`, so the rule's last round is
+tick 18, and the two-boot measurement in the section above saw births at ticks `0, 1, 3, 7, 16` and none later.
 
 **3. A sprite template dies with one tick of its life left.** The explosion's `Glow` (life `6`, size `30`
 held to `0.287`, then to `0`) was logged by `ParticleSystem_DrawParticle` (`scripts/psp-wreck-capture.py
 --templates`) at sizes `30.00, 30.00, 28.04, 21.00, 14.09` and colours `ffffffff, fff3d9ff, ffe7b2ff,
 ffdc8ccd, ffd06689` - five draws, ages `0` to `4`; ours drew a sixth at `7.17`, alpha `0.27`. The five match the
 size and colour channels to the last digit (`oag_vex::pob::initial`). Confidence **75** (one boot).
+
+**Probably the same law, unmeasured:** the hull's own collision sparks and the other effects parented to a craft's node ride the same
+`0.75`-row matrices and are still played at frame scale `1.0` (`oag_game::race::hit_sparks` and friends).
 
 **Not a law, a warning:** a census of rolled quads by bounding box overstates a particle's size by up to
 `sqrt(2)` (`4/pi` on average for a random roll) - the first reading of this section took that for a `0.79` size

@@ -124,11 +124,8 @@ fn the_shockwave_only_starts_growing_after_its_own_delay() {
     );
 }
 
-/// [`SHOCKWAVE_ALPHA`] eases the recovered way even though nothing draws it
-/// yet - see this module's own doc comment on why the fade is recovered but
-/// not wired. A dedicated assertion so the constant stays exercised (and the
-/// numbers stay checked against `mine.md`) rather than sitting as dead code
-/// until a `Drawable::tint` scratch buffer lands for this pool.
+/// [`SHOCKWAVE_ALPHA`] eases the recovered way and the draw carries it - see this
+/// module's own doc comment. The numbers stay checked against `mine.md`.
 #[test]
 fn the_shockwave_alpha_ease_fades_from_opaque_to_nothing() {
     let mut alpha = SHOCKWAVE_ALPHA.start;
@@ -171,6 +168,11 @@ fn a_ship_explosions_shockwave_eases_as_the_original_logged_it() {
         "uniform: the Bomb's own ring leaves its axis alone, this one does not"
     );
     assert_eq!(draw.shockwave_matrix.w_axis.truncate(), at);
+
+    // The ambient light alpha the original's GE read as `0xf4` early and `0xb8` later: `0.98^n`.
+    let blast = race.view.bomb_blasts[0].unwrap();
+    assert!((blast.shockwave_alpha - 0.98_f32.powi(6)).abs() < 1e-4);
+    assert_eq!(draw.shockwave_alpha, blast.shockwave_alpha);
 
     let ticks = (SHIP_SHOCKWAVE_LIFETIME_SECONDS / dt).ceil() as u32 + 2;
     for _ in 0..ticks {

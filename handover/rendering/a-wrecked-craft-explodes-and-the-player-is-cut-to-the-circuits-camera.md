@@ -38,14 +38,14 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md#the-instance-matrix-scales-a-root-emitters-spawn-and-a-run-emits-one-tick-short-2026-10-01)).
   Fire-coloured pixels now read `1.04, 1.08, 1.23, 1.24, 1.57` of the original's at 140 to 180 and smoke `1.08,
   0.96, 1.0, 0.87, 0.72`. **Still open here:** the first five frames - the original's white, hard-edged band
-  (the ring's and the `Glow`'s additive stack, brighter than ours; see the page's "Not read"); the mode-2 emitters
+  (the ring's and the `Glow`'s additive stack; the ring is 1.5-2x dimmer in ours, cause open, see the page's "Not read"); the mode-2 emitters
   (`SHIP_DEBRIS`, `FIRESPIKES`) spread 15 to 30 % more than the uniform frame scale gives; the fire still
   holds a little at the tail (`1.5x` at 180); our slot is about `25` px from the original's.
 - With the default profile (motion blur on) the cut frame and the state-5 shake frames show a
   white diagonal smear: the shake turns the view by more than the 4 degree field, the blur's
   clamp does the rest. The cut now resets the upscaler's history; the blur has no history to reset.
 - ~~`FUN_088407b0` also builds a `Data\Weapons\Bomb_Shockwave.vex` object - read, not drawn.~~ Drawn 2026-10-01
-  (`bomb_blast::BlastKind::ShipExplosion`), law read and logged live; its alpha ease does not reach the draw.
+  (`bomb_blast::BlastKind::ShipExplosion`), law read and logged live; its alpha ease reaches the draw as the ambient light's alpha and is applied. Open: the ring reads 1.5-2x brighter on the original.
 - **The HUD fade, measured 2026-10-01 (pulse-fx-recheck), and the claim above was wrong.** The player's own craft put
   into `Ship_SetState(entity, 4)` in a Single Race countdown on PPSSPP (`scripts/psp-wreck-capture.py --restart
   --inject-frame 40`, frames `data/scratch/pulse-fx-recheck/plA`, `plB`; one boot each): the HUD (lap, position, speed, shield
@@ -65,6 +65,9 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   loads but no Zone craft was wrecked on the original.
 - Not confirmed against a craft a race eliminated (`scripts/psp-wreck-capture.py` calls
   `Ship_SetState(entity, 4)`).
+
+- The hull's own collision sparks and every other effect parented to a craft's node ride the same 0.75-row matrices and are still
+  played at frame scale 1.0: probably the same law, **unmeasured** (`particle-system.md`, 2026-10-01).
 
 ## Next Steps
 

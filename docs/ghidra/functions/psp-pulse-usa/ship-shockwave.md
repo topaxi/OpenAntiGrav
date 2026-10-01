@@ -65,23 +65,37 @@ height the ring is edge-on, a thin orange line along the horizon across the whol
 about fifty frames, and for the first five frames a broad white band with a hard lower edge on the
 side of the wreck. Ours had neither before this change.
 
-## What does not reach the draw: the alpha
+## The alpha reaches the draw, as the ambient light's alpha
 
-`Image_SetVertexColours` (`0x089122b4`) stamps its word at `mesh+0x6c` of every `Mesh`-class node under
-the object (up to ten). `mesh+0x6c` is the GE's scene ambient colour for a batch with normals and no
-vertex colours (`shield-pickup.md`, third pass). The ring's batches carry vertex colours, and in both dumps
-(frames about 123 and 148, where the ease reads `0.94` and `0.57`) the three strips draw with their
-authored vertex words untouched (`0xffc8f9ff` / `0x27ff`, `0x4aff` / `0xffffffff`) and ambient alpha
-`0xff`. **So the ring does not fade by alpha**, and neither does the Bomb's own shockwave, whose
-`+0xf4` ease writes the same call. Applying either ease would draw what the original does not. Confidence
-**85** (two dumps, one boot each).
+`Image_SetVertexColours` (`0x089122b4`) stamps its word at `mesh+0x6c` of every `Mesh`-class node under the
+object (up to ten). The GE reads it as the **ambient light** (`shield-pickup.md`, third pass: scene ambient,
+the vertex colours the material). In the two dumps (`geA`, `geB`) the ring's six strips are drawn with lighting
+on (`0x17` = 1), no lights enabled, `MATERIALUPDATE` (`0x53`) `7` so the vertex colours are the material, and the
+**ambient light colour/alpha `0x5c`/`0x5d` written in the command list just before each strip**:
+
+| Dump | `0x5c` | `0x5d` | The ease `0.98^n` at |
+| --- | --- | --- | ---: |
+| `geA` strips 6691, 6701, 6711 | `ffffff` | `f4` | `0.957` |
+| `geB` strips 6694, 6704, 6714 | `ffffff` | `b8` | `0.722` |
+
+Other model draws in the same frame leave `0x5d` at `0xff` and lighting off. So the drawn alpha is the vertex alpha times
+the ease - `Drawable::tint([1, 1, 1, alpha])` - and the Bomb's own shockwave, whose `+0xf4` ease writes the same call,
+fades the same way (`0.1` a tick). Confidence **88** (two dumps, six strips, the register written just before each).
+The ring's vertex words in the buffer are the authored ones, as a lit material leaves them: that was first
+misread as "the fade does not reach the draw", from the *material* registers `0x55`/`0x58`, which stay `ffffff`/`ff`.
+
+**The ring is still too dim in ours.** With the fade the horizon band at `(300..480, 118..138)` reads, in the red channel at
+140, 150, 160 and 170 frames after the call, `176, 148, 105, 76` on the original and `164, 82, 66, 59` on ours (`182, 104, 82, 74`
+before the fade was wired): the original's band stays brighter than ours either way, which is the same gap as the first five
+frames' white. The strips' state (additive `SRCALPHA` + `FIX 0xffffff`, `TFUNC 0x100`, alpha and colour tests on, no culling,
+`TLEVEL` slope mode) was read, and the cause is open.
 
 ## Not read, open
 
-- The ring's brightness in the first five frames: the original reads saturated white where ours reads a
-  pale yellow band. The texture decodes plausibly (`pulse_ship_shock_ADD` is a fire noise, the edge texture a
-  white-to-brown gradient); the blend, `TLEVEL` (`c8:050002`, bias 5, slope mode) and the texture filter
-  were not compared state by state.
+- The ring's brightness (above): the first five frames and the horizon band read about `1.5` to `2` times brighter on the
+  original. The textures decode plausibly (`pulse_ship_shock_ADD` a fire noise, the edge texture a white-to-brown gradient); the
+  blend, the colour test (`NOTEQUAL` black), `TLEVEL` (`c8:050002`, bias 5, slope mode) and the filter were not compared
+  against ours state by state.
 - `DAT_08b34320` gates the whole object (`0x8c0f410` live); what clears it is unread, so every wreck
   here throws the ring.
 - Whether `FUN_0885ecf0`'s other callers exist: one xref, `Ship_SpawnExplosionBig`.
