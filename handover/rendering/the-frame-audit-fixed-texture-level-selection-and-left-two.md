@@ -23,14 +23,20 @@ of it the same day; see `frame-audit.md`.
   `*_shinemap` batches (their `+0x1a8` is 0, the view-matrix matcap, unread), the
   original's replace-then-add against our single additive redraw, fog on the pass,
   the airbrakes' flap deflection, and the wreck model (`+0x8b8`, same flags).
-- ~~**Factory roofs on the Talon straight.**~~ **Fixed 2026-09-30.** The roofs are
-  draws 1479..1494 (four animated slab transports, `track.vex` nodes 789, 793, 804,
-  806), not 1381..1391; the original's GE list never contains them (`psp-ge-dump.py`,
-  seven dumps, four poses, two boots), and `oag_render::pvs::visible` had exempted
-  every moving draw from the section mask as well as the frustum. The mask now
-  applies (`frame-audit.md` section 3). Still open on it: 21 to 24 moving draws at
-  rest poses that pass the mask and the original does not submit (its frustum uses a
-  bound for moving meshes that we lack), and one circuit only.
+- ~~**Factory roofs on the Talon straight.**~~ **Fixed 2026-09-30, and repeated
+  2026-10-01.** The roofs are draws 1479..1494 (four animated slab transports,
+  `track.vex` nodes 789, 793, 804, 806), not 1381..1391; the original's GE list
+  never contains them (`psp-ge-dump.py`, seven dumps, four poses, two boots), and
+  `oag_render::pvs::visible` had exempted every moving draw from the section mask
+  as well as the frustum. The mask now applies (`frame-audit.md` section 3). The
+  repeat on Metropia (three poses) and Tech De Ra (four) finds **no moving draw
+  the original submits that our mask drops** (0 at all seven, 8 when the craft's
+  section is forced wrong, so the count can move; confidence 80). Still open on
+  it: moving draws that pass the mask and the original does not submit (21 to 24
+  on Talon's, 4 to 6 on Metropia, 5 to 12 on Tech De Ra), some recurring at every
+  pose (Metropia node 225, Tech De Ra nodes 1076 and 1078), which is the original's
+  frustum bound for moving meshes or a rule not yet recovered; and no circuit with
+  a tunnel or a loop yet.
 - **Whether real PSP hardware shows level 1 past about 256 units.** The game
   programs slope mode with slope `1/256` and bias 1; the renderer now applies
   that law to the disc's levels, and PPSSPP's GPU backends do not, so no frame of
@@ -44,9 +50,10 @@ of it the same day; see `frame-audit.md`.
 
 ## Next Steps
 
-- Repeat the roofs measurement on another circuit (Metropia, Tech De Ra) with
-  `scripts/psp-ge-dump.py`: the rule was measured on Talon's Junction alone, and a
-  moving draw the original submits but a section hides would show as a matched
-  signature lost by the mask.
+- Separate the recurring moving draws the original does not submit (Metropia
+  node 225, Tech De Ra nodes 1076 and 1078) into frustum and rule: dump them at
+  poses where the craft faces away from, and then toward, their placement, with
+  `scripts/pvs-moving-census.py`. And repeat on Moa Therma or Arc Prime, which
+  have a loop.
 - Capture Pure at one pose with `psp-trace.py` and confirm or scope the slope
   rule; read `Texture_BuildBindList`'s mode/bias branch.

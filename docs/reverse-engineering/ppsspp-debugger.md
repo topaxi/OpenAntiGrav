@@ -659,6 +659,28 @@ pair is the forward direction was not checked. The working scripts
 (`unlock.py`, `to_track_select.py`, `race_log.py`, `place_trace.py`) were
 scratch, under `data/scratch/sunk-craft-2/`.
 
+**Two traps found walking to Metropia and Tech De Ra (2026-10-01).** `psp-drive.py
+menu --track-down N` presses down from wherever the profile left Track Select, so
+a count that reached a circuit once does not reach it again, and the table above
+did not predict what came up (four downs from the saved position gave
+`02_Track` reversed, a further one an unidentified circuit, then `03_Track`
+forward, then `05_Track` reversed, then `04_Track` reversed). **Identify the
+circuit after every walk**: take the craft's start position and heading from
+`psp-drive.py state` and find the `NN_Track\{track,track_reversed}.vex` spline
+(`oag-trace track`) whose nearest row is within about 20 units with a tangent that
+agrees (dot `+-1`). The reversed file is a separate spline, and `psp-drive.py
+place` with a tangent from the wrong one reads as "a respawn rather than a drive":
+the craft is back on the grid within a dozen ticks. To leave a race for the menu
+without a reboot: `start`, `down` five times, `cross` (QUIT RACE is the sixth of
+the pause menu's six rows) lands on `Main Menu`, and `menu` then walks on.
+
+`Debugger.each_hit` used to fail with `cpu.resume: CPU not stepping` when the CPU
+had been left stopped at the breakpoint's own address (a previous script that
+died inside a hit): adding the breakpoint rebroadcasts `cpu.stepping` carrying
+that pc, the wait accepted the rebroadcast as a hit while the CPU was in fact
+running, and the next resume refused. It now empties the queue behind a
+`cpu.status` round trip before each resume.
+
 ### Stopping *at* `Track Creation` or `Team Selection`, instead of walking through them
 
 **Scripted since 2026-09-09: `scripts/psp-frontend-capture.py`.** It does
