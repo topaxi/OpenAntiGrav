@@ -18,7 +18,7 @@ fn f32_to_half(value: f32) -> u16 {
 /// A view-space turn of about three degrees about each of two axes, seen
 /// through a 60 degree projection: the order of the shake's own jump.
 fn shake_map() -> Mat4 {
-    let projection = Mat4::perspective_rh(1.0, 1.0, 1.0, 100.0);
+    let projection = crate::camera::projection(1.0, 1.0, 1.0, 100.0);
     let turn = Mat4::from_rotation_y(0.05) * Mat4::from_rotation_z(0.04);
     projection * turn * projection.inverse()
 }
