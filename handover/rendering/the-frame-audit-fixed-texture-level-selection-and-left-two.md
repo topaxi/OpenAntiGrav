@@ -33,7 +33,8 @@ of it the same day; see `frame-audit.md`.
   the original submits that our mask drops** (0 at all seven, 8 when the craft's
   section is forced wrong, so the count can move; confidence 80). Still open on
   it: moving draws that pass the mask and the original does not submit (21 to 24
-  on Talon's, 4 to 6 on Metropia, 5 to 12 on Tech De Ra), some recurring at every
+  on Talon's by the earlier method; 4 to 6 on Metropia, 5 to 12 on Tech De Ra by
+  this one, not like-for-like), some recurring at every
   pose (Metropia node 225, Tech De Ra nodes 1076 and 1078), which is the original's
   frustum bound for moving meshes or a rule not yet recovered; and no circuit with
   a tunnel or a loop yet.

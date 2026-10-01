@@ -2892,8 +2892,12 @@ against PPSSPP on 2026-10-01, below.
 test move the chain exactly as the port's literal reading of
 `LeachBeam_ReaimChain` says (the point to `point - s * dir`, the step measured
 from `point + s * dir`), or as the "corrected" `(target - point') / remaining`?
-The two predict the next chain point `2 * s * dir` apart, tens of units on a
-wall violation, so one chain whose tests fail tells them apart. It would come
+The two predict the next chain point and the next step `2 * s * dir / remaining`
+apart (the corrected reading keeps the point at `point - s * dir` and measures
+the step from there), so one chain whose tests fail tells them apart. (The first
+draft of this paragraph said "`2 * s * dir` apart", and the first analysis moved
+the corrected reading's point the wrong way, inflating its misses by about
+`remaining + 1`; both are fixed here and the table below is the recomputed one.) It would come
 out the other way if the logged next point matched the corrected law. A run
 where no plane test fails could not decide anything, so each run is counted
 only for its failing transitions.
@@ -2920,15 +2924,15 @@ call's point is the kept point plus the kept step. The scripts are under
 
 | Run | Chord | Segments | Transitions with a failing test | Literal law, worst miss | Corrected law, worst miss |
 | --- | --- | --- | --- | --- | --- |
-| bent2 | spline 2634 to 2718 | 13 | 55 (48 right wall, 7 floor) | `9e-5` | `13.4` |
-| bent3 | same, start moved 0.7 along the chord | 13 | 55 | `7e-5` | `13.2` |
-| bent5 | same, moved 1.4 | 13 | 55 | `7e-5` | `13.0` |
-| bent8 | same, repeated | 13 | 70 (60 right, 10 floor) | `7e-5` | `13.4` |
-| bent4 | spline 2619 to 2700 | 13 | 46 (right wall) | `8e-5` | `9.8` |
-| bent6 | 2634 to a target 160 units past the left edge of 2718 | 36 | 79 (46 left, 12 right, 15 floor, 6 floor then left) | `8e-5` | `162.5` |
+| bent2 | spline 2634 to 2718 | 13 | 55 (48 right wall, 7 floor) | `9e-5` | `1.68` |
+| bent3 | same, start moved 0.7 along the chord | 13 | 55 | `7e-5` | `1.66` |
+| bent5 | same, moved 1.4 | 13 | 55 | `7e-5` | `1.63` |
+| bent8 | same, repeated | 13 | 70 (60 right, 10 floor) | `7e-5` | `1.68` |
+| bent4 | spline 2619 to 2700 | 13 | 46 (right wall) | `8e-5` | `1.29` |
+| bent6 | 2634 to a target 160 units past the left edge of 2718 | 36 | 79 (46 left, 12 right, 15 floor, 6 floor then left) | `8e-5` | `81.3` |
 
-(Units, miss of the next chain point; the next step misses `1.3` to `81`
-under the corrected law and `3e-5` under the literal one.) All three plane
+(Units, miss of the next chain point; the next step misses by the same amount
+under the corrected law and by at most `3e-5` under the literal one.) All three plane
 tests fire, floor then wall in one call included, and the original's sign and
 order are the port's: the below-the-road test, the right wall, the left wall,
 each reading the point the one before moved. **The hook is real**: a re-aimed
@@ -2936,10 +2940,11 @@ chain does end off the target (the four 13-segment chains end `0.44` to `1.24`
 units from it, not on it). Confidence **92**: a runtime trace of the
 arithmetic, six runs, every branch; short of the top band because no second
 binary has been read for it. `KeepInTrack` and `ReaimChain` are raised from 80
-to 92. Left in the tree: `tube::tests::the_port_reproduces_a_chain_read_off_the_original`
-replays nineteen consecutive calls of `bent6` (`tube/measured.rs`, the original's
-own `f32`s) and fails if the port reads `ReaimChain` the other way (checked by
-making it so).
+to 92. No captured table is committed: the records are the original's own runtime
+track data, which `legal.md` keeps out of the tree, so the numbers stay on this
+page and the captures under `data/scratch/pulse-capture/` (`bent2`..`bent8`).
+`tube::tests::the_step_is_measured_from_the_point_displaced_the_other_way` pins
+the law on a synthetic road.
 
 **The locator interpolates, and the port does not.** The located frame is not a
 row of our exported spline and not a discrete choice: with the query moved

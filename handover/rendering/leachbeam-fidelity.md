@@ -14,9 +14,10 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   PPSSPP captures at Talon's Junction (585 chain transitions, all three plane
   tests, floor-then-wall in one call) reproduce `LeachBeam_KeepInTrack`/
   `ReaimChain` as ported, the far-end hook included, to `1e-4`; the "corrected"
-  reading misses by 10-160 units. `KeepInTrack`/`ReaimChain` are 92 on the
-  page, and `tube::tests::the_port_reproduces_a_chain_read_off_the_original`
-  replays one captured chain. See `cannon-quake-leachbeam.md`, "2026-10-01: the
+  reading (point kept, step from it) misses by 1.3 to 81 units, a thousand times
+  the tolerance. `KeepInTrack`/`ReaimChain` are 92 on the page. No captured table
+  is committed (`legal.md`); a `data/`-backed `#[ignore]` test that replays a
+  capture is possible if the lead wants one. See `cannon-quake-leachbeam.md`, "2026-10-01: the
   tube against PPSSPP".
 - **`oag_game::race::Spline::tube_frame` does not interpolate; the original's
   locator does.** For the `pulse-shine` lane (that file is theirs): the located

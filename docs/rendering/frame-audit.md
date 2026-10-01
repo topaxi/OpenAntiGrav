@@ -344,7 +344,10 @@ single object reads as two twins.
 | Tech De Ra, row 2000 | 53 | 36 / 36 | 5 | **0** |
 
 **Result: nothing the original submits is hidden by our mask.** DROPS is `0` at
-all seven poses. The control that the count can move: with the craft's section
+all seven poses, and again `0` at a second placement and dump of Tech De Ra rows
+600, 900 and 2000 taken later on the same boot (the craft landed 0.9 to 16 units
+off the first pose this time; passing counts `19`, `19` and `36` as before).
+One boot only: no cold second boot was taken here. The control that the count can move: with the craft's section
 forced wrong (`--force-sections`), the same pose reports `8` drops. Before the
 fold of the second-texture passes the first pass showed two apparent drops on
 Metropia, and a few more on Tech De Ra from small four-vertex quads; both were a
@@ -355,8 +358,10 @@ a twin were `68`, `62`, `78` % on Metropia and `86`, `68`, `76`, `91` % on Tech
 De Ra.
 
 **The other direction, a count rather than a finding.** Moving draws that pass
-the mask and have no twin: 4 to 6 on Metropia and 5 to 12 on Tech De Ra, against
-21 to 24 on Talon's Junction. It is a lower bound on what the original hides
+the mask and have no twin: 4 to 6 on Metropia and 5 to 12 on Tech De Ra. The 21 to
+24 quoted above for Talon's Junction came from the earlier pass's own method (no
+fold of the second-texture passes, a different count), so the two are not a
+like-for-like comparison and no ranking of circuits follows. It is a lower bound on what the original hides
 that we draw (a count-and-diameter coincidence turns a miss into a hit, never
 the reverse), and part of it is the original's frustum cull, which moving draws
 here are exempt from. At Metropia row 400 two of the four (node 549, 58 and 44

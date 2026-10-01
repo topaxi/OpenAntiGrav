@@ -139,6 +139,4 @@ pub fn walk(
 }
 
 #[cfg(test)]
-mod measured;
-#[cfg(test)]
 mod tests;
