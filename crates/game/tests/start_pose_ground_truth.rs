@@ -110,15 +110,17 @@ fn the_craft_arrives_at_go_where_and_pointing_as_the_original_does() {
     let rows = fly(&mut race, COUNTDOWN_TICKS + 1);
     let (yaw, position) = rows[COUNTDOWN_TICKS as usize];
     println!("at GO: yaw {yaw:.3} position {position:?}");
-    // 0.15 degrees and 0.25 units: what is left is the per-slot heading
-    // (`grid.md`: the original builds each slot's frame from the track's sample,
-    // ours takes the node's) and the countdown's slow slide down the slope.
+    // 0.05 degrees and 0.15 units. What is left of the position is 0.1 in z:
+    // the original's craft is placed 2 units above the floor and rises to its
+    // rest height along its own up axis, which on this banked start moves it
+    // 0.04 units in z, and it then slides 0.03 down the slope through the
+    // countdown. Ours is placed at its rest height already.
     assert!(
-        (yaw - ORIGINAL_YAW_DEGREES).abs() < 0.15,
+        (yaw - ORIGINAL_YAW_DEGREES).abs() < 0.05,
         "yaw {yaw} against the original's {ORIGINAL_YAW_DEGREES} at GO"
     );
     assert!(
-        (position - ORIGINAL_AT_GO).length() < 0.25,
+        (position - ORIGINAL_AT_GO).length() < 0.15,
         "position {position:?} against the original's {ORIGINAL_AT_GO:?} at GO"
     );
 }
@@ -136,4 +138,62 @@ fn the_craft_starts_to_yaw_at_go_at_the_originals_rate() {
         (drift - ORIGINAL_YAW_DRIFT_30).abs() < 0.25 * ORIGINAL_YAW_DRIFT_30,
         "yaw moved {drift} degrees in 30 ticks, the original {ORIGINAL_YAW_DRIFT_30}"
     );
+}
+
+/// The eight craft of a Single Race at placement, read off the racer table
+/// (`scripts/psp-grid-pose.py`): `x` and the heading, degrees from `+X` toward
+/// `-Z`, of each slot from slot 1 to slot 8. The heading is `forward.z` read
+/// at the third decimal, which is `0.06` degrees a step.
+const ORIGINAL_GRID: [(f32, f32); 8] = [
+    (6.145, -0.1432),
+    (-13.561, -0.1833),
+    (-33.427, -0.2235),
+    (-53.142, -0.2521),
+    (-73.032, -0.2808),
+    (-92.745, -0.3037),
+    (-112.624, -0.3266),
+    (-132.291, -0.3495),
+];
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_grid_slot_points_along_the_tracks_own_frame_as_the_original_does() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        track: Some(TRACK.to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let race = race::Race::start(loaded.setup);
+    let mut worst = 0.0f32;
+    for (x, yaw_original) in ORIGINAL_GRID {
+        // The slot is found by where it stands: ours puts the player on slot 8
+        // and the opponents on 1 to 7, which is the original's order too, but
+        // matching by position does not depend on that.
+        let ship = (0..8)
+            .map(|slot| &race.sim.world.ships[slot].physics.body)
+            .min_by(|a, b| {
+                (a.position.x - x)
+                    .abs()
+                    .total_cmp(&(b.position.x - x).abs())
+            })
+            .expect("eight craft");
+        assert!(
+            (ship.position.x - x).abs() < 3.0,
+            "no craft near the original's x {x}"
+        );
+        let forward = ship.orientation * Vec3::NEG_Z;
+        let yaw = forward.z.atan2(forward.x).to_degrees();
+        worst = worst.max((yaw - yaw_original).abs());
+        assert!(
+            (yaw - yaw_original).abs() < 0.08,
+            "slot at x {x}: yaw {yaw}, the original's {yaw_original}"
+        );
+    }
+    println!("worst slot heading error: {worst:.3} degrees");
 }

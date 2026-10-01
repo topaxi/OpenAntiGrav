@@ -59,8 +59,8 @@ impl Race {
         // runs `Ship_HoverFourCorner` (`Ship_UpdateHover`, `0x0884870c`), whose
         // own epilogue was not read for the guard, and this port flies Zone on
         // the two-point law regardless. Measured on a Time Trial only.
-        let on_grid = RaceState::thrust_gated(self.sim.world.tick)
-            && self.sim.world.mode() != Mode::Zone;
+        let on_grid =
+            RaceState::thrust_gated(self.sim.world.tick) && self.sim.world.mode() != Mode::Zone;
         for ship in &mut self.sim.world.ships {
             ship.physics.on_grid = on_grid;
         }

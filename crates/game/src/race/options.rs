@@ -473,6 +473,11 @@ pub struct Setup {
     /// `craft_title.name == oag_pulse::TITLE.name`. See
     /// `weapons::visuals::laid`.
     pub pulse_laid_pose: bool,
+    /// Whether each grid slot's orientation is the track's own frame at the
+    /// slot rather than the authored `Start Position` node's. Pulse off a PSP
+    /// disc only, the one grid layout function read and measured against the
+    /// original: `oag_gameplay::orientation_on_sample`, `docs/physics/grid-state.md`.
+    pub grid_frame_from_sample: bool,
     /// Whether weapon detonations start `ScreenFlash_Start`'s full-screen
     /// wash - Pulse off a PSP disc only, the one executable its consumer is
     /// read off. See `oag_render::flash`.

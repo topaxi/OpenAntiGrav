@@ -262,10 +262,20 @@ there), and its world position is at
 entry `+0x10` (the four floats before a 3x3 of the craft's axes). The table
 entry, not the craft struct, holds the copy that is stable through the countdown.
 
-**One thing not changed:** each slot still shares the node's heading. The
-original re-derives orientation from each slot's own sample (`FUN_0882663c`);
-on a straight start that is the same to four places, and the measured headings
-on `16_Track` were.
+**Changed 2026-10-01, on Pulse PSP:** each slot now takes the track's own frame at
+its sample (`oag_gameplay::orientation_on_sample`), where it used to share the
+node's heading. "The same to four places" was a dot product, which cannot see a
+third of a degree: the eight craft of a `16_Track` Single Race read at placement
+(`scripts/psp-grid-pose.py`) have forward `z` `-0.0025`, `-0.0032`, `-0.0039`,
+`-0.0044`, `-0.0049`, `-0.0053`, `-0.0057`, `-0.0061` from slot 1 to slot 8, where
+the node's is `0.0000` - 0.35 degrees out at slot 8, which is the player's slot
+in a Single Race. The sample's own tangent is within 0.05 degrees of every one
+(`every_grid_slot_points_along_the_tracks_own_frame_as_the_original_does`, worst
+0.045). Confidence **88** for "built from the located sample" (the heading
+tracks the sample to 0.05 degrees on eight slots; `FUN_0882663c` itself, a long
+VFPU function, was not read to the end). The other titles keep the node's
+heading: nothing was measured for them. See
+[grid-state.md](../../../physics/grid-state.md).
 
 ## Ported, and how close it lands
 

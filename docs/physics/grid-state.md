@@ -102,14 +102,22 @@ rows; the last two are from `data/scratch/pulse-start-pose/ours-tt-16-gate.txt`.
 
 ## What is still different at GO, and what is not this page's
 
-**Heading, 0.145 degrees.** Ours starts exactly along `+X` because every slot
-takes the node's orientation; the original starts at `-0.146` degrees and its
+**Heading, ported second.** Ours started exactly along `+X` because every slot
+took the node's orientation; the original starts at `-0.146` degrees and its
 eight slots read `-0.0025`, `-0.0032`, `-0.0039`, `-0.0044`, `-0.0049`, `-0.0053`,
-`-0.0057` and `-0.0061` of forward `z`, slot 1 to slot 8, a smooth ramp. That
-is `grid.md`'s "the original re-derives orientation from each slot's own sample
+`-0.0057` and `-0.0061` of forward `z`, slot 1 to slot 8, a smooth ramp. That is
+`grid.md`'s "the original re-derives orientation from each slot's own sample
 (`FUN_0882663c`)", and the track's own sample tangent at those positions reads
-`-0.0033` to `-0.0057`: within 0.05 degrees, where the node's is out by up to
-0.35.
+within 0.05 degrees where the node's is out by up to 0.35. Pulse PSP slots now
+take that frame (`oag_gameplay::orientation_on_sample`, gated by
+`Setup::grid_frame_from_sample`); the worst of the eight is 0.045 degrees out,
+and the Time Trial's yaw at GO is `-0.191` against `-0.146` (0.045), from 0.145.
+
+**Position, 0.10 units in z.** The original places the craft 2 units above the
+floor and the spring raises it along the craft's own up axis, which on this
+banked start moves it 0.04 in z, and it slides 0.03 more through the countdown
+under brake and airbrake that ours does not hold. Ours is placed at its rest
+height. Not ported: sub-0.1 and not on the path of anything measured.
 
 **The launch boost.** The original's craft accelerates faster than ours once
 GO comes with thrust already held:
