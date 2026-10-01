@@ -1279,6 +1279,35 @@ measured.
 | `0x08918bf8` | `ParticleSystem_DrawEmitterPool` | 80 |
 | `0x089178c0` | `ParticleSystem_DrawRolledQuads` | 85 |
 | `0x089194d0` | `ParticleSystem_DrawPoolSquares` | 88 |
+| `0x088fc634` | `ParticleSystem_EmitRing` | 85 |
+
+### Shape 3 is a ring or a disc: `ParticleSystem_EmitRing` (2026-10-01)
+
+`FUN_088fc634(instance, count)`, `ParticleSystem_SpawnBurst`'s shape-3 emitter, read in
+full (the "cone placement" this page listed as unread) and confirmed live. With `r` the
+scaled extent (`DAT_08ab2290`) and `phi` drawn `Psys_RandFloatRange(0, 2 pi)` per particle
+(or, under resource flag `0x200000`, a random start stepped by `2 pi / count`), the spawn
+offset in the emitter frame is by `+0x3c`:
+
+| `+0x3c` | offset |
+| ---: | --- |
+| `0` | `(r cos phi, 0, r sin phi)` - a **ring** of radius `r` in the frame's `XZ` plane, `Y` the cone's axis |
+| `1` | the same at a radius `Psys_RandSpread(r, instance+0x60)` |
+| `2` | a point in the square `[-r, r]^2`, redrawn until it lies inside the circle - a uniform **disc** |
+
+**Live**: `WO_BOMB_SMOKERING` authors extent `12.941` and radius mode `1`; a Bomb
+detonated 120 units ahead of the craft (`psp-weapon-pair.py --probe rolled
+--detonate-bomb-at`) spawned its first smoke particles 13.0 to 13.6 units from the blast
+centre on the horizontal plane with a vertical offset under a unit, every azimuth, and the
+instance's own scale words read `1.0`. Confidence **85**: the three modes are read, the
+ring radius and plane measured on mode 1; the disc's rejection loop and the even-step flag
+are read and not measured. The corpus's shape-3 emitters with an extent over 0.1:
+`WO_BOMB_SMOKERING` (12.9), `WO_SHIP_EXPLOSION` root (12.9, mode 1) and `SHIP_DEBRIS`
+(10, mode 2, spread `7.7`) and `trail` (1.9), `WO_ROCKET_EXPLO`'s `DEBRIS` (5.1, mode 2),
+`WO_MISSILE_BOUNCE`/`WO_MISSILE_EXPLO`'s `drift_down` (4.1 to 4.3), `WO_REPULSER_BLAST`
+(13.6, mode 0, with `0x200000`). `oag_render::psys::spawn::Spawn::Ring` plays all of it but
+the even step. The "approximates shape 3 as the anchor" remark further down was true of
+the collision sparks' `0.1` and was never true of these.
 
 ### The pool's square draw, and a pool particle read live (2026-10-01)
 
