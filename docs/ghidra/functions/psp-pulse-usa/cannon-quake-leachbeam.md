@@ -46,8 +46,8 @@ produced it and the one that replaces it.
 | `0x08873090` | `LeachBeam_MarkDisconnected` | 80 (new 2026-09-08) |
 | `0x088730a4` | `LeachBeam_LingerExpired` | 80 (new 2026-09-08) |
 | `0x08873068` | `LeachBeam_UnlockedExpired` | 78 (new 2026-09-08) |
-| `0x088734d0` | `LeachBeam_KeepInTrack` | 80 (new 2026-09-23, re-read 2026-09-30) |
-| `0x08873328` | `LeachBeam_ReaimChain` | 80 (new 2026-09-23, re-read 2026-09-30) |
+| `0x088734d0` | `LeachBeam_KeepInTrack` | 92 (new 2026-09-23, re-read 2026-09-30, measured 2026-10-01) |
+| `0x08873328` | `LeachBeam_ReaimChain` | 92 (new 2026-09-23, re-read 2026-09-30, measured 2026-10-01) |
 | `0x0883f228` | `Ship_ApplyPendingWeaponRepair` | 85 (new 2026-09-08) |
 | `0x08853a80` | `Ai_Update` | 85 (new 2026-09-08) |
 | `0x0885077c` | `WeaponAi_Construct` | 85 (new 2026-09-08) |
@@ -2825,8 +2825,8 @@ again instruction by instruction:
 
 | Address | Name | Confidence | What it does |
 | --- | --- | --- | --- |
-| `0x088734d0` | `LeachBeam_KeepInTrack` | 80 | `AiTrack_LocatePosition(100.0, track, &frame, point, 0, -1, 0)` fills a `SplinePt`-shaped record on the stack (`+0x00` pos, `+0x20` down, `+0x30` lateral, `+0x44`/`+0x48` half-widths), zero-initialised from `DAT_08a90a20`, which reads sixteen zero bytes. Three plane tests follow, in order, against that one record. |
-| `0x08873328` | `LeachBeam_ReaimChain` | 80 | Moves the point and rewrites the step. Arguments: `a0` out step, `a1` the beam instance (target at `*(inst+0xa0) + 0x30`), `a2` direction vector, `a3` the point (in place), `t0` chain points still to place, `f12` the scale. |
+| `0x088734d0` | `LeachBeam_KeepInTrack` | 92 | `AiTrack_LocatePosition(100.0, track, &frame, point, 0, -1, 0)` fills a `SplinePt`-shaped record on the stack (`+0x00` pos, `+0x20` down, `+0x30` lateral, `+0x44`/`+0x48` half-widths), zero-initialised from `DAT_08a90a20`, which reads sixteen zero bytes. Three plane tests follow, in order, against that one record. |
+| `0x08873328` | `LeachBeam_ReaimChain` | 92 | Moves the point and rewrites the step. Arguments: `a0` out step, `a1` the beam instance (target at `*(inst+0xa0) + 0x30`), `a2` direction vector, `a3` the point (in place), `t0` chain points still to place, `f12` the scale. |
 
 **The three tests** (`0x088735d4`, `0x08873724`, `0x088738d0` each leave the
 failed test's own dot product in `f12`, which is the scale `ReaimChain`
@@ -2883,8 +2883,118 @@ that part is read.
 **Built** in `oag_render::beam::tube` (2026-09-30), fed by
 `oag_game::race::Spline::tube_frame`; a disc-backed test on Talon's
 Junction's own spline (`leach_tube_ground_truth`) finds the worst chord on
-the circuit, `9.22` units out of the tube straight and `0.01` bent. Not
-measured against PPSSPP: our side only.
+the circuit, `9.22` units out of the tube straight and `0.01` bent. Measured
+against PPSSPP on 2026-10-01, below.
+
+#### 2026-10-01: the tube against PPSSPP
+
+**Question and falsifier, written before the capture.** Does a failed plane
+test move the chain exactly as the port's literal reading of
+`LeachBeam_ReaimChain` says (the point to `point - s * dir`, the step measured
+from `point + s * dir`), or as the "corrected" `(target - point') / remaining`?
+The two predict the next chain point `2 * s * dir` apart, tens of units on a
+wall violation, so one chain whose tests fail tells them apart. It would come
+out the other way if the logged next point matched the corrected law. A run
+where no plane test fails could not decide anything, so each run is counted
+only for its failing transitions.
+
+**Method.** PPSSPP v1.20.4, Pulse (UCUS98712), a Talon's Junction time trial
+(`psp-drive.py restart`, so every craft is in race state `1`), private muted
+instance. The player is pinned on a spline point with `place_body`'s writes (the
+same rigid-body write `psp-drive.py place` makes) for six ticks, a fake target
+node (an identity matrix with the chosen translation, in free RAM) is written
+into the player's weapon record at `+0x168`, `+0x16c` and `+0x1bc = 10`, and the
+fire bit `0x8000` is set at a `Weapons_DispatchFire` hit. A breakpoint on the
+return from `AiTrack_LocatePosition` inside `LeachBeam_KeepInTrack`
+(`0x08873568`) then logs, for every chain point, the point (`s2`), the step
+(`s1`), the points still to place (`s0`), the target node's translation and the
+located record at `sp+0x10` (24 floats). The checks used: `rec.pos` within 20
+units of the query, `|down|` and `|lateral|` near `1`, and `s0` counting down
+from `segments - 1` to `0` - all held, so the register mapping is right.
+Consecutive calls of one chain give the before and after of each call: the next
+call's point is the kept point plus the kept step. The scripts are under
+`data/scratch/pulse-capture/` (`bent.py`, `an.py`, `an4.py`); captures
+`bent2`..`bent8` there.
+
+**The law is the port's literal one.** Six runs, 585 consecutive transitions:
+
+| Run | Chord | Segments | Transitions with a failing test | Literal law, worst miss | Corrected law, worst miss |
+| --- | --- | --- | --- | --- | --- |
+| bent2 | spline 2634 to 2718 | 13 | 55 (48 right wall, 7 floor) | `9e-5` | `13.4` |
+| bent3 | same, start moved 0.7 along the chord | 13 | 55 | `7e-5` | `13.2` |
+| bent5 | same, moved 1.4 | 13 | 55 | `7e-5` | `13.0` |
+| bent8 | same, repeated | 13 | 70 (60 right, 10 floor) | `7e-5` | `13.4` |
+| bent4 | spline 2619 to 2700 | 13 | 46 (right wall) | `8e-5` | `9.8` |
+| bent6 | 2634 to a target 160 units past the left edge of 2718 | 36 | 79 (46 left, 12 right, 15 floor, 6 floor then left) | `8e-5` | `162.5` |
+
+(Units, miss of the next chain point; the next step misses `1.3` to `81`
+under the corrected law and `3e-5` under the literal one.) All three plane
+tests fire, floor then wall in one call included, and the original's sign and
+order are the port's: the below-the-road test, the right wall, the left wall,
+each reading the point the one before moved. **The hook is real**: a re-aimed
+chain does end off the target (the four 13-segment chains end `0.44` to `1.24`
+units from it, not on it). Confidence **92**: a runtime trace of the
+arithmetic, six runs, every branch; short of the top band because no second
+binary has been read for it. `KeepInTrack` and `ReaimChain` are raised from 80
+to 92. Left in the tree: `tube::tests::the_port_reproduces_a_chain_read_off_the_original`
+replays nineteen consecutive calls of `bent6` (`tube/measured.rs`, the original's
+own `f32`s) and fails if the port reads `ReaimChain` the other way (checked by
+making it so).
+
+**The locator interpolates, and the port does not.** The located frame is not a
+row of our exported spline and not a discrete choice: with the query moved
+`0.65` and `1.29` units along the chord (bent3, bent5) and the same nearest row,
+`rec.pos` moved `0.42`/`0.85`, the left half width `0.22`/`0.45` and `lateral`
+`0.006`/`0.012`, linearly. So `AiTrack_LocatePosition` interpolates along the
+segment, as the page's earlier open question guessed it might. What it
+interpolates between is not recovered: lerping our rows leaves a `0.19` residual
+at the start of the chain (mostly lateral, falling to `0.01`), at spacings of
+one to eight rows alike, and the half widths differ from the nearest row by up
+to `0.3`. Its position-error budget is small: running our locator (the nearest
+row, within `100.0`) and the literal law over the original's own start and
+target reproduces the original's chain to **`0.25`-`0.54` units at worst**
+(`0.17`-`0.31` mean) in the four 13-segment runs, while the chain itself leaves
+the straight line by `14.4`-`21.7`. That is below anything visible, so nothing
+in `oag_game::race::Spline::tube_frame` is changed here (not this lane's file);
+the record is in the handover thread.
+
+**The search radius was not exercised.** The `100.0` could only show as an
+all-zero record for a query more than 100 from any spline point, and the tube
+keeps every chain point near the road: the farthest query seen from its
+located `pos` is `19.4` units over 585 calls, and no all-zero record appeared.
+A shooter pinned 130 units along the lateral axis of spline point 2634
+was tried: that point turned out to lie within 20 units of another stretch of
+the circuit (the corner folds back on itself), so it never left the radius
+either, and pinned over six ticks the craft was re-seated about 22 units away
+by the fire. Written inside the dispatch hit instead, the body stayed where it
+was put, but the first chain still started from the previous pose. Open: it
+needs a point more than 100 from every spline sample, and a shooter that stays
+there for a frame.
+
+**What can disconnect a fired beam, read on the way.** The first fires
+disconnected on their first update (`instance+0x3c & 0x40`).
+`LeachBeam_UpdatePool`'s per-tick test (`0x08866c80`-`0x08866d28`, read
+instruction by instruction) sets the disconnect when any of: the floor-clamped
+distance between the beam and the target's resolved position exceeds
+`ActiveLeachBeamStats+0x11c` (`250`, measured live as `81.1` in one fire); the
+target's `entity+0x860 & 0x1000`; the target's weapon record `+0x1b8 & 0x10`
+(shielded); the owner's weapon record `+0x120` is above `f22` (`0.0`); or
+`FUN_0883e64c` (which returns `entity+0x8c`, or a lookup through `+0x364` when
+`entity+0x860 & 0x800`) is not `1` for the target or for the owner. Two of
+these were seen holding during the session: the owner's `+0x120` read `3.0`
+after a failed shot (and `0.0` otherwise), and after the earlier race had
+finished the entities read `+0x8c = 2` (AI) and `6` (player), where all eight
+read `1` after `psp-drive.py restart`. Which test fired was isolated for
+neither. Five of the six captures above still disconnect on the first update
+(`instance+0x144 = 1`, `+0x148 = 0.0167`), and the chain is then built for the `0.5` s linger, which is what was logged; that
+cause was not run down.
+
+Frames, native 480x272, three consecutive logged moments of one beam
+(bent8, `beamA_40`, `beamA_66`, `beamA_105` under `data/scratch/pulse-capture/`):
+the arc leaves the craft, runs along the outside of the corner, kinks at the
+two re-aim points and ends on the target, jagged but kept inside the tube. They
+are of the original only: our build cannot be posed against a fake node, so
+these are illustrative and not a matched comparison.
 
 #### Measured in play (PPSSPP v1.20.4, UCUS98712)
 

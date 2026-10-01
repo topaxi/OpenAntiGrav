@@ -79,7 +79,7 @@ fn towards_centre(pos: Vec3, point: Vec3) -> Vec3 {
 ///
 /// The wall cases re-aim along `normalize(pos - point)`, straight at the
 /// centre line rather than along `lateral`. `remaining` is how many chain
-/// points are still to place after this one. Confidence **80**: the flow is a
+/// points are still to place after this one. Confidence **92**, measured against PPSSPP on 2026-10-01: the flow is a
 /// direct read, and the frame layout matches `SplinePt` (`docs/formats/track.md`)
 /// field for field, the sign of the floor test included.
 pub fn keep_in_track(
@@ -138,5 +138,7 @@ pub fn walk(
     bases
 }
 
+#[cfg(test)]
+mod measured;
 #[cfg(test)]
 mod tests;
