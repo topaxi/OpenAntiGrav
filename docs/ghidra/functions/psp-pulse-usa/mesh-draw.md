@@ -2271,7 +2271,8 @@ only the hull's six were identified here.
 `Mesh_SetBatchDrawState` picks replace or add on `batch byte 3 & 0x10`. **The disc
 authors `0x00` there on all six batches**, yet live the five `shipShape`/airbrake
 batches draw with `FIXB = 0` (replace, depth write on, `ZTEST` 6) and the canopy
-with `FIXB = 0xffffff` (add, depth write off, depth test off). The runtime headers
+with `FIXB = 0xffffff` (add, depth write off; the depth test stays **on**, function 6 as
+on the ordinary passes - re-read 2026-10-01, see "Re-read on a second dump" below). The runtime headers
 say why: byte 3 is `0x10` on those five and `0x00` on the canopy.
 
 `Mesh_CountBatchesPerList` (`0x0890e7a8`), read this pass beyond its counting,
@@ -2302,9 +2303,9 @@ the second texture), `oag_render::shine::build` makes the pass's model and
 `shine::write` the per-frame coordinates through `texgen::environment_map` over
 the craft's model matrix and `texgen::ENV_BASIS_0`/`ENV_BASIS_1`; the game draws
 it after the hulls through the absorb overlay's plumbing (`Depth::Overlay`,
-additive). **Chosen, not measured**: one additive redraw stands in for replace
-then add (identical for the five; the canopy's depth test is on); no fog on the
-pass; the airbrakes' five-vertex batches are not deflected with their flaps.
+additive). **Chosen, not measured**: the airbrakes' five-vertex batches are not
+deflected with their flaps. The single additive redraw for replace-then-add and the
+pass's black fog are now measured: see the next section.
 Eight teams, six batches each, all matched to their hull's own draws:
 `crates/game/tests/shine_ground_truth.rs`.
 
@@ -2315,6 +2316,80 @@ RGB): original `(153, 154, 95)`, ours without the pass `(135, 139, 85)`, with it
 region toward the original and closes roughly a third to a half of the gap; the
 rest is not this pass (the flare's bloom, and pose and camera differences the
 audit records).
+
+### Re-read on a second dump: fog, the blend sum, and the circuit's own pass
+
+2026-10-01, PPSSPP v1.20.4, `07_Track` (identified by nearest authored spline
+point to the craft: 8.17 units against `03_Track`'s 8.6, and by the frame), TIME
+TRIAL / VENOM, Assegai on the grid. Two `scripts/psp-ge-dump.py` recordings, the
+second with the craft placed so the camera is yawed well off the world axes.
+Runtime trace; one title, one team, one circuit.
+
+| Register, per hull `PRIM` | six `TEXMAPMODE` 2 batches | the ordinary pass over the same batches |
+| --- | --- | --- |
+| `FOGENABLE` (`0x1f`) | **1** | 1 |
+| `FOGCOLOR` (`0xcf`) | **`000000`** | `9e6434` (the circuit's) |
+| `FOG1` / `FOG2` (`0xcd`/`0xce`) | 1600 / 0.000649 (span 1540) | the same |
+| `BLENDMODE` (`0xdf`) | `0xaa` (`FIX`, `FIX`) | `0xaa` |
+| `FIXA` / `FIXB` (`0xe0`/`0xe1`) | white / **black** (five), white / white (canopy) | white / **white** |
+| `ZMASK` (`0xe7`) | 0 (writes on, five), 1 (canopy) | 1 (writes off) |
+| depth function (`0xde`) | 6 | **2** (`EQUAL`) on the five |
+| `LIGHTING` (`0x17`) | off | on |
+
+- **Fog is on and black.** The extra pass fades to nothing with distance rather
+  than into the haze; the distance registers equal the ordinary pass's. At the
+  chase camera's 10 to 20 units it changes nothing (the fog begins at about 60 on
+  this circuit); a rival far down a straight loses its sheen as it loses the
+  rest of its colour. `race::scene::shine` writes the pass's scene uniform with a
+  black fog colour. Falsified by temporarily writing a red fog colour with a 40-unit
+  span: the sheen turns pink on screen, so the uniform does reach the shader.
+- **Replace-then-add is one additive redraw.** `BLENDMODE` `0xaa` with `FIXA` white
+  and `FIXB` black is `src` alone: the five batches replace what is under them and
+  write depth. The ordinary pass then runs `FIXB` white, `src + dst`, depth writes
+  off, depth function `EQUAL`. The pixel is `env + lit * texture` clamped once,
+  which our opaque hull plus one additive redraw also gives. Closed as measured.
+- **The canopy's depth test is on.** `ZTESTENABLE` is 1 with function 6 on its
+  extra draw. The section above that wrote "depth test off" read `FIXB` and the
+  depth-write mask as if they were the test; they are not.
+- **A circuit's mode-2 draws carry the matcap lights.** In the first dump 88 of the
+  94 mode-2 `PRIM`s are circuit batches (`TunnelRim`, `Mini_Vent`, `Grandstand`,
+  `Glacier` `*_shinemap`, second textures `07_chromemap_02/03.tga` and `07_env.tga`);
+  all have lights 0 and 1 equal to **rows 0 and 1 of the GE view matrix's 3x3**,
+  fog on with colour `0`, texture function 0 (modulate), vertex colour used, world
+  matrix a pure scale (the 16-bit position scale) for 85 of them. At the second,
+  yawed camera the view matrix is `cols (-0.986, 0.088, -0.142) (0.071, 0.99, 0.119)
+  (0.151, 0.107, -0.983)` and the lights are `(-0.986, 0.071, 0.151)` and
+  `(0.088, 0.99, 0.107)`: rows, not columns (the first dump's matrix was nearly
+  symmetric and could not tell them apart). The same matrix puts the hull at
+  view-space `(0, -1.8, -11.5)` under `x' = p.x*m0 + p.y*m3 + p.z*m6 + m9`, so
+  row 0 is the camera's right and row 1 its up in world space. This confirms the
+  static reading of `Vex_UpdateLightLists_q` above (`model+0x1a8 == 0`), now at
+  confidence **90** on the `07_Track` dump.
+- **Implementation**: `oag_render::shine::build_track` and `write_view`,
+  `race::scene::shine::TrackShine`. The pass redraws a circuit's opaque `0x2000`
+  batches (animated nodes included, their normals turned by the node matrix) under
+  their second texture, unlit, modulated by the vertex colour the batch authors,
+  in the same overlay pipeline as the hull's, and shows exactly the circuit draws
+  the circuit shows (its section mask, level-of-detail child and frustum bound are
+  looked up by the source draw). 237 of 243 `07_Track` shine batches are drawn;
+  six sit in the cutout or blended list and are left out and reported. `--no-track-shine`
+  takes it out.
+- **Measured against the original**, `07_Track`, two poses at 480x272 with no filters
+  on either side, over the pixels the pass changes (top 125 rows, 11,000 pixels per
+  frame): mean `(original - without)` is RGB `(24, 47, 47)` and `(25, 53, 42)`;
+  mean `(with - without)` is `(21, 51, 51)` and `(20, 50, 50)`. Whole-top mean
+  absolute error against the original falls from 18.26 to 18.11 and from 19.80 to
+  18.24 (the yawed pose). **Chosen, not measured**: normals are the file's own
+  (the world matrix is a pure scale on 85 of 88 draws, so no rotation is lost), and
+  the depth function is `LessEqual` where the original's ordinary pass is `EQUAL`.
+- **Not explained, and not this pass**: the original draws a bright cyan (grid pose)
+  or yellow-green (yawed pose) neon strip along the pipe rims that we draw dull. At
+  the grid pose the original reads RGB `(134, 246, 248)` on 2,721 strip pixels
+  against ours `(50, 109, 115)` without the pass and `(58, 130, 134)` with it. The
+  two rim batches there carry vertex colours `(0.13, 0.30, 0.31)` in both the dump
+  and ours, so the pass's own term is small and equal; the neon is something else
+  (an additive or glow batch we under-draw, or a texture the ordinary pass samples
+  differently). Left open.
 
 ### Names
 
