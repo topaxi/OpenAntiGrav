@@ -408,6 +408,14 @@ impl Scene {
                 prev_vp * prev.ship(slot, race) * Mat4::from_scale(Vec3::splat(state.scale())),
             );
             shell.tint(queue, state.colour(), recoloured);
+            // The shell's own texture scrolls: `shipshield.vex` authors a `u`
+            // offset track (frame 1 to 59, `0` to `251/256`, a 59-frame loop)
+            // on its one material, and the original runs it off the same
+            // global clock as every other texture transform. Read live on
+            // PPSSPP, the offset the GE was handed at three clock values
+            // follows that track to within the dump's own timing error, so the
+            // shell is not a still texture under a breathing alpha.
+            shell.write_anims(queue, seconds);
         }
         // The cockpit sphere, which replaces the player's shell rather than
         // joining it - `ShipShield_Update` draws one *or* the other and hides
