@@ -642,8 +642,9 @@ plume could not simply borrow the PSP path's single embedded texture.
 `Data\Weapons\vr_shield_cockpit.vex` each declare one `Texture` node, embed
 nothing, and are preceded by a set that decodes exactly one entry. That is 13
 of 13 exact. The shell's one texture is `pulse_shield_extra_ADD`, 128x64
-`PSMT4` on the disc; the game expands it to `PSMT8` in RAM, and its `CLUT` is
-stored `CSM1`-swizzled (the palette entry `i` at
+`PSMT8` (15 colours of 256); the game uploads its bytes to the GS unchanged
+(checked byte for byte against EE RAM and a GS dump), and its `CLUT` is stored
+`CSM1`-swizzled (palette entry `i` at
 `(i & ~0x18) | ((i & 8) << 1) | ((i & 0x10) >> 1)`), which the decoder's
 `unswizzle_clut` already undoes.
 `oag_game::livery::shield::shield_model` now calls `ps2_skin` on the same

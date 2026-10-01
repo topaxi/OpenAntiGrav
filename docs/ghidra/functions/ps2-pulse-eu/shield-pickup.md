@@ -96,7 +96,7 @@ ours drew the wrong file.
 | --- | --- |
 | geometry | 167 vertices, 163 triangles in two batches (115 and 48), the first with 68 distinct positions |
 | batch class | `pass_mask` `0x1232`: **`0x200`, additive, in its own words** |
-| texture | one node, `pulse_shield_extra_ADD.tga`, a 128x64 `PSMT4` in the preceding set (directory index 4081 in `WADS2.WAD` for Assegai), 15 colours, alpha `160` (`0x50` on the GS scale) |
+| texture | one node, `pulse_shield_extra_ADD.tga`, a 128x64 `PSMT8` in the preceding set (directory index 4081 in `WADS2.WAD` for Assegai; the entry itself is index 7104), 15 colours, alpha `160` (`0x50` on the GS scale) |
 | `u` | 0 and 0.5 |
 | `v` | 0, 0.756, 0.928, 1 |
 | vertex colour | `(127,127,127,127)` and `(13,0,104,0)` on the GS scale, exactly |
@@ -139,13 +139,14 @@ It also settles the first pass's question on whether the factor is `src x alpha`
 or `src` alone (`As`, with the texel alpha `0x50` and vertex alpha 127), and agrees
 with that pass's finding that the shell never darkens a pixel.
 
-**The texture is the disc's, bit for bit in distribution.** The 8,192 bytes the
-game uploads (`PSMT8` as `PSMCT32` 64x32) sit in EE RAM at `0x0184c6c0` with the
-name `Data\Weapons\Textures\pulse_shield_extra_ADD.tga` just before them; the game
-expands the disc's 4-bit texture to 8 bits at load. Read through the `CSM1`
-palette swizzle (entry `i` at `(i & ~0x18) | ((i & 8) << 1) | ((i & 0x10) >> 1)`)
-the 15 colours used equal the disc texture's 15, and the per-colour texel counts
-match exactly (257, 301, 306, 313, ...). The texel *order* was not compared.
+**The texture is the disc's, byte for byte.** The 8,192 texel bytes the game uploads
+(`PSMT8` as `PSMCT32` 64x32) sit in EE RAM at `0x0184c6c0` with the name
+`Data\Weapons\Textures\pulse_shield_extra_ADD.tga` just before them. They equal
+bytes `0xcd..` of the `WADS2.WAD` entry `6bb25a5b` (directory index 7104, 128x64,
+8 bpp, 9,485 bytes), and the 1,024 palette bytes equal that entry's palette
+(+8,461). Confidence **95**. Decoded through the palette's `CSM1` swizzle (entry
+`i` at `(i & ~0x18) | ((i & 8) << 1) | ((i & 0x10) >> 1)`, what
+`unswizzle_clut` undoes) it has 15 colours, alpha `0x50`.
 
 **The scroll is the file's.** `u` offset advanced `0.039` per game frame (two
 fields) and `0.399` over `0.393 s` of the shield's clock: `1.014 /s`, the
@@ -185,13 +186,36 @@ four more frames left `0x0105e026`; ten frames cleared it.
 
 ## Not yet compared
 
-- **A pixel-matched frame.** The craft is at the savestate's position in
-  `oag-game --pose`, but the chase camera differs: the original's hull fills
-  about 38 % of the frame's width, ours 23 %, and neither published eye
-  (`craft+0x850`, `+0x860`) with the look-at at `craft+0x840` reproduces the
-  original. That is the camera lane's gap, not the shell's. The comparison made
-  is of the draw: the same 68 positions, the same `uv` and colour sets, the
-  same state.
+- **A pixel-matched frame, and whether the brightness agrees.** The craft is at the
+  savestate's position in `oag-game --pose`, but the chase camera differs: the
+  original's hull fills about 38 % of the frame's width, ours 23 %, and neither
+  published eye (`craft+0x850`, `+0x860`) with the look-at at `craft+0x840`
+  reproduces the original (the camera lane's gap). The comparison made is of the
+  draw: the same 68 positions, the same `uv` and colour sets, the same state, and
+  both draw both faces (the dump's strip has 72 counter-clockwise and 44 clockwise
+  non-degenerate triangles; `oag-render`'s pipelines do not cull).
+
+  **The shell's contribution to the picture is not matched, and why is open.** Each
+  side's frame minus its own no-shield frame (the PCSX2 control is bit-identical
+  but for the shell; ours is rendered at the same craft position), inside the
+  dome, over three clocks (0.9, 1.8, 2.7 s of the shield):
+
+  | | changed pixels | median added B | 90th pct B | median added G |
+  | --- | ---: | ---: | ---: | ---: |
+  | original | 38,121 / 40,284 / 40,807 | 20 / 80 / 101 (mean 67) | mean 121 | mean 45 |
+  | ours | 23,168 / 24,484 / 24,138 | 42 / 44 / 47 (mean 44) | mean 96 | mean 27 |
+
+  The pixel counts differ by the camera (1.66x, close to the hull-width ratio
+  squared). The brightness does not obviously: the original's per-frame median
+  swings from 20 to 101 with the texture's scroll phase, and ours swings from 21 to 69
+  across `--anim-seconds` 0.1 to 0.9 on one tick (51, 69, 21, 50, 50). Ours' sweep
+  contains the original's low frame and not its two high ones, and its mean is
+  about two thirds of the original's. Camera and phase do not obviously account for
+  that; a real term may remain. Not found by reading the registers: `ALPHA`,
+  vertex colour, texture alpha, fog and winding all agree with ours. Untested:
+  that the original's own phase at those frames lands on the texture's bright
+  band (the scroll clock is not recovered), the dump's `TEXA`, and any difference
+  in how the two blend in sRGB against linear.
 - The cockpit sphere on PS2, the hit flash (`ShipShield_Hit`), the shell on a
   team other than Assegai, and a shield running out by its timer.
 - `FUN_001df718` (the model colour setter): where its argument goes.

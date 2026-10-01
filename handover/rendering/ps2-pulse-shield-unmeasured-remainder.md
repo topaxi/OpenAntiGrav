@@ -28,13 +28,17 @@ the swell.
 
 ## Open
 
-- **A pixel-matched frame.** `oag-game --pose` puts the craft at the savestate's
-  `(-385.617, 4.004, 127.095)`, but the chase camera does not match: the original's
-  hull fills about 38 % of the frame's width, ours 23 %, and neither published eye
-  (`craft+0x850` far, `+0x860` close, look-at `+0x840`) reproduces it. The shell has
-  been compared draw to draw (positions, `uv`, colour, state) and not pixel to pixel.
-  This is the camera's gap (`ps2-pulse-eu/camera.md`), not the shell's; a pose-matched
-  comparison of the shell waits on it.
+- **A pixel-matched frame, and a brightness gap that is not explained.** `oag-game --pose`
+  puts the craft at the savestate's `(-385.617, 4.004, 127.095)`, but the chase camera does
+  not match (hull 38 % of the frame's width in the original, 23 % in ours; neither published
+  eye reproduces it). Shell-only frames (frame minus its own no-shield control, inside the
+  dome, three clocks): median added blue **67** in the original (20 / 80 / 101) against **44**
+  in ours (42 / 44 / 47, and 21 to 69 across the scroll phase). The pixel counts differ by
+  the camera, the brightness does not obviously. The registers all agree, so the term is
+  unfound: candidates are the scroll clock's phase at those frames (the original's reaches 101
+  where ours' sweep tops out at 69), sRGB against linear blending of the additive, and
+  something outside the draw (a post pass). Numbers and method in
+  `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`, "Not yet compared".
 - **The cockpit sphere** (`vr_shield_cockpit.vex`) on PS2 was not drawn from the chase
   camera and so not measured; `oag-game` keeps the tint on it. Whether it is tinted
   needs an internal-camera dump.
@@ -48,6 +52,7 @@ the swell.
 ## Next Steps
 
 1. Read the PS2 camera's real eye (the published eyes are not it) so a posed frame
-   lines up, then lay `oag-game --give shield` over `shots/` from a PCSX2 run.
+   lines up, then redo the shell-only difference at pinned scroll phases on both sides.
+   If the original still adds more, test sRGB against linear blending of the additive pass.
 2. Take one dump from the internal camera for the sphere.
 3. Decompile `FUN_001df718` (headless, `program=SCES_547.48`).
