@@ -546,14 +546,16 @@ What differs, named and not fixed:
   `1e-5`).
 - **The apparent delay is the frame timer.** The `dt` argument is a measured frame time,
   mean 16.682 ms (59.94 Hz) with jitter of 0.1 to 0.6 ms (min 16.061, max 17.260 over 200
-  frames). `(int)(dt / 0.016666668)` is **0 on 47 of those 200 frames** (`dt` under
-  `1/60`), and a frame with no substep advances neither lerp: the original took 153
-  substeps in 200 frames, 0.765 per frame, so by fire+20 it had done 14 steps against
-  ours 20 (colour 0.897 against 0.961) - the "six to eight frames" the first pass saw
-  (a run of the fade at 0.765 of ours' rate is 20 frames in 26). The jitter is the
-  emulator's frame timer acting on a variable timestep; a real PSP's is likely tighter,
-  so the rate on hardware is between ours and this. **A fixed 60 Hz engine does not
-  reproduce it and nothing here chooses a rate for it.** `ShipShield::advance` keeps
+  frames) - **measured on PPSSPP**. `(int)(dt / 0.016666668)` is **0 on 47 of those 200
+  frames** (`dt` under `1/60`), and a frame with no substep advances neither lerp: the
+  original took 153 substeps in 200 frames, 0.765 per frame, so by fire+20 it had done 14
+  steps against ours 20 (colour 0.897 against 0.961) - the "six to eight frames" the first
+  pass saw. The mechanism (a variable `dt` truncated by `(int)`) is the executable's own,
+  read and then reproduced to `1e-5` from the logged `dt`s; **how large the jitter is on a
+  real PSP is not measured**, so the rate on hardware is unknown and may be nearer ours' or
+  this. Confidence 85 that the onset difference is this and nothing else (the live object
+  matches frame for frame; no second delay is visible in it). A fixed 60 Hz engine does not
+  reproduce it and nothing here chooses a rate for it: `ShipShield::advance` keeps
   `(dt / SUBSTEP) as i32` as it was.
 - **The shell's brightness depends on a second clock phase.** Two original runs 2 s
   apart differ in how clear the shell reads at the same frame (the shell's own texture

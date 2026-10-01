@@ -68,7 +68,7 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   (6-7 frames). **2026-10-01, second pass**: the original lays at the craft's own position
   (stationary probe to the hundredth; `Bomb_Init`'s drop point equals the body position to
   the last bit, stationary and at speed), and `mine::drop_point` now does too (its own
-  commit, `mine.md`'s second-pass section). The Mine's own `Anim Transform` now plays.
+  commit, `mine.md`'s second-pass section). The Mine's own `Anim Transform` (a tilted spin, 2 s a turn) now plays too, by analogy with the Bomb and not seen in the original's two frames.
 - *Pulse Bomb* - **pictured**, same method; **the launch look is fixed 2026-10-01**
   (second pass). The wide flat ring was `Pulse_Bomb.vex`'s `orbit` node drawn at its
   time-zero pose: both `orbit` and `bomb` are keyframed `Anim Transform`s on the one

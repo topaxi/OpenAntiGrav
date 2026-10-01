@@ -324,9 +324,9 @@ fn both_palettes_settle_to_the_same_unmeasured_target() {
 /// shell**. The shell's apparent onset in the original is later than a 60 Hz
 /// tick-for-tick run's because the original's `dt` is a measured frame time that
 /// jitters about `1/59.94` s: `(int)(dt / SUBSTEP)` is `0` on 47 of the 200 frames
-/// logged (`dt` under `1/60`), so those frames advance neither lerp. That is the
-/// emulator's frame-timer jitter acting on the original's variable timestep, not a
-/// rule of the game, and a fixed 60 Hz engine does not reproduce it.
+/// logged (`dt` under `1/60`), so those frames advance neither lerp. The jitter was
+/// measured on PPSSPP; how large it is on a real PSP is not measured. The mechanism
+/// is the executable's own, and a fixed 60 Hz engine does not reproduce it.
 const LIVE_DT: [f32; 30] = [
     0.016679, 0.016786, 0.016589, 0.016672, 0.016683, 0.016694, 0.016678, 0.016683, 0.01668,
     0.01726, 0.016061, 0.016621, 0.016932, 0.016441, 0.016678, 0.016772, 0.016589, 0.016683,

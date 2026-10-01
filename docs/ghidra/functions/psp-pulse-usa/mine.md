@@ -1262,8 +1262,10 @@ tilted arc at the same frames.
 What this engine does now: `Scene::write_weapon_models` writes the Mine's and the Bomb's
 node-animation tables at the race's `tick / 60` like the scenery's
 (`write_node_anims`), so both play their authored `Anim Transform`s. The Mine's one
-animated node (`mine`) plays too; the Mine's `Mine_PoseNode` spin is the matrix handed to
-that node and is unchanged. **The phase is the engine's tick clock, not the original's
+animated node (`mine`, a rotation tilted 30 degrees off `Y`, one turn in 2 s) plays too
+**by analogy with the Bomb, not seen**: the original's two frames of a laid Mine are too
+few to show a second spin, and the Mine's own node was never probed. The `Mine_PoseNode`
+spin is the matrix handed to that node and is unchanged, so the two compose. **The phase is the engine's tick clock, not the original's
 session clock** - which carries an offset this engine has no source for (the same offset the
 scenery already lacks), so an exact phase match is not claimable; the shape, the rate and
 the mechanism are the original's. Pinned by

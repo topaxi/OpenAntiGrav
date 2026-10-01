@@ -207,9 +207,12 @@ pub const CLUSTER: u8 = 5;
 /// This replaced a drop point pushed back by the hull's own extent, which was
 /// chosen (so a charge did not start inside the craft) and which the original
 /// does not do: its charge starts inside the hull and is left behind by the
-/// craft's own motion. The rear anchor `Weapon_RequestFire` stores at
-/// `craft+0xa0` is the emitter for the *effects* that leave the tail, not the
-/// charge's own position.
+/// craft's own motion. What `craft+0xa0`, the anchor `Weapon_RequestFire` stores
+/// for these two weapons, feeds is not established; the measured drop point is the
+/// body position.
+///
+/// **Measured on Pulse's PSP build only.** Pure and HD inherit this law, which is
+/// chosen for those titles, not measured.
 #[must_use]
 pub fn drop_point(state: &ShipState) -> Vec3 {
     state.body.position
