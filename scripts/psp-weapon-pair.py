@@ -322,6 +322,10 @@ def main():
                         "bit, e.g. 0x1ac=5 for the Mine's round counter, which the pickup's arm "
                         "function sets and a hand-set fire bit does not")
     parser.add_argument("--place-window", action="store_true")
+    parser.add_argument("--edram", action="store_true",
+                        help="also write both EDRAM framebuffers (0x04000000 and 0x04088000, 480x272 "
+                        "at stride 512, RGBA8888, alpha = the bloom's glow mask) beside each shot. "
+                        "Needs the emulator on the SOFTWARE renderer; the OpenGL backend leaves EDRAM zero")
     parser.add_argument("--probe", choices=sorted(PROBES),
                         help="after the fire, instead of photographing, log every hit of the "
                         "probe address for --probe-frames frames")
@@ -426,6 +430,10 @@ def main():
                 if k in shots:
                     name = "k%03d.png" % k
                     row["shot"] = name if shoot(args.display, args.out / name) else None
+                    if args.edram:
+                        for index, base in enumerate((0x04000000, 0x04088000)):
+                            (args.out / ("k%03d.fb%d.bin" % (k, index))).write_bytes(
+                                dbg.read(base, 0x88000))
                 if k >= last:
                     log["frames"].append(row)
                     break

@@ -777,7 +777,7 @@ run.
   query is gated on something the rocket copies from its owner (`self+0x114` is
   `*(craft+0xad8)`, the bounds `Collision_SweepSegment`'s second query takes), is not
   separated. Not reproduced and not chosen.
-- **The wide orange glow at fire+3..+8 is still not matched.** Read at 480x272 beside the
+- **The wide orange glow at fire+3..+8 is still not matched.** (**Closed in size 2026-10-01**: see "the launch glow" below; the paragraph is what it said at the time.) Read at 480x272 beside the
   original (`data/scratch/pulse-weapon-laws/rocket-pair-after.png`): the original's is a
   large white-orange bloom over the craft's nose and the road ahead; ours is a smaller
   yellow glow at the nose in the middle two rows. Closer than the 15 px spot before the
@@ -788,11 +788,91 @@ run.
   -0.030; the original z -197.0, forward z -0.007). A spawn/handling matter outside this
   page, recorded because it moved a rocket's detonation by 30 ticks.
 
+## 2026-10-01: the launch glow, the flare's 4-bit sprite and ageing
+
+The wide orange glow at fire+3..+8 (the 2026-10-01 second pass left it open, ours
+smaller) had two causes, both in how `WO_ROCKET_FLARE` was played, and neither in
+the Rocket's own law. Same state as that pass: Venom, Assegai, Talon's Junction,
+Time Trial, fire at speed 106.2, native 480x272, two boots of the original.
+
+**What the original spawns at launch, read live** (`psp-weapon-pair.py --probe
+flare|rolled`, the pool of each of the three rockets' instances, every frame):
+
+| emitter | draw | per frame, per rocket | half-size | colour, alpha | sprite |
+| --- | --- | --- | --- | --- | --- |
+| `WO_ROCKET_FLARE` (root) | `ParticleSystem_DrawPoolSquares`, a square, no roll | 2 new a tick, 30-tick life | **1.05 at age 0, 1.28, 1.51 ... 2.67 at tick 7** = the size channel `lo 1 + (hi 8 - lo) * (0.0068 .. 1)` | (245,245,191,255) at age 0, to (179,105,0,195) at tick 7: the colour table, white to orange | a 4x4 atlas cell, random per particle |
+| `WO_ROCKET_SHAZZAM` | `ParticleSystem_DrawRolledQuads`, rolled | **1 new a tick, drawn once or twice** (22 of 39 particles twice) | **5..15 random, 6.2 to 14.8 read**, held for its life | (255,255,255,255) | `muzzle_flare_pSprite_64x64_ADD`, a soft orange star |
+
+Particles stay where they spawn (the emitter flies on, so they string out behind
+the rocket: the oldest at x 122.6, the newest at 151.4 at tick 7 of a rocket
+moving 3.7 units a tick), and the instance scale words `+0x28..` read `1.0`. The
+quads are 10 to 30 units across at the rocket, which is where the wide glow comes
+from: **`WO_ROCKET_SHAZZAM` is the glow**, one big soft flash a tick on every
+rocket, and the ring sprites are the fine orange structure round it.
+
+**Cause 1: the flare's sprite was not a disc.** `WO_ROCKET_FLARE`'s root has an
+embedded sprite like the other 29, a 128x64, 4-level, **4 bits a pixel** header, and
+`oag_vex::pob::texture::parse_at` refused every header whose depth was not 8, so the
+root drew the procedural radial disc: white and bright at the core where the
+original draws ragged orange rings. See
+[`pob.md`](../../../formats/pob.md#four-bits-a-pixel-2026-10-01)
+for the layout, the six roots and five children it also gives their sprites, and the
+sprite sheet. Commit `be52fc48`.
+
+**Cause 2: a pool particle's spawn tick aged it.** Ours spawned a particle and
+integrated it in the same tick, so its first draw was a tick old and a particle with a
+life of one tick or less was never drawn at all. `WO_ROCKET_SHAZZAM` authors `1 +- 1`
+ticks, so about half of every rocket's flashes never appeared and the rest showed on
+irregular ticks (float rounding decided which). Read live: the first draw is the size
+channel at age 0, the flash is drawn once or twice, and the original's death rule is
+"dead the update its life runs out". The spawn tick no longer ages or moves a pool
+particle (`Particle::fresh`, which templates already had) and death keeps its
+after-ageing test, with a rounding epsilon. Commit `606b6d2f`. This is the shared
+`psys` machinery, so every pool effect changes by one tick of age at its first draw
+(the Rocket's own explosions and the craft-hit blast included); the two numbers the
+original gives to check it against are the flare's `1.05` and the SHAZZAM draw count.
+The craft-hit blast's frame series (`rocket-visuals.md`, 2026-09-24) was not re-run.
+
+**Result** (`data/scratch/pulse-rocket-look`, fire minus a no-fire control, warm light
+only - red minus blue, summed over the frame - mean of fire+3..+10, ours at tick
+`402 + k`, a one-tick alignment that moves ours by up to 8 %):
+
+| | warm light added | within 120 px of the nose | within 90 px |
+| --- | ---: | ---: | ---: |
+| original, boot a / boot b | 2,805 / 2,612 | 90 % | 71 % |
+| ours before | 2,655 | 62 % | 46 % |
+| ours now | 2,859 | 69 % | 53 % |
+
+**The total was never the gap** - ours before was inside the original's own boot-to-boot
+spread, and the disc it drew was bright and white; what moved is the kind and the
+cadence, which are the measured part. Read as a player, native size, fire+3..+6
+(`pair-d1.png`, `pair-d2.png` in the scratch directory): the orange-yellow streak up
+the road with a white core at the nose, and the wide orange halo, are both there now
+where before there was a white blob with a small yellow spot. **Not matched**: where
+the light sits. The original's lies closer to the nose (90 % within 120 px against
+69 %), because ours' rockets are further along the road at the same frame; that
+follows the pose differences (our standing start, row (c) above) and the fan's lateral
+drift, which this page has not measured.
+
+**Does it stamp the bloom mask? No - measured.** PPSSPP on the **software renderer**
+(the OpenGL backend leaves EDRAM zero; `SoftwareRenderer = True` in the profile),
+both framebuffers read at fire+2, 3, 4, 5, 6 and 8 beside a no-fire control
+(`psp-weapon-pair.py --edram`): the alpha plane holds the same values as the control
+(`4`, `51`-`60` animating, `76`, `104`, `247`, `255`), and **7 to 33 pixels** differ
+across the frame, the rockets' own hulls at the edges. The flare's quads, 10 to 30
+units across, change none. The halo a player sees is the bloom of the **road**, whose
+mask is `255` under the flare (about 30,000 pixels of `255` in both the fire and the
+control frame): the bright pass is `rgb * alpha`, so light added to a stamped road
+glows and light added to a `4` sky does not. Ours stamps the same road (`OAG_DUMP_GLOW_MASK`,
+side by side at fire+5, same shapes), so no mask change was made. Confidence **90**
+for the rocket's flare and SHAZZAM not stamping (a measured null on two quads' worth
+of coverage); the particle path's protect call is `docs/rendering/glow-mask.md`'s.
+
 ## What is not verified
 
 - ~~**The quarter-turn's axis**, blocked on resolving `0x08a6b6b4`~~ -
   resolved and measured, see the 2026-09-24 section above.
-- **`WO_ROCKET_FLARE`'s parameters**, blocked on the `.pob` payload layout (the emitters are parsed since 2026-08-12; what is unread is the slot-resolved record).
+- ~~**`WO_ROCKET_FLARE`'s parameters**~~ - read live and played 2026-10-01, see the section above; what remains is where the light sits, which follows the pose.
 - **`func_0x0003a37c`**, the test that gates the craft-hit explosion.
 - **What class `0x3e9` is called.** The id is read off the constructor; the
   class table's name for it was not looked up.
@@ -809,6 +889,7 @@ run.
   and changed one thing: it is what turned "the rocket probably follows the
   surface" into a picture of two rockets skimming the track a body-length off
   the racing line.
+- **2026-10-01, the launch glow.** The flare's 4-bit sprite and the pool particle's first draw at age 0 found and fixed; the rocket's flare and SHAZZAM read live; the mask measured unstamped.
 - **2026-10-01, second pass.** The four rows landed, the probe-hit arm and the craft-up
   seed read and ported, a volley from the original's pose matched to 1-2 ticks and
   8 units, and the first-updates probe miss isolated and left open.

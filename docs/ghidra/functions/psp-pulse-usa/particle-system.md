@@ -1277,4 +1277,36 @@ measured.
 | --- | --- | ---: |
 | `0x089177e4` | `ParticleSystem_DrawInstanceTree` | 80 |
 | `0x08918bf8` | `ParticleSystem_DrawEmitterPool` | 80 |
-| `0x089178c0` | `ParticleSystem_DrawRolledQuads` | 80 |
+| `0x089178c0` | `ParticleSystem_DrawRolledQuads` | 85 |
+| `0x089194d0` | `ParticleSystem_DrawPoolSquares` | 88 |
+
+### The pool's square draw, and a pool particle read live (2026-10-01)
+
+`ParticleSystem_DrawEmitterPool`'s render-mode indices `0` and `1` go to
+`FUN_089194d0`, now `ParticleSystem_DrawPoolSquares` (confidence **88**: read in
+full, and its per-particle reads were then logged live, below). `a0` is the
+instance, `a1` the view matrix, `a2` the per-frame UV table. For every live pool
+particle (`slot + 0x10`, a bitmask word at the pool's head, a next-block pointer
+at `+0x1410`):
+
+| Particle field | Use |
+| --- | --- |
+| `+0x40` | world position, through the view matrix to `(x, y, z)` |
+| `+0x70` | **half-size**: the quad is `(x +- h, y +- h)`, square, no roll |
+| `+0x74..+0x76` | RGB; `+0x77` alpha, **times a near fade** |
+| `+0x78` | atlas frame: `a2 + frame * 0x30` is that frame's UV corners |
+
+The near fade: `z` is view-space, negative in front. A particle with `z > -1.0`
+(`DAT_08a88500`) is not drawn; one with `-2.0 < z <= -1.0` (`DAT_08a88504`) has
+its alpha scaled by `-(z + 1)` (`DAT_08abf57c = -1.0`), so a particle comes in
+over its first unit past the eye. All three words read live. It matters only for
+a particle at the camera, not at a rocket's 11 units. The six words at
+`DAT_08a907a0..` set the projection (`Gu_SetMatrix(1, ...)`), and a quad is six
+vertices, `Gu_DrawArray(4, 0x19f, ...)`.
+
+`ParticleSystem_DrawRolledQuads` (`0x089178c0`) has the same walk and the roll law
+above. **Both are live-probed**: `scripts/psp-weapon-pair.py --probe flare`
+(`0x089194d0`) and `--probe rolled` (`0x089178c0`) break on each call during a
+Rocket launch and read the instance's pool, and the sizes, colours and positions
+read are the ones these functions consume. What that run measured is in
+[`rocket-visuals.md`](rocket-visuals.md#2026-10-01-the-launch-glow-the-flares-4-bit-sprite-and-ageing).
