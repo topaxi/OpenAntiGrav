@@ -66,10 +66,7 @@ of it the same day; see `frame-audit.md`.
 - The cyan strip lights and the start gantry differ between the two sides by
   timing only; a comparison that needs them should pin the same tick after GO.
 
-- **The start-line laser's mask is about 1.5x too wide** on Talon's second grid
-  (original 710 pixels at `0xaf`, ours 1,061) even with the additive class's colour
-  test: where the GE places that test relative to the fog is unread, and ours tests
-  the lit texel before the fog.
+- ~~**The start-line laser's mask is about 1.5x too wide** on Talon's second grid~~ **Closed 2026-10-01** (`pulse-hull-pass`): a phase artefact. The laser's stamped area cycles 588 to 1,390 pixels over about 40 ticks of ours; at the ticks matching the original's frames (592/592/710) the overlap is 0.94. No code change; `docs/rendering/glow-mask.md`.
 - **The blended-glow stamp resubmits every transparent draw of a stamping model**
   (`Drawable::draw_stamps`; a batch without the glow bits discards whole in
   `fs_main_stamp`). `Model` carries no per-draw flag for it, so the GPU cost is
