@@ -12,7 +12,7 @@
 //!   +0x04  u32   0x20
 //!   +0x08  u32   0x22
 //!   +0x0c  f32   1/60         (0.016667, the same on every flyer front)
-//!   +0x10  f32[3] 0
+//!   +0x10  f32[3] 0 on a flyer; on a circuit's `track.vex` the camera's AIM POINT, world space
 //!   +0x1c  f32   1.5380 on the eight base grids, 1.5389 on the eight Fury
 //!                grids, 1.0833 on `Fury_Campaign` and `HD_Campaign`
 //!   +0x20  u32   0x4f15, 0x4a2c, 0x3621 respectively
@@ -60,6 +60,13 @@ pub struct Camera {
     /// The node's own world transform, row-major with the translation in row
     /// 3, from [`vex::world_transforms`].
     pub to_world: [f32; 16],
+    /// The three `f32`s at `+0x10`: **zero on a flyer, the camera's aim point in world
+    /// space on a circuit's `track.vex`**. Read live 2026-10-01 off the original's own
+    /// camera node list (`cam+0x40`, ten nodes on `16_Track`): the engine keeps it at
+    /// `node+0xa0` and picks the spectator camera's node by how near the subject is to
+    /// it - the node's eye is `to_world`'s translation and sits elsewhere. See
+    /// `docs/ghidra/functions/psp-pulse-usa/race-finish.md`.
+    pub target: [f32; 3],
     /// The `f32` at `+0x1c`. Not interpreted - see the module docs.
     pub value_1c: f32,
     /// The `u32` at `+0x20`. Not interpreted - see the module docs.
@@ -83,6 +90,11 @@ impl Camera {
         Some(Self {
             name,
             to_world,
+            target: [
+                f32::from_bits(order.u32(payload, 0x10)),
+                f32::from_bits(order.u32(payload, 0x14)),
+                f32::from_bits(order.u32(payload, 0x18)),
+            ],
             value_1c: f32::from_bits(order.u32(payload, 0x1c)),
             value_20: order.u32(payload, 0x20),
         })
@@ -146,6 +158,20 @@ mod tests {
         assert_eq!(camera.value_1c, 1.538);
         assert_eq!(camera.value_20, 0x4f15);
         assert_eq!(camera.position(), [0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn the_aim_point_is_the_three_floats_at_0x10() {
+        let mut bytes = payload(1.5);
+        for (index, value) in [-233.88_f32, -74.62, 53.65].into_iter().enumerate() {
+            bytes[0x10 + 4 * index..0x14 + 4 * index].copy_from_slice(&value.to_be_bytes());
+        }
+        let camera =
+            Camera::parse(None, &bytes, vex::matrix::IDENTITY, ByteOrder::Big).expect("parses");
+        assert_eq!(camera.target, [-233.88, -74.62, 53.65]);
+        let flyer = Camera::parse(None, &payload(1.5), vex::matrix::IDENTITY, ByteOrder::Big)
+            .expect("parses");
+        assert_eq!(flyer.target, [0.0; 3], "a flyer authors zeros there");
     }
 
     #[test]
