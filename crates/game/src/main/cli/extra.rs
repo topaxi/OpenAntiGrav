@@ -191,6 +191,6 @@ pub(crate) struct IntroArgs {
 
     /// With `--screenshot`: play this many ticks of the pre-race flyby first and photograph that
     /// tick of it, the world held at the grid's first tick. A capture aid for the flyby.
-    #[arg(long = "intro-ticks", value_name = "TICKS", default_value_t = 0)]
-    pub(crate) ticks: u32,
+    #[arg(long, value_name = "TICKS", default_value_t = 0)]
+    pub(crate) intro_ticks: u32,
 }
