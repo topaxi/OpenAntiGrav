@@ -46,6 +46,9 @@ pub struct CaptureOptions {
     /// that severity would, at the end of that tick (zero-based). See
     /// [`Race::force_shake`].
     pub force_shake: Option<(u32, f32)>,
+    /// Play this many ticks of the pre-race flyby first, held to the grid's first tick: a
+    /// picture of the flyby at a given tick. See `race::intro_camera`.
+    pub intro_ticks: u32,
     /// `--force-wreck TICK:SLOT`: put that slot's craft into the destroyed
     /// sequence at the end of that tick (zero-based), as its shield running out
     /// would - state 4, then state 5 half a second later. See
@@ -374,6 +377,11 @@ pub fn capture(
     }
 
     options.ghost.arm(&mut race)?;
+    if options.intro_ticks > 0 && race.begin_intro() {
+        for _ in 0..options.intro_ticks {
+            race.tick_intro(&oag_gameplay::PlayerInputs::none());
+        }
+    }
     let mut held = HeldButtons::new(options.held);
     // A motion blur capture holds the **last** tick back: every velocity is a
     // delta against the previous tick, so the primer frame below has to be
@@ -848,6 +856,7 @@ pub fn capture(
             }
             Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
         },
+        None if !race.hud_shown() => {}
         None => match crate::hud::Overlay::new(&device, &queue, format, &hud) {
             Ok(Some(mut overlay)) => {
                 let mut readout = race.readout();

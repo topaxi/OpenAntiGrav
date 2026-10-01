@@ -176,3 +176,21 @@ pub(crate) struct WreckArgs {
     #[arg(long)]
     pub(crate) no_hull_wreck: bool,
 }
+
+/// The pre-race flyby: skipping it, and photographing a tick of it.
+#[derive(clap::Args, Debug)]
+pub(crate) struct IntroArgs {
+    /// Skip the pre-race flyby: go straight to the countdown, as the original does when the
+    /// button is held through it.
+    ///
+    /// On Pulse (PSP) a race opens with the circuit's own camera animation, `AnimEnd` long
+    /// (25 s on most circuits). It ends on its own, or on a held Cross (thrust) once its first
+    /// second has gone; this flag is for a scripted run that has no one to hold it.
+    #[arg(long)]
+    pub(crate) no_intro: bool,
+
+    /// With `--screenshot`: play this many ticks of the pre-race flyby first and photograph that
+    /// tick of it, the world held at the grid's first tick. A capture aid for the flyby.
+    #[arg(long, value_name = "TICKS", default_value_t = 0)]
+    pub(crate) intro_ticks: u32,
+}

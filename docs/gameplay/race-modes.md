@@ -1023,10 +1023,14 @@ screen through the whole countdown and into the launch, two runs entered via
 
 - The front end reports `InGameTrackDescriptionScreen` for ticks 0-60, then
   `InGame` from tick 61 - a real, pollable state name, not the "nothing to
-  poll" this page and `ppsspp-debugger.md` used to say. It reads as load time
-  plus the first frame the dialog's dismiss press is seen, not an authored
-  minimum-show timer - thrust was already held before the dialog appeared on
-  every run and it still dismissed at the same tick each time.
+  poll" this page and `ppsspp-debugger.md` used to say. **Corrected
+  2026-10-01: those 60 ticks are the lock on the pre-race flyby**, not load time
+  and not a dialog: the screen is the circuit's camera animation
+  ([race-intro.md](race-intro.md)), nothing can end it before its 60-tick
+  counter reaches zero, and thrust held through it (Cross, button 5) ends it
+  the tick the counter does - which is why it dismissed at the same tick on
+  every run. Left alone, it plays to its `AnimEnd` (25 s on `16_Track`) and
+  the 272 ticks below follow.
 - From tick 61, the craft sits stationary - `throttleState` (`craft+0x2b8`)
   reads a flat `0.0` regardless of the input held, and position holds within
   jitter (< 0.1 units total drift, `grounded` staying `1.0`) rather than

@@ -183,7 +183,9 @@ impl Race {
     /// off screen anyway rather than visibly wrong.
     #[must_use]
     pub fn draws_own_ship(&self) -> bool {
-        self.view.camera_view.draws_own_ship()
+        // The flyby is nobody's cockpit: a player who saved the internal view still sees their
+        // own craft on the grid from the circuit's camera ([`super::intro_camera`]).
+        self.in_intro() || self.view.camera_view.draws_own_ship()
     }
 
     /// How many times a `Reset` contact has respawned the player this race.
@@ -204,9 +206,15 @@ impl Race {
             .finish_camera
             .as_ref()
             .map_or(0, finish_camera::FinishCamera::cuts);
+        let intro = self
+            .view
+            .intro
+            .as_ref()
+            .map_or(0, intro_camera::IntroCamera::cuts);
         self.sim.respawns[0]
             .wrapping_add(self.view.destroy_camera.cuts)
             .wrapping_add(spectator)
+            .wrapping_add(intro)
     }
 
     /// The same, for any craft on the grid.

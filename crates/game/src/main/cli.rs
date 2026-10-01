@@ -994,4 +994,6 @@ pub(crate) struct Cli {
     /// `--force-wreck` and `--no-hull-wreck` - see [`extra::WreckArgs`].
     #[command(flatten)]
     pub(crate) wreck: extra::WreckArgs,
+    #[command(flatten)]
+    pub(crate) intro: extra::IntroArgs,
 }

@@ -140,6 +140,7 @@ mod hash;
 mod held_buttons;
 mod hit_sparks;
 mod hud;
+pub mod intro_camera;
 mod load;
 mod models;
 mod options;

@@ -51,6 +51,8 @@ pub(crate) struct App {
     pub(crate) measure_race_load: Option<u32>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
+    /// `--no-intro`: skip the pre-race flyby. See the CLI field.
+    pub(crate) no_intro: bool,
     /// `--autopilot`: whether the player's craft is flown for them. A
     /// verification aid - see `race::Race::set_autopilot`.
     pub(crate) autopilot: bool,
@@ -387,6 +389,7 @@ impl App {
             trace: self.trace,
             log_every: self.log_every,
             give: self.give,
+            no_intro: self.no_intro,
             autopilot: self.autopilot,
             autopilot_pilot: self.autopilot_pilot,
             autopilot_skill: self.autopilot_skill,

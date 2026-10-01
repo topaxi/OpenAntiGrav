@@ -12,7 +12,7 @@ other sound started between them.
 | --- | --- | --- |
 | `0x088274b4` | `RaceMode_UpdateCountdown` | 80 |
 | `0x0893a768` | `Sound_PlayNamedInSlot` | 75 |
-| `0x08829e6c` | `RaceMode_UpdateIntro` | 65 |
+| `0x08829e6c` | `RaceMode_UpdateIntro` | 85 (raised 2026-10-01, [race-intro.md](race-intro.md)) |
 
 `RaceMode_SetState` (`0x08827350`, already named,
 [zone-mode.md](zone-mode.md#the-ten-second-step)) is the other half of the

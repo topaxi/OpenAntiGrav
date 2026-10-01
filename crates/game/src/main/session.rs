@@ -310,6 +310,8 @@ pub(crate) struct Session {
     pub(crate) log_every: u32,
     /// `--give`, carried into the race loop. See the CLI field.
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
+    /// `--no-intro`, carried into the race loop. See the CLI field.
+    pub(crate) no_intro: bool,
     /// `--autopilot`, carried the same way and applied to every race this
     /// session starts - including one launched from the menus, which is how
     /// the results table is reached without driving. See

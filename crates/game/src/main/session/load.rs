@@ -662,7 +662,15 @@ impl Session {
             return Ok(());
         };
         let race_stage = match built {
-            Ok(race_stage) => race_stage,
+            Ok(mut race_stage) => {
+                // Begun here, at the hand-over, so no frame is drawn with the chase camera and
+                // the HUD before the flyby's first tick. A race resumed from the menus
+                // (`escape.rs`) is not a new one and does not come through here.
+                if !self.no_intro {
+                    race_stage.race.begin_intro();
+                }
+                race_stage
+            }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
                 return self.open_menus();

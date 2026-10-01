@@ -28,6 +28,7 @@ pub mod camera;
 pub mod cloud;
 pub mod collision;
 pub mod fog;
+pub mod grid_camera;
 pub mod kdcol;
 pub mod lighting;
 pub mod mesh_coverage;

@@ -474,7 +474,9 @@ impl RaceStage {
                 viewport,
             ),
             None => {
-                if let Some(hud) = &mut self.hud {
+                if let Some(hud) = &mut self.hud
+                    && self.race.hud_shown()
+                {
                     let mut readout = self.race.readout();
                     // The rung the grade is showing, which is what names the
                     // speed class - see `Scene::zone_stage`.

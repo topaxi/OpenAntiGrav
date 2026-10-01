@@ -450,6 +450,7 @@ pub fn run(
                 autopilot_pilot: options.autopilot_pilot,
                 autopilot_skill: options.autopilot_skill,
                 force_shake: None,
+                intro_ticks: 0,
                 force_wreck: None,
                 scheme: options.scheme,
                 size: (width, height),

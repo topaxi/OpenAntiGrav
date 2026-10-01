@@ -16,6 +16,7 @@ mod environment;
 mod gantry_visibility;
 mod geometry;
 mod global;
+mod intro;
 mod pads;
 mod pulse_psp;
 pub(super) mod ripple;
@@ -879,6 +880,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
             destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
+            intro_camera: intro::read(&mut archives, &track, pulse_psp, &mut report),
             slot_teams: slot_teams.clone(),
             collision,
             handling,
