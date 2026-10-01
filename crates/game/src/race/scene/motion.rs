@@ -361,3 +361,45 @@ impl super::Scene {
         (jitter * view_projection, jitter * prev_vp)
     }
 }
+
+impl super::Scene {
+    /// Encodes the motion blur over the finished frame, `false` when the
+    /// pass is absent or off. `views` are the frame, the velocity attachment
+    /// and the depth attachment. `camera_shake` is
+    /// [`Race::shake_screen_motion`], which the pass takes out of every
+    /// velocity it reads.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn encode_motion_blur(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        views: [&wgpu::TextureView; 3],
+        viewport: (f32, f32, f32, f32),
+        strength: f32,
+        camera_shake: Mat4,
+        timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
+    ) -> bool {
+        let Some(pass) = &self.motion_blur else {
+            return false;
+        };
+        let size = self.depth.size();
+        let [scene, velocity, depth] = views;
+        pass.borrow_mut().render(
+            device,
+            queue,
+            encoder,
+            &oag_render::post::motion_blur::Frame {
+                scene,
+                velocity,
+                depth,
+                sample_count: self.msaa.samples(),
+                size: (size.width, size.height),
+                viewport,
+                strength,
+                camera_shake,
+            },
+            timestamps,
+        )
+    }
+}

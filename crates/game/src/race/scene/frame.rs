@@ -71,10 +71,8 @@ impl Scene {
         // last frame that rendered a different tick - what every drawable's
         // `prev_mvp` velocity is measured against. See [`MotionState`].
         //
-        // **These are the shaken views, and the velocity buffer stays true
-        // screen motion**: the temporal upscaler reprojects its history with
-        // it, and the history has to follow the shake. The motion blur takes
-        // the shake out of what it reads instead - see `blur_shake` below.
+        // Shaken views, so the buffer stays true screen motion for the temporal
+        // upscaler; the blur subtracts the shake itself, `blur_shake` below.
         let prev = MotionState::advance(
             &self.motion,
             race,
@@ -83,10 +81,7 @@ impl Scene {
             usize::from(race.ship_count()),
         );
         let prev_vp = prev.view_projection;
-        // The impact shake as screen motion, for the blur alone: where a
-        // pixel sat a tick ago under the shake's own change, which the blur
-        // subtracts from every velocity. Computed with the snapshot, from the
-        // projection before the jitter below, and identity with no shake.
+        // The shake's own screen motion, for the blur - see `Race::shake_screen_motion`.
         let blur_shake = race.shake_screen_motion(projection, prev.shake);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // Recorded before the offset is applied - see `Scene::record_frame`.
@@ -977,25 +972,16 @@ impl Scene {
         // applies live; at `off` the pass encodes nothing. The velocity
         // buffer it reads was written by the scene pass above either way -
         // see `Scene::velocity`.
-        if let Some(pass) = &self.motion_blur {
-            let size = self.depth.size();
-            stats.blur_encoded = pass.borrow_mut().render(
-                device,
-                queue,
-                encoder,
-                &oag_render::post::motion_blur::Frame {
-                    scene: view,
-                    velocity: velocity_view,
-                    depth: depth_view,
-                    sample_count: self.msaa.samples(),
-                    size: (size.width, size.height),
-                    viewport,
-                    strength: motion_blur.shutter(),
-                    camera_shake: blur_shake,
-                },
-                blur_timestamps,
-            );
-        }
+        stats.blur_encoded = self.encode_motion_blur(
+            device,
+            queue,
+            encoder,
+            [view, velocity_view, depth_view],
+            viewport,
+            motion_blur.shutter(),
+            blur_shake,
+            blur_timestamps,
+        );
         oag_render::perfprobe::mark("post-chain");
         stats
     }
