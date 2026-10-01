@@ -64,8 +64,14 @@ fn the_flyby_runs_its_course_and_leaves_the_world_alone() {
     let before = race.sim.state_hash();
     let mut ticks = 0u32;
     while race.in_intro() {
+        let key = race.motion_tick();
         race.tick_intro(&PlayerInputs::none());
         ticks += 1;
+        assert_eq!(
+            race.motion_tick(),
+            key + 1,
+            "the blur's snapshot must promote on every flyby tick while the world is held"
+        );
         assert!(ticks < 3000, "the flyby never ended");
     }
     // The tick that ends it is the one that already shows the chase camera.

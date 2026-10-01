@@ -21,6 +21,9 @@ use super::super::*;
 #[derive(Debug)]
 pub(super) struct MotionState {
     tick: u64,
+    /// [`Race::camera_cuts`] as of the last promotion: a change is a cut, and the blur must not
+    /// read the jump as motion.
+    cuts: u32,
     prev: Snapshot,
     cur: Snapshot,
 }
@@ -93,16 +96,29 @@ impl MotionState {
             None => {
                 let now = Snapshot::take(race, cannon, view_projection, drawn);
                 *state = Some(Self {
-                    tick: race.sim.world.tick,
+                    tick: race.motion_tick(),
+                    cuts: race.camera_cuts(),
                     prev: now.clone(),
                     cur: now.clone(),
                 });
                 now
             }
-            Some(state) if state.tick != race.sim.world.tick => {
+            Some(state) if state.tick != race.motion_tick() => {
                 let now = Snapshot::take(race, cannon, view_projection, drawn);
                 state.prev = std::mem::replace(&mut state.cur, now);
-                state.tick = race.sim.world.tick;
+                state.tick = race.motion_tick();
+                // **A cut is not motion.** On the tick the picture jumps to another shot - a
+                // flyby cut, the flyby ending, the destroy or spectator camera, a respawn - the
+                // camera's "previous" is taken from the new shot, so the blur measures no camera
+                // travel across it. The craft and the projectiles keep their own previous
+                // matrices: they did move.
+                let cuts = race.camera_cuts();
+                if cuts != state.cuts {
+                    state.cuts = cuts;
+                    state.prev.view_projection = state.cur.view_projection;
+                    state.prev.shake = state.cur.shake;
+                    state.prev.camera_translation = state.cur.camera_translation;
+                }
                 state.prev.clone()
             }
             // The same tick re-rendered - a frame rate above 60 Hz - keeps
@@ -401,5 +417,74 @@ impl super::Scene {
             },
             timestamps,
         )
+    }
+}
+
+#[cfg(test)]
+mod advance_tests {
+    use super::*;
+
+    fn race() -> Race {
+        Race::start(Setup::headless(oag_race::Mode::TimeTrial, 1))
+    }
+
+    fn at(x: f32) -> Mat4 {
+        Mat4::from_translation(Vec3::new(x, 0.0, 0.0))
+    }
+
+    /// One frame at `x` after the world has ticked once more.
+    fn frame(cell: &std::cell::RefCell<Option<MotionState>>, race: &mut Race, x: f32) -> Snapshot {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        MotionState::advance(cell, race, &CannonDraw::default(), at(x), 1)
+    }
+
+    #[test]
+    fn the_camera_of_the_previous_tick_is_what_the_blur_measures_against() {
+        let cell = std::cell::RefCell::new(None);
+        let mut race = race();
+        let first = MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
+        assert_eq!(
+            first.view_projection,
+            at(0.0),
+            "the first frame measures against itself"
+        );
+        let prev = frame(&cell, &mut race, 1.0);
+        assert_eq!(prev.view_projection, at(0.0));
+        let prev = frame(&cell, &mut race, 2.0);
+        assert_eq!(prev.view_projection, at(1.0));
+    }
+
+    #[test]
+    fn a_cut_measures_no_camera_travel() {
+        let cell = std::cell::RefCell::new(None);
+        let mut race = race();
+        MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
+        frame(&cell, &mut race, 1.0);
+        // The shot changes: the camera jumps a hundred units, and the picture says so.
+        race.sim.respawns[0] += 1;
+        let prev = frame(&cell, &mut race, 101.0);
+        assert_eq!(
+            prev.view_projection,
+            at(101.0),
+            "the blur's previous view is the post-cut camera"
+        );
+        // And the tick after it is ordinary again.
+        let prev = frame(&cell, &mut race, 102.0);
+        assert_eq!(prev.view_projection, at(101.0));
+    }
+
+    #[test]
+    fn one_tick_rerendered_keeps_its_previous() {
+        let cell = std::cell::RefCell::new(None);
+        let race = race();
+        // Without a flyby the key is the world's tick.
+        assert_eq!(race.motion_tick(), race.sim.world.tick);
+        MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
+        let same = MotionState::advance(&cell, &race, &CannonDraw::default(), at(5.0), 1);
+        assert_eq!(
+            same.view_projection,
+            at(0.0),
+            "one tick re-rendered keeps its previous"
+        );
     }
 }

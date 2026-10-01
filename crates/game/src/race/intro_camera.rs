@@ -17,7 +17,7 @@
 //! | --- | --- |
 //! | the camera is `grid_camera1`'s world pose, vertical field [`FOV_DEGREES`] | measured, two circuits, to `3e-4` |
 //! | the pose is the animation's as of the **previous** tick | measured: against the same tick the median error is `0.74` units, one tick back `5e-5` |
-//! | the animation holds its first frame for [`HOLD_TICKS`] ticks, then plays at the tick rate | measured once (28 ticks), and read: the camera node waits `1.0` s of its own clock, which runs two `dt` a tick |
+//! | the animation holds its first frame for [`HOLD_TICKS`] ticks, then plays at the tick rate | measured on three runs (the animation clock first non-zero at tick 29 each time), and read: the camera node waits `1.0` s of its own clock, which runs two `dt` a tick |
 //! | the flyby ends when the animation reaches `AnimEnd`, or when [`Button::Cross`] is **held** | read (`GridCamera_Progress`, the `Input_IsHeld(5)` test) and measured: the animation ended at `24.99` s of `25.0`, and a held cross ended it as soon as the lock lifted |
 //! | neither can end it before [`LOCK_TICKS`] ticks have passed | read (`+0x1a04`, a counter from 60) and measured (it reads `57` at the third tick and `0` from the sixtieth) |
 //! | the world does not tick meanwhile: the countdown's 272 ticks start when the flyby ends | measured: the race clock reads zero and the mode state `0` throughout, and the first state after the flyby is the one a skip always reached |
@@ -30,6 +30,8 @@
 //!   instead - which keeps every tick count a golden hash or a replay was written against.
 //!   Height only: the settled craft is about two units above the placement pose on `16_Track`.
 //! - **A cut is every one-frame translation key pair** ([`oag_vex::grid_camera`]).
+//! - **The scenery's animation clock is the world's tick**, so it holds still under the
+//!   flyby; the original's runs on.
 //! - The track-description panel that the original draws over the flyby is not drawn here.
 //!
 //! # What is not ported
@@ -47,9 +49,9 @@ use oag_gameplay::input::Button;
 use oag_vex::grid_camera::{FOV_DEGREES, GridCamera};
 
 /// Ticks before the animation starts moving: the camera node waits `1.0` s of its own clock,
-/// which advances two `dt` per tick, so it is read as 30. **Measured once as 28** (the animation's
-/// clock read `0.0834` s five ticks after its first non-zero reading, the counter at `57` on the
-/// third tick), and 28 is what is used.
+/// which advances two `dt` per tick, so it is read as 30. **Measured as 28** on three runs (the
+/// animation's clock first read non-zero at tick 29 each time, ticks counted off the intro's
+/// counter), and 28 is what is used.
 pub const HOLD_TICKS: u32 = 28;
 
 /// Ticks before the flyby may end: the intro's frame counter (`mode+0x1a04`) starts at 60 and
@@ -267,6 +269,16 @@ impl Race {
                 if held { ", Cross held" } else { "" }
             );
         }
+    }
+
+    /// The key the motion blur's previous-tick snapshot is promoted on: the world's tick plus the
+    /// flyby's ticks, so the blur keeps measuring one-tick travel while the world is held.
+    ///
+    /// Keyed on [`World::tick`] alone it would never promote during the flyby (the world sits at
+    /// tick 0), and every frame of it would be blurred against the first.
+    #[must_use]
+    pub fn motion_tick(&self) -> u64 {
+        self.sim.world.tick + self.view.intro.as_ref().map_or(0, |i| u64::from(i.ticks()))
     }
 
     /// Whether the HUD is drawn: not through the flyby, and not for [`HUD_DELAY_TICKS`] ticks of

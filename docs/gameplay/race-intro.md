@@ -34,7 +34,7 @@ reaches the camera pass).
 | `t` | What happens | Seen |
 | --- | --- | --- |
 | `0` | the front end reads `InGameTrackDescriptionScreen`; the picture is the circuit from `grid_camera1`'s first frame; no HUD; the race clock reads `0.0` and the mode state `0`. A counter (`mode+0x1a04`) starts at 60 | `*` four captures |
-| `0 .. ~28` | the animation holds its first frame: the camera node waits `1.0` s of its own clock, which advances two `dt` per tick | measured once at 28 (the animation clock `0.0834` s five ticks after it left zero, the counter at 57 at tick 3) |
+| `0 .. ~28` | the animation holds its first frame: the camera node waits `1.0` s of its own clock, which advances two `dt` per tick | `*` three runs: the animation clock first reads non-zero at tick 29 each time (counter-referred), so 28 held ticks |
 | `~28 ..` | the animation plays at the tick rate | `*` over 1,521 frames: clock against pose |
 | `>= 60` | the flyby **may end**: the counter has reached zero. Before that nothing can end it | `*` counter `59, 58, ... 0` |
 | the end | it ends when the animation reaches `AnimEnd` (key units, so `1500` is 25.0 s), **or** when **Cross is held** (`Input_IsHeld(5)`) once the animation has started and the counter is zero | the first: last frame at `24.99` s of `25.0` on two circuits; the second: a 4-frame press ended it on the next frame, and the old "dismissed by a held cross at tick 61" is this |
@@ -66,7 +66,9 @@ own button presses are the likeliest cause and it was not chased.
 | the pose is the animation as of the previous tick, fov `54.309` vertical degrees (measured, both circuits, not derivable from the file: all twelve `gridCamera` payloads are identical but for the aim point) | `oag_vex::grid_camera`, `race::intro_camera` |
 | the hold is 28 ticks, the lock 60, the end `AnimEnd` or Cross held | `race::intro_camera::Timeline` |
 | the HUD is hidden through it and for 30 ticks after | `Race::hud_shown` |
-| each one-frame key pair, and the end, count as a cut, so the temporal upscaler drops its history | `Race::camera_cuts` |
+| each one-frame key pair, and the end, count as a cut: the temporal upscaler drops its history, and **the motion blur's previous view becomes the post-cut camera** (it also now does so for the destroy and spectator cameras and a respawn, which smeared before). The blur's snapshot is keyed on `Race::motion_tick`, the world's tick plus the flyby's, because the world sits at tick 0 under it | `Race::camera_cuts`, `scene/motion.rs` |
+| the player's own craft is drawn on the grid whatever view they saved | `Race::draws_own_ship` |
+| the flyby begins when the race scene is handed over, before the first frame is drawn; a race resumed from the menus does not replay it; ours has no RESTART RACE row (a relaunch builds a new race) | `session/load.rs` |
 | `--no-intro` skips it; `--intro-ticks N --screenshot` photographs tick `N` of it | CLI |
 | a headless run, a capture and every test drive `Race::tick` from tick 0 and never see it | by construction |
 
@@ -76,10 +78,11 @@ race running; with the X key held from partway through it logs `ends after 1490 
 held`. `--hold cross` does not skip it in a window: that flag feeds the headless loop only.
 
 Compared with the original at five matched times on `03_Track` (`scripts/psp-flyby.py` frames
-against `--intro-ticks` captures, native 480x272): the same buildings, the same framing and
-the same field at all five, to the pixel of scenery detail. The craft is the one visible
-difference: the original's has settled, ours is at its placement pose (4.0 against 1.85 above
-the track on `03_Track`).
+against `--intro-ticks` captures, native 480x272): the same buildings, framing and field at all
+five, judged by eye (`cmp-all.png`, scratch). What differs: the panel is absent, the craft has
+settled in the original and sits at its placement pose in ours (4.0 against 1.85 above the track on
+`03_Track`), and the original's scenery animates under the flyby while ours holds its first
+frame.
 
 ## Open
 
@@ -102,4 +105,8 @@ the track on `03_Track`).
   only one, and Metropia (`02_Track` reversed) flew `02_Track`'s file to `0.02` units over the
   first 100 frames (a RESTART RACE capture, so about the first 1.7 s of its 27).
 - **Why a fresh menu-walk load skipped it on two circuits** (above).
-- **The first-frame hold's 28 ticks** was measured once; the read says 30.
+- **The scenery does not animate under the flyby**: our `Scene::render` takes its animation
+  clock from `World::tick`, which is held at 0, so the circuit's `Anim Transform`s and
+  scrolling textures sit at their first frame through the 25 s (the original's keep running).
+  Fixing it is a one-line change in `scene/frame.rs`, which is 1,000 lines of one function and
+  has to be split first.
