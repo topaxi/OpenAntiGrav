@@ -31,6 +31,13 @@ though)."
     `shipShape`;
   - it writes the bloom glow mask whole, as the original's stencil
     `REPLACE 0xff` does.
+  - **Corrected 2026-10-01 (`pulse-hull-bloom`): the mask write is now limited to
+    the glow batch.** The original's shadow pass puts the whole mask back to 4
+    after the overlay's ordinary batches, so the white blob this item described is
+    PPSSPP's OpenGL backend and not the software renderer's, nor (by the GE words) the
+    PSP's. `hull_overlay::stamps_mask`; evidence in `docs/rendering/glow-mask.md`, "The hull
+    overlay's mask is wiped". The frames in `~/.cache/oag/drive/reports/pulse-absorb-probe/`
+    are of the white-blob kind.
 
   Evidence is in
   [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),

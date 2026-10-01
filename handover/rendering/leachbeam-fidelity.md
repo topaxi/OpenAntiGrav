@@ -41,19 +41,23 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   read (distance over `range 250`, target invulnerable or shielded, the owner's
   weapon record `+0x120` above zero, or either craft's `entity+0x8c` not `1`),
   and a finished race (`+0x8c` of `2`/`6`) makes every fire die at once.
-- **Our bloom spreads much further than PPSSPP's around the lit hull.**
-  2026-10-01 (`pulse-glow`): the bloom's *arithmetic* is not the cause. A numpy
-  model of the four recovered passes on our own scene reproduces the original's
-  bloom layer at Outpost 7's neon strip to about 6 %, and
-  `crates/render/tests/bloom_gain.rs` pins the real shader to the same maths
-  (`docs/rendering/glow-mask.md`, "The bloom's own arithmetic is right"). On
-  that frame the composite does not spread further than the original's either.
-  **What this leaves for the hull**: the `0xff` stamp of the absorb/LeachBeam
-  overlay (`hull_overlay`) and the mask it leaves around the nose, which needs
-  the original's own EDRAM mask and bloom layer read at an absorb frame on the
-  *same hull and pose* - the same method works (own PPSSPP, software renderer,
-  `trace_shot`-style read of `0x04000000` and `0x04110000`) but the pose has to
-  be a stationary one, and an absorb is not. Not done.
+- ~~**Our bloom spreads much further than PPSSPP's around the lit hull.**~~ **Closed
+  2026-10-01 (`pulse-hull-bloom`), for the absorb overlay and on the software renderer.**
+  The bloom's arithmetic was right (`pulse-glow`); the hull overlay's `0xff` stamp was the
+  difference. A GE list of a real absorb shows the craft's ordinary batches and the
+  overlay's ten batches drawn before the shadow pass, whose full-screen stencil quad
+  (`REPLACE`, reference 4, every outcome) puts the whole mask back to 4; only the glow batch
+  and its own overlay (prim after the reset) keep a stamp. Completed frames of the original
+  hold the hull at 4 through the window; the 2026-09-23 reading of `255` was a mid-frame
+  halt. `hull_overlay::stamps_mask` now writes the mask only over a batch with a glow of its
+  own: bloom mean in the hull's neighbourhood 33 before, 5 after, 5 in the original, at five
+  ages, two boots; `crates/game/tests/absorb_mask_ground_truth.rs`. **The OpenGL backend of
+  PPSSPP draws the white blob** ours drew before; the software renderer is the reference
+  here, and no PSP hardware arbitrates (`docs/rendering/glow-mask.md`, "The hull overlay's
+  mask is wiped"). **Open on it**: the LeachBeam overlay is the same routine and takes the
+  same rule, but no LeachBeam frame was read; the rule is read off Assegai alone (the other
+  seven hulls' glow batches are not checked); the HUD's white energy-bar flash stamps the
+  original's mask and ours does not.
 - ~~**The lock sight stays up on our HUD while the beam is live.**~~ **Closed
   2026-10-01 (`pulse-cull`), and the claim did not reproduce as stated**: the pickup
   is spent on the fire tick and the sight was already gone about `0.47` s later in
@@ -84,6 +88,10 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
 
 ## Next Steps
 
+0. A way to fire a real LeachBeam on PPSSPP (2026-10-01): writing the held slot to `10` and
+   holding fire neither halts nor fires (`craft+0x85c` stays `-1`, no lock); a beam needs
+   `Ship_AcquireLock` to have found a target. Try an AI craft close ahead on a straight, the
+   lock reticle's seek time (0.34 s) elapsed with the pickup *received*, not written.
 1. Isolate why a fake-node fire disconnects on its first update (break at
    `0x08866cf4`/`0x08866d08` and read which of the five tests set `s2`), then
    hold a beam connected for the whole `range` window and capture ours at the

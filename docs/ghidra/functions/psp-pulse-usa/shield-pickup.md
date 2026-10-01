@@ -276,6 +276,54 @@ texture as the per-team shell. **No code path assembles that name** on this
 binary - the format string always supplies a directory *and* a prefix - so on
 Pulse it reads as a stray copy and is not the thing to draw.
 
+### The PSP's shell follows the Concept model (2026-10-01, `pulse-hull-bloom`)
+
+`ShipShield_Construct` does **not** use the literal `"ship"` the section above
+reads as the format's prefix, except as a fallback. Read again in full
+(headless, `program=/pulse/BOOT-psp-pulse-usa.BIN`):
+
+```c
+uVar1 = Libc_HashString("FE_TeamModel");
+iVar2 = Registry_Lookup(&g_named_registry, 0, uVar1);
+iVar3 = 0x8a7c134;                       // the literal "ship"
+if (iVar2 != 0) iVar3 = iVar2;           // the registry's value wins
+...
+FUN_089724b4(buf, 0x80, "%s\\%sshield.vex",
+             *(craft->team + 0x94), iVar3);   // team directory, model stem
+```
+
+`Ship_LoadModel` (`0x08843258`) reads the **same** registry value for the
+player's hull - `puVar11 = Registry_Lookup(FE_TeamModel)` for the player's
+craft kind, `"%s\%s.vex"` in every mode but Zone and the Eliminator - and
+for the wreck, `"%s\%swreck.vex"`. The Concept hull is `extra.vex`, which only
+that registry value can name, so a Concept race has `FE_TeamModel = "extra"`
+and the shell is **`Data\Ships\<Team>\extrashield.vex`**. The constructor
+takes the *constructed craft's* team directory with the *player's* stem, so
+every opponent raises its own team's `extrashield.vex` in that race too.
+Confidence **85**: both decompiles agree and the Concept hull's name has no other
+source; the live registry value of a Concept race was **not** read (the
+Concept model is behind a loyalty unlock this profile does not have).
+
+**The PSP disc carries it**, for all eight teams, in both regions
+(`crates/game/examples/pulse_shield_probe.rs`): `extrashield.vex` is a
+different file from `shipshield.vex` on every team (9,536 to 9,776 bytes), and it
+references `pulse_shield_extra_ADD.tga` for six teams and `pulse_shield_test_ADD.tga`
+for Feisar and Triakis. **`extrawreck.vex` is on the disc too** (19,536 to
+22,432 bytes against `shipwreck.vex`'s 18,000 to 18,816), so by the same
+registry value a Concept craft's wreck is not `shipwreck.vex`; this port does not
+do that yet.
+
+**Ours**: `race::shield_entry_names` takes the player's hull stem
+(`Options::hull_variant`) and names every slot's shell from it on the PSP
+(`extra` -> `extrashield`, none or `Ship` -> `shipshield`); the PS2 build still
+passes the literal `extra`. Pinned by
+`race::tests::load::the_psp_shield_shell_follows_the_players_hull_stem_and_the_ps2_one_does_not`
+and, on the disc, `crates/game/tests/psp_shield_model_ground_truth.rs`. One frame
+of ours (Concept hull, `--give shield --variant extra`, tick 40 and 70) against
+the same without the variant: the shell changes from the purple `grid`
+lattice to the pale-blue `extra` texture, scrolling. **No frame of the original's
+Concept shield was taken**, so its look is read, not compared.
+
 ### The same asset across the three titles, checked on all three
 
 Each name hashed or listed against that disc's own archive directory:

@@ -1,5 +1,5 @@
-//! Scratch probe: which shield shells does a Pulse disc carry per team, and
-//! what do they hold? Reproduces the PSP half of the "Concept craft's shield"
+//! Scratch probe: which shield shells (and wrecks, which take the same
+//! `FE_TeamModel` prefix) does a Pulse disc carry per team, and what do they hold? Reproduces the PSP half of the "Concept craft's shield"
 //! question in `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
 //!
 //! ```sh
@@ -23,7 +23,7 @@ fn main() -> anyhow::Result<()> {
     ];
     for team in TEAMS {
         print!("{team}:");
-        for stem in ["shipshield", "extrashield"] {
+        for stem in ["shipshield", "extrashield", "shipwreck", "extrawreck"] {
             let name = format!(r"Data\Ships\{team}\{stem}.vex");
             match archives.read_name(&name) {
                 Ok(blob) => {

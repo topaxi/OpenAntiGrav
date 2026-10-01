@@ -15,11 +15,12 @@
 //! original does not: read at a frame boundary on a PPSSPP running the
 //! software renderer (`docs/rendering/glow-mask.md`, "The hull overlay's mask
 //! is wiped"), the hull holds the neutral `4` all through the one-second
-//! window, bar the 61 pixels or so of the one glow batch (`glowingShape`'s
-//! `colours_flashing_GLOW`, drawn after the shadow pass's stencil reset) and
-//! the HUD. So the number of `0xff` pixels over the hull grows by about 70 in
-//! the original between a frame before the absorb and one at its peak - and by
-//! about 3,500 in a renderer that stamps the whole overlay.
+//! window, bar the one glow batch (`glowingShape`'s `colours_flashing_GLOW`,
+//! drawn after the shadow pass's stencil reset) and the HUD. So the number of
+//! `0xff` pixels over the hull grows by about 100 in the original between a
+//! frame before the absorb and one at its peak (95 to 123 over two boots, in
+//! this test's own box) - and by about 4,000 in a renderer that stamps the
+//! whole overlay.
 
 use std::path::Path;
 
@@ -114,7 +115,8 @@ fn a_real_absorbs_overlay_does_not_flood_the_hull_with_glow() {
 
     let (with, without) = (hull_count(&peak, 0xff), hull_count(&control, 0xff));
     println!("hull neighbourhood at 0xff: {with} at the absorb's peak, {without} without");
-    // The original adds about 70; a renderer that keeps the overlay's stamp adds over 3,000.
+    // The original adds about 100 and ours 113; a renderer that keeps the overlay's stamp
+    // adds about 4,000.
     assert!(
         with <= without + 400,
         "{with} full-glow pixels over the hull against {without} without an absorb: \

@@ -1891,3 +1891,32 @@ photographs. See [after-the-finish.md](../gameplay/after-the-finish.md) for what
   `Menu`), then `psp-drive.py menu`.
 - A second `x` on a long race is not unique: the circuit passes the same `x` away from the start straight, and a
   disarm there flies the craft into a wall. Pin `z` too.
+
+## A real absorb, and reading the mask without a mid-frame halt: `psp-absorb-frames.py` (2026-10-01)
+
+`psp-fire-weapon.py` sets a bit in the fire-request word, and the absorb is not one: it is
+`Ship_AbsorbHeldPickup` (`0x08844ec4`), which reads the controller's absorb byte (**circle**) while the craft holds a
+pickup. So `scripts/psp-absorb-frames.py` does the two things the 2026-09-23 probe did, as a tool: write `0` into the
+player's weapon record (`*(*(*(0x08b317b4) + 0x2c0) + 0x4c) + 0x1bc`, the held-weapon slot) **at a
+`Weapons_DispatchFire` breakpoint**, and hold circle through `input.buttons.send`. The window is the race clock
+`player+0x830` minus the stamp `player+0x878` (`-10.0` until the first absorb, so a stale stamp from an earlier run is not
+mistaken for this one). `--edram` writes both framebuffers and the bloom layer at every `--every`-th frame of the
+window, `--ge-dump` records one frame's GE list inside it.
+
+- **Read EDRAM at a frame boundary, in both buffers.** A halt at an arbitrary moment (`brk` after a sleep) can land
+  between a draw and the pass that overwrites it: boot 1 of this tool's own run read the absorb overlay's `255` over the
+  hull in one buffer at 0.58 s and 0.68 s, and `4` in every frame-boundary read. A breakpoint in a once-a-frame function
+  (`Weapons_DispatchFire`) stops between frames, where both buffers are complete.
+- **The software and hardware backends disagree about the stencil.** The same absorb draws a white-hot hull on the OpenGL
+  backend and a modestly brightened one on the software renderer; see
+  [glow-mask.md](../rendering/glow-mask.md), "The hull overlay's mask is wiped". Say which backend a comparison used.
+- **`gpu.record.dump` needs the CPU running.** With the once-a-frame breakpoint still armed the next frame never
+  completes and the call times out (`no reply to gpu.record.dump`): remove the breakpoint, resume, call, stop again.
+- **A grant by writing the held slot works only for the absorb.** Granting `held = 10` (the LeachBeam) the same way and
+  holding fire (`square`), once straight away and once after a 1 s wait for a lock, did **not** halt PPSSPP and did not
+  produce a beam either: the slot cleared within half a second, `craft+0x85c` (the lock target) stayed `-1` and
+  `craft+0x860 & 1` stayed clear on the grid with the field ahead. The halt is therefore the fire-*bit* route's
+  (`+0x1b8 |= 0x8000`, which skips the construction a real fire does, `bad-memory-access-halt.md`); a real LeachBeam
+  needs `Ship_AcquireLock` to have found a target, which a held-slot write did not cause. Not solved.
+- **The craft drifts off the grid if left alone.** After a couple of minutes the player's position changed (the race
+  clock keeps running), so a matched-pose capture follows a `psp-drive.py restart` within a few seconds.

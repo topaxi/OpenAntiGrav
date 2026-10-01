@@ -39,12 +39,17 @@ structure. `Weapons_DispatchFire` walks an **inline array in the world**:
 from the dispatcher's own argument and indexes that array, which is why the
 breakpoint here is `Weapons_DispatchFire` and not the ship update.
 
+**The absorb is not a bit here: use `psp-absorb-frames.py`** (a held-pickup grant plus a held
+circle, with EDRAM and GE-list readout).
+
 **Never fire the LeachBeam (bit `0x8000`) through this script.** It halts
 PPSSPP within a frame, deterministically: the instance lands in the weapon
 pool `FUN_08866b08` walks with its matrix pointer `+0xa0` never filled in,
 and the next update tick loads a quad from `null + 0x30`
 (`E[MEMMAP] Bad memory access detected! 00000030 ... Stopping emulation`).
-That is why `leachbeam` is deliberately absent from `WEAPONS` below. The
+That is why `leachbeam` is deliberately absent from `WEAPONS` below. Granting the
+held id (`10`) and pressing fire does not halt (2026-10-01, `ppsspp-debugger.md`) but
+needs a lock to produce a beam, which a held-slot write did not cause. The
 whole diagnosis, including the register read one instruction before the
 fault, is in
 `docs/ghidra/functions/psp-pulse-usa/bad-memory-access-halt.md`.
