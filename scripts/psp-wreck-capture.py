@@ -25,10 +25,12 @@ Raw captures are derived game data: write them under `data/`, never commit them.
 """
 
 import argparse
+import base64
 import importlib.util
 import json
 import struct
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -43,6 +45,8 @@ _spec.loader.exec_module(pair)
 SHIP_UPDATE_CRAFT = 0x08849618
 SET_STATE = 0x08844100
 PSYS_SPAWN_Q = 0x08915484
+DRAW_EMITTER_POOL = 0x08918BF8
+DRAW_PARTICLE = 0x089186BC
 RACE_MANAGER = 0x08B317B4
 CAMERA_OBJECT = 0x08B32C64
 CAMERA_NODE_BASE = 0x08AB10B0
@@ -145,6 +149,129 @@ def log_spawns(dbg, entity, seconds):
     return log
 
 
+def read_pool(dbg, instance):
+    """Every live particle of an emitter instance's pool (`particle-system.md`, "A pool particle")."""
+    head = dbg.read(instance, 0x180)
+    out = {
+        "instance": instance,
+        "resource": struct.unpack_from("<I", head, 0x20)[0],
+        "scale_params": list(struct.unpack_from("<7f", head, 0x28)),
+        "age_words": list(struct.unpack_from("<4I", head, 0x138)),
+        "matrix": list(struct.unpack_from("<16f", head, 0xF0)),
+        "words_0x20_0x70": list(struct.unpack_from("<20f", head, 0x20)),
+        "particles": [],
+    }
+    pool = struct.unpack_from("<I", head, 0x74)[0]
+    while pair.ram(pool):
+        block = dbg.read(pool, 0x10 + 32 * 0xA0)
+        mask = struct.unpack_from("<I", block, 0)[0]
+        for slot in range(32):
+            if not mask & (0x80000000 >> slot):
+                continue
+            base = 0x10 + slot * 0xA0
+            out["particles"].append(
+                {
+                    "pos": struct.unpack_from("<3f", block, base + 0x40),
+                    "size": struct.unpack_from("<f", block, base + 0x70)[0],
+                    "rgba": list(block[base + 0x74 : base + 0x78]),
+                    "frame": struct.unpack_from("<I", block, base + 0x78)[0],
+                    "second": struct.unpack_from("<4f", block, base + 0x50),
+                    "raw": block[base : base + 0xA0].hex(),
+                }
+            )
+        pool = dbg.read_u32(pool + 0x1410)
+    return out
+
+
+def log_pools(dbg, from_frame, to_frame):
+    """Every `ParticleSystem_DrawEmitterPool` call from `from_frame` to `to_frame` frames after now.
+
+    Run at a stop. The frame is the PSP cycle counter over 222 MHz / 59.94, as `log_spawns` has it.
+    The resource record's own words that say how it draws (`+0xb8` render mode, `+0xc0` blend
+    class) are read once per resource.
+    """
+    start = dbg.call("cpu.status")["ticks"]
+    log, resources = [], {}
+    try:
+        for _ in dbg.each_hit(DRAW_EMITTER_POOL, 1000000, timeout=20.0):
+            now = (dbg.call("cpu.status")["ticks"] - start) / CYCLES_PER_FRAME
+            if now > to_frame - from_frame:
+                break
+            r = regs(dbg)
+            if not pair.ram(r["a0"]):
+                continue
+            row = read_pool(dbg, r["a0"])
+            res = row["resource"]
+            if pair.ram(res) and res not in resources:
+                resources[res] = {
+                    "mode": dbg.read_u32(res + 0xB8),
+                    "blend": dbg.read_u32(res + 0xC0),
+                    "texture_words": [dbg.read_u32(res + 0x890 + 4 * i) for i in range(4)],
+                }
+            row["frame"] = round(now + from_frame, 2)
+            log.append(row)
+    except TimeoutError:
+        pass
+    return {"draws": log, "resources": resources}
+
+
+def log_templates(dbg, from_frame, to_frame):
+    """Every `ParticleSystem_DrawParticle` call (a sprite template's draw) in the window.
+
+    `a0` is the template particle itself: `+0x00` position, `+0x30` size, `+0x34` colour word,
+    `+0x38` atlas frame, `+0x5c` roll, `+0x64` aspect (`particle-system.md`, "The stretch factor").
+    The first 0x90 bytes are kept raw as floats and as one hex string.
+    """
+    start = dbg.call("cpu.status")["ticks"]
+    log = []
+    try:
+        for _ in dbg.each_hit(DRAW_PARTICLE, 1000000, timeout=20.0):
+            now = (dbg.call("cpu.status")["ticks"] - start) / CYCLES_PER_FRAME
+            if now > to_frame - from_frame:
+                break
+            r = regs(dbg)
+            if not pair.ram(r["a0"]):
+                continue
+            raw = dbg.read(r["a0"], 0x90)
+            log.append(
+                {
+                    "frame": round(now + from_frame, 2),
+                    "particle": r["a0"],
+                    "floats": list(struct.unpack("<36f", raw)),
+                    "colour": raw[0x34:0x38].hex(),
+                    "hex": raw.hex(),
+                }
+            )
+    except TimeoutError:
+        pass
+    return log
+
+
+def log_hits(dbg, address, from_frame, to_frame):
+    """Every hit of `address` in the window, with `a0`/`a1`, `f12` and 0xb0 bytes at each pointer.
+
+    The generic probe: for `FUN_0885efc4` (the ship explosion's shockwave update, `a0` the
+    object) it reads the object's age (`+0x88`), scale (`+0x8c`), alpha (`+0x98`) and matrix.
+    """
+    start = dbg.call("cpu.status")["ticks"]
+    log = []
+    try:
+        for _ in dbg.each_hit(address, 1000000, timeout=20.0):
+            now = (dbg.call("cpu.status")["ticks"] - start) / CYCLES_PER_FRAME
+            if now > to_frame - from_frame:
+                break
+            r = regs(dbg)
+            row = {"frame": round(now + from_frame, 2), "a0": r["a0"], "a1": r["a1"], "ra": r["ra"]}
+            row["f12"] = struct.unpack("<f", struct.pack("<I", pair.fpu(dbg)["f12"]))[0]
+            for name in ("a0", "a1"):
+                if pair.ram(r[name]):
+                    row[name + "_words"] = list(struct.unpack("<44I", dbg.read(r[name], 0xB0)))
+            log.append(row)
+    except TimeoutError:
+        pass
+    return log
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, required=True)
@@ -159,6 +286,11 @@ def main():
     ap.add_argument("--spawns", action="store_true", help="log Psys_Spawn_q for 3.3 s instead of photographing")
     ap.add_argument("--place-window", action="store_true")
     ap.add_argument("--place", help="X,Y,Z: write the craft's body and node position there at the injection stop")
+    ap.add_argument("--pools", help="K0:K1: after the call, log every emitter pool drawn from frame K0 to K1 (pools.json)")
+    ap.add_argument("--templates", help="K0:K1: log every sprite template drawn from frame K0 to K1 (templates.json)")
+    ap.add_argument("--ge-dump-k", type=int, help="K: ask for a GE dump (the next frame drawn) at frame K after the call -> ge.ppdmp")
+    ap.add_argument("--edram", action="store_true", help="write both EDRAM framebuffers beside each shot (needs SoftwareRenderer = True)")
+    ap.add_argument("--hits", help="ADDR:K0:K1: log every hit of a function (a0, a1, f12 and the objects they point at) -> hits.json")
     ap.add_argument("--camera", action="store_true", help="log the camera controller's fields each frame")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -167,6 +299,8 @@ def main():
         pair.place_window(args.display)
 
     dbg = Debugger(args.port)
+    dump_reply = []
+    dump_ticket = None
     log = []
     try:
         if args.restart:
@@ -203,9 +337,23 @@ def main():
             if injected is not None:
                 k = frame - injected
                 row["since"] = k
+                if args.ge_dump_k is not None and k == args.ge_dump_k:
+                    dump_ticket = dbg.send("gpu.record.dump")
+                    _receive = dbg._recv
+
+                    def _spy(_receive=_receive, ticket=dump_ticket):
+                        message = _receive()
+                        if message and message.get("ticket") == ticket:
+                            dump_reply.append(message)
+                        return message
+
+                    dbg._recv = _spy
                 if k in shots:
                     name = "k%03d.png" % k
                     row["shot"] = name if pair.shoot(args.display, args.out / name) else None
+                    if args.edram:
+                        for index, base in enumerate((0x04000000, 0x04088000)):
+                            (args.out / ("k%03d.fb%d.bin" % (k, index))).write_bytes(dbg.read(base, 0x88000))
                 if k >= max(shots):
                     log.append(row)
                     break
@@ -213,9 +361,28 @@ def main():
             frame += 1
         if args.spawns:
             log = log_spawns(dbg, entity, 3.3)
+        elif args.hits:
+            address, k0, k1 = args.hits.split(":")
+            log = log_hits(dbg, int(address, 16), int(k0), int(k1))
+        elif args.templates:
+            k0, k1 = (int(v) for v in args.templates.split(":"))
+            log = log_templates(dbg, k0, k1)
+        elif args.pools:
+            k0, k1 = (int(v) for v in args.pools.split(":"))
+            log = log_pools(dbg, k0, k1)
         dbg.resume()
+        if dump_ticket is not None:
+            end = time.time() + 120
+            while not dump_reply and time.time() < end:
+                dbg._recv()
+            if dump_reply:
+                _, b64 = dump_reply[0]["uri"].split(",", 1)
+                (args.out / "ge.ppdmp").write_bytes(base64.b64decode(b64))
+                print("wrote %s" % (args.out / "ge.ppdmp"), file=sys.stderr)
+            else:
+                print("no GE dump arrived", file=sys.stderr)
     finally:
-        (args.out / ("spawns.json" if args.spawns else "log.json")).write_text(json.dumps(log, indent=1))
+        (args.out / ("spawns.json" if args.spawns else "pools.json" if args.pools else "templates.json" if args.templates else "hits.json" if args.hits else "log.json")).write_text(json.dumps(log, indent=1))
         dbg.close()
     print("wrote", args.out)
 
