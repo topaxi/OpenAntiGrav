@@ -148,7 +148,7 @@ impl Race {
         self.sim.world.ships[0].driver.index = u32::try_from(index).unwrap_or(0);
     }
 
-    /// Whether slot 0 is being flown for the player this tick, by any of three
+    /// Whether slot 0 is being flown for the player this tick, by any of four
     /// routes.
     ///
     /// The operator's `--autopilot` and the pickup are deliberately separate
@@ -158,9 +158,20 @@ impl Race {
     /// Disruptor's two Autopilot effects, which hand the craft to its driver
     /// for their `time` at a scaled thrust - see
     /// `oag_gameplay::disruption::Disruption::autopilot_thrust_scale`.
+    ///
+    /// **The fourth is the finish line.** Once the player has crossed it for the
+    /// last time the original stops reading the pad and flies the craft itself
+    /// for as long as the race stays up behind the end-race panels - measured
+    /// 2026-10-01 on PPSSPP, three runs, with no input held at all: the craft kept
+    /// lapping the circuit for the 35 s logged. See
+    /// `docs/gameplay/after-the-finish.md`. The same driver as the other three
+    /// routes, which is the maintainer's standing rule (the AI obeys player physics);
+    /// the original's own pace after the flag, 0.567 of full thrust, is not
+    /// reproduced.
     #[must_use]
     pub fn flown_for_the_player(&self, slot: usize) -> bool {
         self.sim.autopilot
+            || self.sim.world.ships[slot].standing.finished()
             || self.sim.world.ships[slot].autopilot_timer > 0.0
             || self.sim.world.ships[slot]
                 .disruption
@@ -552,8 +563,17 @@ impl Race {
         // A free function so the `course` and `world` borrows stay disjoint -
         // cloning a `Course` once a tick to satisfy the borrow checker would be
         // a `Vec` copy per frame for nothing.
+        let player = self.player_slot();
+        let finished_before = self.sim.world.ships[player].standing.finished();
         if let Some(course) = &self.sim.course {
             advance_standings(&mut self.sim.world, course);
+        }
+        // The tick the player crosses the line for the last time is the tick
+        // their craft is handed to the driver, which has never run for them:
+        // put it on the piece of line the craft is actually on, for the
+        // windowed-search reason `Self::set_autopilot` spells out.
+        if !finished_before && self.sim.world.ships[player].standing.finished() {
+            self.locate_player_driver();
         }
     }
 
