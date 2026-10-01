@@ -67,6 +67,17 @@ impl Sight {
         self.leach_law = on;
     }
 
+    /// Whether the title's LeachBeam reticle runs its own law
+    /// ([`Self::set_leach_law`]), the Pulse dialect.
+    ///
+    /// The fire gate keys on this and not on [`Self::runs_leach_law`]: the shot
+    /// is taken while the sight still holds the LeachBeam, but a title whose
+    /// reticle keeps the Missile's law (Wipeout HD) fires off the window alone.
+    #[must_use]
+    pub fn leach_law(&self) -> bool {
+        self.leach_law
+    }
+
     /// Whether this frame's law is the LeachBeam's own.
     pub(super) fn runs_leach_law(&self) -> bool {
         self.leach_law && self.held == Held::LeachBeam

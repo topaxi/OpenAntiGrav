@@ -290,3 +290,51 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
         "the arrowheads are still up a quarter of a second into a live beam"
     );
 }
+
+/// Under the Pulse law the player's LeachBeam locks only once its reticle has:
+/// `Ship_FireHeldWeapon` hands the fire request the target only when the sight's
+/// flag (`entity+0x860 & 1`) is up, and `(0, -1)`, the unlocked fizzle, before.
+/// A press at a target that is in the window but whose arrowheads have not
+/// closed fires unlocked; the same press once they have is locked. Wipeout HD's
+/// reticle is another function and keeps firing off the window alone.
+#[test]
+fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
+    let kind_at = |pulse: bool, press: usize| {
+        let mut race = race_with_a_grid();
+        race.sim.weapons = Some(one_leach_beam_table());
+        if pulse {
+            race.set_sight_dialect(oag_pulse::hud::ART.sights);
+        } else {
+            race.set_sight_dialect(oag_hd::hud::ART.sights);
+        }
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+        let mut buttons = Buttons::new();
+        buttons.tick(0);
+        for tick in 0..=press {
+            race.sim.world.ships[1].physics.body.position = ahead;
+            race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+            let input = buttons.tick(if tick == press { SQUARE } else { 0 });
+            race.tick(&PlayerInputs::single(input));
+        }
+        race.sim.world.leach_beam.expect("the press must fire").kind
+    };
+    use oag_gameplay::projectile::leach_beam::Kind;
+    // The Pulse arrowheads close in about 0.34 s (20 ticks); 5 ticks is a first
+    // sighting, 40 is well after it.
+    let early = kind_at(true, 5);
+    assert_eq!(early, Kind::Unlocked, "locked before the reticle had");
+    let late = kind_at(true, 40);
+    assert_eq!(
+        late,
+        Kind::Locked,
+        "the reticle had locked, the beam did not"
+    );
+    let hd_early = kind_at(false, 5);
+    assert_eq!(
+        hd_early,
+        Kind::Locked,
+        "HD keeps firing off the window alone"
+    );
+}

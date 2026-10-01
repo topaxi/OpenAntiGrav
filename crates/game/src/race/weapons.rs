@@ -433,7 +433,19 @@ impl Race {
                     //
                     // `LEACH` fires on the locked arm and `LEACHFAIL` on the
                     // unlocked one - see `Cue::Leach` and `Cue::LeachFail`.
-                    self.sim.world.leach_beam = Some(match self.sight_target() {
+                    //
+                    // **The player's lock needs the reticle's lock, under the Pulse
+                    // law** (read 2026-10-01): `Ship_FireHeldWeapon` (`0x08844ae8`)
+                    // passes `Weapon_RequestFire` the target only when
+                    // `entity+0x860 & 1`, the flag `HudSight_UpdateLeachBeam` sets
+                    // when its extent reaches `6.0`, about `0.34` s after a first
+                    // sighting; before that it passes `(0, -1)`, the unlocked arm.
+                    // Wipeout HD's LeachBeam reticle is a different function, so it
+                    // keeps firing off the window alone. An opponent has no reticle.
+                    let target = self.sight_target().filter(|_| {
+                        slot != 0 || !self.view.sight.leach_law() || self.view.sight.locked()
+                    });
+                    self.sim.world.leach_beam = Some(match target {
                         Some(target) => {
                             self.sim.cues.push(crate::audio::sfx::CueEvent::new(
                                 crate::audio::sfx::Cue::Leach,
