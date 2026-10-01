@@ -47,10 +47,10 @@ Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not `cargo
 Ground-truth tests (in `crates/*/tests/*ground_truth*.rs`) are `#[ignore]`d because they
 need a real disc image under `data/images/`; they never run in CI, only via `just test-data`.
 
-**`just test-data` runs 4,117 tests in about 415s on an idle machine, tees the run to
+**`just test-data` runs 5,831 tests in 230-280s (3,500s of CPU) with other members' builds running beside it - it was 368s and 5,855s of CPU before 2026-10-01's profile change, see `docs/architecture/workspace-layout.md` - tees the run to
 `target/test-data.log`, and then checks it against `scripts/check-test-budget.py` - which
 fails when the suite exceeds 450s or any single test exceeds 300s.** Both are durations
-*under load*: a test competing with 4,100 others for sixteen cores reports well over its
+*under load*: a test competing with 5,800 others for the cores reports well over its
 isolated cost, so these gate gross regressions rather than drift.
 
 When it fires, **stop and re-profile the tail before adding more tests** - that is what

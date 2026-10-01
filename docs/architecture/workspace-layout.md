@@ -526,8 +526,8 @@ so wall clock is an upper bound and CPU is the figure to trust):
 | | before | after |
 | --- | --- | --- |
 | tests | 5,831 | 5,831, all passed |
-| user CPU | 5,855s | 3,667s (before the bc7 fix) |
-| wall | 368s | 276s (before the bc7 fix) |
+| user CPU | 5,855s | 3,667s with the profile change, **3,516s** with the bc7 fix |
+| wall | 368s | 276s, then **232s** (suite per `check-test-budget`: slowest test 153s then 131s) |
 | `a_lone_craft_gets_round...` | 53-57s | 15s, output byte-identical |
 | `ai_roll` full-grid tests | 207-220s each | 98-100s each |
 | `ram` | 242s | 129s |
