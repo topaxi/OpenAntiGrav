@@ -354,6 +354,14 @@ impl super::Scene {
             {
                 let mvp = view_projection * draw.shockwave_matrix;
                 drawable.write(queue, view_projection, draw.shockwave_matrix, mvp);
+                // The ambient light's alpha the blast's update eases (`bomb_blast`'s doc): the
+                // vertex colours times white with that alpha. Per live shockwave, so a scratch of
+                // its own rather than the scene's.
+                drawable.tint(
+                    queue,
+                    [1.0, 1.0, 1.0, draw.shockwave_alpha],
+                    &mut Vec::new(),
+                );
                 shockwave_active[slot] = true;
             }
         }

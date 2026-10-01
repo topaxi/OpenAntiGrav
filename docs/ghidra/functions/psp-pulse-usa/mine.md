@@ -965,8 +965,10 @@ needed:
 - **The shockwave's own fading alpha**, `+0xf4` easing toward `+0xf8` at
   rate `+0xfc` (`1.0 -> 0.0` at `0.1`/tick, `DAT_08ab1074`), packed
   `alpha*255` into an opaque-white ARGB word (`0xffffff` RGB) and applied
-  through `Image_SetVertexColours` on the shockwave object at `+0xd8` -
-  already a named engine call, not chased further.
+  through `Image_SetVertexColours` on the shockwave object at `+0xd8`.
+  **2026-10-01: it reaches the draw, as the ambient light's alpha** (`0x5d` written before each strip of the same
+  `.vex`'s ship-explosion ring: `0xf4`, `0xb8`; lighting on, vertex colours the material), and is applied
+  (`Drawable::tint([1, 1, 1, alpha])`, `ship-shockwave.md`).
 - **The hemisphere hides at `age > 1.55 s`** (a node-flag clear on `+0xd4`,
   bits `0x2`/`0x4`) and **the whole blast object is torn down at `age > 4.0
   s`** - the shockwave's own flag clear plus the same

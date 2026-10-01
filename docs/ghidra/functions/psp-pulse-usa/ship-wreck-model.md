@@ -115,8 +115,16 @@ reader refused, so they drew the procedural white disc: `FIRE`'s colour table is
 life, so its flame colour is its texture's. A GE dump of the original (`scripts/psp-ge-dump.py`,
 the `0x11e` batches) shows the additive draw binding a 128x64 `CLUT4` texture
 ([pob.md](../../../formats/pob.md), "Four bits per pixel"). With it the first frames match the
-original's. At 160 to 180 frames the explosion's fire is still brighter and longer in ours
-(fire-coloured pixels 2.2x to 2.4x the original's) and its smoke thinner; open.
+original's. At 160 to 180 frames the explosion's fire was brighter and longer in ours (fire-coloured pixels 2.2x
+to 2.4x the original's) and its smoke thinner. **Closed 2026-10-01** (pulse-fx-recheck): the explosion's matrix
+has rows of `0.75`, which scales every root emitter's spawn offset and velocity and not its sizes; ours
+ignored it. With that, one tick off every emitter's run, and the `Bomb_Shockwave.vex` ring the same call
+builds ([ship-shockwave.md](ship-shockwave.md), [particle-system.md](particle-system.md#the-instance-matrix-scales-a-root-emitters-spawn-and-a-run-emits-one-tick-short-2026-10-01)),
+a grid opponent's wreck at the same place agrees to the colour-class counts: fire `1.04, 1.08, 1.23, 1.24, 1.57`
+and smoke `1.08, 0.96, 1.0, 0.87, 0.72` of the original's at 140, 150, 160, 170, 180 frames after the call (the
+earlier tree: `0.97` to `1.36` and `1.15` to `1.9`); the per-emitter pool census (counts, sizes, alpha, RMS radius, rise)
+agrees to 1.0 for the smoke and within `0.8` to `1.2` for the fire and debris. The fire still holds a little
+longer at the tail and ours sits about `25` px to the right of the original's (our grid slot is not the original's).
 
 ## Not read
 

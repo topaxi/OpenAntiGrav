@@ -113,6 +113,19 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
         (below - expect).abs() < 1e-3,
         "{below} below, expected {expect}"
     );
+    // The ring `FUN_0885ecf0` builds goes up with it, at the craft itself and not at the drop.
+    let ring = race
+        .view
+        .bomb_blasts
+        .iter()
+        .flatten()
+        .find(|blast| blast.kind == crate::race::bomb_blast::BlastKind::ShipExplosion)
+        .expect("the ship explosion's shockwave starts with the big blast");
+    assert!(
+        (ring.position - wrecked_at).length() < 1e-3,
+        "{:?}",
+        ring.position
+    );
 }
 
 /// A source with no wreck read throws no big blast either.

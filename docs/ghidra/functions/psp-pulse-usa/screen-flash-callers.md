@@ -78,8 +78,8 @@ are never reached because `t < 1` ends the flash first.
 read live, see [ship-wreck-model.md](ship-wreck-model.md)); then `WO_SHIP_EXPLOSION`
 at the placement below, and `Camera_ArmShake` for the player on both (`(0.3, 0.4,
 camera, 3)` at state 5 and `(0.8, 0.6, camera, 1)` at state 6, left out where the
-race ends on the state 5 edge). **Not built:** the two sounds, and the
-`Bomb_Shockwave.vex` object below.
+race ends on the state 5 edge), and **the `Bomb_Shockwave.vex` ring below, built 2026-10-01**
+([ship-shockwave.md](ship-shockwave.md)). **Not built:** the two sounds.
 
 ### `Ship_SpawnExplosionBig`'s placement, read and measured 2026-10-01
 
@@ -93,8 +93,9 @@ kind 0. Then, in order:
    (`0x38d1b717`) through `FUN_08945284`, which makes the live model vanish;
 2. when `DAT_08b34320` is non-zero (it was `0x8c0f410` live) it builds a
    **`Data\Weapons\Bomb_Shockwave.vex`** object (`FUN_0885ecf0`, a `0xb0`-byte node)
-   from the same matrix: scale `0.1`, a ring that grows. **Read, not drawn by this
-   port**; whether it is seen was not looked for;
+   from the same matrix: scale `0.1`, a ring that grows to `20` times its authored `5.4` radius - read
+   whole and logged live 2026-10-01, and **drawn** on the Bomb's blast pool
+   ([ship-shockwave.md](ship-shockwave.md): `FUN_0885ecf0`, `FUN_0885efc4`);
 3. it moves the matrix's translation `DAT_08ab0de8` times its **own second row** back
    (`4.0`: read in `.data` and live), and
 4. calls `Psys_Spawn_q(DAT_08ab2248, "WO_SHIP_EXPLOSION", 'EXPL', &matrix, 0, 0)`:
@@ -113,8 +114,9 @@ Confidence **90**.
 and two flag words and no severity; the only writer of the one-shot severity
 `DAT_08abf564` (`FUN_08916200` stores it into the node at `+0xb8` and clears it) is
 `Ship_PlayAbsorbFeedback`. So the `1.0` the port passes is the original's neutral
-value, not a guess. Whether the matrix's `0.75` rows also shrink the emitters'
-positions and speeds is not read.
+value, not a guess. **The matrix's `0.75` rows do scale the emitters' spawn offsets and
+velocities** (and not their sizes), read 2026-10-01 off the four explosion pools and the eight node
+instances: [particle-system.md](particle-system.md#the-instance-matrix-scales-a-root-emitters-spawn-and-a-run-emits-one-tick-short-2026-10-01).
 
 ## The Shuriken's ending
 
@@ -203,4 +205,5 @@ the entity's own two positions and resets its node pair, but the weapon around i
   player actually sees: the intro is a fly-through this port does not have.
 - Whether the flash draws over the results screen when a craft's big explosion
   lands after its race has ended.
-- What the `Bomb_Shockwave.vex` object `Ship_SpawnExplosionBig` builds looks like.
+- ~~What the `Bomb_Shockwave.vex` object `Ship_SpawnExplosionBig` builds looks like.~~ Read and drawn
+  2026-10-01, [ship-shockwave.md](ship-shockwave.md); its first-five-frames brightness is not matched.

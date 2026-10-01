@@ -708,6 +708,11 @@ The executable has the matching mechanism, at `ParticleSystem_Update`
   `1 - counter / duration`,
 - and the branch that sets the finished bit is skipped entirely.
 
+**The countdown runs one tick short (2026-10-01, Pulse PSP).** An emitter emits on its first update and then
+only while more than one tick of `duration_ticks` is left, so `duration 10` throws `9` rounds and `duration 1`
+one - read on `WO_SHIP_EXPLOSION`'s four emitters, [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md#the-instance-matrix-scales-a-root-emitters-spawn-and-a-run-emits-one-tick-short-2026-10-01)
+(`EmitterSpec::short_run`).
+
 What is **not** traced is the spec-`0x1`-to-instance-`0x10` assignment: the
 instance initialiser is behind an unresolved import stub, so the two are
 joined by the corpus rather than by a read. That is what holds the

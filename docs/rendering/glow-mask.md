@@ -329,3 +329,15 @@ page's "Transparent batches stamp" section built. The shockwave beside it
 and its other particles do not**: the same EDRAM comparison with a Rocket launched shows
 7 to 33 pixels of alpha differing from the control across the whole frame, the rockets'
 own hulls, so a particle draw leaves the mask alone as `particle-system.md` reads.
+
+### The ship explosion does not stamp either (2026-10-01)
+
+`scripts/psp-wreck-capture.py --edram` (software renderer, a grid opponent put into `Ship_SetState(entity, 4)`,
+one boot) wrote both EDRAM framebuffers at 100, 118, 121 to 124, 126, 130, 140, 150 and 160 frames after the
+call. Against the frame at 100 (no explosion, the wreck smoking), the alpha bytes that differ inside the
+explosion's screen region are `4` (the opaque wreck hull stamping its `g_display+0x1178` over the banner it
+covers), `254` and `255` (that banner, `hub_banner_GLOW`, uncovered or scrolled), two or three pixels of `175`
+(the start laser) and nothing else - no new value, and no blob of the size the fire covers (7,000 to 12,000
+pixels). So `WO_SHIP_EXPLOSION`'s particles, like the Rocket's, leave the mask alone, and the orange band along the
+horizon is the `Bomb_Shockwave.vex` ring ([ship-shockwave.md](../ghidra/functions/psp-pulse-usa/ship-shockwave.md)),
+not a bloom of the fire. One boot, four frames read in detail: seen once.
