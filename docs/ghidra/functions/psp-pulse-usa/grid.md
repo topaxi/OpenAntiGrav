@@ -275,7 +275,8 @@ in a Single Race. The sample's own tangent is within 0.05 degrees of every one
 tracks the sample to 0.05 degrees on eight slots; `FUN_0882663c` itself, a long
 VFPU function, was not read to the end). The other titles keep the node's
 heading: nothing was measured for them. See
-[grid-state.md](../../../physics/grid-state.md).
+[grid-state.md](../../../physics/grid-state.md), which also records an exact walk
+that was tried and reverted, and the second circuit (`01_Track`).
 
 ## Ported, and how close it lands
 

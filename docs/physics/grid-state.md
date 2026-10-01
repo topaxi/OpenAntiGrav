@@ -119,6 +119,30 @@ banked start moves it 0.04 in z, and it slides 0.03 more through the countdown
 under brake and airbrake that ours does not hold. Ours is placed at its rest
 height. Not ported: sub-0.1 and not on the path of anything measured.
 
+**Slots along the track: tried, and reverted.** The grid walk stops at the last
+track sample not exceeding `7 * 19.8`, so each slot is short of its target by up
+to one sample spacing (1.5 units). Against the original that reads as a sawtooth:
+on `01_Track`'s Single Race (`orig-grid-01-single-a.json`) the eight slots are
+`0.97, 0.73, 0.47, 1.72, 1.47, 1.20, 0.95` units behind the original's, slot 1 to 7,
+where the original's own steps are near-uniform (`19.69` to `19.76` along the
+track against the `19.8` the code reads). Interpolating the last segment and
+measuring from the node's own place along the track (not the anchor sample) took
+`01_Track`'s worst slot from 1.72 to 0.52 and `16_Track`'s from 0.70 to 0.52, and
+**made `grid_stagger_ground_truth::metropia_reversed_is_the_originals_grid` worse,
+1.13 to 1.99 units on a circuit the sawtooth happens to flatter**, so it was
+reverted. Two things it did show: the original's slots are *not* on whole samples
+either, and what is left after an exact walk is a `0.07` units per slot bias
+(ours further along the track) plus a `0.4` to `0.5` along-track offset on every
+`16_Track` slot, slot 8 included, which is the authored node itself. Both fit the
+original **re-locating on its own spline after every step** (`grid.md`:
+`Race_ComputeGridLayout` "re-locates after each step"): `p(k+1) = project(p(k) +
+tangent * 19.8)`, a chord that loses a little to the curve each time, onto a spline
+that is not our resampling. That chain is the next thing to try, with these three
+circuits' eight slots as its test, and it needs `FUN_0882663c` and the locate
+function read rather than fitted. Side note from the attempt: the Time Trial's slot
+1 on `16_Track` is 0.014 units from the original along the track as the code
+stands, by luck; the slots either side are 0.6 out.
+
 **The launch boost.** The original's craft accelerates faster than ours once
 GO comes with thrust already held:
 
@@ -147,6 +171,31 @@ against `124.5` on x; speeds `100.5` and `106.6`), the largest term left.
 decide `1.2` against `1.4`, and which of them the reaction time selects was not
 read here. Not implemented: it is its own thread, with the measurement above as
 its starting point.
+
+## The second circuit: `01_Track` (Basilico Black), Time Trial and Single Race
+
+Reached through the dev-unlock byte ([ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)),
+17 downs from Talon's Junction White; identified by its start, `(-721.16, 4.01,
+282.58)`, which is slot 1 of this project's `01_Track` grid. Two Time Trial runs
+(`orig-tt-01-{a,b}.json`) and a Single Race grid (`orig-grid-01-single-a.json`).
+
+| | Original | Ours |
+| --- | --- | --- |
+| Yaw, frames 0 to GO | `90.396` degrees, constant to the third decimal | `90.176`, constant |
+| Yaw at GO, and the first Single Race slot | `-0.0069` of forward `x` | `-0.0031`: 0.22 degrees out |
+| The other seven slots' forward `x` | `-0.0014 ... +0.0002` | within 0.1 degrees |
+| Position at GO | `(-721.163, 4.012, 282.583)` | 0.95 out along the track, the sawtooth above |
+| GO + 120 | `z 400.96`, `106.4` units/s | `z 381.71`, `100.3` |
+
+The gate holds on the second circuit (a banked start with a different heading
+and a node on the corridor's *left*, the branch `grid.md` had only from the
+decompile): yaw constant through the countdown in both. Slot 1's heading is an
+outlier in the original (`-0.0069` against `-0.0014` for slot 2); ours follows
+the track sample, which does not have the kink, and the cause is not known.
+
+The eight Single Race craft hold their heading through the countdown too (read
+at placement, then 2.5 and 3.5 s later on `16_Track`: forward `z` identical to
+four places on all eight), so `on_grid` is right for the opponents as well.
 
 ## Reproducing
 
