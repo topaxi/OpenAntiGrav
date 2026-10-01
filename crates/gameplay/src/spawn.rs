@@ -235,7 +235,14 @@ impl Ship {
         let mass = self.physics.body.mass;
         let inertia = self.physics.body.inertia;
         let shield = self.physics.shield;
+        // **The launch boost is carried across**, like the shield. A respawn does
+        // not replay the window in the original (its timer holds through state 3 and
+        // the multiplier stays 1.0, watched live), and a default `LaunchState` on a
+        // released craft would start a fresh window at `normalMul` after every
+        // respawn. See `oag_physics::launch`.
+        let launch = self.physics.launch;
         self.physics = oag_physics::ShipState::default();
+        self.physics.launch = launch;
         self.physics.body.position = pose.position;
         self.physics.body.orientation = pose.orientation;
         self.physics.body.mass = mass;
@@ -652,6 +659,33 @@ mod tests {
             from_slot.orientation,
             from_sample.orientation
         );
+    }
+}
+
+#[cfg(test)]
+mod launch_tests {
+    use super::*;
+    use oag_physics::launch::{Grade, LaunchState};
+
+    /// A respawn after the window has run does not start another: the grade, the
+    /// latch and the clock survive the reset, and the multiplier stays neutral.
+    #[test]
+    fn a_respawn_does_not_replay_the_launch_window() {
+        let spent = LaunchState {
+            multiplier: LaunchState::NEUTRAL,
+            grade: Grade::Stall,
+            latched: true,
+            ticks: 400,
+        };
+        let mut ship = Ship::default();
+        ship.physics.launch = spent;
+
+        ship.place_at(Pose {
+            position: Vec3::ZERO,
+            orientation: Quat::IDENTITY,
+        });
+
+        assert_eq!(ship.physics.launch, spent);
     }
 }
 
