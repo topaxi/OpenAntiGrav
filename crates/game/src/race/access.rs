@@ -90,6 +90,16 @@ impl Race {
         self.view.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
     }
 
+    /// Whether a held LeachBeam's reticle runs the LeachBeam's own law
+    /// (`FUN_0881e8c8`: spinning arrowheads, no hold timer) rather than the
+    /// Missile's - on for the PSP dialect, which is what authors
+    /// `leachbeam_sight_*` brackets, and left off for Wipeout HD's concentric
+    /// rings, whose own update is a different function. Called once before the
+    /// first tick, after [`Self::set_sight_screen`], which resets the reticle.
+    pub fn set_sight_leach_law(&mut self, on: bool) {
+        self.view.sight.set_leach_law(on);
+    }
+
     /// The lock-on reticle, for whoever draws it.
     ///
     /// Render-only state - see [`RaceView::sight`] - so this returning a borrow
