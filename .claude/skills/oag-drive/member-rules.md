@@ -19,7 +19,9 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 ## Safety on a shared machine
 
 - **Display.** Run `oag-game` headless (`--screenshot`, `--dry-run`,
-  `--trace-out`) whenever you can. Any windowed launch, emulators included,
+  `--trace-out`) whenever you can. The same goes for `oag-view`: a probe flag
+  such as `--draws` without `--screenshot` still opens a window (2026-10-01, on
+  the maintainer's display for two minutes). Any windowed launch, emulators included,
   uses this literal prefix inside your own Xvfb:
   `env -u WAYLAND_DISPLAY WINIT_UNIX_BACKEND=x11 DISPLAY=:9N`.
   `DISPLAY` alone is not enough: `WAYLAND_DISPLAY` is inherited and winit
