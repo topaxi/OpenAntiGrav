@@ -549,6 +549,51 @@ fn global_document(classes: &[&str]) -> String {
     )
 }
 
+/// [`global_document`] with a `<StartBoost>` appended to `<Global>`. Invented
+/// numbers, each distinct so a swapped attribute shows.
+fn global_with_start_boost(element: &str) -> String {
+    global_document(&FOUR).replace("</Global>", &format!("{element}</Global>"))
+}
+
+#[test]
+fn start_boost_reads_its_seven_attributes_into_their_own_fields() {
+    let global = parse_global(&global_with_start_boost(
+        r#"<StartBoost windowStart="1" windowEnd="2" stallEnd="3" overallDuration="4" stallMul="5" normalMul="6" boostMul="7"/>"#,
+    ))
+    .expect("parses")
+    .expect("has a <Global>");
+    assert_eq!(
+        global.start_boost,
+        Some(StartBoost {
+            window_start: 1.0,
+            window_end: 2.0,
+            stall_end: 3.0,
+            overall_duration: 4.0,
+            stall_mul: 5.0,
+            normal_mul: 6.0,
+            boost_mul: 7.0,
+        })
+    );
+}
+
+#[test]
+fn a_global_without_start_boost_has_none_and_is_not_an_error() {
+    let global = parse_global(&global_document(&FOUR))
+        .expect("parses")
+        .expect("has a <Global>");
+    assert_eq!(global.start_boost, None);
+}
+
+#[test]
+fn a_start_boost_missing_an_attribute_is_an_error_not_a_zero() {
+    assert!(
+        parse_global(&global_with_start_boost(
+            r#"<StartBoost windowStart="1" windowEnd="2" stallEnd="3" overallDuration="4" stallMul="5" normalMul="6"/>"#
+        ))
+        .is_err()
+    );
+}
+
 /// `<Special>` as [`global_document`] authors it. All five attributes, so
 /// the fixture is the shape the disc's own file is rather than only the four
 /// [`Special`] reads; `turbo_jump` is authored but not asserted on.

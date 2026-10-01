@@ -608,3 +608,54 @@ fn no_pulse_class_reaches_the_pitch_stand_in() {
         println!("{label}: {checked} classes, all authoring <pitch>");
     }
 }
+
+/// Both Pulse discs author the launch boost's window and its three multipliers,
+/// in the order `Ship_UpdateStartBoost` and `FUN_0882773c` walk them.
+///
+/// Asserted structurally and never printed: the windows must open before they
+/// close and close inside the overall duration, which is the only reading under
+/// which the grade selection in `docs/physics/launch-boost.md` has four live
+/// branches, and every multiplier must be positive. A parse that dropped an
+/// attribute would arrive as a zero and fail the ordering. No value is quoted,
+/// per `docs/architecture/adr/0006-no-copyrighted-content.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_global_file_authors_a_launch_boost_on_every_pulse_disc() {
+    let mut checked = 0;
+    for (image_name, archive) in [
+        ("pulse-psp-usa.chd", PSP_ARCHIVE),
+        ("pulse-psp-eu.chd", PSP_ARCHIVE),
+        ("pulse-ps2-eu.chd", PS2_ARCHIVE),
+    ] {
+        let Some(blob) = global_blob(image_name, archive) else {
+            continue;
+        };
+        let global = handling::global_from_blob(&blob)
+            .unwrap_or_else(|e| panic!("{image_name}: {e}"))
+            .unwrap_or_else(|| panic!("{image_name}: the global file carries no <Global>"));
+        let boost = global
+            .start_boost
+            .unwrap_or_else(|| panic!("{image_name}: no <StartBoost> in <Global>"));
+        assert!(
+            0.0 <= boost.window_start
+                && boost.window_start < boost.window_end
+                && boost.window_end < boost.stall_end
+                && boost.stall_end < boost.overall_duration,
+            "{image_name}: the four times are not in order: {boost:?}"
+        );
+        for (name, mul) in [
+            ("stallMul", boost.stall_mul),
+            ("normalMul", boost.normal_mul),
+            ("boostMul", boost.boost_mul),
+        ] {
+            assert!(mul > 0.0, "{image_name}: {name} is not positive");
+        }
+        checked += 1;
+    }
+    if checked == 0 {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "no Pulse disc image found and OAG_REQUIRE_GAME_DATA is set"
+        );
+    }
+}
