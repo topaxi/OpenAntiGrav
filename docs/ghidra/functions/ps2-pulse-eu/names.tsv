@@ -226,3 +226,6 @@
 0x001117c0	function	strstr	90	ship-skin.md
 0x0010ec30	function	strcat	85	ship-skin.md
 0x00102d28	function	memcpy	90	ship-skin.md
+0x00158568	function	Ship_UpdateCameraRigs	95	camera.md
+0x00150d20	function	Craft_Construct	80	camera.md
+0x0027e8cc	data	g_craft_scale	95	camera.md

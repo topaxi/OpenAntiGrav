@@ -77,6 +77,30 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
 /// `docs/ghidra/functions/psp-pulse-usa/camera.md` recorded as an unexplained
 /// factor of three quarters and this closes.
 ///
+/// # Every racing title scales its external eye by the same `0.75`
+///
+/// The value is not Pulse PSP's alone, so [`oag_physics::hover::TARGET_GLOBAL_SCALE`]
+/// is the right number for every title this crate races. Read statically,
+/// 2026-10-01, from each binary's own rig and craft constructor (nothing but
+/// Pulse PSP and Pulse PS2 were observed running, so the rest are readings, not measurements):
+///
+/// | Title | Where the `0.75` is written | The rig that scales by it | Confidence |
+/// | --- | --- | --- | ---: |
+/// | Pulse PSP | `0x08ab0e1c`, `Craft_Construct`, `0x08841000` | `Ship_UpdateCameraRigs` `0x08845ed0` | 85, and **measured** live (eye `(-11.25, +3.0)`) |
+/// | Pulse PS2 | `0x0027e8cc`, `Craft_Construct` `0x00150d20`, `0x00150f64` | `Ship_UpdateCameraRigs` `0x00158568` | 95, and **measured** live on PCSX2 (eye `(-11.25, +3.0)`) |
+/// | Pure PSP | `Craft_Construct` `0x089261ac`, `0x08926290` | `Ship_UpdateCameraRigs` `0x0892a7d0` | 85 |
+/// | HD / Fury | object `0x008c15e0` `+0x44`, both craft constructors | `Ship_UpdateCameraRigs` `0x000d80e0` | 80 |
+/// | 2048 | `0x8151fdd0`, both craft constructors | `Ship_UpdateCameraRigs` `0x811bd89a` | 78 |
+///
+/// The pages are `docs/ghidra/functions/<binary>/camera.md`. That retires the
+/// hypothesis that HD and 2048, whose authored offsets are a quarter smaller than
+/// Pulse's, run at `1.0`: their authored distance is *also* what the scale shrinks,
+/// so their eye sits 8.3 to 9.6 units back, as it does here.
+///
+/// **One difference is not implemented.** HD's and 2048's constructors write `0.7`
+/// instead of `0.75` when the game mode is `14` (Detonator), and this crate has no
+/// Detonator mode to read it from. The Pulse and Pure scale does not vary by mode.
+///
 /// **`<InternalCamera>` is deliberately *not* scaled** - see
 /// `oag_render::camera::internal`. The original's internal rig reads this global
 /// nowhere, and the cockpit eye was measured at `+3.000` against an authored

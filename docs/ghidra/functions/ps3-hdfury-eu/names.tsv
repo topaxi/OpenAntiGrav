@@ -473,3 +473,6 @@
 0x0017d690	function	BackgroundAnim_ParseScreenSetting	85	menu-backdrop-scene.md
 0x001d35e8	function	ModelItem_RenderScene	65	menu-backdrop-scene.md
 0x003e3e50	function	Post_ScreenBlur	62	menu-backdrop-scene.md
+
+# The chase-camera rig (2026-10-01).
+0x000d80e0	function	Ship_UpdateCameraRigs	80	camera.md

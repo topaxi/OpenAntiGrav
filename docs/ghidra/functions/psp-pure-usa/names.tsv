@@ -125,3 +125,8 @@
 # pure-eu's own: byte-identical past relocated call targets. See
 # ../psp-pure-eu/devpub-reel-hold.md.
 0x0894b678	function	DevPubReel_UpdateFrameHolds	92	../psp-pure-eu/devpub-reel-hold.md
+
+# The chase-camera rig and the craft constructor that writes the 0.75 it scales
+# by (2026-10-01).
+0x089261ac	function	Craft_Construct	80	camera.md
+0x0892a7d0	function	Ship_UpdateCameraRigs	85	camera.md
