@@ -1388,6 +1388,7 @@ a GE dump at fire+31 and +33 in `mineGE31`, `mineGE33`, the pool probes `mineP_r
 - **Not isolated:** the mean red of the burst reads `215` on the original and `194` on ours with green `218`/`212` (ours leans green-cyan, the original
   yellow-white); the original's debris are orange and large where ours are small and brown-grey; ours has no cluster. The flash's colour (kind 8, yellow) and
   duration (`0.4 s`) were not re-read. Confidence: the template-sprite finding **90**; the picture comparison is a description, one boot.
-- Pointer: the Mine pool is `*0x08b3bf88` (count `+0x164`, slots from `+0x44`; `+0x48` the fuse), found by reading the candidates around the Bomb's `0x08b3bf90`.
-  `+0x90` is **not** the position (a live mine read `(566, -18.7, 5.8)` there); a detonation-by-write for the Mine would need the translation's real row first.
+- Pointer: the Mine pool is `*0x08b3bf88` (count `+0x164`, slots from `+0x44`; `+0x48` the fuse), found by reading the candidates around the Bomb's `0x08b3bf90`
+  (a candidate, not confirmed). The position row is **unverified**: a live mine read `(566, -18.7, 5.8)` at `+0x90` with 0.6 s of fuse, which may simply be another
+  craft's mine elsewhere on the track; a detonation-by-write for the Mine needs that settled first.
 

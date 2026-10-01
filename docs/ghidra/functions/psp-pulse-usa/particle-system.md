@@ -1448,8 +1448,9 @@ The explosion's `Glow` hangs on `SHIP_DEBRIS` (128x64, 4 bpp, a grey atlas whose
 64x64), the Plasma's `glow2`, the Quake's `shazzam`, the Shuriken's, the weapon absorb's and the fx-node's `Glow` all differ the
 same way and now draw their own. Confidence **90** (the decompile, the GE dump's texture size and palette and the file agree).
 Picture, native 480x272, same wreck and circuit (`data/scratch/pulse-fx-3/pair_glow.png`, original left, ours right, frames
-122-125 after the call): the wash, its extent, and the hard lower edge now match; mean blue added over the frame `23` on the original
-against `6` before and `~22` after (`diff_blue.png`).
+122-125 after the call): the wash, its extent, and the hard lower edge now match; mean blue added over the frame (frame 124 minus 120/161) `23.5` on the original
+against `6.4` before and `28.1` after (red `136`/`134`, green `127`/`121`; `diff_blue.png`); a contact sheet of all 28 template sprites reads as clean
+glows, rings, star bursts and bangs (`data/scratch/pulse-fx-3/tpl_sheet.png`, none sheared).
 
 **The ring leads the particles by about 2.7 frames, and the call's own frame is read.** `Ship_SpawnExplosionBig` (`0x088407b0`) is called at
 frame `119.09` (`--hits 088407b0`), `ShipShockwave_Update` first runs at `119.16`, and the `Glow` template's first draw (age 0) is at

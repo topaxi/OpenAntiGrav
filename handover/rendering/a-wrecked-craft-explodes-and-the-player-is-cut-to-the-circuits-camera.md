@@ -43,7 +43,7 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   texture header in the **template record** (`+0x890`) and the port took the emitter's. All 28 PSP templates now draw their own
   ([particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md#a-sprite-templates-own-sprite-and-what-the-explosions-first-five-frames-are-2026-10-01-pulse-fx-3)):
   the wash, its extent and its hard edge match at frames 122-125 (`data/scratch/pulse-fx-3/pair_glow.png`). The ring was never 1.5-2x dim in
-  its draw: at equal step count the horizon band reads `185, 158, 110, 73` against `176, 148, 105, 76`; the original's `ShipShockwave_Update`
+  its draw: at equal step count the horizon band reads `185, 158, 110, 73` against `176, 148, 105, 76` (within 7 %); the original's `ShipShockwave_Update`
   steps `(int)(dt / (1/60))` with no remainder, which on PPSSPP skipped 29 of 81 frames (`ship-shockwave.md`). **Still open here:** the mode-2 emitters
   (`SHIP_DEBRIS`, `FIRESPIKES`) spread 15 to 30 % more than the uniform frame scale gives; the fire still
   holds a little at the tail (`1.5x` at 180); our slot is about `25` px from the original's.
@@ -57,8 +57,8 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   `ArcadeRace_UpdateRacing` when the player's destroyed bit is set while the mode state is racing (`shield.md`, "Who ends a single race on
   the destroyed bit"). Injected **after GO** (`--inject-frame 330 --hud`, `hudT`), the flag flips one frame after state 5 begins (`k = 31 -> 32`)
   and the frame at `k = 40` has no HUD; injected **during the countdown** (`--inject-frame 40`, `hudS`, the earlier lane's method) the mode state
-  is not yet racing, so the check waits for GO and the hide comes 316 frames after the call - the "160 frames after state 6". Two boots
-  (confidence 85, with the decompile). Ours ends the race at state 5 and so hides the HUD at the same point; nothing to port. The
+  is not yet racing, so the check waits for GO and the hide comes 316 frames after the call - the "160 frames after state 6". Each case seen
+  once (confidence 85: the decompile plus the after-GO frame). Ours ends the race at state 5 and so hides the HUD at the same point; nothing to port. The
   race that follows is the original's own (it keeps running under the circuit's camera; ours freezes: first Open item).
 - The camera lets go "when the craft is racing again" (chosen); the original's hand-over to
   another craft after ten seconds, and `Camera_RepickNearSubject_q`, are read, not ported.

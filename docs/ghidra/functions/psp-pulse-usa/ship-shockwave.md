@@ -92,7 +92,7 @@ which jitters around `1/59.94 s`: of the 81 frames logged in `shockA`, **52 step
 `0`). So the original's ring reached step `14, 20, 26, 33` at frames `140, 150, 160, 170` where ours, one step per 60 Hz tick, had
 reached `21, 31, 41, 51`: the logged alpha at frame 199 is `0.3569 = 0.98^51`, not `0.98^80`, and `geB`'s `0xb8` (`0.722`) is `0.98^16`
 at 28 frames. At **equal step count** the horizon band `(300..480, 118..138)` reads, in the red channel, `185, 158, 110, 73` on ours
-against `176, 148, 105, 76` on the original (steps `14, 20, 26, 33`): the draw agrees to within 5 %, so nothing in the strips'
+against `176, 148, 105, 76` on the original (steps `14, 20, 26, 33`): the draw agrees to within 7 % (`+5, +7, +5, -4 %`), so nothing in the strips'
 state (additive `SRCALPHA` + `FIX 0xffffff`, `TFUNC 0x100`, alpha and colour tests on, no culling, `TLEVEL` slope mode) needs changing.
 The textures decode identically (the dump's level-0 pixels equal ours for the ring's 64x64 `CLUT4`, error `0.0`), the model's scale
 matches (`35.4` units per scale step on both: the dump's `world` row `72.15` at scale `2.04`), and the colours and alpha ride the same
