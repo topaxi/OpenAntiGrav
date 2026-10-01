@@ -872,7 +872,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
             },
             hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
             pulse_laid_pose: craft_title.name == oag_pulse::TITLE.name,
-            camera_aspect: oag_display::space::camera_authored_aspect(archives.layout.platform),
             grid_frame_from_sample: extents,
             screen_flash: extents,
             absorb_burst,

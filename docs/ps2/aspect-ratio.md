@@ -282,8 +282,7 @@ them was scaled, and both are the disc's own doing rather than a decision here:
 - **The race camera's aspect is `10/7` at `4:3`, read live.** The matrix the race
   renders with has `m11 / m00 = 1.42857` and a vertical field of the authored
   60 degrees; see [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md), "The
-  projection the race renders with". This build now fits a PS2 source's field to
-  that shape. The anamorphic part is **not** reproduced: the original's frame is
+  projection the race renders with". A fit of a PS2 source's field to that shape was built and reverted the same day: the maintainer keeps the PS2 widescreen-only presentation with the PSP-shape fit. The anamorphic part is **not** reproduced: the original's frame is
   `640/448` shown at whatever the display is (the 2D art assumes ~16:9), so at the
   `4:3` option a 16:9 display stretches the world 1.24x wide, and ours presents
   the projection at the viewport's own shape instead.

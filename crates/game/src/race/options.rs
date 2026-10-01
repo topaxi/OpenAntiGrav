@@ -477,10 +477,6 @@ pub struct Setup {
     /// `craft_title.name == oag_pulse::TITLE.name`. See
     /// `weapons::visuals::laid`.
     pub pulse_laid_pose: bool,
-    /// The viewport shape the authored field of view is held at when a window is
-    /// narrower - `oag_display::space::camera_authored_aspect` of the track's
-    /// source. See `RaceView::camera_aspect`.
-    pub camera_aspect: f32,
     /// Whether each grid slot's orientation is the track's own frame at the
     /// slot rather than the authored `Start Position` node's. Pulse off a PSP
     /// disc only, the one grid layout function read and measured against the

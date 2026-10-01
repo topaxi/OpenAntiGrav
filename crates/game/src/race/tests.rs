@@ -166,7 +166,6 @@ fn setup(handling: Handling) -> Setup {
         // Pulse's own mechanism, same reasoning as `shield_palette` above.
         hd_plasma_blast: false,
         pulse_laid_pose: false,
-        camera_aspect: AUTHORED_ASPECT,
         grid_frame_from_sample: false,
         screen_flash: false,
         absorb_burst: None,

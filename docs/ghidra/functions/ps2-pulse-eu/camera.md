@@ -230,7 +230,9 @@ lane's report is not reproduced: this matched-pose pair gives 25.5 % against
 20.5 % of the frame width before the fix** (`0.81`), and `25.5 %` against
 `25.5 %` after, in a 640x448 window with the viewport set to `free`.
 
-Fixed 2026-10-01 for the PS2 source only: `oag_display::space::camera_authored_aspect`
+**Reverted the same day by maintainer decision**: this project presents the PS2 widescreen only and keeps the PSP-shape fit it had before 2026-10-01, so the fix below is not in the code. The measurement stands; reinstating it is reverting the revert.
+
+What was built and reverted, 2026-10-01, for the PS2 source only: `oag_display::space::camera_authored_aspect`
 returns `640/448` for the PS2 and the PSP's `480/272` for everything else, and
 `Race::vertical_fov` fits to it. It changes only a window **narrower than the
 PSP's shape** (`fit_vertical_fov` keeps the authored vertical field at or above

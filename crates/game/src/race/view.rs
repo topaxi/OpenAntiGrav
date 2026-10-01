@@ -110,11 +110,6 @@ pub struct RaceView {
     pub(super) hd_plasma_blast: bool,
     /// See `options::Setup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
-    /// The viewport shape [`Race::vertical_fov`] holds the horizontal field at
-    /// when the window is narrower than it: the PSP's 480/272 everywhere except
-    /// a PS2 source, whose engine builds the projection at `640/448`. See
-    /// `oag_display::space::camera_authored_aspect`.
-    pub(super) camera_aspect: f32,
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
     /// source alone - see `options::Setup::screen_flash`.
     pub(super) screen_flash: Option<oag_render::flash::ScreenFlash>,
