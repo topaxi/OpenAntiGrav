@@ -93,8 +93,12 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   written either; HD's steady-state colour (its own thread); the PS2 shell (its thread).
   Evidence: `shield-pickup.md`'s third-pass section. **The decoder fix also changes**
   every flagged `.vex` texture on Pulse PSP (84 nodes: all shield shells, the mine, bomb,
-  shuriken, cage and mag-effect textures, and the front-end ship models): a Mine/Bomb/FE-ship
-  comparison taken before 2026-10-01 read them scrambled.
+  shuriken, cage and mag-effect textures, and the front-end ship models): a Bomb/FE-ship
+  comparison taken before 2026-10-01 read them scrambled. `Pulse_Bomb.vex`'s three textures
+  (`pulse_bomb`, `mine001_ADD`, `mine_flash_GLOW`) were sheared noise and now decode as a clean
+  hatch plate and a glow flare (`data/scratch/pulse-shield-look/shots/bomb-tex-before-after.png`);
+  `Pulse_Mine.vex` is flagged `0xe4` and did not change. **Re-look at the Bomb against the
+  original**: the "bands" read off its canister on 2026-10-01 were this scramble.
 - *Resolved 2026-10-01 (camera lane)*: the original's craft looked about 1.4 x
   larger because its fresh profile flies `OPT_CLOSE` and ours defaulted to `far`;
   the default is now `close` and a three-tick native comparison agrees. Pass
