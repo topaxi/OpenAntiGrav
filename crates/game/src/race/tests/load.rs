@@ -74,6 +74,32 @@ fn a_hull_variant_override_does_not_reach_zone_mode() {
     );
 }
 
+/// The PSP's shield shell follows the player's hull stem, because
+/// `ShipShield_Construct` formats the `FE_TeamModel` registry value into
+/// `%s\%sshield.vex`; the PS2 build passes the literal `extra` whatever was
+/// picked.
+#[test]
+fn the_psp_shield_shell_follows_the_players_hull_stem_and_the_ps2_one_does_not() {
+    use oag_assets::Platform::{Ps2, Psp};
+    let first = |platform, model| {
+        shield_entry_names(oag_title::race::SHIP_DIR, "Assegai", platform, model)[0].clone()
+    };
+    assert_eq!(first(Psp, None), r"Data\Ships\Assegai\shipshield.vex");
+    assert_eq!(
+        first(Psp, Some("Ship")),
+        r"Data\Ships\Assegai\shipshield.vex"
+    );
+    assert_eq!(
+        first(Psp, Some("extra")),
+        r"Data\Ships\Assegai\extrashield.vex"
+    );
+    assert_eq!(first(Ps2, None), r"Data\Ships\Assegai\extrashield.vex");
+    assert_eq!(
+        first(Ps2, Some("Ship")),
+        r"Data\Ships\Assegai\extrashield.vex"
+    );
+}
+
 /// The PS2 shape, measured: five slots declared and none of them filled.
 #[test]
 fn slots_that_all_failed_to_decode_are_reported_with_the_count() {

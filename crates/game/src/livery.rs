@@ -241,6 +241,11 @@ pub struct LoadContext<'a> {
 /// `oag_title::race::HullVariant`'s doc comment for why there is no unlock
 /// model behind it either.
 ///
+/// The player's `hull_variant` also reaches **every** slot's shield shell, as
+/// `team_model`: the original's `ShipShield_Construct` reads the `FE_TeamModel`
+/// registry value itself, so a Concept player's field all raises `extrashield`.
+/// See [`crate::race::shield_entry_names`].
+///
 /// `skin` is the *other* half of that axis and lands on slot 0 for the same
 /// reason: a `PI_ModelSkin`'s own `.dat`, already resolved to an archive entry
 /// by [`ship_skin::resolve`], repainting the hull this slot just built. **Which
@@ -292,7 +297,7 @@ pub fn load(
             team,
             ctx.race.ships_for(team),
             ctx,
-            if slot == 0 { hull_variant } else { None },
+            (if slot == 0 { hull_variant } else { None }, hull_variant),
             if slot == 0 { skin } else { None },
             report,
         ) {
@@ -330,12 +335,15 @@ pub fn load(
 }
 
 /// One team's hull, nozzle and plume.
+///
+/// `(hull_variant, team_model)`: the hull stem this slot flies, and the
+/// player's own, which names every craft's shield shell.
 fn one(
     archives: &mut oag_assets::Archives,
     team: &str,
     ships: oag_title::race::ShipPaths,
     ctx: &LoadContext,
-    hull_variant: Option<&str>,
+    (hull_variant, team_model): (Option<&str>, Option<&str>),
     skin: Option<&str>,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
@@ -446,7 +454,7 @@ fn one(
             // beside it, under the same stem Pulse uses, for all eight teams and
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
-            shield: shell(archives, team, ships.dir, report),
+            shield: shell(archives, team, ships.dir, team_model, report),
             engine_light,
             cannon_flash,
         });
@@ -479,7 +487,7 @@ fn one(
         engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
 
     let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, report);
-    let shield = shell(archives, team, ships.dir, report);
+    let shield = shell(archives, team, ships.dir, team_model, report);
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by

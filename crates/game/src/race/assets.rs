@@ -586,6 +586,16 @@ pub fn boost_entry_name(
 /// different texture (`pulse_shield_extra_ADD`, not `shipshield.vex`'s
 /// `grid_GLOW` lattice). See [`ships::PS2_SHIELD`].
 ///
+/// **`team_model` is the player's own hull stem, and it reaches every craft's
+/// shell.** `ShipShield_Construct` reads the `FE_TeamModel` registry value
+/// itself - the same value `Ship_LoadModel` builds the player's `%s\%s.vex`
+/// hull from, `extra` for the Concept model - and formats it into `%s\%sshield.vex`
+/// with the *constructed craft's* team directory, so a Concept player raises
+/// `extrashield.vex` on the PSP, and so does every opponent beside them. `None`
+/// (or the baseline `Ship`) is the literal default, `shipshield`. See
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`, "The PSP's shell
+/// follows the Concept model".
+///
 /// **No mode switch**, unlike [`boost_entry_name`]: no `Zoneshield.vex` exists
 /// on either disc, and the original's own format string takes its prefix from a
 /// config key rather than from the game mode. See
@@ -595,14 +605,18 @@ pub fn shield_entry_names(
     ship_dir: &str,
     team: &str,
     platform: oag_assets::Platform,
+    team_model: Option<&str>,
 ) -> [String; 2] {
     let stem = if platform == oag_assets::Platform::Ps2 {
-        ships::PS2_SHIELD
+        ships::PS2_SHIELD.to_string()
     } else {
-        ships::SHIELD
+        match team_model {
+            Some(model) if !model.eq_ignore_ascii_case(ships::HULL) => format!("{model}shield"),
+            _ => ships::SHIELD.to_string(),
+        }
     };
     [
-        ships::entry_name_in(ship_dir, team, stem),
+        ships::entry_name_in(ship_dir, team, &stem),
         oag_pulse::race::SHARED_SHIELD.to_string(),
     ]
 }
