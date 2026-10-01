@@ -73,6 +73,17 @@ def camera_row(dbg):
     return row
 
 
+def camera_nodes(dbg):
+    """Every authored `Camera` node the controller knows: eye (`+0x90`) and aim (`+0xa0`)."""
+    cam = dbg.read_u32(CAMERA_OBJECT)
+    out = []
+    for i in range(dbg.read_u32(cam + 0x1D0)):
+        node = dbg.read_u32(cam + 0x40 + 4 * i)
+        f = struct.unpack("<8f", dbg.read(node + 0x90, 32))
+        out.append({"node": hex(node), "eye": list(f[:3]), "aim": list(f[4:7])})
+    return out
+
+
 def position(dbg, entity):
     craft = dbg.read_u32(entity + 0x94)
     return struct.unpack("<3f", dbg.read(dbg.read_u32(craft + 0x1CC) + 0x30, 12))
@@ -147,6 +158,7 @@ def main():
     ap.add_argument("--shots", default="0,5,10,20,30,36,40,50,60,75,90,105,120,140,160,180")
     ap.add_argument("--spawns", action="store_true", help="log Psys_Spawn_q for 3.3 s instead of photographing")
     ap.add_argument("--place-window", action="store_true")
+    ap.add_argument("--place", help="X,Y,Z: write the craft's body and node position there at the injection stop")
     ap.add_argument("--camera", action="store_true", help="log the camera controller's fields each frame")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -169,6 +181,12 @@ def main():
             if regs(dbg)["a0"] != craft:
                 continue
             if injected is None and frame >= args.inject_frame:
+                if args.camera:
+                    log.append({"nodes": camera_nodes(dbg), "entity_0xc3c": hex(dbg.read_u32(entity + 0xC3C))})
+                if args.place:
+                    where = [float(v) for v in args.place.split(",")]
+                    dbg.write_f32s(dbg.read_u32(craft + 0x1CC) + 0x30, where)
+                    dbg.write_f32s(dbg.read_u32(entity + 0x794) + 0x30, where)
                 inject(dbg, entity, args.state)
                 injected = frame
                 print("Ship_SetState(%d) injected at frame %d" % (args.state, frame), file=sys.stderr)

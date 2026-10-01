@@ -19,6 +19,7 @@ mod camera;
 mod cannon_draw;
 mod countdown;
 mod craft_flash;
+mod destroy_camera;
 mod cue_endings;
 mod cues;
 mod eliminator;
@@ -170,6 +171,7 @@ fn setup(handling: Handling) -> Setup {
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
         wreck_anchors: Vec::new(),
+        destroy_stations: Vec::new(),
         slot_teams: Vec::new(),
         trail_sparks: false,
         spark_anchors: Vec::new(),

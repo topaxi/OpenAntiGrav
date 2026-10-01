@@ -142,17 +142,18 @@ impl Race {
     }
 
     /// `FUN_088407b0`'s `WO_SHIP_EXPLOSION`, when state 5 times out: placed in
-    /// the world at the live model's matrix, `EXPLOSION_DROP` rows below its
-    /// origin, and let go. A source with no wreck read (every title but Pulse)
-    /// throws nothing.
-    pub(super) fn throw_wreck_explosion(&mut self, slot: usize) {
+    /// the world at the wreck's model matrix, `EXPLOSION_DROP` rows below its
+    /// origin, and let go. `model` is the matrix the craft was wrecked with
+    /// (a wreck lies still, so it is the one the original reads 1.5 s on; a
+    /// craft put back on the track in between is not where the blast goes). A
+    /// source with no wreck read (every title but Pulse) throws nothing.
+    pub(super) fn throw_wreck_explosion(&mut self, slot: usize, model: Mat4) {
         if self.view.wreck_fx.anchors.get(slot).is_none() {
             return;
         }
         let Some(effect) = self.view.effects.get(EXPLOSION_EFFECT).cloned() else {
             return;
         };
-        let model = model_matrix_of(&self.sim.world.ships[slot]);
         let at = model.transform_point3(Vec3::new(0.0, -EXPLOSION_DROP, 0.0));
         let up = model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y);
         // Chosen, not measured: scale `1.0`, as for the node effects.

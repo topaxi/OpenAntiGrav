@@ -476,6 +476,7 @@ impl Race {
         // `crate::race::eliminator`.
         self.tick_destroyed_craft();
         self.advance_craft_flashes();
+        self.advance_destroy_camera();
 
         self.sim.world.tick += 1;
 

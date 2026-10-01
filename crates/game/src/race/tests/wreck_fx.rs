@@ -89,12 +89,17 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
         .expect("the hand-laid effect parses");
     race.view.effects.insert(EXPLOSION_EFFECT, effect);
     go_out(&mut race, 3);
+    let wrecked_at = race.sim.world.ships[3].physics.body.position;
+    let up = race.sim.world.ships[3].physics.body.orientation * Vec3::Y;
     let after_the_nodes = race.wreck_fx_started_for_tests();
     assert_eq!(race.wreck_explosion_at_for_tests(), None, "not on the edge");
     for _ in 0..80 {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
     assert_eq!(race.wreck_fx_started_for_tests(), after_the_nodes);
+    // Put back on the track meanwhile, as an Eliminator craft is: the blast
+    // still goes where the wreck lies.
+    race.sim.world.ships[3].physics.body.position += Vec3::new(500.0, 0.0, 0.0);
     for _ in 0..20 {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
@@ -102,9 +107,7 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
         .wreck_explosion_at_for_tests()
         .expect("thrown by 1.5 s after the edge");
     assert_eq!(race.wreck_fx_started_for_tests(), after_the_nodes + 1);
-    let ship = &race.sim.world.ships[3];
-    let up = ship.physics.body.orientation * Vec3::Y;
-    let below = (ship.physics.body.position - at).dot(up);
+    let below = (wrecked_at - at).dot(up);
     let expect = EXPLOSION_DROP * oag_render::exhaust::CRAFT_ROW_SCALE;
     assert!(
         (below - expect).abs() < 1e-3,
@@ -117,6 +120,6 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
 fn a_source_with_no_wreck_throws_no_big_explosion() {
     let mut race = race_with_wreck_locators();
     race.view.wreck_fx = WreckFx::new(Vec::new());
-    race.throw_wreck_explosion(3);
+    race.throw_wreck_explosion(3, Mat4::IDENTITY);
     assert_eq!(race.wreck_explosion_at_for_tests(), None);
 }
