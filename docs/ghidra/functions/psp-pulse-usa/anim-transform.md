@@ -254,6 +254,12 @@ address (`get_function_by_address` returns nothing for it), so it is not
 named - one more instance of the decompiler gaps this binary already has open
 elsewhere, not investigated further here.
 
+**Measured live 2026-10-01** (`psp-weapon-pair.py`, every frame row carries it):
+`g_ingame->0x40` read 49.52 s in the start-line countdown of one run and 90.676 s at GO of
+another, advancing 0.0166-0.0168 per frame - it counts from the session's start, not the
+race's, so the phase of any animated node at a given race tick is not fixed. The laid Bomb
+and Mine play their own `Anim Transform`s off it (`mine.md`, 2026-10-01 second pass).
+
 #### What advances `g_ingame->0x40`
 
 Found: **`InGame_Update`** (`0x08813328`), dispatched through the object's own

@@ -1183,7 +1183,8 @@ frames later on both sides. Difference, named: **laid-position offset**, which i
 hull's own extent"). It is now measured against; the same applies to the Bomb
 (`Weapon_FireBomb` takes the same anchor).
 
-**Bomb, side by side.** The same canister model on both sides (olive hexagonal
+**Bomb, side by side.** *(Both differences below are resolved: see the
+2026-10-01 second pass at the end of this page.)* The same canister model on both sides (olive hexagonal
 body, hex plate on top, yellow bands near the base), laid at the same place
 (ours about 5 units behind the craft centre, the same offset as above) and out of sight within
 three frames. Two differences, neither fixed:
@@ -1219,3 +1220,72 @@ labelled as this engine's choice. **That choice now has a measurement against
 it.** Changing it is a gameplay change (a craft reversing into its own cluster
 takes a blast in the original) and needs the racing gate; it is left for a lane
 that owns it.
+
+## 2026-10-01, second pass: the Bomb's ring is an animated node, and the drop point is the craft's own
+
+Two of the differences the section above named, closed. Same state and method
+(`psp-weapon-pair.py`, Time Trial, Talon's Junction, Venom/Assegai, 106.2 u/s at
+`--go-offset 120`); frames and logs under
+`data/scratch/pulse-weapon-fx/` (not committed).
+
+### The wide flat ring was a node that never moved
+
+`Pulse_Bomb.vex` (`oag-vex --example bomb_nodes_probe`) is one tree under `world`:
+`orbit` (an `Anim Transform`, `0x3c0`) with `orbitShape`, a mesh of 79 triangles - the
+yellow ring - and `bomb` (another `Anim Transform`) with `bombShape`, the 92-triangle
+canister, plus a shadow hull. **Both transforms are keyframed rotations**, 180 frames at
+60 Hz, one turn in three seconds: `orbit` turns about its own `X` (matrix at 0.25 s:
+`[1 0 0; 0 .882 .472; 0 -.472 .882]`), `bomb` about `Y`. The ring lies flat at time zero,
+and **the loaders and `oag-view` drew every laid Mine and Bomb at that time-zero pose**, so
+ours was the ring at rest: wide, flat, 2.5 x the canister.
+
+Turned about `X`, the ring's plane always contains `X`. The bomb is posed square to the
+world with `X` along the heading (`Bomb_Init`, above), so from the chase camera the ring is
+**always edge-on**: it reads as a thin vertical shaft when its plane is upright and as a
+tilted arc between. That is the original's "thin vertical light shaft"; the "two bands at
+the canister's width" are the canister's own yellow texture bands. No particle effect is
+involved (the 2026-10-01 `Psys_Spawn_q` probe stands).
+
+**The clock is the one animation clock.** `AnimTransform_Update` (`0x088fe0a8`) reads
+`g_ingame->0x40` (`anim-transform.md`) and integrates `dt = clock - node->0x80` into the
+node's own time; a node whose `+0x80` starts at zero takes the whole clock on its first
+update, so its time is `clock mod LoopEnd` whenever it runs. The Bomb entities are built
+once at the race's start (`FUN_088634e8` makes 32 of them, flags cleared; `Bomb_Init`
+sets `|= 6`). **Measured:** `g_ingame->0x40` read 90.676 at GO and 92.695 at the fire
+frame of one run, **49.52 s in the countdown of another** - the clock counts from the
+game's own start of the session, so the ring's phase at a launch is not a constant of the
+launch. Two launches of this harness at different clocks show different ring poses (a
+vertical shaft in the first pass's frames, whose clock was not logged, and a tilted arc in
+the second pass's, clock 92.695 = 2.695 s into the loop, ring turned 5.6 rad). Ours, pinned to that clock with `--anim-seconds`, draws the same
+tilted arc at the same frames.
+
+What this engine does now: `Scene::write_weapon_models` writes the Mine's and the Bomb's
+node-animation tables at the race's `tick / 60` like the scenery's
+(`write_node_anims`), so both play their authored `Anim Transform`s. The Mine's one
+animated node (`mine`) plays too; the Mine's `Mine_PoseNode` spin is the matrix handed to
+that node and is unchanged. **The phase is the engine's tick clock, not the original's
+session clock** - which carries an offset this engine has no source for (the same offset the
+scenery already lacks), so an exact phase match is not claimable; the shape, the rate and
+the mechanism are the original's. Pinned by
+`crates/game/tests/bomb_orbit_ground_truth.rs`: two frames at clocks 0 and 0.75 s differ
+at 18,778 pixels outside the control pair's own difference with the write, 2,201 without it.
+
+### The drop point is the craft's own position, measured
+
+`Bomb_Init` (`0x08863188`) takes the drop point in `a1`. Probed on the running original
+(`--probe bomb`): stationary, `a1 = (6.0764699, -50.0664253, -196.0265045)` and the rigid
+body's position (`body+0x30`) on the fire frame is **the same to the last bit**; at
+106.2 u/s `a1 = (124.4720764, -47.9094696, -196.9474182)` and the body position on that
+frame is again identical - not advanced by the velocity. Together with the Mine's five
+stationary `Mine_PoseNode` matrices (above) the law is: **a Mine and a Bomb are laid at
+the craft's own position, no push back along the hull.** Confidence 90 (two states, both
+exact; the Mine's moving-craft case rests on the shared `Weapon_FireBomb` shape and the
+frame series, not a Mine probe at speed).
+
+`oag_gameplay::projectile::mine::drop_point` took the hull's own extent as a chosen
+offset; it now returns the body position. It moves simulation state (a laid charge's
+position, hashed per projectile); no committed golden hash covers a laid charge. The
+`mine_ground_truth` tests that asserted "behind the craft" now assert "at the craft's
+own position". With it a laid Mine is under the hull for its first frames and emerges as
+the craft leaves, as in the original's frames (ours t406 against the original's k5).
+
