@@ -34,20 +34,28 @@ disc.
 
 ## Open
 
-- **No capture of the original PS2 shield has been compared.** The blend is
-  an inference from the plume, not a reading of the shell's own draw. The
-  shell's colour, brightness and whether it is additive or alpha-over are all
-  unchecked against PCSX2. Still true after the 2026-09-25 attempt below - the
-  blocker turned out to be reaching a raised shield at all, not the capture
-  mechanics.
-- **The "not animated" half is explained, not measured.** After the fix, two
-  frames a second apart show the shell, but the camera moves between them, so
-  no pixel diff isolates the breath. A stationary capture (a `--pose`, or a
-  shield fired and the craft held still) would.
-- **One 66-triangle band may draw twice.** `--draws` lists a list-0 cutout
-  batch and an opaque batch with the same triangle count, colour and centre.
-  Added together, that band would read about twice as bright as the body.
-  Whether the two share geometry is unread. Don't drop one to hide it.
+**2026-10-01, a raised PS2 shell captured** (see
+`docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`): the shield object is
+`*(craft+0x958)`, its law is the PSP's at `+0x80`, and **writing what
+`ShipShield_Activate` writes over PINE raises a shell on a savestate** - the
+2026-09-25 blocker is gone. Measured against a bit-identical control: the PS2
+shell **never darkens a pixel** (additive, not alpha-over: the blend inference is
+now a reading, confidence 88), looks like soft cyan ring bands, and **ours looks
+nothing like it** - a crisp hexagon lattice over the whole craft.
+
+- **The lattice against rings gap is the open item.** Candidates, untested:
+  the GS samples a coarser mip level of the tiled 256x256 `PSMT4` lattice, the
+  texture is not the one the original binds, or the texel alpha (128 = 1.0)
+  combines differently with the vertex alpha. A GS dump of the shell's draw
+  (`TEX0`/`TEX1`/`ALPHA`/`TEST`) would read it. The UVs are `u 0.09..7.58`,
+  `v 0.39..6.91` over eleven rings; PSP's are `u 0..0.5` over four rows.
+- **One 66-triangle band may draw twice.** Unread; the PS2 shell has three additive
+  ranges of 124, 141 and 124 triangles in ours.
+- **Colour and brightness against a pixel-matched frame** are not compared: ours
+  was not posed at the savestate's craft.
+- **The "not animated" half** is answered by the captured frames: band brightness
+  and position change between frames. Ours' own PS2 shell animation (the `sin`
+  breath, the scroll) was not diffed against it.
 
 ## Attempted, 2026-09-25: no capture obtained, but the road there is shorter now
 
@@ -111,6 +119,11 @@ actual Weapon Pad on the track:
   `--gate`/`--look-*` sweep without re-deriving them.
 
 ## Next Steps
+
+0. Pose ours at the savestate's craft (`--pose`) and compare, then take a PCSX2 GS
+   dump of the shell's draw. The raising recipe is in
+   `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`; the harness is
+   `scripts/pcsx2-drive.py` with its globals patched for a private datapath.
 
 1. Either retune the `--gate` pursuit plan through Moa Therma's early corners (tighter
    `--deadband`/`--brake-at`, or planning leg by leg rather than start-to-pad in one
