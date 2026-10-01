@@ -202,15 +202,18 @@
 //! after four clean laps, with `lap_ticks` still `Some`. Not tuned around; read
 //! against `race_ground_truth`'s twelve-circuit gate, which stays clean.
 //!
-//! **Regenerated 2026-10-01 for the launch boost** (`docs/physics/launch-boost.md`)
-//! and for the grid state ending one tick before thrust is released: every craft,
-//! the AI included, now gets the thrust multiplier its first-thrust time earns for
-//! the first second (an AI thrusting at GO is graded stall, `1.2x`), so a lone Ace
-//! leaves the line faster and all 48 rows moved by a few ticks either way. Total
-//! contact `12302` to `12547`. **`04_Track` RAPIER `Died` to `CleanLap`** (the row the
-//! grid-state regeneration regressed comes back), **`13_Track` RAPIER stays `Died`
-//! but its `lap_ticks` goes `Some(1896)` to `None`** (no clean lap in the window), and
-//! `13_Track` PHANTOM took more contact (`631` to `791`, `Died` both). Not tuned.
+//! **Regenerated 2026-10-01 for the launch boost** (`docs/physics/launch-boost.md`),
+//! for the grid state ending one tick before thrust is released, and for a respawn
+//! carrying the launch state across (`Ship::place_at`): every craft, the AI included,
+//! now gets the thrust multiplier its first-thrust time earns for the first second (an
+//! AI thrusting at GO is graded stall, `1.2x`), so a lone Ace leaves the line faster
+//! and all 48 rows moved by a few ticks either way. Net against the previous table:
+//! contact `12302` to `12349` over the 48 rows; **`04_Track` RAPIER `Died` to `CleanLap`**
+//! (the row the grid-state regeneration regressed comes back); **`07_Track` FLASH `Died`
+//! to `Eliminated`** (contact `842` to `871`, `lap_ticks` still `Some`: dead at the end
+//! of the window instead of recovered, which is `Eliminated`'s own definition and the
+//! window-artefact shape the grid-state note describes - not traced this time);
+//! `13_Track` PHANTOM `lap_ticks` `None` to `Some(1965)` (`Died` both). Not tuned.
 //!
 //! [`BASELINE`] below was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
@@ -402,19 +405,19 @@ const BASELINE: &[Row] = &[
     Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2223), contact_ticks: 158 },
     Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2281), contact_ticks: 325 },
     Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2641), contact_ticks: 97 },
-    Row { circuit: "07_Track", class: "VENOM", status: Status::Died, lap_ticks: Some(2988), contact_ticks: 596 },
+    Row { circuit: "07_Track", class: "VENOM", status: Status::Died, lap_ticks: Some(2988), contact_ticks: 592 },
     Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2273), contact_ticks: 99 },
     Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2325), contact_ticks: 0 },
     Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2373), contact_ticks: 16 },
     Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2067), contact_ticks: 57 },
-    Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2157), contact_ticks: 107 },
+    Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2157), contact_ticks: 109 },
     Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2108), contact_ticks: 83 },
     Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2717), contact_ticks: 34 },
     Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2429), contact_ticks: 73 },
     Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1978), contact_ticks: 319 },
     Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2046), contact_ticks: 441 },
     Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2443), contact_ticks: 109 },
-    Row { circuit: "07_Track", class: "FLASH", status: Status::Died, lap_ticks: Some(2845), contact_ticks: 861 },
+    Row { circuit: "07_Track", class: "FLASH", status: Status::Eliminated, lap_ticks: Some(2845), contact_ticks: 871 },
     Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2065), contact_ticks: 200 },
     Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2112), contact_ticks: 4 },
     Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2206), contact_ticks: 112 },
@@ -423,22 +426,22 @@ const BASELINE: &[Row] = &[
     Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1872), contact_ticks: 298 },
     Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2486), contact_ticks: 260 },
     Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2143), contact_ticks: 396 },
-    Row { circuit: "01_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1741), contact_ticks: 460 },
-    Row { circuit: "13_Track", class: "RAPIER", status: Status::Died, lap_ticks: None, contact_ticks: 880 },
+    Row { circuit: "01_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1741), contact_ticks: 465 },
+    Row { circuit: "13_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1903), contact_ticks: 888 },
     Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2299), contact_ticks: 158 },
-    Row { circuit: "07_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(2623), contact_ticks: 912 },
+    Row { circuit: "07_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(2623), contact_ticks: 924 },
     Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1951), contact_ticks: 221 },
     Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2032), contact_ticks: 77 },
     Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2103), contact_ticks: 122 },
-    Row { circuit: "10_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1727), contact_ticks: 285 },
+    Row { circuit: "10_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1727), contact_ticks: 283 },
     Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1763), contact_ticks: 236 },
-    Row { circuit: "04_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1766), contact_ticks: 437 },
+    Row { circuit: "04_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1766), contact_ticks: 445 },
     Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2333), contact_ticks: 377 },
-    Row { circuit: "14_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1995), contact_ticks: 539 },
-    Row { circuit: "01_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1646), contact_ticks: 557 },
-    Row { circuit: "13_Track", class: "PHANTOM", status: Status::Died, lap_ticks: None, contact_ticks: 791 },
+    Row { circuit: "14_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1995), contact_ticks: 535 },
+    Row { circuit: "01_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1646), contact_ticks: 565 },
+    Row { circuit: "13_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1965), contact_ticks: 582 },
     Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2257), contact_ticks: 209 },
-    Row { circuit: "07_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(2550), contact_ticks: 969 },
+    Row { circuit: "07_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(2550), contact_ticks: 937 },
 ];
 
 /// Runs one row and asserts it against its frozen [`BASELINE`] entry.
