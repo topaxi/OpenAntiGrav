@@ -92,7 +92,7 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
         });
     loaded.report.push(
         "glow mask: the track, sky, pads, hulls, plumes and shields stamp it as the \
-         original's stencil does"
+         original's stencil does, a blended batch with the glow bits through a second draw"
             .into(),
     );
 }

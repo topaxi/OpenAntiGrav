@@ -1268,3 +1268,74 @@ Deliberately **not** renamed: `FUN_088455ec` (the internal rig's update - it als
 writes the fov shake term, a smoothed look-around offset and a view roll, so
 "update the internal camera rig" describes less than half of it, and the rest was
 not read), and `FUN_08885e84` for the reason its own section gives.
+
+## The default view is `OPT_CLOSE`, measured 2026-10-01
+
+**The question** (the 2026-10-01 weapons lane's open item): at the same state the
+original's craft is about 1.4 times larger on screen than ours. Which term of the
+camera differs - distance, height, look-at, fov, aspect, craft scale, or which block?
+
+**What would have falsified "it is the view block".** If the original's eye
+offset in the craft's own frame were `(-14.25, +3.00)` (the far block at 0.75) and
+the craft still looked larger, the cause would be a projection or scale term. It
+was `(-11.25, +3.00)`.
+
+**Method.** `scripts/psp-camera-pair.py` (new; the camera half of
+`psp-weapon-pair.py`): restart the Time Trial to its countdown, hold `cross`, take
+the first frame the throttle word is non-zero as GO, and at every stop in
+`Weapons_DispatchFire` read the camera node (`*(s7 + 0x3c)` learned from one hit of
+`0x0883c13c`), the body's four rows, `g_camera_fov_degrees`, and photograph the
+window at native 480x272. Talon's Junction White, Time Trial, Venom/Assegai,
+PPSSPP v1.20.4, a **fresh `HOME`** each boot (no save of any title), walked there
+by `psp-drive.py menu` so no profile choice was ever made.
+
+**Measured, two cold boots, GO+120 (speed 106.2):**
+
+| Quantity | Boot 1 | Boot 2 | Reads as |
+| --- | ---: | ---: | --- |
+| eye in the craft's frame (right, up, forward) | `(-0.008, +3.002, -11.250)` | `(-0.008, +3.001, -11.250)` | `<ExternalCameraClose>` `(-15, +4)` x 0.75 |
+| `\|eye - craft\|` | 11.644 | 11.644 | close 11.643, far would be 14.562 |
+| `g_camera_fov_degrees` | 67.936 | 67.936 | `60 + 0.075 * dot(fwd, vel)`, the recovered law |
+| the setting string `Camera_UpdatePlayerView` returns (`v0` at `0x0883c13c`) | `OPT_CLOSE` | not read | |
+
+Held across the whole GO..GO+130 window on boot 1: the offset stays
+`(~0, +3.00, -11.25)` and the distance 11.643-11.647 from a standing start to
+110 units/s, so it is the settled close rig and not a spring transient.
+
+**Conclusion.** The original's fresh profile flies **`OPT_CLOSE`**. Our default was
+`far` - this project's own choice, documented as "not recovered" because nothing had
+read an empty profile - so ours drew the craft with the eye 14.56 instead of 11.64
+units back. Every other term agrees: the eye scale (0.75 on both sides: the test
+`the_external_blocks_carry_the_crafts_global_scale` pins 11.643), the fov (authored
+60 plus the speed term, the same projection), the aspect and the display scale of the
+craft. Confidence **88**: two cold boots agree to three decimals and the picture
+agrees; the *writer* of the default into a fresh profile (a code literal or a
+default parameter of the settings lookup) was not located, which is why it is not
+higher. It is corroborated independently by Wipeout 2048's `Options_Definition.xml`
+(`CameraP1 default="OPT_CLOSE"`, a different title on the same engine vocabulary) and
+by `data/traces/pad0-boost.csv`, whose eye sits 11.64 units from the craft - this page's
+own capture section above already said so while the project's default stayed `far`.
+
+**Side by side, native 480x272, original (left) against ours (right), three ticks**
+(`data/scratch/pulse-camera/side-by-side.png`; GO+60/90/120 against our ticks
+343/373/403, which are matched by the standing-start offset and not by tick count -
+our standing start is about ten ticks slower): with the default changed the craft's
+span on screen agrees at all three, where before it was about 1.4 times narrower
+(far 180 px against close 250 px across the craft, enlarged 3x). Left over and not
+this lane's: the HUD's green chevron and the song ticker, the exhaust plume's
+length and the speed read-out, which differ in the same frames.
+
+**`--camera-view close|far` is not a no-op.** At our tick 403 the two renders differ
+(`ours/close.png` against `ours/far.png`, the eye 11.64 against 14.56 units back) and
+`each_view_frames_the_craft_from_its_own_block` pins that the three views are three
+cameras. The weapons lane's "rendered alike" is not reproduced; the flag is accepted
+only under `--screenshot` (`cli.rs` says why), so a windowed run reads the setting
+instead. What was real is that the *race start* held the far block whatever
+`CameraView::default()` said; both are now the one choice (`chase_block_for`).
+
+**Consequences carried.** `CameraView::default()` is `Close`; a new `settings.toml`
+gets `camera_view = "close"`. **A settings file written by an earlier build already
+says `far`** (the first run wrote the default out) and stays on it: that cannot be
+told from a choice, so it is not migrated. The Wipeout 2048 options picker starts on
+`OPT_CLOSE`, as its own definition declares. A comparison against a capture taken on
+`OPT_FAR` (the `hull-sparks.md` ones) now needs `--camera-view far`.

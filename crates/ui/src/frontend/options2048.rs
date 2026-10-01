@@ -40,16 +40,15 @@
 //! this build has no motion-sensor axis and no pilot-assist difficulty
 //! setting to wire either into.
 //!
-//! **The starting index shown is this build's own default
-//! (`CameraView::default()`, `Far`), not `CameraP1`'s own authored
-//! `default="OPT_CLOSE"`.** Threading the live `Settings` into
+//! **The starting index is `CameraP1`'s own authored `default="OPT_CLOSE"`
+//! (index 0), which is also what [`oag_display::display::CameraView::default`]
+//! now is** - a fresh Pulse profile starts on `OPT_CLOSE` too (measured
+//! 2026-10-01, `camera.md`). Until then this picker started on `OPT_FAR`
+//! because the type behind it did. Threading the live `Settings` into
 //! `Frontend::booting` so the picker could seed itself from the session's
-//! actual value - rather than from either default - needs `boot::assemble`'s
-//! own signature widened, which touches every title's boot path for a value
-//! only this one reads; left as a follow-up. The divergence itself is a real
-//! finding: `oag_display::display::CameraView`'s own doc comment already
-//! says its `Far` default is "a choice and not a reading", and this is the
-//! disc naming the reading directly.
+//! actual value needs `boot::assemble`'s own signature widened, which touches
+//! every title's boot path for a value only this one reads; left as a
+//! follow-up.
 
 use oag_2048::frontend::states as w2048;
 
@@ -60,6 +59,9 @@ use super::*;
 
 /// `CameraP1`'s own three entries, in file order - `OptionsCamera`.
 const CAMERA_ENTRIES: [&str; 3] = ["OPT_CLOSE", "OPT_FAR", "OPT_INT"];
+
+/// `CameraP1`'s authored `default="OPT_CLOSE"`: index 0 of [`CAMERA_ENTRIES`].
+const CAMERA_DEFAULT_INDEX: u8 = 0;
 /// `Pilot Assist`'s own three entries - `OptionsPilot`. Drawn, not wired.
 const PILOT_ENTRIES: [&str; 3] = ["FE_OFF", "FE_NORMAL", "FE_SUPER"];
 /// `Motion Sensor`'s own three entries - `OptionsControls`. Drawn, not wired.
@@ -127,7 +129,7 @@ impl Frontend {
         match current {
             w2048::OPTIONS_CAMERA => {
                 let len = CAMERA_ENTRIES.len() as i32;
-                let index = self.touch.camera_choice.unwrap_or(1) as i32;
+                let index = self.touch.camera_choice.unwrap_or(CAMERA_DEFAULT_INDEX) as i32;
                 let index = (index + step).rem_euclid(len);
                 self.touch.camera_choice = Some(index as u8);
                 self.notes
@@ -210,7 +212,7 @@ impl Frontend {
                     self.draw_touch_list(
                         list,
                         &CAMERA_ENTRIES,
-                        self.touch.camera_choice.unwrap_or(1) as usize,
+                        self.touch.camera_choice.unwrap_or(CAMERA_DEFAULT_INDEX) as usize,
                         cursor,
                         out,
                     );

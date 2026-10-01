@@ -899,12 +899,12 @@ percentage!(BoostFovKick, DEFAULT, "boost field-of-view kick");
 ///
 /// # What is not recovered
 ///
-/// - **Which one a fresh profile starts on.** The original stores the choice as a
-///   string and nothing read what an empty profile holds, so [`Self::default`] is
-///   **this project's choice**: [`Self::ExternalFar`], because it is what every
-///   frame captured under `data/traces/` was taken with and what the game
-///   rendered before this type existed. Marked here rather than dressed up as a
-///   reading, the way [`BoostFovKick`] marks its own invention.
+/// - Which one a fresh profile starts on is **recovered**: [`Self::Close`],
+///   measured 2026-10-01 on two cold PPSSPP boots (eye 11.644 from the craft, the
+///   close block at the 0.75 scale; the setting read `OPT_CLOSE`), and what
+///   Wipeout 2048's own `CameraP1 default="OPT_CLOSE"` declares. `Far` was this
+///   type's default until then and drew the craft 1.4 times too small. See
+///   `camera.md`, "The default view".
 /// - **The spelling.** The original persists `OPT_INT`, `OPT_CLOSE` and
 ///   `OPT_FAR`; [`Self::name`] uses this project's own settings-file vocabulary.
 ///   Anything that ever reads a real profile save has to know the disc's own
@@ -922,11 +922,11 @@ pub enum CameraView {
     /// The cockpit view, `<InternalCamera>`. The only one that hides the
     /// player's own ship.
     Internal,
-    /// The nearer chase view, `<ExternalCameraClose>`.
-    Close,
-    /// The further chase view, `<ExternalCameraFar>`. The default; see the type's
-    /// documentation for why that is a choice and not a reading.
+    /// The nearer chase view, `<ExternalCameraClose>`. **The default**: what a
+    /// fresh profile of the original starts on, see the type's documentation.
     #[default]
+    Close,
+    /// The further chase view, `<ExternalCameraFar>`.
     Far,
 }
 

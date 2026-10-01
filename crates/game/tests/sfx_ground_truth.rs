@@ -743,6 +743,11 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
     let mut race = race::Race::start(loaded.setup);
+    // The pan ratio below is calibrated against the far chase view: the player's own
+    // engine sits at the listener's feet and its share of the energy grows as the
+    // eye nears it. The default became the close view on 2026-10-01 (a fresh Pulse
+    // profile starts on `OPT_CLOSE`), so the view this was written for is named.
+    race.set_camera_view(oag_display::display::CameraView::Far);
     assert!(
         race.ship_count() > 1,
         "the fixture raced alone, so nothing below is testing anything"

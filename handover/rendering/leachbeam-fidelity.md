@@ -42,12 +42,18 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   weapon record `+0x120` above zero, or either craft's `entity+0x8c` not `1`),
   and a finished race (`+0x8c` of `2`/`6`) makes every fire die at once.
 - **Our bloom spreads much further than PPSSPP's around the lit hull.**
-  With bloom off, the hull overlay and the arc are as crisp as the original's.
-  With it on, a white blob covers the nose. The ribbon's own `0x28` stamp is
-  not the cause: zeroing it changes nothing visible. The hull overlay's
-  `0xff` stamp and our composite are the candidates. That is the
-  `hull_overlay`/bloom modules' calibration, not this weapon's, and nothing
-  here was tuned toward the picture.
+  2026-10-01 (`pulse-glow`): the bloom's *arithmetic* is not the cause. A numpy
+  model of the four recovered passes on our own scene reproduces the original's
+  bloom layer at Outpost 7's neon strip to about 6 %, and
+  `crates/render/tests/bloom_gain.rs` pins the real shader to the same maths
+  (`docs/rendering/glow-mask.md`, "The bloom's own arithmetic is right"). On
+  that frame the composite does not spread further than the original's either.
+  **What this leaves for the hull**: the `0xff` stamp of the absorb/LeachBeam
+  overlay (`hull_overlay`) and the mask it leaves around the nose, which needs
+  the original's own EDRAM mask and bloom layer read at an absorb frame on the
+  *same hull and pose* - the same method works (own PPSSPP, software renderer,
+  `trace_shot`-style read of `0x04000000` and `0x04110000`) but the pose has to
+  be a stationary one, and an absorb is not. Not done.
 - ~~**The lock sight stays up on our HUD while the beam is live.**~~ **Closed
   2026-10-01 (`pulse-cull`), and the claim did not reproduce as stated**: the pickup
   is spent on the fire tick and the sight was already gone about `0.47` s later in

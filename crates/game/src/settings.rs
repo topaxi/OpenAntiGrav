@@ -535,9 +535,9 @@ pub struct Graphics {
     /// the original's own behaviour: it sets its profile's dirty flag on every
     /// cycle - see `docs/ghidra/functions/psp-pulse-usa/camera.md`.
     ///
-    /// The order the button cycles is recovered at confidence 88; **which view a
-    /// fresh install starts on is not**, and
-    /// [`oag_display::display::CameraView::default`] documents that choice.
+    /// The order the button cycles is recovered at confidence 88, and a fresh
+    /// install starts on the nearer chase view because a fresh profile of the
+    /// original does - see [`oag_display::display::CameraView::default`].
     #[serde(default = "default_camera_view")]
     pub camera_view: oag_display::display::CameraView,
 }
@@ -549,9 +549,8 @@ fn default_boost_fov_kick() -> oag_display::display::BoostFovKick {
     oag_display::display::BoostFovKick::DEFAULT
 }
 
-/// See [`Graphics::camera_view`]: the further of the two chase views, which is
-/// what the game rendered before the other two existed and what every capture
-/// under `data/traces/` was taken with. A choice, not a reading - see
+/// See [`Graphics::camera_view`]: the nearer chase view, which is what a fresh
+/// profile of the original starts on (measured 2026-10-01) - see
 /// [`oag_display::display::CameraView`].
 fn default_camera_view() -> oag_display::display::CameraView {
     oag_display::display::CameraView::default()

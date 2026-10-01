@@ -127,8 +127,10 @@ plume **does not** write the mask.
 
 What is not reproduced:
 
-- **Transparent batches with the glow bits do not stamp** - see
-  `GlowMask::Stamped`. 20 pixels of the measured frame, the start-line laser.
+- ~~**Transparent batches with the glow bits do not stamp**~~ **Closed
+  2026-10-01** - the frame measured on Talon's Junction had 20 such pixels, but
+  on Outpost 7's grid they are the whole tunnel; see "Transparent batches
+  stamp" below.
 - **The HUD writes alpha into our target**, where the original's mask reads
   `4` under it. The race draws the bloom before it composites the HUD, and a
   crop of the countdown widget shows no halo with the bloom on.
@@ -150,3 +152,123 @@ What is not reproduced:
   `LodGroup_SelectChild` does, which keeps the player's hull on tier 0 at
   every chase distance - "implemented - the switch runs every frame", same
   page. The old setting and its both-tiers view are gone.
+
+## Transparent batches stamp (2026-10-01, Outpost 7)
+
+A PPSSPP running the original, **software renderer** (so EDRAM is the real
+framebuffer; the hardware backend leaves it zero), on Outpost 7's Black start
+grid (`track_reversed.vex`, craft at rest at `(-102.6, -0.90, 330.9)`), with a
+GE dump of the same frame. `0x04000000` is the displayed buffer, alpha being the
+stencil, and `0x04110000` (240 x 136, stride 256) is the bloom's final blurred
+layer. Counts over the 480 x 272 frame:
+
+| Mask value | Pixels | What stamps it |
+| ---: | ---: | --- |
+| `0xfa` | 4,076 | the tunnel's arch lights: `07_Pulse_light_BLEND_GLOW`, **alpha-over batches**, `Gu_BlendFunc` `0x32` (`07`'s own `track.vex` authors these as `pass_mask` `0x1192`) |
+| `0xaf` | 1,469 | the start-line laser: `startline_laser_ADD_GLOW`, an **additive** batch, blend `0xa2` with the colour test on |
+| `0x8b` | 221 | a second additive light batch (`blend 0xa2`) |
+| `0xff` | 265 | the opaque `_GLOW` decals, as before |
+
+The GE state of those blended draws, read off the dump (prims 574 to 601):
+`STENCILTEST` on, `ALWAYS`, **ref = the texture's glow byte**, `STENCILOP` zpass
+`REPLACE`, depth test `GREATER` (the PSP's `Less`) with depth **write off**, the
+alpha test `GREATER 0`, and the blend equation untouched. That is rule 2 above
+holding for a blended batch exactly as for an opaque one - the state list sets
+the stencil from `pass_mask & 0xc0` whatever the blend class - and rule 3
+(a blended batch **without** the bits leaves the mask) is the same dump's other
+half: the transparent-class batches that carry no glow bits - the light shafts,
+`pass_mask` `0x1222`, grid prims 705 to 737 - read `STENCILTEST` off. (The
+chrome-map extra pass and its EQUAL ordinary pass are blended too, with the
+stencil **on** and ref `4`; they are not transparent-class batches, and the
+second re-stamps the base over the first's ref.) Confidence **90**: two
+batch classes, both reads agreeing with the texture bytes `texture_bytes`
+already extracts (`0xfa`, `0xaf`; `col_arrows1_GLOW_ADD`'s `0x8d` is stamped by a draw in the dump that no pixel of this frame shows).
+
+The reason the frame matters: the bloom reads `rgb * alpha`, so a surface that
+does not reach the mask does not glow at all. Before this change ours held `4`
+there and the arches, the laser and the tunnel's rim light drew with no glow.
+
+**How ours stamps it - chosen, not measured.** The original writes the stencil
+inside the blended draw. A blend state cannot write a constant alpha while its
+colour factors read the texel's own, so `oag_render::mesh_render::stamp` builds
+a second pipeline - colour write mask off, alpha only, no blend, the batch's own
+alpha test and the blended pipelines' depth state - and
+`race::Drawable::draw_stamps` submits every visible transparent draw through it
+after their colour. `mesh.wgsl`'s `fs_main_stamp` discards a fragment whose
+vertex glow is `0` (a batch without the bits) or that fails the alpha test. It
+reuses `GpuVertex::glow`, which already carried the byte for transparent
+batches. **The additive class also runs the GE's colour test** (`NOTEQUAL`
+against black; `Gfx_BuildBatchStateList`'s `0x200` branch, and on in every
+additive glow draw of the dump, off in the alpha-over ones), so the additive
+pipeline pair sets `stamp_colour_test` and a black texel stamps nothing. Where
+the GE places that test relative to the fog is unread; ours tests the lit texel
+before the fog. That test took the over-stamped pixels around the laser
+(`0xaf`, original `4`) from 567 to 61 on the frame below.
+
+Measured against the original's own frame at the same pose (`track_reversed.vex`
+at `pose-from`, 480 x 272, the original's mask read out of EDRAM):
+
+| | before | after | original |
+| --- | ---: | ---: | ---: |
+| mask pixels `>= 100`, rows 45 to 195 | 286 | 5,080 | 6,066 |
+| mean abs mask difference, rows 45 to 195 | 17.9 | 8.12 | - |
+| mean abs RGB difference over the original's mask `>= 100` | 65.7 | 43.8 | - |
+| mean abs RGB difference, all of rows 45 to 195 | 19.73 | 17.48 | - |
+
+Per pixel, rows 45 to 195 at that pose: ours is set where the original reads `4` on
+721 pixels (649 of them `0xfa` inside the arches, which animate - ours at ticks 1, 60,
+120, 200, 300 and 400 holds 3,153 to 368 pixels at `0xfa` against the original's 4,076,
+so a fixed tick cannot be compared pixel for pixel) and reads `4` where the original is
+set on 1,707.
+
+**A cross-check on a different circuit**, Talon's Junction's second grid (craft at rest
+at `(-130.05, -49.59, -175.34)`, `track_reversed.vex` - mean abs RGB difference to the
+original 14.6 against 21.5 on `track.vex`, which is how the file was told). Rows 45 to
+195, original / ours / ours without the stamp:
+
+| Mask value | original | ours | without the pass |
+| ---: | ---: | ---: | ---: |
+| `0xaf` (the laser) | 710 | 1,061 | 0 |
+| `0x8b` | 109 | 175 | 0 |
+| `0xff` | 1,860 | 1,676 | - |
+
+Ours is set where the original reads `4` on 388 pixels (244 of them the laser's `0xaf`)
+and reads `4` where the original is set on 119. So the laser is about 1.5 x too wide
+here: the colour test as placed is not the whole of the original's edge. (The
+`0xaf`-on-20-pixels row of the Talon table above was a frame after the laser had
+mostly gone; the laser is animated, so one tick of ours and one of the original agree
+on neither width nor timing.)
+
+`crates/game/tests/glow_stamp_ground_truth.rs` pins it on the disc (arch lights
+at `0xfa` and the laser at `0xaf`, zero of each without the pass); the
+`oag-game` loader report says so.
+
+## The bloom's own arithmetic is right (2026-10-01)
+
+Checked because a bloom that is merely dim reads as a plausible glow. On the
+Outpost 7 White grid (`(-122.4, -0.88, 188.3)`, craft at rest) a numpy model of
+`Bloom_Draw` - 2 x 2 box downsample of `rgb * a`, the 11-tap kernel along y then
+x with each pass clamped to `[0, 1]` like the GE's 8-bit target, a bilinear 2 x
+upscale, `+ 0xaf / 255` of it - run on our scene reproduces the original's
+bloom layer at the neon strip to about 6 % (`0.686 x layer`: model 16 / 11 / 9,
+original 23 / 16 / 10 in red, the one channel that does not saturate there).
+`crates/render/tests/bloom_gain.rs` runs the real shader against the same
+arithmetic on a synthetic strip and agrees to a level or two. **A comparison
+through `result - base` of a saturated pixel reads 0.37 of the truth** - the
+first measurement here did exactly that on green and blue and briefly pointed
+at a missing 2.7 x of gain; red, which stays under 255, is the honest channel.
+
+## The tunnel rim's neon strip (2026-10-01)
+
+The strip on `07_Track` that the original draws at `(134, 246, 248)` and ours
+drew at `(50, 109, 115)` was this: the arch-light and rim batches did not stamp,
+so there was no glow around them. **The strip's brightness also changes with the
+race clock** - measured, not attributed: ours at ticks 1, 150, 300, 450, 600 and
+900 holds 1,736, 510, 1,584, 583, 1,583 and 1,584 pixels with green and blue over 225
+in the strip's box (rows 40 to 135, columns 190 to 290), a period of about 300
+ticks. Which batch or texture animates is **unread**; on the Outpost 7 White
+grid the animated surface was `col_display7_GLOW`'s own texture transform, and
+nothing here shows the rim's is the same one. With the stamp, a bright-phase
+frame of ours has 1,584 such pixels against the original's 1,581; before it had 186 at
+every phase. The original frame sits at a bright phase of its own clock, which is
+why one frame of ours read dull: the missing stamp, and a dim phase.

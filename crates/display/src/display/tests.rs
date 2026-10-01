@@ -259,11 +259,13 @@ fn camera_views_round_trip_and_refuse_nonsense() {
     }
 }
 
-/// The default is a *choice* - see the type's docs - and it is the one that
-/// leaves every existing capture alone, so it is worth pinning.
+/// A fresh profile of the original starts on `OPT_CLOSE`: two cold boots on empty
+/// homes read the camera 11.644 units from the craft, which is
+/// `<ExternalCameraClose>` at the 0.75 craft scale (`Far` is 14.56). A default
+/// of `Far` drew the craft about 1.25 times smaller than the original's.
 #[test]
-fn the_default_camera_view_is_the_far_chase() {
-    assert_eq!(CameraView::default(), CameraView::Far);
+fn the_default_camera_view_is_the_close_chase_a_fresh_profile_starts_on() {
+    assert_eq!(CameraView::default(), CameraView::Close);
 }
 
 /// The cockpit view is the only one that hides the hull. Getting this

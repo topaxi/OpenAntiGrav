@@ -527,6 +527,11 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     use oag_render::exhaust::{self, hd};
     let Some(loaded) = load() else { return };
     let mut race = race::Race::start(loaded.setup);
+    // Calibrated against the far chase view's eye. The default became the close
+    // view on 2026-10-01 (a fresh Pulse profile starts on `OPT_CLOSE`), which sits
+    // three units nearer the craft, and this fixture's numbers depend on the
+    // distance to the eye, so the view it was written for is named here.
+    race.set_camera_view(oag_display::display::CameraView::Far);
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }

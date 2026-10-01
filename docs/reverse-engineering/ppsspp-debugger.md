@@ -1805,3 +1805,15 @@ Four things it learned the slow way:
   `InternalResolution = 1` in the profile keeps the picture native, and
   `iShowStatusFlags = 0` hides the FPS counter that otherwise sits in every frame.
 
+
+### Reading the camera at the same state: `psp-camera-pair.py` (2026-10-01)
+
+`scripts/psp-camera-pair.py` is the same harness with nothing fired: it logs, for
+every frame in `--from-go .. --to-go`, the camera node's eye in the body's own
+frame, `|eye - craft|`, `g_camera_fov_degrees` and the speed, and photographs the
+window at `--shots`. Its first use told which camera block the original flies on a
+fresh profile (`OPT_CLOSE`, eye `(-11.25, +3.0)`): see
+[camera.md](../ghidra/functions/psp-pulse-usa/camera.md#the-default-view-is-opt_close-measured-2026-10-01).
+Start it on a **fresh `HOME`** to read a default and on a copied one to read a
+choice; `psp-drive.py menu` gets a fresh home to a Time Trial unattended (run it
+with `python3`, not `uv run --with websocket-client`, which needs the network).

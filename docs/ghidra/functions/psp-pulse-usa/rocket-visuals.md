@@ -707,9 +707,11 @@ units ahead at 1.7 x the speed) but that is **not tested**: it needs the gamepla
 rows changed first. Chosen, not measured: nothing here.
 
 Two things in the frames that are not this lane's: the original's craft is
-about 1.4 x larger on screen than ours at the same moment (a camera framing
-difference, not investigated; `--camera-view close` and `far` rendered alike in one
-check, which may also mean the flag did not take effect),
+about 1.4 x larger on screen than ours at the same moment (**resolved
+2026-10-01**: the original's fresh profile flies `OPT_CLOSE` and ours defaulted to
+`far`; the default is now `close` and the sizes agree, see
+[camera.md](camera.md#the-default-view-is-opt_close-measured-2026-10-01); the two
+views do render differently, the flag does take effect),
 and the held-weapon icon differs (the original's Time Trial shows its pad
 indicator; ours shows the weapon, because `--give` refills the slot).
 
