@@ -59,7 +59,6 @@ impl Race {
             start_boost,
             pose_override,
             camera_override,
-            spectator_cameras,
             hd_trail,
             shield_palette,
             hd_plasma_blast,
@@ -454,10 +453,10 @@ impl Race {
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),
                 camera_override,
-                finish_camera: (!spectator_cameras.is_empty()).then(|| {
+                finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(
-                        spectator_cameras,
-                        super::finish_camera::spectator_smoothing(lap_class),
+                        destroy_stations.clone(),
+                        destroy_focus_rate,
                         super::finish_camera::SPECTATOR_SEED,
                     )
                 }),

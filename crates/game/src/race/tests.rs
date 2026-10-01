@@ -264,7 +264,6 @@ fn setup(handling: Handling) -> Setup {
         // capture aids with nothing to say here.
         pose_override: None,
         camera_override: None,
-        spectator_cameras: Vec::new(),
         // The identity, so every assertion below is about the force law and
         // not about a scale. This is also what a race gets when the
         // engine-wide file is unreadable.

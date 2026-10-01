@@ -1,7 +1,7 @@
 use super::*;
 
-fn node(aim_x: f32) -> SpectatorNode {
-    SpectatorNode {
+fn node(aim_x: f32) -> Station {
+    Station {
         eye: Vec3::new(aim_x, 5.0, 40.0),
         aim: Vec3::new(aim_x, 0.0, 0.0),
     }
@@ -168,10 +168,10 @@ fn the_craft_relative_modes_leave_the_chase_camera() {
 fn the_field_of_view_frames_the_view_width_at_the_distance() {
     // 50 units across at 25 units away is a quarter turn, 90 degrees.
     let eye = Vec3::new(0.0, 0.0, 25.0);
-    let fov = field_of_view(50.0, eye, Vec3::ZERO);
+    let fov = destroy::framing_fov_degrees(50.0, eye.distance(Vec3::ZERO));
     assert!((fov - 90.0).abs() < 1e-3, "{fov}");
     // Twice as far is narrower.
-    assert!(field_of_view(50.0, eye * 2.0, Vec3::ZERO) < fov);
+    assert!(destroy::framing_fov_degrees(50.0, (eye * 2.0).distance(Vec3::ZERO)) < fov);
 }
 
 #[test]
@@ -183,7 +183,7 @@ fn the_fov_eases_to_its_target_and_the_camera_looks_at_the_subject() {
         pose = camera.step(since, &field, 0).expect("a pose");
     }
     let node = camera.nodes[camera.node.expect("a node")];
-    let target = field_of_view(camera.width, node.eye, Vec3::ZERO);
+    let target = destroy::framing_fov_degrees(camera.width, node.eye.distance(Vec3::ZERO));
     let fov = pose.fov_deg.expect("a fov");
     assert!((fov - target).abs() < 0.05, "{fov} against {target}");
     // The camera's -Z points from the eye toward the subject, to the squash of its height.

@@ -29,7 +29,7 @@
 
 use super::*;
 
-use oag_core::math::Mat3;
+use oag_render::camera::destroy::{self, Destroy, Station};
 
 /// Frames after the finishing frame on which the director starts.
 ///
@@ -43,12 +43,9 @@ pub const SUBJECT_PERIOD_TICKS: u32 = 600;
 /// `3600` squared in `FUN_08880168`).
 pub const NODE_RADIUS: f32 = 60.0;
 
-/// The fov's ease toward its target each frame (`0x3d75c28f`, `cam+0x260`).
-const FOV_RATE: f32 = 0.06;
-
 /// The view width the constructor starts the camera object with (`0x42700000`), kept until a
 /// cut calls `Camera_SetMode` with a node mode.
-const INITIAL_WIDTH: f32 = 60.0;
+const INITIAL_WIDTH: f32 = destroy::START_FRAME_SIZE;
 
 /// What a mode roll can land on, with the original's thresholds on `rand() % 100`.
 const MODE_ROLLS: [(u32, ViewMode); 4] = [
@@ -89,42 +86,8 @@ impl ViewMode {
     }
 }
 
-/// The director's own random stream: not the simulation's, and not the shake's.
+/// The director's own random stream: not the simulation's, the shake's or the destroy camera's.
 pub const SPECTATOR_SEED: u64 = 0x0f1a_15c0;
-
-/// `cam+0x264` by speed class, set in the camera object's constructor off the race's class
-/// index: `0x3ecccccd`, `0x3f000000`, `0x3f19999a` and `0x3f19999a`.
-#[must_use]
-pub fn spectator_smoothing(class: oag_race::SpeedClass) -> f32 {
-    match class {
-        oag_race::SpeedClass::Venom => 0.4,
-        oag_race::SpeedClass::Flash => 0.5,
-        oag_race::SpeedClass::Rapier | oag_race::SpeedClass::Phantom => 0.6,
-    }
-}
-
-/// The circuit's `Camera` nodes out of its `track.vex`, in file order - the order the
-/// original's own list holds them in, checked node for node on `16_Track`.
-#[must_use]
-pub fn spectator_nodes(track_blob: &[u8]) -> Vec<SpectatorNode> {
-    oag_vex::camera::cameras(track_blob)
-        .iter()
-        .map(|camera| SpectatorNode {
-            eye: Vec3::from_array(camera.position()),
-            aim: Vec3::from_array(camera.aim),
-        })
-        .collect()
-}
-
-/// One authored `Camera` node of the circuit.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SpectatorNode {
-    /// Where the camera sits (`node+0x90`): the node's world translation.
-    pub eye: Vec3,
-    /// The aim point the engine picks nodes by (`node+0xa0`): the payload's three floats at
-    /// `+0x10`.
-    pub aim: Vec3,
-}
 
 /// A craft the director can follow: its slot and where it is.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -138,7 +101,7 @@ pub struct Subject {
 /// The director's state. View-side: nothing here reaches the simulation or its hash.
 #[derive(Debug, Clone)]
 pub struct FinishCamera {
-    nodes: Vec<SpectatorNode>,
+    nodes: Vec<Station>,
     /// `cam+0x264`: how fast the aim point follows the subject, by speed class.
     smoothing: f32,
     rng: Rng,
@@ -160,7 +123,7 @@ impl FinishCamera {
     /// A director over `nodes`, flying with `smoothing` (`0.4 / 0.5 / 0.6 / 0.6` for Venom
     /// through Phantom) and its own stream from `seed`.
     #[must_use]
-    pub fn new(nodes: Vec<SpectatorNode>, smoothing: f32, seed: u64) -> Self {
+    pub fn new(nodes: Vec<Station>, smoothing: f32, seed: u64) -> Self {
         Self {
             nodes,
             smoothing,
@@ -278,18 +241,9 @@ impl FinishCamera {
         self.subject = subject;
     }
 
-    /// `FUN_0887fedc`: the node whose aim point is nearest `position`.
+    /// `Camera_PickStation`: the node whose aim point is nearest `position`.
     fn nearest_node(&self, position: Vec3) -> Option<usize> {
-        let mut best = None;
-        let mut best_distance = f32::MAX;
-        for (index, node) in self.nodes.iter().enumerate() {
-            let distance = (position - node.aim).length_squared();
-            if distance < best_distance {
-                best_distance = distance;
-                best = Some(index);
-            }
-        }
-        best
+        destroy::nearest_station(&self.nodes, position)
     }
 
     /// `FUN_08880168`: stay while the subject is within [`NODE_RADIUS`] of the node's aim
@@ -328,10 +282,12 @@ impl FinishCamera {
         let Some(node) = self.node else {
             return;
         };
-        let target = field_of_view(self.width, self.nodes[node].eye, position);
+        let reach = self.nodes[node].eye.distance(position).max(f32::EPSILON);
+        let target = destroy::framing_fov_degrees(self.width, reach);
         // `Psys_RandFloatRange(-10, 20)`, and never below 3 degrees.
-        let start = target + (-10.0 + 30.0 * self.rng.next_f32());
-        self.fov = start.max(3.0);
+        let (low, high) = destroy::START_FOV_SPREAD;
+        let start = target + low + (high - low) * self.rng.next_f32();
+        self.fov = start.max(destroy::START_FOV_FLOOR);
         self.smoothed = position;
     }
 
@@ -347,26 +303,29 @@ impl FinishCamera {
         }
     }
 
-    /// The node cameras' own update (cases `5`, `6`, `7` of `FUN_08880c04`): the aim point
-    /// follows the subject, the fov eases to its target, and the eye is the node.
+    /// The node cameras' own update (cases `5`, `6`, `7` of `Camera_UpdateSpectatorView`): the
+    /// aim point follows the subject, the fov eases to its target, and the eye is the node. The
+    /// pose is the destroy camera's own ([`Destroy::to_world`]), which is this arm's body.
     fn pose(&mut self, subject: Vec3) -> Option<CameraOverride> {
         if !self.mode.is_node_camera() {
             return None;
         }
-        let node = self.nodes[self.node?];
-        let target_fov = field_of_view(self.width, node.eye, subject);
+        let eye = self.nodes[self.node?].eye;
+        let reach = eye.distance(subject).max(f32::EPSILON);
+        let target_fov = destroy::framing_fov_degrees(self.width, reach);
         self.smoothed += (subject - self.smoothed) * self.smoothing;
-        self.fov += (target_fov - self.fov) * FOV_RATE;
-        // The look vector runs from the aim point to the eye, its height squashed so a wide
-        // zoom keeps the horizon: `y *= max(1 - fov * 0.008, 0.4)`.
-        let mut back = node.eye - self.smoothed;
-        back.y *= (1.0 - self.fov * 0.008).max(0.4);
-        let back = back.try_normalize()?;
-        let right = Vec3::Y.cross(back).try_normalize()?;
-        let up = back.cross(right);
+        self.fov += (target_fov - self.fov) * destroy::FOV_RATE;
+        let pose = Destroy {
+            eye,
+            focus: self.smoothed,
+            focus_target: self.smoothed,
+            fov: self.fov,
+            focus_rate: self.smoothing,
+        };
+        let (_, orientation, _) = pose.to_world().to_scale_rotation_translation();
         Some(CameraOverride {
-            eye: node.eye,
-            orientation: Quat::from_mat3(&Mat3::from_cols(right, up, back)),
+            eye,
+            orientation,
             fov_deg: Some(self.fov),
         })
     }
@@ -376,14 +335,6 @@ fn position_of(live: &[Subject], slot: usize) -> Vec3 {
     live.iter()
         .find(|s| s.slot == slot)
         .map_or(Vec3::ZERO, |s| s.position)
-}
-
-/// `FUN_08880984`: the vertical field of view, in degrees, that frames `width` units at the
-/// distance from the node's eye to the subject; `65` with no node.
-#[must_use]
-pub fn field_of_view(width: f32, eye: Vec3, subject: Vec3) -> f32 {
-    let distance = (eye - subject).length().max(1e-3);
-    (width * 0.5 / distance).atan() * 2.0 * 180.0 / std::f32::consts::PI
 }
 
 impl Race {

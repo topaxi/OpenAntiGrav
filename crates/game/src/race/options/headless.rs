@@ -122,7 +122,6 @@ impl Setup {
             weapon_pad_refresh: 0.0,
             pose_override: None,
             camera_override: None,
-            spectator_cameras: Vec::new(),
         }
     }
 }

@@ -165,16 +165,19 @@ fn the_circuits_camera_nodes_are_the_ones_the_original_holds() {
     let blob = archives
         .read_name(r"Data\Environments\16_Track\track.vex")
         .expect("the circuit's track.vex");
-    let nodes = race::finish_camera::spectator_nodes(&blob);
+    let nodes = oag_vex::camera::cameras(&blob);
     assert_eq!(nodes.len(), ORIGINAL_NODES_16_TRACK.len());
     for (index, (node, (eye, aim))) in nodes.iter().zip(ORIGINAL_NODES_16_TRACK).enumerate() {
+        let dist = |a: [f32; 3], b: [f32; 3]| {
+            ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+        };
         assert!(
-            (node.eye - oag_core::math::Vec3::from_array(eye)).length() < 0.1,
+            dist(node.position(), eye) < 0.1,
             "node {index}: eye {:?} against {eye:?}",
-            node.eye
+            node.position()
         );
         assert!(
-            (node.aim - oag_core::math::Vec3::from_array(aim)).length() < 0.1,
+            dist(node.aim, aim) < 0.1,
             "node {index}: aim {:?} against {aim:?}",
             node.aim
         );
@@ -191,12 +194,15 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
         .standing
         .finish_tick
         .expect("finished");
-    let nodes = race::finish_camera::spectator_nodes(
+    let nodes: Vec<oag_core::math::Vec3> = oag_vex::camera::cameras(
         &oag_pulse::open(&image().expect("image").display().to_string())
             .expect("mounting the disc")
             .read_name(r"Data\Environments\16_Track\track.vex")
             .expect("track.vex"),
-    );
+    )
+    .iter()
+    .map(|camera| oag_core::math::Vec3::from_array(camera.position()))
+    .collect();
     let mut cuts = 0;
     let mut last_eye = None;
     for since in 1..=1500_u64 {
@@ -204,13 +210,13 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
         let eye = race.camera_position();
         if since < race::finish_camera::START_TICKS {
             assert!(
-                nodes.iter().all(|node| (node.eye - eye).length() > 1.0),
+                nodes.iter().all(|node| (*node - eye).length() > 1.0),
                 "the camera was already on a node at frame {since}"
             );
         } else if let Some(mode) = race.spectator_mode() {
             if mode.is_node_camera() {
                 assert!(
-                    nodes.iter().any(|node| (node.eye - eye).length() < 0.01),
+                    nodes.iter().any(|node| (*node - eye).length() < 0.01),
                     "frame {since}: a node camera is not at a node: {eye:?}"
                 );
             }

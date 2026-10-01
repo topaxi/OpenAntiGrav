@@ -54,17 +54,18 @@ corrected is that nothing in these modes reaches it.
 The global camera object (`0x08b32c64`, constructed by `FUN_0887f9bc`) has a **spectator director** the
 race-end flow drives. Static reading, with the timing checked live.
 
+The functions below are named on [`camera.md`](camera.md#the-destroy-camera-mode-5-read-and-measured-2026-10-01)
+(read independently by the destroy-camera lane the same day, from the same code): `Camera_UpdateSpectator`
+`0x0887fd3c`, `Camera_UpdateSpectatorView` `0x08880c04`, `Camera_SetSubject` `0x0888058c`, `Camera_PickStation`
+`0x0887fedc`, `Camera_FramingFov` `0x08880984`, `Camera_RepickNearSubject` `0x08880168`. This page adds two:
+
 | Address | Name | Confidence | What it does |
 | --- | --- | --- | --- |
-| `0x0887fd3c` | `Camera_UpdateSpectator` | 80 | the per-frame director (below) |
 | `0x08880a58` | `Camera_PickSubject` | 80 | starts from the player (`manager+0x2c0`), then while that equals the previous subject (`+0x1e4`) and more than one craft is live takes a random live craft (`rand() % count`) |
-| `0x08880b38` | `Camera_PickRandomMode` | 75 | `Psys_RandIntRange(0, 100)`: `< 26` mode `3`, `< 51` mode `2`, `< 76` mode `6`, else mode `7` |
-| `0x08880724` | `Camera_SetMode` | (already named) | `+0x1dc = mode`; sets the view width `+0x268`: mode `5` -> `35.0`, `6` -> `17.0`, `7` -> `50.0` |
-| `0x0887fedc` | `FUN_0887fedc` | not renamed | picks the nearest authored camera node (`+0x40` array, `+0x1d0` of them, position at `node+0xa0`) to a point, subject to a height-plane test |
-| `0x08880168` | `FUN_08880168` | not renamed | if the current node is `>= 60` units from the point (`3600` squared), takes a **random** node within 60 units that is not the current one and returns it, else returns 0 |
-| `0x0888058c` | `FUN_0888058c` | not renamed | sets a subject (`+0x1e0`), takes the subject's own node `entity+0xc3c` if it has one, otherwise the nearest node; mode `7` |
-| `0x08880984` | `FUN_08880984` | not renamed | the field of view in degrees that frames `+0x268` units at the node's distance: `2 atan(width / 2 / distance) * 180 / pi` |
-| `0x08880c04` | `FUN_08880c04` | not renamed | the camera's render update; one large `switch` on `+0x1dc`. Cases `5`, `6` and `7` share one body (below) |
+| `0x08880b38` | `Camera_PickRandomMode` | 75 | `Psys_RandIntRange(0, 100)`: `< 26` mode `3`, `< 51` mode `2`, `< 76` mode `6`, else mode `7`; called when `Camera_UpdateSpectator` takes a new node |
+
+`Camera_SetMode` (`0x08880724`) stores the view width `+0x268`: mode `5` -> `35.0`, `6` -> `17.0`, `7` -> `50.0`; the
+constructor leaves `60.0`. `Camera_PickStation` and `Camera_RepickNearSubject` pick by the node's **aim point**.
 
 `Camera_UpdateSpectator(dt)`, every frame: `+0x3c += dt`; past `10.0` s it resets the timer, clears the subject (unless
 `+0x274` is set) and `+0x1e8 = -1`. It re-picks a cleared subject, then: with no node, takes the nearest; with a node,
@@ -89,7 +90,8 @@ view      = look_at(look normalised, up = (0, 1, 0))      // FUN_0897019c
 
 `rate` is `0.4 / 0.5 / 0.6 / 0.6` for speed class `0..3` (the constructor sets `0.3` by default), the
 fov rate `0.06` (`0x3d75c28f`). Mode `5` is the death camera (`Ship_SetState` state 4 calls `Camera_SetMode(cam, 5)`), so
-**the destroy camera and this one are the same code with a different view width**.
+**the destroy camera and this one are the same code with a different view width**: the port shares it
+(`oag_render::camera::destroy`: the station pick, the framing field, the pose).
 
 **The node list was read live** (`16_Track`, forward track, PPSSPP): ten nodes at `cam+0x40`, each with a unit vector at `node+0x80` (the camera's back axis), the **eye at `node+0x90`** and an **aim point at `node+0xa0`**; the eye is the track `.vex` node's world translation and the aim is the three floats at `+0x10` of its `Camera` payload, all ten matching to 0.1 unit and in file order. The director picks nodes by the aim point and sits at the eye. Ported as `oag_game::race::finish_camera`.
 
@@ -98,8 +100,8 @@ what drives `+0x274`, and the trigger that makes `Race End Photo` call `FUN_0888
 
 ## Names
 
-`Craft_SetAutopilotBlend`, `Camera_UpdateSpectator`, `Camera_PickSubject` and `Camera_PickRandomMode` are in
+`Craft_SetAutopilotBlend`, `Camera_PickSubject` and `Camera_PickRandomMode` are in
 [`names.tsv`](names.tsv). Confidence: the setter is a one-store function whose effect was watched live (a write
-watchpoint on `craft+0x1d4` caught it from the two call sites above); the three camera names rest on the decompile and
+watchpoint on `craft+0x1d4` caught it from the two call sites above); the two camera names rest on the decompile and
 on the timing the captures reproduce (the `10.0` s re-pick to the frame, the `F+61` start, the mode set), not on a
 breakpoint inside them.
