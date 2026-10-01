@@ -62,6 +62,7 @@ pub(crate) mod engine_light;
 mod flare;
 mod shield;
 pub(crate) mod ship_skin;
+mod wreck;
 
 pub(crate) use shield::cockpit_shield;
 use shield::shell;
@@ -120,6 +121,10 @@ pub struct Livery {
     /// drawn over it every frame; see [`oag_render::shine`]. `None` wherever
     /// it is not built.
     pub shine: Option<Model>,
+    /// What the craft becomes once it has blown up, `shipwreck.vex` - see
+    /// [`wreck`]. `None` wherever the source ships none or the title's wreck is
+    /// not measured. **No extra pass**: the wreck's mesh words carry no `0x2000`.
+    pub wreck: Option<Model>,
     /// HD's `AbsorbEffect` shell - see [`absorb::shell`]. `None` elsewhere.
     pub absorb_shell: Option<Model>,
     /// The plume's own authored texture-transform animation.
@@ -209,6 +214,10 @@ pub struct LoadContext<'a> {
     /// Whether to build the hull's extra pass - Pulse's alone, and only while
     /// `oag_render::shine::DRAWN` says so. See [`oag_render::shine`].
     pub hull_shine: bool,
+    /// Whether to load each team's `shipwreck.vex` - Pulse on a PSP disc alone,
+    /// the one source its swap trigger and its flags were read and captured on.
+    /// See [`wreck`].
+    pub hull_wreck: bool,
     /// Whether to load HD's absorb shell. See [`absorb::shell`].
     pub absorb_shell: bool,
 }
@@ -260,6 +269,7 @@ pub fn load(
                 absorb_overlay: source.absorb_overlay.clone(),
                 leach_overlay: source.leach_overlay.clone(),
                 shine: source.shine.clone(),
+                wreck: source.wreck.clone(),
                 absorb_shell: source.absorb_shell.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
@@ -303,6 +313,7 @@ pub fn load(
                     absorb_overlay: player.absorb_overlay.clone(),
                     leach_overlay: player.leach_overlay.clone(),
                     shine: player.shine.clone(),
+                    wreck: player.wreck.clone(),
                     absorb_shell: player.absorb_shell.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
@@ -383,6 +394,7 @@ fn one(
                     absorb_overlay: None,
                     leach_overlay: None,
                     shine: None,
+                    wreck: None,
                     absorb_shell: None,
                     boost: None,
                     boost_uv: None,
@@ -422,6 +434,7 @@ fn one(
             absorb_overlay: None,
             leach_overlay: None,
             shine: None,
+            wreck: None,
             absorb_shell: absorb::shell(archives, team, ships.dir, ctx.absorb_shell, report),
             hull,
             boost: lit.boost,
@@ -471,6 +484,11 @@ fn one(
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
     let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
+    let wreck = if ctx.hull_wreck {
+        wreck::load(archives, team, ships.dir, ctx.mode, report)
+    } else {
+        None
+    };
     let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
         .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
     let shine = if ctx.hull_shine {
@@ -495,6 +513,7 @@ fn one(
         absorb_overlay,
         leach_overlay,
         shine,
+        wreck,
         absorb_shell: None,
         boost,
         boost_uv,

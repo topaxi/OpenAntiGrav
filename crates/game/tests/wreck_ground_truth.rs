@@ -1,0 +1,177 @@
+//! A Pulse craft's wreck on a real disc image.
+//!
+//! **`#[ignore]`d and never run in CI.** It needs game content, which this
+//! project does not ship. See
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//!
+//! ```sh
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test wreck_ground_truth --run-ignored all
+//! ```
+//!
+//! # What only real data can say here
+//!
+//! `Ship_SetState`'s case 5 makes `shipwreck.vex` the live model
+//! (`docs/ghidra/functions/psp-pulse-usa/ship-wreck-model.md`). This proves the
+//! loader finds every team's wreck under the name the original assembles, that
+//! none of the eight authors the `0x2000` flag a hull's meshes carry (so the
+//! wreck has no extra pass), and that the swap reaches the picture: the frame
+//! of a wrecked opponent differs with and without it, and does not while the
+//! craft is still in its explosion (state 4 keeps the hull).
+
+use oag_game::livery::{self, LoadContext};
+use oag_race::Mode;
+
+/// Every Pulse PSP team, by the directory the disc keeps it in.
+const TEAMS: [&str; 8] = [
+    "Assegai",
+    "Qirex",
+    "Feisar",
+    "AG_Systems",
+    "EGX",
+    "Goteki",
+    "Triakis",
+    "Piranha",
+];
+
+fn load(wreck: bool, mode: Mode) -> Option<(Vec<livery::Livery>, Vec<String>)> {
+    let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
+    let mut archives =
+        oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
+    let teams: Vec<String> = TEAMS.iter().map(|t| (*t).to_string()).collect();
+    let mut report = Vec::new();
+    let liveries = livery::load(
+        &mut archives,
+        &teams,
+        &LoadContext {
+            race: oag_pulse::TITLE.race,
+            mode,
+            flare: oag_pulse::TITLE.flare,
+            hull_overlay: false,
+            hull_shine: true,
+            hull_wreck: wreck,
+            absorb_shell: false,
+        },
+        None,
+        None,
+        &mut report,
+    )
+    .expect("the liveries load");
+    Some((liveries, report))
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_teams_wreck_loads_and_has_no_extra_pass() {
+    let Some((liveries, _)) = load(true, Mode::SingleRace) else {
+        return;
+    };
+    assert_eq!(liveries.len(), TEAMS.len());
+    for (team, livery) in TEAMS.iter().zip(&liveries) {
+        let wreck = livery
+            .wreck
+            .as_ref()
+            .unwrap_or_else(|| panic!("{team}: no wreck was loaded"));
+        assert!(
+            wreck.label.ends_with("shipwreck.vex"),
+            "{team}: {}",
+            wreck.label
+        );
+        assert!(!wreck.indices.is_empty(), "{team}: an empty wreck");
+        assert_ne!(wreck.indices.len(), livery.hull.indices.len(), "{team}");
+        // The hull's meshes carry 0x2000 and the wreck's do not, so there is
+        // no extra pass to build and none is drawn.
+        assert!(wreck.shine_draws.is_empty(), "{team}");
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_context_that_does_not_ask_for_the_wreck_loads_none() {
+    let Some((liveries, _)) = load(false, Mode::SingleRace) else {
+        return;
+    };
+    assert!(liveries.iter().all(|l| l.wreck.is_none()));
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_zone_race_loads_the_zone_wreck_where_the_disc_has_one() {
+    let Some((liveries, report)) = load(true, Mode::Zone) else {
+        return;
+    };
+    for (team, livery) in TEAMS.iter().zip(&liveries) {
+        let name = format!(r"Data\Ships\{team}\zonewreck.vex");
+        match &livery.wreck {
+            Some(wreck) => assert_eq!(wreck.label, name),
+            None => assert!(
+                report
+                    .iter()
+                    .any(|l| l.contains(&name) && l.contains("not in")),
+                "{team}: no zone wreck and no report line saying so"
+            ),
+        }
+    }
+}
+
+fn frame(
+    image: &std::path::Path,
+    scratch: &std::path::Path,
+    name: &str,
+    ticks: &str,
+    flag: &[&str],
+) -> Vec<u8> {
+    let out = scratch.join(format!("{name}.png"));
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(image)
+        .args(["--race", "--no-audio", "--size", "480x272"])
+        .args(["--render-scale", "100", "--msaa", "off"])
+        .args(["--screen-filter", "off", "--anisotropy", "off"])
+        .args(["--motion-blur", "off", "--opponents", "--ticks", ticks])
+        .args(["--force-wreck", "40:7"])
+        .args(flag)
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game {name}");
+    std::fs::read(&out).expect("reading the screenshot")
+}
+
+/// Slot 7's craft is destroyed at the end of tick 40. Tick 60 is inside its
+/// half-second explosion (state 4, which keeps the hull) and tick 100 is past
+/// the edge into state 5, where the wreck is the live model. Dropping the
+/// loader, the swap or the draw leaves the second pair equal.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn the_wreck_replaces_the_hull_from_state_5_and_not_before() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-wreck-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let exploding = frame(&image, &scratch, "exploding", "60", &[]);
+    let exploding_hull = frame(
+        &image,
+        &scratch,
+        "exploding-hull",
+        "60",
+        &["--no-hull-wreck"],
+    );
+    let wrecked = frame(&image, &scratch, "wrecked", "100", &[]);
+    let wrecked_hull = frame(
+        &image,
+        &scratch,
+        "wrecked-hull",
+        "100",
+        &["--no-hull-wreck"],
+    );
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_eq!(
+        exploding, exploding_hull,
+        "the wreck replaced the hull during the explosion"
+    );
+    assert_ne!(wrecked, wrecked_hull, "the wreck drew nothing in state 5");
+}

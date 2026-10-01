@@ -31,5 +31,6 @@ impl super::Scene {
                 drawable.select_lod(race.ship_model_matrix_of(slot), eye);
             }
         }
+        self.select_wreck_lod(race, eye);
     }
 }

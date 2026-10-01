@@ -211,6 +211,9 @@ pub(super) fn grid(
             hull_shine: oag_render::shine::DRAWN
                 && options.hull_shine
                 && craft_title.name == oag_pulse::TITLE.name,
+            hull_wreck: options.hull_wreck
+                && craft_title.name == oag_pulse::TITLE.name
+                && archives.layout.platform == oag_assets::Platform::Psp,
             absorb_shell: craft_title.name == oag_hd::TITLE.name,
         },
         hull_variant,

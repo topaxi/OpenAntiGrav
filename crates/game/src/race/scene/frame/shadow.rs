@@ -355,6 +355,7 @@ impl super::super::Scene {
                 );
             }
         }
+        self.write_wrecks(queue, race, view_projection, prev_vp, prev);
     }
 
     /// Writes the player's sun-occlusion map - layer 0 - as a greyscale PNG
@@ -412,7 +413,7 @@ impl super::super::Scene {
     /// geometry - a synthetic track, a test fixture - than a craft over a
     /// chasm, and "lit as before" is the honest answer for a map that has
     /// no road in it.
-    pub(super) fn sun_occlusion_layer(&self, slot: usize) -> Option<usize> {
+    pub(in crate::race::scene) fn sun_occlusion_layer(&self, slot: usize) -> Option<usize> {
         (self.sun_occlusion.borrow().drawn(slot) > 0).then_some(slot)
     }
 

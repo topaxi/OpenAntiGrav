@@ -91,7 +91,7 @@ impl Scene {
             .enumerate()
             .take(drawn)
             .filter_map(move |(slot, shine)| {
-                if !race.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
+                if !race.ship_active(slot) || self.hull_skipped(race, slot) {
                     return None;
                 }
                 Some((slot, shine.as_ref()?))
@@ -120,6 +120,7 @@ impl Scene {
         for pass in self.shine.iter().flatten().chain(track_shine) {
             queue.write_buffer(&pass.fog, 0, bytemuck::bytes_of(&shine));
         }
+        self.write_wreck_scenes(queue, ship_scene);
     }
 
     /// Writes every live craft's pose and its environment-mapped coordinates:

@@ -291,6 +291,19 @@ pub mod ships {
     /// too - the prefix comes from a config key, not from the game mode.
     pub const SHIELD: &str = "shipshield";
 
+    /// The model the craft becomes once it has blown up: `%s\%swreck.vex` with
+    /// the same `"ship"` prefix [`SHIELD`] takes, so `shipwreck`.
+    ///
+    /// `Ship_LoadModel` (`0x08843258`) reads it into `entity+0x8b8` beside the
+    /// hull at `+0x8b4`, and `Ship_SetState`'s case 5 makes it the live model
+    /// - see `docs/ghidra/functions/psp-pulse-usa/ship-wreck-model.md`.
+    pub const WRECK: &str = "shipwreck";
+
+    /// The wreck a Zone craft becomes: the `local_38 == 6` guard that swaps the
+    /// hull for `Zone.vex` swaps this in for [`WRECK`] too
+    /// (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`).
+    pub const ZONE_WRECK: &str = "zonewreck";
+
     /// The archive entry name of one of a team's models, under the ship
     /// directory this title keeps its roster in.
     ///

@@ -23,6 +23,7 @@ mod scratch;
 mod shine;
 mod weapon_models;
 mod weapon_quads;
+mod wreck;
 
 use frame::{depth_texture, msaa_color_texture};
 use motion::Attachments;
@@ -146,6 +147,9 @@ pub struct Scene {
     absorb_overlay: [Vec<Option<Drawable>>; 2],
     /// The hull's environment-mapped extra pass per slot - see [`shine`].
     shine: Vec<Option<Drawable>>,
+    /// Every slot's wreck, drawn instead of its hull once the craft is out of
+    /// the race - see [`wreck`].
+    wrecks: wreck::Wrecks,
     /// The circuit's own extra pass - see [`shine::TrackShine`].
     track_shine: Option<shine::TrackShine>,
     /// This frame's animation clock, in seconds: set where the frame reads it,
@@ -692,6 +696,7 @@ impl Scene {
         };
         let absorb_overlay = [slots.absorb_overlays()?, slots.leach_overlays()?];
         let shine = slots.shines()?;
+        let wrecks = wreck::Wrecks::build(&slots, scene_depth, zone_art)?;
         let shell = |l: &crate::livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;
@@ -852,6 +857,7 @@ impl Scene {
             shield_cockpit,
             absorb_overlay,
             shine,
+            wrecks,
             track_shine,
             anim_clock: std::cell::Cell::new(0.0),
             absorb_shell,

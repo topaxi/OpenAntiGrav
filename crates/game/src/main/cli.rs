@@ -640,6 +640,17 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "TICK:SEVERITY", requires = "race")]
     pub(crate) force_shake: Option<String>,
 
+    /// With `--race --screenshot`, put one craft into the destroyed sequence at
+    /// the end of a tick: `TICK:SLOT`, e.g. `60:3` and then `--ticks 100` for a
+    /// wreck about half a second old.
+    ///
+    /// A verification aid, there because a wreck is hard to produce at a chosen
+    /// place and moment. It enters the state `Ship_Damage`'s depletion does, so
+    /// the sequence that follows is the simulation's own. See
+    /// [`Race::force_destroy`].
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_wreck: Option<String>,
+
     /// Seed the world generator, instead of `race::SEED`.
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race
@@ -863,6 +874,12 @@ pub(crate) struct Cli {
     /// by rendering the same frame with and without it.
     #[arg(long)]
     pub(crate) no_hull_shine: bool,
+
+    /// Keep a destroyed craft's hull instead of swapping in its
+    /// `shipwreck.vex`: the headless way to measure what the wreck adds, by
+    /// rendering the same frame with and without it.
+    #[arg(long)]
+    pub(crate) no_hull_wreck: bool,
 
     /// Leave out a Pulse circuit's own extra pass: its `*_shinemap` batches
     /// under their chrome map, which `oag_render::shine::build_track` draws.
