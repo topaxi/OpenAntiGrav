@@ -192,6 +192,15 @@ impl Race {
         self.sim.respawns[0]
     }
 
+    /// How many times the player's picture has jumped to a different shot: each
+    /// of their respawns, and the destroy camera taking over and letting go
+    /// ([`super::destroy_camera`]). What the temporal upscaler's history reset
+    /// watches, so a cut throws the history away the way a respawn does.
+    #[must_use]
+    pub fn camera_cuts(&self) -> u32 {
+        self.sim.respawns[0].wrapping_add(self.view.destroy_camera.cuts)
+    }
+
     /// The same, for any craft on the grid.
     ///
     /// Out of bounds reads zero rather than panicking: a caller sweeping

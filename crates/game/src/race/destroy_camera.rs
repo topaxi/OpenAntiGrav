@@ -24,8 +24,9 @@
 //! The player's own shakes at the explosions (`Camera_ArmShake(0.3, 0.4)` at
 //! state 5 and `(0.8, 0.6)` at state 6) are not ported.
 //!
-//! Pulse's circuits only, because only Pulse's `track.vex` payloads carry an aim
-//! point: another title, or a circuit with no cameras, keeps the chase camera.
+//! Pulse on a PSP disc only: the aim point at payload `+0x10` was read off the
+//! PSP's `track.vex` and nothing else (the PS2's was not looked at), so another
+//! source, or a circuit with no cameras, keeps the chase camera.
 
 use super::*;
 use oag_render::camera::destroy::{self, Destroy, Station};
@@ -42,6 +43,9 @@ pub(super) struct DestroyCamera {
     rng: Rng,
     active: Option<Destroy>,
     held: bool,
+    /// How many times the camera has taken over or let go - see
+    /// [`Race::camera_cuts`].
+    pub(super) cuts: u32,
 }
 
 impl Default for DestroyCamera {
@@ -58,17 +62,19 @@ impl DestroyCamera {
             rng: Rng::new(DESTROY_CAMERA_SEED),
             active: None,
             held: false,
+            cuts: 0,
         }
     }
 }
 
-/// Every authored `Camera` in a circuit as a [`Station`], or none off Pulse.
+/// Every authored `Camera` in a circuit as a [`Station`], or none off Pulse's
+/// PSP source (`pulse_psp`, the loader's own flag).
 pub(super) fn stations(
-    title: &oag_title::Title,
+    pulse_psp: bool,
     track_blob: &[u8],
     report: &mut Vec<String>,
 ) -> Vec<Station> {
-    if title.name != oag_pulse::TITLE.name {
+    if !pulse_psp {
         return Vec::new();
     }
     let stations: Vec<Station> = oag_vex::camera::cameras(track_blob)
@@ -118,7 +124,9 @@ impl Race {
         );
         let camera = &mut self.view.destroy_camera;
         if !out {
-            camera.active = None;
+            if camera.active.take().is_some() {
+                camera.cuts = camera.cuts.wrapping_add(1);
+            }
             camera.held = false;
             return;
         }
@@ -129,6 +137,9 @@ impl Race {
                 let offset = low + (high - low) * camera.rng.next_f32();
                 camera.active =
                     Destroy::start(&camera.stations, subject, camera.focus_rate, offset);
+                if camera.active.is_some() {
+                    camera.cuts = camera.cuts.wrapping_add(1);
+                }
             }
         }
     }

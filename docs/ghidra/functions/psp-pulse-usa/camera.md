@@ -429,6 +429,11 @@ the screen (kind 7) and `Camera_ArmShake(0.8, 0.6, camera, 1)` throws the view a
 by more than the field, so the frames that follow are a different part of the circuit
 for a quarter of a second. `FUN_0883e064` arms `(0.3, 0.4, camera, 3)` at state 5.
 
+**Ported for a PSP disc only**: the aim point was read off the PSP's `track.vex` and the PS2's
+was not looked at, so `race::destroy_camera` keys on the loader's `pulse_psp` flag. The cut
+counts as a camera cut for the temporal upscaler's history (`Race::camera_cuts`); the motion
+blur is stateless and smears the cut frame and the largest shake frames as it does a respawn.
+
 **Not read or not ported.** The camera hands over to another craft after ten seconds
 (`+0x3c`), and when the craft's state-6 timer runs out; what ends the destroy camera in
 a mode that respawns the player is read only as "the craft is racing again"

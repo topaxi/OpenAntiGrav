@@ -155,3 +155,17 @@ fn destruction_cancels_a_running_shake() {
     race.advance_craft_flashes();
     assert!(!race.view.shake.active());
 }
+
+/// The cut counter the temporal upscaler watches moves when the camera takes
+/// over and when it lets go, and not while it runs.
+#[test]
+fn the_camera_taking_over_and_letting_go_are_cuts() {
+    let mut race = with_a_station();
+    let before = race.camera_cuts();
+    set_player(&mut race, CraftState::Destroyed);
+    assert_eq!(race.camera_cuts(), before + 1);
+    set_player(&mut race, CraftState::Eliminated);
+    assert_eq!(race.camera_cuts(), before + 1);
+    set_player(&mut race, CraftState::Racing);
+    assert_eq!(race.camera_cuts(), before + 2);
+}

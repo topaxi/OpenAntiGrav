@@ -248,8 +248,8 @@ impl EmbeddedTexture<'_> {
 /// range, an implausible width/height/depth, or a palette/pixel region that
 /// does not fit `data`. There is no [`crate::pob::Error`] variant for this:
 /// unlike every other field this module's sibling reads, a missing embedded
-/// texture is not a corrupt file, it is the documented common case (six of
-/// the PSP corpus's thirty-five root emitters, and all of PS2's).
+/// texture is not a corrupt file, it is the documented common case (all of
+/// PS2's; no PSP emitter lacks one now that 4 bits per pixel parses).
 #[must_use]
 pub fn parse_at(
     data: &[u8],

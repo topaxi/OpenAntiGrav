@@ -91,7 +91,7 @@ impl Scene {
             camera_jitter,
             race.projection(aspect, self.far, fov),
             race.camera_view(),
-            race.respawns(),
+            race.camera_cuts(),
         );
         // Above this line the camera is unjittered, below it is not, and the
         // frustum and the snapshot are above deliberately - see the call.

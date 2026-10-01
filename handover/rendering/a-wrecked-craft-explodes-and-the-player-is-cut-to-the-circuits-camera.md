@@ -35,6 +35,9 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   the matrix `Psys_Spawn_q` is given may scale emitter positions and speeds (unread), and
   the explosion's alpha-over emitters were not compared emitter by emitter. A GE dump
   (`scripts/psp-ge-dump.py`, vertex type `0x11e` batches) separates them.
+- With the default profile (motion blur on) the cut frame and the state-5 shake frames show a
+  white diagonal smear: the shake turns the view by more than the 4 degree field, the blur's
+  clamp does the rest. The cut now resets the upscaler's history; the blur has no history to reset.
 - `FUN_088407b0` also builds a `Data\Weapons\Bomb_Shockwave.vex` object (`FUN_0885ecf0`
   under `DAT_08b34320`, non-zero live) - read, not drawn.
 - The original hides the HUD by degrees from about 30 frames into state 5; ours keeps it.

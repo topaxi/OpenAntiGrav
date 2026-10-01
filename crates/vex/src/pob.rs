@@ -430,8 +430,8 @@ impl<'a> ParticleSystem<'a> {
     /// `data`. See [`texture`] for the evidence this is positional - at
     /// `resource_base + emitter.offset + `[`EMITTER_LEN`] - rather than
     /// resolved through [`Self::slots`]. `None` is the documented common
-    /// case, not a parse failure: five of the PSP corpus's thirty-five root
-    /// emitters have no texture here, and PS2 never does.
+    /// case on PS2, which never has one, and no PSP emitter lacks one (the six
+    /// root emitters once counted here were 4 bits per pixel).
     #[must_use]
     pub fn embedded_texture<'d>(
         &self,
