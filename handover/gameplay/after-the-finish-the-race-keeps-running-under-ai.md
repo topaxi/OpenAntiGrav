@@ -30,7 +30,8 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
 - **The other endings**: a wreck, an Eliminator target and a Zone run still stand still in ours; the
   original was not measured there (a wrecked player's craft respawns after state 6 with the mode
   state already 3).
-- **Audio after the flag** was not measured (emulator muted).
+- **Audio after the flag** was not measured (emulator muted); ours spins the engine voice down under the panels while the craft flies on.
+- **A player shot down after the finish**: the spectator camera is checked before the destroy camera in ours; unmeasured in the original.
 - The camera node lists of the other 23 circuits were not read live; `16_Track` matches to 0.1 unit.
 - HD/Fury (where the maintainer saw it), Pure and 2048 were not checked.
 

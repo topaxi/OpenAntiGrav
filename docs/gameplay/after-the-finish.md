@@ -67,6 +67,7 @@ pickup won). Nothing was ported from it; see [what ours does](#what-ours-does).
 | Only the **line** keeps the world running | **chosen**: a wreck, an Eliminator target or a Zone run still stands still, because the original was not measured there (a wrecked player's craft respawns after state 6, and the mode state is already 3, so what happens next is unread) |
 | HUD hidden from `F+1` | ours draws the results panels over the scene at once, which hides the HUD; not separately measured |
 | The `Race End Photo` state and its legend | **not built**: ours goes straight to `EndRace Results` |
+| Seen in the window | **walked live 2026-10-01** (Xvfb, llvmpipe, release build, isolated profile, `--autopilot --no-audio`; `RACEBOX`, Time Trial, Venom, Basilico Black, 3 laps, finished `1.44.78`): under `EndRace Results` the scene keeps moving and cuts between the chase view and trackside views from frame to frame; Cross (Enter) went on to `EndRace Menu` (a Time Trial earns no Rewards page) with the scene still moving behind it and the craft unaffected; a second Cross left for the main menu. Frames: `data/scratch/pulse-postrace/shots/f-0123.png`, `f-4to9.png`, `rewards-menu.png` (gitignored) |
 | The spectator camera | **ported for the node views** (`race::finish_camera`): starts on `F+61`, follows the player, re-picks the subject every 600 frames, cuts by the 60-unit rule and the 26/25/25/24 mode roll, modes `6`/`7` sit on the circuit's authored `Camera` nodes. Modes `2` and `3` (`above`, `front`) are **chosen, not measured**: the chase camera stands in, so about half the cuts leave it. The random stream is the director's own, so it matches the distribution, not the frames. Pulse PSP only |
 | Audio under the panels | **unmeasured** (the emulator was muted); ours spins the engine down as before |
 
@@ -90,6 +91,8 @@ from three captures and a decompile:
 
 ## Open
 
+- **A player's craft shot down after the finish.** Ours: an AI-flown craft that is destroyed is a wreck that never respawns (the world runs on, the race stays finished), and the spectator camera is checked before the destroy camera in `Race::view_unshaken`, so it stays on its node view where the original would be expected to switch to mode 5. Unmeasured.
+- **The engine voice** spins down under the panels while the craft is still flying at about 130 u/s: audio after the flag was not measured, so ours keeps its pre-existing finished-race behaviour.
 - What produces the `56.7` throttle, and whether it is rank-dependent. Measure a Single Race the player
   finishes **not** first.
 - The `Race End Photo` state (about one second of clean view, then a legend that waits for X before the panels).
