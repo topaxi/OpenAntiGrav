@@ -85,3 +85,7 @@
 0x81052810	function	CampaignEventCard_DrawUnlockPage	60	campaign-event-card.md
 0x812b021a	function	GameMode_GetKindLabel	85	campaign-event-card.md
 0x8114f252	function	Time_SplitCentiseconds	85	campaign-event-card.md
+
+# The chase-camera rig and the craft scale it applies (2026-10-01).
+0x811bd89a	function	Ship_UpdateCameraRigs	78	camera.md
+0x8151fdd0	data	g_craft_scale	82	camera.md
