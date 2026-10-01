@@ -62,6 +62,7 @@ impl Race {
             shield_palette,
             hd_plasma_blast,
             pulse_laid_pose,
+            grid_frame_from_sample,
             screen_flash,
             absorb_burst,
             absorb_anchors,
@@ -182,7 +183,15 @@ impl Race {
         let solo_slot_one = (!full_grid && start_position.is_some())
             .then_some(base)
             .flatten()
-            .map(|base| grid_poses(base, &spline, &collision, spawn_height(&handling))[0]);
+            .map(|base| {
+                grid_poses(
+                    base,
+                    &spline,
+                    &collision,
+                    spawn_height(&handling),
+                    grid_frame_from_sample,
+                )[0]
+            });
         // A full grid puts the player on slot 8, and slot 8 is the authored node
         // re-laid on the corridor midpoint's own `+/-10`, not the node's raw
         // position: `Race_ComputeGridLayout` derives every slot, the eighth
@@ -190,7 +199,13 @@ impl Race {
         // `16_Track`, the raw node sits 1.68 units from the original's eighth
         // craft, all of it lateral.
         let full_grid_slot_eight = full_grid.then_some(base).flatten().map(|base| {
-            grid_poses(base, &spline, &collision, spawn_height(&handling))[GRID_SLOTS as usize - 1]
+            grid_poses(
+                base,
+                &spline,
+                &collision,
+                spawn_height(&handling),
+                grid_frame_from_sample,
+            )[GRID_SLOTS as usize - 1]
         });
         if let Some(pose) = pose_override
             .or(solo_slot_one)
@@ -256,7 +271,13 @@ impl Race {
             && full_grid
             && let Some(base) = base
         {
-            let poses = grid_poses(base, &spline, &collision, spawn_height(&handling));
+            let poses = grid_poses(
+                base,
+                &spline,
+                &collision,
+                spawn_height(&handling),
+                grid_frame_from_sample,
+            );
             // **A short field packs to the back**, mirroring the original's
             // own compaction rule for a field smaller than the grid
             // (`grid.md`'s "a short grid packs to the back", confidence 82,

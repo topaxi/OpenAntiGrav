@@ -1201,6 +1201,15 @@ is confirmed **not** to be this early-return path - something else pins
 never fires to do it. `craft+0x290` remains the open candidate for the
 standing-start capture specifically.
 
+**Answered 2026-10-01: it is the craft's grid state.** `Ship_UpdateCraft` re-writes
+the control record (`*(craft+0x78)`) every frame while `craft+0x1c0 & 2` is set,
+which `FUN_088486d4` sets in state 0 and `FUN_088486e4` clears in state 1: both
+airbrake inputs forced to `100.0`, the stick, pitch and thrust inputs zeroed. Live,
+`flags_1c0` reads `0x3` and `state_2a4` `0` through the countdown, and the brake and
+both airbrake words sit at `100` until the frame before the throttle steps. Full
+account, and the rest of what state 0 changes, in
+[grid-state.md](../../../physics/grid-state.md). Confidence **88**.
+
 #### The world-force writer list is complete
 
 Checked directly rather than from the step table: `Ship_UpdateCraft`'s full callee

@@ -1179,3 +1179,6 @@
 0x08902a2c	function	ViewCull_LoadWorldMatrix	85	section-view-cull.md
 0x0890296c	function	ViewCull_BuildViewProjection	85	section-view-cull.md
 0x0890cc80	function	Mesh_SubmitNode	85	section-view-cull.md
+0x08848590	function	Craft_SetState	90	grid.md
+0x088486d4	function	Craft_EnterGridState	90	grid.md
+0x088486e4	function	Craft_ReleaseFromGrid	90	grid.md

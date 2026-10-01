@@ -228,9 +228,15 @@ fn face_the_way_the_track_runs(pose: Pose, slot: &StartPosition, spline: &Spline
 /// `base`'s place along the track and is moved laterally onto the same rule -
 /// the original does not use the raw node either, and it is 1.68 units nearer
 /// the original's eighth craft on `16_Track` for it.
-/// **Heading is untouched** - every slot still shares `base`'s own orientation,
-/// which is the part grid.md's live capture actually confirmed, to four decimal
-/// places, and nothing here re-opens that.
+/// **Heading** is the node's own for every slot unless `frame_from_sample`,
+/// which is Pulse PSP's: there each slot takes the track's frame at its own
+/// sample, `FUN_0882663c`'s input. Measured 2026-10-01 on the eight craft of a
+/// `16_Track` Single Race at placement: forward `z` runs `-0.0025` to `-0.0061`
+/// from slot 1 to slot 8, where the node's is `0.0000` (0.35 degrees out at slot
+/// 8, the player's slot) and the sample tangent reads `-0.0033` to `-0.0057`
+/// (0.05 degrees out). `grid.md`'s "heading, any slot against slot 1: 1.0000 to
+/// four decimal places" was a dot product, which cannot see 0.3 degrees. See
+/// `docs/physics/grid-state.md`.
 ///
 /// Falls back to [`oag_gameplay::grid_pose`]'s straight line, per slot, when
 /// `spline` has no sample near `base`, when `base`'s own tangent gives no
@@ -247,7 +253,18 @@ pub(super) fn grid_poses(
     spline: &Spline,
     collision: &CollisionWorld,
     height: f32,
+    frame_from_sample: bool,
 ) -> [Pose; GRID_SLOTS as usize] {
+    // Pulse PSP builds each slot's matrix from the track's frame at the slot
+    // (`oag_gameplay::orientation_on_sample`); every other title keeps the
+    // node's own orientation, which is all that has been measured for them.
+    let orientation_at = |sample: &oag_vex::track::Sample| {
+        if frame_from_sample {
+            oag_gameplay::orientation_on_sample(sample)
+        } else {
+            base.orientation
+        }
+    };
     let forward = base.orientation * Vec3::NEG_Z;
     let anchor = spline.nearest(base.position).map(|(index, _, _)| index);
     let walk = anchor.and_then(|index| walk_direction(spline, index, forward));
@@ -291,7 +308,7 @@ pub(super) fn grid_poses(
                 Pose {
                     position: base.position
                         + lateral * (lateral_target(sample, slot) - node_lateral),
-                    orientation: base.orientation,
+                    orientation: orientation_at(sample),
                 }
             }
             (Some(anchor), Some(direction), Some(_), Some(_)) => {
@@ -317,7 +334,7 @@ pub(super) fn grid_poses(
                     _ if ran_off_the_end => oag_gameplay::grid_pose(base, slot),
                     Some(sample) => Pose {
                         position: sample_pos + sample_lateral * lateral_target(sample, slot),
-                        orientation: base.orientation,
+                        orientation: orientation_at(sample),
                     },
                     None => oag_gameplay::grid_pose(base, slot),
                 }

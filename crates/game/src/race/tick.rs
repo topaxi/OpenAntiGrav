@@ -48,6 +48,22 @@ impl Race {
         // impact frame already one tick in. Measured 2026-09-30, see
         // `oag_render::camera::shake`.
         self.view.shake.advance(self.sim.dt);
+        // Every craft is in the original's grid state until the green light:
+        // `Race_PlaceGrid` puts the field in state 0 and `Race_StartRacing`
+        // moves it to state 1. Derived from the one countdown clock rather than
+        // stored, so a respawn after the start (state 3) can never re-enter it
+        // and a restart, which rebuilds the race, always begins in it. Physics
+        // reads the flag; see `oag_physics::ShipState::on_grid`.
+        //
+        // **Not Zone.** The term the flag gates is `Ship_HoverTwoPoint`'s; Zone
+        // runs `Ship_HoverFourCorner` (`Ship_UpdateHover`, `0x0884870c`), whose
+        // own epilogue was not read for the guard, and this port flies Zone on
+        // the two-point law regardless. Measured on a Time Trial only.
+        let on_grid =
+            RaceState::thrust_gated(self.sim.world.tick) && self.sim.world.mode() != Mode::Zone;
+        for ship in &mut self.sim.world.ships {
+            ship.physics.on_grid = on_grid;
+        }
         // The one craft a person is flying this tick. `0` under
         // `World::SINGLE_PLAYER`, which is every session this engine starts, so
         // reading it changes nothing and hard-coding it would have cost the

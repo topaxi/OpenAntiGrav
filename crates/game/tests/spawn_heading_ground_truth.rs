@@ -153,12 +153,31 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
             // substitutes or the nine circuits it fires on would start in a
             // different frame from the other 43. Asserted here rather than
             // trusted, because the agreement figure below is blind to pitch.
+            //
+            // **Or, on Pulse PSP alone, it carries the track's own pitch**, where the
+            // grid is laid in the track's frame (`oag_gameplay::orientation_on_sample`,
+            // 2026-10-01): the original's eight placed craft read forward `y` of
+            // `+0.0037` to `-0.0040`, the track's slope. Every other source keeps the
+            // bind's level frame and the strict bound, so an accidental pitch on HD,
+            // the PS2 or Pure still fails. The Pulse PSP tolerance is `0.01`, not
+            // `0.001`, because the slot's own sample is not the nearest one to the
+            // craft, and `09_Track` reversed climbs at `0.29`.
+            let tangent = tangent_at(body.position);
+            let on_the_tracks_frame = source.to_string_lossy().contains("pulse-psp");
+            let level = forward.y.abs() < 1.0e-3;
+            let on_the_track = (forward.y - tangent.y).abs() < 1.0e-2;
             assert!(
-                forward.y.abs() < 1.0e-3,
-                "{track}: a craft spawned pitched by {}, and the bind's frame is level",
-                forward.y
+                level || (on_the_tracks_frame && on_the_track),
+                "{track}: a craft spawned pitched by {} (the track's own is {}), and {}",
+                forward.y,
+                tangent.y,
+                if on_the_tracks_frame {
+                    "neither the bind's level frame nor the track's pitch explains it"
+                } else {
+                    "this source's frame is level"
+                }
             );
-            forward.dot(tangent_at(body.position))
+            forward.dot(tangent)
         })
         .collect();
 

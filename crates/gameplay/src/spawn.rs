@@ -172,6 +172,24 @@ impl Pose {
     }
 }
 
+/// The orientation of a ship lying in `sample`'s own frame: forward along the
+/// track's tangent, up the surface normal.
+///
+/// **What Pulse PSP's grid does** (`Race_ComputeGridLayout`'s per-slot matrix,
+/// `FUN_0882663c`, built from the located sample rather than from the authored
+/// node): measured on `16_Track`, the eight craft's forward `z` reads `-0.0025`
+/// at slot 1 down to `-0.0061` at slot 8 where the node's own heading is
+/// `0.0000` and the track's sample tangent at the same places reads `-0.0033` to
+/// `-0.0057` - see `docs/physics/grid-state.md`. The sample is this crate's
+/// resampling of the curve, not the original's own, which is the residue.
+#[must_use]
+pub fn orientation_on_sample(sample: &Sample) -> Quat {
+    orientation_from_axes(
+        Vec3::from_array(sample.tangent),
+        -Vec3::from_array(sample.down),
+    )
+}
+
 /// Builds a rotation whose forward is `-Z` and whose up is `+Y`, matching
 /// [`oag_physics::Body`]'s axes.
 ///
