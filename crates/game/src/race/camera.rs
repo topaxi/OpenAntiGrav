@@ -244,6 +244,20 @@ impl Race {
         );
     }
 
+    /// Puts the craft in `slot` into the destroyed sequence, for
+    /// `--force-wreck`: state 4 with its half second, which is what
+    /// `Ship_Damage`'s depletion does (`oag_physics::damage`), so the
+    /// `Destroyed` to `Eliminated` edge and everything keyed on it run as they
+    /// do in a race. A verification aid and nothing else; a slot that is not
+    /// racing is left alone.
+    pub fn force_destroy(&mut self, slot: usize) {
+        let state = &mut self.sim.world.ships[slot].physics;
+        if state.craft_state == oag_physics::CraftState::Racing {
+            state.craft_state = oag_physics::CraftState::Destroyed;
+            state.state_timer = oag_physics::damage::DESTROYED_DURATION;
+        }
+    }
+
     /// The camera's own world position, from the view matrix it produces.
     ///
     /// A view matrix is the inverse of the camera's world transform, so

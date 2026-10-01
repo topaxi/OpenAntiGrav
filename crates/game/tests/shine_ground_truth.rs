@@ -49,6 +49,7 @@ fn load(shine: bool) -> Option<Vec<livery::Livery>> {
             flare: oag_pulse::TITLE.flare,
             hull_overlay: false,
             hull_shine: shine,
+            hull_wreck: false,
             absorb_shell: false,
         },
         None,

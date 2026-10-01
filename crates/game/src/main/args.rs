@@ -229,6 +229,18 @@ pub(crate) fn force_shake(text: Option<&str>) -> Result<Option<(u32, f32)>> {
     Ok(Some((tick.trim().parse().map_err(|_| bad())?, severity)))
 }
 
+/// Parses `--force-wreck`'s `TICK:SLOT`.
+pub(crate) fn force_wreck(text: Option<&str>) -> Result<Option<(u32, usize)>> {
+    let Some(text) = text else { return Ok(None) };
+    let bad =
+        || anyhow::anyhow!("{text:?} is not a forced wreck; write it as TICK:SLOT, e.g. 60:3");
+    let (tick, slot) = text.split_once(':').ok_or_else(bad)?;
+    Ok(Some((
+        tick.trim().parse().map_err(|_| bad())?,
+        slot.trim().parse().map_err(|_| bad())?,
+    )))
+}
+
 /// Resolves `--give`'s spelling to a weapon, case-insensitively.
 ///
 /// Rejects an unknown name rather than ignoring it: a silent no-op here looks

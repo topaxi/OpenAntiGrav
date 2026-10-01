@@ -66,6 +66,7 @@ impl Race {
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors,
+            wreck_anchors,
             slot_teams,
             ..
         } = setup;
@@ -479,6 +480,7 @@ impl Race {
                 pulse_laid_pose,
                 screen_flash: screen_flash.then(oag_render::flash::ScreenFlash::default),
                 craft_flashes: Default::default(),
+                wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors),
                 absorb_burst,
                 absorb_anchors,
                 absorb_bursts: Vec::new(),

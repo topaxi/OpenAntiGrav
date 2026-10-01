@@ -324,6 +324,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
             flare: oag_hd::TITLE.flare,
             hull_overlay: false,
             hull_shine: false,
+            hull_wreck: false,
             absorb_shell: false,
         },
         None,

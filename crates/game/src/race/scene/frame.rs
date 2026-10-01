@@ -624,8 +624,9 @@ impl Scene {
             };
             let exhaust = race.exhaust_of(slot);
             // The flare quad only where the source authors no effect for it
-            // - see `Race::engine_flare_effect`. The ribbon always.
-            if !race.engine_flare_effect() {
+            // - see `Race::engine_flare_effect` - and not on a wreck, which
+            // shows none on a running original (`scene::wreck`). The ribbon always.
+            if !race.engine_flare_effect() && !self.is_wrecked(race, slot) {
                 vertices.extend(exhaust.vertices(nozzle, right, up));
             }
             // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
@@ -813,11 +814,12 @@ impl Scene {
         // Only the *player's* hull is skipped in the cockpit view. The opponents
         // in front are exactly what a cockpit view is for.
         for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
-            if index == 0 && !race.draws_own_ship() {
+            if self.hull_skipped(race, index) {
                 continue;
             }
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
+        self.draw_wrecks(race, &mut pass, &mut stats);
         // Every weapon's own body: opaque painted models, bounded by how many
         // matrices were written this frame, same as the plumes below.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {

@@ -65,6 +65,9 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
     }
     for livery in &mut loaded.liveries {
         stamp(&mut livery.hull);
+        if let Some(wreck) = &mut livery.wreck {
+            stamp(&mut wreck.model);
+        }
         for model in [&mut livery.boost, &mut livery.shield]
             .into_iter()
             .flatten()

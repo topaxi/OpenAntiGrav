@@ -422,6 +422,7 @@ impl Race {
         self.advance_engine_flares();
         self.advance_absorb_bursts();
         self.advance_hit_sparks();
+        self.advance_wreck_fx();
         self.view
             .stage
             .advance(self.sim.dt, &mut self.view.stage_rng);

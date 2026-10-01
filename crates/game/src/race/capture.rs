@@ -46,6 +46,11 @@ pub struct CaptureOptions {
     /// that severity would, at the end of that tick (zero-based). See
     /// [`Race::force_shake`].
     pub force_shake: Option<(u32, f32)>,
+    /// `--force-wreck TICK:SLOT`: put that slot's craft into the destroyed
+    /// sequence at the end of that tick (zero-based), as its shield running out
+    /// would - state 4, then state 5 half a second later. See
+    /// [`Race::force_destroy`].
+    pub force_wreck: Option<(u32, usize)>,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a

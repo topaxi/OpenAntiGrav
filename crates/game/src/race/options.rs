@@ -121,6 +121,9 @@ pub struct Options {
     /// the headless way to take the pass out of a frame and so measure what it
     /// adds.
     pub hull_shine: bool,
+    /// Whether each Pulse craft's `shipwreck.vex` is loaded and swapped in once
+    /// the craft is out of the race. `false` is `--no-hull-wreck`.
+    pub hull_wreck: bool,
     /// Whether a Pulse circuit's own extra pass is drawn: its `*_shinemap`
     /// batches under their chrome map. `false` is `--no-track-shine`.
     pub track_shine: bool,
@@ -352,6 +355,7 @@ impl Default for Options {
             // comment. Only `race::load_event` ever sets this.
             grid_teams: Vec::new(),
             hull_shine: true,
+            hull_wreck: true,
             track_shine: true,
             // The rung every measured title shares, named rather than
             // defaulted from an enum: a title whose ladder was never read must
@@ -488,6 +492,9 @@ pub struct Setup {
     /// weapon hit throws, or none on a title whose path is unread. See
     /// `race::hit_sparks`.
     pub hit_spark_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
+    /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
+    /// effects spawn - see `race::wreck_fx`.
+    pub wreck_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
     /// The team id each grid slot flies (`Feisar`), for the HUD's per-craft
     /// rows - the Eliminator's kill column. Ids, not names: the string table
     /// turns one into the name a player reads at draw time. Empty where a

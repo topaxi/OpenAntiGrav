@@ -54,7 +54,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming
 /// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 26] = [
+pub const RACE_EFFECTS: [&str; 28] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     MISSILE_FLARE_EFFECT,
@@ -91,6 +91,10 @@ pub const RACE_EFFECTS: [&str; 26] = [
     // A landed LeachBeam drain's hull sparks - see `race::hit_sparks`. The
     // other weapons' are `sparks::DAMAGE_EFFECT`, already first above.
     super::hit_sparks::LEACHBEAM_HIT_SPARK_EFFECT,
+    // What a craft throws at each wreck node as it goes out - see
+    // `race::wreck_fx`.
+    super::wreck_fx::FXNODE_EXPLO_EFFECT,
+    super::wreck_fx::DEATH_SPARKS_EFFECT,
 ];
 
 impl Race {

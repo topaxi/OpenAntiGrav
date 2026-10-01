@@ -45,6 +45,7 @@ mod spawn;
 mod spline;
 mod trail_hits;
 mod weapons;
+mod wreck_fx;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.
 fn model(slots: usize, decoded: usize) -> Model {
@@ -168,6 +169,7 @@ fn setup(handling: Handling) -> Setup {
         absorb_burst: None,
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
+        wreck_anchors: Vec::new(),
         slot_teams: Vec::new(),
         trail_sparks: false,
         spark_anchors: Vec::new(),

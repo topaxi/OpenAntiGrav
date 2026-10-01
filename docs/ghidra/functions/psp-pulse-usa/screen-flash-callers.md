@@ -73,12 +73,11 @@ are never reached because `t < 1` ends the flash first.
   for the player, `SHIP_DEST` and kind 7 with `Camera_ArmShake`; for everyone
   else `EXPLBIG` positional and kind 0; then `WO_SHIP_EXPLOSION`.
 
-**Not built:** the particles (`WO_SHIP_FXNODE_EXPLO`, `WO_SHIP_DEATH_SPARKS`,
-`WO_SHIP_EXPLOSION`), `Camera_ArmShake` on either, and the two sounds. Their
-triggers are the ones above and are recovered; `psys_inventory_ground_truth.rs`
-still lists all three as "no craft destruction in this engine", which is stale
-about the state machine (it exists: [`oag_physics::CraftState`]) and right that
-nothing plays them.
+**Built 2026-10-01:** the two state 5 particles, `WO_SHIP_FXNODE_EXPLO` then
+`WO_SHIP_DEATH_SPARKS` at each node of the **wreck** (`oag_game::race::wreck_fx`;
+read live, see [ship-wreck-model.md](ship-wreck-model.md)). **Not built:**
+`WO_SHIP_EXPLOSION` (its placement matrix, `local_370` in `FUN_088407b0`, is
+unread), `Camera_ArmShake` on either, and the two sounds.
 
 ## The Shuriken's ending
 

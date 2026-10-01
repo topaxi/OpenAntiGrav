@@ -6,13 +6,12 @@
 | **Subsystem** | ship models, state machine |
 | **Related** | [`mesh-draw.md`](mesh-draw.md) ("The hull's extra pass": the entity's `+0x8b4` hull and `+0x8b8` wreck), [`zone-mode.md`](zone-mode.md) (`Ship_SetState` states 4 and 5), [`shield.md`](shield.md) (`Ship_GatherCollisionFxNodes`) |
 
-Read 2026-10-01, static only (headless Ghidra on a scratch copy of the
-project, decompile of `0x0883eae8`, `0x0883eb68` and their callers). Question:
-the `0x2000` extra pass is drawn for the hull model at `entity+0x8b4`, and the
-wreck model at `entity+0x8b8` carries the same flags - **when does the wreck
-draw?** Nothing in this port loads `shipwreck.vex` for a race, so there is no
-wreck to give the pass; this page is the trigger, recorded so the wiring can be
-done from it.
+Read 2026-10-01: statically (headless Ghidra on a scratch copy of the project,
+decompile of `0x0883eae8`, `0x0883eb68` and their callers), then measured on a
+running original (the section "Measured on a running original"). Question: the
+hull model sits at `entity+0x8b4` and the wreck at `entity+0x8b8` - **when does
+the wreck draw, what is drawn, and what does the craft throw as it goes out?**
+Answered below; this port now draws it.
 
 ## The two functions
 
@@ -46,20 +45,75 @@ So the wreck is the live model from the moment the craft has finished exploding
 until the next `Ship_SetState` to 0 to 3 or `Ship_UpdateRespawn` puts the hull
 back.
 
-## What is not read
+## Measured on a running original, 2026-10-01
 
-- **What bit `2` of the model's flag word does.** `zone-mode.md` calls it "a
-  render flag that hides the model"; this pass did not read a consumer of
-  `model+0x2c`. If it hides the wreck the swap is for the collision-FX node list
-  and the craft's tree only and nothing of the wreck is ever drawn in a race. A
-  GE list of a craft in state 5 would answer it (does a mode-2 PRIM with the
-  wreck's world matrix appear?). That recording was not made.
-- What bit `4` is (it follows the live model across the swap).
-- Whether the wreck's `0x2000` batches use the same fixed basis as the hull's
-  (`model+0x1a8 == 1` was read on the wreck live: [`mesh-draw.md`](mesh-draw.md))
-  - yes, recorded there - so the pass for it would be the hull's, over the wreck's
-  own batches.
+`scripts/psp-wreck-capture.py` calls `Ship_SetState(entity, 4)` on a craft in a
+live race (PPSSPP, Talon's Junction, Venom class; a grid Piranha, so the chase
+camera sees it), then photographs at 480x272 and logs the entity's state, its
+three model pointers and their flag words per frame. A race reaches state 4 only
+by draining a shield, so the call is the lever; everything after it is the
+game's own state machine.
 
-Nothing is wired from this: `shipwreck.vex` is not loaded, no state 5 is
-modelled with a model swap, and no wreck is drawn. Giving the wreck the extra
-pass is a consequence of drawing the wreck, which is its own piece of work.
+| Since the call | State | Live model | What the frames show |
+| --- | --- | --- | --- |
+| 0 to 29 frames | 4 (`entity+0x874` counts `0.5` s) | hull | the hull, unchanged |
+| 30 frames | 5 (`+0x874 = 1.5`) | **wreck** | a full-screen yellow wash (kind 0), then a scorched dark model with orange fire glints where the hull was; no engine flare |
+| 120 frames | 6 | wreck | the same wreck, `WO_SHIP_EXPLOSION` going off over it |
+
+**Bit `2` hides nothing - the question the first reading left open.** The wreck
+is drawn in states 5 and 6 and the hull is not. The flag words say why: the hull
+(`+0x8b4`) read `0x5e026`, the wreck (`+0x8b8`) `0x52000`; at the state 5 edge the
+hull reads `0x5f022` (bit `4` cleared, bit `0x1000` set) and the wreck `0x5e026`
+(the hull's word, bit `4` set). So **bit `4` is the visible bit and it moves with
+the live model** (`Ship_SelectWreckModel`'s carry), and case 5's `|= 2` changes
+nothing here: the hull's bit `2` was already set and the wreck takes the hull's
+whole word. The same bit is a widget's "on" bit elsewhere (`FUN_088bb83c` sets
+`4` while a fade is rising and clears it when alpha reaches zero), and bit `2` is
+the "enabled / updated" bit (`Node_UpdateTree` recurses only into children with
+it; `FUN_088be070` sets it on the list it shows). State 6 adds `0x1000000` to the
+wreck's word, unread. Confidence **88** (a runtime read of the flag words and the
+frames agree, one title, one team and one circuit).
+
+**The wreck authors no `0x2000` extra pass.** Its meshes carry `0x1821` (Assegai's
+batches `0x1821`/`0x1021`) where the hull's carry `0x3001`; the earlier note that
+"the wreck carries the same flags" read `model+0x1a8 == 1`, the fixed light basis,
+which is shared (the section above). `oag_render::shine::build` finds no batch on
+any of the eight teams' `shipwreck.vex`, so the wreck has no extra pass to draw.
+Confidence **92** (decoded off every team's file).
+
+**What `FUN_0883e064` throws, read live.** At the state 5 edge `Psys_Spawn_q` is
+entered 14 times in a row, `WO_SHIP_FXNODE_EXPLO` then `WO_SHIP_DEATH_SPARKS`,
+seven times, each pair parented to a distinct node; the Piranha's
+`shipwreck.vex` authors seven `Ship Collision Fx` locators. `WO_SHIP_EXPLOSION`
+follows 90 frames later, on the entry to state 6. Confidence **90**.
+
+**Per team the wreck is a smaller, separate model**: 198 to 302 triangles against
+the hull's 845 to 1,497; locators 4 (Assegai, Triakis), 7 (Piranha), 8 (EGX), 9
+(AG_Systems) or 10 (Qirex, Feisar, Goteki). `zonewreck.vex` exists beside
+`zone.vex` (Assegai: 2 meshes, 182 triangles).
+
+**Camera.** For the local player state 4 also puts the camera in mode 5 (a high
+pull-back, `Camera_SetMode(DAT_08b32c64, 5)`); this port keeps its chase camera,
+so a player wreck frames differently from the original's. The opponent wreck above
+is seen from the ordinary chase camera, which is why it is the comparison.
+
+## What this port does
+
+`oag_game::race::scene::wreck` draws `shipwreck.vex` (`zonewreck.vex` in Zone)
+instead of the hull while the craft is `CraftState::Eliminated`, which is case 5;
+the hull stays through `Destroyed`. The engine flare quad is not drawn on a wreck
+(**seen**, mechanism unread: `Exhaust_Update` has no state test, so it is probably
+the hull's node going invisible). `race::wreck_fx` throws the two particles at each
+wreck locator on that edge. Pulse on a PSP disc only. Side by side with the
+capture, the wreck's shape, pose, scorch and fire glints agree; the first frames'
+fireballs are whiter in ours than the original's warm orange (not chased).
+
+## Not read
+
+- `WO_SHIP_EXPLOSION`'s placement: `FUN_088407b0` builds a matrix (`local_370`)
+  and a parent node for it; not played.
+- What `0x1000000` in the wreck's word at state 6 is.
+- The wreck's two authored `Trail` nodes ([`exhaust.md`](exhaust.md)): whether a
+  ribbon draws from them was not looked for.
+- The craft's blob shadow under a wreck, and the other per-craft overlays (shield
+  shell, absorb): ours still draw as for a hull.

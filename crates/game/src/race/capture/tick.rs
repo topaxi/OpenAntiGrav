@@ -38,6 +38,11 @@ pub(super) fn advance_one_tick(
     {
         race.force_shake(severity);
     }
+    if let Some((at, slot)) = options.force_wreck
+        && at == tick
+    {
+        race.force_destroy(slot);
+    }
     // The race's own voices, on the tick that raised them - the same call
     // the windowed loop makes immediately after `Race::tick` in
     // `main::session::frame`. Without it a `--dump-audio` capture of a race

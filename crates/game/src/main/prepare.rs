@@ -156,6 +156,7 @@ impl Pending {
             // See `race::Options::grid_teams`.
             grid_teams: Vec::new(),
             hull_shine: !self.cli.no_hull_shine,
+            hull_wreck: !self.cli.wreck.no_hull_wreck,
             track_shine: !self.cli.no_track_shine,
             ribbon: self.cli.ribbon,
             collision: self.cli.collision,

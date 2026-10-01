@@ -990,4 +990,8 @@ pub(crate) struct Cli {
     /// `--measure-race-load` - see [`extra::MeasureArgs`].
     #[command(flatten)]
     pub(crate) measure: extra::MeasureArgs,
+
+    /// `--force-wreck` and `--no-hull-wreck` - see [`extra::WreckArgs`].
+    #[command(flatten)]
+    pub(crate) wreck: extra::WreckArgs,
 }

@@ -158,6 +158,7 @@ pub mod tournament;
 mod view;
 mod visibility;
 mod weapons;
+mod wreck_fx;
 pub(crate) use weapons::{CannonAssets, CannonDraw};
 mod worker;
 pub mod zone_grade;
