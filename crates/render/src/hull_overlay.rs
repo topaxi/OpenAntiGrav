@@ -32,13 +32,29 @@
 //! stencil to `ALWAYS`, ref `0xff`, `REPLACE` (GE commands `0xDC`/`0xDD`,
 //! read at instruction level). So every overlay fragment that survives the
 //! alpha test (`GREATER 0`) and the colour test (not black) writes a **full**
-//! glow into the bloom's mask, whatever the fade. That is why the original's
-//! hull blooms into a white blob at the peak. A blend state cannot write a
-//! constant alpha, so this moves the `SRC_ALPHA` factor into the texture
-//! instead: [`glow_texels`] premultiplies each texel and sets its alpha to 1,
-//! or clears a texel the two tests would discard. [`tint`] carries the fade.
-//! [`BLEND`] then adds the colour and replaces the mask. The sum is the
-//! original's own, `tex.rgb * tex.a * a^2 + dst`.
+//! glow into the bloom's mask, whatever the fade.
+//!
+//! **But almost all of it is wiped before the bloom reads it.** A GE dump of a
+//! real absorb (2026-10-01, `docs/rendering/glow-mask.md`, "The hull overlay's
+//! mask is wiped") shows the craft's ordinary batches and their overlay drawn
+//! *before* the shadow pass, whose last draw is a full-screen quad with the
+//! stencil at `REPLACE`, reference 4, on every outcome: every pixel's mask goes
+//! back to the neutral 4. Only what is drawn after that survives, and that is
+//! the batches with the glow bits and their overlay. A completed frame of the
+//! original holds the hull at 4 through the whole window, bar the one glow
+//! batch's few dozen pixels. The earlier reading of a white blob from a full
+//! hull stamp (2026-09-23) came from halting the emulator mid-frame, with the
+//! buffer being drawn caught between the overlay and the reset.
+//! [`stamps_mask`] is that rule: the overlay writes the mask over a batch that
+//! has a glow of its own and leaves it alone elsewhere.
+//!
+//! A blend state cannot write a constant alpha, so the `SRC_ALPHA` factor moves
+//! into the texture instead: [`glow_texels`] premultiplies each texel and sets
+//! its alpha to 1, or clears a texel the two tests would discard. [`tint`]
+//! carries the fade, and the vertex colour's alpha says whether the fragment
+//! writes the mask at all. [`BLEND`] then adds the colour and replaces the mask
+//! where that alpha is 1. The sum is the original's own,
+//! `tex.rgb * tex.a * a^2 + dst`.
 //!
 //! # What is ours
 //!
@@ -265,11 +281,29 @@ pub fn glow_texels(rgba: &mut [u8]) {
 /// The vertex colour the overlay draws with at `alpha` ([`alpha`]): the
 /// original's `Gu_Color(a, a, a, a)` modulates both the texel and its alpha,
 /// and the blend multiplies by that alpha again, so the colour weight is
-/// `a^2`. The alpha stays 1 for [`BLEND`]'s mask write.
+/// `a^2`. The alpha stays 1 so a vertex that writes the mask ([`stamps_mask`])
+/// writes it whole.
 #[must_use]
 pub fn tint(alpha: f32) -> [f32; 4] {
     let weight = alpha * alpha;
     [weight, weight, weight, 1.0]
+}
+
+/// Whether the overlay over a batch whose own mask value is `glow`
+/// ([`crate::mesh::GpuVertex::glow`]) reaches the bloom's mask: only a batch
+/// that stamps a glow of its own does.
+///
+/// Measured 2026-10-01 on a real absorb (`docs/rendering/glow-mask.md`, "The
+/// hull overlay's mask is wiped"): the original draws a craft's ordinary
+/// batches, and the overlay over them, **before** its shadow pass, whose
+/// full-screen stencil quad (`REPLACE`, reference 4, every pixel) rewrites the
+/// mask to the neutral value. The batches with the glow bits are drawn after
+/// it, with their own overlay, so only theirs survives. The rule is read off
+/// one hull, Assegai, whose single such batch (`colours_flashing_GLOW`, 75
+/// vertices) is the only overlay draw the dump holds after the shadow pass.
+#[must_use]
+pub fn stamps_mask(glow: f32) -> bool {
+    glow > (f32::from(crate::mesh::glow::BASE) + 0.5) / 255.0
 }
 
 /// The overlay model for `hull`: the same vertices and triangles, textured
@@ -292,7 +326,13 @@ pub fn build(
         let input = Vec3::from_array(vertex.position) / scale;
         vertex.texcoord = [REPEAT * input.x, -REPEAT * input.z];
         let lit = ships.iter().any(|range| range.contains(&(index as u32)));
-        vertex.colour = if lit { [1.0; 4] } else { [0.0; 4] };
+        // Alpha is the mask write: 1 replaces the mask under [`BLEND`], 0 keeps it.
+        let stamps = lit && stamps_mask(vertex.glow);
+        vertex.colour = match (lit, stamps) {
+            (false, _) => [0.0; 4],
+            (true, true) => [1.0; 4],
+            (true, false) => [1.0, 1.0, 1.0, 0.0],
+        };
         vertex.lit = 0.0;
         vertex.anim = 0;
     }
@@ -358,6 +398,18 @@ mod tests {
     fn the_tint_weighs_the_colour_by_the_square_and_keeps_the_mask_whole() {
         assert_eq!(tint(0.5), [0.25, 0.25, 0.25, 1.0]);
         assert_eq!(tint(1.0), [1.0; 4]);
+    }
+
+    #[test]
+    fn only_a_batch_with_a_glow_of_its_own_keeps_the_overlays_mask() {
+        let base = f32::from(crate::mesh::glow::BASE) / 255.0;
+        assert!(!stamps_mask(base), "an ordinary batch's mask is wiped");
+        assert!(!stamps_mask(0.0), "a transparent batch without the bits");
+        assert!(
+            stamps_mask(f32::from(0xf7u8) / 255.0),
+            "colours_flashing_GLOW"
+        );
+        assert!(stamps_mask(1.0), "a glow batch with no texture byte");
     }
 
     #[test]

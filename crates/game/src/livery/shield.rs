@@ -99,9 +99,11 @@ pub(super) fn shell(
     archives: &mut oag_assets::Archives,
     team: &str,
     ship_dir: &str,
+    team_model: Option<&str>,
     report: &mut Vec<String>,
 ) -> Option<Model> {
-    let names = crate::race::shield_entry_names(ship_dir, team, archives.layout.platform);
+    let names =
+        crate::race::shield_entry_names(ship_dir, team, archives.layout.platform, team_model);
     for (index, name) in names.iter().enumerate() {
         let provenance = if index == 0 {
             "the team's own"

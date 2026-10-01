@@ -26,6 +26,18 @@ cutout copies of one batch, which the original does not draw; "not animated" is 
 authored `u` scroll (`0 -> 251/256` over 0.9833 s, read off the GS at `1.014 /s`) plus
 the swell.
 
+## PSP half (2026-10-01, `pulse-hull-bloom`)
+
+The PSP's `ShipShield_Construct` formats the `FE_TeamModel` registry value, not the
+literal `ship`, into `%s\%sshield.vex`, so a PSP **Concept** race (hull `extra.vex`)
+raises `<Team>\extrashield.vex` - on the disc for all eight teams - for the player and
+every opponent. Built (`race::shield_entry_names` takes the player's hull stem) and pinned
+by a unit test and a disc test. Open there: no frame of the original's Concept shield was
+taken (the Concept model is behind a loyalty unlock this profile lacks), and the registry
+value of a Concept race was not read live. `extrawreck.vex` exists too, by the same
+registry value; the wreck loader does not use it yet. See `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`,
+"The PSP's shell follows the Concept model".
+
 ## Open
 
 - **A pixel-matched frame, and a brightness gap that is not explained.** `oag-game --pose`

@@ -2087,6 +2087,19 @@ does not depend on the fade. The original's frames show it: at the peak the
 hull blooms into a white blob wider than its own silhouette (see the
 screenshots below). Confidence **85**.
 
+**Corrected 2026-10-01 (`pulse-hull-bloom`): the stamp is real and almost
+all of it is overwritten before the bloom reads it.** A GE list of a real
+absorb shows these ten overlay batches drawn *before* the shadow pass, whose
+full-screen quad (`REPLACE`, reference 4, on every stencil outcome) puts the
+whole mask back to `4`. Completed frames read on the software renderer hold
+the hull at `4` through the window, and the hull does not bloom into a white
+blob; PPSSPP's OpenGL backend draws that blob, and the frames below came from
+a run that did not record its backend. The only overlay draw after the reset
+is the glow batch's own (75 vertices on Assegai). The `255` read out of EDRAM
+on 2026-09-23 was a mid-frame halt. Evidence, the table of prims and the
+backend difference: [glow-mask.md](../../../rendering/glow-mask.md), "The hull
+overlay's mask is wiped".
+
 **Frames.** PPSSPP's own screenshot key (`g` in this profile's
 `controls.ini`, sent with `xdotool` to the window after `windowmove 0 0`)
 saved fourteen frames 0.11-1.09 s into the window. They are

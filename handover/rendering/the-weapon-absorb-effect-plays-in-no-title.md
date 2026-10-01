@@ -31,6 +31,13 @@ though)."
     `shipShape`;
   - it writes the bloom glow mask whole, as the original's stencil
     `REPLACE 0xff` does.
+  - **Corrected 2026-10-01 (`pulse-hull-bloom`): the mask write is now limited to
+    the glow batch.** The original's shadow pass puts the whole mask back to 4
+    after the overlay's ordinary batches, so the white blob this item described is
+    PPSSPP's OpenGL backend and not the software renderer's, nor (by the GE words) the
+    PSP's. `hull_overlay::stamps_mask`; evidence in `docs/rendering/glow-mask.md`, "The hull
+    overlay's mask is wiped". The frames in `~/.cache/oag/drive/reports/pulse-absorb-probe/`
+    are of the white-blob kind.
 
   Evidence is in
   [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),
@@ -68,8 +75,8 @@ Screenshots from the 2026-09-23 lane are in
     and not the same team as ours;
   - ours reads bluer than the original's white-lavender. Exposure and bloom
     are the first suspects, and nothing has been measured.
-- **Pulse: ours reads weaker than the original's absorb, much less so since
-  2026-09-23 (later still).** Three causes found and fixed, all measured on
+- **Superseded 2026-10-01 (`pulse-hull-bloom`): this item's target, the white blob, is what PPSSPP's OpenGL backend draws; the software renderer's completed frames (the reference here) bloom modestly, because the shadow pass wipes the overlay's mask - see `docs/rendering/glow-mask.md`, "The hull overlay's mask is wiped". Do not tune the hull back toward the blob.** Pulse: ours reads weaker than the original's absorb, much less so since
+  2026-09-23 (later still). Three causes found and fixed, all measured on
   PPSSPP (see [scene-light.md](../../docs/ghidra/functions/psp-pulse-usa/scene-light.md)
   and [glow-mask.md](../../docs/rendering/glow-mask.md)):
   - the hull is lit by the circuit's own `AmbientLight`/`DirectionalLight`

@@ -91,7 +91,8 @@ textures, and every one of the 21 is named `_GLOW`; no batch sets `0x40`
 Three effect writers sit outside the mesh path. The exhaust ribbon stamps its
 ramp (`Trail_BuildStateList`, REPLACE), which is the 0 behind an idle
 nozzle. Both hull overlays, absorb and LeachBeam, stamp `0xff`
-(`Gfx_BuildBatchStateList(0x282)`). The LeachBeam ribbon stamps `0x28` on
+(`Gfx_BuildBatchStateList(0x282)`) - **and the shadow pass then wipes all of it
+but the glow batch's own; see "The hull overlay's mask is wiped" below**. The LeachBeam ribbon stamps `0x28` on
 every fragment, transparent texels included (`LeachBeam_SubmitStrip`, REPLACE
 with the alpha test off). That last one is read statically, not measured out
 of EDRAM - see
@@ -134,9 +135,11 @@ What is not reproduced:
 - **The HUD writes alpha into our target**, where the original's mask reads
   `4` under it. The race draws the bloom before it composites the HUD, and a
   crop of the countdown widget shows no halo with the bloom on.
-- **Resolved 2026-09-23: the absorb overlay's mask was patchy because we
-  drew both `LodGroup` tiers.** Read out of EDRAM 0.42 s into a live absorb,
-  the original stamps `255` over the whole overlaid hull, with holes only at
+- **Resolved 2026-09-23, and then superseded 2026-10-01 (see "The hull
+  overlay's mask is wiped"): the absorb overlay's mask was patchy because we
+  drew both `LodGroup` tiers.** Read out of EDRAM 0.42 s into a live absorb
+  **by halting the emulator at an arbitrary moment, which caught the buffer
+  mid-draw**, the original stamps `255` over the whole overlaid hull, with holes only at
   the canopy and the rear, and its colour at that moment is still almost the
   plain hull: the white blob a player sees is the bloom of that mask. Under
   the then-default `lod = "both"` ours also drew the hull's `lodShape`,
@@ -152,6 +155,105 @@ What is not reproduced:
   `LodGroup_SelectChild` does, which keeps the player's hull on tier 0 at
   every chase distance - "implemented - the switch runs every frame", same
   page. The old setting and its both-tiers view are gone.
+
+## The hull overlay's mask is wiped (2026-10-01, `pulse-hull-bloom`)
+
+The question: ours bloomed into a white blob around a craft in its absorb window
+and PPSSPP's software renderer does not. The bloom arithmetic is right (above),
+so the suspect was the overlay's `0xff` stamp.
+
+**Method.** Own PPSSPP on the **software renderer** (EDRAM is real), Talon's
+Junction, Venom, Assegai, Single Race, the craft stationary on the grid after GO
+(`(-132.30, -49.58, -175.32)`, `psp-drive.py restart`). `scripts/psp-absorb-frames.py`
+grants the pickup (`weapon record +0x1bc = 0`, written at a `Weapons_DispatchFire`
+breakpoint) and holds circle, then at **every fourth frame boundary** of the
+one-second window reads `0x04000000`, `0x04088000` (both framebuffers, alpha =
+the stencil) and `0x04110000` (the bloom's final layer), and once records the GE
+list of a frame inside the window (`gpu.record.dump`, breakpoint removed first).
+Two boots; the second reproduced every structural number below.
+
+**What the original's completed frames read.** The hull holds the neutral `4`
+through the whole window, in both buffers, all 16 frames of both boots, though
+its RGB brightens (hull mean `87/95/92` at age 0 to `128/156/165` at 0.53 s). The
+mask pixels that change between age 0 and the peak, inside the box rows 110 to
+255, columns 150 to 290: **95 and 123** on two boots, a few small patches at the
+hull's lights, against **about 4,000** if the whole overlay stamped (what ours
+did). Inside the hull's neighbourhood the bloom layer's mean is `5.1/5.7/4.8/6.0/5.3`
+(original, boot 1) and `5.4/5.2/4.6/5.9/4.8` (boot 2) against `4.4/5.7/5.2/5.7/4.7`
+(ours after the fix) at ages 0.13/0.33/0.53/0.73/0.93, and `35.0/33.6/28.8/33.5/33.1` before it
+(`data/scratch/pulse-hull-bloom/cmpstats.py`).
+
+**Why: the draw order, read off the GE list** (the same frame, both boots; prim
+numbers of boot 1, boot 2 differs by a constant):
+
+| Prims | What | Stencil state (`0xDC` func/ref/mask, `0xDD` ops) |
+| --- | --- | --- |
+| 48 to 62 | the hull's ordinary batches | `ALWAYS`, ref `4`, `REPLACE` on pass |
+| **63 to 72** | **the absorb overlay**, ten batches (425, 168, 29, 29, 150, 47, 123, 5, 5, 133 vertices): `blend 0xa2`, depth `EQUAL` | `ALWAYS`, ref **`0xff`**, `REPLACE` on pass |
+| 326 to 329 | the craft's drop-shadow volume, colour masked off | ref `0`, `INCR`/`DECR` on **z-fail** |
+| **330** | **a full-screen quad**, 4 vertices, depth test off | `GREATER`, ref `4`, mask `0xff`, **`REPLACE` on stencil-fail, z-fail and pass** |
+| 331 onward | the track's glow batches, the weapon bodies, the blink-light batch | their own texture bytes (`0xf7`, ...) |
+| **387 to 389** | **`colours_flashing_GLOW` (75 vertices), its ordinary pass, and its overlay (75 vertices)** | ref `0xf7`, ref `4`, ref **`0xff`** |
+
+The pixel mask (`0xE8`/`0xE9`) is open on prim 330, so its `REPLACE` reaches the
+framebuffer's alpha. **The quad rewrites every pixel's mask to `4`**, and it
+runs after the overlay's ten ordinary batches. It exists in a frame with no absorb
+(a control dump has the same shadow volumes and the same quad), so it is the
+frame's own structure and not something the absorb causes. What is drawn after
+it keeps its stamp: the track's glow batches, which is why the neon strips
+survive, and the one hull batch with the glow bits and **its own overlay** (prim
+389, the only overlay draw after the reset), which is why a few patches of the
+hull do change. Confidence **88**: the GE words, the pixel counts and the
+bloom layer agree on two boots; one hull (Assegai) only.
+
+(Decoding: `0xDC` is `func | ref << 8 | mask << 16`, `0xDD` is `sfail | zfail << 8
+| zpass << 16`, with the enum `KEEP 0, ZERO 1, REPLACE 2, INVERT 3, INCR 4, DECR
+5` and `NEVER 0, ALWAYS 1, EQUAL 2, NOTEQUAL 3, LESS 4, LEQUAL 5, GREATER 6,
+GEQUAL 7`; a texture address differs between boots, so the overlay is found by
+its state, not by its texture.)
+
+**Why the 2026-09-23 reading said otherwise.** That probe halted the emulator
+at an arbitrary time and read the buffer. A halt between the overlay's draws and
+prim 330 leaves exactly the overlaid hull at `255` in the buffer being drawn. The
+same read in this lane's boot 1 caught it: halts at 0.58 s and 0.68 s showed
+2,822 and 3,054 hull pixels at `255` in one buffer and 4 in the other, while
+every frame-boundary read showed 4 in both. The rule for any later read of
+EDRAM: **read at a frame boundary (a breakpoint in a once-a-frame function) and in
+both buffers.**
+
+**The hardware backend does not do this.** The same absorb on PPSSPP's OpenGL
+backend (**one boot, seen once**, same pose, 16 frames) draws the hull white-hot, a blob wider than the
+silhouette, as the 2026-09-23 screenshots did and as ours did before the fix
+(`data/scratch/pulse-hull-bloom/compare-sw-hw-ours-before-after.png`, in that order: software PPSSPP, OpenGL PPSSPP, ours before, ours after). A plausible cause,
+**not verified**: an alpha-as-stencil emulation can write the stencil only where a
+fragment passes the test, and prim 330's reset is a `REPLACE` on stencil *fail*. The
+software renderer (`DrawPixel.cpp`) runs every stencil outcome on every pixel,
+which is what the PSP's raster does. This page treats the software renderer as the
+reference, as it does for every EDRAM figure above, and the white blob a player sees
+on PPSSPP's OpenGL backend as that backend's approximation. No PSP hardware was
+available to arbitrate; that is the one thing that would.
+
+**What ours does now.** `hull_overlay::stamps_mask`: the overlay writes `0xff`
+only over a batch with a glow of its own (`GpuVertex::glow` above the neutral
+`4`), and leaves the mask alone elsewhere; its colour is unchanged (a rendered
+no-bloom frame moves by at most one level). That is the rule's second half,
+"what is drawn after the reset keeps its stamp", read off one hull. **Chosen, not
+measured:** it is keyed on the batch having the glow bits, which on Assegai
+singles out the one batch the dump shows after the reset; whether that holds for
+the other seven teams, and what orders the batches around the shadow pass, is
+not read. At the original's grid pose (ours via `--pose-from`, `--camera-fov 60`),
+at ages 0.13 to 0.93 s, the bloom mean in the hull's neighbourhood is `4.4 / 5.7 /
+5.2 / 5.7 / 4.7` against the original's `5.1 / 5.7 / 4.8 / 6.0 / 5.3` (boot 1) and `5.4 / 5.2 / 4.6 / 5.9 / 4.8` (boot 2), the mask
+pixels at `255` match to within about 8 %, and the frames read alike
+(`data/scratch/pulse-hull-bloom/o1/vs1.png`). `crates/game/tests/absorb_mask_ground_truth.rs` pins it
+on the disc: the full-glow pixels in the hull's box grow by **232 - 119 = 113** at the
+peak against 4,189 - 119 without the fix, and the original's 95 and 123.
+
+**Not done:** the LeachBeam overlay is the same routine (`HullOverlay_Submit`) and
+takes the same rule here, but no frame of it was read; the shadow pass's reset
+quad itself is not modelled (ours has no stencil shadow volumes, so nothing else
+that draws before it is wiped either); the HUD's white energy-bar flash stamps
+the original's mask (the bar block in the diff), which ours does not.
 
 ## Transparent batches stamp (2026-10-01, Outpost 7)
 

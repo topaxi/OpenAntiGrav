@@ -185,8 +185,12 @@ fn the_ps2_shell_is_extrashield_and_not_shipshield() {
     let mut archives =
         oag_pulse::open(&image.display().to_string()).expect("opening the PS2 archives");
     for team in PS2_TEAMS {
-        let names =
-            race::shield_entry_names(oag_title::race::SHIP_DIR, team, oag_assets::Platform::Ps2);
+        let names = race::shield_entry_names(
+            oag_title::race::SHIP_DIR,
+            team,
+            oag_assets::Platform::Ps2,
+            None,
+        );
         assert_eq!(
             names[0],
             format!(r"Data\Ships\{team}\extrashield.vex"),
