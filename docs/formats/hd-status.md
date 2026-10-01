@@ -511,7 +511,8 @@ UTF-8 with a declaration and CRLF line endings, so it needs no dictionary.
 `easyshield` and `weight_distribution` included, both of which Pulse authors and
 the parser already reads:
 `<Misc height length shield easyshield width weight_distribution>`,
-`<ExternalCameraFar>` with the identical seven attributes, `<AirbrakeGraphics>`,
+`<ExternalCameraFar>` and `<ExternalCameraClose>` with the identical seven attributes (the values differ from Pulse's, see
+[handling-stats.md](handling-stats.md#the-two-externalcamera-blocks-across-titles)), `<AirbrakeGraphics>`,
 and per-class `<Engine accelcap amount falloff gain turbo>`, `<Brakes>`,
 `<Turning>`, `<Airbrake>`, `<Antigrav>`, `<Physical>` blocks for
 VENOM/FLASH/RAPIER/PHANTOM.

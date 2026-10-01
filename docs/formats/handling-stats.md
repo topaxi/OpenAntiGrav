@@ -350,6 +350,31 @@ Whether the two releases ship the same *values* is still open, and deliberately
 so: answering it would mean putting a comparison or a fingerprint of shipped design
 data in the repository.
 
+## The two `ExternalCamera` blocks across titles
+
+Compared on 2026-10-01, for these two blocks only and as agreement or difference, not
+as a table of values (the paragraph above still holds for everything else). Every
+racing title authors both blocks with the same seven attributes, and the global
+`<ExternalCloseCamPitchMod>`, `<ExternalFarCamPitchMod>`, `<ReplayCamPitchMod>` and
+`<CameraSideOffset>` blocks agree on all five titles.
+
+| Pair | What the blocks do |
+| --- | --- |
+| Pulse PSP USA and EU | identical on every team |
+| Pulse PSP and Pulse PS2 | the close block and the far block's `pos_*` and `fov` are identical on every team; **the far block's `lookat_height` and `lookat_length` differ on all of them** |
+| Pulse PSP and Pure | identical on the racing teams the two share; Pure's `Zone_01` and `Medievil` differ |
+| Pulse PSP and HD | **both blocks differ on every team** - HD authors a shorter close eye, a close look-at below the craft, and a far eye about as far as Pulse's close. HD's `Test` ship and `feisar\handlingstats_traditional.txt` carry Pulse's blocks instead |
+| HD and 2048's `Data\art\published\hdships\<Team>\` | identical on all 39 files |
+| 2048's own `Data\HandlingStats\<team>\<n>\` | `<n>` is the four craft a team flies (see [2048-status.md](2048-status.md)). Both blocks carry an extra `head_tilt` attribute, **which `ExternalCamera::from_node` ignores**, and they differ between the four craft of one team and from HD's |
+
+What the authored offsets mean at runtime is a per-title fact: Pulse PSP applies a
+0.75 craft scale to the eye (measured, [camera.md](../ghidra/functions/psp-pulse-usa/camera.md)),
+Pulse PS2's camera function has no such multiply, and Pure, HD and 2048 are
+unmeasured. Pulse's authored close is 4/3 of what the player sees, and HD's and
+2048's authored offsets are close to the distance Pulse's player sees, which is a
+reason to measure them rather than assume the scale carries over. Not read: Pulse's
+and Pure's DLC teams, which live in `data/dlc/`.
+
 ## A second file shares the parser: `Data\XML\HandlingStats.xml`
 
 `Handling_ParseStats` (`0x0883a2f0`) has **two** callers and they open different
@@ -609,7 +634,8 @@ Located alongside, same naming pattern, not yet decoded:
   table above are read off the names, not off the rendering code. Confidence 60.
   Settling them means finding the sites that consume the camera block.
 - Whether the PS2 release ships the same *values*. The schema question is now
-  settled - see above - but the values are not compared, and will not be here:
+  settled - see above - but the values are not compared, and will not be here
+  (bar the two `ExternalCamera` blocks, [above](#the-two-externalcamera-blocks-across-titles)):
   recording the answer means recording a fingerprint of shipped design data. It
   would settle whether [ADR-0004](../architecture/adr/0004-asset-pipeline.md)'s
   "gameplay is identical across asset sets" holds, and needs a home outside the
