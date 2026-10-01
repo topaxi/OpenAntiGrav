@@ -692,3 +692,43 @@ fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
         "which HD texture names fail to resolve is a measurement, not a tolerance"
     );
 }
+
+/// The animated-attribute records (`+0x93c`/`+0x940`) of the PSP corpus: eleven, on eleven
+/// emitters, ten of them selector 2 (the extent's co-factor) and `WO_REPULSER_BLAST`'s
+/// selector 5. `WO_BOMB_SMOKERING`'s root is the one a live detonation measured: a keyed
+/// `1 + 1 * (0.0068 .. 1)` that widens its spawn ring from 12.94 to 23.3 units.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_psp_corpus_authors_eleven_attribute_animations() {
+    let Some(image) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archive =
+        Archive::open(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display())).expect("open");
+    let mut selectors = Vec::new();
+    let mut smoke = None;
+    for (_, blob) in particle_systems(&mut archive) {
+        let system = ParticleSystem::parse(&blob).expect("parse");
+        for emitter in system.emitters(&blob).expect("emitters") {
+            assert_eq!(
+                emitter.attribute_animations.len(),
+                usize::try_from(emitter.animated_attributes).unwrap_or(0),
+                "{} / {}: every counted record is read",
+                system.name,
+                emitter.name
+            );
+            for animation in &emitter.attribute_animations {
+                selectors.push(animation.selector);
+                if system.name == "WO_BOMB_SMOKERING" && emitter.name == "WO_BOMB_SMOKERING" {
+                    smoke = Some(animation.clone());
+                }
+            }
+        }
+    }
+    selectors.sort_unstable();
+    assert_eq!(selectors, [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5]);
+    let smoke = smoke.expect("the smoke ring's record");
+    assert_eq!((smoke.channel.lo, smoke.channel.hi), (1.0, 2.0));
+    assert_eq!(smoke.channel.keys.len(), 2);
+    assert!((smoke.channel.scaled_at(1.0) - 2.0).abs() < 1e-5);
+}

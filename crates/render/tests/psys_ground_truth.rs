@@ -585,14 +585,16 @@ fn every_psp_sprite_fits_one_sheet_and_the_quake_fire_is_orange() {
 }
 
 /// Shape 3 places a particle on a ring or in a disc round the anchor, not at it
-/// (`FUN_088fc634`, read 2026-10-01). The Bomb's smoke ring authors an extent of
-/// 12.94 with an exact radius, and the original's first particles were read at 13.0
-/// to 13.6 units from the blast centre on the horizontal plane (`PPSSPP`,
-/// `psp-weapon-pair.py --probe rolled --detonate-bomb-at`); placed at the anchor, as
-/// every shape 3 was until then, the smoke was a puff where the original's is a wall.
+/// (`FUN_088fc634`, read 2026-10-01), and the Bomb's smoke ring **widens while it emits**:
+/// its one animated-attribute record scales the extent from `1.007` to `2` over the
+/// emitter's 20 ticks. Read live on a PPSSPP detonation (`psp-weapon-pair.py --probe
+/// rolled --detonate-bomb-at`, a single run), the particles born at emitter ticks 0, 1, 3, 7
+/// and 16 sat 13.1, 13.7, 15.0, 17.6 and 23.4 units from the blast centre on the
+/// horizontal plane. Placed at the anchor, as every shape 3 was until then, the smoke was
+/// a puff where the original's is a wall.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn the_bombs_smoke_ring_is_born_on_a_ring_of_its_extent() {
+fn the_bombs_smoke_ring_is_born_on_a_ring_that_widens_as_it_emits() {
     let Some(mut archive) = archive() else {
         return;
     };
@@ -601,29 +603,39 @@ fn the_bombs_smoke_ring_is_born_on_a_ring_of_its_extent() {
     let mut system = System::new();
     system.ignite(&effect, Vec3::ZERO, 1.0);
     let dt = 1.0 / TICK_HZ;
-    let mut checked = 0;
-    for _ in 0..4 {
+    // Radii of the particles born this tick - the ones still at the size channel's start.
+    let mut born = Vec::new();
+    for _ in 0..17 {
         system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
-    }
-    let (_, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
-    // The `debris` emitter beside it has no extent, so its quads sit at the anchor; the
-    // smoke's must be on the ring and nothing may lie between the two.
-    for quad in alpha_over.chunks(6) {
-        let centre = quad
-            .iter()
-            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from(v.position))
-            / 6.0;
-        let horizontal = centre.x.hypot(centre.z);
-        if horizontal < 4.0 {
-            continue;
+        let (_, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        let mut radii = Vec::new();
+        for quad in alpha_over.chunks(6) {
+            let xs = quad.iter().map(|v| v.position[0]);
+            let half = (xs.clone().fold(f32::MIN, f32::max) - xs.fold(f32::MAX, f32::min)) / 2.0;
+            let centre = quad
+                .iter()
+                .fold(Vec3::ZERO, |sum, v| sum + Vec3::from(v.position))
+                / 6.0;
+            // The `debris` emitter beside it has no extent: its quads sit at the anchor.
+            if half < 0.1 && centre.x.hypot(centre.z) > 4.0 {
+                radii.push(centre.x.hypot(centre.z));
+            }
         }
-        // The ring is 12.94; a particle that has drifted a few ticks sits a little out.
-        assert!(
-            (12.0..16.0).contains(&horizontal),
-            "a smoke particle {horizontal} units from the anchor: {centre}"
-        );
-        assert!(centre.y.abs() < 2.0, "{centre}");
-        checked += 1;
+        born.push(radii);
     }
-    assert!(checked >= 4, "{checked} smoke quads");
+    for (tick, expected) in [
+        (0usize, 13.1f32),
+        (1, 13.7),
+        (3, 15.0),
+        (7, 17.6),
+        (16, 23.4),
+    ] {
+        assert!(!born[tick].is_empty(), "no particle born at tick {tick}");
+        for &radius in &born[tick] {
+            assert!(
+                (radius - expected).abs() < 0.6,
+                "tick {tick}: born {radius} units out, the original's {expected}"
+            );
+        }
+    }
 }

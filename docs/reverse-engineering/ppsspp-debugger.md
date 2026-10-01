@@ -1841,5 +1841,8 @@ with `python3`, not `uv run --with websocket-client`, which needs the network).
   to a PRIM (`TEXLEVEL` `0xc8`, `BLENDMODE` `0xdf`, `STENCILTEST` `0xdc`, ...) is how the
   Bomb's ring and dome states in `mine.md` were read.
 - `--detonate-bomb-at K --detonate-ahead D` moves the first laid Bomb `D` units ahead of the
-  craft and runs its fuse out (`mine.md`, third pass); with `--probe` it fires inside the
-  probe loop instead.
+  craft and runs its fuse out (`mine.md`, third pass). With `--probe` it fires inside the
+  probe loop instead, **at the first probe hit after K frames** - and a `rolled` probe is not
+  hit until something draws through `ParticleSystem_DrawRolledQuads`, so in one run it fired at
+  frame 72.9 and not 8, the craft 70 frames further down the road. Read the logged
+  `detonation` row for where the blast went.

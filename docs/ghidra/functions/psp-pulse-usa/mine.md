@@ -1310,7 +1310,7 @@ The body is now the original's darker olive. **Still different, not isolated**:
 
 - *The ring's brightness.* The original's ring at this phase is a thick, solid, saturated
   yellow band round the canister's lower half; ours is thinner, dimmer, three yellow lines
-  on brown. The batch's GE state in the original was read off a dump (prim 668: 81 vertices,
+  on brown. The batch's GE state in the original was read off a dump (one GE dump, prim 668: 81 vertices,
   `vt 0x13d`, texture format `T4`): additive `SRC_ALPHA, FIX 0xffffff`, colour test
   `NOTEQUAL` black, depth write off, culling off, lighting off, stencil off, filter
   `LINEAR_MIPMAP_LINEAR`, **texture level mode 2 with bias 2.875** (`TEXLEVEL` byte 46 / 16:
@@ -1341,10 +1341,11 @@ tick with the camera 120 units away. The frames (`bomb-det-a/`) show, from the b
 
 Ours, built from the same recovered animator, matched in kind and timing and differed in
 size: the smoke was a 25 px puff and the dome a faint grey outline. **Two causes fixed**:
-the smoke ring spawns on a ring 12.94 units in radius round the blast (`psys` shape 3,
-`ParticleSystem_EmitRing`, [`particle-system.md`](particle-system.md#shape-3-is-a-ring-or-a-disc-particlesystem_emitring-2026-10-01),
-read live on this effect: 13.0 to 13.6 units from the centre) where ours spawned it at the
-anchor, and the dome stamps the glow mask (`hemisphere_disperse1_ADD_GLOW`, stencil `80`
+the smoke ring spawns on a ring round the blast that **widens from 12.94 to 23.3 units over
+the emitter's twenty ticks** (`psys` shape 3, `ParticleSystem_EmitRing`, and the animated
+attribute that scales its extent; [`particle-system.md`](particle-system.md#shape-3-is-a-ring-or-a-disc-particlesystem_emitring-2026-10-01),
+read live on this effect, two boots: 13.1 to 23.4 units from the centre) where ours spawned
+it at the anchor, and the dome stamps the glow mask (`hemisphere_disperse1_ADD_GLOW`, stencil `80`
 in the GE list). The debris emitter's rock sprites now exist at all (4-bit textures,
 [`pob.md`](../../../formats/pob.md)). **Still different**: the
 dome reads yellow and opaque in the original and white and thin in ours, and the original's
@@ -1354,8 +1355,9 @@ is alpha `80`, so it is additive at 31 %), which is the same in both, so the bri
 original shows is its bloom (mask `80`) and the sky behind it; our bloom of the same mask is
 not separated from the extra white.
 
-Confidence **90** that the wash, the dome's mask and the smoke ring's placement match the
-original (each read off the original, two of them off a GE list or a particle pool); the
-rest above is a description, not a measurement. The detonation was moved by a debugger
+Confidence: **88** for the smoke ring's placement and widening (a particle pool read on two
+boots); the dome's mask and the ring's and dome's GE states are **seen once** (one GE dump,
+one boot - no score); the wash is a visual match of colour and frame, with the formula read
+earlier (`particle-system.md`); the rest above is a description, not a measurement. The detonation was moved by a debugger
 write, and the blast's own position is therefore the written one; the blast force is not
 applied (that is `Bomb_ApplyBlast`, a separate call the write does not reach).

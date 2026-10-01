@@ -865,9 +865,9 @@ units across, change none. The halo a player sees is the bloom of the **road**, 
 mask is `255` under the flare (about 30,000 pixels of `255` in both the fire and the
 control frame): the bright pass is `rgb * alpha`, so light added to a stamped road
 glows and light added to a `4` sky does not. Ours stamps the same road (`OAG_DUMP_GLOW_MASK`,
-side by side at fire+5, same shapes), so no mask change was made. Confidence **90**
-for the rocket's flare and SHAZZAM not stamping (a measured null on two quads' worth
-of coverage); the particle path's protect call is `docs/rendering/glow-mask.md`'s.
+side by side at fire+5, same shapes), so no mask change was made. Seen on **one
+boot** (six frames), so scored low: **80** for the rocket's flare and SHAZZAM not stamping;
+the particle path's protect call is `docs/rendering/glow-mask.md`'s.
 
 ## What is not verified
 

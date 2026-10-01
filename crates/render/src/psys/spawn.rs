@@ -6,22 +6,26 @@
 //! matrix. Three shapes are read and implemented here; the rest stay at the
 //! anchor, as every shape did before:
 //!
-//! - **Shape 3, a ring or a disc.** `FUN_088fc634`, read at decompiler level
-//!   on 2026-10-01 and confirmed live on `WO_BOMB_SMOKERING`: with `r` the
-//!   scaled extent (`DAT_08ab2290`) and `phi` drawn `U(0, 2 pi)` per particle,
-//!   `+0x3c` `0` places it at `(r cos phi, 0, r sin phi)` - a **ring** of radius
-//!   `r` in the frame's `XZ` plane, its `Y` the cone's axis; `1` at a radius
-//!   `Psys_RandSpread(r, +0x40)`; `2` anywhere in the **disc** (a point drawn in
-//!   the square `[-r, r]^2` until it lies inside the circle). Read on the
-//!   Bomb's smoke ring: its first particles sit 13.0 to 13.6 units from the
-//!   blast centre on the horizontal plane at an authored extent of 12.94, with
-//!   a vertical offset under a unit, and a ring-shaped smoke wall follows.
-//!   Until then shape 3 was a point, on the strength of the collision sparks'
-//!   extents of at most 0.1; the corpus authors `12.9` on the Bomb's smoke and
-//!   the ship explosion's root, `10` on its debris, `13.6` on the Repulser's
-//!   blast and `5.1` on the Rocket's own debris. **Not played:** flag
-//!   `0x200000`, which steps `phi` evenly (`2 pi / count`) from a random
-//!   start instead of drawing it - only `WO_REPULSER_BLAST` carries it.
+//! - **Shape 3, a ring or a disc.** `FUN_088fc634`, read in full on 2026-10-01 and
+//!   checked against a live detonation of `WO_BOMB_SMOKERING`: with `r` the scaled
+//!   extent (`DAT_08ab2290`) and `phi` drawn `U(0, 2 pi)` per particle, `+0x3c` `0`
+//!   places it at `(r cos phi, 0, r sin phi)` - a **ring** in the frame's `XZ` plane,
+//!   its `Y` the cone's axis; `1` at a radius `Psys_RandSpread(r, +0x40)`; `2` anywhere
+//!   in the **disc** (a point of the square `[-r, r]^2` redrawn until it lies inside the
+//!   circle). Under an aimed velocity (mode 1, which every shape-3 emitter with an extent
+//!   authors) the particle then flies along the heading of that offset - see [`place`].
+//!   `r` is **not constant**: the emitter's animated-attribute record (selector 2,
+//!   [`oag_vex::pob::attribute`]) scales the extent over its run, so the smoke ring's
+//!   particles were born 13.1, 13.7, 15.0, 17.6 and 23.4 units out at emitter ticks 0, 1,
+//!   3, 7 and 16 (two boots) against the authored `12.94`, and
+//!   [`super::EmitterSpec::extent_animation`] plays it. Until then shape 3 was a point, on
+//!   the strength of the collision sparks' extents of at most 0.1; the corpus authors `12.9`
+//!   on the Bomb's smoke and the ship explosion's root, `10` on its debris, `13.6` on the
+//!   Repulser's blast and `5.1` on the Rocket's own debris. **Not played:** flag
+//!   `0x200000`, which steps `phi` evenly (`2 pi / count`) from a random start instead of
+//!   drawing it (only `WO_REPULSER_BLAST` carries it), the sub-frame spread of a moving
+//!   emitter, the sign of the aimed azimuth (unmeasured, and the debris authors `0.925`),
+//!   and the Repulser's selector-5 record.
 //! - **Shape 1, a line (or a flat rectangle).** `FUN_088fcfec`, read at
 //!   instruction level on 2026-09-24: while `+0x3c` is `0..=2` the offset is
 //!   `(U(-e, e), 0, U(-z, z))`, `e` the scaled extent global
@@ -202,6 +206,48 @@ impl Spawn {
             }
         }
     }
+}
+
+/// A new particle's flight direction and spawn offset, in that order of dependence.
+///
+/// A ring or a disc under an **aimed** velocity (every shape-3 emitter with an extent
+/// authors velocity mode 1) places the particle first and aims it along the spawn
+/// offset's own heading: `FUN_088fc634` hands `ParticleSystem_AimedVelocity` the
+/// normalised `(x, 0, z)` it just wrote, so the smoke leaves the ring outward rather
+/// than in a direction drawn apart from where it was born. Every other pairing draws
+/// the direction first, as it always did (a sphere places the particle along it, and
+/// a tangent sphere stays at the anchor).
+#[must_use]
+pub(super) fn place(
+    spawn: Spawn,
+    direction: super::Direction,
+    scale: f32,
+    across: Vec3,
+    up: Vec3,
+    rng: &mut Rng,
+) -> (Vec3, Vec3) {
+    if let (
+        Spawn::Ring { .. },
+        super::Direction::Aimed {
+            elevation,
+            azimuth,
+            jitter,
+        },
+    ) = (spawn, direction)
+    {
+        let offset = spawn.offset(scale, Vec3::ZERO, across, up, rng);
+        let radial = offset.try_normalize().unwrap_or(across);
+        let elevation = elevation + jitter * (rng.next_f32() * 2.0 - 1.0);
+        let (sin_a, cos_a) = azimuth.sin_cos();
+        let heading = radial * cos_a + up.cross(radial) * sin_a;
+        return (heading * elevation.cos() + up * elevation.sin(), offset);
+    }
+    let aim = super::direction_for(direction, up, rng);
+    let placement = match (spawn, direction) {
+        (Spawn::Sphere { .. }, super::Direction::Tangent { .. }) => Spawn::Point,
+        (other, _) => other,
+    };
+    (aim, placement.offset(scale, aim, across, up, rng))
 }
 
 /// `across` made perpendicular to `up`, falling back to the frame's own

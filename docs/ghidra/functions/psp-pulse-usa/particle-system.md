@@ -1283,31 +1283,57 @@ measured.
 
 ### Shape 3 is a ring or a disc: `ParticleSystem_EmitRing` (2026-10-01)
 
-`FUN_088fc634(instance, count)`, `ParticleSystem_SpawnBurst`'s shape-3 emitter, read in
-full (the "cone placement" this page listed as unread) and confirmed live. With `r` the
-scaled extent (`DAT_08ab2290`) and `phi` drawn `Psys_RandFloatRange(0, 2 pi)` per particle
-(or, under resource flag `0x200000`, a random start stepped by `2 pi / count`), the spawn
-offset in the emitter frame is by `+0x3c`:
+`FUN_088fc634(instance, count)`, `ParticleSystem_SpawnBurst`'s shape-3 emitter (the
+"cone placement" this page listed as unread), decompiled whole - the first read of it
+stopped inside mode 2's loop and the rest was read after. With `r` the scaled extent
+(`DAT_08ab2290`) and `phi` drawn `Psys_RandFloatRange(0, 2 pi)` per particle (or, under
+resource flag `0x200000`, a random start stepped by `2 pi / count`), the spawn offset in the
+emitter frame is, by `+0x3c`:
 
-| `+0x3c` | offset |
+| `+0x3c` | offset `(x, y, z)` |
 | ---: | --- |
 | `0` | `(r cos phi, 0, r sin phi)` - a **ring** of radius `r` in the frame's `XZ` plane, `Y` the cone's axis |
 | `1` | the same at a radius `Psys_RandSpread(r, instance+0x60)` |
-| `2` | a point in the square `[-r, r]^2`, redrawn until it lies inside the circle - a uniform **disc** |
+| `2` | `(x, 0, z)` with `x` and `z` each `U(-r, r)`, **redrawn until `x^2 + z^2 <= r^2`**: a uniform **disc** |
 
-**Live**: `WO_BOMB_SMOKERING` authors extent `12.941` and radius mode `1`; a Bomb
-detonated 120 units ahead of the craft (`psp-weapon-pair.py --probe rolled
---detonate-bomb-at`) spawned its first smoke particles 13.0 to 13.6 units from the blast
-centre on the horizontal plane with a vertical offset under a unit, every azimuth, and the
-instance's own scale words read `1.0`. Confidence **85**: the three modes are read, the
-ring radius and plane measured on mode 1; the disc's rejection loop and the even-step flag
-are read and not measured. The corpus's shape-3 emitters with an extent over 0.1:
-`WO_BOMB_SMOKERING` (12.9), `WO_SHIP_EXPLOSION` root (12.9, mode 1) and `SHIP_DEBRIS`
-(10, mode 2, spread `7.7`) and `trail` (1.9), `WO_ROCKET_EXPLO`'s `DEBRIS` (5.1, mode 2),
-`WO_MISSILE_BOUNCE`/`WO_MISSILE_EXPLO`'s `drift_down` (4.1 to 4.3), `WO_REPULSER_BLAST`
-(13.6, mode 0, with `0x200000`). `oag_render::psys::spawn::Spawn::Ring` plays all of it but
-the even step. The "approximates shape 3 as the anchor" remark further down was true of
-the collision sparks' `0.1` and was never true of these.
+What follows the placement, in the same function: `+0x44` (the emitter's velocity mode)
+`1` calls `ParticleSystem_AimedVelocity` with the **normalised `(x, 0, z)` it just wrote**
+as the heading - the particle leaves the ring outward - and `0` or `2` call
+`ParticleSystem_ConeVelocity` independent of the offset; then `ParticleSystem_InitParticle`;
+then, under the sub-frame flag (`DAT_08b620a0`), the offset and the two stored points are
+pushed forward by the emitter's motion times `i / count`. Every shape-3 emitter with an
+extent authors velocity mode 1.
+
+**The extent is animated.** `WO_BOMB_SMOKERING`'s emitter carries one animated-attribute
+record (`+0x93c` count 1, selector `2`, a keyed channel `1 + 1 * (0.0068 .. 1)`), which
+`ParticleSystem_Update` evaluates at the emitter's normalised age every tick and stores into
+instance `+0x48`, the extent's co-factor, before `ParticleSystem_DeriveScaledParams` runs
+again (`oag_vex::pob::attribute`). So the ring is `12.94` at the first tick and `23.3` at
+the sixteenth.
+
+**Live, two boots** (a Bomb moved 120 units ahead and run out,
+`psp-weapon-pair.py --probe rolled --detonate-bomb-at`; the second boot read 13.2, 13.8, 15.1,
+17.6 and, at tick 15, 22.7): the particles born at emitter ticks
+0, 1, 3, 7 and 16 sat **13.1, 13.7, 15.0, 17.6 and 23.4** units from the blast centre on the
+horizontal plane, a vertical offset under a unit, every azimuth; the formula gives 13.0,
+13.7, 15.0, 17.5 and 23.3, and the instance's own scale words read `1.0`. Each drifted
+outward about 0.09 units a tick with `y` flat. (The first reading of this section took the
+ring for a constant `12.94`; the log it was written from said otherwise.) Confidence **88**
+for the decompile and the extent's growth (read, and matched at five ticks on two boots);
+the disc's loop is read and not measured; the aimed azimuth's sign is unmeasured.
+
+The corpus's shape-3 emitters with an extent over 0.1: `WO_BOMB_SMOKERING` (12.9, mode 1),
+`WO_SHIP_EXPLOSION`'s root (12.9, mode 1), `SHIP_DEBRIS` (10, mode 2) and `trail` (1.9,
+mode 1, velocity mode 0), `WO_ROCKET_EXPLO`'s `DEBRIS` (5.1, mode 2), the missile's
+`drift_down` (4.1 to 4.3, mode 2) and `WO_REPULSER_BLAST` (13.6, mode 0, flag `0x200000`,
+selector 5 animated). The animated attributes on the disc: eleven records on eleven
+emitters, ten of them selector 2 (`WO_BOMB_SMOKERING` and its `debris`,
+`WO_SHIP_EXPLOSION` and its `FIREBALL`, `WO_ROCKET_EXPLO`'s two mushrooms and
+`WO_ROCKET_EXPLO_TRACK`'s `Fire_Emitter`, the Shuriken's bounce and expiry and the absorb).
+`oag_render::psys::spawn::Spawn::Ring`, `place` and `EmitterSpec::extent_animation` play
+all of it but the even step, the sub-frame spread, the azimuth's sign and selector 5. The
+"approximates shape 3 as the anchor" remark further down was true of the collision sparks'
+`0.1` and was never true of these.
 
 ### The pool's square draw, and a pool particle read live (2026-10-01)
 

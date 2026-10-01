@@ -305,15 +305,15 @@ no-fire control; `psp-weapon-pair.py --edram`):
 
 | What | Original | Ours before | Ours now |
 | --- | --- | --- | --- |
-| mask `0xba` (186), the canister's lamp batch (`mine_flash_GLOW`), pixels at fire+5 to +7 | 1,006 to 1,326 | 0 | 1,361 (one frame) |
-| road pixels `255` -> `4` under the opaque canister, fire+5 / fire+6 | 756 / 2,965 | 400 at the same frame | 3,357 |
+| mask `0xba` (186), the canister's lamp batch (`mine_flash_GLOW`), pixels at fire+5 to +7 | 1,006 to 1,326 (boot 1), 758 to 1,406 (boot 2) | 0 | 1,361 (one frame) |
+| road pixels `255` -> `4` under the opaque canister, fire+5 / fire+6 | 756 / 2,965 (boot 1), 2,218 / 4,581 (boot 2) | 400 at the same frame | 3,357 |
 
 So the canister's body writes the neutral `4` over the road's `255`, and its lamp writes its
 own glow byte. Ours kept the road's `255` under the body, and the body bloomed as a pale
 wash - the grey-green sheen on the canister that the original's saturated olive does not
 have. `crates/game/tests/weapon_stamp_ground_truth.rs` pins both numbers (it reads 0 and
-400 with the bodies off the list). Confidence **90** for the Bomb's body and lamp, from the
-EDRAM read alone (the two values are what its batches' glow bytes and the neutral `4` would
+400 with the bodies off the list). Confidence **88** for the Bomb's body and lamp, from the
+EDRAM read on two boots alone (the two values are what its batches' glow bytes and the neutral `4` would
 write; the Bomb's own GE batches were not separated out of the dump); the
 Rocket, Mine and Cannon bodies are on the list by the same generic state list, with the
 Rocket's rockets seen turning 7 to 87 road pixels to `4` per frame and no frame of the
@@ -321,7 +321,7 @@ other two compared.
 
 **The Bomb's blast dome stamps as well.** `explosion_hemisphere.vex`'s two batches are
 `pass_mask 0x12b2` - transparent with the glow bit, like the tunnel's arch lights - and a GE
-dump of a Bomb detonated 120 units ahead shows them (prims 527 and 528: 21 and 87
+dump of a Bomb detonated 120 units ahead (one dump, one boot, so seen once) shows them (prims 527 and 528: 21 and 87
 vertices, 37 units across) drawn additive, colour test `NOTEQUAL` black, depth write off,
 stencil `REPLACE` reference `80`. Ours stamps through the second alpha-only pipeline this
 page's "Transparent batches stamp" section built. The shockwave beside it

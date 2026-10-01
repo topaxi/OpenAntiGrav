@@ -86,3 +86,35 @@ fn a_disc_fills_its_circle_and_stays_inside_it() {
     // A uniform disc has a quarter of its area inside half its radius.
     assert!((90..170).contains(&inner), "{inner} of 500");
 }
+
+#[test]
+fn a_ring_under_an_aimed_velocity_flies_outward_along_its_own_heading() {
+    let ring = Spawn::Ring {
+        extent: 8.0,
+        spread: 0.0,
+        mode: 0,
+    };
+    let aimed = crate::psys::Direction::Aimed {
+        elevation: 0.0,
+        azimuth: 0.0,
+        jitter: 0.0,
+    };
+    let mut rng = Rng::new(2);
+    for _ in 0..50 {
+        let (direction, offset) = place(ring, aimed, 1.0, Vec3::X, Vec3::Y, &mut rng);
+        assert!(
+            (direction - offset / 8.0).length() < 1e-4,
+            "{direction} against {offset}"
+        );
+    }
+    // A raised aim keeps the heading and tilts it up by the elevation.
+    let raised = crate::psys::Direction::Aimed {
+        elevation: 1.0,
+        azimuth: 0.0,
+        jitter: 0.0,
+    };
+    let (direction, offset) = place(ring, raised, 1.0, Vec3::X, Vec3::Y, &mut rng);
+    assert!((direction.y - 1.0f32.sin()).abs() < 1e-5);
+    let flat = Vec3::new(direction.x, 0.0, direction.z).normalize();
+    assert!((flat - offset.normalize()).length() < 1e-4);
+}
