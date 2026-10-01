@@ -70,17 +70,14 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   here), and Wipeout HD's own `Hud_UpdateLeachBeamSight` keeps the Missile's law.
   `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`, "The LeachBeam's reticle is
   its own function".
-- **Ready to wire, for the weapons lane (read 2026-10-01, `pulse-cull`): the LeachBeam
-  locks only when its reticle has locked.** `Ship_FireHeldWeapon` (`0x08844ae8`) passes
-  `Weapon_RequestFire` the target only when `entity+0x860 & 1` - the flag
-  `HudSight_UpdateLeachBeam` sets on its lock (the extent reaching `6.0`, `0.34` s after a
-  first sighting) - and `(0, -1)`, the unlocked fizzle arm, otherwise. Ours
-  (`race/weapons.rs`, the LeachBeam arm) fires `Beam::locked` off `sight_target()` alone,
-  like the Missile's arm before its `candidate.filter(|_| self.view.sight.locked())`.
-  The wiring is the same one filter for slot 0 (`self.view.sight.locked()`), only under the
-  Pulse law (`Sight::set_leach_law`), with a test that a shot at `0.2` s of sighting is
-  `Beam::unlocked` and one at `0.4` s is locked. Not done here: `weapons.rs` is not this
-  lane's.
+- ~~**Ready to wire: the LeachBeam locks only when its reticle has locked.**~~ **Done
+  2026-10-01 (`pulse-weapon-laws`).** `Race::spend_pickup`'s LeachBeam arm filters
+  `sight_target()` through `self.view.sight.locked()` for slot 0 under the Pulse law only
+  (`Sight::leach_law`); Wipeout HD keeps firing off the window alone, and an opponent has no
+  reticle. `race/tests/leach_beam.rs::the_pulse_leach_beam_locks_only_once_its_reticle_has`
+  presses at 5 ticks (unlocked) and 40 ticks (locked) and shows HD locked at 5. Not checked
+  against the original with a press during the first 0.34 s: that is read off
+  `Ship_FireHeldWeapon`, not measured.
 - **An orange-white flash at the target in some original frames** has no
   counterpart in ours. Candidates: the victim's damage feedback, or
   `WO_SHIP_SPARK_DAMAGE_*`. Not identified.

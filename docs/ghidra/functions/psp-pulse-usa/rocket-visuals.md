@@ -682,9 +682,8 @@ What this settles:
   stationary Mine's `Mine_PoseNode` matrix was read at the craft's body position
   to the hundredth (mine.md, same date), and the Rocket agrees.
 
-**Open rows (all in `crates/gameplay`, outside this lane's edit scope, and each
-moves the committed determinism hash, so a lane that owns them regenerates it in
-its own commit):**
+**Open rows - all four landed 2026-10-01, second pass (see the next section for the
+commits, the third law the rows did not name, and what is still open):**
 
 1. *Rocket cruise speed*: 222.22 u/s, not 277.78. Measured, 2 sources.
 2. *Rocket launch speed*: the direction vector keeps the craft's display scale
@@ -715,6 +714,80 @@ views do render differently, the flag does take effect),
 and the held-weapon icon differs (the original's Time Trial shows its pad
 indicator; ours shows the weapon, because `--give` refills the slot).
 
+## 2026-10-01, second pass: the rows landed, the probe arm read, a volley matched
+
+Rows 1-3 each landed in their own commit, and row 4 resolved into two more laws the
+rows did not name. Method for the last: the craft is placed at the pose the original's
+volley was measured at and the volley fired through `projectile::fire_rocket`
+(`crates/game/tests/rocket_launch_ground_truth.rs`, disc-backed), because our own
+standing start lands the craft at z -199.4 heading 1.7 degrees toward the -Z wall where
+the original's is at z -197.0, which alone moves the detonation by 30 ticks.
+
+| Law | Source | Ours now |
+| --- | --- | --- |
+| cruise speed is the class's, 222.22 u/s on Venom | live, two probes | `rocket::launch` |
+| launch speed is 0.75 x that until the first surface-probe hit | live (rows 0.7500) | `LAUNCH_SPEED_SCALE`; class speed rides in `Projectile::launch_speed_kmh` |
+| spawn at the craft's own position | live, to 0.1 unit | `launch` |
+| the stored normal `self+0x100` is seeded from the craft (`-(craft+0xb10)`), the first probe goes along it | decompiled `Rocket_Init`; live rows `(-0.03, 1.0, 0.05)` | `Projectiles::spawn_riding` seeds the craft's up (whether `+0xb10` is the craft's up or its contact normal was not separated) |
+| **the probe-hit arm steers toward the ride point** | decompiled `Rocket_Update`, confidence **88** | `flight.rs`, Rocket only |
+
+**The probe-hit arm, read at decompiler level 2026-10-01.** On a floor-class result the
+rocket adopts the hit normal (`+0x10c = 0`), takes `to' = hit + 3.0 * n`, sets
+`velocity = (to' - from) / dt`, **normalises it and scales it to
+`Rocket_SpeedForClass / 3.6`**, then moves to `from + velocity * dt` - not onto `to'`
+and not by turning the old velocity parallel to the surface, which is what this engine
+did for every projectile. The travel-segment floor arm that follows writes
+`(next - prev) / dt` unnormalised and leaves the rescale to the next tick's probe. Where
+our port differed by turning the velocity parallel, a volley flew nearly straight and
+met the side wall 20-30 ticks early; with the arm ported it follows the road.
+
+**Result at the original's pose (same ship, same track, same start line):**
+
+| shot | original, frames / units from spawn | ours before (rows 1-3 only) | ours now, ticks / units |
+| --- | --- | --- | --- |
+| -Z side | 51 / 185 | 31 / 110 | 49 / 177 |
+| centre | 61 / 221 | 42 / 151 | 60 / 218 |
+| +Z side | 70 / 252 | 52 / 187 | 69 / 251 |
+
+The centre shot's last position is within about four units of the original's
+(`341.9, -36.0, -174.9` against `345.4, -35.8, -172.5`). The test asserts three ticks
+and twelve units. Confidence **85** on the arm and the result: read and matched on one
+circuit, one ship, one start pose; the other three classes and any other track were not
+run.
+
+**What is still open, honestly.**
+
+- **The first two or three updates are a probe miss in the original, cause unrecovered.**
+  A live break on the instruction after `Rocket_Update`'s first `Collision_SweepSegment`
+  (`0x0885d40c`, `psp-weapon-pair.py --probe sweep`) read `v0 = 0x7f` (no hit, the fall
+  arm) for the first **two** updates in a capture fired at speed 57 and for the first
+  **three** at the matched speed 106, then `1` (floor) every update after, with the floor
+  about four units below the rocket and the probe six long. That is the 166.67 u/s phase:
+  the arm that renormalises never runs, the rocket stays at 0.75 x class, and it falls
+  at 50 u/s^2 for those updates (the live y rises 0.10, 0.08, 0.08 per frame, the fall
+  arm's shape). Ours finds the floor on its first update, so it has no slow phase and its
+  first three positions sit about 1.2 units lower than the original's. A temporary
+  diagnostic that skipped the probe for the first three updates reproduced the original's
+  first four positions and speeds to about 0.04 unit (before the craft-up seed; its
+  ranges were not re-run with the seed), so the fall arm is the original's and the miss
+  is real, but **that diagnostic was a timer and was not kept**: nothing here says it is
+  age. `Collision_SweepSegment` returns `0x7f`
+  when `Collision_RaycastWorld`'s hit kind (`local_38`) is not `1`; whether the start
+  line's floor is authored as another kind in the original's collision world, or the
+  query is gated on something the rocket copies from its owner (`self+0x114` is
+  `*(craft+0xad8)`, the bounds `Collision_SweepSegment`'s second query takes), is not
+  separated. Not reproduced and not chosen.
+- **The wide orange glow at fire+3..+8 is still not matched.** Read at 480x272 beside the
+  original (`data/scratch/pulse-weapon-laws/rocket-pair-after.png`): the original's is a
+  large white-orange bloom over the craft's nose and the road ahead; ours is a smaller
+  yellow glow at the nose in the middle two rows. Closer than the 15 px spot before the
+  spawn moved, not equal. `WO_ROCKET_FLARE`'s parameters are the unread part (section
+  above).
+- **Our standing start differs from the original's** by 2.4 units laterally and 1.7
+  degrees of heading at the same place on the same track (ours z -199.4, forward z
+  -0.030; the original z -197.0, forward z -0.007). A spawn/handling matter outside this
+  page, recorded because it moved a rocket's detonation by 30 ticks.
+
 ## What is not verified
 
 - ~~**The quarter-turn's axis**, blocked on resolving `0x08a6b6b4`~~ -
@@ -736,6 +809,9 @@ indicator; ours shows the weapon, because `--give` refills the slot).
   and changed one thing: it is what turned "the rocket probably follows the
   surface" into a picture of two rockets skimming the track a body-length off
   the racing line.
+- **2026-10-01, second pass.** The four rows landed, the probe-hit arm and the craft-up
+  seed read and ported, a volley from the original's pose matched to 1-2 ticks and
+  8 units, and the first-updates probe miss isolated and left open.
 - **2026-09-24.** The quarter-turn resolved and measured live: it is the
   flare's frame, the model's basis is a rotation, and ours was a reflection.
   `0x08a6b820`/`0x08a6b6b4` named.
