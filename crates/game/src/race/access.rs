@@ -90,14 +90,21 @@ impl Race {
         self.view.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
     }
 
-    /// Whether a held LeachBeam's reticle runs the LeachBeam's own law
-    /// (`FUN_0881e8c8`: spinning arrowheads, no hold timer) rather than the
-    /// Missile's - on for the PSP dialect, which is what authors
-    /// `leachbeam_sight_*` brackets, and left off for Wipeout HD's concentric
-    /// rings, whose own update is a different function. Called once before the
-    /// first tick, after [`Self::set_sight_screen`], which resets the reticle.
-    pub fn set_sight_leach_law(&mut self, on: bool) {
-        self.view.sight.set_leach_law(on);
+    /// Which reticle dialect the title draws, and so which law a held LeachBeam's
+    /// reticle runs.
+    ///
+    /// **The PSP dialect** - `Sights::Brackets` with a LeachBeam set, which is
+    /// Pulse - runs the LeachBeam's own law (`FUN_0881e8c8`: spinning arrowheads,
+    /// no hold timer, the lock taken on arrival); Wipeout HD's concentric rings
+    /// and Pure's no-LeachBeam brackets keep the Missile's, because HD's own
+    /// update is a different function and nothing has read it. One call at each
+    /// place a race is built, after [`Self::set_sight_screen`] (which resets the
+    /// reticle).
+    pub fn set_sight_dialect(&mut self, sights: &oag_title::hud::Sights) {
+        self.view.sight.set_leach_law(matches!(
+            sights,
+            oag_title::hud::Sights::Brackets { leach: Some(_), .. }
+        ));
     }
 
     /// The lock-on reticle, for whoever draws it.

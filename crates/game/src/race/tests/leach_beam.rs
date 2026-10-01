@@ -195,8 +195,8 @@ fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not()
     );
 }
 
-/// A held LeachBeam's reticle runs the LeachBeam's own law when the dialect asks
-/// for it: the arrowheads turn, and they lock on arrival rather than after the
+/// A held LeachBeam's reticle runs the LeachBeam's own law when the title's
+/// reticle dialect is Pulse's (`Race::set_sight_dialect`), and not Wipeout HD's: the arrowheads turn, and they lock on arrival rather than after the
 /// Missile's hold.
 ///
 /// **Through `Race::tick`** because the gate, the projection and the law meet
@@ -208,7 +208,11 @@ fn a_held_leach_beam_spins_its_reticle_under_the_pulse_law_only() {
     let run = |pulse: bool| {
         let mut race = race_with_a_grid();
         race.sim.weapons = Some(one_leach_beam_table());
-        race.set_sight_leach_law(pulse);
+        if pulse {
+            race.set_sight_dialect(oag_pulse::hud::ART.sights);
+        } else {
+            race.set_sight_dialect(oag_hd::hud::ART.sights);
+        }
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -252,7 +256,7 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
     // The fixture's half-second `active_time` outlasts the 16 ticks checked.
     let table = one_leach_beam_table();
     race.sim.weapons = Some(table);
-    race.set_sight_leach_law(true);
+    race.set_sight_dialect(oag_pulse::hud::ART.sights);
     let forward = race.sim.world.ships[0].physics.body.forward();
     let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);

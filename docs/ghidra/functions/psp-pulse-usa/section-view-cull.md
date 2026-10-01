@@ -149,11 +149,15 @@ reversed 600, 900, 1800, 2000, the Assegai) are **pixel-identical** before and
 after (`0` differing pixels each), with `0 .. 10` fewer draws submitted
 (`443 -> 441`, `740 -> 730`, `278 -> 276`): the cull is conservative, so a correct
 port moves submissions and not pixels. **The narrowing is title-agnostic** (it runs wherever a track authors sections),
-and only Pulse PSP's original was read, so it was checked where it was not:
-Wipeout Pure PSP (USA and EU), Pulse PS2 EU and Pulse PSP EU, an autopilot race at
-ticks 1, 300, 700, 1100 and 1500 each, before and after - **0 differing pixels in
-all 20 frames**, with draws submitted moving by up to 13 on Pulse PSP EU (`299 ->
-286` at tick 700). The data-backed test
+and only Pulse PSP's original was read, so it was checked where it was not: Wipeout
+Pure PSP (USA and EU), Pulse PS2 EU and Pulse PSP EU, an autopilot race at ticks 1,
+300, 700, 1100 and 1500 each, before and after - **0 differing pixels in all 20
+frames**, and the check bites: draws submitted fell on Pure at four of five ticks
+(`372 -> 361`, `367 -> 356`, `204 -> 199`, `247 -> 246`, identical on USA and EU), on
+Pulse PS2 EU (`372 -> 363` at tick 700) and on Pulse PSP EU (`299 -> 286`). So on the
+titles whose cull was not read the port removes draws and no pixel changes. That is
+neutrality against our frames, not evidence the original culls Pure by section; Pure's
+executable was not read. The data-backed test
 `crates/render/tests/pvs_section_view_ground_truth.rs` runs it over 24 circuit
 files: the craft's own section is never rejected from a chase camera, and `49 %`
 of section tests reject.

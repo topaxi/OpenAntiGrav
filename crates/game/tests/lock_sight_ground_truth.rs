@@ -302,21 +302,27 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
     use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
+    let sights = loaded.hud.art.sights;
     let mut race = race::Race::start(loaded.setup);
+    // The real dialect: Pulse's reticle, so the LeachBeam's own law, which is
+    // what the game runs - not the Missile's with the LeachBeam's art.
+    race.set_sight_dialect(sights);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
-    let mut seeking = false;
+    let mut seeking_at = None;
     let mut locked_at = None;
+    let mut spun = false;
     for tick in 0..240u32 {
         race.tick(&PlayerInputs::none());
         match race.sight_state() {
-            sight::State::Seeking => seeking = true,
+            sight::State::Seeking if seeking_at.is_none() => seeking_at = Some(tick),
             sight::State::Locked if locked_at.is_none() => locked_at = Some(tick),
             _ => {}
         }
+        spun |= race.sight().visible() && race.sight().brackets()[2].rotation != 0.0;
     }
 
     assert_eq!(
@@ -324,16 +330,18 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
         sight::Held::LeachBeam,
         "the reticle is still wearing the Missile's art with a LeachBeam in hand"
     );
-    assert!(
-        seeking,
-        "a LeachBeam on the shipped starting grid put no reticle on screen"
-    );
+    let seeking =
+        seeking_at.expect("a LeachBeam on the shipped starting grid put no reticle on screen");
     let locked = locked_at.expect("the LeachBeam's reticle never locked on a real grid");
-    let seconds = f64::from(locked) / 60.0;
+    // `FUN_0881e8c8` has no hold timer: the lock is the brackets arriving, `0.34` s
+    // after the first sighting from open. The Missile's holds `0.8`.
+    let seconds = f64::from(locked - seeking) / 60.0;
     assert!(
-        seconds >= 0.8,
-        "it locked after {seconds}s, inside the recovered 0.8s hold"
+        (0.25..0.6).contains(&seconds),
+        "the LeachBeam locked {seconds}s after its first sighting; the recovered law is about \
+         0.34s and the Missile's 0.8s"
     );
+    assert!(spun, "the LeachBeam's arrowheads never turned");
 }
 
 /// Wipeout Pure locks and draws its reticle, in the PSP dialect.

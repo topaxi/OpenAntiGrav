@@ -2215,8 +2215,20 @@ weapon here. Confidence **88** - direct decompile, no VFPU trap on this path.
 
 ### Victim selection is the Missile's own lock-on, reused whole
 
-`craft+0x16c`/`craft+0x168` are filled **before** this handler ever runs, by
-the same `Ship_AcquireLock` scan `missile.md` already documents in full: a
+`craft+0x16c`/`craft+0x168` are filled **before** this handler ever runs - and
+**not by `Ship_AcquireLock`; corrected 2026-10-01** (`pulse-cull`, disassembly and a
+live fault). `Weapon_RequestFire` (`0x08862d9c`), case `10`, sets bit `0x8000` and
+stores its own third and fourth arguments into `+0x168` (the target's world matrix
+pointer) and `+0x16c` (its craft index). `Ship_FireHeldWeapon` (`0x08844ae8`)
+chooses them: **`(0, -1)` - the unlocked arm - unless `entity+0x85c != -1` and
+`entity+0x860 & 1`**, the lock flag the reticle's own update sets on the tick its
+brackets arrive (`HudSight_UpdateLeachBeam`, `lock-sight.md`). So a LeachBeam fired
+before the arrowheads close (under `0.34` s of the target on screen) takes the
+fizzle arm in the original, **and a target found by the window alone does not lock
+it**; writing the held id into the weapon record by hand leaves `+0x168`/`+0x16c`
+stale and the locked arm dereferences a null matrix (the halt
+`scripts/psp-fire-weapon.py` records). The window scan itself is
+`Ship_AcquireLock`, the same scan `missile.md` already documents in full: a
 longitudinal cone ahead of the craft, nearest-along-forward wins, using the
 LeachBeam's own `lock_min_dist`/`lock_max_dist` at `<Stats>+0x114`/`+0x118`
 (`missile.md`'s own reading - "the two weapons that author `lock_max_dist`/
