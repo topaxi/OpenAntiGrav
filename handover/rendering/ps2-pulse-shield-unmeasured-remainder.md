@@ -1,0 +1,53 @@
+# PS2 Pulse's shield: the model and the tint are fixed against a GS dump; what is left
+
+2026-10-01. The user reported on 2026-09-17 that the PS2 shield "renders solid and
+not animated". Three layers, found in order:
+
+1. **No texture** (2026-09-24): the shell's `Texture` node carries no pixels on PS2.
+   `livery::shield::shield_model` skins it from the preceding archive entry.
+2. **Wrong blend class** (2026-09-24, superseded): the shell *as then loaded*
+   (`shipshield.vex`, class-less batches) drew opaque. A load-time reclassification
+   (`blend_additively`) moved it to additive. **That function is gone**: layer 3.
+3. **Wrong model, and a tint that is never applied** (2026-10-01, GS dump): the PS2
+   executable builds `<Team>\extrashield.vex` (literal prefix `extra` at `0x002a7920`),
+   not `shipshield.vex`. `extrashield.vex` carries its own additive class and its own
+   `pulse_shield_extra_ADD` texture (128x64, 15 colours), and the original leaves its
+   vertices at the file's colours through the fade-up, the flicker and the fade-out.
+   `shield_entry_names` takes the platform; `PS2_PULSE_PALETTE` has `tints_shell =
+   false`. Evidence and the GS registers:
+   `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`. The method:
+   `docs/reverse-engineering/pcsx2-debugger.md` "GS dumps". Pinned by
+   `crates/game/tests/ps2_shield_ground_truth.rs` and
+   `oag_render::shield::tests::the_ps2_shell_is_never_tinted_and_the_other_palettes_are`.
+
+The first pass's open items are answered: the "lattice against rings" gap was the
+wrong file; the "66-triangle band drawn twice" was `shipshield.vex`'s opaque and
+cutout copies of one batch, which the original does not draw; "not animated" is the
+authored `u` scroll (`0 -> 251/256` over 0.9833 s, read off the GS at `1.014 /s`) plus
+the swell.
+
+## Open
+
+- **A pixel-matched frame.** `oag-game --pose` puts the craft at the savestate's
+  `(-385.617, 4.004, 127.095)`, but the chase camera does not match: the original's
+  hull fills about 38 % of the frame's width, ours 23 %, and neither published eye
+  (`craft+0x850` far, `+0x860` close, look-at `+0x840`) reproduces it. The shell has
+  been compared draw to draw (positions, `uv`, colour, state) and not pixel to pixel.
+  This is the camera's gap (`ps2-pulse-eu/camera.md`), not the shell's; a pose-matched
+  comparison of the shell waits on it.
+- **The cockpit sphere** (`vr_shield_cockpit.vex`) on PS2 was not drawn from the chase
+  camera and so not measured; `oag-game` keeps the tint on it. Whether it is tinted
+  needs an internal-camera dump.
+- **`FUN_001df718`** (the model colour setter `ShipShield_Update` calls): where its
+  argument goes if not to the vertices. Unread.
+- **The hit flash** (`ShipShield_Hit`, `0x00169af8`) and the shield **running out by
+  its timer** on PS2: the fade-out was driven by writing `Deactivate`'s fields.
+- **Teams other than Assegai** were checked for the model's shape (all twelve decode,
+  `u <= 0.5`, `v <= 1`, additive) and not by a dump.
+
+## Next Steps
+
+1. Read the PS2 camera's real eye (the published eyes are not it) so a posed frame
+   lines up, then lay `oag-game --give shield` over `shots/` from a PCSX2 run.
+2. Take one dump from the internal camera for the sphere.
+3. Decompile `FUN_001df718` (headless, `program=SCES_547.48`).

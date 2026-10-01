@@ -151,7 +151,19 @@ second-base thunks (`obj+0x38` chained via a `+0x70`/`+0x78` offset pair) and
 **that chain has not been followed**. Following it is what would turn
 `oag_game::race::Drawable::draw_additive`'s model-scoped override into a decode.
 
-### The shield shell reaches the same unfollowed draw (2026-09-24)
+### The shield shell reaches the same unfollowed draw (2026-09-24, corrected 2026-10-01)
+
+**Corrected 2026-10-01: the batches this section reads are the wrong model's.**
+The second `%s` of `%s\%sshield.vex` is the literal `extra` at `0x002a7920` on
+the PS2, so the shell is `<Team>\extrashield.vex`, whose own batches carry
+`pass_mask` `0x1232` (`0x200`, additive) - not `shipshield.vex`, which the
+executable never names. A GS dump of the raised shell reads `ALPHA_1 = 0x48`
+(`Cs * As + Cd`) directly. The `0x1031`/`0x18b1`/`0x10b2` reading and the
+"confidence 70, `blend_additively`" paragraph below are superseded: that
+function is gone, and the plume is the one layer-`0x7d0` model whose batches do
+not say they blend. Everything else here (the constructor's structure, the
+sort-word table) stands. See
+[shield-pickup.md](shield-pickup.md#the-model-is-extrashieldvex-not-shipshieldvex-gs-dump-2026-10-01).
 
 `ShipShield_Construct` (`0x00169168`, confidence 85) is the PS2 counterpart of
 the PSP's `ShipShield_Construct` (`0x0885db38`,

@@ -1,11 +1,14 @@
-# The PS2 Shield pickup's visual object: the same law as the PSP, and a raised shell captured live
+# The PS2 Shield pickup's visual object: the same law as the PSP, a different model, and a GS dump of the raised shell
 
 **Binary:** `SCES_547.48` (Pulse PS2, EU), image base `0x00100000`.
 **Status:** the object's constructor, activate, deactivate and per-frame update
 are decompiled and match the PSP's (`../psp-pulse-usa/shield-pickup.md`) field for
 field, offset by `0x80`. A raised shell was **captured live on PCSX2** by writing
-the object's fields through PINE (2026-10-01). Read there: the shell adds and
-never darkens, and it looks nothing like ours. The cause of the second is open.
+the object's fields through PINE (2026-10-01), and a **GS dump** of it
+(2026-10-01, second pass) settled what the first pass left open: the PS2 draws
+**`<Team>\extrashield.vex`, not `shipshield.vex`**, with its own texture, and
+**never tints the shell's vertices**. Both are fixed in `oag-game` and pinned by
+`crates/game/tests/ps2_shield_ground_truth.rs`.
 
 ## The object
 
@@ -27,7 +30,7 @@ two model pointers aside):
 | `+0xf8` | `+0x75` | fading |
 | `+0xfc` | `+0x78` | clock, seconds |
 | `+0x100` | `+0x7c` | `vr_shield_cockpit.vex` instance |
-| `+0x104` | `+0x80` | `shipshield.vex` instance |
+| `+0x104` | `+0x80` | the shell (`<Team>\extrashield.vex` here, `shipshield.vex` on the PSP) instance |
 
 ## Three functions, named
 
@@ -62,46 +65,139 @@ as read. A control from the same savestate and frame counts is **bit-identical
 except for the shell** (the HUD clock reads the same), so the difference of the
 two frames is the shell's contribution exactly.
 
-## What the original draws (read, three frames, 640x448)
+## The model is `extrashield.vex`, not `shipshield.vex` (GS dump, 2026-10-01)
 
-- **It adds and never darkens.** Over 42,000 to 48,000 changed pixels per frame,
-  not one pixel is darker with the shell than without (`min` of the difference 0,
-  the negative sum 0 on all three channels). An alpha-over shell would darken
-  every pixel it covered with a shell colour below the background. This raises
-  `livery::shield::blend_additively`'s reading from an inference on the plume
-  (confidence 70) to a measured one: the PS2 shell is additive. Confidence
-  **88** for "additive in the sense of never darkening"; whether the factor is
-  `src x alpha` or `src` alone is not separated.
-- **Look.** A translucent cyan-blue dome with soft horizontal ring bands, brighter
-  on the rim bands, nothing resembling hexagon cells.
-- **It breathes and moves**: the same three frames differ in band brightness (the
-  `sin` alpha) and in band position.
+`ShipShield_Construct` (`0x00169168`) formats the shell's name with
+`FUN_0025b920(buf, 0x80, 0x2a7928, *(*(craft + 0x400) + 0x98), 0x2a7920)`. Read
+from EE RAM at those addresses: `0x2a7928` is `%s\%sshield.vex`, `0x2a7920` is the
+literal **`extra`**, and `*(*(craft+0x400)+0x98)` is the team directory. The PSP
+build passes the `FE_TeamModel` config key's `"ship"` there, so its shell is
+`shipshield.vex`; the PS2 build's is `<Team>\extrashield.vex`. (The cockpit
+sphere's `%s\vr_shield_cockpit.vex` at `0x2a78f0` is the same on both.)
+Confidence **92**: the call's arguments read off the executable, the assembled
+`Data\Ships\Assegai\extrashield.vex` and `Data\Ships\AG_Systems\extrashield.vex`
+seen in EE RAM with no `shipshield` string anywhere, and the GS draw below
+matching this file vertex for vertex. It is a literal in the PS2 binary, so it
+holds for every team and every mode. (`Construct` also looks `FE_TeamModel` up,
+but the decompile drops the result; the PSP is where that key is the prefix.)
 
-## Ours, same disc, same craft class (not pixel-matched)
+Everything this page and `batch-draw-state.md` said about `shipshield.vex` on
+PS2 (its `0x1031`/`0x18b1`/`0x10b2` class-less batches, the 256x256 `PSMT4`
+`grid_GLOW` lattice taken from the preceding texture set, eleven rings with
+`u` up to 7.6) described a model the PS2 never draws for the shell.
+`shipshield.vex` is on the disc, unreferenced by the executable (no string of
+it exists in the binary or in RAM). That is the "lattice against rings" gap:
+ours drew the wrong file.
 
-`oag-game data/images/pulse-ps2-eu.chd --race --give shield` (the craft's slot and
-the camera differ from the savestate's, so no per-pixel comparison was made): a
-bright hexagon lattice over the whole craft, crisp cells, nearly opaque. The shell
-here is 395 vertices in three additive ranges, **UVs up to `u 7.58`, `v 6.91`
-(eleven rings spaced `0.652` in `v`)**, a 256x256 `PSMT4` lattice (grey cells,
-bright edges, texel alpha 0 to 128-scale), vertex colours `(103,177,253)` at
-alpha 253, and `(115,199,253)` at alpha 0 and 131.
+`extrashield.vex` (node `shield_temp1:polySurfaceShape6`, `AG_Systems`, `Assegai`,
+`Auricom`, `EGX`, `Goteki`, `Harimau`, ... one per team, about 7 KB) has:
 
-**The difference is named and not fixed.** The original shows the vertex-colour
-ring pattern with no lattice; ours shows the lattice. Candidates, none tested:
-the GS samples a coarser mip level of a tiled texture (the lattice averages out
-at that minification, the rings stay), the texture used is not this one, or the
-texture's own alpha and the vertex alpha combine differently on the GS's 128 =
-1.0 scale. Whether the 66-triangle band draws twice (the open question on the
-handover thread) is untouched.
+| | |
+| --- | --- |
+| geometry | 167 vertices, 163 triangles in two batches (115 and 48), the first with 68 distinct positions |
+| batch class | `pass_mask` `0x1232`: **`0x200`, additive, in its own words** |
+| texture | one node, `pulse_shield_extra_ADD.tga`, a 128x64 `PSMT4` in the preceding set (directory index 4081 in `WADS2.WAD` for Assegai), 15 colours, alpha `160` (`0x50` on the GS scale) |
+| `u` | 0 and 0.5 |
+| `v` | 0, 0.756, 0.928, 1 |
+| vertex colour | `(127,127,127,127)` and `(13,0,104,0)` on the GS scale, exactly |
+| texture track | `u` offset `0 -> 251/256` over keys 1..59 of 60 per second, loop 0.9833 s (`vex::mesh_tex_transforms`) |
 
-## Method and what remains
+## What the GS dump shows (PCSX2, eight dumps of the raised shell and one control)
 
-Own display `:93`, own PCSX2 `-datapath`, PINE slot 45093 (`data/scratch/pulse-shield-look/scripts/ps2lib.py`,
-`ps2_cap.py`: `pcsx2-drive.py`'s globals patched, the render window picked by
-title because a PPSSPP window shared the display). Frames: `ps2a` (shield),
-`ps2c` (control).
+Method: [`../../../reverse-engineering/pcsx2-debugger.md`](../../../reverse-engineering/pcsx2-debugger.md)
+"GS dumps". Savestate on the grid (Moa Therma, Assegai, craft stationary at
+`(-385.617, 4.004, 127.095)`), shell raised by writing `Activate`'s fields, a
+verified frame advance, the `GSDumpSingleFrame` hotkey, six more frames so the
+file closes. A control from the same savestate and frame counts has no shell.
+The shell is the only draw group the two dumps do not share in sequence
+(`602` and `1239`, the two fields of the frame), ignoring the texture-pool
+addresses, which differ between runs.
 
-Open: a PCSX2 GS dump of the shell's draw (texture level, `TEX0`/`TEX1`, `ALPHA`
-register, `TEST`) would turn every candidate above into a read; no GS capture
-was taken. The cockpit sphere is not captured.
+One draw, a 159-primitive triangle strip of 161 vertices at 68 distinct
+positions, GS state read from the packets:
+
+| Register | Value | Reads as |
+| --- | --- | --- |
+| `PRIM` | `0x7c` | triangle strip, Gouraud, **textured**, fog on, **alpha blend on**, STQ |
+| `ALPHA_1` | `0x48` | `A=Cs, B=0, C=As, D=Cd`: **`Cs * As + Cd`**, source-alpha additive, FIX unused |
+| `TEST_1` | `0x70003` | alpha test on but `ALWAYS`, **depth test on (`GEQUAL`)** |
+| `ZBUF_1` | bit 32 set | **no depth writes** |
+| `TEX0_1` | `PSMT8`, 128x64, `TFX` modulate, `CLUT` 256 entries `CSM1`, `TCC` on | the texture below |
+| `TEX1_1` | `0x260` | bilinear, **no mip** (`MXL` 0) |
+| `CLAMP_1` | `0x1fc001fc000` | repeat |
+| fog | `FOGCOL 0xffe3f1`, vertex `F` 250-251 | effectively none (mix 0.98 to 0.02) |
+
+So the PS2 shell is **additive, source-alpha weighted** (`blend_additively`'s
+inference is gone because the model names its class), unmipped and bilinear, and
+the GS-side candidates the previous pass listed (a coarser mip level, a second
+texture, texel alpha combining oddly) were all wrong: the model and texture were.
+Confidence **92**: every register read straight off the packets, identical in
+eight dumps across clocks 0.16 to 2.9 s and a fade-out. Single emulator, single
+savestate.
+
+It also settles the first pass's question on whether the factor is `src x alpha`
+or `src` alone (`As`, with the texel alpha `0x50` and vertex alpha 127), and agrees
+with that pass's finding that the shell never darkens a pixel.
+
+**The texture is the disc's, bit for bit in distribution.** The 8,192 bytes the
+game uploads (`PSMT8` as `PSMCT32` 64x32) sit in EE RAM at `0x0184c6c0` with the
+name `Data\Weapons\Textures\pulse_shield_extra_ADD.tga` just before them; the game
+expands the disc's 4-bit texture to 8 bits at load. Read through the `CSM1`
+palette swizzle (entry `i` at `(i & ~0x18) | ((i & 8) << 1) | ((i & 0x10) >> 1)`)
+the 15 colours used equal the disc texture's 15, and the per-colour texel counts
+match exactly (257, 301, 306, 313, ...). The texel *order* was not compared.
+
+**The scroll is the file's.** `u` offset advanced `0.039` per game frame (two
+fields) and `0.399` over `0.393 s` of the shield's clock: `1.014 /s`, the
+authored track's `251/256` over `0.9667 s`. Which clock the phase hangs off was
+not separated (the shield's own or the global one advance together).
+
+**The vertex colour is never tinted.** Every white vertex read `(127,127,127,127)`
+and every rim vertex `(13,0,104,0)` - the file's own values - in all of:
+
+| State | Object colour (`+0xc0`) | Clock | Flicker factor `0.75 + 0.25 sin` |
+| --- | --- | --- | --- |
+| fade-up | 0.73, 0.86 | 0.16, 0.24 s | 0.76, 0.81 |
+| settled | 0.997 .. 1.0 | 0.71, 1.61, 2.48, 2.87 s | 0.91, 1.0, 0.90, 0.81 |
+| fade-out (`Deactivate`'s fields written) | 0.197 | 0.98 s | n/a |
+
+If `ShipShield_Update`'s packed-colour push (`FUN_001df718(model, argb)`, alpha
+`rgba.a * (0.25 sin + 0.75)`) were multiplied into the vertices the alpha would
+have read 76 to 127 instead of 127. It is not: the shell is drawn at its
+authored colours, scaled by the swell, until it switches off at `alpha <= 0.1`.
+Confidence **88**: seven states, one savestate. The fade-out was driven by
+writing `Deactivate`'s fields, not by a pickup running out. Whether the push
+reaches something else (a lit pass, a model that sets a colour-override flag) is
+unread; `FUN_001df718`'s body was not followed. The cockpit sphere (not drawn
+from the chase camera) was not measured and keeps the tint in `oag-game`.
+
+The **swell** (`+0xe4`, 0.95 at 0.157 s, 0.98 at 0.236 s, 1.18 at the fade-out)
+is applied, through the model matrix `ShipShield_Update` builds, and was not
+separated from the dump (the vertices are post-transform).
+
+## Which instance is drawn
+
+`ShipShield_Update` sets bit 2 of `+0x2c` on the instance it draws. After a write
+of `Activate`'s fields and ten frames, `*(obj+0x104)` (the shell) went from
+`0x0005b022` to `0x0105e026` and `*(obj+0x100)` (the cockpit sphere) stayed
+`0x0005b022`, as the chase camera needs. A write of `Deactivate`'s fields and
+four more frames left `0x0105e026`; ten frames cleared it.
+
+## Not yet compared
+
+- **A pixel-matched frame.** The craft is at the savestate's position in
+  `oag-game --pose`, but the chase camera differs: the original's hull fills
+  about 38 % of the frame's width, ours 23 %, and neither published eye
+  (`craft+0x850`, `+0x860`) with the look-at at `craft+0x840` reproduces the
+  original. That is the camera lane's gap, not the shell's. The comparison made
+  is of the draw: the same 68 positions, the same `uv` and colour sets, the
+  same state.
+- The cockpit sphere on PS2, the hit flash (`ShipShield_Hit`), the shell on a
+  team other than Assegai, and a shield running out by its timer.
+- `FUN_001df718` (the model colour setter): where its argument goes.
+
+## Raising a shell, and the harness
+
+Own display, own PCSX2 `-datapath`, own PINE slot; `GSDumpSingleFrame = Keyboard/F9`
+added to `[Hotkeys]`. See `scripts/pcsx2-gsdump.py` for the reader. The savestate
+is a grid state made by walking the front end once.
