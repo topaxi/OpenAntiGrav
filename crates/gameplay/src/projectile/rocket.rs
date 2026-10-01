@@ -14,7 +14,6 @@
 
 use oag_core::math::Vec3;
 use oag_physics::ShipState;
-use oag_physics::params::Dimensions;
 use oag_tables::weapons::RocketStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
@@ -77,11 +76,13 @@ pub const LAUNCH_SPEED_SCALE: f32 = oag_physics::hover::TARGET_GLOBAL_SCALE;
 ///   through four `vpfxs`-prefixed lanes and reading the axis back off the
 ///   prefixes was not attempted. The craft's **up** axis is what a lateral
 ///   spread of forward-firing rockets wants, and it is what this uses.
-/// - **The launch offset.** The original passes the craft's pose for the
-///   position and varies only the matrix, so all three share an origin - that
-///   part is recovered. Pushing that origin forward by the hull's own extent,
-///   so a rocket starts outside the craft that fired it, is this engine's, and
-///   it uses the craft's *unrotated* forward so the three still share it.
+/// - **The launch point is the craft's own position, measured 2026-10-01.**
+///   A live `Rocket_Update` probe reads the rocket's spawn at `124.5, -47.9,
+///   -196.9` against the body's `124.5, -47.9, -197.0`, to 0.1 unit. This pushed
+///   the origin forward by the hull's own extent, so a rocket started outside
+///   the craft that fired it; that was this engine's, and the original does not.
+///   All three share it. The rocket is no longer clear of its owner's hull at
+///   the first tick, and [`super::nearest_hit`] excludes the owner already.
 /// - **The launch speed is 0.75 x the class speed, and the class speed alone
 ///   afterwards, measured 2026-10-01.** See [`LAUNCH_SPEED_SCALE`].
 /// - **The speed is the class's alone, measured 2026-10-01** (Pulse PSP on
@@ -112,14 +113,14 @@ pub const LAUNCH_SPEED_SCALE: f32 = oag_physics::hover::TARGET_GLOBAL_SCALE;
 #[must_use]
 pub fn launch(
     state: &ShipState,
-    dimensions: &Dimensions,
     stats: &RocketStats,
     class: &str,
 ) -> Option<[(Vec3, Vec3); ROCKET_SHOTS]> {
     let forward = state.body.forward();
     let up = state.body.up();
-    let nose = state.body.position
-        + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
+    // The craft's own position, shared by all three: `Rocket_Init` places the
+    // rocket at the position it is handed, which is the craft's.
+    let origin = state.body.position;
     let speed = stats.speed_for_named(class)? / KMH_PER_UNIT_PER_SECOND * LAUNCH_SPEED_SCALE;
 
     // The original's own order. A zero `spread` collapses all three onto the
@@ -127,7 +128,7 @@ pub fn launch(
     // broken weapon.
     Some([0.0, stats.spread, -stats.spread].map(|angle| {
         let direction = oag_core::math::quat_from_axis_angle(up, angle) * forward;
-        (nose, direction * speed)
+        (origin, direction * speed)
     }))
 }
 
@@ -144,13 +145,12 @@ pub fn launch(
 pub fn fire(
     projectiles: &mut super::Projectiles,
     state: &ShipState,
-    dimensions: &Dimensions,
     stats: &RocketStats,
     class: &str,
     owner: u8,
 ) -> Option<usize> {
     let class_kmh = stats.speed_for_named(class)?;
-    let shots = launch(state, dimensions, stats, class)?;
+    let shots = launch(state, stats, class)?;
     let mut fired = 0;
     for (position, velocity) in shots {
         if projectiles.spawn_guided(

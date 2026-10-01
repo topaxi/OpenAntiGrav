@@ -61,7 +61,6 @@ fn a_rocket_with_no_floor_in_reach_keeps_the_launch_speed() {
     let fired = fire(
         &mut projectiles,
         &ShipState::default(),
-        &Dimensions::default(),
         &stats(),
         "VENOM",
         0,
@@ -90,7 +89,6 @@ fn the_first_surface_hit_sets_the_class_speed() {
     fire(
         &mut projectiles,
         &ShipState::default(),
-        &Dimensions::default(),
         &stats(),
         "VENOM",
         0,

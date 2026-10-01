@@ -228,11 +228,9 @@ impl Race {
                     // shot at some other rung's speed. A partial volley is
                     // better than a pickup that survives having fired two of
                     // three, so any rocket getting away spends it.
-                    let (physics, dimensions) = (&ship.physics, &ship.handling.dimensions);
                     let Some(fired) = oag_gameplay::projectile::fire_rocket(
                         &mut self.sim.world.projectiles,
-                        physics,
-                        dimensions,
+                        &ship.physics,
                         &stats,
                         &self.sim.class,
                         0,

@@ -62,7 +62,6 @@ fn run_volley(ticks: u32) -> (u64, u64) {
     let fired = projectile::fire_rocket(
         &mut world.projectiles,
         &world.ships[0].physics,
-        &world.ships[0].handling.dimensions,
         &stats,
         "VENOM",
         0,
@@ -292,7 +291,7 @@ fn the_volley_actually_fans() {
     };
     ship.physics.body.orientation = Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
 
-    let shots = projectile::launch(&ship.physics, &ship.handling.dimensions, &stats, "VENOM")
+    let shots = projectile::launch(&ship.physics, &stats, "VENOM")
         .expect("Pulse's weapon table authors a Venom rocket speed");
     let directions: Vec<V> = shots.iter().map(|&(_, velocity)| velocity).collect();
     assert!(
