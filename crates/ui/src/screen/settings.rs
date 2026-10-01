@@ -53,11 +53,11 @@ pub struct TouchList {
     pub entries: Vec<TouchListEntry>,
     /// The `default` attribute: an entry's own `idstring` or `value`,
     /// whichever it carries. **Authored, and not necessarily this build's
-    /// own starting point** - `CameraP1` declares `default="OPT_CLOSE"`
-    /// where this project's own [`oag_display::display::CameraView::default`]
-    /// is `Far`; a reader that seeds the picker from the live setting rather
-    /// than this field is choosing continuity with the running session over
-    /// the disc's own declared default, and should say so.
+    /// own starting point** - `CameraP1` declares `default="OPT_CLOSE"`,
+    /// which [`oag_display::display::CameraView::default`] now agrees with;
+    /// a reader that seeds the picker from the live setting rather than this
+    /// field is choosing continuity with the running session over the disc's
+    /// own declared default, and should say so.
     pub default: Option<String>,
 }
 

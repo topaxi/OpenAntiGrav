@@ -899,12 +899,18 @@ percentage!(BoostFovKick, DEFAULT, "boost field-of-view kick");
 ///
 /// # What is not recovered
 ///
-/// - **Which one a fresh profile starts on.** The original stores the choice as a
-///   string and nothing read what an empty profile holds, so [`Self::default`] is
-///   **this project's choice**: [`Self::ExternalFar`], because it is what every
-///   frame captured under `data/traces/` was taken with and what the game
-///   rendered before this type existed. Marked here rather than dressed up as a
-///   reading, the way [`BoostFovKick`] marks its own invention.
+/// - Nothing about which one a fresh profile starts on is open any more: a
+///   **fresh profile starts on [`Self::Close`]**, measured 2026-10-01. Two cold
+///   PPSSPP boots on empty homes (no save of any title), walked to a Time Trial
+///   on Talon's Junction, both read the player camera node 11.644 units from
+///   the craft, `(0, +3.00, -11.25)` in its own frame - the `<ExternalCameraClose>`
+///   block at the craft's 0.75 scale, where `Far` is 14.56 - and the setting
+///   string `Camera_UpdatePlayerView` looks up read `OPT_CLOSE`. Wipeout 2048's
+///   `Options_Definition.xml` agrees (`CameraP1 default="OPT_CLOSE"`), and so does
+///   the 150-tick capture `data/traces/pad0-boost.csv`. Until then this type
+///   defaulted to `Far`, a choice made when nothing was read, and the craft drew
+///   about 1.25 times smaller than the original's next to the same track.
+///   See `camera.md`, "The default view".
 /// - **The spelling.** The original persists `OPT_INT`, `OPT_CLOSE` and
 ///   `OPT_FAR`; [`Self::name`] uses this project's own settings-file vocabulary.
 ///   Anything that ever reads a real profile save has to know the disc's own
@@ -922,11 +928,11 @@ pub enum CameraView {
     /// The cockpit view, `<InternalCamera>`. The only one that hides the
     /// player's own ship.
     Internal,
-    /// The nearer chase view, `<ExternalCameraClose>`.
-    Close,
-    /// The further chase view, `<ExternalCameraFar>`. The default; see the type's
-    /// documentation for why that is a choice and not a reading.
+    /// The nearer chase view, `<ExternalCameraClose>`. **The default**: what a
+    /// fresh profile of the original starts on, see the type's documentation.
     #[default]
+    Close,
+    /// The further chase view, `<ExternalCameraFar>`.
     Far,
 }
 

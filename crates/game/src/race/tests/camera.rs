@@ -300,6 +300,26 @@ fn each_view_frames_the_craft_from_its_own_block() {
     assert!(!race.draws_own_ship());
 }
 
+/// A race starts on the nearer chase block, as a fresh profile of the original
+/// does: two cold boots read the player camera 11.644 units from the craft, which
+/// is `<ExternalCameraClose>` at the 0.75 scale (`Far` is 14.56). With the round
+/// fixture numbers (`chase_close` offsets `(4, 1)`, scale 1) that is `hypot(4, 1)`
+/// from the craft and not the far block's `hypot(8, 2)`.
+#[test]
+fn a_race_starts_on_the_close_chase_block() {
+    use oag_display::display::CameraView;
+
+    let race = Race::start(setup(Handling::default()));
+    assert_eq!(race.camera_view(), CameraView::Close);
+    let craft = race.ship().physics.body.position;
+    let distance = (race.camera_position() - craft).length();
+    assert!(
+        (distance - 4.0_f32.hypot(1.0)).abs() < 0.01,
+        "eye is {distance} from the craft, the close block's is {}",
+        4.0_f32.hypot(1.0)
+    );
+}
+
 /// The craft's global `0.75` scale reaches the external rig and none of the
 /// internal one. Both halves are measurements off the original - see
 /// [`chase_params`] and `oag_render::camera::internal` - and both are cheap to
@@ -397,9 +417,15 @@ fn a_camera_fov_override_stands_in_for_the_authored_fov() {
     let overridden = Race::start(with_override);
 
     let mut same_authored = setup(Handling::default());
+    // Both external blocks, so the test does not care which one the default view
+    // flies with (it is the close one since 2026-10-01).
     same_authored.chase = ChaseParams {
         fov: 75.0,
         ..same_authored.chase
+    };
+    same_authored.chase_close = ChaseParams {
+        fov: 75.0,
+        ..same_authored.chase_close
     };
     let authored = Race::start(same_authored);
 

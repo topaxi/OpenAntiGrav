@@ -142,15 +142,7 @@ impl Race {
             return;
         }
         self.view.camera_view = view;
-        self.view.chase_params = match view {
-            oag_display::display::CameraView::Close => self.view.chase_close,
-            // The cockpit view does not use these, but leaving the *far* block
-            // installed means a cycle back out of the cockpit lands on the block
-            // the next external view will want anyway.
-            oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => {
-                self.view.chase_far
-            }
-        };
+        self.view.chase_params = chase_block_for(view, self.view.chase_far, self.view.chase_close);
         self.view.camera = Chase::snapped(target_of(self.ship()), &self.view.chase_params);
     }
 
@@ -469,5 +461,25 @@ impl Race {
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::bomb)
+    }
+}
+
+/// The external block `view` flies with.
+///
+/// Shared by [`Race::set_camera_view`] and the race start, so a race that begins
+/// on [`CameraView::default`] holds the block that view names rather than
+/// whichever one the constructor happened to be handed first.
+///
+/// The cockpit view does not use these, but leaving the *far* block installed
+/// means a cycle back out of the cockpit lands on the block the next external
+/// view will want anyway.
+pub(super) fn chase_block_for(
+    view: oag_display::display::CameraView,
+    far: ChaseParams,
+    close: ChaseParams,
+) -> ChaseParams {
+    match view {
+        oag_display::display::CameraView::Close => close,
+        oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => far,
     }
 }

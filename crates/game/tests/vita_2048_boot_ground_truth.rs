@@ -647,8 +647,8 @@ fn options_camera_is_reached_directly_from_home_and_the_choice_cycles() {
     press_release(&mut frontend, &mut input, Button::Right);
     assert_eq!(
         frontend.camera_choice(),
-        Some(2),
-        "one Right off the default index (1, Far) lands on Internal (2)"
+        Some(1),
+        "one Right off the default index (0, OPT_CLOSE) lands on OPT_FAR (1)"
     );
     press_release(&mut frontend, &mut input, Button::Circle);
     assert!(
