@@ -411,10 +411,9 @@ impl Scene {
             // The authored `u` scroll, on the global clock (shield-pickup.md).
             shell.write_anims(queue, seconds);
         }
-        // The cockpit sphere, which replaces the player's shell rather than
-        // joining it - `ShipShield_Update` draws one *or* the other and hides
-        // the one it did not draw. At `cockpit_scale`, the recovered `1.8` times
-        // the shell's own, so it encloses a camera sitting inside the hull.
+        // The cockpit sphere replaces the player's shell (`ShipShield_Update` draws one
+        // *or* the other), at `cockpit_scale`, the recovered `1.8` times the shell's own,
+        // so it encloses a camera sitting inside the hull.
         if let Some(sphere) = &self.shield_cockpit
             && cockpit_shield_visible(race)
         {
