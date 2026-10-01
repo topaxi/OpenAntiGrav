@@ -457,12 +457,12 @@ impl Effect {
         let roots = (0..emitters.len()).filter(|&i| !is_child[i]).collect();
 
         let mut effect = Self {
-            name: system.name,
+            name: system.name.clone(),
             emitters,
             roots,
             skipped_templates: 0,
         };
-        effect.add_templates(&records, scale);
+        effect.add_templates(&system, data, &records, scale);
         Ok(effect)
     }
 

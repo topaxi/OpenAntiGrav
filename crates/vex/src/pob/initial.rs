@@ -41,8 +41,8 @@
 //! atlas-frame rate; `+0xf0` is read here as [`Emitter::stretch`], `+0x2b0` is
 //! constant `1.0` in every record and unused on a one-cell grid. All of
 //! them draw as class 3, a rotated quad - see `pob.md`. The sprite is the
-//! parent emitter's own: both records point at the same pixel pool the
-//! emitters do.
+//! record's **own** (`+0x890`, see [`super::texture::TEMPLATE_TEXTURE_OFFSET`]),
+//! which on the collision sparks happens to be the pool their parent shares.
 //!
 //! **Live confirmation.** A struck craft at severity `2.4` drew `shazam` at
 //! half-sizes `9.36, 9.36, 8.73, 6.54, 4.33` (`3.9 * 2.4` held to `0.287` of
@@ -172,4 +172,23 @@ fn parse_one(record: &[u8], order: ByteOrder, offset: usize) -> Option<Emitter> 
         particle_child: None,
         initial_particles: Vec::new(),
     })
+}
+
+impl super::ParticleSystem<'_> {
+    /// `template`'s own embedded sprite - see [`super::texture::TEMPLATE_TEXTURE_OFFSET`].
+    ///
+    /// `template` must be an entry of an [`Emitter::initial_particles`] list
+    /// read from the same `data`. **Not the parent emitter's sprite**: the
+    /// explosion's `Glow` hangs on `SHIP_DEBRIS` (a 128x64 grey debris atlas)
+    /// and binds its own 32x32 radial glow; the collision sparks' templates
+    /// carry the same pool as their parent, which is why that was read as a
+    /// rule. `None` when the record carries no header-shaped block.
+    #[must_use]
+    pub fn template_texture<'d>(
+        &self,
+        data: &'d [u8],
+        template: &Emitter,
+    ) -> Option<super::texture::EmbeddedTexture<'d>> {
+        super::texture::parse_template(data, self.order, self.resource_base(), template.offset)
+    }
 }

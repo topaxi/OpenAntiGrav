@@ -169,3 +169,59 @@ fn the_mine_bangs_keyed_stretch_reads_the_live_aspect() {
         );
     }
 }
+
+/// `ParticleSystem_DrawParticle` binds `*(owner + 8) + 0x890` for a template
+/// particle - the template record's own texture block - so each template draws
+/// with a sprite of its own. The explosion's `Glow` hangs on `SHIP_DEBRIS`
+/// (a 128x64 4 bpp grey atlas) and binds a 32x32 8 bpp radial glow: the GE dump
+/// of the running original (`TEXSIZE 0x505`, `CLUT8`, a grey ramp whose palette
+/// alpha equals its colour) drew exactly that, and the parent's sprite drew
+/// nothing like it. The collision sparks' templates share their parent's pool
+/// by authoring, which is what had been read as a rule.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_psp_template_carries_its_own_sprite_and_the_explosions_glow_is_not_its_parents() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let spec = format!("{}:PSP_GAME/USRDIR/Data.wad", image.display());
+    let mut archive = Archive::open(&spec).expect("open archive");
+    let mut checked = 0;
+    for index in 0..archive.directory().entries.len() {
+        let Ok(head) = archive.peek(index, 4) else {
+            continue;
+        };
+        if !pob::looks_like_particle_system(&head) {
+            continue;
+        }
+        let blob = archive.read(index).expect("read blob");
+        let system = ParticleSystem::parse(&blob).expect("parse");
+        for emitter in system.emitters(&blob).expect("emitters") {
+            for template in &emitter.initial_particles {
+                let own = system.template_texture(&blob, template).unwrap_or_else(|| {
+                    panic!("{} / {}: no texture block", system.name, template.name)
+                });
+                assert!(own.width >= 32 && own.height >= 32, "{}", template.name);
+                checked += 1;
+                if system.name == "WO_SHIP_EXPLOSION" {
+                    let parent = system
+                        .embedded_texture(&blob, &emitter)
+                        .expect("the parent's sprite");
+                    assert_eq!(
+                        (parent.width, parent.height, parent.bits_per_pixel),
+                        (128, 64, 4)
+                    );
+                    assert_eq!(
+                        (own.width, own.height, own.bits_per_pixel, own.levels),
+                        (32, 32, 8, 3)
+                    );
+                    let rgba = own.rgba8();
+                    let centre = (16 * 32 + 16) * 4;
+                    assert_eq!(&rgba[centre..centre + 4], &[255, 255, 255, 255]);
+                    assert_eq!(&rgba[..4], &[0, 0, 0, 0], "black at the corner");
+                }
+            }
+        }
+    }
+    assert_eq!(checked, 28, "the corpus's templates");
+}
