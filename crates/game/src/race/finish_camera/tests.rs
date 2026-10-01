@@ -219,3 +219,34 @@ fn the_same_seed_flies_the_same_cuts() {
     };
     assert_eq!(run(4), run(4));
 }
+
+#[test]
+fn the_take_over_a_new_node_and_a_switch_to_the_chase_stand_in_each_count_as_a_cut() {
+    let mut camera = director(3);
+    assert_eq!(camera.cuts(), 0);
+    camera.step(START_TICKS, &[craft(0, 0.0)], 0);
+    assert_eq!(camera.cuts(), 1, "the take-over");
+    camera.step(START_TICKS + 1, &[craft(0, 1.0)], 0);
+    assert_eq!(camera.cuts(), 1, "the same node, the same shot");
+    // Past sixty units: a new node. The mode roll may leave a node camera, which is a second jump.
+    camera.mode = ViewMode::Track;
+    camera.step(START_TICKS + 2, &[craft(0, 61.0)], 0);
+    assert!(camera.cuts() >= 2, "a new node is a cut");
+    // Back on a node camera whatever the roll chose, so what follows is deterministic.
+    camera.mode = ViewMode::Track;
+    camera.step(START_TICKS + 3, &[craft(0, 61.0)], 0);
+    let before = camera.cuts();
+    camera.mode = ViewMode::Front;
+    camera.step(START_TICKS + 4, &[craft(0, 61.0)], 0);
+    assert_eq!(
+        camera.cuts(),
+        before + 1,
+        "node camera to the chase stand-in"
+    );
+    camera.step(START_TICKS + 5, &[craft(0, 61.0)], 0);
+    assert_eq!(
+        camera.cuts(),
+        before + 1,
+        "the chase stand-in keeps its shot"
+    );
+}

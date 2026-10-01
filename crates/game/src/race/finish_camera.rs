@@ -117,6 +117,12 @@ pub struct FinishCamera {
     fov: f32,
     /// Whether `camera_override` is this director's, so a `--camera-pose` one is never cleared.
     imposed: bool,
+    /// How many times the picture has jumped: the take-over, a new node while a node camera
+    /// is showing, and each switch between a node camera and the chase stand-in. What
+    /// [`Race::camera_cuts`] adds so the temporal upscaler's history is dropped across them.
+    cuts: u32,
+    /// Whether the last frame was a node camera.
+    was_node: bool,
 }
 
 impl FinishCamera {
@@ -138,6 +144,8 @@ impl FinishCamera {
             smoothed: Vec3::ZERO,
             fov: 65.0,
             imposed: false,
+            cuts: 0,
+            was_node: false,
         }
     }
 
@@ -174,13 +182,27 @@ impl FinishCamera {
         if since_finish < START_TICKS || self.nodes.is_empty() {
             return None;
         }
+        let node_before = self.node;
         if !self.running {
             self.start(live, player);
         } else {
             self.director(live, player);
         }
         let subject = live.iter().find(|s| s.slot == self.subject)?;
-        self.pose(subject.position)
+        let pose = self.pose(subject.position);
+        // A jump the upscaler must not blend across: the picture changes shot.
+        let showing = pose.is_some();
+        if showing != self.was_node || (showing && self.node != node_before) {
+            self.cuts = self.cuts.wrapping_add(1);
+        }
+        self.was_node = showing;
+        pose
+    }
+
+    /// How many times the picture has jumped to a different shot. See [`Race::camera_cuts`].
+    #[must_use]
+    pub fn cuts(&self) -> u32 {
+        self.cuts
     }
 
     /// `FUN_08880788` on the first frame: the player, the nearest node, mode `7`.
