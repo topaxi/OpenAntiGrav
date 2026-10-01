@@ -1745,3 +1745,35 @@ its absorb hull overlay in play. The probe itself is in
   because the craft pointer read earlier no longer drives anything.
   `psp-drive.py restart` brings back a live grid. Re-read
   `*(g_race_manager + 0x2c0)` after it, because the craft is reallocated.
+
+## Firing a weapon at a matched state: `psp-weapon-pair.py` (2026-10-01)
+
+`scripts/psp-weapon-pair.py <weapon>` is the weapon-comparison harness: it restarts
+the race, holds `cross` through the countdown (not a false start), takes the first
+frame the player's throttle word (`craft+0x2b8`) is non-zero as GO, and ORs the
+weapon's fire bit into the player's weapon record inside `Weapons_DispatchFire`
+`--go-offset` frames later, so the craft is at a known state when it fires (speed
+106.2 at `--go-offset 120`, on every one of more than ten restarts). Then it either
+photographs the window at native 480x272 on chosen frames after the fire
+(`--shots`), or breaks on a probe address for `--probe-frames` frames
+(`--probe rocket|spawns|mine`: `Rocket_Update`, `Psys_Spawn_q`, `Mine_PoseNode`).
+`--no-fire` is the control, `--fire-frame` fires a stationary craft, `--set-word
+0x1ac=5` arms the Mine's round counter, `--camera` records the camera node's eye.
+The matching `oag-game` side is `verification/scenarios/weapon-after-go.inputs`.
+
+Four things it learned the slow way:
+
+- **The race manager's player slot is the ship entity, not the craft.**
+  `*(*(0x08b317b4) + 0x2c0)` has `+0x94` pointing at the craft `Ship_UpdateCraft`
+  takes (and the craft's `+0x1c4` points back); its `+0x4c` is the weapon record.
+  The craft has the throttle word and the body.
+- **Do not nest a probe breakpoint in the dispatch loop.** It records its first
+  frame and then waits out its timeout, because the dispatch breakpoint is still
+  armed and takes the next stop. Leave the loop first.
+- **The presented frame lags the stop by two frames.** The first screenshot that
+  differs from a no-fire control is `fire+3`, on two boots (RMSE 0.068 -> 0.11).
+- **An unmanaged Xvfb puts the SDL window off-screen** (one run: x 1760 of 1280).
+  `--place-window` moves it to `160,88`; the window is the PSP's 480x272 doubled,
+  `InternalResolution = 1` in the profile keeps the picture native, and
+  `iShowStatusFlags = 0` hides the FPS counter that otherwise sits in every frame.
+

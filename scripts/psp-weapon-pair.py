@@ -60,8 +60,10 @@ SPEED_CACHED = 0x2EC
 # Fire-request bits, from `psp-fire-weapon.py`'s table and weapon-fire.md.
 BITS = {
     "rocket": 0x0080,
+    "shield": 0x0020,
     "missile": 0x0040,
     "mine": 0x0002,
+    "bomb": 0x0100,
     "backward": 0x0100,
     "quake": 0x0008,
 }
@@ -71,7 +73,10 @@ BITS = {
 PSYS_SPAWN = 0x08915484
 ROCKET_UPDATE = 0x0885D2A8
 CYCLES_PER_FRAME = 222_000_000 / 59.940059940059946
-PROBES = {"spawns": PSYS_SPAWN, "rocket": ROCKET_UPDATE}
+MINE_POSE_NODE = 0x08859CE4
+BOMB_NODE = 0x08863390
+CAMERA_BREAK = 0x0883C13C
+PROBES = {"spawns": PSYS_SPAWN, "rocket": ROCKET_UPDATE, "mine": MINE_POSE_NODE}
 
 # The emulator window is 960x544 (the PSP's 480x272, doubled) and is moved here.
 WINDOW_X, WINDOW_Y, WINDOW_W, WINDOW_H = 160, 88, 960, 544
@@ -85,6 +90,23 @@ def gpr(dbg):
     registers = dbg.call("cpu.getAllRegs")
     category = next(c for c in registers["categories"] if c["name"] == "GPR")
     return dict(zip(category["registerNames"], category["uintValues"]))
+
+
+def camera_node(dbg):
+    """The player camera's node: one hit of `Camera_UpdatePlayerView`, `*(s7 + 0x3c)`.
+
+    The node holds the view matrix with the **negated eye** in its fourth row
+    (`camera.md`); `camera_eye` negates it back.
+    """
+    node = None
+    for _, _ in dbg.each_hit(CAMERA_BREAK, 1, timeout=60.0):
+        node = dbg.read_u32(gpr(dbg)["s7"] + 0x3C)
+    return node
+
+
+def camera_eye(dbg, node):
+    m = struct.unpack("<16f", dbg.read(node, 0x40))
+    return {"right": m[0:3], "up": m[4:7], "fwd": m[8:11], "eye": [-m[12], -m[13], -m[14]]}
 
 
 def probe_after_fire(dbg, kind, frames, log):
@@ -121,6 +143,13 @@ def _probe_loop(dbg, kind, address, frames, start, out):
             for k in ("a0", "a2", "a3", "t0", "t1", "t2", "t3"):
                 if ram(regs[k]):
                     entry["ptr_floats"][k] = list(struct.unpack("<16f", dbg.read(regs[k], 64)))
+        elif kind == "mine":
+            mine = regs["a0"]
+            blob = dbg.read(mine, 0x100)
+            entry["entity"] = mine
+            entry["matrix"] = list(struct.unpack_from("<16f", blob, 0x60))
+            entry["fuse"] = struct.unpack_from("<f", blob, 0x48)[0]
+            entry["owner"] = struct.unpack_from("<I", blob, 0x40)[0]
         else:
             rocket = regs["a0"]
             entry["rocket"] = rocket
@@ -201,11 +230,21 @@ def main():
     parser.add_argument("--no-restart", action="store_true",
                         help="the race is already at its countdown; just arm the hold")
     parser.add_argument("--no-hold", action="store_true", help="do not hold thrust (stand still)")
+    parser.add_argument("--fire-frame", type=int,
+                        help="fire at this absolute stop frame instead of --go-offset frames after "
+                        "GO. Needed when thrust is not held, so there is no GO to see; GO came at "
+                        "stop frame 266-267 on every run, so 300 is about 33 frames after it")
+    parser.add_argument("--set-word", action="append", default=[], metavar="OFFSET=VALUE",
+                        help="also write this word into the player's weapon record with the fire "
+                        "bit, e.g. 0x1ac=5 for the Mine's round counter, which the pickup's arm "
+                        "function sets and a hand-set fire bit does not")
     parser.add_argument("--place-window", action="store_true")
     parser.add_argument("--probe", choices=sorted(PROBES),
                         help="after the fire, instead of photographing, log every hit of the "
                         "probe address for --probe-frames frames")
     parser.add_argument("--probe-frames", type=float, default=150.0)
+    parser.add_argument("--camera", action="store_true",
+                        help="record the player camera's pose in every frame row")
     parser.add_argument("--no-fire", action="store_true",
                         help="a control: run the whole capture and write no fire bit")
     parser.add_argument("--timeout", type=float, default=60.0)
@@ -229,9 +268,11 @@ def main():
             dbg.resume()
             dbg.hold(cross=True)
 
+        node = camera_node(dbg) if args.camera else None
         go = None
         fire_frame = None
         announced = None
+        probe_pending = False
         frame = 0
         for _, _ in dbg.each_hit(WEAPONS_DISPATCH_FIRE, 6000, timeout=args.timeout):
             manager = dbg.read_u32(RACE_MANAGER)
@@ -258,12 +299,17 @@ def main():
                 print("gave up: no GO or no fire within %d frames" % frame, file=sys.stderr)
                 break
             row = {"frame": frame, "throttle": throttle, "speed": speed, "pos": position}
-            if go is None and throttle > 0.0:
+            if node:
+                row["camera"] = camera_eye(dbg, node)
+            if go is None and throttle > 0.0 and args.fire_frame is None:
                 go = frame
                 print("GO at stop frame %d" % go, file=sys.stderr)
-            if go is not None:
-                row["since_go"] = frame - go
-                if fire_frame is None and frame - go >= args.go_offset:
+            if go is not None or args.fire_frame is not None:
+                if go is not None:
+                    row["since_go"] = frame - go
+                due = (frame >= args.fire_frame) if args.fire_frame is not None \
+                    else (frame - go >= args.go_offset)
+                if fire_frame is None and due:
                     fire_frame = frame
                     if args.no_fire:
                         print("control: no fire word written at stop frame %d" % frame,
@@ -271,13 +317,21 @@ def main():
                     else:
                         before = dbg.read_u32(rec + FIRE_WORD)
                         dbg.write_u32(rec + TARGET_WORD, 0xFFFFFFFF)
+                        for item in args.set_word:
+                            offset, value = item.split("=")
+                            dbg.write_u32(rec + int(offset, 0), int(value, 0))
                         dbg.write_u32(rec + FIRE_WORD, before | BITS[args.weapon])
                         row["fired"] = True
                         row["fire_word"] = [before, dbg.read_u32(rec + FIRE_WORD)]
-                        print("fired %s at stop frame %d (%d after GO), speed %.2f"
-                              % (args.weapon, frame, frame - go, speed), file=sys.stderr)
+                        print("fired %s at stop frame %d (%s after GO), speed %.2f"
+                              % (args.weapon, frame, frame - go if go is not None else "-", speed),
+                              file=sys.stderr)
                     if args.probe:
-                        probe_after_fire(dbg, args.probe, args.probe_frames, log)
+                        # Not nested in this loop: the dispatch breakpoint is still
+                        # armed inside it and would stop the probe's run at the next
+                        # frame. Leave the loop (its exit removes the breakpoint with
+                        # the CPU stopped, before the handler runs) and probe after.
+                        probe_pending = True
                         log["frames"].append(row)
                         break
             if fire_frame is not None:
@@ -291,6 +345,8 @@ def main():
                     break
             log["frames"].append(row)
             frame += 1
+        if probe_pending:
+            probe_after_fire(dbg, args.probe, args.probe_frames, log)
         dbg.resume()
     finally:
         dbg.hold(cross=False)
