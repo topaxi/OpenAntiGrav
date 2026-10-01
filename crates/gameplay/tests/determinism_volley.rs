@@ -233,9 +233,19 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   row is untouched because nothing expires inside a second. Replaces
 ///   `0xc8f5_f44f_4c4d_c618`; isolated by that arithmetic rather than by a
 ///   revert.
+///
+/// - **Moved 2026-10-01 (60-tick final and both trajectories)**, by the
+///   Rocket's measured launch: the class speed alone, 0.75 x it until the first
+///   surface hit, and the class speed riding in `Projectile::launch_speed_kmh`
+///   (`rocket::fire`). Isolated by commit: `f9dce4de` (class speed alone) left
+///   this fixture's hash unchanged because it authors `launchSpeed="0"`, and
+///   `2b253ead` (0.75 launch, the new hashed field) moved it. The 600-tick
+///   final is unchanged, the slots being empty by then. Replaces
+///   `0xccab_866c_78e1_d1d6` / `0x668e_a6e7_f71d_d3e4` at 60 ticks and
+///   `0x9c20_7c28_2863_b750` (trajectory) at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xccab_866c_78e1_d1d6, 0x668e_a6e7_f71d_d3e4),
-    (600, 0x5b48_d436_7dbc_09e7, 0x9c20_7c28_2863_b750),
+    (60, 0x84b1_ede3_62c8_f914, 0xdf2c_fa35_c525_9b68),
+    (600, 0x5b48_d436_7dbc_09e7, 0xc367_da50_59dd_4747),
 ];
 
 #[test]
