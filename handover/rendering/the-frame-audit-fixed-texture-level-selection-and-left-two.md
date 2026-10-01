@@ -24,8 +24,11 @@ of it the same day; see `frame-audit.md`.
   single additive redraw~~ (the sums are equal; the canopy's depth test is on, not
   off), ~~fog on the pass~~ (on, colour `0`; written), ~~a track's `*_shinemap`
   batches~~ (rows 0 and 1 of the view matrix, confirmed at two yaws; drawn,
-  `--no-track-shine`). Still open: the airbrakes' flap deflection on the pass, and the
-  wreck model (`+0x8b8`, same flags) - neither started (pulse-glow did not reach them).
+  `--no-track-shine`). ~~The airbrakes' flap deflection on the pass~~ **closed 2026-10-01** (`pulse-hull-pass`:
+  the flap's mode-2 PRIM carries its twin's node matrix in three GE lists; the pass now swings
+  with the hull's own `Flap::swung`; a *deflected* GE list was not recorded; and Feisar's and
+  Triakis's flaps were mis-spanned in the base draw too, fixed). Still open: the wreck model
+  (`+0x8b8`, same flags) - see its bullet below.
 - ~~**The tunnel rim's neon strip.**~~ **Closed 2026-10-01** (`pulse-glow`). It
   was not the shine pass and not a missing batch: the arch lights and rim light
   are **blended batches with the glow bits**, which the original stamps into the
@@ -66,10 +69,7 @@ of it the same day; see `frame-audit.md`.
 - The cyan strip lights and the start gantry differ between the two sides by
   timing only; a comparison that needs them should pin the same tick after GO.
 
-- **The start-line laser's mask is about 1.5x too wide** on Talon's second grid
-  (original 710 pixels at `0xaf`, ours 1,061) even with the additive class's colour
-  test: where the GE places that test relative to the fog is unread, and ours tests
-  the lit texel before the fog.
+- ~~**The start-line laser's mask is about 1.5x too wide** on Talon's second grid~~ **Closed 2026-10-01** (`pulse-hull-pass`): a phase artefact. The laser's stamped area cycles 588 to 1,390 pixels over about 40 ticks of ours; at the ticks matching the original's frames (592/592/710) the overlap is 0.94. No code change; `docs/rendering/glow-mask.md`.
 - **The blended-glow stamp resubmits every transparent draw of a stamping model**
   (`Drawable::draw_stamps`; a batch without the glow bits discards whole in
   `fs_main_stamp`). `Model` carries no per-draw flag for it, so the GPU cost is
@@ -79,8 +79,14 @@ of it the same day; see `frame-audit.md`.
   path is unread, and firing the LeachBeam halts PPSSPP. The method that now works
   for a mask comparison is documented in `docs/rendering/glow-mask.md`; it needs a
   craft at rest.
-- **The wreck model (`+0x8b8`) and the airbrake flap deflection on the hull's extra
-  pass** - the first Open bullet's remainder - were not started.
+- **The wreck model (`+0x8b8`) on the extra pass: trigger found, nothing drawn.**
+  It becomes the live model only in `Ship_SetState` case 5 (half a second after the
+  explosion), through `Ship_SelectWreckModel` (`0x0883eb68`), and is swapped back by
+  `Ship_SelectHullModel` (`0x0883eae8`) on states 0 to 3 and on respawn
+  ([ship-wreck-model.md](../../docs/ghidra/functions/psp-pulse-usa/ship-wreck-model.md)).
+  We load no `shipwreck.vex`, so there is no wreck to pass. Unread: whether bit `2`
+  that case 5 ORs into the live model's `+0x2c` hides it (then nothing of the wreck
+  draws in a race); a GE list of a craft in state 5 answers it.
 
 ## Next Steps
 

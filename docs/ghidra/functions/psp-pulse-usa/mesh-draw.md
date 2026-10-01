@@ -2303,9 +2303,24 @@ the second texture), `oag_render::shine::build` makes the pass's model and
 `shine::write` the per-frame coordinates through `texgen::environment_map` over
 the craft's model matrix and `texgen::ENV_BASIS_0`/`ENV_BASIS_1`; the game draws
 it after the hulls through the absorb overlay's plumbing (`Depth::Overlay`,
-additive). **Chosen, not measured**: the airbrakes' five-vertex batches are not
-deflected with their flaps. The single additive redraw for replace-then-add and the
-pass's black fog are now measured: see the next section.
+additive). The airbrakes' five-vertex batches follow their flaps (2026-10-01,
+`pulse-hull-pass`): in all three recorded GE lists (`grid`, `yaw`, and Outpost 7's
+black grid) each flap's `TEXMAPMODE` 2 PRIM carries a world matrix equal to its
+ordinary twin's and different from `shipShape`'s (flap
+`[-18.165, -21.063, -0.319, ...]` against the hull's `27.816` diagonal), so the
+original draws the pass under the flap's own node, which `Airbrake_Update` turns.
+`oag_render::shine::write` swings the pass's flap vertices through
+`Flap::swung`, the call the hull's base draw makes, before the coordinates are
+generated; the player's alone, as the base draw is. **Not measured: a deflected
+frame** - every list was recorded with the airbrakes stowed - so that the original
+follows a *deflected* flap is the structure of `Mesh_CompileExtraPass` (the pass
+replays inside the mesh's own node), not a read. The same change fixed a base-draw
+bug the work found: Feisar's and Triakis's `Airbrake` node has two `Mesh` children
+(`AirBrake_*Shape` and `underbrake_flash*Shape`), and the builder had kept only the
+last as "the flap", so the flap proper never moved on those two teams and the flash
+swung alone; the spans are joined now (`shine_ground_truth.rs` checks every team's
+flap holds exactly one shine batch). The single additive redraw for replace-then-add
+and the pass's black fog are measured: see the next section.
 Eight teams, six batches each, all matched to their hull's own draws:
 `crates/game/tests/shine_ground_truth.rs`.
 

@@ -51,8 +51,15 @@
 //!
 //! - The redraw's depth function is `LessEqual` where the original's is the
 //!   strict one; they differ only at equal depth, which the pass never writes.
-//! - **The airbrake batches are not deflected** with their flaps: they are five
-//!   vertices each.
+//!
+//! Measured (2026-10-01, three recorded GE lists, craft stowed): each flap's
+//! `TEXMAPMODE` 2 PRIM carries the same world matrix as its ordinary twin and
+//! not `shipShape`'s, so the pass rides the flap's own node and follows its
+//! deflection: [`write`] swings the flap's vertices through the same
+//! [`crate::mesh::Flap::swung`] the hull's base draw uses. The *deflected*
+//! state itself was not recorded (stowed only); that the original's pass
+//! follows is the structure of `Mesh_CompileExtraPass`, which replays inside
+//! the mesh's own node, not a read of a deflected frame.
 //!
 //! # A circuit's own pass
 //!
@@ -270,7 +277,13 @@ pub fn write_view(model: &Model, out: &mut Vec<GpuVertex>, view: Mat4, seconds: 
 /// The vertices of `model` (a [`build`] result) with their texture coordinates
 /// generated for a ship posed by `ship`, into `out`: the uvgen-2 equation over
 /// the two fixed basis vectors, the ship's rotation and nothing of the camera.
-pub fn write(model: &Model, out: &mut Vec<GpuVertex>, ship: Mat4) {
+///
+/// **`flaps` are the two airbrake angles, left then right, radians** - the pass
+/// rides its flap's node as the original's does, so each flap's vertices are
+/// swung by [`crate::mesh::Flap::swung`], the same call the hull's base draw
+/// makes, *before* the coordinates are generated: the swung normal is what the
+/// glint reads. `[0.0, 0.0]` leaves every vertex where the file put it.
+pub fn write(model: &Model, out: &mut Vec<GpuVertex>, ship: Mat4, flaps: [f32; 2]) {
     texgen::environment_map(
         &model.vertices,
         out,
@@ -278,6 +291,25 @@ pub fn write(model: &Model, out: &mut Vec<GpuVertex>, ship: Mat4) {
         texgen::ENV_BASIS_0,
         texgen::ENV_BASIS_1,
     );
+    let mut moved = Vec::new();
+    let mut mapped = Vec::new();
+    for (flap, angle) in model.airbrakes.iter().zip(flaps) {
+        let Some(flap) = flap else { continue };
+        if angle == 0.0 {
+            continue;
+        }
+        let Some(span) = flap.swung(&model.vertices, angle, &mut moved) else {
+            continue;
+        };
+        texgen::environment_map(
+            &moved,
+            &mut mapped,
+            ship,
+            texgen::ENV_BASIS_0,
+            texgen::ENV_BASIS_1,
+        );
+        out[span].copy_from_slice(&mapped);
+    }
 }
 
 #[cfg(test)]

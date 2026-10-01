@@ -143,7 +143,12 @@ impl Scene {
             track.drawable.write_node_anims(queue, seconds);
             track.drawable.write_view_map(queue, view, seconds, scratch);
         }
+        // The flaps the hull's base draw swings: the player's alone
+        // (`deflect_airbrakes` runs for `ships.first()`), so a rival's pass
+        // stays with its own stowed hull.
+        let player_flaps = race.airbrake_flaps();
         for (slot, shine) in self.shines(race) {
+            let flaps = if slot == 0 { player_flaps } else { [0.0; 2] };
             let ship = race.ship_model_matrix_of(slot);
             shine.write(
                 queue,
@@ -151,7 +156,7 @@ impl Scene {
                 ship,
                 prev_vp * prev.ship(slot, race),
             );
-            shine.write_environment_map(queue, ship, scratch);
+            shine.write_environment_map(queue, ship, flaps, scratch);
         }
     }
 

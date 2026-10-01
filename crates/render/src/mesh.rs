@@ -871,13 +871,27 @@ fn build_class(
             if let Some(side) = side
                 && !span.is_empty()
             {
-                airbrakes[side] = Some(Flap {
-                    vertices: span,
-                    // `anchors` rather than a separate world pass: a flap is on
-                    // a ship, no ship authors an `Anim Transform`, and with no
-                    // anchor above it `Anchored::local` *is* the world matrix.
-                    hinge: Mat4::from_cols_array(&anchors[hinge].local),
-                });
+                // **An `Airbrake` can carry more than one `Mesh`**: Feisar's and
+                // Triakis's has `AirBrake_*Shape` (the flap, with its `0x2000`
+                // batch) and then `underbrake_flash*Shape`. Replacing the flap
+                // by each child in turn left the *last* one - the flash - as
+                // the "flap", so the flap proper never moved and the flash
+                // swung alone. The children's vertices are adjacent (the
+                // builder appends a node at a time and an `Airbrake`'s meshes
+                // are consecutive), so a second child extends the first's span.
+                match &mut airbrakes[side] {
+                    Some(flap) if flap.vertices.end == span.start => flap.vertices.end = span.end,
+                    slot => {
+                        *slot = Some(Flap {
+                            vertices: span,
+                            // `anchors` rather than a separate world pass: a flap
+                            // is on a ship, no ship authors an `Anim Transform`,
+                            // and with no anchor above it `Anchored::local` *is*
+                            // the world matrix.
+                            hinge: Mat4::from_cols_array(&anchors[hinge].local),
+                        });
+                    }
+                }
             }
         }
     }

@@ -233,11 +233,33 @@ original 14.6 against 21.5 on `track.vex`, which is how the file was told). Rows
 | `0xff` | 1,860 | 1,676 | - |
 
 Ours is set where the original reads `4` on 388 pixels (244 of them the laser's `0xaf`)
-and reads `4` where the original is set on 119. So the laser is about 1.5 x too wide
-here: the colour test as placed is not the whole of the original's edge. (The
-`0xaf`-on-20-pixels row of the Talon table above was a frame after the laser had
-mostly gone; the laser is animated, so one tick of ours and one of the original agree
-on neither width nor timing.)
+and reads `4` where the original is set on 119. **That is a phase difference, not a
+width.** Closed 2026-10-01 (`pulse-hull-pass`): the laser's stamped area cycles with the
+race clock - ours at ticks 5 to 230 of that pose holds 588 to 1,390 pixels at `0xaf`, a
+period of about 40 ticks (minima 606 and 599 at ticks 15 and 55) - and the single tick
+the table above compared (tick 1, 1,061) sits mid-cycle. The original's own three
+frames at that pose hold 592, 592 and 710 pixels (`shots6` ticks 0, 1, 2). At the ticks
+of ours that match them, rows 45 to 195, pixel overlap (intersection over union):
+
+| Original frame | Ours at tick | `0xaf`: original / ours / overlap | `0x8b` | `0xff` |
+| --- | ---: | --- | --- | --- |
+| tick 0 and 1 (592) | 16 | 592 / 588 / 0.94 | 173 / 209 / 0.79 | 1,822 / 1,784 / 0.96 |
+| tick 0 and 1 (592) | 17 | 592 / 617 / 0.94 | 173 / 154 / 0.86 | 1,822 / 1,784 / 0.96 |
+| tick 2 (710) | 19 | 710 / 744 / 0.94 | 109 / 123 / 0.86 | 1,860 / 1,783 / 0.94 |
+
+So the stamp, the colour test as placed (on the lit texel) and the alpha test
+reproduce the original's laser edge to about one pixel, and **no term widens it**. Two
+things worth keeping: (1) the fog cannot move these pixels at this pose - the laser's
+draws carry fog on, but `FOG1` is 1600 and `FOG2` `1/1540` in the dump and the laser is
+tens of units from the eye, so the factor there is about zero; where the GE places the
+colour test relative to the fog stays unread, and nothing here depends on it. (2) Three
+experiments that did not move the Talon number to the original's and were reverted: the
+colour test's black threshold swept to 4, 12 and 30 of 255 (it thins Outpost 7's
+laser, which already agrees at 1,468 against 1,469, in proportion - a fit, not a
+measurement), a stamp depth test of `Always` (1,053 against 1,061: the laser is not
+depth-limited), and rounding the alpha test to the 8-bit result (no change). Outpost 7's
+White grid at tick 1 reads 1,375 against the original's 1,264 (not phase-matched). The lesson for any comparison of the laser, the arch lights or the neon strip:
+compare at a matched tick, never at one fixed tick of ours.
 
 `crates/game/tests/glow_stamp_ground_truth.rs` pins it on the disc (arch lights
 at `0xfa` and the laser at `0xaf`, zero of each without the pass); the
