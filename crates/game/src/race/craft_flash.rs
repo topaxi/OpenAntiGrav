@@ -35,7 +35,8 @@
 //!
 //! The state 5 edge also throws `WO_SHIP_FXNODE_EXPLO` and
 //! `WO_SHIP_DEATH_SPARKS` at each wreck node ([`super::wreck_fx`]).
-//! `WO_SHIP_EXPLOSION`, 1.5 s later, is not played: its placement is unread.
+//! `WO_SHIP_EXPLOSION`, [`BLOWUP_DELAY`] later, is thrown with the big flash,
+//! at the live model's matrix ([`Race::throw_wreck_explosion`]).
 
 use oag_core::math::Vec3;
 use oag_gameplay::MAX_SHIPS;
@@ -97,6 +98,7 @@ impl Race {
                         oag_render::flash::BLAST
                     };
                     self.start_flash(kind, at);
+                    self.throw_wreck_explosion(slot);
                 }
             }
         }
