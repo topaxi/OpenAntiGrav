@@ -80,7 +80,13 @@ BOMB_NODE = 0x08863390
 G_INGAME = 0x08AB0818
 INGAME_CLOCK = 0x40
 CAMERA_BREAK = 0x0883C13C
-PROBES = {"spawns": PSYS_SPAWN, "rocket": ROCKET_UPDATE, "mine": MINE_POSE_NODE}
+BOMB_INIT = 0x08863188
+PROBES = {
+    "spawns": PSYS_SPAWN,
+    "rocket": ROCKET_UPDATE,
+    "mine": MINE_POSE_NODE,
+    "bomb": BOMB_INIT,
+}
 
 # The emulator window is 960x544 (the PSP's 480x272, doubled) and is moved here.
 WINDOW_X, WINDOW_Y, WINDOW_W, WINDOW_H = 160, 88, 960, 544
@@ -147,6 +153,11 @@ def _probe_loop(dbg, kind, address, frames, start, out):
             for k in ("a0", "a2", "a3", "t0", "t1", "t2", "t3"):
                 if ram(regs[k]):
                     entry["ptr_floats"][k] = list(struct.unpack("<16f", dbg.read(regs[k], 64)))
+        elif kind == "bomb":
+            # `Bomb_Init (entity a0, position a1, direction a2, ...)`: the drop point.
+            entry["entity"] = regs["a0"]
+            entry["drop"] = list(struct.unpack("<4f", dbg.read(regs["a1"], 16)))
+            entry["dir"] = list(struct.unpack("<4f", dbg.read(regs["a2"], 16)))
         elif kind == "mine":
             mine = regs["a0"]
             blob = dbg.read(mine, 0x100)

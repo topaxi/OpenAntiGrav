@@ -24,11 +24,9 @@
 //!    sideways - so on a static fixture five mines land on top of each other and
 //!    every assertion about a cluster passes vacuously. It needs a craft under
 //!    the real force law at a real speed.
-//! 2. **That the mines end up behind the craft.** `craft+0xa0` being the rear
-//!    anchor is recovered, but which way this engine's own `body.forward()`
-//!    points through `hull_extent` is not something a hand-written pose proves -
-//!    a sign error there lays the cluster out of the nose, which is a different
-//!    weapon and would still detonate on somebody.
+//! 2. **That the mines are laid at the craft's own position.** Measured on the
+//!    original (`mine.md`, 2026-10-01); a drop point still pushed back by the
+//!    hull, or out of the nose, is silent - mines still detonate on somebody.
 //! 3. **That the authored fuse outlives the drop.** `timetodie` is seven seconds
 //!    and the cluster takes half of one; a fuse read from the wrong offset would
 //!    very likely be some other weapon's number, and the ones adjacent to it in
@@ -231,16 +229,18 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     }
 }
 
-/// The cluster ends up **behind** the craft that laid it.
+/// The first mine of a cluster is laid **at the craft's own position**.
 ///
-/// The rear anchor is recovered; that this engine's own `hull_extent` is being
-/// asked for it in the right direction is not, and a sign error there is silent -
-/// mines out of the nose still detonate on somebody. Measured along the craft's
-/// forward axis at the moment of the drop, so it does not depend on the circuit's
-/// shape.
+/// Measured on the running original 2026-10-01: a stationary craft's mines carry
+/// its body position to the hundredth, and `Bomb_Init`'s drop point equals the
+/// body position to the last bit, stationary and at 106 u/s. The charge starts
+/// inside the hull and the craft's own motion leaves it behind; this engine used
+/// to push it back by `hull_extent`, which was chosen and is not the law. The
+/// first tick of a drop, so the craft has not yet moved and "where it was" is
+/// the position read before the tick.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_cluster_is_laid_behind_the_craft() {
+fn a_mine_is_laid_at_the_crafts_own_position() {
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
@@ -250,7 +250,6 @@ fn a_cluster_is_laid_behind_the_craft() {
     race.mine_stats().expect("the disc authors a Mine");
 
     let origin = race.sim.world.ships[0].physics.body.position;
-    let forward = race.sim.world.ships[0].physics.body.forward();
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
@@ -266,12 +265,11 @@ fn a_cluster_is_laid_behind_the_craft() {
         1,
         "expected exactly the first mine of the drop"
     );
-    let along = (mines[0].position - origin).dot(forward);
-    println!("the first mine sits {along:.2} units along the craft's forward axis");
+    let off = (mines[0].position - origin).length();
+    println!("the first mine sits {off:.4} units from where the craft was");
     assert!(
-        along < 0.0,
-        "the mine was laid {along:.2} units *ahead* of the craft - the drop point \
-         is coming out of the nose"
+        off < 1e-3,
+        "the mine was laid {off:.4} units from the craft's own position"
     );
 }
 
@@ -414,7 +412,7 @@ fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
 ///   Bomb wired through the Mine's `Drop` with the wrong count is the single
 ///   most likely way this refactor goes wrong, and it is invisible to the type
 ///   system.
-/// - It is behind the craft, like the Mine's.
+/// - It is at the craft's own position, like the Mine's.
 /// - It does not move. Asserted over sixty ticks of the craft driving away, so
 ///   a bomb that inherited any of the launcher's velocity - which is what the
 ///   original's own negated-forward spawn direction might have meant - fails.
@@ -422,7 +420,7 @@ fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
 ///   two `<Stats>` blocks did not get transposed on the way through `Drop`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_bomb_is_one_static_charge_behind_the_craft() {
+fn a_bomb_is_one_static_charge_at_the_crafts_own_position() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
@@ -433,7 +431,6 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
     let fuse = stats.timetodie.expect("Pulse's Bomb authors a timetodie");
 
     let origin = race.sim.world.ships[0].physics.body.position;
-    let forward = race.sim.world.ships[0].physics.body.forward();
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Bomb);
     let mut buttons = oag_gameplay::input::Input::new();
     buttons.begin_frame(Button::Cross.bit());
@@ -461,13 +458,16 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
         "the pickup survived a drop of one, so the counter did not reach zero"
     );
 
-    let along = (charges[0].position - origin).dot(forward);
+    let off = (charges[0].position - origin).length();
     println!(
-        "the bomb sits {along:.2} units along the craft's forward axis, fuse {:.1} s \
+        "the bomb sits {off:.4} units from where the craft was, fuse {:.1} s \
          against the mine's {:.1}",
         charges[0].lifetime, bomb.timetodie
     );
-    assert!(along < 0.0, "the bomb was laid {along:.2} units *ahead*");
+    assert!(
+        off < 1e-3,
+        "the bomb was laid {off:.4} units from the craft's own position"
+    );
     assert!(
         charges[0].lifetime > bomb.timetodie,
         "the bomb's fuse is {:.1} s against the mine's {:.1} - the two <Stats> \
