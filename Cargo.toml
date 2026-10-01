@@ -199,9 +199,19 @@ debug = 1
 #
 # `[profile.test]` inherits both from `dev`. Neither touches `release`, which
 # keeps its full `debug = 1` above.
+#
+# `incremental = false` is the third. Cargo's incremental mode splits a
+# workspace member into 256 codegen units so it can reuse the unchanged ones,
+# and at `opt-level = 2` that split keeps small `#[inline]` functions
+# (`Vec3::from_array`, `Iterator::next`, ...) from being inlined across units:
+# the simulation tests ran about 40% slower for it, measured 2026-10-01 in
+# `docs/architecture/workspace-layout.md`. It also keeps `sccache` (the
+# rustc-wrapper in `~/.cargo/config.toml`) from caching our own crates at all,
+# because it refuses incremental invocations.
 [profile.dev]
 debug = "line-tables-only"
 lto = "off"
+incremental = false
 
 # Behavioural verification runs the simulation for many thousands of ticks, and
 # the ground-truth tests push whole discs through our own decoders. An
@@ -213,8 +223,15 @@ lto = "off"
 # halved its CPU time, and `.config/nextest.toml`'s ordering took it to 3:17
 # from there. See docs/architecture/workspace-layout.md for the measurement and
 # for which crates are deliberately *not* here.
+#
+# `debug = false` for the same reason `line-tables-only` exists above, one step
+# further: a failing test is read from the `file:line` of *our* frames, and
+# nobody reads a wgpu or naga frame's line. The DWARF for third-party crates was
+# more than half of a 91 MB test binary and of the sys time spent linking 130 of
+# them. Our own crates keep `line-tables-only`.
 [profile.dev.package."*"]
 opt-level = 2
+debug = false
 
 # The simulation, driven for thousands of ticks per behavioural test.
 [profile.dev.package.oag-core]
@@ -271,4 +288,15 @@ opt-level = 2
 # The front end: `menu_layout_ground_truth.rs` and `menu_skin.rs` decode a real
 # sprite sheet and parse a whole title's front-end XML per test.
 [profile.dev.package.oag-ui]
+opt-level = 2
+
+# The race itself: `oag-game` holds `race/`, the whole front-to-back tick that
+# `ai_roll_ground_truth`, `ram_ground_truth` and the other sim-driving tests run
+# for thousands of ticks, and `oag-render` holds the particle systems the race
+# steps with it. Both were the "left at 0" column of the table in
+# `docs/architecture/workspace-layout.md` and were the largest unoptimised cost
+# in `just test-data`. `opt-level` keeps IEEE semantics, so no state hash moves.
+[profile.dev.package.oag-game]
+opt-level = 2
+[profile.dev.package.oag-render]
 opt-level = 2
