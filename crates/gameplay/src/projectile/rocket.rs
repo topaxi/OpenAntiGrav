@@ -140,6 +140,11 @@ pub fn launch(
 /// pin to it (see [`super::Projectiles::advance`]'s Rocket arm). One entry point
 /// for both halves, so dropping either is a failing test and not a quiet change.
 ///
+/// Each rocket rides the craft's own up until its first probe adopts a surface:
+/// `Rocket_Init` seeds the stored normal from the craft, and the first surface
+/// probe goes along it (measured: the live rows read `(-0.03, 1.0, 0.05)`, the
+/// craft's tilt, where world up would be `(0, 1, 0)`).
+///
 /// Returns how many left, or `None` where the table authors no speed for this
 /// race's class.
 pub fn fire(
@@ -153,12 +158,12 @@ pub fn fire(
     let shots = launch(state, stats, class)?;
     let mut fired = 0;
     for (position, velocity) in shots {
-        if projectiles.spawn_guided(
+        if projectiles.spawn_riding(
             oag_tables::weapons::Weapon::Rocket,
             position,
             velocity,
             owner,
-            None,
+            state.body.up(),
             class_kmh,
         ) {
             fired += 1;

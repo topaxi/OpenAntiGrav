@@ -104,3 +104,22 @@ fn the_first_surface_hit_sets_the_class_speed() {
         "expected the class speed {CLASS}, got {after}"
     );
 }
+
+/// The first probe goes along the craft's own normal, not world up: `Rocket_Init`
+/// seeds the stored normal from the craft. Drops if `fire` goes back to
+/// `spawn_guided`'s world-up seed.
+#[test]
+fn a_rocket_is_seeded_with_the_craft_up() {
+    let mut state = ShipState::default();
+    state.body.orientation = oag_core::math::Quat::from_rotation_z(0.2);
+    let mut projectiles = Projectiles::new();
+    fire(&mut projectiles, &state, &stats(), "VENOM", 0).expect("Venom is authored");
+    for slot in &projectiles.slots[..ROCKET_SHOTS] {
+        assert_eq!(slot.surface, state.body.up());
+    }
+    assert_ne!(
+        state.body.up(),
+        Vec3::Y,
+        "the craft must be tilted for this to mean anything"
+    );
+}
