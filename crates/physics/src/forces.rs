@@ -612,7 +612,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     launch::advance(
         &mut state.launch,
         env.start_boost.as_ref(),
-        !state.on_grid,
+        state.released,
         input.thrust != 0.0,
         dt,
     );

@@ -166,7 +166,7 @@ fn grade_at(seconds: f32, p: &StartBoost) -> Option<Grade> {
 /// One tick of the grader and the boost writer, **after** the engine has read
 /// [`LaunchState::multiplier`] for this tick.
 ///
-/// `released` is the craft being out of the grid state (`!ShipState::on_grid`).
+/// `released` is the craft being out of the grid state (`ShipState::released`).
 /// `thrust` is whether the raw thrust input is non-zero this tick. With no
 /// `params` nothing runs and the multiplier stays neutral, which is every title
 /// and every test that never supplies the disc's `<StartBoost>`.

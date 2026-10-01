@@ -577,6 +577,17 @@ pub struct ShipState {
     /// `rebound` base is `1.0` rather than the hull's, and the control record's
     /// airbrakes are forced to full. See `docs/physics/grid-state.md`.
     pub on_grid: bool,
+    /// The craft has left the grid state, `craft+0x2a4 == 1`: `false` through the
+    /// countdown, **in every mode, Zone included**, and `true` for a craft that
+    /// was never on a grid.
+    ///
+    /// The same fact as `!`[`Self::on_grid`] in every mode but Zone, where
+    /// `on_grid` stays `false` because the one force term it gates is
+    /// `Ship_HoverTwoPoint`'s and Zone runs the four-corner hover. The launch
+    /// boost's clock starts here ([`crate::launch`]), and Zone's auto-speed goes
+    /// through the same multiplier. Written by the race from the countdown clock,
+    /// not hashed, for [`Self::on_grid`]'s reason.
+    pub released: bool,
     /// The launch boost: `craft+0x294` and what decides it. See
     /// [`crate::launch`].
     ///
@@ -809,6 +820,7 @@ impl Default for ShipState {
             // `docs/ghidra/functions/psp-pulse-usa/engine.md`.
             time_since_landing: 10.0,
             on_grid: false,
+            released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,
             mag_lock_blend: 0.0,

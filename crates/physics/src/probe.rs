@@ -384,6 +384,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         // value the world hash already carries, and writing it would move every
         // committed reference for a field no probe script ever sets.
         on_grid: _,
+        // Not hashed, for `on_grid`'s reason: the race writes it from the countdown clock.
+        released: _,
         launch,
         time_airborne,
         mag_lock_blend,

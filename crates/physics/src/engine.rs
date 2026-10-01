@@ -419,8 +419,16 @@ pub fn engine(
     if let Some(target) = auto_speed {
         let thrust = if grounded > 0.0 { target } else { 0.0 };
         return EngineForce {
+            // **The launch multiplier is deliberately not applied here.** The
+            // original's tail is shared - this branch reaches `craft+0x294` at
+            // `0x0884c918` like the throttle one - so Zone's first second after GO
+            // would be graded too (a coasting craft `normalMul`, one holding
+            // accelerate `stallMul`), but that was never watched on a Zone race, and
+            // it would make the speed 28 ticks after GO depend on whether accelerate
+            // was held, which `zone_ground_truth` asserts it does not. Left at the
+            // resting `1.0` until Zone is measured; see `docs/physics/launch-boost.md`.
             thrust: one_shot_scale(
-                thrust * state.launch.multiplier * ENGINE_OUTPUT_DOUBLE,
+                thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
                 thrust_scale,
             ),
             lift: 0.0,

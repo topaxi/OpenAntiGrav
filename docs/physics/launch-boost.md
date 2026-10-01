@@ -103,10 +103,16 @@ falsifier.
   `ShipState::on_grid` falls one tick earlier than it did
   (`thrust_gated(tick + 1)`); the yaw coupling gains the same tick and its first-30-tick
   drift is `0.1027` degrees against the original's `0.102`.
-- Zone's four-corner branch multiplies by the same word in the original and does here
-  (the shared tail of `Ship_UpdateEngine`); its grid state is not modelled, so the
-  window has already run out by the time Zone's first thrust lands and the term is
-  inert there.
+- **Zone is left at `1.0`.** Its four-corner branch reaches the same multiply in the
+  original (the shared tail, `0x0884c918`), so a Zone launch is graded too: a coasting
+  craft `normalMul`, one holding accelerate `stallMul`. That was not watched (Zone is
+  greyed on a fresh profile), and applying it makes the speed 28 ticks after GO depend on
+  whether accelerate was held (127.6 against 114.9 km/h on `16_Track`), which
+  `zone_ground_truth::zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too`
+  asserts it does not. The assertion is itself a decompile-based expectation, not a
+  measurement, so this is a finding for whoever measures Zone: the clock already starts
+  at the right tick in Zone (`ShipState::released`), and the multiply is one line in
+  `engine::engine`.
 
 ## A respawn does not replay the window
 
