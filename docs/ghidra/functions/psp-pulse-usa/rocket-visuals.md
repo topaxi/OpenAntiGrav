@@ -610,11 +610,114 @@ takes its velocity. Only `+Y` is carried: the psys port builds the other two
 axes from `up` alone (`horizontal_basis`), so an emitter whose azimuth matters
 would still differ from the original's `n x f`/`-n` pair.
 
+## 2026-10-01: a matched-state comparison, and the flight law it measured
+
+The 2026-09-24 side-by-side was not a matched state (the original at 140-237
+km/h, ours at 48-100, so our volley met an opponent). This one is: the same
+authored intent on both sides, the same ship (Venom, Assegai), the same
+circuit (Talon's Junction, `16_Track`) and the same start straight.
+
+**Method.** `scripts/psp-weapon-pair.py` (emulator side) holds `cross` through
+the countdown (not a false start, see `race-modes.md`), calls the first frame
+the player's throttle word (`craft+0x2b8`) is non-zero GO, and ORs the Rocket
+bit `0x80` into the player's weapon record inside `Weapons_DispatchFire` 120
+frames later - GO was stop frame 266-267 on every run, and the craft was at
+**speed 106.2, x 124.5** at the fire on every restart (more than ten runs over three emulator boots, 106.05-106.22). Ours is
+`verification/scenarios/weapon-after-go.inputs` with `oag-game --race --mode
+time_trial --give rocket --size 480x272`. Ours reaches the same state (x
+124.9, speed 105.8) on tick 403, not 392: our standing start is about ten
+ticks slower off the line, which is a handling matter and is left alone. The
+presented frame lags the stop by two frames (the first frame that differs from a
+no-fire control is `fire+3` on both boots, RMSE 0.068 -> 0.11), so the original's
+`k` is compared with our tick `fire + k - 2`. Three traps found on the way, each
+now in the script: the race manager's player slot (`*(0x08b317b4) + 0x2c0`) is the
+**ship entity**, not the craft `Ship_UpdateCraft` takes (`entity+0x94` is the
+craft); a probe breakpoint nested inside the dispatch breakpoint's loop records
+only its first frame; and an unmanaged Xvfb places the SDL window off-screen.
+
+**Time Trial is a valid place to fire.** The original updates and detonates
+rockets there like anywhere else (a first reading that they were frozen was the
+nested-breakpoint trap above). It has no opponents and no weapon pickups, which
+is exactly why it is the clean place to compare a free flight. The capture
+frames and the probe JSON are under `data/scratch/pulse-weapons/` (not
+committed).
+
+**Measured, 3 rockets of one volley, two runs: identical to 0.1 unit.** (Ours: a temporary, uncommitted `eprintln!` of `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs`, reverted; the original: `psp-weapon-pair.py --probe rocket`.) Every
+`Rocket_Update` hit (`0x0885d2a8`) read `a0` = the rocket:
+
+| | original | ours |
+| --- | --- | --- |
+| spawn position | the craft's own, to 0.1 (`124.5, -47.9, -196.9` against the body's `124.5, -47.9, -197.0`) | the nose: craft position plus the hull's extent |
+| speed, frames 0-3 | **166.67 u/s (600 km/h)**, drifting to 166.59 | 277.78 u/s (1000 km/h) |
+| speed, frame 4 on | **222.22 u/s (800 km/h) and held** | 277.78 |
+| age at the speed step | `age` 0.0501 -> 0.0668 (the fourth update) | no step |
+| ends | `WO_ROCKET_EXPLO_TRACK` at frame **51, 61, 70** after the fire, at **185, 221, 252 units** from the spawn, rising from y -47.9 to -39..-33 with the road | tick 14, 24, 32 after the fire, at 75-158 units |
+| `WO_ROCKET_FLARE` spawns | three, at frame 0, nothing else at launch | three, at launch |
+
+What this settles:
+
+- **Cruise speed is the class speed alone: `venomspeed` 800 km/h = 222.22 u/s.**
+  Ours flies `class + launchSpeed` = 1000 km/h. The source comment on
+  `projectile::rocket::launch` already flagged the sum as ours; it is now
+  measured against, twice (this, and the 2026-09-24 fx-brightness probe's
+  "about 222"). `Rocket_SpeedForClass` is called by both `Rocket_Init` and
+  `Rocket_Update` and is a pure function of two globals, so it returns the same
+  800 at both.
+- **The first four frames are slower, at exactly 0.75 x the class speed**
+  (166.67 = 600 km/h), and the 0.75 is the craft's display-matrix scale, not
+  `launchSpeed`. `Rocket_Init` copies the matrix `Weapon_FireRocket` hands it
+  into `+0x60..+0x9c` and scales its row 2 (`a1+0x20`, the direction) by
+  `SpeedForClass / 3.6`. The first `Rocket_Update` hit breaks at entry, before the
+  rows are rebuilt, so those words are still Init's copy: read off all six rockets
+  of two runs, **rows 0, 1 and 2 each have length 0.7500** (the same `g_craft_scale`
+  the Mine probe found on the craft's anchor). So launch speed = class speed x
+  0.75 for as long as the direction vector keeps that length, and the step to
+  222.22 at the fourth update is the first surface-probe hit, where
+  `Rocket_Update` renormalises to `SpeedForClass / 3.6` (the `0x4066 6666`
+  divide at `0x0885d6c8`). `launchSpeed` plays no part. Confidence **88**: the
+  mechanism is read and the 0.75 and both speeds are measured, but why the step
+  lands on the fourth update (probe reach against the hover height) was not
+  separated from the age, and the Flash/Rapier/Phantom values were not run.
+- **The rocket is spawned at the craft's position, not at its nose.** A
+  stationary Mine's `Mine_PoseNode` matrix was read at the craft's body position
+  to the hundredth (mine.md, same date), and the Rocket agrees.
+
+**Open rows (all in `crates/gameplay`, outside this lane's edit scope, and each
+moves the committed determinism hash, so a lane that owns them regenerates it in
+its own commit):**
+
+1. *Rocket cruise speed*: 222.22 u/s, not 277.78. Measured, 2 sources.
+2. *Rocket launch speed*: the direction vector keeps the craft's display scale
+   0.75, so the rocket leaves at 0.75 x class until its first surface hit sets
+   the class speed. Measured on Venom; `launchSpeed` is not involved.
+3. *Rocket spawn point*: the craft's position, not the nose. Measured.
+4. *Rocket life against the track*: ours detonates 2-4 times sooner than the
+   original's 51-70 frames. Not isolated: the speed, the spawn point and the
+   fan's lateral drift each change it; re-measure after 1-3.
+
+**What the picture shows at player size** (`pair-tt-*.png`, scratch): at fire+3
+to fire+8 the original has a wide orange-white glow (about 40-60 px across at
+480x272) lying on the craft's nose and along the road, which thins to a streak
+by fire+20; ours has a small yellow spot (about 15 px) ahead of the nose and
+three darts. Both sides draw `WO_ROCKET_FLARE` once per rocket with nothing else
+at launch, so the difference is not a missing effect. It is consistent with rows
+2 and 3 (the original's flare starts on top of the craft and travels slowly for
+four frames, so the camera sits inside its first particles; ours starts nine
+units ahead at 1.7 x the speed) but that is **not tested**: it needs the gameplay
+rows changed first. Chosen, not measured: nothing here.
+
+Two things in the frames that are not this lane's: the original's craft is
+about 1.4 x larger on screen than ours at the same moment (a camera framing
+difference, not investigated; `--camera-view close` and `far` rendered alike in one
+check, which may also mean the flag did not take effect),
+and the held-weapon icon differs (the original's Time Trial shows its pad
+indicator; ours shows the weapon, because `--give` refills the slot).
+
 ## What is not verified
 
 - ~~**The quarter-turn's axis**, blocked on resolving `0x08a6b6b4`~~ -
   resolved and measured, see the 2026-09-24 section above.
-- **`WO_ROCKET_FLARE`'s parameters**, blocked on the `.pob` payload layout.
+- **`WO_ROCKET_FLARE`'s parameters**, blocked on the `.pob` payload layout (the emitters are parsed since 2026-08-12; what is unread is the slot-resolved record).
 - **`func_0x0003a37c`**, the test that gates the craft-hit explosion.
 - **What class `0x3e9` is called.** The id is read off the constructor; the
   class table's name for it was not looked up.

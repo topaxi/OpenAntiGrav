@@ -14,7 +14,7 @@ checks these first rather than rediscovering them:
   quarter-turn is the `WO_ROCKET_FLARE` frame's, not the model's, and the
   flare now rides it (`psys::Stage::orient`: its `+Y` is the velocity). See
   `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s 2026-09-24
-  section. No launch-speed ramp has been read for it (the Plasma's was).
+  section. **2026-10-01**: measured - 0.75 x class for four frames, then the class speed alone (see Open).
 - **Mine**: **2026-09-24** - the pose is measured live and is not the
   craft's at all: `Mine_PoseNode` re-poses every laid mine each tick as
   `0.6 x Rot(axis, -4 x fuse)` about a per-mine random axis. Pulse draws
@@ -42,41 +42,66 @@ checks these first rather than rediscovering them:
 
 ## Open
 
-- A side-by-side, three-frames-each capture per weapon per title against a
-  PPSSPP (`docs/reverse-engineering/ppsspp-debugger.md`) / RPCS3 capture of
-  the same moment, judged as a player would. **Where it stands 2026-09-24:**
-  - *Pulse Rocket* - one volley, three frames each (5/15/30 frames after
-    firing), ours against PPSSPP on the same start straight and team. Not a
-    matched state: the PPSSPP craft was at 140-237 km/h after `psp-drive.py
-    restart`, ours at 48-100 km/h, so our volley met an opponent and
-    detonated where the original's flew clear. The darts are a few pixels
-    at player size on both; the flare is now a glow down the flight path on
-    both. Frames: `data/scratch/weapon-pose/side-rocket-*.png`.
-  - *Pulse Mine/Bomb* - **no capture of the original's picture**: the
-    player's own charges land behind the chase camera, and setting the fire
-    bit on an AI record (indices 0 and 6) is never consumed. The poses were
-    measured from memory instead (above); a picture still wants a viewpoint
-    behind the craft, or the AI's own drop path.
-  - *Pulse Cannon* - the round's own basis measured live
-    (`cannon-quake-leachbeam.md`, 2026-09-24); the node that draws it was
-    not, and no frame compared.
-  - *Missile* - nothing to pose: neither title draws a Missile model (Pulse
-    rides `WO_MISSILE_HEAD` alone; HD's `HD_missile_ball_bloomring` is
-    unwired).
-  - *HD, every weapon* - no RPCS3 capture: firing on the emulator needs the
-    held-weapon slot, which is unread (the same blocker the Plasma thread
-    records).
-  - *Shield* - not touched.
+**2026-10-01 pass (Pulse PSP only), matched state.** Method, numbers and
+evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has a
+2026-10-01 section); the harness is `scripts/psp-weapon-pair.py` with
+`verification/scenarios/weapon-after-go.inputs` on our side. Frames stay under
+`data/scratch/pulse-weapons/`.
+
+- *Pulse Rocket* - **matched** (Time Trial, Talon's Junction, Venom/Assegai,
+  fired at speed 106.2 x 124.5, 3 rockets measured twice to 0.1 unit). Named
+  differences, each a `crates/gameplay` row not yet fixed (each moves the
+  determinism hash, so its own commit):
+  1. cruise speed 222.22 u/s (800 km/h, class alone), ours 277.78 (class +
+     `launchSpeed`);
+  2. launch speed 166.67 u/s for four frames: the direction vector keeps the
+     craft's display scale 0.75 (rows measured 0.7500 on six rockets), so
+     0.75 x class until the first surface hit; `launchSpeed` plays no part. Ours
+     has none;
+  3. spawn at the craft's position, ours at the nose;
+  4. life: the original's detonate at fire+51/61/70 (185-252 units), ours at
+     +14..32 (75-158 units). Re-measure after 1-3.
+  The wide orange glow on the original's nose at fire+3..+8 against ours' small
+  spot is consistent with 2 and 3 and is **untested**.
+- *Pulse Mine* - **pictured**: the charges are visible for two frames as the craft
+  leaves them (fire at speed, photograph every frame). Same model, same cadence
+  (6-7 frames). Difference: the original lays at the craft's own position (to the
+  hundredth, stationary probe), ours `hull_extent` behind (`mine::drop_point`,
+  chosen).
+- *Pulse Bomb* - **pictured**, same method. Same canister. Difference: ours draws
+  a wide flat yellow ring round it for 3-4 frames; the original draws a thin
+  vertical light shaft and two bands at the canister's width, and spawns **no**
+  particle effect at the launch (probe). Not isolated: view `Pulse_Bomb.vex`'s
+  meshes against the ring. No detonation is in view for a moving craft on either
+  side. The detonation animator itself still has no original picture (the owner
+  trips its own charge only when stationary, and then at the craft, so a picture
+  of it needs the craft stationary and the camera is inside the blast).
+- *Pulse Shield* - **pictured**. Matches: violet to blue, size against the craft.
+  Differs: onset (original clear at +28, ours at +20; the recovered fade cannot
+  explain a 20-frame delay, so something before `ShipShield_Activate` is unread)
+  and banding/brightness (not measured).
+- *Cross-cutting, not this lane*: the original's craft is about 1.4 x larger on
+  screen than ours at the same moment; `--camera-view close` and `far` rendered
+  alike in one check (not investigated; the flag may not have taken effect). The
+  camera lane owns it.
+- *Pulse Cannon* - the round's own basis measured live
+  (`cannon-quake-leachbeam.md`, 2026-09-24); the node that draws it was not,
+  and no frame compared.
+- *Missile* - nothing to pose: neither title draws a Missile model.
+- *HD, every weapon* - no RPCS3 capture: firing on the emulator needs the
+  held-weapon slot, which is unread.
 
 ## Next Steps
 
-0. For the Rocket, match state before comparing: drive both from one
-   `.inputs` script (`psp-trace.py --script` / `--input-script`) instead of
-   `psp-drive.py restart` plus a held button, so the two crafts fire at the
-   same speed.
-1. Capture: `cargo run -p oag-game -- --race --give <rocket|mine|bomb|shield>
-   --press square --ticks N --screenshot ...` at three ticks each, Pulse PSP
-   and HD; same moments on the emulators.
-2. For each visible difference, name the recovered-vs-chosen row above it
-   falls under, and open a build thread only for a difference that is not
-   already listed.
+1. A gameplay lane takes rows 1-4 of the Rocket (one commit per row, hash
+   regenerated in its own commit), then re-runs
+   `python3 scripts/psp-weapon-pair.py rocket --probe rocket` against our
+   per-tick projectile positions (a temporary `eprintln!` of
+   `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs` made them
+   this pass) and the photographed set.
+2. Decide the Mine/Bomb drop point from the measurement (`mine::drop_point`), and
+   look at `Pulse_Bomb.vex` for the ring and the shaft.
+3. Read what delays the shield's first visible frame in the original
+   (`FUN_08861568`'s arm path against `ShipShield_Activate`).
+4. Optional: re-run the Rocket probe on Flash to confirm 0.75 x class on a second
+   speed class.
