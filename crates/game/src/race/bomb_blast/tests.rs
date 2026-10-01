@@ -143,6 +143,42 @@ fn the_shockwave_alpha_ease_fades_from_opaque_to_nothing() {
     );
 }
 
+/// The ship explosion's ring, read off the running original: scale
+/// `0.1, 1.095, 2.040, 2.938, 3.791, 4.602` on the first six ticks, on all three axes, at the
+/// craft and not the explosion's dropped point, gone at `1.5 s`.
+#[test]
+fn a_ship_explosions_shockwave_eases_as_the_original_logged_it() {
+    let mut race = race_with_a_grid();
+    let at = Vec3::new(-112.61, -49.85, -195.41);
+    race.spawn_ship_shockwave(at, Vec3::Y * 0.75);
+    let dt = 1.0 / 60.0;
+    let seen = [0.1, 1.095, 2.040, 2.938, 3.791, 4.602];
+    for (tick, expect) in seen.iter().enumerate() {
+        let blast = race.view.bomb_blasts[0].expect("live");
+        assert!(
+            (blast.shockwave_scale - expect).abs() < 2e-3,
+            "tick {tick}: {} against {expect}",
+            blast.shockwave_scale
+        );
+        race.advance_bomb_blast_models(dt);
+    }
+    let draw = race.bomb_blast_draws()[0].expect("live");
+    assert!(!draw.hemisphere_visible, "a ship explosion has no dome");
+    let scale = draw.shockwave_matrix.y_axis.truncate().length();
+    assert!((scale - race.view.bomb_blasts[0].unwrap().shockwave_scale).abs() < 1e-4);
+    assert!(
+        (draw.shockwave_matrix.x_axis.truncate().length() - scale).abs() < 1e-4,
+        "uniform: the Bomb's own ring leaves its axis alone, this one does not"
+    );
+    assert_eq!(draw.shockwave_matrix.w_axis.truncate(), at);
+
+    let ticks = (SHIP_SHOCKWAVE_LIFETIME_SECONDS / dt).ceil() as u32 + 2;
+    for _ in 0..ticks {
+        race.advance_bomb_blast_models(dt);
+    }
+    assert_eq!(race.bomb_blast_draws().iter().flatten().count(), 0);
+}
+
 /// The basis is orthonormal, puts `dir` in its own `Y` column (the slot
 /// both `.vex` files' own vertical axis expects - see [`bomb_blast_basis`]'s
 /// own doc comment) and the object's position in the translation column,

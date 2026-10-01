@@ -34,9 +34,14 @@
 //! The edge is `Destroyed` to `Eliminated` ([`super::craft_flash`] already keys
 //! on it), and each effect rides its locator on the craft's model matrix, the
 //! way the hit sparks ride theirs ([`super::hit_sparks`]) - the original
-//! parents them to the node. **Chosen, not measured:** the scale is `1.0`
-//! (`Psys_Spawn_q`'s trailing arguments are zero and its scale argument was not
-//! read) and the effects are let go once their emitters stop.
+//! parents them to the node. **Chosen, not measured:** the severity is `1.0`
+//! (`Psys_Spawn_q`'s trailing arguments are zero and no wreck call passes one) and
+//! the effects are let go once their emitters stop. **Measured, 2026-10-01:** the
+//! instance matrix has rows of `0.75` (the craft's model scale, read off every
+//! one of the explosion's and the nodes' instances), which scales each root
+//! emitter's spawn offset and velocity by `0.75` and not a particle's size - the
+//! smoke ring, the fireball's spread and rise and the debris's rise all read
+//! `0.75` of the unscaled law's (`psys::System::set_frame_scale`, `particle-system.md`).
 //!
 //! Pulse on a PSP disc only: no other title's wreck or `Ship_SetState` is read.
 
@@ -130,6 +135,9 @@ impl Race {
                     continue;
                 };
                 self.view.stage.orient(playing, up);
+                self.view
+                    .stage
+                    .set_frame_scale(playing, oag_render::exhaust::CRAFT_ROW_SCALE);
                 let fx = &mut self.view.wreck_fx;
                 fx.riding.push(Riding {
                     slot,
@@ -151,6 +159,12 @@ impl Race {
         if self.view.wreck_fx.anchors.get(slot).is_none() {
             return;
         }
+        // The shockwave is built from the matrix before its translation is moved, and is
+        // its own `.vex`, so it does not wait on the particle effect having loaded.
+        self.spawn_ship_shockwave(
+            model.w_axis.truncate(),
+            model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y),
+        );
         let Some(effect) = self.view.effects.get(EXPLOSION_EFFECT).cloned() else {
             return;
         };
@@ -161,6 +175,9 @@ impl Race {
             return;
         };
         self.view.stage.orient(playing, up);
+        self.view
+            .stage
+            .set_frame_scale(playing, oag_render::exhaust::CRAFT_ROW_SCALE);
         self.view.wreck_fx.started += 1;
         self.view.wreck_fx.last_explosion_at = Some(at);
     }

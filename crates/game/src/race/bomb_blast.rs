@@ -55,16 +55,34 @@
 //! carries on the original's own bomb entity is not established; only which
 //! *slot* of the basis the authored models expect it to fill is.
 //!
-//! **Not wired: the shockwave's own fading alpha.** `BombBlast_Update`
-//! writes a white, fading vertex colour onto the shockwave's own submeshes
-//! every tick (`+0xf4` easing `1.0 -> 0.0`) - recovered, and left unapplied
-//! here. [`Drawable::tint`] is this engine's equivalent call, but it wants a
-//! `&mut Vec<GpuVertex>` scratch buffer this pool does not carry, and
-//! `Scene`'s own struct is at its file's line ceiling - see this crate's
-//! `CLAUDE.md` on `scripts/check-file-size.py`. The shockwave draws at full
-//! authored opacity for its own `4.0 s` lifetime and then disappears outright
-//! with the rest of the object, rather than fading - a recovered mechanism
-//! partially applied, not an invented one.
+//! **The shockwave's fading alpha stays unapplied, and now for a measured reason
+//! (2026-10-01).** `BombBlast_Update` stamps a white word whose alpha is the `+0xf4`
+//! ease (`1.0 -> 0.0`) onto the shockwave's meshes through `Image_SetVertexColours`
+//! (`mesh+0x6c`, `0x089122b4`), which is the GE's scene ambient colour for a batch
+//! with normals and **no** vertex colours (`shield-pickup.md`, third pass). The
+//! shockwave's batches carry authored vertex colours (`0xffc8f9ff`, `0x27ff`, `0x4aff`,
+//! `0xffffffff`), and a GE dump of the original's ship-explosion ring (frames about 123
+//! and 148, past the point where the ease reads `0.94` and `0.57`) shows its three strips
+//! drawn with those colours untouched and ambient alpha `0xff`. So the word does not
+//! reach the draw and the ring does not fade by alpha; applying the ease would be an
+//! invention. It is kept as a constant and a test, with no caller.
+//!
+//! # The ship explosion's shockwave (2026-10-01)
+//!
+//! `Ship_SpawnExplosionBig` (`FUN_088407b0`) builds a second object of the same
+//! `Bomb_Shockwave.vex` (`FUN_0885ecf0`, update `FUN_0885efc4`), read whole and
+//! logged live on PPSSPP: at the craft's own position (the matrix's translation,
+//! before the explosion effect's `4.0` drop), basis from the matrix's up row
+//! (the same Gram-Schmidt against `(0, 0, 1)` the Bomb's basis uses), **uniform**
+//! scale easing `0.1 -> 20` at `0.05` a tick, an alpha `1 -> 0` at `0.02` that, like the
+//! Bomb's, does not reach the draw, retired at `1.5 s`. Live: scale `0.1, 1.095, 2.04, 2.938, 3.791, 4.602`, alpha
+//! `1, 0.98, 0.9604, 0.9412 ...`, age `1.3343` at scale `18.545` and alpha
+//! `0.3569`. The ring is `5.37` units across its radius at scale `1`, so by the
+//! fifth tick it spans the whole start grid, flat at the craft's height - which a
+//! chase camera at the same height sees edge-on as the thin orange line along the
+//! horizon that the original's explosion leaves for about fifty frames and the
+//! white band that covers the first five. Confidence **90** for the law (decompile
+//! and one live boot agree to every digit); the picture reading is **seen once**.
 
 use super::*;
 
@@ -111,17 +129,26 @@ pub(super) const SHOCKWAVE_SCALE: Ease = Ease {
 /// ease alone in `BombBlast_Update`.
 pub(super) const SHOCKWAVE_SCALE_DELAY_SECONDS: f32 = 0.1;
 
-/// The shockwave's own fading alpha ease, `+0xf4`/`+0xf8`/`+0xfc` -
-/// **recovered but not drawn**, see this module's own doc comment. Reached
-/// only by `bomb_blast::tests::the_shockwave_alpha_ease_fades_from_opaque_to_nothing`
-/// until a `Drawable::tint` scratch buffer lands for this pool, hence the
-/// `allow` - a real caller, not a lint silenced for its own sake.
+/// The shockwave's own fading alpha ease, `+0xf4`/`+0xf8`/`+0xfc` - recovered, and
+/// **not applied**: see this module's own doc comment. Reached only by
+/// `bomb_blast::tests::the_shockwave_alpha_ease_fades_from_opaque_to_nothing`.
 #[allow(dead_code)]
 pub(super) const SHOCKWAVE_ALPHA: Ease = Ease {
     start: 1.0,
     target: 0.0,
     rate: 0.1,
 };
+
+/// The ship explosion's shockwave scale ease (`FUN_0885ecf0` writes `0.1` and `DAT_08ab0f30` = `20.0`
+/// and `DAT_08ab0f2c` = `0.05`, `FUN_0885efc4` steps it once a tick), applied to all three axes.
+pub(super) const SHIP_SHOCKWAVE_SCALE: Ease = Ease {
+    start: 0.1,
+    target: 20.0,
+    rate: 0.05,
+};
+
+/// When `FUN_0885efc4` retires the ship explosion's shockwave, in seconds (`1.5 <= age`).
+pub(super) const SHIP_SHOCKWAVE_LIFETIME_SECONDS: f32 = 1.5;
 
 /// How far the shockwave sits from the hemisphere, pulled back along the
 /// basis's own `dir` axis - `DAT_08ab1070`, read directly as `1.0`.
@@ -187,6 +214,8 @@ impl BombBlastDrawables {
 /// **View state, not `World` state** - see this module's own doc comment.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct BombBlast {
+    /// Which object this is: a Bomb's two models, or a ship explosion's lone shockwave.
+    pub(super) kind: BlastKind,
     pub(super) position: Vec3,
     /// The frozen bomb's own forward axis - see this module's own doc
     /// comment on what this substitutes for `+0x60`.
@@ -194,6 +223,15 @@ pub(super) struct BombBlast {
     pub(super) age: f32,
     pub(super) hemisphere_scale: f32,
     pub(super) shockwave_scale: f32,
+}
+
+/// Which of the two objects a [`BombBlast`] slot holds - both are `Bomb_Shockwave.vex`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum BlastKind {
+    /// `BombBlast_Construct`'s: a hemisphere and a shockwave that widens in its own plane.
+    Bomb,
+    /// `Ship_SpawnExplosionBig`'s: the shockwave alone, scaled on all three axes.
+    ShipExplosion,
 }
 
 /// One blast's own transform and visibility, for one frame.
@@ -225,11 +263,29 @@ impl Race {
         // the rear emitter's own transform) carries no confidence score.
         let dir = (orientation * Vec3::Y).try_normalize().unwrap_or(Vec3::Y);
         self.view.bomb_blasts[slot] = Some(BombBlast {
+            kind: BlastKind::Bomb,
             position,
             dir,
             age: 0.0,
             hemisphere_scale: HEMISPHERE_SCALE.start,
             shockwave_scale: SHOCKWAVE_SCALE.start,
+        });
+    }
+
+    /// Starts a ship explosion's shockwave at `position` (the craft's own, not the explosion
+    /// effect's dropped one) with the craft's up as `dir` - see this module's doc comment.
+    /// Dropped silently when every slot is live, like [`Self::spawn_bomb_blast_model`].
+    pub(in crate::race) fn spawn_ship_shockwave(&mut self, position: Vec3, up: Vec3) {
+        let Some(slot) = self.view.bomb_blasts.iter().position(Option::is_none) else {
+            return;
+        };
+        self.view.bomb_blasts[slot] = Some(BombBlast {
+            kind: BlastKind::ShipExplosion,
+            position,
+            dir: up.try_normalize().unwrap_or(Vec3::Y),
+            age: 0.0,
+            hemisphere_scale: HEMISPHERE_SCALE.start,
+            shockwave_scale: SHIP_SHOCKWAVE_SCALE.start,
         });
     }
 
@@ -244,6 +300,13 @@ impl Race {
         for slot in &mut self.view.bomb_blasts {
             let Some(blast) = slot else { continue };
             blast.age += dt;
+            if blast.kind == BlastKind::ShipExplosion {
+                blast.shockwave_scale = SHIP_SHOCKWAVE_SCALE.step(blast.shockwave_scale);
+                if blast.age >= SHIP_SHOCKWAVE_LIFETIME_SECONDS {
+                    *slot = None;
+                }
+                continue;
+            }
             blast.hemisphere_scale = HEMISPHERE_SCALE.step(blast.hemisphere_scale);
             if blast.age > SHOCKWAVE_SCALE_DELAY_SECONDS {
                 blast.shockwave_scale = SHOCKWAVE_SCALE.step(blast.shockwave_scale);
@@ -260,6 +323,15 @@ impl Race {
     pub(in crate::race) fn bomb_blast_draws(&self) -> [Option<BombBlastDraw>; BOMB_BLAST_SLOTS] {
         std::array::from_fn(|slot| {
             self.view.bomb_blasts[slot].map(|blast| {
+                if blast.kind == BlastKind::ShipExplosion {
+                    return BombBlastDraw {
+                        hemisphere_matrix: Mat4::IDENTITY,
+                        hemisphere_visible: false,
+                        shockwave_matrix: bomb_blast_basis(blast.position, blast.dir)
+                            * Mat4::from_scale(Vec3::splat(blast.shockwave_scale)),
+                        shockwave_visible: true,
+                    };
+                }
                 let basis = bomb_blast_basis(blast.position, blast.dir);
                 // The shockwave's own copy of the basis, pulled back along
                 // `dir` by a fixed `1.0` - `DAT_08ab1070`, read directly.
