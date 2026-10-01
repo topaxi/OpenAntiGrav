@@ -965,8 +965,13 @@ needed:
 - **The shockwave's own fading alpha**, `+0xf4` easing toward `+0xf8` at
   rate `+0xfc` (`1.0 -> 0.0` at `0.1`/tick, `DAT_08ab1074`), packed
   `alpha*255` into an opaque-white ARGB word (`0xffffff` RGB) and applied
-  through `Image_SetVertexColours` on the shockwave object at `+0xd8` -
-  already a named engine call, not chased further.
+  through `Image_SetVertexColours` on the shockwave object at `+0xd8`.
+  **2026-10-01: it does not reach the draw.** `Image_SetVertexColours` stamps `mesh+0x6c`, the GE's
+  scene ambient for a batch with no vertex colours, and the shockwave's batches carry authored ones: a GE
+  dump of the same `Bomb_Shockwave.vex` (the ship explosion's ring, `ship-shockwave.md`) draws them untouched with
+  ambient alpha `0xff` while the ease reads `0.94` and `0.57`. So the unwired fade is not a missing
+  feature; applying it would invent one. (The Bomb's own ring was not dumped; the file and the call are the
+  same.) Not applied by design, `bomb_blast`'s doc says so.
 - **The hemisphere hides at `age > 1.55 s`** (a node-flag clear on `+0xd4`,
   bits `0x2`/`0x4`) and **the whole blast object is torn down at `age > 4.0
   s`** - the shockwave's own flag clear plus the same

@@ -30,16 +30,22 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   (`ELIMINATOR_RESPAWN_DELAY` is the state-5 dwell alone; the original adds state 8's
   timer), so the player never sees the explosion from the destroy camera. The blast
   is placed with the matrix the craft was wrecked with, so it still lands on the wreck.
-- The explosion's smoke is thinner and its fire brighter and longer in ours at k 160 to
-  180 (fire-coloured pixels 2.2x to 2.4x the original's). Not chased: the `0.75` rows of
-  the matrix `Psys_Spawn_q` is given may scale emitter positions and speeds (unread), and
-  the explosion's alpha-over emitters were not compared emitter by emitter. A GE dump
-  (`scripts/psp-ge-dump.py`, vertex type `0x11e` batches) separates them.
+- ~~The explosion's smoke is thinner and its fire brighter and longer in ours at k 160 to
+  180 (2.2x to 2.4x).~~ **Closed 2026-10-01 (pulse-fx-recheck)**: the matrix's `0.75` rows scale every root
+  emitter's spawn offset and velocity (and not sizes), an emitter's run is one tick short, a template dies one tick
+  early, and `FUN_088407b0`'s `Bomb_Shockwave.vex` ring was never drawn
+  ([ship-shockwave.md](../../docs/ghidra/functions/psp-pulse-usa/ship-shockwave.md),
+  [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md#the-instance-matrix-scales-a-root-emitters-spawn-and-a-run-emits-one-tick-short-2026-10-01)).
+  Fire-coloured pixels now read `1.04, 1.08, 1.23, 1.24, 1.57` of the original's at 140 to 180 and smoke `1.08,
+  0.96, 1.0, 0.87, 0.72`. **Still open here:** the first five frames - the original's white, hard-edged band
+  (the ring's and the `Glow`'s additive stack, brighter than ours; see the page's "Not read"); the mode-2 emitters
+  (`SHIP_DEBRIS`, `FIRESPIKES`) spread 15 to 30 % more than the uniform frame scale gives; the fire still
+  holds a little at the tail (`1.5x` at 180); our slot is about `25` px from the original's.
 - With the default profile (motion blur on) the cut frame and the state-5 shake frames show a
   white diagonal smear: the shake turns the view by more than the 4 degree field, the blur's
   clamp does the rest. The cut now resets the upscaler's history; the blur has no history to reset.
-- `FUN_088407b0` also builds a `Data\Weapons\Bomb_Shockwave.vex` object (`FUN_0885ecf0`
-  under `DAT_08b34320`, non-zero live) - read, not drawn.
+- ~~`FUN_088407b0` also builds a `Data\Weapons\Bomb_Shockwave.vex` object - read, not drawn.~~ Drawn 2026-10-01
+  (`bomb_blast::BlastKind::ShipExplosion`), law read and logged live; its alpha ease does not reach the draw.
 - The original hides the HUD by degrees from about 30 frames into state 5; ours keeps it.
 - The camera lets go "when the craft is racing again" (chosen); the original's hand-over to
   another craft after ten seconds, and `Camera_RepickNearSubject_q`, are read, not ported.
@@ -60,6 +66,8 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
    so a Single Race or Zone wreck plays out under the results; then arm the state-5 shake there.
 2. Give the Eliminator the original's state-8 wait so the destroy camera holds through the
    explosion, and hide the HUD as state 5 goes on.
-3. Compare the explosion emitter by emitter against a GE dump taken a few frames in
-   (`scripts/psp-ge-dump.py`, `gestate`-style per-PRIM state), then read what scale the matrix applies.
+3. ~~Compare the explosion emitter by emitter, then read what scale the matrix applies.~~ Done 2026-10-01
+   (`scripts/psp-wreck-capture.py --pools/--templates/--hits/--ge-dump-k`). Next: why the ring's first
+   five frames read saturated white where ours reads pale yellow (state by state against the GE dump: `TLEVEL`, filter, the
+   additive blend's alpha source), and the mode-2 spawn spread.
 4. `scripts/psp-wreck-capture.py --state 5` on a craft an Eliminator run really eliminated.

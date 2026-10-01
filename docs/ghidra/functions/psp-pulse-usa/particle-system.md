@@ -1365,3 +1365,58 @@ above. **Both are live-probed**: `scripts/psp-weapon-pair.py --probe flare`
 Rocket launch and read the instance's pool, and the sizes, colours and positions
 read are the ones these functions consume. What that run measured is in
 [`rocket-visuals.md`](rocket-visuals.md#2026-10-01-the-launch-glow-the-flares-4-bit-sprite-and-ageing).
+
+### The instance matrix scales a root emitter's spawn, and a run emits one tick short (2026-10-01)
+
+Measured on `WO_SHIP_EXPLOSION` as a grid opponent's wreck threw it (PPSSPP, Talon's Junction,
+`scripts/psp-wreck-capture.py --pools`, which breaks on every `ParticleSystem_DrawEmitterPool` and reads
+the instance's pool, its resource, its scale words at `+0x28` and its node matrix at `+0xf0`; two boots
+for the counts, one for the positions). Three laws, each read against the same effect played alone by
+ours (`System::ignite`, one tick a step).
+
+**1. The matrix's scale reaches a root emitter's spawn offset and its velocity, and nothing else.**
+`Psys_Spawn_q` copies the matrix it is given into the instance (`+0xf0`) and the emit functions carry the
+spawn offset and the velocity through it unless the emitter's flag `0x2` is set. The explosion's
+matrix is the hull's own, rows `0.75` long (read live on all four of its resources, and on the eight
+`WO_SHIP_FXNODE_EXPLO` / `WO_SHIP_DEATH_SPARKS` instances), the instance's scale words `+0x28..` all
+`1.0`, and:
+
+| Effect | Original / ours with the scale ignored | Original / ours with `0.75` |
+| --- | --- | --- |
+| smoke ring (root, 18 particles): RMS radius, ticks 4 to 72 | `0.76, 0.77, 0.73, 0.73, 0.73, 0.73` | **`1.02, 1.01, 1.01, 1.01, 1.01, 1.01`** |
+| fireball: horizontal spread / centroid rise at tick 40 | `0.79` / `0.73` | `1.11` / `0.89` |
+| debris: centroid rise at ticks 24, 40, 56 | `0.78, 0.72, 0.69` | **`1.03, 1.00, 0.98`** |
+
+Sizes are **not** scaled: the fireball's half-size is `2 + 9 * age` of its life (`2.06` at birth, then
+`+0.1155` a frame, matching the authored channel) on both sides, and so are the lifetime and the alpha ramp
+(`0.96 / 0.96, 0.89 / 0.90, 0.78 / 0.80` at ticks 28, 34, 40). A **child** instance (`trail`, the debris's
+per-particle child, `0x91ae580`) reads a matrix of unit rows, so a child spawn takes no scale. `1.0` is every
+other matrix read so far: the Rocket's three `WO_ROCKET_EXPLO` and `WO_ROCKET_EXPLO_TRACK` spawns pass an
+identity rotation with only the translation set (`--probe spawns`, a3 rows `1, 0, 0 / 0, 1, 0 / 0, 0, 1`).
+Ported as `System::set_frame_scale`, called for the wreck's node effects and the big explosion only. Confidence
+**85** (the smoke ring and the debris rise land on `1.0`; the fireball's `1.1` and the debris's `1.2` horizontal
+spread, and the spikes, are not isolated - the mode-2 emitters (`SHIP_DEBRIS`, `FIRESPIKES`) spread more
+than the uniform law gives and their cause is open).
+
+**2. A finite run emits one tick short.** The explosion's emitters author `duration` `10` (smoke, `2` a tick),
+`20` (fireball, `1`), `4` (`FIRESPIKES`, `3`) and `8` (debris): the original holds at most **18, 19, 9** of them
+(ours held 20, 20, 12), on two boots, and a particle count that stayed flat from tick 8 to 72 so none was
+lost to age. The rule that fits all of them and every `duration 1` burst (`WO_ROCKET_EXPLO`'s `DEBRIS`, `32` at
+once, drawn exactly once) is: emit on the first update unconditionally, then only while more than one tick of
+the duration is left - `d - 1` emissions for `d >= 2`, `1` for `1`. Ported as `EmitterSpec::short_run`.
+Confidence **80** (three emitters, two boots; the `duration 1` case is the corpus's behaviour rather than a
+separate measurement).
+
+**3. A sprite template dies with one tick of its life left.** The explosion's `Glow` (life `6`, size `30`
+held to `0.287`, then to `0`) was logged by `ParticleSystem_DrawParticle` (`scripts/psp-wreck-capture.py
+--templates`) at sizes `30.00, 30.00, 28.04, 21.00, 14.09` and colours `ffffffff, fff3d9ff, ffe7b2ff,
+ffdc8ccd, ffd06689` - five draws, ages `0` to `4`; ours drew a sixth at `7.17`, alpha `0.27`. The five match the
+size and colour channels to the last digit (`oag_vex::pob::initial`). Confidence **75** (one boot).
+
+**Not a law, a warning:** a census of rolled quads by bounding box overstates a particle's size by up to
+`sqrt(2)` (`4/pi` on average for a random roll) - the first reading of this section took that for a `0.79` size
+ratio and nearly scaled sizes. Read a size from the pool's `+0x70`, or from a quad's edge, not its extent.
+
+**What the pool probe does not see:** the sprite templates (drawn one at a time by `ParticleSystem_DrawParticle`)
+and the `FIRESPIKES` streaks' length (the probe stores each streak's head and second point; the comparison used
+centroids, which sit half-way along).

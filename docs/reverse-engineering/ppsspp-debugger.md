@@ -1846,3 +1846,24 @@ with `python3`, not `uv run --with websocket-client`, which needs the network).
   hit until something draws through `ParticleSystem_DrawRolledQuads`, so in one run it fired at
   frame 72.9 and not 8, the craft 70 frames further down the road. Read the logged
   `detonation` row for where the blast went.
+
+### The explosion probes in `scripts/psp-wreck-capture.py` (2026-10-01)
+
+The wreck harness (a grid opponent or the player put into `Ship_SetState(entity, 4)` at a chosen frame, then
+`kNNN.png` shots) also takes, each in its own boot:
+
+- `--pools K0:K1` breaks on every `ParticleSystem_DrawEmitterPool` from frame K0 to K1 after the call and logs
+  each instance's resource (`+0x20`, with its render mode `+0xb8` and blend class `+0xc0`), scale words (`+0x28`),
+  node matrix (`+0xf0`) and every pool particle's world position, half-size, colour, atlas frame, second point
+  and raw bytes. Pools only: the sprite templates are not in them.
+- `--templates K0:K1` breaks on `ParticleSystem_DrawParticle` (`0x089186bc`) and logs each template particle's first
+  `0x90` bytes (position `+0x00`, size `+0x30`, colour `+0x34`, roll `+0x5c`, aspect `+0x64`).
+- `--hits ADDR:K0:K1` logs every hit of any function with `a0`, `a1`, `f12` and the `0xb0` bytes at each pointer -
+  it read `ShipShockwave_Update`'s object frame by frame (`ship-shockwave.md`).
+- `--ge-dump-k K` and `--edram` as in `psp-weapon-pair.py`, above.
+
+The frames in `K` are counted from the call, one per `Ship_UpdateCraft` stop of that craft, and the probe's own
+clock is the PSP cycle counter over 222 MHz / 59.94, so a boot-to-boot start of the same effect can differ by a
+frame: compare an effect's shape against itself, not its absolute frame against another boot's. `--restart`
+walks the pause menu's RESTART RACE; a `psp-drive.py restart` run first sits out the countdown, so the opponents
+have already left the grid.

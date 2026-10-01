@@ -890,6 +890,13 @@ the particle path's protect call is `docs/rendering/glow-mask.md`'s.
   and changed one thing: it is what turned "the rocket probably follows the
   surface" into a picture of two rockets skimming the track a body-length off
   the racing line.
+- **2026-10-01, pulse-fx-recheck: the craft-hit blast's pool census.** `WO_ROCKET_EXPLO`'s eight pools read live
+  (`--probe rolled`, one boot) against ours played alone: the steady-state areas agree to `10 %` (ticks 18, 24,
+  30: `4.2k, 4.8k, 4.5k` against `4.0k, 4.7k, 4.1k`), the `GLOW` is the same law (half-size `1 + 8.8` a tick, alpha `200`,
+  life 11 here and 5 to 15 authored). The matrix is identity (the spawn's rotation rows `1, 0, 0 / 0, 1, 0 / 0, 0, 1`), so
+  the `0.75` scale law of the ship explosion does not apply. The picture series was **not** re-run like for like: a
+  Time Trial pair has nothing to hit, and a Single Race pair (`--mode single_race`) puts the grid's craft 20 units
+  ahead in ours where the original's has left by the fire frame.
 - **2026-10-01, the launch glow.** The flare's 4-bit sprite and the pool particle's first draw at age 0 found and fixed; the rocket's flare and SHAZZAM read live; the mask measured unstamped.
 - **2026-10-01, second pass.** The four rows landed, the probe-hit arm and the craft-up
   seed read and ported, a volley from the original's pose matched to 1-2 ticks and

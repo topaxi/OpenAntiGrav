@@ -92,6 +92,10 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   view for a moving craft on either side; the detonation animator itself still has no original
   picture (the owner trips its own charge only when stationary, and then at the craft, so a
   picture of it needs the craft stationary and the camera is inside the blast).
+- *Bomb_Shockwave's fade, 2026-10-01 (pulse-fx-recheck)*: **closed as a non-feature.** `BombBlast_Update`'s `+0xf4` alpha ease
+  goes through `Image_SetVertexColours` to `mesh+0x6c`, the GE's ambient colour for a batch with no vertex colours,
+  and the ring's batches have them; the original's ring (GE dump of the ship explosion's, same `.vex`) draws untouched
+  (`ship-shockwave.md`). Do not wire it. The ring, plate, dome and +50 smoke differences above were **not** re-looked at.
 - *Pulse Shield* - **matched 2026-10-01 (third pass)**, pixel for pixel at a pinned
   clock. The "ours dimmer, banding softer" gap was two defects, both fixed:
   `pulse_shield_test_ADD` (flags `0xe5`, pre-swizzled) was decoded linearly, and the
@@ -141,6 +145,9 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
    `TEXLEVEL` bias `2.875` against ours `1.0` (a per-texture value `Texture_BuildBindList`
    emits, read for this one texture only - read it for every `.vex` texture and apply it
    wherever it moves a level), then the dome's colour against its bloom.
-6. Re-run the craft-hit Rocket blast's frame series (`rocket-visuals.md`, 2026-09-24): the
+6. (Pool census re-run 2026-10-01, pulse-fx-recheck: `WO_ROCKET_EXPLO`'s eight pools agree to 10 % in steady
+   state and the `GLOW` is the same law; the matrix is identity so the ship explosion's `0.75` law does not apply. The
+   picture series still wants a state where the player's Rocket meets a grid craft - fire at GO, not GO + 120.)
+   Re-run the craft-hit Rocket blast's frame series (`rocket-visuals.md`, 2026-09-24): the
    pool particle's first draw at age 0 and the shape-3 ring/disc both move it, and it has
    not been compared since.

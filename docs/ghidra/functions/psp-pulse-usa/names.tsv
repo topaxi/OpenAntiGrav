@@ -1191,3 +1191,5 @@
 0x08880c04	function	Camera_UpdateSpectatorView	85	camera.md
 0x0887fd3c	function	Camera_UpdateSpectator	70	camera.md
 0x08880168	function	Camera_RepickNearSubject	62	camera.md
+0x0885ecf0	function	ShipShockwave_Construct	85	ship-shockwave.md
+0x0885efc4	function	ShipShockwave_Update	88	ship-shockwave.md
