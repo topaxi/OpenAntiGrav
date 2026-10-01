@@ -512,6 +512,7 @@ pub(crate) fn run_race(
                 autopilot: cli.autopilot,
                 autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.autopilot_skill,
+                force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),

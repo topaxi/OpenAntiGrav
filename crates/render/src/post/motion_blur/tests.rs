@@ -10,18 +10,25 @@
 use super::*;
 
 #[test]
-fn the_uniform_is_48_bytes_with_no_implicit_padding() {
-    // Three vec2s, two floats, another vec2, and a u32 row: WGSL and
-    // `repr(C)` agree on this layout exactly, which is what the assertion
-    // pins - the previous layout's vec3 padding disagreement reached a
-    // player as a validation panic.
-    assert_eq!(std::mem::size_of::<Constants>(), 48);
+fn the_uniform_is_112_bytes_with_no_implicit_padding() {
+    // Three vec2s, two floats, another vec2, a u32 row and then the shake's
+    // mat4 on its own 16-byte boundary: WGSL and `repr(C)` agree on this
+    // layout exactly, which is what the assertion pins - the previous
+    // layout's vec3 padding disagreement reached a player as a validation
+    // panic.
+    assert_eq!(std::mem::size_of::<Constants>(), 112);
 }
 
 #[test]
 fn the_viewport_rectangle_is_mapped_into_uv_of_the_target() {
     // A 4:3 pillarboxed scene inside a 200x100 capture: rect x=40, 120 wide.
-    let c = Constants::new((40.0, 0.0, 120.0, 100.0), (200, 100), 0.5, 8);
+    let c = Constants::new(
+        (40.0, 0.0, 120.0, 100.0),
+        (200, 100),
+        0.5,
+        8,
+        Mat4::IDENTITY,
+    );
     assert_eq!(c.rect_offset, [0.2, 0.0]);
     assert_eq!(c.rect_size, [0.6, 1.0]);
     assert_eq!(c.rect_pixels, [120.0, 100.0]);
@@ -33,7 +40,7 @@ fn the_viewport_rectangle_is_mapped_into_uv_of_the_target() {
 
 #[test]
 fn a_degenerate_size_cannot_divide_by_zero() {
-    let c = Constants::new((0.0, 0.0, 0.0, 0.0), (0, 0), 0.5, 8);
+    let c = Constants::new((0.0, 0.0, 0.0, 0.0), (0, 0), 0.5, 8, Mat4::IDENTITY);
     for value in c
         .rect_offset
         .iter()
@@ -242,6 +249,7 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
+            camera_shake: Mat4::IDENTITY,
         },
         None,
     );
@@ -476,6 +484,7 @@ fn still_block_over_a_moving_background(
             size: (size, size),
             viewport: (0.0, 0.0, size as f32, size as f32),
             strength: 0.5,
+            camera_shake: Mat4::IDENTITY,
         },
         None,
     );
@@ -633,6 +642,7 @@ fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
+            camera_shake: Mat4::IDENTITY,
         },
         None,
     );
@@ -822,6 +832,7 @@ fn the_multisampled_prepare_variant_reads_sample_zero_and_the_chain_runs() {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
+            camera_shake: Mat4::IDENTITY,
         },
         None,
     );

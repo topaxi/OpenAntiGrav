@@ -39,6 +39,10 @@ pub struct CaptureOptions {
     /// `--autopilot-skill`: fly at a stated AI skill instead of the race's
     /// own. See [`Race::set_autopilot_tuning`].
     pub autopilot_skill: Option<oag_ai::Difficulty>,
+    /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit of
+    /// that severity would, at the end of that tick (zero-based). See
+    /// [`Race::force_shake`].
+    pub force_shake: Option<(u32, f32)>,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a

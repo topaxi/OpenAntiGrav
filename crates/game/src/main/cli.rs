@@ -629,6 +629,17 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "SKILL", requires = "autopilot")]
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
 
+    /// With `--race --screenshot`, arm the camera's impact shake at the end of
+    /// a tick as a wall hit of that severity would: `TICK:SEVERITY`, severity
+    /// `0..=1`, e.g. `120:1.0` and then `--ticks 121` for the first frame of a
+    /// hard hit.
+    ///
+    /// A verification aid, there because a hard hit is hard to produce on
+    /// demand and the first shaken frame is where the shake meets the motion
+    /// blur and the temporal upscaler. See [`Race::force_shake`].
+    #[arg(long, value_name = "TICK:SEVERITY", requires = "race")]
+    pub(crate) force_shake: Option<String>,
+
     /// Seed the world generator, instead of `race::SEED`.
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race

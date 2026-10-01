@@ -215,6 +215,20 @@ pub(crate) fn parse_size(text: &str) -> Result<(u32, u32)> {
     Ok((width, height))
 }
 
+/// Parses `--force-shake`'s `TICK:SEVERITY`.
+pub(crate) fn force_shake(text: Option<&str>) -> Result<Option<(u32, f32)>> {
+    let Some(text) = text else { return Ok(None) };
+    let bad = || {
+        anyhow::anyhow!("{text:?} is not a forced shake; write it as TICK:SEVERITY, e.g. 120:1.0")
+    };
+    let (tick, severity) = text.split_once(':').ok_or_else(bad)?;
+    let severity: f32 = severity.trim().parse().map_err(|_| bad())?;
+    if !(0.0..=1.0).contains(&severity) {
+        return Err(bad());
+    }
+    Ok(Some((tick.trim().parse().map_err(|_| bad())?, severity)))
+}
+
 /// Resolves `--give`'s spelling to a weapon, case-insensitively.
 ///
 /// Rejects an unknown name rather than ignoring it: a silent no-op here looks

@@ -2,7 +2,7 @@
 categories: [rendering, frontend]
 ---
 
-# The camera shake on impact is measured against the original and matches; a hard hit and the motion blur are open
+# The camera shake on impact is measured against the original and matches; only a real hard hit is still open
 
 A hard wall hit in the original visibly shakes the camera/HUD; `oag_render` has no shake at all.
 
@@ -52,7 +52,7 @@ Two things this pass could not settle from the two evidence pages alone, carried
 
 ## Open
 
-The motion-blur flash on the first frame of a hard hit closed 2026-10-01: the blur's snapshot is the unshaken camera and the previous tick is seen through this tick's shake (`docs/rendering/motion-blur.md`, "The impact shake").
+The motion-blur flash on the first frame of a hard hit closed 2026-10-01: the velocity buffer stays true and the blur's prepare pass subtracts the shake's own screen motion (`docs/rendering/motion-blur.md`, "The impact shake"; `--force-shake TICK:SEVERITY` reproduces the frame).
 
 - **A real hard hit was not produced** (the original's scrapes arm at severity `0.005`-`0.08`; magnitude `0.3` was forced). The apply side is settled; the arming side at severity near `1`, and the `min(|impulse| * 0.0125, 1)` severity into it, are read from the disassembly and not measured.
 - The internal (cockpit) view goes through the same submit function and was not captured separately; the PS2 binary was not checked at runtime.

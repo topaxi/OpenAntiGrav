@@ -501,38 +501,69 @@ fn an_active_shake_does_rotate_the_view() {
     assert_ne!(race.view(), level);
 }
 
-/// The motion blur must not read the impact shake as camera motion. With the
-/// craft and camera still, the previous tick's unshaken view-projection seen
-/// through this tick's shake is exactly the current shaken one, so every
-/// point's clip-space velocity is zero. A blur built from the shaken views (the
-/// bug: the shake's view jump read as the world flying past, smearing the whole
-/// frame on impact) fails this, as does dropping the shake from the previous
-/// side.
+/// The map the motion blur is given must take the shake's own screen motion
+/// out of the velocity a still camera writes: for a world point seen once
+/// through last tick's view and once through this tick's shaken one, the
+/// velocity less the map's prediction is zero. Run both from a camera that
+/// had no shake the tick before and from one already mid-shake, because the
+/// second is the usual case (the shake lasts 0.6 s) and needs the stored
+/// previous rotation. A map that is the identity, or built from the wrong
+/// side of either rotation, fails both.
 #[test]
-fn an_active_shake_adds_no_velocity_to_a_still_camera() {
+fn the_blur_is_given_the_shakes_own_screen_motion() {
     let mut race = Race::start(setup(Handling::default()));
     let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
-    let previous_unshaken = projection * race.view_unshaken();
+    let still = race.view_unshaken();
+    let forward = race.ship().physics.body.position + race.ship().physics.body.forward() * 20.0;
+    let points = [
+        forward,
+        forward + Vec3::new(8.0, 3.0, -2.0),
+        forward - Vec3::Y * 4.0,
+    ];
+    let ndc = |clip: oag_core::math::Vec4| clip.truncate().truncate() / clip.w;
+    let mut previous_shake = race.view_shake_rotation();
+    assert_eq!(previous_shake, Mat4::IDENTITY);
     race.view.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Elsewhere,
         &mut Rng::new(1),
     );
-    let current = projection * race.view();
-    assert_ne!(
-        current, previous_unshaken,
-        "the shake is not doing anything"
-    );
-    let previous = race.blur_previous_view_projection(previous_unshaken);
-    let ahead = race.ship().physics.body.position + race.ship().physics.body.forward() * 20.0;
-    for point in [
-        ahead,
-        ahead + Vec3::new(8.0, 3.0, -2.0),
-        ahead - Vec3::Y * 4.0,
-    ] {
-        let now = current * point.extend(1.0);
-        let before = previous * point.extend(1.0);
-        let moved = (now.truncate() / now.w - before.truncate() / before.w).length();
-        assert!(moved < 1e-4, "clip-space velocity {moved} at {point}");
+    for tick in 0..4 {
+        let previous_view = previous_shake * still;
+        let current = projection * race.view();
+        let map = race.shake_screen_motion(projection, previous_shake);
+        assert_ne!(
+            map,
+            Mat4::IDENTITY,
+            "tick {tick}: the shake did not reach the map"
+        );
+        for point in points {
+            let now = current * point.extend(1.0);
+            let before = projection * previous_view * point.extend(1.0);
+            let velocity = ndc(now) - ndc(before);
+            let predicted = ndc(now) - ndc(map * ndc(now).extend(0.5).extend(1.0));
+            assert!(
+                velocity.length() > 1e-4,
+                "tick {tick}: no shake motion to take out at {point}"
+            );
+            assert!(
+                (velocity - predicted).length() < 1e-4,
+                "tick {tick}: velocity {velocity} against the map's {predicted} at {point}"
+            );
+        }
+        previous_shake = race.view_shake_rotation();
+        race.view.shake.advance(1.0 / 60.0);
     }
+}
+
+/// With no shake in either tick the map is exactly the identity, so the blur
+/// of an unshaken frame is untouched to the bit.
+#[test]
+fn no_shake_gives_the_blur_exactly_the_identity() {
+    let race = Race::start(setup(Handling::default()));
+    let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
+    assert_eq!(
+        race.shake_screen_motion(projection, Mat4::IDENTITY),
+        Mat4::IDENTITY
+    );
 }

@@ -71,21 +71,23 @@ impl Scene {
         // last frame that rendered a different tick - what every drawable's
         // `prev_mvp` velocity is measured against. See [`MotionState`].
         //
-        // **The snapshot holds the camera without the impact shake**, and the
-        // previous one is then seen through *this* tick's shake: the shake is
-        // a camera-wide rotation of up to six degrees arriving in one tick,
-        // which the velocity buffer would otherwise read as the world flying
-        // past and smear the whole frame (the original does not blur it).
-        // The picture itself is still drawn through the shaken
-        // `view_projection`.
+        // **These are the shaken views, and the velocity buffer stays true
+        // screen motion**: the temporal upscaler reprojects its history with
+        // it, and the history has to follow the shake. The motion blur takes
+        // the shake out of what it reads instead - see `blur_shake` below.
         let prev = MotionState::advance(
             &self.motion,
             race,
             &self.weapon_quads.draw,
-            projection * race.view_unshaken(),
+            view_projection,
             usize::from(race.ship_count()),
         );
-        let prev_vp = race.blur_previous_view_projection(prev.view_projection);
+        let prev_vp = prev.view_projection;
+        // The impact shake as screen motion, for the blur alone: where a
+        // pixel sat a tick ago under the shake's own change, which the blur
+        // subtracts from every velocity. Computed with the snapshot, from the
+        // projection before the jitter below, and identity with no shake.
+        let blur_shake = race.shake_screen_motion(projection, prev.shake);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // Recorded before the offset is applied - see `Scene::record_frame`.
         self.record_frame(
@@ -989,6 +991,7 @@ impl Scene {
                     size: (size.width, size.height),
                     viewport,
                     strength: motion_blur.shutter(),
+                    camera_shake: blur_shake,
                 },
                 blur_timestamps,
             );

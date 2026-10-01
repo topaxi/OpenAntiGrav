@@ -29,6 +29,10 @@ pub(super) struct MotionState {
 #[derive(Clone, Debug)]
 pub(super) struct Snapshot {
     pub(super) view_projection: Mat4,
+    /// The impact shake as a view-space rotation that tick - identity with
+    /// none - for the blur to take out of its velocities. See
+    /// [`Race::shake_screen_motion`].
+    pub(super) shake: Mat4,
     /// The camera's translation alone, for the sky's own `prev_mvp` - see
     /// the sky write in [`Scene::render`].
     pub(super) camera_translation: Mat4,
@@ -49,6 +53,7 @@ impl Snapshot {
     fn take(race: &Race, cannon: &CannonDraw, view_projection: Mat4, drawn: usize) -> Self {
         Self {
             view_projection,
+            shake: race.view_shake_rotation(),
             camera_translation: Mat4::from_translation(race.camera_position()),
             ships: (0..drawn)
                 .map(|slot| race.ship_model_matrix_of(slot))
