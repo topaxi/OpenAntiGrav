@@ -28,7 +28,7 @@ and the work is to turn it into measurements, not to tune toward a memory.
   picks the circuit's Camera node nearest the wreck; a post-race view may use the same
   nodes), a replay-style cut sequence, or something else. Whether it cuts, and on what.
 - **Whether the HUD hides**, and what audio does (engine loop, music).
-- Whether Pure, HD/Fury and 2048 do the same (the maintainer's note is about Pulse).
+- Which titles do it: seen in HD/Fury, presumed in Pulse; Pure and 2048 unknown.
 
 ## Next Steps
 
