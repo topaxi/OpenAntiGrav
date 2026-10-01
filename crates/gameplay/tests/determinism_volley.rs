@@ -242,9 +242,15 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   final is unchanged, the slots being empty by then. Replaces
 ///   `0xccab_866c_78e1_d1d6` / `0x668e_a6e7_f71d_d3e4` at 60 ticks and
 ///   `0x9c20_7c28_2863_b750` (trajectory) at 600.
+///
+/// - **Moved again 2026-10-01 (same three values)**, by the Rocket leaving from
+///   the craft's own position rather than its nose (see `rocket::launch`). Isolated by commit: the previous
+///   regeneration was green before it. Replaces `0x84b1_ede3_62c8_f914` /
+///   `0xdf2c_fa35_c525_9b68` at 60 ticks and `0xc367_da50_59dd_4747`
+///   (trajectory) at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x84b1_ede3_62c8_f914, 0xdf2c_fa35_c525_9b68),
-    (600, 0x5b48_d436_7dbc_09e7, 0xc367_da50_59dd_4747),
+    (60, 0xdb77_1466_f784_d9b9, 0x299e_b849_daed_4a92),
+    (600, 0x5b48_d436_7dbc_09e7, 0x4129_e4fd_ccdd_4d1c),
 ];
 
 #[test]
