@@ -182,11 +182,23 @@ return spin `-3.0` rad/s a spin error of `0.017`. The constants (`30.0`, `1.5`,
 `4.0`, `2.0`) were read out of memory at `0x08ab0840`, `0x08ab0a78`,
 `0x08ab0a7c` and `0x08ab0a80`; the literals are in the instructions.
 
+**The tone is its own voice.** `Hud_Update` calls `HudSight_UpdateTone(hud, 0)` and
+`(hud, 1)`: slot `0` reads `0x08ab0a54` (the Missile's state) and slot `1`
+`0x08ab0a58`, which `HudSight_UpdateLeachBeam` writes `1` for a held target and `2`
+for a lock. So a held LeachBeam plays its own `~ROCKLOCK` voice and **reaches the
+locked tone about `0.34` s after a first sighting, not at the Missile's `0.8`**;
+`oag_game`'s one tone follows `Race::sight_state`, which now reports exactly that.
+
 **Not obtained: a picture.** The pinned-target capture runs the emulator one
 frame per breakpoint stop, and its window showed no reticle for the LeachBeam or
 for a Missile held the same way (the pinned craft sat behind the pillar the player
 was parked facing), so no frame pair of the arrowheads exists from this pass, and
-their art and size are unverified here beyond what the previous page said. The
+their art and size are unverified here beyond what the previous page said. Ours
+was not seen in a played race either: an autopilot race with `--give LeachBeam`
+never put a craft squarely in the window. What was checked is that the draw's
+`rotation` and the corners' turn are the same clockwise matrix (`ui.wgsl`'s
+`(cos, sin), (-sin, cos)` on a y-down screen), so the figure turns rigidly and
+the arrowheads keep pointing inward at every spin. The
 numbers above do not depend on it.
 
 **Not a claim about Wipeout HD.** HD's own LeachBeam reticle is

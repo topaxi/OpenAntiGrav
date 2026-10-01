@@ -137,7 +137,7 @@ impl Sight {
     pub(super) fn leach_pieces(&self) -> [Piece; 4] {
         let e = self.extent;
         let [cx, cy] = self.centre;
-        let (sin, cos) = self.spin.sin_cos();
+        let (sin, cos) = oag_core::math::sin_cos(self.spin);
         let corners = [[-e, -e], [e, -e], [-e, e], [e, e]];
         std::array::from_fn(|i| {
             let [dx, dy] = corners[i];

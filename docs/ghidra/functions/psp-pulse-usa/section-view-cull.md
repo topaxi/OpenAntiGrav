@@ -86,7 +86,16 @@ twins first** so an instanced copy cannot hand its twin to a culled one.
 | Tech De Ra moving | 45 | **0** | 52 | 141 |
 
 The falsifier - a draw the original submits although its section's box is
-rejected - is `0` of 2,004 culled draws. **Positive control**: the same test with
+rejected - is `0` of 2,004 culled draws. **It was not 0 on the first pass**: before
+draws in a visible section claimed their twins first, 9 moving draws in 3 dumps
+(Tech De Ra rows 1500, 2400, 2700) read as submitted-yet-culled, all of them the
+batches of nodes `283` and `285` in section `1`. Checked directly rather than
+assumed: each has a same-signature sibling (nodes `961` and `963`, same vertex
+count and diameter) in a section the view reaches, and the dump's one object of
+that signature (submitted twice, with two textures) sits at `(230, 16 .. 24, 45)`,
+outside section `1`'s box (`x` from `-650` to `0`). It belongs to the sibling; the
+object a rejected section holds is not in the list. That attribution rests on the
+signature and the position, not on an exact match of the moving mesh. **Positive control**: the same test with
 the view turned a quarter circle reports `73` and `135` such draws at two poses.
 The test explains 64 % of the static draws and 47 % of the moving draws that pass
 the section mask and have no twin; the rest are the small transparent quads whose
@@ -139,7 +148,12 @@ Seven native `480x272` poses (Metropia `03_Track` 400, 2300, 3200; Tech De Ra
 reversed 600, 900, 1800, 2000, the Assegai) are **pixel-identical** before and
 after (`0` differing pixels each), with `0 .. 10` fewer draws submitted
 (`443 -> 441`, `740 -> 730`, `278 -> 276`): the cull is conservative, so a correct
-port moves submissions and not pixels. The data-backed test
+port moves submissions and not pixels. **The narrowing is title-agnostic** (it runs wherever a track authors sections),
+and only Pulse PSP's original was read, so it was checked where it was not:
+Wipeout Pure PSP (USA and EU), Pulse PS2 EU and Pulse PSP EU, an autopilot race at
+ticks 1, 300, 700, 1100 and 1500 each, before and after - **0 differing pixels in
+all 20 frames**, with draws submitted moving by up to 13 on Pulse PSP EU (`299 ->
+286` at tick 700). The data-backed test
 `crates/render/tests/pvs_section_view_ground_truth.rs` runs it over 24 circuit
 files: the craft's own section is never rejected from a chase camera, and `49 %`
 of section tests reject.
