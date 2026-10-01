@@ -660,3 +660,50 @@ its neighbours in that section are not.
 - 2026-08-10: geometry measured against the running original; the authored node
   identified as slot 8. Ordering recovered the same day.
 - 2026-08-10: page created. Ordering recovered; geometry open.
+
+## The craft's own state: `Craft_SetState`, grid state 0 and racing state 1 (2026-10-01)
+
+`Race_PlaceGrid` ends each craft with `Ship_SetState(craft, 0)` and `Race_StartRacing`
+with `Ship_SetState(craft, 1)`; when the craft has an entity and is not a remote one
+(`entity+0x368 != 1`) `Ship_SetState` first calls `Craft_SetState` (`0x08848590`) on the
+craft, and **that** is where the craft's own state word, `craft+0x2a4`, is written:
+
+```text
+08848590  Craft_SetState(craft a0, state a1)
+08848594  lw a2,0x2a4(a0)      ; the old state
+088485a8  beq a1,a2,0x088485ec ; unchanged: nothing
+088485bc  beq s0,zero,0x088485f4 -> state 0: Craft_EnterGridState(craft); craft+0x2a4 = 0
+088485c4  beq s0,at(1),0x08848604 -> state 1: Craft_ReleaseFromGrid(craft); craft+0x2a4 = 1
+          states 3 (Body_ClearAccumulators + Body_ClearVelocity, craft+0x284 = 0), 2, 4 and 5 store only
+```
+
+| Address | Name | What it does |
+| --- | --- | --- |
+| `0x08848590` | `Craft_SetState` | stores `craft+0x2a4`, and runs the state's own entry on 0, 1 and 3 |
+| `0x088486d4` | `Craft_EnterGridState` | `craft+0x1c0 \|= 2` |
+| `0x088486e4` | `Craft_ReleaseFromGrid` | `craft+0x1c0 &= ~2`, then `craft+0x2bc` (brake), `+0x2c0` (steer), `+0x2c4` and `+0x2c8` (airbrakes) `= 0.0` |
+
+**What reads the state, all read from the decompile on 2026-10-01** (full account and
+the measurements in [grid-state.md](../../../physics/grid-state.md)):
+
+- `Ship_HoverTwoPoint` (`0x0884a658`), the epilogue: `0x0884ad2c  lw a2,0x2a4(s0)` and
+  `0x0884ad30  beq a2,zero,0x0884ad78` jump over the bank-to-yaw term
+  (`localAngular.y += 30 * craft+0x174 * (1 - magLockBlend)`, `0x0884ad38`-`0x0884ad40`
+  onward) and into the downforce. **State 0 skips the bank-to-yaw coupling.**
+- `Ship_ApplyAngularDamping` (`0x08848ed0`): the roll coefficient is `-5.0` in state 0
+  and `-2.0` otherwise.
+- `Ship_HoverTwoPoint`'s head: the `rebound` base is `1.0` in state 0 and `handling+4`
+  otherwise.
+- `Ship_UpdateCraft` (`0x08849618`): while `craft+0x1c0 & 2`, the control record at
+  `*(craft+0x78)` is re-written every frame - `+0x8` and `+0xc` to `100.0`, `+0x0`, `+0x4`
+  and `+0x10` to `0` - which holds both airbrakes full, the stick and the thrust off.
+
+**Live** (PPSSPP 1.20.4, Time Trial on `16_Track`, four runs, `scripts/psp-start-pose.py
+--full`): `craft+0x1c0` reads `0x2` then `0x3` and `craft+0x2a4` reads `0` through the
+countdown; the frame before the throttle word steps `craft+0x1c0` reads `0x1`, `+0x2a4`
+`1`, and the brake and both airbrake words go from `100` to `0` (`+0x2bc`, `+0x2c4`,
+`+0x2c8`). Yaw is constant to the third decimal until that frame.
+
+Confidence **90** for all three names: every instruction is read, the effects are watched
+live on four runs, and the PS2 build was not compared. `Ship_SetState`'s remote-craft
+guard (`entity+0x368 != 1`) is from the decompile only.

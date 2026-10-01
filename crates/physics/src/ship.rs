@@ -556,7 +556,7 @@ pub struct ShipState {
     /// on the start line and held until the green light.
     ///
     /// `Race_PlaceGrid` puts every craft in state `0` and `Race_StartRacing`
-    /// moves every craft to state `1` (`FUN_08848590`, `0x08848590`). Of the
+    /// moves every craft to state `1` (`Craft_SetState`, `0x08848590`). Of the
     /// terms in `Ship_UpdateCraft`'s force law, `Ship_HoverTwoPoint`'s epilogue is
     /// the one this field gates: the bank-to-yaw coupling is skipped in state `0`
     /// (`if (craft+0x2a4 != 0)` at `0x0884ad2c`-`0x0884ad40`), which is why a
@@ -567,6 +567,10 @@ pub struct ShipState {
     /// Written by the race, which owns the countdown clock; physics only reads
     /// it. `false` for every craft that was never on a grid, so a bare physics
     /// test and a respawn mid-race see the racing law.
+    ///
+    /// **Measured on Pulse PSP only** (Time Trial and a Single Race grid, two
+    /// circuits). The race applies it to every title by extension - the other
+    /// engines share the craft update - which is **chosen, not measured**.
     ///
     /// **Not the only thing state `0` changes**, and the rest is not ported
     /// here: the damping on the roll axis is `-5` rather than `-2`, the

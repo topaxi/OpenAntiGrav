@@ -43,21 +43,23 @@ a constant torque of `0.573` against the yaw damping `-5 * L`.
 
 ## What the original does: `craft+0x2a4`, state 0 and state 1
 
-`Race_PlaceGrid` puts every craft in state `0` (`Ship_SetState(craft, 0)`,
-`FUN_08848590`), `Race_StartRacing` moves every craft to state `1`. The craft's
-own state word is `craft+0x2a4`; `FUN_08848590` writes it after calling
-`FUN_088486d4` (state 0: `craft+0x1c0 |= 2`) or `FUN_088486e4` (state 1:
-`craft+0x1c0 &= ~2` and the brake, steering and both airbrake words zeroed).
-Live: `flags_1c0 = 0x2`/`0x3` and `state_2a4 = 0` through the countdown,
-`0x1`/`1` from the frame before the throttle word steps. Confidence **94**
-(decompile of all three functions, live reads of both words on four runs).
+`Race_PlaceGrid` puts every craft in state `0` and `Race_StartRacing` moves every
+craft to state `1`, both through `Ship_SetState`, which calls `Craft_SetState`
+(`0x08848590`) on the craft. That writes the craft's own state word, `craft+0x2a4`,
+after running `Craft_EnterGridState` (`0x088486d4`, state 0: `craft+0x1c0 |= 2`) or
+`Craft_ReleaseFromGrid` (`0x088486e4`, state 1: `craft+0x1c0 &= ~2` and the brake,
+steering and both airbrake words zeroed). Live: `flags_1c0 = 0x2`/`0x3` and
+`state_2a4 = 0` through the countdown, `0x1`/`1` from the frame before the throttle
+word steps. Confidence **90** (instructions read, effects watched live on four
+runs; the PS2 build not compared). Evidence page:
+[grid.md](../ghidra/functions/psp-pulse-usa/grid.md#the-crafts-own-state-craft_setstate-grid-state-0-and-racing-state-1-2026-10-01).
 
 Four things in the force law read that state, all in the original and all read
 from the decompile on 2026-10-01:
 
 | Where | State 0 | State 1 | Ported |
 | --- | --- | --- | --- |
-| `Ship_HoverTwoPoint`'s epilogue, `0x0884ad2c`: `if (craft+0x2a4 != 0)` guards `localAngular.y += 30 * right.y * (1 - magLockBlend)` | **skipped** | applied | **yes**, `ShipState::on_grid`, read in `hover::evaluate` |
+| `Ship_HoverTwoPoint`'s epilogue, `0x0884ad2c  lw a2,0x2a4(s0)` / `0x0884ad30  beq a2,zero,0x0884ad78`: `craft+0x2a4 != 0` guards `localAngular.y += 30 * right.y * (1 - magLockBlend)` | **skipped** | applied | **yes**, `ShipState::on_grid`, read in `hover::evaluate` |
 | `Ship_ApplyAngularDamping` (`0x08848ed0`): the roll-axis coefficient | `-5` | `-2` | no |
 | `Ship_HoverTwoPoint`'s head: the `rebound` base in the spring's damping factor | `1.0` | `handling+4` | no |
 | `Ship_UpdateCraft`'s control record, while `craft+0x1c0 & 2`: `+8` and `+0xc` forced to `100.0`, `+0`, `+4` and `+0x10` zeroed | both airbrakes full (the brake rises with them), no steering, no thrust | the live record | no, only thrust is gated (`RaceState::thrust_gated`) |
@@ -82,7 +84,9 @@ level on this slot (the spawn pose is the track node's, which is horizontal)
 settles onto the `1.1` degree bank in the first 40 ticks and then yaws at
 `0.29` degrees a second: `1.29` degrees by the 272 ticks of countdown.
 
-`ShipState::on_grid` is the original's state `0`, written from the race's
+`ShipState::on_grid` is the original's state `0` (measured on Pulse PSP only; the
+race applies it to every title by extension, which is **chosen, not measured**,
+and not to Zone, whose four-corner hover epilogue was not read), written from the race's
 countdown clock (`RaceState::thrust_gated`) on every ship at the top of
 `Race::tick` - for every craft, not only the player, which is how the original
 does it - and read by the one term. Derived from the clock rather than stored,
