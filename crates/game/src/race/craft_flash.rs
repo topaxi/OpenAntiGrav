@@ -33,9 +33,9 @@
 //!   [`BLOWUP_DELAY`] later whether or not the craft has been put back by
 //!   then, at the position it was wrecked.
 //!
-//! The craft's explosion *particles* (`WO_SHIP_FXNODE_EXPLO`,
-//! `WO_SHIP_DEATH_SPARKS`, `WO_SHIP_EXPLOSION`) are not played by this port
-//! yet; only the wash is, so a destruction shows the flash without the fire.
+//! The state 5 edge also throws `WO_SHIP_FXNODE_EXPLO` and
+//! `WO_SHIP_DEATH_SPARKS` at each wreck node ([`super::wreck_fx`]).
+//! `WO_SHIP_EXPLOSION`, 1.5 s later, is not played: its placement is unread.
 
 use oag_core::math::Vec3;
 use oag_gameplay::MAX_SHIPS;
@@ -80,6 +80,7 @@ impl Race {
                     self.start_flash(oag_render::flash::BLAST, position);
                 }
                 self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position));
+                self.throw_wreck_fx(slot);
             }
             if let Some((left, at)) = &mut self.view.craft_flashes.blowup[slot] {
                 // The edge tick's own `dt` is not counted: the timer is armed

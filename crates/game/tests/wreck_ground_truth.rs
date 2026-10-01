@@ -72,15 +72,19 @@ fn every_teams_wreck_loads_and_has_no_extra_pass() {
             .as_ref()
             .unwrap_or_else(|| panic!("{team}: no wreck was loaded"));
         assert!(
-            wreck.label.ends_with("shipwreck.vex"),
+            wreck.model.label.ends_with("shipwreck.vex"),
             "{team}: {}",
-            wreck.label
+            wreck.model.label
         );
-        assert!(!wreck.indices.is_empty(), "{team}: an empty wreck");
-        assert_ne!(wreck.indices.len(), livery.hull.indices.len(), "{team}");
+        assert!(!wreck.model.indices.is_empty(), "{team}: an empty wreck");
+        assert_ne!(
+            wreck.model.indices.len(),
+            livery.hull.indices.len(),
+            "{team}"
+        );
         // The hull's meshes carry 0x2000 and the wreck's do not, so there is
         // no extra pass to build and none is drawn.
-        assert!(wreck.shine_draws.is_empty(), "{team}");
+        assert!(wreck.model.shine_draws.is_empty(), "{team}");
     }
 }
 
@@ -102,7 +106,7 @@ fn a_zone_race_loads_the_zone_wreck_where_the_disc_has_one() {
     for (team, livery) in TEAMS.iter().zip(&liveries) {
         let name = format!(r"Data\Ships\{team}\zonewreck.vex");
         match &livery.wreck {
-            Some(wreck) => assert_eq!(wreck.label, name),
+            Some(wreck) => assert_eq!(wreck.model.label, name),
             None => assert!(
                 report
                     .iter()

@@ -13,6 +13,18 @@
 
 use super::*;
 
+/// One team's wreck: the model, and the `Ship Collision Fx` locators the
+/// destruction effects ride.
+#[derive(Debug, Clone)]
+pub struct Wreck {
+    /// `Data\Ships\<Team>\shipwreck.vex`, or `zonewreck.vex` in Zone mode.
+    pub model: Model,
+    /// The wreck's own `Ship Collision Fx` locators in its model space - the
+    /// nodes `Ship_GatherCollisionFxNodes` collects once the wreck is live, and
+    /// where `FUN_0883e064` spawns the explosion and the death sparks.
+    pub fx: Vec<SparkAnchor>,
+}
+
 /// The wreck's archive entry name: [`oag_pulse::race::ships::ZONE_WRECK`] in a
 /// Zone race, [`oag_pulse::race::ships::WRECK`] otherwise.
 #[must_use]
@@ -33,7 +45,7 @@ pub(super) fn load(
     dir: &str,
     mode: Mode,
     report: &mut Vec<String>,
-) -> Option<Model> {
+) -> Option<Wreck> {
     let name = entry_name(dir, team, mode);
     let blob = match archives.read_name(&name) {
         Ok(blob) => blob,
@@ -54,10 +66,13 @@ pub(super) fn load(
             return None;
         }
     };
+    let fx = collision_fx_locators(&blob);
     report.push(format!(
-        "{name}: {} triangle(s), {} 0x2000 batch(es) - the wreck has no extra pass",
+        "{name}: {} triangle(s), {} Ship Collision Fx locator(s), {} 0x2000 batch(es) - the \
+         wreck has no extra pass",
         wreck.indices.len() / 3,
+        fx.len(),
         wreck.shine_draws.len()
     ));
-    Some(wreck)
+    Some(Wreck { model: wreck, fx })
 }

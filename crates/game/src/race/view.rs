@@ -109,6 +109,9 @@ pub struct RaceView {
     pub(super) screen_flash: Option<oag_render::flash::ScreenFlash>,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
+    /// The explosion and sparks a craft throws as it goes out - see
+    /// `race::wreck_fx`.
+    pub(super) wreck_fx: super::wreck_fx::WreckFx,
     /// See `Setup::absorb_burst`.
     pub(super) absorb_burst: Option<super::absorb::AbsorbBurst>,
     /// See `Setup::absorb_anchors`.

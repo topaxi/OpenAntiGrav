@@ -492,6 +492,9 @@ pub struct Setup {
     /// weapon hit throws, or none on a title whose path is unread. See
     /// `race::hit_sparks`.
     pub hit_spark_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
+    /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
+    /// effects spawn - see `race::wreck_fx`.
+    pub wreck_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
     /// The team id each grid slot flies (`Feisar`), for the HUD's per-craft
     /// rows - the Eliminator's kill column. Ids, not names: the string table
     /// turns one into the name a player reads at draw time. Empty where a

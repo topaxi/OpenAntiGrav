@@ -54,7 +54,8 @@ impl Wrecks {
             let livery = &slots.liveries[slot.min(slots.liveries.len().saturating_sub(1))];
             let model = livery
                 .wreck
-                .clone()
+                .as_ref()
+                .map(|wreck| wreck.model.clone())
                 .filter(|model| !model.indices.is_empty());
             hull.push(match model {
                 Some(model) => Some(Drawable::new(

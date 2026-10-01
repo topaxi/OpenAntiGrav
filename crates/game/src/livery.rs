@@ -66,6 +66,7 @@ mod wreck;
 
 pub(crate) use shield::cockpit_shield;
 use shield::shell;
+pub use wreck::Wreck;
 
 /// Everything a single grid slot draws that belongs to its team.
 #[derive(Debug)]
@@ -124,7 +125,7 @@ pub struct Livery {
     /// What the craft becomes once it has blown up, `shipwreck.vex` - see
     /// [`wreck`]. `None` wherever the source ships none or the title's wreck is
     /// not measured. **No extra pass**: the wreck's mesh words carry no `0x2000`.
-    pub wreck: Option<Model>,
+    pub wreck: Option<Wreck>,
     /// HD's `AbsorbEffect` shell - see [`absorb::shell`]. `None` elsewhere.
     pub absorb_shell: Option<Model>,
     /// The plume's own authored texture-transform animation.
