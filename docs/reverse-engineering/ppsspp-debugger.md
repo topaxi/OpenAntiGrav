@@ -1745,3 +1745,30 @@ its absorb hull overlay in play. The probe itself is in
   because the craft pointer read earlier no longer drives anything.
   `psp-drive.py restart` brings back a live grid. Re-read
   `*(g_race_manager + 0x2c0)` after it, because the craft is reallocated.
+
+## Probing a per-node test live, and pinning a target (2026-10-01)
+
+Two recipes from `pulse-cull`, both on one boot of a Single Race:
+
+- **A breakpoint at a predicate's entry, reading its operands.** `FUN_08902a98`
+  (the box test) takes the box struct in `a0`; at each hit read the box, the
+  view-projection (`0x08af2500`) and the world-times-VP the caller just stored
+  (`0x08af24c0`), and on the *next* hit read the previous box's flag at `+0xc`.
+  A call that reaches the function without having run the world multiply (the
+  non-`Mesh` callers) leaves `0x08af24c0` stale - tell them apart by the node's
+  class pointer at `node+4` (`0x08a6bd48` for `Mesh`), not by the layout.
+  Roughly 12 hits a second; `each_hit` leaves the CPU stopped between them.
+- **Pinning an opponent in front of the player** so a lock holds for as long as
+  the capture runs: write its body position (`craft+0x1cc`, then `+0x30`) and
+  zero its velocity at every `HudSight_Update` entry, so the HUD reads the pinned
+  pose the same call. Give the player a LeachBeam by writing `10` to `+0x1bc` of
+  its weapon record (`entity+0x4c`, `entity = *(*g_race_manager + 0x2c0)`), and
+  fire the **unlocked** arm (`+0x16c = -1`, then bit `0x8000` of `+0x1b8`): the
+  locked arm needs the target's matrix pointer at `+0x168` and halts the
+  emulator without one. `scripts/psp-leach-sight-capture.py` is the whole thing.
+- **The window shows a stale frame while the CPU steps frame by frame.** A
+  screenshot taken during such a capture showed no sight for either weapon even
+  though the HUD's own state read visible and locked; trust the memory reads and
+  say so rather than reading the picture. Also: a race left idle for tens of
+  minutes ends, the HUD is hidden and `HudSight_Update` never fires again - the
+  probes then time out with no error. Reboot rather than debug it.

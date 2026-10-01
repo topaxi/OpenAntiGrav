@@ -1167,3 +1167,13 @@
 0x089177e4	function	ParticleSystem_DrawInstanceTree	80	particle-system.md
 0x08918bf8	function	ParticleSystem_DrawEmitterPool	80	particle-system.md
 0x089178c0	function	ParticleSystem_DrawRolledQuads	80	particle-system.md
+0x0881e8c8	function	HudSight_UpdateLeachBeam	92	lock-sight.md
+0x0881b478	function	HudSight_RotateAboutCentre	92	lock-sight.md
+0x0892b638	function	Node_TestSectionVisible	80	section-view-cull.md
+0x08902a98	function	ViewCull_TestBox	88	section-view-cull.md
+0x08902594	function	ViewCull_TestBoxCorners	90	section-view-cull.md
+0x08902894	function	ViewCull_ComputeOutcode	90	section-view-cull.md
+0x08902a58	function	ViewCull_LoadViewProjection	85	section-view-cull.md
+0x08902a2c	function	ViewCull_LoadWorldMatrix	85	section-view-cull.md
+0x0890296c	function	ViewCull_BuildViewProjection	85	section-view-cull.md
+0x0890cc80	function	Mesh_SubmitNode	85	section-view-cull.md

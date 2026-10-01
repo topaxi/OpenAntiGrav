@@ -11,6 +11,8 @@ lock is not instant.** It takes `0.8` seconds of holding a target on screen.
 | Address | Name | Confidence |
 | --- | --- | --- |
 | `0x0881dbcc` | `HudSight_Update` | 88 |
+| `0x0881e8c8` | `HudSight_UpdateLeachBeam` | 92 |
+| `0x0881b478` | `HudSight_RotateAboutCentre` | 92 |
 | `0x0881b604` | `HudSight_Bind` | 90 |
 | `0x0881b34c` | `HudSight_UpdateTone` | 85 |
 | `0x0883b358` | `Hud_ResolveLockTarget` | 80 |
@@ -63,8 +65,9 @@ batches rather than by looking. What makes them a reticle is the texture:
 
 **Both sets are driven as of 2026-09-07**, and the difference between them is
 the whole of what a title has to author: four names and, for the Missile alone,
-a fifth. **Where the LeachBeam's four go is inferred, not read** - see
-[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered). `oag_race::sight::Held` carries which of the two is up and
+a fifth. **Where the LeachBeam's four go is read, 2026-10-01**: by their own function,
+`HudSight_UpdateLeachBeam` - see
+[The LeachBeam's reticle is its own function](#the-leachbeams-reticle-is-its-own-function). `oag_race::sight::Held` carries which of the two is up and
 `oag_title::hud::Sights::Brackets` carries the names, its `leach` field `None`
 for a title that authors no such widget. What had kept the LeachBeam's four dark
 was entirely upstream - `oag_tables::weapons` parsed no
@@ -110,23 +113,93 @@ Two further things the block says:
   tuning data for a beam nothing here fires. `LeachBeamStats` deliberately does
   not decode it, so nothing can grow a dependency between the two.
 
-### Who places the LeachBeam's four is unrecovered
+### The LeachBeam's reticle is its own function
 
-`HudSight_Update` is read end to end below and it writes **five** widgets:
-`sight[0]` … `sight[3]` and the inner. Those are the Missile's. **Nothing yet
-read writes the bind's `+0x108` … `+0x114`**, so what moves the LeachBeam's four
-and at what angles is not recovered, and this page should not be read as saying
-it is.
+**2026-10-01, confidence 92.** `Hud_Update` (`0x0881bf50`) calls `HudSight_Update`
+and, when it returns no lock (`iVar2 == 0`), `FUN_0881e8c8` - **named
+`HudSight_UpdateLeachBeam`** - which writes `+0x108` .. `+0x114`. This section
+used to say nothing read those four and gave them the Missile's law as "chosen,
+not measured". It is a different law, read at instruction level and **replayed
+against 298 frames of the running game** (below).
 
-`oag_race::sight` gives them the Missile's four corners and the Missile's
-four quarter-turn rotations. That is **chosen, not measured**, and carries no
-confidence score. The grounds are structural rather than read: the two sets are
-the same shape - four widgets, one model each, one shared `(-240, 136)`
-placeholder - and one arrowhead makes four corners no other way, exactly as one
-bracket does. A capture at 480x272 shows the picture that arrangement produces,
-which is a check on the *result* and not on the rule. If the original places
-these on a rule of their own, this is where the port is wrong, and finding the
-writer of `+0x108` is what settles it.
+```c
+// gate: the held weapon, with a target, not flagged 0x1000
+view = hud->view;                                   // hud + 0x3c
+if (view->held_plus_one == 11 && view->leach_target != 0 &&    // +0x48, +0xec
+    !(view->leach_target->flags & 0x1000) && (node = target->node)) {
+    (sx, sy) = 240 + 240 * clip.x / clip.w, 136 + 136 * clip.y / clip.w;
+    if (clip.w > 0 && dist < 250 && 0 <= sx < 480 && 0 <= sy < 272) {
+        visible = true;  centre = (sx, sy);          // the raw projection: no chase,
+        if (!view->seen) hud->extent = 30.0;         // no 2*new-old; first sight snaps open
+    }
+}
+want, ref = visible ? (6.0, 6.0) : (30.0, 9.6);       // 9.6 = 6.0 * 1.6
+step = dt * 50;  if (extent > ref) step *= 1.4;  if (!visible) step *= 1.5;  // DAT_08ab0a78
+extent = ease(extent, want, step);                    // hud + 0x27c
+locked = (extent == ref);                              // hud + 0xf8: arrival is the lock
+spin = visible ? spin + dt * (locked ? 4.0 : 2.0)      // hud + 0x104; DAT_08ab0a7c, a80
+               : spin - 2.0 * dt;
+spin = fmodf(spin, 2*pi);
+corner[i] = rotate(centre + (+-extent, +-extent), about centre, spin);   // FUN_0881b478
+piece[i].angle = spin + {pi/2, pi, 0, 3pi/2}[i];       // widget + 0xac
+if (!visible && extent == 30.0) hide the four;         // else show them
+alpha = visible ? 6.0 / extent : 1.0 - extent / 30.0;  // min(a * 255, 255), truncated
+colour = alpha << 24 | (locked ? 0x0000ff : 0x00ffff); // red locked, yellow seeking
+view->seen = visible;                                  // view + 0xf1
+view->tone = visible || (craft->fire_word & 0x8000);   // view + 0xf0
+```
+
+What it settles:
+
+- **The hide rule is the gate, and the shot closes it.** `view+0x48` carries the
+  held weapon id plus one (read live: `0` with nothing held, `11` the tick after
+  the id `10` was written into the weapon record, `2` for a Missile).
+  `Weapon_FireLeachBeam` sets the craft's held-weapon slot to `-1`
+  ([cannon-quake-leachbeam.md](cannon-quake-leachbeam.md)), so the gate fails on
+  the fire tick, the arrowheads open at `75` to `105` units a second and are gone
+  in about `0.24` seconds, **while the beam is still live** (read live: the
+  extent was `11.5` four frames after the shot and `30.0` on the eighteenth, the
+  beam flag held for 44 frames).
+- **There is no hold timer.** The lock is the extent arriving at `6.0`, `0.34`
+  seconds after a first sighting from `30.0`, against the Missile's `0.8`.
+- **The whole figure spins**, `2.0` rad/s while seeking, `4.0` locked, and runs
+  back at `-2.0` rad/s while open. That is the part the Missile's law does not
+  have and the port did not draw.
+- **The colour's alpha byte carries the fade** and its RGB is yellow or red with
+  no blink, where the Missile scales RGB under an opaque alpha.
+
+**Verified live, 2026-10-01** (PPSSPP v1.20.4, a Single Race, the LeachBeam id
+written into the player's weapon record, an opponent held `60` units ahead
+through the sight's own breakpoint, then the unlocked arm fired):
+`scripts/psp-leach-sight-capture.py capture` reads `hud+0x27c`, `+0x104`,
+`+0xf8`, `view+0xf1` and the frame's `dt` at every `HudSight_Update` entry, and
+`replay` runs the arithmetic above on each step: **159 and 139 steps, worst extent
+error under `1e-5`, worst spin error under `1e-6` rad, no `locked` disagreement,
+across the first sighting, the lock, the spin at both rates, the shot, the
+opening and the hide.** The control that the replay can fail: with the opening
+rate's `1.5` taken as `1.0` it reports an extent error of `0.59`, and with the
+return spin `-3.0` rad/s a spin error of `0.017`. The constants (`30.0`, `1.5`,
+`4.0`, `2.0`) were read out of memory at `0x08ab0840`, `0x08ab0a78`,
+`0x08ab0a7c` and `0x08ab0a80`; the literals are in the instructions.
+
+**Not obtained: a picture.** The pinned-target capture runs the emulator one
+frame per breakpoint stop, and its window showed no reticle for the LeachBeam or
+for a Missile held the same way (the pinned craft sat behind the pillar the player
+was parked facing), so no frame pair of the arrowheads exists from this pass, and
+their art and size are unverified here beyond what the previous page said. The
+numbers above do not depend on it.
+
+**Not a claim about Wipeout HD.** HD's own LeachBeam reticle is
+`Hud_UpdateLeachBeamSight` and keeps the Missile's law in `oag_race::sight`
+(`Sight::set_leach_law` is left off for the concentric dialect).
+
+**Implemented** in `oag_race::sight::leach` and switched on by
+`oag_game::race::Race::set_sight_leach_law` for a title whose brackets carry a
+LeachBeam set (`Sights::Brackets { leach: Some(..) }`, which is Pulse). The
+tests pin the closing, the lock on arrival, the three spin rates, the opening
+steps (`7.25`, `8.5`, `9.75`, `11.5` at 60 Hz), the fade and tint, and that a
+shot takes the reticle down while the beam is live
+(`crates/game/src/race/tests/leach_beam.rs`).
 
 **HD authors the block too, and that is measured**, contrary to what this page
 implied until 2026-09-07: its weapon table carries a `<Weapon type="LeachBeam">`
@@ -149,7 +222,7 @@ would draw nothing rather than borrow the Missile's brackets.
 
 `HudSight_Update` (`0x0881dbcc`) runs once a frame with `dt`. Confidence **88**
 on the arithmetic; the gate at the top is the one part that is not read (see
-[The gate](#the-gate-is-the-one-part-not-read)).
+[The gate](#the-gate-read-it-is-the-held-weapon)).
 
 ```c
 player->lock_flags &= ~1;               // entity + 0x860, cleared every frame
@@ -346,12 +419,13 @@ for the guard's operand, the parameter store (`0x0898daf0`) and the loop-back.
 is identified: `_DAT_00275ba4` is the pointer to that string and
 `HudSight_UpdateTone` is the only thing that loads it.
 
-## The gate is the one part not read
+## The gate, read: it is the held weapon
 
-The projection block is guarded by a flag this page calls `gate`:
+**Resolved 2026-10-01** (it was "the one part not read", confidence 50 on what it
+meant). The projection block is guarded by
 
 ```c
-gate = (hud->view->mode == 2);                    // hud + 0x3c, then + 0x48
+gate = (hud->view->held_plus_one == 2);           // hud + 0x3c, then + 0x48
 if (!gate) {
     for (m in missile_pool) {
         if (m->owner_field == player->0x360 && m->target != 0
@@ -362,16 +436,16 @@ if (!gate) {
 }
 ```
 
-So the sight is drawn when some mode equals `2`, **or** when one of the player's
-missiles is in the air and pointing at what it is chasing. Neither `hud->view`
-nor `player+0x360` is identified, and the helper that returns the pool is at an
-address Ghidra has not made a function of, so this is **read but not understood**
-- confidence **50** on what it means, against 88 for everything below it.
-
-Taken literally it would mean the reticle never appears while merely *holding* a
-Missile, which does not match how the weapon plays. Either `mode == 2` is
-commoner than it looks or one of the two reads is wrong. `oag_game` gates the
-sight on "the held weapon locks and something is lockable" instead, and says so.
+and `view+0x48` is **the held weapon id plus one**: the player's status record
+`hud+0x3c` reads `0` with nothing held, `2` with a Missile (id `1`) and `11` with
+a LeachBeam (id `10`), live on PPSSPP. So the Missile's sight is drawn while a
+Missile is held **or** while one of the player's missiles is in the air and
+pointing at what it chases - which is the behaviour the previous reading found
+"does not match how the weapon plays" and does; the `mode == 2` it could not place
+was the held weapon. The LeachBeam's own function gates on `11` the same way
+([above](#the-leachbeams-reticle-is-its-own-function)). `oag_game` gates the sight
+on "the held weapon locks and something is lockable", which is the same
+condition with the lock window folded in.
 
 ## The other two titles
 
@@ -417,7 +491,7 @@ table authors the `<Weapon type="LeachBeam">` block to go with them, measured
 2026-09-07. They are still unwired, but no longer for Pulse's old reason: what
 is missing is a second widget set on `Sights::Concentric` and a reading of which
 of the four is up when. Until then a held LeachBeam draws nothing here. See
-[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered).
+[The LeachBeam's reticle is its own function](#the-leachbeams-reticle-is-its-own-function).
 
 **The placeholder idiom is what says the reading is right.** Every sight widget
 on every title is authored centred on `(-width/2, +height/2)` of that title's own
@@ -576,10 +650,8 @@ not a sequence of different widgets being shown and hidden the way HD's rings
 are. No widget is ever hidden or added at a hold-time threshold anywhere in
 this function.
 
-**The LeachBeam on Pulse has no known reveal law at all, staged or
-continuous**, because - as [Who places the LeachBeam's four is
-unrecovered](#who-places-the-leachbeams-four-is-unrecovered) already says -
-nothing yet read writes its four widgets' positions in the first place.
-`oag_race::sight`'s choice to give them the Missile's own extent and
-rotations is what supplies the only closing behaviour they have, and that
-choice is unchanged by this finding.
+**The LeachBeam on Pulse has a reveal law, and it is not staged either**
+(2026-10-01): `HudSight_UpdateLeachBeam`, above, closes the four arrowheads
+continuously from `30.0` to `6.0` and takes the lock on arrival - no widget is
+hidden or added at a threshold there either. It is the closing the earlier text
+here left to the Missile's law.

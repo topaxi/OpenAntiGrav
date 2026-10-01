@@ -42,13 +42,20 @@ of it the same day; see `frame-audit.md`.
   as well as the frustum. The mask now applies (`frame-audit.md` section 3). The
   repeat on Metropia (three poses) and Tech De Ra (four) finds **no moving draw
   the original submits that our mask drops** (0 at all seven, 8 when the craft's
-  section is forced wrong, so the count can move; confidence 80). Still open on
-  it: moving draws that pass the mask and the original does not submit (21 to 24
-  on Talon's by the earlier method; 4 to 6 on Metropia, 5 to 12 on Tech De Ra by
-  this one, not like-for-like), some recurring at every
-  pose (Metropia node 225, Tech De Ra nodes 1076 and 1078), which is the original's
-  frustum bound for moving meshes or a rule not yet recovered; and no circuit with
-  a tunnel or a loop yet.
+  section is forced wrong, so the count can move; confidence 80). **The residue is explained, 2026-10-01
+  (`pulse-cull`)**: the original also rejects a draw whose *section's* authored box
+  the view does not reach (`Node_TestSectionVisible`, `0x0892b638`; a corner outcode,
+  no far plane), and a moving draw's section is static. Against 22 dumps: 0 of
+  2,004 draws in a rejected section are submitted (control: 73 and 135 with the
+  view turned), 64 % of the static and 47 % of the moving twinless draws are in
+  one. Ported as `oag_render::pvs::sections_in_view`/`VisibleSet::within_view`
+  (seven 480x272 poses pixel-identical). The "recurring" Metropia node 225 and Tech
+  De Ra 1076/1078 were a census artifact (a double-sweep diameter 8 % short of the
+  exact one) and are not culled by anything. Evidence:
+  `docs/ghidra/functions/psp-pulse-usa/section-view-cull.md`. Still open on it:
+  whether the batch-set draw path carries a bound of its own (1,071 static draws
+  pass the section test with no twin), the small transparent quads the census
+  cannot match, and a circuit with a tunnel or a loop.
 - **Whether real PSP hardware shows level 1 past about 256 units.** The game
   programs slope mode with slope `1/256` and bias 1; the renderer now applies
   that law to the disc's levels, and PPSSPP's GPU backends do not, so no frame of

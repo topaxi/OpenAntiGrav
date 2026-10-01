@@ -41,6 +41,15 @@
 //! Packaged the way `[graphics] frustum_culling` is - config-file only, no
 //! menu row - and defaults on.
 //!
+//! # The second tier: a section's own box, against the view
+//!
+//! The authored mask is the first test the original makes. The second is **the
+//! section's authored world-space box against the view** - see
+//! [`sections_in_view`] and `docs/ghidra/functions/psp-pulse-usa/
+//! section-view-cull.md` - and it is the cull a *moving* draw gets, because its
+//! section does not move though it does. [`VisibleSet::within_view`] applies it
+//! to the visible set once a frame.
+//!
 //! # What this does not do yet
 //!
 //! Draw calls are tested one at a time. With a single section per draw call,
@@ -624,9 +633,10 @@ pub fn visible(
     {
         return false;
     }
-    // The frustum is the one test a moving draw cannot take: its bounds
-    // describe where it was at time zero and nothing about where it is now.
-    // See [`DrawCall::moving`].
+    // The per-draw frustum is the one test a moving draw cannot take: its
+    // bounds describe where it was at time zero and nothing about where it is
+    // now. What the original culls it by is its section's own box, which is
+    // tested a tier up (`VisibleSet::within_view`). See [`DrawCall::moving`].
     if draw.moving {
         return true;
     }

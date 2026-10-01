@@ -48,9 +48,22 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   `0xff` stamp and our composite are the candidates. That is the
   `hull_overlay`/bloom modules' calibration, not this weapon's, and nothing
   here was tuned toward the picture.
-- **The lock sight stays up on our HUD while the beam is live.** In the
-  original's frames the brackets vanish once the beam fires. HUD lane, not
-  read.
+- ~~**The lock sight stays up on our HUD while the beam is live.**~~ **Closed
+  2026-10-01 (`pulse-cull`), and the claim did not reproduce as stated**: the pickup
+  is spent on the fire tick and the sight was already gone about `0.47` s later in
+  a `Race::tick` test. What the original does is a different law: the LeachBeam's
+  four arrowheads have their own function, `HudSight_UpdateLeachBeam`
+  (`0x0881e8c8`), gated on the held weapon (`view+0x48 == 11`; the shot clears the
+  slot), with no hold timer, the lock taken on the extent arriving at `6.0`, the
+  whole figure spinning (`2.0` rad/s seeking, `4.0` locked), opening at `1.5x` and
+  gone about `0.24` s after the shot with the beam still live, the fade in the
+  colour's alpha byte. Ported (`oag_race::sight::leach`, switched on for the Pulse
+  dialect by `Race::set_sight_leach_law`) and replayed against 298 frames read off
+  PPSSPP (error under `1e-5`). Open on it: no frame pair of the arrowheads (the
+  pinned-target capture presents stale frames, so their art and size are unverified
+  here), and Wipeout HD's own `Hud_UpdateLeachBeamSight` keeps the Missile's law.
+  `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`, "The LeachBeam's reticle is
+  its own function".
 - **An orange-white flash at the target in some original frames** has no
   counterpart in ours. Candidates: the victim's damage feedback, or
   `WO_SHIP_SPARK_DAMAGE_*`. Not identified.
