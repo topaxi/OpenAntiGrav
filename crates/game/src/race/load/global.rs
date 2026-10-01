@@ -28,6 +28,9 @@ pub(super) struct GlobalTunables {
     pub(super) zone: Option<handling::Zone>,
     /// `<GlobalClass><WeaponPad refresh_time/></GlobalClass>`.
     pub(super) weapon_pad_refresh: f32,
+    /// `<StartBoost/>`, or `None` where the file authors none (Pure) or cannot
+    /// be read: no launch boost, rather than one on invented numbers.
+    pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
 }
 
 /// Reads the file and resolves the rung `options.class` names.
@@ -168,10 +171,31 @@ pub(super) fn resolve(
         None => 0.0,
     };
 
+    let start_boost = global
+        .as_ref()
+        .and_then(|global| global.start_boost)
+        .map(|b| oag_physics::launch::StartBoost {
+            window_start: b.window_start,
+            window_end: b.window_end,
+            stall_end: b.stall_end,
+            overall_duration: b.overall_duration,
+            stall_mul: b.stall_mul,
+            normal_mul: b.normal_mul,
+            boost_mul: b.boost_mul,
+        });
+    report.push(match start_boost {
+        Some(b) => format!(
+            "<StartBoost>: a launch boost for {} s after GO, graded by when thrust first lands",
+            b.overall_duration
+        ),
+        None => "<StartBoost>: absent, so no launch boost this run".to_string(),
+    });
+
     GlobalTunables {
         pad_tunables,
         special,
         class_gravity_scale,
+        start_boost,
         zone,
         weapon_pad_refresh,
     }

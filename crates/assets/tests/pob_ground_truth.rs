@@ -301,20 +301,14 @@ fn every_psp_particle_system_walks_its_emitter_tree() {
     );
 }
 
-/// The six PSP root emitters `docs/formats/pob.md` records as having no
-/// embedded texture at their positional offset - a continuous/ambient trio
-/// with plausibly no per-particle sprite, plus two more with no explanation
-/// found yet. A file leaving this set (in either direction) is a real
-/// change to what the corpus measures, not noise - update this list and
-/// `pob.md`'s own table together.
-const PSP_ROOTS_WITH_NO_TEXTURE: &[&str] = &[
-    "WO_PLASMA_FLASH",
-    "WO_RAIN",
-    "WO_SNOW",
-    "WO_LEACHBEAM_CHARGING",
-    "WO_REPULSER",
-    "WO_ROCKET_FLARE",
-];
+/// The PSP root emitters with no embedded texture at their positional
+/// offset: **none**. There used to be six (`WO_PLASMA_FLASH`, `WO_RAIN`,
+/// `WO_SNOW`, `WO_LEACHBEAM_CHARGING`, `WO_REPULSER`, `WO_ROCKET_FLARE`) and
+/// the reader refused them because their headers are 4 bits per pixel, which
+/// it did not accept until 2026-10-01 (`oag_vex::pob::texture`, "Four bits per
+/// pixel"). A file entering this set is a real change to what the corpus
+/// measures, not noise - update this list and `pob.md` together.
+const PSP_ROOTS_WITH_NO_TEXTURE: &[&str] = &[];
 
 /// [`oag_vex::pob::ParticleSystem::embedded_texture`] over the whole PSP
 /// corpus: every root emitter either has one, or is on
@@ -351,8 +345,11 @@ fn every_psp_root_emitter_texture_is_where_the_layout_says() {
                 );
                 assert_eq!(
                     texture.indices.len(),
-                    usize::from(texture.width) * usize::from(texture.height),
-                    "{}: level 0 index count",
+                    usize::from(texture.width)
+                        * usize::from(texture.height)
+                        * usize::from(texture.bits_per_pixel)
+                        / 8,
+                    "{}: level 0 stored byte count",
                     system.name
                 );
                 with_texture.push(system.name.clone());
@@ -419,10 +416,13 @@ fn every_psp_texture_pointer_is_a_fixup_site() {
             }
             if emitter.blend_class == 2 {
                 additive += 1;
-                assert_eq!(
-                    texture.palette[..3],
-                    [0, 0, 0],
-                    "{} / {}: an additive sprite's index 0 is not black",
+                // Black (to within 2: `WO_REPULSER`'s is `2, 2, 2`), or
+                // transparent (alpha 0 or 1): the field around the picture
+                // adds nothing. `WO_LEACHBEAM_CHARGING`'s is a transparent
+                // blue.
+                assert!(
+                    texture.palette[..3].iter().all(|&c| c <= 2) || texture.palette[3] <= 1,
+                    "{} / {}: an additive sprite's index 0 adds light",
                     system.name,
                     emitter.name
                 );
@@ -691,4 +691,44 @@ fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
         ],
         "which HD texture names fail to resolve is a measurement, not a tolerance"
     );
+}
+
+/// The animated-attribute records (`+0x93c`/`+0x940`) of the PSP corpus: eleven, on eleven
+/// emitters, ten of them selector 2 (the extent's co-factor) and `WO_REPULSER_BLAST`'s
+/// selector 5. `WO_BOMB_SMOKERING`'s root is the one a live detonation measured: a keyed
+/// `1 + 1 * (0.0068 .. 1)` that widens its spawn ring from 12.94 to 23.3 units.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_psp_corpus_authors_eleven_attribute_animations() {
+    let Some(image) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archive =
+        Archive::open(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display())).expect("open");
+    let mut selectors = Vec::new();
+    let mut smoke = None;
+    for (_, blob) in particle_systems(&mut archive) {
+        let system = ParticleSystem::parse(&blob).expect("parse");
+        for emitter in system.emitters(&blob).expect("emitters") {
+            assert_eq!(
+                emitter.attribute_animations.len(),
+                usize::try_from(emitter.animated_attributes).unwrap_or(0),
+                "{} / {}: every counted record is read",
+                system.name,
+                emitter.name
+            );
+            for animation in &emitter.attribute_animations {
+                selectors.push(animation.selector);
+                if system.name == "WO_BOMB_SMOKERING" && emitter.name == "WO_BOMB_SMOKERING" {
+                    smoke = Some(animation.clone());
+                }
+            }
+        }
+    }
+    selectors.sort_unstable();
+    assert_eq!(selectors, [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5]);
+    let smoke = smoke.expect("the smoke ring's record");
+    assert_eq!((smoke.channel.lo, smoke.channel.hi), (1.0, 2.0));
+    assert_eq!(smoke.channel.keys.len(), 2);
+    assert!((smoke.channel.scaled_at(1.0) - 2.0).abs() < 1e-5);
 }

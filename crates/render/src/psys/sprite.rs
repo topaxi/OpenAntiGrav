@@ -50,7 +50,7 @@ use oag_vex::pob::{self, ParticleSystem};
 /// The sheet's width and height in texels.
 ///
 /// Chosen, not measured: a race loads a few dozen effects, and the whole PSP
-/// corpus embeds 64 sprites of at most 128x64 - about 300 K texels before
+/// corpus embeds 76 sprites of at most 128x64 - about 300 K texels before
 /// sharing, under a third of this.
 pub const SHEET_SIZE: u32 = 1024;
 

@@ -384,6 +384,9 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         // value the world hash already carries, and writing it would move every
         // committed reference for a field no probe script ever sets.
         on_grid: _,
+        // Not hashed, for `on_grid`'s reason: the race writes it from the countdown clock.
+        released: _,
+        launch,
         time_airborne,
         mag_lock_blend,
         pad_timer,
@@ -445,6 +448,17 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         Some(direction) => direction as u8,
     });
     hasher.write_f32(time_since_landing);
+    // Written only once the launch boost has run, so a craft that never had the
+    // disc's `<StartBoost>` (every probe script, every committed reference)
+    // hashes as it did before the field existed. Idle is `0` and nothing more;
+    // see `crate::launch::LaunchState`.
+    if !launch.is_idle() {
+        hasher.write_u8(1);
+        hasher.write_f32(launch.multiplier);
+        hasher.write_u8(launch.grade as u8);
+        hasher.write_u8(u8::from(launch.latched));
+        hasher.write_u32(launch.ticks);
+    }
     hasher.write_f32(time_airborne);
     hasher.write_f32(mag_lock_blend);
     // Both stay at their defaults through every probe script - none crosses a

@@ -180,6 +180,11 @@ impl Race {
             // A view matrix is the inverse of the camera's world transform.
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
         }
+        // The player's destroyed craft: the circuit's own camera, not a rig on
+        // the craft - see `race::destroy_camera`.
+        if let Some(destroyed) = self.destroy_camera_now() {
+            return destroyed.view();
+        }
         let target = target_of(self.ship());
         if self.view.camera_view == oag_display::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
@@ -456,8 +461,13 @@ impl Race {
         // forward velocity.
         let body = &self.ship().physics.body;
         let forward_speed = body.forward().dot(body.linear_velocity);
-        let widened_deg = (authored_fov + SPEED_FOV_GAIN_DEG * forward_speed)
-            .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
+        // The destroy camera zooms to frame the wreck, with no speed widen:
+        // `FUN_08880c04` writes `g_camera_fov_degrees` from its own field.
+        let widened_deg = match self.destroy_camera_now() {
+            Some(destroyed) if self.view.camera_override.is_none() => destroyed.fov,
+            _ => authored_fov + SPEED_FOV_GAIN_DEG * forward_speed,
+        }
+        .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
         // Composed *after* the setting, so a player who has widened the field
         // gets the same proportional kick rather than a fixed number of degrees.

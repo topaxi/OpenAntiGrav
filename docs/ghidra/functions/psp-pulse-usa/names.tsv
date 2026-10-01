@@ -152,7 +152,8 @@
 0x0884e8b0	function	World_SetBodyMass	88	rigid-body.md
 0x0884e900	function	World_SetBodyBoxInertia	88	rigid-body.md
 0x0883a970	function	Xml_ReadGlobalSettings	85	engine.md
-0x0883fdec	function	Ship_UpdateStartBoost	85	engine.md
+0x0883fdec	function	Ship_UpdateStartBoost	92	engine.md
+0x0882773c	function	Race_UpdateLaunchGrade	90	engine.md
 0x088390b4	function	Xml_ReadBoostSettings	88	engine.md
 0x088271b4	function	Race_ResetCraftBoosts	60	engine.md
 0x0884c5c8	function	Ship_UpdateEngine	84	engine.md
@@ -1166,7 +1167,9 @@
 0x088f7e64	function	ParticleSystem_UpdateParticleFields	85	particle-system.md
 0x089177e4	function	ParticleSystem_DrawInstanceTree	80	particle-system.md
 0x08918bf8	function	ParticleSystem_DrawEmitterPool	80	particle-system.md
-0x089178c0	function	ParticleSystem_DrawRolledQuads	80	particle-system.md
+0x089178c0	function	ParticleSystem_DrawRolledQuads	85	particle-system.md
+0x089194d0	function	ParticleSystem_DrawPoolSquares	88	particle-system.md
+0x088fc634	function	ParticleSystem_EmitRing	85	particle-system.md
 0x0883eae8	function	Ship_SelectHullModel	82	ship-wreck-model.md
 0x0883eb68	function	Ship_SelectWreckModel	82	ship-wreck-model.md
 0x0881e8c8	function	HudSight_UpdateLeachBeam	92	lock-sight.md
@@ -1182,7 +1185,12 @@
 0x08848590	function	Craft_SetState	90	grid.md
 0x088486d4	function	Craft_EnterGridState	90	grid.md
 0x088486e4	function	Craft_ReleaseFromGrid	90	grid.md
+0x0888058c	function	Camera_SetSubject	85	camera.md
+0x0887fedc	function	Camera_PickStation	88	camera.md
+0x08880984	function	Camera_FramingFov	88	camera.md
+0x08880c04	function	Camera_UpdateSpectatorView	85	camera.md
+0x0887fd3c	function	Camera_UpdateSpectator	70	camera.md
+0x08880168	function	Camera_RepickNearSubject	62	camera.md
 0x08848664	function	Craft_SetAutopilotBlend	90	race-finish.md
-0x0887fd3c	function	Camera_UpdateSpectator	80	race-finish.md
 0x08880a58	function	Camera_PickSubject	80	race-finish.md
 0x08880b38	function	Camera_PickRandomMode	75	race-finish.md

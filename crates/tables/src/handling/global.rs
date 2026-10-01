@@ -220,13 +220,65 @@ impl Special {
 /// The engine-wide `<Global>` block, out of [`GLOBAL_ENTRY`].
 ///
 /// Only the parts this project has a consumer for are decoded. The three camera
-/// pitch modifiers, `<CameraSideOffset>` and `<StartBoost>` are all read by the
-/// original's `Xml_ReadGlobalSettings` and are deliberately left alone here;
+/// pitch modifiers and `<CameraSideOffset>` are read by the original's
+/// `Xml_ReadGlobalSettings` and are deliberately left alone here;
 /// they are named in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be
 /// added when something needs them.
 ///
 /// Of `<Special>`'s five attributes, `turbo_jump` is the only one left unread -
 /// see [`Special`].
+/// `<StartBoost windowStart windowEnd stallEnd overallDuration stallMul normalMul
+/// boostMul/>` - the launch boost's window and its three multipliers.
+///
+/// `Xml_ReadBoostSettings` (`0x088390b4`) compares the seven attribute names
+/// literally and stores each through `Xml_AttributeAsFloat` into
+/// `0x08ab0d70..0x08ab0d88` unscaled; `Ship_UpdateStartBoost` (`0x0883fdec`) and
+/// `FUN_0882773c` read them, see `docs/physics/launch-boost.md`. Confidence
+/// **90** for the names and the order, from the parse function; the law that
+/// uses them was watched live on five launches.
+///
+/// **Absent on Pure**, whose `<Global>` has no such element, so [`Global`] holds
+/// it as an `Option`: the presence of the element is what says a title has a
+/// launch boost at all. Values are read from the player's own disc at runtime
+/// and are not reproduced anywhere in this repository.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct StartBoost {
+    /// Seconds after GO at which the "perfect" window opens (`0x08ab0d70`).
+    pub window_start: f32,
+    /// Seconds after GO at which the perfect window closes (`0x08ab0d74`).
+    pub window_end: f32,
+    /// Seconds after GO at which the stall window closes (`0x08ab0d78`).
+    pub stall_end: f32,
+    /// How long the multiplier is held after GO, in seconds (`0x08ab0d7c`).
+    pub overall_duration: f32,
+    /// The multiplier for a thrust that first landed before the perfect window
+    /// or in the stall window after it (`0x08ab0d80`).
+    pub stall_mul: f32,
+    /// The multiplier before any grade is earned, and for a thrust that first
+    /// landed after the stall window (`0x08ab0d84`).
+    pub normal_mul: f32,
+    /// The multiplier for a thrust that first landed inside the perfect window
+    /// (`0x08ab0d88`).
+    pub boost_mul: f32,
+}
+
+impl StartBoost {
+    const ELEMENT: &'static str = "StartBoost";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        let e = Self::ELEMENT;
+        Ok(Self {
+            window_start: number(node, e, "windowStart")?,
+            window_end: number(node, e, "windowEnd")?,
+            stall_end: number(node, e, "stallEnd")?,
+            overall_duration: number(node, e, "overallDuration")?,
+            stall_mul: number(node, e, "stallMul")?,
+            normal_mul: number(node, e, "normalMul")?,
+            boost_mul: number(node, e, "boostMul")?,
+        })
+    }
+}
+
 /// A `<GlobalClass>` whose `name` is outside [`SpeedClass`].
 ///
 /// The counterpart of [`super::Class`]'s `raw_name`, one level up: the same rung
@@ -247,8 +299,8 @@ pub struct ForeignGlobalClass {
 /// The engine-wide `<Global>` block, out of [`GLOBAL_ENTRY`].
 ///
 /// Only the parts this project has a consumer for are decoded. The three camera
-/// pitch modifiers, `<CameraSideOffset>` and `<StartBoost>` are all read by the
-/// original's `Xml_ReadGlobalSettings` and are deliberately left alone here;
+/// pitch modifiers and `<CameraSideOffset>` are read by the original's
+/// `Xml_ReadGlobalSettings` and are deliberately left alone here;
 /// they are named in `docs/ghidra/functions/psp-pulse-usa/engine.md` and can be
 /// added when something needs them.
 ///
@@ -260,6 +312,8 @@ pub struct Global {
     pub zone: Zone,
     /// `<Special/>`, of which one attribute is decoded.
     pub special: Special,
+    /// `<StartBoost/>`, `None` where the file authors none (Pure).
+    pub start_boost: Option<StartBoost>,
     /// `<GlobalClass><SpeedupPads/></GlobalClass>`, indexed by [`SpeedClass`].
     pub speedup_pads: [SpeedupPads; 4],
     /// `<GlobalClass><GravityMul/></GlobalClass>`, indexed by [`SpeedClass`].
@@ -370,6 +424,10 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
     Ok(Some(Global {
         zone: Zone::from_node(child(global, Zone::ELEMENT)?)?,
         special: Special::from_node(child(global, Special::ELEMENT)?)?,
+        start_boost: child(global, StartBoost::ELEMENT)
+            .ok()
+            .map(StartBoost::from_node)
+            .transpose()?,
         speedup_pads,
         gravity_mul,
         weapon_pads,

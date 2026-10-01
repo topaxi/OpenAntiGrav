@@ -75,9 +75,46 @@ are never reached because `t < 1` ends the flash first.
 
 **Built 2026-10-01:** the two state 5 particles, `WO_SHIP_FXNODE_EXPLO` then
 `WO_SHIP_DEATH_SPARKS` at each node of the **wreck** (`oag_game::race::wreck_fx`;
-read live, see [ship-wreck-model.md](ship-wreck-model.md)). **Not built:**
-`WO_SHIP_EXPLOSION` (its placement matrix, `local_370` in `FUN_088407b0`, is
-unread), `Camera_ArmShake` on either, and the two sounds.
+read live, see [ship-wreck-model.md](ship-wreck-model.md)); then `WO_SHIP_EXPLOSION`
+at the placement below, and `Camera_ArmShake` for the player on both (`(0.3, 0.4,
+camera, 3)` at state 5 and `(0.8, 0.6, camera, 1)` at state 6, left out where the
+race ends on the state 5 edge). **Not built:** the two sounds, and the
+`Bomb_Shockwave.vex` object below.
+
+### `Ship_SpawnExplosionBig`'s placement, read and measured 2026-10-01
+
+`FUN_088407b0` copies the live hull model's world matrix (`FUN_089451dc(entity+0x8b0)`:
+`model+0x3c`, `+0x40`, sixteen floats) into a local (`local_370`), and for the local player
+plays `EXPLBIG_PC` and `SHIP_DEST`, starts kind 7 at the craft's node (`+0x794`, `+0x30`)
+and arms the shake `(0.8, 0.6, camera, 1)`; for anyone else plays `EXPLBIG` and starts
+kind 0. Then, in order:
+
+1. it **squashes the hull's own node matrix** with a `1e-4` scale on its three rows
+   (`0x38d1b717`) through `FUN_08945284`, which makes the live model vanish;
+2. when `DAT_08b34320` is non-zero (it was `0x8c0f410` live) it builds a
+   **`Data\Weapons\Bomb_Shockwave.vex`** object (`FUN_0885ecf0`, a `0xb0`-byte node)
+   from the same matrix: scale `0.1`, a ring that grows. **Read, not drawn by this
+   port**; whether it is seen was not looked for;
+3. it moves the matrix's translation `DAT_08ab0de8` times its **own second row** back
+   (`4.0`: read in `.data` and live), and
+4. calls `Psys_Spawn_q(DAT_08ab2248, "WO_SHIP_EXPLOSION", 'EXPL', &matrix, 0, 0)`:
+   flags `0` copy the matrix into the instance (`FUN_08916200`) and the parent is the
+   particle world root, so the blast sits **in the world at the wreck and does not ride
+   the craft**.
+
+Live (Talon's Junction, the player's craft put into state 4, 90 frames after the state
+5 edge): the matrix's rows were **0.75 long** (the craft model's own scale) and its
+translation was the craft node's position moved `2.9995` units along `-up`, which is
+`4.0 * 0.7499`, to four digits. Ported as `oag_game::race::wreck_fx::EXPLOSION_DROP`:
+`model * (0, -4, 0)`, oriented by the model's up, thrown with the big flash.
+Confidence **90**.
+
+**No scale is passed to any of the three wreck effects.** `Psys_Spawn_q` takes a matrix
+and two flag words and no severity; the only writer of the one-shot severity
+`DAT_08abf564` (`FUN_08916200` stores it into the node at `+0xb8` and clears it) is
+`Ship_PlayAbsorbFeedback`. So the `1.0` the port passes is the original's neutral
+value, not a guess. Whether the matrix's `0.75` rows also shrink the emitters'
+positions and speeds is not read.
 
 ## The Shuriken's ending
 
@@ -166,3 +203,4 @@ the entity's own two positions and resets its node pair, but the weapon around i
   player actually sees: the intro is a fly-through this port does not have.
 - Whether the flash draws over the results screen when a craft's big explosion
   lands after its race has ended.
+- What the `Bomb_Shockwave.vex` object `Ship_SpawnExplosionBig` builds looks like.

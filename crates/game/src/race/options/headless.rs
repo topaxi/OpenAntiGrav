@@ -78,6 +78,7 @@ impl Setup {
             absorb_anchors: Vec::new(),
             hit_spark_anchors: Vec::new(),
             wreck_anchors: Vec::new(),
+            destroy_stations: Vec::new(),
             slot_teams: Vec::new(),
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
@@ -88,6 +89,7 @@ impl Setup {
                 down_speed: 0.0,
             },
             class_gravity_scale: 1.0,
+            start_boost: None,
             // The cameras, all zeroed. Nothing here draws, and a camera whose
             // numbers were invented to look reasonable is the failure
             // `CLAUDE.md`'s "never invent what the assets already author"

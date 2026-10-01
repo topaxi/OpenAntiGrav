@@ -164,6 +164,7 @@ fn parse_one(record: &[u8], order: ByteOrder, offset: usize) -> Option<Emitter> 
         child_velocity_inherit: 0.0,
         child_spawn_probability: 0.0,
         animated_attributes: 0,
+        attribute_animations: Vec::new(),
         atlas_grid: ((grid >> 16) as u16, (grid & 0xffff) as u16),
         atlas_frames: 0,
         modifiers: Vec::new(),

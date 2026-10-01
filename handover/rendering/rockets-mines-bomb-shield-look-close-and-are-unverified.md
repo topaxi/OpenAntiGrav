@@ -70,6 +70,17 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   (stationary probe to the hundredth; `Bomb_Init`'s drop point equals the body position to
   the last bit, stationary and at speed), and `mine::drop_point` now does too (its own
   commit, `mine.md`'s second-pass section). The Mine's own `Anim Transform` (a tilted spin, 2 s a turn) now plays too, by analogy with the Bomb and not seen in the original's two frames.
+- *Pulse Bomb, third pass 2026-10-01* - the weapon bodies were missing from the glow-mask stamp
+  list (the canister bloomed pale; now stamps `4`/`0xba` as the original, EDRAM-measured, pinned by
+  `weapon_stamp_ground_truth`), and **the detonation has its first picture**: a laid Bomb moved
+  120 units ahead by a debugger write (`psp-weapon-pair.py --detonate-bomb-at`). Ours matched the
+  orange wash and timing; the smoke was a puff because psys shape 3 spawned at the anchor where the
+  original spawns on a ring of the authored extent (fixed, `ParticleSystem_EmitRing`; also moves
+  `WO_SHIP_EXPLOSION`, the Rocket's debris, the missile, the Repulser blast). **Still open**:
+  the launch ring's brightness (the original's is a thick solid yellow band, ours three dim lines;
+  GE state read, not isolated - `mine.md`'s third pass lists what matches), the top plate's hue,
+  the dome reading yellow-opaque in the original and white-thin in ours, the smoke's density at
+  fire+50. `0x200000` (evenly stepped ring angles, `WO_REPULSER_BLAST` only) is not played.
 - *Pulse Bomb* - **pictured**, same method; **the launch look is fixed 2026-10-01**
   (second pass). The wide flat ring was `Pulse_Bomb.vex`'s `orbit` node drawn at its
   time-zero pose: both `orbit` and `bomb` are keyframed `Anim Transform`s on the one
@@ -126,3 +137,10 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
    GE reads them.
 4. Optional: re-run the Rocket probe on Flash to confirm 0.75 x class on a second
    speed class.
+5. The Bomb's remaining differences (see the third-pass bullet): start from the ring's
+   `TEXLEVEL` bias `2.875` against ours `1.0` (a per-texture value `Texture_BuildBindList`
+   emits, read for this one texture only - read it for every `.vex` texture and apply it
+   wherever it moves a level), then the dome's colour against its bloom.
+6. Re-run the craft-hit Rocket blast's frame series (`rocket-visuals.md`, 2026-09-24): the
+   pool particle's first draw at age 0 and the shape-3 ring/disc both move it, and it has
+   not been compared since.

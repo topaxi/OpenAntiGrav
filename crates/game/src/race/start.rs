@@ -56,6 +56,7 @@ impl Race {
             weapon_pad_refresh,
             class,
             class_gravity_scale,
+            start_boost,
             pose_override,
             camera_override,
             spectator_cameras,
@@ -69,6 +70,7 @@ impl Race {
             absorb_anchors,
             hit_spark_anchors,
             wreck_anchors,
+            destroy_stations,
             slot_teams,
             ..
         } = setup;
@@ -99,6 +101,7 @@ impl Race {
         // measured**, and carries no confidence score. The warning is the point
         // - a silent Venom is how three of four classes raced short in the
         // first place.
+        let destroy_focus_rate = super::destroy_camera::focus_rate(&class);
         let lap_class = oag_race::SpeedClass::from_name(&class).unwrap_or_else(|| {
             warn!(
                 "speed class {class:?} is not one of the four the lap census covers - \
@@ -432,6 +435,7 @@ impl Race {
                 allowed_weapons,
                 class,
                 class_gravity_scale,
+                start_boost,
                 pad_current: [None; MAX_SHIPS],
                 pad_previous_position: [None; MAX_SHIPS],
                 scheme: ControlScheme::default(),
@@ -510,6 +514,10 @@ impl Race {
                 screen_flash: screen_flash.then(oag_render::flash::ScreenFlash::default),
                 craft_flashes: Default::default(),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors),
+                destroy_camera: super::destroy_camera::DestroyCamera::new(
+                    destroy_stations,
+                    destroy_focus_rate,
+                ),
                 absorb_burst,
                 absorb_anchors,
                 absorb_bursts: Vec::new(),

@@ -403,7 +403,8 @@ nothing else, asserted by `which_top_level_elements_handlingstats_carries` in
 `crates/tables/tests/handling_ground_truth.rs`. So `oag_tables::handling::parse`
 does not look for `<Global>`; `global_from_blob` reads it out of the global file.
 
-Two parts are decoded, because they are the two with consumers:
+Three parts are decoded, because they are the three with consumers (`<StartBoost>` since
+2026-10-01, see [the launch boost](../physics/launch-boost.md)):
 
 ```text
 <Global>
@@ -415,7 +416,8 @@ Two parts are decoded, because they are the two with consumers:
     <WeaponPad refresh_time elimination_refresh_time/>
   </GlobalClass>                                          x5
   <ExternalCloseCamPitchMod/> <ExternalFarCamPitchMod/> <ReplayCamPitchMod/>
-  <CameraSideOffset/> <StartBoost/>
+  <CameraSideOffset/>
+  <StartBoost windowStart windowEnd stallEnd overallDuration stallMul normalMul boostMul/>   <- decoded, absent on Pure
 </Global>
 ```
 

@@ -111,7 +111,7 @@ pub fn spectator_nodes(track_blob: &[u8]) -> Vec<SpectatorNode> {
         .iter()
         .map(|camera| SpectatorNode {
             eye: Vec3::from_array(camera.position()),
-            aim: Vec3::from_array(camera.target),
+            aim: Vec3::from_array(camera.aim),
         })
         .collect()
 }

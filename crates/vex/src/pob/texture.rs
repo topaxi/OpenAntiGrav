@@ -14,11 +14,9 @@
 //! Confirmed two ways. First, a corpus-wide structural scan
 //! (`crates/assets/tests/pob_ground_truth.rs`,
 //! `every_psp_root_emitter_texture_is_where_the_layout_says`) finds a
-//! header-shaped record at exactly that offset for 29 of 35 PSP files' root
-//! emitter (the other six - `WO_PLASMA_FLASH`, `WO_RAIN`, `WO_SNOW`,
-//! `WO_LEACHBEAM_CHARGING`, `WO_REPULSER`, `WO_ROCKET_FLARE` - have none
-//! there; the first three are continuous/ambient effects with no
-//! per-particle sprite at all, plausibly drawing an untextured quad).
+//! header-shaped record at exactly that offset for every PSP file's root
+//! emitter (35 of 35: this said 29, the other six being 4 bits per pixel,
+//! which the reader refused until 2026-10-01 - see "Four bits per pixel").
 //! Second, `WO_SHIP_COLL_SPARK_DAMAGE`
 //! (`docs/formats/pob.md`'s four-emitter sibling tree, offsets `+0x0`,
 //! `+0xd20`, `+0x2320`, `+0x2fe0`) has a header at all four of
@@ -43,14 +41,14 @@
 //! ```text
 //! +0x00  u16  width
 //! +0x02  u16  height
-//! +0x04  u8   bits per pixel (8 on every real header)
+//! +0x04  u8   bits per pixel: 8, or 4 (see "Four bits per pixel" below)
 //! +0x05  u8   mip levels (3 or 4 on every real header)
 //! +0x06  u8   flags - bit 0 is the GE swizzle bit, bits 3-4 select the
 //!             level mode (see "What the runtime bind reads" below). Zero on
 //!             most headers, 224 on one (WO_SHIP_COLL_SPARK_DAMAGE's `+0x1758`),
 //!             which sets neither of the bits the bind reads
 //! +0x07  u8   unknown - zero on every header seen
-//! +0x08  u32  palette_bytes (1024 on every real header: 256 RGBA8888 entries)
+//! +0x08  u32  palette_bytes (1024 at 8 bpp: 256 RGBA8888 entries; 64 at 4 bpp: 16)
 //! +0x0c  u32  pixel_bytes, the whole mip chain
 //! +0x10  u32  pixel offset, **from the resource base** - a fixup site
 //! +0x14  u32  palette offset, the same
@@ -68,6 +66,24 @@
 //! sharing match, and the PS2 zero-hit control); **40** for what, if
 //! anything, distinguishes the six root emitters with no positional texture
 //! from the twenty-nine that have one.
+//!
+//! # Four bits per pixel - 2026-10-01
+//!
+//! **This module used to accept 8 bpp alone**, on the corpus claim that every
+//! real header is 8. That was wrong, and it was found from a frame: the PSP
+//! `FIRE` emitter of `WO_SHIP_FXNODE_EXPLO` and `SHIP_DEBRIS` of
+//! `WO_SHIP_EXPLOSION` carry a 128x64, **4 bpp**, 16-entry-palette header
+//! (`80 00 40 00 04 04 ..`, palette bytes `0x40`, pixel bytes `0x1580` = 4,096
+//! of level 0 and its three mips), and a GE dump of the running original
+//! binds exactly that texture (`TEXSIZE 0x607`, `TEXFORMAT 4` = `CLUT4`, 128x64)
+//! for the additive draw that follows each wreck node's alpha-over root. An
+//! emitter whose header was refused drew with the procedural white disc, which
+//! is a white blowout where the original draws an orange flame atlas.
+//!
+//! The pixels are packed two to a byte, **low nibble first** (the GE's CLUT4
+//! order), and the swizzle flag works on bytes: a row is `width / 2` bytes, in
+//! blocks of 16 bytes by 8 rows. [`EmbeddedTexture::indices`] stays the level-0
+//! bytes *as stored*; [`EmbeddedTexture::rgba8`] unpacks them.
 //!
 //! # The two offsets are from the resource base, not the blob - 2026-09-24
 //!
@@ -148,7 +164,7 @@ pub struct EmbeddedTexture<'a> {
     pub width: u16,
     /// `+0x02`.
     pub height: u16,
-    /// `+0x04`, always 8 on a real header.
+    /// `+0x04`: 8, or 4 - see "Four bits per pixel" in the module docs.
     pub bits_per_pixel: u8,
     /// `+0x05`, mip levels in the chain `pixel_bytes` covers. Only level 0
     /// is exposed as [`EmbeddedTexture::indices`].
@@ -160,8 +176,8 @@ pub struct EmbeddedTexture<'a> {
     pub unknown: u8,
     /// `+0x08..+0x0c` bytes of [`EmbeddedTexture::palette`].
     pub palette_bytes: u32,
-    /// Raw palette bytes, `palette_bytes` long: 256 RGBA8888 entries on
-    /// every real header. Not yet chunked into `[u8; 4]` here, so a caller
+    /// Raw palette bytes, `palette_bytes` long: RGBA8888 entries, 256 at 8 bpp
+    /// and 16 at 4 bpp. Not yet chunked into `[u8; 4]` here, so a caller
     /// that wants entries can `.as_chunks::<4>()` - kept raw rather than
     /// parsed so this module stays free of a colour type of its own.
     pub palette: &'a [u8],
@@ -170,8 +186,9 @@ pub struct EmbeddedTexture<'a> {
     /// module documentation. Exists so a caller (`pob_coverage`) can claim
     /// the span without recovering it from the slice's own address.
     pub palette_offset: usize,
-    /// Level 0's palette indices, exactly `width * height` bytes - one byte
-    /// per pixel, since every real header is 8 bits per pixel.
+    /// Level 0's palette indices **as stored**: `width * height` bytes at 8 bpp,
+    /// one per pixel, and `width * height / 2` at 4 bpp, two per byte with the
+    /// low nibble the left pixel. [`EmbeddedTexture::rgba8`] unpacks them.
     pub indices: &'a [u8],
     /// Where [`EmbeddedTexture::indices`] starts. See
     /// [`EmbeddedTexture::palette_offset`].
@@ -193,12 +210,23 @@ impl EmbeddedTexture<'_> {
     #[must_use]
     pub fn rgba8(&self) -> Vec<u8> {
         let (width, height) = (usize::from(self.width), usize::from(self.height));
+        let row_bytes = width * usize::from(self.bits_per_pixel) / 8;
         let linear;
-        let indices = if self.swizzled() {
-            linear = oag_formats::swizzle::unswizzle(self.indices, width, height);
+        let stored = if self.swizzled() {
+            linear = oag_formats::swizzle::unswizzle(self.indices, row_bytes, height);
             &linear[..]
         } else {
             self.indices
+        };
+        let unpacked;
+        let indices = if self.bits_per_pixel == 4 {
+            unpacked = stored
+                .iter()
+                .flat_map(|byte| [byte & 0x0f, byte >> 4])
+                .collect::<Vec<u8>>();
+            &unpacked[..]
+        } else {
+            stored
         };
         let mut out = Vec::with_capacity(width * height * 4);
         for &index in indices {
@@ -220,8 +248,8 @@ impl EmbeddedTexture<'_> {
 /// range, an implausible width/height/depth, or a palette/pixel region that
 /// does not fit `data`. There is no [`crate::pob::Error`] variant for this:
 /// unlike every other field this module's sibling reads, a missing embedded
-/// texture is not a corrupt file, it is the documented common case (six of
-/// the PSP corpus's thirty-five root emitters, and all of PS2's).
+/// texture is not a corrupt file, it is the documented common case (all of
+/// PS2's; no PSP emitter lacks one now that 4 bits per pixel parses).
 #[must_use]
 pub fn parse_at(
     data: &[u8],
@@ -253,7 +281,7 @@ pub fn parse_at(
     if !height.is_power_of_two() || !(8..=256).contains(&height) {
         return None;
     }
-    if bits_per_pixel != 8 || !(1..=6).contains(&levels) {
+    if !matches!(bits_per_pixel, 4 | 8) || !(1..=6).contains(&levels) {
         return None;
     }
     if palette_bytes == 0 || pixel_bytes == 0 {
@@ -261,7 +289,7 @@ pub fn parse_at(
     }
 
     let palette_end = palette_offset.checked_add(palette_bytes as usize)?;
-    let level0_len = usize::from(width) * usize::from(height);
+    let level0_len = usize::from(width) * usize::from(height) * usize::from(bits_per_pixel) / 8;
     let pixel_end = pixel_offset.checked_add(pixel_bytes as usize)?;
     if palette_end > data.len() || pixel_end > data.len() || level0_len > pixel_bytes as usize {
         return None;

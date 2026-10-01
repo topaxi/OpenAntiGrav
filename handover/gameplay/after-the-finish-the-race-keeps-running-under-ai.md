@@ -7,7 +7,9 @@ categories: [rendering, frontend]
 2026-10-01. The maintainer's play report was right and is now measured and ported for
 Pulse PSP: [after-the-finish.md](../../docs/gameplay/after-the-finish.md) has the timeline, what
 ours does and what is chosen; [race-finish.md](../../docs/ghidra/functions/psp-pulse-usa/race-finish.md)
-has the code. In one line: from the frame after the player's last crossing the AI flies the
+has the code. **The maintainer remembers it from HD/Fury** and presumed the earlier titles do the same:
+Pulse PSP is now observed (the falsifier, a craft that stops, did not fire), HD/Fury is still unchecked.
+In one line: from the frame after the player's last crossing the AI flies the
 craft (the autopilot weight `craft+0x1d4` goes to `1.0`, the HUD hides, the mode state goes to 3),
 the whole field keeps lapping, and 61 frames after the flag a spectator director takes the camera.
 
@@ -30,7 +32,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   state already 3).
 - **Audio after the flag** was not measured (emulator muted).
 - The camera node lists of the other 23 circuits were not read live; `16_Track` matches to 0.1 unit.
-- Pure, HD/Fury and 2048 were not checked.
+- HD/Fury (where the maintainer saw it), Pure and 2048 were not checked.
 
 ## Next Steps
 

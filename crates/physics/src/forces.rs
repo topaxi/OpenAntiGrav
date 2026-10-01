@@ -59,6 +59,7 @@ use crate::airbrake::{self, AirbrakeForces};
 use crate::barrel_roll;
 use crate::collide::Raycaster;
 use crate::hover::{self, Hover};
+use crate::launch;
 use crate::maglock;
 use crate::params::Handling;
 use crate::ship::{ShipControls, ShipState};
@@ -401,6 +402,11 @@ pub struct Environment {
     /// slowdown credit. See
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     pub thrust_scale: f32,
+    /// The disc's `<StartBoost>`, or `None` for a title that authors none and for
+    /// every caller that has not read it. `None` leaves
+    /// [`crate::ship::ShipState::launch`] idle and the engine's multiplier at
+    /// `1.0`. See [`crate::launch`].
+    pub start_boost: Option<crate::launch::StartBoost>,
 }
 
 impl Default for Environment {
@@ -414,6 +420,7 @@ impl Default for Environment {
             pad_hit: None,
             damage_rules: crate::damage::DamageRules::default(),
             thrust_scale: 1.0,
+            start_boost: None,
         }
     }
 }
@@ -599,6 +606,16 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         env.thrust_scale,
     );
     acc.local_force += engine_force.as_local_force();
+    // After the engine, which has just read last tick's multiplier: the grader
+    // and the boost writer run behind it in the original's frame. See
+    // `crate::launch`.
+    launch::advance(
+        &mut state.launch,
+        env.start_boost.as_ref(),
+        state.released,
+        input.thrust != 0.0,
+        dt,
+    );
 
     // 2. Brakes. Called only while the contact flag is set, so groundedness gates the
     //    whole term rather than scaling it: braking does nothing in the air.

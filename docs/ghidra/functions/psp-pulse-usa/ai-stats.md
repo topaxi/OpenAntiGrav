@@ -191,6 +191,20 @@ What would take it higher is a runtime leg, and there are two: read `+0x28`
 after load under PPSSPP, or author a file using `BaseThrust` and watch the
 launch change. Neither has been done.
 
+## `StartBoost[8]` has a consumer: the AI's grade 3
+
+Added 2026-10-01 (`pulse-launch-boost`). `Ship_UpdateStartBoost` (`0x0883fdec`) case 3 -
+`craft+0x294 = boostMul * *(float *)(g_race_manager + DAT_08b31040 * 0x10c +
+player+0x914 * 4 + 800)` - reads a per-grid-slot table out of the race manager, and
+`Race_UpdateLaunchGrade` (`0x0882773c`) writes grade 3 to every craft with
+`player+0x368 != 0` on every frame of the perfect window. That table is this block's
+`StartBoost[8]` on the strongest reading (the same eight-per-block shape, indexed by
+slot) - **read from the decompile, not watched, confidence 75**; the copy from the
+block into the manager was not followed. So the "staggered launch" this page calls
+the point of `StartBoost` is the original's AI getting `boostMul` times a slot figure
+for the rest of the launch window without a thrust edge, which `oag-ai` does not copy:
+see [the launch boost](../../../physics/launch-boost.md).
+
 ## What is not determined
 
 - **Units, and what most of these numbers multiply.** The parser stores the

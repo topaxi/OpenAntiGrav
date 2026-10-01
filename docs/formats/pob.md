@@ -388,7 +388,7 @@ resource in a live PPSSPP session:
 | `+0x4d0` | f32 | child velocity-inherit scale (1.0) |
 | `+0x4d4` | f32 | child spawn probability (0.1) |
 | `+0x4d8`,`+0x5b8`,`+0x698`,`+0x778`,`+0x858` | block | channel blocks: size, alpha, rotation speed (**always a rate**, radians per tick, on an emitter - played since 2026-09-30: flag `0x4` starts the angle at `U(-pi, pi)`, flag `0x8` flips a coin per particle, a random channel draws its rate once at spawn, a keyframed one turns the opposite way round from the others; class 3 only), atlas frame rate (added 2026-09-24, see below), emission scale - each `{period f32, mode u32 (0 keyframed / 2 constant / 3 random), key count i32, lo f32, hi f32, (time,value) f32 pairs}` |
-| `+0x93c`,`+0x940` | i32, ptr | animated-attribute array (count, records of 0xec bytes) - re-derives the severity-scaled params per tick when present (0, null) |
+| `+0x93c`,`+0x940` | i32, ptr | animated-attribute array (count, records of 0xec bytes: a channel block at `+0x00` and a selector at `+0xe0`, `1..6` to instance `+0x44, +0x48, +0x50, +0x4c, +0x54, +0x34`) - re-derives the severity-scaled params every tick when present (0, null). Parsed since 2026-10-01 as `Emitter::attribute_animations`; selector `2` is the extent's co-factor and widens `WO_BOMB_SMOKERING`'s spawn ring from 12.9 to 23.3 over its run (`particle-system.md`) |
 | `+0x944`,`+0x948`,`+0x94c` | ptr | on-death child system, per-particle child system, **next sibling emitter** (0, 0, `base+0xd20`) |
 | `+0x9a0` | u16,u16 | sprite-atlas grid (1, 1) |
 | `+0x9ac` | i32 | **not** the atlas frame count (corrected 2026-09-24): `ParticleSystem_InitParticle` ORs `Psys_RandIntRange(1, n) << 4` into a per-particle flag byte when it is above 1; its reader is untraced. The frame count is the `+0x9a0` grid's product |
@@ -1126,11 +1126,20 @@ confidence scores in its own module doc; the summary:
   u8 unk, u8 unk, u32 palette_bytes(1024), u32 pixel_bytes, u32 pixel_offset,
   u32 palette_offset` - the last two are plain absolute offsets into the
   blob, not relative to the resource base or the header.
-- **29 of the PSP corpus's 35 root emitters carry one**; the other six -
-  `WO_PLASMA_FLASH`, `WO_RAIN`, `WO_SNOW`, `WO_LEACHBEAM_CHARGING`,
-  `WO_REPULSER`, `WO_ROCKET_FLARE` - do not, measured by
+- **Every PSP root emitter carries one** (35 of 35), and so does every other
+  emitter: 76 headers across the corpus, 64 at 8 bits per pixel and **12 at 4**
+  (128x64 or 64x128, a 16-entry palette), measured by
   `crates/assets/tests/pob_ground_truth.rs`'s
-  `every_psp_root_emitter_texture_is_where_the_layout_says`.
+  `every_psp_root_emitter_texture_is_where_the_layout_says`. **This page used
+  to say 29 of 35, with `WO_PLASMA_FLASH`, `WO_RAIN`, `WO_SNOW`,
+  `WO_LEACHBEAM_CHARGING`, `WO_REPULSER` and `WO_ROCKET_FLARE` carrying none
+  ("plausibly drawing an untextured quad")**: the reader refused 4 bpp headers,
+  and all six are 4 bpp. Found 2026-10-01 from a picture: the `FIRE` emitter of
+  `WO_SHIP_FXNODE_EXPLO` is a 4 bpp sprite too, and a GE dump of the running
+  original binds it (`TEXSIZE 0x607`, `TEXFORMAT 4`). The six, `FIRE`,
+  `SHIP_DEBRIS` and the `DEBRIS` emitters of `WO_ROCKET_EXPLO`, `WO_MINE_EXPLO`
+  and `WO_BOMB_SMOKERING` plus `WO_PLASMA_HEAD`'s `plasma_spikes` had been drawn
+  with the procedural white disc.
 - **`WO_SHIP_COLL_SPARK_DAMAGE` confirms it names the texture `pob.md`
   already resolved from the slot table**: its root's positional texture is
   32x32/3-level, matching `quakesmoke32x32.tga`'s own size, and decodes

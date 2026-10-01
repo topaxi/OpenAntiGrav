@@ -46,8 +46,9 @@ use crate::ship::{ShipControls, ShipState};
 /// value**, at confidence 88, not the identity chosen for want of anything
 /// better. Confidence 88.
 ///
-/// The start boost itself is not implemented: it needs the race-start grade at
-/// `player+0x36c` and the XML group above, neither of which this crate has.
+/// The start boost is implemented in [`crate::launch`], which owns the grade at
+/// `player+0x36c`, the clock and the multiplier this expression reads off
+/// [`ShipState::launch`].
 ///
 /// # The measured 17x gap is real, and it is not this constant
 ///
@@ -243,7 +244,12 @@ use crate::ship::{ShipControls, ShipState};
 /// straight off the capture before anyone changes a coefficient on the strength of
 /// it. If the sign is actually positive, the diagnosis flips again - to the *mass*,
 /// which cancels out of an equilibrium but sets the whole timescale of a transient.
-pub const ENGINE_OUTPUT_SCALE: f32 = 1.0;
+///
+/// **This is now the multiplier's resting value and not a constant the engine
+/// reads.** `craft+0x294` is [`crate::launch::LaunchState::multiplier`], which
+/// is this `1.0` outside the launch window and `<StartBoost>`'s figures inside
+/// it - see [`crate::launch`].
+pub const ENGINE_OUTPUT_SCALE: f32 = crate::launch::LaunchState::NEUTRAL;
 
 /// The flag-gated engine multiplier: the speed-up pickup, a flat +20 % on thrust.
 ///
@@ -413,6 +419,14 @@ pub fn engine(
     if let Some(target) = auto_speed {
         let thrust = if grounded > 0.0 { target } else { 0.0 };
         return EngineForce {
+            // **The launch multiplier is deliberately not applied here.** The
+            // original's tail is shared - this branch reaches `craft+0x294` at
+            // `0x0884c918` like the throttle one - so Zone's first second after GO
+            // would be graded too (a coasting craft `normalMul`, one holding
+            // accelerate `stallMul`), but that was never watched on a Zone race, and
+            // it would make the speed 28 ticks after GO depend on whether accelerate
+            // was held, which `zone_ground_truth` asserts it does not. Left at the
+            // resting `1.0` until Zone is measured; see `docs/physics/launch-boost.md`.
             thrust: one_shot_scale(
                 thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
                 thrust_scale,
@@ -447,7 +461,7 @@ pub fn engine(
     }
 
     thrust = one_shot_scale(
-        thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
+        thrust * state.launch.multiplier * ENGINE_OUTPUT_DOUBLE,
         thrust_scale,
     );
 

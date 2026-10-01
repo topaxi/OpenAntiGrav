@@ -1277,4 +1277,91 @@ measured.
 | --- | --- | ---: |
 | `0x089177e4` | `ParticleSystem_DrawInstanceTree` | 80 |
 | `0x08918bf8` | `ParticleSystem_DrawEmitterPool` | 80 |
-| `0x089178c0` | `ParticleSystem_DrawRolledQuads` | 80 |
+| `0x089178c0` | `ParticleSystem_DrawRolledQuads` | 85 |
+| `0x089194d0` | `ParticleSystem_DrawPoolSquares` | 88 |
+| `0x088fc634` | `ParticleSystem_EmitRing` | 85 |
+
+### Shape 3 is a ring or a disc: `ParticleSystem_EmitRing` (2026-10-01)
+
+`FUN_088fc634(instance, count)`, `ParticleSystem_SpawnBurst`'s shape-3 emitter (the
+"cone placement" this page listed as unread), decompiled whole - the first read of it
+stopped inside mode 2's loop and the rest was read after. With `r` the scaled extent
+(`DAT_08ab2290`) and `phi` drawn `Psys_RandFloatRange(0, 2 pi)` per particle (or, under
+resource flag `0x200000`, a random start stepped by `2 pi / count`), the spawn offset in the
+emitter frame is, by `+0x3c`:
+
+| `+0x3c` | offset `(x, y, z)` |
+| ---: | --- |
+| `0` | `(r cos phi, 0, r sin phi)` - a **ring** of radius `r` in the frame's `XZ` plane, `Y` the cone's axis |
+| `1` | the same at a radius `Psys_RandSpread(r, instance+0x60)` |
+| `2` | `(x, 0, z)` with `x` and `z` each `U(-r, r)`, **redrawn until `x^2 + z^2 <= r^2`**: a uniform **disc** |
+
+What follows the placement, in the same function: `+0x44` (the emitter's velocity mode)
+`1` calls `ParticleSystem_AimedVelocity` with the **normalised `(x, 0, z)` it just wrote**
+as the heading - the particle leaves the ring outward - and `0` or `2` call
+`ParticleSystem_ConeVelocity` independent of the offset; then `ParticleSystem_InitParticle`;
+then, under the sub-frame flag (`DAT_08b620a0`), the offset and the two stored points are
+pushed forward by the emitter's motion times `i / count`. Every shape-3 emitter with an
+extent authors velocity mode 1.
+
+**The extent is animated.** `WO_BOMB_SMOKERING`'s emitter carries one animated-attribute
+record (`+0x93c` count 1, selector `2`, a keyed channel `1 + 1 * (0.0068 .. 1)`), which
+`ParticleSystem_Update` evaluates at the emitter's normalised age every tick and stores into
+instance `+0x48`, the extent's co-factor, before `ParticleSystem_DeriveScaledParams` runs
+again (`oag_vex::pob::attribute`). So the ring is `12.94` at the first tick and `23.3` at
+the sixteenth.
+
+**Live, two boots** (a Bomb moved 120 units ahead and run out,
+`psp-weapon-pair.py --probe rolled --detonate-bomb-at`; the second boot read 13.2, 13.8, 15.1,
+17.6 and, at tick 15, 22.7): the particles born at emitter ticks
+0, 1, 3, 7 and 16 sat **13.1, 13.7, 15.0, 17.6 and 23.4** units from the blast centre on the
+horizontal plane, a vertical offset under a unit, every azimuth; the formula gives 13.0,
+13.7, 15.0, 17.5 and 23.3, and the instance's own scale words read `1.0`. Each drifted
+outward about 0.09 units a tick with `y` flat. (The first reading of this section took the
+ring for a constant `12.94`; the log it was written from said otherwise.) Confidence **88**
+for the decompile and the extent's growth (read, and matched at five ticks on two boots);
+the disc's loop is read and not measured; the aimed azimuth's sign is unmeasured.
+
+The corpus's shape-3 emitters with an extent over 0.1: `WO_BOMB_SMOKERING` (12.9, mode 1),
+`WO_SHIP_EXPLOSION`'s root (12.9, mode 1), `SHIP_DEBRIS` (10, mode 2) and `trail` (1.9,
+mode 1, velocity mode 0), `WO_ROCKET_EXPLO`'s `DEBRIS` (5.1, mode 2), the missile's
+`drift_down` (4.1 to 4.3, mode 2) and `WO_REPULSER_BLAST` (13.6, mode 0, flag `0x200000`,
+selector 5 animated). The animated attributes on the disc: eleven records on eleven
+emitters, ten of them selector 2 (`WO_BOMB_SMOKERING` and its `debris`,
+`WO_SHIP_EXPLOSION` and its `FIREBALL`, `WO_ROCKET_EXPLO`'s two mushrooms and
+`WO_ROCKET_EXPLO_TRACK`'s `Fire_Emitter`, the Shuriken's bounce and expiry and the absorb).
+`oag_render::psys::spawn::Spawn::Ring`, `place` and `EmitterSpec::extent_animation` play
+all of it but the even step, the sub-frame spread, the azimuth's sign and selector 5. The
+"approximates shape 3 as the anchor" remark further down was true of the collision sparks'
+`0.1` and was never true of these.
+
+### The pool's square draw, and a pool particle read live (2026-10-01)
+
+`ParticleSystem_DrawEmitterPool`'s render-mode indices `0` and `1` go to
+`FUN_089194d0`, now `ParticleSystem_DrawPoolSquares` (confidence **88**: read in
+full, and its per-particle reads were then logged live, below). `a0` is the
+instance, `a1` the view matrix, `a2` the per-frame UV table. For every live pool
+particle (`slot + 0x10`, a bitmask word at the pool's head, a next-block pointer
+at `+0x1410`):
+
+| Particle field | Use |
+| --- | --- |
+| `+0x40` | world position, through the view matrix to `(x, y, z)` |
+| `+0x70` | **half-size**: the quad is `(x +- h, y +- h)`, square, no roll |
+| `+0x74..+0x76` | RGB; `+0x77` alpha, **times a near fade** |
+| `+0x78` | atlas frame: `a2 + frame * 0x30` is that frame's UV corners |
+
+The near fade: `z` is view-space, negative in front. A particle with `z > -1.0`
+(`DAT_08a88500`) is not drawn; one with `-2.0 < z <= -1.0` (`DAT_08a88504`) has
+its alpha scaled by `-(z + 1)` (`DAT_08abf57c = -1.0`), so a particle comes in
+over its first unit past the eye. All three words read live. It matters only for
+a particle at the camera, not at a rocket's 11 units. The six words at
+`DAT_08a907a0..` set the projection (`Gu_SetMatrix(1, ...)`), and a quad is six
+vertices, `Gu_DrawArray(4, 0x19f, ...)`.
+
+`ParticleSystem_DrawRolledQuads` (`0x089178c0`) has the same walk and the roll law
+above. **Both are live-probed**: `scripts/psp-weapon-pair.py --probe flare`
+(`0x089194d0`) and `--probe rolled` (`0x089178c0`) break on each call during a
+Rocket launch and read the instance's pool, and the sizes, colours and positions
+read are the ones these functions consume. What that run measured is in
+[`rocket-visuals.md`](rocket-visuals.md#2026-10-01-the-launch-glow-the-flares-4-bit-sprite-and-ageing).

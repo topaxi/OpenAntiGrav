@@ -21,6 +21,7 @@ mod countdown;
 mod craft_flash;
 mod cue_endings;
 mod cues;
+mod destroy_camera;
 mod eliminator;
 mod energy_bar_delay;
 mod field;
@@ -171,6 +172,7 @@ fn setup(handling: Handling) -> Setup {
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
         wreck_anchors: Vec::new(),
+        destroy_stations: Vec::new(),
         slot_teams: Vec::new(),
         trail_sparks: false,
         spark_anchors: Vec::new(),
@@ -267,6 +269,7 @@ fn setup(handling: Handling) -> Setup {
         // not about a scale. This is also what a race gets when the
         // engine-wide file is unreadable.
         class_gravity_scale: 1.0,
+        start_boost: None,
     }
 }
 

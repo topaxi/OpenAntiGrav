@@ -89,7 +89,7 @@ of it the same day; see `frame-audit.md`.
 - ~~**The wreck model (`+0x8b8`) on the extra pass.**~~ **Closed 2026-10-01**
   (`pulse-wreck`): the wreck is drawn from state 5, and it authors **no** `0x2000`
   batch, so there is no extra pass on it. Thread:
-  [a wrecked craft draws its wreck](a-wrecked-craft-draws-its-wreck-and-the-big-explosion-is-next.md).
+  [a wrecked craft draws its wreck](a-wrecked-craft-explodes-and-the-player-is-cut-to-the-circuits-camera.md).
 
 ## Next Steps
 

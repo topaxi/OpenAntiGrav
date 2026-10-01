@@ -500,6 +500,9 @@ pub struct Setup {
     /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
     /// effects spawn - see `race::wreck_fx`.
     pub wreck_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
+    /// The circuit's authored cameras, where the player's camera stands once
+    /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
+    pub destroy_stations: Vec<oag_render::camera::destroy::Station>,
     /// The team id each grid slot flies (`Feisar`), for the HUD's per-craft
     /// rows - the Eliminator's kill column. Ids, not names: the string table
     /// turns one into the name a player reads at draw time. Empty where a
@@ -522,6 +525,9 @@ pub struct Setup {
     /// it reaches `oag_physics::forces::Environment` every tick and a headless
     /// race must fall the same way a drawn one does.
     pub class_gravity_scale: f32,
+    /// The disc's `<StartBoost>`, `None` where it authors none: the launch boost.
+    /// Presence is the only gate. See `oag_physics::launch`.
+    pub start_boost: Option<oag_physics::launch::StartBoost>,
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
     /// The same seven from `<ExternalCameraClose>`: the nearer of the two

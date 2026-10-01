@@ -175,11 +175,26 @@ impl Shake {
     /// `rng` is the phase draw, seeded and never OS entropy - the same
     /// contract [`crate::exhaust::Exhaust::advance`]'s own `rng` carries.
     pub fn arm(&mut self, severity: f32, side: Side, rng: &mut Rng) {
-        self.magnitude = severity * MAGNITUDE_SCALE;
-        self.duration = DURATION_SECONDS;
-        self.timer = DURATION_SECONDS;
+        self.arm_with(severity * MAGNITUDE_SCALE, DURATION_SECONDS, side, rng);
+    }
+
+    /// `Camera_ArmShake(magnitude, duration, camera, mode)` as a caller that
+    /// passes its own two numbers makes it: the player's craft going out arms
+    /// `(0.3, 0.4, mode 3)` at state 5 and `(0.8, 0.6, mode 1)` at state 6
+    /// (`FUN_0883e064`, `FUN_088407b0`). `rng` draws the phase as for
+    /// [`Self::arm`].
+    pub fn arm_with(&mut self, magnitude: f32, duration: f32, side: Side, rng: &mut Rng) {
+        self.magnitude = magnitude;
+        self.duration = duration;
+        self.timer = duration;
         self.side = side;
         self.phase = PHASE_RANGE.0 + (PHASE_RANGE.1 - PHASE_RANGE.0) * rng.next_f32();
+    }
+
+    /// Ends a running shake: `Ship_SetState` case 4 writes `0.0` to the
+    /// camera's duration field (`+0xe4`) for the local player.
+    pub fn cancel(&mut self) {
+        self.timer = 0.0;
     }
 
     /// Decays one tick toward inactive.

@@ -88,8 +88,8 @@ use crate::fexml::{self, Node};
 mod global;
 
 pub use global::{
-    ForeignGlobalClass, GLOBAL_ENTRY, Global, GravityMul, Special, SpeedupPads, WeaponPad,
-    global_from_blob, parse_global,
+    ForeignGlobalClass, GLOBAL_ENTRY, Global, GravityMul, Special, SpeedupPads, StartBoost,
+    WeaponPad, global_from_blob, parse_global,
 };
 
 /// The four speed classes, in the order the XML lists them.

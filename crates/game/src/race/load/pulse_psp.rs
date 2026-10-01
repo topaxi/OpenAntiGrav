@@ -57,6 +57,22 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
         &mut loaded.pad_model,
         &mut loaded.weapon_pad_model,
         &mut loaded.shield_cockpit,
+        &mut loaded.rocket_model,
+        &mut loaded.mine_model,
+        &mut loaded.bomb_model,
+        &mut loaded.cannon_model,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        stamp(model);
+    }
+    // The Bomb's blast dome: `hemisphere_disperse1_ADD_GLOW`, a transparent batch with the
+    // glow bit, which the original's state list stamps (`0x50`) like the arch lights. The
+    // shockwave beside it has no glow bits, so for it the flag is a no-op.
+    for model in [
+        &mut loaded.bomb_blast_models.hemisphere,
+        &mut loaded.bomb_blast_models.shockwave,
     ]
     .into_iter()
     .flatten()
@@ -94,7 +110,7 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
             ),
         });
     loaded.report.push(
-        "glow mask: the track, sky, pads, hulls, plumes and shields stamp it as the \
+        "glow mask: the track, sky, pads, hulls, plumes, shields and weapon bodies stamp it as the \
          original's stencil does, a blended batch with the glow bits through a second draw"
             .into(),
     );
