@@ -281,13 +281,29 @@ impl Projectiles {
                         || projectile.velocity.length(),
                         missile::speed_units_on_surface,
                     );
-                    let along =
-                        projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
-                    // A projectile aimed straight at the floor has nothing left
-                    // after the normal component is removed; keep its heading
-                    // rather than zeroing it and let the sweep below resolve it.
-                    if along.length_squared() > 1e-6 {
-                        projectile.velocity = along.normalize() * speed;
+                    if kind == Weapon::Rocket {
+                        // **The Rocket steers toward the ride point.** `Rocket_Update`
+                        // sets its velocity to `(ride point - from) / dt`, rescales it
+                        // to the class speed, and re-integrates the position from
+                        // `from` along it - not onto the ride point, and not by
+                        // turning the old velocity parallel to the surface. See
+                        // `rocket-visuals.md`'s 2026-10-01 second-pass section.
+                        let toward = (to - from) / dt;
+                        if toward.length_squared() > 0.0 {
+                            projectile.velocity = toward.normalize() * speed;
+                            to = from + projectile.velocity * dt;
+                        } else {
+                            projectile.velocity = toward;
+                        }
+                    } else {
+                        let along =
+                            projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
+                        // A projectile aimed straight at the floor has nothing left
+                        // after the normal component is removed; keep its heading
+                        // rather than zeroing it and let the sweep below resolve it.
+                        if along.length_squared() > 1e-6 {
+                            projectile.velocity = along.normalize() * speed;
+                        }
                     }
                 }
                 // A wall within reach below: the Rocket and the Plasma go off

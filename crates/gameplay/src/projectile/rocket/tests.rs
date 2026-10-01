@@ -123,3 +123,47 @@ fn a_rocket_is_seeded_with_the_craft_up() {
         "the craft must be tilted for this to mean anything"
     );
 }
+
+/// On a floor hit the Rocket steers toward the ride point and re-integrates from
+/// where it was: `velocity = normalize((hit + 3n) - from) * class speed`, and
+/// the new position is `from + velocity * dt`, not the ride point itself and not
+/// the old velocity turned parallel to the floor (which would leave `velocity.y`
+/// at zero over a flat floor). `Rocket_Update`'s probe arm, measured to land
+/// the volley within a few units of the original's ranges.
+#[test]
+fn a_rocket_steers_toward_the_ride_point_on_a_floor_hit() {
+    let mut projectiles = Projectiles::new();
+    let launch_kmh = 800.0;
+    assert!(projectiles.spawn_riding(
+        oag_tables::weapons::Weapon::Rocket,
+        Vec3::ZERO,
+        Vec3::Z * (launch_kmh / KMH_PER_UNIT_PER_SECOND * LAUNCH_SPEED_SCALE),
+        0,
+        Vec3::Y,
+        launch_kmh,
+    ));
+    // The projected position is (0, 0, 0.75 * 222.22 * dt); the probe from it
+    // reaches the floor 4 units down, so the ride point is 1 unit above zero.
+    let projected = Vec3::Z * (launch_kmh / KMH_PER_UNIT_PER_SECOND * LAUNCH_SPEED_SCALE * DT);
+    let ride_point = Vec3::new(0.0, -1.0, projected.z);
+    let direction = ride_point.normalize();
+    tick(&mut projectiles, &floor_at_y(-4.0));
+    let rocket = projectiles.slots[0];
+    let speed = launch_kmh / KMH_PER_UNIT_PER_SECOND;
+    assert!(
+        (rocket.velocity - direction * speed).length() < 1e-2,
+        "velocity {:?}, wanted {:?}",
+        rocket.velocity,
+        direction * speed
+    );
+    assert!(
+        (rocket.position - direction * speed * DT).length() < 1e-3,
+        "position {:?} is not from + velocity * dt",
+        rocket.position
+    );
+    assert!(
+        rocket.velocity.y < -50.0,
+        "it did not steer down: {:?}",
+        rocket.velocity
+    );
+}
