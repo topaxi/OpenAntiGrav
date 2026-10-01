@@ -8,9 +8,9 @@
 
 use super::*;
 
-const DT: f32 = 1.0 / TICK_HZ;
+pub(super) const DT: f32 = 1.0 / TICK_HZ;
 
-fn constant(value: f32) -> Channel {
+pub(super) fn constant(value: f32) -> Channel {
     Channel {
         period: 0.0,
         mode: ChannelMode::Constant,
@@ -22,7 +22,7 @@ fn constant(value: f32) -> Channel {
 
 /// One emitter that drops a stationary particle a tick, each living ten
 /// ticks - enough to tell "still emitting" from "still fading".
-fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effect> {
+pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effect> {
     std::sync::Arc::new(Effect {
         name: name.to_string(),
         emitters: vec![EmitterSpec {
@@ -56,6 +56,8 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             atlas: Atlas::SINGLE,
             frames: FrameAdvance::Still,
             sheet_rect: None,
+            short_run: false,
+            world_space: false,
             template: false,
             rotation: None,
         }],
@@ -64,7 +66,7 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
     })
 }
 
-fn run(system: &mut System, effect: &Effect, ticks: usize, rng: &mut Rng) {
+pub(super) fn run(system: &mut System, effect: &Effect, ticks: usize, rng: &mut Rng) {
     for _ in 0..ticks {
         system.advance(effect, DT, Vec3::ZERO, Vec3::Y, rng);
     }

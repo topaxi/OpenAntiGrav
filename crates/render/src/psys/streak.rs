@@ -54,7 +54,8 @@ impl Effect {
     /// Draws every streak with the procedural profile again and keeps every
     /// particle on its spawn frame, the way every source did before Pulse's
     /// own strips ([this module](self)) and frame advance
-    /// ([`super::frames`]) were read.
+    /// ([`super::frames`]) were read. Also gives back the run law
+    /// ([`EmitterSpec::short_run`]), read on the same executable.
     ///
     /// **For every source but Pulse on the PSP, by choice (2026-09-24)**,
     /// the same line [`Self::without_extents`] draws: the strips are read
@@ -64,6 +65,7 @@ impl Effect {
         for spec in &mut self.emitters {
             spec.streak = StreakDraw::Procedural;
             spec.frames = super::FrameAdvance::Still;
+            spec.short_run = false;
         }
         self.mute_templates();
         self.mute_rotation();
