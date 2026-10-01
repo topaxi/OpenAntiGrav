@@ -152,7 +152,8 @@
 0x0884e8b0	function	World_SetBodyMass	88	rigid-body.md
 0x0884e900	function	World_SetBodyBoxInertia	88	rigid-body.md
 0x0883a970	function	Xml_ReadGlobalSettings	85	engine.md
-0x0883fdec	function	Ship_UpdateStartBoost	85	engine.md
+0x0883fdec	function	Ship_UpdateStartBoost	92	engine.md
+0x0882773c	function	Race_UpdateLaunchGrade	90	engine.md
 0x088390b4	function	Xml_ReadBoostSettings	88	engine.md
 0x088271b4	function	Race_ResetCraftBoosts	60	engine.md
 0x0884c5c8	function	Ship_UpdateEngine	84	engine.md

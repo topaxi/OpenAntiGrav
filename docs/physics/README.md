@@ -580,7 +580,8 @@ tuning, per the [roadmap](../overview/roadmap.md).
 evidence records that the term exists and not how large it is. That is deliberate: a
 plausible-looking number would be indistinguishable from a recovered one later.
 
-- The engine's `craft+0x294` output multiplier (identity).
+- ~~The engine's `craft+0x294` output multiplier (identity).~~ **Left the list 2026-10-01**: it is the
+  launch boost, graded by when thrust first lands - [launch-boost.md](launch-boost.md).
 
 Three names have left this list. `K2`, the hover target's global scale, was read at
 `0.75`. The grounded **downforce** was read at `track_gravity * mass * grounded`,

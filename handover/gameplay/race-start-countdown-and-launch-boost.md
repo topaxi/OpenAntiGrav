@@ -11,7 +11,7 @@ skeletal, then one static-only pass landed the same day - see below for what eac
 |                                  | Pure | Pulse                          | HD/Fury                        | 2048 |
 | -------------------------------- | ---- | ------------------------------ | ------------------------------- | ---- |
 | Countdown state machine + timing | open | **Zone's read statically; a Time Trial's own duration measured live** (below) | open | open |
-| Launch reaction speedboost       | open | **no false-start penalty exists, measured live** (below) | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
+| Launch reaction speedboost       | open | **exists, graded by when thrust first lands; ported, watched on five launches** ([launch-boost.md](../../docs/physics/launch-boost.md)); no false-start penalty exists, measured live (below) | **likely not a thing** (below)  | untried, `StartBoost` string present (below) |
 | Zone display: HUD overlay        | **confirmed identical** (below) | **confirmed identical** (below) | **confirmed identical** (below) | untried |
 | Zone display: track-side gantry  | untried | **no per-mode model exists** - Pulse ships one gantry and Zone's circuit authors no manifest (below) | **matches the user's own description, rendered and confirmed** (below) | asset family exists, untried past a string search |
 
@@ -623,14 +623,19 @@ In short:
   States 6/8 in `shield.md` remain unidentified as *anything* to do with a race
   start; whatever they are, this capture shows they do not fire from held thrust
   before the lights.
-- **No player-side launch-timing mechanism has been found on either title searched.**
-  This session only ran name/string sweeps, not a trace of the throttle-input path
-  through the countdown - a `Ship_UpdateThrust`-adjacent function reading the
-  countdown clock during the lights, if one exists, is still unfound. Given HD's
-  `StartBoost` reads as pure grid-slot AI tuning, **and Pulse's own thrust gate
-  now measured live is a flat 0-to-full step with no ramp or window to time a
-  press against**, the working hypothesis is now "there is no player-skill launch
-  boost on Pulse" - stronger than before, still not a search of the code itself.
+- ~~**No player-side launch-timing mechanism has been found on either title searched.**~~
+  **Found on Pulse, 2026-10-01 (`pulse-launch-boost`), and the working hypothesis
+  above was wrong.** The first thrust edge is graded against the seconds since GO
+  (`Race_UpdateLaunchGrade`, `0x0882773c`): an edge before the perfect window or in the
+  stall window after it earns the stall multiplier, one inside the perfect window the
+  boost multiplier, a late one the normal multiplier, and the multiplier holds for one
+  second (`Ship_UpdateStartBoost`). A held-through start is a stall, which is the
+  "no false-start penalty" this thread measured: it is a smaller boost, not a stall of
+  the engine. Watched live on five launches and ported; see
+  [launch-boost.md](../../docs/physics/launch-boost.md). HD's `StartBoost`, which this
+  bullet cites as AI-only tuning, is the same element and not yet read there; the AI half
+  of Pulse's (a grade 3 for non-human craft, times a per-slot table) is read and not
+  ported or watched.
 - The billboard thread's own top open item - the mode-descriptor pointer replacing
   `Num==7`'s mesh, traced to one of the four `321Go_*.vex` shapes - still doubles as
   this thread's Zone-display-variant question and is still open in both places.

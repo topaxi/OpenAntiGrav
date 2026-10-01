@@ -42,9 +42,10 @@
 //! by its own thrust edge**. An AI that thrusts at GO lands in Stall, exactly as a
 //! human who held the button does. Chosen, not measured.
 //!
-//! **Not modelled:** the original re-runs the boost window after every respawn
-//! (the timer is zeroed whenever `craft+0x2a4 != 1` and the grade persists); this
-//! port runs it once, at the start.
+//! **A respawn does not replay the window**, though the decompile reads as if it
+//! would (the timer is zeroed whenever `craft+0x2a4 != 1` and the grade persists):
+//! watched live, the timer holds through state 3 and the multiplier stays `1.0`.
+//! This port runs the window once, at the start.
 
 /// The launch boost's window and multipliers, from the disc's `<StartBoost>`.
 ///

@@ -71,6 +71,9 @@ def main():
     parser.add_argument("--hold", action="store_true")
     parser.add_argument("--press-after-go", type=int, default=None)
     parser.add_argument("--after-go", type=int, default=100)
+    parser.add_argument("--drop-at", type=int, default=None,
+                        help="at this many rows after state 1, move the craft 400 units down, "
+                        "to provoke a respawn and watch whether the boost window runs again")
     parser.add_argument("--max-rows", type=int, default=2400)
     parser.add_argument("--timeout", type=float, default=90.0)
     args = parser.parse_args()
@@ -136,6 +139,12 @@ def main():
                 dbg.hold(cross=True)
                 pressed = True
                 print("pressed at row %d" % (len(rows) - 1), file=sys.stderr)
+            if (args.drop_at is not None and state1 is not None
+                    and len(rows) - 1 - state1 == args.drop_at):
+                pos = list(pos)
+                pos[1] -= 400.0
+                dbg.write_f32s(body + 0x30, pos)
+                print("dropped at row %d" % (len(rows) - 1), file=sys.stderr)
             if state1 is not None and len(rows) - state1 > args.after_go:
                 break
             if len(rows) >= args.max_rows:
