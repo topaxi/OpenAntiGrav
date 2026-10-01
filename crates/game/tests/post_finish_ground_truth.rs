@@ -231,5 +231,8 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
         race.spectator_mode().is_some(),
         "the director never started"
     );
-    println!("{cuts} eye changes in 1500 frames, {} camera cuts", race.camera_cuts());
+    println!(
+        "{cuts} eye changes in 1500 frames, {} camera cuts",
+        race.camera_cuts()
+    );
 }
