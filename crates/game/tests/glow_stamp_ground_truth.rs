@@ -102,9 +102,10 @@ fn the_grid_frame_of_outpost_7_stamps_its_blended_glow_batches() {
     let count = |value: u8| mask.iter().filter(|&&v| v == value).count();
     let (arches, laser) = (count(ARCH_LIGHTS), count(START_LASER));
     println!("mask: {arches} pixels at {ARCH_LIGHTS:#x}, {laser} at {START_LASER:#x}");
-    // The original's own frame at this start: 2,700 and 1,600 pixels. A
-    // different grid slot sees a different share of each, so this asks for a
-    // third of that - far more than anything but the stamp can write.
+    // Ours at this default slot holds about 2,600 and 1,100 pixels; the original's
+    // Black grid, a different slot, 4,076 and 1,469. A slot sees a different share
+    // of each, so this asks for a third to a half of the original's - far more than
+    // anything but the stamp can write.
     assert!(
         arches >= 900,
         "{arches} arch-light pixels in the mask: a blended glow batch did not stamp"

@@ -32,8 +32,9 @@ of it the same day; see `frame-audit.md`.
   bloom's mask (`0xfa`, their texture's own byte) and ours left at `4`, so they
   had no bloom at all. `oag_render::mesh_render::stamp` now writes it
   (`docs/rendering/glow-mask.md`, "Transparent batches stamp"); a frame of ours
-  at a bright phase of the strip's animation (about 300 ticks) has 1,584 pixels
-  over 225 in the strip's box against the original's 1,581, from 186. The
+  at a bright phase of the strip's brightness cycle (about 300 ticks; which texture
+  drives it is unread) has 1,584 pixels over 225 in the strip's box against the
+  original's 1,581, from 186. The
   yellow-green streak at the *yawed* pose is a different thing: prims 627/628 of
   `yaw.ppdmp` are WAD entry 1078, `pSphereShape1` with `cage_collision2_ADD.tga`
   (a collision-cage sphere about 19 units from the craft), present only in that
@@ -57,6 +58,22 @@ of it the same day; see `frame-audit.md`.
   synthesised chain. Unmeasured against a Pure capture.
 - The cyan strip lights and the start gantry differ between the two sides by
   timing only; a comparison that needs them should pin the same tick after GO.
+
+- **The start-line laser's mask is about 1.5x too wide** on Talon's second grid
+  (original 710 pixels at `0xaf`, ours 1,061) even with the additive class's colour
+  test: where the GE places that test relative to the fog is unread, and ours tests
+  the lit texel before the fog.
+- **The blended-glow stamp resubmits every transparent draw of a stamping model**
+  (`Drawable::draw_stamps`; a batch without the glow bits discards whole in
+  `fs_main_stamp`). `Model` carries no per-draw flag for it, so the GPU cost is
+  unmeasured and a per-texture or per-draw table would cut it.
+- **The bloom spread around a lit hull (`leachbeam-fidelity.md`) is blocked on a
+  stationary absorb frame**: `psp-fire-weapon.py` has no absorb bit, the pickup grant
+  path is unread, and firing the LeachBeam halts PPSSPP. The method that now works
+  for a mask comparison is documented in `docs/rendering/glow-mask.md`; it needs a
+  craft at rest.
+- **The wreck model (`+0x8b8`) and the airbrake flap deflection on the hull's extra
+  pass** - the first Open bullet's remainder - were not started.
 
 ## Next Steps
 

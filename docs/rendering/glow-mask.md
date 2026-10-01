@@ -167,7 +167,7 @@ layer. Counts over the 480 x 272 frame:
 | `0xfa` | 4,076 | the tunnel's arch lights: `07_Pulse_light_BLEND_GLOW`, **alpha-over batches**, `Gu_BlendFunc` `0x32` (`07`'s own `track.vex` authors these as `pass_mask` `0x1192`) |
 | `0xaf` | 1,469 | the start-line laser: `startline_laser_ADD_GLOW`, an **additive** batch, blend `0xa2` with the colour test on |
 | `0x8b` | 221 | a second additive light batch (`blend 0xa2`) |
-| `0xff` | 265 | the opaque `_GLOW` decals and the shine passes' REPLACE draws, as before |
+| `0xff` | 265 | the opaque `_GLOW` decals, as before |
 
 The GE state of those blended draws, read off the dump (prims 574 to 601):
 `STENCILTEST` on, `ALWAYS`, **ref = the texture's glow byte**, `STENCILOP` zpass
@@ -210,9 +210,10 @@ at `pose-from`, 480 x 272, the original's mask read out of EDRAM):
 
 | | before | after | original |
 | --- | ---: | ---: | ---: |
-| mask pixels `>= 100`, rows 45 to 195 | 286 | 5,739 | 6,066 |
-| mean abs mask difference, rows 45 to 195 | 17.9 | 9.25 | - |
-| mean abs RGB difference over the original's mask `>= 100` | 65.7 | 44.1 | - |
+| mask pixels `>= 100`, rows 45 to 195 | 286 | 5,080 | 6,066 |
+| mean abs mask difference, rows 45 to 195 | 17.9 | 8.12 | - |
+| mean abs RGB difference over the original's mask `>= 100` | 65.7 | 43.8 | - |
+| mean abs RGB difference, all of rows 45 to 195 | 19.73 | 17.48 | - |
 
 Per pixel, rows 45 to 195 at that pose: ours is set where the original reads `4` on
 721 pixels (649 of them `0xfa` inside the arches, which animate - ours at ticks 1, 60,
@@ -261,11 +262,13 @@ at a missing 2.7 x of gain; red, which stays under 255, is the honest channel.
 
 The strip on `07_Track` that the original draws at `(134, 246, 248)` and ours
 drew at `(50, 109, 115)` was this: the arch-light and rim batches did not stamp,
-so there was no glow around them, and the strip itself is **animated**
-(`07_Tunnel_Light_Glow`'s texture transform, a period of about 300 ticks on
-`col_display7_GLOW`). With the stamp, a frame of ours at a bright phase has
-1,584 pixels with green and blue over 225 in the strip's box (rows 40 to 135,
-columns 190 to 290) against the original's 1,581, where it had 186 at every
-phase before. The first pose's
-frame is at a bright phase of the original's clock, which is why one frame of
-ours read dull: time, not state.
+so there was no glow around them. **The strip's brightness also changes with the
+race clock** - measured, not attributed: ours at ticks 1, 150, 300, 450, 600 and
+900 holds 1,736, 510, 1,584, 583, 1,583 and 1,584 pixels with green and blue over 225
+in the strip's box (rows 40 to 135, columns 190 to 290), a period of about 300
+ticks. Which batch or texture animates is **unread**; on the Outpost 7 White
+grid the animated surface was `col_display7_GLOW`'s own texture transform, and
+nothing here shows the rim's is the same one. With the stamp, a bright-phase
+frame of ours has 1,584 such pixels against the original's 1,581; before it had 186 at
+every phase. The original frame sits at a bright phase of its own clock, which is
+why one frame of ours read dull: the missing stamp, and a dim phase.
