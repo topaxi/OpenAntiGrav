@@ -66,26 +66,15 @@ pub const LIFETIME_SECONDS: f32 = 5.0;
 ///   part is recovered. Pushing that origin forward by the hull's own extent,
 ///   so a rocket starts outside the craft that fired it, is this engine's, and
 ///   it uses the craft's *unrotated* forward so the three still share it.
-/// - **The speed being the class's plus `launchSpeed`** rather than one or the
-///   other, and the craft's own velocity not being inherited. The original's
-///   flight speed is the class's **alone** - neither `Rocket_Init` nor
-///   `Rocket_Update` mentions `launchSpeed` - so the sum is this engine's
-///   choice and stays one, flagged here rather than quietly corrected: what
-///   `launchSpeed` *is* for has not been found.
-///
-///   **This is now the odd one out rather than a shared choice.** Both
-///   [`super::missile::launch`] (`Missile_Init`, `0x0885a160`) and
-///   [`super::plasma`]'s own launch (`Plasma_Launch`, `0x0885bf84`) turned out
-///   to answer the question above the same way: `launchSpeed` is an additive
-///   muzzle velocity over the *launcher's* own speed, ramping down to the
-///   class speed over one second rather than being added to it and held. The
-///   Rocket has neither reading, since `Rocket_Update` was not re-read for a
-///   ramp, so its constant `class + launchSpeed` is what remains unmeasured
-///   here, not a rule the other two weapons still agree with.
-/// - **Treating `launchSpeed` as km/h too.** The four class speeds are measured
-///   (see below); `launchSpeed` is authored in the same `<Stats>` block and in
-///   the same range, so it is converted with them. Nothing reads it, so nothing
-///   confirms it.
+/// - **The speed is the class's alone, measured 2026-10-01** (Pulse PSP on
+///   PPSSPP, Venom, Time Trial on Talon's Junction): a live `Rocket_Update`
+///   probe reads 222.22 units/s, which is `venomspeed` 800 km/h divided by 3.6,
+///   and held. This took `class + launchSpeed` (277.78) before; `launchSpeed`
+///   plays no part in `Rocket_Init` or `Rocket_Update`. What `launchSpeed` *is*
+///   for on a Rocket has not been found. Measured on Pulse PSP only: HD and
+///   Pure author the same attribute and were not probed. The craft's own
+///   velocity is not inherited either, which the same probe agrees with. See
+///   `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s 2026-10-01 section.
 ///
 /// # The authored speeds are km/h, not units per second
 ///
@@ -96,8 +85,8 @@ pub const LIFETIME_SECONDS: f32 = 5.0;
 /// second, which this did until 2026-08-11, flies a rocket **3.6x too fast**:
 /// the disc authors `venomspeed="800" launchSpeed="200"`, so a Venom rocket ran
 /// at `1000` units/s, which the HUD's own `* 3.6` would read as **3600 km/h**
-/// against a craft that tops out near 600. Converted it is `278` units/s, or
-/// 1000 km/h - faster than the craft, which is what a rocket should be.
+/// against a craft that tops out near 600. Converted it is `222` units/s, or
+/// 800 km/h - faster than the craft, which is what a rocket should be.
 ///
 /// The conversion is at the call site rather than inside
 /// [`RocketStats::speed_for`] on purpose, mirroring the original: the lookup
@@ -113,7 +102,7 @@ pub fn launch(
     let up = state.body.up();
     let nose = state.body.position
         + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
-    let speed = (stats.speed_for_named(class)? + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
+    let speed = stats.speed_for_named(class)? / KMH_PER_UNIT_PER_SECOND;
 
     // The original's own order. A zero `spread` collapses all three onto the
     // same ray rather than erroring: that is a file that authors no fan, not a
