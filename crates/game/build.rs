@@ -66,28 +66,48 @@ fn resolve_git_dir(dot_git: &Path) -> Option<PathBuf> {
     Some(path.canonicalize().unwrap_or(path))
 }
 
+/// The directory the refs live in. A linked worktree's git directory
+/// (`.git/worktrees/<name>`) holds only its own `HEAD` and `index`; the
+/// branch ref files and `packed-refs` stay in the main repository, which the
+/// worktree's `commondir` file names (relative to the worktree's git
+/// directory). An ordinary checkout has no `commondir` and is its own.
+fn common_git_dir(git_dir: &Path) -> PathBuf {
+    std::fs::read_to_string(git_dir.join("commondir"))
+        .ok()
+        .map(|rel| {
+            let path = git_dir.join(rel.trim());
+            path.canonicalize().unwrap_or(path)
+        })
+        .unwrap_or_else(|| git_dir.to_path_buf())
+}
+
 /// Tells cargo to rerun this script whenever a new commit could change the
 /// answer: `HEAD` itself, and the ref file or `packed-refs` entry it points
 /// at - a checked-out branch's `HEAD` is a pointer (`ref: refs/heads/main`)
 /// that reads the same after every commit made on that branch, so watching
 /// `HEAD` alone would miss every one of them.
+///
+/// **Only paths that exist are emitted.** Cargo treats a missing
+/// `rerun-if-changed` path as changed on every build, so naming the
+/// worktree's own `refs/heads/<branch>` (which is never there, see
+/// [`common_git_dir`]) or a `packed-refs` that has not been written yet made
+/// this crate - and the 130-odd test binaries that link it - rebuild and
+/// relink on every `cargo` invocation in a worktree.
 fn track_head(git_dir: &Path) {
-    let head_path = git_dir.join("HEAD");
-    println!("cargo:rerun-if-changed={}", head_path.display());
+    let common = common_git_dir(git_dir);
 
-    if let Ok(head) = std::fs::read_to_string(&head_path)
+    let mut tracked = vec![git_dir.join("HEAD")];
+    if let Ok(head) = std::fs::read_to_string(git_dir.join("HEAD"))
         && let Some(reference) = head.trim().strip_prefix("ref: ")
     {
-        println!(
-            "cargo:rerun-if-changed={}",
-            git_dir.join(reference).display()
-        );
+        tracked.push(git_dir.join(reference));
+        tracked.push(common.join(reference));
     }
+    tracked.push(common.join("packed-refs"));
 
-    println!(
-        "cargo:rerun-if-changed={}",
-        git_dir.join("packed-refs").display()
-    );
+    for path in tracked.into_iter().filter(|path| path.exists()) {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
 }
 
 /// Asks the `git` binary, if there is one.
@@ -112,12 +132,13 @@ fn via_git_command(dir: &Path) -> Option<String> {
 fn via_head_file(git_dir: &Path) -> Option<String> {
     let head = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
     let head = head.trim();
+    let common = common_git_dir(git_dir);
 
     let full_hash = match head.strip_prefix("ref: ") {
-        Some(reference) => std::fs::read_to_string(git_dir.join(reference))
+        Some(reference) => std::fs::read_to_string(common.join(reference))
             .ok()
             .map(|hash| hash.trim().to_string())
-            .or_else(|| hash_from_packed_refs(git_dir, reference))?,
+            .or_else(|| hash_from_packed_refs(&common, reference))?,
         None => head.to_string(),
     };
 
