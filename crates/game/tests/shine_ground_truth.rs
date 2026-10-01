@@ -119,3 +119,68 @@ fn a_context_that_does_not_ask_for_the_pass_builds_none() {
     let Some(liveries) = load(false) else { return };
     assert!(liveries.iter().all(|l| l.shine.is_none()));
 }
+
+fn grid_frame(
+    image: &std::path::Path,
+    scratch: &std::path::Path,
+    name: &str,
+    flag: &[&str],
+) -> Vec<u8> {
+    let out = scratch.join(format!("{name}.png"));
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(image)
+        .args(["--race", "--no-audio", "--size", "480x272"])
+        .args(["--render-scale", "100", "--msaa", "off"])
+        .args(["--screen-filter", "off", "--anisotropy", "off"])
+        .args(["--motion-blur", "off", "--ticks", "1"])
+        .args(flag)
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game {name}");
+    std::fs::read(&out).expect("reading the screenshot")
+}
+
+/// The pass reaches the picture: the grid frame differs with it and without
+/// it (`--no-hull-shine`). Dropping the pass from the draw, the loader or the
+/// per-frame write leaves the two equal.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn the_extra_pass_changes_the_grid_frame() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-shine-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let with = grid_frame(&image, &scratch, "with", &[]);
+    let without = grid_frame(&image, &scratch, "without", &["--no-hull-shine"]);
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_ne!(with, without, "the hull's extra pass drew nothing");
+}
+
+/// A circuit's own pass reaches the frame: the grid frame of `07_Track`,
+/// whose tunnel rims and walls carry chrome-mapped batches in view from the
+/// grid, differs with and without it (`--no-track-shine`).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn the_circuits_extra_pass_changes_the_grid_frame() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-track-shine-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let track = ["--track", r"Data\Environments\07_Track\track.vex"];
+    let with = grid_frame(&image, &scratch, "with", &track);
+    let without = grid_frame(
+        &image,
+        &scratch,
+        "without",
+        &["--track", track[1], "--no-track-shine"],
+    );
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_ne!(with, without, "the circuit's extra pass drew nothing");
+}

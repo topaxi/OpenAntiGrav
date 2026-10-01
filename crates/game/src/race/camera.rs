@@ -135,12 +135,29 @@ impl Race {
     /// `oag_render::camera::shake`, measured against the running original.
     #[must_use]
     pub fn view(&self) -> Mat4 {
+        let base = self.view_unshaken();
+        if self.view.camera_override.is_some() {
+            return base;
+        }
+        // The camera turned about its own up and forward, the eye fixed:
+        // see `oag_render::camera::shake::Shake::apply`.
+        self.view.shake.apply(base)
+    }
+
+    /// [`Self::view`] without the impact shake: where the camera is really
+    /// pointed this tick.
+    ///
+    /// What [`Self::view_shake_rotation`] is measured against, and so what the
+    /// motion blur takes the shake out of its velocities with: see
+    /// [`Self::shake_screen_motion`].
+    #[must_use]
+    pub fn view_unshaken(&self) -> Mat4 {
         if let Some(over) = &self.view.camera_override {
             // A view matrix is the inverse of the camera's world transform.
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
         }
         let target = target_of(self.ship());
-        let base = if self.view.camera_view == oag_display::display::CameraView::Internal {
+        if self.view.camera_view == oag_display::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
             // snap: the cockpit is bolted to the hull. The roll phase rides
             // along so the cockpit view rolls with the manoeuvre too - see
@@ -152,10 +169,55 @@ impl Race {
             )
         } else {
             self.view.camera.view(target, &self.view.chase_params)
-        };
-        // The camera turned about its own up and forward, the eye fixed:
-        // see `oag_render::camera::shake::Shake::apply`.
-        self.view.shake.apply(base)
+        }
+    }
+
+    /// The impact shake as a rotation in view space, `view() * view_unshaken()^-1`:
+    /// `shaken view = rotation * unshaken view`. Exactly [`Mat4::IDENTITY`]
+    /// with no shake active or under a camera override, which the shake does
+    /// not reach.
+    #[must_use]
+    pub fn view_shake_rotation(&self) -> Mat4 {
+        if self.view.camera_override.is_some() || !self.view.shake.active() {
+            return Mat4::IDENTITY;
+        }
+        self.view() * self.view_unshaken().inverse()
+    }
+
+    /// How far the impact shake moved the picture since the previous tick, as a
+    /// clip-space map for the motion blur: a pixel's clip position `c` goes to
+    /// where the same direction sat a tick ago under the shake alone,
+    /// `projection * previous * current^-1 * projection^-1`, where `current`
+    /// is this tick's [`Self::view_shake_rotation`] and `previous` the one the
+    /// last tick stored. [`Mat4::IDENTITY`] exactly when neither tick shook.
+    ///
+    /// **The velocity buffer itself stays true screen motion** - the temporal
+    /// upscaler reprojects its history with it, and that has to follow the
+    /// shake - so it is the blur that takes this out: the shake turns the view
+    /// by up to six degrees in one tick, a velocity buffer reads that as the
+    /// world flying past, and the first frame of a hard hit smeared whole,
+    /// which the original does not do. A rotation about the eye moves a pixel
+    /// by an amount that depends on where it is on screen and not on how deep
+    /// it is, which is why one matrix describes the whole frame.
+    #[must_use]
+    pub fn shake_screen_motion(&self, projection: Mat4, previous: Mat4) -> Mat4 {
+        let current = self.view_shake_rotation();
+        if current == Mat4::IDENTITY && previous == Mat4::IDENTITY {
+            return Mat4::IDENTITY;
+        }
+        projection * previous * current.inverse() * projection.inverse()
+    }
+
+    /// Arms the player's camera shake as a wall hit of `severity` would
+    /// (`0..=1`, `Side::Elsewhere`), for `--force-shake`: a verification aid, so
+    /// a capture can show a hard hit without producing one. The shake's phase
+    /// draw is its own seeded stream, so the same call twice shakes the same.
+    pub fn force_shake(&mut self, severity: f32) {
+        self.view.shake.arm(
+            severity.clamp(0.0, 1.0),
+            oag_render::camera::shake::Side::Elsewhere,
+            &mut self.view.shake_rng,
+        );
     }
 
     /// The camera's own world position, from the view matrix it produces.

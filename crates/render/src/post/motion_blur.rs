@@ -56,6 +56,7 @@
 //! and it touches only how a finished frame is presented.
 
 use anyhow::Result;
+use oag_core::math::Mat4;
 
 /// The cap on the gather's reach, as a fraction of the viewport height -
 /// also the tile size the dominant-velocity reduction runs at.
@@ -64,7 +65,7 @@ use anyhow::Result;
 /// respawn - to a bounded smear rather than a whole-frame streak.
 pub const MAX_STRETCH: f32 = 0.08;
 
-/// The shader's uniform. `repr(C)`, 48 bytes, no implicit padding.
+/// The shader's uniform. `repr(C)`, 112 bytes, no implicit padding.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 struct Constants {
@@ -76,6 +77,8 @@ struct Constants {
     inv_size: [f32; 2],
     tile: u32,
     _pad: f32,
+    /// [`Frame::camera_shake`], column-major.
+    shake: [[f32; 4]; 4],
 }
 
 impl Constants {
@@ -83,7 +86,13 @@ impl Constants {
     /// in pixels, the same tuple `Scene::render` takes - and `size` the whole
     /// target, both needed because a capture draws the scene into a
     /// sub-rectangle with the aspect bars outside it.
-    fn new(viewport: (f32, f32, f32, f32), size: (u32, u32), strength: f32, tile: u32) -> Self {
+    fn new(
+        viewport: (f32, f32, f32, f32),
+        size: (u32, u32),
+        strength: f32,
+        tile: u32,
+        shake: Mat4,
+    ) -> Self {
         let (w, h) = (size.0.max(1) as f32, size.1.max(1) as f32);
         Self {
             rect_offset: [viewport.0 / w, viewport.1 / h],
@@ -94,6 +103,7 @@ impl Constants {
             inv_size: [1.0 / w, 1.0 / h],
             tile,
             _pad: 0.0,
+            shake: shake.to_cols_array_2d(),
         }
     }
 }
@@ -176,6 +186,18 @@ pub struct Frame<'a> {
     /// does nothing at all, which is how "off" reaches it: the caller's
     /// setting is a strength, read fresh every frame.
     pub strength: f32,
+    /// How far the camera's impact shake moved the picture since the previous
+    /// tick, as a clip-space map: a pixel's clip position goes to where the
+    /// same direction sat a tick ago under the shake alone. The prepare pass
+    /// subtracts that motion from the velocity it reads, so the blur smears
+    /// what really moved and not the whole frame the shake turned - the
+    /// velocity buffer itself stays true screen motion, which the temporal
+    /// upscaler needs. [`Mat4::IDENTITY`] for none, and then exactly nothing
+    /// is subtracted.
+    ///
+    /// A rotation about the eye moves a pixel by an amount that depends on its
+    /// screen position and not its depth, which is why one matrix will do.
+    pub camera_shake: Mat4,
 }
 
 /// A render-and-sample scratch target.
@@ -510,7 +532,13 @@ impl MotionBlur {
             return false;
         };
 
-        let wanted = Constants::new(frame.viewport, frame.size, frame.strength, tile);
+        let wanted = Constants::new(
+            frame.viewport,
+            frame.size,
+            frame.strength,
+            tile,
+            frame.camera_shake,
+        );
         if self.written != Some(wanted) {
             queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));
             self.written = Some(wanted);
@@ -878,5 +906,7 @@ impl MotionBlur {
 
 #[cfg(test)]
 mod extent_tests;
+#[cfg(test)]
+mod shake_tests;
 #[cfg(test)]
 mod tests;

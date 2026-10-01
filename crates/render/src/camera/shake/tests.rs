@@ -171,3 +171,13 @@ fn arming_again_restarts_the_timer_rather_than_extending_it() {
     shake.arm(1.0, Side::Elsewhere, &mut rng());
     assert_eq!(shake.timer, DURATION_SECONDS);
 }
+
+#[test]
+fn the_matrix_is_exactly_identity_while_inactive_and_apply_is_view_times_it() {
+    let view = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)).inverse();
+    let mut shake = Shake::new();
+    assert_eq!(shake.matrix(view), Mat4::IDENTITY);
+    shake.arm(1.0, Side::Elsewhere, &mut rng());
+    assert_ne!(shake.matrix(view), Mat4::IDENTITY);
+    assert_eq!(shake.apply(view), view * shake.matrix(view));
+}

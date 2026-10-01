@@ -155,6 +155,8 @@ impl Pending {
             // `race::load_event`'s own 2048-campaign resolution sets this.
             // See `race::Options::grid_teams`.
             grid_teams: Vec::new(),
+            hull_shine: !self.cli.no_hull_shine,
+            track_shine: !self.cli.no_track_shine,
             ribbon: self.cli.ribbon,
             collision: self.cli.collision,
             // **From the settings here, not only in the menu path.** `--race`

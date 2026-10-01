@@ -435,6 +435,34 @@ stateless across frames, so that method is gone and the cache to invalidate
 is `race::scene::frame::MotionState` instead. Whoever wires a cut clears the
 snapshot there, and the frame after it measures zero.
 
+**The impact shake (solved 2026-10-01).** The shake turns the view by up to six
+degrees in one tick, and a velocity buffer built from the shaken views reads
+that as the world flying past: the first frame of a hard hit smeared whole,
+which the original does not (seen against PPSSPP, 2026-09-30). **The velocity
+buffer stays true screen motion**, because the temporal upscaler reprojects its
+history with the same attachment and that history has to follow the shake; it
+is the blur's prepare pass that takes the shake out. A rotation about the eye
+moves a pixel by an amount that depends on where it is on screen and not on how
+deep it is, so one clip-space matrix describes the whole frame:
+`projection * previous * current^-1 * projection^-1`, with `current` and
+`previous` the view-space shake rotations of this and the last tick
+(`Race::view_shake_rotation`, `Race::shake_screen_motion`; the previous one
+rides in `MotionState`'s snapshot). It reaches the pass as
+`motion_blur::Frame::camera_shake` and `fs_prepare` subtracts the pixel's own
+shake motion from the velocity it reads; identity, with no shake in either
+tick, subtracts exactly nothing. A first attempt that built the velocity from
+the unshaken camera instead was dropped because it also removed the shake from
+what the upscaler sees, for the whole 0.6 s decay.
+
+Evidence: `--force-shake 120:1.0 --ticks 121` on the grid, a still craft, so
+the blur has nothing to blur and a frame with it on must equal the frame with
+it off. Before, the two differ by RMSE 0.07 (the whole frame smeared); after,
+byte-identical, at 480x272 and 1440x816, severity 0.3 and 1.0, ticks 120 to
+134. Pinned by `crates/game/tests/shake_blur_ground_truth.rs` (disc-backed,
+fails if `Scene::render` drops the map), `the_blur_is_given_the_shakes_own_screen_motion`
+(the matrices, from a cold shake and mid-decay) and `post::motion_blur::shake_tests`
+(the shader, on a device).
+
 [`MAX_STRETCH`]: ../../crates/render/src/post/motion_blur.rs
 
 ## Settle these before writing any shader

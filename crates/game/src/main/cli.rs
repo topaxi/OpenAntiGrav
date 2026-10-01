@@ -629,6 +629,17 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "SKILL", requires = "autopilot")]
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
 
+    /// With `--race --screenshot`, arm the camera's impact shake at the end of
+    /// a tick as a wall hit of that severity would: `TICK:SEVERITY`, severity
+    /// `0..=1`, e.g. `120:1.0` and then `--ticks 121` for the first frame of a
+    /// hard hit.
+    ///
+    /// A verification aid, there because a hard hit is hard to produce on
+    /// demand and the first shaken frame is where the shake meets the motion
+    /// blur and the temporal upscaler. See [`Race::force_shake`].
+    #[arg(long, value_name = "TICK:SEVERITY", requires = "race")]
+    pub(crate) force_shake: Option<String>,
+
     /// Seed the world generator, instead of `race::SEED`.
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race
@@ -846,6 +857,17 @@ pub(crate) struct Cli {
     /// See `docs/rendering/projection-vs-the-original.md`.
     #[arg(long)]
     pub(crate) camera_fov: Option<f32>,
+
+    /// Leave out a Pulse hull's `0x2000` environment-mapped extra pass
+    /// (`oag_render::shine`): the headless way to measure what the pass adds,
+    /// by rendering the same frame with and without it.
+    #[arg(long)]
+    pub(crate) no_hull_shine: bool,
+
+    /// Leave out a Pulse circuit's own extra pass: its `*_shinemap` batches
+    /// under their chrome map, which `oag_render::shine::build_track` draws.
+    #[arg(long)]
+    pub(crate) no_track_shine: bool,
 
     /// Render from a camera given outright, as nine comma-separated numbers:
     /// `eye_x,eye_y,eye_z,fwd_x,fwd_y,fwd_z,up_x,up_y,up_z`.

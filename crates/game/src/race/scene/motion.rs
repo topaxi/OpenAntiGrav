@@ -29,6 +29,10 @@ pub(super) struct MotionState {
 #[derive(Clone, Debug)]
 pub(super) struct Snapshot {
     pub(super) view_projection: Mat4,
+    /// The impact shake as a view-space rotation that tick - identity with
+    /// none - for the blur to take out of its velocities. See
+    /// [`Race::shake_screen_motion`].
+    pub(super) shake: Mat4,
     /// The camera's translation alone, for the sky's own `prev_mvp` - see
     /// the sky write in [`Scene::render`].
     pub(super) camera_translation: Mat4,
@@ -49,6 +53,7 @@ impl Snapshot {
     fn take(race: &Race, cannon: &CannonDraw, view_projection: Mat4, drawn: usize) -> Self {
         Self {
             view_projection,
+            shake: race.view_shake_rotation(),
             camera_translation: Mat4::from_translation(race.camera_position()),
             ships: (0..drawn)
                 .map(|slot| race.ship_model_matrix_of(slot))
@@ -354,5 +359,47 @@ impl super::Scene {
         };
         let jitter = oag_render::jitter::matrix(frame, phases, (viewport.2, viewport.3));
         (jitter * view_projection, jitter * prev_vp)
+    }
+}
+
+impl super::Scene {
+    /// Encodes the motion blur over the finished frame, `false` when the
+    /// pass is absent or off. `views` are the frame, the velocity attachment
+    /// and the depth attachment. `camera_shake` is
+    /// [`Race::shake_screen_motion`], which the pass takes out of every
+    /// velocity it reads.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn encode_motion_blur(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        views: [&wgpu::TextureView; 3],
+        viewport: (f32, f32, f32, f32),
+        strength: f32,
+        camera_shake: Mat4,
+        timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
+    ) -> bool {
+        let Some(pass) = &self.motion_blur else {
+            return false;
+        };
+        let size = self.depth.size();
+        let [scene, velocity, depth] = views;
+        pass.borrow_mut().render(
+            device,
+            queue,
+            encoder,
+            &oag_render::post::motion_blur::Frame {
+                scene,
+                velocity,
+                depth,
+                sample_count: self.msaa.samples(),
+                size: (size.width, size.height),
+                viewport,
+                strength,
+                camera_shake,
+            },
+            timestamps,
+        )
     }
 }

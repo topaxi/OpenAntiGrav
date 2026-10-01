@@ -236,9 +236,12 @@ the glint reads as a soft sheen on the inner wings and canopy rather than a flat
 lift. **It does not close the gap**: a third to a half of it on the first two
 frames, nothing on `talon-corner`, where the ship is mostly out of frame and the
 difference is framing. What remains is the flare's bloom and small pose and
-camera differences, and the pass's own unmeasured parts: one additive redraw
-stands in for the original's replace-then-add, there is no fog on it, and the
-airbrakes' batches are not deflected with their flaps.
+camera differences, and the pass's one unmeasured part: the airbrakes' batches
+are not deflected with their flaps. Re-read 2026-10-01 on `07_Track`
+([mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md), "Re-read on a
+second dump"): one additive redraw **is** the original's replace-then-add sum, and
+the pass is fogged to black, as the original's is. A circuit's own `*_shinemap`
+batches are drawn under the view-matrix matcap the same day.
 
 ## 3. The factory roofs (fixed)
 

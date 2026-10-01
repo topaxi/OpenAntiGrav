@@ -7,8 +7,11 @@
 use super::*;
 use log::warn;
 
+mod describe;
 mod tick;
 use tick::advance_one_tick;
+
+pub use describe::describe;
 
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
@@ -39,6 +42,10 @@ pub struct CaptureOptions {
     /// `--autopilot-skill`: fly at a stated AI skill instead of the race's
     /// own. See [`Race::set_autopilot_tuning`].
     pub autopilot_skill: Option<oag_ai::Difficulty>,
+    /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit of
+    /// that severity would, at the end of that tick (zero-based). See
+    /// [`Race::force_shake`].
+    pub force_shake: Option<(u32, f32)>,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a
@@ -975,26 +982,4 @@ fn zone_spectrum(options: &CaptureOptions, audio: &crate::audio::Audio) -> [f32;
     } else {
         audio.output().spectrum().levels()
     }
-}
-
-/// One telemetry line, for a log or a report.
-#[must_use]
-pub fn describe(telemetry: &Telemetry) -> String {
-    format!(
-        "tick {:>5}  speed {:>8.2}  grounded {:>3.1}  spline {:>8.2}  height {:>8.2}  at {:.1}\
-         {}",
-        telemetry.tick,
-        telemetry.speed,
-        telemetry.grounded,
-        telemetry.spline_distance,
-        telemetry.height_above_spline,
-        telemetry.position,
-        match (telemetry.pickup, telemetry.projectiles) {
-            (None, 0) => String::new(),
-            (held, count) => {
-                let held = held.map_or("-", oag_tables::weapons::Weapon::as_type);
-                format!("  holding {held}  in the air {count}")
-            }
-        },
-    )
 }

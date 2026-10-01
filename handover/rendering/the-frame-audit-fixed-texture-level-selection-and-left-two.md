@@ -19,10 +19,21 @@ of it the same day; see `frame-audit.md`.
   (`envtest4bit.tga`), `model+0x1a8 == 1` so the basis is the fixed world-space
   pair (read live; `mesh-draw.md`, "The hull's extra pass"). `oag_render::shine`
   draws it; it closes roughly a third to a half of the measured spine gap
-  (`frame-audit.md` section 2). Still open on the pass: a track's
-  `*_shinemap` batches (their `+0x1a8` is 0, the view-matrix matcap, unread), the
-  original's replace-then-add against our single additive redraw, fog on the pass,
-  the airbrakes' flap deflection, and the wreck model (`+0x8b8`, same flags).
+  (`frame-audit.md` section 2). Closed 2026-10-01 on a second GE dump of `07_Track`
+  ("Re-read on a second dump" in `mesh-draw.md`): ~~replace-then-add against our
+  single additive redraw~~ (the sums are equal; the canopy's depth test is on, not
+  off), ~~fog on the pass~~ (on, colour `0`; written), ~~a track's `*_shinemap`
+  batches~~ (rows 0 and 1 of the view matrix, confirmed at two yaws; drawn,
+  `--no-track-shine`). Still open: the airbrakes' flap deflection on the pass, and the
+  wreck model (`+0x8b8`, same flags) - neither started.
+- **The tunnel rim's neon strip.** In the original a bright cyan (grid pose, RGB
+  `(134, 246, 248)` over 2,721 pixels) or yellow-green (yawed pose) strip runs along
+  the pipe rim on `07_Track`; ours is dull (`(50, 109, 115)`, `(58, 130, 134)` with
+  the circuit pass). The pass's own term on those batches is small and equal in the
+  dump and in ours (vertex colour `(0.13, 0.30, 0.31)`), so it is another batch or
+  another state: find which `PRIM`s of `data/scratch/pulse-shine/ge/yaw.ppdmp`
+  cover those pixels (project the verts with the dump's world, view and projection)
+  and read their blend and texture.
 - ~~**Factory roofs on the Talon straight.**~~ **Fixed 2026-09-30.** The roofs are
   draws 1479..1494 (four animated slab transports, `track.vex` nodes 789, 793, 804,
   806), not 1381..1391; the original's GE list never contains them (`psp-ge-dump.py`,

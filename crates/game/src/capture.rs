@@ -449,6 +449,7 @@ pub fn run(
                 autopilot: options.autopilot,
                 autopilot_pilot: options.autopilot_pilot,
                 autopilot_skill: options.autopilot_skill,
+                force_shake: None,
                 scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,

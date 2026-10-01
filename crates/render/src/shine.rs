@@ -29,22 +29,45 @@
 //!   ordinary pass then follows, additively and at equal depth, so the pixel is
 //!   `env + lit * texture` either way.
 //!
+//! # Measured against the original, 2026-10-01
+//!
+//! A recorded GE list of a live Metropia-grid hull (`scripts/psp-ge-dump.py`):
+//!
+//! - **Replace-then-add equals one additive redraw.** The five replace batches
+//!   run `BLENDMODE` `0xaa` with `FIXA` white and `FIXB` black (`src` alone),
+//!   depth writes on; the ordinary pass over the same batch runs the same
+//!   blend with `FIXB` white (`src + dst`), depth writes off, depth function
+//!   `EQUAL`. The pixel is `env + lit * texture` clamped once, which is what
+//!   our opaque hull plus an additive redraw gives. The canopy is additive in
+//!   both with the depth **test on** (function 6, as the ordinary passes), not
+//!   off as an earlier page read it.
+//! - **Fog is on, and its colour register is `0`** where the ordinary pass
+//!   carries the circuit's: the pass fades to nothing with distance, not into
+//!   the haze. The scene uniform is written with a black fog colour.
+//!
 //! # What is ours
 //!
 //! Chosen, not measured:
 //!
-//! - **One additive redraw after the hull** ([`BLEND`], depth `LessEqual`, no
-//!   write) stands in for the original's replace-then-add pair. For the five
-//!   replace batches the sum is the same; for the canopy, which the original
-//!   draws with the depth test off, this keeps it behind the hull's own
-//!   occluders.
-//! - **No fog** on the pass, as the absorb overlay has none.
+//! - The redraw's depth function is `LessEqual` where the original's is the
+//!   strict one; they differ only at equal depth, which the pass never writes.
 //! - **The airbrake batches are not deflected** with their flaps: they are five
 //!   vertices each.
+//!
+//! # A circuit's own pass
+//!
+//! A circuit's `*_shinemap` batches carry the same bit and a chrome map as
+//! their second texture (`07_chromemap_02.tga`, `07_env.tga`), and the same
+//! mode-2 state, but the lights are not the fixed pair: in the same GE list all
+//! 88 mode-2 circuit draws of a frame carry lights 0 and 1 equal to **rows 0 and
+//! 1 of the view matrix** (confirmed at a second, yawed camera where rows and
+//! columns differ), the matcap `Vex_UpdateLightLists_q` writes for a model whose
+//! `+0x1a8` is 0. [`build_track`] and [`write_view`] draw it; animated nodes are
+//! not drawn (their normals need the node's matrix) and say so.
 
-use oag_core::math::Mat4;
+use oag_core::math::{Mat4, Vec3};
 
-use crate::mesh::{GpuVertex, Model};
+use crate::mesh::{DrawCall, GpuVertex, Model};
 use crate::texgen;
 
 /// Whether a race draws the pass at all: **on**, because the original draws it
@@ -87,13 +110,25 @@ pub fn build(hull: &Model) -> Option<Model> {
     }
     let mut model = hull.clone();
     model.label = format!("{} (shine pass)", hull.label);
+    model.draws = std::mem::take(&mut model.shine_draws);
+    plain(&mut model);
+    Some(model)
+}
+
+/// Turns `model` into the extra pass's: unlit white vertices, no animation,
+/// glow or flame, and only its [`Model::draws`] left to draw.
+fn plain(model: &mut Model) {
     for vertex in &mut model.vertices {
-        vertex.colour = [1.0; 4];
+        // A vertex that authors a colour keeps it: the pass is lit by nothing
+        // and the texture is modulated by what the vertex carries, as the
+        // original's is. One that authors none (a hull's) is white.
+        if vertex.lit != 0.0 {
+            vertex.colour = [1.0; 4];
+        }
         vertex.lit = 0.0;
         vertex.anim = 0;
         vertex.glow = 0.0;
     }
-    model.draws = std::mem::take(&mut model.shine_draws);
     model.alpha_tested_draws.clear();
     model.transparent_draws.clear();
     model.lightmaps.clear();
@@ -106,7 +141,130 @@ pub fn build(hull: &Model) -> Option<Model> {
     model.vertex_colour_is_light = false;
     model.stamps_glow = false;
     model.flame = None;
-    Some(model)
+}
+
+/// A circuit's extra pass: the `0x2000` batches of its static meshes, on a
+/// vertex buffer of their own, and where each came from.
+#[derive(Debug)]
+pub struct TrackPass {
+    /// Draws the shine batches only, under their second texture, unlit and
+    /// white. Its vertices are the batches' own, re-indexed.
+    pub model: Model,
+    /// For each of `model.draws`, the index of the circuit draw it redraws in
+    /// the circuit's own [`Model::draws`] - the key its section mask, its
+    /// level-of-detail child and its frustum bound are looked up by.
+    pub sources: Vec<usize>,
+    /// Shine batches left undrawn because they sit outside the opaque list,
+    /// whose pipeline this pass does not have.
+    pub skipped: usize,
+}
+
+/// The extra pass of a circuit, `None` when it authors no drawable batch.
+///
+/// **Opaque batches only.** A batch in the cutout or blended list would need
+/// that list's pipeline; it is counted in [`TrackPass::skipped`] so the loader
+/// report can say what was left out, rather than drawing a guess. An animated
+/// node's batch is kept with its `xform` and the model's [`Model::anim_nodes`],
+/// so the vertex shader places it as it places the circuit's own, and
+/// [`write_view`] turns its normal by the same node matrix.
+#[must_use]
+pub fn build_track(track: &Model) -> Option<TrackPass> {
+    let mut remap: Vec<Option<u32>> = vec![None; track.vertices.len()];
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    let mut draws = Vec::new();
+    let mut sources = Vec::new();
+    let mut skipped = 0;
+    for shine in &track.shine_draws {
+        let source = track
+            .draws
+            .iter()
+            .position(|d| d.range == shine.range && d.node == shine.node);
+        let Some(source) = source else {
+            skipped += 1;
+            continue;
+        };
+        let first = indices.len() as u32;
+        for &index in &track.indices[shine.range.start as usize..shine.range.end as usize] {
+            let slot = &mut remap[index as usize];
+            let mapped = *slot.get_or_insert_with(|| {
+                vertices.push(track.vertices[index as usize]);
+                vertices.len() as u32 - 1
+            });
+            indices.push(mapped);
+        }
+        draws.push(DrawCall {
+            range: first..indices.len() as u32,
+            ..shine.clone()
+        });
+        sources.push(source);
+    }
+    if draws.is_empty() {
+        return None;
+    }
+    let mut model = Model::none(&format!("{} (shine pass)", track.label));
+    model.vertices = vertices;
+    model.indices = indices;
+    model.draws = draws;
+    // Only the textures a kept draw names stay on the GPU: the circuit's
+    // other hundred are not this pass's to upload twice.
+    let used: std::collections::HashSet<usize> =
+        model.draws.iter().filter_map(|d| d.texture).collect();
+    model.textures = track
+        .textures
+        .iter()
+        .enumerate()
+        .map(|(i, t)| used.contains(&i).then(|| t.clone()).flatten())
+        .collect();
+    model.anim_nodes = track.anim_nodes.clone();
+    model.centre = track.centre;
+    model.radius = track.radius;
+    plain(&mut model);
+    Some(TrackPass {
+        model,
+        sources,
+        skipped,
+    })
+}
+
+/// The vertices of a [`build_track`] model with texture coordinates generated
+/// for the camera `view` (world to view): the equation over the view matrix's
+/// first two **rows**, which are the camera's right and up in world space, so
+/// a normal facing right of the camera reaches the far end of `u`.
+///
+/// Read off a recorded GE list at two camera yaws: the circuit's `TEXMAPMODE`
+/// 2 batches carry lights 0 and 1 equal to rows 0 and 1 of the view matrix's
+/// rotation, not its columns, and a hull in the same frame is placed by the
+/// same matrix at view-space `(0, -1.8, -11.5)`, centred and ahead.
+pub fn write_view(model: &Model, out: &mut Vec<GpuVertex>, view: Mat4, seconds: f32) {
+    let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
+    let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
+    let nodes = model.sample_anim_nodes(seconds);
+    if nodes.is_empty() {
+        texgen::environment_map(&model.vertices, out, Mat4::IDENTITY, right, up);
+        return;
+    }
+    // An animated node's vertices are in the node's space; its matrix takes the
+    // normal to the circuit's. Not an inverse transpose, as the vertex shader's
+    // own normal is not: the animated meshes under a non-uniformly scaled node
+    // are the ones this skews.
+    let placed: Vec<GpuVertex> = model
+        .vertices
+        .iter()
+        .map(|v| {
+            let mut v = *v;
+            if let Some(m) = (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
+                let n = Vec3::new(
+                    m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
+                    m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
+                    m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
+                );
+                v.normal = n.normalize_or_zero().to_array();
+            }
+            v
+        })
+        .collect();
+    texgen::environment_map(&placed, out, Mat4::IDENTITY, right, up);
 }
 
 /// The vertices of `model` (a [`build`] result) with their texture coordinates
@@ -123,117 +281,4 @@ pub fn write(model: &Model, out: &mut Vec<GpuVertex>, ship: Mat4) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::mesh::{Bounds, DrawCall, slots};
-    use oag_core::math::Vec3;
-
-    fn vertex(normal: [f32; 3]) -> GpuVertex {
-        GpuVertex {
-            position: [0.0; 3],
-            normal,
-            colour: [0.3, 0.4, 0.5, 0.6],
-            texcoord: [0.25, 0.75],
-            lightmap_texcoord: [0.0, 0.0],
-            lit: 1.0,
-            anim: 2,
-            xform: 0,
-            sun_mask: 1.0,
-            slots: slots::DEFAULT,
-            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
-            glow: 1.0,
-        }
-    }
-
-    fn draw(range: std::ops::Range<u32>, texture: usize) -> DrawCall {
-        DrawCall {
-            range,
-            texture: Some(texture),
-            bounds: Bounds {
-                centre: [0.0; 3],
-                radius: 1.0,
-            },
-            moving: false,
-            culled: true,
-            blend: None,
-            blend_state: None,
-            alpha_test_ref: None,
-            layer: oag_vex::vex::LAYER_DEFAULT,
-            node: Some(3),
-            chunk: None,
-        }
-    }
-
-    fn hull() -> Model {
-        let mut hull = Model::none("hull");
-        hull.vertices = vec![vertex([0.0, 0.0, 1.0]); 6];
-        hull.indices = vec![0, 1, 2, 3, 4, 5];
-        hull.draws = vec![draw(0..3, 0), draw(3..6, 1)];
-        hull.transparent_draws = vec![draw(3..6, 5)];
-        hull.shine_draws = vec![draw(3..6, 2)];
-        hull
-    }
-
-    #[test]
-    fn a_hull_with_no_extra_pass_batch_builds_no_shine_model() {
-        let mut bare = hull();
-        bare.shine_draws.clear();
-        assert!(build(&bare).is_none());
-    }
-
-    #[test]
-    fn the_shine_model_draws_only_the_extra_pass_batches_under_their_second_texture() {
-        let model = build(&hull()).expect("a hull with an extra pass");
-        assert_eq!(model.draws.len(), 1);
-        assert_eq!(model.draws[0].range, 3..6, "the batch's own vertices");
-        assert_eq!(model.draws[0].texture, Some(2), "the second texture");
-        assert!(model.alpha_tested_draws.is_empty() && model.transparent_draws.is_empty());
-        assert!(
-            model.shine_draws.is_empty(),
-            "moved into `draws`, not kept twice"
-        );
-    }
-
-    #[test]
-    fn the_pass_is_unlit_white_and_writes_no_glow() {
-        let model = build(&hull()).unwrap();
-        for v in &model.vertices {
-            assert_eq!(v.colour, [1.0; 4]);
-            assert_eq!((v.lit, v.anim, v.glow), (0.0, 0, 0.0));
-        }
-        assert!(!model.stamps_glow);
-    }
-
-    /// The equation over the fixed basis: a normal along light 0 is the far
-    /// end of `u` and a normal along light 1 is the far end of `v`.
-    #[test]
-    fn a_normal_along_each_basis_vector_reaches_the_far_end_of_its_axis() {
-        let mut model = build(&hull()).unwrap();
-        model.vertices[0].normal = texgen::ENV_BASIS_0.to_array();
-        model.vertices[1].normal = texgen::ENV_BASIS_1.to_array();
-        let mut out = Vec::new();
-        write(&model, &mut out, Mat4::IDENTITY);
-        assert!((out[0].texcoord[0] - 1.0).abs() < 1.0e-5, "{:?}", out[0]);
-        assert!((out[1].texcoord[1] - 1.0).abs() < 1.0e-5, "{:?}", out[1]);
-        assert_eq!(out.len(), model.vertices.len());
-    }
-
-    /// The coordinates follow the ship: a turned ship moves the same vertex's
-    /// coordinate, and nothing the camera does can reach `write`.
-    #[test]
-    fn turning_the_ship_moves_the_coordinates() {
-        let model = build(&hull()).unwrap();
-        let (mut still, mut turned) = (Vec::new(), Vec::new());
-        write(&model, &mut still, Mat4::IDENTITY);
-        write(&model, &mut turned, Mat4::from_rotation_x(1.2));
-        assert_ne!(still[0].texcoord, turned[0].texcoord);
-        // The translation half of the matrix is not a rotation of the normal.
-        let mut moved = Vec::new();
-        write(
-            &model,
-            &mut moved,
-            Mat4::from_translation(Vec3::new(5.0, 6.0, 7.0)),
-        );
-        assert_eq!(still[0].texcoord, moved[0].texcoord);
-    }
-}
+mod tests;

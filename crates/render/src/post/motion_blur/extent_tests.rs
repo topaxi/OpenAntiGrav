@@ -234,6 +234,7 @@ fn the_chain_smears_inside_a_viewport_smaller_than_its_allocation() {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, EXTENT, EXTENT),
             strength: 1.0,
+            camera_shake: Mat4::IDENTITY,
         },
         None,
     ));

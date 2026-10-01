@@ -65,10 +65,14 @@ impl Scene {
         hd_bloom_timestamps: Option<oag_render::post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
-        let view_projection = race.projection(aspect, self.far, fov) * race.view();
+        let projection = race.projection(aspect, self.far, fov);
+        let view_projection = projection * race.view();
         // The previous tick's camera and model matrices, promoted from the
         // last frame that rendered a different tick - what every drawable's
         // `prev_mvp` velocity is measured against. See [`MotionState`].
+        //
+        // Shaken views, so the buffer stays true screen motion for the temporal
+        // upscaler; the blur subtracts the shake itself, `blur_shake` below.
         let prev = MotionState::advance(
             &self.motion,
             race,
@@ -77,6 +81,8 @@ impl Scene {
             usize::from(race.ship_count()),
         );
         let prev_vp = prev.view_projection;
+        // The shake's own screen motion, for the blur - see `Race::shake_screen_motion`.
+        let blur_shake = race.shake_screen_motion(projection, prev.shake);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // Recorded before the offset is applied - see `Scene::record_frame`.
         self.record_frame(
@@ -140,6 +146,7 @@ impl Scene {
         // still-frame comparison wants a chosen time, not a freeze; a stale
         // `false` in a settings file wants nothing at all.
         let seconds = anim_seconds.unwrap_or(race.sim.world.tick as f32 / 60.0);
+        self.anim_clock.set(seconds);
         // Fog, sampled where the eye is. `oag_vex::fog::sample` reimplements
         // `FogCube_Sample`: the camera is transformed into the volume's space,
         // rejected if outside, and all six parameters interpolated across the
@@ -270,9 +277,7 @@ impl Scene {
             light,
             ..scene
         };
-        for drawable in self.ships.iter() {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&ship_scene));
-        }
+        self.write_ship_scenes(queue, &ship_scene);
         // The scenery: both animation mechanisms off the one clock.
         for drawable in [
             Some(&self.track),
@@ -768,7 +773,7 @@ impl Scene {
         if let Some(sky) = &self.sky {
             let _ = sky.draw(&mut pass, None, None, None, None);
         }
-        let mut stats = self.track.draw(
+        let mut stats = self.draw_track(
             &mut pass,
             self.visibility.as_ref().map(|v| &v.sections),
             visible_set.as_ref(),
@@ -966,24 +971,16 @@ impl Scene {
         // applies live; at `off` the pass encodes nothing. The velocity
         // buffer it reads was written by the scene pass above either way -
         // see `Scene::velocity`.
-        if let Some(pass) = &self.motion_blur {
-            let size = self.depth.size();
-            stats.blur_encoded = pass.borrow_mut().render(
-                device,
-                queue,
-                encoder,
-                &oag_render::post::motion_blur::Frame {
-                    scene: view,
-                    velocity: velocity_view,
-                    depth: depth_view,
-                    sample_count: self.msaa.samples(),
-                    size: (size.width, size.height),
-                    viewport,
-                    strength: motion_blur.shutter(),
-                },
-                blur_timestamps,
-            );
-        }
+        stats.blur_encoded = self.encode_motion_blur(
+            device,
+            queue,
+            encoder,
+            [view, velocity_view, depth_view],
+            viewport,
+            motion_blur.shutter(),
+            blur_shake,
+            blur_timestamps,
+        );
         oag_render::perfprobe::mark("post-chain");
         stats
     }

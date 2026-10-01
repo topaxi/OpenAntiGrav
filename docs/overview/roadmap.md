@@ -1135,9 +1135,9 @@ change how this list should be read:
       rates for its own layers, and no track equivalent has been found
 - [x] The `0x2000` extra pass and its second texture index at material `+0x08` -
       **a Pulse hull draws it** (`oag_render::shine`, 2026-09-30): six batches
-      per team under environment mapping with `envtest4bit.tga`. A track's
-      `*_shinemap` batches are still not drawn, and their light basis is the
-      view-matrix matcap (`model+0x1a8 == 0`), unread
+      per team under environment mapping with `envtest4bit.tga`, fogged to black.
+      A circuit's own `*_shinemap` batches are drawn too (2026-10-01): their
+      lights are rows 0 and 1 of the view matrix, read off a GE list at two yaws
 
 ### Ship visual state
 
