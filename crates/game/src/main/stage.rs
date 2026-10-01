@@ -555,6 +555,7 @@ impl Stage {
         // The reticle projects through the same field the picture is drawn at.
         race.set_sight_fov(settings.graphics.fov);
         race.set_sight_screen(hud.space.size);
+        race.set_sight_dialect(hud.art.sights);
         // Applied before the first tick, but unlike the kick this one is also
         // set again whenever the cycle button or the menu row moves it - see
         // `Session::cycle_camera_view`.

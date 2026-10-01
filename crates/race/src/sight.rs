@@ -222,20 +222,15 @@ pub const MISSILE_INNER: &str = "missile_sight_inner";
 /// LeachBeam's reticle is four arrowheads pointing inward and nothing in the
 /// middle.
 ///
-/// # That these four take [`BRACKET_ROTATIONS`] is **chosen, not measured**
+/// # Their law is their own, read 2026-10-01
 ///
-/// No confidence score, deliberately. `HudSight_Update` (`0x0881dbcc`) is read
-/// end to end and it writes **five** widgets - `sight[0]` … `sight[3]` and the
-/// inner, which are the Missile's. Nothing yet read writes the bind's
-/// `+0x108` … `+0x114`, so *what places the LeachBeam's four, and at what
-/// angles, is unrecovered.*
-///
-/// What is taken here is the obvious reading and it is an inference: the two
-/// sets are the same shape - four widgets, one model each, one shared
-/// placeholder - and one arrowhead makes four corners no other way, exactly as
-/// one bracket does. The picture it produces is right in a capture. It is still
-/// an inference, and if the original places these on their own rule this is
-/// where it will be wrong.
+/// `HudSight_Update` (`0x0881dbcc`) writes the **Missile's** five widgets. The
+/// LeachBeam's four are written by `FUN_0881e8c8`, which `Hud_Update` runs when
+/// the first returns no lock: a different law - spinning, no hold timer - and it
+/// is [`leach`]'s. The four take [`BRACKET_ROTATIONS`] **plus the figure's spin**
+/// (`piece+0xac = spin + {pi/2, pi, 0, 3pi/2}`), which is what the original
+/// writes; a title that does not run that law (Wipeout HD, whose reticle is
+/// concentric rings) keeps the quarter turns alone.
 pub const LEACHBEAM_BRACKETS: [&str; 4] = [
     "leachbeam_sight_1",
     "leachbeam_sight_2",
@@ -381,6 +376,14 @@ pub struct Sight {
     /// until another lockable weapon is picked up, and [`Self::visible`] is what
     /// decides whether anything is drawn at all.
     held: Held,
+    /// The figure's turn angle, radians (`hud+0x104`) - the LeachBeam's own law
+    /// only. See [`leach`].
+    spin: f32,
+    /// Whether the previous frame held a target on screen (`view+0xf1`), which
+    /// is what makes a first sighting close in from open. The LeachBeam's law.
+    leach_seen: bool,
+    /// Whether a held LeachBeam runs its own law rather than the Missile's.
+    leach_law: bool,
 }
 
 impl Default for Sight {
@@ -406,6 +409,9 @@ impl Sight {
             blink_timer: 0.0,
             blink: false,
             held: Held::Missile,
+            spin: 0.0,
+            leach_seen: false,
+            leach_law: false,
         }
     }
 
@@ -451,6 +457,10 @@ impl Sight {
     ///    held past [`HOLD_SECONDS`] is necessary and not sufficient: the
     ///    brackets have to have caught up in the same frame.
     pub fn update(&mut self, dt: f32, target: Option<Projected>) -> State {
+        if self.runs_leach_law() {
+            return self.update_leach(dt, target);
+        }
+        self.leach_seen = false;
         self.blink_timer -= dt;
         while self.blink_timer < 0.0 {
             self.blink_timer += BLINK_PERIOD;
@@ -654,6 +664,15 @@ impl Sight {
     /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md#colour-and-blink-resolved-the-byte-order-and-the-two-tints`.
     #[must_use]
     pub fn tint(&self) -> [f32; 3] {
+        if self.runs_leach_law() {
+            // `0xff` and `0xffff` under the same byte order: red when locked,
+            // yellow while seeking, and no blink.
+            return if self.locked {
+                [1.0, 0.0, 0.0]
+            } else {
+                [1.0, 1.0, 0.0]
+            };
+        }
         if self.locked {
             [1.0, 0.0, 0.0]
         } else if self.blink {
@@ -666,6 +685,9 @@ impl Sight {
     /// The four corner brackets, in the order [`BRACKET_ROTATIONS`] indexes.
     #[must_use]
     pub fn brackets(&self) -> [Piece; 4] {
+        if self.runs_leach_law() {
+            return self.leach_pieces();
+        }
         let e = self.extent;
         let [cx, cy] = self.centre;
         let corners = [
@@ -719,5 +741,14 @@ fn ease_toward(current: f32, wanted: f32, step: f32) -> f32 {
     }
 }
 
+mod leach;
+pub use leach::{
+    LEACH_EXTENT_CLOSED, LEACH_OPEN_RATE, LEACH_SPIN_LOCKED, LEACH_SPIN_SEEKING,
+    LEACH_UNHELD_REFERENCE,
+};
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod leach_tests;

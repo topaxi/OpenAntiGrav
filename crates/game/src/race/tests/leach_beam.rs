@@ -194,3 +194,99 @@ fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not()
         "the charge goes the moment the pickup does"
     );
 }
+
+/// A held LeachBeam's reticle runs the LeachBeam's own law when the title's
+/// reticle dialect is Pulse's (`Race::set_sight_dialect`), and not Wipeout HD's: the arrowheads turn, and they lock on arrival rather than after the
+/// Missile's hold.
+///
+/// **Through `Race::tick`** because the gate, the projection and the law meet
+/// there: the held weapon decides there is a target, the camera projects it, and
+/// `FUN_0881e8c8` turns what it sees into a figure. Without the flag the same
+/// race keeps the Missile's law, which is what Wipeout HD's rings still run.
+#[test]
+fn a_held_leach_beam_spins_its_reticle_under_the_pulse_law_only() {
+    let run = |pulse: bool| {
+        let mut race = race_with_a_grid();
+        race.sim.weapons = Some(one_leach_beam_table());
+        if pulse {
+            race.set_sight_dialect(oag_pulse::hud::ART.sights);
+        } else {
+            race.set_sight_dialect(oag_hd::hud::ART.sights);
+        }
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+        let mut locked_at = None;
+        for tick in 0..120 {
+            race.sim.world.ships[1].physics.body.position = ahead;
+            race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+            race.tick(&PlayerInputs::none());
+            if locked_at.is_none() && race.sight().locked() {
+                locked_at = Some(tick);
+            }
+        }
+        (race.sight().brackets()[2].rotation, locked_at)
+    };
+    let (rotation, locked_at) = run(true);
+    assert_ne!(
+        rotation, 0.0,
+        "the third arrowhead is a pure quarter-turn only when nothing spins"
+    );
+    let locked_at = locked_at.expect("the arrowheads never closed");
+    assert!(
+        locked_at < 40,
+        "locked at tick {locked_at}: the Pulse law has no 0.8 s hold"
+    );
+
+    let (rotation, locked_at) = run(false);
+    assert_eq!(rotation, 0.0, "without the dialect flag nothing spins");
+    assert!(
+        locked_at.expect("locked") >= 48,
+        "the Missile's law holds for 0.8 s"
+    );
+}
+
+/// Firing closes the reticle's gate on the fire tick - `Weapon_FireLeachBeam`
+/// clears the held-weapon slot, and the sight's gate is that slot - so the
+/// arrowheads open and are gone in a quarter of a second while the beam is
+/// still live, rather than staying up over its target.
+#[test]
+fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
+    let mut race = race_with_a_grid();
+    // The fixture's half-second `active_time` outlasts the 16 ticks checked.
+    let table = one_leach_beam_table();
+    race.sim.weapons = Some(table);
+    race.set_sight_dialect(oag_pulse::hud::ART.sights);
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    let mut buttons = Buttons::new();
+    buttons.tick(0);
+    let tick = |race: &mut Race, input: oag_gameplay::InputSnapshot| {
+        race.sim.world.ships[1].physics.body.position = ahead;
+        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        race.tick(&PlayerInputs::single(input));
+    };
+    for _ in 0..60 {
+        tick(&mut race, buttons.tick(0));
+    }
+    assert!(race.sight().locked(), "never locked before the shot");
+    tick(&mut race, buttons.tick(SQUARE));
+    assert!(race.sim.world.leach_beam.is_some(), "the shot did not fire");
+    assert_eq!(
+        race.sight_state(),
+        oag_race::sight::State::Absent,
+        "the reticle still holds its target on the fire tick"
+    );
+    for _ in 0..16 {
+        tick(&mut race, buttons.tick(0));
+    }
+    assert!(
+        race.sim.world.leach_beam.is_some(),
+        "the beam ended before the check"
+    );
+    assert!(
+        !race.sight().visible(),
+        "the arrowheads are still up a quarter of a second into a live beam"
+    );
+}

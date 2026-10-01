@@ -364,23 +364,63 @@ De Ra.
 the mask and have no twin: 4 to 6 on Metropia and 5 to 12 on Tech De Ra. The 21 to
 24 quoted above for Talon's Junction came from the earlier pass's own method (no
 fold of the second-texture passes, a different count), so the two are not a
-like-for-like comparison and no ranking of circuits follows. It is a lower bound on what the original hides
-that we draw (a count-and-diameter coincidence turns a miss into a hit, never
-the reverse), and part of it is the original's frustum cull, which moving draws
-here are exempt from. At Metropia row 400 two of the four (node 549, 58 and 44
-units across) pass only through our camera and padding union and not the
-craft's mask: that is the union drawing what the original's single mask does not,
-by design. Some recur: Metropia node 225 (two draws, 144 and 102 units across) at all
-three poses, Tech De Ra node 1076 (45 and 34 units) at all four and node 1078
-(66 units) at the three poses where it passes. Whether the original hides those by
-the frustum bound it keeps for moving meshes (the lead above) or by a rule this
-audit did not recover is not settled. **Open**: those named nodes, and the same
-measurement on a circuit with a tunnel or a loop.
+like-for-like comparison and no ranking of circuits follows. **Corrected
+2026-10-01**: the Metropia figures were inflated by this census's own diameter
+(a double sweep, `8 %` short of the exact diameter the dump side computes, outside
+the `3 %` tolerance), and Metropia node 225 - the one that "recurred" - has twins
+at every pose; with both sides exact Metropia reads 0 to 4 (rows 400, 2300, 3200:
+2, 4, 4; none at row 400 by the craft's mask alone) and Tech De Ra is unchanged
+(9, 11, 12, 5). Tech De Ra's nodes 1076 and 1078 were not among the residue.
+What is left, and what explains it, is the next subsection.
 
 **Confidence 80** for "the mask hides no moving batch the original submits":
 three circuits, eleven poses, zero counterexamples, a positive control, no
 loader reading, and moving batches matched on count and diameter alone, which is
 weaker than the static match.
+
+### The original culls a moving draw by its section's box (2026-10-01)
+
+*Question and falsifier, written before the work:* does the original frustum-cull
+moving meshes by a bound we lack? It would be wrong if a draw the original submits
+sat in a section whose box the view rejects, and it would explain the residue only
+if the rejected sections hold the draws the original does not submit.
+
+**Found in the executable, then measured.** The shared node predicate
+`Node_TestSectionVisible` (`0x0892b638`, a vtable method of twelve node classes)
+tests the governing section's mask bit and then the section's own authored
+world-space box against the view with a corner outcode (`x < -w`, `y < -w`,
+`z < 0`, `x > w`, `y > w`; culled when every one of the eight corners is outside
+the same plane; no far plane). The box is the `.vex` `section` node's own, which
+`oag_vex::pvs` already reads. Evidence, the disassembly and the live reads are in
+[section-view-cull.md](../ghidra/functions/psp-pulse-usa/section-view-cull.md).
+
+Against the 22 dumps (view and projection are the dump's own registers,
+`scripts/pvs-cull-check.py`): **0 of 2,004 draws in a culled section are in the
+original's list** (static 1,936, moving 68), the same test with the view turned a
+quarter circle finds 73 and 135 at two poses, and it explains 64 % of the static
+and 47 % of the moving draws that pass the mask and have no twin. Moving draws
+need no bound of their own for this: their section is static.
+
+| | section culled, no twin | culled, **twin** | visible, no twin | visible, twin |
+| --- | --- | --- | --- | --- |
+| Metropia moving (8 poses) | 23 | **0** | 25 | 163 |
+| Tech De Ra moving (14) | 45 | **0** | 52 | 141 |
+
+**Ported** as `oag_render::pvs::sections_in_view` and `VisibleSet::within_view`,
+wired in the race scene. Seven native 480x272 poses are pixel-identical before and
+after (0 differing pixels each), with 0 to 10 fewer draws submitted: the original's
+cull is conservative, so a correct port moves submissions and not pixels.
+**Chosen, not measured**: the test uses this camera's view-projection where the
+original hard-codes 480/272 into its planes.
+
+**What this is not.** The original also runs the same corner test per `Mesh` node
+against its own box (`Mesh_SubmitNode`, `0x0890cc80`), and that one does *not*
+predict the GE list - 19 of 46 nodes it rejected at the start grid still had a PRIM
+in the frame - because most static geometry also reaches the GE through merged
+batch sets that never take it. It is not ported. **Still open**: a bound on the
+batch-set path, if there is one (1,071 static draws pass the section test with no
+twin), the small transparent quads the census cannot match, and a circuit with a
+tunnel or a loop.
 
 **Seen as a player.** `data/shots/frame-audit/talon-fast/roofs-orig-before-after.png`: the
 original, ours before and ours after at the fast pose. The dark slabs left of the

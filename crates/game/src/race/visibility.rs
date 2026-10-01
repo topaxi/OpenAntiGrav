@@ -206,10 +206,18 @@ impl TrackVisibility {
         self.swaps.pair_count()
     }
 
-    /// What may be drawn with the craft in `craft` and the camera in `camera`.
+    /// What may be drawn with the craft in `craft` and the camera in `camera`,
+    /// narrowed to the sections whose authored box `view_projection` reaches -
+    /// the original's second tier, see `oag_render::pvs::sections_in_view`.
     #[must_use]
-    pub(super) fn set(&self, craft: u8, camera: u8) -> VisibleSet {
+    pub(super) fn set(
+        &self,
+        craft: u8,
+        camera: u8,
+        view_projection: &oag_core::math::Mat4,
+    ) -> VisibleSet {
         VisibleSet::around(&self.pvs, &self.padding, &self.swaps, craft, camera)
+            .within_view(&self.pvs, view_projection)
     }
 }
 
@@ -310,5 +318,65 @@ mod name_tests {
         // A model name that is not a `.rcsmodel` falls back to the `.vex`.
         assert_eq!(pvs_name("a/track.vex", Some("a/track.bin")), "a/track.pvs");
         assert_eq!(pvs_name("a/track.vex", Some("l")), "a/track.pvs");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_core::math::{Vec3, camera};
+
+    /// The race scene narrows the visible set to the sections the view reaches
+    /// (`Visibility::set`'s `within_view`), on a real circuit.
+    ///
+    /// **The wiring, not the law**: `oag_render::pvs`'s unit tests hold the
+    /// corner test, and a call site that dropped `within_view` would pass all
+    /// of them. A camera on the racing line looking along it must see strictly
+    /// fewer sections than the same craft and camera with the view test off -
+    /// `set` with a matrix that rejects every section falls back to the
+    /// unnarrowed set, which is the reference.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn the_visible_set_is_narrowed_to_the_view_on_a_real_circuit() {
+        let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+            return;
+        };
+        let entry = r"Data\Environments\16_Track\track.vex";
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+        let blob = archives.read_name(entry).expect("track.vex");
+        let model = oag_render::mesh::build_with_textures(entry, &blob, None).expect("model");
+        let nodes = oag_vex::vex::nodes(&blob).expect("nodes");
+        let node = oag_vex::track::find_node(&blob, &nodes).expect("a WO Track node");
+        let ai = oag_vex::track::parse(&blob[node.payload()]).expect("spline");
+        let visibility =
+            TrackVisibility::build(&model, &blob, &ai).expect("the circuit's sections");
+        assert!(visibility.has_sections());
+
+        let points: Vec<_> = ai.paths.iter().flat_map(|p| p.points.iter()).collect();
+        let point = points[points.len() / 3];
+        let (pos, forward) = (
+            Vec3::from_array(point.pos),
+            Vec3::from_array(point.tangent).normalize(),
+        );
+        let eye = pos - forward * 10.0 + Vec3::Y * 3.0;
+        let projection = camera::perspective(60f32.to_radians(), 480.0 / 272.0, 1.0, 2500.0);
+        let view_projection = projection * camera::look_at(eye, pos + forward * 20.0, Vec3::Y);
+
+        let ids: Vec<u8> = visibility.pvs.ids().collect();
+        let allowed = |set: &VisibleSet| ids.iter().filter(|&&id| set.allows(1u64 << id)).count();
+        let section = point.section_id;
+        let narrowed = allowed(&visibility.set(section, section, &view_projection));
+        let reference = allowed(&visibility.set(section, section, &Mat4::ZERO));
+        assert!(
+            narrowed < reference,
+            "the view test removed nothing: {narrowed} of {reference} sections"
+        );
+        assert!(
+            VisibleSet::allows(
+                &visibility.set(section, section, &view_projection),
+                1u64 << section
+            ),
+            "the craft's own section was narrowed away"
+        );
     }
 }

@@ -84,6 +84,8 @@ impl Scene {
         // The shake's own screen motion, for the blur - see `Race::shake_screen_motion`.
         let blur_shake = race.shake_screen_motion(projection, prev.shake);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
+        // The same unjittered matrix, for the section boxes' view test.
+        let section_view = view_projection;
         // Recorded before the offset is applied - see `Scene::record_frame`.
         self.record_frame(
             camera_jitter,
@@ -106,7 +108,7 @@ impl Scene {
             .filter(|visibility| visibility.has_sections())
             .map(|visibility| {
                 let (craft, camera) = race.visibility_sections();
-                visibility.set(craft, camera)
+                visibility.set(craft, camera, &section_view)
             });
         // Tier one on a PS3 circuit, which partitions by chunk rather than by
         // section - see `oag_render::pvs::ChunkSet`. Located from world
