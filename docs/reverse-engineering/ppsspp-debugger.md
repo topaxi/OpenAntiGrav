@@ -1745,7 +1745,6 @@ its absorb hull overlay in play. The probe itself is in
   because the craft pointer read earlier no longer drives anything.
   `psp-drive.py restart` brings back a live grid. Re-read
   `*(g_race_manager + 0x2c0)` after it, because the craft is reallocated.
-<<<<<<< HEAD
 
 ## Probing a per-node test live, and pinning a target (2026-10-01)
 
@@ -1774,9 +1773,6 @@ Two recipes from `pulse-cull`, both on one boot of a Single Race:
   minutes ends, the HUD is hidden and `HudSight_Update` never fires again - the
   probes then time out with no error. Reboot rather than debug it.
 
-||||||| cc69dad5
-
-=======
 
 ## Firing a weapon at a matched state: `psp-weapon-pair.py` (2026-10-01)
 
@@ -1809,5 +1805,3 @@ Four things it learned the slow way:
   `InternalResolution = 1` in the profile keeps the picture native, and
   `iShowStatusFlags = 0` hides the FPS counter that otherwise sits in every frame.
 
-
->>>>>>> main
