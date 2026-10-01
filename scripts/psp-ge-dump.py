@@ -128,7 +128,11 @@ def diameter(pts):
 def census(path):
     cmds, push = load(path)
     world = [0.0] * 12
+    view = [0.0] * 12
+    proj = [0.0] * 16
     number = 0
+    view_number = 0
+    proj_number = 0
     state = {}
     vertices = None
     prims = []
@@ -144,6 +148,18 @@ def census(path):
                     if number < 12:
                         world[number] = _f(word)
                     number += 1
+                elif op == 0x3C:
+                    view_number = word & 0xF
+                elif op == 0x3D:
+                    if view_number < 12:
+                        view[view_number] = _f(word)
+                    view_number += 1
+                elif op == 0x3E:
+                    proj_number = word & 0xF
+                elif op == 0x3F:
+                    if proj_number < 16:
+                        proj[proj_number] = _f(word)
+                    proj_number += 1
                 elif op == 0x12:
                     state["vtype"] = word & FLOAT24
                 elif op == 0xA0:
@@ -175,6 +191,13 @@ def census(path):
                                 "mn": [min(p[k] for p in pts) for k in range(3)],
                                 "mx": [max(p[k] for p in pts) for k in range(3)],
                                 "diam": diameter(pts),
+                                # The matrices in force, for the clip-space test of
+                                # `scripts/pvs-cull-check.py`: world and view are
+                                # 4x3 (rows x, y, z, translation), proj 4x4, all
+                                # row-major as the game keeps them.
+                                "world": list(world),
+                                "view": list(view),
+                                "proj": list(proj),
                             }
                         )
                     vertices = None

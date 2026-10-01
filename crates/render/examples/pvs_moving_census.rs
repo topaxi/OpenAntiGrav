@@ -22,11 +22,25 @@ use oag_render::pvs::{DrawSections, SectionPadding, SwapConflicts, VisibleSet};
 use oag_vex::pvs::TrackPvs;
 use oag_vex::{track, vex};
 
+/// The longest vertex-to-vertex distance, exact up to 3,000 points and a double
+/// sweep (a lower bound) above that - the same rule `scripts/psp-ge-dump.py`
+/// applies to the original's side, so the two agree on what "diameter" means.
+/// A double sweep alone read 8 % short on `03_Track` node 225, which is why
+/// the join missed batches the original does submit.
 fn diameter(points: &[[f32; 3]]) -> f32 {
     let Some(&first) = points.first() else {
         return 0.0;
     };
     let dist2 = |a: [f32; 3], b: [f32; 3]| (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f32>();
+    if points.len() <= 3000 {
+        let mut best = 0.0f32;
+        for (i, &a) in points.iter().enumerate() {
+            for &b in &points[i + 1..] {
+                best = best.max(dist2(a, b));
+            }
+        }
+        return best.sqrt();
+    }
     let farthest = |from: [f32; 3]| {
         points
             .iter()

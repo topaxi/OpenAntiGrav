@@ -206,10 +206,18 @@ impl TrackVisibility {
         self.swaps.pair_count()
     }
 
-    /// What may be drawn with the craft in `craft` and the camera in `camera`.
+    /// What may be drawn with the craft in `craft` and the camera in `camera`,
+    /// narrowed to the sections whose authored box `view_projection` reaches -
+    /// the original's second tier, see `oag_render::pvs::sections_in_view`.
     #[must_use]
-    pub(super) fn set(&self, craft: u8, camera: u8) -> VisibleSet {
+    pub(super) fn set(
+        &self,
+        craft: u8,
+        camera: u8,
+        view_projection: &oag_core::math::Mat4,
+    ) -> VisibleSet {
         VisibleSet::around(&self.pvs, &self.padding, &self.swaps, craft, camera)
+            .within_view(&self.pvs, view_projection)
     }
 }
 

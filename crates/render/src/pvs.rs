@@ -646,5 +646,8 @@ pub fn visible(
     }
 }
 
+mod section_view;
+pub use section_view::{NEAR_REJECT_DEPTH, box_outside_view, sections_in_view};
+
 #[cfg(test)]
 mod tests;

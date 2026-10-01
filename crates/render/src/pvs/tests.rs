@@ -38,7 +38,7 @@ fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
 }
 
 /// Sections with boxes, built the way a `.vex` would hold them.
-fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
+pub(super) fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
     let mut data = vex_header();
     let mut nodes = Vec::new();
     for &(index, min, max) in boxes {
