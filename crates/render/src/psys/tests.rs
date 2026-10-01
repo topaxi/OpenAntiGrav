@@ -51,6 +51,7 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
             velocity_inherit: 0.0,
             spawn: Spawn::Point,
             emission_scale: constant(1.0),
+            extent_animation: None,
             sprite: None,
             atlas: Atlas::SINGLE,
             frames: FrameAdvance::Still,
@@ -553,4 +554,115 @@ fn a_release_frees_the_templates_and_leaves_the_rest() {
     let (freed, survivors) = after(Stage::release);
     assert_eq!(freed, 0, "a release left the template");
     assert_eq!(survivors, alive - 1, "a release cut more than the template");
+}
+
+/// `effect`, with its one emitter's lifetime and size channel replaced.
+fn effect_with(lifetime: (f32, f32), size: Channel) -> std::sync::Arc<Effect> {
+    let mut built = (*effect("probe", true, 10.0)).clone();
+    built.emitters[0].lifetime_ticks = lifetime;
+    built.emitters[0].size = size;
+    std::sync::Arc::new(built)
+}
+
+/// The measured law (`Particle::fresh`): an emitter's particle is drawn at age
+/// 0 on the tick it spawns, so a one-tick life is drawn once and a two-tick
+/// life twice - never zero times, which is what the Rocket's
+/// `WO_ROCKET_SHAZZAM` flash did when the spawn tick aged the particle too.
+#[test]
+fn an_emitters_particle_is_drawn_from_the_tick_it_spawns() {
+    let mut rng = Rng::new(3);
+    for (life, expected) in [(1.0, 1), (2.0, 2), (3.0, 3)] {
+        let effect = effect_with((life, 0.0), constant(1.0));
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        for tick in 0..8 {
+            system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+            // One spawn a tick: steady from the first tick, since the particle
+            // that is spent is removed by the update that finds it so.
+            assert_eq!(
+                system.alive_count(),
+                expected.min(tick + 1),
+                "life {life}, tick {tick}"
+            );
+        }
+    }
+}
+
+/// The flare's own numbers: its first draw is the size channel at age 0
+/// (`1.05` from `lo 1 + (hi 8 - lo) * 0.0068`), the next one a tick on.
+#[test]
+fn the_first_draw_is_the_size_at_age_zero() {
+    let mut rng = Rng::new(4);
+    let size = Channel {
+        period: 0.0,
+        mode: ChannelMode::Keyframed,
+        lo: 1.0,
+        hi: 8.0,
+        keys: vec![(0.0, 0.0068), (1.0, 1.0)],
+    };
+    let effect = effect_with((30.0, 0.0), size);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    let mut halves = Vec::new();
+    for _ in 0..3 {
+        system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        let width = additive
+            .iter()
+            .map(|v| v.position[0])
+            .fold(f32::MIN, f32::max)
+            - additive
+                .iter()
+                .map(|v| v.position[0])
+                .fold(f32::MAX, f32::min);
+        halves.push(width / 2.0);
+    }
+    assert!((halves[0] - 1.0476).abs() < 1e-3, "{halves:?}");
+    assert!((halves[1] - 1.2765).abs() < 2e-2, "{halves:?}");
+}
+
+/// The extent's animated co-factor (`attribute` record, selector 2): a ring that is born
+/// `10` units out at the start of the run is born `20` out at its end (`18` after nine of ten ticks), which is how the
+/// Bomb's smoke ring widens over its twenty emitting ticks.
+#[test]
+fn an_animated_extent_widens_the_ring_over_the_emitters_run() {
+    let mut built = (*effect("ring", false, 10.0)).clone();
+    built.emitters[0].spawn = Spawn::Ring {
+        extent: 10.0,
+        spread: 0.0,
+        mode: 0,
+    };
+    built.emitters[0].extent_animation = Some(Channel {
+        period: 0.0,
+        mode: ChannelMode::Keyframed,
+        lo: 1.0,
+        hi: 2.0,
+        keys: vec![(0.0, 0.0), (1.0, 1.0)],
+    });
+    let effect = std::sync::Arc::new(built);
+    let mut rng = Rng::new(21);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    let widest = |system: &System| {
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        additive
+            .chunks(6)
+            .map(|quad| {
+                let centre = quad
+                    .iter()
+                    .fold(Vec3::ZERO, |s, v| s + Vec3::from(v.position))
+                    / 6.0;
+                centre.x.hypot(centre.z)
+            })
+            .fold(0.0f32, f32::max)
+    };
+    system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+    let first = widest(&system);
+    for _ in 0..8 {
+        system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+    }
+    let last = widest(&system);
+    assert!((first - 10.0).abs() < 0.2, "{first}");
+    // Born at the ninth tick, 80 % through a ten-tick run: `10 * (1 + 0.8)`.
+    assert!((last - 18.0).abs() < 0.2, "{last}");
 }

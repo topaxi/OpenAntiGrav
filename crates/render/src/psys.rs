@@ -62,6 +62,10 @@ use streak::StreakDraw;
 
 /// The original's fixed simulation rate, ticks per second.
 ///
+/// How much life still counts as spent: `life -= dt` can land a rounding error
+/// either side of zero. The spawn order is measured, see [`Particle::fresh`].
+const LIFE_EPSILON: f32 = 1e-5;
+
 /// Emitter schedules, speeds and lifetimes in a `.pob` are all expressed in
 /// ticks; this is the one conversion constant between them and seconds.
 pub const TICK_HZ: f32 = 60.0;
@@ -301,6 +305,8 @@ pub struct EmitterSpec {
     pub spawn: Spawn,
     /// `+0x858`, over the emitter's own run: a multiplier on the extent.
     pub emission_scale: Channel,
+    /// The selector-2 attribute record, over the emitter's run: the extent's co-factor.
+    pub extent_animation: Option<Channel>,
     /// The emitter's own sprite, decoded off a PSP disc - see [`sprite`].
     pub sprite: Option<Sprite>,
     /// How [`EmitterSpec::sprite`] divides into frames.
@@ -584,6 +590,11 @@ impl EmitterSpec {
             velocity_inherit: record.child_velocity_inherit,
             spawn: Spawn::of(record),
             emission_scale: record.emission_scale.clone(),
+            extent_animation: record
+                .attribute_animations
+                .iter()
+                .find(|animation| animation.selector == 2)
+                .map(|animation| animation.channel.clone()),
             sprite,
             atlas: Atlas::of(record),
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
@@ -815,7 +826,11 @@ impl System {
             } else {
                 0.0
             };
-            let extent = channel_sample(&spec.emission_scale, emitter_age, 0.5);
+            let extent = channel_sample(&spec.emission_scale, emitter_age, 0.5)
+                * spec
+                    .extent_animation
+                    .as_ref()
+                    .map_or(1.0, |channel| channel_sample(channel, emitter_age, 0.5));
             loop {
                 let state = &mut self.emitters[index];
                 if state.until_next > 0.0 || state.ticks_left <= 0.0 {
@@ -890,7 +905,7 @@ impl System {
             }
             let frames = spec.atlas.frames();
             spec.frames.step(particle, before, after, dt_ticks, frames);
-            if particle.life <= 0.0 {
+            if particle.life <= LIFE_EPSILON {
                 let (position, velocity) = (particle.position, particle.velocity);
                 *particle = Particle::DEAD;
                 if let Some(child) = spec.death_child {
@@ -918,22 +933,15 @@ impl System {
         rng: &mut Rng,
     ) -> Option<(usize, Vec3, Vec3)> {
         let spec = &effect.emitters[usize::from(spec_index)];
-        let direction = direction_for(spec.direction, self.up, rng);
-        // A sphere places the particle along its own flight direction, which
-        // is only the sphere's direction under the radial law; a tangent
-        // particle stays at the anchor rather than borrowing its tangent.
-        let placement = match (spec.spawn, spec.direction) {
-            (Spawn::Sphere { .. }, Direction::Tangent { .. }) => Spawn::Point,
-            (spawn, _) => spawn,
-        };
-        let anchor = anchor
-            + placement.offset(
-                self.scale * self.extent_scale * emission_scale,
-                direction,
-                self.across,
-                self.up,
-                rng,
-            );
+        let (direction, offset) = spawn::place(
+            spec.spawn,
+            spec.direction,
+            self.scale * self.extent_scale * emission_scale,
+            self.across,
+            self.up,
+            rng,
+        );
+        let anchor = anchor + offset;
         // `centre + spread * U(-1, 1)`, the original's `Psys_RandSpread`,
         // units per tick converted to per second once.
         let speed = (spec.speed_per_tick.0 + spec.speed_per_tick.1 * signed_unit(rng))
@@ -959,7 +967,7 @@ impl System {
             // procedural profile (every PS2 and HD effect) draws what it did.
             frame: spec.random_frame(rng),
             frame_at: 0.0,
-            fresh: spec.template,
+            fresh: true,
             roll: 0.0,
             turn: 1.0,
             spin_sample: 0.0,
@@ -1602,24 +1610,6 @@ fn random_range(rng: &mut Rng, range: (u32, u32)) -> f32 {
     (min + rng.below(max - min + 1)) as f32
 }
 
-/// The index of a dead particle, or the one with the least life left.
-///
-/// Ascending scan, so the choice depends only on the pool's own state.
-fn expendable_slot(particles: &[Particle]) -> usize {
-    let mut best = 0;
-    let mut best_life = f32::INFINITY;
-    for (i, particle) in particles.iter().enumerate() {
-        if !particle.alive() {
-            return i;
-        }
-        if particle.life < best_life {
-            best_life = particle.life;
-            best = i;
-        }
-    }
-    best
-}
-
 /// One spawn direction for a [`Direction`] law, in an emitter frame whose
 /// authored `+Y` maps to world-space `up`.
 ///
@@ -1729,7 +1719,7 @@ mod release;
 mod riding;
 
 mod particle;
-use particle::Particle;
+use particle::{Particle, expendable_slot};
 mod quad;
 use quad::quad;
 

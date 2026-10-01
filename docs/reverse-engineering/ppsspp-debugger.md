@@ -1819,3 +1819,30 @@ fresh profile (`OPT_CLOSE`, eye `(-11.25, +3.0)`): see
 Start it on a **fresh `HOME`** to read a default and on a copied one to read a
 choice; `psp-drive.py menu` gets a fresh home to a Time Trial unattended (run it
 with `python3`, not `uv run --with websocket-client`, which needs the network).
+
+### More ways to read the same launch (2026-10-01)
+
+`scripts/psp-weapon-pair.py` also does, each in its own run:
+
+- `--probe flare` / `--probe rolled` break on `ParticleSystem_DrawPoolSquares` and
+  `ParticleSystem_DrawRolledQuads` and log, per live instance, its scale words, its view
+  matrix and every pool particle's world position, size, colour, frame and roll
+  (`particle-system.md`). Hit once per instance per frame.
+- `--edram` writes both EDRAM framebuffers (`0x04000000`, `0x04088000`, 480x272 at stride
+  512) beside each shot. **Needs the software renderer**: set `SoftwareRenderer = True` in
+  the profile *with the emulator stopped* (it rewrites the file on exit). Alpha is the
+  bloom's glow mask; the displayed buffer is the one whose RGB matches the screenshot. A
+  `--no-fire` control beside it is what makes a difference mean something
+  (`glow-mask.md`, "The weapon bodies").
+- `--ge-dump-k K` requests `gpu.record.dump` at stop frame fire+K. The request has to be
+  **sent while the CPU is stopped and answered after it resumes** - the synchronous call
+  waits for a frame that cannot draw - so the script keeps the ticket and reads the reply
+  after the loop. `psp-ge-dump.py census` reads the file; a replay of its command words up
+  to a PRIM (`TEXLEVEL` `0xc8`, `BLENDMODE` `0xdf`, `STENCILTEST` `0xdc`, ...) is how the
+  Bomb's ring and dome states in `mine.md` were read.
+- `--detonate-bomb-at K --detonate-ahead D` moves the first laid Bomb `D` units ahead of the
+  craft and runs its fuse out (`mine.md`, third pass). With `--probe` it fires inside the
+  probe loop instead, **at the first probe hit after K frames** - and a `rolled` probe is not
+  hit until something draws through `ParticleSystem_DrawRolledQuads`, so in one run it fired at
+  frame 72.9 and not 8, the craft 70 frames further down the road. Read the logged
+  `detonation` row for where the blast went.

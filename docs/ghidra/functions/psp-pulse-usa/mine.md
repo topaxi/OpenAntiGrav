@@ -1291,3 +1291,73 @@ position, hashed per projectile); no committed golden hash covers a laid charge.
 own position". With it a laid Mine is under the hull for its first frames and emerges as
 the craft leaves, as in the original's frames (ours t406 against the original's k5).
 
+
+## 2026-10-01, third pass: the Bomb re-looked at with its textures decoding, and its detonation seen for the first time
+
+Same state as the second pass (Venom, Assegai, Talon's Junction, Time Trial, fire at speed
+106.2, native 480x272, the original's own animation clock read per frame and pinned on our
+side with `--anim-seconds`, which puts the ring at the phase the original's frame shows).
+Frames and probes are under `data/scratch/pulse-rocket-look/` (not committed).
+
+### The canister at launch
+
+Compared at fire+4 to +6, after the swizzle fix made `Pulse_Bomb.vex`'s textures decode.
+**Fixed**: the canister's mask. The weapon bodies were not stamping the glow mask, so the
+body kept the road's `255` under it and bloomed into a pale grey-green wash; the original
+writes `4` over the road there and `0xba` on its lamp batch, and ours now reads the same
+counts - see [`glow-mask.md`](../../../rendering/glow-mask.md#the-weapon-bodies-and-the-bombs-dome-stamp-too-2026-10-01).
+The body is now the original's darker olive. **Still different, not isolated**:
+
+- *The ring's brightness.* The original's ring at this phase is a thick, solid, saturated
+  yellow band round the canister's lower half; ours is thinner, dimmer, three yellow lines
+  on brown. The batch's GE state in the original was read off a dump (one GE dump, prim 668: 81 vertices,
+  `vt 0x13d`, texture format `T4`): additive `SRC_ALPHA, FIX 0xffffff`, colour test
+  `NOTEQUAL` black, depth write off, culling off, lighting off, stencil off, filter
+  `LINEAR_MIPMAP_LINEAR`, **texture level mode 2 with bias 2.875** (`TEXLEVEL` byte 46 / 16:
+  a per-texture bias, where this engine uses the one `1.0`), vertex colours all `0xffffffff`,
+  `u` and `v` in `0..128`. Those match ours but the bias, and at the bomb's 12 to 15 units of
+  view depth the slope law gives level 0 either way; the gap is therefore not the level.
+  Candidates left: the texel alpha (`237`) used as a vertex-times-texel factor, and the
+  authored mip chain.
+- *The top plate.* The original's hexagonal plate on the canister is an orange hatch; ours
+  is brighter and yellower. Same texture family, not isolated.
+
+### The detonation, pictured
+
+`psp-weapon-pair.py bomb --detonate-bomb-at 8 --detonate-ahead 120`: the first laid Bomb
+(pool `*0x08b3bf90`, slots at `+0x44`, count `+0xc4`) is moved 120 units ahead of the craft
+along its travel by writing its position row (`+0xb0`, the one `FUN_088633c0` reads) and
+its age (`+0xc0`) set far past `timetodie`, so `BombPool_Update` detonates it on the next
+tick with the camera 120 units away. The frames (`bomb-det-a/`) show, from the blast:
+
+1. **A full-screen orange wash, fire+10 to about +25**, fading - `ScreenFlash` kind 3
+   (`(1, 0.5, 0, 0.7)`, 0.75 s, near 100, far 300 -> 0.9 at 120 units), which
+   `BombBlast_Construct` starts. Ours draws the same wash at the same frames and colour.
+2. **A bright yellow-white fireball dome** at the blast, from fire+14, growing to a 100 px
+   hemisphere by +40, yellow at the rim and white at the core.
+3. **A brown smoke wall** rolling out from it from +32, 100 px and more across by +50,
+   with **rock debris** flying (the `debris` emitter's 4x4 rock sprites).
+4. A shockwave that passes through the dome and fades by +30.
+
+Ours, built from the same recovered animator, matched in kind and timing and differed in
+size: the smoke was a 25 px puff and the dome a faint grey outline. **Two causes fixed**:
+the smoke ring spawns on a ring round the blast that **widens from 12.94 to 23.3 units over
+the emitter's twenty ticks** (`psys` shape 3, `ParticleSystem_EmitRing`, and the animated
+attribute that scales its extent; [`particle-system.md`](particle-system.md#shape-3-is-a-ring-or-a-disc-particlesystem_emitring-2026-10-01),
+read live on this effect, two boots: 13.1 to 23.4 units from the centre) where ours spawned
+it at the anchor, and the dome stamps the glow mask (`hemisphere_disperse1_ADD_GLOW`, stencil `80`
+in the GE list). The debris emitter's rock sprites now exist at all (4-bit textures,
+[`pob.md`](../../../formats/pob.md)). **Still different**: the
+dome reads yellow and opaque in the original and white and thin in ours, and the original's
+smoke is denser and a little larger at fire+50; neither cause is isolated. The dome's palette
+is read (`(255,253,238,80)` through `(252,151,0,80)` and then alpha `0`: every visible texel
+is alpha `80`, so it is additive at 31 %), which is the same in both, so the brightness the
+original shows is its bloom (mask `80`) and the sky behind it; our bloom of the same mask is
+not separated from the extra white.
+
+Confidence: **88** for the smoke ring's placement and widening (a particle pool read on two
+boots); the dome's mask and the ring's and dome's GE states are **seen once** (one GE dump,
+one boot - no score); the wash is a visual match of colour and frame, with the formula read
+earlier (`particle-system.md`); the rest above is a description, not a measurement. The detonation was moved by a debugger
+write, and the blast's own position is therefore the written one; the blast force is not
+applied (that is `Bomb_ApplyBlast`, a separate call the write does not reach).

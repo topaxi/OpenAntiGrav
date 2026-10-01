@@ -1167,7 +1167,9 @@
 0x088f7e64	function	ParticleSystem_UpdateParticleFields	85	particle-system.md
 0x089177e4	function	ParticleSystem_DrawInstanceTree	80	particle-system.md
 0x08918bf8	function	ParticleSystem_DrawEmitterPool	80	particle-system.md
-0x089178c0	function	ParticleSystem_DrawRolledQuads	80	particle-system.md
+0x089178c0	function	ParticleSystem_DrawRolledQuads	85	particle-system.md
+0x089194d0	function	ParticleSystem_DrawPoolSquares	88	particle-system.md
+0x088fc634	function	ParticleSystem_EmitRing	85	particle-system.md
 0x0883eae8	function	Ship_SelectHullModel	82	ship-wreck-model.md
 0x0883eb68	function	Ship_SelectWreckModel	82	ship-wreck-model.md
 0x0881e8c8	function	HudSight_UpdateLeachBeam	92	lock-sight.md

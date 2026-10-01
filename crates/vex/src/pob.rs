@@ -466,6 +466,8 @@ pub const CHANNEL_LEN: usize = 0xe0;
 /// the block's own five-word header, in `(time, value)` pairs.
 pub const MAX_CHANNEL_KEYS: usize = (CHANNEL_LEN - 0x14) / 8;
 
+/// The records `+0x93c` counts: what re-derives an emitter's extents every tick.
+pub mod attribute;
 /// Emitter-record flag bits, `+0x20`. Its own file: the evidence behind
 /// [`flags::LOOPING`] alone runs longer than the rest of this module's
 /// constants put together.
@@ -685,10 +687,10 @@ pub struct Emitter {
     pub child_velocity_inherit: f32,
     /// `+0x4d4`: the probability a parent particle spawns this system.
     pub child_spawn_probability: f32,
-    /// `+0x93c`: records that re-derive the severity-scaled parameters every
-    /// tick. Their contents are not parsed; a non-zero count means this
-    /// emitter's parameters are *not* constant over a burst.
+    /// `+0x93c`'s count; a non-zero one means the parameters are not constant over a burst.
     pub animated_attributes: i32,
+    /// `+0x940`'s records, in order - see [`attribute`].
+    pub attribute_animations: Vec<attribute::AttributeAnimation>,
     /// `+0x9a0`: sprite-atlas grid, columns and rows.
     pub atlas_grid: (u16, u16),
     /// `+0x9ac`. **Not the frame count**: `ParticleSystem_InitParticle`
@@ -836,6 +838,7 @@ fn emitter_placeholder() -> Emitter {
         child_velocity_inherit: 0.0,
         child_spawn_probability: 0.0,
         animated_attributes: 0,
+        attribute_animations: Vec::new(),
         atlas_grid: (0, 0),
         atlas_frames: 0,
         modifiers: Vec::new(),
@@ -916,6 +919,7 @@ fn parse_emitter(
         child_velocity_inherit: float(0x4d0),
         child_spawn_probability: float(0x4d4),
         animated_attributes: int(0x93c),
+        attribute_animations: attribute::parse_list(data, order, base, record)?,
         atlas_grid: (half(0x9a0), half(0x9a2)),
         atlas_frames: int(0x9ac),
         modifiers,

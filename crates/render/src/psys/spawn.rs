@@ -3,9 +3,29 @@
 //! `ParticleSystem_SpawnBurst` switches on the emitter's shape (`+0x30`) and
 //! each emit function places the particle's spawn offset in the emitter's own
 //! frame before `ParticleSystem_InitParticle` carries it through the node
-//! matrix. Two shapes are read and implemented here; the rest stay at the
+//! matrix. Three shapes are read and implemented here; the rest stay at the
 //! anchor, as every shape did before:
 //!
+//! - **Shape 3, a ring or a disc.** `FUN_088fc634`, read in full on 2026-10-01 and
+//!   checked against a live detonation of `WO_BOMB_SMOKERING`: with `r` the scaled
+//!   extent (`DAT_08ab2290`) and `phi` drawn `U(0, 2 pi)` per particle, `+0x3c` `0`
+//!   places it at `(r cos phi, 0, r sin phi)` - a **ring** in the frame's `XZ` plane,
+//!   its `Y` the cone's axis; `1` at a radius `Psys_RandSpread(r, +0x40)`; `2` anywhere
+//!   in the **disc** (a point of the square `[-r, r]^2` redrawn until it lies inside the
+//!   circle). Under an aimed velocity (mode 1, which every shape-3 emitter with an extent
+//!   authors) the particle then flies along the heading of that offset - see [`place`].
+//!   `r` is **not constant**: the emitter's animated-attribute record (selector 2,
+//!   [`oag_vex::pob::attribute`]) scales the extent over its run, so the smoke ring's
+//!   particles were born 13.1, 13.7, 15.0, 17.6 and 23.4 units out at emitter ticks 0, 1,
+//!   3, 7 and 16 (two boots) against the authored `12.94`, and
+//!   [`super::EmitterSpec::extent_animation`] plays it. Until then shape 3 was a point, on
+//!   the strength of the collision sparks' extents of at most 0.1; the corpus authors `12.9`
+//!   on the Bomb's smoke and the ship explosion's root, `10` on its debris, `13.6` on the
+//!   Repulser's blast and `5.1` on the Rocket's own debris. **Not played:** flag
+//!   `0x200000`, which steps `phi` evenly (`2 pi / count`) from a random start instead of
+//!   drawing it (only `WO_REPULSER_BLAST` carries it), the sub-frame spread of a moving
+//!   emitter, the sign of the aimed azimuth (unmeasured, and the debris authors `0.925`),
+//!   and the Repulser's selector-5 record.
 //! - **Shape 1, a line (or a flat rectangle).** `FUN_088fcfec`, read at
 //!   instruction level on 2026-09-24: while `+0x3c` is `0..=2` the offset is
 //!   `(U(-e, e), 0, U(-z, z))`, `e` the scaled extent global
@@ -76,6 +96,15 @@ pub enum Spawn {
         /// `+0x40`, never scaled.
         depth: f32,
     },
+    /// Shape 3: a ring or a disc in the frame's `XZ` plane, see [this module](self).
+    Ring {
+        /// `+0x34`, before scaling.
+        extent: f32,
+        /// `+0x40`, scaled like `extent`; only read under `mode == 1`.
+        spread: f32,
+        /// `+0x3c`: `0` the ring, `1` the ring spread, `2` the disc.
+        mode: u32,
+    },
     /// Shapes 4 and 7: out along the particle's own direction.
     Sphere {
         /// `+0x34`, before scaling.
@@ -96,6 +125,11 @@ impl Spawn {
             (1, 0..=2) => Self::Line {
                 extent: record.extent,
                 depth: if depth.is_finite() { depth } else { 0.0 },
+            },
+            (3, mode @ 0..=2) => Self::Ring {
+                extent: record.extent,
+                spread: if depth.is_finite() { depth } else { 0.0 },
+                mode,
             },
             (4 | 7, mode) => Self::Sphere {
                 extent: record.extent,
@@ -131,6 +165,31 @@ impl Spawn {
                 let z = depth * signed(rng);
                 across * x + across.cross(up) * z
             }
+            Self::Ring {
+                extent,
+                spread,
+                mode,
+            } => {
+                let e = (extent * scale).max(1e-5);
+                let z_axis = across.cross(up);
+                if mode >= 2 {
+                    // A point of the square until it is in the circle: the original's own
+                    // rejection loop, so the disc is uniform.
+                    loop {
+                        let (x, z) = (e * signed(rng), e * signed(rng));
+                        if x * x + z * z <= e * e {
+                            return across * x + z_axis * z;
+                        }
+                    }
+                }
+                let radius = if mode == 1 {
+                    e + spread * scale * signed(rng)
+                } else {
+                    e
+                };
+                let phi = rng.next_f32() * std::f32::consts::TAU;
+                across * (radius * phi.cos()) + z_axis * (radius * phi.sin())
+            }
             Self::Sphere {
                 extent,
                 spread,
@@ -147,6 +206,48 @@ impl Spawn {
             }
         }
     }
+}
+
+/// A new particle's flight direction and spawn offset, in that order of dependence.
+///
+/// A ring or a disc under an **aimed** velocity (every shape-3 emitter with an extent
+/// authors velocity mode 1) places the particle first and aims it along the spawn
+/// offset's own heading: `FUN_088fc634` hands `ParticleSystem_AimedVelocity` the
+/// normalised `(x, 0, z)` it just wrote, so the smoke leaves the ring outward rather
+/// than in a direction drawn apart from where it was born. Every other pairing draws
+/// the direction first, as it always did (a sphere places the particle along it, and
+/// a tangent sphere stays at the anchor).
+#[must_use]
+pub(super) fn place(
+    spawn: Spawn,
+    direction: super::Direction,
+    scale: f32,
+    across: Vec3,
+    up: Vec3,
+    rng: &mut Rng,
+) -> (Vec3, Vec3) {
+    if let (
+        Spawn::Ring { .. },
+        super::Direction::Aimed {
+            elevation,
+            azimuth,
+            jitter,
+        },
+    ) = (spawn, direction)
+    {
+        let offset = spawn.offset(scale, Vec3::ZERO, across, up, rng);
+        let radial = offset.try_normalize().unwrap_or(across);
+        let elevation = elevation + jitter * (rng.next_f32() * 2.0 - 1.0);
+        let (sin_a, cos_a) = azimuth.sin_cos();
+        let heading = radial * cos_a + up.cross(radial) * sin_a;
+        return (heading * elevation.cos() + up * elevation.sin(), offset);
+    }
+    let aim = super::direction_for(direction, up, rng);
+    let placement = match (spawn, direction) {
+        (Spawn::Sphere { .. }, super::Direction::Tangent { .. }) => Spawn::Point,
+        (other, _) => other,
+    };
+    (aim, placement.offset(scale, aim, across, up, rng))
 }
 
 /// `across` made perpendicular to `up`, falling back to the frame's own
