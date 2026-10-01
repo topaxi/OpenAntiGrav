@@ -67,8 +67,9 @@ impl Race {
         // clock both start a tick ahead of the first thrust. Measured on Pulse PSP.
         let on_grid =
             RaceState::thrust_gated(self.sim.world.tick + 1) && self.sim.world.mode() != Mode::Zone;
-        // The launch boost's clock starts at the same tick in every mode: Zone's
-        // auto-speed goes through the same multiplier, and Zone has a countdown.
+        // The launch boost's clock starts at the same tick in every mode, Zone
+        // included (it has a countdown; its auto-speed is not multiplied yet, see
+        // `oag_physics::engine::engine`).
         let released = !RaceState::thrust_gated(self.sim.world.tick + 1);
         for ship in &mut self.sim.world.ships {
             ship.physics.on_grid = on_grid;

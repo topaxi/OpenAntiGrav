@@ -198,3 +198,33 @@ fn a_held_through_launch_covers_the_originals_ground_on_two_circuits() {
         }
     }
 }
+
+/// The boost is applied on Pulse PSP, where it was measured, and not by extension
+/// to the discs that author the same `<StartBoost>`: Pulse PS2's and Wipeout HD's
+/// files carry it too, and neither was watched.
+#[test]
+#[ignore = "needs disc images in data/images/"]
+fn only_pulse_psp_gets_the_launch_boost() {
+    for (image, expected) in [
+        ("data/images/pulse-psp-usa.chd", true),
+        ("data/images/pulse-psp-eu.chd", true),
+        ("data/images/pulse-ps2-eu.chd", false),
+        ("data/images/hdfury-ps3-eu-dec.iso", false),
+    ] {
+        let Some(path) = oag_testdata::image(image) else {
+            continue;
+        };
+        let loaded = race::load(&race::Options {
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        assert_eq!(
+            loaded.setup.start_boost.is_some(),
+            expected,
+            "{image}: the launch boost's presence"
+        );
+    }
+}

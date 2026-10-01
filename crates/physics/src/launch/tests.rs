@@ -2,17 +2,23 @@ use super::*;
 
 const DT: f32 = 1.0 / 60.0;
 
-/// Invented figures, each distinct, with the windows at the ratios a disc's
-/// are: they are not the game's numbers.
+/// Invented figures, each distinct and none of them the game's. The four times
+/// are whole numbers of 60 Hz ticks (12, 24, 30 and 75), which is the case the
+/// count-not-sum rule exists for: a running `f32` sum of 75 steps reads
+/// `1.2499995`, a tick short of the limit.
 const P: StartBoost = StartBoost {
-    window_start: 0.1,
-    window_end: 0.35,
-    stall_end: 0.45,
-    overall_duration: 1.0,
+    window_start: 0.2,
+    window_end: 0.4,
+    stall_end: 0.5,
+    overall_duration: 1.25,
     stall_mul: 1.25,
     normal_mul: 1.5,
     boost_mul: 1.75,
 };
+
+/// The last tick whose engine read is boosted: `overall_duration` of 75 ticks,
+/// the boost writer's reads running from tick 1.
+const WINDOW: usize = 75;
 
 /// Runs the launch one tick at a time the way `forces::evaluate` does: read the
 /// multiplier (what the engine uses), then advance. Tick 0 is the release
@@ -44,23 +50,26 @@ fn count(reads: &[f32], value: f32) -> usize {
 fn a_held_through_launch_reads_normal_once_then_stall_for_the_window() {
     // Thrust is first non-zero on tick 1, the first racing frame: the engine
     // reads the resting grade's multiplier on it, the grader runs behind it.
-    let reads = run(Some(1), 80);
+    let reads = run(Some(1), 100);
     assert_eq!(reads[0], 1.0, "the release frame reads the resting 1.0");
     assert_eq!(reads[1], P.normal_mul, "the first thrust frame");
-    assert!(reads[2..=60].iter().all(|&m| m == P.stall_mul), "{reads:?}");
-    assert_eq!(reads[61], 1.0, "the window is over");
+    assert!(
+        reads[2..=WINDOW].iter().all(|&m| m == P.stall_mul),
+        "{reads:?}"
+    );
+    assert_eq!(reads[WINDOW + 1], 1.0, "the window is over");
 }
 
 #[test]
 fn a_thrust_inside_the_perfect_window_earns_the_perfect_multiplier() {
-    // Tick 12 is 11 clock ticks into the racing frames: 0.183 s.
-    let reads = run(Some(12), 80);
+    // Tick 20 is 19 clock ticks into the racing frames: 0.317 s, inside [0.2, 0.4).
+    let reads = run(Some(20), 100);
     assert_eq!(
-        reads[12], P.normal_mul,
+        reads[20], P.normal_mul,
         "the edge frame reads the old grade"
     );
     assert!(
-        reads[13..=60].iter().all(|&m| m == P.boost_mul),
+        reads[21..=WINDOW].iter().all(|&m| m == P.boost_mul),
         "{reads:?}"
     );
     assert_eq!(count(&reads, P.stall_mul), 0);
@@ -68,10 +77,10 @@ fn a_thrust_inside_the_perfect_window_earns_the_perfect_multiplier() {
 
 #[test]
 fn a_thrust_in_the_stall_window_after_it_earns_stall() {
-    // Tick 26: 25 clock ticks, 0.417 s, between windowEnd and stallEnd.
-    let reads = run(Some(26), 80);
+    // Tick 28: 27 clock ticks, 0.45 s, between windowEnd and stallEnd.
+    let reads = run(Some(28), 100);
     assert!(
-        reads[27..=60].iter().all(|&m| m == P.stall_mul),
+        reads[29..=WINDOW].iter().all(|&m| m == P.stall_mul),
         "{reads:?}"
     );
     assert_eq!(count(&reads, P.boost_mul), 0);
@@ -79,26 +88,31 @@ fn a_thrust_in_the_stall_window_after_it_earns_stall() {
 
 #[test]
 fn a_thrust_after_the_stall_window_keeps_normal() {
-    let reads = run(Some(32), 80);
-    assert!(reads[1..=60].iter().all(|&m| m == P.normal_mul));
-    assert_eq!(reads[61], 1.0);
+    let reads = run(Some(40), 100);
+    assert!(reads[1..=WINDOW].iter().all(|&m| m == P.normal_mul));
+    assert_eq!(reads[WINDOW + 1], 1.0);
 }
 
 #[test]
 fn a_thrust_after_the_window_never_sees_a_boost() {
-    let reads = run(Some(80), 120);
-    assert!(reads[61..].iter().all(|&m| m == 1.0), "{reads:?}");
-    assert_eq!(count(&reads[..61], P.normal_mul), 60, "nothing graded it");
+    let reads = run(Some(90), 140);
+    assert!(reads[WINDOW + 1..].iter().all(|&m| m == 1.0), "{reads:?}");
+    assert_eq!(
+        count(&reads[..=WINDOW], P.normal_mul),
+        WINDOW,
+        "nothing graded it"
+    );
 }
 
 #[test]
-fn the_boost_window_is_sixty_ticks_whatever_the_grade() {
+fn the_boost_window_is_exactly_its_ticks_whatever_the_grade() {
     // The boost writer reads its own timer before adding to it, at 1/60 in f32:
-    // sixty additions must not land short of the one second and give a sixty-first.
-    for press in [1, 12, 26, 32] {
-        let reads = run(Some(press), 100);
+    // seventy-five additions land at `1.2499995`, short of the limit, and would
+    // give a seventy-sixth boosted tick if the timer were a running sum.
+    for press in [1, 20, 28, 40] {
+        let reads = run(Some(press), 120);
         let boosted = reads.iter().filter(|&&m| m != 1.0).count();
-        assert_eq!(boosted, 60, "press at tick {press}: {reads:?}");
+        assert_eq!(boosted, WINDOW, "press at tick {press}: {reads:?}");
     }
 }
 

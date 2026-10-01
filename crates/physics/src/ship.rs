@@ -584,8 +584,8 @@ pub struct ShipState {
     /// The same fact as `!`[`Self::on_grid`] in every mode but Zone, where
     /// `on_grid` stays `false` because the one force term it gates is
     /// `Ship_HoverTwoPoint`'s and Zone runs the four-corner hover. The launch
-    /// boost's clock starts here ([`crate::launch`]), and Zone's auto-speed goes
-    /// through the same multiplier. Written by the race from the countdown clock,
+    /// boost's clock starts here ([`crate::launch`]); in the original Zone's auto-speed
+    /// goes through the same multiplier, which this port does not apply yet. Written by the race from the countdown clock,
     /// not hashed, for [`Self::on_grid`]'s reason.
     pub released: bool,
     /// The launch boost: `craft+0x294` and what decides it. See
