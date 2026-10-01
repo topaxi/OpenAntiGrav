@@ -153,12 +153,24 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
             // substitutes or the nine circuits it fires on would start in a
             // different frame from the other 43. Asserted here rather than
             // trusted, because the agreement figure below is blind to pitch.
+            //
+            // **Or it carries the track's own pitch, where the grid is laid in
+            // the track's frame.** Pulse PSP's is (`oag_gameplay::
+            // orientation_on_sample`, 2026-10-01): the original's eight craft
+            // read at placement have forward `y` of `+0.0037` to `-0.0040`, the
+            // track's slope, where the bind's frame is level. Either is a real
+            // frame; a craft pitched by anything else is not. The tolerance is
+            // `0.01`, not `0.001`, because the slot's own sample is not the
+            // nearest one to the craft, and `09_Track` reversed climbs at `0.29`.
+            let tangent = tangent_at(body.position);
             assert!(
-                forward.y.abs() < 1.0e-3,
-                "{track}: a craft spawned pitched by {}, and the bind's frame is level",
-                forward.y
+                forward.y.abs() < 1.0e-3 || (forward.y - tangent.y).abs() < 1.0e-2,
+                "{track}: a craft spawned pitched by {}, and neither the bind's level frame nor \
+                 the track's own pitch {} explains it",
+                forward.y,
+                tangent.y
             );
-            forward.dot(tangent_at(body.position))
+            forward.dot(tangent)
         })
         .collect();
 

@@ -44,6 +44,10 @@ def main():
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--no-restart", action="store_true")
+    parser.add_argument("--again", type=float, action="append", default=[],
+                        help="after the description is dismissed, read the table again this many "
+                        "seconds of wall clock later (repeatable): the field is held through the "
+                        "countdown, so a read before GO is a read of where it stood")
     args = parser.parse_args()
     dbg = Debugger(args.port)
     dbg.resume()
@@ -72,6 +76,23 @@ def main():
     args.out.write_text(json.dumps({"state": state, "rows": rows}))
     for r in rows:
         print(r["slot_entry"], [round(v, 3) for v in r["pos"]], [round(v, 4) for v in r["axis_b"]])
+    later = []
+    started = time.time()
+    if args.again:
+        dbg.resume()
+        dbg.hold(cross=True)
+        for wait in sorted(args.again):
+            time.sleep(max(0.0, wait - (time.time() - started)))
+            dbg.brk()
+            rows = read_grid(dbg)
+            later.append({"after_seconds": wait, "rows": rows})
+            print("after %.1f s:" % wait)
+            for r in rows:
+                print(r["slot_entry"], [round(v, 3) for v in r["pos"]], [round(v, 4) for v in r["axis_b"]])
+            dbg.resume()
+        dbg.hold(cross=False)
+        args.out.write_text(json.dumps({"state": state, "rows": json.loads(args.out.read_text())["rows"],
+                                        "later": later}))
     dbg.resume()
 
 
