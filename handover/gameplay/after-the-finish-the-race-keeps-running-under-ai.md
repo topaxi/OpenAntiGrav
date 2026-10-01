@@ -5,8 +5,10 @@ categories: [rendering, frontend]
 # After the finish the race keeps running under AI, and ours stops
 
 2026-10-01, from play (the maintainer): in the original, once a race is over the race
-keeps playing in the background, the player's craft driven by AI. How the camera
-behaves there is not known. Nothing in `docs/` records this yet: the end-of-race pages
+keeps playing in the background, the player's craft driven by AI. How the camera behaves there is not known. **The maintainer remembers it from HD/Fury**
+and presumes the earlier titles do the same, so HD is the observed title and Pulse the
+presumed one: a Pulse capture showing the craft stopping falsifies the presumption for
+Pulse, not the report. Nothing in `docs/` records this yet: the end-of-race pages
 ([endrace-screens.md](../../docs/ui/endrace-screens.md)) cover the panels drawn over
 the race, not what the race underneath them does.
 
@@ -30,7 +32,8 @@ and the work is to turn it into measurements, not to tune toward a memory.
 
 ## Next Steps
 
-1. Capture on PPSSPP (Pulse PSP): finish a Single Race and a Time Trial, then record
+1. Capture on PPSSPP (Pulse PSP; if Pulse shows no post-race AI, capture HD/Fury on
+   RPCS3 before closing anything, since HD is where it was seen): finish a Single Race and a Time Trial, then record
    frames and the player craft's input/control state for at least 30 s past the line
    while the results panels are up. Discriminating question: does the player's craft
    keep moving with no input, and is its control state the AI's? Falsified if the craft

@@ -28,7 +28,8 @@ from memory.
   a button skips it, and how it hands over to the grid and the countdown.
 - **What else runs during it**: the crafts on the grid, the HUD, music and the
   announcer.
-- Whether Pure, HD/Fury and 2048 have one (the report is about Pulse).
+- Which titles have one. The maintainer's post-race memory is from HD/Fury, so the
+  flyby may be too: check Pulse PSP first, and HD/Fury on RPCS3 if Pulse has none.
 
 ## Next Steps
 
