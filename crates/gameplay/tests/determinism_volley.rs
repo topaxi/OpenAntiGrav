@@ -248,9 +248,15 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   regeneration was green before it. Replaces `0x84b1_ede3_62c8_f914` /
 ///   `0xdf2c_fa35_c525_9b68` at 60 ticks and `0xc367_da50_59dd_4747`
 ///   (trajectory) at 600.
+///
+/// - **Moved again 2026-10-01**, by the Rocket's riding normal being seeded from
+///   the craft's up rather than world up (`Projectiles::spawn_riding`).
+///   Isolated by commit: the previous regeneration was green before it.
+///   Replaces `0xdb77_1466_f784_d9b9` / `0x299e_b849_daed_4a92` at 60 ticks and
+///   `0x4129_e4fd_ccdd_4d1c` (trajectory) at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xdb77_1466_f784_d9b9, 0x299e_b849_daed_4a92),
-    (600, 0x5b48_d436_7dbc_09e7, 0x4129_e4fd_ccdd_4d1c),
+    (60, 0x72ba_a575_f0b3_bdf4, 0x2e0f_a99e_309c_ed96),
+    (600, 0x5b48_d436_7dbc_09e7, 0x7a1f_821f_3771_eb31),
 ];
 
 #[test]
