@@ -58,6 +58,13 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
+#
+# `[parallel]` so the script checks (about four seconds of Python in all) and
+# `rustfmt` run while cargo is compiling rather than after it. `lint` and `test`
+# still take cargo's own build-directory lock one after the other, in whichever
+# order they get there, so nothing here changes what either asserts. Output of
+# the recipes interleaves; a failure names its recipe.
+[parallel]
 check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings check-just-args check-status
 
 # Documentation is a deliverable, so its links are checked like any other build output
