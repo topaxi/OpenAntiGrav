@@ -577,6 +577,13 @@ pub struct ShipState {
     /// `rebound` base is `1.0` rather than the hull's, and the control record's
     /// airbrakes are forced to full. See `docs/physics/grid-state.md`.
     pub on_grid: bool,
+    /// The launch boost: `craft+0x294` and what decides it. See
+    /// [`crate::launch`].
+    ///
+    /// Idle for every craft whose race never supplies the disc's
+    /// `<StartBoost>` (`Environment::start_boost`), and hashed only once it is
+    /// not.
+    pub launch: crate::launch::LaunchState,
     /// Seconds since the ship last touched down, in seconds.
     ///
     /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
@@ -802,6 +809,7 @@ impl Default for ShipState {
             // `docs/ghidra/functions/psp-pulse-usa/engine.md`.
             time_since_landing: 10.0,
             on_grid: false,
+            launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,
             mag_lock_blend: 0.0,
             pad_timer: 0.0,
