@@ -1126,11 +1126,20 @@ confidence scores in its own module doc; the summary:
   u8 unk, u8 unk, u32 palette_bytes(1024), u32 pixel_bytes, u32 pixel_offset,
   u32 palette_offset` - the last two are plain absolute offsets into the
   blob, not relative to the resource base or the header.
-- **29 of the PSP corpus's 35 root emitters carry one**; the other six -
-  `WO_PLASMA_FLASH`, `WO_RAIN`, `WO_SNOW`, `WO_LEACHBEAM_CHARGING`,
-  `WO_REPULSER`, `WO_ROCKET_FLARE` - do not, measured by
+- **Every PSP root emitter carries one** (35 of 35), and so does every other
+  emitter: 76 headers across the corpus, 64 at 8 bits per pixel and **12 at 4**
+  (128x64 or 64x128, a 16-entry palette), measured by
   `crates/assets/tests/pob_ground_truth.rs`'s
-  `every_psp_root_emitter_texture_is_where_the_layout_says`.
+  `every_psp_root_emitter_texture_is_where_the_layout_says`. **This page used
+  to say 29 of 35, with `WO_PLASMA_FLASH`, `WO_RAIN`, `WO_SNOW`,
+  `WO_LEACHBEAM_CHARGING`, `WO_REPULSER` and `WO_ROCKET_FLARE` carrying none
+  ("plausibly drawing an untextured quad")**: the reader refused 4 bpp headers,
+  and all six are 4 bpp. Found 2026-10-01 from a picture: the `FIRE` emitter of
+  `WO_SHIP_FXNODE_EXPLO` is a 4 bpp sprite too, and a GE dump of the running
+  original binds it (`TEXSIZE 0x607`, `TEXFORMAT 4`). The six, `FIRE`,
+  `SHIP_DEBRIS` and the `DEBRIS` emitters of `WO_ROCKET_EXPLO`, `WO_MINE_EXPLO`
+  and `WO_BOMB_SMOKERING` plus `WO_PLASMA_HEAD`'s `plasma_spikes` had been drawn
+  with the procedural white disc.
 - **`WO_SHIP_COLL_SPARK_DAMAGE` confirms it names the texture `pob.md`
   already resolved from the slot table**: its root's positional texture is
   32x32/3-level, matching `quakesmoke32x32.tga`'s own size, and decodes
