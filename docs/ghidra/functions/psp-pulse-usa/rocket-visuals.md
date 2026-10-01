@@ -642,7 +642,7 @@ is exactly why it is the clean place to compare a free flight. The capture
 frames and the probe JSON are under `data/scratch/pulse-weapons/` (not
 committed).
 
-**Measured, 3 rockets of one volley, two runs: identical to 0.1 unit.** Every
+**Measured, 3 rockets of one volley, two runs: identical to 0.1 unit.** (Ours: a temporary, uncommitted `eprintln!` of `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs`, reverted; the original: `psp-weapon-pair.py --probe rocket`.) Every
 `Rocket_Update` hit (`0x0885d2a8`) read `a0` = the rocket:
 
 | | original | ours |
@@ -664,13 +664,20 @@ What this settles:
   `Rocket_Update` and is a pure function of two globals, so it returns the same
   800 at both.
 - **The first four frames are slower, at exactly 0.75 x the class speed**
-  (166.67 = 600 km/h). `Rocket_Init` scales the launch direction by that same
-  function, so the 0.75 is in the direction vector the spawn hands it
-  (`Weapon_FireRocket`'s matrix row 2), or in a second term not read; and the
-  step to 222.22 coincides with the first surface-probe hit, where
-  `Rocket_Update` renormalises to `SpeedForClass / 3.6`. Which of the two it is
-  was **not** separated: one class (Venom) cannot tell `0.75 x class` from
-  `class - launchSpeed` (800 - 200). Hypothesis, below 50, no name.
+  (166.67 = 600 km/h), and the 0.75 is the craft's display-matrix scale, not
+  `launchSpeed`. `Rocket_Init` copies the matrix `Weapon_FireRocket` hands it
+  into `+0x60..+0x9c` and scales its row 2 (`a1+0x20`, the direction) by
+  `SpeedForClass / 3.6`. The first `Rocket_Update` hit breaks at entry, before the
+  rows are rebuilt, so those words are still Init's copy: read off all six rockets
+  of two runs, **rows 0, 1 and 2 each have length 0.7500** (the same `g_craft_scale`
+  the Mine probe found on the craft's anchor). So launch speed = class speed x
+  0.75 for as long as the direction vector keeps that length, and the step to
+  222.22 at the fourth update is the first surface-probe hit, where
+  `Rocket_Update` renormalises to `SpeedForClass / 3.6` (the `0x4066 6666`
+  divide at `0x0885d6c8`). `launchSpeed` plays no part. Confidence **88**: the
+  mechanism is read and the 0.75 and both speeds are measured, but why the step
+  lands on the fourth update (probe reach against the hover height) was not
+  separated from the age, and the Flash/Rapier/Phantom values were not run.
 - **The rocket is spawned at the craft's position, not at its nose.** A
   stationary Mine's `Mine_PoseNode` matrix was read at the craft's body position
   to the hundredth (mine.md, same date), and the Rocket agrees.
@@ -680,8 +687,9 @@ moves the committed determinism hash, so a lane that owns them regenerates it in
 its own commit):**
 
 1. *Rocket cruise speed*: 222.22 u/s, not 277.78. Measured, 2 sources.
-2. *Rocket launch speed*: 0.75 x class for the first four frames, then the
-   class speed. Measured on Venom only.
+2. *Rocket launch speed*: the direction vector keeps the craft's display scale
+   0.75, so the rocket leaves at 0.75 x class until its first surface hit sets
+   the class speed. Measured on Venom; `launchSpeed` is not involved.
 3. *Rocket spawn point*: the craft's position, not the nose. Measured.
 4. *Rocket life against the track*: ours detonates 2-4 times sooner than the
    original's 51-70 frames. Not isolated: the speed, the spawn point and the
@@ -700,7 +708,8 @@ rows changed first. Chosen, not measured: nothing here.
 
 Two things in the frames that are not this lane's: the original's craft is
 about 1.4 x larger on screen than ours at the same moment (a camera framing
-difference, ours is `--camera-view close` and `far` identical at this speed),
+difference, not investigated; `--camera-view close` and `far` rendered alike in one
+check, which may also mean the flag did not take effect),
 and the held-weapon icon differs (the original's Time Trial shows its pad
 indicator; ours shows the weapon, because `--give` refills the slot).
 

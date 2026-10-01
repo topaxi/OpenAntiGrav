@@ -14,7 +14,7 @@ checks these first rather than rediscovering them:
   quarter-turn is the `WO_ROCKET_FLARE` frame's, not the model's, and the
   flare now rides it (`psys::Stage::orient`: its `+Y` is the velocity). See
   `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s 2026-09-24
-  section. No launch-speed ramp has been read for it (the Plasma's was).
+  section. **2026-10-01**: measured - 0.75 x class for four frames, then the class speed alone (see Open).
 - **Mine**: **2026-09-24** - the pose is measured live and is not the
   craft's at all: `Mine_PoseNode` re-poses every laid mine each tick as
   `0.6 x Rot(axis, -4 x fuse)` about a per-mine random axis. Pulse draws
@@ -54,7 +54,10 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   determinism hash, so its own commit):
   1. cruise speed 222.22 u/s (800 km/h, class alone), ours 277.78 (class +
      `launchSpeed`);
-  2. launch speed 166.67 u/s (0.75 x class) for four frames, ours none;
+  2. launch speed 166.67 u/s for four frames: the direction vector keeps the
+     craft's display scale 0.75 (rows measured 0.7500 on six rockets), so
+     0.75 x class until the first surface hit; `launchSpeed` plays no part. Ours
+     has none;
   3. spawn at the craft's position, ours at the nose;
   4. life: the original's detonate at fire+51/61/70 (185-252 units), ours at
      +14..32 (75-158 units). Re-measure after 1-3.
@@ -78,8 +81,9 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   explain a 20-frame delay, so something before `ShipShield_Activate` is unread)
   and banding/brightness (not measured).
 - *Cross-cutting, not this lane*: the original's craft is about 1.4 x larger on
-  screen than ours at the same moment; `--camera-view close` and `far` render
-  alike at this speed. The camera/pulse-glow lanes own it.
+  screen than ours at the same moment; `--camera-view close` and `far` rendered
+  alike in one check (not investigated; the flag may not have taken effect). The
+  camera lane owns it.
 - *Pulse Cannon* - the round's own basis measured live
   (`cannon-quake-leachbeam.md`, 2026-09-24); the node that draws it was not,
   and no frame compared.
@@ -92,10 +96,12 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
 1. A gameplay lane takes rows 1-4 of the Rocket (one commit per row, hash
    regenerated in its own commit), then re-runs
    `python3 scripts/psp-weapon-pair.py rocket --probe rocket` against our
-   `OAG_PROJ_LOG`-style per-tick positions and the photographed set.
+   per-tick projectile positions (a temporary `eprintln!` of
+   `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs` made them
+   this pass) and the photographed set.
 2. Decide the Mine/Bomb drop point from the measurement (`mine::drop_point`), and
    look at `Pulse_Bomb.vex` for the ring and the shaft.
 3. Read what delays the shield's first visible frame in the original
    (`FUN_08861568`'s arm path against `ShipShield_Activate`).
-4. For a second speed class, re-run the Rocket probe on Flash to tell
-   `0.75 x class` from `class - launchSpeed`.
+4. Optional: re-run the Rocket probe on Flash to confirm 0.75 x class on a second
+   speed class.
