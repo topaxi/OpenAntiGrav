@@ -880,8 +880,7 @@ impl System {
                         spec_index,
                         anchor,
                         inherited,
-                        extent,
-                        frame_scale,
+                        (extent, frame_scale),
                         rng,
                     ));
                 }
@@ -969,8 +968,7 @@ impl System {
         spec_index: u16,
         anchor: Vec3,
         inherited: Vec3,
-        emission_scale: f32,
-        frame_scale: f32,
+        (emission_scale, frame_scale): (f32, f32),
         rng: &mut Rng,
     ) -> Option<(usize, Vec3, Vec3)> {
         let spec = &effect.emitters[usize::from(spec_index)];
