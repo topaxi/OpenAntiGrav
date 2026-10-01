@@ -491,10 +491,48 @@ All in `names.tsv` in this change.
 countdown, is disassembled and understood but has no function defined in the
 database and no page section of its own, so it gets no row.
 
+## 2026-10-01: the shell watched on PPSSPP, side by side with ours
+
+The first runtime leg for this page. Same method as `rocket-visuals.md`'s
+2026-10-01 section: `scripts/psp-weapon-pair.py shield` ORs bit `0x20` into the
+player's weapon record 120 frames after GO (speed 106.2, Time Trial, Talon's
+Junction, Venom/Assegai), the emulator window is photographed at 480x272 up to
+240 frames later (two runs, 16 and 17 frames each), and ours is
+`oag-game --race --mode time_trial --give shield` with the same
+`weapon-after-go.inputs`, at the tick `fire + k - 2` (two frames of display lag).
+Frames: `data/scratch/pulse-weapons/shield-orig-tt1`, `-tt2`,
+`shield-ours-tt480` (not committed).
+
+What matches, at player size:
+
+- A shell that **fades in and settles**, violet-magenta at first and
+  **blue** by about fire+70, with the cap-and-bands look of the authored mesh,
+  persisting to fire+240 at least (the pickup's `time` is not read here).
+- The shell's size against the craft: about 1.6-1.7 x the craft's width on both
+  sides (the original's looks larger only because its craft is about 1.4 x larger
+  on screen; the camera framing is not this page's).
+
+What differs, named and not fixed:
+
+1. *Onset.* In the original nothing is visible at fire+12, a faint outline at
+   +20 and a clear shell at +28. Ours shows a faint shell at +12 and a clear one
+   at +20: **about 6-8 frames earlier**. The recovered fade (`rgba += (target -
+   rgba) * 0.15` per 60 Hz step, 90 % in 14 steps) cannot account for an
+   original delay of 20+ frames, so something before `ShipShield_Activate`
+   delays it in the original (the arm function's own timer, or the `active` flag
+   being set late). Not read. This is the same size as the delay ours already
+   carries from somewhere; which part of it is the original's is open.
+2. *Banding and brightness.* The original's concentric cyan bands are sharper
+   and its shell reads as brighter and more opaque at fire+50 to +150 than ours.
+   Not measured in numbers (a colour comparison needs the same camera framing
+   first). Candidate: the sinusoidal alpha `(n * 0.25 + 0.75)` or the model's
+   vertex colours.
+
 ## What is not verified
 
-- **No runtime leg.** Nothing on this page has been watched in PPSSPP. Every
-  claim is a static read, which is why nothing exceeds 88.
+- **Almost no runtime leg.** The 2026-10-01 section above watched the shell once
+  on PPSSPP, as a picture; no number on this page was measured live. Every claim
+  is still a static read, which is why nothing exceeds 88.
 - **The block behind the contact loop's first shield gate**
   (`0x08841fe0`-`0x08842088`), which does more than post damage. The other
   three gates are read; see the table above.

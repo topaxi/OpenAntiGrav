@@ -1149,6 +1149,59 @@ row, negated". It is `-craft[+0xb10]`, and live it is `(0.0002, 0.9998,
 - **HD's Mine and Bomb** keep the frozen craft pose: HD is a different
   binary and neither of its poses was read. Chosen, not measured.
 
+## 2026-10-01: seen from the original's own chase camera, and what the first frames show
+
+The 2026-09-24 pass had no picture of the original's charges because they are
+laid at the craft's position and left behind. They are visible for **two
+frames**, as the craft moves off them and before the camera passes over them:
+fire at speed (106.2 u/s, 120 frames after GO, Time Trial, Talon's Junction,
+Venom/Assegai; `scripts/psp-weapon-pair.py mine --set-word 0x1ac=5`, the round
+counter a hand-set fire bit does not arm) and photograph every frame. The
+camera is 11.4 behind and 2.6 above the craft (read off the camera node,
+`camera.md`), so a charge laid at the craft's centre passes under the lens
+about 6 frames after the drop. Frames: `data/scratch/pulse-weapons/mine-orig-mv1`,
+`bomb-orig-mv1` (not committed); ours `mine-ours-tt480`, `bomb-ours-tt480`.
+
+**Measured (a stationary craft, `Mine_PoseNode` probe, 5 mines, fuse 7.00
+each):** every mine's matrix translation equals the craft's body position to the
+hundredth (`6.08, -50.07, -196.03` both), so **the original lays a Mine at the
+craft's own position, with no push back along the hull**, and its row lengths
+are 0.75 at the first hit (the anchor's `g_craft_scale`, as above) before
+`Mine_PoseNode` scales it to 0.6. The cluster leaves at stop frames 0, 7, 13, 19,
+25 (6-7 apart). A stationary craft cannot see them (they are inside the hull);
+the frames show the blast, a full-screen yellow wash and debris, between
+fire+24 (clear) and fire+32, on the craft that laid them (the 2026-09-30
+section above, 29 frames, consistent).
+
+**Mine, side by side at native size.** The model matches: a dark grey
+triangular prism with a grille, scaled and tumbling as drawn. It is visible for
+two frames in the original (fire+5 and +6, emerging from under the hull) and for
+three in ours (from fire+0, because ours is laid `hull_extent` behind the craft
+centre and so is already clear of the hull). The second mine follows 6-7
+frames later on both sides. Difference, named: **laid-position offset**, which is
+`projectile::mine::drop_point`, documented there as chosen ("pushed back by the
+hull's own extent"). It is now measured against; the same applies to the Bomb
+(`Weapon_FireBomb` takes the same anchor).
+
+**Bomb, side by side.** The same canister model on both sides (olive hexagonal
+body, hex plate on top, yellow bands near the base), laid at the same place
+(ours about 5 units behind the craft centre, the same offset as above) and out of sight within
+three frames. Two differences, neither fixed:
+
+1. *A ring.* Ours shows a wide, flat yellow ring around the canister for its first
+   three or four frames (about 2.5 x the canister's width). The original shows
+   none; at fire+3 it shows a thin vertical shaft of white-yellow light through the
+   craft, and two yellow bands at the canister's own width at fire+5. The original
+   spawns **no particle effect at all** for a Bomb launch: a `Psys_Spawn_q` probe
+   (`0x08915484`, 120 frames after the fire) caught nothing but a wall-scrape
+   spark. So the shaft and the bands are the model's own geometry or material,
+   and ours' ring is either that same geometry drawn at a different scale or
+   orientation, or something this engine adds. **Not isolated**; the first step is
+   to view `Pulse_Bomb.vex`'s meshes and compare their extents with the ring.
+2. *No detonation in the original's frames.* A moving bomb is left behind and
+   its `BombBlast` is never in view within 58 frames; ours also holds it (fuse
+   20 s, never detonates in 300 ticks). No difference.
+
 ## The Mine trips on its own layer too, measured live (2026-09-30)
 
 On PPSSPP (Talon's Junction, the player stationary on the start line) a Mine

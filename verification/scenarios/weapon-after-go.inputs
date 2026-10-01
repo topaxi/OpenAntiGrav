@@ -1,0 +1,13 @@
+# Weapon comparison scenario: full thrust from the countdown, then one fire press.
+#
+# Both sides hold thrust through the countdown (not a false start, see
+# docs/gameplay/race-modes.md#the-countdown-is-measured) and fire when the craft
+# is in the same state: the emulator side, scripts/psp-weapon-pair.py, ORs the
+# fire bit in 120 frames after the player's throttle word first goes non-zero,
+# which measured speed 106.2 at x 124.5 on Talon's Junction (Time Trial, Venom,
+# Assegai). Ours reaches that state on tick 403, about ten ticks after the same
+# 120 frames, because our standing start is that much slower off the line
+# (a handling matter, not this scenario's). Combine with `oag-game --give <weapon>`.
+403 cross
+1 cross square
+200 cross
