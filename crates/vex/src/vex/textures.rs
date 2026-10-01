@@ -46,8 +46,9 @@ pub struct EmbeddedTexture {
     /// **Authored, not derived**: they are the bytes that follow the base level
     /// in the texel block, at the padded stride the sum-check in
     /// [`texture_row_stride`] establishes. Empty for a texture declaring one
-    /// level. A pre-swizzled node (flags bit 0) has each level unswizzled on
-    /// its own first.
+    /// level. A pre-swizzled node (flags bit 0) of version 5 or later has each
+    /// level unswizzled on its own first; a version-4 one keeps none (its
+    /// chain is synthesised).
     pub levels: Vec<Vec<u8>>,
 }
 
@@ -192,7 +193,8 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // texel block is already in the GE's 16-byte by 8-row block order, so a
         // literal read comes out scrambled.
         //
-        // **Read on every version, since 2026-10-01.** It was gated to version 4
+        // **Acted on for every version, since 2026-10-01** (the levels below the base
+        // only from version 5, see below). It was gated to version 4
         // and below (Pure) because a sweep found the bit on 88 Pulse PSP nodes
         // and nothing said what it meant there. A live PPSSPP capture of Pulse's
         // shield shell (`pulse_shield_test_ADD`, flags `0xe5`) settled it: the
@@ -213,8 +215,23 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         let swizzled = p
             .get(6)
             .is_some_and(|flags| flags & oag_formats::swizzle::FLAG_SWIZZLED != 0);
+        // **Version 4 and below (Pure, Pulse's Zone wrecks) keep exactly what
+        // they had before 2026-10-01**: the base level unswizzled as one block and
+        // no authored levels, so the renderer synthesises their chain (the
+        // documented Pure behaviour in `docs/rendering/frame-audit.md`). Their
+        // levels are swizzled like any other (236 of 236 flagged levels
+        // across both versions agree), but handing them on would switch Pure onto
+        // the slope level rule, a change nothing here measured.
+        let authored_levels = classes.version >= 5;
         let linear;
-        let texels = if swizzled {
+        let texels = if swizzled && !authored_levels {
+            linear = oag_formats::swizzle::unswizzle(
+                &data[at + clut_size..end],
+                stride,
+                usize::from(height),
+            );
+            &linear[..]
+        } else if swizzled {
             linear = unswizzle_levels(
                 &data[at + clut_size..end],
                 width,
@@ -255,7 +272,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // block cannot hold, so a short block yields fewer levels rather than
         // padded ones.
         let mut levels = Vec::new();
-        {
+        if !swizzled || authored_levels {
             let mut offset = stride * usize::from(height);
             for level in 1..u32::from(mip_count) {
                 let (w, h) = (

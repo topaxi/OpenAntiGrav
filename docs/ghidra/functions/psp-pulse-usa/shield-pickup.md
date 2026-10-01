@@ -661,12 +661,22 @@ brightness and banding gap is these two defects.
 base): each decoded level is compared against a 2x box-downsample of the decoded level
 above it, and against the linear reading of the same bytes. The unswizzled level matches
 at least as well on **236 of 236** (mean absolute RGB difference 3.5 against 8.1). The 13
-version-4 nodes (Pure's model textures and Pulse's Zone shipwrecks, flags `0x61`)
-already took the swizzled branch before 2026-10-01 with level 0 unswizzled as one
-block; level 0 is unchanged for them by construction, and what is new is that their
-mip levels are now unswizzled too, so they enter the `Texels::Chain` path and the
-slope level rule. No Pure frame was rendered before and after; the expectation, not a
-measurement, is that pixels move only where a surface is far enough to leave level 0.
+version-4 nodes (Pulse's Zone shipwrecks, flags `0x61`) and Pure's 1,806 already took
+the swizzled branch before 2026-10-01, with level 0 unswizzled as one block and no
+authored levels (the renderer synthesises their chain, as `frame-audit.md` records for
+Pure). **That is kept exactly**: `vex::textures` hands on authored levels only from
+version 5, because handing Pure's on would switch it onto the slope level rule, which
+nothing measured. A unit test pins both (`a_flagged_texture_is_unswizzled_and_only_version_six_keeps_its_levels`).
+
+Base-level coherence of every flagged node, decoded reading against the linear one
+(neighbour difference of palette luminance): Pulse USA and EU, 88 nodes, **69 smoother
+decoded, 19 identical (32-wide or flat), 0 smoother linear**; Pure USA and EU, 1,806
+nodes (the reading it has had since 2026-08-12), 1,543 smoother decoded, 248 identical,
+**15 smoother linear** - all `col_banners*_ADD_GLOW`/`AAdc_BaseTexture`-style 128x32
+or 64x64 textures (e.g. `col_banners2_ADD_GLOW` 22.9 against 7.0). Pure's reading is
+unchanged here and those 15 are an observation for whoever audits Pure's textures, not
+a finding. Nothing else reads this `.vex` texture block: PS2 `.vex` scenes carry no
+texels and HD's are big-endian and skipped (`embedded` is false for both).
 
 Residual, reported and not tuned toward: ours reads 10 to 14 % brighter in the
 fit (k about .9), the hull occludes the shell in ours over the craft's own box,
