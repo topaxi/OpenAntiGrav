@@ -72,6 +72,11 @@ BITS = {
 # that say what a launch spawns and where each rocket goes, frame by frame.
 PSYS_SPAWN = 0x08915484
 ROCKET_UPDATE = 0x0885D2A8
+# The instruction after `Rocket_Update`'s first `Collision_SweepSegment` call (the jal is at
+# `0x0885d404`, its delay slot at `0x0885d408`): `v0` is the surface-probe result - `0x7f`
+# nothing, `0`/`4` detonate, else a surface type to ride. Logged with the s registers, so the
+# rocket (a pointer into RAM among them) can be matched to the entry rows by frame.
+ROCKET_PROBE_RESULT = 0x0885D40C
 CYCLES_PER_FRAME = 222_000_000 / 59.940059940059946
 MINE_POSE_NODE = 0x08859CE4
 BOMB_NODE = 0x08863390
@@ -85,6 +90,7 @@ SHIELD_UPDATE = 0x0885E254
 PROBES = {
     "spawns": PSYS_SPAWN,
     "rocket": ROCKET_UPDATE,
+    "sweep": ROCKET_PROBE_RESULT,
     "mine": MINE_POSE_NODE,
     "bomb": BOMB_INIT,
     "shield": SHIELD_UPDATE,
@@ -192,6 +198,9 @@ def _probe_loop(dbg, kind, address, frames, start, out):
             entry["matrix"] = list(struct.unpack_from("<16f", blob, 0x60))
             entry["fuse"] = struct.unpack_from("<f", blob, 0x48)[0]
             entry["owner"] = struct.unpack_from("<I", blob, 0x40)[0]
+        elif kind == "sweep":
+            entry["v0"] = regs["v0"]
+            entry["s"] = [regs["s%d" % i] for i in range(8)]
         else:
             rocket = regs["a0"]
             entry["rocket"] = rocket

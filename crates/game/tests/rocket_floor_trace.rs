@@ -250,13 +250,13 @@ fn trace_a_rocket_volley_along_the_floor() {
     )
     .unwrap();
     let stats = race.rocket_stats().expect("the disc authors a Rocket");
+    let cruise = stats.speed_for_named("VENOM").unwrap_or(0.0) / 3.6;
     writeln!(
         log,
-        "# rocket venom {:.0} km/h + launch {:.0} km/h -> {:.2} units/s, {:.3} units/tick",
+        "# rocket venom {:.0} km/h -> {:.2} units/s cruise (0.75 of it at launch), {:.3} units/tick",
         stats.speed_for_named("VENOM").unwrap_or(0.0),
-        stats.launch_speed,
-        (stats.speed_for_named("VENOM").unwrap_or(0.0) + stats.launch_speed) / 3.6,
-        (stats.speed_for_named("VENOM").unwrap_or(0.0) + stats.launch_speed) / 3.6 * dt
+        cruise,
+        cruise * dt
     )
     .unwrap();
 
