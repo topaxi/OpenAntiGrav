@@ -12,7 +12,9 @@
 //! sees a different world than it did. Standing still once the race is over is
 //! the *composition root's* call, on the same argument that keeps the camera
 //! cycle outside the tick: see `Session::frame`, which stops calling `tick` once
-//! [`Race::finished`] answers yes.
+//! [`Race::finished`] answers yes - **unless the player crossed the line**
+//! ([`Race::runs_on_after_the_line`]), where the original keeps the race running
+//! behind the panels and so does this.
 
 use super::*;
 
@@ -93,6 +95,22 @@ impl Race {
     #[must_use]
     pub fn finished(&self) -> bool {
         self.sim.world.primary_race().finished
+    }
+
+    /// Whether the world goes on being stepped under the end-race screens: the
+    /// player crossed the line for the last time, so the craft is the driver's
+    /// (see [`Race::flown_for_the_player`]) and the rest of the field is still
+    /// lapping.
+    ///
+    /// **Only the line.** A race that ended any other way - the player's craft
+    /// destroyed in a single race, an Eliminator's kill target, a Zone run - is
+    /// left standing as before: the original's behaviour there was not measured
+    /// (Time Trial and Single Race on Talon's Junction, 2026-10-01), and a wreck
+    /// that respawns under the panels, or a Zone session that restarts itself,
+    /// would be an invention. See `docs/gameplay/after-the-finish.md`.
+    #[must_use]
+    pub fn runs_on_after_the_line(&self) -> bool {
+        self.finished() && self.sim.world.ships[self.player_slot()].standing.finished()
     }
 
     /// The results screens' tallies. See [`RunStats`].
