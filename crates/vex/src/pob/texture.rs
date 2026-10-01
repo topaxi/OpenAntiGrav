@@ -312,3 +312,29 @@ pub fn parse_at(
 
 #[cfg(test)]
 mod tests;
+
+/// Where a sprite template's own texture header sits in its record: the block
+/// `ParticleSystem_DrawParticle` binds for a template particle is
+/// `*(particle->owner + 8) + 0x890` - the template record's own, not the
+/// emitter's trailing one (`FUN_08928b10` takes it; pixel pointer at `+0x10`
+/// of the block, palette at `+0x14`, so `+0x8a0` and `+0x8a4` of the record,
+/// both base-relative fixup sites like the emitter's). Read 2026-10-01.
+pub const TEMPLATE_TEXTURE_OFFSET: usize = 0x890;
+
+/// [`parse_at`] for a sprite template: `offset` is the template record's own
+/// resource-relative offset ([`crate::pob::Emitter::offset`] of an entry of
+/// [`crate::pob::Emitter::initial_particles`]).
+#[must_use]
+pub fn parse_template(
+    data: &[u8],
+    order: ByteOrder,
+    base: usize,
+    offset: usize,
+) -> Option<EmbeddedTexture<'_>> {
+    parse_at(
+        data,
+        order,
+        base,
+        offset.checked_add(TEMPLATE_TEXTURE_OFFSET)?,
+    )
+}

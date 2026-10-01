@@ -1344,10 +1344,16 @@ channel is the angle, `0x08` a coin picks each particle's turning sense. See
 [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md),
 "The per-tick field update". **A channel's `period` is a loop in ticks** (the
 `glow`'s is 10 over its 40-tick life): the live size peaked at ticks 2-3 and
-again at 12-13, `v` at `fract(age / 10)`. The sprite is the parent emitter's
-own; both records point at the pool the emitters do (the shared `orange_glow2`
-64x64 pool on the collision sparks - read off the live record's pixel and
-palette pointers).
+again at 12-13, `v` at `fract(age / 10)`. **The sprite is the template
+record's own, not its parent's (corrected 2026-10-01).** `ParticleSystem_DrawParticle` binds
+`*(owner + 8) + 0x890` for a template particle (`FUN_08928b10`; pixel pointer at block `+0x10`, palette at `+0x14`,
+so `+0x8a0` and `+0x8a4` of the record), a 32-byte texture header in the template record itself. The collision
+sparks' templates carry the pool their parent shares (`orange_glow2` 64x64, read off the live record's pointers),
+which is what had been read as a rule. Elsewhere they differ: the ship explosion's `Glow` hangs on `SHIP_DEBRIS`
+(128x64, 4 bpp, a grey atlas) and carries a **32x32, 8 bpp, 3-level radial glow** (centre white, corner black); the GE
+dump of the running original binds exactly that (`TEXSIZE 0x505`, `CLUT8`, a grey palette whose alpha equals its colour).
+All 28 PSP templates parse a header at `+0x890` (`crates/assets/tests/pob_initial_particles_ground_truth.rs`).
+Confidence **90** (decompile, GE dump and the file agree).
 
 **Where they are.** 28 on the PSP disc, on 20 effects (31 in the PS2 port's, unread): the collision sparks'
 `shazam` (on `WO_SHIP_COLL_SPARK`) and `glow` (on the `_TRAIL`), the Plasma's

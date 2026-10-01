@@ -524,7 +524,14 @@ a PSP `.vex` texture with the levels the disc authors and selects among them by
 this rule (`mesh_render::PSP_TEXLOD_SLOPE`), so scenery is level 0 inside about
 128 units, as the emulator draws it, and level 1 from 256. Whether real hardware
 shows that is unmeasured, and the per-texture `Texture_BuildBindList` emission
-(mode 0 or 2 with a computed bias) is still unread.
+(mode 0 or 2 with a computed bias) is **read 2026-10-01 (pulse-fx-3), not yet applied**: on the texture's `+0x06 & 0x18` bits it
+emits slope mode (`0xc8000002`) with bias `(int)(FUN_08926f6c(*(float *)(header + 0x18)) * 16) & 0xff`, mode `0` (automatic, no bias) for
+value `1`, nothing otherwise, and `FUN_08926f6c(x)` is `log2(sqrt(x)) + *(float *)(g_display + 0x5df4) + 0.2 + 8.0` clamped to
+`[-8, 7.5]` (`0` for `x == 0`). So the bias is a per-texture function of a float in the header (a texel-density figure) and a display setting,
+not the `1.0` `Gfx_FlushRenderManager` writes; the GE dumps show `TLEVEL` offsets of `0x05`, `0x0d`, `0x1c`, `0x26`, `0x2e` (bias `0.3` to
+`2.9`) on the explosion's, the shield's and the Bomb ring's textures. At the 12 to 15 units of a Bomb ring the slope law gives level 0 whatever
+the bias, so this is **not** what makes that ring read dim; its reach is the mid-distance scenery (bias `5` or more steps to level 2 at 60
+units). Confidence 80 for the read; the header field's meaning and `g_display + 0x5df4` are unread.
 
 **This one is a real divergence and it is measured inert.** `oag_render`
 synthesises a **full** box-filtered chain down to 1x1 (`mesh_render::mip_chain`,

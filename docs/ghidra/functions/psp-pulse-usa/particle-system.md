@@ -1044,7 +1044,11 @@ played are in [pob.md](../../../formats/pob.md), "The sprite templates at
 
 `ParticleSystem_DrawParticle` (`0x089186bc`) reads a template's render mode at
 record `+0x874` and its blend class at `+0x878`, and binds the record's own
-texture words at `+0x890`.
+texture words at `+0x890` - **a header of its own in the template record**
+(`FUN_08928b10(*(owner + 8) + 0x890)`), not the parent emitter's trailing one. Ours bound the
+parent's until 2026-10-01, which drew the ship explosion's `Glow` with `SHIP_DEBRIS`'s 128x64 grey
+debris atlas (centre alpha `0`) instead of its own 32x32 radial glow, and left the explosion's first five
+frames without the broad white wash; see "A sprite template's own sprite" below.
 
 | Address | Name | Confidence |
 | --- | --- | ---: |
@@ -1425,3 +1429,32 @@ ratio and nearly scaled sizes. Read a size from the pool's `+0x70`, or from a qu
 **What the pool probe does not see:** the sprite templates (drawn one at a time by `ParticleSystem_DrawParticle`)
 and the `FIRESPIKES` streaks' length (the probe stores each streak's head and second point; the comparison used
 centroids, which sit half-way along).
+
+## A sprite template's own sprite, and what the explosion's first five frames are (2026-10-01, pulse-fx-3)
+
+**The broad white band the original draws for five frames over the ship explosion is the `Glow` template's quad, not the shockwave
+ring.** The GE dump of the running original (`data/scratch/pulse-fx-recheck/geA`, frame ~122 after the call) has, after the ring's three
+strips, one view-space additive quad (`ci 6898`): half-extents `45 x 30` (the template's size `30` at aspect `1.5`), depth `31.5`,
+colour `fff3d9` (the template's age-1 colour), bound to a **32x32, 8 bpp** texture whose palette is a grey ramp with alpha equal to its
+colour (`TEXSIZE 0x505`, `CLUT8`). Centred on the wreck it covers about `670 x 450` px; the floor's depth test cuts its lower edge at a
+hard horizontal line (the dump's depth test is on, writes off). The ring itself, run through the dump's own matrices, is a thin
+ellipse (`y 128-149`), not a band.
+
+`FUN_08928b10` binds the texture header at **record `+0x890`** (pixel pointer at block `+0x10`, palette `+0x14`, base-relative like the
+emitter's), so every sprite template carries a sprite of its own. All 28 PSP templates parse one
+(`pob_initial_particles_ground_truth`); on the collision sparks it is the pool the parent shares, which is why it was read as a rule.
+The explosion's `Glow` hangs on `SHIP_DEBRIS` (128x64, 4 bpp, a grey atlas whose centre texel has alpha `0`) and carries a
+32x32, 3-level glow with a white centre. The Missile's `glow` (64x64 against the parent's 32x32), the Mine's `BANG` (32x32 against
+64x64), the Plasma's `glow2`, the Quake's `shazzam`, the Shuriken's, the weapon absorb's and the fx-node's `Glow` all differ the
+same way and now draw their own. Confidence **90** (the decompile, the GE dump's texture size and palette and the file agree).
+Picture, native 480x272, same wreck and circuit (`data/scratch/pulse-fx-3/pair_glow.png`, original left, ours right, frames
+122-125 after the call): the wash, its extent, and the hard lower edge now match; mean blue added over the frame (frame 124 minus 120/161) `23.5` on the original
+against `6.4` before and `28.1` after (red `136`/`134`, green `127`/`121`; `diff_blue.png`); a contact sheet of all 28 template sprites reads as clean
+glows, rings, star bursts and bangs (`data/scratch/pulse-fx-3/tpl_sheet.png`, none sheared).
+
+**The ring leads the particles by about 2.7 frames, and the call's own frame is read.** `Ship_SpawnExplosionBig` (`0x088407b0`) is called at
+frame `119.09` (`--hits 088407b0`), `ShipShockwave_Update` first runs at `119.16`, and the `Glow` template's first draw (age 0) is at
+`121.88` (second boot of the pool probe: `120.88`/`121.88`), so the explosion's particles first draw two to three frames after the call
+while the ring is already in the node list. The mechanism (a start delay on the instance, or the queue `Psys_Spawn_q` feeds) is unread, so
+ours starts both on the same tick and the offset is **not ported**; frame phase varies by about one frame boot to boot (one boot per number).
+

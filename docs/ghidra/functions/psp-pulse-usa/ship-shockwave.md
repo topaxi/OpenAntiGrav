@@ -62,8 +62,10 @@ that a dump of the same scene 20 frames before the call does not: **43, 97 and 4
 
 **What it looks like** (seen once, frames `opA`/`opB` against ours): from a chase camera at about the same
 height the ring is edge-on, a thin orange line along the horizon across the whole width that decays over
-about fifty frames, and for the first five frames a broad white band with a hard lower edge on the
-side of the wreck. Ours had neither before this change.
+about fifty frames. **(Corrected 2026-10-01, pulse-fx-3: the broad white band with a hard lower edge on the side of the wreck
+that this page first credited to the ring is the `Glow` template's quad, a different object - see
+[particle-system.md](particle-system.md#a-sprite-templates-own-sprite-and-what-the-explosions-first-five-frames-are-2026-10-01-pulse-fx-3).
+A software rasteriser run over the dump's own ring strips, matrices and textures gives a thin ellipse at `y 128-149`, nothing like a band.)**
 
 ## The alpha reaches the draw, as the ambient light's alpha
 
@@ -84,18 +86,26 @@ fades the same way (`0.1` a tick). Confidence **88** (two dumps, six strips, the
 The ring's vertex words in the buffer are the authored ones, as a lit material leaves them: that was first
 misread as "the fade does not reach the draw", from the *material* registers `0x55`/`0x58`, which stay `ffffff`/`ff`.
 
-**The ring is still too dim in ours.** With the fade the horizon band at `(300..480, 118..138)` reads, in the red channel at
-140, 150, 160 and 170 frames after the call, `176, 148, 105, 76` on the original and `164, 82, 66, 59` on ours (`182, 104, 82, 74`
-before the fade was wired): the original's band stays brighter than ours either way, which is the same gap as the first five
-frames' white. The strips' state (additive `SRCALPHA` + `FIX 0xffffff`, `TFUNC 0x100`, alpha and colour tests on, no culling,
-`TLEVEL` slope mode) was read, and the cause is open.
+**The ring's late dimness was the original's scheduler, not a render difference (closed 2026-10-01, pulse-fx-3).** The update steps each
+ease `(int)(dt / 0.016666668)` times and **carries no remainder**, and the original's `dt` on PPSSPP is the emulated clock's own,
+which jitters around `1/59.94 s`: of the 81 frames logged in `shockA`, **52 stepped** (`0.016593`, `0.016654`, `0.016543`... truncate to
+`0`). So the original's ring reached step `14, 20, 26, 33` at frames `140, 150, 160, 170` where ours, one step per 60 Hz tick, had
+reached `21, 31, 41, 51`: the logged alpha at frame 199 is `0.3569 = 0.98^51`, not `0.98^80`, and `geB`'s `0xb8` (`0.722`) is `0.98^16`
+at 28 frames. At **equal step count** the horizon band `(300..480, 118..138)` reads, in the red channel, `185, 158, 110, 73` on ours
+against `176, 148, 105, 76` on the original (steps `14, 20, 26, 33`): the draw agrees to within 7 % (`+5, +7, +5, -4 %`), so nothing in the strips'
+state (additive `SRCALPHA` + `FIX 0xffffff`, `TFUNC 0x100`, alpha and colour tests on, no culling, `TLEVEL` slope mode) needs changing.
+The textures decode identically (the dump's level-0 pixels equal ours for the ring's 64x64 `CLUT4`, error `0.0`), the model's scale
+matches (`35.4` units per scale step on both: the dump's `world` row `72.15` at scale `2.04`), and the colours and alpha ride the same
+vertices. **Not ported:** whether a real PSP, whose vblank is locked to `59.94 Hz`, truncates the same third of frames is unmeasured
+(an emulated-time jitter of `0.1 %` flips the truncation, and a locked `16.683 ms` frame would always pass), so one step per tick is
+what the code does for any `dt >= 1/60` and is kept. The same `(int)(dt/(1/60))` idiom is in `BombBlast_Update` (`0x0887250c`, its three eases, read 2026-10-01), so the Bomb's dome and ring also
+ran about a third slow on PPSSPP in every capture taken so far. **`ParticleSystem_Update` does not do it**: it scales `dt` to a fractional tick
+count (`60 * dt * the clock's scale`, clamped at `3.0`), so a particle's age follows the emulated clock proportionally and frame jitter
+drops nothing there.
 
 ## Not read, open
 
-- The ring's brightness (above): the first five frames and the horizon band read about `1.5` to `2` times brighter on the
-  original. The textures decode plausibly (`pulse_ship_shock_ADD` a fire noise, the edge texture a white-to-brown gradient); the
-  blend, the colour test (`NOTEQUAL` black), `TLEVEL` (`c8:050002`, bias 5, slope mode) and the filter were not compared
-  against ours state by state.
+- ~~The ring's brightness~~: closed above (the scheduler for the late band, the `Glow` template for the first five frames).
 - `DAT_08b34320` gates the whole object (`0x8c0f410` live); what clears it is unread, so every wreck
   here throws the ring.
 - Whether `FUN_0885ecf0`'s other callers exist: one xref, `Ship_SpawnExplosionBig`.

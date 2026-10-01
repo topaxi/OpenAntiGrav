@@ -64,12 +64,23 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   unread; (c) our standing start puts the craft 2.4 units and 1.7 degrees off the original's
   at the same place, which alone moves a detonation by 30 ticks (spawn/handling, not this
   thread's).
+- *Pulse Mine's explosion, 2026-10-01 (pulse-fx-3)* - **first picture of the original's**: a stationary craft trips its own Mine at fire+30
+  (the arming delay; ours keeps its chosen owner exclusion), and the burst runs about twenty frames of yellow-white wash, rays and orange debris
+  where ours' lasts sixteen and leans green. The `ring` and `BANG` templates were drawn with the wrong sprite and are fixed
+  (`particle-system.md`); the pools agree at first order. Open: the hue (red `215` against `194`), the debris colour and size, the flash's duration
+  and whether the original's Mine cluster (several charges) is why the original's wash has three bumps. `mine.md`'s 2026-10-01 pulse-fx-3 section.
 - *Pulse Mine* - **pictured**: the charges are visible for two frames as the craft
   leaves them (fire at speed, photograph every frame). Same model, same cadence
   (6-7 frames). **2026-10-01, second pass**: the original lays at the craft's own position
   (stationary probe to the hundredth; `Bomb_Init`'s drop point equals the body position to
   the last bit, stationary and at speed), and `mine::drop_point` now does too (its own
   commit, `mine.md`'s second-pass section). The Mine's own `Anim Transform` (a tilted spin, 2 s a turn) now plays too, by analogy with the Bomb and not seen in the original's two frames.
+- *Pulse Bomb, pulse-fx-3 2026-10-01 - narrowed, not closed.* **`BombBlast_Update` steps its three eases `(int)(dt / (1/60))` times with no
+  remainder** (read), so on PPSSPP the dome and ring ran about a third slow in every capture of the original taken so far
+  (`ship-shockwave.md`); a frame-by-frame comparison must be at equal step count. The ring's `TEXLEVEL` bias (`2.875`) is the per-texture value
+  `Texture_BuildBindList` computes (`mesh-draw.md`, "read 2026-10-01"): level 0 at the ring's 12-15 units either way, so it is **not** the dim ring.
+  The dome's `0x13d` draws are unlit additive with the texel's alpha `80`; its yellow-opaque read is plausibly bloom (`pulse-hull-bloom`'s area).
+  The launch ring and the +50 smoke were not re-looked at.
 - *Pulse Bomb, third pass 2026-10-01* - the weapon bodies were missing from the glow-mask stamp
   list (the canister bloomed pale; now stamps `4`/`0xba` as the original, EDRAM-measured, pinned by
   `weapon_stamp_ground_truth`), and **the detonation has its first picture**: a laid Bomb moved

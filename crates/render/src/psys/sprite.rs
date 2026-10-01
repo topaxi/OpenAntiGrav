@@ -70,6 +70,26 @@ pub struct Sprite {
 }
 
 impl Sprite {
+    /// The sprite a sprite template (`record`, an entry of
+    /// `initial_particles`) embeds in its own record - what the original
+    /// binds for a template particle, not its parent's.
+    #[must_use]
+    pub fn from_template(
+        system: &ParticleSystem,
+        data: &[u8],
+        record: &pob::Emitter,
+    ) -> Option<Self> {
+        if system.order != oag_formats::ByteOrder::Little {
+            return None;
+        }
+        let texture = system.template_texture(data, record)?;
+        Some(Self {
+            width: texture.width,
+            height: texture.height,
+            rgba: texture.rgba8().into(),
+        })
+    }
+
     /// The sprite `record` embeds, if it embeds one and the file is a PSP
     /// one - see the module documentation for why the byte order is the
     /// test.

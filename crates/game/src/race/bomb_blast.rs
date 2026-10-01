@@ -78,9 +78,12 @@
 //! `0.3569`. The ring is `5.37` units across its radius at scale `1`, so by the
 //! fifth tick it spans the whole start grid, flat at the craft's height - which a
 //! chase camera at the same height sees edge-on as the thin orange line along the
-//! horizon that the original's explosion leaves for about fifty frames and the
-//! white band that covers the first five. Confidence **90** for the law (decompile
-//! and one live boot agree to every digit); the picture reading is **seen once**.
+//! horizon that the original's explosion leaves for about fifty frames. (The white band that
+//! covers the first five frames is **not** the ring: it is the explosion's `Glow` template, drawn with
+//! its own sprite since 2026-10-01 - see `ship-shockwave.md`.) Confidence **90** for the law (decompile
+//! and one live boot agree to every digit); the picture reading is **seen once**. The original's
+//! updates step `(int)(dt / (1/60))` times with no remainder, which on PPSSPP skipped a third of the
+//! frames; ours steps once a tick (`ship-shockwave.md`).
 
 use super::*;
 

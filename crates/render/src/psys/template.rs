@@ -19,8 +19,10 @@
 //! every other source calls [`Effect::without_pulse_psp_draw`], which mutes the
 //! templates it added.
 //!
-//! The sprite is the parent emitter's own: both records point at the pool the
-//! emitters do. Severity multiplies a template's size as it does any
+//! The sprite is the template record's own, at `+0x890`
+//! (`FUN_08928b10` binds it for a template particle): on the collision sparks it is
+//! the pool the parent shares, on the explosion's `Glow` a 32x32 radial glow
+//! where its parent `SHIP_DEBRIS` is a 128x64 debris atlas. Severity multiplies a template's size as it does any
 //! particle's - the live capture's `shazam` reads `3.9 * 2.4 = 9.36`.
 //!
 //! **A looping size channel is unrolled.** A record's channel authors a
@@ -38,15 +40,24 @@ use super::{ColourScale, Effect, EmitterSpec, Particle, System};
 impl Effect {
     /// Appends a one-shot spec for every template on a root emitter, and
     /// starts each with the effect.
-    pub(super) fn add_templates(&mut self, records: &[pob::Emitter], scale: ColourScale) {
+    pub(super) fn add_templates(
+        &mut self,
+        system: &pob::ParticleSystem,
+        data: &[u8],
+        records: &[pob::Emitter],
+        scale: ColourScale,
+    ) {
         let parents: Vec<usize> = self.roots.clone();
         for parent in parents {
             for template in &records[parent].initial_particles {
                 if self.emitters.len() >= super::MAX_EMITTER_STATES {
                     return;
                 }
-                let sprite = self.emitters[parent].sprite.clone();
-                let Ok(mut spec) = EmitterSpec::from_record(template, scale, sprite) else {
+                // The template's own sprite, not its parent's: none is a stand-in.
+                let Some(sprite) = super::Sprite::from_template(system, data, template) else {
+                    continue;
+                };
+                let Ok(mut spec) = EmitterSpec::from_record(template, scale, Some(sprite)) else {
                     continue;
                 };
                 let life = spec.lifetime_ticks.0.max(1.0);
