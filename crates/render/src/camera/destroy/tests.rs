@@ -9,7 +9,7 @@ use super::*;
 fn station() -> Station {
     Station {
         eye: Vec3::new(468.343_6, -22.805_176, -39.869_6),
-        aim: Vec3::new(344.118_74, -43.194_11, -137.083_89),
+        aim: Vec3::new(344.118_74, -43.194_11, -137.083_9),
     }
 }
 
@@ -106,12 +106,18 @@ fn the_view_matches_the_live_view_node() {
     };
     let world = camera.to_world();
     let near = |a: Vec3, b: [f32; 3]| (a - Vec3::from_array(b)).length() < 2e-4;
-    assert!(near(world.x_axis.truncate(), [0.320_020_17, 0.0, -0.947_410_76]));
+    assert!(near(
+        world.x_axis.truncate(),
+        [0.320_020_17, 0.0, -0.947_410_76]
+    ));
     assert!(near(
         world.y_axis.truncate(),
         [-0.051_119_585, 0.998_543_26, -0.017_267_374]
     ));
-    assert!(near(world.z_axis.truncate(), [0.946_030_6, 0.053_957_15, 0.319_553_97]));
+    assert!(near(
+        world.z_axis.truncate(),
+        [0.946_030_6, 0.053_957_15, 0.319_553_97]
+    ));
     assert_eq!(world.w_axis.truncate(), station().eye);
     let view = camera.view();
     let at_the_craft = view.transform_point3(Vec3::new(6.077_87, -50.065_22, -196.015_55));

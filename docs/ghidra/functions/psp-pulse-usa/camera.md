@@ -222,7 +222,7 @@ side.** The list above is what the *photo-mode* code names, and its cycle
 craft's own explosion - calls `Camera_SetMode(camera, 5)` at `0x08844524`
 after handing the camera the wrecked craft as its subject. So the enum has at
 least one value the photo path never reaches, and this is it. What mode 5
-*looks like* is unread. See
+looks like is read below ("The destroy camera"). See
 [zone-mode.md](zone-mode.md), which carries case 4 at instruction level.
 
 ## `pos_length` is a signed offset along forward, and the disc value is used as-is
@@ -358,6 +358,87 @@ below. It is a code literal in the craft constructor, it is the same global scal
 this project had already recovered twice from the physics and the exhaust, and it
 is now applied. The confidence **0** on its origin above no longer stands.
 
+## The destroy camera (mode 5), read and measured 2026-10-01
+
+Read statically (headless Ghidra on a scratch copy of the project) and measured on a
+running PPSSPP: Talon's Junction (`16_Track`), a Venom player craft on the start line
+put into `Ship_SetState(.., 4)` by `scripts/psp-wreck-capture.py --camera`, which logs
+the camera controller's fields every frame; a second run placed the craft elsewhere
+(`--place`) to tell two candidate rules apart. Mode 5 shares one arm of
+`Camera_UpdateSpectatorView` with modes 6 and 7, and the three differ only in
+`camera+0x268` (`Camera_SetMode`: **35.0**, 17.0, 50.0; the constructor leaves 60.0).
+
+**The camera is not on the craft, and it is not the chase rig.** It stands at one of
+the circuit's own authored `Camera` nodes (`track.vex`, class `0xf7`, **ten** on
+Talon's Junction) and looks at the wreck from there, zooming until the craft fills
+`+0x268` units of the picture. On the start line that is a camera **488.6 units** away
+at a **4.10 degree** vertical field. (An earlier note read "168.7 units from the
+wreck"; that was a different circuit and a different craft position.)
+
+| Address | Name | What it does | Conf. |
+| --- | --- | --- | ---: |
+| `0x0888058c` | `Camera_SetSubject` | `camera+0x1e0 = craft`; picks the station by `Camera_PickStation` unless the craft carries its own at `+0xc3c` (zero on every craft read), forces mode 7, takes the starting field `fov(60) + rand(-10, 20)` (at least 3) and the starting focus | 85 |
+| `0x0887fedc` | `Camera_PickStation` | the station whose **aim point** is nearest the subject (`dot(d, d)`, strictly less so the first of equals wins; a y-plane filter that is off with `DAT_08abff10 <= 0`, read here as `0`) | 88 |
+| `0x08880984` | `Camera_FramingFov` | `2 * atan((camera+0x268 * 0.5) / distance)` in degrees, `distance` from the station's eye to the subject; `65.0` with no station | 88 |
+| `0x08880c04` | `Camera_UpdateSpectatorView` | the per-frame look-at, one `switch` on `camera+0x1dc` (cases 0 to 8) | 85 |
+| `0x0887fd3c` | `Camera_UpdateSpectator` | the controller's per-frame update: a ten second timer, the hand-over to another craft, then `Camera_UpdateSpectatorView` | 70 |
+| `0x08880168` | `Camera_RepickNearSubject_q` | picks a random station among those whose aim is within 60 units of the subject, but only when the current one's aim is farther than 60 | 62 |
+
+**A station is an authored `Camera` node, and its aim is in its payload.** The runtime
+object holds the eye at `+0x90` and an aim point at `+0xa0`. Both are in
+`track.vex`: the eye is the node's world translation and **the aim point is the
+payload's three floats at `+0x10`** (`Camera` is 48 bytes; `oag_vex::camera::Camera::aim`).
+They matched the live object to the digit on all ten nodes (eye `468.3436, -22.8052,
+-39.8696`, aim `344.1187, -43.1941, -137.0839` for the one picked). The page that
+documents the payload for Wipeout HD flyers (zero there) is not wrong; Pulse's circuits
+use the field.
+
+**The rule, per frame** (after the craft has moved), as `oag_render::camera::destroy`:
+
+```text
+pick:    argmin |aim - craft|
+fov0:    2*atan(30 / |eye - craft|) degrees + rand(-10, 20), at least 3
+fov_target = 2*atan(17.5 / |eye - craft|) degrees
+focus_target = craft position            (frozen once the craft is in state 6)
+focus += (focus_target - focus) * 0.4    (camera+0x250, from +0x264: Venom 0.4)
+fov   += (fov_target - fov) * 0.06       (camera+0x228, from +0x260)
+z = normalize(eye - focus) with z.y *= max(1 - fov * 0.008, 0.4)
+x = normalize(up x z), y = z x x, eye = the station's eye
+```
+
+**Measured, per frame.** The field started at 19.914203, read 18.965461 the next frame
+(`19.914203 + (4.101826 - 19.914203) * 0.06 = 18.965461`) and 6.730304 at the
+twenty-ninth, converging on `fov_target` 4.101826 (`framing(35, 488.6)`). At the
+179th frame the view node's columns were right `(0.320020, 0, -0.947411)`, up
+`(-0.051120, 0.998543, -0.017267)` and back `(0.946031, 0.053957, 0.319554)` with
+translation `-eye`, which the formula reproduces to `2e-4`
+(`oag_render::camera::destroy::tests`). The focus rate `0.4` was read only on Venom;
+Flash `0.5`, Rapier and Phantom `0.6` are read in the constructor (`FUN_0887f9bc`).
+
+**The pick is by aim, not by eye.** The craft placed at `(-450, -40, -100)` was given
+station 6 (aim 115.5 away) over station 2 (eye 186 away, aim 303 away). On the start
+line the nearest two aims are 343.2 (station 7) and 347.2 (station 0): a near tie, so a
+craft a few units off the line is given the other one, which one capture showed.
+Confidence **88**.
+
+**What the picture is.** Through 4 degrees the wreck is a dark shape in the middle of
+the frame at about 35 units across, the walls and the track around it as from a
+telephoto lens on the grandstand; the HUD is gone by 30 frames into state 5 (not
+ported). At state 6 the focus stops following the craft, the player's blast washes
+the screen (kind 7) and `Camera_ArmShake(0.8, 0.6, camera, 1)` throws the view about
+by more than the field, so the frames that follow are a different part of the circuit
+for a quarter of a second. `FUN_0883e064` arms `(0.3, 0.4, camera, 3)` at state 5.
+
+**Not read or not ported.** The camera hands over to another craft after ten seconds
+(`+0x3c`), and when the craft's state-6 timer runs out; what ends the destroy camera in
+a mode that respawns the player is read only as "the craft is racing again"
+(**chosen, not measured**). The re-pick when the craft is more than 60 units from the
+current aim (`Camera_RepickNearSubject_q`) cannot fire on a wreck that lies still and is
+not ported. The starting field's `rand(-10, 20)` is unseeded in the original and drawn
+here from a stream of its own. Whether a player's craft ever carries its own station at
+`+0xc3c` is not known. Case 4 also hides the HUD by degrees, which this port does
+not.
+
 ## Applied renames
 
 | Address | Name | Conf |
@@ -369,6 +450,12 @@ is now applied. The confidence **0** on its origin above no longer stands.
 | `0x08838bc8` | `HandlingXml_ParseExternalCameraFar` | 92 |
 | `0x08838d8c` | `HandlingXml_ParseExternalCameraClose` | 92 |
 | `0x08880724` | `Camera_SetMode` | 82 |
+| `0x0888058c` | `Camera_SetSubject` | 85 |
+| `0x0887fedc` | `Camera_PickStation` | 88 |
+| `0x08880984` | `Camera_FramingFov` | 88 |
+| `0x08880c04` | `Camera_UpdateSpectatorView` | 85 |
+| `0x0887fd3c` | `Camera_UpdateSpectator` | 70 |
+| `0x08880168` | `Camera_RepickNearSubject_q` | 62 |
 | `0x08878874` | `Camera_SubmitScene` | 80 |
 | `0x08885d78` | `Camera_PublishTripod` | 88 |
 | `0x08845ed0` | `Ship_UpdateCameraRigs` | 82 |

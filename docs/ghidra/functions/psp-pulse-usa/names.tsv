@@ -1179,3 +1179,9 @@
 0x08902a2c	function	ViewCull_LoadWorldMatrix	85	section-view-cull.md
 0x0890296c	function	ViewCull_BuildViewProjection	85	section-view-cull.md
 0x0890cc80	function	Mesh_SubmitNode	85	section-view-cull.md
+0x0888058c	function	Camera_SetSubject	85	camera.md
+0x0887fedc	function	Camera_PickStation	88	camera.md
+0x08880984	function	Camera_FramingFov	88	camera.md
+0x08880c04	function	Camera_UpdateSpectatorView	85	camera.md
+0x0887fd3c	function	Camera_UpdateSpectator	70	camera.md
+0x08880168	function	Camera_RepickNearSubject	62	camera.md

@@ -63,24 +63,42 @@ impl DestroyCamera {
 }
 
 /// Every authored `Camera` in a circuit as a [`Station`], or none off Pulse.
-pub(super) fn stations(title: &oag_title::Title, track_blob: &[u8]) -> Vec<Station> {
+pub(super) fn stations(
+    title: &oag_title::Title,
+    track_blob: &[u8],
+    report: &mut Vec<String>,
+) -> Vec<Station> {
     if title.name != oag_pulse::TITLE.name {
         return Vec::new();
     }
-    oag_vex::camera::cameras(track_blob)
+    let stations: Vec<Station> = oag_vex::camera::cameras(track_blob)
         .iter()
         .map(|camera| Station {
             eye: Vec3::from_array(camera.position()),
             aim: Vec3::from_array(camera.aim),
         })
-        .collect()
+        .collect();
+    report.push(if stations.is_empty() {
+        "destroy camera: the circuit authors no Camera node, so the chase camera stays on a wreck"
+            .to_string()
+    } else {
+        format!(
+            "destroy camera: {} authored Camera node(s) to cut to when the player's craft is destroyed",
+            stations.len()
+        )
+    });
+    stations
 }
 
 /// The camera's focus rate for a class name: Venom `0.4`, Flash `0.5`, Rapier
 /// and Phantom `0.6` (`FUN_0887f9bc`; only Venom's was seen running).
 pub(super) fn focus_rate(class: &str) -> f32 {
     let index = oag_physics::SpeedClass::from_name(class)
-        .and_then(|class| oag_physics::SpeedClass::ALL.iter().position(|c| *c == class))
+        .and_then(|class| {
+            oag_physics::SpeedClass::ALL
+                .iter()
+                .position(|c| *c == class)
+        })
         .unwrap_or(0);
     destroy::FOCUS_RATE_BY_CLASS[index]
 }
@@ -109,7 +127,8 @@ impl Race {
             None => {
                 let (low, high) = destroy::START_FOV_SPREAD;
                 let offset = low + (high - low) * camera.rng.next_f32();
-                camera.active = Destroy::start(&camera.stations, subject, camera.focus_rate, offset);
+                camera.active =
+                    Destroy::start(&camera.stations, subject, camera.focus_rate, offset);
             }
         }
     }

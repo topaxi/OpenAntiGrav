@@ -34,7 +34,9 @@
 //! - the player's own two shakes at the explosions are armed as the original's
 //!   `Camera_ArmShake` calls do: `(0.3, 0.4, mode 3)` on the state 5 edge and
 //!   `(0.8, 0.6, mode 1)` with the big explosion, and a running shake is
-//!   cancelled as state 4 begins.
+//!   cancelled as state 4 begins. The first is left out where the race ends
+//!   on that edge (everything but an Eliminator), since the finished race is
+//!   not stepped and would hold it at its largest frame.
 //!
 //! The state 5 edge also throws `WO_SHIP_FXNODE_EXPLO` and
 //! `WO_SHIP_DEATH_SPARKS` at each wreck node ([`super::wreck_fx`]).
@@ -44,6 +46,7 @@
 use oag_core::math::{Mat4, Vec3};
 use oag_gameplay::MAX_SHIPS;
 use oag_physics::CraftState;
+use oag_race::Mode;
 use oag_render::camera::shake::Side;
 
 use super::Race;
@@ -96,7 +99,12 @@ impl Race {
                 let model = super::drawable::model_matrix_of(&self.sim.world.ships[slot]);
                 self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
                 self.throw_wreck_fx(slot);
-                if slot == player {
+                // **Not where the race ends on this very tick**: a finished race
+                // is not stepped, so the shake would be held for good at its
+                // first and largest frame - a tilt of six degrees under a
+                // four-degree field, a different scene under the results.
+                // Chosen, not measured. The original goes on running.
+                if slot == player && self.sim.world.mode() == Mode::Eliminator {
                     self.arm_player_blast_shake(STATE_5_SHAKE);
                 }
             }

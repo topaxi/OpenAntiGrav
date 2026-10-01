@@ -59,7 +59,9 @@ fn the_destroy_camera_zooms_to_frame_the_wreck() {
         race.advance_destroy_camera();
     }
     let zoomed = race.vertical_fov(16.0 / 9.0, Fov::AUTHORED).to_degrees();
-    let reach = station().eye.distance(race.sim.world.ships[0].physics.body.position);
+    let reach = station()
+        .eye
+        .distance(race.sim.world.ships[0].physics.body.position);
     let framing = oag_render::camera::destroy::framing_fov_degrees(35.0, reach);
     assert!((zoomed - framing).abs() < 0.01, "{zoomed} vs {framing}");
     assert!(zoomed < chase_fov.to_degrees() / 4.0);
@@ -94,11 +96,13 @@ fn a_tick_with_the_player_destroyed_cuts_to_the_circuits_camera() {
     assert!((race.camera_position() - station().eye).length() < 1e-3);
 }
 
-/// The player's two explosion shakes: `(0.3, 0.4)` on the state 5 edge,
-/// `(0.8, 0.6)` with the big explosion, and none for an opponent.
+/// The player's two explosion shakes in a race that goes on: `(0.3, 0.4)` on
+/// the state 5 edge, `(0.8, 0.6)` with the big explosion, and none for an
+/// opponent.
 #[test]
 fn the_players_explosions_shake_their_camera() {
-    let mut race = with_a_station();
+    let mut race =
+        race_with_weapon_table(Mode::Eliminator, enveloping_pad(), 1.0, one_mine_table());
     race.advance_craft_flashes();
     assert!(!race.view.shake.active());
     race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
@@ -111,14 +115,33 @@ fn the_players_explosions_shake_their_camera() {
         race.view.shake.advance(1.0 / 60.0);
         race.advance_craft_flashes();
     }
-    assert!((race.view.shake.magnitude() - 0.8).abs() < 1e-6, "state 6's own");
+    assert!(
+        (race.view.shake.magnitude() - 0.8).abs() < 1e-6,
+        "state 6's own"
+    );
 
     let mut other = with_a_station();
     other.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
     other.advance_craft_flashes();
     other.sim.world.ships[3].physics.craft_state = CraftState::Eliminated;
     other.advance_craft_flashes();
-    assert!(!other.view.shake.active(), "an opponent's blast shakes nobody");
+    assert!(
+        !other.view.shake.active(),
+        "an opponent's blast shakes nobody"
+    );
+}
+
+/// Where the race ends on the state 5 edge the first shake is left out - a
+/// finished race is not stepped and would hold it at its largest frame.
+#[test]
+fn a_race_that_ends_on_the_edge_is_not_left_mid_shake() {
+    let mut race = with_a_station();
+    assert_ne!(race.sim.world.mode(), Mode::Eliminator);
+    race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
+    race.advance_craft_flashes();
+    race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
+    race.advance_craft_flashes();
+    assert!(!race.view.shake.active());
 }
 
 /// State 4 cancels a shake already running, as `Ship_SetState` case 4 does.
