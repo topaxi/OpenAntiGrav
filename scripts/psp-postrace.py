@@ -93,6 +93,75 @@ def hits(dbg, address, count, timeout=120.0):
         dbg.remove_breakpoint(address)
 
 
+SHIP_SET_STATE = 0x08844100
+
+
+def regs(dbg):
+    category = dbg.call("cpu.getAllRegs")["categories"][0]
+    return dict(zip(category["registerNames"], category["uintValues"]))
+
+
+def wait_any_stop(dbg, timeout):
+    """Wait for any stop and return `cpu.status`, whatever caused it (a watchpoint's pc is not known)."""
+    end = time.time() + timeout
+    dbg.pending = []
+    while time.time() < end:
+        msg = dbg._recv()
+        if msg is not None and msg.get("event") == "cpu.stepping":
+            return dbg.call("cpu.status")
+    raise TimeoutError("no stop")
+
+
+def probe_set_state(dbg, player, frames_after, log):
+    """Break on `Ship_SetState` and log every call (entity, state, ra) until the player's state 2."""
+    dbg.brk()
+    dbg.add_breakpoint(SHIP_SET_STATE)
+    seen_player_two = 0
+    try:
+        for _ in range(400):
+            dbg.call("cpu.status")
+            dbg.pending = []
+            dbg.call("cpu.resume")
+            dbg.wait_for_break(SHIP_SET_STATE, timeout=120.0)
+            r = regs(dbg)
+            row = {"entity": r["a0"], "state": r["a1"], "ra": r["ra"], "player": r["a0"] == player,
+                   "sp": r["sp"]}
+            log["set_state"].append(row)
+            print("Ship_SetState(entity %#x%s, %d) ra=%#x" % (
+                r["a0"], " PLAYER" if row["player"] else "", r["a1"], r["ra"]), file=sys.stderr)
+            if row["player"] and r["a1"] == 2:
+                seen_player_two = 1
+            if seen_player_two:
+                frames_after -= 1
+                if frames_after <= 0:
+                    break
+    finally:
+        dbg.brk()
+        dbg.remove_breakpoint(SHIP_SET_STATE)
+
+
+def probe_ctl_write(dbg, ctl, count, log, size=8):
+    """Stop on every write to `ctl` (the player's control record, or the autopilot scale) and log the writer."""
+    dbg.brk()
+    dbg.call("memory.breakpoint.add", address=ctl, size=size, enabled=True, log=False,
+             read=False, write=True, change=False)
+    try:
+        for _ in range(count):
+            dbg.call("cpu.status")
+            dbg.pending = []
+            dbg.call("cpu.resume")
+            status = wait_any_stop(dbg, 60.0)
+            r = regs(dbg)
+            row = {"pc": status["pc"], "ra": r["ra"], "a0": r["a0"], "sp": r["sp"],
+                   "value": list(f32s(dbg, ctl, min(5, size // 4)))}
+            log["ctl_writes"].append(row)
+            print("ctl write pc=%#x ra=%#x record=%s" % (status["pc"], r["ra"],
+                  ["%.1f" % v for v in row["value"]]), file=sys.stderr)
+    finally:
+        dbg.brk()
+        dbg.call("memory.breakpoint.remove", address=ctl, size=size)
+
+
 def ram(pointer):
     return 0x08800000 <= pointer < 0x0A000000
 
@@ -131,6 +200,8 @@ def craft_row(dbg, entity, full):
         "speed": speed, "stun": stun,
         "driver": driver,
         "ctl_ptr": ctl,
+        "alt_record": dbg.read_u32(craft + 0x40),
+        "scale_1d4": f32s(dbg, craft + 0x1D4, 1)[0],
     }
     if ram(ctl):
         row["ctl"] = list(f32s(dbg, ctl, 5))
@@ -218,6 +289,14 @@ def main():
                         help="on the final lap, once the player's world x passes this, stop the "
                         "autopilot pickup (its timer to 0) and release thrust, so nothing but the "
                         "game's own post-finish driver is left (Talon's Junction: -60)")
+    parser.add_argument("--probe", choices=["setstate", "ctl", "scale"],
+                        help="instead of logging frames: break on Ship_SetState once the autopilot is "
+                        "disarmed, or watch writes to the player's control record once the player "
+                        "has finished")
+    parser.add_argument("--probe-count", type=int, default=12)
+    parser.add_argument("--disarm-z", type=float, default=-187.0,
+                        help="and its z must be within 30 of this (the start straight; the circuit "
+                        "passes the same x elsewhere on a long race)")
     parser.add_argument("--attach", action="store_true",
                         help="the race is under way and the autopilot is armed: just log")
     parser.add_argument("--after", type=float, default=35.0, help="seconds to log past the finish")
@@ -236,7 +315,8 @@ def main():
     shots = sorted({int(v) for v in args.shots.split(",") if v})
 
     dbg = Debugger(args.port)
-    log = {"args": {k: str(v) for k, v in vars(args).items()}, "frames": [], "events": []}
+    log = {"args": {k: str(v) for k, v in vars(args).items()}, "frames": [], "events": [],
+           "set_state": [], "ctl_writes": []}
     try:
         if args.attach:
             dbg.resume()
@@ -297,7 +377,9 @@ def main():
         shots_done = set()
         last_state = None
         interval = 0
-        for _, _ in hits(dbg, WEAPONS_DISPATCH_FIRE, 400000, timeout=120.0):
+        gen = hits(dbg, WEAPONS_DISPATCH_FIRE, 400000, timeout=120.0)
+        probe_now = None
+        for _, _ in gen:
             manager = dbg.read_u32(RACE_MANAGER)
             if not ram(manager):
                 continue
@@ -308,8 +390,8 @@ def main():
                 rec = dbg.read_u32(player + ENTITY_RECORD)
                 pcraft = dbg.read_u32(player + ENTITY_CRAFT)
                 pbody = dbg.read_u32(pcraft + 0x1CC)
-                px = f32s(dbg, pbody + 0x30, 1)[0]
-                if (args.disarm_x < px < args.disarm_x + 60 and dbg.read_u32(player + 0xAC8) >= dbg.read_u32(G_RACE_LAPS)
+                px, _py, pz = f32s(dbg, pbody + 0x30, 3)
+                if (args.disarm_x < px < args.disarm_x + 60 and abs(pz - args.disarm_z) < 30 and dbg.read_u32(player + 0xAC8) >= dbg.read_u32(G_RACE_LAPS)
                         and f32s(dbg, manager + 0x2B8, 1)[0] > 20.0):
                     dbg.write(rec + AUTO_TIMER, struct.pack("<f", 0.0))
                     dbg.hold(cross=False)
@@ -317,6 +399,12 @@ def main():
                     log["events"].append({"frame": frame, "disarmed_at_x": px})
                     print("autopilot disarmed and thrust released at x=%.1f, stop frame %d"
                           % (px, frame), file=sys.stderr)
+                    if args.probe == "setstate":
+                        probe_now = ("setstate", player)
+                        break
+                    if args.probe == "scale":
+                        probe_now = ("scale", pcraft + 0x1D4)
+                        break
             full = frame % args.full_every == 0
             n = dbg.read_u32(G_RACER_COUNT)
             crafts = []
@@ -336,6 +424,9 @@ def main():
                 finished_frame = frame
                 print("player finished at stop frame %d (sampled crossings %d)"
                       % (frame, me["crossings"]), file=sys.stderr)
+                if args.probe == "ctl":
+                    probe_now = ("ctl", me["ctl_ptr"])
+                    break
             if finished_frame is not None:
                 k = frame - finished_frame
                 row["since_finish"] = k
@@ -351,6 +442,13 @@ def main():
             frame += 1
             if len(log["frames"]) > args.lead and finished_frame is None:
                 log["frames"] = log["frames"][-args.lead:]
+        gen.close()
+        if probe_now and probe_now[0] == "setstate":
+            probe_set_state(dbg, probe_now[1], args.probe_count, log)
+        elif probe_now and probe_now[0] == "ctl":
+            probe_ctl_write(dbg, probe_now[1], args.probe_count, log)
+        elif probe_now and probe_now[0] == "scale":
+            probe_ctl_write(dbg, probe_now[1], args.probe_count, log, size=4)
         dbg.resume()
     finally:
         dbg.hold(cross=False)

@@ -1182,3 +1182,7 @@
 0x08848590	function	Craft_SetState	90	grid.md
 0x088486d4	function	Craft_EnterGridState	90	grid.md
 0x088486e4	function	Craft_ReleaseFromGrid	90	grid.md
+0x08848664	function	Craft_SetAutopilotBlend	90	race-finish.md
+0x0887fd3c	function	Camera_UpdateSpectator	80	race-finish.md
+0x08880a58	function	Camera_PickSubject	80	race-finish.md
+0x08880b38	function	Camera_PickRandomMode	75	race-finish.md
