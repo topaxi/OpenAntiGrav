@@ -65,11 +65,11 @@ fn held(on: bool) -> oag_gameplay::InputSnapshot {
     }
 }
 
-fn start() -> Option<race::Race> {
+fn start(track: &str) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        track: Some(TRACK.to_string()),
+        track: Some(track.to_string()),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::TimeTrial,
         ..race::Options::default()
@@ -78,10 +78,11 @@ fn start() -> Option<race::Race> {
     Some(race::Race::start(loaded.setup))
 }
 
-/// Forward speed after each tick from the release frame (tick `COUNTDOWN_TICKS - 1`)
-/// on, with thrust first held at the release frame plus `edge`.
-fn fly(edge: u64, frames: u64) -> Vec<f32> {
-    let mut race = start().expect("an image");
+/// Forward speed and position after each tick from the release frame (tick
+/// `COUNTDOWN_TICKS - 1`) on, with thrust first held at the release frame plus
+/// `edge`.
+fn fly(track: &str, edge: u64, frames: u64) -> Vec<(f32, oag_core::math::Vec3)> {
+    let mut race = start(track).expect("an image");
     let release = COUNTDOWN_TICKS - 1;
     for _ in 0..release {
         race.tick(&PlayerInputs::single(held(false)));
@@ -90,8 +91,11 @@ fn fly(edge: u64, frames: u64) -> Vec<f32> {
         .map(|frame| {
             race.tick(&PlayerInputs::single(held(frame >= edge)));
             let body = &race.ship().physics.body;
-            body.linear_velocity
-                .dot(body.orientation * oag_core::math::Vec3::NEG_Z)
+            (
+                body.linear_velocity
+                    .dot(body.orientation * oag_core::math::Vec3::NEG_Z),
+                body.position,
+            )
         })
         .collect()
 }
@@ -112,7 +116,10 @@ fn each_launch_matches_the_original_off_the_line() {
     }
     for launch in &LAUNCHES {
         let last = launch.speeds.iter().map(|&(o, _)| o).max().unwrap_or(0);
-        let ours = fly(launch.edge, launch.edge + last + 2);
+        let ours: Vec<f32> = fly(TRACK, launch.edge, launch.edge + last + 2)
+            .into_iter()
+            .map(|(speed, _)| speed)
+            .collect();
         for &(offset, original) in launch.speeds {
             // The capture's row is read after the frame's integration, which is
             // the speed after tick `edge + offset`.
@@ -129,6 +136,61 @@ fn each_launch_matches_the_original_off_the_line() {
                 "{}: {offset} frames after the first thrust ours is {:.3}, the original {original}",
                 launch.name,
                 ours[at]
+            );
+        }
+    }
+}
+
+/// Thrust held through the countdown on two circuits: the original's speed and
+/// the distance it has covered from the first thrust frame, 20, 60 and 120
+/// frames on. `(offset, speed, distance)`.
+///
+/// The distance is the length of the displacement rather than a coordinate, so
+/// the same table serves a start that runs along `+X` and one along `+Z`. This is
+/// the comparison the previous lane's report called the largest term left: ours
+/// was 18 units behind at 120 frames before the boost.
+const HELD: [(&str, [(u64, f32, f32); 3]); 2] = [
+    (
+        "Data\\Environments\\16_Track\\track.vex",
+        [
+            (20, 16.721, 2.719),
+            (60, 65.777, 29.217),
+            (120, 106.637, 118.449),
+        ],
+    ),
+    (
+        "Data\\Environments\\01_Track\\track.vex",
+        [
+            (20, 16.749, 2.723),
+            (60, 65.835, 29.260),
+            (120, 106.450, 118.376),
+        ],
+    ),
+];
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_held_through_launch_covers_the_originals_ground_on_two_circuits() {
+    if oag_testdata::image("data/images/pulse-psp-usa.chd").is_none() {
+        return;
+    }
+    for (track, rows) in HELD {
+        let ours = fly(track, 1, 125);
+        let origin = ours[1].1;
+        for (offset, speed, distance) in rows {
+            let (our_speed, position) = ours[(1 + offset) as usize];
+            let our_distance = (position - origin).length();
+            println!(
+                "{track}: {offset} frames on: speed {our_speed:.3} against {speed}, \
+                 distance {our_distance:.3} against {distance}"
+            );
+            assert!(
+                (our_speed - speed).abs() / speed < TOLERANCE,
+                "{track}: speed {offset} frames on is {our_speed}, the original {speed}"
+            );
+            assert!(
+                (our_distance - distance).abs() / distance < 2.0 * TOLERANCE,
+                "{track}: {offset} frames on ours has covered {our_distance}, the original {distance}"
             );
         }
     }
