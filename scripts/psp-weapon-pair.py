@@ -75,8 +75,20 @@ ROCKET_UPDATE = 0x0885D2A8
 CYCLES_PER_FRAME = 222_000_000 / 59.940059940059946
 MINE_POSE_NODE = 0x08859CE4
 BOMB_NODE = 0x08863390
+# `g_ingame` (a pointer): its `+0x40` is the one animation clock every `Anim Transform`
+# and texture transform reads (`anim-transform.md`).
+G_INGAME = 0x08AB0818
+INGAME_CLOCK = 0x40
 CAMERA_BREAK = 0x0883C13C
-PROBES = {"spawns": PSYS_SPAWN, "rocket": ROCKET_UPDATE, "mine": MINE_POSE_NODE}
+BOMB_INIT = 0x08863188
+SHIELD_UPDATE = 0x0885E254
+PROBES = {
+    "spawns": PSYS_SPAWN,
+    "rocket": ROCKET_UPDATE,
+    "mine": MINE_POSE_NODE,
+    "bomb": BOMB_INIT,
+    "shield": SHIELD_UPDATE,
+}
 
 # The emulator window is 960x544 (the PSP's 480x272, doubled) and is moved here.
 WINDOW_X, WINDOW_Y, WINDOW_W, WINDOW_H = 160, 88, 960, 544
@@ -89,6 +101,13 @@ def ram(pointer):
 def gpr(dbg):
     registers = dbg.call("cpu.getAllRegs")
     category = next(c for c in registers["categories"] if c["name"] == "GPR")
+    return dict(zip(category["registerNames"], category["uintValues"]))
+
+
+def fpu(dbg):
+    """The FPU registers as raw 32-bit words, by name (`f12` is a float argument)."""
+    registers = dbg.call("cpu.getAllRegs")
+    category = next(c for c in registers["categories"] if c["name"] == "FPU")
     return dict(zip(category["registerNames"], category["uintValues"]))
 
 
@@ -143,6 +162,29 @@ def _probe_loop(dbg, kind, address, frames, start, out):
             for k in ("a0", "a2", "a3", "t0", "t1", "t2", "t3"):
                 if ram(regs[k]):
                     entry["ptr_floats"][k] = list(struct.unpack("<16f", dbg.read(regs[k], 64)))
+        elif kind == "shield":
+            # `ShipShield_Update (float dt in f12, ShipShield *a1)`: the whole shell animation.
+            obj = regs["a0"] if ram(regs["a0"]) else regs["a1"]
+            entry["dt"] = struct.unpack("<f", struct.pack("<I", fpu(dbg)["f12"]))[0]
+            blob = dbg.read(obj, 0x90)
+            entry["obj"] = obj
+            entry["rgba"] = list(struct.unpack_from("<4f", blob, 0x40))
+            entry["target"] = list(struct.unpack_from("<4f", blob, 0x50))
+            entry["rate"], entry["swell"], entry["swell_target"], entry["swell_rate"] = \
+                struct.unpack_from("<4f", blob, 0x60)
+            entry["active"] = blob[0x74]
+            entry["fading"] = blob[0x75]
+            entry["time"] = struct.unpack_from("<f", blob, 0x78)[0]
+            entry["models"] = {}
+            for name, at in (("shell", 0x7C), ("cockpit", 0x80)):
+                ptr = struct.unpack_from("<I", blob, at)[0]
+                if ram(ptr):
+                    entry["models"][name] = {"ptr": ptr, "flags": dbg.read_u32(ptr + 0x2C)}
+        elif kind == "bomb":
+            # `Bomb_Init (entity a0, position a1, direction a2, ...)`: the drop point.
+            entry["entity"] = regs["a0"]
+            entry["drop"] = list(struct.unpack("<4f", dbg.read(regs["a1"], 16)))
+            entry["dir"] = list(struct.unpack("<4f", dbg.read(regs["a2"], 16)))
         elif kind == "mine":
             mine = regs["a0"]
             blob = dbg.read(mine, 0x100)
@@ -299,6 +341,9 @@ def main():
                 print("gave up: no GO or no fire within %d frames" % frame, file=sys.stderr)
                 break
             row = {"frame": frame, "throttle": throttle, "speed": speed, "pos": position}
+            ingame = dbg.read_u32(G_INGAME)
+            if ram(ingame):
+                row["clock"] = struct.unpack("<f", dbg.read(ingame + INGAME_CLOCK, 4))[0]
             if node:
                 row["camera"] = camera_eye(dbg, node)
             if go is None and throttle > 0.0 and args.fire_frame is None:

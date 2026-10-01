@@ -312,3 +312,113 @@ fn both_palettes_settle_to_the_same_unmeasured_target() {
     assert_eq!(PULSE_PALETTE.target, HD_PALETTE.target);
     assert_eq!(HD_PALETTE.target, TARGET_COLOUR);
 }
+
+/// The live object, frame by frame: `ShipShield_Update`'s own `dt` argument and
+/// the colour, swell and clock it found on entry, read off PPSSPP (Time Trial,
+/// Talon's Junction, Venom, fire bit `0x20` at speed 106; `psp-weapon-pair.py
+/// shield --probe shield`, 2026-10-01). 30 of the 200 frames logged.
+///
+/// Fed the same `dt` values, [`ShipShield::advance`] reproduces every one: the
+/// activation, the `0.15` fade, the `0.2` swell and the clock are the original's
+/// own, and **nothing between `Shield_Fire` and the first drawn frame delays the
+/// shell**. The shell's apparent onset in the original is later than a 60 Hz
+/// tick-for-tick run's because the original's `dt` is a measured frame time that
+/// jitters about `1/59.94` s: `(int)(dt / SUBSTEP)` is `0` on 47 of the 200 frames
+/// logged (`dt` under `1/60`), so those frames advance neither lerp. The jitter was
+/// measured on PPSSPP; how large it is on a real PSP is not measured. The mechanism
+/// is the executable's own, and a fixed 60 Hz engine does not reproduce it.
+const LIVE_DT: [f32; 30] = [
+    0.016679, 0.016786, 0.016589, 0.016672, 0.016683, 0.016694, 0.016678, 0.016683, 0.01668,
+    0.01726, 0.016061, 0.016621, 0.016932, 0.016441, 0.016678, 0.016772, 0.016589, 0.016683,
+    0.016688, 0.016689, 0.016673, 0.016678, 0.016681, 0.01696, 0.016412, 0.016678, 0.016865,
+    0.016502, 0.016682, 0.016686,
+];
+const LIVE_COLOUR: [f32; 30] = [
+    0.0, 0.15, 0.27750003, 0.27750003, 0.38587505, 0.4779938, 0.55629474, 0.62285054, 0.679423,
+    0.72750956, 0.76838315, 0.76838315, 0.76838315, 0.8031257, 0.8031257, 0.8326568, 0.8577583,
+    0.8577583, 0.87909454, 0.8972304, 0.9126458, 0.92574894, 0.9368866, 0.9463536, 0.9544006,
+    0.9544006, 0.96124053, 0.9670544, 0.9670544, 0.97199625,
+];
+const LIVE_SWELL: [f32; 30] = [
+    0.7, 0.76, 0.80799997, 0.80799997, 0.84639996, 0.87711996, 0.90169597, 0.9213568, 0.93708545,
+    0.94966835, 0.9597347, 0.9597347, 0.9597347, 0.96778774, 0.96778774, 0.9742302, 0.9793841,
+    0.9793841, 0.9835073, 0.9868058, 0.9894446, 0.9915557, 0.9932445, 0.99459565, 0.9956765,
+    0.9956765, 0.9965412, 0.997233, 0.997233, 0.9977864,
+];
+const LIVE_CLOCK: [f32; 30] = [
+    0.0,
+    0.016679,
+    0.033464998,
+    0.050054,
+    0.066726,
+    0.083409,
+    0.100103,
+    0.116781,
+    0.133464,
+    0.150144,
+    0.167404,
+    0.183465,
+    0.200086,
+    0.217018,
+    0.233459,
+    0.250137,
+    0.266909,
+    0.283498,
+    0.300181,
+    0.316869,
+    0.333558,
+    0.350231,
+    0.366909,
+    0.38358998,
+    0.40054998,
+    0.41696197,
+    0.43363997,
+    0.45050496,
+    0.46700695,
+    0.48368895,
+];
+
+#[test]
+fn the_live_objects_fade_swell_and_clock_are_reproduced_from_its_own_dts() {
+    let mut shield = ShipShield::new();
+    shield.activate();
+    for i in 0..30 {
+        assert!(
+            (shield.rgba[0] - LIVE_COLOUR[i]).abs() < 1e-5,
+            "frame {i}: colour {} against the live {}",
+            shield.rgba[0],
+            LIVE_COLOUR[i]
+        );
+        assert!(
+            (shield.swell - LIVE_SWELL[i]).abs() < 1e-5,
+            "frame {i}: swell {} against the live {}",
+            shield.swell,
+            LIVE_SWELL[i]
+        );
+        assert!(
+            (shield.time - LIVE_CLOCK[i]).abs() < 1e-5,
+            "frame {i}: clock {} against the live {}",
+            shield.time,
+            LIVE_CLOCK[i]
+        );
+        shield.advance(LIVE_DT[i]);
+    }
+}
+
+/// The same 30 frames at a fixed 60 Hz are ahead of the live object: this engine
+/// takes a substep every tick where the live frame timer dropped a quarter of
+/// them. Pinned so the difference is a stated number and not a surprise.
+#[test]
+fn a_fixed_60_hz_shield_runs_ahead_of_the_jittered_live_one() {
+    let mut fixed = ShipShield::new();
+    fixed.activate();
+    for _ in 0..29 {
+        fixed.advance(DT);
+    }
+    assert!(
+        fixed.rgba[0] > LIVE_COLOUR[29] + 0.015,
+        "fixed {} against live {}",
+        fixed.rgba[0],
+        LIVE_COLOUR[29]
+    );
+}

@@ -65,21 +65,32 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   spot is consistent with 2 and 3 and is **untested**.
 - *Pulse Mine* - **pictured**: the charges are visible for two frames as the craft
   leaves them (fire at speed, photograph every frame). Same model, same cadence
-  (6-7 frames). Difference: the original lays at the craft's own position (to the
-  hundredth, stationary probe), ours `hull_extent` behind (`mine::drop_point`,
-  chosen).
-- *Pulse Bomb* - **pictured**, same method. Same canister. Difference: ours draws
-  a wide flat yellow ring round it for 3-4 frames; the original draws a thin
-  vertical light shaft and two bands at the canister's width, and spawns **no**
-  particle effect at the launch (probe). Not isolated: view `Pulse_Bomb.vex`'s
-  meshes against the ring. No detonation is in view for a moving craft on either
-  side. The detonation animator itself still has no original picture (the owner
-  trips its own charge only when stationary, and then at the craft, so a picture
-  of it needs the craft stationary and the camera is inside the blast).
+  (6-7 frames). **2026-10-01, second pass**: the original lays at the craft's own position
+  (stationary probe to the hundredth; `Bomb_Init`'s drop point equals the body position to
+  the last bit, stationary and at speed), and `mine::drop_point` now does too (its own
+  commit, `mine.md`'s second-pass section). The Mine's own `Anim Transform` (a tilted spin, 2 s a turn) now plays too, by analogy with the Bomb and not seen in the original's two frames.
+- *Pulse Bomb* - **pictured**, same method; **the launch look is fixed 2026-10-01**
+  (second pass). The wide flat ring was `Pulse_Bomb.vex`'s `orbit` node drawn at its
+  time-zero pose: both `orbit` and `bomb` are keyframed `Anim Transform`s on the one
+  animation clock (`orbit` turns about its own `X`, once in 3 s), so from behind the ring is
+  always edge-on - a thin vertical shaft or a tilted arc by the clock's phase. The laid pools
+  now write their node-animation table (`bomb_orbit_ground_truth.rs` pins it). The phase is
+  our tick clock, not the original's session clock (`g_ingame->0x40`, 49-92 s at a launch),
+  so a frame-exact ring pose is not claimable. Drop point as for the Mine. No detonation is in
+  view for a moving craft on either side; the detonation animator itself still has no original
+  picture (the owner trips its own charge only when stationary, and then at the craft, so a
+  picture of it needs the craft stationary and the camera is inside the blast).
 - *Pulse Shield* - **pictured**. Matches: violet to blue, size against the craft.
-  Differs: onset (original clear at +28, ours at +20; the recovered fade cannot
-  explain a 20-frame delay, so something before `ShipShield_Activate` is unread)
-  and banding/brightness (not measured).
+  **Onset resolved 2026-10-01 (second pass)**: a live `ShipShield_Update` probe shows nothing
+  delays the shell - the object, its models and its colour, swell and clock match
+  `ShipShield::advance` frame for frame on the same `dt` values (a test pins 30 live frames).
+  The original's later onset is its jittered frame `dt`: `(int)(dt/substep)` is 0 on 47 of 200
+  frames, so it took 0.765 substeps a frame against ours 1.0 (`shield-pickup.md`). Not
+  reproduced and not chosen. Still differs: **brightness and banding**, ours dimmer at settled
+  state (about a third of the original's mean pixel change by one rough measure); unexplained,
+  and a frame-for-frame comparison needs the animation clock pinned on both sides (the shell's
+  texture scrolls on it). Candidate: how `mesh+0x6c` (the colour `Image_SetVertexColours` writes)
+  reaches the draw against ours multiplying the authored vertex colours.
 - *Resolved 2026-10-01 (camera lane)*: the original's craft looked about 1.4 x
   larger because its fresh profile flies `OPT_CLOSE` and ours defaulted to `far`;
   the default is now `close` and a three-tick native comparison agrees. Pass
@@ -99,9 +110,10 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
    per-tick projectile positions (a temporary `eprintln!` of
    `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs` made them
    this pass) and the photographed set.
-2. Decide the Mine/Bomb drop point from the measurement (`mine::drop_point`), and
-   look at `Pulse_Bomb.vex` for the ring and the shaft.
-3. Read what delays the shield's first visible frame in the original
-   (`FUN_08861568`'s arm path against `ShipShield_Activate`).
+2. ~~Mine/Bomb drop point; the Bomb's ring and shaft~~ - done 2026-10-01, second pass.
+3. ~~What delays the shield's first visible frame~~ - nothing does; the frame timer
+   (above). Open instead: the shell's settled brightness, with the animation clock pinned on
+   both sides (`--anim-seconds` on ours, `clock` in the harness rows) and `mesh+0x6c`'s path
+   into the draw (`mesh-draw.md`).
 4. Optional: re-run the Rocket probe on Flash to confirm 0.75 x class on a second
    speed class.

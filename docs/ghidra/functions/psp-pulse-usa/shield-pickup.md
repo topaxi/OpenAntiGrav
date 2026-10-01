@@ -515,7 +515,7 @@ What matches, at player size:
 
 What differs, named and not fixed:
 
-1. *Onset.* In the original nothing is visible at fire+12, a faint outline at
+1. *Onset.* **Resolved 2026-10-01, second pass: see "The onset, measured live" below.** In the original nothing is visible at fire+12, a faint outline at
    +20 and a clear shell at +28. Ours shows a faint shell at +12 and a clear one
    at +20: **about 6-8 frames earlier**. The recovered fade (`rgba += (target -
    rgba) * 0.15` per 60 Hz step, 90 % in 14 steps) cannot account for an
@@ -528,6 +528,45 @@ What differs, named and not fixed:
    Not measured in numbers (a colour comparison needs the same camera framing
    first). Candidate: the sinusoidal alpha `(n * 0.25 + 0.75)` or the model's
    vertex colours.
+
+## The onset, measured live (2026-10-01, second pass)
+
+`psp-weapon-pair.py shield --probe shield` breaks on `ShipShield_Update`
+(`0x0885e254`) for 200 frames after the fire and logs the whole object and the `dt` in
+`f12` each frame. Time Trial, Talon's Junction, Venom, fire at speed 106.2.
+
+- **Nothing between `Shield_Fire` and the first drawn frame delays the shell.** The
+  object is `active = 1` and its clock `0` on the first update (fire+1), the colour is
+  `(0, 0, 0, 0)` with target `(1, 1, 1, 1)` (all four equal), the swell starts at
+  `0.7` with target `1.0`, the rates are `0.15` and `0.2`. The model at `obj+0x80` has its
+  draw bit (`flags & 4`) set from the second frame and the one at `+0x7c` is hidden, in
+  the chase camera: `craft+0x6d == 0` takes the update's first branch, which draws
+  `+0x80`. Confidence 90 (read live, constant for 60 frames).
+- **The fade, swell and clock match `ShipShield::advance` frame for frame when it is fed
+  the same `dt` values** (`crates/render/src/shield/tests.rs`, 30 live frames, tolerance
+  `1e-5`).
+- **The apparent delay is the frame timer.** The `dt` argument is a measured frame time,
+  mean 16.682 ms (59.94 Hz) with jitter of 0.1 to 0.6 ms (min 16.061, max 17.260 over 200
+  frames) - **measured on PPSSPP**. `(int)(dt / 0.016666668)` is **0 on 47 of those 200
+  frames** (`dt` under `1/60`), and a frame with no substep advances neither lerp: the
+  original took 153 substeps in 200 frames, 0.765 per frame, so by fire+20 it had done 14
+  steps against ours 20 (colour 0.897 against 0.961) - the "six to eight frames" the first
+  pass saw. The mechanism (a variable `dt` truncated by `(int)`) is the executable's own,
+  read and then reproduced to `1e-5` from the logged `dt`s; **how large the jitter is on a
+  real PSP is not measured**, so the rate on hardware is unknown and may be nearer ours' or
+  this. Confidence 85 that the onset difference is this and nothing else (the live object
+  matches frame for frame; no second delay is visible in it). A fixed 60 Hz engine does not
+  reproduce it and nothing here chooses a rate for it: `ShipShield::advance` keeps
+  `(dt / SUBSTEP) as i32` as it was.
+- **The shell's brightness depends on a second clock phase.** Two original runs 2 s
+  apart differ in how clear the shell reads at the same frame (the shell's own texture
+  scrolls on the animation clock), so a frame-for-frame brightness comparison needs the
+  clock pinned on both sides; none was done. The original's shell also reads brighter
+  than ours at settled state (about three times the mean pixel change from the control in
+  the craft's box, with the caveat above). Unexplained: candidate is how `mesh+0x6c`
+  (written by `Image_SetVertexColours`, `0x089122b4`) reaches the draw - read on
+  `mesh-draw.md` as an ambient colour on batches with normals and no vertex colours - against
+  how ours multiplies the authored vertex colours.
 
 ## What is not verified
 

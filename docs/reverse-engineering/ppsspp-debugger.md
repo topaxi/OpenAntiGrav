@@ -1784,7 +1784,9 @@ weapon's fire bit into the player's weapon record inside `Weapons_DispatchFire`
 106.2 at `--go-offset 120`, on every one of more than ten restarts). Then it either
 photographs the window at native 480x272 on chosen frames after the fire
 (`--shots`), or breaks on a probe address for `--probe-frames` frames
-(`--probe rocket|spawns|mine`: `Rocket_Update`, `Psys_Spawn_q`, `Mine_PoseNode`).
+(`--probe rocket|spawns|mine|bomb|shield`: `Rocket_Update`, `Psys_Spawn_q`, `Mine_PoseNode`,
+`Bomb_Init`'s drop point and direction, and `ShipShield_Update`'s whole object plus its `dt`
+in `f12`). Every frame row also carries `clock`, `g_ingame->0x40`, the one animation clock.
 `--no-fire` is the control, `--fire-frame` fires a stationary craft, `--set-word
 0x1ac=5` arms the Mine's round counter, `--camera` records the camera node's eye.
 The matching `oag-game` side is `verification/scenarios/weapon-after-go.inputs`.

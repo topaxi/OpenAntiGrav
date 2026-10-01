@@ -61,7 +61,6 @@
 use super::{Impact, Projectile};
 use oag_core::math::{Quat, Vec3};
 use oag_physics::ShipState;
-use oag_physics::params::Dimensions;
 use oag_tables::weapons::{BombStats, MineStats, Weapon};
 
 /// What one press of a rear weapon lays: how many, and with what fuse and trip.
@@ -194,19 +193,29 @@ pub const DROP_INTERVAL: f32 = 0.1;
 /// changing it is a hash move - which the measurement did not require.
 pub const CLUSTER: u8 = 5;
 
-/// Where a craft lays its mines.
+/// Where a craft lays its mines and its bomb: **the craft's own position.**
 ///
-/// The tail rather than the nose, which is recovered: `Weapon_RequestFire`
-/// (`0x08862d9c`) stores `craft+0xa0` as this weapon's emitter anchor, and the
-/// only other weapon that uses that anchor is the Bomb. Everything that leaves
-/// the front uses `craft+0x20`.
+/// **Measured on the running original, 2026-10-01, confidence 90.** A stationary
+/// craft's five `Mine_PoseNode` matrices carry the body position to the
+/// hundredth (`6.08, -50.07, -196.03` on both), and `Bomb_Init`'s own `a1` - the
+/// drop point `Weapon_FireBomb` hands it - equals the rigid body's position to
+/// the last bit, both stationary (`6.0764699, -50.0664253, -196.0265045`) and at
+/// 106.2 u/s (`124.4720764, -47.9094696, -196.9474182`, the body's position on
+/// the fire frame, not advanced by the velocity). `docs/ghidra/functions/
+/// psp-pulse-usa/mine.md`'s 2026-10-01 section has the probe.
 ///
-/// Pushed back by the hull's own extent for [`super::launch`]'s reason: a mine
-/// that started inside the craft would be tripped, or drawn, in the wrong place.
+/// This replaced a drop point pushed back by the hull's own extent, which was
+/// chosen (so a charge did not start inside the craft) and which the original
+/// does not do: its charge starts inside the hull and is left behind by the
+/// craft's own motion. What `craft+0xa0`, the anchor `Weapon_RequestFire` stores
+/// for these two weapons, feeds is not established; the measured drop point is the
+/// body position.
+///
+/// **Measured on Pulse's PSP build only.** Pure and HD inherit this law, which is
+/// chosen for those titles, not measured.
 #[must_use]
-pub fn drop_point(state: &ShipState, dimensions: &Dimensions) -> Vec3 {
-    let back = -state.body.forward();
-    state.body.position + back * oag_physics::wall::hull_extent(&state.body, dimensions, back)
+pub fn drop_point(state: &ShipState) -> Vec3 {
+    state.body.position
 }
 
 /// The velocity a mine is laid with.

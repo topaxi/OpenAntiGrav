@@ -165,6 +165,7 @@ impl super::Scene {
         queue: &wgpu::Queue,
         view_projection: Mat4,
         prev_vp: Mat4,
+        seconds: f32,
     ) -> WeaponMatrices {
         let rocket_matrices = race.rocket_model_matrices();
         let plasma_ball_matrices = race.plasma_ball_model_matrices();
@@ -178,6 +179,7 @@ impl super::Scene {
             queue,
             view_projection,
             prev_vp,
+            None,
         );
         write_one_kind(
             &self.plasma_blast.ball,
@@ -186,6 +188,7 @@ impl super::Scene {
             queue,
             view_projection,
             prev_vp,
+            None,
         );
         write_one_kind(
             &self.mines,
@@ -194,6 +197,7 @@ impl super::Scene {
             queue,
             view_projection,
             prev_vp,
+            Some(seconds),
         );
         write_one_kind(
             &self.bombs,
@@ -202,6 +206,7 @@ impl super::Scene {
             queue,
             view_projection,
             prev_vp,
+            Some(seconds),
         );
         write_one_kind(
             &self.cannon_rounds,
@@ -210,6 +215,7 @@ impl super::Scene {
             queue,
             view_projection,
             prev_vp,
+            None,
         );
         (
             rocket_matrices,
@@ -385,7 +391,14 @@ impl super::Scene {
 }
 
 /// One kind's own write loop - the shared body of
-/// [`super::Scene::write_weapon_models`]'s four calls.
+/// [`super::Scene::write_weapon_models`]'s five calls.
+///
+/// `anim_seconds` is the one animation clock (`g_ingame->0x40`, see
+/// `anim-transform.md`) for a model whose own `Anim Transform` nodes play, or
+/// `None` to leave the identity table `mesh_render::build` initialised. The
+/// Mine and the Bomb pass it: the Bomb's `orbit` ring tumbles about its own `X`
+/// and its `bomb` body about `Y`; neither was ever written before, so both drew
+/// at their time-zero pose.
 fn write_one_kind(
     drawables: &[Drawable],
     matrices: &[Mat4],
@@ -393,9 +406,13 @@ fn write_one_kind(
     queue: &wgpu::Queue,
     view_projection: Mat4,
     prev_vp: Mat4,
+    anim_seconds: Option<f32>,
 ) {
     for (index, (drawable, matrix)) in drawables.iter().zip(matrices).enumerate() {
         let previous = previous.get(index).copied().unwrap_or(*matrix);
         drawable.write(queue, view_projection, *matrix, prev_vp * previous);
+        if let Some(seconds) = anim_seconds {
+            drawable.write_node_anims(queue, seconds);
+        }
     }
 }
