@@ -179,6 +179,16 @@ class Debugger:
             self.add_breakpoint(address)
         try:
             for index in range(count):
+                # Everything queued so far describes a stop that is already
+                # over. Without this, a `cpu.stepping` rebroadcast whose pc
+                # happens to equal the breakpoint (the CPU was left stopped
+                # there, or the stop being resumed from is the breakpoint
+                # itself) satisfies the wait below while the CPU is running,
+                # and the next resume fails with "CPU not stepping". A
+                # `cpu.status` round trip pulls what is already on the socket
+                # into the queue first, so the clear really is a clear.
+                self.call("cpu.status")
+                self.pending = []
                 self.call("cpu.resume")
                 yield index, self.wait_for_break_any(addresses, timeout=timeout)
         finally:

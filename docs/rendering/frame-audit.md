@@ -304,12 +304,83 @@ Every moving batch whose signature the original's list contains survives the
 rule (the dropped ones are "no signature match", which for a moving batch is
 weaker than "not submitted"), and the sixteen roof batches go (16 roof draws before, 0 after, at all of the poses rendered). The
 original's own frame omits what its sections hide, and the section mask is
-authored data. **Confidence 75**: four poses on Talon's Junction, one circuit; the original's loader has not been read doing the
+authored data. **Confidence 75** when this was written (raised to 80 by the repeat on two more circuits, below): four poses on Talon's Junction, one circuit; the original's loader has not been read doing the
 walk (`docs/formats/track.md`), and the signature is a match by shape and not by
 address. A moving draw that passes the mask but is absent from the original's list
 still exists (21 to 24 at the rest poses): the original frustum-culls by a real
 bound, which we cannot. At `talon-mid` the original draws no moving batch at all,
 so that pose confirms nothing for the rule.
+
+**Repeated on Metropia and Tech De Ra (2026-10-01).** *Question and falsifier,
+written before the capture:* with the mask on moving draws, does it hide any
+moving batch the original submits at the same pose? It would come out the other
+way if some moving draw our mask drops still has a twin (same vertex count and
+diameter) in the original's frame that nothing else accounts for - *DROPS* above
+zero. Seven poses at rest, same Venom time trial: Metropia `03_Track` forward
+(spline rows 400, 2300, 3200) and Tech De Ra `04_Track` reversed (rows 600, 900,
+1800, 2000), one boot, the craft placed with `psp-drive.py place --speed 0
+--settle 12`, the GE list recorded by `psp-ge-dump.py dump`, the craft and camera
+by `psp-trace.py --camera --ticks 3`. (The profile's track list had to be walked
+to find them: Track Select is not in the order the dev-unlock table gives, and
+the circuit that came up was identified from its start position and heading
+against every `NN_Track` spline, as `docs/reverse-engineering/ppsspp-debugger.md`
+describes; Tech De Ra came up reversed.) Ours is `crates/render/examples/
+pvs_moving_census.rs`: every draw call with its authored mask, its rest-pose
+vertex count, box and diameter, and whether it passes the running game's visible
+set (`VisibleSet::around`, craft and camera sections taken off the nearest spline
+rows) and the craft's own mask alone, which is what the original culls with. The
+join is `scripts/pvs-moving-census.py`. Two things the first pass got wrong, kept
+because they are traps: the original's PRIM `cnt` is a strip's vertex count, not
+our index count (match on the vertex count the buffer holds), and **the original
+submits many batches twice at one place with two textures** (an object's second
+pass), so its PRIMs are folded to one per (vertices, box) before matching, or a
+single object reads as two twins.
+
+| Pose | Our moving draws (all) | Pass our set / the craft's mask alone | Of those we pass, no twin in the original | Moving draws we drop that have an unclaimed twin |
+| --- | --- | --- | --- | --- |
+| Metropia, row 400 | 40 | 20 / 18 | 4 | **0** |
+| Metropia, row 2300 | 40 | 29 / 29 | 6 | **0** |
+| Metropia, row 3200 | 40 | 32 / 32 | 6 | **0** |
+| Tech De Ra, row 600 | 53 | 19 / 19 | 9 | **0** |
+| Tech De Ra, row 900 | 53 | 19 / 19 | 11 | **0** |
+| Tech De Ra, row 1800 | 53 | 27 / 27 | 12 | **0** |
+| Tech De Ra, row 2000 | 53 | 36 / 36 | 5 | **0** |
+
+**Result: nothing the original submits is hidden by our mask.** DROPS is `0` at
+all seven poses, and again `0` at a second placement and dump of Tech De Ra rows
+600, 900 and 2000 taken later on the same boot (the craft landed 0.9 to 16 units
+off the first pose this time; passing counts `19`, `19` and `36` as before).
+One boot only: no cold second boot was taken here. The control that the count can move: with the craft's section
+forced wrong (`--force-sections`), the same pose reports `8` drops. Before the
+fold of the second-texture passes the first pass showed two apparent drops on
+Metropia, and a few more on Tech De Ra from small four-vertex quads; both were a
+static draw's twin or the same object's second pass, and vanish once static draws
+claim their twins first. The static control is weaker than the 88 to 98 % above,
+because this side applies no frustum: static draws passing the craft's mask with
+a twin were `68`, `62`, `78` % on Metropia and `86`, `68`, `76`, `91` % on Tech
+De Ra.
+
+**The other direction, a count rather than a finding.** Moving draws that pass
+the mask and have no twin: 4 to 6 on Metropia and 5 to 12 on Tech De Ra. The 21 to
+24 quoted above for Talon's Junction came from the earlier pass's own method (no
+fold of the second-texture passes, a different count), so the two are not a
+like-for-like comparison and no ranking of circuits follows. It is a lower bound on what the original hides
+that we draw (a count-and-diameter coincidence turns a miss into a hit, never
+the reverse), and part of it is the original's frustum cull, which moving draws
+here are exempt from. At Metropia row 400 two of the four (node 549, 58 and 44
+units across) pass only through our camera and padding union and not the
+craft's mask: that is the union drawing what the original's single mask does not,
+by design. Some recur: Metropia node 225 (two draws, 144 and 102 units across) at all
+three poses, Tech De Ra node 1076 (45 and 34 units) at all four and node 1078
+(66 units) at the three poses where it passes. Whether the original hides those by
+the frustum bound it keeps for moving meshes (the lead above) or by a rule this
+audit did not recover is not settled. **Open**: those named nodes, and the same
+measurement on a circuit with a tunnel or a loop.
+
+**Confidence 80** for "the mask hides no moving batch the original submits":
+three circuits, eleven poses, zero counterexamples, a positive control, no
+loader reading, and moving batches matched on count and diameter alone, which is
+weaker than the static match.
 
 **Seen as a player.** `data/shots/frame-audit/talon-fast/roofs-orig-before-after.png`: the
 original, ours before and ours after at the fast pose. The dark slabs left of the
@@ -331,6 +402,10 @@ uv run --with websocket-client scripts/psp-trace.py --port 45093 --ticks 3 --cam
 # the original's submitted batches at a pose (section 3)
 uv run --with websocket-client --with zstandard scripts/psp-ge-dump.py dump --port 45093 --out frame.ppdmp
 uv run --with zstandard scripts/psp-ge-dump.py census frame.ppdmp --out frame.prims.json
+# the moving-draw census, ours and the join (section 3, second table)
+cargo build -q -p oag-render --example pvs_moving_census
+python3 scripts/pvs-moving-census.py --spline spline.csv --pose-dir dir \\
+    --entry 'Data\\Environments\\03_Track\\track.vex'
 # ours
 oag-game --race --no-audio --size 480x272 --render-scale 100 --msaa off --motion-blur off \
     --screen-filter off --anisotropy off --ticks 1 --pose-from t.csv --pose-tick 2 --screenshot ours.png

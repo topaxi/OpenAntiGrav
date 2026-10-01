@@ -688,8 +688,8 @@
 0x08873090	function	LeachBeam_MarkDisconnected	80	cannon-quake-leachbeam.md
 0x088730a4	function	LeachBeam_LingerExpired	80	cannon-quake-leachbeam.md
 0x08873068	function	LeachBeam_UnlockedExpired	78	cannon-quake-leachbeam.md
-0x088734d0	function	LeachBeam_KeepInTrack	80	cannon-quake-leachbeam.md
-0x08873328	function	LeachBeam_ReaimChain	80	cannon-quake-leachbeam.md
+0x088734d0	function	LeachBeam_KeepInTrack	92	cannon-quake-leachbeam.md
+0x08873328	function	LeachBeam_ReaimChain	92	cannon-quake-leachbeam.md
 0x0883f228	function	Ship_ApplyPendingWeaponRepair	85	cannon-quake-leachbeam.md
 0x08874a30	function	Quake_UpdateSpans	85	cannon-quake-leachbeam.md
 0x0891cab8	function	Quake_UpdateSpan	80	cannon-quake-leachbeam.md

@@ -15,8 +15,9 @@ frame's GE list".
         data/scratch/<lane>/ge/frame.ppdmp --out frame.prims.json
 
 `census` writes one record per PRIM: its vertex count, the world-space bounding
-box of its vertex buffer under the world matrix in force, the vertex type and
-the level-0 texture address. A batch is identified by **(vertex count, sorted
+box of its vertex buffer under the world matrix in force, the longest
+vertex-to-vertex distance (`diam`, which a rotation cannot change), the vertex
+type and the level-0 texture address. A batch is identified by **(vertex count, sorted
 bounding-box extents)** rather than by an address, because the extents survive
 the world matrix (the GE's fixed-point positions are scaled by it) and the
 vertex count is the batch's own. Against this project's own draws that signature
@@ -101,6 +102,29 @@ def _read_pos(buf, at, fmt):
     return (0.0, 0.0, 0.0)
 
 
+def diameter(pts):
+    """The longest vertex-to-vertex distance: unchanged by a rotation.
+
+    A moving batch's world box depends on the animation phase, this does not,
+    so it is what a moving batch is matched on (`docs/rendering/frame-audit.md`
+    section 3). Exact for up to 3,000 points, a double sweep (a lower bound,
+    usually exact) above that.
+    """
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    a = np.asarray(pts, dtype=np.float64)
+    if len(a) < 2:
+        return 0.0
+    if len(a) <= 3000:
+        d = a[:, None, :] - a[None, :, :]
+        return float(np.sqrt((d * d).sum(-1).max()))
+    far = a[np.argmax(((a - a[0]) ** 2).sum(-1))]
+    far2 = a[np.argmax(((a - far) ** 2).sum(-1))]
+    return float(np.sqrt(((far2 - far) ** 2).sum()))
+
+
 def census(path):
     cmds, push = load(path)
     world = [0.0] * 12
@@ -150,6 +174,7 @@ def census(path):
                                 "tex": state.get("tex", 0),
                                 "mn": [min(p[k] for p in pts) for k in range(3)],
                                 "mx": [max(p[k] for p in pts) for k in range(3)],
+                                "diam": diameter(pts),
                             }
                         )
                     vertices = None
