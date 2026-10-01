@@ -15,10 +15,6 @@ use oag_gameplay::PlayerInputs;
 /// Six game-minutes at 60 Hz: past that a run is a wait, not a measurement.
 const TICKS: u64 = 60 * 60 * 6;
 
-fn loaded_eliminator(kill_target: Option<u32>) -> Option<race::Race> {
-    loaded_eliminator_seeded(kill_target, None)
-}
-
 fn loaded_eliminator_seeded(kill_target: Option<u32>, seed: Option<u64>) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
     let loaded = race::load(&race::Options {
