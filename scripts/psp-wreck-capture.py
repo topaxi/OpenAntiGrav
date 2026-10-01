@@ -44,12 +44,33 @@ SHIP_UPDATE_CRAFT = 0x08849618
 SET_STATE = 0x08844100
 PSYS_SPAWN_Q = 0x08915484
 RACE_MANAGER = 0x08B317B4
+CAMERA_OBJECT = 0x08B32C64
+CAMERA_NODE_BASE = 0x08AB10B0
 CYCLES_PER_FRAME = 222_000_000 / 59.940059940059946
 
 
 def regs(dbg):
     c = dbg.call("cpu.getAllRegs")["categories"][0]
     return dict(zip(c["registerNames"], c["uintValues"]))
+
+
+def camera_row(dbg):
+    """The camera controller's own fields (`camera.md`, "destroy camera") and the node it drives."""
+    cam = dbg.read_u32(CAMERA_OBJECT)
+    row = {"mode": dbg.read_u32(cam + 0x1DC), "subject": hex(dbg.read_u32(cam + 0x1E4))}
+    f = lambda off, n=1: list(struct.unpack("<%df" % n, dbg.read(cam + off, 4 * n)))
+    row["fov"], row["fov_target"], row["fov_rate"] = f(0x220)[0], f(0x224)[0], f(0x228)[0]
+    row["focus"], row["focus_target"] = f(0x230, 3), f(0x240, 3)
+    row["focus_rate"], row["frame_size"] = f(0x250)[0], f(0x268)[0]
+    node = dbg.read_u32(cam + 0x1D4)
+    row["node"] = hex(node)
+    if node:
+        row["node_floats_0x40_0xc0"] = list(struct.unpack("<32f", dbg.read(node + 0x40, 128)))
+    node_base = dbg.read_u32(CAMERA_NODE_BASE)
+    row["flags_10e8"] = hex(dbg.read_u32(dbg.read_u32(0x08AB10E8) + 0x2C))
+    row["flags_10b0"] = hex(dbg.read_u32(node_base + 0x2C))
+    row["view_node_0x40"] = list(struct.unpack("<16f", dbg.read(node_base + 0x40, 64)))
+    return row
 
 
 def position(dbg, entity):
@@ -126,6 +147,7 @@ def main():
     ap.add_argument("--shots", default="0,5,10,20,30,36,40,50,60,75,90,105,120,140,160,180")
     ap.add_argument("--spawns", action="store_true", help="log Psys_Spawn_q for 3.3 s instead of photographing")
     ap.add_argument("--place-window", action="store_true")
+    ap.add_argument("--camera", action="store_true", help="log the camera controller's fields each frame")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     shots = sorted({int(v) for v in args.shots.split(",")})
@@ -158,6 +180,8 @@ def main():
             row["hull_flags"] = dbg.read_u32(hull + 0x2C)
             row["wreck_flags"] = dbg.read_u32(wreck + 0x2C) if wreck else None
             row["timer"] = struct.unpack("<f", dbg.read(entity + 0x874, 4))[0]
+            if args.camera:
+                row["camera"] = camera_row(dbg)
             if injected is not None:
                 k = frame - injected
                 row["since"] = k
