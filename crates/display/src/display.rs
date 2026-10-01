@@ -899,18 +899,12 @@ percentage!(BoostFovKick, DEFAULT, "boost field-of-view kick");
 ///
 /// # What is not recovered
 ///
-/// - Nothing about which one a fresh profile starts on is open any more: a
-///   **fresh profile starts on [`Self::Close`]**, measured 2026-10-01. Two cold
-///   PPSSPP boots on empty homes (no save of any title), walked to a Time Trial
-///   on Talon's Junction, both read the player camera node 11.644 units from
-///   the craft, `(0, +3.00, -11.25)` in its own frame - the `<ExternalCameraClose>`
-///   block at the craft's 0.75 scale, where `Far` is 14.56 - and the setting
-///   string `Camera_UpdatePlayerView` looks up read `OPT_CLOSE`. Wipeout 2048's
-///   `Options_Definition.xml` agrees (`CameraP1 default="OPT_CLOSE"`), and so does
-///   the 150-tick capture `data/traces/pad0-boost.csv`. Until then this type
-///   defaulted to `Far`, a choice made when nothing was read, and the craft drew
-///   about 1.25 times smaller than the original's next to the same track.
-///   See `camera.md`, "The default view".
+/// - Which one a fresh profile starts on is **recovered**: [`Self::Close`],
+///   measured 2026-10-01 on two cold PPSSPP boots (eye 11.644 from the craft, the
+///   close block at the 0.75 scale; the setting read `OPT_CLOSE`), and what
+///   Wipeout 2048's own `CameraP1 default="OPT_CLOSE"` declares. `Far` was this
+///   type's default until then and drew the craft 1.4 times too small. See
+///   `camera.md`, "The default view".
 /// - **The spelling.** The original persists `OPT_INT`, `OPT_CLOSE` and
 ///   `OPT_FAR`; [`Self::name`] uses this project's own settings-file vocabulary.
 ///   Anything that ever reads a real profile save has to know the disc's own
