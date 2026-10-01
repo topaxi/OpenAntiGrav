@@ -263,7 +263,7 @@ split is by what the loop is, not by crate ownership:
 
 | optimised | left at `opt-level = 0` |
 | --- | --- |
-| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test | `oag-render`, `oag-game`, `oag-view`, `oag-input`, `oag-audio` |
+| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-game` (the whole `race/` tick) and `oag-render` (the particle systems it steps), added 2026-10-01 - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
 | `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-rcs` - the RCSMODEL geometry and material walk | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
 
 The right-hand column is where a debugger actually gets pointed, so it keeps the
@@ -476,3 +476,77 @@ has no valid split beyond the one it already has (its own doc comment and
 assertion rather than merely partition it), and `spawn_heading` is already
 split on both its available axes. Every `check-test-budget` red seen this
 session was contention, not drift.
+
+### The race itself was the unoptimised cost (2026-10-01)
+
+The table above left `oag-game` and `oag-render` at `opt-level = 0`. That was
+right when the sim lived in `oag-race`, and stopped being right when the whole
+race tick (`crates/game/src/race/`) and the particle systems it steps moved into
+those two crates: `ai_roll`, `ram`, `eliminator_finish`, `difficulty` and the
+rest of the sim-driving ground-truth tests were running the race unoptimised.
+Three changes, all in `Cargo.toml`'s profiles, none touching float semantics
+(`opt-level` keeps IEEE; the determinism hashes and the all-twelve
+`a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` output are
+byte-identical before and after, see below):
+
+1. `oag-game` and `oag-render` at `opt-level = 2`.
+2. `[profile.dev] incremental = false`. Incremental mode uses 256 codegen units
+   and, at `opt-level = 2`, stops small `#[inline]` functions (`Vec3::from_array`,
+   `Iterator::next`) inlining across them: `perf` showed `Vec3::from_array` at 11%
+   of a sim test as a real call. Measured on the two sim tests in
+   `eliminator_finish_ground_truth` + `difficulty_ground_truth`, user CPU
+   (machine loaded by other members, so read as ratios): oag-game at O2 with
+   incremental 50s + 24s, without 30s + 16s, plus `oag-render` at O2 22s + 10s.
+   It also lets `sccache`, the rustc wrapper in `~/.cargo/config.toml`, cache our
+   own crates; it refuses incremental ones.
+3. `[profile.dev.package."*"] debug = false`. Third-party DWARF was over half of
+   a 91 MB test binary (now 41 MB) and of the sys time spent linking 130 of them.
+   Our own crates keep `line-tables-only`, which is what a failing test is read
+   from.
+
+And one source fix the profile pointed at: `oag_texture::bcn::bc7` read its
+bitstream a bit at a time and built each texel then `swap`ped channels, which
+the compiler turned into byte stores reloaded as a word (a store-forwarding
+stall at 54% of the function). A `u128` shift-and-mask reader and a rotation
+written as a choice of whole arrays halve the Omega GNF pixel sweep
+(`data00_gnf_entries_decode_or_refuse_by_name` 152s to 77s). The bc7 unit tests
+and the ground-truth sweep still pass unchanged.
+
+A fourth, separate bug: `crates/game/build.rs` named the worktree's own
+`refs/heads/<branch>` as a `rerun-if-changed` path. Refs live in the common git
+directory, so in every linked worktree that path never existed, cargo treats a
+missing path as changed, and every cargo invocation rebuilt `oag-game` and
+relinked its ~130 test binaries (a no-op `cargo test --no-run` cost 217 CPU-s,
+now 0.7).
+
+**Measured** (`just test-data`, same tree otherwise, all images present; the
+machine ran other members' builds and tests throughout, load 15-55 at the start,
+so wall clock is an upper bound and CPU is the figure to trust):
+
+| | before | after |
+| --- | --- | --- |
+| tests | 5,831 | 5,831, all passed |
+| user CPU | 5,855s | 3,667s (before the bc7 fix) |
+| wall | 368s | 276s (before the bc7 fix) |
+| `a_lone_craft_gets_round...` | 53-57s | 15s, output byte-identical |
+| `ai_roll` full-grid tests | 207-220s each | 98-100s each |
+| `ram` | 242s | 129s |
+
+What that costs: the edit-and-rebuild loop in `oag-game` pays more CPU, because
+a non-incremental `opt-level = 2` rebuild of the 130k-line library and its test
+crates replaces an incremental `opt-level = 0` one. A comment-only edit followed
+by `just lint` + `cargo nextest run --no-run` measured about 370 CPU-s (7.7s
+wall for lint, 47s for the build, load 37-48) against about 280 CPU-s before.
+The data run saves roughly ten times what that costs, but a member iterating on
+one test with `cargo nextest run -E 'test(...)'` should expect the first build
+after an edit in `oag-game` to take longer.
+
+**What is left.** The remaining tail is not scheduling: it is the PS2 intro
+transcode (`ffmpeg`/libaom, about 130s, the floor), `omega_gnf_pixels` BC7
+decode volume, ATRAC9 decode (`omega_wem_ground_truth`, 100s each, third-party
+`atrac9dec` and a non-inlined libm `floor`), and in the sim tests
+`oag_physics::collide::TriangleSoup::raycast_all` at 25% plus `raycast` at 14%
+of a `ram` run: a brute-force walk of every triangle. A spatial index there
+would speed every sim test and the game itself, but it must return hits in the
+same order to keep the state hashes, so it belongs to a physics lane and is
+recommended, not done.

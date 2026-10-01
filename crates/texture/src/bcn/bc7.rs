@@ -158,14 +158,22 @@ const MODES: [Mode; 8] = [
 ];
 
 /// Reads bits LSB-first out of a 16-byte block, advancing a cursor.
-struct BitStream<'a> {
-    data: &'a [u8; 16],
+///
+/// The block is held as one little-endian `u128`, whose bit `i` is bit `i % 8`
+/// of byte `i / 8` - the stream order - so a field is a shift and a mask rather
+/// than a loop over its bits. This was a bit-at-a-time loop and was 94% of the
+/// Omega GNF pixel sweep's profile.
+struct BitStream {
+    bits: u128,
     pos: u32,
 }
 
-impl<'a> BitStream<'a> {
-    fn new(data: &'a [u8; 16]) -> Self {
-        Self { data, pos: 0 }
+impl BitStream {
+    fn new(data: &[u8; 16]) -> Self {
+        Self {
+            bits: u128::from_le_bytes(*data),
+            pos: 0,
+        }
     }
 
     /// Reads `n` bits (`n` up to 32), LSB of the stream into bit 0 of the
@@ -173,13 +181,7 @@ impl<'a> BitStream<'a> {
     /// pass a field width that happens to be zero for a given mode without
     /// a separate branch.
     fn read(&mut self, n: u32) -> u32 {
-        let mut out = 0u32;
-        for i in 0..n {
-            let bit_index = self.pos + i;
-            let byte = self.data[(bit_index / 8) as usize];
-            let bit = (byte >> (bit_index % 8)) & 1;
-            out |= u32::from(bit) << i;
-        }
+        let out = ((self.bits >> self.pos) & ((1u128 << n) - 1)) as u32;
         self.pos += n;
         out
     }
@@ -376,19 +378,20 @@ pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
 
         let cw = weight(color_bits, color_index);
         let aw = weight(alpha_bits, alpha_index);
-        let mut texel = [
-            lerp(e0[0], e1[0], cw),
-            lerp(e0[1], e1[1], cw),
-            lerp(e0[2], e1[2], cw),
-            lerp(e0[3], e1[3], aw),
-        ];
-        match rotation {
-            1 => texel.swap(3, 0),
-            2 => texel.swap(3, 1),
-            3 => texel.swap(3, 2),
-            _ => {}
-        }
-        out[t] = texel;
+        let r = lerp(e0[0], e1[0], cw);
+        let g = lerp(e0[1], e1[1], cw);
+        let b = lerp(e0[2], e1[2], cw);
+        let a = lerp(e0[3], e1[3], aw);
+        // Rotation swaps alpha with one colour channel. Written as a choice of
+        // whole arrays rather than a `swap` on a built one: the swap made the
+        // compiler store the four bytes singly and reload them as a word, a
+        // store-forwarding stall that was over half this function's time.
+        out[t] = match rotation {
+            1 => [a, g, b, r],
+            2 => [r, a, b, g],
+            3 => [r, g, a, b],
+            _ => [r, g, b, a],
+        };
     }
 
     out
