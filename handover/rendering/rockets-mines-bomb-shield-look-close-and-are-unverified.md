@@ -48,21 +48,22 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
 `verification/scenarios/weapon-after-go.inputs` on our side. Frames stay under
 `data/scratch/pulse-weapons/`.
 
-- *Pulse Rocket* - **matched** (Time Trial, Talon's Junction, Venom/Assegai,
-  fired at speed 106.2 x 124.5, 3 rockets measured twice to 0.1 unit). Named
-  differences, each a `crates/gameplay` row not yet fixed (each moves the
-  determinism hash, so its own commit):
-  1. cruise speed 222.22 u/s (800 km/h, class alone), ours 277.78 (class +
-     `launchSpeed`);
-  2. launch speed 166.67 u/s for four frames: the direction vector keeps the
-     craft's display scale 0.75 (rows measured 0.7500 on six rockets), so
-     0.75 x class until the first surface hit; `launchSpeed` plays no part. Ours
-     has none;
-  3. spawn at the craft's position, ours at the nose;
-  4. life: the original's detonate at fire+51/61/70 (185-252 units), ours at
-     +14..32 (75-158 units). Re-measure after 1-3.
-  The wide orange glow on the original's nose at fire+3..+8 against ours' small
-  spot is consistent with 2 and 3 and is **untested**.
+- *Pulse Rocket* - **flight matched 2026-10-01, second pass; the look is not.** The four rows
+  landed one commit each (cruise 222.22 u/s class alone; 0.75 x class until the first surface
+  hit; spawn at the craft's position; and the two laws the re-measure found: the riding normal
+  is seeded from the craft, and the probe-hit arm steers toward the ride point). A volley
+  fired from the original's measured pose detonates at ticks 49/60/69 and 177/218/251 units
+  against the original's 51/61/70 and 185/221/252
+  (`crates/game/tests/rocket_launch_ground_truth.rs`, disc-backed). Evidence and the arm's
+  read in `rocket-visuals.md`'s 2026-10-01 second-pass section. **Still open**: (a) the
+  original's first two or three updates are a probe miss (`Collision_SweepSegment` returns
+  `0x7f` with the floor four units below, so the rocket flies 166.67 u/s and falls for them);
+  ours finds the floor on its first update. Cause unrecovered, see the page; (b) the wide
+  orange glow at fire+3..+8 is still larger on the original than ours (480x272 pair,
+  `data/scratch/pulse-weapon-laws/rocket-pair-after.png`); `WO_ROCKET_FLARE`'s parameters are
+  unread; (c) our standing start puts the craft 2.4 units and 1.7 degrees off the original's
+  at the same place, which alone moves a detonation by 30 ticks (spawn/handling, not this
+  thread's).
 - *Pulse Mine* - **pictured**: the charges are visible for two frames as the craft
   leaves them (fire at speed, photograph every frame). Same model, same cadence
   (6-7 frames). **2026-10-01, second pass**: the original lays at the craft's own position
@@ -104,12 +105,10 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
 
 ## Next Steps
 
-1. A gameplay lane takes rows 1-4 of the Rocket (one commit per row, hash
-   regenerated in its own commit), then re-runs
-   `python3 scripts/psp-weapon-pair.py rocket --probe rocket` against our
-   per-tick projectile positions (a temporary `eprintln!` of
-   `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs` made them
-   this pass) and the photographed set.
+1. ~~A gameplay lane takes rows 1-4 of the Rocket~~ - done 2026-10-01, second pass.
+   Open instead: find why the original's first updates miss the floor (a break on
+   `Collision_RaycastWorld`'s hit kind `local_38` and on what the rocket copies from its owner
+   at `self+0x114`), then the flare's parameters.
 2. ~~Mine/Bomb drop point; the Bomb's ring and shaft~~ - done 2026-10-01, second pass.
 3. ~~What delays the shield's first visible frame~~ - nothing does; the frame timer
    (above). Open instead: the shell's settled brightness, with the animation clock pinned on

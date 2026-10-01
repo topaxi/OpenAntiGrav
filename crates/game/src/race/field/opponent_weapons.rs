@@ -107,25 +107,15 @@ impl Race {
         // `None` where the weapon table authors a speed per class and this
         // race's rung is outside them - the shot does not happen rather than
         // flying at a rung it was not tuned for.
-        let Some(shots) = oag_gameplay::projectile::launch(
+        let Some(fired) = oag_gameplay::projectile::fire_rocket(
+            &mut self.sim.world.projectiles,
             &ship.physics,
-            &ship.handling.dimensions,
             &stats,
             &self.sim.class,
+            slot as u8,
         ) else {
             return false;
         };
-        let mut fired = 0;
-        for (position, velocity) in shots {
-            if self.sim.world.projectiles.spawn(
-                oag_tables::weapons::Weapon::Rocket,
-                position,
-                velocity,
-                slot as u8,
-            ) {
-                fired += 1;
-            }
-        }
         fired > 0
     }
 

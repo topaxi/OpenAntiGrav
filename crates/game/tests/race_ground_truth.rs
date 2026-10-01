@@ -1425,9 +1425,9 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // at `ROCKET_LIFETIME_SECONDS`), so the reap is the *correct* end for it -
     // and the failure it produced said "the rocket aged out instead of
     // hitting the track", which sent two passes looking for a speed bug that
-    // was never there. The speed is exact: 277.78 units a second, the
-    // authored `venomspeed` 800 plus `launchSpeed` 200 over
-    // [`KMH_PER_UNIT_PER_SECOND`].
+    // was never there. The speed is exact: 222.22 units a second, the
+    // authored `venomspeed` 800 alone over [`KMH_PER_UNIT_PER_SECOND`]
+    // (277.78 with `launchSpeed` 200 added until 2026-10-01).
     let mut ticks = 1;
     let mut last_alive = [0usize; oag_gameplay::projectile::ROCKET_SHOTS];
     let mut furthest = 0.0f32;

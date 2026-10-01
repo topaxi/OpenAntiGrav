@@ -94,7 +94,10 @@ pub use hit::WeaponHit;
 
 pub use blast::{BlastStats, blast, blast_stats};
 pub use mine::TriggerRadii;
-pub use rocket::{LIFETIME_SECONDS as ROCKET_LIFETIME_SECONDS, ROCKET_SHOTS, launch};
+pub use rocket::{
+    LAUNCH_SPEED_SCALE as ROCKET_LAUNCH_SPEED_SCALE, LIFETIME_SECONDS as ROCKET_LIFETIME_SECONDS,
+    ROCKET_SHOTS, fire as fire_rocket, launch,
+};
 
 use oag_core::math::{Quat, Vec3};
 use oag_physics::Raycaster;
@@ -188,7 +191,11 @@ pub struct Projectile {
     /// craft's up, which is **ours**: the original seeds it from the craft and
     /// this engine's spawn call does not carry one. The first probe corrects it,
     /// so the cost is at most one tick of a wrong probe direction on a steeply
-    /// banked launch.
+    /// banked launch. **The Rocket is seeded from the craft's up**, through
+    /// [`Projectiles::spawn_riding`] (`Rocket_Init` writes `self+0x100` as the
+    /// negated `craft+0xb10`, and the live rows read `(-0.03, 1.0, 0.05)` on the
+    /// first update); whether that vector is the craft's own up or its contact
+    /// normal was not separated.
     pub surface: Vec3,
     /// Which ship slot fired it.
     ///
@@ -490,6 +497,36 @@ impl Projectiles {
             MAX_FLIGHT_SECONDS,
         )
         .is_some()
+    }
+
+    /// The same as [`Self::spawn_guided`], seeding the surface normal the
+    /// projectile rides: what a Rocket does, because the original's first
+    /// surface probe goes along the *craft's* normal and not along world up.
+    ///
+    /// Its own entry point for [`Self::lay`]'s reason: every other weapon must
+    /// keep landing in the same slot with the same fields it always did.
+    pub fn spawn_riding(
+        &mut self,
+        kind: Weapon,
+        position: Vec3,
+        velocity: Vec3,
+        owner: u8,
+        surface: Vec3,
+        launch_speed_kmh: f32,
+    ) -> bool {
+        let Some(projectile) = self.place(
+            kind,
+            position,
+            velocity,
+            owner,
+            None,
+            launch_speed_kmh,
+            MAX_FLIGHT_SECONDS,
+        ) else {
+            return false;
+        };
+        projectile.surface = surface;
+        true
     }
 
     /// Throws one blade, with its own authored `fuse` instead of the safety net.

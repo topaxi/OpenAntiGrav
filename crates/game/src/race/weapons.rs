@@ -225,30 +225,18 @@ impl Race {
                     // slot each rocket lands in, and the slot is hashed state.
                     // `None` where the table authors a speed per class and
                     // this race's rung is outside them: no shot, rather than a
-                    // shot at some other rung's speed.
-                    let Some(shots) = oag_gameplay::projectile::launch(
+                    // shot at some other rung's speed. A partial volley is
+                    // better than a pickup that survives having fired two of
+                    // three, so any rocket getting away spends it.
+                    let Some(fired) = oag_gameplay::projectile::fire_rocket(
+                        &mut self.sim.world.projectiles,
                         &ship.physics,
-                        &ship.handling.dimensions,
                         &stats,
                         &self.sim.class,
+                        0,
                     ) else {
                         return;
                     };
-                    // Spent on the *first* shot getting away. A partial volley
-                    // is better than a pickup that survives having fired two of
-                    // three, and the array cannot fill from one press in a race
-                    // this engine can currently run.
-                    let mut fired = 0;
-                    for (position, velocity) in shots {
-                        if self.sim.world.projectiles.spawn(
-                            oag_tables::weapons::Weapon::Rocket,
-                            position,
-                            velocity,
-                            0,
-                        ) {
-                            fired += 1;
-                        }
-                    }
                     if fired == 0 {
                         // Every slot was taken. Keep the pickup rather than
                         // spend it on a volley that never left - the same rule
@@ -445,7 +433,19 @@ impl Race {
                     //
                     // `LEACH` fires on the locked arm and `LEACHFAIL` on the
                     // unlocked one - see `Cue::Leach` and `Cue::LeachFail`.
-                    self.sim.world.leach_beam = Some(match self.sight_target() {
+                    //
+                    // **The player's lock needs the reticle's lock, under the Pulse
+                    // law** (read 2026-10-01): `Ship_FireHeldWeapon` (`0x08844ae8`)
+                    // passes `Weapon_RequestFire` the target only when
+                    // `entity+0x860 & 1`, the flag `HudSight_UpdateLeachBeam` sets
+                    // when its extent reaches `6.0`, about `0.34` s after a first
+                    // sighting; before that it passes `(0, -1)`, the unlocked arm.
+                    // Wipeout HD's LeachBeam reticle is a different function, so it
+                    // keeps firing off the window alone. An opponent has no reticle.
+                    let target = self.sight_target().filter(|_| {
+                        slot != 0 || !self.view.sight.leach_law() || self.view.sight.locked()
+                    });
+                    self.sim.world.leach_beam = Some(match target {
                         Some(target) => {
                             self.sim.cues.push(crate::audio::sfx::CueEvent::new(
                                 crate::audio::sfx::Cue::Leach,

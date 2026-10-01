@@ -242,15 +242,18 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
             "rocket {slot} spawned behind the craft: {:?}",
             rocket.position
         );
-        // Venom's authored speed plus `launchSpeed`, the same for all three:
-        // the fan turns them, it does not slow them. Both figures are km/h
-        // in the file, so the velocity is the sum over
+        // 0.75 x Venom's authored speed, the same for all three: the fan turns
+        // them, it does not slow them, and `launchSpeed="16"` plays no part
+        // (measured on Pulse PSP 2026-10-01: the rocket leaves at the craft's
+        // display scale times the class speed until its first surface hit). Both
+        // figures are km/h in the file, so the velocity is over
         // `KMH_PER_UNIT_PER_SECOND` - spelled as the arithmetic so the unit
         // stays legible.
-        let expected = (600.0 + 16.0) / oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
+        let expected = 600.0 * oag_gameplay::projectile::ROCKET_LAUNCH_SPEED_SCALE
+            / oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
         assert!(
             (rocket.velocity.length() - expected).abs() < 1e-2,
-            "rocket {slot}: expected (600 + 16) km/h as units per second, got {}",
+            "rocket {slot}: expected 0.75 x 600 km/h as units per second, got {}",
             rocket.velocity.length()
         );
         assert!(

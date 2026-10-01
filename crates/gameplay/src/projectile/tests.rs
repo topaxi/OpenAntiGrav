@@ -524,13 +524,8 @@ fn clearing_empties_every_slot() {
 /// A test that only counted three would pass with all three on the same ray.
 #[test]
 fn a_launch_fires_three_fanned_about_the_craft_forward() {
-    let state = ShipState::default();
-    let dimensions = Dimensions {
-        length: 4.0,
-        width: 2.0,
-        height: 1.0,
-        ..Dimensions::default()
-    };
+    let mut state = ShipState::default();
+    state.body.position = Vec3::new(12.0, -3.0, 40.0);
     // `spread` of 0.25 rad is about 14 degrees to each side.
     let stats = oag_tables::weapons::parse(
         r#"<WeaponStats>
@@ -544,26 +539,27 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
     .rocket()
     .expect("a Rocket");
 
-    let shots = launch(&state, &dimensions, &stats, "VENOM")
-        .expect("the fixture authors a Venom rocket speed");
+    let shots = launch(&state, &stats, "VENOM").expect("the fixture authors a Venom rocket speed");
     assert_eq!(shots.len(), ROCKET_SHOTS);
 
     let forward = state.body.forward();
-    for (nose, velocity) in shots {
-        // One origin, ahead of the hull, shared by all three - the original
-        // varies the matrix and not the pose.
-        assert_eq!(nose, shots[0].0, "the three must share an origin");
-        assert!(
-            (nose - state.body.position).dot(forward) > 0.0,
-            "the launch point is behind the craft: {nose:?}"
+    for (origin, velocity) in shots {
+        // One origin, the craft's own position (measured 2026-10-01, not the
+        // nose), shared by all three - the original varies the matrix and not
+        // the pose.
+        assert_eq!(origin, shots[0].0, "the three must share an origin");
+        assert_eq!(
+            origin, state.body.position,
+            "a rocket is laid at the craft's position"
         );
-        // One speed, unchanged by the fan: the class's plus `launchSpeed`,
-        // converted out of the km/h the file authors them in. Spelled as
-        // the arithmetic rather than as `180.55` so the unit is legible -
-        // this assertion is the guard against the 3.6x reappearing.
+        // One speed, unchanged by the fan: 0.75 x the class's alone (measured
+        // 2026-10-01; `launchSpeed="50"` plays no part), converted out of the
+        // km/h the file authors it in. Spelled as the arithmetic rather than
+        // as `125.0` so the unit is legible - this assertion is the guard
+        // against the 3.6x reappearing and against `launchSpeed` joining in.
         assert!(
-            (velocity.length() - (600.0 + 50.0) / KMH_PER_UNIT_PER_SECOND).abs() < 1e-2,
-            "expected (600 + 50) km/h as units per second, got {}",
+            (velocity.length() - 600.0 * 0.75 / KMH_PER_UNIT_PER_SECOND).abs() < 1e-2,
+            "expected 0.75 x 600 km/h as units per second, got {}",
             velocity.length()
         );
     }
@@ -608,13 +604,8 @@ fn a_zero_spread_still_fires_three() {
     .rocket()
     .expect("a Rocket");
 
-    let shots = launch(
-        &ShipState::default(),
-        &Dimensions::default(),
-        &stats,
-        "VENOM",
-    )
-    .expect("the fixture authors a Venom rocket speed");
+    let shots = launch(&ShipState::default(), &stats, "VENOM")
+        .expect("the fixture authors a Venom rocket speed");
     assert_eq!(shots.len(), ROCKET_SHOTS);
     for (_, velocity) in shots {
         assert!(velocity.is_finite(), "{velocity:?}");

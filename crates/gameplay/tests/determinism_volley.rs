@@ -10,7 +10,6 @@ use oag_gameplay::projectile;
 use oag_gameplay::world::World;
 use oag_physics::DamageRules;
 use oag_physics::params::Dimensions;
-use oag_tables::weapons::Weapon;
 
 mod determinism_support;
 use determinism_support::{TICK, corridor, weapon_stats};
@@ -60,21 +59,19 @@ fn run_volley(ticks: u32) -> (u64, u64) {
         Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
 
     // The volley the front end fires, built the way `race::weapons` builds it.
-    let shots = projectile::launch(
+    let fired = projectile::fire_rocket(
+        &mut world.projectiles,
         &world.ships[0].physics,
-        &world.ships[0].handling.dimensions,
         &stats,
         "VENOM",
+        0,
     )
     .expect("Pulse's weapon table authors a Venom rocket speed");
-    for (position, velocity) in shots {
-        assert!(
-            world
-                .projectiles
-                .spawn(Weapon::Rocket, position, velocity, 0),
-            "the pool refused a shot, so this scenario is not flying a full volley"
-        );
-    }
+    assert_eq!(
+        fired,
+        projectile::ROCKET_SHOTS,
+        "the pool refused a shot, so this scenario is not flying a full volley"
+    );
 
     let mut trajectory = oag_core::hash::StateHasher::new();
     for _ in 0..ticks {
@@ -235,9 +232,31 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   row is untouched because nothing expires inside a second. Replaces
 ///   `0xc8f5_f44f_4c4d_c618`; isolated by that arithmetic rather than by a
 ///   revert.
+///
+/// - **Moved 2026-10-01 (60-tick final and both trajectories)**, by the
+///   Rocket's measured launch: the class speed alone, 0.75 x it until the first
+///   surface hit, and the class speed riding in `Projectile::launch_speed_kmh`
+///   (`rocket::fire`). Isolated by commit: `f9dce4de` (class speed alone) left
+///   this fixture's hash unchanged because it authors `launchSpeed="0"`, and
+///   `2b253ead` (0.75 launch, the new hashed field) moved it. The 600-tick
+///   final is unchanged, the slots being empty by then. Replaces
+///   `0xccab_866c_78e1_d1d6` / `0x668e_a6e7_f71d_d3e4` at 60 ticks and
+///   `0x9c20_7c28_2863_b750` (trajectory) at 600.
+///
+/// - **Moved again 2026-10-01 (same three values)**, by the Rocket leaving from
+///   the craft's own position rather than its nose (see `rocket::launch`). Isolated by commit: the previous
+///   regeneration was green before it. Replaces `0x84b1_ede3_62c8_f914` /
+///   `0xdf2c_fa35_c525_9b68` at 60 ticks and `0xc367_da50_59dd_4747`
+///   (trajectory) at 600.
+///
+/// - **Moved again 2026-10-01**, by the Rocket's riding normal being seeded from
+///   the craft's up rather than world up (`Projectiles::spawn_riding`).
+///   Isolated by commit: the previous regeneration was green before it.
+///   Replaces `0xdb77_1466_f784_d9b9` / `0x299e_b849_daed_4a92` at 60 ticks and
+///   `0x4129_e4fd_ccdd_4d1c` (trajectory) at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xccab_866c_78e1_d1d6, 0x668e_a6e7_f71d_d3e4),
-    (600, 0x5b48_d436_7dbc_09e7, 0x9c20_7c28_2863_b750),
+    (60, 0x72ba_a575_f0b3_bdf4, 0x2e0f_a99e_309c_ed96),
+    (600, 0x5b48_d436_7dbc_09e7, 0x7a1f_821f_3771_eb31),
 ];
 
 #[test]
@@ -284,7 +303,7 @@ fn the_volley_actually_fans() {
     };
     ship.physics.body.orientation = Quat::from_rotation_y(0.11) * Quat::from_rotation_z(0.23);
 
-    let shots = projectile::launch(&ship.physics, &ship.handling.dimensions, &stats, "VENOM")
+    let shots = projectile::launch(&ship.physics, &stats, "VENOM")
         .expect("Pulse's weapon table authors a Venom rocket speed");
     let directions: Vec<V> = shots.iter().map(|&(_, velocity)| velocity).collect();
     assert!(
