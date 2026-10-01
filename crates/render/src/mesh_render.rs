@@ -9,13 +9,16 @@ use anyhow::Result;
 use crate::mesh::{GpuVertex, Model};
 
 mod blend;
+mod glow_mask;
 mod hull_lights;
 mod spu_light;
+mod stamp;
 mod tables;
 mod uniforms;
 
 mod texlod;
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
+pub use glow_mask::GlowMask;
 pub use hull_lights::{HULL_LIGHTS, HullLights, ge_channel};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
 pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
@@ -155,6 +158,11 @@ pub struct Built {
     /// alone uses five of the pairs that makes. A Pulse model authors none and
     /// this is empty, so nothing is created for a title that does not use it.
     pub authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])>,
+    /// Alpha-only pass that stamps a blended batch's glow byte into the mask,
+    /// drawn over [`Model::transparent_draws`] after their colour - see
+    /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
+    /// `culled as usize` like [`Built::blend_pipeline`].
+    pub stamp_pipeline: Option<[wgpu::RenderPipeline; 2]>,
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -231,61 +239,6 @@ pub enum Depth {
 /// this same opaque/cutout/blend machinery but needs `crate::exhaust::BLEND`
 /// instead, because its `_ADD` texture is additive rather than a lerp - see
 /// `race::Scene`'s `boost` field.
-#[allow(clippy::too_many_arguments)]
-/// Whether a model's draws may write the scene target's alpha channel, which
-/// [`crate::post::bloom`] reads as its glow mask.
-///
-/// **The original writes that channel only through the GE stencil**, which
-/// keeps its value in the framebuffer's alpha and never blends it. What a
-/// surface stamps is decided per batch - `pass_mask & 0xc0` and the blend
-/// class, in `Gfx_BuildBatchStateList` (`0x0891f890`) - and was measured out
-/// of EDRAM on a live race: see `docs/rendering/glow-mask.md` and
-/// [`Self::Stamped`]. An earlier reading here, that the plume's draw path
-/// writes the mask and a hull's does not, took `Gu_PixelMask(0)` for a write;
-/// opening the channel writes nothing without a stencil op.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GlowMask {
-    /// Colour only - the default wherever the original's stencil stamp has
-    /// not been measured. A Pulse PSP model is [`Self::Stamped`] instead,
-    /// whatever its caller asks - see [`Model::stamps_glow`].
-    Protected,
-    /// Alpha reaches the target, so this model's fragments feed the bloom.
-    Written,
-    /// **The original's own stencil stamp, per batch.** Every opaque and
-    /// alpha-tested draw writes the constant its batch names -
-    /// [`crate::mesh::GpuVertex::glow`], read by `crate::mesh::glow` - in
-    /// place of its alpha, and transparent draws leave the mask alone. That
-    /// is Pulse on the PSP, measured out of EDRAM; see
-    /// `docs/rendering/glow-mask.md`.
-    ///
-    /// **Transparent batches with the glow bits do not stamp here**, where
-    /// the original stamps their texture's byte too. A blend state cannot
-    /// write a constant alpha while the colour blend reads the texel's own;
-    /// the measured grid frame had 20 such pixels, the start-line laser.
-    Stamped,
-}
-
-impl GlowMask {
-    /// The colour write mask this choice implies.
-    #[must_use]
-    pub fn writes(self) -> wgpu::ColorWrites {
-        match self {
-            Self::Protected => wgpu::ColorWrites::COLOR,
-            Self::Written | Self::Stamped => wgpu::ColorWrites::ALL,
-        }
-    }
-
-    /// The colour write mask for this choice's **blended** pipeline, where
-    /// [`Self::Stamped`] writes colour only - see that variant.
-    #[must_use]
-    pub fn blend_writes(self) -> wgpu::ColorWrites {
-        match self {
-            Self::Stamped => wgpu::ColorWrites::COLOR,
-            other => other.writes(),
-        }
-    }
-}
-
 // One knob per pipeline decision, and they are genuinely independent: format,
 // filtering, sample count, depth role, blend and glow mask do not group into a
 // meaningful struct without inventing a name for the grouping. The same call
@@ -803,6 +756,20 @@ pub fn build(
         ));
     }
 
+    let stamp_pipeline = (glow == GlowMask::Stamped).then(|| {
+        stamp::pipelines(&stamp::Shared {
+            device,
+            shader,
+            layout: &pipeline_layout,
+            vertex_buffers: &vertex_buffers,
+            constants,
+            velocity,
+            format,
+            multisample,
+            depth_stencil: &blend_depth_stencil,
+        })
+    });
+
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertices"),
         size: std::mem::size_of_val(&model.vertices[..]) as u64,
@@ -940,6 +907,7 @@ pub fn build(
         additive_pipeline,
         unblended_pipeline,
         authored_pipelines,
+        stamp_pipeline,
         bind_group,
         vertex_buffer,
         index_buffer,

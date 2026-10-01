@@ -7,6 +7,49 @@ use oag_render::mesh;
 use super::{ChunkSet, DrawSections, Drawable, Frustum, SceneStats, VisibleSet};
 
 impl Drawable {
+    /// Draws **every** list of this model through the additive pipeline,
+    /// ignoring which list each batch's `pass_mask` put it in.
+    ///
+    /// **Only the PS2 boost plume uses this, and only because a reference
+    /// frame settled it.** That model's four batches carry no `0x0700` class
+    /// bit, so they land in [`Model::draws`] and [`Self::draw`] would submit
+    /// them through the opaque pipeline - which draws each nozzle as a solid
+    /// hexagon with hard edges, occluding the hull behind it. A PCSX2 capture
+    /// of the original (2026-08-23, the first this project has taken) shows
+    /// the opposite: soft violet plumes with no geometry edge anywhere and the
+    /// hull visible through them. So the original blends this model, and the
+    /// question is only where it says so.
+    ///
+    /// **Where it says so is unrecovered, and that is why this is a
+    /// model-scoped override rather than a decode.** `Gfx_BuildBatchStateList`
+    /// (`0x001e9088`) does disable blending for a `0x0700`-clear batch - read
+    /// on the PS2 executable, and every other `pass_mask` bit it tests matches
+    /// the PSP's - but it is reached through `Mesh_DrawBatches` for sort keys
+    /// of layer `0x750`, and the plume's own object queues at `0x7d0`. The
+    /// draw its vtable (`0x0029a3a0`) reaches for that layer has not been
+    /// followed yet. See
+    /// `docs/ghidra/functions/ps2-pulse-eu/batch-draw-state.md`.
+    ///
+    /// The PS2 shield shell has the same class-less batches and reaches the
+    /// same layer through the same constructor, but it does not come through
+    /// here. `livery::shield::blend_additively` reclassifies its draws at load
+    /// instead, so the shell's ordinary [`Self::draw`] routes them, with no
+    /// PS2 check needed in the frame loop.
+    ///
+    /// The equation is not invented either: `mesh_render::ADDITIVE_BLEND` is
+    /// the `0x200` class's own recovered equation, byte-identical to
+    /// [`oag_render::exhaust::BLEND`], and it is what the **PSP** plume
+    /// already draws with - its batches carry `0x200` and
+    /// `TransparentPipelines::select` routes them there. So this puts the two
+    /// discs' plumes on one blend rather than giving them two.
+    ///
+    /// A PSP plume never reaches this method's opaque or cutout lists, both
+    /// being empty there, so calling it for both titles changes nothing on
+    /// PSP.
+    pub(in crate::race) fn draw_additive(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
+        self.draw_every_list(pass, &self.additive_pipeline)
+    }
+
     /// Draws the absorb overlay: every draw of every list through the
     /// pipelines built with this drawable's own blend, which for the overlay
     /// is [`oag_render::hull_overlay::BLEND`] rather than the fixed additive

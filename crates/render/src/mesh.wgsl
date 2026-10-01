@@ -1707,6 +1707,34 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 }
 
+// **The glow mask's stamp for a blended batch** - drawn after the batch's own
+// blended draw, through a pipeline that masks colour off and writes alpha only,
+// so it reaches the target as the one thing the blend cannot do: replace the
+// mask with a constant. The original does this in the same draw with the GE
+// stencil (`ALWAYS`, ref = the texture's glow byte, `REPLACE` on depth pass)
+// left on under the blend, and the test below is its alpha test
+// (`GU_GREATER`, the batch's own reference, on texel alpha times vertex
+// alpha - the value the blend reads). A batch without the glow bits carries
+// `glow == 0` and never stamps: the original disables the stencil test for it,
+// which keeps the mask. See `docs/rendering/glow-mask.md`.
+@fragment
+fn fs_main_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
+    let shaded = lit_texel(in);
+    if shaded.a <= alpha_test_ref || in.glow <= 0.0 {
+        discard;
+    }
+    return vec4<f32>(0.0, 0.0, 0.0, in.glow);
+}
+
+@fragment
+fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
+    let shaded = lit_texel(in);
+    if shaded.a <= alpha_test_ref || in.glow <= 0.0 {
+        discard;
+    }
+    return MrtOutput(vec4<f32>(0.0, 0.0, 0.0, in.glow), velocity_of(in));
+}
+
 // The velocity-writing twins of `fs_main` and `fs_main_alpha_test`, for the
 // pipelines built against the race's two attachments (`mesh_render::Velocity`).
 // The blended pipelines have no twin on purpose: they write no depth, so the

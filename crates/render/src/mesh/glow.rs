@@ -8,7 +8,9 @@
 //! - a batch with `pass_mask & 0xc0` stamps its texture's glow byte, the
 //!   `Texture` node payload's byte `+0x1e` (`0xff` when it has no texture);
 //! - every other opaque or alpha-tested batch stamps [`BASE`];
-//! - a transparent batch without `0xc0` stamps nothing.
+//! - a transparent batch with `0xc0` stamps its texture's byte too, through
+//!   a draw of its own (`mesh_render::stamp`), and one without it stamps
+//!   nothing.
 //!
 //! [`batch_value`] is that rule, and [`super::GpuVertex::glow`] carries its
 //! answer to the shader.
@@ -48,8 +50,9 @@ pub fn texture_bytes(data: &[u8]) -> Vec<Option<u8>> {
 /// The value one batch stamps into the mask, `0..=1`.
 ///
 /// `texture` is the ordinal its material names, if any. A transparent batch
-/// with the glow bits answers its texture's byte too, though no pipeline here
-/// writes it yet - see `mesh_render::GlowMask::Stamped`.
+/// with the glow bits answers its texture's byte too, and
+/// `mesh_render::stamp`'s second draw is what writes it - see
+/// `mesh_render::GlowMask::Stamped`.
 #[must_use]
 pub fn batch_value(batch: &vex::Batch, texture: Option<u32>, bytes: &[Option<u8>]) -> f32 {
     let byte = if batch.pass_mask & STAMP_BITS != 0 {
@@ -105,5 +108,11 @@ mod tests {
             0,
             "the PSP plume: transparent, no glow bits"
         );
+        assert_eq!(
+            value(0x1192, Some(0)),
+            0x5c,
+            "an alpha-over batch with the glow bit stamps its texture's byte"
+        );
+        assert_eq!(value(0x1292, Some(0)), 0x5c, "and an additive one");
     }
 }
