@@ -284,6 +284,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         pad_tunables,
         special,
         class_gravity_scale,
+        start_boost,
         zone,
         weapon_pad_refresh,
     } = global::resolve(&mut archives, options, &mut report);
@@ -900,6 +901,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             allowed_weapons: Vec::new(),
             weapon_pad_refresh,
             class_gravity_scale,
+            start_boost,
             pose_override,
             camera_override: options.camera,
         },

@@ -268,6 +268,7 @@ fn setup(handling: Handling) -> Setup {
         // not about a scale. This is also what a race gets when the
         // engine-wide file is unreadable.
         class_gravity_scale: 1.0,
+        start_boost: None,
     }
 }
 
