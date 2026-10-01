@@ -80,10 +80,10 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   Differs: onset (original clear at +28, ours at +20; the recovered fade cannot
   explain a 20-frame delay, so something before `ShipShield_Activate` is unread)
   and banding/brightness (not measured).
-- *Cross-cutting, not this lane*: the original's craft is about 1.4 x larger on
-  screen than ours at the same moment; `--camera-view close` and `far` rendered
-  alike in one check (not investigated; the flag may not have taken effect). The
-  camera lane owns it.
+- *Resolved 2026-10-01 (camera lane)*: the original's craft looked about 1.4 x
+  larger because its fresh profile flies `OPT_CLOSE` and ours defaulted to `far`;
+  the default is now `close` and a three-tick native comparison agrees. Pass
+  `--camera-view far` only when the original capture was taken on `OPT_FAR`.
 - *Pulse Cannon* - the round's own basis measured live
   (`cannon-quake-leachbeam.md`, 2026-09-24); the node that draws it was not,
   and no frame compared.

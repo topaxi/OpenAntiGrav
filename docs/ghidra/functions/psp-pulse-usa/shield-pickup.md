@@ -510,7 +510,8 @@ What matches, at player size:
   persisting to fire+240 at least (the pickup's `time` is not read here).
 - The shell's size against the craft: about 1.6-1.7 x the craft's width on both
   sides (the original's looks larger only because its craft is about 1.4 x larger
-  on screen; the camera framing is not this page's).
+  on screen: its profile flew `OPT_CLOSE` and ours `far`, resolved 2026-10-01 in
+  [camera.md](camera.md#the-default-view-is-opt_close-measured-2026-10-01)).
 
 What differs, named and not fixed:
 
