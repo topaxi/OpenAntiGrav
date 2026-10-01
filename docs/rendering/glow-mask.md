@@ -181,7 +181,7 @@ hull's lights, against **about 4,000** if the whole overlay stamped (what ours
 did). Inside the hull's neighbourhood the bloom layer's mean is `5.4/5.2/4.6/5.9/4.8`
 (original) against `4.4/5.7/5.2/5.7/4.7` (ours after the fix) at ages
 0.13/0.33/0.53/0.73/0.93, and `35.0/33.6/28.8/33.5/33.1` before it
-(`cmpstats.py`, scratch).
+(`data/scratch/pulse-hull-bloom/cmpstats.py`).
 
 **Why: the draw order, read off the GE list** (the same frame, both boots; prim
 numbers of boot 1, boot 2 differs by a constant):
@@ -222,9 +222,9 @@ EDRAM: **read at a frame boundary (a breakpoint in a once-a-frame function) and 
 both buffers.**
 
 **The hardware backend does not do this.** The same absorb on PPSSPP's OpenGL
-backend (own boot, same pose) draws the hull white-hot, a blob wider than the
+backend (**one boot, seen once**, same pose, 16 frames) draws the hull white-hot, a blob wider than the
 silhouette, as the 2026-09-23 screenshots did and as ours did before the fix
-(`compare-sw-hw-ours-before-after.png`, scratch, in that order). A plausible cause,
+(`data/scratch/pulse-hull-bloom/compare-sw-hw-ours-before-after.png`, in that order: software PPSSPP, OpenGL PPSSPP, ours before, ours after). A plausible cause,
 **not verified**: an alpha-as-stencil emulation can write the stencil only where a
 fragment passes the test, and prim 330's reset is a `REPLACE` on stencil *fail*. The
 software renderer (`DrawPixel.cpp`) runs every stencil outcome on every pixel,
@@ -245,7 +245,7 @@ not read. At the original's grid pose (ours via `--pose-from`, `--camera-fov 60`
 at ages 0.13 to 0.93 s, the bloom mean in the hull's neighbourhood is `4.4 / 5.7 /
 5.2 / 5.7 / 4.7` against the original's `5.4 / 5.2 / 4.6 / 5.9 / 4.8`, the mask
 pixels at `255` match to within about 8 %, and the frames read alike
-(`o1/vs1.png`, scratch). `crates/game/tests/absorb_mask_ground_truth.rs` pins it
+(`data/scratch/pulse-hull-bloom/o1/vs1.png`). `crates/game/tests/absorb_mask_ground_truth.rs` pins it
 on the disc: the full-glow pixels in the hull's box grow by **232 - 119 = 113** at the
 peak against 4,189 - 119 without the fix, and the original's 95 and 123.
 
