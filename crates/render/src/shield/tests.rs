@@ -422,3 +422,27 @@ fn a_fixed_60_hz_shield_runs_ahead_of_the_jittered_live_one() {
         LIVE_COLOUR[29]
     );
 }
+
+/// On Pulse PS2 the animated colour reaches no vertex of the shell (a GS dump
+/// of the raised shell, `shield-pickup.md`), so the shell draws at its authored
+/// colours whatever the object colour is doing. The colour itself still runs
+/// the same law - `colour()` is untouched - and every other palette still
+/// tints.
+#[test]
+fn the_ps2_shell_is_never_tinted_and_the_other_palettes_are() {
+    for palette in [PULSE_PALETTE, HD_PALETTE] {
+        let mut shield = ShipShield::with_palette(palette);
+        shield.activate();
+        assert_eq!(shield.shell_colour(), shield.colour());
+    }
+    let mut ps2 = ShipShield::with_palette(PS2_PULSE_PALETTE);
+    let mut reference = ShipShield::new();
+    ps2.activate();
+    reference.activate();
+    for _ in 0..90 {
+        assert_eq!(ps2.shell_colour(), [1.0; 4], "the PS2 shell was tinted");
+        assert_eq!(ps2.colour(), reference.colour(), "the law moved");
+        ps2.advance(DT);
+        reference.advance(DT);
+    }
+}

@@ -291,6 +291,20 @@ pub mod ships {
     /// too - the prefix comes from a config key, not from the game mode.
     pub const SHIELD: &str = "shipshield";
 
+    /// The shell the **PS2** build draws, `extrashield`: the `%s\%sshield.vex`
+    /// format of [`SHIELD`] with the literal `"extra"` as its prefix.
+    ///
+    /// **Read, then seen formed.** `ShipShield_Construct` (`0x00169168` in
+    /// `SCES_547.48`) passes the string at `0x002a7920`, which reads `extra`,
+    /// where the PSP build passes the `FE_TeamModel` config key's `"ship"`. A
+    /// PCSX2 run shows the assembled `Data\Ships\Assegai\extrashield.vex` and
+    /// `Data\Ships\AG_Systems\extrashield.vex` in EE RAM and no `shipshield`
+    /// anywhere, and a GS dump of the raised shell draws this model's
+    /// `pulse_shield_extra_ADD` texture rather than the `grid_GLOW` lattice
+    /// `shipshield.vex` carries. See
+    /// `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`.
+    pub const PS2_SHIELD: &str = "extrashield";
+
     /// The model the craft becomes once it has blown up: `%s\%swreck.vex` with
     /// the same `"ship"` prefix [`SHIELD`] takes, so `shipwreck`.
     ///

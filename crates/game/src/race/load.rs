@@ -859,6 +859,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
             shield_palette: if craft_title.name == oag_hd::TITLE.name {
                 oag_render::shield::HD_PALETTE
+            } else if archives.layout.platform == oag_assets::Platform::Ps2 {
+                oag_render::shield::PS2_PULSE_PALETTE
             } else {
                 oag_render::shield::PULSE_PALETTE
             },

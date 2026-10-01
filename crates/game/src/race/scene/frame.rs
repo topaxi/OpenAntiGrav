@@ -407,7 +407,7 @@ impl Scene {
                 race.ship_model_matrix_of(slot) * Mat4::from_scale(Vec3::splat(state.scale())),
                 prev_vp * prev.ship(slot, race) * Mat4::from_scale(Vec3::splat(state.scale())),
             );
-            shell.tint(queue, state.colour(), recoloured);
+            shell.tint(queue, state.shell_colour(), recoloured);
             // The authored `u` scroll, on the global clock (shield-pickup.md).
             shell.write_anims(queue, seconds);
         }

@@ -2,8 +2,8 @@
 //!
 //! Split out of `livery` because the shield is the one model family that takes
 //! a per-source branch at load on top of the PSP/PS3 geometry split: the PS2
-//! disc's shield needs its external texture set *and* a blend class its own
-//! batches do not name. See [`blend_additively`].
+//! disc's shield needs its external texture set, and its shell is a different
+//! file from the PSP's. See [`shell`].
 
 use super::*;
 
@@ -43,15 +43,6 @@ fn shield_model(
                 note.push_str(line.strip_prefix(&format!("{name}: ")).unwrap_or(&line));
             }
         }
-        if archives.layout.platform == oag_assets::Platform::Ps2 {
-            let moved = blend_additively(&mut model);
-            if moved > 0 {
-                note.push_str(&format!(
-                    "; {moved} batch(es) with no blend class drawn additively, as the \
-                     PS2 plume on the same layer is"
-                ));
-            }
-        }
         return Ok((model, note));
     }
     let sibling = mesh::rcs::sibling_name(name);
@@ -86,49 +77,6 @@ fn shield_model(
     ))
 }
 
-/// Moves every opaque and cutout draw of a PS2 shield model onto the additive
-/// class, and says how many it moved.
-///
-/// **The PS2 shell's batches carry no `0x0700` blend class**, where the PSP
-/// shell's two carry `0x200`: `pass_mask` `0x1031`, `0x18b1` and `0x10b2`
-/// against `0x1232`. Taken at their word they land in `Model::draws` and the
-/// opaque pipeline, and the shell is a solid dome that hides the craft inside
-/// it. Its alpha breathing (`oag_render::shield::flicker`) then has nothing to
-/// act on, which is the "not animated" half of the same report.
-///
-/// **This is the PS2 plume's model-scoped override extended to one more model,
-/// on evidence from the executable, and not a decode.** `SCES_547.48`'s shield
-/// constructor `FUN_00169168` builds both `vr_shield_cockpit.vex` and
-/// `%s\%sshield.vex` through the generic model constructor `FUN_001debe8` with
-/// sort word `0x7d000000`, exactly as the plume loader `FUN_001d4310` builds
-/// `shipboost.vex`. Of the constructor's 26 call sites, 17 pass `0x75000000`,
-/// three pass something else, and the six at `0x7d000000` are the plume, the
-/// two shield models, `MagEffect1/2.vex` and `pulse_repulsorwave.vex` - glow
-/// effects, every one. A PCSX2 capture showed the plume blending on that layer
-/// despite its own class-less batches (see `Drawable::draw_additive` and
-/// `docs/ghidra/functions/ps2-pulse-eu/batch-draw-state.md`), so the shell,
-/// reaching the same path with the same arguments, is taken to blend too.
-/// Confidence 70: no capture of the PS2 shield itself has been compared.
-///
-/// Additive rather than alpha-over because the PSP shell's own batches say
-/// `0x200`, and the PS2 texture is a bright lattice on black that only reads
-/// as a lattice when added. The cockpit sphere already carries `0x200` on PS2
-/// and moves nothing here.
-fn blend_additively(model: &mut Model) -> usize {
-    let mut moved: Vec<mesh::DrawCall> = model
-        .draws
-        .drain(..)
-        .chain(model.alpha_tested_draws.drain(..))
-        .collect();
-    let count = moved.len();
-    for draw in &mut moved {
-        draw.blend = Some(vex::BlendClass::Additive);
-    }
-    moved.append(&mut model.transparent_draws);
-    model.transparent_draws = moved;
-    count
-}
-
 /// The shell a fired Shield pickup raises, from the first of
 /// [`crate::race::shield_entry_names`] the source actually carries.
 ///
@@ -144,15 +92,16 @@ fn blend_additively(model: &mut Model) -> usize {
 /// the transform and the vertex colour that
 /// [`oag_render::shield::ShipShield`] computes. Anything done to the mesh here
 /// would be a second, invisible place for the look to come from. The PS2
-/// branch in [`shield_model`] touches only which texture a draw binds and
-/// which blend class it names, never a vertex.
+/// branch in [`shield_model`] touches only which texture a draw binds, never a
+/// vertex, and the PS2 shell is `extrashield.vex`, not the PSP's `shipshield.vex`
+/// (see [`crate::race::shield_entry_names`]).
 pub(super) fn shell(
     archives: &mut oag_assets::Archives,
     team: &str,
     ship_dir: &str,
     report: &mut Vec<String>,
 ) -> Option<Model> {
-    let names = crate::race::shield_entry_names(ship_dir, team);
+    let names = crate::race::shield_entry_names(ship_dir, team, archives.layout.platform);
     for (index, name) in names.iter().enumerate() {
         let provenance = if index == 0 {
             "the team's own"
