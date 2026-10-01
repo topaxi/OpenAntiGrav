@@ -58,6 +58,7 @@ impl Race {
             class_gravity_scale,
             pose_override,
             camera_override,
+            spectator_cameras,
             hd_trail,
             shield_palette,
             hd_plasma_blast,
@@ -449,6 +450,13 @@ impl Race {
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),
                 camera_override,
+                finish_camera: (!spectator_cameras.is_empty()).then(|| {
+                    super::finish_camera::FinishCamera::new(
+                        spectator_cameras,
+                        super::finish_camera::spectator_smoothing(lap_class),
+                        super::finish_camera::SPECTATOR_SEED,
+                    )
+                }),
                 // Cold, then snapped on the first tick. A race starts from a standing
                 // start with no thrust, so there is nothing to snap *to* here.
                 //

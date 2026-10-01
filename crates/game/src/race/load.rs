@@ -901,6 +901,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
             class_gravity_scale,
             pose_override,
             camera_override: options.camera,
+            // Pulse off a PSP disc only, the one executable the director is read off.
+            spectator_cameras: if extents {
+                finish_camera::spectator_nodes(&track_blob)
+            } else {
+                Vec::new()
+            },
         },
         hud,
         track_stats,

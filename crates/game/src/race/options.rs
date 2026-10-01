@@ -680,6 +680,9 @@ pub struct Setup {
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
     pub camera_override: Option<CameraOverride>,
+    /// The circuit's authored `Camera` nodes, for the spectator camera behind the end-race
+    /// panels: **Pulse off a PSP disc only**, empty elsewhere. See [`super::finish_camera`].
+    pub spectator_cameras: Vec<super::finish_camera::SpectatorNode>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.

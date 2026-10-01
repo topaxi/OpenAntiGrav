@@ -638,6 +638,9 @@ impl Race {
         self.view
             .camera
             .advance(target, &self.view.chase_params, self.sim.dt);
+        // After the chase camera and before the eye is read: behind the end-race panels the
+        // spectator director's pose replaces it. A no-op until the player has finished.
+        self.advance_finish_camera();
         // After the camera, so the flash's falloff measures from this tick's eye.
         let eye = self.camera_position();
         if let Some(flash) = &mut self.view.screen_flash {

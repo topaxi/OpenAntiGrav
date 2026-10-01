@@ -1,8 +1,9 @@
 # After the finish: the race keeps running under the end-race panels
 
 **Status: measured on Pulse PSP, 2026-10-01 (Time Trial and Single Race, Talon's
-Junction White `16_Track`, four captures plus three probe runs).** The craft hand-over
-and the running world are ported; the camera is not (see [Open](#open)).
+Junction White `16_Track`, four captures plus three probe runs).** The craft hand-over,
+the running world and the spectator camera's node cameras are ported; two of its four
+views and the `Race End Photo` state are not (see [Open](#open)).
 
 The maintainer's play report said it first: once a race is over the race keeps playing in
 the background with the player's craft driven by AI, and nobody knew what the camera does
@@ -66,12 +67,12 @@ pickup won). Nothing was ported from it; see [what ours does](#what-ours-does).
 | Only the **line** keeps the world running | **chosen**: a wreck, an Eliminator target or a Zone run still stands still, because the original was not measured there (a wrecked player's craft respawns after state 6, and the mode state is already 3, so what happens next is unread) |
 | HUD hidden from `F+1` | ours draws the results panels over the scene at once, which hides the HUD; not separately measured |
 | The `Race End Photo` state and its legend | **not built**: ours goes straight to `EndRace Results` |
-| The camera | **not built**: ours stays on the player's chase camera |
+| The spectator camera | **ported for the node views** (`race::finish_camera`): starts on `F+61`, follows the player, re-picks the subject every 600 frames, cuts by the 60-unit rule and the 26/25/25/24 mode roll, modes `6`/`7` sit on the circuit's authored `Camera` nodes. Modes `2` and `3` (`above`, `front`) are **chosen, not measured**: the chase camera stands in, so about half the cuts leave it. The random stream is the director's own, so it matches the distribution, not the frames. Pulse PSP only |
 | Audio under the panels | **unmeasured** (the emulator was muted); ours spins the engine down as before |
 
 ## The camera, as far as it is read
 
-Not ported, so recorded in full in
+Ported for modes `6` and `7`; recorded in full in
 [`race-finish.md`](../ghidra/functions/psp-pulse-usa/race-finish.md#the-spectator-camera). The shape,
 from three captures and a decompile:
 
@@ -93,7 +94,8 @@ from three captures and a decompile:
   finishes **not** first.
 - The `Race End Photo` state (about one second of clean view, then a legend that waits for X before the panels).
   Ours shows the panels at once.
-- Modes `2` and `3` (`above`, `front`) and the exact trigger of a cut; the camera port itself.
+- Modes `2` and `3` (`above`, `front`), whose geometry is in the `FUN_08880c04` cases not read; what drives `cam+0x274`.
+- The camera nodes are checked against the original's own runtime list on `16_Track` only (ten nodes, eye and aim, to 0.1 unit); the other circuits' lists were not read live.
 - Audio after the flag; the other endings (wreck, Eliminator, Zone); whether Pure, HD/Fury and 2048 do the
   same (not checked: Pulse was the priority).
 - `Race_FinishAllCrafts` (`0x08824e10`) is **not** this path: see the correction in

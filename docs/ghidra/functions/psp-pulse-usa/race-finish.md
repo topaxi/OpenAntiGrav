@@ -91,6 +91,8 @@ view      = look_at(look normalised, up = (0, 1, 0))      // FUN_0897019c
 fov rate `0.06` (`0x3d75c28f`). Mode `5` is the death camera (`Ship_SetState` state 4 calls `Camera_SetMode(cam, 5)`), so
 **the destroy camera and this one are the same code with a different view width**.
 
+**The node list was read live** (`16_Track`, forward track, PPSSPP): ten nodes at `cam+0x40`, each with a unit vector at `node+0x80` (the camera's back axis), the **eye at `node+0x90`** and an **aim point at `node+0xa0`**; the eye is the track `.vex` node's world translation and the aim is the three floats at `+0x10` of its `Camera` payload, all ten matching to 0.1 unit and in file order. The director picks nodes by the aim point and sits at the eye. Ported as `oag_game::race::finish_camera`.
+
 **Not read**: modes `1`-`4` (`internal`, `above`, `front`, `close`), the large body of `FUN_08880c04` that draws them,
 what drives `+0x274`, and the trigger that makes `Race End Photo` call `FUN_08880788` on frame `F+61`.
 
