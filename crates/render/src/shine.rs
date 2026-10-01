@@ -440,7 +440,14 @@ mod tests {
     fn the_circuit_coordinate_follows_the_cameras_right_and_up_in_world_space() {
         let pass = build_track(&circuit()).unwrap();
         // The camera yawed 90 degrees about y: its right axis is world +z (forward x up).
-        let view = Mat4::look_to_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
+        // World to view for a camera whose right is +z, up +y and back -x: the
+        // rows are those three axes, so the columns are their components.
+        let view = Mat4::from_cols_array(&[
+            0.0, 0.0, -1.0, 0.0, //
+            0.0, 1.0, 0.0, 0.0, //
+            1.0, 0.0, 0.0, 0.0, //
+            0.0, 0.0, 0.0, 1.0,
+        ]);
         let mut out = Vec::new();
         let mut model = pass.model;
         model.vertices[0].normal = [0.0, 0.0, 1.0];
