@@ -133,16 +133,10 @@ fn envelope(loaded: &race::Loaded) -> f32 {
     loaded.setup.spline.max_half_width() * 2.0
 }
 
-/// Ticks the handoff test flies: the countdown, then half the two seconds
-/// `ship_spawn_ground_truth.rs` drives, and for the same reason: the question is
-/// whether `Launch Game` produces a driveable ship at all, not how long one
-/// stays driveable.
-///
-/// **The countdown is in it since 2026-10-01.** This flew 60 ticks, all of them
-/// inside the 272-tick countdown in which nothing is driven, and "drives
-/// forwards" passed on the sliver of downhill creep a craft had under the grid's
-/// yaw drift. A craft held on the grid in the original's own way does not move
-/// (`docs/physics/grid-state.md`), so the question has to be asked after GO.
+/// Ticks the handoff test flies: the 272-tick countdown, where nothing is driven
+/// (`grid-state.md`: a craft held on the grid does not move), then 60 more, half
+/// the two seconds `ship_spawn_ground_truth.rs` drives. The question is whether
+/// `Launch Game` produces a driveable ship, not how long one stays driveable.
 const HANDOFF_TICKS: u32 = oag_race::state::COUNTDOWN_TICKS as u32 + 60;
 
 /// `Launch Game` is what puts a player in a ship, so the two halves have to
