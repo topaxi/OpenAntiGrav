@@ -15,6 +15,9 @@ PS2 equivalent and confirms the cycle in a second binary.
 | `0x0014f208` | `Camera_UpdatePlayerView` | 88 |
 | `0x002db350` | `g_settings` | 78 |
 | `0x0013e280` | `Camera_SubmitScene` | 80 |
+| `0x00158568` | `Ship_UpdateCameraRigs` | 88 |
+| `0x00150d20` | `Craft_Construct` | 80 |
+| `0x0027e8cc` | `g_craft_scale` (data) | 88 |
 
 The parameter blocks themselves are parsed by the five
 `HandlingXml_Parse*Camera` functions, documented in
@@ -90,6 +93,66 @@ of both. Whoever picks that question up should treat the PS2 path as a
 different algorithm rather than as a second copy of the same one. Confidence
 **70** on that negative: the function was read, not run, and the trace at
 `0x00132ed0` was not decoded.
+
+## Correction 2026-10-01: the PS2 eye IS scaled by 0.75, in the rig, not in `Camera_UpdatePlayerView`
+
+The section above is right about the function it read and wrong about the
+conclusion it drew. `Camera_UpdatePlayerView` (`0x0014f208`) does not place the
+eye at all: it takes the tripod's position at `tripod+0x30`, which something
+else already wrote, and only pulls it in when the trace at `0x00132ed0` hits
+geometry (a wall pull-in, with its low-pass and lift). The place the authored
+`pos_*` become an eye is `FUN_00158568`, now `Ship_UpdateCameraRigs`, and it is
+the PSP's `Ship_UpdateCameraRigs` (`0x08845ed0`) line for line. Read headless,
+2026-10-01, decompiler output plus the instruction stream.
+
+**The write.** `FUN_00150d20` (the ship-entity constructor, now `Craft_Construct`;
+it also calls `Ship_InitCraft`) stores `0.75` (`0x3f400000`) to `DAT_0027e8cc`
+at `0x00150f64` and its reciprocal `1.3333334` (`0x3faaaaab`) to `DAT_0027e8d0`
+at `0x00150f60`, four instructions apart, the PSP's `0x08841000` / `0x08841018`
+pair. It then does `Body_SetPosition(DAT_0027e8cc * 150.0, ...)`, as the PSP does.
+The ELF image holds `1.0` at that address; the `0.75` is the constructor's, so a
+reader of the file alone sees the wrong value. Readers of `DAT_0027e8cc`:
+`Ship_HoverFourCorner` (`0x0015a9fc`), `Ship_InitCraft` (`0x0015957c`,
+`0x00159590`), `Ship_UpdateCraft` (`0x00159b44`), `Craft_Construct` itself
+(`0x0015127c`, `0x001512e0`: the `<Misc>` hull dimensions and the body height),
+`FUN_00158568` four times (`0x001587a8`, `0x001587c4`, `0x00158a2c`,
+`0x00158a44`) and `FUN_0014bab0`, `FUN_00155188`, `FUN_001f82bc`. The PSP's
+consumer list is the same shape.
+
+**The rig.** With `params = *(*(craft+0x124)+0x8c)`, `FUN_00158568` runs the
+close block (`+0x50` pos_height, `+0x54` pos_length, `+0x58` lookat_height, `+0x5c`
+lookat_length, `+0x64`/`+0x68` springs) then the far block (`+0x34`..`+0x4c`, the
+same seven in the same order), each as
+
+```c
+anchorLook = shipPos + fwd * lookat_length + up * lookat_height;
+anchorPos  = shipPos + fwd * pos_length;
+eye        = prevEye + spring(anchorPos - prevEye) * dt;   /* prevEye at craft+0x870 / +0x880 */
+eye        = anchorLook + normalize(eye - anchorLook) * length(anchorPos - anchorLook);
+prevEye    = eye;                                          /* stored BEFORE the scale */
+eye       += up * (pos_height + stats[0x94] [*2 for far]);
+eye        = shipPos + (eye  - shipPos) * g_craft_scale;   /* -> craft+0x860 close, +0x850 far */
+look       = shipPos + (anchorLook - shipPos) * g_craft_scale;
+```
+
+so the spring state is unscaled and the scale is applied after it, the ordering
+the PSP page measured against the original. `fov` and the springs are not
+scaled. Even the odd `pos_height + stats[0x74]` term (doubled for the far block)
+has the same shape on the PSP (`*(craft+0x94)+0x74`), and so does the far block's
+extra `up.y` factor on that term.
+
+**Look-at is per block.** The close look-at reads `+0x58`/`+0x5c` and the far
+look-at `+0x3c`/`+0x40`, each from its own block, so the PS2's authored far
+look-at `(6, 28)` against the PSP's `(0, 20)` reaches the aim point as authored.
+
+Confidence **88** that the PS2's external eye and look-at are scaled by `0.75`
+about the craft, after the spring: the write, the reciprocal pair, the four
+reads in the rig and the PSP's measured twin (eye `(-11.25, +3.0)` on a running
+PPSSPP) all agree; not higher because nothing here was read from a running PS2.
+The earlier "does not reach its eye the way the PSP does" reading stands retired.
+`Camera_UpdatePlayerView`'s probe-and-low-pass remains a separate wall pull-in
+(`min(L - 1, 3)` along the ray, low-passed at `0.5` into `0x0027e8b0`), a no-op in
+open air; it is not implemented here.
 
 ## The `Aspect Ratio` option's widen, at one address inside `Camera_SubmitScene`
 
@@ -310,3 +373,6 @@ than, say, a shadow-volume or reflection-clip use.
   vtable-shaped table this page already suspected does exist, but nothing
   Ghidra's static analysis can see reaches it. See the "Not determined"
   section for the full trace.
+- 2026-10-01: the chase eye is scaled on the PS2 too: see the correction section.
+  `FUN_00158568` named `Ship_UpdateCameraRigs`, `FUN_00150d20` `Craft_Construct`,
+  `DAT_0027e8cc` `g_craft_scale`.
