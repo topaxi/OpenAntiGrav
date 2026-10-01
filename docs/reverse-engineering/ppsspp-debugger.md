@@ -1861,6 +1861,16 @@ The wreck harness (a grid opponent or the player put into `Ship_SetState(entity,
 - `--hits ADDR:K0:K1` logs every hit of any function with `a0`, `a1`, `f12` and the `0xb0` bytes at each pointer -
   it read `ShipShockwave_Update`'s object frame by frame (`ship-shockwave.md`).
 - `--ge-dump-k K` and `--edram` as in `psp-weapon-pair.py`, above.
+- `--hud` adds the HUD object's words (`g_hud` `0x08ab0838`: `+0x2c` flags, `+0x3c`, `+0x40` widget mask, `+0x168` the hidden
+  flag `Hud_Hide` writes, `+0x274`/`+0x278`) to every frame row; `--timeout S` is the wall time allowed per `Ship_UpdateCraft`
+  stop (default 30 s - a **software-rendered** emulator on an Xvfb runs a heavy scene at a few frames a second and the default
+  then reads as "the craft stopped updating"; 200-600 s is safe). `--inject-frame` can be after GO (about 270 on a Single Race).
+- A hit on `Ship_SpawnExplosionBig` (`--hits 088407b0:100:140`) gives the call's own frame, to order the ring (`ShipShockwave_Update`,
+  `--hits 0885efc4`) and the particles (`--templates`) against it; each is its own boot and the frame phase varies by about one.
+- **Only one execution breakpoint fires at a time** (`each_hit_any`'s note), so two streams of one boot cannot be interleaved; and a
+  `memory.breakpoint.add` write watch on the HUD flag did not stop within 300 s of wall time (the write was about 316 emulated frames
+  away on a slow software-rendered run, so that is not evidence it cannot fire); a breakpoint on the writing function (`Hud_Hide`,
+  `0x0881a128`) is the route not tried yet and the better one.
 
 The frames in `K` are counted from the call, one per `Ship_UpdateCraft` stop of that craft, and the probe's own
 clock is the PSP cycle counter over 222 MHz / 59.94, so a boot-to-boot start of the same effect can differ by a

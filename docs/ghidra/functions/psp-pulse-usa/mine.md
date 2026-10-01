@@ -1363,3 +1363,31 @@ one boot - no score); the wash is a visual match of colour and frame, with the f
 earlier (`particle-system.md`); the rest above is a description, not a measurement. The detonation was moved by a debugger
 write, and the blast's own position is therefore the written one; the blast force is not
 applied (that is `Bomb_ApplyBlast`, a separate call the write does not reach).
+
+## 2026-10-01: the Mine's explosion, pictured against ours (pulse-fx-3)
+
+Method: a stationary craft in a Single Race on Talon's Junction fires a Mine at stop frame 300 (`scripts/psp-weapon-pair.py mine --no-hold
+--fire-frame 300 --set-word 0x1ac=5 --shots ...`, PPSSPP 1.20.4, software renderer, native 480x272; frames `data/scratch/pulse-fx-3/mineB`,
+a GE dump at fire+31 and +33 in `mineGE31`, `mineGE33`, the pool probes `mineP_rolled`).
+
+- **A stationary craft trips its own Mine at once**: the explosion starts at fire+30/31 (the arming delay, `screen-flash-callers.md`'s
+  29 frames), not at the 7 s fuse. Ours keeps its chosen owner exclusion, so a Mine laid by a craft that stands still waits out its fuse. The
+  comparison below ignites ours at the craft's position 29 ticks after the press with a scratch-only hook (`OAG_SCRATCH_IGNITE`, not committed).
+- The original's picture, fire+31 to +60: a yellow-white wash from +31, radial rays and orange burning debris across the screen to
+  about +50 (the mean brightness of the playfield rows holds at 175-215 for twenty frames, then falls to 96 at +60), the player's shield bar goes red
+  and the camera shakes. **It is a cluster**: the Mine scatters several charges and each goes off, so the wash has three bumps (+31, +38 to +40, +44);
+  ours ignites one blast (peak 194, back to baseline in sixteen frames). In the GE dump at +31 the template quads sit at three different view depths
+  (`16.5`, `11.2`, `9.3`: the `ring`'s texture at two of them), more than one explosion's worth (`mineGE31`; the cluster reading is an inference, the count of charges was not read).
+- The effect's pools agree with ours at first order (`WO_MINE_EXPLO`'s smoke ring: two particles, half-size `4.0, 5.31, 6.61, 7.92 ...`, colour
+  `1d2863` rising in alpha; the `Debris` pool: ten white quads of half-size `0.58-1.0`; ours `4.00, 5.1 ...`, `0.64-1.15`). The ring's colour `(29, 39, 98)` is
+  authored, so a cyan-blue haze in the middle of the burst is the original's too.
+- **The Mine's two templates were drawn with the wrong sprite** until this change (`ring` and `BANG` bound their parent's 64x64; their own are 64x64 and
+  32x32, [particle-system.md](particle-system.md#a-sprite-templates-own-sprite-and-what-the-explosions-first-five-frames-are-2026-10-01-pulse-fx-3)).
+  The dump's template quads: the `ring` 64x64 at half-extents `14 x 9.4` (aspect `1.5`) at fire+31, the `BANG` 32x32 as a bar `85` units wide, rotated, at
+  depth `11.2`.
+- **Not isolated:** the mean red of the burst reads `215` on the original and `194` on ours with green `218`/`212` (ours leans green-cyan, the original
+  yellow-white); the original's debris are orange and large where ours are small and brown-grey; ours has no cluster. The flash's colour (kind 8, yellow) and
+  duration (`0.4 s`) were not re-read. Confidence: the template-sprite finding **90**; the picture comparison is a description, one boot.
+- Pointer: the Mine pool is `*0x08b3bf88` (count `+0x164`, slots from `+0x44`; `+0x48` the fuse), found by reading the candidates around the Bomb's `0x08b3bf90`.
+  `+0x90` is **not** the position (a live mine read `(566, -18.7, 5.8)` there); a detonation-by-write for the Mine would need the translation's real row first.
+

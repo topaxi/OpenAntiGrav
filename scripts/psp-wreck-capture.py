@@ -50,6 +50,8 @@ DRAW_PARTICLE = 0x089186BC
 RACE_MANAGER = 0x08B317B4
 CAMERA_OBJECT = 0x08B32C64
 CAMERA_NODE_BASE = 0x08AB10B0
+G_HUD = 0x08AB0838
+HUD_WORDS = (0x2C, 0x3C, 0x40, 0x168, 0x274, 0x278)
 CYCLES_PER_FRAME = 222_000_000 / 59.940059940059946
 
 
@@ -292,6 +294,8 @@ def main():
     ap.add_argument("--edram", action="store_true", help="write both EDRAM framebuffers beside each shot (needs SoftwareRenderer = True)")
     ap.add_argument("--hits", help="ADDR:K0:K1: log every hit of a function (a0, a1, f12 and the objects they point at) -> hits.json")
     ap.add_argument("--camera", action="store_true", help="log the camera controller's fields each frame")
+    ap.add_argument("--timeout", type=float, default=30.0, help="wall seconds to wait for each Ship_UpdateCraft stop (a software-rendered emulator needs more)")
+    ap.add_argument("--hud", action="store_true", help="log the HUD object's visibility words (`g_hud` +0x2c, +0x3c, +0x40, +0x120, +0x121) each frame")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     shots = sorted({int(v) for v in args.shots.split(",")})
@@ -311,7 +315,7 @@ def main():
         print("entity %#x craft %#x" % (entity, craft), file=sys.stderr)
         injected = None
         frame = 0
-        for _ in dbg.each_hit(SHIP_UPDATE_CRAFT, 100000, timeout=30.0):
+        for _ in dbg.each_hit(SHIP_UPDATE_CRAFT, 100000, timeout=args.timeout):
             if regs(dbg)["a0"] != craft:
                 continue
             if injected is None and frame >= args.inject_frame:
@@ -334,6 +338,12 @@ def main():
             row["timer"] = struct.unpack("<f", dbg.read(entity + 0x874, 4))[0]
             if args.camera:
                 row["camera"] = camera_row(dbg)
+            if args.hud:
+                hud = dbg.read_u32(G_HUD)
+                row["hud"] = hex(hud)
+                if pair.ram(hud):
+                    row["hud_words"] = {hex(o): hex(dbg.read_u32(hud + o)) for o in HUD_WORDS}
+                    row["hud_bytes"] = {hex(o): dbg.read(hud + o, 1)[0] for o in (0x120, 0x121)}
             if injected is not None:
                 k = frame - injected
                 row["since"] = k

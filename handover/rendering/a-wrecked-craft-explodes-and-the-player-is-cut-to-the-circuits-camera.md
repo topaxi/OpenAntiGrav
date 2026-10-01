@@ -37,22 +37,29 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   ([ship-shockwave.md](../../docs/ghidra/functions/psp-pulse-usa/ship-shockwave.md),
   [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md#the-instance-matrix-scales-a-root-emitters-spawn-and-a-run-emits-one-tick-short-2026-10-01)).
   Fire-coloured pixels now read `1.04, 1.08, 1.23, 1.24, 1.57` of the original's at 140 to 180 and smoke `1.08,
-  0.96, 1.0, 0.87, 0.72`. **Still open here:** the first five frames - the original's white, hard-edged band
-  (the ring's and the `Glow`'s additive stack; the ring is 1.5-2x dimmer in ours, cause open, see the page's "Not read"); the mode-2 emitters
+  0.96, 1.0, 0.87, 0.72`. **2026-10-01, pulse-fx-3: the first five frames and the dim ring are closed.** The white, hard-edged band is the
+  `Glow` template's quad (a view-space additive sprite, `90 x 60` units at depth `31.5`, its lower edge cut by the floor's depth
+  test); ours drew it with its *parent's* sprite (`SHIP_DEBRIS`'s grey atlas, centre alpha `0`) because `ParticleSystem_DrawParticle` binds the
+  texture header in the **template record** (`+0x890`) and the port took the emitter's. All 28 PSP templates now draw their own
+  ([particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md#a-sprite-templates-own-sprite-and-what-the-explosions-first-five-frames-are-2026-10-01-pulse-fx-3)):
+  the wash, its extent and its hard edge match at frames 122-125 (`data/scratch/pulse-fx-3/pair_glow.png`). The ring was never 1.5-2x dim in
+  its draw: at equal step count the horizon band reads `185, 158, 110, 73` against `176, 148, 105, 76`; the original's `ShipShockwave_Update`
+  steps `(int)(dt / (1/60))` with no remainder, which on PPSSPP skipped 29 of 81 frames (`ship-shockwave.md`). **Still open here:** the mode-2 emitters
   (`SHIP_DEBRIS`, `FIRESPIKES`) spread 15 to 30 % more than the uniform frame scale gives; the fire still
   holds a little at the tail (`1.5x` at 180); our slot is about `25` px from the original's.
 - With the default profile (motion blur on) the cut frame and the state-5 shake frames show a
   white diagonal smear: the shake turns the view by more than the 4 degree field, the blur's
   clamp does the rest. The cut now resets the upscaler's history; the blur has no history to reset.
 - ~~`FUN_088407b0` also builds a `Data\Weapons\Bomb_Shockwave.vex` object - read, not drawn.~~ Drawn 2026-10-01
-  (`bomb_blast::BlastKind::ShipExplosion`), law read and logged live; its alpha ease reaches the draw as the ambient light's alpha and is applied. Open: the ring reads 1.5-2x brighter on the original.
-- **The HUD fade, measured 2026-10-01 (pulse-fx-recheck), and the claim above was wrong.** The player's own craft put
-  into `Ship_SetState(entity, 4)` in a Single Race countdown on PPSSPP (`scripts/psp-wreck-capture.py --restart
-  --inject-frame 40`, frames `data/scratch/pulse-fx-recheck/plA`, `plB`; one boot each): the HUD (lap, position, speed, shield
-  bar, the clock) is **intact through state 4, state 5 and state 6** (frames 0 to 200 after the call), and at 250 (state `1`, the race clock at
-  `0.00.3`). It is partial at 300 and **gone by 360** (the clock would read about 2 s) with only the music title left on
-  screen. So the fade is not a state 5 effect; it follows the wrecked player's craft leaving the race, 100 to 160 frames after
-  state 6 ended. Where the fade is computed is unread (HUD alpha, not found); ours ends the race instead.
+  (`bomb_blast::BlastKind::ShipExplosion`), law read and logged live; its alpha ease reaches the draw as the ambient light's alpha and is applied. The ring's late dimness was the original's scheduler (`ship-shockwave.md`), closed.
+- ~~**The HUD fade.**~~ **Closed 2026-10-01 (pulse-fx-3): there is no fade, and the 160 frames were an injection artefact.** The HUD is hidden by
+  `Hud_Hide` (`0x0881a128`): `g_hud + 0x168` goes `0x100 -> 0x101` and `+0x2c` loses bits `2` and `4` in one frame, called from
+  `ArcadeRace_UpdateRacing` when the player's destroyed bit is set while the mode state is racing (`shield.md`, "Who ends a single race on
+  the destroyed bit"). Injected **after GO** (`--inject-frame 330 --hud`, `hudT`), the flag flips one frame after state 5 begins (`k = 31 -> 32`)
+  and the frame at `k = 40` has no HUD; injected **during the countdown** (`--inject-frame 40`, `hudS`, the earlier lane's method) the mode state
+  is not yet racing, so the check waits for GO and the hide comes 316 frames after the call - the "160 frames after state 6". Two boots
+  (confidence 85, with the decompile). Ours ends the race at state 5 and so hides the HUD at the same point; nothing to port. The
+  race that follows is the original's own (it keeps running under the circuit's camera; ours freezes: first Open item).
 - The camera lets go "when the craft is racing again" (chosen); the original's hand-over to
   another craft after ten seconds, and `Camera_RepickNearSubject_q`, are read, not ported.
   The focus rate `0.4` was seen on Venom only (Flash `0.5`, Rapier and Phantom `0.6` read).
@@ -74,9 +81,9 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
 1. Let a finished race keep stepping its cosmetics (shake, particles, the wreck's explosion)
    so a Single Race or Zone wreck plays out under the results; then arm the state-5 shake there.
 2. Give the Eliminator the original's state-8 wait so the destroy camera holds through the
-   explosion, and hide the HUD as state 5 goes on.
+   explosion (the HUD already hides at state 5, as the original's does).
 3. ~~Compare the explosion emitter by emitter, then read what scale the matrix applies.~~ Done 2026-10-01
-   (`scripts/psp-wreck-capture.py --pools/--templates/--hits/--ge-dump-k`). Next: why the ring's first
-   five frames read saturated white where ours reads pale yellow (state by state against the GE dump: `TLEVEL`, filter, the
-   additive blend's alpha source), and the mode-2 spawn spread.
+   (`scripts/psp-wreck-capture.py --pools/--templates/--hits/--ge-dump-k`). ~~Why the first five frames read white~~ done
+   (the `Glow` template's own sprite). Next: the mode-2 spawn spread, and what delays the explosion's particles by about 2.7 frames
+   behind the ring (`particle-system.md`, measured once, mechanism unread).
 4. `scripts/psp-wreck-capture.py --state 5` on a craft an Eliminator run really eliminated.
