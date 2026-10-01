@@ -46,7 +46,13 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   clamp does the rest. The cut now resets the upscaler's history; the blur has no history to reset.
 - ~~`FUN_088407b0` also builds a `Data\Weapons\Bomb_Shockwave.vex` object - read, not drawn.~~ Drawn 2026-10-01
   (`bomb_blast::BlastKind::ShipExplosion`), law read and logged live; its alpha ease does not reach the draw.
-- The original hides the HUD by degrees from about 30 frames into state 5; ours keeps it.
+- **The HUD fade, measured 2026-10-01 (pulse-fx-recheck), and the claim above was wrong.** The player's own craft put
+  into `Ship_SetState(entity, 4)` in a Single Race countdown on PPSSPP (`scripts/psp-wreck-capture.py --restart
+  --inject-frame 40`, frames `data/scratch/pulse-fx-recheck/plA`, `plB`; one boot each): the HUD (lap, position, speed, shield
+  bar, the clock) is **intact through state 4, state 5 and state 6** (frames 0 to 200 after the call), and at 250 (state `1`, the race clock at
+  `0.00.3`). It is partial at 300 and **gone by 360** (the clock would read about 2 s) with only the music title left on
+  screen. So the fade is not a state 5 effect; it follows the wrecked player's craft leaving the race, 100 to 160 frames after
+  state 6 ended. Where the fade is computed is unread (HUD alpha, not found); ours ends the race instead.
 - The camera lets go "when the craft is racing again" (chosen); the original's hand-over to
   another craft after ten seconds, and `Camera_RepickNearSubject_q`, are read, not ported.
   The focus rate `0.4` was seen on Venom only (Flash `0.5`, Rapier and Phantom `0.6` read).
