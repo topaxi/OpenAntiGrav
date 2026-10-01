@@ -1707,6 +1707,47 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 }
 
+// **The glow mask's stamp for a blended batch** - drawn after the batch's own
+// blended draw, through a pipeline that masks colour off and writes alpha only,
+// so it reaches the target as the one thing the blend cannot do: replace the
+// mask with a constant. The original does this in the same draw with the GE
+// stencil (`ALWAYS`, ref = the texture's glow byte, `REPLACE` on depth pass)
+// left on under the blend, and the test below is its alpha test
+// (`GU_GREATER`, the batch's own reference, on texel alpha times vertex
+// alpha - the value the blend reads). A batch without the glow bits carries
+// `glow == 0` and never stamps: the original disables the stencil test for it,
+// which keeps the mask. See `docs/rendering/glow-mask.md`.
+//
+// **The additive class also tests colour** - `Gfx_BuildBatchStateList`'s
+// `0x200` branch turns the GE colour test on, `NOTEQUAL` against black, and a
+// GE dump of Outpost 7 shows it on every additive glow draw and off on the
+// alpha-over ones - so a black texel of an additive quad stamps nothing.
+// `stamp_colour_test` is that branch's constant, set on the pipeline pair
+// that draws the additive batches. Whether the GE tests before or after the
+// fog is unread; this tests the lit texel, before the fog.
+override stamp_colour_test: f32 = 0.0;
+
+fn stamp_discards(shaded: vec4<f32>, glow: f32) -> bool {
+    let black = max(shaded.r, max(shaded.g, shaded.b)) < 0.5 / 255.0;
+    return shaded.a <= alpha_test_ref || glow <= 0.0 || (stamp_colour_test > 0.5 && black);
+}
+
+@fragment
+fn fs_main_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
+    if stamp_discards(lit_texel(in), in.glow) {
+        discard;
+    }
+    return vec4<f32>(0.0, 0.0, 0.0, in.glow);
+}
+
+@fragment
+fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
+    if stamp_discards(lit_texel(in), in.glow) {
+        discard;
+    }
+    return MrtOutput(vec4<f32>(0.0, 0.0, 0.0, in.glow), velocity_of(in));
+}
+
 // The velocity-writing twins of `fs_main` and `fs_main_alpha_test`, for the
 // pipelines built against the race's two attachments (`mesh_render::Velocity`).
 // The blended pipelines have no twin on purpose: they write no depth, so the

@@ -60,6 +60,7 @@ impl Drawable {
             additive_pipeline: self.additive_pipeline.clone(),
             unblended_pipeline: self.unblended_pipeline.clone(),
             authored_pipelines: self.authored_pipelines.clone(),
+            stamp_pipeline: self.stamp_pipeline.clone(),
             vertices: self.vertices.clone(),
             indices: self.indices.clone(),
             uniforms,

@@ -25,15 +25,21 @@ of it the same day; see `frame-audit.md`.
   off), ~~fog on the pass~~ (on, colour `0`; written), ~~a track's `*_shinemap`
   batches~~ (rows 0 and 1 of the view matrix, confirmed at two yaws; drawn,
   `--no-track-shine`). Still open: the airbrakes' flap deflection on the pass, and the
-  wreck model (`+0x8b8`, same flags) - neither started.
-- **The tunnel rim's neon strip.** In the original a bright cyan (grid pose, RGB
-  `(134, 246, 248)` over 2,721 pixels) or yellow-green (yawed pose) strip runs along
-  the pipe rim on `07_Track`; ours is dull (`(50, 109, 115)`, `(58, 130, 134)` with
-  the circuit pass). The pass's own term on those batches is small and equal in the
-  dump and in ours (vertex colour `(0.13, 0.30, 0.31)`), so it is another batch or
-  another state: find which `PRIM`s of `data/scratch/pulse-shine/ge/yaw.ppdmp`
-  cover those pixels (project the verts with the dump's world, view and projection)
-  and read their blend and texture.
+  wreck model (`+0x8b8`, same flags) - neither started (pulse-glow did not reach them).
+- ~~**The tunnel rim's neon strip.**~~ **Closed 2026-10-01** (`pulse-glow`). It
+  was not the shine pass and not a missing batch: the arch lights and rim light
+  are **blended batches with the glow bits**, which the original stamps into the
+  bloom's mask (`0xfa`, their texture's own byte) and ours left at `4`, so they
+  had no bloom at all. `oag_render::mesh_render::stamp` now writes it
+  (`docs/rendering/glow-mask.md`, "Transparent batches stamp"); a frame of ours
+  at a bright phase of the strip's brightness cycle (about 300 ticks; which texture
+  drives it is unread) has 1,584 pixels over 225 in the strip's box against the
+  original's 1,581, from 186. The
+  yellow-green streak at the *yawed* pose is a different thing: prims 627/628 of
+  `yaw.ppdmp` are WAD entry 1078, `pSphereShape1` with `cage_collision2_ADD.tga`
+  (a collision-cage sphere about 19 units from the craft), present only in that
+  dump. Not drawn by us and not read: what spawns it, and why it sat there while
+  the craft was merely yawed, are open.
 - ~~**Factory roofs on the Talon straight.**~~ **Fixed 2026-09-30, and repeated
   2026-10-01.** The roofs are draws 1479..1494 (four animated slab transports,
   `track.vex` nodes 789, 793, 804, 806), not 1381..1391; the original's GE list
@@ -59,6 +65,22 @@ of it the same day; see `frame-audit.md`.
   synthesised chain. Unmeasured against a Pure capture.
 - The cyan strip lights and the start gantry differ between the two sides by
   timing only; a comparison that needs them should pin the same tick after GO.
+
+- **The start-line laser's mask is about 1.5x too wide** on Talon's second grid
+  (original 710 pixels at `0xaf`, ours 1,061) even with the additive class's colour
+  test: where the GE places that test relative to the fog is unread, and ours tests
+  the lit texel before the fog.
+- **The blended-glow stamp resubmits every transparent draw of a stamping model**
+  (`Drawable::draw_stamps`; a batch without the glow bits discards whole in
+  `fs_main_stamp`). `Model` carries no per-draw flag for it, so the GPU cost is
+  unmeasured and a per-texture or per-draw table would cut it.
+- **The bloom spread around a lit hull (`leachbeam-fidelity.md`) is blocked on a
+  stationary absorb frame**: `psp-fire-weapon.py` has no absorb bit, the pickup grant
+  path is unread, and firing the LeachBeam halts PPSSPP. The method that now works
+  for a mask comparison is documented in `docs/rendering/glow-mask.md`; it needs a
+  craft at rest.
+- **The wreck model (`+0x8b8`) and the airbrake flap deflection on the hull's extra
+  pass** - the first Open bullet's remainder - were not started.
 
 ## Next Steps
 
