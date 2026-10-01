@@ -108,8 +108,15 @@ for it ([camera.md](camera.md)), and `WO_SHIP_EXPLOSION` goes off 1.5 s later
 (**seen**, mechanism unread: `Exhaust_Update` has no state test, so it is probably
 the hull's node going invisible). `race::wreck_fx` throws the two particles at each
 wreck locator on that edge. Pulse on a PSP disc only. Side by side with the
-capture, the wreck's shape, pose, scorch and fire glints agree; the first frames'
-fireballs are whiter in ours than the original's warm orange (not chased).
+capture, the wreck's shape, pose, scorch and fire glints agree. **The fireballs**
+read white until 2026-10-01 because the `FIRE` emitter of `WO_SHIP_FXNODE_EXPLO` (and
+`SHIP_DEBRIS` of `WO_SHIP_EXPLOSION`) author a **4 bits per pixel** sprite that the `.pob`
+reader refused, so they drew the procedural white disc: `FIRE`'s colour table is white all
+life, so its flame colour is its texture's. A GE dump of the original (`scripts/psp-ge-dump.py`,
+the `0x11e` batches) shows the additive draw binding a 128x64 `CLUT4` texture
+([pob.md](../../../formats/pob.md), "Four bits per pixel"). With it the first frames match the
+original's. At 160 to 180 frames the explosion's fire is still brighter and longer in ours
+(fire-coloured pixels 2.2x to 2.4x the original's) and its smoke thinner; open.
 
 ## Not read
 
