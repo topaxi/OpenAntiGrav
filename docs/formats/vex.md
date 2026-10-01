@@ -1219,9 +1219,13 @@ shows every row as eight content bytes followed by eight zeroes.
 
 It is also **not swizzling**. A swizzled PSP texture is reordered into 16-byte
 by 8-row blocks, and reading one row-wise corrupts every texture wider than a
-block rather than only the narrow ones; every 64-pixel-wide 4-bit texture on the
-disc decodes correctly read row-wise. (The standalone [`.mip`
-container](psp-texture.md) *does* carry a swizzle flag and is a separate case.)
+block rather than only the narrow ones; every **unflagged** 64-pixel-wide 4-bit
+texture on the disc decodes correctly read row-wise. A node whose flags byte
+(`+0x06`) has bit 0 set *is* swizzled in the file - `pulse_bomb.tga` is 64 wide,
+4-bit and flagged - and `vex::textures` unswizzles it, each level at its own
+stride (measured live, 2026-10-01: [the shield
+page](../ghidra/functions/psp-pulse-usa/shield-pickup.md#2026-10-01-third-pass-the-shells-own-ge-state-and-why-ours-looked-dim)).
+(The standalone [`.mip` container](psp-texture.md) carries the same flag at `+0x07`.)
 
 **Corroborated from the runtime, 2026-08-08, which raises this from a data
 measurement to a mechanism.** The PSP texture-upload path counts every mip

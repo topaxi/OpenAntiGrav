@@ -361,9 +361,11 @@ pub fn texture_row_bytes(width: u16, bits_per_pixel: u8) -> usize {
 ///
 /// What this is *not*: swizzling. A swizzled PSP texture is reordered into
 /// 16-byte by 8-row blocks, and reading it row-wise would corrupt every texture
-/// wider than the block rather than only the narrow ones. Every 64-pixel-wide
-/// 4-bit texture on the disc decodes correctly read row-wise, so this data is
-/// linear with padded rows.
+/// wider than the block rather than only the narrow ones. Every **unflagged**
+/// 64-pixel-wide 4-bit texture on the disc decodes correctly read row-wise, so
+/// that data is linear with padded rows; a node with flags bit 0 is the
+/// swizzled case (`pulse_bomb.tga` is 64 wide, 4-bit and flagged, and reads as
+/// sheared noise row-wise - see `unswizzle_levels`).
 #[must_use]
 pub fn texture_row_stride(width: u16, bits_per_pixel: u8) -> usize {
     texture_row_bytes(width, bits_per_pixel).next_multiple_of(16)

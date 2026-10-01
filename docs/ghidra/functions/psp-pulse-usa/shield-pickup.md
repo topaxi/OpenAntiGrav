@@ -656,6 +656,18 @@ earlier measure compared different texture phases (a scroll the engine did not
 have) with a noisy pixel-change metric. Confidence **90** that the settled
 brightness and banding gap is these two defects.
 
+**The per-level rule was checked on every flagged node**, version 4 and 6, across
+`Data.wad`, `FEData.wad`, `BEData.wad` and `FE.wad` (88 nodes, 236 levels below the
+base): each decoded level is compared against a 2x box-downsample of the decoded level
+above it, and against the linear reading of the same bytes. The unswizzled level matches
+at least as well on **236 of 236** (mean absolute RGB difference 3.5 against 8.1). The 13
+version-4 nodes (Pure's model textures and Pulse's Zone shipwrecks, flags `0x61`)
+already took the swizzled branch before 2026-10-01 with level 0 unswizzled as one
+block; level 0 is unchanged for them by construction, and what is new is that their
+mip levels are now unswizzled too, so they enter the `Texels::Chain` path and the
+slope level rule. No Pure frame was rendered before and after; the expectation, not a
+measurement, is that pixels move only where a surface is far enough to leave level 0.
+
 Residual, reported and not tuned toward: ours reads 10 to 14 % brighter in the
 fit (k about .9), the hull occludes the shell in ours over the craft's own box,
 and the emulator frame lags the pause by one frame. No term was adjusted.
