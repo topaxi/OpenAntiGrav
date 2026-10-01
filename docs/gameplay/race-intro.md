@@ -70,6 +70,11 @@ own button presses are the likeliest cause and it was not chased.
 | `--no-intro` skips it; `--intro-ticks N --screenshot` photographs tick `N` of it | CLI |
 | a headless run, a capture and every test drive `Race::tick` from tick 0 and never see it | by construction |
 
+Run in a window (lavapipe under Xvfb, `--race`): it logs `pre-race flyby: begins`, plays the
+`16_Track` shots, and logs `ends after 1529 tick(s)` (28 + 1500 + 1) with the HUD back and the
+race running; with the X key held from partway through it logs `ends after 1490 tick(s), Cross
+held`. `--hold cross` does not skip it in a window: that flag feeds the headless loop only.
+
 Compared with the original at five matched times on `03_Track` (`scripts/psp-flyby.py` frames
 against `--intro-ticks` captures, native 480x272): the same buildings, the same framing and
 the same field at all five, to the pixel of scenery detail. The craft is the one visible

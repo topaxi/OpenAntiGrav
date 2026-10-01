@@ -40,6 +40,7 @@
 
 use super::*;
 
+use log::info;
 use oag_core::math::Mat3;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::Button;
@@ -219,7 +220,11 @@ impl Race {
     pub fn begin_intro(&mut self) -> bool {
         match &mut self.view.intro {
             Some(intro) if self.view.camera_override.is_none() => {
+                let was = intro.playing();
                 intro.begin();
+                if intro.playing() && !was {
+                    info!("pre-race flyby: begins");
+                }
                 intro.playing()
             }
             _ => false,
@@ -253,7 +258,15 @@ impl Race {
         let Some(intro) = &mut self.view.intro else {
             return;
         };
+        let was = intro.playing();
         self.view.camera_override = intro.step(held, dt);
+        if was && !intro.playing() {
+            info!(
+                "pre-race flyby: ends after {} tick(s){}",
+                intro.ticks(),
+                if held { ", Cross held" } else { "" }
+            );
+        }
     }
 
     /// Whether the HUD is drawn: not through the flyby, and not for [`HUD_DELAY_TICKS`] ticks of
