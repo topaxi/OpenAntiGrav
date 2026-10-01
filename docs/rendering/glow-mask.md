@@ -178,9 +178,9 @@ its RGB brightens (hull mean `87/95/92` at age 0 to `128/156/165` at 0.53 s). Th
 mask pixels that change between age 0 and the peak, inside the box rows 110 to
 255, columns 150 to 290: **95 and 123** on two boots, a few small patches at the
 hull's lights, against **about 4,000** if the whole overlay stamped (what ours
-did). Inside the hull's neighbourhood the bloom layer's mean is `5.4/5.2/4.6/5.9/4.8`
-(original) against `4.4/5.7/5.2/5.7/4.7` (ours after the fix) at ages
-0.13/0.33/0.53/0.73/0.93, and `35.0/33.6/28.8/33.5/33.1` before it
+did). Inside the hull's neighbourhood the bloom layer's mean is `5.1/5.7/4.8/6.0/5.3`
+(original, boot 1) and `5.4/5.2/4.6/5.9/4.8` (boot 2) against `4.4/5.7/5.2/5.7/4.7`
+(ours after the fix) at ages 0.13/0.33/0.53/0.73/0.93, and `35.0/33.6/28.8/33.5/33.1` before it
 (`data/scratch/pulse-hull-bloom/cmpstats.py`).
 
 **Why: the draw order, read off the GE list** (the same frame, both boots; prim
@@ -243,7 +243,7 @@ singles out the one batch the dump shows after the reset; whether that holds for
 the other seven teams, and what orders the batches around the shadow pass, is
 not read. At the original's grid pose (ours via `--pose-from`, `--camera-fov 60`),
 at ages 0.13 to 0.93 s, the bloom mean in the hull's neighbourhood is `4.4 / 5.7 /
-5.2 / 5.7 / 4.7` against the original's `5.4 / 5.2 / 4.6 / 5.9 / 4.8`, the mask
+5.2 / 5.7 / 4.7` against the original's `5.1 / 5.7 / 4.8 / 6.0 / 5.3` (boot 1) and `5.4 / 5.2 / 4.6 / 5.9 / 4.8` (boot 2), the mask
 pixels at `255` match to within about 8 %, and the frames read alike
 (`data/scratch/pulse-hull-bloom/o1/vs1.png`). `crates/game/tests/absorb_mask_ground_truth.rs` pins it
 on the disc: the full-glow pixels in the hull's box grow by **232 - 119 = 113** at the
