@@ -86,7 +86,7 @@ fn a_normal_along_each_basis_vector_reaches_the_far_end_of_its_axis() {
     model.vertices[0].normal = texgen::ENV_BASIS_0.to_array();
     model.vertices[1].normal = texgen::ENV_BASIS_1.to_array();
     let mut out = Vec::new();
-    write(&model, &mut out, Mat4::IDENTITY);
+    write(&model, &mut out, Mat4::IDENTITY, [0.0; 2]);
     assert!((out[0].texcoord[0] - 1.0).abs() < 1.0e-5, "{:?}", out[0]);
     assert!((out[1].texcoord[1] - 1.0).abs() < 1.0e-5, "{:?}", out[1]);
     assert_eq!(out.len(), model.vertices.len());
@@ -98,8 +98,8 @@ fn a_normal_along_each_basis_vector_reaches_the_far_end_of_its_axis() {
 fn turning_the_ship_moves_the_coordinates() {
     let model = build(&hull()).unwrap();
     let (mut still, mut turned) = (Vec::new(), Vec::new());
-    write(&model, &mut still, Mat4::IDENTITY);
-    write(&model, &mut turned, Mat4::from_rotation_x(1.2));
+    write(&model, &mut still, Mat4::IDENTITY, [0.0; 2]);
+    write(&model, &mut turned, Mat4::from_rotation_x(1.2), [0.0; 2]);
     assert_ne!(still[0].texcoord, turned[0].texcoord);
     // The translation half of the matrix is not a rotation of the normal.
     let mut moved = Vec::new();
@@ -107,6 +107,7 @@ fn turning_the_ship_moves_the_coordinates() {
         &model,
         &mut moved,
         Mat4::from_translation(Vec3::new(5.0, 6.0, 7.0)),
+        [0.0; 2],
     );
     assert_eq!(still[0].texcoord, moved[0].texcoord);
 }
@@ -234,5 +235,68 @@ fn an_animated_nodes_normal_is_turned_by_its_matrix() {
         (turned[0].texcoord[1] - 1.0).abs() < 1.0e-5,
         "turned to face up: {:?}",
         turned[0]
+    );
+}
+
+/// A shine model whose last three vertices are the left airbrake flap: off the
+/// hinge, with a normal that turns when the flap does.
+fn flapped() -> Model {
+    let mut model = build(&hull()).unwrap();
+    for (i, v) in model.vertices.iter_mut().enumerate() {
+        v.position = [i as f32, 1.0, -2.0];
+        v.normal = [0.0, 1.0, 0.0];
+    }
+    model.airbrakes[0] = Some(crate::mesh::Flap {
+        vertices: 3..6,
+        hinge: Mat4::from_translation(Vec3::new(1.5, -0.5, -6.0)),
+    });
+    model
+}
+
+/// The pass rides its flap: its vertices are exactly the ones the hull's base
+/// draw writes for the same angle (`Flap::swung`, one call for both), and the
+/// glint's coordinates are generated from the *swung* normal. Drop the swing
+/// from `write` and the positions stay where the file put them.
+#[test]
+fn the_extra_pass_follows_the_airbrake_flap_the_hull_deflects() {
+    let model = flapped();
+    let flap = model.airbrakes[0].clone().unwrap();
+    let angle = 0.6;
+
+    let (mut stowed, mut braked) = (Vec::new(), Vec::new());
+    write(&model, &mut stowed, Mat4::IDENTITY, [0.0; 2]);
+    write(&model, &mut braked, Mat4::IDENTITY, [angle, 0.0]);
+
+    let mut hull_side = Vec::new();
+    let span = flap.swung(&model.vertices, angle, &mut hull_side).unwrap();
+    assert_eq!(span, 3..6);
+    for (shine, hull) in braked[span.clone()].iter().zip(&hull_side) {
+        assert_eq!(shine.position, hull.position, "the same swing, bit for bit");
+        assert_eq!(shine.normal, hull.normal);
+    }
+    assert_ne!(braked[3].position, stowed[3].position, "the flap moved");
+    assert_ne!(
+        braked[3].texcoord, stowed[3].texcoord,
+        "the glint reads the swung normal"
+    );
+    // The rest of the hull, and a flap held at zero, are untouched.
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&braked[..3]),
+        bytemuck::cast_slice::<_, u8>(&stowed[..3])
+    );
+    assert_eq!(stowed[3].position, model.vertices[3].position);
+}
+
+/// The right flap's angle moves only the right flap: a model with one flap
+/// ignores the other's angle.
+#[test]
+fn an_angle_for_a_flap_the_model_lacks_changes_nothing() {
+    let model = flapped();
+    let (mut a, mut b) = (Vec::new(), Vec::new());
+    write(&model, &mut a, Mat4::IDENTITY, [0.0; 2]);
+    write(&model, &mut b, Mat4::IDENTITY, [0.0, 0.9]);
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&a),
+        bytemuck::cast_slice::<_, u8>(&b)
     );
 }

@@ -3,7 +3,9 @@
 //! Split out of `mesh.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
-use oag_core::math::Mat4;
+use oag_core::math::{Mat4, Vec3};
+
+use super::GpuVertex;
 
 /// One authored airbrake flap: which vertices are its own, and what it hinges
 /// about.
@@ -19,10 +21,10 @@ pub struct Flap {
     /// This flap's vertices, as a range into [`super::Model::vertices`].
     ///
     /// Contiguous because the builder appends one mesh node's vertices at a
-    /// time, and an `Airbrake` has exactly one `Mesh` child in every shipped
-    /// file. A flap split across two nodes would need a list here, and an
-    /// assertion in the builder would be a better way to find that out than a
-    /// half-moved flap.
+    /// time and an `Airbrake`'s mesh children are consecutive: one on six
+    /// teams, two on Feisar and Triakis (the flap, then its `underbrake_flash`),
+    /// whose spans the builder joins. A child that did not follow its sibling
+    /// would need a list here.
     pub vertices: std::ops::Range<u32>,
     /// The hinge's pose in model space: the enclosing `Transform`'s composed
     /// world matrix.
@@ -69,6 +71,41 @@ impl Flap {
             return Mat4::IDENTITY;
         }
         self.hinge * Mat4::from_rotation_x(angle) * self.hinge.inverse()
+    }
+
+    /// This flap's vertices swung by `angle` radians, into `out` (cleared
+    /// first), and where in `vertices` they belong - `None` when the flap's
+    /// range is not inside `vertices`.
+    ///
+    /// **The one swing both draws of a flap use.** The hull's base draw
+    /// (`Drawable::deflect_airbrakes`) and the extra pass's copy of the same
+    /// vertices (`shine::write`) call this, because the original draws both
+    /// under the *same node matrix*: in three recorded GE lists the flap's
+    /// `TEXMAPMODE` 2 PRIM carries a world matrix equal, to the last digit, to
+    /// its ordinary twin's and different from `shipShape`'s. Positions and
+    /// normals are rotated from `vertices` as given - never from a previous
+    /// frame - so a second caller reproduces the first bit for bit.
+    pub fn swung(
+        &self,
+        vertices: &[GpuVertex],
+        angle: f32,
+        out: &mut Vec<GpuVertex>,
+    ) -> Option<std::ops::Range<usize>> {
+        let span = self.vertices.start as usize..self.vertices.end as usize;
+        let base = vertices.get(span.clone())?;
+        let swing = self.deflect(angle);
+        out.clear();
+        out.extend(base.iter().map(|v| {
+            let mut out = *v;
+            out.position = swing
+                .transform_point3(Vec3::from_array(v.position))
+                .to_array();
+            out.normal = swing
+                .transform_vector3(Vec3::from_array(v.normal))
+                .to_array();
+            out
+        }));
+        Some(span)
     }
 }
 

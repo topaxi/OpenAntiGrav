@@ -98,6 +98,26 @@ fn every_teams_hull_carries_six_extra_pass_batches_under_the_env_map() {
                 "{team}: a shine draw has no batch of the hull behind it"
             );
         }
+        // Where a flap's own vertices carry an extra-pass batch, `shine::write`
+        // swings it with the hull's base draw: the original draws both under the
+        // flap's one node matrix. Every team's flap carries exactly one - and Feisar's
+        // and Triakis's flap is two meshes (`AirBrake_*Shape` and the
+        // `underbrake_flash*Shape` after it), which the span must cover whole.
+        for (side, flap) in shine.airbrakes.iter().enumerate() {
+            let flap = flap
+                .as_ref()
+                .unwrap_or_else(|| panic!("{team}: the shine model lost airbrake {side}"));
+            let on_flap = shine
+                .draws
+                .iter()
+                .filter(|d| {
+                    let indices = &shine.indices[d.range.start as usize..d.range.end as usize];
+                    !indices.is_empty() && indices.iter().all(|i| flap.vertices.contains(i))
+                })
+                .count();
+            println!("{team}: {on_flap} shine batch(es) on airbrake {side}");
+            assert_eq!(on_flap, 1, "{team}: airbrake {side}'s own batch");
+        }
         // The hull itself is untouched: its draws name their own textures.
         assert!(
             livery

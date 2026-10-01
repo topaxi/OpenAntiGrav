@@ -420,25 +420,13 @@ impl Drawable {
     ) {
         for (flap, angle) in self.model.airbrakes.iter().zip([left, right]) {
             let Some(flap) = flap else { continue };
-            let swing = flap.deflect(angle);
-            let span = flap.vertices.start as usize..flap.vertices.end as usize;
-            let Some(base) = self.model.vertices.get(span.clone()) else {
-                continue;
-            };
             // From the model's own vertices every time, never from the last
             // frame's: accumulating rotations would drift, and worse, would
-            // make the rest position depend on how the ship got there.
-            moved.clear();
-            moved.extend(base.iter().map(|v| {
-                let mut out = *v;
-                out.position = swing
-                    .transform_point3(Vec3::from_array(v.position))
-                    .to_array();
-                out.normal = swing
-                    .transform_vector3(Vec3::from_array(v.normal))
-                    .to_array();
-                out
-            }));
+            // make the rest position depend on how the ship got there. The
+            // swing is `Flap::swung`, which the extra pass shares.
+            let Some(span) = flap.swung(&self.model.vertices, angle, moved) else {
+                continue;
+            };
             let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
             queue.write_buffer(
                 &self.vertices,
