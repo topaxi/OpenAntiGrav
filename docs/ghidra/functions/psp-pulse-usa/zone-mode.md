@@ -178,7 +178,11 @@ on `obj+0x7cc`** (the field `RaceMode_SetState` zeroes alongside `+0x7c8`
 itself, confirming it belongs to the same object rather than being reused
 scratch space). Read at instruction/branch level, not runtime-verified:
 
-- **Substate 1 is the countdown proper.** It decrements `obj+0x1a04` - the new
+- **Substate 1 is the pre-race flyby, not the countdown proper** (corrected 2026-10-01 after
+  reading the rest of the function and watching it live: [race-intro.md](race-intro.md)). The
+  counter below is its 60-tick lock, and the "second float-valued gate" is the flyby animation's
+  own progress (`GridCamera_Progress`) or a held Cross. What follows is the original reading,
+  kept for its offsets. It decrements `obj+0x1a04` - the new
   offset above - by one every call, plays a sound cue
   (`func_0x00136958(0x3ca3d70a, ...)`, the float bit-pattern is roughly `0.02`,
   read as a pitch or volume argument rather than a duration) at the exact tick

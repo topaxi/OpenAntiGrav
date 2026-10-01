@@ -31,7 +31,7 @@ fn grid(archives: &mut oag_assets::source::Archives, circuit: u32) -> Option<Gri
 }
 
 /// `(clock one frame before, eye, right row, up row, back row)`, `03_Track`.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::excessive_precision)]
 const SAMPLES: &[(f32, [f32; 3], [f32; 3], [f32; 3], [f32; 3])] = &[
     (
         0.616943,

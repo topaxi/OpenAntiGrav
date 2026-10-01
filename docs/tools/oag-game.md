@@ -98,6 +98,13 @@ just play --race --screenshot /tmp/race.png --ticks 45 --hold cross
 just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross --ticks 60
 ```
 
+A race opens, in a window, with the circuit's own camera animation (Pulse on a PSP disc;
+[race-intro.md](../gameplay/race-intro.md)): 25 s on most circuits, ended early by a held
+`cross` once its first second has gone. `--no-intro` skips it for a scripted run with no one to
+hold the button. A headless `--screenshot` never plays it (the simulation is driven from tick
+0), but `--intro-ticks N` photographs tick `N` of it - `--ticks 0 --intro-ticks 600` is ten
+seconds in, and the HUD is hidden as it is for the whole flyby.
+
 `--screenshot` renders through the same scene the window draws, so what it captures
 is what a player would have seen. `--ticks` advances the simulation first and
 `--hold` holds abstract buttons - `cross` for thrust, `left`, `right`, `l`, `r` -

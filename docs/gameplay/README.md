@@ -23,6 +23,9 @@
   rubberbanding: the original spreads the player coupling across *two* blocks
   and only one of them is called `RubberBanding`.
 
+- [before the race: the flyby](race-intro.md) - the circuit's own camera animation that plays
+  under the track-description panel before the countdown, what ends it, and what the original
+  does meanwhile. **The camera is `start_grid.vex`'s `grid_camera1`**, not a `Camera` node.
 - [leaving the track](leaving-the-track.md) - where craft leave the circuit in this
   engine, and the discriminating measurements against the original (ride height,
   airtime, walls, edges). Read it before tuning anything because "it is easier to

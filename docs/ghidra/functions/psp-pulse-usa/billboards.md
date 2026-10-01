@@ -529,7 +529,9 @@ crate).
 - The `func_0x00XXXXXX` / `+0x08804000` relocation gap above is its own
   open item, tracked separately.
 - **`Data\Environments\<circuit>\start_grid.vex` is ruled out as a placement
-  source, checked this pass.** `oag-view --nodes` against `16_Track`'s copy
+  source, checked this pass - and it is the pre-race flyby** (2026-10-01,
+  [race-intro.md](race-intro.md)): `grid_camera1`'s keyed animation is the camera the
+  original plays before the countdown. `oag-view --nodes` against `16_Track`'s copy
   (real disc, `oag-tools`/`oag-view`'s own `--nodes` flag, no modification)
   shows exactly 4 nodes: `World`, two `Anim Transform` (a camera rig group)
   and one `gridCamera` leaf - a Maya camera scene, not a billboard-shaped

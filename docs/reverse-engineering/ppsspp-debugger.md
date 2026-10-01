@@ -1871,3 +1871,32 @@ photographs. See [after-the-finish.md](../gameplay/after-the-finish.md) for what
   `Menu`), then `psp-drive.py menu`.
 - A second `x` on a long race is not unique: the circuit passes the same `x` away from the start straight, and a
   disarm there flies the craft into a wall. Pin `z` too.
+
+## The original's pre-race flyby: `psp-flyby.py` (2026-10-01)
+
+`scripts/psp-flyby.py` walks the front end into a race exactly as `psp-drive.py menu` does (or `--restart`s a live
+one through the pause menu) and **watches the load instead of sitting it out**. See
+[race-intro.md](../gameplay/race-intro.md) for what it found.
+
+- No flag: once a second, the front-end state name, the PSP cycle counter, the camera object's mode word and a 480x272
+  photograph. This is how the flyby was first seen: `InGameTrackDescriptionScreen` for 1,565 frames with the camera
+  moving.
+- **`--frames N`** breaks at `0x08882e9c` (inside the render-view publisher, which only runs while the intro's camera
+  pass does) once per frame and logs the camera node's tripod pose and field, the animation's own clock, `AnimEnd`, the
+  pause flag, the intro's counter, `mode+0x7c8/+0x7cc` and `g_ingame+0x40`. **`--after M`** then switches to
+  `Weapons_DispatchFire` for `M` frames **without a gap** (a hit timeout in between runs the emulator free for 20 s
+  and the countdown with it), and **`--skip-frame K`** presses `--skip-button` (Cross) at hit `K`.
+- **`--intro-trace N`** logs `N` calls of `RaceMode_UpdateIntro` (`0x08829e6c`): the mode object's `+0x40` byte, the
+  substate, the counter and `g_game_mode`. It is what showed a fresh menu-walk load reaching the intro already in
+  its fade-out substate on two circuits.
+- **`--hit-timeout S`**: a cold first load of a circuit can take longer than the default 20 s to reach the camera
+  pass; with the timeout spent, the script concludes "no flyby" when it only missed it. Two early runs read exactly
+  that way. Raise it.
+- **A write watchpoint left armed hangs `input.buttons.press`**: the CPU is stopped on the next write and nothing
+  answers until the watchpoint is removed (`memory.breakpoint.remove`, in a `finally`).
+- **Only the most recently added execution breakpoint fires**, as `Debugger.each_hit_any` says: the flyby capture needs
+  the publisher's one breakpoint and reads everything else from memory with the CPU stopped.
+- **The publisher's breakpoint address `0x08882e9c` is mid-function**: a breakpoint on the function's own entry
+  (`0x08882cbc`) never fired though the function ran every frame of the flyby (cause not found). The write watchpoint on
+  the render view's translation (`+0x70` of `*(0x08ab10b0)`) is what gave the mid-function pc, and a breakpoint on that
+  does fire.

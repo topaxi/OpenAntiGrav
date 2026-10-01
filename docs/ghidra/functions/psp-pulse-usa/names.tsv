@@ -1143,7 +1143,7 @@
 0x0898dfe0	function	Scream_OpLoopBack	85	sound.md
 0x088274b4	function	RaceMode_UpdateCountdown	80	countdown-voice.md
 0x0893a768	function	Sound_PlayNamedInSlot	75	countdown-voice.md
-0x08829e6c	function	RaceMode_UpdateIntro	65	countdown-voice.md
+0x08829e6c	function	RaceMode_UpdateIntro	85	race-intro.md
 0x088e5ff4	function	RaceBox_ApplySetupGlobals	78	eliminator-kill-target.md
 0x08b30fb0	data	g_eliminator_kill_target	82	eliminator-kill-target.md
 0x088091a0	function	Profile_GetBestRaceTime	75	race-progress.md
@@ -1194,3 +1194,7 @@
 0x08848664	function	Craft_SetAutopilotBlend	90	race-finish.md
 0x08880a58	function	Camera_PickSubject	80	race-finish.md
 0x08880b38	function	Camera_PickRandomMode	75	race-finish.md
+0x088834bc	function	Camera_PickGridCamera	70	race-intro.md
+0x08883484	function	Camera_IntroProgress	78	race-intro.md
+0x08908a70	function	GridCamera_Progress	88	race-intro.md
+0x08908394	function	GridCamera_Update	80	race-intro.md

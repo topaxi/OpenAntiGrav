@@ -96,6 +96,38 @@ def after_flyby(dbg, args, t0, clock0):
     log.close()
 
 
+RACE_MODE_UPDATE_INTRO = 0x08829E6C
+G_GAME_MODE = 0x08B31048
+
+
+def intro_trace(dbg, args):
+    """One stop per `RaceMode_UpdateIntro` call, from the race load on: why it runs or does not."""
+    args.out.mkdir(parents=True, exist_ok=True)
+    log = open(args.out / "intro.jsonl", "w")
+    t0 = ticks(dbg)
+    try:
+        for index, _ in dbg.each_hit(RACE_MODE_UPDATE_INTRO, args.intro_trace, timeout=args.hit_timeout):
+            mode = gpr(dbg)["a0"]
+            row = {
+                "i": index,
+                "tick": round((ticks(dbg) - t0) / CYCLES_PER_FRAME, 1),
+                "mode_obj": hex(mode),
+                "flag_0x40": dbg.read_u8(mode + 0x40),
+                "substate": dbg.read_u32(mode + 0x7CC),
+                "state": dbg.read_u32(mode + 0x7C8),
+                "counter_1a04": dbg.read_u32(mode + 0x1A04),
+                "game_mode": dbg.read_u32(G_GAME_MODE),
+            }
+            if index % 10 == 0:
+                row["name"] = dbg.state_name()
+            log.write(json.dumps(row) + "\n")
+            log.flush()
+    except TimeoutError:
+        print("RaceMode_UpdateIntro stopped hitting", file=sys.stderr)
+    log.close()
+    raise SystemExit(0)
+
+
 def per_frame(dbg, args):
     """One stop per published view: the tripod's pose and fov, the render view, the clocks."""
     pair.place_window(args.display)
@@ -116,7 +148,7 @@ def per_frame(dbg, args):
 
 def _frames(dbg, args, log, t0, shots):
     skipped = False
-    for index, _ in dbg.each_hit(args.break_at, args.frames, timeout=20.0):
+    for index, _ in dbg.each_hit(args.break_at, args.frames, timeout=args.hit_timeout):
         if args.skip_frame is not None and index >= args.skip_frame and not skipped:
             skipped = True
             dbg.call("input.buttons.press", button=args.skip_button, duration=4)
@@ -186,6 +218,8 @@ def restart_race(dbg):
 
 def survey(args):
     def run(dbg, describe=True):
+        if args.intro_trace:
+            intro_trace(dbg, args)
         if args.frames:
             per_frame(dbg, args)
         pair.place_window(args.display)
@@ -232,6 +266,10 @@ def main():
     parser.add_argument("--frames", type=int, default=0, help="per-frame mode: this many spectator updates")
     parser.add_argument("--shot-every", type=int, default=30)
     parser.add_argument("--restart", action="store_true", help="RESTART RACE from a live race instead of the menu walk")
+    parser.add_argument("--intro-trace", type=int, default=0,
+                        help="log this many RaceMode_UpdateIntro calls instead of the camera")
+    parser.add_argument("--hit-timeout", type=float, default=20.0,
+                        help="seconds without a hit before the publisher is taken to have stopped")
     parser.add_argument("--break-at", type=lambda v: int(v, 0), default=VIEW_PUBLISH)
     parser.add_argument("--after", type=int, default=0, help="frames of Weapons_DispatchFire to log after the flyby")
     parser.add_argument("--skip-frame", type=int)
