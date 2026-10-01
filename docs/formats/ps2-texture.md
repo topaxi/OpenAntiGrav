@@ -636,18 +636,25 @@ fact about the two authorings, not about the lookup rule, but it is why the
 plume could not simply borrow the PSP path's single embedded texture.
 
 **A fourth: the shield shell and the cockpit sphere** (2026-09-24, confidence
-90). All twelve teams' PS2 `Data\Ships\<Team>\shipshield.vex` and
+90; the shell's file corrected 2026-10-01). All twelve teams' PS2
+`Data\Ships\<Team>\extrashield.vex` (the file the PS2 executable names - the
+2026-09-24 walk was over `shipshield.vex`, which it does not) and
 `Data\Weapons\vr_shield_cockpit.vex` each declare one `Texture` node, embed
 nothing, and are preceded by a set that decodes exactly one entry. That is 13
-of 13 exact.
+of 13 exact. The shell's one texture is `pulse_shield_extra_ADD`, 128x64
+`PSMT8` (15 colours of 256); the game uploads its bytes to the GS unchanged
+(checked byte for byte against EE RAM and a GS dump), and its `CLUT` is stored
+`CSM1`-swizzled (palette entry `i` at
+`(i & ~0x18) | ((i & 8) << 1) | ((i & 0x10) >> 1)`), which the decoder's
+`unswizzle_clut` already undoes.
 `oag_game::livery::shield::shield_model` now calls `ps2_skin` on the same
 all-slots-empty gate. Before that, both models bound the white 1x1, which is
 half of why the PS2 shell drew as a flat pale dome.
 `crates/game/tests/ps2_shield_ground_truth.rs` walks all thirteen the way the
 plume check walks its 24, and also asserts the eight shells a race fields
 come out of the load skinned. The other half of that report was the shell's
-blend, not its texture. See
-[batch-draw-state.md](../ghidra/functions/ps2-pulse-eu/batch-draw-state.md#the-shield-shell-reaches-the-same-unfollowed-draw-2026-09-24).
+blend, not its texture - and then the file itself. See
+[shield-pickup.md](../ghidra/functions/ps2-pulse-eu/shield-pickup.md#the-model-is-extrashieldvex-not-shipshieldvex-gs-dump-2026-10-01).
 
 ## A standalone texture is under its declared name with the extension rewritten
 

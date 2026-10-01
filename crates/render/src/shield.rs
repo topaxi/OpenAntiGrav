@@ -219,6 +219,16 @@ pub struct Palette {
     pub target: [f32; 4],
     /// What [`ShipShield::hit`] flashes the current colour to.
     pub hit: [f32; 4],
+    /// Whether the animated colour reaches the **shell's** vertices.
+    ///
+    /// `true` on Pulse PSP and HD, where it is the AMBIENTCOLOR the GE
+    /// modulates with. `false` on Pulse PS2, where a GS dump of the raised
+    /// shell found every vertex at its authored colour while the object colour
+    /// ran from 0.16 to 1.0 and back to 0.2 and the flicker swept its range:
+    /// the push `ShipShield_Update` makes reaches no vertex there. The shell
+    /// is then drawn at its authored colours, scaled by the swell, until it
+    /// switches off. See `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`.
+    pub tints_shell: bool,
 }
 
 /// Pulse's own palette - [`ACTIVATION_COLOUR`], [`TARGET_COLOUR`],
@@ -227,6 +237,15 @@ pub const PULSE_PALETTE: Palette = Palette {
     activation: ACTIVATION_COLOUR,
     target: TARGET_COLOUR,
     hit: HIT_COLOUR,
+    tints_shell: true,
+};
+
+/// Pulse on the PS2: [`PULSE_PALETTE`]'s colours - the object's fields run the
+/// same law there, read live - with the shell's vertices left at their
+/// authored colours. See [`Palette::tints_shell`].
+pub const PS2_PULSE_PALETTE: Palette = Palette {
+    tints_shell: false,
+    ..PULSE_PALETTE
 };
 
 /// HD/Fury's palette.
@@ -248,6 +267,7 @@ pub const HD_PALETTE: Palette = Palette {
     activation: HD_ACTIVATION_COLOUR,
     target: TARGET_COLOUR,
     hit: HD_HIT_COLOUR,
+    tints_shell: true,
 };
 
 /// The substep the update runs its two lerps at, `1.0 / 60.0` as the original
@@ -430,6 +450,17 @@ impl ShipShield {
     #[must_use]
     pub fn cockpit_scale(&self) -> f32 {
         self.scale() * COCKPIT_SCALE
+    }
+
+    /// The colour the **shell** multiplies its authored vertices by: [`Self::colour`],
+    /// or the identity where [`Palette::tints_shell`] is `false`.
+    #[must_use]
+    pub fn shell_colour(&self) -> [f32; 4] {
+        if self.palette.tints_shell {
+            self.colour()
+        } else {
+            [1.0; 4]
+        }
     }
 
     /// The colour the shell multiplies its authored vertices by, `0..=1`.

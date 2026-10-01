@@ -500,6 +500,67 @@ somewhere, not a lap the original game would call clean - but for "get a real
 console frame at this specific point on the track," it turns a manual driving
 session into an unattended one.
 
+## GS dumps: what the console actually drew
+
+A savestate and a frame step tell you what the game *set up*; a GS dump tells you
+what the GS was *told*: every register write and every GIF packet of one frame.
+It is the PCSX2 counterpart of the PSP's `gpu.record.dump`, and it settled the
+PS2 shield (`ps2-pulse-eu/shield-pickup.md`) in an afternoon that three rounds of
+reading the executable had not.
+
+**The hotkey is `GSDumpSingleFrame`** (`GSDumpMultiFrame` is the other). Bind it
+in `[Hotkeys]` like the harness binds `FrameAdvance`:
+
+```ini
+[Hotkeys]
+GSDumpSingleFrame = Keyboard/F9
+```
+
+The id is not `SaveSingleFrameGSDump`, which is what the menu entry's label
+("Save Single Frame GS Dump") suggests and silently does nothing. Tell: no
+`OSD [GSDump]: Saving single frame GS dump...` line in the log after the tap.
+`strings` on `pcsx2-qt` finds the ids next to `ToggleSoftwareRendering`.
+
+How a dump is taken from a paused savestate, with the verified stepping this page
+already has:
+
+1. Pause, `loadstate`, re-pause, do whatever the capture needs (write memory).
+2. `advance_frames(N)` to the state you want.
+3. Tap the hotkey, then **advance at least six more frames and wait several
+   seconds.** The file is written on a worker thread and is closed by a later
+   frame; read at once it is a truncated Zstandard stream (`Read error (39):
+   premature end`, about 1.3 MB of 7 MB). `zstd -dc` salvages a partial one, which
+   is how the first dump was found to parse, and is not a complete frame.
+
+The dump lands in `<datapath>/PCSX2/snaps/` as `<title>_<serial>_<stamp>.gs.zst`
+with a PNG beside it. It records **two fields** of an interlaced PAL frame (two
+`vsync` packets with `field` 0 and 1), so a draw appears twice, with different
+scroll phases.
+
+**Reading it:** `scripts/pcsx2-gsdump.py frame.gs` lists the state groups and
+`--draw N` prints one group's registers and vertices; its docstring has the file
+layout. Traps that cost this page time:
+
+- **Texture-pool addresses are not stable.** The game uploads every texture it
+  draws into a streaming VRAM pool each frame (`PSMT8` as `PSMCT32` at half
+  size - `dbp ... 64x64`, 16,384 bytes for a 128x128), so the `TBP0` of the same
+  texture differs between two runs of the same savestate. Diff a frame against a
+  control by *sequence* (`difflib` on `PRIM`, primitive count, `ALPHA`, `TEST`,
+  texture shape), never by `TEX0`. The shell was the one group inserted.
+- **The upload is the texture file's transfer packet.** The bytes in the `IMAGE`
+  data are what sits in EE RAM, so a search of a PINE read of EE RAM (1.6 s for
+  32 MB) finds the source, and the name string stored just before it names the
+  texture.
+- **The `CLUT` is stored `CSM1`-swizzled**: entry `i` is at
+  `(i & ~0x18) | ((i & 8) << 1) | ((i & 0x10) >> 1)`. Read linearly, a 15-colour
+  palette looks like 9 colours with two alphas.
+- **`XYOFFSET` is not `2048`.** Pulse sets `0x7000` (`1792.0`), so a screen
+  position is `xy - 1792` (the last `XYOFFSET_1` in the dump), inside a scissor of
+  `0..511` both ways - the 512x512 buffer this page already measured.
+
+Confidence 90 for the method: it reproduced the same draw's registers to the bit
+in eight dumps.
+
 ## The walk into a race
 
 Measured 2026-08-23 from a cold boot with an **unformatted** memory card, which

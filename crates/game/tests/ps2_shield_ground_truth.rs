@@ -10,13 +10,15 @@
 //! ```
 //!
 //! Reported from play on 2026-09-17: on the PS2 source the Shield pickup's
-//! shell "renders solid and not animated". Two causes, both on the PS2 path
-//! alone. The shell's one `Texture` node carries no pixels on PS2, so it bound
-//! the white 1x1 until `livery::shield::shield_model` learned the plume's external
-//! texture set; and its batches carry no `0x0700` blend class, so they drew
-//! opaque until `livery::shield::blend_additively` put them on the additive class the
-//! PSP shell's own batches name. See that function for the evidence and its
-//! confidence.
+//! shell "renders solid and not animated". Two causes, then a third found by
+//! a PCSX2 GS dump on 2026-10-01. The shell's one `Texture` node carries no
+//! pixels on PS2, so it bound the white 1x1 until
+//! `livery::shield::shield_model` learned the external texture set. And the
+//! model was the wrong file: `ShipShield_Construct` (`0x00169168`) builds
+//! `%s\%sshield.vex` with the literal prefix `extra`, so the PS2 shell is
+//! `extrashield.vex` (batches `0x1232`, additive in their own words, a
+//! `pulse_shield_extra_ADD` texture), not the PSP's `shipshield.vex`. See
+//! `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`.
 
 use std::path::PathBuf;
 
@@ -139,7 +141,7 @@ fn every_ps2_shield_model_is_skinned_by_the_entry_before_it() {
         oag_pulse::open(&image.display().to_string()).expect("opening the PS2 archives");
     let names = PS2_TEAMS
         .iter()
-        .map(|team| format!(r"Data\Ships\{team}\shipshield.vex"))
+        .map(|team| format!(r"Data\Ships\{team}\extrashield.vex"))
         .chain([oag_pulse::race::COCKPIT_SHIELD.to_string()]);
     for name in names {
         let blob = archives
@@ -168,4 +170,68 @@ fn every_ps2_shield_model_is_skinned_by_the_entry_before_it() {
             "{name}: a slot is still empty after re-skinning"
         );
     }
+}
+
+/// The shell is the model the executable names, on every team, and has the
+/// shape the GS dump of the original's draw showed: a `u` span of one half
+/// texture (the PS2 draw's `u` was `0.114` and `0.614`, a scroll on `{0, 0.5}`),
+/// `v` within one texture, and every batch additive by its own class.
+#[test]
+#[ignore = "needs a disc image"]
+fn the_ps2_shell_is_extrashield_and_not_shipshield() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives =
+        oag_pulse::open(&image.display().to_string()).expect("opening the PS2 archives");
+    for team in PS2_TEAMS {
+        let names =
+            race::shield_entry_names(oag_title::race::SHIP_DIR, team, oag_assets::Platform::Ps2);
+        assert_eq!(
+            names[0],
+            format!(r"Data\Ships\{team}\extrashield.vex"),
+            "{team}: the PS2 prefix is the literal `extra`"
+        );
+        let blob = archives
+            .read_name(&names[0])
+            .unwrap_or_else(|e| panic!("{team}: reading {}: {e}", names[0]));
+        let bare = mesh::build_with_textures(&names[0], &blob, None)
+            .unwrap_or_else(|e| panic!("{team}: decoding {}: {e}", names[0]));
+        assert!(
+            bare.draws.is_empty() && bare.alpha_tested_draws.is_empty(),
+            "{team}: extrashield.vex names its own blend class on every batch"
+        );
+        assert!(
+            bare.transparent_draws
+                .iter()
+                .all(|draw| draw.blend == Some(BlendClass::Additive)),
+            "{team}: a batch is not on the additive class"
+        );
+        let (mut max_u, mut max_v) = (0.0_f32, 0.0_f32);
+        for vertex in &bare.vertices {
+            max_u = max_u.max(vertex.texcoord[0]);
+            max_v = max_v.max(vertex.texcoord[1]);
+        }
+        assert!(
+            max_u <= 0.5 + 1e-3 && max_v <= 1.0 + 1e-3,
+            "{team}: uv reaches ({max_u}, {max_v}); the original's draw stayed within (0.5, 1)"
+        );
+    }
+}
+
+/// The PS2 source loads the palette that leaves the shell's vertices alone, and
+/// a PSP source does not: a GS dump of the raised PS2 shell found its vertex
+/// colours at the authored values through the fade-up, the flicker and the
+/// fade-out.
+#[test]
+#[ignore = "needs a disc image"]
+fn the_ps2_source_does_not_tint_the_shell() {
+    let Some(loaded) = load() else {
+        return;
+    };
+    assert!(!loaded.setup.shield_palette.tints_shell);
+    assert_eq!(
+        loaded.setup.shield_palette,
+        oag_render::shield::PS2_PULSE_PALETTE
+    );
 }
