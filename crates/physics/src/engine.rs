@@ -413,11 +413,19 @@ pub fn engine(
     // **The gate is approximated.** The original tests `(flags & 1) && !(flags &
     // 2)` on the undecoded `craft+0x1c0` and writes `0.0` when it fails. Bit 0 is
     // known to mean ground contact - it is the same bit that gates `brakes` - so
-    // groundedness stands in for it here. Bit 1 is not decoded, and treating it
-    // as always clear is the assumption; the effect is that a Zone craft here
-    // always gets its auto-speed on the ground where the original might not.
+    // groundedness stands in for it here. Bit 1 is the grid state, `on_grid`.
     if let Some(target) = auto_speed {
-        let thrust = if grounded > 0.0 { target } else { 0.0 };
+        // Bit 1 of the original's `craft+0x1c0` is the grid state
+        // (`Craft_EnterGridState`, `0x088486d4`), so `on_grid` is that bit: the
+        // countdown writes `0.0` here and the craft sits until it is released.
+        // Read live 2026-10-02 on a Zone engine: `flags` `0x3` through state 0,
+        // the craft still (`0.02` units/s), `0x1` and `95.2` thrust from the
+        // first state-1 frame.
+        let thrust = if grounded > 0.0 && !state.on_grid {
+            target
+        } else {
+            0.0
+        };
         return EngineForce {
             // **The launch multiplier is deliberately not applied here.** The
             // original's tail is shared - this branch reaches `craft+0x294` at
@@ -829,6 +837,19 @@ mod auto_speed_tests {
         let state = grounded_ship();
         let force = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(10_000.0), 1.0).thrust;
         assert!(force > 0.0, "the cap bound a branch that has no cap");
+    }
+
+    #[test]
+    fn a_zone_craft_on_the_grid_gets_nothing_until_it_is_released() {
+        // `(flags & 1) && !(flags & 2)`: bit 1 is the grid state, so the
+        // countdown writes `0.0` and the first state-1 frame writes the target.
+        let mut state = grounded_ship();
+        state.on_grid = true;
+        let held = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        assert_eq!(held, 0.0, "auto-speed ran under the grid state");
+        state.on_grid = false;
+        let released = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        assert!(released > 0.0);
     }
 
     #[test]
