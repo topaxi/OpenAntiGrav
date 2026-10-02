@@ -223,3 +223,21 @@ impl Overlay {
         );
     }
 }
+
+/// Builds an overlay for `assets` and draws it once - what a headless capture does, with no
+/// stage to keep one in. A panel that will not build is skipped with a warning.
+pub fn draw_once(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    format: wgpu::TextureFormat,
+    assets: Assets,
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    progress: Progress,
+    viewport: (f32, f32, f32, f32),
+) {
+    match Overlay::new(device, queue, format, assets) {
+        Ok(mut panel) => panel.draw(device, queue, encoder, view, progress, viewport),
+        Err(why) => log::warn!("the track panel did not build ({why}); capturing without it"),
+    }
+}
