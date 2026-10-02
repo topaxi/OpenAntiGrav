@@ -388,10 +388,10 @@ impl Session {
         // on this path.
         self.tournament =
             is_tournament.then(|| crate::race::tournament::Progress::new(leg_entries));
-        if let Stage::Menu(stage) = &mut self.stage {
-            if let Some(campaign) = stage.campaign.take() {
-                self.campaign_cursor = campaign.cursor_on_close();
-            }
+        if let Stage::Menu(stage) = &mut self.stage
+            && let Some(campaign) = stage.campaign.take()
+        {
+            self.campaign_cursor = campaign.cursor_on_close();
         }
         if !self.open_ship_picker() {
             self.launch_campaign_race();
