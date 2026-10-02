@@ -136,6 +136,23 @@ fn a_stage_recolours_the_rig_and_keeps_its_direction() {
     assert_eq!(lit.enabled, 1.0);
 }
 
+/// Omega's prelit combination survives a grade: `Light::authored` clears the
+/// flag and the bias, and a graded Omega rig would otherwise fall back to HD's.
+#[test]
+fn a_graded_omega_rig_keeps_its_prelit_combination() {
+    let mut grade = grade();
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(1.0);
+    let omega = circuit_light().with_nova_prelit(2.5, 0.2, 2.0);
+    let lit = grade.light(omega);
+    assert_eq!(lit.nova, 1.0, "the flag survives");
+    assert_eq!(lit.prelit_bias, 0.2, "and so does the bias");
+    let hd = grade.light(circuit_light());
+    assert_eq!(hd.nova, 0.0, "an HD rig stays HD's");
+    assert_eq!(hd.prelit_bias, 0.0);
+}
+
 /// A circuit with no authored rig is handed back untouched: a tint needs a
 /// direction to tint, and this file states none.
 #[test]

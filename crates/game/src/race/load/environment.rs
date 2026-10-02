@@ -537,123 +537,8 @@ pub(super) fn envsettings_bloom(
     })
 }
 
-/// The light rig a circuit authors, or [`mesh_render::Light::stand_in`].
-///
-/// **Every way this can fail leaves the stand-in and says so in the report.**
-/// A track that authors no settings file - every Pulse, Pure and PS2 circuit -
-/// is silent, because an absence that is true of a whole title is not news; a
-/// file that is there and does not yield a rig is reported, because that is a
-/// gap in this reading rather than in the data.
-///
-/// **`psp2` picks the key spelling, not the file.** Wipeout 2048 ships the
-/// same `"Key.Subkey"=float [float...]` syntax beside its own `track.vex`, but
-/// its registrar spells the ambient and sun-diffuse terms differently from
-/// HD's - see `oag_tables::envsettings`'s "Wipeout 2048 authors the same
-/// shape under different key names". Reading HD's keys against a 2048 file
-/// resolves nothing and falls back to the stand-in rig silently wrong about
-/// why; this is what tells the two schemas apart.
-///
-/// **Does not read through [`staged_envsettings`].** Checked for the same
-/// partial-key gap `envsettings_bloom` had (`lane-envsettings-carry`): every
-/// circuit that ships a `.envsettings` at all authors a complete sun
-/// direction, colour and ambient itself, so there is nothing here for the
-/// front end's file to carry. See [`staged_envsettings`]'s own doc for why the
-/// remaining case, `zone_2`/`zone_3`/`zone_4` (which ship no file at all), is
-/// left with the pre-existing stand-in rig rather than wired to the front
-/// end's.
-pub(super) fn envsettings_light(
-    archives: &mut oag_assets::Archives,
-    track: &str,
-    psp2: bool,
-    report: &mut Vec<String>,
-) -> mesh_render::Light {
-    let Some(name) = envsettings_name(track) else {
-        return mesh_render::Light::stand_in();
-    };
-    let Ok(blob) = archives.read_name(&name) else {
-        return mesh_render::Light::stand_in();
-    };
-    let text = match String::from_utf8(blob) {
-        Ok(text) => text,
-        Err(_) => {
-            report.push(format!("{name}: not text; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
-        }
-    };
-    let env = match EnvSettings::parse(&text) {
-        Ok(env) => env,
-        Err(e) => {
-            report.push(format!("{name}: {e}; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
-        }
-    };
-    use oag_tables::envsettings::{
-        AMBIENT_COLOUR, PRELIT_POWER, PRELIT_SCALE, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR,
-        SUN_COLOUR, SUN_DIRECTION, SUN_SPECULAR_SCALE,
-    };
-    let ambient_key = if psp2 {
-        PSP2_AMBIENT_COLOUR
-    } else {
-        AMBIENT_COLOUR
-    };
-    let colour_key = if psp2 {
-        PSP2_SUN_DIFFUSE_COLOUR
-    } else {
-        SUN_COLOUR
-    };
-    let (Some(direction), Some(colour), Some(ambient)) = (
-        env.direction(SUN_DIRECTION),
-        env.vec3(colour_key),
-        env.vec3(ambient_key),
-    ) else {
-        report.push(format!(
-            "{name}: no usable sun direction, colour and ambient; lighting with the \
-             stand-in rig"
-        ));
-        return mesh_render::Light::stand_in();
-    };
-    // The prelit curve and the specular weight feed terms whose *combination*
-    // is read out of the circuit's own fragment microcode on HD - see
-    // `mesh_render::Light`. 2048 authors no equivalent keys at all (a genuine
-    // RGB `Sun specular colour` rather than a scalar - see the module docs for
-    // why that is left unwired rather than reduced to a scalar), so both
-    // terms take the identity there, same as a file missing one of them: the
-    // sun and ambient above are still the circuit's.
-    let prelit_scale = env.vec3(PRELIT_SCALE).unwrap_or([1.0; 3]);
-    let prelit_power = env.vec3(PRELIT_POWER).unwrap_or([1.0; 3]);
-    let specular_scale = env.scalar(SUN_SPECULAR_SCALE).unwrap_or(0.0);
-    let light = mesh_render::Light::authored(
-        direction,
-        colour,
-        ambient,
-        prelit_scale,
-        prelit_power,
-        specular_scale,
-    );
-    let combination = if psp2 {
-        "2048 authors no equivalent prelit or specular keys, so both stay at the identity"
-    } else {
-        "the combination is the microcode's own; the render target's saturation stands in \
-         for HD's tonemap"
-    };
-    report.push(format!(
-        "{name}: sun [{:.2}, {:.2}, {:.2}] colour [{:.2}, {:.2}, {:.2}] over ambient \
-         [{:.2}, {:.2}, {:.2}], prelit {:.1}*lightmap^{:.1}, specular x{:.2} - {combination}",
-        direction[0],
-        direction[1],
-        direction[2],
-        light.sun[0],
-        light.sun[1],
-        light.sun[2],
-        light.ambient[0],
-        light.ambient[1],
-        light.ambient[2],
-        prelit_scale[0],
-        prelit_power[0],
-        specular_scale,
-    ));
-    light
-}
+mod light;
+pub(super) use light::envsettings_light;
 
 /// Everything the four environment readers found, in one value.
 ///
@@ -676,7 +561,7 @@ pub(super) struct Staging {
 /// Which title's `.rcsmodel` container [`staging`] is reading a light rig
 /// beside, where there is one.
 ///
-/// Both non-`None` variants set the flag `ps3_geometry` used to be - the two
+/// Every non-`None` variant sets the flag `ps3_geometry` used to be - the two
 /// readers that only a `.rcsmodel`-backed circuit answers stay gated on
 /// "either", per [`staging`]'s own doc. Only the light rig cares which one,
 /// because only its key spelling differs - see [`envsettings_light`]. A
@@ -693,6 +578,13 @@ pub(super) enum GeometryKind {
     /// Wipeout 2048's own container - the same extension, an unrelated binary
     /// shape (see `oag_rcs::rcsmodel::psp2`).
     Psp2,
+    /// Wipeout: Omega Collection's: 2048's container with eight-byte offsets
+    /// ([`oag_rcs::rcsmodel::psp2::is_ps4`]). **A kind of its own because its
+    /// pixel shaders are not 2048's**: Omega's lightmapped surfaces are lit by
+    /// the `Lighting.Nova prelit scale bias power` triple - see
+    /// [`mesh_render::Light::with_nova_prelit`] - which the Vita files author
+    /// (as `1 0 1 0`) and whose Vita shader is unread.
+    Ps4,
 }
 
 impl GeometryKind {
@@ -702,7 +594,13 @@ impl GeometryKind {
     pub(super) fn of(rcsmodel: Option<&[u8]>) -> Self {
         match rcsmodel {
             None => Self::None,
-            Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => Self::Psp2,
+            Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
+                if oag_rcs::rcsmodel::psp2::is_ps4(geometry) {
+                    Self::Ps4
+                } else {
+                    Self::Psp2
+                }
+            }
             Some(_) => Self::Hd,
         }
     }
@@ -742,7 +640,13 @@ pub(super) fn staging(
     // the same failure behaviour: no file, an unparsable one, or a degenerate
     // sun direction all fall back to the stand-in and say so. Nothing is
     // substituted for a value the file does not carry.
-    let light = envsettings_light(archives, track, geometry == GeometryKind::Psp2, report);
+    let light = envsettings_light(
+        archives,
+        track,
+        matches!(geometry, GeometryKind::Psp2 | GeometryKind::Ps4),
+        geometry == GeometryKind::Ps4,
+        report,
+    );
     // The circuit's authored distance fog, on the same file. **The curve is no
     // longer a guess**: every fogged fragment variant of an HD circuit
     // `.rcsmaterial` computes `exp(-(coefficient * view_depth)^2)` and lerps a

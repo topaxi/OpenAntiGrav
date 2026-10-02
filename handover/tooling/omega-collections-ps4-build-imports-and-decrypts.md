@@ -182,9 +182,9 @@ about a second, decompression-shaped problem on top of it.
   skeleton and clip (the Vita's with 8-byte offsets) so the scenery moves, and
   textures with their lightmaps. What it does **not** read or get right:
   the `.EnvSettings` schema (read through
-  2048's reader: the patch's `Lighting.Nova prelit scale bias power` and its
-  `Tonemap.*` block are unread), and the lightmap's combination, which is HD's
-  own carried over and unmeasured for this title. **`track.final.pvs` and the
+  2048's reader; **`Lighting.Nova prelit scale bias power` and the `Tonemap.*`
+  block are read since 2026-10-02**, and the lightmap's combination is the
+  pixel shaders' own, wired for Omega alone - `omega-lightmap`). **`track.final.pvs` and the
   Wwise banks were closed by `omega-pvs-sound` (2026-09-30)**: a cell culls
   (`draws 1,271 -> 757`, triangles `939,301 -> 619,822` at tick 300 forward;
   the reversed frames and 2048's are pixel-identical), and the banks, events,
@@ -261,17 +261,25 @@ about a second, decompression-shaped problem on top of it.
 
 ## Next Steps
 
-- **Measure the lightmap's combination** (bound 2026-09-30 with HD's shader
-  path, chosen not measured). Three authored things to read first, all in the
-  patch's `.EnvSettings`: `"Lighting.Nova prelit scale bias power"=2.5 0.2 2`
-  (2048's Vita has `1 0 1 0`; the formula behind three numbers is not
-  recovered), the `Tonemap.*` block (exposure min/max/response/time, luminance
-  and source-colour coefficients) that the reader does not look for, and what the
-  atlas's alpha means (39 to 55 % zero on the three atlases sampled). The
-  materials are PS4 GCN shaders inside the `.rcsmaterial`, so the formula is a
-  Ghidra or shader-microcode question, not a listing one. Until then the frame
-  is not a verdict: the reversed circuit's clipped-white share went 0.99 % to
-  7.04 %, the forward one's 11.98 % to 8.32 % (HD's Tech De Ra: 4.78 %).
+- ~~Measure the lightmap's combination~~ **closed 2026-10-02**
+  (`omega-lightmap`): `pow(lightmap, power) * scale + bias` on the raw UNORM
+  atlas, no constant ambient on a lightmapped draw, atlas alpha is the sun mask -
+  read off the GCN pixel shaders, 4,664 of 4,664 nova shaders consistent
+  ([`lightmap-prelit.md`](../../docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md),
+  [`omega-status.md`](../../docs/formats/omega-status.md)). **What is left of it:**
+  (1) the `Tonemap.*` block is read and **no consumer is located** - the pixel
+  shaders export fp16, so the circuit is HDR-mapped afterwards by something this
+  project does not have; try `FUN_01623500`'s `wo_composite_*` registry
+  (`wo_composite_fp`, `_notonemap_fp`, `_nocc_fp`) and `FUN_0178b970`
+  (`pal_ToneMapCoefficientsFilter_fp`); (2) the **shadow-light factor** on the
+  prelit term, recovered on one shader and left at 1 (**chosen, not measured**);
+  (3) the **vertex-colour variant** (`NOVAColor`, same curve in the vertex
+  shader), which needs role bits the PS4 material container does not provide -
+  a `.rcsmaterial` PS4 container reader is the real next step, and the shader
+  reflection (`OrbShdr` footers, constant-buffer member records) is already
+  decoded in `lightmap-prelit.md`; (4) **24 of 4,664** nova shaders do not match
+  the census pattern and were not read; (5) the numbers have not been seen on a
+  running PS4.
 - **Extend the declaration and animation censuses to the patch archives**
   (`omega_declaration_ground_truth.rs`, `omega_animation_ground_truth.rs` read
   the five base archives; `data08` carries the front-end scenes and the newer

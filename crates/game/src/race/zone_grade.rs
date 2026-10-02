@@ -641,7 +641,7 @@ impl ZoneGrade {
             return base;
         }
         let palette = self.palette();
-        mesh_render::Light::authored(
+        let graded = mesh_render::Light::authored(
             base.direction,
             palette.sun_colour.unwrap_or(base.sun),
             palette.ambient_colour.unwrap_or(base.ambient),
@@ -649,7 +649,20 @@ impl ZoneGrade {
             palette.prelit_power.unwrap_or(base.prelit_power),
             // Not in this schema at all, so the circuit's own value stands.
             base.specular_scale,
-        )
+        );
+        // **`authored` clears Omega's prelit flag and bias**, so a graded
+        // Omega rig would silently go back to HD's combination. Omega ships no
+        // Zone palette today (`zone_palette: None`), so nothing reaches this
+        // with the flag set; the carry keeps it that way when one does.
+        if base.nova > 0.5 {
+            graded.with_nova_prelit(
+                graded.prelit_scale[0],
+                base.prelit_bias,
+                graded.prelit_power[0],
+            )
+        } else {
+            graded
+        }
     }
 
     /// The `float4` HD/Fury hands its shaders as `fogColour`, assembled the

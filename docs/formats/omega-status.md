@@ -744,7 +744,8 @@ builds no weapon pools. See the handover thread.
   to compare with), and the shader's node-table ceiling on the Zone models,
   which no race here loads.
 - **Lightmaps are bound, and their combination is chosen, not measured**
-  (`omega-catchup`, 2026-09-30). The atlas is each material's `lightmap`
+  (`omega-catchup`, 2026-09-30; **the combination is now read, see the next
+  bullet**). The atlas is each material's `lightmap`
   sampler (a 2048x2048 BC7 `-lmap.gnf`, 49 distinct on `tech_de_ra` reversed)
   and its coordinate is `lightmapUV` in the submesh's own vertex declaration
   ([the declaration pointer](#a-ps4-submesh-points-at-its-own-vertex-declaration-and-its-materials-are-the-headers-own-table)).
@@ -768,6 +769,76 @@ builds no weapon pools. See the handover thread.
   baked shading where they were flat. **The purple crystalline kerbs are not
   a defect of this title's reader**: HD's own render of the same circuit has
   them. Load time is about 19 s longer in a debug build.
+- **The lightmap's combination is read off the pixel shaders, and wired for
+  Omega alone** (`omega-lightmap`, 2026-10-02). `Lighting.Nova prelit scale bias
+  power` is three scalars, `(scale, bias, power)`, and the circuit pixel shaders
+  compute **`scale * pow(lightmap.rgb, power) + bias`** on the *raw* atlas
+  (`v_log_f32`, `v_mul_f32` by the power, `v_exp_f32`, `v_mad_f32` by scale and
+  bias; no clamp). All 1,028 `*-lmap.gnf` atlases are BC7 **UNORM** (the same
+  descriptor parse reads number format 9 on albedo and 0 on normal maps), so the
+  HD renderer's `pow(lightmap, 2.2)` was a second decode. **No constant ambient
+  joins a lightmapped surface**: of 4,664 unique pixel shaders that declare the
+  triple, all are lightmapped and none declares `constantAmbientColour`. The atlas
+  alpha is the direct sun's mask (`liveLighting0diffuse * lightmap.a * N.L`), the
+  same role as on HD, so the 39 to 55 % zero is a baked sun shadow. Evidence,
+  addresses and census:
+  [`ps4-omega-eu/lightmap-prelit.md`](../ghidra/functions/ps4-omega-eu/lightmap-prelit.md).
+  A file that omits the key keeps the executable's static default
+  `(1.4, 0.2, 1.5)`; 88 of the title's 97 files author it, 20 distinct triples,
+  one with a negative bias.
+
+  **Wired** in `oag-render` as `Light::with_nova_prelit` and `mesh.wgsl`'s
+  `nova` branch, **only for a PS4 container** (`GeometryKind::Ps4`, by
+  `psp2::is_ps4`): 2048 authors the key as `1 0 1 0` and its Vita shader is
+  unread, so 2048 does not take it. The branch is gated on the lightmap bit, so
+  the bias never lights an unlit draw. Tests: `omega_nova_prelit` (the quad
+  reads `2.5 t^2 + 0.2`, no ambient leaks in, an unlit draw is unchanged, HD's
+  curve is unchanged with the flag off; it fails if the bias is dropped) and, on
+  the real disc, `omega_lightmap_ground_truth`.
+
+  Frames (`oag-game --no-audio --race --hold cross`, debug, 1440x816,
+  `data/scratch/omega-lightmap/shots/`, before from `main` `679bd898`):
+
+  | frame | clipped white before -> after | mean luminance |
+  | --- | --- | --- |
+  | Tech De Ra forward, tick 300 | 8.13 % -> 6.72 % | 0.566 -> 0.529 |
+  | Tech De Ra forward, tick 600 | 12.24 % -> 10.47 % | 0.585 -> 0.598 |
+  | Tech De Ra reversed, tick 300 | 5.47 % -> 3.88 % | 0.522 -> 0.491 |
+  | Anulpha Pass forward, tick 300 | 2.75 % -> 2.86 % | 0.293 -> 0.315 |
+  | Anulpha Pass reversed, tick 300 | 4.27 % -> 4.46 % | 0.343 -> 0.364 |
+  | HD Tech De Ra, tick 300 | 5.16 % -> 5.16 % | **byte-identical** |
+  | 2048 default circuit, tick 300 | 4.97 % -> 4.97 % | **byte-identical** |
+
+  **Sweep of all twelve forward circuits** (tick 30): every one binds its
+  lightmaps with **0 unresolved** and reports its own triple
+  (`omega-lightmap` load logs), so no lightmapped draw falls back to the bias
+  without an atlas; the outlier is Sebenco Climb's `16 * lightmap^12 + 0.96`,
+  which renders brighter (0.375 -> 0.461 mean luminance, 0.43 % -> 1.65 %
+  clipped) and plausible. The Zone rig rebuild (`ZoneGrade::light`) now carries
+  the Omega flag through, though Omega ships no Zone palette today
+  (`zone_palette: None`), so no Omega Zone race reaches it.
+
+  Read by eye (`*-before-after.png`): Tech De Ra's blown-white upper walls now
+  carry panel shading, and Anulpha Pass's walls and floor take a deeper baked
+  shadow, which is what dropping the 1.0 constant ambient and the second sRGB
+  decode do. **The clipped share does not rise, against the expectation that a
+  2.5x scale would clip more**; it is not a verdict either, because the
+  original writes fp16 and tonemaps afterwards.
+
+  **Not wired, recovered:** the shadow-light factor on the prelit term
+  (`0.75 + 0.25 * sat(N.L_shadow) + ...`, general in presence across the 4,664
+  shaders and fixed in form in only 1,780), left at 1 (**chosen, not
+  measured**); and the vertex-colour variant of the same curve (`NOVAColor`),
+  which needs role bits the PS4 material container does not yet provide.
+
+  **The `Tonemap.*` block is read** (`oag_tables::envsettings::Tonemap`, ten keys
+  under both the `Tonemap` and `TonemapHDR` prefixes) and reported, and **applied
+  by nothing**: no instruction in the executable reads it by absolute address
+  and the consumer is not located (next address: the `wo_composite_*` registry
+  at `0x01623500`). The pixel shaders export fp16 (`v_cvt_pkrtz_f16_f32`), so
+  the circuit is rendered to an HDR target and mapped afterwards; this project's
+  saturating target is the missing stage.
+
 - **`track.final.pvs` is read and culls** (`omega-pvs-sound`, 2026-09-30). It is
   [HD's `track.pvs`](hd-pvs.md) in the 2048 lineage's dialect: little-endian,
   header word 2 is `1`, the bitmap is `ceil(chunks / 8)` bytes, and a chunk is a

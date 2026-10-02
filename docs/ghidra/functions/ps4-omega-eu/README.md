@@ -115,6 +115,14 @@ unnamed rather than forced.
   the actual read implementation is inside the signed `libSceFios2.prx`
   system module, not this executable.
 
+- [lightmap-prelit.md](lightmap-prelit.md) - what `Lighting.Nova prelit scale
+  bias power` does: the circuit pixel shaders compute `pow(lightmap, power) *
+  scale + bias` on the raw UNORM atlas, with no constant ambient on a lightmapped
+  surface (4,664 of 4,664 nova shaders), the atlas alpha is the sun mask, and
+  the output is fp16 into a tonemap this project does not have. The CPU chain
+  (`EnvSettings_RegisterKeys`, the `(1.4, 0.2, 1.5)` default, the per-frame
+  upload and the slot-32 binding) and a negative on the `Tonemap.*` consumer.
+
 - [collision.md](collision.md) - a tag-located candidate for
   `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the
   structural evidence that first looked like a match turned out to be
