@@ -107,7 +107,7 @@ impl EndRaceRuntime {
         results: ResultsModel,
         rewards: Option<Rewards>,
         menu: EndRaceMenu,
-        ended_on_the_line: bool,
+        runs_on_after_the_end: bool,
         anisotropy: oag_render::mesh_render::Anisotropy,
     ) -> Result<Self> {
         let mut screens = screens;
@@ -115,9 +115,11 @@ impl EndRaceRuntime {
         // disc's screen read (Pulse), and nowhere else: Wipeout HD/Fury's
         // equivalent was not read, so its panels come up at once as they
         // always did.
-        let flow = Flow::new(
-            ended_on_the_line && screens.photo.is_some() && !matches!(results, ResultsModel::Hd(_)),
-        );
+        let flow = Flow::new(endrace_flow::opens_on_photo(
+            runs_on_after_the_end,
+            screens.photo.is_some(),
+            matches!(results, ResultsModel::Hd(_)),
+        ));
         let mut renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
         renderer.set_space(skin.space());
         // Wipeout HD/Fury steps its options in their Blocks' own on-screen

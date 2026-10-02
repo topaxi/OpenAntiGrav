@@ -78,7 +78,7 @@ impl Session {
         // all is chosen). Both are the endings whose world keeps running; an
         // Eliminator or Zone ending was not looked at and keeps its panels at
         // once (`docs/gameplay/after-the-finish.md`).
-        let ended_on_the_line = stage.race.runs_on_after_the_end();
+        let runs_on_after_the_end = stage.race.runs_on_after_the_end();
 
         // `Race_ComputeLoyaltyAward`'s own inputs - see `LoyaltyInputs`'s own
         // doc for why `perfect_laps`/`perfect_zones`/`suggested_ship` are
@@ -273,7 +273,7 @@ impl Session {
             results,
             rewards,
             menu,
-            ended_on_the_line,
+            runs_on_after_the_end,
             self.anisotropy,
         ) {
             Ok(runtime) => {
