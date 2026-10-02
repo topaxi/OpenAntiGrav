@@ -135,7 +135,12 @@ boot screens do not** - they are outside `Top FE Screen` in the skin, so the ori
 either. **Not validated against the original**: no PS4 emulator exists and HD's one capture of its HD
 style shows a flat white page. Chosen, not measured: the blur kernel, the linear sampling, and which
 page takes which row. The `--menu-page grid-select`/`cell-select` stills draw it too (they take the
-page's picture); the live campaign stage and the end-of-race screens sit under the
+page's picture). **The live campaign stage draws it too, and did before this was written**
+(`menu_stage.rs` hands the stage's `shown` picture, the movie or else the style's
+`Live::picture`, to every campaign list builder, and `Live::tick` runs per frame): walked windowed under
+Xvfb + lavapipe on `main` `4def1665` plus the texture-limit change, language -> `Main Menu` -> `RACE CAMPAIGN`
+-> `Grid Selection` -> `Cell Selection` by mouse, 2026-10-02, and the scene draws behind all three
+(`data/scratch/omega-talon-crash/walk_1.png` to `walk_3.png`). The end-of-race screens sit under the
 same widget and do not yet. Omega authors no track or ship picker.
 
 ## What a menu-page capture does today

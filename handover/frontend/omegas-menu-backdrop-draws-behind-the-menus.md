@@ -2,7 +2,7 @@
 categories: [frontend, rendering]
 ---
 
-# Omega's menu backdrop draws behind the menus and the campaign stills; the live campaign stage, the end-of-race screens, HD's own HD style, and two unread passes are open
+# Omega's menu backdrop draws behind the menus, the campaign stills and the live campaign stage; the end-of-race screens, HD's own HD style, and two unread passes are open
 
 2026-09-30, `omega-menu-backdrop`. Evidence and every number:
 [menu-backdrop-scene.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md)
@@ -23,10 +23,13 @@ Fury `--anim-seconds 4` one). Disc-backed:
 
 - **Not validated against the original.** No PS4 emulator exists and HD's only capture of its HD style
   shows a flat white page. The look is what the recovered program computes; nothing was compared.
-- **The live campaign stage** (`main/campaign_stage.rs`, which the campaign-launch lane owns) and the
-  **end-of-race screens** sit under the same widget in the skin and draw no backdrop in a window. The
-  `--menu-page grid-select`/`cell-select` stills do draw it, because `capture/campaign_page.rs` already
-  took the page's `Picture`. Omega authors no track or ship picker, so there is nothing to draw there.
+- ~~**The live campaign stage** draws no backdrop in a window~~ - it does, and already did:
+  `menu_stage.rs` passes `shown` (the movie, else `styled.picture`) to every campaign list builder and
+  ticks `styled` each frame. Walked windowed under Xvfb + lavapipe, 2026-10-02 (`omega-talon-crash`):
+  `Main Menu`, `Grid Selection` and `Cell Selection` all draw the scene
+  (`data/scratch/omega-talon-crash/walk_1.png` to `walk_3.png`), so no code was needed; this line was stale.
+  Only the **end-of-race screens** are still open (lane `pulse-end-photo` held that code, and nothing was
+  changed there). Omega authors no track or ship picker, so there is nothing to draw there.
 - **The boot screens have none in the original**: they are outside `Top FE Screen`. Not a gap.
 - **Bands** (`use_bands`, always false), **`GroundPlane`** (named `_VR`), both not drawn.
 - **Chosen, not measured**: the blur kernel (`0x003e3e50` unread), linear sampling of the scene target,
@@ -42,6 +45,6 @@ Fury `--anim-seconds 4` one). Disc-backed:
 
 ## Next Steps
 
-1. Draw the backdrop under the live campaign stage and the end-of-race screens (hand `Picture` to their list builders; `Live::tick`/`picture` are the two calls).
+1. Draw the backdrop under the end-of-race screens (hand `Picture` to their list builders; `Live::tick`/`picture` are the two calls). The live campaign stage already does.
 2. Read `0x003e3e50`'s kernel and replace the chosen blur.
 3. Try a live RPCS3 capture of HD's HD style past its first seconds; if it draws this, flip `oag_hd`'s `menu_scene`.
