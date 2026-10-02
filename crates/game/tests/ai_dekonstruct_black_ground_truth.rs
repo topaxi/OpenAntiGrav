@@ -67,17 +67,17 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 
 /// Ceilings on craft destroyed, `(class, seed, forward, reversed)`.
 const BOUND: &[(&str, u64, u32, u32)] = &[
-    ("VENOM", 1, 5, 0),
+    ("VENOM", 1, 6, 0),
     ("VENOM", 2, 4, 0),
-    ("VENOM", 3, 4, 1),
-    ("FLASH", 1, 2, 0),
-    ("FLASH", 2, 4, 0),
-    ("FLASH", 3, 4, 1),
-    ("RAPIER", 1, 1, 1),
-    ("RAPIER", 2, 6, 2),
-    ("RAPIER", 3, 3, 5),
-    ("PHANTOM", 1, 3, 1),
-    ("PHANTOM", 2, 6, 3),
+    ("VENOM", 3, 5, 1),
+    ("FLASH", 1, 3, 0),
+    ("FLASH", 2, 6, 0),
+    ("FLASH", 3, 4, 2),
+    ("RAPIER", 1, 1, 0),
+    ("RAPIER", 2, 6, 1),
+    ("RAPIER", 3, 4, 2),
+    ("PHANTOM", 1, 2, 1),
+    ("PHANTOM", 2, 4, 3),
     ("PHANTOM", 3, 4, 2),
 ];
 

@@ -512,8 +512,8 @@ impl Driver {
         // Positive is to the craft's right.
         let offset = to_aim.dot(body.right());
         let curvature = 2.0 * offset / (distance * distance);
-        let wanted = (curvature * speed.max(tuning.steer_speed_floor))
-            .clamp(-tuning.max_turn_rate, tuning.max_turn_rate);
+        let wanted =
+            (curvature * speed.max(1.0)).clamp(-tuning.max_turn_rate, tuning.max_turn_rate);
 
         // Positive yaw about the craft's own up axis turns it **left** - the
         // right-hand rule, with forward on `-Z`. Working in "rate of turning to

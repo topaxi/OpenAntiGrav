@@ -13,6 +13,15 @@ use oag_core::math::Vec3;
 /// this circuit; it is the one gap it was looked at on.
 pub const TAKEOFF_RUNUP: f32 = 75.0;
 
+/// The fewest unsupported samples in a row that make a takeoff, rather than a
+/// seam or a lip the craft skims over.
+///
+/// **Chosen, not measured.** The first version marked every gap, and the
+/// 5-sample gap on `06_Track` and the 12-sample one on `01_Track` then took
+/// 20 to 40 more wall-contact ticks a lap for a faster lap; the jumps that
+/// matter are 50 samples and up.
+pub const TAKEOFF_MIN_RUN: usize = 40;
+
 /// How much room a craft has either side of the line, and which way "aside" is.
 ///
 /// **Both bounds are relative to the line itself**, so `left` is at most zero
@@ -170,6 +179,12 @@ impl Line {
         for start in 0..marked.len() {
             let previous = (start + n - 1) % n;
             if !self.unsupported[start] || self.unsupported[previous] {
+                continue;
+            }
+            let run = (0..n)
+                .take_while(|step| self.unsupported[(start + step) % n])
+                .count();
+            if run < TAKEOFF_MIN_RUN {
                 continue;
             }
             let mut at = start;
@@ -461,10 +476,12 @@ impl Line {
         let (at_c, c, _) = self.ahead(index, span * 3.0);
         // Over a gap the craft is flying, not steering: see
         // [`Self::with_unsupported`].
-        let over_gap = |at| self.is_unsupported(at) || self.is_takeoff(at);
-        if over_gap(at_a) || over_gap(at_b) || over_gap(at_c) {
+        if self.is_unsupported(at_a) || self.is_unsupported(at_b) || self.is_unsupported(at_c) {
             return 0.0;
         }
+        // On the run-up to a gap the crest is the ramp the craft launches off,
+        // not a hump it must stay on the ground over: only the yaw counts.
+        let launches = self.is_takeoff(at_a) || self.is_takeoff(at_b) || self.is_takeoff(at_c);
         let into = b - a;
         let out_of = c - b;
         // A chord of no length carries no direction, and `normalize_or_zero`
@@ -491,7 +508,7 @@ impl Line {
         // the platform's own `acos` is not required to be correctly rounded.
         // The clamp is still ours - a dot of two unit vectors can leave
         // `-1..=1` by a rounding error and `acos` of `1.0000001` is `NaN`.
-        bend_angle(into, out_of) / travelled
+        bend_angle(into, out_of, !launches) / travelled
     }
 
     /// Which way the line bends over `span`, positive where it bends toward
@@ -529,7 +546,7 @@ impl Line {
 /// A chord steeper than sixty degrees has no ground heading worth reading, so
 /// a bend through one falls back to the plain angle between the chords, which is
 /// what every bend read before this split.
-fn bend_angle(into: Vec3, out_of: Vec3) -> f32 {
+fn bend_angle(into: Vec3, out_of: Vec3, crest_counts: bool) -> f32 {
     let flat_in = Vec3::new(into.x, 0.0, into.z);
     let flat_out = Vec3::new(out_of.x, 0.0, out_of.z);
     if flat_in.length() <= 0.5 || flat_out.length() <= 0.5 {
@@ -546,7 +563,11 @@ fn bend_angle(into: Vec3, out_of: Vec3) -> f32 {
     // the difference.
     let climb_in = -oag_core::math::acos(into.y.clamp(-1.0, 1.0));
     let climb_out = -oag_core::math::acos(out_of.y.clamp(-1.0, 1.0));
-    let crest = (climb_in - climb_out).max(0.0);
+    let crest = if crest_counts {
+        (climb_in - climb_out).max(0.0)
+    } else {
+        0.0
+    };
     (yaw * yaw + crest * crest).sqrt()
 }
 
