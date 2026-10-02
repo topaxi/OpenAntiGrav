@@ -109,8 +109,8 @@ mod tests {
     fn it_matches_the_wind_read_off_fort_gale() {
         // heading -0.156, strength 5.0 + -4.02 as the original's two filters stood.
         let mut wind = Wind::new(5.0, 25.0, -10.0, &mut Rng::new(1));
-        wind.heading = -0.156_328_39;
-        wind.strength = -4.020_229_3;
+        wind.heading = -0.156_328_4;
+        wind.strength = -4.020_229;
         let live = wind.vector();
         assert!((live.x - 0.9678).abs() < 1e-3, "{live:?}");
         assert!((live.y - -10.0).abs() < 1e-6);

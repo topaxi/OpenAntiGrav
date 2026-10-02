@@ -56,8 +56,7 @@ pub fn anchors(data: &[u8], nodes: &[Node]) -> Vec<Anchor> {
             let section = nodes
                 .iter()
                 .enumerate()
-                .filter(|(_, n)| n.parent == Some(ancestor) && n.class_id == section_class)
-                .next_back()
+                .rfind(|(_, n)| n.parent == Some(ancestor) && n.class_id == section_class)
                 .and_then(|(_, n)| data.get(n.payload()).and_then(|p| p.first().copied()));
             if let Some(index) = section {
                 if let (Some(slot), Some(matrix)) =

@@ -101,7 +101,7 @@ fn a_ring_under_an_aimed_velocity_flies_outward_along_its_own_heading() {
     };
     let mut rng = Rng::new(2);
     for _ in 0..50 {
-        let (direction, offset) = place(ring, aimed, 1.0, Vec3::X, Vec3::Y, &mut rng);
+        let (direction, offset) = place(ring, (aimed, None), 1.0, Vec3::X, Vec3::Y, &mut rng);
         assert!(
             (direction - offset / 8.0).length() < 1e-4,
             "{direction} against {offset}"
@@ -113,8 +113,29 @@ fn a_ring_under_an_aimed_velocity_flies_outward_along_its_own_heading() {
         azimuth: 0.0,
         jitter: 0.0,
     };
-    let (direction, offset) = place(ring, raised, 1.0, Vec3::X, Vec3::Y, &mut rng);
+    let (direction, offset) = place(ring, (raised, None), 1.0, Vec3::X, Vec3::Y, &mut rng);
     assert!((direction.y - 1.0f32.sin()).abs() < 1e-5);
     let flat = Vec3::new(direction.x, 0.0, direction.z).normalize();
     assert!((flat - offset.normalize()).length() < 1e-4);
+}
+
+/// A lens droplet is born in the `XZ` rectangle and aimed from `+Z` by the live azimuth.
+#[test]
+fn a_rect_spawns_in_the_xz_plane_and_heads_along_the_live_azimuth() {
+    let rect = Spawn::Rect {
+        extent: 10.0,
+        depth: 5.625,
+    };
+    let aimed = crate::psys::Direction::Aimed {
+        elevation: 0.0,
+        azimuth: 0.0,
+        jitter: 0.0,
+    };
+    let mut rng = Rng::new(5);
+    for _ in 0..50 {
+        let (direction, offset) = place(rect, (aimed, Some(0.5)), 1.0, Vec3::X, Vec3::Y, &mut rng);
+        assert!(offset.x.abs() <= 10.0 && offset.z.abs() <= 5.625 && offset.y == 0.0);
+        assert!((direction.x - -0.5f32.sin()).abs() < 1e-5, "{direction:?}");
+        assert!((direction.z - 0.5f32.cos()).abs() < 1e-5);
+    }
 }
