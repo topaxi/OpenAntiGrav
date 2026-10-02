@@ -326,6 +326,12 @@ pub mod names {
     /// The race box's `Single Player` screen: its `Mode`, `Class`, `Weapons`,
     /// `Difficulty` and `Eliminations` lists. See `docs/formats/race-setup.md`.
     pub const RACE_SETUP_DEFINITION: &str = r"Data\Plugins\PI001\GUI\RaceBox_Definition.xml";
+    /// The in-race screens: the pause menu, the photo mode's, and `Race End
+    /// Photo`, the state a race sits in between the flag and `EndRace Results`.
+    /// No recovered name list carried it; it is the hash `31b50f2e`'s name,
+    /// found by hashing the obvious sibling of `EndRace_Definition.xml`. See
+    /// `docs/gameplay/after-the-finish.md`.
+    pub const INGAME_DEFINITION: &str = r"Data\Plugins\PI001\GUI\InGame_Definition.xml";
 
     /// The game plugin's own definition: which circuits, teams, ship models and
     /// music tracks this release carries.

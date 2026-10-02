@@ -293,11 +293,19 @@ impl Session {
             // which is what persists the choice across a restart. Before the tick
             // rather than after, so the frame this tick produces is already drawn
             // from the new view.
+            // **Not on `Race End Photo`**, where the legend names this button
+            // for photo mode, which this build does not have: the press is
+            // spent and the camera stays as the spectator director has it.
+            let in_photo = matches!(&self.stage, Stage::Race(stage)
+                if stage.endrace.as_ref().is_some_and(
+                    crate::race_stage::endrace::EndRaceRuntime::is_photo));
             if matches!(self.stage, Stage::Race(_))
                 && self.controls.buttons().is_pressed(Button::Select)
             {
                 self.controls.buttons_mut().consume_press(Button::Select);
-                self.cycle_camera_view();
+                if !in_photo {
+                    self.cycle_camera_view();
+                }
             }
             // Pause, on the same button the original spends on "leave the
             // results table" - free during a still-running race because

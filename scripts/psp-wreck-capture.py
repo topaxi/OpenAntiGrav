@@ -295,6 +295,8 @@ def main():
     ap.add_argument("--hits", help="ADDR:K0:K1: log every hit of a function (a0, a1, f12 and the objects they point at) -> hits.json")
     ap.add_argument("--camera", action="store_true", help="log the camera controller's fields each frame")
     ap.add_argument("--timeout", type=float, default=30.0, help="wall seconds to wait for each Ship_UpdateCraft stop (a software-rendered emulator needs more)")
+    ap.add_argument("--ui-state", action="store_true",
+                    help="log the front end's state name (`Race End Photo`, `EndRace Results`...) and the race manager's mode state each frame")
     ap.add_argument("--hud", action="store_true", help="log the HUD object's visibility words (`g_hud` +0x2c, +0x3c, +0x40, +0x120, +0x121) each frame")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -338,6 +340,11 @@ def main():
             row["timer"] = struct.unpack("<f", dbg.read(entity + 0x874, 4))[0]
             if args.camera:
                 row["camera"] = camera_row(dbg)
+            if args.ui_state:
+                row["ui_state"] = dbg.state_name()
+                manager = dbg.read_u32(RACE_MANAGER)
+                if pair.ram(manager):
+                    row["mode_state"] = dbg.read_u32(manager + 0x7C8)
             if args.hud:
                 hud = dbg.read_u32(G_HUD)
                 row["hud"] = hex(hud)

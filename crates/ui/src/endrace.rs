@@ -62,6 +62,7 @@ pub use crate::campaign::Layout;
 pub mod draw;
 pub mod hd;
 mod modes;
+pub mod photo;
 pub mod pointer;
 mod table;
 

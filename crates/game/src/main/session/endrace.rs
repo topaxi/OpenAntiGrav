@@ -72,6 +72,12 @@ impl Session {
             })
             .collect();
         let new_best_lap_ticks = standing.best_lap_ticks;
+        // `Race End Photo` follows a finish by the line, the one ending
+        // measured on the original. A wreck sat in `InGame` for 17,800
+        // frames with the field racing on and neither legend nor panel, and
+        // an Eliminator or Zone ending was not looked at, so those keep
+        // their panels at once (`docs/gameplay/after-the-finish.md`).
+        let ended_on_the_line = stage.race.runs_on_after_the_line();
 
         // `Race_ComputeLoyaltyAward`'s own inputs - see `LoyaltyInputs`'s own
         // doc for why `perfect_laps`/`perfect_zones`/`suggested_ship` are
@@ -266,6 +272,7 @@ impl Session {
             results,
             rewards,
             menu,
+            ended_on_the_line,
             self.anisotropy,
         ) {
             Ok(runtime) => {
@@ -301,6 +308,7 @@ impl Session {
             let Some(endrace) = stage.endrace.as_mut() else {
                 return;
             };
+            endrace.tick_flow();
             endrace.tick_tournament_table();
             if endrace.is_menu() {
                 let mut events = endrace.menu_mut().update(self.controls.buttons_mut());
@@ -336,7 +344,10 @@ impl Session {
                         .buttons_mut()
                         .take(oag_gameplay::input::Button::Start)
                     || pointer.clicked;
-                if confirmed {
+                // Read either way, so a press made before `Race End Photo`
+                // is entered is spent there rather than carried into the
+                // panels as an edge of its own.
+                if confirmed && endrace.takes_confirm() {
                     endrace.advance();
                 }
             }
