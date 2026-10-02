@@ -220,7 +220,7 @@ fn a_finished_race_stops_counting() {
 }
 
 #[test]
-fn crossing_the_line_backwards_takes_the_lap_back() {
+fn crossing_the_line_backwards_leaves_the_lap_count_and_owes_the_crossing() {
     let course = course();
     let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
     drive_lap(&mut state, &course, 0);
@@ -234,7 +234,8 @@ fn crossing_the_line_backwards_takes_the_lap_back() {
         let position = course.position(index).expect("in range");
         state.update(&course, position, tick, DT, false);
     }
-    assert_eq!(state.lap, 1, "reversing over the line did not undo the lap");
+    assert_eq!(state.lap, 2, "the lap count is never lowered");
+    assert_eq!(state.reversed, 1, "but the crossing is owed back");
 }
 
 #[test]
@@ -253,6 +254,26 @@ fn the_lap_count_never_goes_below_one() {
         );
     }
     assert_eq!(state.lap, 1);
+}
+
+#[test]
+fn a_ship_pushed_back_over_the_line_still_gets_the_lap_it_was_on() {
+    let course = course();
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    drive_lap(&mut state, &course, 0);
+    let position = course.position(0).expect("in range");
+    state.update(&course, position, course.len() as u64, DT, false);
+    assert_eq!(state.lap, 2);
+    let mut tick = course.len() as u64 + 1;
+    for index in (course.len() - 4..course.len()).rev() {
+        state.update(&course, course.position(index).unwrap(), tick, DT, false);
+        tick += 1;
+    }
+    drive_lap(&mut state, &course, tick);
+    tick += course.len() as u64;
+    assert_eq!(state.lap, 2, "the re-crossing earned nothing");
+    state.update(&course, course.position(0).unwrap(), tick, DT, false);
+    assert_eq!(state.lap, 3, "the lap after a push back was lost");
 }
 
 #[test]

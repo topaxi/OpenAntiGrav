@@ -198,6 +198,16 @@ pub struct RaceState {
     /// both: the first has not driven the near half, and the second has not
     /// driven it *since* the crossing.
     pub lap_gate: LapGate,
+    /// Backward crossings of the line not yet crossed forward again.
+    ///
+    /// The original keeps a **crossing count** that falls on a reverse crossing
+    /// and rises on a forward one, and a lap is the count reaching the value the
+    /// next lap completes on (`Craft_UpdateLapProgress`, `0x08842a18`,
+    /// confidence 92, read statically). The HUD lap is that target less one and
+    /// is never lowered, so a craft shoved back over the line loses nothing: it
+    /// re-crosses forward, which only restores the count, and the lap it was on
+    /// is counted at the next crossing as usual. This is that count's deficit.
+    pub reversed: u32,
     /// Whether the current zone has had a wall contact.
     ///
     /// Clears at every zone step. A zone that ends with this still clear is a
@@ -261,6 +271,7 @@ impl RaceState {
             zone_timer: 0.0,
             score: 0,
             lap_gate: LapGate::NeedsNearHalf,
+            reversed: 0,
             zone_dirty: false,
             finished: false,
             course_index: None,
@@ -440,7 +451,11 @@ impl RaceState {
         let delta = located.progress - previous;
         if wrapped_forward(delta, half) {
             // A wrap. Whether it is also a *lap* is what the gate decides.
-            if self.lap_gate == LapGate::Ready {
+            if self.reversed > 0 {
+                // Back over a line the ship was pushed across: the crossing
+                // count is restored, nothing is earned. See [`Self::reversed`].
+                self.reversed -= 1;
+            } else if self.lap_gate == LapGate::Ready {
                 self.complete_lap(tick, &mut outcome);
             } else if self.lap == 1 && self.best_lap_ticks.is_none() {
                 // The first time the race crosses the line, and it did not
@@ -510,17 +525,13 @@ impl RaceState {
 
     /// Crosses the line backwards.
     ///
-    /// The lap count goes back down, and the lap clock is deliberately **not**
-    /// restored: what it read when the line was last crossed forwards is not
-    /// kept, and inventing a value would put a wrong time on the HUD. Driving
-    /// backwards over the line is already a wrong-way situation the HUD warns
-    /// about.
+    /// The lap count does **not** go down, as in the original, whose crossing
+    /// count falls but whose next-lap target does not (see [`Self::reversed`]);
+    /// the deficit grows and the forward re-crossing pays it back. The lap clock
+    /// is not touched either. The gate goes back to the near half, which is also
+    /// what keeps rocking over the line from recording a lap of a few ticks.
     fn uncomplete_lap(&mut self) {
-        self.lap = self.lap.saturating_sub(1).max(1);
-        // The lap being re-entered has to be earned again. Strict - the ship did
-        // drive it once - but the alternative lets a ship rock over the line and
-        // record a lap time of a few ticks, and reversing over a start line is
-        // already a wrong-way situation the HUD warns about.
+        self.reversed = self.reversed.saturating_add(1);
         self.lap_gate = LapGate::NeedsNearHalf;
     }
 }

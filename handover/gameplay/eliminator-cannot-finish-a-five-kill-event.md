@@ -7,32 +7,33 @@ plus the respawn-keeps-its-place test).
 
 ## Open
 
-- **Time to five is about 2.7 times the original's**: about 100 to 345 s, median 230 s, over 24
-  seeds on `16_Track`, player parked, against 85 s. 22 of 24 finish within six game-minutes.
+- **Time to five is about 1.4 times the original's**: 65 to 325 s, median 118 s, over seeds 1 to 24
+  on `16_Track`, player parked, against 85 s; 24 of 24 finish within six game-minutes (after the
+  beam and quake credit).
 - **The leader tether is catch-up by slowing the front** (`eliminator_pack_scale`, chosen, not
   measured). It is the lever that makes the mode finish (off: 0 of 8) and it is a throttle
-  reduction only, but whether it is acceptable under the AI-obeys-player-physics rule is the
-  maintainer's call. The respawn fix alone gives 11 of 24 (it finishes the four pinned seeds); the tether lifts it to 22.
+  reduction only. **Accepted by the maintainer 2026-10-02** under the AI-obeys-player-physics
+  rule (catch-up by slowing the front is fine; extra speed or thrust for the back is not). The respawn fix alone gives 11 of 24 (it finishes the four pinned seeds); the tether lifts it to 22.
   Wider forward-weapon gates were tried and dropped. A chase on equal speed cannot close; **a
   held-Turbo chase (Turbo is lawful speed) was not tried**.
-- **Uncredited deaths**: 11 of 30 in a 233 s run had no landed weapon hit. A Leech Beam's damage
-  never sets `last_weapon_hit`, so a kill by beam credits nobody; the original's behaviour for a
-  beam kill is not read. Wall deaths are not investigated (why opponents scrape lethally here).
+- **Beam and Quake kills are now credited** (the original credits all three of Cannon, Beam and
+  Quake via `+0x13c`, read statically, not live), and credit needs the shield-emptying blow, so a
+  wall death after a standing-shield hit credits nobody. Over seeds 1 to 24: 24 of 24 finish,
+  median 118 s (was 22 of 24, about 210 s), against the original's 85 s. Wall deaths
+  and why opponents scrape lethally here are still not investigated.
 - **Held weapons**: Mine, Bomb, Cannon and Leech Beam together were held for about a quarter of all
   craft-ticks and are rarely usable by a leader or a tail; Eliminator refuses absorbing so those
   craft stop collecting pickups. A discard or a drop rule would free the slot (chosen, would need a label).
-- **A backward wrap costs a lap in every mode** (`Standing::update`: lap lowered, gate reset, the
-  forward re-crossing earns nothing), so any craft shoved back over the line ends a lap short.
-  Not fixed (Single Race must not move); sits against `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`.
-  The player's Eliminator respawn (`last_on_track`) may lose a lap the same way; unchecked.
+- ~~A backward wrap costs a lap in every mode~~ fixed 2026-10-02 (static read of the original's
+  crossing count, confidence 92; a live reversed-craft capture on PPSSPP was not taken). The
+  player's Eliminator respawn is the same case and is covered.
 - **`WeaponAi_DecideFireOrAbsorb` is not ported.** Its `+0x52` predicted-path test and the fields `+0x44`, `+0x4c`, `+0x5c` are unread.
 - **Ghidra data rename rejected**: `g_eliminator_kill_target` for `0x08b30fb0` (Hungarian-prefix
   check). The docs and `names.tsv` are authoritative for the data name.
 
 ## Next Steps
 
-1. Credit beam, Cannon and Quake kills if the original does (read `Ship_Damage`'s callers for the
-   beam path), then re-measure uncredited deaths.
+1. ~~Credit beam, Cannon and Quake kills~~ done 2026-10-02.
 2. Wall deaths: log where opponents die with no weapon hit and whether the shield was already low.
 3. A drop/discard rule for held Mine, Bomb, Cannon and Beam in Eliminator, labelled chosen.
 4. A held-Turbo chase: keep Turbo until a craft is 100 to 400 units ahead, then fire it.

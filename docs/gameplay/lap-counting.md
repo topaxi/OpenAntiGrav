@@ -129,10 +129,18 @@ since the last crossing. Two real failures need it:
    re-crosses it. Counting that would also restart the lap clock, so a few
    seconds of nudging would record an unbeatable best lap.
 
-Reversing over the line takes the lap count back down, and the lap being
-re-entered has to be earned again. Strict - the ship did drive it once - but the
-alternative is the exploit above, and driving backwards over a start line is
-already a wrong-way situation the HUD warns about.
+Reversing over the line does **not** take the lap count down (changed 2026-10-02). The
+original keeps a crossing count that falls on a reverse crossing, but the target it
+completes the next lap on - and so the HUD lap - is only ever raised
+(`Craft_UpdateLapProgress`, `0x08842a18`, [race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md),
+confidence 92, read statically, **not** observed live with a reversed craft). `RaceState` and
+`Standing` therefore carry `reversed`, the backward crossings not yet crossed forward again:
+a reverse crossing raises it and resets the gate, the forward re-crossing lowers it and earns
+nothing, and the lap being driven is counted at its next full crossing. Before this the lap was
+lowered and the re-crossing earned nothing, so a craft shoved back over the line ended a lap
+short in every mode. Rocking over the line still records no lap, which is the exploit the gate
+exists for. The player's Eliminator respawn (`last_on_track`) that lands behind the line is the
+same case and is now harmless.
 
 ## The lap clock starts at the line
 
@@ -172,7 +180,7 @@ for the original in full; the divergences that remain are these, each a choice:
 - **Progress.** Ours is a ring-point table with a windowed locator; the
   original's is the spline `t` field times a load-time length. Same quantity,
   different instrument; a lap is a wrap in ours and an integer crossing count
-  in theirs, and both re-earn a lap after a reversal.
+  in theirs, and neither lowers the lap on a reversal.
 - **Lap 1's clock.** The original does **not** restart its clock at the first
   crossing: lap 1 runs from the thrust release, which is when the race update
   starts stepping crafts and the lap clock leaves `0.0` (measured, see above).

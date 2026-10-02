@@ -275,6 +275,7 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
     let oag_race::Standing {
         lap,
         gate,
+        reversed,
         progress,
         course_index,
         finish_tick,
@@ -291,6 +292,7 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
         LapGate::NeedsFarHalf => 1,
         LapGate::Ready => 2,
     });
+    write_reversed(hasher, *reversed);
     // A discriminant byte first, for the reason `write_race` gives about
     // `progress`: "not yet located" must not hash the same as "at the line".
     match progress {
@@ -326,6 +328,15 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
     // Eliminator-only counts, `0` on every other mode - see `Standing::kills`.
     hasher.write_u32(*kills);
     hasher.write_u32(*deaths);
+}
+
+/// The backward-crossing deficit, written only while there is one so that a
+/// race that never reversed over the line hashes as it did before the field.
+fn write_reversed(hasher: &mut StateHasher, reversed: u32) {
+    if reversed > 0 {
+        hasher.write_u8(0xA5);
+        hasher.write_u32(reversed);
+    }
 }
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {
@@ -403,6 +414,7 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         zone_timer,
         score,
         lap_gate,
+        reversed,
         zone_dirty,
         finished,
         course_index,
@@ -442,6 +454,7 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         LapGate::NeedsFarHalf => 1,
         LapGate::Ready => 2,
     });
+    write_reversed(hasher, *reversed);
     hasher.write_u8(u8::from(*zone_dirty));
     hasher.write_u8(u8::from(*finished));
     write_option_u32(hasher, *course_index);

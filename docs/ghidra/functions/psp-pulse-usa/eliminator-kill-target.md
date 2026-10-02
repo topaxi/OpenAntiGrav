@@ -68,8 +68,30 @@ scrape cleared the credit, and a blast credited only the craft it struck directl
 credited nobody). Measured with the player parked on `16_Track`, 3 of 9 deaths credited
 nobody.
 
+## Every weapon credits through the same field (2026-10-02, confidence 80)
+
+Three independent writers put the shooter's craft index into the victim's `+0x13c`, the field
+`Ship_Damage` credits from, and each reaches `Ship_Damage` with source 2 (a weapon):
+
+| Weapon | Writer of `+0x13c` | Damage reaches `Ship_Damage` through |
+| --- | --- | --- |
+| Cannon | `Cannon_ApplyCraftDamage` (`0x08857e90`), tag 3 | `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`) |
+| Leech Beam | `LeachBeam_Drain` (`0x08866804`), tag 7, on the target | the same consumer |
+| Quake | the wave block of `FUN_088418e0` (`0x08841e60`), tag 5 | a direct `Ship_Damage(damage, s2, 2, 5, 0)` |
+
+Evidence: [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md) (static, two independent call
+paths per weapon). Not confirmed live on PPSSPP. One reading to keep in mind: the Quake block
+that page transcribes twice names the written record `entity` once and `owner_craft` once; the
+first reading (the struck craft's own record, `s2`) is the one consistent with the shooter
+and shield tests beside it, and is what is ported.
+
+So a Beam or Quake kill **is** credited, and a wall that finishes a craft off after a weapon hit
+that left the shield standing credits nobody (the fatal blow's source must be 2).
+`oag_game::race::eliminator::note_weapon_hit` and `record_pending_hit` port this.
+
 ## What is still open
 
+- ~~Beam, Cannon and Quake credit~~ settled above; this build now credits them.
 - Whether the original's opponents die to walls as often as this build's: in a 330 s
   parked-player run 9 of 20 deaths here were wall-fatal (no weapon hit in the last second),
   where the original's results table read kills 21, deaths 20 in 85 s.

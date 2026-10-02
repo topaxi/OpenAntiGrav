@@ -785,9 +785,28 @@ the respawn fault had put a lap down read thousands of units behind, past `PACK_
 not in the pack at all. Reach 60 against 0 is 1 against 3 fields in eight finishing; the
 knob was sensitive, the sample just did not show it.
 
+**Beam and Quake kills are credited too (2026-10-02, `pulse-elim-credit`).**
+`LeachBeam_Drain` and the Quake wave block write the shooter into the victim's `+0x13c` as the
+Cannon does (evidence in `eliminator-kill-target.md`), so `Ship_Damage` credits them; this build
+had set neither `last_damager` nor `last_weapon_hit` for either, so a kill by beam or wave
+credited nobody. Fixed, and the credit now needs the blow that *emptied the shield* (the shield
+is read right after the hit), so a wall that finishes a craft after a hit that left it standing
+credits nobody, as in the original. Eliminator only; no other mode's state moves. Parked
+player, `16_Track`, seeds 1 to 24 (a fresh sweep, not the earlier three sets), six game-minutes:
+
+| | before | after |
+| --- | --- | --- |
+| finishes | 22 of 24 | **24 of 24** |
+| median time to five | about 210 s | **about 118 s** (65 to 325 s) |
+| kills against deaths (seed 1) | 9 against 21 | 18 against 16 |
+
+Deaths with no credit are now close to none in the sweep (kills run level with deaths on every
+seed). The original's 85 s is still ahead of the median by about a third.
+
 Still open:
 
-- **Time to five is 2.5 times the original's.** Of 30 deaths in a 233 s run (seed 5), 19 had a weapon hit
+- **Time to five is 1.4 times the original's** (118 s median; it was 2.5 times before the credit).
+  Earlier note, from before the credit: **Time to five is 2.5 times the original's.** Of 30 deaths in a 233 s run (seed 5), 19 had a weapon hit
   in the last second and 11 did not: wall deaths and weapons that credit nothing here (a Leech
   Beam's damage does not set `last_weapon_hit`, so a kill by beam is uncredited; not confirmed
   against the original).
@@ -795,11 +814,12 @@ Still open:
   8,032 a Cannon and 5,874 a Leech Beam, none of which is used against a leader or a tail with
   nobody behind, and Eliminator refuses absorbing, so those craft stop receiving pickups.
 - **Wall deaths** (priority 3 of the thread) are not investigated.
-- **A backward wrap costs a lap in every mode.** `Standing::update` lowers the lap and resets the
-  gate to `NeedsNearHalf`, and the forward re-crossing then earns nothing, so any craft shoved
-  back over the line ends one lap short (Eliminator's respawn was one way in). This sits against
-  `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`, which pins the no-lap half.
-  Not changed here: Single Race must not move.
+- ~~**A backward wrap costs a lap in every mode.**~~ **Fixed 2026-10-02.** The original's lap target
+  is never lowered by a reverse crossing (`Craft_UpdateLapProgress`, static, confidence 92), so
+  `Standing` and `RaceState` keep a `reversed` deficit instead; see `lap-counting.md`. The
+  no-lap half of `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap` stands, its lap
+  value changed. No committed golden moved and the 24-seed Eliminator sweep is identical (no
+  craft ends a sweep with a deficit). Not observed live with a reversed craft.
 - **The player's Eliminator respawn** reads `last_on_track`, latched each tick the craft is near
   the spline, so a player wreck that coasts over the line may lose a lap the same way. Not
   checked, nobody drives in the finish test.

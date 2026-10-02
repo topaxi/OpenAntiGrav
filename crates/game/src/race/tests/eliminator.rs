@@ -148,3 +148,44 @@ fn a_craft_is_never_credited_with_its_own_death() {
     race.credit_kill(1);
     assert_eq!(race.sim.world.ships[1].standing.kills, 0);
 }
+
+/// Two craft in play, the victim's shield at `shield`, a beam or wave hit from
+/// slot 0 recorded this tick.
+fn pending_hit(shield: f32) -> Race {
+    let mut race = eliminator();
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.tick = 5000;
+    race.sim.world.ships[1].physics.shield = shield;
+    race.record_pending_hit(1, 0);
+    race
+}
+
+/// A LeachBeam or Quake blow that empties the shield is a weapon kill: the
+/// shooter goes into the victim's `+0x13c` and `Ship_Damage` credits it.
+#[test]
+fn a_beam_or_quake_blow_that_empties_the_shield_is_credited() {
+    let mut race = pending_hit(0.0);
+    race.credit_kill(1);
+    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+}
+
+/// A drain that leaves the shield standing is not the fatal blow: a wall that
+/// finishes the craft a moment later credits nobody, as in the original.
+#[test]
+fn a_beam_hit_that_left_the_shield_standing_does_not_credit_a_wall_death() {
+    let mut race = pending_hit(40.0);
+    race.credit_kill(1);
+    assert_eq!(race.sim.world.ships[0].standing.kills, 0);
+}
+
+/// The original writes the attacker in every mode but reads it only in mode 8,
+/// so no other mode's state may move.
+#[test]
+fn a_pending_hit_writes_nothing_outside_eliminator() {
+    let mut race = race_with_a_grid();
+    race.sim.world.ships[1].physics.shield = 0.0;
+    let before = race.sim.state_hash();
+    race.record_pending_hit(1, 0);
+    assert_eq!(race.sim.state_hash(), before);
+}
