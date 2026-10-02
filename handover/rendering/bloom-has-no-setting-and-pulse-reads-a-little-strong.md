@@ -48,8 +48,8 @@ definition, and the only faithful value is the title's own.
 
 The maintainer found the bloom "quite obvious" in Zone. Measured on a native
 Zone race (`bloom.md`, "Is ours stronger than the original in Zone?"): **ours
-is 0.89-0.90x the original racing** (zone 2 and zone 3), 1.2x on the start grid
-from a bottom-of-frame strip that ours stamps `214` and the original leaves at
+is 0.88-0.90x the original racing** (zones 2, 3 and 5, two boots), 1.2x on the start grid
+(boot 1 and 2) from a bottom-of-frame strip that ours stamps `214` and the original leaves at
 `4` (cause not identified). Zone's bloom is the original's own look: the same
 pose adds 1.5 luma on the ordinary circuit and 13 on Zone's, and the original's
 mask is 13-18 % at >= 200. No code change.

@@ -630,14 +630,19 @@ refuted if ours-over-original, for the luma the bloom adds at a matched Zone
 pose, stays at or below the non-Zone residual (1.2-1.6x on a racing straight).
 It was refuted.
 
-**How a native Zone race was reached.** The dev-unlock byte (`*(0x08b31774) +
-0x45f = 1`, see `docs/reverse-engineering/ppsspp-debugger.md`) also opens the
-RACE TYPE list's Zone row, so `Racebox -> Custom Race -> RACE TYPE: right x5 ->
-ZONE` selects it, Track Select offers the 16 `availableInZone` circuits (1/16 is
-Talon's Junction White) and `g_game_mode` reads `6` once the race is up. It is
-a real Zone load (its own `zone_track.vex`, its HUD, `Results: Zone session
-complete`), not a patched Single Race. Earlier lanes' "Zone is greyed" held for
-a fresh profile only. Zone then flies itself: a race with no input reached
+**How a native Zone race was reached (observed on two boots, recipe only).**
+On a copy of `bloom-setting`'s PPSSPP profile (70 runs of use), the manual walk
+`Racebox -> Custom Race -> RACE TYPE: right x5 -> ZONE` selected Zone, Track
+Select offered 16 circuits (1/16 is Talon's Junction White) and `g_game_mode`
+read `6` once the race was up. It is a real Zone load (its own
+`zone_track.vex`, its HUD, `Results: Zone session complete`), not a patched
+Single Race. **The dev-unlock byte (`+0x45f`) was set on boot 1 and left `0` on
+boot 2, and Zone was selectable both times**, so on this profile it is not the
+byte. What opens Zone on this profile (its progress, rather than the byte) was
+not determined, and a fresh profile was not tried here, so "Zone is greyed on a
+fresh profile" is neither confirmed nor refuted. `psp-drive.py menu
+--race-type 5` landed on mode 3 even with the byte set (its 0.4 s press waits);
+the walk that worked pressed one key at a time with 1 s waits. Zone then flies itself: a race with no input reached
 zone 7 and the results screen about 60 s after GO, so a later stage needs
 nothing but waiting.
 
@@ -653,18 +658,20 @@ figure being the mean of the two neighbouring on-blocks minus the off-block
 frames are tick-aligned). Ours is rendered at the trace's own pose
 (`--pose-from`, `--pose-tick`, flare forced `--pose-boost 10 --pose-intensity
 1.0 --pose-speed <trace>`; the trace reads intensity `1` in Zone even on the
-grid, because Zone's auto-thrust is on) with the bloom pass skipped by an
+grid; cause not read) with the bloom pass skipped by an
 uncommitted local patch, never a setting.
 
 Mean luma (0-255) the bloom adds over the whole frame:
 
 | Where | The original | Ours | Ours / original |
 | --- | --- | --- | --- |
-| racing, zone 2, 150 km/h, four blocks | 11.8, 12.6, 11.6, 21.9 (mean 14.5) | 9.9, 10.6, 13.1, 17.8 (mean 12.9) | 0.89 |
-| racing, zone 3, 146 km/h, four blocks | 6.5, 6.2, 5.5, 4.2 (mean 5.6) | 5.1, 4.8, 5.3, 5.0 (mean 5.1) | 0.90 |
-| the start grid, countdown, craft at rest (2 boots) | 10.28, 10.32 | 12.5-12.8 | 1.2 |
+| boot 1, racing, zone 2, 150 km/h, four blocks | 11.8, 12.6, 11.6, 21.9 (mean 14.5) | 9.9, 10.6, 13.1, 17.8 (mean 12.9) | 0.89 |
+| boot 1, racing, zone 3, 146 km/h (scraping a wall), four blocks | 6.5, 6.2, 5.5, 4.2 (mean 5.6) | 5.1, 4.8, 5.3, 5.0 (mean 5.1) | 0.90 |
+| boot 2, racing, zone 2, 137 km/h, four blocks | 10.8, 23.7, 20.5, 9.6 (mean 16.1) | 13.0, 17.5, 16.9, 9.2 (mean 14.2) | 0.88 |
+| boot 2, racing, zone 5 (`flash` class), 147-156 km/h (scraping), four blocks | 18.3, 6.7, 16.3, 18.4 (mean 14.9) | 12.7, 15.5, 12.0, 12.1 (mean 13.1) | 0.88 |
+| the start grid, countdown, craft at rest: boot 1 (poke, control) x2 sharing one control; boot 2 (poke, control) x2 | 10.28, 10.32; 10.89, 10.64 | 12.5-12.8 (one pose, rendered once) | 1.2 |
 
-**Ours is not stronger racing in Zone: 0.89-0.90 of the original.** Around the
+**Ours is not stronger racing in Zone: 0.88-0.90 of the original** over four stages-by-boots (zone 2 twice, zone 3, zone 5; two boots, sixteen blocks). Around the
 craft ours is weaker still (boxes `10.4` against `13.0` in the zone 3 run), the
 original's exhaust glow being the larger there. The grid frame is 1.2x, and it
 is localised: split into a 3 x 3 grid, the top two thirds of the frame agree to
@@ -686,16 +693,21 @@ racing pose rendered by ours on the ordinary Talon's Junction environment adds
 `1.47` luma (whole-frame luma with the bloom off `61`); on the Zone environment
 it adds `13.1` (`164`). The original agrees with the second: `11.6-14.5` at that
 pose, whole-frame luma `150-173`, and **7-13 % of the frame is clipped white**
-(min channel >= 250; ours `5.6-15 %`, bloom adds about 2 points of it in both).
+(min channel >= 250; ours `5.6-15 %`, the bloom adds about 2 points of it in both).
 Zone's mask is wide: **the original's mask is >= 200 on 13-18 % of the pixels**
 in a racing Zone frame (`17,501` and `23,393` of `130,560` at two ticks; the
 distribution is `255` on `10,951-11,800`, `214` on `6,278-11,388`), against
 about 3 % on the ordinary circuit's grid (`glow-mask.md`). Zone's own
 materials stamp their own `_GLOW` bytes over large lit panels; nothing is
-added by the port. There is **no Zone grade** to stack with it: Pulse's
-`RaceDefaults::zone_stages` is `None` (the `.effectSettings` ladder is HD's and
-2048's), so the only colour is the authored environment, and its bloom-off
-frame is already `150-164` luma.
+added by the port. Ours applies **no Zone grade** on Pulse (`RaceDefaults::
+zone_stages` is `None`; the `.effectSettings` ladder is HD's and 2048's), so
+there is nothing of ours to stack with the bloom; whether the original's Pulse
+Zone brightens with the zone number was not measured (bloom-off luma `139-164`
+at zones 2, 3 and 5 in both, which shows no steady rise, but the poses differ).
+**The player's default path draws the same as these stripped captures**: the
+zone-2 pose at tick 34 rendered with every default (no `--msaa`, motion-blur,
+filter or anisotropy flag, the default 1440 x 816) reads luma `177.3` and
+`15.4 %` white against the stripped `177.4` and `15.5 %`.
 
 **No fix.** The racing numbers show no excess, and the one 1.2x (countdown
 grid) has no identified cause, so the PSP bloom/Zone path is untouched. The
@@ -703,12 +715,14 @@ player's "obvious" is the original's look, seen at 0.9x. If the maintainer
 wants it quieter, that is a design decision against the title's own strength,
 which has no setting (ruling 2026-10-02).
 
-**Not done.** One circuit (Talon's Junction White), one craft, one boot per
-racing block; zone 2 and zone 3 only (zone 5+ was reached but not captured);
-the original's mask is read at ticks 30 and 40 of two runs only; Zone is not
+**Not done.** One circuit (Talon's Junction White) and one craft; zones 2, 3
+and 5 only (the craft was scraping a wall at every racing capture, so none is
+a clean-speed pose, and zones 6-7 were not captured); the original's mask is
+read at ticks 30 and 40 of one boot only; Zone is not
 modelled by the original's wipe quad either (same open as `glow-mask.md`).
-Confidence **75** for "ours is 0.8-1.0x the original racing in Zone" (two
-stages, eight blocks, one circuit), **85** for "Zone's strength is authored
+Confidence **78** for "ours is 0.8-1.0x the original racing in Zone" (two
+boots, three stages, sixteen blocks, one circuit; individual blocks swing
+`0.4-2.3x` on scene change), **85** for "Zone's strength is authored
 environment, not a mode-dependent bloom" (the same pose is 9x stronger on the
 Zone environment in ours and the original matches ours), **40** for the grid
 band's cause.

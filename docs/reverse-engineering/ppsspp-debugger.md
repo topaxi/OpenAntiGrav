@@ -659,6 +659,14 @@ pair is the forward direction was not checked. The working scripts
 (`unlock.py`, `to_track_select.py`, `race_log.py`, `place_trace.py`) were
 scratch, under `data/scratch/sunk-craft-2/`.
 
+**Zone was selectable on a used profile (2026-10-02, `zone-bloom`).** On a copy of
+a 70-run PPSSPP profile, `Racebox -> Custom Race -> RACE TYPE`, `right` x5, one
+key at a time with 1 s waits, selects ZONE with the dev byte set or `0`, and
+the race comes up with `g_game_mode == 6` and its own `zone_track.vex`
+(`psp-drive.py menu --race-type 5` landed on mode 3 in the same state). A fresh
+profile was not tried. See `docs/ghidra/functions/psp-pulse-usa/bloom.md`, the
+Zone section.
+
 **Two traps found walking to Metropia and Tech De Ra (2026-10-01).** `psp-drive.py
 menu --track-down N` presses down from wherever the profile left Track Select, so
 a count that reached a circuit once does not reach it again, and the table above
