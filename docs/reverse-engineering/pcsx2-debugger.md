@@ -537,6 +537,14 @@ with a PNG beside it. It records **two fields** of an interlaced PAL frame (two
 `vsync` packets with `field` 0 and 1), so a draw appears twice, with different
 scroll phases.
 
+**Reading the frame's alpha** is not in the dump either (the VRAM it carries is the
+state before the packets): `scripts/pcsx2-gsdump-alpha.py` cuts the first field after
+a state group and appends one sprite that draws `255 * alpha / 128` into the frame, so
+a replay's screenshot is a picture of the alpha. Run the replay with `pcsx2-qt -batch
+-nogui -- out.gs` on the OpenGL renderer (the software renderer needs a Vulkan present
+queue Xvfb lacks), press the screenshot hotkey; `--plain` cuts without the readout for
+a before and an after of one pass. See `docs/rendering/ps2-bloom.md`.
+
 **Reading it:** `scripts/pcsx2-gsdump.py frame.gs` lists the state groups and
 `--draw N` prints one group's registers and vertices; its docstring has the file
 layout. Traps that cost this page time:

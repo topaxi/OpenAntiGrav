@@ -35,7 +35,7 @@ original's own look (same size in both). The glow-mask value of the pad is a tex
 | Title | Bloom path | Gated by the removed `graphics.bloom` | Original reference |
 | --- | --- | --- | --- |
 | Pulse PSP | `post::bloom`, four passes, constants from `BOOT.BIN` | yes | always runs (121 of 121 frames) |
-| Pulse PS2 | none: the glow mask is not measured there (`scene.rs`: `measured_mask`); the original does bloom, see `docs/rendering/ps2-bloom.md` | n/a | 7-tap, 320x224, half-strength add |
+| Pulse PS2 | `post::ps2_bloom`, its own three passes (7 integer taps, 320x224, `127/128 * 64/128` add) over its own mask (`GlowMask::StampedByTexel`), both read off replayed GS dumps, `docs/rendering/ps2-bloom.md` | n/a | always runs (every race field) |
 | Pure | none, same reason | n/a | unread |
 | HD / Fury | `post::hd_bloom`, five stages, per-circuit `HDR and Bloom` values | yes, as `Glow::Drawn` or `Suppressed` (the chain still runs; only the glow term goes) | read, not measured as a player option |
 | Omega | none: the patch carries no `HDR and Bloom` block | n/a | n/a |
@@ -52,16 +52,19 @@ definition, and the only faithful value is the title's own.
   triggered the pad in this lane).
 - HD's own strength at matched poses: this lane measured Pulse PSP only.
 
-- ~~Does Pulse PS2's original bloom at all?~~ **Yes** (2026-10-02, confidence
-  90): a GS dump of the grid and of a racing frame shows five passes per field
-  (320x224 downsample masked by frame alpha, 7-tap H and V blur, weights
-  16,32,32,64,32,32,16, additive composite at half strength). The frame-rate
-  hypothesis is falsified. See `docs/rendering/ps2-bloom.md`. Open: the PS2
-  glow mask (frame alpha) is still unmeasured, so ours still draws none there.
+- ~~Does Pulse PS2's original bloom at all?~~ **Yes**, and **ported** (2026-10-02):
+  the mask (a glow batch's own alpha, zero elsewhere) was read back off replayed GS
+  dumps and the chain (320x224, 7 integer taps, half-strength add) is
+  `post::ps2_bloom`. Matched on Moa Therma's grid at slot 8, ours adds 1.06x the
+  original's mean luma (1.62 against 1.53). Open: **one circuit and a grid frame**
+  - Talon's Junction was not reached and no racing frame has a recoverable pose; the
+  ghost craft stamps nothing on PS2; `ATST NOTEQUAL 6` and whether the HUD groups
+  before the downsample take the composite are read from registers only. See
+  `docs/rendering/ps2-bloom.md`.
 
 ## Next Steps
 
 1. Explain the residual 1.2-1.6x on a racing straight (flare and plume mask
    size at speed) before touching any constant.
-2. Measure the PS2 glow mask (read frame alpha out of a GS dump VRAM) so the PS2 path can bloom; the original does. Circuit: Talon's Junction too.
+2. PS2 bloom: a second circuit (Talon's Junction) and a racing frame at a pose read out of the emulator, for the racing-straight strength the PSP chain still carries 1.2-1.6x on.
 3. Measure HD's bloom strength at matched poses on RPCS3.
