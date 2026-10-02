@@ -206,3 +206,67 @@ fn a_zero_delta_leaves_every_ramped_state_where_it_was() {
     assert_eq!(state.steer, before.steer);
     assert_eq!(state.slowdown_timer, before.slowdown_timer);
 }
+
+const DT: f32 = 1.0 / 60.0;
+
+fn lean_after(ticks: usize, stick: f32) -> ShipState {
+    let mut state = ShipState::default();
+    for _ in 0..ticks {
+        update_camera_lean(&mut state, stick, DT);
+    }
+    state
+}
+
+/// The lean leans with the stick's sign, never overshoots the stick, and
+/// settles on it: the delta is clamped, not the value.
+#[test]
+fn the_camera_lean_settles_on_the_stick_and_never_overshoots() {
+    let right = lean_after(600, 1.0);
+    assert!(
+        (right.camera_lean - 1.0).abs() < 1.0e-3,
+        "{}",
+        right.camera_lean
+    );
+    assert!(lean_after(600, -0.5).camera_lean < 0.0);
+    for ticks in 1..200 {
+        assert!(lean_after(ticks, 1.0).camera_lean <= 1.0);
+    }
+}
+
+/// One tick from rest on full lock: the follower moves by `min(delta, 0.6) *
+/// 5.4 * dt`, and the lean by `follower * 4 * dt` of that.
+#[test]
+fn the_camera_lean_first_tick_matches_the_decompiled_arithmetic() {
+    let state = lean_after(1, 1.0);
+    let follower = 0.6 * 5.4 * DT;
+    assert_eq!(state.camera_lean_follower, follower);
+    assert_eq!(state.camera_lean, follower * DT * 4.0);
+}
+
+/// Returning to centre is held to `0.3` against `0.6` going out, so the lean
+/// lets go half as fast as it takes hold.
+#[test]
+fn the_camera_lean_returns_slower_than_it_leans_out() {
+    let out = lean_after(1, 1.0).camera_lean_follower;
+    let mut state = ShipState {
+        camera_lean_follower: 1.0,
+        ..ShipState::default()
+    };
+    update_camera_lean(&mut state, 0.0, DT);
+    let back = 1.0 - state.camera_lean_follower;
+    assert!((back * 2.0 - out).abs() < 1.0e-6, "{back} vs {out}");
+}
+
+/// `controls::update` feeds the lean from the raw stick, not the ramped steer.
+#[test]
+fn update_drives_the_camera_lean_from_the_raw_stick() {
+    let mut state = ShipState::default();
+    let controls = ShipControls {
+        steer_x: 1.0,
+        ..ShipControls::default()
+    };
+    update(&mut state, &controls, &test_handling(), DT);
+    assert!(state.camera_lean_follower > 0.0);
+    assert!(state.steer < 100.0);
+    assert!(state.camera_lean_follower > 0.0 && state.camera_lean > 0.0);
+}

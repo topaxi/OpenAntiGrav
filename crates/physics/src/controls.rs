@@ -142,6 +142,42 @@ pub fn update(state: &mut ShipState, controls: &ShipControls, handling: &Handlin
         handling.turning.falloff,
         dt,
     );
+    update_camera_lean(state, controls.steer_x, dt);
+}
+
+/// The follower's per-second gain, the `5.4` literal at `0x0883fac0`.
+pub const CAMERA_LEAN_FOLLOW_GAIN: f32 = 5.4;
+/// The most the follower may be behind its target, in lean units, while the stick
+/// pushes it further out (`0x3f19999a`).
+pub const CAMERA_LEAN_OUT_LIMIT: f32 = 0.6;
+/// The same bound while the stick is centred or opposes the move (`0x3e99999a`).
+pub const CAMERA_LEAN_RETURN_LIMIT: f32 = 0.3;
+/// The first-order filter's rate between follower and lean, per second (`4.0`).
+pub const CAMERA_LEAN_SMOOTH_RATE: f32 = 4.0;
+
+/// Advances the steering lean the cockpit camera rolls by, one frame.
+///
+/// `FUN_0883fab4` (`craft+0x848`, `craft+0x844`), arithmetic read at instruction
+/// level, confidence 80. The input is the **raw** stick on the `+/-100` record
+/// `PlayerInput_Update` writes, not the ramped [`ShipState::steer`]; `stick_x` is
+/// that stick on `-1..=1`. The `delta` the follower closes is clamped, not the
+/// lean: the lean itself saturates at `+/-1`, where the stick does.
+///
+/// **Chosen, not measured: omitted.** The original also folds in `+/-10.0` from two
+/// flags (`craft+0x8a4`, `craft+0x8a8`) and negates on `craft+0x860 & 2`; none of
+/// the three is identified, so they are treated as clear.
+pub fn update_camera_lean(state: &mut ShipState, stick_x: f32, dt: f32) {
+    let target = stick_x * CONTROL_RANGE * 0.01;
+    let delta = target - state.camera_lean_follower;
+    let limit = if (delta > 0.0 && stick_x > 0.0) || (delta <= 0.0 && stick_x < 0.0) {
+        CAMERA_LEAN_OUT_LIMIT
+    } else {
+        CAMERA_LEAN_RETURN_LIMIT
+    };
+    let delta = delta.clamp(-limit, limit);
+    state.camera_lean_follower += delta * CAMERA_LEAN_FOLLOW_GAIN * dt;
+    state.camera_lean +=
+        (state.camera_lean_follower - state.camera_lean) * dt * CAMERA_LEAN_SMOOTH_RATE;
 }
 
 #[cfg(test)]

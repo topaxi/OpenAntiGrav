@@ -15,7 +15,7 @@ use super::flare::{FLARE_COLUMNS, Flare};
 /// column located in it - so a capture that grows a column stays readable.
 /// [`super::Trace::columns`] is what [`super::Trace::to_csv`] writes, which is this list
 /// filtered down to the columns the trace in hand actually carries.
-pub const COLUMNS: [&str; 65] = [
+pub const COLUMNS: [&str; 67] = [
     "tick",
     "dt",
     "grounded",
@@ -37,6 +37,8 @@ pub const COLUMNS: [&str; 65] = [
     "ss_shift_r",
     "ss_lockout",
     "steer_lean",
+    "cam_lean",
+    "cam_lean_follower",
     "roll_phase",
     "roll_eased",
     "right_x",
@@ -122,7 +124,7 @@ pub const REQUIRED_COLUMNS: [&str; 25] = [
 ];
 
 /// The columns a trace may carry and an older one does not.
-pub const OPTIONAL_COLUMNS: [&str; 40] = [
+pub const OPTIONAL_COLUMNS: [&str; 42] = [
     "stun_timer",
     "timer_2e0",
     "shield",
@@ -135,6 +137,8 @@ pub const OPTIONAL_COLUMNS: [&str; 40] = [
     "ss_shift_r",
     "ss_lockout",
     "steer_lean",
+    "cam_lean",
+    "cam_lean_follower",
     "roll_phase",
     "roll_eased",
     "avel_x",
@@ -384,6 +388,12 @@ pub struct Frame {
     /// d-pad roll gesture *is* steering input) can still reconstruct the
     /// exact angle the original drew.
     pub steer_lean: Option<f32>,
+    /// The cockpit camera's steering lean, `entity+0x844`, or `None`:
+    /// `FUN_0883fab4`'s first filter, which `oag_physics::ShipState::camera_lean`
+    /// reproduces to RMS 0.0003 (`camera_lean_ground_truth.rs`).
+    pub cam_lean: Option<f32>,
+    /// The lean's rate-limited follower, `entity+0x848`, or `None`.
+    pub cam_lean_follower: Option<f32>,
     /// Row 0 of the player camera node's basis, or `None` for a capture taken
     /// without `--camera`.
     ///
@@ -446,6 +456,8 @@ impl Default for Frame {
             roll_phase: None,
             roll_eased: None,
             steer_lean: None,
+            cam_lean: None,
+            cam_lean_follower: None,
             camera_row0: None,
             camera_up: None,
             camera_forward: None,
@@ -548,6 +560,8 @@ impl Frame {
             "roll_phase" => self.roll_phase?,
             "roll_eased" => self.roll_eased?,
             "steer_lean" => self.steer_lean?,
+            "cam_lean" => self.cam_lean?,
+            "cam_lean_follower" => self.cam_lean_follower?,
             "cam_right_x" => self.camera_row0?.x,
             "cam_right_y" => self.camera_row0?.y,
             "cam_right_z" => self.camera_row0?.z,
@@ -593,6 +607,8 @@ impl Frame {
             "roll_phase" => self.roll_phase.is_some(),
             "roll_eased" => self.roll_eased.is_some(),
             "steer_lean" => self.steer_lean.is_some(),
+            "cam_lean" => self.cam_lean.is_some(),
+            "cam_lean_follower" => self.cam_lean_follower.is_some(),
             "cam_right_x" | "cam_right_y" | "cam_right_z" => self.camera_row0.is_some(),
             "cam_up_x" | "cam_up_y" | "cam_up_z" => self.camera_up.is_some(),
             "cam_fwd_x" | "cam_fwd_y" | "cam_fwd_z" => self.camera_forward.is_some(),
@@ -652,6 +668,8 @@ impl Frame {
             "roll_phase" => self.roll_phase = Some(value),
             "roll_eased" => self.roll_eased = Some(value),
             "steer_lean" => self.steer_lean = Some(value),
+            "cam_lean" => self.cam_lean = Some(value),
+            "cam_lean_follower" => self.cam_lean_follower = Some(value),
             "cam_right_x" => self.camera_row0.get_or_insert(Vec3::ZERO).x = value,
             "cam_right_y" => self.camera_row0.get_or_insert(Vec3::ZERO).y = value,
             "cam_right_z" => self.camera_row0.get_or_insert(Vec3::ZERO).z = value,

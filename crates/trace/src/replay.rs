@@ -832,6 +832,8 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         roll_phase: Some(state.roll_phase),
         roll_eased: None,
         steer_lean: None,
+        cam_lean: Some(state.camera_lean),
+        cam_lean_follower: Some(state.camera_lean_follower),
         // The replay simulates the ship, not the original's camera rig, so the
         // camera pose is not compared rather than reported as agreement.
         camera_row0: None,

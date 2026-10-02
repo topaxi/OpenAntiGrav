@@ -619,7 +619,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The AI's six-stage plan (line-follower to a field of pilots) is complete; what remains unbuilt is the residual](handover/gameplay/the-ais-six-stage-plan-line-follower-to.md)
 - [The AI was never the problem: four contact-path bugs, and what is left after them](handover/gameplay/the-ai-was-never-the-problem-four-contact.md)
 - [DLC packs are mounted; two things inside them are not read](handover/tooling/dlc-packs-are-mounted-two-things-inside-them.md)
-- [Two recovered chase-camera behaviours are ported; `headtilt` is not](handover/rendering/two-recovered-chase-camera-behaviours-are-ported-headtilt.md)
+- [Two recovered chase-camera behaviours are ported; `headtilt` is ported, its stick shaping and look-around are not](handover/rendering/two-recovered-chase-camera-behaviours-are-ported-headtilt.md)
 - [The menus draw the disc's layout and its footer ticker; the page-transition easing curve is still invented](handover/frontend/the-menus-draw-the-discs-layout-the-chrome.md)
 - [PS2 front-end layout is hardcoded to 480x272](handover/frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md) - **2026-09-27**: PCSX2 pixel measurement settles the title-font question (don't flip `PS2_MENU_SKIN::title_font` - title and row glyphs measure the same 14px cap height); title position stays open with a 5px residual. Track Select/Ship Select walked on PCSX2 and match this build exactly.
 - [Audio: race SFX plays on all three titles](handover/audio/audio-race-sfx-plays-on-all-three-titles.md)

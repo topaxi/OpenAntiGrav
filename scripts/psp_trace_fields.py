@@ -134,6 +134,8 @@ ENTITY_FIELDS = [
     ("ss_shift_r", 0x8A8),
     ("ss_lockout", 0x8AC),
     ("steer_lean", 0x854),
+    ("cam_lean", 0x844),
+    ("cam_lean_follower", 0x848),
     ("roll_phase", 0x87C),
     ("roll_eased", 0x880),
 ]
