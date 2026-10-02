@@ -42,7 +42,10 @@ of it the same day; see `frame-audit.md`.
   `yaw.ppdmp` are WAD entry 1078, `pSphereShape1` with `cage_collision2_ADD.tga`
   (a collision-cage sphere about 19 units from the craft), present only in that
   dump. Not drawn by us and not read: what spawns it, and why it sat there while
-  the craft was merely yawed, are open.
+  the craft was merely yawed, are open. **Identified 2026-10-02**
+  (`pulse-moving-draws`): it is **WAD entry 1078 of `DATA.WAD`**, `Data\visual_effects\cage_collision_curved.vex`
+  (not the track node 1078); the spawn is still unread, with `collisionCageEnabled`
+  (`leaving-the-track.md`) as the lead - `frame-audit.md`, "The collision-cage sphere".
 - ~~**Factory roofs on the Talon straight.**~~ **Fixed 2026-09-30, and repeated
   2026-10-01.** The roofs are draws 1479..1494 (four animated slab transports,
   `track.vex` nodes 789, 793, 804, 806), not 1381..1391; the original's GE list
@@ -61,10 +64,16 @@ of it the same day; see `frame-audit.md`.
   (seven 480x272 poses pixel-identical). The "recurring" Metropia node 225 and Tech
   De Ra 1076/1078 were a census artifact (a double-sweep diameter 8 % short of the
   exact one) and are not culled by anything. Evidence:
-  `docs/ghidra/functions/psp-pulse-usa/section-view-cull.md`. Still open on it:
+  `docs/ghidra/functions/psp-pulse-usa/section-view-cull.md`. **Separated 2026-10-02**
+  (`pulse-moving-draws`, `frame-audit.md` "Moving draws the original does not
+  submit: frustum or rule"): on Metropia (the one circuit whose dumps pin the
+  animation clock) all 13 missing moving draws, 11 of them transparent, lie outside
+  the view, but the same test rejects 129 moving draws the original does submit, so
+  it is not a rule `pvs::visible` can take (pixel-neutral either way); **Talon's loop**
+  (12 dumps, four inside the inverted stretch): 0 missing. Still open on it:
   whether the batch-set draw path carries a bound of its own (1,071 static draws
-  pass the section test with no twin), the small transparent quads the census
-  cannot match, and a circuit with a tunnel or a loop.
+  pass the section test with no twin), and the small transparent quads the census
+  cannot match.
 - **Whether real PSP hardware shows level 1 past about 256 units.** The game
   programs slope mode with slope `1/256` and bias 1; the renderer now applies
   that law to the disc's levels, and PPSSPP's GPU backends do not, so no frame of
@@ -93,10 +102,15 @@ of it the same day; see `frame-audit.md`.
 
 ## Next Steps
 
-- Separate the recurring moving draws the original does not submit (Metropia
-  node 225, Tech De Ra nodes 1076 and 1078) into frustum and rule: dump them at
-  poses where the craft faces away from, and then toward, their placement, with
-  `scripts/pvs-moving-census.py`. And repeat on Moa Therma or Arc Prime, which
-  have a loop.
+- ~~Separate the recurring moving draws the original does not submit (Metropia
+  node 225, Tech De Ra nodes 1076 and 1078) into frustum and rule.~~ **Done
+  2026-10-02**, with the premise corrected: those three were a census artifact
+  (`pulse-cull`), and the real residue is the transparent moving draws outside the
+  view - not a portable rule (`frame-audit.md`). What would move it: pin the
+  animation clock on Tech De Ra (a dump with a fast mover in view, or the clock read
+  from the running game rather than solved from the list), which turns its 8
+  "missing, inside the view" draws into a verdict; a cold second boot of Metropia;
+  and read `Mesh_SubmitNode`'s caller for the transparent list, since the missing
+  draws are all there.
 - Capture Pure at one pose with `psp-trace.py` and confirm or scope the slope
   rule; read `Texture_BuildBindList`'s mode/bias branch.
