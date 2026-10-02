@@ -104,8 +104,11 @@ struct Shift {
     /// corridor at the index the driver holds on the arming tick.
     ///
     /// **Not against the corridor at last tick's index**, which this used to read and which
-    /// is two samples behind: `Driver::ram` asks `aim(self.index)` with the index it has
-    /// just advanced, so the corridor it measured is the arming tick's. On a corridor that
+    /// is two samples behind: `Driver::drive` sets `self.index` from the body's position at
+    /// the top of the tick (`crates/ai/src/driver.rs`, `self.index = index as u32`, the only
+    /// write to it) and only then calls `self.ram`, which asks `aim(self.index)`, so the
+    /// corridor it measured is the arming tick's and `ship.driver.index` read after that tick
+    /// is the index it used. On a corridor that
     /// narrows that is a few tenths: on 2026-10-02 a Pulse grid walk that moved every
     /// starting slot a fraction of a unit put one shove at seed 24 on a tapered stretch,
     /// read `11.68` against last tick's index and `12.05` against the index the driver

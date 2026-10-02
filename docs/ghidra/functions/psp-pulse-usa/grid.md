@@ -737,7 +737,7 @@ read live out of the loop.
 | `0x0887cf88` | `AiTrack_BuildLocatedRecord` | picks the four control points of the segment between the cursor's point and its nearer neighbour, runs `FUN_0887c340` for `t`, hands `t` to `FUN_0887c7e8` | 85 |
 | `0x0887c340` | `Spline_ProjectOntoSegment` | three Gauss-Newton steps from `t = 0.5`, `t -= (C(t) - p) . C'(t) / (C'(t) . C'(t))`, unclamped inside the loop and clamped to `0..1` after it | 88 |
 | `0x0887c1e0` | `Spline_EvalPointAndDerivative` | the uniform cubic B-spline of four `vec4` at `t` (`0x0887c1f4`..`0x0887c2a0`) and its derivative (`0x0887c2b4`..`0x0887c334`), the basis rows `(-1,3,-3,1) (3,-6,0,4) (-3,3,3,1) (1,0,0,0) / 6` and their derivative | 88 |
-| `0x0887c7e8` | `Spline_SampleSegment` (named at 75 on [scene-light.md](scene-light.md), kept) | blends the `0x70`-byte record over the same four control points with the weights multiplied by `vfim.s 0x3155`; **this read's evidence scores it 90** (the `w` lane read live, the chain it feeds exact to 0.0002), and its row is left for that page's owner to rescore | 90 |
+| `0x0887c7e8` | `Spline_SampleSegment` (named at 75 on [scene-light.md](scene-light.md), kept) | blends the `0x70`-byte record over the same four control points with the weights multiplied by `vfim.s 0x3155`; **this read's evidence scores it 90** (the `w` lane read live, the chain it feeds exact to 0.0002), and its row is left for that page's owner to rescore | 75 |
 
 `0x0887ce78` `AiTrack_LocatePosition` and `0x0887e464` `AiTrack_UpdateCursor` keep their names and
 scores. **Ghidra's prototype for `AiTrack_LocatePosition` is wrong and the call sites show
@@ -828,9 +828,10 @@ heading in degrees:
 `01_Track` slot 1's `-0.0069` heading, "0.22 degrees, cause unknown" in
 [grid-state.md](../../../physics/grid-state.md), is the edge chord: the track widens there and
 the tangent does not see it. The eight located records read live on Metropia match
-`locate`'s chain to **0.0002** units. The remaining 0.04-0.07 on `16_Track` and Metropia is the
-placement drop (the original raycasts along the sample's own down axis, then `+2`; ours drops
-along world `-Y`) and the two-decimal Metropia readings, not the walk.
+`locate`'s chain to **0.0002** units. The remaining 0.04-0.07 on `16_Track` and Metropia is **probably** the placement drop (the
+original raycasts along the sample's own down axis, then `+2`; ours drops along world `-Y`) and,
+on Metropia, the two-decimal readings: not measured, and `16_Track`'s 0.043 shows with no raycast in the
+probe at all, so it may be something in the walk itself.
 
 Confidence **94** that this is `Race_ComputeGridLayout`'s walk on Pulse PSP (USA): a runtime
 trace of the records, eight craft on three circuits agreeing to hundredths and the headings to

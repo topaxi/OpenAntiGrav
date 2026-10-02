@@ -180,8 +180,10 @@ impl Pose {
 /// node): measured on `16_Track`, the eight craft's forward `z` reads `-0.0025`
 /// at slot 1 down to `-0.0061` at slot 8 where the node's own heading is
 /// `0.0000` and the track's sample tangent at the same places reads `-0.0033` to
-/// `-0.0057` - see `docs/physics/grid-state.md`. The sample is this crate's
-/// resampling of the curve, not the original's own, which is the residue.
+/// `-0.0057` - see `docs/physics/grid-state.md`. **Superseded for Pulse PSP by
+/// [`crate::grid_walk`] (2026-10-02)**: the original's heading is the direction the track's
+/// two edges run, not the tangent, and the 0.045 degrees left here is gone there. This
+/// stays the fallback where that walk refuses a node and for every other title.
 #[must_use]
 pub fn orientation_on_sample(sample: &Sample) -> Quat {
     orientation_from_axes(

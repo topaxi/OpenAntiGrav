@@ -228,15 +228,18 @@ fn face_the_way_the_track_runs(pose: Pose, slot: &StartPosition, spline: &Spline
 /// `base`'s place along the track and is moved laterally onto the same rule -
 /// the original does not use the raw node either, and it is 1.68 units nearer
 /// the original's eighth craft on `16_Track` for it.
-/// **Heading** is the node's own for every slot unless `frame_from_sample`,
-/// which is Pulse PSP's: there each slot takes the track's frame at its own
-/// sample, `FUN_0882663c`'s input. Measured 2026-10-01 on the eight craft of a
-/// `16_Track` Single Race at placement: forward `z` runs `-0.0025` to `-0.0061`
-/// from slot 1 to slot 8, where the node's is `0.0000` (0.35 degrees out at slot
-/// 8, the player's slot) and the sample tangent reads `-0.0033` to `-0.0057`
-/// (0.05 degrees out). `grid.md`'s "heading, any slot against slot 1: 1.0000 to
-/// four decimal places" was a dot product, which cannot see 0.3 degrees. See
-/// `docs/physics/grid-state.md`.
+/// **Pulse PSP's grid is the original's own walk** (`walked`, 2026-10-02,
+/// `oag_gameplay::grid_walk`): position and heading both, read from
+/// `Race_ComputeGridLayout` and `FUN_0882663c` and reproduced against the original's
+/// craft to 0.001 units on `01_Track`. The rest of this comment describes the **fallback**
+/// that every other title takes, and Pulse PSP takes where the walk refuses a node.
+///
+/// **Heading** in the fallback is the node's own for every slot unless
+/// `frame_from_sample`: there each slot takes the sample tangent's frame (0.05
+/// degrees out of the original on `16_Track`, where the node's is 0.35 out). The
+/// original's is the edge chords', which is what `walked` carries. `grid.md`'s
+/// "heading, any slot against slot 1: 1.0000 to four decimal places" was a dot
+/// product, which cannot see 0.3 degrees. See `docs/physics/grid-state.md`.
 ///
 /// Falls back to [`oag_gameplay::grid_pose`]'s straight line, per slot, when
 /// `spline` has no sample near `base`, when `base`'s own tangent gives no
