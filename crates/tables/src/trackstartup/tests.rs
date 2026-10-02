@@ -173,3 +173,41 @@ fn a_slot_may_be_a_colour_rather_than_a_model() {
     assert_eq!(m.billboards[0].location(), None);
     assert_eq!(m.billboards[1].location(), Some("/Data/A/b.vex"));
 }
+
+/// Fort Gale's own `<Weather>` element, as the disc authors it.
+const FORT_GALE: &str = r#"<TrackStartup>
+<LevelFx>
+<Weather Tex="Data\Tex\ScreenFX\Mist.mip" Alpha="0.3" DisplayScale="0.8" TexScale="3.1" AspectRatio="0.5625" ScreenPsys="data\psys\WO_RAIN_LENS.POB" EnvPsys="data\psys\WO_RAIN.POB" DriftY="-10.0" DriftMistMult="6.0" MistInside="0" WindBase="5.0" WindRange="25.0"/>
+<WindSound type="1"/>
+</LevelFx>
+</TrackStartup>"#;
+
+#[test]
+fn a_weather_element_reads_every_attribute_as_authored() {
+    let weather = TrackStartup::parse(FORT_GALE).weather.expect("weather");
+    assert_eq!(weather.tex.as_deref(), Some(r"Data\Tex\ScreenFX\Mist.mip"));
+    assert_eq!(weather.env_psys.as_deref(), Some(r"data\psys\WO_RAIN.POB"));
+    assert_eq!(
+        weather.screen_psys.as_deref(),
+        Some(r"data\psys\WO_RAIN_LENS.POB")
+    );
+    assert_eq!(
+        (weather.alpha, weather.display_scale, weather.tex_scale),
+        (0.3, 0.8, 3.1)
+    );
+    assert_eq!(
+        (
+            weather.drift_y,
+            weather.drift_mist_mult,
+            weather.mist_inside
+        ),
+        (-10.0, 6.0, 0.0)
+    );
+    assert_eq!((weather.wind_base, weather.wind_range), (5.0, 25.0));
+    assert_eq!(effect_name(weather.env_psys.as_deref().unwrap()), "WO_RAIN");
+}
+
+#[test]
+fn a_manifest_without_weather_has_none() {
+    assert_eq!(TrackStartup::parse(SAMPLE).weather, None);
+}
