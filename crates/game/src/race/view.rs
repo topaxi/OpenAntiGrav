@@ -60,6 +60,10 @@ pub struct RaceView {
     /// The spectator director that flies the camera behind the end-race panels, `None` on a
     /// title it was not read for. See [`super::finish_camera`].
     pub(super) finish_camera: Option<super::finish_camera::FinishCamera>,
+    /// The tick the player's wreck ended the race on, `None` until it does.
+    /// View-side bookkeeping for [`Race::runs_on_after_the_end`] and the spectator
+    /// director's clock; nothing the simulation reads.
+    pub(super) wreck_ended_tick: Option<u64>,
     /// The external block the chase camera is currently flying, which is
     /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
     /// [`Self::camera_view`] names. Kept as its own field rather than looked up

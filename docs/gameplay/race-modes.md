@@ -989,13 +989,13 @@ Three things happen on that tick, and they are in three layers on purpose:
    being stepped** (`Race::runs_on_after_the_line`): the original keeps the race
    running behind the panels with the player's craft flown by the AI, see
    [after-the-finish.md](after-the-finish.md). A wreck, an Eliminator target and a
-   Zone run still stand still.
+   Zone run still stand still, and a Single Race wreck runs on too (2026-10-02, the maintainer's "hold, then results").
 
 **The table is ours and is labelled as one.** The original ends a race in a
 sequence of screens whose names are recovered - `"Race End Photo"`,
 `"Race End Save"`, `"Race End Records"`, `"Race End Proceed"`,
 `"Race End Alone"`, and `"EndRace_Results"` from `Zone_UpdateResults`. **`Race End Photo`
-has been read and is reproduced for a finish by the line** (2026-10-02,
+has been read and is reproduced for a finish by the line and a Single Race wreck** (2026-10-02,
 [after-the-finish.md](after-the-finish.md)); the others have not, so none of them is. What is drawn instead is a plain list of positions in the built-in
 grid, the same kind of stand-in [our own menus](../ui/menus-original.md) are.
 See `crates/game/src/scoreboard.rs`, which carries the argument and what would

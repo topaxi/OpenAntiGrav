@@ -1,6 +1,8 @@
 //! What a race a wreck ended goes on doing under the results - see
-//! `Race::tick_cosmetics`. The explosion, the shake and the destroy camera are
-//! seen; the world, the standings and the board are not touched.
+//! `Race::tick_cosmetics` and `Race::runs_on_after_the_wreck`. In a Single Race
+//! the world runs on, as the original's does (the field races, the player's wreck
+//! stays down); in a Zone run only what is seen moves: the explosion, the shake and
+//! the destroy camera.
 
 use super::*;
 use crate::race::wreck_fx::{EXPLOSION_EFFECT, WreckFx};
@@ -9,7 +11,14 @@ use oag_physics::CraftState;
 /// A single race whose player's craft has been shot down and the race is over,
 /// the wreck effects loaded, and a destroy camera station to cut to.
 fn a_race_the_wreck_ended() -> Race {
+    a_race_the_wreck_ended_in(Mode::SingleRace)
+}
+
+fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
     let mut race = race_with_a_grid();
+    if mode != Mode::SingleRace {
+        race = zone_grid(mode);
+    }
     race.view.wreck_fx = WreckFx::new(vec![Vec::new(); 1]);
     let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
     let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
@@ -32,12 +41,12 @@ fn a_race_the_wreck_ended() -> Race {
     panic!("the destroyed player's single race never ended");
 }
 
-/// The wreck ends the race and is not the line, so the world stands still while
-/// the cosmetics play: shake, destroy camera, and the big explosion 1.5 s on.
+/// Zone's wreck ends the race the same way but was not looked at, so the world stands
+/// still while the cosmetics play: shake, destroy camera, and the big explosion 1.5 s on.
 #[test]
-fn a_wreck_plays_out_under_the_results_without_moving_the_world() {
-    let mut race = a_race_the_wreck_ended();
-    assert!(!race.runs_on_after_the_line());
+fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
+    let mut race = a_race_the_wreck_ended_in(Mode::Zone);
+    assert!(!race.runs_on_after_the_end());
     assert_eq!(
         race.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated
@@ -77,6 +86,55 @@ fn a_wreck_plays_out_under_the_results_without_moving_the_world() {
     );
     assert_eq!(race.sim.world.tick, tick, "the world's own clock stands");
     assert_eq!(race.sim.state_hash(), hash, "nothing the hash reads moved");
+}
+
+/// A Single Race wreck: the world runs on under the results - the clock advances, the
+/// player's craft stays down, the race stays over - and the explosion still plays.
+#[test]
+fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
+    let mut race = a_race_the_wreck_ended();
+    assert!(!race.runs_on_after_the_line(), "the player never crossed");
+    assert!(race.runs_on_after_the_wreck());
+    assert!(race.runs_on_after_the_end());
+    let tick = race.sim.world.tick;
+    for _ in 0..200 {
+        race.tick_finished();
+    }
+    assert_eq!(race.sim.world.tick, tick + 200, "the world's clock runs on");
+    assert!(race.finished(), "the race stays over");
+    assert_eq!(
+        race.sim.world.ships[0].physics.craft_state,
+        CraftState::Eliminated,
+        "a single race's wreck never comes back"
+    );
+    assert!(
+        race.wreck_explosion_at_for_tests().is_some(),
+        "the explosion goes off"
+    );
+}
+
+/// The spectator director takes over from the destroy camera `WRECK_START_TICKS` after the
+/// race ended - not on the line's `START_TICKS` - and follows a craft that is still live.
+#[test]
+fn the_director_takes_over_from_the_destroy_camera_after_a_single_race_wreck() {
+    use crate::race::finish_camera::{FinishCamera, SPECTATOR_SEED, WRECK_START_TICKS};
+    let mut race = a_race_the_wreck_ended();
+    let station = oag_render::camera::destroy::Station {
+        eye: Vec3::new(400.0, 30.0, 0.0),
+        aim: Vec3::new(10.0, 0.0, 0.0),
+    };
+    race.view.finish_camera = Some(FinishCamera::new(vec![station], 0.4, SPECTATOR_SEED));
+    for _ in 0..WRECK_START_TICKS - 1 {
+        race.tick_finished();
+    }
+    assert_eq!(
+        race.spectator_mode(),
+        None,
+        "the destroy camera still has it"
+    );
+    race.tick_finished();
+    race.tick_finished();
+    assert!(race.spectator_mode().is_some(), "then the director starts");
 }
 
 /// `race_with_a_grid` with the mode switched: eight craft in an Eliminator.
@@ -161,4 +219,17 @@ fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
         (136..=140).contains(&opponent),
         "2.3 s from tick 0: {opponent}"
     );
+}
+
+/// `race_with_a_grid` in another mode.
+fn zone_grid(mode: Mode) -> Race {
+    let mut setup = setup(hulled_handling());
+    setup.mode = mode;
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    Race::start(setup)
 }

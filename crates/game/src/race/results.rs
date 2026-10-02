@@ -113,11 +113,39 @@ impl Race {
         self.finished() && self.sim.world.ships[self.player_slot()].standing.finished()
     }
 
+    /// Whether the player's wreck in a **Single Race** is what ended the race: the
+    /// one other ending whose world also goes on under the end-race screens.
+    ///
+    /// **The original never leaves `InGame` after that wreck** - measured
+    /// 2026-10-02, 17,800+ frames with the field racing on, the HUD hidden and the
+    /// spectator camera cutting, no legend and no panel
+    /// (`docs/gameplay/after-the-finish.md`). Ours runs the world on in the same
+    /// way and then shows `Race End Photo` and the panels, because a wrecked
+    /// player needs a way out: **the maintainer's decision of 2026-10-02**, "hold,
+    /// then results". That the legend shows at all, and when, is chosen, not
+    /// measured. Zone is not included: it ends the same way but was not looked at.
+    #[must_use]
+    pub fn runs_on_after_the_wreck(&self) -> bool {
+        self.finished()
+            && self.sim.world.mode() == Mode::SingleRace
+            && self.view.wreck_ended_tick.is_some()
+    }
+
+    /// Whether the world goes on being stepped under the end-race screens, for
+    /// either ending that does it: the player's crossing
+    /// ([`Self::runs_on_after_the_line`]) or a Single Race wreck
+    /// ([`Self::runs_on_after_the_wreck`]).
+    #[must_use]
+    pub fn runs_on_after_the_end(&self) -> bool {
+        self.runs_on_after_the_line() || self.runs_on_after_the_wreck()
+    }
+
     /// One tick of a race that ended another way than the player's crossing:
     /// the world stands still, and only what a player can *see* keeps moving.
     ///
-    /// A wreck that ends a Single Race or a Zone run is state 5, and the
-    /// original goes on running behind the panels: the state-5 shake, the
+    /// A wreck that ends a Zone run is state 5 (a Single Race's runs the whole
+    /// world, [`Race::runs_on_after_the_wreck`]), and the original goes on running
+    /// behind the panels: the state-5 shake, the
     /// wreck's fire, the big explosion 1.5 s on and its shockwave ring, the
     /// screen flashes and the destroy camera's ease. They are all presentation
     /// state on [`RaceView`] (the particle stage, the shake, the flash, the blast
@@ -149,7 +177,7 @@ impl Race {
     /// neutral input because the panels consume the pad), only the cosmetics
     /// ([`Race::tick_cosmetics`]) after any other ending.
     pub fn tick_finished(&mut self) {
-        if self.runs_on_after_the_line() {
+        if self.runs_on_after_the_end() {
             self.tick(&oag_gameplay::PlayerInputs::none());
         } else {
             self.tick_cosmetics();

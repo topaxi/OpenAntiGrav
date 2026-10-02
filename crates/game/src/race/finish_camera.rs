@@ -36,6 +36,14 @@ use oag_render::camera::destroy::{self, Destroy, Station};
 /// Measured: the camera object's subject becomes the player on `F+61` in all four captures.
 pub const START_TICKS: u64 = 61;
 
+/// Ticks after the race ended on which the camera object takes another craft as its subject
+/// after a player's wreck in a Single Race: the destroy camera (mode 5) keeps the wreck until
+/// `k+290` frames after the injected `Ship_SetState(4)` and then follows another craft on another
+/// node, `259` frames after the mode state went to 3 (`k+31`). **Measured once** (a per-frame log
+/// of the camera object, PPSSPP, 2026-10-02); the original stays in mode 5 where this director
+/// starts in mode 7, and what triggers the hand-off is unread.
+pub const WRECK_START_TICKS: u64 = 259;
+
 /// Frames between subject re-picks (10.0 s at 60 Hz), measured as `F+661` and `F+1261`.
 pub const SUBJECT_PERIOD_TICKS: u32 = 600;
 
@@ -189,7 +197,11 @@ impl FinishCamera {
             self.director(live, player);
         }
         let subject = live.iter().find(|s| s.slot == self.subject)?;
-        let pose = self.pose(subject.position);
+        // With the player down the chase camera is the wreck, not a view of anything: the
+        // two craft-relative modes (not read) show the node camera instead, **chosen, not
+        // measured**, so a wrecked player watches the field rather than their own hulk.
+        let player_down = live.iter().all(|s| s.slot != player);
+        let pose = self.pose(subject.position, player_down);
         // A jump the upscaler must not blend across: the picture changes shot.
         let showing = pose.is_some();
         if showing != self.was_node || (showing && self.node != node_before) {
@@ -211,8 +223,15 @@ impl FinishCamera {
         self.since_subject = 0;
         self.subject = player;
         self.previous = Some(player);
+        // A wrecked player is not live: the first subject is the first craft that is.
+        if live.iter().all(|s| s.slot != player)
+            && let Some(first) = live.first()
+        {
+            self.subject = first.slot;
+            self.previous = Some(first.slot);
+        }
         self.mode = ViewMode::Track;
-        let position = position_of(live, player);
+        let position = position_of(live, self.subject);
         self.node = self.nearest_node(position);
         self.take_node(position);
     }
@@ -256,6 +275,11 @@ impl FinishCamera {
             self.previous = Some(player);
         }
         let count = u32::try_from(live.len()).unwrap_or(0);
+        // A wrecked player is not a candidate: start from some craft that is still racing.
+        // (The original's player is always live; this is the port's own wreck case.)
+        if live.iter().all(|s| s.slot != player) && count > 0 {
+            subject = live[self.rng.below(count) as usize].slot;
+        }
         while Some(subject) == self.previous && count > 1 {
             let at = self.rng.below(count) as usize;
             subject = live[at].slot;
@@ -328,8 +352,8 @@ impl FinishCamera {
     /// The node cameras' own update (cases `5`, `6`, `7` of `Camera_UpdateSpectatorView`): the
     /// aim point follows the subject, the fov eases to its target, and the eye is the node. The
     /// pose is the destroy camera's own ([`Destroy::to_world`]), which is this arm's body.
-    fn pose(&mut self, subject: Vec3) -> Option<CameraOverride> {
-        if !self.mode.is_node_camera() {
+    fn pose(&mut self, subject: Vec3, player_down: bool) -> Option<CameraOverride> {
+        if !self.mode.is_node_camera() && !player_down {
             return None;
         }
         let eye = self.nodes[self.node?].eye;
@@ -372,12 +396,18 @@ impl Race {
     /// Steps the post-race camera one tick and imposes its pose, once the player's craft
     /// has crossed the line and the world is running on behind the panels.
     pub(super) fn advance_finish_camera(&mut self) {
-        if self.view.finish_camera.is_none() || !self.runs_on_after_the_line() {
+        if self.view.finish_camera.is_none() || !self.runs_on_after_the_end() {
             return;
         }
         let player = self.player_slot();
-        let Some(finish) = self.sim.world.ships[player].standing.finish_tick else {
-            return;
+        // The line's clock is the finishing tick; a Single Race wreck's is the tick the
+        // race ended, with the start pushed back to `WRECK_START_TICKS`.
+        let (finish, delay) = match self.sim.world.ships[player].standing.finish_tick {
+            Some(finish) => (finish, 0),
+            None => match self.view.wreck_ended_tick {
+                Some(ended) => (ended, WRECK_START_TICKS.saturating_sub(START_TICKS)),
+                None => return,
+            },
         };
         let live: Vec<Subject> = (0..usize::from(self.sim.world.ship_count))
             .filter(|&slot| {
@@ -389,7 +419,12 @@ impl Race {
                 position: self.sim.world.ships[slot].physics.body.position,
             })
             .collect();
-        let since = self.sim.world.tick.saturating_sub(finish);
+        let since = self
+            .sim
+            .world
+            .tick
+            .saturating_sub(finish)
+            .saturating_sub(delay);
         let Some(director) = self.view.finish_camera.as_mut() else {
             return;
         };

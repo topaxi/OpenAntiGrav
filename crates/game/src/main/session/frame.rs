@@ -601,8 +601,9 @@ impl Session {
                     // nothing the panels show moves. See
                     // `Race::runs_on_after_the_line`.
                     //
-                    // Any other ending (a wreck in a Single Race or a Zone run)
-                    // steps only what is seen: the explosion, the shake, the
+                    // A Single Race wreck steps the whole world too
+                    // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
+                    // run) steps only what is seen: the explosion, the shake, the
                     // destroy camera. See `Race::tick_cosmetics`.
                     stage.race.tick_finished();
                     self.audio.race_tick(&mut stage.race);

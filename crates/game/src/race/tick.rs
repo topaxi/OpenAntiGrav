@@ -538,6 +538,7 @@ impl Race {
                 == oag_physics::CraftState::Eliminated
             && self.sim.world.primary_race_mut().eliminate()
         {
+            self.view.wreck_ended_tick = Some(self.sim.world.tick);
             // The original plays `~BLOWUP`, hides the HUD and swings the camera
             // into its mode 5 on the way here. **The sound is built** and is
             // held on `Race::craft_is_exploding` rather than raised here,
