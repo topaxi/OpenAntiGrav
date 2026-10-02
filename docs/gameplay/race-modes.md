@@ -590,11 +590,16 @@ you come back in; a single race has no such row.
 of 2026-09-16 the reader of the bit is found: `ArcadeRace_UpdateRacing`
 (`0x0882c5c4`) ends the race the moment the *player's* destroyed bit is set,
 confidence 82 ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#who-ends-a-single-race-on-the-destroyed-bit-and-who-comes-back)).
-**An opponent is a different matter**: nothing watches its bit, so it runs
-the original's own state 5 (`1.5` s) and state 6 (`0.8` s for an AI craft)
-and `Ship_UpdateRespawn` puts it back on the track with a full pool - and
-the announcer says *"contender eliminated"*. `Race::tick_destroyed_craft`
-does the respawn; the announcer line is not wired.
+**An opponent is a different matter, and it is out for good too** (corrected
+2026-10-02, measured live, confidence 85): nothing watches its bit, so it runs
+the original's own state 5 (`1.5` s) and state 6 (`0.8` s for an AI craft) and
+then stays in state 6 with its wreck at rest - `Ship_UpdateRespawn` is state
+8's update, the Eliminator's, and a write watchpoint on the craft's state saw
+no writer after 5 to 6 in 13 s ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#state-6-measured-on-ppsspp-a-wrecked-ai-craft-stays-down-2026-10-02-pulse-state6)).
+State 6's timer plays *"contender eliminated"* at its zero crossing; that
+announcer line is not wired. This page, and the port, used to return the
+opponent to the track with a full pool after those two dwells
+(2026-09-16 to 2026-10-02).
 
 ## Eliminator
 

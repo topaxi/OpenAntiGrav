@@ -41,13 +41,13 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   `eliminator::eliminator_respawn_delay`. The destroy camera is on the wreck as the explosion goes off and lets go with the respawn
   (`data/scratch/pulse-wreck-3/shots/sheet_e.png`: the fireball seen from the circuit's camera, then the RESET wash and the chase
   camera). Confidence 88: the table and the call read, no live run of an Eliminator wreck.
-- **The same table says state 6 is `FUN_08840500`, a bare `+0x874` countdown** (plus the `cont_elim` line at expiry in modes other
-  than 2, 8 and 18), not `Ship_UpdateRespawn`; nothing read revives a craft in state 6. `shield.md` and the port both had a
-  single-race opponent return after `1.5 + 0.8` s through `Ship_UpdateRespawn`. **Unreconciled, not changed here** (it is
-  `oag-game` sim timing outside this lane): watch an AI craft driven to state 4 in a Single Race on PPSSPP for 5 s and see whether
-  it ever leaves state 6. Static evidence so far (`shield.md`, the 2026-10-02 correction): of the 20 `Ship_SetState` call sites only
-  `Ship_UpdateDestroyed` passes 8, and none revives a state-6 craft, which fits the `cont_elim` ("contender eliminated") line state 6
-  plays at expiry: a single race's destroyed AI craft may be out for good, as the player is.
+- ~~**State 6 is `FUN_08840500`, a bare `+0x874` countdown; does a single race's wrecked AI craft ever come back?**~~ **Closed
+  2026-10-02 (pulse-state6): no.** Live on PPSSPP, two runs (`Ship_SetState(4)` on slot 1, `Ship_Damage` on slot 2), the craft goes
+  4 (0.5 s), 5 (1.5 s), 6 and stays in 6 with the destroyed bit set and the wreck at rest for 13 s past the 0.8 s timer; a write
+  watchpoint on `entity+0x8C` saw only `Ship_SetState`'s two writes (4 to 5, 5 to 6). `eliminator.rs` now leaves a destroyed craft
+  down outside the Eliminator (confidence 85). Still open from it: what `Race_FinishAllCrafts` does to a wreck at the flag, whether
+  the standings drop a wreck, and a death by a real weapon or wall rather than a debugger call
+  (`shield.md`, "State 6 measured on PPSSPP").
 - ~~The explosion's smoke is thinner and its fire brighter and longer in ours at k 160 to
   180 (2.2x to 2.4x).~~ **Closed 2026-10-01 (pulse-fx-recheck)**: the matrix's `0.75` rows scale every root
   emitter's spawn offset and velocity (and not sizes), an emitter's run is one tick short, a template dies one tick
@@ -105,4 +105,4 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
    (the `Glow` template's own sprite). Next: the mode-2 spawn spread, and what delays the explosion's particles by about 2.7 frames
    behind the ring (`particle-system.md`, measured once, mechanism unread).
 4. `scripts/psp-wreck-capture.py --state 5` on a craft an Eliminator run really eliminated.
-5. Settle state 6 (see the Open item above): does a single race's wrecked AI craft ever come back, and through what?
+5. ~~Settle state 6~~ Done 2026-10-02: it never comes back (see the Open item above).
