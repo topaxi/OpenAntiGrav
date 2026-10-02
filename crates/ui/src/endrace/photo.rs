@@ -41,13 +41,15 @@ pub const ENTER_TICKS: u32 = 61;
 /// author for `enabletransition` (`docs/formats/fe-menu-definitions.md`).
 pub const FADE_TICKS: u32 = 42;
 
-/// How much narrower the original draws a `Stats` line than this build's
-/// `small` stand-in does. `Stats` is `Pulse_14.fnt`; no atlas of that file is
-/// loaded, so the text is the `menu` face scaled down, and its advances do not
-/// shrink in step with its height. **Measured, not derived**: the first line,
-/// `PRESS SELECT BUTTON FOR PHOTO MODE`, is 283 px wide on a 480-wide PSP
-/// capture and 315 px with the plain `small` scale, `283 / 315 = 0.90`. Retire
-/// it with the real atlas.
+/// How much narrower this build draws a `Stats` line than its `small`
+/// stand-in does. `Stats` is `Pulse_14.fnt`; no atlas of that file is loaded,
+/// so the text is the `menu` face scaled down, and a uniform scale cannot get
+/// both the width and the height of the original's glyphs: the first line,
+/// `PRESS SELECT BUTTON FOR PHOTO MODE`, was 315 px wide at the plain `small`
+/// scale against the capture's 283 (`0.90`), and 9 pixel rows tall against 8
+/// (the second line was 8 against 8). **Chosen, not measured**: the width is
+/// matched, and the height is then near rather than exact. Not re-photographed
+/// in English after the change. The real atlas retires it.
 const STATS_OVER_SMALL: f32 = 0.9;
 
 /// The legend's ink at `ticks` after the finish: `0` until [`ENTER_TICKS`],

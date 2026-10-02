@@ -23,7 +23,8 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
 - ~~**The `Race End Photo` state**~~ **Ported 2026-10-02 (pulse-end-photo), line finishes only.** The state is entered at `F+61` and the legend
   (`InGame_Definition.xml`'s own two `Stats` texts) fades in over 42 frames; ours holds the clean view, draws the disc's lines and leaves on
   X/Start/click; SELECT does nothing. **Still open on it**: photo mode itself (`forward="select"` goes to `InGame Photo`), why the fade is
-  0.7 s, and the real `Pulse_14.fnt` atlas (ours is the menu face scaled, narrowed by a measured 0.90).
+  0.7 s, and the real `Pulse_14.fnt` atlas (ours is the menu face scaled, narrowed by a chosen 0.90 that matches width, not height).
+- **Noticed, not investigated:** in one windowed run the HUD was French while the `Race End Photo` legend and `Results` were English, and in the next the legend was French. The EndRace string table and the HUD's language did not always agree within a session.
 - **A player wreck never reaches `Race End Photo`** (measured 2026-10-02): mode state goes to 3 and the HUD hides, then the front end stays on
   `InGame` for 17,800+ frames with the field racing on and the spectator camera cutting. What ends that race in the original (the player's
   `finished` flag? the field finishing? only the pause menu?) is unread; ours puts the panels up at once at a wreck, chosen. Also unlooked at:
