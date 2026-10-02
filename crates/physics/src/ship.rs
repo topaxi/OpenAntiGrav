@@ -360,6 +360,18 @@ pub struct ShipState {
     pub brake: f32,
     /// The steering state, `-100..=100`, ramped toward the analog X axis.
     pub steer: f32,
+    /// The steering lean's rate-limited follower, the original's `craft+0x848`.
+    ///
+    /// Chases `raw_stick * 0.01` (so `-1..=1`) at no more than `0.6 * 5.4` per second
+    /// when the stick is pushing it further out and `0.3 * 5.4` when it is returning.
+    /// See [`crate::controls::update_steer_lean`]. **Not hashed**: a pure function of
+    /// the control history, read only by the cockpit camera, so hashing it would move
+    /// every committed reference for a value no force reads.
+    pub steer_lean_target: f32,
+    /// The steering lean the cockpit camera rolls by, the original's `craft+0x844`:
+    /// [`Self::steer_lean_target`] through a `4/s` first-order filter. `-1..=1`,
+    /// positive for a positive stick. Not hashed, for the reason above.
+    pub steer_lean: f32,
     /// How far steering is inverted, `0..=1` and beyond.
     ///
     /// A **blend**, not a flag: at 0 steering is normal, at 0.5 it is dead, past 1
@@ -794,6 +806,8 @@ impl Default for ShipState {
             thrust: 0.0,
             brake: 0.0,
             steer: 0.0,
+            steer_lean_target: 0.0,
+            steer_lean: 0.0,
             reverse_controls: 0.0,
             stun_timer: 0.0,
             wall_contact_prev: false,

@@ -28,21 +28,10 @@
 //!   reading the attribute as degrees or radians would be wrong by whatever the
 //!   ship happens to author. Confidence **85**: one site, read as instructions,
 //!   with the literal visible.
-//! - **`headtilt` is carried and deliberately *not applied*.** The original rolls
-//!   the view's up vector by `up - side * (craft[0x844] * headtilt)`.
-//!   `craft+0x844` **was** identified on 2026-08-09 as a two-stage
-//!   steering-driven filter (`camera.md`), which settles the **sign** - the
-//!   craft leans *into* the turn - and leaves the **magnitude** open, because
-//!   the filter's own input is unidentified at confidence 0 and the constants
-//!   beside it say its units are not what a first reading assumes.
-//!
-//!   So the reason for holding this back has narrowed but not gone: a lean of
-//!   the right sign and the wrong scale still leans the horizon wrongly through
-//!   every corner. What would close it is one field - the first float of
-//!   `*(craft+0x94) + 0x78` - and not another capture.
-//!   See [`InternalParams::headtilt`].
-//!   The original discards `<BackwardCamera headtilt>` outright, so an unapplied
-//!   headtilt is at least a thing this format does elsewhere.
+//! - **`headtilt` rolls the up vector by the steering lean.** The original takes
+//!   `up - side * (craft[0x844] * headtilt)`, with `craft+0x844` the smoothed raw
+//!   stick (`oag_physics::ShipState::steer_lean`, `-1..=1`). See [`view`] and
+//!   `camera.md`. The external rigs never read the lean at all.
 //! - **No `0.75`.** The original scales both *external* rigs by a global length
 //!   factor of `0.75` and does not touch the internal one with it. That factor is
 //!   a scale on craft-space geometry generally (it also shrinks the hull the
@@ -77,18 +66,12 @@ pub struct InternalParams {
     /// confidence 95 in `camera.md`. Nothing here converts it; a caller that
     /// wants a projection matrix passes radians to [`super::projection`].
     pub fov: f32,
-    /// How far the view rolls with the ship, **carried and not applied**.
-    ///
-    /// The original's roll is proportional to this times an unidentified
-    /// per-craft quantity, so the sign and scale of the effect are unrecovered.
-    /// Kept on the type because the document has it and because a later pass
-    /// that identifies that quantity should find the value already threaded
-    /// here, not have to re-thread it.
+    /// How far the view rolls with the steering lean: the up vector is moved by
+    /// `side * lean * headtilt` before the view is built. See [`view`].
     ///
     /// `None` where the document omits the attribute, which Wipeout HD's team
     /// files do. Carried as an absence rather than defaulted to zero at this
-    /// boundary: nothing applies it, so a zero would be indistinguishable from
-    /// an authored zero for no gain.
+    /// boundary, though an absence and a zero tilt the view identically.
     pub headtilt: Option<f32>,
     /// Eye offset along the ship's up axis.
     pub height: f32,
@@ -136,10 +119,34 @@ pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
 /// matrix in `FUN_088418e0` was. Labelled here so that distinction is not
 /// lost: the ship's roll is measured, the cockpit's is inferred from it.
 #[must_use]
-pub fn view(target: Target, params: &InternalParams, roll_phase: f32) -> Mat4 {
-    let up = crate::roll::rotation(target.forward, roll_phase) * target.up;
-    camera::look_at(eye(target, params), look_at_point(target, params), up)
+pub fn view(target: Target, params: &InternalParams, roll_phase: f32, steer_lean: f32) -> Mat4 {
+    let eye = eye(target, params);
+    let aim = look_at_point(target, params);
+    let up = tilted_up(target, params, aim - eye, steer_lean);
+    let up = crate::roll::rotation(target.forward, roll_phase) * up;
+    camera::look_at(eye, aim, up)
 }
+
+/// The up vector after `<InternalCamera headtilt>`: `u = up - side * (lean *
+/// headtilt)`, then `u` taken perpendicular to the view direction, as
+/// `FUN_088455ec` does with `cross(d, cross(u, d))`.
+///
+/// `side` is the body's right axis, `forward x up` here. **Handedness is carried
+/// by [`HEADTILT_SIDE_SIGN`].** An absent `headtilt` tilts nothing, as the original
+/// never reads one it was not given.
+fn tilted_up(target: Target, params: &InternalParams, dir: Vec3, steer_lean: f32) -> Vec3 {
+    let Some(headtilt) = params.headtilt.filter(|_| steer_lean != 0.0) else {
+        return target.up;
+    };
+    let side = target.forward.cross(target.up) * HEADTILT_SIDE_SIGN;
+    let u = target.up - side * (steer_lean * headtilt);
+    let perp = u * dir.length_squared() - dir * dir.dot(u);
+    perp.normalize_or_zero()
+}
+
+/// Which way the original's `craft+0x37c` side row points relative to this
+/// engine's right (`forward x up`). See `camera.md`, "headtilt".
+pub const HEADTILT_SIDE_SIGN: f32 = 1.0;
 
 #[cfg(test)]
 mod tests {
@@ -226,7 +233,7 @@ mod tests {
     fn the_view_matrix_looks_from_the_eye_at_the_aim_point() {
         let params = params();
         let target = target();
-        let matrix = view(target, &params, 0.0);
+        let matrix = view(target, &params, 0.0, 0.0);
 
         let at_eye = matrix.transform_point3(eye(target, &params));
         assert!(at_eye.length() < 1e-5, "{at_eye}");
@@ -236,17 +243,44 @@ mod tests {
         assert!(at_aim.z < 0.0, "the aim point is down -Z: {at_aim}");
     }
 
-    /// `headtilt` is carried and not applied, and that is deliberate. If a later
-    /// pass wires it up this test is the one to delete, on purpose.
+    /// A level stick leans nothing, whatever the ship authors, so a straight run
+    /// draws what it drew before the lean landed.
     #[test]
-    fn headtilt_changes_nothing_today() {
-        let target = target();
-        let flat = params();
+    fn a_centred_stick_changes_nothing() {
         let tilted = InternalParams {
             headtilt: Some(45.0),
-            ..flat
+            ..params()
         };
-        assert_eq!(view(target, &tilted, 0.0), view(target, &flat, 0.0));
+        assert_eq!(
+            view(target(), &tilted, 0.0, 0.0),
+            view(target(), &params(), 0.0, 0.0)
+        );
+    }
+
+    /// The lean is `up - side * lean * headtilt`: a positive lean moves the up
+    /// vector off the ship's up, sideways, by `lean * headtilt` before it is
+    /// renormalised, and a ship that authors no `headtilt` is left alone.
+    #[test]
+    fn the_lean_tilts_the_up_vector_by_lean_times_headtilt() {
+        let target = target();
+        let tilted = InternalParams {
+            headtilt: Some(0.5),
+            pitch: 0.0,
+            ..params()
+        };
+        let up = tilted_up(target, &tilted, Vec3::X * 10.0, 0.4);
+        let side = target.forward.cross(target.up) * HEADTILT_SIDE_SIGN;
+        let expect = (target.up - side * 0.2).normalize();
+        assert!((up - expect).length() < 1.0e-6, "{up} vs {expect}");
+        let none = InternalParams {
+            headtilt: None,
+            ..tilted
+        };
+        assert_eq!(tilted_up(target, &none, Vec3::X, 0.4), target.up);
+        assert_ne!(
+            view(target, &tilted, 0.0, 0.4),
+            view(target, &tilted, 0.0, 0.0)
+        );
     }
 
     /// A zero roll phase changes nothing, so a race that never rolls draws
@@ -257,7 +291,7 @@ mod tests {
         let target = target();
         let params = params();
         assert_eq!(
-            view(target, &params, 0.0),
+            view(target, &params, 0.0, 0.0),
             camera::look_at(
                 eye(target, &params),
                 look_at_point(target, &params),
@@ -276,14 +310,14 @@ mod tests {
     fn the_roll_moves_neither_the_eye_nor_the_aim_point() {
         let target = target();
         let params = params();
-        let matrix = view(target, &params, 0.4);
+        let matrix = view(target, &params, 0.4, 0.0);
 
         let at_eye = matrix.transform_point3(eye(target, &params));
         assert!(at_eye.length() < 1e-4, "{at_eye}");
 
         let at_aim = matrix.transform_point3(look_at_point(target, &params));
         let unrolled_aim =
-            view(target, &params, 0.0).transform_point3(look_at_point(target, &params));
+            view(target, &params, 0.0, 0.0).transform_point3(look_at_point(target, &params));
         assert!(
             (at_aim.length() - unrolled_aim.length()).abs() < 1e-4,
             "at_aim = {at_aim}, unrolled_aim = {unrolled_aim}"
@@ -297,9 +331,9 @@ mod tests {
     fn opposite_roll_phases_produce_different_and_symmetric_views() {
         let target = target();
         let params = params();
-        let level = view(target, &params, 0.0);
-        let rolled_one_way = view(target, &params, 0.5);
-        let rolled_the_other_way = view(target, &params, -0.5);
+        let level = view(target, &params, 0.0, 0.0);
+        let rolled_one_way = view(target, &params, 0.5, 0.0);
+        let rolled_the_other_way = view(target, &params, -0.5, 0.0);
         assert_ne!(level, rolled_one_way);
         assert_ne!(rolled_one_way, rolled_the_other_way);
     }
