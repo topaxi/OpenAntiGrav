@@ -282,9 +282,7 @@ pub fn load(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    for line in report {
-        log::info!("campaign sprites {line}");
-    }
+    crate::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
 
     Ok(Campaign {
         grids,
@@ -481,9 +479,7 @@ fn load_hd(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    for line in report {
-        log::info!("campaign sprites {line}");
-    }
+    crate::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
 
     Ok(Campaign {
         grids,
@@ -725,9 +721,7 @@ fn load_omega(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    for line in report {
-        log::info!("campaign sprites {line}");
-    }
+    crate::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
 
     Ok(Campaign {
         grids,

@@ -3,7 +3,7 @@
 //! Split out of `session/menus.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py` - a move, with no behaviour change.
 
-use log::{error, info};
+use log::error;
 
 use oag_game::{boot, movie, pilots};
 use oag_ui::menu;
@@ -86,9 +86,7 @@ impl Session {
                 return;
             }
         };
-        for line in &boot_shell.report {
-            info!("{line}");
-        }
+        oag_game::loader_log::lines(&boot_shell.report);
         let shell = Shell::from_boot(title, definition, &boot_shell);
         let mode = self.race_mode();
         let device = &self.gpu.device;

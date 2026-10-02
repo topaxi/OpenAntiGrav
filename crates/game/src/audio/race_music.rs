@@ -356,14 +356,14 @@ impl Audio {
                 });
                 self.race_from = self.race_voice.and(loaded.from);
                 match seek {
-                    Some(seek) => info!(
+                    Some(seek) => debug!(
                         "audio: race music {}, {seconds:.1} s, resuming from {seek:.1} s",
                         loaded.what
                     ),
-                    None => info!("audio: race music {}, {seconds:.1} s", loaded.what),
+                    None => debug!("audio: race music {}, {seconds:.1} s", loaded.what),
                 }
             }
-            Ok(None) => info!("audio: this source carries no race music this can play"),
+            Ok(None) => warn!("audio: this source carries no race music this can play"),
             Err(error) => warn!("audio: no race music ({error:#})"),
         }
     }
@@ -653,7 +653,7 @@ impl Audio {
                     self.music = started;
                 });
                 self.music_from = self.music.and(loaded.from);
-                info!("audio: music {}, from {at:.1} s", loaded.what);
+                debug!("audio: music {}, from {at:.1} s", loaded.what);
             }
             Ok(None) => {
                 warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
@@ -709,7 +709,7 @@ impl Audio {
                 // spawned; this catches one `Self::maybe_prefetch_next_race_track`
                 // started for the old release in the meantime.
                 self.race_prefetch = None;
-                info!("audio: race music {}, from {at:.1} s", loaded.what);
+                debug!("audio: race music {}, from {at:.1} s", loaded.what);
             }
             Ok(None) => {
                 warn!("audio: no soundtrack on the {wanted} release, so nothing changed")

@@ -5,7 +5,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
-use log::{info, warn};
+use log::{debug, info, warn};
 
 impl Race {
     /// Starts a race: one ship, on the racing line, at the start of the spline.
@@ -366,8 +366,8 @@ impl Race {
             // is the only thing that says *which* pilot file differs. The
             // second line is for the player, who wants to know the grid they
             // are about to race. A `*` marks a pilot that came from a file.
-            info!("pilots loaded: {}", roster.summary());
-            info!("ai difficulty: {}", difficulty.name());
+            debug!("pilots loaded: {}", roster.summary());
+            debug!("ai difficulty: {}", difficulty.name());
             let grid: Vec<String> = (pose_start + 1..GRID_SLOTS as usize)
                 .map(|slot| format!("{slot}:{}", pilot_names[slot]))
                 .collect();

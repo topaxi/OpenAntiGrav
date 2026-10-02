@@ -118,12 +118,17 @@ use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 
 /// Installs the sink every `log` call in this workspace ends up in.
 ///
-/// **The default filter is `warn` globally with our own crates at `debug`.**
-/// Our own crates are loud on purpose while the engine is still being built:
-/// the cheapest bug report is one where the reporter did not have to be told to
-/// re-run with a flag. Everything else stays at `warn` because it is not ours
-/// to read - at `info` the graphics stack alone narrates every adapter, shader
-/// module and pipeline it builds, and the engine's own lines drown in it.
+/// **The default filter is `warn` globally with our own crates at `info`.**
+/// A normal launch prints a handful of lifecycle lines (the disc found, the
+/// renderer chosen, a race starting) and whatever degraded or missing, which
+/// is `warn` and always shown. Everything a loader merely *did* - counts,
+/// sizes, timings, one line per cue or ship - is `debug` or `trace`. The rule
+/// that sorts a message into a level, and the `RUST_LOG` values that bring the
+/// rest back, are in `docs/architecture/logging.md`.
+///
+/// Everything else stays at `warn` because it is not ours to read - at `info`
+/// the graphics stack alone narrates every adapter, shader module and pipeline
+/// it builds, and the engine's own lines drown in it.
 ///
 /// **`calloop` is pinned to `error`**, and it is the one third-party crate
 /// singled out by name. winit's Wayland backend removes and re-inserts a
@@ -137,8 +142,9 @@ use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 /// to do about it - it is upstream noise that happens to be loudest exactly
 /// when a race is least able to spare the attention.
 ///
-/// `RUST_LOG` replaces the whole expression: `RUST_LOG=info` to quieten this
-/// down to milestones, `RUST_LOG=oag_game::audio=trace` for one module,
+/// `RUST_LOG` replaces the whole expression: `RUST_LOG=warn,oag=debug` for
+/// what the loaders did, `RUST_LOG=warn,oag=trace` for every line there is,
+/// `RUST_LOG=warn,oag_game::audio=trace` for one module,
 /// `RUST_LOG=warn,wgpu_core=info` to hear the graphics stack instead, or
 /// `RUST_LOG=warn,calloop=warn` to put the line above back.
 ///
@@ -147,7 +153,7 @@ use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 /// a module path on each would be wider than most of the messages.
 fn init_logging() {
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("warn,oag=debug,calloop=error"),
+        env_logger::Env::default().default_filter_or("warn,oag=info,calloop=error"),
     )
     .format_timestamp(None)
     .format_target(false)

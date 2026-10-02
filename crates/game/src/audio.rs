@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{debug, info, warn};
 use oag_audio::mixer::MUSIC_MASTER_TRIM;
 use oag_audio::{Bus, Output, Play, Sound, VoiceId};
 use oag_disc::{DiscImage, Platform};
@@ -845,9 +845,9 @@ impl Audio {
                     .output
                     .with_mixer(|mixer| mixer.play(Play::looping(loaded.sound, Bus::Music)));
                 self.music_from = self.music.and(loaded.from);
-                info!("audio: music {}, {seconds:.1} s, looping", loaded.what);
+                debug!("audio: music {}, {seconds:.1} s, looping", loaded.what);
             }
-            Ok(None) => info!("audio: this source carries no music this can play"),
+            Ok(None) => warn!("audio: this source carries no music this can play"),
             Err(error) => warn!("audio: no music ({error:#})"),
         }
     }
@@ -1172,9 +1172,9 @@ impl Audio {
             Ok(sound) => {
                 if self.start_movie(sound) {
                     if self.movie_playhead().is_some() {
-                        info!("audio: {what}'s own track, {seconds:.2} s, clocking the picture");
+                        debug!("audio: {what}'s own track, {seconds:.2} s, clocking the picture");
                     } else {
-                        info!(
+                        debug!(
                             "audio: {what}'s own track, {seconds:.2} s, but nothing pulls from \
                              the mixer - tick-clocked instead"
                         );

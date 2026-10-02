@@ -143,6 +143,7 @@ pub fn silhouettes(
     report: &mut Vec<String>,
 ) -> Vec<shadow::Silhouette> {
     let mut out = Vec::with_capacity(teams.len());
+    let mut fallbacks = 0;
     for (slot, team) in teams.iter().enumerate() {
         let name = silhouette_entry(dir, team);
         match archives
@@ -166,8 +167,19 @@ pub fn silhouettes(
                      falloff, which is this project's and not the disc's"
                 ));
                 out.push(shadow::Silhouette::falloff(FALLOFF_SIZE));
+                fallbacks += 1;
             }
         }
+    }
+    // The per-slot lines above are the report's, and the log carries them at
+    // `debug`: Pulse, Pure and 2048 author no silhouette at all, so eight
+    // identical warnings every race would say nothing the first does not.
+    if fallbacks > 0 {
+        log::warn!(
+            "blob shadow: {fallbacks} of {} slot(s) use a generated falloff, which is this \
+             project's and not the disc's",
+            teams.len()
+        );
     }
     out
 }

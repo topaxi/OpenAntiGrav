@@ -15,7 +15,7 @@
 
 use std::time::{Duration, Instant};
 
-use log::info;
+use log::debug;
 
 use oag_game::{race, settings};
 use oag_gameplay::ControlScheme;
@@ -143,7 +143,7 @@ fn build(request: Request, loaded: race::Loaded) -> Built {
         track_entry.as_deref(),
     );
     let build = start.elapsed();
-    info!("race scene built in {build:?}, off the frame thread");
+    debug!("race scene built in {build:?}, off the frame thread");
     let mut stage = built.map_err(RaceBuildError::Gpu);
     let warm_start = Instant::now();
     // **Building the pipeline objects is not the same as the driver having
@@ -163,7 +163,7 @@ fn build(request: Request, loaded: race::Loaded) -> Built {
         );
     }
     let warm_up = warm_start.elapsed();
-    info!("race scene warmed up in {warm_up:?}, off the frame thread");
+    debug!("race scene warmed up in {warm_up:?}, off the frame thread");
     Built {
         stage,
         allocation,

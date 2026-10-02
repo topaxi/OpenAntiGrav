@@ -6,7 +6,7 @@
 //! several-hundred-line construction, and everything here is instead a small,
 //! independent question about a `Scene` that already exists.
 
-use log::info;
+use log::debug;
 
 use super::Scene;
 use super::frame::{depth_texture, msaa_color_texture};
@@ -66,7 +66,7 @@ impl Scene {
             // the same "log the edge, not the state" rule the announcer cue
             // follows. It is also the only headless evidence that the grade
             // moved at all, since a `--screenshot` cannot say so on its own.
-            info!(
+            debug!(
                 "zone {zone}: the colour grade steps to stage {}",
                 grade.blend().current
             );

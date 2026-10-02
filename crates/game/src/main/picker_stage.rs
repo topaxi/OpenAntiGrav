@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{debug, warn};
 use oag_game::preview::Preview;
 use oag_game::sprite::Sheet;
 use oag_render::camera::orbit::Orbit;
@@ -310,9 +310,9 @@ impl PickerStage {
                 let mut report = Vec::new();
                 let sheet = self.base.extended(&blobs, &mut report);
                 for line in report {
-                    info!("slideshow {line}");
+                    debug!("slideshow {line}");
                 }
-                info!(
+                debug!(
                     "slideshow {location}: {} state(s), {} still(s) on a {}x{} sheet",
                     show.states().len(),
                     blobs.len(),
@@ -348,10 +348,10 @@ impl PickerStage {
             && let Some((_, entry)) = skins.iter().find(|(id, _)| id == skin)
         {
             for line in oag_game::preview::paint(&mut self.archives, entry, &name, &mut model) {
-                info!("preview {name}: {line}");
+                debug!("preview {name}: {line}");
             }
         }
-        info!(
+        debug!(
             "preview {name}: {} vertices, {} triangles",
             model.vertices.len(),
             model.indices.len() / 3

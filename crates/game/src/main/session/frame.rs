@@ -416,9 +416,7 @@ impl Session {
                         }
                     }
                     report(&events, stage.trace);
-                    for note in stage.frontend.take_notes() {
-                        info!("{note}");
-                    }
+                    oag_game::loader_log::lines(stage.frontend.take_notes());
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see
                     // `Frontend::is_playing_movie`.

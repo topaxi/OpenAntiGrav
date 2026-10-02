@@ -18,7 +18,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use log::{info, warn};
+use log::{debug, warn};
 use oag_game::catalogue;
 use oag_ui::picker::{self, Details, Entry, Event, Kind, Picker};
 
@@ -144,7 +144,7 @@ impl Session {
                         Err(error) => warn!("{entry}: {error:#} - no distance for {id}"),
                     }
                 }
-                info!("circuit lengths measured");
+                debug!("circuit lengths measured");
             });
         match spawned {
             Ok(_) => Some(distances),

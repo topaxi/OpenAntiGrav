@@ -180,9 +180,7 @@ pub fn load(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    for line in report {
-        log::info!("endrace sprites {line}");
-    }
+    crate::loader_log::lines(report.iter().map(|line| format!("endrace sprites {line}")));
 
     let trophies = load_trophies(archives, &rewards);
     let photo = load_photo(archives, strings, faces, grid, fallback_globals);
@@ -293,9 +291,7 @@ fn load_hd(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    for line in report {
-        log::info!("endrace sprites {line}");
-    }
+    crate::loader_log::lines(report.iter().map(|line| format!("endrace sprites {line}")));
 
     Ok(EndRaceScreens {
         results,

@@ -9,7 +9,7 @@
 
 use std::time::{Duration, Instant};
 
-use log::info;
+use log::debug;
 
 use oag_game::perf::transition::{FRAME_BUDGET, Frame, Recorder};
 
@@ -87,7 +87,7 @@ impl Session {
         probe.run += 1;
         probe.race_frames = 0;
         probe.recorder = Recorder::default();
-        info!("--measure-race-load: run {} launching", probe.run);
+        debug!("--measure-race-load: run {} launching", probe.run);
         let start = Instant::now();
         if let Err(e) = self.launch_race() {
             log::error!("--measure-race-load: cannot launch a race: {e:#}");
@@ -122,7 +122,7 @@ impl Session {
         // Printed as well as logged, so a run with the log filtered down to
         // warnings still says what it found.
         for line in probe.recorder.report(FRAME_BUDGET) {
-            info!("{line}");
+            debug!("{line}");
             println!("{line}");
         }
         if let Some(worst) = probe.recorder.worst() {

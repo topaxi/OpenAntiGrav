@@ -27,7 +27,7 @@
 //! `moving_axis_discards_an_untouched_low_edit_without_saving` below, not
 //! merely left undocumented.
 
-use log::{error, info};
+use log::{debug, error, info};
 
 use oag_game::pilots;
 use oag_ui::language::StringTable;
@@ -364,7 +364,7 @@ impl Session {
 
         let model = match self.tag_entry_for_rename(&name) {
             Ok(tag_entry) => {
-                info!("RENAME PILOT: using Pulse's own TagInput for {name}");
+                debug!("RENAME PILOT: using Pulse's own TagInput for {name}");
                 RenameModel::TagEntry(Box::new(tag_entry))
             }
             Err(reason) => {
@@ -374,7 +374,7 @@ impl Session {
                 // non-Pulse title has no `TagInput` proven yet, and a longer
                 // or `_`-carrying name never qualifies on any title), not a
                 // bug to chase silently.
-                info!(
+                debug!(
                     "RENAME PILOT: using the on-screen grid, not Pulse's own TagInput - {reason}"
                 );
                 let labels = prompt::Labels {

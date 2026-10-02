@@ -15,7 +15,7 @@
 //! (`Session::loading_progress`) rather than thread through as a parameter.
 
 use anyhow::Result;
-use log::{debug, info};
+use log::debug;
 
 use oag_game::{drs, movie, perf, pilots, upscale};
 
@@ -406,7 +406,7 @@ impl Session {
                     }),
                 );
                 if let Some(start) = start {
-                    info!("first race frame: encoded in {:?}", start.elapsed());
+                    debug!("first race frame: encoded in {:?}", start.elapsed());
                 }
                 (Some(stats), None)
             }
@@ -806,7 +806,7 @@ impl Session {
         // carried a load is dropped rather than recorded as a 300 ms scene.
         self.read_timing_and_feed_drs(&render_profile, frame_seconds, drs_limits);
         if let Some(start) = submit_start {
-            info!("first race frame: submitted in {:?}", start.elapsed());
+            debug!("first race frame: submitted in {:?}", start.elapsed());
         }
         // Unconditional, unlike the `submit_start` above it: this one is both
         // the first race frame's diagnostic *and* the second half of the
@@ -815,7 +815,7 @@ impl Session {
         self.gpu.queue.present(frame);
         present_seconds += present_start.elapsed().as_secs_f32();
         if timing_first_race_frame {
-            info!(
+            debug!(
                 "first race frame: presented in {:?}",
                 present_start.elapsed()
             );
@@ -832,7 +832,7 @@ impl Session {
         if matches!(self.stage, Stage::Race(_))
             && let Some(ready_at) = self.race_ready_at.take()
         {
-            info!(
+            debug!(
                 "first race frame presented: {:?} since the scene was ready",
                 ready_at.elapsed()
             );

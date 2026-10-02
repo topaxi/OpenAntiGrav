@@ -119,7 +119,7 @@ impl Gpu {
         let offered = surface.get_capabilities(&chosen.adapter).present_modes;
         let temporal = oag_render::post::fsr3::supported(&chosen.adapter);
         if !temporal {
-            info!("no compute shaders on this adapter; UPSCALER fsr3 will run as fsr1");
+            warn!("no compute shaders on this adapter; UPSCALER fsr3 will run as fsr1");
         }
         // Said here, after the device and the surface config, so the line is
         // about an adapter that *worked*: an attempt that dies at either of them

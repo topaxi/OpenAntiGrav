@@ -68,7 +68,7 @@
 //! comparison wants a picture of a window; a bug report does not.
 
 use anyhow::Result;
-use log::{info, warn};
+use log::{debug, warn};
 
 use oag_render::post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
@@ -513,7 +513,7 @@ impl Framebuffer {
                 && self.fsr3_sizes != Some(sizes)
             {
                 let mib = |bytes: u64| bytes as f64 / (1024.0 * 1024.0);
-                info!(
+                debug!(
                     "FSR 3.1 intermediates: {:.1} MiB ({:.1} render, {:.1} half, {:.1} presentation)",
                     mib(sizes.total()),
                     mib(sizes.render),

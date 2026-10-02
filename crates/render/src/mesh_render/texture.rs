@@ -476,7 +476,7 @@ pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool, limit: u32) {
         return;
     }
     let mib = |bytes: u64| bytes as f64 / (1024.0 * 1024.0);
-    log::info!(
+    log::debug!(
         "{}: texture memory - {} albedo + {} lightmap texture(s), {compressed} block-compressed; \
          CPU kept {:.1} + {:.1} MiB, GPU uploaded {:.1} + {:.1} MiB (albedo + lightmap); \
          geometry {:.1} MiB vertices + {:.1} MiB indices, CPU and GPU each",
@@ -491,7 +491,7 @@ pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool, limit: u32) {
         mib((model.indices.len() * 4) as u64),
     );
     if !trimmed.is_empty() {
-        log::info!(
+        log::warn!(
             "{}: {} texture(s) wider than this device's max_texture_dimension_2d of {limit} \
              uploaded from the first mip level that fits - chosen, not measured: {}",
             model.label,

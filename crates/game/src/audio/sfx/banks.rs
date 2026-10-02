@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use log::info;
+use log::warn;
 use oag_assets::source::Archives;
 use oag_audio::Sound;
 use oag_core::Rng;
@@ -124,9 +124,7 @@ impl Banks {
                 &mut report,
             );
         }
-        for line in &report {
-            info!("{line}");
-        }
+        crate::loader_log::lines_at(log::Level::Trace, &report);
         Self {
             sounds,
             report,
@@ -155,7 +153,7 @@ impl Banks {
             Ok(blob) => blob,
             Err(e) => {
                 let line = format!("sfx: {entry} not read: {e}");
-                info!("{line}");
+                warn!("{line}");
                 self.report.push(line);
                 return;
             }
@@ -175,9 +173,7 @@ impl Banks {
                 &mut report,
             );
         }
-        for line in &report {
-            info!("{line}");
-        }
+        crate::loader_log::lines_at(log::Level::Trace, &report);
         self.report.extend(report);
     }
 

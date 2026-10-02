@@ -6,7 +6,7 @@
 //! frame with it is `race/frame.rs`; its tests are `race/tests/scene.rs`.
 
 use super::*;
-use log::{info, warn};
+use log::{debug, warn};
 
 mod absorb_overlay;
 mod absorb_shell;
@@ -833,7 +833,7 @@ impl Scene {
         let (shader_calls, shader_hits) = cache_scope.shader_counts();
         let (texture_calls, texture_hits) = cache_scope.texture_counts();
         let build_cache = cache_scope.pipeline_counts();
-        info!(
+        debug!(
             "race scene build cache: shader {shader_hits}/{shader_calls} reused, pipeline \
              {}/{} reused ({} distinct built), texture upload {texture_hits}/{texture_calls} reused",
             build_cache.1, build_cache.0, build_cache.2

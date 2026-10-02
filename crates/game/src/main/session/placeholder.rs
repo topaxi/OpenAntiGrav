@@ -37,7 +37,7 @@
 //! `oag_game::boot`'s own loaders do everywhere else.
 
 use anyhow::{Context, Result};
-use log::info;
+use log::{debug, warn};
 
 use oag_game::{catalogue, loading, sprite};
 use oag_ui::{font, language, menu, placeholder, strings};
@@ -93,7 +93,7 @@ impl Session {
             self.pending = Some(pending);
             return Err(windowed_error);
         }
-        info!(
+        warn!(
             "{}: no MenuSkin-shaped menu has been read off this title's own archives \
              (front end: {}), so this is OpenAntiGrav's own placeholder menu, not {}'s \
              own - see oag_ui::placeholder",
@@ -106,7 +106,7 @@ impl Session {
             title.name
         );
         for problem in &problems {
-            info!("dlc: {problem}");
+            warn!("dlc: {problem}");
         }
         let mut archives = opened.archives;
         let strings = language::StringTable::default();
@@ -129,7 +129,7 @@ impl Session {
         let declared_team_count = declared_teams.len();
         let teams = raceable_teams(&archives, declared_teams);
         if teams.len() != declared_team_count {
-            info!(
+            debug!(
                 "{}: {} of {declared_team_count} declared team(s) are raceable - see \
                  oag_game::main::session::placeholder::raceable_teams for why the rest \
                  are not offered",
@@ -160,7 +160,7 @@ impl Session {
                 )
             })
             .collect();
-        info!(
+        debug!(
             "{}: {} team(s), {} raceable circuit(s) over {} definition(s)",
             title.plugin_definition,
             teams.len(),

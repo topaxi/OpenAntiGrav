@@ -7,7 +7,7 @@
 //! path would prove nothing.
 
 use anyhow::{Context, Result};
-use log::info;
+use log::debug;
 use oag_render::mesh_render::Anisotropy;
 
 use crate::boot::Boot;
@@ -361,9 +361,7 @@ pub fn run(
             );
         }
         crate::report(&events, options.trace);
-        for note in frontend.take_notes() {
-            info!("{note}");
-        }
+        crate::loader_log::lines(frontend.take_notes());
         ticks += 1;
     }
 
@@ -390,11 +388,11 @@ pub fn run(
         // See `oag_ui::frontend::Launch`.
         let loaded = match frontend.launch() {
             Some(oag_ui::frontend::Launch::Event(name)) => {
-                info!("Launch 2048: campaign event {name:?}");
+                debug!("Launch 2048: campaign event {name:?}");
                 race::load_event(race_options, name)?
             }
             Some(other) => {
-                info!(
+                debug!(
                     "Launch 2048 asked for {other:?}, which is a menu page; a capture has no \
                      menus, so this races the options given"
                 );
@@ -402,9 +400,7 @@ pub fn run(
             }
             None => race::load(race_options)?,
         };
-        for line in &loaded.report {
-            info!("{line}");
-        }
+        crate::loader_log::lines(&loaded.report);
         // The same handoff `App::launch_race` makes: the menu voice this loop
         // started above stops, and the race playlist takes over - one music
         // rule for every way a race is reached, screenshot captures included.

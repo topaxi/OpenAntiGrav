@@ -7,7 +7,7 @@
 //! feature rather than a fix to something already there. See Task #33.
 
 use anyhow::Result;
-use log::info;
+use log::debug;
 use oag_race::Course;
 use oag_vex::pads::PadVolume;
 use oag_vex::{track, vex};
@@ -40,6 +40,6 @@ pub(crate) fn load_speedup_pads(source: Option<&str>, name: &str) -> Result<Vec<
     let blob = read_track_blob(source, name)?;
     let nodes = vex::nodes(&blob).map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
     let pads = oag_vex::pads::volumes(&blob, &nodes, vex::CLASS_SPEEDUP_PAD);
-    info!("{name}: {} speed pad(s)", pads.len());
+    debug!("{name}: {} speed pad(s)", pads.len());
     Ok(pads)
 }

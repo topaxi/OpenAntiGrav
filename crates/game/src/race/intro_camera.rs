@@ -43,7 +43,7 @@
 
 use super::*;
 
-use log::info;
+use log::debug;
 use oag_core::math::Mat3;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::Button;
@@ -235,7 +235,7 @@ impl Race {
                 let was = intro.playing();
                 intro.begin();
                 if intro.playing() && !was {
-                    info!("pre-race flyby: begins");
+                    debug!("pre-race flyby: begins");
                 }
                 intro.playing()
             }
@@ -281,7 +281,7 @@ impl Race {
         let was = intro.playing();
         self.view.camera_override = intro.step(held, dt);
         if was && !intro.playing() {
-            info!(
+            debug!(
                 "pre-race flyby: ends after {} tick(s){}",
                 intro.ticks(),
                 if held { ", Cross held" } else { "" }
