@@ -113,18 +113,19 @@ fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
     );
 }
 
-/// The spectator director takes over from the destroy camera `WRECK_START_TICKS` after the
-/// race ended - not on the line's `START_TICKS` - and follows a craft that is still live.
+/// The spectator director takes over from the destroy camera `WRECK_HANDOFF_TICKS` after the
+/// race ended - not on the line's `START_TICKS` - in the death camera's mode 5, and follows
+/// a craft that is still live.
 #[test]
 fn the_director_takes_over_from_the_destroy_camera_after_a_single_race_wreck() {
-    use crate::race::finish_camera::{FinishCamera, SPECTATOR_SEED, WRECK_START_TICKS};
+    use crate::race::finish_camera::{FinishCamera, SPECTATOR_SEED, ViewMode, WRECK_HANDOFF_TICKS};
     let mut race = a_race_the_wreck_ended();
     let station = oag_render::camera::destroy::Station {
         eye: Vec3::new(400.0, 30.0, 0.0),
         aim: Vec3::new(10.0, 0.0, 0.0),
     };
     race.view.finish_camera = Some(FinishCamera::new(vec![station], 0.4, SPECTATOR_SEED));
-    for _ in 0..WRECK_START_TICKS - 1 {
+    for _ in 0..WRECK_HANDOFF_TICKS - 1 {
         race.tick_finished();
     }
     assert_eq!(
@@ -134,7 +135,11 @@ fn the_director_takes_over_from_the_destroy_camera_after_a_single_race_wreck() {
     );
     race.tick_finished();
     race.tick_finished();
-    assert!(race.spectator_mode().is_some(), "then the director starts");
+    assert_eq!(
+        race.spectator_mode(),
+        Some(ViewMode::Death),
+        "then the director starts, in the death camera's mode"
+    );
 }
 
 /// `race_with_a_grid` with the mode switched: eight craft in an Eliminator.
