@@ -2104,3 +2104,39 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 | `0x08809980` | `Profile_DifficultyRC` | 85 |
 | `0x088098f0` | `Profile_SetDifficultyRC` | 85 |
 | `0x088d6430` | `CellSelection_Update` | 85 |
+
+## Where `Cell Selection` keeps its cursor across a back-out (2026-10-02, `pulse-loyaltybar`)
+
+Headless decompile of `CellSelection_OnEnter` (`0x088d59c4`) and `CellSelection_Update`
+(`0x088d6430`), reading the one question the earlier passes left: what the "cursor" is
+and where it lives. Confidence **70** (decompile only; the lifetime of the screen object
+across leaving the campaign is not measured).
+
+- **The cursor is the `Selector` grid-controller widget's own slot**, `(+0xa0, +0xa4)`,
+  not a cell pointer. `CellSelection_Update` rebuilds the name `"%s %d %d"` of the current
+  grid's name (`DAT_08b30fb8 + 0x74`; `"UserGrid_%d_%d"` for a player grid) and the
+  Selector's `(x, y)` every frame, finds the collected cell definition with that name, and
+  stores it in the screen's `+0xdc` (`CellSelection_PopulateDetail` runs when it changes).
+  So `+0xdc` is derived, never the source.
+- **`OnEnter` re-resolves it**: if `+0xdc != 0` it builds the same name from the
+  Selector's *surviving* `(x, y)`, scans the cells for a name match whose slot also passes
+  `FUN_088a37cc(selector, 4, cell.x, cell.y, 4) == 0` (a flag test on the tile at that
+  grid position; not chased), re-seats the Selector on that cell and refreshes it
+  (`FUN_088a4248`). No match (the name carries the *current* grid's name) clears `+0xdc`.
+- **The first-visit default scan only runs when `+0xdc` was cleared or was zero and the
+  screen was not entered from or returning to `Cell Help`** (`strcasecmp` on the screen's
+  previous/next names, `+0x18c`/`+0x1e8` of its definition). That is why backing out of
+  `Cell Selection` keeps `grid0_3_2` (the measured case): the Selector widget and the
+  screen object outlive the exit, and nothing resets the slot.
+- **Consequence for the build, not applied**: the persisted thing is **one Selector
+  position shared by every grid**, not a per-grid memory. Entering a different grid keeps
+  the same `(x, y)` when that grid has a cell there (named for the new grid) and falls to
+  the default scan otherwise. `CellCursors` (`crates/game/src/main/campaign_stage.rs`)
+  keys per grid, which is **chosen, not measured** and disagrees with this reading for a
+  second grid. Left alone: our cell names carry no parsed `(x, y)`, the tile-flag filter
+  is unread, and nothing on the original was observed crossing grids. **Next measurement**:
+  PPSSPP, `grid0` to `grid0_3_2`, back out, enter a second unlocked grid, read which cell
+  holds the cursor (the decompile predicts `(3, 2)` of that grid if it has one).
+- Whether the Selector survives leaving the campaign altogether (to `Main Menu` and back)
+  depends on the screen object's lifetime and is not read here.
+

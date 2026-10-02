@@ -2603,7 +2603,12 @@ unit tests only check the *draw*, never how a caller clips it.
   screens close - the original was only observed backing out of and
   re-entering the same grid. Also chosen, not measured: HD/Fury share
   `CampaignStage`, so their `Cell Selection` now persists the cursor too,
-  though only Pulse PSP was observed doing it.
+  though only Pulse PSP was observed doing it. **Decompile, 2026-10-02
+  (`pulse-loyaltybar`, 70)**: the original keeps the cursor as the `Selector` widget's own
+  `(x, y)` slot, shared by every grid, so the per-grid keying above probably disagrees on a
+  second grid (it would keep `(3, 2)` if the new grid has a cell there). Not changed: see
+  [`race-campaign.md`'s section](../ghidra/functions/psp-pulse-usa/race-campaign.md#where-cell-selection-keeps-its-cursor-across-a-back-out-2026-10-02-pulse-loyaltybar)
+  for the law and the live check that would settle it.
 - ~~The scrolling tip ticker and the button-legend footer row are still not
   drawn.~~ **Both draw, 2026-09-21** - see "The tip ticker, the Confirm/Back
   legend, `Cell Help` and a podium" above. The scroll speed itself is still
