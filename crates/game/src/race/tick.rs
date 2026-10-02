@@ -530,8 +530,9 @@ impl Race {
         // `Eliminated` craft back into a `Racing` one via a respawn, before
         // this read - see `crate::race::eliminator`'s own doc comment for why
         // the mode's own text rules out `RaceState::eliminate` as its ending.
-        // An *opponent* in a single race never reaches it either, for the
-        // same reason with the original's own states behind it.
+        // An *opponent* in a single race never reaches it, because the branch
+        // reads the player's own state alone; an opponent's wreck stays down
+        // (the original's state 6, measured live) and ends nothing.
         if self.sim.world.mode() != Mode::Eliminator
             && self.sim.world.ships[player].physics.craft_state
                 == oag_physics::CraftState::Eliminated

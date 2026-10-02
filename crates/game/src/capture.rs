@@ -440,6 +440,7 @@ pub fn run(
         return race::capture(
             loaded,
             &race::CaptureOptions {
+                gpu: None,
                 aspect: options.settings.display.aspect,
                 path: options.path.clone(),
                 ticks: options.ticks.saturating_sub(ticks),

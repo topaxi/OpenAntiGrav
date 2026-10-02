@@ -149,6 +149,8 @@ pub(super) fn upload_shared(
 
 /// Uploads one [`ModelTexture`], in the form it came in.
 ///
+/// A texture already [`Texels::Uploaded`] hands back the view it carries.
+///
 /// `blocks` is whether the device has `TEXTURE_COMPRESSION_BC`. Without it a
 /// block-compressed texture is decoded back to RGBA8 here rather than left
 /// undrawn - one memory win traded away on an adapter that cannot take it,
@@ -159,6 +161,11 @@ pub(super) fn upload(
     texture: &ModelTexture,
     blocks: bool,
 ) -> wgpu::TextureView {
+    // Decoded under a `texture_sink` scope: the picture is already up, and this
+    // is the one place that would otherwise put it there a second time.
+    if let Texels::Uploaded { view, .. } = &texture.texels {
+        return view.clone();
+    }
     if let Texels::Chain(levels) = &texture.texels {
         return upload_levels(
             device,
@@ -272,7 +279,10 @@ pub(super) fn upload(
 /// the GPU and this mirrors its three outcomes - the disc's own blocks and
 /// chain, blocks decoded back to RGBA8 on an adapter without
 /// `TEXTURE_COMPRESSION_BC`, and RGBA8 with the box-filtered chain.
-fn gpu_bytes(texture: &ModelTexture, blocks: bool) -> u64 {
+pub(super) fn gpu_bytes(texture: &ModelTexture, blocks: bool) -> u64 {
+    if let Texels::Uploaded { gpu_bytes, .. } = &texture.texels {
+        return *gpu_bytes;
+    }
     if let (Texels::Blocks { levels, .. }, true) = (&texture.texels, blocks) {
         return levels.iter().map(|level| level.len() as u64).sum();
     }
@@ -319,7 +329,13 @@ pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool) {
             counts[role] += 1;
             cpu[role] += texture.cpu_bytes();
             gpu[role] += gpu_bytes(texture, blocks);
-            compressed += usize::from(matches!(texture.texels, Texels::Blocks { .. }) && blocks);
+            compressed += usize::from(match &texture.texels {
+                Texels::Blocks { .. } => blocks,
+                Texels::Uploaded {
+                    block_compressed, ..
+                } => *block_compressed,
+                _ => false,
+            });
         }
     }
     if counts == [0, 0] {

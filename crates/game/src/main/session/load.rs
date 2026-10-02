@@ -455,10 +455,17 @@ impl Session {
         // Bumped before the screen is built, so the first race of a run draws
         // with 1 rather than with the same seed a capture uses.
         self.races_launched = self.races_launched.saturating_add(1);
+        // The frame loop's own device: the scene is built from it, so each
+        // texture goes up as it is decoded rather than waiting on the CPU for
+        // every other one. See `race::TextureSink`.
+        let sink = Some(race::TextureSink {
+            device: self.gpu.device.clone(),
+            queue: self.gpu.queue.clone(),
+        });
         // A campaign event the front end asked for, or the menus' own race.
         let worker = match self.pending_event.take() {
-            Some(event) => race::LoadWorker::spawn_event(options, event, label),
-            None => race::LoadWorker::spawn(options, label),
+            Some(event) => race::LoadWorker::spawn_event(options, event, label, sink),
+            None => race::LoadWorker::spawn(options, label, sink),
         };
         // Spawned alongside the circuit read, for the same reason: fetching
         // this synchronously at the hand-off used to decode a full track on

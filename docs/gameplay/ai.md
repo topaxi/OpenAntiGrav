@@ -2662,9 +2662,10 @@ Flat across every setting, and **zero escapes at any of them** against a
 lever: raising it from 90 to 200 changes nothing about how far a boosted
 craft strays. Second, the specific failure this section opened with did not
 reproduce once, in a sample eight times the size of the one that found it
-originally - the opponent respawn and stall rescue, both landed after this
-measurement was first taken, most plausibly already cover what `look_max`
-was suspected of. The residual gap this section describes is not shown to
+originally - the opponent respawn (reverted 2026-10-02: a wrecked opponent
+stays down, which only removes a craft the gap was measured on) and the stall
+rescue, both landed after this measurement was first taken, most plausibly
+already cover what `look_max` was suspected of; only the stall rescue still does. The residual gap this section describes is not shown to
 exist any more on `16_Track`; it has not been re-measured on other circuits,
 and nothing here rules out a rarer event this sample size still missed.
 
@@ -2814,11 +2815,10 @@ against the code on 2026-08-17; check it again before trusting it.
 What is still missing, and it is now a short list:
 **adaptation between races**, which was blocked on per-opponent lap times and is
 not any more. ~~And **anything at all happening when a craft is eliminated**~~ -
-**it comes back, as of 2026-09-16**: state 5's `1.5` s and state 6's `0.8` s,
-then `Ship_UpdateRespawn`'s full pool and a place on the line, the way the
-original treats any craft no mode object is watching
-([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#who-ends-a-single-race-on-the-destroyed-bit-and-who-comes-back),
-`Race::tick_destroyed_craft`). The
+**it came back from 2026-09-16 to 2026-10-02, which was wrong**: state 5's `1.5` s and state 6's `0.8` s, then a
+full pool and a place on the line. Measured live on 2026-10-02, the original's wrecked opponent stays in state 6 for good
+([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#state-6-measured-on-ppsspp-a-wrecked-ai-craft-stays-down-2026-10-02-pulse-state6)),
+and `Race::tick_destroyed_craft` now leaves it down outside the Eliminator. The
 player's *own* position is on screen; an opponent's is not - `PosTag0`-`PosTag7`
 are eight fixed-position rows meant to list the field, not the runtime-anchored
 per-craft tags an earlier reading of this line took them for (corrected

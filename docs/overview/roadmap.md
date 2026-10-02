@@ -732,11 +732,11 @@ seen from the authoring side.
 
       **Landed since that paragraph, too**: reaction latency (2026-08-26,
       [ai.md](../gameplay/ai.md#reaction-latency-a-driver-takes-time-to-notice))
-      and, on 2026-09-16, **a wrecked opponent comes back** in a single race
-      the way the original's own craft states bring it back - state 5's
-      1.5 s, state 6's 0.8 s, a full pool and a place on the line
-      ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#who-ends-a-single-race-on-the-destroyed-bit-and-who-comes-back));
-      before that a wrecked opponent coasted to a stop and stayed there.
+      and, on 2026-09-16, **a wrecked opponent came back** in a single race
+      after state 5's 1.5 s, state 6's 0.8 s, a full pool and a place on the line; **that was
+      wrong and was reverted 2026-10-02** - measured live, the original's wrecked opponent
+      stays in state 6 for good, so it coasts to a stop and stays there
+      ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#state-6-measured-on-ppsspp-a-wrecked-ai-craft-stays-down-2026-10-02-pulse-state6)).
       **What is left**: adaptation between races - specified on
       [ai.md](../gameplay/ai.md#rubberbanding-and-the-config) as the
       `adaptive` key and deliberately not built, since it is this project's

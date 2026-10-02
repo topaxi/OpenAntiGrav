@@ -43,6 +43,24 @@ fn a_single_level_gnf_decodes_to_rgba_so_the_renderer_can_mip_it() {
 }
 
 #[test]
+fn the_form_a_gnf_took_is_counted_so_a_loader_can_say_how_many_fell_back() {
+    let (_, chain) = ModelTexture::from_gnf_form("chain", &gnf(2)).expect("decodes");
+    let (_, flat) = ModelTexture::from_gnf_form("flat", &gnf(1)).expect("decodes");
+    assert_eq!((chain, flat), (GnfForm::Blocks, GnfForm::SingleLevel));
+    let mut counts = GnfCounts::default();
+    assert_eq!(counts.describe(), "", "a build with no .gnf says nothing");
+    for form in [chain, flat, flat, GnfForm::OffGrid, GnfForm::BlocksRefused] {
+        counts.record(form);
+    }
+    assert_eq!(counts.fell_back(), 4);
+    assert_eq!(
+        counts.describe(),
+        "; 1 .gnf texture(s) kept as BC7 blocks, 4 decoded to RGBA8 with a synthesised chain \
+         (2 single-level, 1 off the block grid, 1 refused as blocks)"
+    );
+}
+
+#[test]
 fn a_gnf_the_decoder_refuses_draws_nothing() {
     let mut bytes = gnf(2);
     bytes[8 + 8 + 4 + 3] = 0x20 << 2; // surface format 0x3f: no decoder
@@ -82,4 +100,28 @@ fn releasing_a_model_keeps_its_slots_and_frees_its_texels() {
         320,
         "another owner's copy is untouched"
     );
+}
+
+/// An uploaded texture holds no texels to release, and `release_texels` must
+/// keep its view: the uploader hands that view to every drawable that binds it.
+#[test]
+fn releasing_texels_keeps_an_uploaded_texture_s_view() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        return;
+    };
+    let Ok((device, queue)) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+    else {
+        return;
+    };
+    let _scope = crate::mesh_render::TextureSinkScope::open(&device, &queue);
+    let texture = crate::mesh_render::offer_to_texture_sink(ModelTexture::rgba8(
+        "uploaded".into(),
+        2,
+        2,
+        vec![9; 16],
+        None,
+    ));
+    assert!(matches!(texture.released().texels, Texels::Uploaded { .. }));
 }
