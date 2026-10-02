@@ -184,7 +184,24 @@ impl Race {
             let sample_index = if slot == player {
                 Some(self.sim.last_on_track as usize)
             } else {
-                let index = self.sim.world.ships[slot].driver.index as usize;
+                // **Where the wreck came to rest, not where the driver last
+                // looked.** `Driver::drive` does not run while a craft is down,
+                // so its index stops at the death and the wreck coasts on, up
+                // to a hundred units. A respawn at the stale index teleports the
+                // craft *backwards* over the start line if the wreck crossed it
+                // meanwhile, which `Standing::update` reads as a backward wrap:
+                // one lap lost and the gate reset, so the craft is one lap down
+                // for the rest of the race, invisible to every other craft's
+                // `Field` and out of reach of every pack rule. Measured on
+                // `16_Track`, seed 5: the craft in slot 2 read one lap down
+                // from tick 3025 to the end of the run. The original's `Ship_UpdateRespawn` places the
+                // craft at the AI corridor's midpoint, which is a place near
+                // the wreck, not a place near a stale index.
+                let index = self.sim.racing_line.nearest(
+                    self.sim.world.ships[slot].physics.body.position,
+                    0,
+                    self.sim.racing_line.len(),
+                );
                 self.sample_index_of(index)
             };
             self.sim.last_respawn_cause[slot] = Some(respawn::RespawnCause::Destroyed);

@@ -125,3 +125,45 @@ fn the_chosen_kill_target_is_what_the_eliminator_ends_on() {
     }
     panic!("no field of {unfinished:?} reached a finish within eighteen game-minutes");
 }
+
+/// A craft that is destroyed and put back is still where it was in the race.
+///
+/// The respawn used to read the driver's stale index, which stops at the
+/// death while the wreck coasts on. A wreck that crossed the start line and
+/// was then put back behind it read as a backward wrap, so the craft lost a lap
+/// for the rest of the race (seed 5, slot 2, tick 3025: 5,263 units down) and
+/// vanished from every other craft's field. Each respawn's distance is compared
+/// with the distance at the moment of death, and fails if the craft moved by
+/// anything like a lap.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_respawned_craft_keeps_its_place_in_the_race() {
+    let Some(mut race) = loaded_eliminator_seeded(Some(5), Some(5)) else {
+        return;
+    };
+    let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());
+    let slots = race.sim.world.ship_count as usize;
+    let mut down = [None::<f32>; 8];
+    let mut respawns = 0;
+    for _ in 0..4000 {
+        race.tick(&parked);
+        let course = race.course().expect("a closed circuit").clone();
+        for slot in 1..slots {
+            let ship = &race.sim.world.ships[slot];
+            let distance = ship.standing.distance(&course);
+            match (ship.physics.craft_state, down[slot]) {
+                (oag_physics::CraftState::Eliminated, None) => down[slot] = Some(distance),
+                (oag_physics::CraftState::Racing, Some(was)) => {
+                    respawns += 1;
+                    assert!(
+                        (distance - was).abs() < 500.0,
+                        "slot {slot} was at {was} when destroyed and {distance} when put back"
+                    );
+                    down[slot] = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    assert!(respawns >= 3, "only {respawns} respawns: nothing was checked");
+}
