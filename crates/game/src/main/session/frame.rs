@@ -592,9 +592,11 @@ impl Session {
                     // standings and the board were frozen at the line, so
                     // nothing the panels show moves. See
                     // `Race::runs_on_after_the_line`.
-                    if stage.race.runs_on_after_the_line() {
-                        stage.race.tick(&oag_gameplay::PlayerInputs::none());
-                    }
+                    //
+                    // Any other ending (a wreck in a Single Race or a Zone run)
+                    // steps only what is seen: the explosion, the shake, the
+                    // destroy camera. See `Race::tick_cosmetics`.
+                    stage.race.tick_finished();
                     self.audio.race_tick(&mut stage.race);
                     // `stage`'s own last use - the reborrow inside
                     // `Session::tick_endrace` is legal from here on, the
