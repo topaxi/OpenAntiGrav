@@ -1213,3 +1213,11 @@
 0x08832b0c	function	CageEffect_Spawn	58	collision-cage.md
 0x08ab0c88	data	g_cage_effect	80	collision-cage.md
 0x088c3f7c	function	TrackDefinition_ReadXml	78	zone-start.md
+# 2026-10-02, pulse-psys lane: placed ParticleSystem nodes
+0x089164c0	function	PsysNode_RegisterClass	92	placed-particle-systems.md
+0x08a6bd18	function	PsysNode_Tag	88	placed-particle-systems.md
+0x089156a0	function	PsysNode_Init	90	placed-particle-systems.md
+0x0891559c	function	PsysNode_Construct	65	placed-particle-systems.md
+0x0892e384	function	AnimationTrigger_RegisterClass	90	placed-particle-systems.md
+0x08a727cc	function	AnimationTrigger_Tag	85	placed-particle-systems.md
+0x08945284	function	Node_SetLocalMatrix	75	placed-particle-systems.md

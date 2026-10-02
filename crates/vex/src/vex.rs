@@ -894,7 +894,7 @@ pub use mesh_header::{
 };
 
 mod attributes;
-pub use attributes::node_attributes;
+pub use attributes::{node_attributes, node_string_attribute};
 
 mod anim_transform;
 pub use anim_transform::{

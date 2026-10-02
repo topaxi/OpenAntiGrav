@@ -87,7 +87,9 @@ storing the tag it calls into its descriptor's `+0x04`:
 `AnimTransform_Register` calls `0x08a6bb84`, and `Mesh_Register`
 (`0x089100a0`, the only `li a1, 0x125` in the image) calls `0x08a6bd48`.
 
-The third branch, `0x08a6bd18`, is still unidentified - it is called from 40
+The third branch, `0x08a6bd18`, is `PsysNode_Tag` - `ParticleSystem`'s identity
+tag, identified 2026-10-02 in [placed-particle-systems.md](placed-particle-systems.md).
+The text that follows predates that: it was still unidentified - it is called from 40
 sites including `Missile_Init`, `Rocket_Init` and `ShipCollisionFx_Trigger`,
 which is the shape of a base class rather than a leaf. **Not named**, per the
 [rubric](../../../reverse-engineering/confidence-rubric.md)'s rule for a reading

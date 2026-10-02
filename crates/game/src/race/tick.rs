@@ -457,6 +457,7 @@ impl Race {
         self.view
             .stage
             .advance(self.sim.dt, &mut self.view.stage_rng);
+        self.advance_scenery_fx(self.sim.dt);
 
         self.sim.respawn_cooldown[player] = self.sim.respawn_cooldown[player].saturating_sub(1);
         // Unconditionally and before the `||`, so the dwell sees every tick -

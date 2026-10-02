@@ -54,7 +54,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming
 /// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 29] = [
+pub const RACE_EFFECTS: [&str; 31] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     MISSILE_FLARE_EFFECT,
@@ -96,6 +96,10 @@ pub const RACE_EFFECTS: [&str; 29] = [
     super::wreck_fx::FXNODE_EXPLO_EFFECT,
     super::wreck_fx::DEATH_SPARKS_EFFECT,
     super::wreck_fx::EXPLOSION_EFFECT,
+    // What a circuit places on its own scenery, from load - see
+    // `race::scenery_fx`.
+    BLUE_WELDER_EFFECT,
+    MODESTO_STEAM_EFFECT,
 ];
 
 impl Race {
@@ -794,6 +798,25 @@ impl Race {
         self.view
             .stage
             .extend_vertices(additive, alpha_over, right, up);
+        self.view
+            .scenery_fx
+            .stage()
+            .extend_vertices(additive, alpha_over, right, up);
+    }
+
+    /// Runs the circuit's placed effects one step on the scenery clock - see
+    /// `race::scenery_fx`.
+    pub(super) fn advance_scenery_fx(&mut self, dt: f32) {
+        let seconds = self.sim.world.tick as f32 / 60.0;
+        self.view
+            .scenery_fx
+            .advance(&self.view.effects, dt, seconds);
+    }
+
+    /// The circuit's placed effects.
+    #[must_use]
+    pub fn scenery_fx(&self) -> &super::scenery_fx::SceneryFx {
+        &self.view.scenery_fx
     }
 
     /// The pool the rocket effects play in.

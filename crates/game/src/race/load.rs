@@ -887,6 +887,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .map(|livery| livery.collision_fx.iter().map(|a| a.position).collect())
                 .collect(),
             collision_fx,
+            scenery_fx: Vec::new(),
             effects,
             sounds,
             track_emitters,

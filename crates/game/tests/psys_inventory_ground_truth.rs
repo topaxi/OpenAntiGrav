@@ -111,8 +111,12 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     ),
     ("WO_RAIN_LENS", "environment, same as `WO_RAIN`."),
     ("WO_SNOW", "environment, same as `WO_RAIN`."),
-    ("WO_BLUE_WELDER", "environment, same as `WO_RAIN`."),
-    ("WO_MODESTO_STEAM_A", "environment, same as `WO_RAIN`."),
+    // **Not `WO_BLUE_WELDER` or `WO_MODESTO_STEAM_A`** - wired 2026-10-02.
+    // The circuits place them as `ParticleSystem` (`0x3c4`) nodes and
+    // `PsysNode_Init` (`0x089156a0`) spawns each at load; three Basilico
+    // welders confirmed live. See `oag_game::race::scenery_fx`. `RAIN`,
+    // `RAIN_LENS` and `SNOW` are placed by no `ParticleSystem` node on the
+    // disc, which leaves `weatherPos` (`0x3da`) as their likely owner.
 ];
 
 /// The eight the PS2 port authors, the PSP does not, and nothing triggers.
@@ -191,6 +195,9 @@ const PSP_WIRED: &[&str] = &[
     "WO_SHIP_DEATH_SPARKS",
     // The big blast 1.5 s later, at the live model's matrix - the same module.
     "WO_SHIP_EXPLOSION",
+    // Placed by the circuits themselves - see `oag_game::race::scenery_fx`.
+    "WO_BLUE_WELDER",
+    "WO_MODESTO_STEAM_A",
 ];
 
 /// The PS2 carries all ten of the PSP's plus its own engine flare.

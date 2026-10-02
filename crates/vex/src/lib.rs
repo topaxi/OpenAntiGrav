@@ -33,6 +33,7 @@ pub mod kdcol;
 pub mod lighting;
 pub mod mesh_coverage;
 pub mod pads;
+pub mod placed_psys;
 pub mod pob;
 pub mod pob_coverage;
 pub mod pvs;

@@ -164,6 +164,7 @@ impl Race {
         self.advance_bomb_blast_models(dt);
         self.advance_wreck_fx();
         self.view.stage.advance(dt, &mut self.view.stage_rng);
+        self.advance_scenery_fx(dt);
         self.advance_craft_flashes();
         self.advance_destroy_camera();
         let eye = self.camera_position();
