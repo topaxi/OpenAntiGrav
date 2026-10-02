@@ -57,25 +57,47 @@ pub(super) const DESTROYED_DWELL: f32 = 1.5;
 /// Seconds an AI craft then waits in state 6 before `Ship_UpdateRespawn`
 /// (`0x08847914`) puts it back: `Ship_SetState`'s case 6 writes `0.8` for a
 /// craft whose `entity+0x368` is set and `2.0` for the local player, who
-/// never reaches it in a single race. Confidence 85.
+/// never reaches it in a single race. Confidence 85 for the timer.
+///
+/// **Whether anything puts the craft back afterwards is in doubt** (2026-10-02):
+/// the per-state jump table at `0x08a7bb88` sends state 6 to `FUN_08840500`,
+/// which only counts the timer down, and `Ship_UpdateRespawn` is reached from
+/// state 8 alone. Nothing read revives a state-6 craft, so this single-race
+/// opponent return is the port's reading of `shield.md` and is unverified
+/// against a live run. See `docs/ghidra/functions/psp-pulse-usa/shield.md`.
 pub(super) const AI_RESPAWN_WAIT: f32 = 0.8;
 
-/// Seconds an Eliminator craft spends fully `Eliminated` before it returns.
-///
-/// [`DESTROYED_DWELL`] alone. The Eliminator's own state 8 sets a second
-/// timer - `1.0` s for the local player, `2.0` s otherwise, the opposite
-/// ratio to state 6 - and what counts it down was not found, so this build
-/// does not add it; when it is read, this is the constant that grows. **The
-/// consequence runs the wrong way until then**: an Eliminator craft here
-/// returns after `2.0` s from destruction against a single-race opponent's
-/// `2.8`, where the original's Eliminator is the slower of the two.
-pub(super) const ELIMINATOR_RESPAWN_DELAY: f32 = DESTROYED_DWELL;
+/// Seconds the local player waits in the Eliminator's state 8: `Ship_SetState`'s
+/// case 8 (`0x088446ec`) writes `1.0` into `entity+0x874` for the craft whose
+/// `entity+0x368` is zero. State 8's own update is `Ship_UpdateRespawn`
+/// (`0x08847914`): the per-state jump table at `0x08a7bb88` sends state `8` to
+/// the call at `0x08841e44`, counts the timer down, and at zero relocates the
+/// craft, refills the shield and goes to state 1. Confidence 88 (the table and
+/// the call read, no live run of an Eliminator wreck).
+pub(super) const ELIMINATOR_PLAYER_WAIT: f32 = 1.0;
+
+/// The same wait for every other craft: `2.0`, the opposite ratio to a
+/// single race's state 6. Confidence 88, as [`ELIMINATOR_PLAYER_WAIT`].
+pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 2.0;
+
+/// Seconds an Eliminator craft spends out before it returns: state 5's
+/// [`DESTROYED_DWELL`] and then state 8's own wait, so `2.5` s for the local
+/// player (whose destroy camera is still on the wreck for the second after the
+/// big explosion) and `3.5` s for anyone else.
+pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
+    DESTROYED_DWELL
+        + if is_player {
+            ELIMINATOR_PLAYER_WAIT
+        } else {
+            ELIMINATOR_OPPONENT_WAIT
+        }
+}
 
 impl Race {
     /// Brings a destroyed craft back, on the terms its mode sets.
     ///
     /// **Two modes bring one back, and the third does not.** In an Eliminator
-    /// every craft returns after [`ELIMINATOR_RESPAWN_DELAY`], with the
+    /// every craft returns after [`eliminator_respawn_delay`], with the
     /// death and kill bookkeeping the mode is about. In a race with opponents,
     /// a single race, an *opponent* returns after
     /// [`DESTROYED_DWELL`] plus [`AI_RESPAWN_WAIT`], which is the original's
@@ -108,7 +130,7 @@ impl Race {
                 continue;
             }
             let delay = if mode == Mode::Eliminator {
-                ELIMINATOR_RESPAWN_DELAY
+                eliminator_respawn_delay(slot == player)
             } else if slot != player && mode.has_opponents() {
                 DESTROYED_DWELL + AI_RESPAWN_WAIT
             } else {
@@ -133,11 +155,9 @@ impl Race {
             // the race, and `crates/game/tests/ai_clean_lap_gate.rs` reads it
             // to tell a craft that died and came back from one that never died.
             self.sim.world.ships[slot].standing.deaths += 1;
-            // **A full pool, and for state 6 that is measured**:
-            // `Ship_UpdateRespawn` calls `Ship_ResetShield` on its way back to
-            // state 1. For the Eliminator's state 8 the consumer of its own
-            // timer is unread, so the same refill there is the reading carried
-            // over rather than one of its own.
+            // **A full pool, measured for the Eliminator's state 8**:
+            // `Ship_UpdateRespawn` (state 8's update) calls `Ship_ResetShield`
+            // on its way back to state 1.
             let dimensions = self.sim.world.ships[slot].handling.dimensions;
             oag_physics::damage::reset(&mut self.sim.world.ships[slot].physics, &dimensions);
 
