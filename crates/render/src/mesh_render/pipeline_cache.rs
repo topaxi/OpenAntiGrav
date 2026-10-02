@@ -227,8 +227,8 @@ pub(crate) fn cached_pipeline(
 /// their decoded textures by `Arc` but not their GPU copies.
 pub(crate) fn cached_texture_view(
     texture: &std::sync::Arc<crate::mesh::ModelTexture>,
-    upload: impl FnOnce() -> wgpu::TextureView,
-) -> wgpu::TextureView {
+    upload: impl FnOnce() -> Option<wgpu::TextureView>,
+) -> Option<wgpu::TextureView> {
     CACHE.with(|cell| match cell.borrow_mut().as_mut() {
         None => upload(),
         Some(cache) => {
@@ -236,13 +236,15 @@ pub(crate) fn cached_texture_view(
             cache.texture_calls += 1;
             if let Some((_, view)) = cache.textures.get(&key) {
                 cache.texture_hits += 1;
-                return view.clone();
+                return Some(view.clone());
             }
-            let view = upload();
+            // A texture the device cannot hold is not remembered: asking again
+            // is arithmetic, not an upload.
+            let view = upload()?;
             cache
                 .textures
                 .insert(key, (std::sync::Arc::downgrade(texture), view.clone()));
-            view
+            Some(view)
         }
     })
 }

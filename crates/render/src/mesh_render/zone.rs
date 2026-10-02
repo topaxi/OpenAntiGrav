@@ -166,17 +166,26 @@ fn upload_view(
     texture: &Option<Arc<ModelTexture>>,
     label: &str,
 ) -> wgpu::TextureView {
-    match texture {
-        Some(texture) => texture::upload(
-            device,
-            queue,
-            texture,
-            device
-                .features()
-                .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
-        ),
-        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], label, None),
-    }
+    // A texture no level of which fits the device takes the absent slot's 1x1
+    // black, like one that was never authored.
+    texture
+        .as_ref()
+        .and_then(|texture| {
+            texture::upload(
+                device,
+                queue,
+                texture,
+                device
+                    .features()
+                    .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
+            )
+        })
+        .map(|placed| placed.view)
+        .unwrap_or_else(|| {
+            texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], label, None)
+                .expect("a 1x1 texture fits every device")
+                .view
+        })
 }
 
 /// [`StageArt`]'s four views alone, rebuilt on a stage-change edge by

@@ -135,7 +135,12 @@ boot screens do not** - they are outside `Top FE Screen` in the skin, so the ori
 either. **Not validated against the original**: no PS4 emulator exists and HD's one capture of its HD
 style shows a flat white page. Chosen, not measured: the blur kernel, the linear sampling, and which
 page takes which row. The `--menu-page grid-select`/`cell-select` stills draw it too (they take the
-page's picture); the live campaign stage and the end-of-race screens sit under the
+page's picture). **The live campaign stage draws it too, and did before this was written**
+(`menu_stage.rs` hands the stage's `shown` picture, the movie or else the style's
+`Live::picture`, to every campaign list builder, and `Live::tick` runs per frame): walked windowed under
+Xvfb + lavapipe on `main` `4def1665` plus the texture-limit change, language -> `Main Menu` -> `RACE CAMPAIGN`
+-> `Grid Selection` -> `Cell Selection` by mouse, 2026-10-02, and the scene draws behind all three
+(`data/scratch/omega-talon-crash/walk_1.png` to `walk_3.png`). The end-of-race screens sit under the
 same widget and do not yet. Omega authors no track or ship picker.
 
 ## What a menu-page capture does today
@@ -605,6 +610,63 @@ What this does not cover, so the numbers are not read wider than they are:
 - The flush rule (a submit and a non-blocking poll every 64 MiB uploaded) is
   **chosen, not measured**; the peak above is with it, and no run without it
   was taken.
+
+**Textures wider than the device allows.** 2026-10-02, `omega-talon-crash`. Two
+circuits ship a 16,384-wide texture, against wgpu's default
+`max_texture_dimension_2d` of 8,192: Talon's Junction's
+`texturesps4/ds_floor_cs.gnf` and Modesto Heights'
+`texturesps4/track_floor_diffuse_new.gnf` (both 16,384 by 4,096). On `main` a race
+on either panicked in `create_texture` ("Dimension X value 16384 exceeds the
+limit of 8192", reproduced on both). Every other circuit's largest side is 8,192
+(the craft liveries and the sky among them), including the 10 `environments2048/*`.
+Two changes, one commit:
+
+1. **The device asks for the adapter's own texture limits**
+   (`oag_render::mesh_render::required_limits`: wgpu's defaults with only the
+   1D/2D/3D dimension limits raised, `Limits::using_resolution`). RADV and
+   lavapipe both report 16,384, so on this machine both circuits go up whole.
+   It also raises the clamp `oag_game::upscale::target_size` reads from the same
+   limit; `Scale::RANGE` tops out at 200 %, so only a display wider than 4,096
+   pixels at that scale could ever have hit 8,192.
+2. **A texture still over the limit uploads from the first mip level that fits**
+   (`texture::first_fitting_level`, one rule shared by the `Chain`, `Blocks`,
+   decoded-blocks and synthesised-RGBA8 arms, so a 16,384-by-4,096 chain on an
+   8,192 device goes up from level 1, 8,192 by 2,048). **Chosen, not measured**:
+   nothing is known of how the original treated an oversize texture. A texture
+   with no fitting level (a single-level one over the limit) is not uploaded and
+   its slot is bound as a texture that never decoded is: the same path as a `.gnf`
+   the decoder refuses (`a_gnf_the_decoder_refuses_draws_nothing`: the slot is
+   `None` and the build binds its 1x1 "undecoded" white, which on a surface that
+   carries real art is a plain white surface, see the Talon's Junction check
+   below). That is the codebase's existing convention for a texture it cannot
+   hold, not a new mechanism, and no Omega texture reaches it. Both cases are
+   named in the loader line: `N texture(s) wider than this device's
+   max_texture_dimension_2d of L uploaded from the first mip level that fits -
+   chosen, not measured: <labels>` and, for the refusal, a warning. The census's
+   `GPU uploaded` figure counts what went up, not what the disc holds
+   (`texture::plan` mirrors `texture::upload`).
+
+Forcing an 8,192 device (a sink on `DeviceDescriptor::default()`) over every
+circuit that loads - 15 `environments/*` forwards, 12 reversed (`zone_*` ship no
+reversed entry, `zone_3` loads to no triangles on `main` too: 27 loads, the same
+27 as the census below) and the 10 `environments2048/*` forwards: Talon's Junction
+and Modesto Heights, forwards and reversed, are the only ones that trim, one
+texture each, from level 1; no texture is left undrawn anywhere. Checked on a
+real race, `--race --hold cross --ticks 120 --screenshot`, on the RX 7800 XT
+(16,384): all 27 loads reach the still without a panic (and the 10
+`environments2048` ones). **What `ds_floor_cs.gnf` is**, found by making `upload`
+refuse it locally (not committed) and differencing the stills: the circuit's
+**road surface**. With it refused, the road in the `--ticks 300` frame is plain
+white where it is textured otherwise (3.3 % of the frame differs, all of it road;
+`talon_t300.png` against `talon_nofloor_t300.png` and `talon_diff_t300.png` under
+`data/scratch/omega-talon-crash/`), so Talon's Junction draws its floor with the
+whole 16,384 texture on this machine, and the white road is also what a refusal
+would look like. Also viewed: `talon_t700.png`, `talon_lvp_t30.png` (lavapipe).
+Tech De Ra's still, HD Dion's and 2048 Altima's are byte-identical before and
+after. Tests: `texture::tests` (the rule, the descriptor's limit, an over-limit
+chain / RGBA8 / BC7 on a 1,024 device, a refusal) and
+`texture_stream_ground_truth`'s two Talon's Junction tests (an 8,192 device, the
+renderer's own).
 
 **Single-level `.gnf` textures per circuit.** The `.rcsmodel` loader report now
 carries one clause, `; N .gnf texture(s) kept as BC7 blocks, M decoded to RGBA8
