@@ -31,7 +31,7 @@ values it cycles and the observed period all agree with it.
 | A third parameter block for an internal view | answered: there are **five** blocks |
 | Whether the view is persisted to the profile save | answered: yes, as a string setting |
 | Where the 3/4 factor on the external offsets comes from | answered 2026-08-08: `g_craft_scale`, a code literal |
-| How the internal rig applies `pitch` and `headtilt` | answered 2026-08-08: `pitch` is a rise over a run of 10; `headtilt` rolls the up vector by `craft+0x844`, **identified 2026-08-09 as a smoothed steering-driven lean** - see below |
+| How the internal rig applies `pitch` and `headtilt` | answered 2026-08-08: `pitch` is a rise over a run of 10; `headtilt` rolls the up vector by `craft+0x844`, **identified 2026-08-09 as a smoothed steering-driven lean**; ported and measured 2026-10-02 (lean RMS 0.0003) - see below |
 | How many camera rigs a craft has | answered 2026-08-08: **four**, internal / backward / external close / external far |
 | Whether the external rig is reproduced | answered 2026-08-08, third pass: yes, to `0.008` RMS over a 150-tick capture of the original |
 
@@ -1192,10 +1192,13 @@ to the up vector: the view leans into the turn. Over the same capture, re-taken 
 `entity+0x374`/`+0x37c` and `entity+0x810`, and with the body's own rows, the angle between the predicted and
 the recorded tripod up is smallest at `k = +0.3 * lean` (RMS 0.261 rad) and rises
 on both sides (`k = 0`: 0.312, `+0.6`: 0.284, `-0.3`: 0.416, `-0.6`: 0.526), where
-`0.3` is this ship's authored `headtilt`. That supports the sign and the scale and
-no more: **0.26 rad of the tripod's up is explained by something else**, because
-`tgt += craft[0x810]` and the rows `craft+0x374`/`+0x37c` point at nodes whose full
-behaviour was not ported or fitted here. Confidence **70** for the sign and scale
+`0.3` is this ship's authored `headtilt`. **That fit is consistent with the sign and
+scale and does not prove them**: the margin (0.261 against 0.312) is smaller than
+the 0.26 rad the model leaves unexplained, because `tgt += craft[0x810]` and the rows
+`craft+0x374`/`+0x37c` point at nodes whose full behaviour was not ported or fitted
+here. The sign rests on two firmer things: the instruction-level minus in
+`FUN_088455ec`, and the measured `left-up-forward` reading of the body's row 0.
+Confidence **70** for the sign and scale
 of the roll, **90** for the lean it multiplies. Ours is
 `oag_render::camera::internal::view`'s `tilted_up`, with `HEADTILT_SIDE_SIGN = -1`.
 

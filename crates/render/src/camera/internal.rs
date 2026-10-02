@@ -153,9 +153,9 @@ fn tilted_up(target: Target, params: &InternalParams, dir: Vec3, camera_lean: f3
 /// as well. So `up - side * (lean * headtilt)` is `up + right * (lean *
 /// headtilt)` here: the view's up vector leans **into** the turn, which is also
 /// what the arithmetic's own sign pattern (a positive stick gives a positive lean)
-/// predicts. Checked against the original's tripod: with the raw rows, the
-/// residual of `up - side * lean * 0.3` over the whole capture is lowest at
-/// `+0.3` and rises on the other side of zero (`camera.md`, "headtilt").
+/// predicts. The recorded tripod up is consistent with this sign and scale
+/// (`camera.md`, "headtilt") but the fit leaves too much unexplained to prove it:
+/// the evidence is the instruction-level minus and the measured basis reading.
 pub const HEADTILT_SIDE_SIGN: f32 = -1.0;
 
 #[cfg(test)]
