@@ -66,8 +66,7 @@ impl Race {
         // (`flags_1c0` and `state_2a4` read `0x1`/`1` there on four live runs,
         // `docs/physics/grid-state.md`), so the coupling and the launch boost's
         // clock both start a tick ahead of the first thrust. Measured on Pulse PSP.
-        let on_grid =
-            RaceState::thrust_gated(self.sim.world.tick + 1);
+        let on_grid = RaceState::thrust_gated(self.sim.world.tick + 1);
         // The launch boost's clock starts at the same tick in every mode, Zone
         // included (it has a countdown; its auto-speed is not multiplied yet, see
         // `oag_physics::engine::engine`).

@@ -887,8 +887,11 @@ fn every_titles_zone_handling_is_one_classless_block() {
 ///
 /// This test is the regression: intensity has to come up substantially with
 /// nothing held, on the same order the accelerate-held control case reaches,
-/// while the craft's speed - driven by `auto_speed` alone - is identical
-/// either way.
+/// while the craft's speed is driven by `auto_speed`. It was identical either
+/// way until 2026-10-02: Zone's auto-speed now carries the launch multiplier, so
+/// 28 ticks after GO a craft that coasted (`normalMul`, 1.4) is ahead of one
+/// that held accelerate (`stallMul`, 1.2) by the original's ratio, 1.159 read
+/// live at the same age on a Zone engine.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
@@ -942,9 +945,15 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
         "auto_speed should have the craft moving fast with nothing held: {coasting_speed} km/h"
     );
     assert!(
-        (coasting_speed - held_speed).abs() < 1.0,
-        "auto_speed should put both runs at the same speed regardless of \
-         whether accelerate was held: held {held_speed} km/h, coasting {coasting_speed} km/h"
+        held_speed > 100.0,
+        "auto_speed should have the held craft moving fast too: {held_speed} km/h"
+    );
+    let ratio = coasting_speed / held_speed;
+    assert!(
+        (ratio - 1.159).abs() < 0.03,
+        "28 ticks after GO the coasting craft should lead the held one by the launch \
+         grades' ratio, 1.159 on the original: held {held_speed} km/h, coasting \
+         {coasting_speed} km/h, ratio {ratio}"
     );
     assert!(
         coasting_intensity > 0.3,
@@ -993,5 +1002,8 @@ fn a_zone_craft_stands_still_through_the_countdown_and_moves_after_go() {
         zone.tick(&PlayerInputs::none());
     }
     let moved = (zone.ship().physics.body.position - start).length();
-    assert!(moved > 20.0, "a Zone craft only moved {moved} units in 2 s after GO");
+    assert!(
+        moved > 20.0,
+        "a Zone craft only moved {moved} units in 2 s after GO"
+    );
 }
