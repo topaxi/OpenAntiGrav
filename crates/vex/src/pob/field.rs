@@ -10,9 +10,10 @@
 //! - **`params[4]` is the box's half-extent**, `50` on both effects: a
 //!   particle that leaves `[-e, e]` on an axis is moved a whole `2e` back
 //!   inside, so a field of a few dozen particles fills a cube for ever.
-//! - **The resource's `+0x98` is how far ahead of the camera the cube
-//!   sits**, `60` on `WO_RAIN` - the emitter's model matrix is a pure
-//!   translation by `-depth` along the view's `z`.
+//! - **The resource's `+0x98` is how far ahead of the camera the effect
+//!   sits** ([`ParticleSystem::view_depth`]), `60` on `WO_RAIN` and `6` on the
+//!   screen lens - the emitter's model matrix is a pure translation by `-depth`
+//!   along the view's `z`.
 
 use super::{Emitter, ParticleSystem};
 
@@ -24,25 +25,30 @@ pub const MODIFIER_WRAP_BOX: u32 = 19;
 pub struct FieldBox {
     /// `params[4]`: the half-extent every axis wraps at.
     pub half_extent: f32,
-    /// The resource's `+0x98`: the cube's distance in front of the camera.
-    pub depth: f32,
 }
 
 impl ParticleSystem<'_> {
     /// `emitter`'s wrapping box, when it authors a type-19 modifier.
     ///
-    /// `emitter` must have come from [`Self::emitters`] on the same `data`.
     /// `None` for every effect that is not the weather.
     #[must_use]
-    pub fn field_box(&self, data: &[u8], emitter: &Emitter) -> Option<FieldBox> {
+    pub fn field_box(&self, emitter: &Emitter) -> Option<FieldBox> {
         let modifier = emitter
             .modifiers
             .iter()
             .find(|modifier| modifier.kind == MODIFIER_WRAP_BOX)?;
-        let record = data.get(self.resource_base() + emitter.offset..)?;
         Some(FieldBox {
             half_extent: modifier.params[4],
-            depth: self.order.f32(record, 0x98),
         })
+    }
+
+    /// The resource's `+0x98`: how far ahead of the lens a view-space effect sits.
+    ///
+    /// Read for every emitter and meaningful for the weather's alone, where it
+    /// is `60` on `WO_RAIN` and `WO_SNOW` and `6` on `WO_RAIN_LENS`.
+    #[must_use]
+    pub fn view_depth(&self, data: &[u8], emitter: &Emitter) -> Option<f32> {
+        let record = data.get(self.resource_base() + emitter.offset..)?;
+        Some(self.order.f32(record, 0x98))
     }
 }

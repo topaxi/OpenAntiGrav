@@ -166,4 +166,48 @@ mod race {
         step(&mut weather, open);
         assert!(!weather.is_anchored(), "leaving it returns to the camera");
     }
+
+    /// Fort Gale's lens: eased up to three drops a tick in the open (`4`
+    /// is its target and the integer part never reaches it), switched off
+    /// 0.3 s after cover is entered with its drops given long lives, and on
+    /// again - with the long lives kept - when it is left.
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-usa.chd"]
+    fn the_lens_rains_in_the_open_and_dries_under_cover() {
+        let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
+            return;
+        };
+        let setup: Setup = loaded.setup.scenery_fx.weather.clone().expect("weather");
+        let covered = setup.anchors.first().expect("an anchor").section;
+        let open = (0..64u8)
+            .find(|s| !setup.anchors.iter().any(|a| a.section == *s))
+            .expect("an open section");
+        let mut weather = Weather::new(Some(setup));
+        let library = &loaded.setup.effects;
+        let camera = Frame::IDENTITY;
+        let dt = 1.0 / 60.0;
+        for _ in 0..90 {
+            weather.advance(library, dt, camera, i32::from(open));
+        }
+        let lens = weather.lens();
+        assert!(lens.is_loaded() && lens.is_emitting());
+        assert_eq!(lens.per_emission(), 3, "4 * (1 - 0.975^90) = 3.6");
+        assert!(lens.alive_count() > 20, "{} drops", lens.alive_count());
+
+        weather.advance(library, dt, camera, i32::from(covered));
+        assert_eq!(weather.lens().target(), 0.0);
+        assert!(weather.lens().is_emitting(), "it runs on for 0.3 s");
+        for _ in 0..30 {
+            weather.advance(library, dt, camera, i32::from(covered));
+        }
+        assert!(!weather.lens().is_emitting(), "and then stops");
+        for _ in 0..200 {
+            weather.advance(library, dt, camera, i32::from(covered));
+        }
+        assert_eq!(weather.lens().alive_count(), 0, "80 ticks of life, drained");
+
+        weather.advance(library, dt, camera, i32::from(open));
+        assert_eq!(weather.lens().target(), 4.0);
+        assert!(weather.lens().is_emitting());
+    }
 }

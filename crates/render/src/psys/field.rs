@@ -80,6 +80,12 @@ pub enum Anchor {
     Camera { previous: Frame, current: Frame },
     /// Fixed in the world at this frame, the camera's motion not reaching it.
     World(Frame),
+    /// On the lens, `depth` units in front of it, the emitter frame turned so
+    /// its `XZ` plane is the screen's: a field point `(x, y, z)` is `x` right,
+    /// `z` up and `y` away. The screen effect's own placement - the instance
+    /// matrix's rows `(1,0,0), (0,0,-1), (0,1,0)`, read live - with no
+    /// camera compensation, so a droplet stays where it was on the glass.
+    Lens(Frame),
 }
 
 /// The box and the tick's wind.
@@ -100,11 +106,21 @@ impl Anchor {
         match self {
             Self::Camera { current, .. } => current.to_world(field - Vec3::Z * depth),
             Self::World(frame) => frame.to_world(field),
+            Self::Lens(frame) => frame.to_world(Vec3::new(field.x, field.z, -field.y - depth)),
         }
     }
 }
 
 impl System {
+    /// Holds `res+0x54`, the azimuth an aimed emitter spawns along, for this pool.
+    ///
+    /// The original's `Weather_Update` writes it into the *resource* every frame
+    /// (the lens's wind direction on the glass); an [`super::Effect`] here is shared,
+    /// so the pool keeps the live value instead. Only an aimed emitter reads it.
+    pub fn set_azimuth(&mut self, azimuth: f32) {
+        self.azimuth = Some(azimuth);
+    }
+
     /// Runs [`System::advance`] with the field's origin at the pool's own
     /// zero, then applies the field's step to every particle that has
     /// aged. See the module doc.
@@ -131,11 +147,11 @@ impl System {
                     let world = previous.to_world(particle.position - Vec3::Z * field.depth);
                     current.to_local(world + field.wind) + Vec3::Z * field.depth
                 }
-                Anchor::World(_) => particle.position + field.wind,
+                Anchor::World(_) | Anchor::Lens(_) => particle.position + field.wind,
             };
             let mut origin = match anchor {
                 Anchor::Camera { .. } => streak,
-                Anchor::World(_) => streak + field.wind,
+                Anchor::World(_) | Anchor::Lens(_) => streak + field.wind,
             };
             for axis in 0..3 {
                 if position[axis] > extent {

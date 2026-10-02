@@ -37,6 +37,9 @@
 //!   fill a cube of side `2e`. Read at confidence 75 (`particle-system.md`) and checked
 //!   live: Fort Gale's rain keeps 32 drops inside a 100-unit box - the wrap
 //!   [`super::field`] runs is the same `e`.
+//! - **Shape 2, a rectangle.** `FUN_088fbcec`: `(U(-1, 1) * ex, 0, U(-1, 1) * ez)` with
+//!   `ex` and `ez` the scaled `+0x34` and `+0x38` - the lens's `10 x 5.625`, the screen's
+//!   own 16:9 - and its velocity aimed from a fixed `+Z` rather than from the offset.
 //! - **Shapes 4 and 7, a sphere or hemisphere.** `ParticleSystem_EmitSphere`
 //!   (`particle-system.md`): the offset is the same unit direction the
 //!   particle flies along, at a radius shaped by `+0x3c` - `0` exactly `e`,
@@ -101,6 +104,13 @@ pub enum Spawn {
         /// `+0x40`, never scaled.
         depth: f32,
     },
+    /// Shape 2: a rectangle in the frame's `XZ` plane, `Y = 0`.
+    Rect {
+        /// `+0x34`, before scaling: the half-width along `X`.
+        extent: f32,
+        /// `+0x38`, before scaling: the half-depth along `Z`.
+        depth: f32,
+    },
     /// Shape 6: a cube of side `2e` about the frame's origin.
     Box {
         /// `+0x34`, before scaling.
@@ -141,6 +151,14 @@ impl Spawn {
                 spread: if depth.is_finite() { depth } else { 0.0 },
                 mode,
             },
+            (2, _)
+                if record.extent_unread[0].is_finite() && record.extent_unread[0].abs() < 1e4 =>
+            {
+                Self::Rect {
+                    extent: record.extent,
+                    depth: record.extent_unread[0],
+                }
+            }
             (6, _) => Self::Box {
                 extent: record.extent,
             },
@@ -176,6 +194,13 @@ impl Spawn {
                 let e = (extent * scale).max(1e-5);
                 let x = e * signed(rng);
                 let z = depth * signed(rng);
+                across * x + across.cross(up) * z
+            }
+            Self::Rect { extent, depth } => {
+                let (x, z) = (
+                    (extent * scale) * signed(rng),
+                    (depth * scale) * signed(rng),
+                );
                 across * x + across.cross(up) * z
             }
             Self::Box { extent } => {
@@ -238,12 +263,26 @@ impl Spawn {
 #[must_use]
 pub(super) fn place(
     spawn: Spawn,
-    direction: super::Direction,
+    (direction, azimuth): (super::Direction, Option<f32>),
     scale: f32,
     across: Vec3,
     up: Vec3,
     rng: &mut Rng,
 ) -> (Vec3, Vec3) {
+    // A caller's live azimuth (`res+0x54`) replaces the authored one on an aimed law.
+    let direction = match (direction, azimuth) {
+        (
+            super::Direction::Aimed {
+                elevation, jitter, ..
+            },
+            Some(azimuth),
+        ) => super::Direction::Aimed {
+            elevation,
+            azimuth,
+            jitter,
+        },
+        (other, _) => other,
+    };
     if let (
         Spawn::Ring { .. },
         super::Direction::Aimed {
@@ -258,6 +297,24 @@ pub(super) fn place(
         let elevation = elevation + jitter * (rng.next_f32() * 2.0 - 1.0);
         let (sin_a, cos_a) = azimuth.sin_cos();
         let heading = radial * cos_a + up.cross(radial) * sin_a;
+        return (heading * elevation.cos() + up * elevation.sin(), offset);
+    }
+    if let (
+        Spawn::Rect { .. },
+        super::Direction::Aimed {
+            elevation,
+            azimuth,
+            jitter,
+        },
+    ) = (spawn, direction)
+    {
+        // `ParticleSystem_AimedVelocity` handed a fixed `+Z`: each of the azimuth and the
+        // elevation is jittered on its own draw, and the heading is `+Z` turned by the azimuth.
+        let offset = spawn.offset(scale, Vec3::ZERO, across, up, rng);
+        let azimuth = azimuth + jitter * (rng.next_f32() * 2.0 - 1.0);
+        let elevation = elevation + jitter * (rng.next_f32() * 2.0 - 1.0);
+        let forward = across.cross(up);
+        let heading = forward * azimuth.cos() - across * azimuth.sin();
         return (heading * elevation.cos() + up * elevation.sin(), offset);
     }
     let aim = super::direction_for(direction, up, rng);

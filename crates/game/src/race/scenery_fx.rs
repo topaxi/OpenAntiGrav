@@ -27,6 +27,7 @@
 //! other thing it places on its own, from its `TrackStartup` rather than its
 //! `.vex` nodes, and it rides the same pool of view-side state.
 
+pub mod lens;
 mod noise;
 pub mod weather;
 mod wind;

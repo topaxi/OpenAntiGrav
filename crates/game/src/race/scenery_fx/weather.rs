@@ -17,9 +17,9 @@
 //! counts as covered; the first frame therefore leaves "covered" for an open
 //! section and enters it for a covered one.
 //!
+//! **The lens** `ScreenPsys` (`WO_RAIN_LENS`, Fort Gale) is [`super::lens`].
+//!
 //! **Not played, and said so:**
-//! - The screen lens `ScreenPsys` (`WO_RAIN_LENS`): its emitter is shape 2, a
-//!   shape no emitter here reads yet.
 //! - The mist overlay `FUN_088fa0a0` builds from `Tex`, `Alpha` and the
 //!   `Drift*` attributes.
 //! - The manager's clock behind the noise: its units are taken as seconds, the
@@ -36,6 +36,7 @@ use oag_render::psys::{self, Effect, System};
 use oag_tables::trackstartup::{Weather as Config, effect_name};
 use oag_vex::weather::{self as covered, Anchor as CoveredAnchor};
 
+use super::lens::{Edge, Lens};
 use super::wind::Wind;
 
 /// Seed for the weather's own spawn draws, wind table and phases. Any
@@ -68,6 +69,7 @@ pub struct Weather {
     anchor: Frame,
     previous: Option<Frame>,
     wind: Wind,
+    lens: Lens,
     clock: f32,
     rng: Rng,
 }
@@ -104,6 +106,7 @@ impl Weather {
             anchor: Frame::IDENTITY,
             previous: None,
             wind,
+            lens: Lens::new(None),
             clock: 0.0,
             rng,
         }
@@ -133,6 +136,12 @@ impl Weather {
         self.anchored
     }
 
+    /// The raindrops on the glass.
+    #[must_use]
+    pub fn lens(&self) -> &Lens {
+        &self.lens
+    }
+
     /// The pool, for tests.
     #[must_use]
     pub fn pool(&self) -> &System {
@@ -155,10 +164,18 @@ impl Weather {
             if let Some(effect) = &self.effect {
                 self.pool.ignite(effect, Vec3::ZERO, 1.0);
             }
+            self.lens = Lens::new(
+                setup
+                    .config
+                    .screen_psys
+                    .as_deref()
+                    .and_then(|path| effects.get(effect_name(path))),
+            );
         }
         self.clock += dt;
         self.sections = (self.sections.1, section);
         if self.sections.0 != self.sections.1 {
+            let was = covered::covered(self.mask, self.sections.0);
             let now = covered::covered(self.mask, self.sections.1);
             if now {
                 self.anchored = true;
@@ -169,17 +186,28 @@ impl Weather {
                 if let Some(anchor) = at {
                     self.anchor = frame_of(&anchor.world);
                 }
-            } else if covered::covered(self.mask, self.sections.0) {
+            } else if was {
                 self.anchored = false;
+            }
+            let edge = match (was, now) {
+                (false, true) => Some(Edge::Entered),
+                (true, true) => Some(Edge::Held),
+                (true, false) => Some(Edge::Left),
+                (false, false) => None,
+            };
+            if let Some(edge) = edge {
+                self.lens.edge(edge, self.clock);
             }
         }
         self.wind.advance(dt, self.clock);
+        self.lens
+            .advance(dt, self.clock, camera, self.wind.vector());
         if let Some(effect) = self.effect.clone()
             && let Some(field) = effect.field
         {
             let spec = FieldSpec {
                 half_extent: field.half_extent,
-                depth: field.depth,
+                depth: effect.view_depth,
                 wind: self.wind.modifier(),
             };
             let anchor = self.anchor_for(camera);
@@ -209,12 +237,14 @@ impl Weather {
         right: Vec3,
         up: Vec3,
     ) {
+        self.lens
+            .extend_vertices(additive, alpha_over, camera, right, up);
         let Some(effect) = &self.effect else {
             return;
         };
-        let Some(field) = effect.field else {
+        if effect.field.is_none() {
             return;
-        };
+        }
         let anchor = if self.anchored {
             Anchor::World(self.anchor)
         } else {
@@ -224,7 +254,7 @@ impl Weather {
             }
         };
         self.pool
-            .in_world(&anchor, field.depth)
+            .in_world(&anchor, effect.view_depth)
             .extend_vertices(additive, alpha_over, effect, right, up);
     }
 }
