@@ -119,6 +119,10 @@ pub(super) fn ride(spec: &EmitterSpec, particle: &mut Particle, anchor: Vec3) {
 
 /// `channel`, repeated over a particle life of `life_ticks`, when it authors a
 /// period; `channel` unchanged otherwise.
+///
+/// Equal-time keys survive when their values differ: that pair is a jump,
+/// which [`Channel::value_at`] plays as one (the left value up to the time,
+/// the right one after it).
 pub(super) fn unroll(channel: &Channel, life_ticks: f32) -> Channel {
     let period = channel.period;
     if period <= 0.0 || channel.mode != ChannelMode::Keyframed || channel.keys.len() < 2 {
@@ -135,8 +139,13 @@ pub(super) fn unroll(channel: &Channel, life_ticks: f32) -> Channel {
                 keys.push((1.0, channel.value_at(end.min(1.0))));
                 break 'cycles;
             }
+            // Two keys at one time are how the format authors a jump - the
+            // welder's `GLOW` flashes four times a cycle that way - so only a
+            // key repeating both time and value is redundant. Dropping every
+            // equal-time key erased the jumps, and the flashes with them.
             match keys.last() {
-                Some(&(last, _)) if at <= last + 1.0e-6 => {}
+                Some(&(last, _)) if at < last - 1.0e-6 => {}
+                Some(&(last, lv)) if (at - last).abs() <= 1.0e-6 && lv == v => {}
                 _ => keys.push((at, v)),
             }
         }

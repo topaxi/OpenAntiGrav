@@ -39,5 +39,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             e.palette[128]
         );
     }
+    let system = oag_vex::pob::ParticleSystem::parse(&blob)?;
+    for e in system.emitters(&blob)? {
+        for t in &e.initial_particles {
+            println!(
+                "template {:?} on {:?}: life {:?} size {:?} alpha {:?}",
+                t.name, e.name, t.lifetime_ticks, t.size, t.alpha
+            );
+        }
+    }
     Ok(())
 }
