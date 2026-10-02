@@ -291,3 +291,57 @@ fn a_flat_circle_reads_exactly_as_it_did() {
     let measured = ring.curvature(0, 10.0);
     assert!((measured - 0.01).abs() < 0.002, "measured {measured}");
 }
+
+/// A level run along `-z` with a crest (the climb eases off) at step 40, then
+/// `gap` unsupported samples from step 70, and a sideways kink of `yaw` radians
+/// at step 50 when non-zero. One unit between points.
+fn ramp_line(gap: usize, yaw: f32) -> Line {
+    let mut points = Vec::new();
+    let (mut x, mut y, mut z) = (0.0f32, 0.0f32, 0.0f32);
+    let mut unsupported = Vec::new();
+    for step in 0..200 {
+        points.push(Vec3::new(x, y, z));
+        unsupported.push((70..70 + gap).contains(&step));
+        let climb = if step < 40 { 0.3f32 } else { 0.0 };
+        let heading = if step >= 50 { yaw } else { 0.0 };
+        y += climb;
+        x += heading.sin();
+        z -= heading.cos() * (1.0 - climb * climb).sqrt();
+    }
+    Line::new(points).with_unsupported(unsupported)
+}
+
+/// Chosen, not measured: the crest a craft launches off, a few dozen units
+/// before a long gap, is not a corner to brake for. `05_Track`'s first jump.
+#[test]
+fn the_crest_before_a_long_gap_reads_straight() {
+    let with_gap = ramp_line(50, 0.0);
+    let no_gap = ramp_line(0, 0.0);
+    let crest = 34;
+    assert!(
+        no_gap.curvature(crest, 4.0) > 0.01,
+        "the fixture has no crest: {}",
+        no_gap.curvature(crest, 4.0)
+    );
+    assert!(with_gap.is_takeoff(crest));
+    assert_eq!(with_gap.curvature(crest, 4.0), 0.0);
+}
+
+/// Only the pitch is forgiven: a real turn on the run-up still brakes.
+#[test]
+fn a_turn_on_the_run_up_still_reads_as_a_corner() {
+    let with_gap = ramp_line(50, 0.3);
+    let no_gap = ramp_line(0, 0.3);
+    assert!(with_gap.is_takeoff(50));
+    let at = 42;
+    assert!(no_gap.curvature(at, 4.0) > 0.01);
+    assert!(with_gap.curvature(at, 4.0) > 0.01);
+}
+
+/// A short gap is a seam or a lip, not a jump: it marks no run-up.
+#[test]
+fn a_short_gap_has_no_run_up() {
+    let line = ramp_line(5, 0.0);
+    assert!(!line.is_takeoff(60));
+    assert!(line.curvature(34, 4.0) > 0.01);
+}
