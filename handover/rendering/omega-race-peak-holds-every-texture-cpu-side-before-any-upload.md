@@ -36,13 +36,13 @@ their peaks at 769 to 667 and 701 to 349 MiB. Numbers, method and caveats are in
 - One `.gnf` per `amphiseum` and `modesto_heights` is refused as blocks and still
   decodes to RGBA8 (the loader line counts it, does not name it). Single-level and
   off-grid are 0 on every circuit.
-- **Talon's Junction cannot be raced on this machine, on `main` too.**
-  `data/environments/talons_junction/texturesps4/ds_floor_cs.gnf` is 16,384
-  texels wide and `device_descriptor` asks for wgpu's default limits
-  (`max_texture_dimension_2d` 8,192), so `create_texture` panics. With the sink
-  it panics on `race-load` at the first such texture instead of on `race-build`;
-  both are reported as a failed load/build. The rule says a texture that cannot
-  be uploaded draws nothing and says so in the loader report; neither happens.
+- **Talon's Junction and Modesto Heights panicked in `create_texture`** on a
+  16,384-wide `.gnf` against the default 8,192 limit. Fixed (the device asks for
+  the adapter's limit; an oversize texture uploads from the first level that
+  fits, chosen, not measured); see `docs/formats/omega-status.md`, "Textures
+  wider than the device allows". A texture with no fitting level takes the
+  "undecoded" 1x1 white fallback rather than being left undrawn; no Omega
+  texture reaches it.
 - HD's 5 pitched `.gtf` files and Vita `.gxt` textures stay RGBA8 on the way in,
   and are uploaded as such now.
 
@@ -53,8 +53,5 @@ their peaks at 769 to 667 and 701 to 349 MiB. Numbers, method and caveats are in
 2. Check whether the `environments2048` unresolved draws are the single-level
    textures (one `textures(path)` probe on `mall`).
 3. Route HD's `sky.gtf` through the sink, or note why the sky cube cannot.
-4. Talon's Junction: refuse a texture over the device's
-   `max_texture_dimension_2d` (bind nothing, name it in the loader line), or
-   request the adapter's own limit.
-5. Optionally open the 2048 front-end capture's device before its load so that
+4. Optionally open the 2048 front-end capture's device before its load so that
    route streams too.
