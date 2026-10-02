@@ -309,6 +309,26 @@ pub fn hd_results_draw_list(
         if matches!(name, "GridHead3" | "GridHead4") {
             continue;
         }
+        // The loyalty group's two `<Block>`s (`ER_LOY`, `IG_HUD_TOTAL`) author no
+        // `name`, so they cannot be looked up the way the grid headers are: the
+        // block sharing this text's position is its box, in `HD_Blue` behind the
+        // white label. Drawn as the text alone they were white on the light panel.
+        if name.is_empty()
+            && let Some(block) = unnamed_block_at(screen, text)
+        {
+            if let Some(content) = text.string.as_deref() {
+                block_draw(
+                    block,
+                    Some((text, content)),
+                    None,
+                    0.0,
+                    frame,
+                    layout,
+                    &mut out,
+                );
+            }
+            continue;
+        }
         let content = match name {
             "Line1" => hd_headline_text(model.headline, strings),
             // Online-only - see the module doc.
@@ -700,6 +720,14 @@ fn find_block<'a>(screen: &'a Screen, name: &str) -> Option<&'a BlockWidget> {
         .blocks
         .iter()
         .find(|block| block.name.as_deref() == Some(name))
+}
+
+/// The `<Block>` with no `name` that sits where `text` does - the half of an
+/// unnamed block [`crate::screen`] folded into [`Screen::texts`].
+fn unnamed_block_at<'a>(screen: &'a Screen, text: &Text) -> Option<&'a BlockWidget> {
+    screen.blocks.iter().find(|block| {
+        block.name.is_none() && (block.x - text.x).abs() < 0.5 && (block.y - text.y).abs() < 0.5
+    })
 }
 
 /// Where a Block's label sits inside it, `(40, 3)`: `0x00189c38` puts the

@@ -618,6 +618,18 @@ reproduced:** the ticker's animation (a line per reason, a fade and a cap on
 the speed, `0x00225030`) - the final state only. **Not measured:** the whole
 law is decompilation, no RPCS3 run (the cap on every row is 84).
 
+**Colours are what the file authors** (`EndRace_Definition.xml`, the `Item` at
+`1180,368`): the caption `ER_LOYSTAT` and `loyalty1.1` are `FEGlobals->HD_Grey`,
+`loyalty2` is white and right-aligned at `x = 352`, and the two `<Block>`s
+(`ER_LOY` at `y = 24`, `IG_HUD_TOTAL` at `y = 112`, `HD_Blue` fill, white
+`TextColor`) carry the white labels. Those blocks author **no `name`**, so a
+first capture drew them as bare white text on the light panel; they now draw
+as blocks like the grid headers (`unnamed_block_at`). `"135 POINTS"` is grey
+`HD_Grey` text on the light panel exactly as authored - dim, but nothing in the
+file backs it with a fill. Unverified against a live frame. The two `4 px`
+vertical bars (`x = 1` and `361`, `y = 44`, `70` tall, `HD_Blue`) are authored
+`<Image>` fills and are the sides of that panel.
+
 Capture: `--menu-page endrace-results --size 1280x720` against
 `hdfury-ps3-eu-dec.iso` draws `LOYALTY` / `135 POINTS` / `TOTAL 4020` at the
 block the file authors (`x = 1180`, `y = 368`) - the numbers are the capture's

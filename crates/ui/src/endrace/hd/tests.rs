@@ -496,3 +496,56 @@ fn results_draws_the_loyalty_block_off_the_award_and_the_total() {
         "no loyalty on the model draws no points line: {absent:?}"
     );
 }
+
+/// The loyalty group's two `<Block>`s author no `name`; they must still draw as
+/// blocks (label inset into the box at `X + 40`), not as bare text at the
+/// block's own corner - the white-on-light-panel bug the first capture showed.
+#[test]
+fn unnamed_loyalty_blocks_draw_as_blocks_with_their_label_inset() {
+    let xml = r#"
+<Screen type="EndRace Results" name="EndRace Results">
+<Item OffsetX="1180" OffsetY="368">
+<Block transition="0"><Values x="0" y="24" IDString="ER_LOY" TextColor="0xffffffff" unselectable="true" width="366" shaped="true" Color="0xff8ac0ca"></Values></Block>
+<Block transition="0"><Values x="0" y="112" IDString="IG_HUD_TOTAL" TextColor="0xffffffff" unselectable="true" width="366" shaped="false" Color="0xff8ac0ca"></Values></Block>
+</Item>
+</Screen>"#;
+    let strings = StringTable::from_xml(
+        r#"<Strings><Entry ID="ER_LOY" String="LOYALTY"></Entry><Entry ID="IG_HUD_TOTAL" String="TOTAL"></Entry></Strings>"#,
+    );
+    let layout = Layout::read_authored(
+        &Screens::from_xml(xml),
+        "EndRace Results",
+        &strings,
+        crate::picker::FaceScales::default(),
+        [1920.0, 1080.0],
+        [1920.0, 1080.0],
+    )
+    .unwrap();
+    let model = FieldResults {
+        loyalty: None,
+        headline: Headline::Position(1),
+        rows: Vec::new(),
+    };
+    let layers = hd_results_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    );
+    let at = |wanted: &str| {
+        layers.body.iter().find_map(|draw| match draw {
+            Draw::Text { text, x, y, .. } if text == wanted => Some((*x, *y)),
+            _ => None,
+        })
+    };
+    let loyalty = at("LOYALTY").expect("the ER_LOY block's label draws");
+    assert!(
+        loyalty.0 >= 1180.0 + LABEL_INSET.0 - 1.0,
+        "label inset into the block, not at its corner: {loyalty:?}"
+    );
+    assert!(at("TOTAL").is_some());
+}
