@@ -119,3 +119,10 @@ any regression gate quoted before and after, screenshot paths, and what is
 still open. Return ONLY that path plus at most 15 lines: long returns can
 silently fail to arrive. A negative result reported honestly is a good
 outcome, and "I could not determine X, here is its address" is a result.
+
+**Your report is the end of the lane.** After you send it, do not commit,
+merge main into your branch, or edit your worktree unless the lead sends you
+back. The lead merges and removes your worktree as soon as the report arrives.
+On 2026-10-02 a member kept committing after its report and was mid-way
+through merging main when its worktree was removed. Finish everything first,
+then report.
