@@ -120,7 +120,6 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
         wgpu::TextureFormat::Rgba8Unorm,
         (64, 64),
         Anisotropy::Off,
-        false,
         None,
         oag_display::display::Msaa::Off,
         Vec::new(),

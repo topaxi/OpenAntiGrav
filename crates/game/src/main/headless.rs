@@ -539,7 +539,6 @@ pub(crate) fn run_race(
                 frustum_culling: settings.graphics.frustum_culling,
                 pvs_culling: cli.pvs.unwrap_or(settings.graphics.pvs_culling),
                 anim_seconds: cli.anim_seconds,
-                bloom: settings.graphics.bloom,
                 boost_fov_kick: settings.graphics.boost_fov_kick,
                 camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
                 msaa: render_profile.msaa,

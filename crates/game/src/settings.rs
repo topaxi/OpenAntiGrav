@@ -444,65 +444,6 @@ pub struct Graphics {
     /// `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md`.
     #[serde(default = "default_pvs_culling")]
     pub pvs_culling: bool,
-    /// Whether trackside surfaces animate, or stay frozen at their authored
-    /// texture coordinates.
-    ///
-    /// **On by default, because it is now a reproduction rather than a
-    /// guess.** Each animated material carries its own keyframed
-    /// `TEXSCALE`/`TEXOFFSET` track in the `.vex` file: key times in 60 Hz
-    /// frames, values in 1/256 units, an authored loop period and a step flag.
-    /// The renderer replays those, the way `TexAnim_UpdateTransform`
-    /// (`0x08927204`) does. See
-    /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
-    ///
-    /// It was off while the animation was inferred instead: surfaces picked
-    /// out by banded texture rows and narrow-V-band geometry, scrolled at
-    /// chosen rates. That reading was not merely unproven, it was wrong on the
-    /// axis - `col_display7_GLOW`, on all twelve circuits, authors a **U**
-    /// scroll where the table drove it in V.
-    ///
-    /// What it still does, off, is freeze every animated surface at the start
-    /// of its track, which is what a still-frame comparison against a capture
-    /// of the original wants.
-    ///
-    /// **It freezes the scenery that *moves*, not only the scenery that
-    /// scrolls, and the name no longer says so.** Since the `Anim Transform`
-    /// class was ported (2026-08-18) this switch gates both mechanisms off one
-    /// clock, because a still-frame comparison wants the whole circuit held
-    /// still and not half of it. The name is kept for now rather than migrated,
-    /// since it is a persisted key in everyone's settings file - but a `false`
-    /// here is now a much bigger hammer than it was when it was written, and a
-    /// file written before 2026-08-11 carries `false` from back when that was
-    /// the default. That is the first thing to check if a circuit looks static.
-    ///
-    /// The ships are deliberately not covered by this switch: their blink is
-    /// measured in a frame-accurate capture, so it animates either way.
-    /// Whether the recovered bloom post-process runs.
-    ///
-    /// **On by default, because the original always runs it.** A read
-    /// watchpoint only `Bloom_Draw` trips counted it once per race frame, 121
-    /// of 121; nothing in the executable switches it off. Every constant of
-    /// the passes is read out of `BOOT.BIN` - see `oag_render::post::bloom`.
-    ///
-    /// **It stayed off until the mask it reads was measured**, and that was
-    /// the right call: the plume wrote the mask through an additive alpha
-    /// blend and quadrupled a boost frame's blown-out area. The original's
-    /// mask is the GE stencil, read out of EDRAM on a live race, and nothing
-    /// blends it: `4` under every opaque batch, a `_GLOW` texture's own byte
-    /// under its batches, nothing under the plume. Stamped that way
-    /// (`mesh_render::GlowMask::Stamped`), a racing frame on Talon's Junction
-    /// moves from 2,911 fully white pixels to 6,888, almost all of it the
-    /// exhaust ribbon, and its mean luma from 110 to 115. See
-    /// `docs/rendering/glow-mask.md`.
-    ///
-    /// **Pulse on the PSP only.** The pass runs over a mask stamped the
-    /// measured way, which a Pure or PS2 source does not write, so there it
-    /// draws nothing whatever this says. Wipeout HD's own chain reads this
-    /// switch too, as `Glow::Drawn` or `Glow::Suppressed`. A settings file
-    /// that already says `bloom = false` keeps saying it: a default only
-    /// fills a missing key.
-    #[serde(default = "default_bloom")]
-    pub bloom: bool,
     /// How much crossing a speed pad widens the field of view for a moment.
     ///
     /// **[`oag_display::display::BoostFovKick::DEFAULT`] by default, and an authored
@@ -556,11 +497,6 @@ fn default_camera_view() -> oag_display::display::CameraView {
     oag_display::display::CameraView::default()
 }
 
-/// See [`Graphics::bloom`]: **on**, as the original always runs it.
-fn default_bloom() -> bool {
-    true
-}
-
 impl Default for Graphics {
     fn default() -> Self {
         Self {
@@ -570,7 +506,6 @@ impl Default for Graphics {
             perf_overlay: crate::perf::Overlay::default(),
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
-            bloom: default_bloom(),
             boost_fov_kick: default_boost_fov_kick(),
             camera_view: default_camera_view(),
         }

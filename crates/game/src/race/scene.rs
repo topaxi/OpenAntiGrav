@@ -410,7 +410,6 @@ impl Scene {
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
-        bloom_enabled: bool,
         visibility: Option<TrackVisibility>,
         msaa: oag_display::display::Msaa,
         fog_volumes: Vec<oag_vex::fog::FogVolume>,
@@ -437,8 +436,7 @@ impl Scene {
         let scene_depth = mesh_render::Depth::Scene;
         // See `hd_chain::build`'s own doc comment for what this chain is and
         // why `format` comes back shadowed.
-        let (hd, format, caller_format) =
-            hd_chain::build(device, format, size, hd_bloom, bloom_enabled);
+        let (hd, format, caller_format) = hd_chain::build(device, format, size, hd_bloom);
         // **The Zone stage's own texture, bound once per model.** The showing
         // stage's `zoneModeTrack<n>.gtf`, which `mesh.wgsl` samples at
         // `zoneColourTint.xy * (1 - meshUV)` wherever the material's albedo is
@@ -800,7 +798,7 @@ impl Scene {
         // dimmer, not broken. The HD chain replaces this pass outright, and it
         // runs only over a mask stamped as Pulse PSP's is measured to be -
         // Pure's and the PS2's are not (docs/rendering/glow-mask.md).
-        let bloom = match (bloom_enabled && hd.is_none() && measured_mask)
+        let bloom = match (hd.is_none() && measured_mask)
             .then(|| oag_render::post::bloom::Bloom::new(device, format))
             .transpose()
         {

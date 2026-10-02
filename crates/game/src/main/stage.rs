@@ -498,7 +498,6 @@ impl Stage {
             gpu.format(),
             size,
             anisotropy,
-            settings.graphics.bloom,
             visibility,
             render_profile.msaa,
             fog_volumes,

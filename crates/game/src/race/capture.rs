@@ -100,9 +100,6 @@ pub struct CaptureOptions {
     pub aspect: oag_display::display::Aspect,
     /// Anisotropic filtering level for the track and ship textures.
     pub anisotropy: Anisotropy,
-    /// Whether the recovered bloom runs - see `crate::settings::Graphics::bloom`,
-    /// which defaults it **off** until its magnitude is calibrated.
-    pub bloom: bool,
     /// Which adapter to draw with, for the same reason `aspect` and `fov` are
     /// here: a capture is only evidence about what a player sees if it was
     /// drawn on the device they see it on. A driver is exactly the kind of
@@ -483,7 +480,6 @@ pub fn capture(
         format,
         scene_size,
         options.anisotropy,
-        options.bloom,
         visibility,
         options.msaa,
         fog_volumes,

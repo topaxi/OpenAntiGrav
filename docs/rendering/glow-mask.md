@@ -118,8 +118,8 @@ plume **does not** write the mask.
   pipeline for that reference now tests `LessEqual`
   (`mesh_render::cutout::depth_compare`). On a Pure and a PS2 start frame the
   change moves no pixel.
-- **The bloom is on by default** (`Graphics::bloom`) and runs only over a
-  stamped mask, so a Pure or PS2 race draws none.
+- **The bloom always runs** (no setting since 2026-10-02: the original
+  offers none) and only over a stamped mask, so a Pure or PS2 race draws none.
 - `OAG_DUMP_GLOW_MASK=<png>` writes a `--screenshot`'s mask for this
   comparison. Talon's Junction on the grid: ours reads `4` over 107,644 of
   130,560 pixels at 480 x 272, with the strips, the banner, the panels and

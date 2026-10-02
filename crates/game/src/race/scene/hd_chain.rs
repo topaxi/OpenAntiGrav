@@ -14,14 +14,10 @@ use super::*;
 /// the PSP bloom's is: a race without it is the pre-HDR picture, not a
 /// broken one.
 ///
-/// **`bloom_enabled` reaches this chain too, and until 2026-09-09 it did
-/// not.** The switch gated only the PSP chain below, so Wipeout HD - the
-/// one title this chain draws for - blooms whatever the player sets.
-/// Measured: flipping the setting moved a Pulse frame's clipped-white share
-/// from 2.07 % to 0.41 % and left an HD frame byte-identical.
-/// `Glow::Suppressed` still runs the exposure resolve, which is what
-/// encodes the linear scene target at all; see that enum for why turning
-/// the whole chain off would be a different and wrong thing.
+/// **The glow always draws.** There is no bloom setting: the original offers
+/// none in any title, so the only faithful strength is the title's own
+/// (maintainer, 2026-10-02). `Glow::Suppressed` stays in `oag_render` for its
+/// own tests; nothing here asks for it.
 ///
 /// Returns the chain itself (or `None`), the caller's own surface format -
 /// **the format is the statement about colour space**: with the chain in
@@ -35,17 +31,12 @@ pub(super) fn build(
     format: wgpu::TextureFormat,
     size: (u32, u32),
     hd_bloom: Option<oag_render::post::hd_bloom::Params>,
-    bloom_enabled: bool,
 ) -> (
     Option<oag_render::post::hd_bloom::Chain>,
     wgpu::TextureFormat,
     wgpu::TextureFormat,
 ) {
-    let glow = if bloom_enabled {
-        oag_render::post::hd_bloom::Glow::Drawn
-    } else {
-        oag_render::post::hd_bloom::Glow::Suppressed
-    };
+    let glow = oag_render::post::hd_bloom::Glow::Drawn;
     let hd = match hd_bloom
         .map(|params| oag_render::post::hd_bloom::Chain::new(device, format, size, params, glow))
         .transpose()
