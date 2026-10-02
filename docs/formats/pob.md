@@ -322,10 +322,14 @@ a GPU texture reference from it, or reads a resolved numeric record and
 turns it into emission/colour/lifetime parameters, is a **different,
 not-yet-located** function - the same gap the previous pass described, just
 narrowed: it operates on already-fixed-up pointers rather than on the raw
-container. `FUN_08a6bd18`, the class-descriptor slot `Vex_RegisterClass`
+container. ~~`FUN_08a6bd18`, the class-descriptor slot `Vex_RegisterClass`
 installs for `ParticleSystem` class `0x3c4`, remains a trivial
 self-address-returning thunk - the same dead end already seen twice for
-`Ship Collision Fx`'s own slot. The preload-array lead above is the more
+`Ship Collision Fx`'s own slot.~~ **Corrected 2026-10-02:** `0x08a6bd18` is
+`PsysNode_Tag`, the class's identity tag, and the class is live - circuits
+place `ParticleSystem` nodes in their `track.vex` and `PsysNode_Init`
+(`0x089156a0`) spawns each at load, confirmed on PPSSPP. See
+[placed-particle-systems.md](../ghidra/functions/psp-pulse-usa/placed-particle-systems.md). The preload-array lead above is the more
 promising next static step; short of that, a live capture that steps
 forward from a resolved `WO_SHIP_COLL_SPARK_DAMAGE` target rather than from
 the loader (which this pass did not attempt) is the next live one.

@@ -53,10 +53,11 @@ const SYSTEMS: usize = 35;
 const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     (
         "WO_SHIP_COLL_SPARK_NODAMAGE",
-        "the trigger IS recovered - `ShipCollisionFx_Trigger` picks this when \
-         the contact dealt no damage - but this engine's wall contact carries \
-         no damage flag yet, so there is nothing to pick on. The closest of \
-         all of these to being wirable.",
+        "the trigger IS read: `Ship_DispatchCollisionFx` picks it for a contact \
+         whose combined friction is not positive (`record+0x30`, `0x0883df38`) - \
+         a floor or magstrip contact, the same predicate that spares it damage. \
+         320 live contacts on Outpost 7 never produced one, so it waits for a \
+         live `damaged == 0` hit before it is wired.",
     ),
     (
         "WO_SHIP_COLL_SPARK_TRAIL_SMOKE",
@@ -105,14 +106,22 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // `oag_game::race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     (
         "WO_RAIN",
-        "an environment effect. Which track places it, where, and how many, \
-         is not in anything decoded - the track format carries no effect \
-         placement this project has read.",
+        "the trigger is read: Fort Gale's `TrackStartup` `Weather` element names \
+         it as `EnvPsys`, and `Weather_Construct` (`0x088f184c`) spawns it on a \
+         camera-relative node that `Weather_Update` (`0x088f1e58`) hides indoors \
+         and blows with the wind. None of that frame is modelled here yet.",
     ),
-    ("WO_RAIN_LENS", "environment, same as `WO_RAIN`."),
-    ("WO_SNOW", "environment, same as `WO_RAIN`."),
-    ("WO_BLUE_WELDER", "environment, same as `WO_RAIN`."),
-    ("WO_MODESTO_STEAM_A", "environment, same as `WO_RAIN`."),
+    (
+        "WO_RAIN_LENS",
+        "Fort Gale's `ScreenPsys`, same as `WO_RAIN`.",
+    ),
+    ("WO_SNOW", "Outpost 7's `EnvPsys`, same as `WO_RAIN`."),
+    // **Not `WO_BLUE_WELDER` or `WO_MODESTO_STEAM_A`** - wired 2026-10-02.
+    // The circuits place them as `ParticleSystem` (`0x3c4`) nodes and
+    // `PsysNode_Init` (`0x089156a0`) spawns each at load; three Basilico
+    // welders confirmed live. See `oag_game::race::scenery_fx`. `RAIN`,
+    // `RAIN_LENS` and `SNOW` are placed by no `ParticleSystem` node on the
+    // disc, which leaves `weatherPos` (`0x3da`) as their likely owner.
 ];
 
 /// The eight the PS2 port authors, the PSP does not, and nothing triggers.
@@ -191,6 +200,9 @@ const PSP_WIRED: &[&str] = &[
     "WO_SHIP_DEATH_SPARKS",
     // The big blast 1.5 s later, at the live model's matrix - the same module.
     "WO_SHIP_EXPLOSION",
+    // Placed by the circuits themselves - see `oag_game::race::scenery_fx`.
+    "WO_BLUE_WELDER",
+    "WO_MODESTO_STEAM_A",
 ];
 
 /// The PS2 carries all ten of the PSP's plus its own engine flare.

@@ -24,6 +24,7 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
         return;
     }
     let nodes = oag_vex::vex::nodes(track_blob).unwrap_or_default();
+    place_scenery_fx(loaded, track_blob, &nodes);
     match mesh_render::HullLights::from_track(track_blob, &nodes, 255) {
         Some(hull) => {
             loaded.report.push(format!(
@@ -73,4 +74,26 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
          original's stencil does, a blended batch with the glow bits through a second draw"
             .into(),
     );
+}
+
+/// The circuit's own `ParticleSystem` nodes, each played from load on its node,
+/// as `race::scenery_fx` describes. Pulse PSP only: `PsysNode_Init` was read
+/// and confirmed live there and nowhere else.
+fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::vex::Node]) {
+    let placed = oag_vex::placed_psys::placed(track_blob, nodes);
+    let mut names: Vec<&str> = placed.iter().map(|p| p.name.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    for name in names {
+        let count = placed.iter().filter(|p| p.name == name).count();
+        let state = if loaded.setup.effects.get(name).is_some() {
+            "played from load on its node"
+        } else {
+            "not loaded, so not drawn"
+        };
+        loaded
+            .report
+            .push(format!("placed effect: {count} x {name}, {state}"));
+    }
+    loaded.setup.scenery_fx = placed;
 }

@@ -434,6 +434,20 @@ spark candidate; their consumer is still unlocated and still unimportant to
 the spark question. Left as an open, low-priority thread rather than chased
 further.
 
+**What `damaged` is, read at instruction level 2026-10-02.** `Ship_DispatchCollisionFx`
+computes its fourth argument as `lwc1 f12,0x30(s1)` (`0x0883df38`), `c.le.s f12,0.0`,
+`bc1fl` -> `a2 = 1`: **the contact record's combined friction is positive**. `s1` is
+the record (`body + 0x170 + n*0x40`), so this is `record + 0x1a0`, the very field
+the hull-damage gate tests at `0x08842648`. So `WO_SHIP_COLL_SPARK_NODAMAGE` is the
+spark of a contact that cannot damage: a `Floor` or `MagFloor` collider (the `-1.0`
+friction sentinel). Confidence **88** on the predicate. **Live, not yet seen:** 300
+`ShipCollisionFx_Trigger` hits on an Outpost 7 replay - which diverged into
+scraping walls - were all `kind 0, damaged 1`. A drop from height was tried too,
+but its 20 hits (all `damaged 1`, decaying like a contact at rest) cannot be
+trusted to be the drop: `place --settle` and the logger both use execution
+breakpoints and only the newest fires. Not wired here, for want of a live
+`damaged == 0` hit.
+
 ## `ShipCollisionFx_Trigger` (`0x089246b4`) is the actual spark-spawn function
 
 Reached from reaction #1 above. **Decompiled in full.** It takes

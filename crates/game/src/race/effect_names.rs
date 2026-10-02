@@ -371,3 +371,22 @@ pub const LEACHBEAM_CHARGING_EFFECT: &str = "WO_LEACHBEAM_CHARGING";
 /// a "the same instance kept alive" requirement out of the decompile the way
 /// that effect's own re-spawn-on-pulse behaviour did.
 pub const LEACHBEAM_ABSORB_EFFECT: &str = "WO_LEACHBEAM_ABSORB";
+
+/// The welding sparks Basilico (`01_Track`) and circuit five place on their
+/// own scenery: three nodes on Basilico, six or seven on circuit five.
+///
+/// **Recovered, confidence 85, trigger confirmed live.** Not a code literal at
+/// all: the circuit's `.vex` places a `ParticleSystem` node whose `Name`
+/// attribute is this string, and `PsysNode_Init` (`0x089156a0`) spawns
+/// it at load on the node's own matrix. PPSSPP caught exactly the three
+/// Basilico loads. Played by `race::scenery_fx` - see
+/// `docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md`. This
+/// constant names it for [`super::RACE_EFFECTS`]'s loader; the placement comes
+/// from the disc.
+pub const BLUE_WELDER_EFFECT: &str = "WO_BLUE_WELDER";
+
+/// The steam vents circuits five and seven place: two on five, eighteen on
+/// seven. **A Pulse effect**, despite the name: no Pure circuit is needed to
+/// explain it. Same placement mechanism and evidence as
+/// [`BLUE_WELDER_EFFECT`]; Outpost 7's eighteen loads were caught live too.
+pub const MODESTO_STEAM_EFFECT: &str = "WO_MODESTO_STEAM_A";

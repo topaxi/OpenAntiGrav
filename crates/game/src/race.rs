@@ -150,6 +150,7 @@ mod replay;
 mod respawn;
 mod results;
 mod scene;
+pub mod scenery_fx;
 mod shadow;
 mod sim;
 mod spawn;

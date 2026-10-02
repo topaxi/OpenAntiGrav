@@ -580,6 +580,8 @@ pub struct Setup {
     /// the model authors none, and the burst falls back to anchoring at the
     /// contact point itself, aimed along world up.
     pub collision_fx: Vec<crate::livery::SparkAnchor>,
+    /// The circuit's own placed effects - see `race::scenery_fx`. Empty off Pulse PSP.
+    pub scenery_fx: Vec<oag_vex::placed_psys::Placed>,
     /// Every [`RACE_EFFECTS`] entry that loaded, parsed from the disc's own
     /// `Data\Psys\*.POB`.
     ///

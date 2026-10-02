@@ -138,6 +138,11 @@ address for `LodGroup`'s own `init` slot and did not resolve to it cleanly
 through this session's arithmetic - not asserted as a match, just noted as
 tried and inconclusive.)
 
+**Settled 2026-10-02 in [placed-particle-systems.md](placed-particle-systems.md):
+`0x08a6bd18` is `ParticleSystem`'s live identity tag, and `ParticleSystem`
+nodes - not `weatherPos` - are what place `WO_BLUE_WELDER` and
+`WO_MODESTO_STEAM_A`, which leaves `WO_RAIN`/`WO_RAIN_LENS`/`WO_SNOW` as
+`weatherPos`'s candidates.** The paragraph below is kept as written.
 **This means `pob.md`'s identical framing for `ParticleSystem`'s slot
 (`FUN_08a6bd18`, called there "a trivial self-address-returning thunk", "the
 same dead end") is now suspect too** - it was not re-checked this session

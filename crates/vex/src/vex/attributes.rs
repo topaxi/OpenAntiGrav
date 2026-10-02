@@ -79,3 +79,36 @@ pub fn node_attributes(data: &[u8], node: &Node) -> Vec<(String, f32)> {
     }
     out
 }
+
+/// The string a node's header carries under `name`, compared without case.
+///
+/// The same list [`node_attributes`] walks, read the other way: the value at
+/// the attribute's own offset is a NUL-terminated string rather than an `f32`.
+/// `PsysNode_Init` (`0x089156a0`) looks its `Name` up this way, with
+/// `strcasecmp` - which is why this one folds case where [`node_attributes`]
+/// does not. See `docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md`.
+///
+/// `None` for a node with no list, no such attribute, or an empty string.
+#[must_use]
+pub fn node_string_attribute(data: &[u8], node: &Node, name: &str) -> Option<String> {
+    if node.unk_0x0e == 0 || node.header_size < 0x10 {
+        return None;
+    }
+    let header = data.get(node.offset..node.offset + node.header_size)?;
+    let order = byte_order(data);
+    let mut at = usize::from(order.u16(header, 6));
+    for _ in 0..64 {
+        if at + 5 > header.len() {
+            return None;
+        }
+        let stride = usize::from(order.u16(header, at + 2));
+        if stride == 0 {
+            return None;
+        }
+        if cstr_at(header, at + 4)?.eq_ignore_ascii_case(name) {
+            return cstr_at(header, at + usize::from(header[at + 1]));
+        }
+        at += stride;
+    }
+    None
+}
