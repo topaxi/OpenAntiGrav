@@ -44,6 +44,16 @@ original's own look (same size in both). The glow-mask value of the pad is a tex
 The original exposes no bloom option in any title. A level is therefore ours by
 definition, and the only faithful value is the title's own.
 
+## Zone (2026-10-02, `zone-bloom` lane)
+
+The maintainer found the bloom "quite obvious" in Zone. Measured on a native
+Zone race (`bloom.md`, "Is ours stronger than the original in Zone?"): **ours
+is 0.88-0.90x the original racing** (zones 2, 3 and 5, two boots), 1.2x on the start grid
+(boot 1 and 2) from a bottom-of-frame strip that ours stamps `214` and the original leaves at
+`4` (cause not identified). Zone's bloom is the original's own look: the same
+pose adds 1.5 luma on the ordinary circuit and 13 on Zone's, and the original's
+mask is 13-18 % at >= 200. No code change.
+
 ## Open
 
 - Why ours is still 1.2-1.6x on a racing straight (candidates: the flare and
@@ -63,6 +73,11 @@ definition, and the only faithful value is the title's own.
   `docs/rendering/ps2-bloom.md`.
 
 ## Next Steps
+
+0. Zone grid strip: find which `zone_track.vex` batch stamps `214` across rows
+   231-243 at the countdown (`oag-view --draws` plus node isolation) and why
+   the original's mask is `4` there (depth tie of a coplanar `GEQUAL` decal is
+   the candidate). Only the 1.2x grid residual depends on it.
 
 1. Explain the residual 1.2-1.6x on a racing straight (flare and plume mask
    size at speed) before touching any constant.
