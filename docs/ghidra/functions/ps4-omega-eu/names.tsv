@@ -64,3 +64,8 @@
 0x01656130	function	WeaponStats_ParseXml	90	plasma.md
 0x013a26b0	function	PsarcArchive_Mount	85	psarc-mount.md
 0x013a27d0	function	PsarcArchive_WaitAndMountAll	80	psarc-mount.md
+0x015c1f20	function	EnvSettings_RegisterKeys	82	lightmap-prelit.md
+0x015c2dc0	function	ShaderConstants_InitNameTable	78	lightmap-prelit.md
+0x015c6120	function	Scene_BindFrameConstants	72	lightmap-prelit.md
+0x015c63a0	function	Scene_PrepareFrame	66	lightmap-prelit.md
+0x01e3de80	data	EnvSettings_NovaPrelitScaleBiasPower	88	lightmap-prelit.md
