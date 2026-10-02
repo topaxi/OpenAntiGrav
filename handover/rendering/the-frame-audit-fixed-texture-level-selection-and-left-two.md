@@ -64,13 +64,14 @@ of it the same day; see `frame-audit.md`.
   (seven 480x272 poses pixel-identical). The "recurring" Metropia node 225 and Tech
   De Ra 1076/1078 were a census artifact (a double-sweep diameter 8 % short of the
   exact one) and are not culled by anything. Evidence:
-  `docs/ghidra/functions/psp-pulse-usa/section-view-cull.md`. **Separated 2026-10-02**
+  `docs/ghidra/functions/psp-pulse-usa/section-view-cull.md`. **Not separated, 2026-10-02**
   (`pulse-moving-draws`, `frame-audit.md` "Moving draws the original does not
   submit: frustum or rule"): on Metropia (the one circuit whose dumps pin the
-  animation clock) all 13 missing moving draws, 11 of them transparent, lie outside
-  the view, but the same test rejects 129 moving draws the original does submit, so
-  it is not a rule `pvs::visible` can take (pixel-neutral either way); **Talon's loop**
-  (12 dumps, four inside the inverted stretch): 0 missing. Still open on it:
+  animation clock) all 13 missing moving draws lie outside the view, but 75 % of
+  the population does (p about 0.02 on correlated draws), and the same test rejects
+  129 moving draws the original does submit, so it is not a rule `pvs::visible`
+  can take (pixel-neutral on Metropia either way); **Talon's loop** (20 dumps, two
+  cold boots, six inside the inverted stretch): 0 missing. Still open on it:
   whether the batch-set draw path carries a bound of its own (1,071 static draws
   pass the section test with no twin), and the small transparent quads the census
   cannot match.

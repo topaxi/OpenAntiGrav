@@ -55,7 +55,10 @@ def main():
     ap.add_argument("--prims", required=True, type=Path)
     ap.add_argument("--entry", required=True)
     ap.add_argument("--image", default="data/images/pulse-psp-usa.chd")
-    ap.add_argument("--tol", type=float, default=0.7, help="world units, a box's six numbers")
+    ap.add_argument("--tol", type=float, default=0.7,
+                    help="world units, a box's six numbers: when a draw counts as present")
+    ap.add_argument("--solve-tol", type=float, default=0.7,
+                    help="the same, for solving the clock (held apart so --tol can be swept)")
     ap.add_argument("--grow", type=float, default=1.5, help="units the box is grown by for the view test")
     ap.add_argument("--max-seconds", type=float, default=620.0)
     ap.add_argument("--control", action="store_true", help="view turned a quarter circle")
@@ -101,7 +104,7 @@ def main():
     obs_path.write_text("".join(
         "%d %f %f %f %f %f %f %f\n" % (p["nv"], p["diam"], *p["mn"], *p["mx"]) for p in folded))
     phase_args = [str(obs_path), str(args.max_seconds)]
-    phase = run("pvs_moving_phase", *phase_args, env={"TOL": str(args.tol)})
+    phase = run("pvs_moving_phase", *phase_args, env={"TOL": str(args.solve_tol)})
     ours = run("pvs_moving_census", str(craft_sec), str(cam_sec))
     sections = {b["id"]: b for b in run("pvs_section_boxes") if "min" in b}
     boxes = {(b["list"], b["i"]): b for b in phase["boxes"]}
@@ -115,6 +118,11 @@ def main():
             if all(abs(a - c) <= args.tol for a, c in zip(b["mn"] + b["mx"], p["mn"] + p["mx"])):
                 return True
         return False
+
+    def signature_twin(b):
+        """A PRIM of the same vertex count and a diameter within 3 %: the old join's test."""
+        return any(abs(p["diam"] - b["diam"]) <= 0.03 * max(p["diam"], b["diam"], 1.0)
+                   for p in by_count.get(b["nv"], []))
 
     def section_culled(o):
         mask = int(o["mask"], 16)
@@ -163,7 +171,7 @@ def main():
         verdicts["mesh box, held 14 frames"] = all(
             corners_culled(c) for c in [b["mesh_corners"], *b["history"]])
         rec = {"node": o["node"], "list": o["list"], "i": o["i"], "nv": o["nv"], "diam": o["diam"],
-               "section_culled": sc, "present": pres, "box_culled": verdicts,
+               "section_culled": sc, "present": pres, "sig_twin": signature_twin(b), "box_culled": verdicts,
                "mn": b["mn"], "mx": b["mx"], "rest_mn": b["rest_mn"], "rest_mx": b["rest_mx"]}
         records.append(rec)
         if sc:
