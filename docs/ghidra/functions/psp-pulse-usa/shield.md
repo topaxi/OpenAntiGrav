@@ -546,7 +546,7 @@ not raised: `cont_elim` at state 6's expiry (an announcer-bank line this build's
 PPSSPP v1.20.4 (software renderer), Pulse USA, Single Race / Venom on a track that was **not** Talon's Junction (the craft came up
 139.9 units from that start line; Track Select was not identified). `scripts/psp-state6-watch.py` stops at `Ship_UpdateCraft`
 (`0x08849618`) each frame, wrecks one AI craft a few game seconds into a live race and logs its `entity` fields; `--watch` arms a
-write watchpoint on `entity+0x8C`. Two valid runs, different grid slots and different ways in:
+write watchpoint on `entity+0x8C`. Two valid runs (**the same boot and the same track, one race restarted between them**), different grid slots and different ways in:
 
 | Run | Slot | Call | State sequence (frames after the call) | State at +15 s | Writers of `+0x8C` |
 | --- | --- | --- | --- | --- | --- |
@@ -579,9 +579,12 @@ The same script on an Eliminator (`scripts/psp-drive.py menu --race-type 6`, the
 | 120 | **8** | **0.8** | `ra 0x08844718` (`Ship_UpdateDestroyed`'s call at `0x088478ec` passes 8) |
 | 168 | 1, shield `144.99` (refilled) | about 0 | `ra 0x08844184` (`Ship_UpdateRespawn`'s `Ship_SetState(1)`) |
 
-So an opponent is out `1.5 + 0.8 = 2.3` s in the Eliminator, not `3.5`. The player's `1.0` s is the same `0x368 == 0` branch of the same
-disassembly and was **not** run live (the player was parked and untouched). Confidence **90** for the opponent's `0.8` (a runtime trace
-agreeing with the corrected disassembly; one run), **85** for the player's `1.0` (disassembly only).
+So an opponent is out `1.5 + 0.8 = 2.3` s in the Eliminator, not `3.5`. Run `e2` (a second race on a fresh boot, slot 4) read the same
+`4 (0), 5 (30), 8 at 0.8 (120), 1 (168)`, with the same three writers' `ra`s. Run `e3` wrecked the **player** (grid slot 7,
+`entity+0x368 == 0`): `4 (0), 5 (30), 8 with +0x874 = 1.0 (120), 1 (180)`, shield refilled, so the player's wait is `1.0` s, `2.5` s out in all.
+Confidence **92** for the opponent's `0.8` (two runs, two slots, the corrected disassembly), **90** for the player's `1.0` (one run, the disassembly).
+All three Eliminator runs and both single-race runs were on one emulator profile and the same track (not Talon's Junction), and all five
+destroyed the craft by a call from a debugger stop, not a weapon or a wall.
 
 **What would raise every confidence number in this table**: a live PPSSPP
 capture of an actual false start (hold thrust before the lights, per the

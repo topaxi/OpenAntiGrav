@@ -78,19 +78,21 @@ pub(super) const DESTROYED_DWELL: f32 = 1.5;
 /// `entity+0x368` is zero. State 8's own update is `Ship_UpdateRespawn`
 /// (`0x08847914`): the per-state jump table at `0x08a7bb88` sends state `8` to
 /// the call at `0x08841e44`, counts the timer down, and at zero relocates the
-/// craft, refills the shield and goes to state 1. Confidence 85: the disassembly
-/// (`lui 0x3F80` on the zero branch), the table and the call read; **not run
-/// live for the player** (only an opponent was, below).
+/// craft, refills the shield and goes to state 1. **Measured live 2026-10-02
+/// (pulse-state6, run `e3`)**: the player's craft wrecked by `Ship_Damage` in an
+/// Eliminator went 4 (0.5 s), 5 (1.5 s), 8 with `+0x874` reading `1.0`, then state 1
+/// with a refilled shield 60 frames later. Confidence 90: one run, agreeing with the
+/// disassembly (`lui 0x3F80` on the zero branch).
 pub(super) const ELIMINATOR_PLAYER_WAIT: f32 = 1.0;
 
 /// The same wait for every other craft: **`0.8`**, the same constant state 6's
 /// case arms for a non-zero `entity+0x368`. **Measured live 2026-10-02
-/// (pulse-state6)**: an Eliminator opponent destroyed by `Ship_Damage` on PPSSPP
-/// went 4 (0.5 s), 5 (1.5 s), 8 with `entity+0x874` reading `0.8`, then state 1 and
-/// a refilled shield `48` frames later. This used to be `2.0`, read off
-/// `Ship_SetState`'s case 8 (`0x088446ec`) with its branch-delay `lui 0x3F4C`
-/// (which executes on both paths) taken for dead code. Confidence 90: a
-/// runtime trace and the corrected disassembly agree; one run.
+/// (pulse-state6, runs `e1` and `e2`, two boots of one race, slots 2 and 4)**: an
+/// Eliminator opponent destroyed by `Ship_Damage` on PPSSPP went 4 (0.5 s), 5 (1.5 s),
+/// 8 with `entity+0x874` reading `0.8`, then state 1 and a refilled shield `48` frames
+/// later, both times. This used to be `2.0`, read off `Ship_SetState`'s case 8
+/// with its branch-delay `lui 0x3F4C` (which executes on both paths) taken for
+/// dead code. Confidence 92: two runs and the corrected disassembly agree.
 pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 0.8;
 
 /// Seconds an Eliminator craft spends out before it returns: state 5's

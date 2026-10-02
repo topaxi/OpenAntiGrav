@@ -2662,9 +2662,10 @@ Flat across every setting, and **zero escapes at any of them** against a
 lever: raising it from 90 to 200 changes nothing about how far a boosted
 craft strays. Second, the specific failure this section opened with did not
 reproduce once, in a sample eight times the size of the one that found it
-originally - the opponent respawn and stall rescue, both landed after this
-measurement was first taken, most plausibly already cover what `look_max`
-was suspected of. The residual gap this section describes is not shown to
+originally - the opponent respawn (reverted 2026-10-02: a wrecked opponent
+stays down, which only removes a craft the gap was measured on) and the stall
+rescue, both landed after this measurement was first taken, most plausibly
+already cover what `look_max` was suspected of; only the stall rescue still does. The residual gap this section describes is not shown to
 exist any more on `16_Track`; it has not been re-measured on other circuits,
 and nothing here rules out a rarer event this sample size still missed.
 
