@@ -476,3 +476,9 @@
 
 # The chase-camera rig (2026-10-01).
 0x000d80e0	function	Ship_UpdateCameraRigs	80	camera.md
+
+# EndRace Results' loyalty block (2026-10-02, hd-endrace-loyalty). Static only, no live run.
+0x00023f98	function	Race_ComputeLoyaltyAward	82	endrace-loyalty.md
+0x00224488	function	EndRaceResults_BuildLoyaltyTicker	78	endrace-loyalty.md
+0x00225030	function	EndRaceResults_UpdateLoyaltyTicker	76	endrace-loyalty.md
+0x0001b678	function	Loyalty_FindTeamRecord	72	endrace-loyalty.md
