@@ -62,6 +62,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             rotation: None,
         }],
         roots: vec![0],
+        field: None,
         skipped_templates: 0,
     })
 }
