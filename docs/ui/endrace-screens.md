@@ -197,7 +197,7 @@ where the frames show the mixed-case default face - the shared-table font gap
 | `MedalImg` under an earned trophy | **No - settled 2026-09-30, confidence 80** | a live gold-medal run (campaign `grid0_3_2`, one lap, 1.19.84, `Gold medal awarded`) shows only the gold trophy in the medal square and **no static hex glyph under it**; the trophy **spins** about its vertical axis (seven frames 0.9 s apart, edge-on to full face and back, about a 6 s period) where this build holds its first frame - `StartPaused` and the animation stay **chosen, not measured** here |
 | trophy (`TrophyPanel`, `g_trophy`/`s_trophy`/`b_trophy`) | **Yes, 2026-09-28**, on a campaign race that earned a medal | the medal's own model, `oag_game::endrace::Trophy`, drawn with the disc's `Mode3D` camera - see "The trophy" below |
 | `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum` (the loyalty row) | **Yes, 2026-09-14** | `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal` landed in main (confidence 95/90) - see [`oag_ui::endrace::Loyalty`](../../crates/ui/src/endrace.rs) and `crate::race_stage::endrace::loyalty_award`. `None` (nothing draws) only when a launch names no team at all |
-| `loyaltybg`/`loyaltybar` | Yes, alongside the row | `loyaltybar`'s own fill width scales by `total * 0.00124` - see [Open](#open) for a visual mismatch against the reference frame this pass found and did not resolve |
+| `loyaltybg`/`loyaltybar` | Yes, alongside the row | `loyaltybar` is `total * 0.00124` **pixels** wide and as many texels of the sheet (not a fraction of the authored width; the `100000` cap is the authored `124`), so a total of 90 shows only `loyaltybg`, as the reference frame does - see [The loyalty bar](#the-loyalty-bar-is-pixels-not-a-fraction) |
 | `LoyaltyImg` | Yes, alongside the row | |
 | `BigPos` | **No** | a finishing-position figure this model carries no place for - would need threading a `place` into `Rewards` that nothing else on this screen needs |
 | `ContinueButton` etc. | Yes | direct |
@@ -244,7 +244,7 @@ names), and a live campaign race that earned bronze -
 | Loyalty award/total, `SingleRace`/`Zone`/`Eliminator` branches | Decompiled, **not independently live-verified** | same page's own "Still open"; drawn under the same law regardless |
 | `SingleRace`'s own difficulty multiplier | **Never applied** (`multiplier` fixed at `1`) | this project's `[ai] difficulty` (4 tiers) has no honest mapping to the original's campaign-cell `easy`/`medium`/`hard` (3 tiers, `AI_ResolveSkillScale`, unimplemented) - see `crate::race_stage::endrace::loyalty_award`'s own doc |
 | "Perfect lap"/"perfect zone" counts feeding the award | **Always `0`** | this project keeps no running tally for either - see [Open](#open) |
-| `loyaltybar`'s own fill width | Chosen shape (linear scale of the decompiled `0.00124` fraction), **visual mismatch against the reference frame** | see [Open](#open) |
+| `loyaltybar`'s own fill width | Measured, confidence 88: `total * 0.00124` pixels, cropped (width and U extent together); live point only near zero | [The loyalty bar](#the-loyalty-bar-is-pixels-not-a-fraction) |
 | A confirm anywhere on `Results`/`Rewards` advances | Matches the disc's own `ContinueButton`/cross-or-start reading | `docs/formats/endrace-screens.md` |
 | `RETURN TO GRID` re-launches through the existing campaign session flow, not a parallel path | Chosen, reusing `oag_game::campaign`/`Session::open_campaign`/`CellSelection::select_by_name` | this project's own "don't fork it" convention |
 
@@ -289,26 +289,33 @@ race scene exactly as the reference frames show. This is real, on-screen
 confirmation the drawing path works end to end, not only in a `--menu-page`
 still.
 
+## The loyalty bar is pixels, not a fraction
+
+Closed 2026-10-02 (`pulse-loyaltybar`). The old note said the decompiled `total *
+0.00124` fraction put a `90` total at ~11 % and that `results-02.png` showed the whole
+bar lit. Both halves were wrong. `EndRaceRewards_Update` writes `total * 0.00124` into
+the bar's **width in pixels** and its **U extent in texels** (the pair
+`Image_DenormalizeUv`/`Image_NormalizeUv` brackets the second write), so `90` is
+`0.11` pixels wide, and `FEScreen_SetStatBar` does the same with `fullWidth * value /
+max` - see [the decompile
+page](../ghidra/functions/psp-pulse-usa/endrace-screens.md#the-loyalty-bars-fill-pixels-not-a-fraction-2026-10-02-pulse-loyaltybar).
+The reference frame's bar is uniformly dim (~130 on every segment, no bright column):
+that is `loyaltybg` alone at half alpha, not a lit bar. `100000 * 0.00124 = 124` is the
+authored width, which is why it looked like a fraction.
+
+**Drawn:** `oag_ui::endrace::draw`'s `loyalty_bar_draw` sets the width and the texture
+width to `total * 0.00124` (a crop, where the old code narrowed the rectangle and left
+the whole 124-texel window in it, squashing all twenty segments into a few pixels).
+`--menu-page endrace-rewards` at total `90` now reads ~126 on every segment along the
+bar, against the reference's ~130, with no bright column. A unit test pins the slope
+at `90`, `50000` and `100000`. **Confidence 88**; the only live point is near zero, so
+a PPSSPP poke of the team record's `+8` to `50000` (expect a 62 px bright fill) is the
+step that would settle the slope. **Also unchased:** the original sets the bar, its
+background and `loyaltynum` visible only once the ticker finishes, this build draws
+them from the first frame.
+
 ## Open
 
-- **`loyaltybar`'s own fill width does not match the reference frame.** The
-  decompiled fraction (`total * 0.00124`,
-  `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`) puts a `90`
-  total at ~11% - a handful of bright segments and the rest showing the
-  dimmer `loyaltybg` underneath, which is what this build's own capture
-  draws (`/tmp/oag-drive/endrace/endrace-rewards.png`). `results-02.png`
-  shows the **whole** bar lit at the same total. Not resolved this pass:
-  either the `0.00124` constant means something other than "a linear
-  fraction of the authored width" (a notch count? a different scale
-  entirely?), or the reference frame's own bar renders every segment above
-  some low floor rather than a literal proportional fill, or this project's
-  two-layer bright/dim compositing is not how the original's own bar reads
-  a partial fill at all. The arithmetic (`90`/`90` in the text) matches the
-  reference exactly; only the bar's own width does not. Left for whoever
-  next opens this screen with a Ghidra bridge, since it is a rendering-law
-  question, not a drawing-code one - `crate::race_stage::endrace`'s own
-  fraction is a direct, documented read of the one number
-  `endrace-screens.md` gives.
 - ~~**The trophy model is not wired this pass.**~~ **Wired 2026-09-28** -
   see "The trophy" above; the struck text is kept for its history.
   `oag_game::preview::model` can

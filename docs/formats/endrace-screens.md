@@ -126,7 +126,7 @@ walk (`results-01.png` -> `results-02.png` -> `results-03.png`).
 | `RewardLine2` | `idstring="ER_LOY"` template | overwritten to `"<team> Loyalty:"` (`"%s %s"` of the team's own localised name and `ER_LOY`) | 78 |
 | `RewardLoyaltyActive` | `string="line 2"` (generic placeholder) | a two-role scrolling ticker - this race's own loyalty award, then a cycle of "why" reason strings - see below | 78 |
 | `loyaltynum` | `string="0"` | the **team's persistent total** loyalty, not this race's award - see below | 78 |
-| `loyaltybar`/`loyaltybg` | a fixed-size fill bar, `124x10` | fill fraction = `total * 0.00124` | 75 |
+| `loyaltybar`/`loyaltybg` | a fixed-size fill bar, `124x10` | fill width in **pixels** and U extent in texels = `total * 0.00124` (the `100000` cap is the authored `124`) | 88 |
 | `ContinueButton` etc. | as `EndRace Results` | direct | 90 |
 | `EndRaceRewardsMenuRedirect` | `<Default goto="Race End Save">` | fires once the ticker has scrolled past `reasonCount * 0.5 + 1.5` seconds | 75 - decompiled |
 
@@ -183,7 +183,7 @@ index reaches its own reason-string count (i.e. on the ticker's very first
   reused for a second, unrelated store. That record's own `+8` field is
   formatted into `loyaltynum` as `"%s %d"` of `ER_TOT_LOY` and this value -
   **`"Total loyalty: 90"`, the team's running total**, not this race's award.
-  `loyaltybar`'s fill fraction is the same total scaled by `0.00124`.
+  `loyaltybar`'s width in pixels is the same total scaled by `0.00124` (2026-10-02: not a fraction; see `docs/ui/endrace-screens.md`).
 - Every following ticker "beat" (roughly every 10 update-timer units,
   `param_1 * 20.0` accumulated against a fixed `10.0` threshold) instead
   shows the next reason string built in `OnEnter` - see below - and the

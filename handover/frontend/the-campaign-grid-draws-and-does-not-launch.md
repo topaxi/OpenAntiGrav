@@ -1,5 +1,17 @@
 # The campaign grid draws and does not launch
 
+**Update, 2026-10-02, `pulse-loyaltybar` lane: where the original keeps the cursor
+across a back-out is decompiled.** `CellSelection_OnEnter`/`_Update` hold it as the
+`Selector` widget's own `(x, y)` slot, one position shared by every grid; `+0xdc` (the
+selected cell) is derived from it each frame, and `OnEnter` re-resolves it by the name of
+the *current* grid at that slot, running the first-visit default scan only when that fails
+(and not around `Cell Help`). This build's per-grid `CellCursors` is therefore **chosen and
+probably wrong for a second grid**; not changed, because the same-grid case is the only one
+measured and the tile-flag filter (`FUN_088a37cc`) is unread. Next: a PPSSPP walk that
+backs out of `grid0_3_2` and enters another unlocked grid, then key `CellCursors` by
+`(x, y)` if it reproduces. Detail: `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+"Where `Cell Selection` keeps its cursor across a back-out".
+
 **Update, 2026-09-28, `pulse-cellsel` lane: the two live capture findings
 below settled, plus a full decompile of the medal/difficulty write this
 thread's own item 1/2 needed.** `Race_RecordResult`'s own `record+8`/

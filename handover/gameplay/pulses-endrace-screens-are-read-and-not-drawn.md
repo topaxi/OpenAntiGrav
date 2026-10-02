@@ -163,12 +163,13 @@ Results` draws correctly over a real, just-finished race. What is left:
   zone" counts and the campaign's own `easy`/`medium`/`hard` difficulty
   multiplier are always `0`/unapplied - this project keeps no running tally
   for the first two and has no honest mapping from its own four-tier
-  `[ai] difficulty` to the original's three-tier scale for the third. **A
-  real, unresolved mismatch**: `loyaltybar`'s own fill width, computed from
-  the decompiled `total * 0.00124` fraction, does not match how full the
-  reference frame's own bar shows at the same total (`90`) - see
-  `docs/ui/endrace-screens.md`'s Open section, a rendering-law question for
-  whoever next has a Ghidra bridge on this screen.
+  `[ai] difficulty` to the original's three-tier scale for the third.
+  ~~**A real, unresolved mismatch**: `loyaltybar`'s fill width~~ **Closed
+  2026-10-02 (88)**: the bar is `total * 0.00124` *pixels* wide (cropped), not a
+  fraction, so a total of `90` shows only `loyaltybg`, as the reference does -
+  see `docs/ui/endrace-screens.md`. **Still open**: a PPSSPP poke of the team
+  total to `50000` to pin the slope past the near-zero point, and the bar/`loyaltynum`
+  being hidden until the ticker finishes in the original (drawn from frame one here).
 - ~~**The trophy model is not wired.**~~ **Wired 2026-09-28**: `Screen::models`
   collects `<Mode3D><Model>`, `oag_game::endrace::Trophy` decodes the three,
   and `EndRaceRuntime` draws the earned one with the disc's `Mode3D` camera,

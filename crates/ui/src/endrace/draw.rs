@@ -233,18 +233,24 @@ pub fn rewards_draw_list(
         }
         if name == "loyaltybar" {
             if let (Some(loyalty), Some(placed)) = (&model.loyalty, sprites(&image.src)) {
-                // `loyaltybar`'s own fill fraction -
-                // `EndRaceRewards_Update`'s `total * 0.00124`, decompiled
-                // (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`).
-                // The total is capped at `100000` (`Loyalty_AccumulateTotal`),
-                // well inside `f32`'s exact-integer range, so this cast loses
-                // nothing.
+                // `loyaltybar`'s fill is `total * 0.00124` **pixels**, not a
+                // fraction: `EndRaceRewards_Update` (`0x088dd2b8`) writes it
+                // into the widget's width (`+0x9c`) and its U extent
+                // (`+0xc4`) alike, between `FUN_088a6a9c` and `FUN_088a68ec`
+                // (the texel-space denormalise and renormalise pair), and
+                // `FEScreen_SetStatBar` (`0x088ea780`) does the same with
+                // `fullWidth * value / max`. `Loyalty_AccumulateTotal`'s
+                // `100000` ceiling lands on `124`, the authored width, so the
+                // bar only fills at the cap; a total of 90 is `0.11` pixels
+                // wide and only `loyaltybg` shows (the reference frame).
+                // The total is capped at `100000`, well inside `f32`'s
+                // exact-integer range, so this cast loses nothing.
                 #[allow(
                     clippy::cast_precision_loss,
                     reason = "total is capped at 100_000, exact in f32"
                 )]
-                let fraction = loyalty.total as f32 * 0.00124;
-                out.push(loyalty_bar_draw(image, placed, fraction));
+                let width = loyalty.total as f32 * LOYALTY_BAR_PIXELS_PER_POINT;
+                out.push(loyalty_bar_draw(image, placed, width));
             }
             continue;
         }
@@ -552,15 +558,21 @@ pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
 }
 
-/// `loyaltybar`'s own draw, its authored width scaled by `fraction` - a
-/// clone with the width overridden reaches the same `sprite_draw` every
-/// other image on this screen does, rather than a second copy of its UV
-/// logic for one widget.
-fn loyalty_bar_draw(image: &Image, placed: Placed, fraction: f32) -> Draw {
-    let full_width = image.width.unwrap_or(placed.width as f32);
-    let mut scaled = image.clone();
-    scaled.width = Some(full_width * fraction.clamp(0.0, 1.0));
-    sprite_draw(&scaled, placed, image.x, image.y, image.color)
+/// Pixels of `loyaltybar` per loyalty point, `EndRaceRewards_Update`'s
+/// `0.00124` literal: `100000` points (the ceiling) is the authored
+/// `124`-pixel width, which is the only reason it looks like a fraction.
+const LOYALTY_BAR_PIXELS_PER_POINT: f32 = 0.00124;
+
+/// `loyaltybar`'s own draw: `width` pixels on screen *and* `width` texels of
+/// the sheet, because the original writes the one number into both the
+/// widget's width and its U extent. Cropping, not squashing - a clone with
+/// both overridden reaches the same `sprite_draw` every other image on this
+/// screen does, rather than a second copy of its UV logic for one widget.
+fn loyalty_bar_draw(image: &Image, placed: Placed, width: f32) -> Draw {
+    let mut cropped = image.clone();
+    cropped.width = Some(width.max(0.0));
+    cropped.texture_width = Some(width.max(0.0));
+    sprite_draw(&cropped, placed, image.x, image.y, image.color)
 }
 
 fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {

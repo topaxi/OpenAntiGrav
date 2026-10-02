@@ -319,7 +319,7 @@ RewardLoyaltyActive <- "%d %s" of *(g_endrace_result + 8), ER_POINTS       # "90
 record <- FUN_08808664(DAT_08b31774, Libc_HashString(team_name), 0, 0)     # same accessor race-box-screens.md
                                                                             # already names for the per-craft rating table
 loyaltynum  <- "%s %d" of ER_TOT_LOY, *(record + 8)                       # "Total loyalty: <team's running total>"
-loyaltybar fill <- *(record + 8) * 0.00124
+loyaltybar width (+0x9c) and U extent (+0xc4) <- *(record + 8) * 0.00124   # PIXELS, see "The loyalty bar's fill" below
 ```
 
 Confidence 85 - full decompile, and the field `*(g_endrace_result + 8)`
@@ -671,3 +671,51 @@ understood and cleared.
 | `0x08807884` | `Loyalty_AccumulateTotal` | 90 |
 | `0x0882a498` | `Race_BuildEndRaceResult` | 78 |
 | `0x088c8e88` | `ConfirmButton_Update` | 85 |
+| `0x088a6a9c` | `Image_DenormalizeUv` | 80 |
+| `0x088a68ec` | `Image_NormalizeUv` | 80 |
+
+## The loyalty bar's fill: pixels, not a fraction (2026-10-02, `pulse-loyaltybar`)
+
+Headless decompile of `EndRaceRewards_Update` (`0x088dd2b8`) and the two helpers it
+brackets the bar's write with. The earlier reading ("fill fraction = `total * 0.00124`")
+took the product for a fraction of the authored width; it is the width itself.
+
+```
+bar.+0x9c   <- 0                                   # start of the tick block, width cleared
+...
+bar.+0x9c   <- (float) total * 0.00124             # width, pixels
+Image_DenormalizeUv(bar)   # 0x088a6a9c  U/V ((+0xbc,+0xc0), (+0xc4,+0xc8)) *= texture size, flag +0xd0 = 0
+bar.+0xc4   <- (float) total * 0.00124             # U extent, texels
+Image_NormalizeUv(bar)     # 0x088a68ec  UVs /= texture size, flag +0xd0 = 1; +0x9c, +0xa0 kept
+```
+
+- `Image_NormalizeUv` defaults `+0x9c`/`+0xa0` to the texture's own width and height when
+  they hold `FLT_MIN` (`1.1754944e-38`) and divides `+0xbc..+0xc8` by the texture size, so
+  `+0x9c`/`+0xa0` are the width and height in pixels and `+0xc4`/`+0xc8` the U/V extent
+  in texels before normalisation. Confidence 80 for the two names (the arithmetic is
+  unambiguous; the field names are read off it).
+- **A second, independent call site agrees**: `FEScreen_SetStatBar` (`0x088ea6b8`, the
+  `TeamSelection` stat bars) computes `(scale * value) / max` and writes the same number
+  to `+0x9c` and `+0xc4` around the same pair. There `scale` is the bar's full width in
+  pixels, so a bar is `fullWidth * fraction` pixels wide and as many texels of the sheet:
+  cropped, not squashed.
+- The loyalty bar passes no `scale`: `total * 0.00124` is already pixels, and
+  `Loyalty_AccumulateTotal`'s ceiling of `100000` gives `100000 * 0.00124 = 124`, exactly
+  the authored `width="124"`/`TxtrWidth="124"`. That is the only reason it reads as a
+  fraction, and the bar only fills at the cap.
+- At the live capture's total of `90` the bar is `0.1116` pixels wide. The reference frame
+  (`results-02.png`) shows exactly that: every one of the twenty segments reads one
+  uniform ~130 (the `loyaltybg` image, `Color=0x7fffffff`, half alpha over the dark band),
+  with no brighter column anywhere. The earlier note that the reference showed the "whole
+  bar lit" mistook that background for fill.
+
+Confidence **88** for the width law: decompile at two independent call sites plus the
+`100000` -> `124` coincidence plus the reference frame at one point. **The live evidence
+is a single point near zero**, which rules the fraction reading out (it would be ~11
+pixels at 90) but does not pin the slope; a PPSSPP memory poke of the team record's `+8`
+(the `FUN_08808664(DAT_08b31774, ...)` result) to `50000` on this screen, expecting a
+62 px bright fill, would take it into the 90s. Not run this pass.
+
+Visible bit: `loyaltybar`, `loyaltybg` and `loyaltynum` get `+0x2c |= 4` only inside the
+end-of-ticker branch (`cycle == reasonCount`), so the original probably keeps them hidden
+until the ticker finishes; this build draws them from the first frame. Not chased.
