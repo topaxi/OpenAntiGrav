@@ -27,13 +27,8 @@ use oag_ui::endrace::{
 
 use oag_game::render::Renderer;
 
-/// Which of the three screens is on top.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Which {
-    Results,
-    Rewards,
-    Menu,
-}
+mod endrace_flow;
+use endrace_flow::{Flow, Which};
 
 /// `EndRace Results`' own model, title-dispatched: Pulse's per-lap table, or
 /// Wipeout HD/Fury's whole-field standings grid
@@ -75,7 +70,7 @@ pub(crate) struct EndRaceRuntime {
     results: ResultsModel,
     rewards: Option<Rewards>,
     menu: EndRaceMenu,
-    which: Which,
+    flow: Flow,
     /// `EndRace Rewards`' trophy for this race's medal, when a campaign
     /// cell awarded one and its `.vex` decoded - `oag_game::endrace::Trophy`,
     /// drawn over the screen's own draw list with the `Mode3D` camera the
@@ -86,7 +81,7 @@ pub(crate) struct EndRaceRuntime {
 impl std::fmt::Debug for EndRaceRuntime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EndRaceRuntime")
-            .field("which", &self.which)
+            .field("which", &self.flow.which())
             .finish()
     }
 }
@@ -112,9 +107,17 @@ impl EndRaceRuntime {
         results: ResultsModel,
         rewards: Option<Rewards>,
         menu: EndRaceMenu,
+        ended_on_the_line: bool,
         anisotropy: oag_render::mesh_render::Anisotropy,
     ) -> Result<Self> {
         let mut screens = screens;
+        // `Race End Photo` first after a finish by the line wherever the
+        // disc's screen read (Pulse), and nowhere else: Wipeout HD/Fury's
+        // equivalent was not read, so its panels come up at once as they
+        // always did.
+        let flow = Flow::new(
+            ended_on_the_line && screens.photo.is_some() && !matches!(results, ResultsModel::Hd(_)),
+        );
         let mut renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
         renderer.set_space(skin.space());
         // Wipeout HD/Fury steps its options in their Blocks' own on-screen
@@ -142,37 +145,48 @@ impl EndRaceRuntime {
             results,
             rewards,
             menu,
-            which: Which::Results,
+            flow,
             trophy,
         })
     }
 
-    /// Advances to the next screen on a `Confirmed` event - `Results` goes to
-    /// `Rewards` when a campaign cell was in play (the disc's own
-    /// `EndRaceRewardsRedirect` branch), straight to `Menu` otherwise (the
-    /// `EndRaceMenuRedirect` branch); `Rewards` always goes to `Menu`.
-    /// `Menu` does not advance here - a row's own action is
-    /// `crate::main::session::endrace`'s job.
+    /// One tick of the flow: the clock `Race End Photo`'s clean view and the
+    /// legend's fade run off. Nothing on any other screen.
+    pub(crate) fn tick_flow(&mut self) {
+        self.flow.tick();
+    }
+
+    /// Whether `Race End Photo` is on top, in its clean second or after: the
+    /// race is running behind it and `SELECT` means photo mode, which this
+    /// build does not have, so nothing in the session may act on it.
+    #[must_use]
+    pub(crate) fn is_photo(&self) -> bool {
+        self.flow.which() == Which::Photo
+    }
+
+    /// Whether a confirm press may leave the screen on top - see
+    /// [`Flow::takes_confirm`].
+    #[must_use]
+    pub(crate) fn takes_confirm(&self) -> bool {
+        self.flow.takes_confirm()
+    }
+
+    /// Advances to the next screen on a `Confirmed` event - see
+    /// [`Flow::advance`]. `Menu` does not advance here - a row's own action
+    /// is `crate::main::session::endrace`'s job.
     pub(crate) fn advance(&mut self) {
-        self.which = match self.which {
-            Which::Results
-                if self
-                    .rewards
-                    .as_ref()
-                    .is_some_and(|rewards| rewards.campaign) =>
-            {
-                Which::Rewards
-            }
-            Which::Results | Which::Rewards => Which::Menu,
-            Which::Menu => Which::Menu,
-        };
+        let campaign = self
+            .rewards
+            .as_ref()
+            .is_some_and(|rewards| rewards.campaign);
+        self.flow.advance(campaign);
     }
 
     /// `VIEW RESULTS AGAIN` - back to `Results`, the identical
     /// `<Entry item="Endrace Options" equals="ER_VIEW_AGAIN" goto="EndRace Results">`
     /// redirect the disc authors.
     pub(crate) fn view_results_again(&mut self) {
-        self.which = Which::Results;
+        self.flow.view_results_again();
     }
 
     #[must_use]
@@ -214,7 +228,7 @@ impl EndRaceRuntime {
     /// `EndRaceResults_Update`'s own per-frame toggle runs only while that
     /// screen is on top.
     pub(crate) fn tick_tournament_table(&mut self) {
-        if self.which != Which::Results {
+        if self.flow.which() != Which::Results {
             return;
         }
         if let ResultsModel::PulseTournament(results) = &mut self.results {
@@ -232,7 +246,7 @@ impl EndRaceRuntime {
 
     #[must_use]
     pub(crate) fn is_menu(&self) -> bool {
-        self.which == Which::Menu
+        self.flow.which() == Which::Menu
     }
 
     /// Draws whichever screen is current, over the race's own already-drawn
@@ -246,8 +260,20 @@ impl EndRaceRuntime {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
+        if self.flow.which() == Which::Photo {
+            // Nothing but the legend, over the race; nothing at all for the
+            // first second. No panel, no backdrop: the screen authors none.
+            if let Some(layout) = &self.screens.photo {
+                let list = oag_ui::endrace::photo::photo_draw_list(layout, self.flow.photo_ticks());
+                if !list.is_empty() {
+                    self.renderer
+                        .overlay(device, queue, encoder, view, &list, viewport);
+                }
+            }
+            return;
+        }
         let sprites = &self.screens.sprites;
-        let layers = match (self.which, &self.results) {
+        let layers = match (self.flow.which(), &self.results) {
             (Which::Results, ResultsModel::Pulse(results)) => oag_ui::endrace::results_draw_list(
                 results,
                 &self.screens.results,
@@ -311,6 +337,7 @@ impl EndRaceRuntime {
             // own doc, and `EndRaceScreens::rewards`'s for why that is
             // always true on the title this arm ever actually reaches
             // (Pulse; HD never builds a `Rewards` at all).
+            (Which::Photo, _) => return,
             (Which::Rewards, _) => {
                 let Some(rewards) = &self.rewards else {
                     return;
@@ -364,7 +391,7 @@ impl EndRaceRuntime {
         // every `TrophyPanel` model authors `StartPaused="yes"`, and the
         // `|= 4` `EndRaceRewards_OnEnter` sets on the chosen one reads as
         // the widget's visible bit, not an animation release.
-        if self.which == Which::Rewards
+        if self.flow.which() == Which::Rewards
             && let Some((preview, placement)) = &mut self.trophy
         {
             preview.draw_mode3d(

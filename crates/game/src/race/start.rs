@@ -457,6 +457,7 @@ impl Race {
                     .filter(|_| camera_override.is_none())
                     .map(super::intro_camera::IntroCamera::new),
                 camera_override,
+                wreck_ended_tick: None,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(
                         destroy_stations.clone(),

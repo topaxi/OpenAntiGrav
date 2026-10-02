@@ -250,3 +250,23 @@ fn the_take_over_a_new_node_and_a_switch_to_the_chase_stand_in_each_count_as_a_c
         "the chase stand-in keeps its shot"
     );
 }
+
+/// A wrecked player (slot 0, not in the live list) is never the subject, at the start or at
+/// a re-pick, and the craft-relative modes show a node camera instead of the wreck.
+#[test]
+fn a_wrecked_player_is_never_followed_and_the_stand_in_modes_still_show_the_field() {
+    let mut camera = director(7);
+    let field = [craft(1, 5.0), craft(2, 50.0), craft(3, 150.0)];
+    camera.step(START_TICKS, &field, 0).expect("a node camera");
+    assert_ne!(camera.subject(), Some(0));
+    let mut showing = 0;
+    for since in START_TICKS + 1..START_TICKS + 3 * u64::from(SUBJECT_PERIOD_TICKS) {
+        showing += u32::from(camera.step(since, &field, 0).is_some());
+        assert_ne!(camera.subject(), Some(0), "tick {since}");
+    }
+    assert_eq!(
+        showing,
+        3 * SUBJECT_PERIOD_TICKS - 1,
+        "never the chase stand-in"
+    );
+}

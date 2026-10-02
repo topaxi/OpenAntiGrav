@@ -3,7 +3,7 @@
 **Status: measured on Pulse PSP, 2026-10-01 (Time Trial and Single Race, Talon's
 Junction White `16_Track`, four captures plus three probe runs).** The craft hand-over,
 the running world and the spectator camera's node cameras are ported; two of its four
-views and the `Race End Photo` state are not (see [Open](#open)).
+views are not, and the `Race End Photo` state is ported for line finishes (see [Open](#open)).
 
 The maintainer's play report said it first: once a race is over the race keeps playing in
 the background with the player's craft driven by AI, and nobody knew what the camera does
@@ -26,7 +26,7 @@ the frame on every row marked `*`, except the throttle step, which reads `F+2`, 
 | `F+1` | the race manager's mode state goes `2 -> 3` (`ArcadeRace_UpdateRacing`: `Hud_Hide`, `Race_BuildEndRaceResult`, `RaceMode_SetState(3)`) and the **HUD is hidden** (`g_hud+0x168 = 1`). The craft's control record pointer (`craft+0x78`) moves from the pad's record to the blend buffer at `craft+0x44`: the AI now flies it | `*` |
 | `F+1 .. F+6` | the AI's throttle reads `100` for one to six frames, then **`56.7`** and stays there for the rest of the log (35 s, a whole lap and more); the steer swings `+-10..50` as a follower's does | `*` |
 | `F+61` | the camera object (`0x08b32c64`) is given a subject, the player's craft, and node mode `7` | `*` (four captures, to the frame) |
-| about `F+61..F+89` | the front end enters **`Race End Photo`**: the legend `PRESS SELECT BUTTON FOR PHOTO MODE / PRESS X TO CONTINUE` is drawn over the running race; X leaves for `EndRace Results`, then `Rewards`, then `Menu` | state name sampled every 30 frames |
+| `F+61` | the front end enters **`Race End Photo`** (state name read every frame on a fresh capture: `InGame` through `F+60`, `Race End Photo` from `F+61`, the same frame the spectator camera starts). The screen is `InGame_Definition.xml`'s, two `Stats`-font texts with nothing behind them: `PRESS SELECT BUTTON FOR PHOTO MODE` over `PRESS ε TO CONTINUE` (ε is the cross button's glyph in that font), left-aligned at x = 20, y = 212 and 242. **The legend fades in linearly from `F+62` to full ink at about `F+104`** (42 frames, 0.7 s; a photograph every second frame, two text lines, two-frame photograph lag allowed for). X leaves for `EndRace Results`, then `Rewards`, then `Menu` | `*` (state flip: four captures bracket it to `F+50..59 -> F+80..89`, the fifth pins it to `F+61`) |
 | every 600 frames | the subject is re-picked: a random live craft other than the previous one (`F+661`, `F+1261`, ...). Time Trial has one craft, so it stays the player | `*` |
 | at random | a **cut**: the camera node and mode change (modes `3`, `2`, `6` and `7` all seen) | |
 
@@ -64,9 +64,9 @@ pickup won). Nothing was ported from it; see [what ours does](#what-ours-does).
 | The pace of that driver | **chosen, not measured**: the AI's own pace under the player's physics (the maintainer's standing rule). The original's `0.567` of full thrust is not reproduced, so ours cruises at about `125-135` u/s against `92-110` |
 | The world is stepped under the end-race panels (`Race::runs_on_after_the_line`, `Session::frame`, neutral input) and the headless capture runs on past the line | **ported** |
 | The standing, best lap, splits and the board stay frozen at the line | already true: `Standing::update` returns once finished, and the board is taken once. The original only records a lap in craft state 1 |
-| Only the **line** keeps the world running | **chosen**: a wreck, an Eliminator target or a Zone run does not step the world (the original was not measured there). **Since 2026-10-02 the cosmetics of such a finish do step** (`Race::tick_cosmetics`): a Single Race or Zone wreck plays out under the panels - the state-5 shake, the fire, the big explosion 1.5 s on with its ring and wash, the destroy camera's ease. The opponents, shots in flight and trails stay frozen under it (**chosen, not measured**). Seen for a Single Race and a Zone wreck; the panel is drawn over it at once, where the original's wreck frames carry none for the first 120 frames checked (the `Race End Photo` gap above) |
-| HUD hidden from `F+1` | ours draws the results panels over the scene at once, which hides the HUD; not separately measured |
-| The `Race End Photo` state and its legend | **not built**: ours goes straight to `EndRace Results` |
+| The world keeps running under the panels | **For the line and for a Single Race wreck** (`Race::runs_on_after_the_end`). A wreck: the player's craft stays down for good, the field races on, the wreck's explosion, fire and shake play as before, and from 259 ticks after the race ended (**measured once**, below) the spectator director follows the field, with the node camera standing in for the two unread craft-relative modes, because the chase stand-in would show the wreck. **Zone, Eliminator**: not looked at; Zone stands still with cosmetics only (`Race::tick_cosmetics`), Eliminator respawns. Opponents', shots' and trails' state under a Zone wreck stays frozen (**chosen, not measured**) |
+| HUD hidden from `F+1` | ours stops drawing the HUD from the tick the race finishes (the end-race flow replaces it), the clean view of `Race End Photo` included; seen in the window |
+| The `Race End Photo` state and its legend | **ported 2026-10-02, for a line finish and for a Single Race wreck** (`oag_ui::endrace::photo`, `race_stage::endrace_flow`). Ours holds a clean view for 61 ticks, the HUD already gone, then draws the disc's own two lines (read off `InGame_Definition.xml`'s `Race End Photo`: strings, font role, colour and places are the file's; the `ε` draws as the cross button) fading in over 42 ticks, and waits. **X, Start or a click** leaves for `EndRace Results` once the state is entered (`F+61`; a press before that is spent, so thrust held across the line cannot skip it). **SELECT does nothing**: photo mode is not built, and the line promising it is drawn anyway because the disc authors it. The `Stats` face is the `menu` atlas scaled (no `Pulse_14.fnt` atlas is loaded), narrowed by 0.90 to match the capture's line width (**chosen, not measured**: width is matched, glyph height is then near it - 9 pixel rows against 8 on the first line before the narrowing - and the narrowed text was not re-photographed in English). The fade's length is measured; why it is 0.7 s is unread. **For a wreck the original has no such state** (below); ours shows it after the wreck on the line's own timing, **chosen, not measured**. **Wipeout HD/Fury, Eliminator and Zone endings are unchanged**: the panels come up at once. Seen in a window (Xvfb, llvmpipe, release): `data/scratch/pulse-end-photo/sheet_race_end3.png` and `cmp_legend_crop.png` (both **before** the 0.90 narrowing), `sheet_all.png` and `ours2_full.png` (after, in French); a wreck: `sheet_manual3.png` |
 | Seen in the window | **walked live 2026-10-01** (Xvfb, llvmpipe, release build, isolated profile, `--autopilot --no-audio`; `RACEBOX`, Time Trial, Venom, Basilico Black, 3 laps, finished `1.44.78`): under `EndRace Results` the scene keeps moving and cuts between the chase view and trackside views from frame to frame; Cross (Enter) went on to `EndRace Menu` (a Time Trial earns no Rewards page) with the scene still moving behind it and the craft unaffected; a second Cross left for the main menu. Frames: `data/scratch/pulse-postrace/shots/f-0123.png`, `f-4to9.png`, `rewards-menu.png` (gitignored) |
 | The spectator camera | **ported for the node views** (`race::finish_camera`): starts on `F+61`, follows the player, re-picks the subject every 600 frames, cuts by the 60-unit rule and the 26/25/25/24 mode roll, modes `6`/`7` sit on the circuit's authored `Camera` nodes. Modes `2` and `3` (`above`, `front`) are **chosen, not measured**: the chase camera stands in, so about half the cuts leave it. The random stream is the director's own, so it matches the distribution, not the frames. Pulse PSP only |
 | Audio under the panels | **unmeasured** (the emulator was muted); ours spins the engine down as before |
@@ -89,14 +89,42 @@ from three captures and a decompile:
 - The sequence is random in the original (C `rand`), so a port can match the **distribution**, not the
   frames.
 
+## A player wreck never reaches `Race End Photo`
+
+**Measured 2026-10-02 (Pulse PSP, PPSSPP software renderer, Single Race, Talon's Junction, `Ship_SetState(player, 4)` injected 330 frames after GO).**
+`manager+0x7c8` goes `2 -> 3` and the HUD hides 31 frames after the call (state 5 begins at 30), exactly as for a finish. The front end then **stays on
+`InGame`**: read every frame to `k+660`, then once a second to about `k+17,800` (4.9 minutes). No legend, no panel, the
+spectator camera cutting between the field, the other seven craft racing on, the wrecked craft in state 6 with its timer
+running negative. A finish flips to `Race End Photo` 60 frames after mode state 3; a wreck does not. What the line has and a wreck lacks
+(the player's `finished` flag, craft state 2, a `Race_BuildEndRaceResult` the front end waits on) is **unread**. The wreck was
+injected through `Ship_SetState`, not drained to zero shield, so a real kill might differ; the mode state going to 3 on the
+same frame rule suggests not. `data/scratch/pulse-end-photo/wreck/log.json`, `wreck-watch/log.json`.
+
+**The camera (`wreck2/log.json`, a second run with the camera object read every frame):** the destroy camera (mode 5) keeps the player as its subject
+and the same node until `k+289`; at `k+290` the subject is another craft on another node (mode stays 5). That is 259 frames after the mode state
+went to 3. What triggers the hand-off is unread.
+
+### What ours does for a wreck (maintainer decision)
+
+The maintainer decided on 2026-10-02: **"hold, then results"** - after a player wreck in a Single Race the race keeps running in spectator view with
+the HUD hidden, as the original does, then the same `Race End Photo` legend and X/pointer continue lead to `EndRace Results`. Two parts are
+**chosen, not measured**: the clean-view delay before the legend (the line finish's measured `F+61` and 42-tick fade, reused) and that a wreck shows
+the legend at all. Built: the world runs on (`Race::runs_on_after_the_wreck`), the director takes over at 259 ticks after the race ended (measured
+once), the legend comes up 61 ticks after the race ended - over the explosion, which goes off at 90 ticks - and X leaves for the panels. Zone and
+Eliminator are not part of the decision and keep their old endings. Seen in a window: `data/scratch/pulse-end-photo/sheet_manual3.png`.
+
 ## Open
 
 - **A player's craft shot down after the finish.** Ours: an AI-flown craft that is destroyed is a wreck that never respawns (the world runs on, the race stays finished), and the spectator camera is checked before the destroy camera in `Race::view_unshaken`, so it stays on its node view where the original would be expected to switch to mode 5. Unmeasured.
 - **The engine voice** spins down under the panels while the craft is still flying at about 130 u/s: audio after the flag was not measured, so ours keeps its pre-existing finished-race behaviour.
 - What produces the `56.7` throttle, and whether it is rank-dependent. Measure a Single Race the player
   finishes **not** first.
-- The `Race End Photo` state (about one second of clean view, then a legend that waits for X before the panels).
-  Ours shows the panels at once.
+- **What ends a wrecked player's race in the original** ([above](#a-player-wreck-never-reaches-race-end-photo)): unread; ours leaves by the legend
+  and the panels as the maintainer decided. The Eliminator and Zone endings were not looked at; ours puts the panels up at once for both.
+- **Photo mode** (`SELECT` on `Race End Photo`): not built; `Race End Photo Redirect`'s `forward="select"` goes to `InGame Photo`.
+  Both the redirect and `PhotoMessage` carry `GSDisable="1"` (off under Game Share, which this port has no equivalent of).
+- Why the legend fades over 0.7 s: the screen authors no `Transition`. Whether the original reads a press before `F+61`
+  is moot, the state does not exist yet.
 - Modes `2` and `3` (`above`, `front`), whose geometry is in the `FUN_08880c04` cases not read; what drives `cam+0x274`.
 - The camera nodes are checked against the original's own runtime list on `16_Track` only (ten nodes, eye and aim, to 0.1 unit); the other circuits' lists were not read live.
 - Audio after the flag; the other endings (wreck, Eliminator, Zone); whether Pure, HD/Fury and 2048 do the
@@ -106,7 +134,8 @@ from three captures and a decompile:
 
 ## Method
 
-`scripts/psp-postrace.py`: restart the race, hold thrust through the countdown, give the player's weapon
+`scripts/psp-postrace.py` (`--state-every 1` reads the front end's state name every frame; `psp-wreck-capture.py --ui-state` does the same
+and adds the mode state): restart the race, hold thrust through the countdown, give the player's weapon
 record the Autopilot pickup (fire bit `0x1000`) with its timer raised so the original's own autopilot
 drives the laps, `--laps-hack 1` to shorten the race (a mid-race write to `g_race_laps`, said so in the
 log), then break in `Weapons_DispatchFire` once a frame and log every craft, the manager, the HUD flag and

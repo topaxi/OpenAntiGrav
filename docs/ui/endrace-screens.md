@@ -40,6 +40,26 @@ sheet/skin/frame built once when the race finishes
 not the only shape this could have taken - see that module's own doc for the
 trade against a `Stage::Menu`-based design.
 
+## `Race End Photo`, before the first panel (2026-10-02)
+
+A Pulse race that ended on the line does not open `EndRace Results` at once. The original sits in `Race End Photo` first
+(measured and written up in [after-the-finish.md](../gameplay/after-the-finish.md)); ours does the same, in
+[`oag_ui::endrace::photo`](../../crates/ui/src/endrace/photo.rs) (timing and draw list) and
+[`race_stage::endrace_flow`](../../crates/game/src/main/race_stage/endrace_flow.rs) (which screen is on top):
+
+| Part | What ours does | Source |
+| --- | --- | --- |
+| Screen | `Race End Photo` in `Data\Plugins\PI001\GUI\InGame_Definition.xml` (hash `31b50f2e`), read by `oag_game::endrace::load` next to the three panels; a file that will not read logs once and the panels come up at once | the disc |
+| Clean view | 61 ticks from the finish: nothing drawn, the HUD already gone | measured, four captures + one per-frame run |
+| Legend | `ProceedMessage` (`FE_PRESS_TO_CONT`, y 242) and `PhotoMessage` (`ER_PRESS_SELECT_PHOTO`, y 212): `Stats` font, left-aligned at x 20, white. Strings come from the disc's language file, so `check-strings` has nothing to add | the disc |
+| Fade | straight ramp, 42 ticks, from tick 61 | measured (a photograph every second frame) |
+| Leaving | X, Start or a click, from tick 61; the press is spent before that | the clock is measured; accepting a press in the first second is moot, the original is not on the state yet |
+| SELECT | nothing (`Session::frame` spends the press instead of cycling the camera view) | photo mode is not built |
+| Pointer | a click anywhere, like the other two confirm-only screens | chosen |
+
+A finish by the line and a **Single Race wreck** get it (the wreck on the maintainer's 2026-10-02 decision "hold, then results", the original having no
+such state there). An Eliminator target and a Zone run keep the panels at once, and Wipeout HD/Fury is unchanged (its equivalent was not read).
+
 ## What each screen draws, and what it leaves blank
 
 ### `EndRace Results`

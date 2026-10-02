@@ -53,6 +53,13 @@ pub struct EndRaceScreens {
     /// `--menu-page endrace-rewards`.
     pub rewards: Option<Layout>,
     pub menu: Layout,
+    /// `Race End Photo`, the state a Pulse race sits in between the flag and
+    /// `EndRace Results` - read off `InGame_Definition.xml`, not
+    /// [`SCREEN_ENTRY`], so it is its own `Option`: a pressing whose copy
+    /// will not read still gets its three panels, straight away, and says so
+    /// once in the log. `None` on Wipeout HD/Fury, whose equivalent was not
+    /// read.
+    pub photo: Option<Layout>,
     /// `base` extended with this title's own extra textures - the same
     /// "front end's own sheet plus this screen's own art" shape
     /// [`crate::campaign::load`] already extends it with.
@@ -178,13 +185,52 @@ pub fn load(
     }
 
     let trophies = load_trophies(archives, &rewards);
+    let photo = load_photo(archives, strings, faces, grid, fallback_globals);
     Ok(EndRaceScreens {
         results,
         rewards: Some(rewards),
         menu,
+        photo,
         sprites,
         trophies,
     })
+}
+
+/// Pulse's `Race End Photo`, off `InGame_Definition.xml`. A file that will not
+/// read, or a screen that is not in it, is logged and answered with `None`:
+/// the legend is then not drawn and the race goes straight to its panels, as
+/// it did before this screen was read.
+fn load_photo(
+    archives: &mut oag_assets::Archives,
+    strings: &StringTable,
+    faces: FaceScales,
+    grid: [f32; 2],
+    fallback_globals: &[(&str, &str)],
+) -> Option<Layout> {
+    let entry = oag_pulse::names::INGAME_DEFINITION;
+    let mut read = || -> Result<Layout> {
+        let blob = archives
+            .read_name(entry)
+            .with_context(|| format!("reading {entry}"))?;
+        let xml = oag_tables::fexml::text(&blob).context("expanding InGame_Definition.xml")?;
+        let screens =
+            oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
+        Layout::read(
+            &screens,
+            oag_ui::endrace::photo::SCREEN,
+            strings,
+            faces,
+            grid,
+        )
+        .context("Race End Photo is not on this screen")
+    };
+    match read() {
+        Ok(layout) => Some(layout),
+        Err(error) => {
+            log::warn!("{error:#} - the race goes straight to its results, with no legend");
+            None
+        }
+    }
 }
 
 /// [`load`]'s Wipeout HD/Fury branch - `oag_hd::endrace::SCREEN_ENTRY`, its
@@ -255,6 +301,7 @@ fn load_hd(
         results,
         rewards,
         menu,
+        photo: None,
         sprites,
         trophies: Vec::new(),
     })

@@ -401,9 +401,9 @@ pub fn capture(
         // The race ended inside the requested tick count, so the rest is not
         // driven, as the window stops stepping a finished race - except after the
         // player's own last crossing, which the window steps on
-        // ([`Race::runs_on_after_the_line`]); its cosmetics go on ([`Race::tick_cosmetics`]).
+        // ([`Race::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
         // Said out loud, so a capture that ran short is not read as a lost tick.
-        if race.finished() && !race.runs_on_after_the_line() {
+        if race.finished() && !race.runs_on_after_the_end() {
             println!(
                 "the race finished on tick {} of the {} asked for; only its cosmetics are driven",
                 race.sim.world.tick, options.ticks

@@ -305,6 +305,9 @@ def main():
     parser.add_argument("--shot-every", type=int, default=60,
                         help="then one photograph every N frames up to --after")
     parser.add_argument("--full-every", type=int, default=15)
+    parser.add_argument("--state-every", type=int, default=30,
+                        help="read the front end's state name every N frames (1 pins the frame "
+                        "`Race End Photo` is entered on)")
     parser.add_argument("--timeout", type=float, default=900.0)
     parser.add_argument("--place-window", action="store_true")
     args = parser.parse_args()
@@ -414,7 +417,7 @@ def main():
             ticks = dbg.call("cpu.status")["ticks"]
             row = {"frame": frame, "cycle_frame": int(ticks / CYCLES_PER_FRAME),
                    "player_entity": player, "mgr": manager_row(dbg, manager), "crafts": crafts}
-            if frame % 30 == 0:
+            if frame % args.state_every == 0:
                 state = dbg.state_name()
                 row["ui_state"] = state
             if frame % 10 == 0:
