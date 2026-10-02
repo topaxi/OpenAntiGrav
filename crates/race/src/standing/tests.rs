@@ -280,8 +280,9 @@ fn the_standings_clock_agrees_with_the_players() {
     );
 }
 
-/// Reversing over the line takes the lap count back and deliberately leaves the
-/// clock alone, exactly as `RaceState::uncomplete_lap` does. Inventing a time for
+/// Reversing over the line leaves the lap count and the clock alone, as the
+/// original's next-lap target does (`Craft_UpdateLapProgress`, `0x08842a18`): the
+/// crossing count falls, the target does not, so the deficit is what is recorded. Inventing a time for
 /// a lap that was un-driven would put a wrong number on a results table.
 #[test]
 fn driving_backwards_over_the_line_invents_no_lap_time() {
@@ -295,7 +296,8 @@ fn driving_backwards_over_the_line_invents_no_lap_time() {
     for (tick, step) in (200u64..).zip(0..30u32) {
         standing.update(&course, on_ring(20.0 - step as f32), tick, None);
     }
-    assert_eq!(standing.lap, 1, "the lap count went back");
+    assert_eq!(standing.lap, 2, "the lap count is never lowered");
+    assert_eq!(standing.reversed, 1, "but the crossing was owed back");
     assert_eq!(standing.best_lap_ticks, best, "the best lap is untouched");
     assert_eq!(standing.lap_start_tick, started, "and so is the clock");
 }
@@ -330,7 +332,7 @@ fn an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap() {
         standing.update(&course, on_ring(20.0 - step as f32), tick, None);
         tick += 1;
     }
-    assert_eq!(standing.lap, 1, "the lap count went back");
+    assert_eq!(standing.lap, 2, "the lap count is never lowered");
 
     // And straight forward again, back across the same line, continuing from
     // exactly where the reversal left off.
@@ -348,7 +350,8 @@ fn an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap() {
         "a lap completed at tick {completed_on:?}, ticks after a backward wrap - \
          the gate was not re-earned"
     );
-    assert_eq!(standing.lap, 1, "no lap re-completed itself");
+    assert_eq!(standing.lap, 2, "no lap re-completed itself");
+    assert_eq!(standing.reversed, 0, "the crossing was paid back");
     assert_eq!(
         standing.best_lap_ticks, best,
         "a bogus short lap overwrote the real one"
@@ -438,4 +441,38 @@ fn craft_that_are_exactly_level_are_placed_by_slot() {
     let course = course();
     let standings = [Standing::default(); 8];
     assert_eq!(places(&standings, &course), [1, 2, 3, 4, 5, 6, 7, 8]);
+}
+
+/// **A craft shoved back over the line does not lose the lap it was on.** The
+/// lowered lap count this replaces made it end one lap short in every mode: the
+/// forward re-crossing earned nothing and the lap count stood a lap behind for
+/// the rest of the race. In the original the crossing count is restored by the
+/// re-crossing and the very next full drive completes the lap.
+#[test]
+fn a_craft_pushed_back_over_the_line_still_completes_the_lap_it_was_on() {
+    let course = course();
+    let mut standing = Standing::default();
+    drive(&mut standing, &course, 110.0, 200);
+    assert_eq!(standing.lap, 2);
+
+    let mut tick = 200u64;
+    for step in 0..30u32 {
+        standing.update(&course, on_ring(20.0 - step as f32), tick, None);
+        tick += 1;
+    }
+    for step in 1..=20u32 {
+        standing.update(&course, on_ring(-9.0 + step as f32), tick, None);
+        tick += 1;
+    }
+    assert_eq!(standing.lap, 2);
+
+    let mut completed = 0;
+    for step in 1..=130u32 {
+        if standing.update(&course, on_ring(11.0 + step as f32), tick, None) {
+            completed += 1;
+        }
+        tick += 1;
+    }
+    assert_eq!(completed, 1, "the next full lap is counted");
+    assert_eq!(standing.lap, 3);
 }

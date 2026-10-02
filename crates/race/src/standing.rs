@@ -32,6 +32,16 @@ pub struct Standing {
     pub lap: u32,
     /// The two-half gate that stops rocking over the line counting as a lap.
     pub gate: LapGate,
+    /// Backward crossings of the line not yet crossed forward again.
+    ///
+    /// The original keeps a **crossing count** that falls on a reverse crossing
+    /// and rises on a forward one, and a lap is the count reaching the value the
+    /// next lap completes on (`Craft_UpdateLapProgress`, `0x08842a18`,
+    /// confidence 92, read statically). The HUD lap is that target less one and
+    /// is never lowered, so a craft shoved back over the line loses nothing: it
+    /// re-crosses forward, which only restores the count, and the lap it was on
+    /// is counted at the next crossing as usual. This is that count's deficit.
+    pub reversed: u32,
     /// Distance along the circuit, or `None` before the first fix.
     ///
     /// Stored as the raw distance rather than a fraction so it can be compared
@@ -104,6 +114,7 @@ impl Default for Standing {
             // lap, it is *on* its first.
             lap: 1,
             gate: LapGate::default(),
+            reversed: 0,
             progress: None,
             course_index: None,
             finish_tick: None,
@@ -190,36 +201,31 @@ impl Standing {
 
         let delta = located.progress - previous;
         if wrapped_backward(delta, half) {
-            self.lap = self.lap.saturating_sub(1).max(1);
-            // **The clock is deliberately not restored**, exactly as
-            // `RaceState::uncomplete_lap` does not restore it: what it read when
-            // the line was last crossed forwards is not kept, and inventing a
-            // value would put a wrong time on a results table. Driving backwards
-            // over the line is already a wrong-way situation.
+            // **The lap count does not go down** - see [`Self::reversed`]. Only
+            // the deficit grows, and the forward re-crossing below pays it back.
+            // The clock is not touched either, as in the original.
             //
-            // **The gate has to go back too, and until 2026-09-07 it did not.**
-            // `self.gate` was already advanced above using *this* tick's
-            // (post-wrap) progress, which for a backward crossing sits past the
-            // far half - so a craft shoved backwards over the line landed on
-            // `LapGate::Ready` and stayed there, with nothing here to undo it.
-            // The very next forward crossing then read `Ready` as "the lap is
-            // earned" and completed it on the spot, against the clock still
-            // reading the lap this craft had *not* re-driven - a lap of a
-            // handful of ticks that never happened. `RaceState::uncomplete_lap`
-            // resets its own gate for exactly this reason; this arm has to
-            // match it, per this module's own rule that the two must not
-            // disagree about where a craft is. Found on a real race where the
-            // corrected craft-pair narrowphase
-            // (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`) threw
-            // a craft back across the line in one tick - see
+            // **The gate goes back, and has to**: `self.gate` was advanced above
+            // with *this* tick's post-wrap progress, which for a backward
+            // crossing sits past the far half, so a craft shoved over the line
+            // would otherwise sit on `LapGate::Ready` and complete a lap of a
+            // few ticks at its next crossing (found 2026-09-07 on
             // `crates/game/tests/lap_times_ground_truth.rs`'s
-            // `every_opponent_that_laps_has_a_lap_time`, which is what caught
-            // it, and `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`
-            // below, which pins the rule directly.
+            // `every_opponent_that_laps_has_a_lap_time`; pinned by
+            // `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`).
+            self.reversed = self.reversed.saturating_add(1);
             self.gate = LapGate::NeedsNearHalf;
             return false;
         }
         if !wrapped_forward(delta, half) {
+            return false;
+        }
+        if self.reversed > 0 {
+            // Back over the line the craft was pushed across: the crossing count
+            // is restored and nothing is earned. The lap it was on is still
+            // owed a full drive and is counted when it is completed.
+            self.reversed -= 1;
+            self.gate = LapGate::NeedsNearHalf;
             return false;
         }
         if self.gate != LapGate::Ready {
@@ -294,7 +300,7 @@ impl Standing {
         {
             return progress - course.length();
         }
-        (self.lap.saturating_sub(1)) as f32 * course.length() + progress
+        (self.lap.saturating_sub(1) as f32 - self.reversed as f32) * course.length() + progress
     }
 }
 
