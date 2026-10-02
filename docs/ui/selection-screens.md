@@ -202,7 +202,7 @@ this build already had changes appearance.
   the RECORDS page keys them - circuit, mode and the RACE page's class.
 - **The counter is `n / 32` on a fresh profile**, not `1 / 3`: this build
   offers every circuit the definition authors, by design
-  ([menus.md](../architecture/menus.md#unlocks-our-race-box-offers-everything-deliberately)).
+  ([menus.md](../architecture/menus.md#unlocks-pulses-circuits-gate-craft-variants-do-not-yet)).
 - **The outline is darker than the original's.** It is drawn through the
   ordinary mesh pipeline with the stand-in light; the original's has a
   teal glow whose source (a blend class on the ribbon, a second pass, a
@@ -244,8 +244,10 @@ hull through the same texture-slot swap a race makes
 stored as `race.skin`, which the launched race reads the way `--skin`
 does. A team that declares no skin - every HD and 2048 team - gets the
 title's *variant* axis on the same row instead, the RACE page's VARIANT.
-No unlock is checked on either: this build's race box offers everything,
-by design.
+No craft-variant unlock is checked: the `Team="any"`/`Exclusive` combination
+is untraced (see [menus.md](../architecture/menus.md#unlocks-pulses-circuits-gate-craft-variants-do-not-yet)).
+Track Select, by contrast, hides circuits whose `<Unlock Grid>` is not met
+(`oag_game::unlock`).
 
 **Loyalty is not drawn - title, bar and backing together.** It is a per-team
 counter the profile keeps and this build does not, and an empty bar would

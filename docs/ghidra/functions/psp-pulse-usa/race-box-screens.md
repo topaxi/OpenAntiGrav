@@ -579,6 +579,13 @@ own authored numbers agreeing on a scale factor, not from PS2 code.
 
 ## What is still open after this pass
 
+- **Implemented 2026-10-02 (`oag_game::unlock`)**: a locked circuit is absent from
+  Track Select, not greyed - the list filter above plus the 3-vs-24 live capture.
+  Not modelled: the `+0x16e` mode-gated byte (it is not `availableInZone`, which is
+  on 16 circuits, incl. not `18_Track`) and the `+0x99` always-hidden byte.
+  Not traced either: how `Definition_IsUnlocked` combines `Team="any"` with an
+  own-team `Exclusive` row, so craft variants stay ungated.
+
 - The nine unlock-predicate functions inside `Definition_IsUnlocked` are
   unnamed and untraced - this is what "circuits gate on a named grid" and
   "craft variants gate on loyalty" would need to become a confirmed
