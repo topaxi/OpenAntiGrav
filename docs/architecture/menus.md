@@ -138,7 +138,9 @@ Selection's livery row therefore offers `Classic` plus only the skins the
 profile's loyalty has earned, a locked one **absent** as in the original
 (`oag_game::unlock::loyalty_unlocked`), and the RACE page's VARIANT row drops
 `Concept` the same way (`gated_variant_choices`). `--unlock-all` lifts both.
-RACE REMIX's craft-side variant row is still ungated.
+RACE REMIX's craft-side variant row is ungated by decision: RACE REMIX is
+this project's own mode, so no disc unlock applies to it (maintainer,
+2026-10-02).
 
 ### What the originals actually do, because the contrast is the point
 
