@@ -92,28 +92,51 @@ drawn by `oag_game::hud::runtime` off `oag_title::HudArt::runtime`:
   `0x0067e6d0` was not read); `hd_hud_runtime_ground_truth.rs` pins that exactly
   one matches in each hexagon layout.
 
+**2026-10-02, the low-shield pass (branch `hd-hud-flash`).** The flash was compared
+against the running original for the first time (private RPCS3, the shield
+poked through the GDB stub, the HUD recorded at 30 fps; evidence and numbers on
+[hud-readouts.md](../../docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md#what-the-running-original-does-at-low-shield)).
+Rate (3.91-4.03 cycles a second, six stretches in two boots), the `<= 20` threshold, the red bracket, the
+solid fill, the blinking number and the 1 s post-hit window all agreed. Three
+things were fixed: the window now arms on a **whole-percent** drop (60.9 to
+60.2 arms nothing, 60.2 to 59.9 does - read off `hud+0x110`), the flash phase
+is the original's own accumulator, and the absorb half of the third condition is
+wired (the fill and the number blink, the bracket stays white). `ship+0x6a80` is
+the absorb stamp - 3 of 3 stamps coincided with the absorb timer starting, 0 of 12
+other pickup clears did; `ship+0x6958` is the LeachBeam manager's flag.
+`oag-game --force-shield TICK:PERCENT` puts both sides in the same state.
+
 ## Open
 
-- **The shield readout's third flash condition** (`0x000cf490` / `ship+0x6958`,
-  "within one second of a ship event") is unread and never fires here.
-- **Post-hit window arming differs slightly**: HD arms on a drop of the
-  *truncated whole* percent; this build reuses Pulse's `shield_flashing`, which
-  arms on any drop. Flash phase origin is chosen (race clock), not HD's own timer.
-- **No low-shield or post-hit frame of the original** has been compared yet - the
-  flash is implemented from the executable only.
+- **`ship+0x6958`** (the flash's other input) is set by
+  `LeachBeamManager_Update_q` (`0x0013d7a8`) on `*(beam+0xc94c)`; which of the
+  two craft that is (the firing one or the beamed one) is unread, so the
+  flash on a live beam does not fire. Read `LeachBeam`'s `+0xc93c`/`+0xc94c`/`+0x44`
+  writers, or watch it live: it needs two craft on a beam, i.e. an AI that fires one.
+- **The player's own absorb was not seen on the original** (no pickup on the
+  line in 35 s of thrust); the AI's three were. A steered run onto a weapon pad,
+  then a button tap, would give the player's `ship+0x6a80` and the real blink.
 - **`0x0067e6d0`'s traversal order** (which `DamageBar` it binds) is unread.
+- **A look at one frame each found the top plate and the pickup slot's hexagon
+  outline drawn heavier than the original's** (different scenes - this build was
+  rendered at its default circuit, the capture is Talon's - so unmeasured): at 100 % the original's outline is a
+  light translucent grey and its top plate shows the scene through it; this build's
+  outline is near-black and its plate opaque (`data/scratch/hd-hud-flash/cmp/ring.png`,
+  original left, this build right, same crop). Not touched - it is not the flash,
+  and `hd-hud.md` records the outline as measured "in its authored grey" - but the
+  two pictures disagree, so check the blend and the baked alpha of that atlas region.
 - The per-lap rows still draw on no reference frame at all - none of the three
   captures completes a lap. Confidence 70 stands; see `hd-hud.md`'s per-lap
   section.
 
 ## Next Steps
 
-- Capture the original at <= 20 % shield (`just rpcs3-race`, drive into walls)
-  to check the red `DamageBarBg` flash and the blinking number against this build.
-- Read what event `ship+0x6a80` timestamps (writers near `0x000e93c0`) to wire
-  the third flash condition.
 - Get a capture with two or more laps completed on a mode that shows
   `Lap1Image`-`Lap4Image` (time trial, default skin) to check the digit-per-row
   reading and the "invisible until completed" gate against a real frame. The
-  same capture checks `LapBar` lighting one more segment per lap.
+  same capture checks `LapBar` lighting one more segment per lap. (Not attempted
+  this pass: the original has no autopilot, and three laps by hand is minutes of
+  steering through a pad.)
+- Resolve `beam+0xc94c` and wire `ship+0x6958` into
+  `Race::advance_shield_flash_whole`'s blink gate once it is read.
 - Whoever next holds `crates/2048`'s HUD reading: `HUD_lap_times.xml` ships in the `2048_hud` skin's archive but no played-race root loads it (`SpeedLap_TimeTrial_HUD.xml` loads `HUD_lap_counters.xml`/`HUD_target_time_total.xml` instead) - confirm that stays true once `oag_2048::hud::ALWAYS_ON` (currently empty) gets filled in, rather than assuming this cluster is reachable there. Separately: 2048's *unplayed* `wo3_hud`/`2097_hud`/bare-root skins do author `PickupDamageTxt`/`PickupAbsorbTxt`/`PositionTxt2` (checked directly, 2026-09-13) - moot today since nothing composes those skins, but worth knowing before assuming this thread's `None` fix needs revisiting there.

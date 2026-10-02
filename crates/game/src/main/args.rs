@@ -229,6 +229,26 @@ pub(crate) fn force_shake(text: Option<&str>) -> Result<Option<(u32, f32)>> {
     Ok(Some((tick.trim().parse().map_err(|_| bad())?, severity)))
 }
 
+/// Parses every `--force-shield TICK:PERCENT`.
+pub(crate) fn force_shield(texts: &[String]) -> Result<Vec<(u32, f32)>> {
+    texts
+        .iter()
+        .map(|text| {
+            let bad = || {
+                anyhow::anyhow!(
+                    "{text:?} is not a forced shield; write it as TICK:PERCENT, e.g. 0:15"
+                )
+            };
+            let (tick, percent) = text.split_once(':').ok_or_else(bad)?;
+            let percent: f32 = percent.trim().parse().map_err(|_| bad())?;
+            if !(0.0..=1000.0).contains(&percent) {
+                return Err(bad());
+            }
+            Ok((tick.trim().parse().map_err(|_| bad())?, percent))
+        })
+        .collect()
+}
+
 /// Parses `--force-wreck`'s `TICK:SLOT`.
 pub(crate) fn force_wreck(text: Option<&str>) -> Result<Option<(u32, usize)>> {
     let Some(text) = text else { return Ok(None) };

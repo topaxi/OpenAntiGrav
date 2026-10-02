@@ -117,12 +117,12 @@ the lap and place the two functions below read), and `f = pct * 0.01`.
    timer gains `dt` and wraps to zero once it reaches `1.0`
    (`0x000869a8`-`0x000869d8`). The comparison is on **`fctiwz`-truncated
    integers**, so a drop inside one whole percent does not arm it.
-3. **A ship-side condition, unresolved.** `ship` is the viewing player's craft,
+3. **A ship-side condition, `c`.** `ship` is the viewing player's craft,
    found through `RaceManager_GetInstance`'s eight-slot lookup (the same
-   boilerplate [hud-sight.md](hud-sight.md) describes). `c = 0x000cf490(ship) ||
-   ship+0x6958 != 0`, where `0x000cf490` returns `0.0 <= ship+0x6a30 - ship+0x6a80 <= 1.0`,
-   that is, within one second of some ship event. Which event is not read; left
-   unnamed on purpose.
+   boilerplate [hud-sight.md](hud-sight.md) describes). `c = Ship_AbsorbWindowActive(ship) ||
+   ship+0x6958 != 0`, where `0x000cf490` returns `0.0 <= ship+0x6a30 - ship+0x6a80 <= 1.0`:
+   within one second of the **absorb** stamp, and `ship+0x6958` is a LeachBeam
+   flag. Both are read in [the section below](#what-c-is-the-absorb-window-and-a-leach-flag).
 4. **The colour.** `rgb = +0x6a0 ? 0xFFFFFF : 0x1664FF`, computed branch-free:
 
    ```
@@ -220,10 +220,106 @@ side along the bottom edge, where `PosBar0` and `PosBar1` both sit at
 the formula would light as nine, is a state the function never meets in the
 original and this page does not claim to know.
 
+## What `c` is: the absorb window, and a leach flag
+
+2026-10-02. Names, with the evidence below them.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x000cf490` | `Ship_AbsorbWindowActive` | 75 |
+| `0x000e9160` | `Ship_UpdatePickup_q` | 55 |
+| `0x0013d7a8` | `LeachBeamManager_Update_q` | 65 |
+
+**`ship+0x6a80` is the time of the last pickup absorb** (`ship+0x6a30` being the
+craft's own clock, advanced at `0x000eaeb8`). Its writers are the constructors
+(`-10.0`, so the window is closed at the start) and `0x000e9160`, which the
+per-tick pickup step `0x000eabd0` calls after `0x000ea0c8` and `0x000e9cd0`.
+`0x000e9160` returns at once without a held pickup (`*(ship+0x5edc) == 0`) and
+otherwise dispatches on the slot object's state word (`*(ship+0x5edc)+0x204`, `-1`
+empty) through two jump tables; four sites store `ship+0x6a30` into
+`ship+0x6a80` (`0x000e93c0`, `0x000e9c0c`, `0x000e9c7c`, `0x000e9cc8`), two of
+them reached through the `'B'`/`'Q'`/`'D'` network messages
+`absorb-feedback.md` already met on the absorb path, and the fall-through that
+follows the first calls `Ship_PlayAbsorbFeedback` (`0x000d9398`).
+
+**Measured on the running original (live, AI craft).** Every craft runs
+`0x000e9160`, so the eight craft were swept through the GDB stub every ~1.2 s
+(`ship+0x6a30`, `+0x6a80`, `+0x6958`, `+0x7a5c`, the slot state) for 150 s and
+200 s of a Talon's Junction race, two boots. A stamp appeared **three times**
+and each time with `ship+0x7a5c` - the absorb feedback's timer, `1.0` counting
+down, idle at `-ship+0x6a30` - at `1.0 - (ship+0x6a30 - stamp)` to within a
+sweep (0.783 at 0.2 s after stamp `69.94`; 0.515 at 0.45 s; 0.466 at 0.51 s).
+**Twelve other pickup slots cleared (a weapon fired, the state going to `-1`)
+without a stamp and without `+0x7a5c` leaving idle.** The craft that stamped
+held states 6, 6 and 0, so it is not a weapon type. That is the absorb
+feedback starting, 3 of 3 and 0 of 12, not "a pickup was used"; the player's
+own craft could not be made to absorb (no pad on the line in 35 s of
+thrust - `circle`/`triangle`/`r1`/`l1`/`square` taps with an empty slot
+changed nothing). Confidence 75: the correlation is clean and small.
+
+**The visible effect agrees with the table in step 6, row `c`.** Writing
+`ship+0x6a30` into `ship+0x6a80` on the player's craft (at 59.9 %) blinked the
+fill and the number together for about a second, four frames on and four off,
+with the background white throughout - no red in the bracket on any of 36 frames.
+
+**`ship+0x6958` is set by the LeachBeam manager's per-tick update.**
+`0x0013d7a8` sits beside `LeachBeamManager_Construct` (`0x0013d520`, 85), walks
+the manager's beam list (`param+0x88` of them, each a `0xc9c0`-byte
+`LeachBeam`), clears `*(beam+0xc94c)+0x6958` and sets it again to `1` for a beam
+whose state word (`+0x4c`) is `4` with bit `0x1` of `+0x40`, while moving shield
+between two craft (`+0x120` and `+0x128` of their pickup-slot objects). Which of
+the two craft `beam+0xc94c` is - the one firing or the one beamed - was not
+read, and so `ship+0x6958` is **not wired**. Confidence 65 for the name, 0 for
+the owner.
+
+## What the running original does at low shield
+
+2026-10-02, a private RPCS3 (Recompiler), the Fury campaign's Talon's Junction
+single race, Feisar, 1280x720 at 30 fps through the emulator's own recorder
+(`data/scratch/hd-hud-flash/flash2/`), the shield poked through the GDB stub.
+The cells, found by scanning for the 140.0 the Feisar's pool starts at and
+confirmed by writing 70.0 and reading the HUD's record follow within 0.5 s:
+
+- **The local craft** is the slot of `rm+0xe8..0x104` (plus `rm+0x13e8`, the
+  fallback) whose `ship+0x7a60` equals `hud+0x118` (0). `rm` is
+  `[[0x008a6814]]`. The shield is **`ship+0x5fa0`** (f32). The HUD's record
+  (`hud+0x40`, lap `+0xc`, laps `+0x10`, place `+0x14`, shield `+0x48`, maximum
+  `+0x50`) is a mirror of it refreshed every tick, so a write to the record is
+  undone within a frame - the first run poked it and saw nothing but a one-frame
+  blank of the number.
+- **The HUD object** (`hud`) sat at `0x32921a30` in four boots out of four, the
+  interpreter's and three Recompiler's; the craft, the record and the shield
+  cell moved by a few kilobytes boot to boot. Its `+0x10c`, `+0x110`, `+0x1e8`
+  are the previous percentage, the post-hit timer and the flash accumulator.
+
+| Question | Measured | Matches |
+| --- | --- | --- |
+| Flash rate | cycles per second at 30 fps over 22, 17 and 14 cycles (first boot): 3.95, 3.98, 4.00; over 14, 9 and 9 (second boot, `scripts/rpcs3-hud-probe.py schedule`): 3.96, 3.91, 4.03 | 8 phases a second |
+| 20.0 % | flashes without end: red bracket and the number on, pale bracket and an empty plate off; the fill solid blue throughout | `<= 20` |
+| 20.5 % | after the drop from 50 %: about 0.97 s of flashing (28 frames; 29-30 in the second boot), then a steady `20` for the rest of the 5 s | the post-hit window, no threshold flash |
+| 15 %, 5 % | flashes, the digits `15` and `5` | |
+| Rise to 60 % | the flash ends within a frame of the poke (30 fps, a poke freezes the clip, so a tick cannot be resolved) | |
+| Post-hit arming | 60.9 to 60.2 %: `hud+0x110` stays `0.0`; 60.2 to 59.9 %: 0.20-0.234 a quarter second on; a rise arms nothing - in each of **three boots**, three reps a boot (first boot `0.2286`, `0.2298`, `0.2330`) | **`fctiwz`-truncated whole percent** |
+| Absorb | fill and number blink, background white | row `c` |
+
+`scripts/rpcs3-hud-probe.py arming` reproduces the arming rows (`schedule` films
+the rest, `sweep` reads the absorb stamps).
+
+The flash accumulator `hud+0x1e8` was read at 0.9833, 0.9574, 0.9395 and 0.9269
+when a flash ended and picked up from there on the next (the values are read; that
+a flash starting at 0.98 therefore starts on an "off" phase, `floor(7.9)` being odd,
+is arithmetic on them - no recorded frame isolates a flash's first phase), so
+**the phase at which a flash starts is the accumulator's, not the race clock's**.
+
+Only the `arming` mode of the probe script has been run end to end three times;
+`schedule` once (the second boot above); `sweep` is the `arm2.py` sweep that the
+absorb reading comes from, folded into the script and not re-run from it.
+
 ## Not read
 
-- **What `c` is** (`0x000cf490`, `ship+0x6958`, `ship+0x6a80`). Written by
-  `0x000e93c0` and three siblings nearby; nothing was read about why.
+- **Which craft `beam+0xc94c` is** (above), so `ship+0x6958` is not wired.
+- **Why the absorb stamp has four writers** - which pickup states reach which,
+  and the two jump tables' cases. The player's own absorb was not seen.
 - **Which bits of `hud+0x44`** each mode's HUD sets.
 - **`0x0067e6d0`'s traversal order** - a hash-cached lookup
   (`0x0016d9a8`) falling back to a tree walk (`0x0016a920`). `arcade_hud.xml`

@@ -597,6 +597,10 @@ pub struct Readout {
     /// `false` on [`Self::blank`], the same as every other "nothing has run
     /// yet" field.
     pub shield_flashing: bool,
+    /// HD's [`Self::shield_flashing`]: the post-hit window armed by a drop of
+    /// the truncated whole percentage, `hud+0x110 > 0` in
+    /// `Hud_UpdateShieldReadout`. See `Race::advance_shield_flash_whole`.
+    pub shield_flashing_whole: bool,
     /// Whether the player is inside the one-second window after absorbing a
     /// pickup this frame - `Race::absorb_window_active(player_slot)`, the
     /// same state [`oag_render::hull_overlay`] draws off.
@@ -635,6 +639,10 @@ pub struct Readout {
     /// [`crate::race::view::View::shield_blink_timer`]'s own doc comment for
     /// what that assumption rests on.
     pub shield_blink_phase: f32,
+    /// HD's [`Self::shield_blink_phase`], `hud+0x1e8`: the accumulator the
+    /// original runs `floor(t * 8)` parity on, gated on the whole-percent
+    /// window. See `Race::advance_shield_flash_whole`.
+    pub shield_blink_phase_whole: f32,
     /// 2048's `EnergyBarDelay`: an exponentially-smoothed trail behind
     /// [`Self::shield_fraction`], `0..=1`.
     ///

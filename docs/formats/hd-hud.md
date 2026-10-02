@@ -973,12 +973,38 @@ source rectangle, so the same rule reaches it. (That the Zone HUD's update runs
 with bit `0x02` of `hud+0x44` set is read off this frame, not off the
 executable.)
 
-**Chosen, not read:** where in its cycle a flash starts (the original keeps a
-flash timer of its own; this build phases off the race clock), and that a
-place of zero draws no place arc (the original never meets one). **Not
-reproduced:** the post-hit window here reuses Pulse's, which arms on any drop
-rather than on a drop of the whole percentage, and a third flash condition,
-a ship-side event behind `0x000cf490`, is unread.
+**Checked against the running original at low shield, 2026-10-02.** The
+rate, the threshold, the colours, the blinking number and the absorb row were
+all compared with a Recompiler boot of the Fury campaign's Talon's Junction,
+the shield poked through the GDB stub and the HUD recorded at 30 fps; the
+numbers, the cells poked and the method are on
+[hud-readouts.md](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md#what-the-running-original-does-at-low-shield).
+Where this build differed it is fixed:
+
+- **The post-hit window arms on a drop of the truncated whole percentage**,
+  not on any drop: 60.9 to 60.2 % arms nothing and 60.2 to 59.9 % does (3 reps
+  in each of three boots, read off the HUD's own `+0x110`). `Race::advance_shield_flash_whole`
+  is the twin of Pulse's step with `fctiwz`'s test.
+- **The phase a flash starts in is the original's accumulator** (`+0x1e8`,
+  kept between flashes, wrapped past 1.0) and not the race clock:
+  `Readout::shield_blink_phase_whole`. The cycle itself was already right, at
+  3.91-4.03 cycles a second over six stretches in two boots.
+- **The third flash condition is wired for its absorb half.** Within a second
+  of an absorb the fill and the number blink together and the background stays
+  white - row `c` of the table - from `Readout::shield_absorbing`, the same
+  one-second window the hull overlay draws off. The craft-side LeachBeam flag
+  (`ship+0x6958`) is not wired: which of two craft it marks is unread.
+
+`oag-game --force-shield TICK:PERCENT` sets the player's shield for a headless
+capture, so both sides can be looked at in the same state: this build at 20.0 %
+flashes the red bracket and the number on and a pale bracket and an empty
+plate off, four frames each at a 2-tick step, like the recording; at 20.5 %
+after a drop from 100 it flashes for about a second and then reads a steady `20`;
+`--force-shield 0:60 --give rocket --hold cross --press circle` absorbs and the
+fill and the number blink over a white bracket.
+
+**Still chosen, not read:** that a place of zero draws no place arc (the
+original never meets one).
 
 ## What is not done
 
@@ -998,10 +1024,11 @@ match", it is "no copy on the disc authors a `color=` attribute on the
 relevant widget", checked directly rather than inferred from resolved colours
 alone.
 
-- **The shield readout's third flash condition** - a ship-side event
-  `Hud_UpdateShieldReadout` keys off `0x000cf490` and `ship+0x6958` - is
-  unread and never fires here; see
-  [hud-readouts.md](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md#not-read).
+- **The shield readout's second flash input, `ship+0x6958`**, is the
+  LeachBeam manager's flag (`0x0013d7a8`), and which of the two craft it marks
+  is unread, so it never fires here; the absorb half of the same condition is
+  wired. See
+  [hud-readouts.md](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md#what-c-is-the-absorb-window-and-a-leach-flag).
   Everything else the 2026-09-07 re-check above listed as needing the
   executable is read and drawn now; see
   [the section above](#the-executable-writes-the-shield-the-number-and-the-arcs).

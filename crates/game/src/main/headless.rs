@@ -523,6 +523,7 @@ pub(crate) fn run_race(
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
                 force_wreck: crate::args::force_wreck(cli.wreck.force_wreck.as_deref())?,
+                force_shield: crate::args::force_shield(&cli.wreck.force_shield)?,
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),

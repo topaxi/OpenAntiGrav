@@ -482,3 +482,6 @@
 0x00224488	function	EndRaceResults_BuildLoyaltyTicker	78	endrace-loyalty.md
 0x00225030	function	EndRaceResults_UpdateLoyaltyTicker	76	endrace-loyalty.md
 0x0001b678	function	Loyalty_FindTeamRecord	72	endrace-loyalty.md
+0x000cf490	function	Ship_AbsorbWindowActive	75	hud-readouts.md
+0x000e9160	function	Ship_UpdatePickup	55	hud-readouts.md
+0x0013d7a8	function	LeachBeamManager_Update	65	hud-readouts.md

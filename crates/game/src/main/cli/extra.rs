@@ -170,6 +170,19 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wreck: Option<String>,
 
+    /// With `--race --screenshot`, set the player's shield to a percentage of
+    /// its maximum at the end of a tick: `TICK:PERCENT`, e.g. `0:15` for a
+    /// craft at 15 % from the first frame. Repeat the flag to script a drop:
+    /// `--force-shield 0:60.9 --force-shield 40:60.2` is a fall inside one
+    /// whole percent, `--force-shield 40:59.9` one across it.
+    ///
+    /// A verification aid, written from outside `Race::tick` the way `--give`
+    /// writes the pickup slot, so nothing here reaches a determinism hash. It
+    /// exists to look at the shield readout's flash against the original at a
+    /// chosen shield without driving a craft into a wall for it.
+    #[arg(long, value_name = "TICK:PERCENT", requires = "race")]
+    pub(crate) force_shield: Vec<String>,
+
     /// Keep a destroyed craft's hull instead of swapping in its
     /// `shipwreck.vex`: the headless way to measure what the wreck adds, by
     /// rendering the same frame with and without it.

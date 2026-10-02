@@ -575,6 +575,45 @@ Same disconnect, different state: if the target was paused, the log adds
 *resumed* leaves the game running, debugger-less but alive. So a script that
 means to hand a live emulator back should `vCont;c` before dropping the socket.
 
+### A breakpoint's stop reply is queued at once, and an unread one kills the stub
+
+Measured 2026-10-02. After `vCont;c` with a `Z0` already set, the breakpoint hit
+**20 ms later** (`SYS: Emulation is being paused... (mark=1)`), the stub sent
+its stop reply and waited for the client's `+`. A client that then slept two
+seconds and sent `\x03` (which is what `run_for()` and a `resume()` / sleep /
+`pause()` loop do) made the stub log `GDB: Wrong acknowledge character
+received: ''` and answer nothing more - every later packet timed out, 25 s each,
+and the boot was spent. Read the reply right after the resume instead:
+
+```python
+gdb.resume()
+stop = gdb.wait_for_stop(30.0)   # the reply, acked; None if nothing stopped
+if stop is None:
+    gdb.pause()                  # only now is \x03 safe
+```
+
+A breakpoint that fires every tick (the HUD's, here) is hit at once; one that
+does not needs `wait_for_stop` with a real timeout, not a sleep.
+
+### A member's own emulator, and what a scan costs
+
+`scripts/rpcs3-drive.py` read `~/.cache/rpcs3/TTY.log` and the stock config
+whatever `XDG_*` said, so a second user's private instance waited on the
+first's file and never saw a screen change. It now honours `XDG_CACHE_HOME` and
+`XDG_CONFIG_HOME` (the log, `TTY.log`, the lock, the recordings and the input
+profile all move), `OAG_RPCS3_DISPLAY` (the Xvfb), `OAG_RPCS3_SCRATCH_CONFIG`
+(where the generated config copy goes - `data/tools/` is shared between
+worktrees) and `OAG_RPCS3_GDB=127.0.0.1:2391` (the stub's port, written into
+the copy). A private config directory needs its own copy of `dev_hdd0`
+(the save decides the boot chain) and the `input_configs` profile; `dev_flash`
+can be a symlink.
+
+A heap scan is cheaper than the table above says: 540 KiB (`0x307c0000`-
+`0x30844000`, 2 KiB per read) took **11 s** against a Recompiler boot, and the
+HD HUD's record, the HUD object and the ship were each found in under a minute.
+The HUD object was at the same address (`0x32921a30`) in all four boots of one
+session; the ship and the record moved by a few kilobytes.
+
 ### The shared Xvfb never clears, so an old window's pixels can ghost into a new screenshot
 
 **Found 2026-09-01**, capturing HD/Fury's Main Menu. `start_display()` reuses
