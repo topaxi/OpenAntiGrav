@@ -809,6 +809,15 @@ builds no weapon pools. See the handover thread.
   | HD Tech De Ra, tick 300 | 5.16 % -> 5.16 % | **byte-identical** |
   | 2048 default circuit, tick 300 | 4.97 % -> 4.97 % | **byte-identical** |
 
+  **Sweep of all twelve forward circuits** (tick 30): every one binds its
+  lightmaps with **0 unresolved** and reports its own triple
+  (`omega-lightmap` load logs), so no lightmapped draw falls back to the bias
+  without an atlas; the outlier is Sebenco Climb's `16 * lightmap^12 + 0.96`,
+  which renders brighter (0.375 -> 0.461 mean luminance, 0.43 % -> 1.65 %
+  clipped) and plausible. The Zone rig rebuild (`ZoneGrade::light`) now carries
+  the Omega flag through, though Omega ships no Zone palette today
+  (`zone_palette: None`), so no Omega Zone race reaches it.
+
   Read by eye (`*-before-after.png`): Tech De Ra's blown-white upper walls now
   carry panel shading, and Anulpha Pass's walls and floor take a deeper baked
   shadow, which is what dropping the 1.0 constant ambient and the second sRGB

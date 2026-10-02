@@ -107,7 +107,10 @@ mixed with `fogColour` by `attr0.w` and exported through
 shape reads off the three other nova variants read by hand
 (`Shdr` blobs at `0x9a64`, `0xd044`, `0xe444` of the same file), and off a census
 of all 7,911 tag-valid PS4 `.rcsmaterial` files in the five base archives
-(`data00`..`data04`; the patch's were not read):
+(`data00`..`data04`; the patch's were not read; this is more than
+[`rcsmaterial.md`](../../../formats/rcsmaterial.md)'s "439 of 1,270" tag-valid
+files of 2026-09-16, which predates the corrected extraction of 2026-09-29 and
+is not reconciled here):
 
 | Count | |
 | --- | --- |
