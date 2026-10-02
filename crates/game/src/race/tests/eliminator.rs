@@ -55,14 +55,14 @@ fn a_craft_that_is_not_racing_and_a_mode_that_is_not_eliminator_get_nothing() {
     assert_eq!(race.sim.world.ships[0].physics.shield, maximum * 0.3);
 }
 
-/// A wrecked opponent in a single race comes back: state 5's dwell, state
-/// 6's wait, then `Ship_ResetShield` and a place on the line
-/// (`Ship_UpdateDestroyed`, `Ship_UpdateRespawn` - shield.md). The player's
-/// own destruction still ends the race, so it is the opponent that is put
-/// down here.
+/// A wrecked opponent in a single race stays down: state 5's dwell, then
+/// state 6, a bare timer nothing revives (measured live on PPSSPP, 2026-10-02,
+/// 13 s past the timer's expiry - the module doc of `race::eliminator`). The
+/// opponent keeps its wreck, its empty pool and its place off the circuit for
+/// as long as the race runs, and the player's race goes on.
 #[test]
-fn a_destroyed_opponent_in_a_single_race_returns_after_the_two_dwells() {
-    use crate::race::eliminator::{AI_RESPAWN_WAIT, DESTROYED_DWELL};
+fn a_destroyed_opponent_in_a_single_race_never_comes_back() {
+    use crate::race::eliminator::DESTROYED_DWELL;
     use oag_physics::CraftState;
 
     let mut race = race_with_a_grid();
@@ -70,28 +70,23 @@ fn a_destroyed_opponent_in_a_single_race_returns_after_the_two_dwells() {
         race.sim.world.ships[1].active,
         "the grid fixture fields opponents"
     );
-    let dimensions = race.sim.world.ships[1].handling.dimensions;
     // Straight to the out-of-the-race state, the explosion already run.
     race.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
     race.sim.world.ships[1].physics.shield = 0.0;
 
-    let dwell_ticks = ((DESTROYED_DWELL + AI_RESPAWN_WAIT) / race.dt()).round() as usize;
-    for _ in 0..dwell_ticks - 2 {
+    // Past state 5's 1.5 s, state 6's 0.8 s, the Eliminator's longest wait
+    // (3.5 s) and then the 13 s the live capture watched.
+    let ticks = ((DESTROYED_DWELL + 0.8 + 3.5 + 13.0) / race.dt()).round() as usize;
+    for tick in 0..ticks {
         race.tick(&PlayerInputs::none());
         assert_eq!(
             race.sim.world.ships[1].physics.craft_state,
             CraftState::Eliminated,
-            "the opponent came back before its dwell had run"
+            "the opponent came back at tick {tick}"
         );
     }
-    for _ in 0..4 {
-        race.tick(&PlayerInputs::none());
-    }
-    assert_eq!(
-        race.sim.world.ships[1].physics.craft_state,
-        CraftState::Racing
-    );
-    assert_eq!(race.sim.world.ships[1].physics.shield, dimensions.shield);
+    assert_eq!(race.sim.world.ships[1].physics.shield, 0.0);
+    assert_eq!(race.sim.world.ships[1].standing.deaths, 0);
     assert!(
         !race.finished(),
         "an opponent's death must not end the player's race"
