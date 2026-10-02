@@ -380,8 +380,8 @@ wreck"; that was a different circuit and a different craft position.)
 | `0x0888058c` | `Camera_SetSubject` | `camera+0x1e0 = craft`; picks the station by `Camera_PickStation` unless the craft carries its own at `+0xc3c` (zero on every craft read), forces mode 7, takes the starting field `fov(60) + rand(-10, 20)` (at least 3) and the starting focus | 85 |
 | `0x0887fedc` | `Camera_PickStation` | the station whose **aim point** is nearest the subject (`dot(d, d)`, strictly less so the first of equals wins; a y-plane filter that is off with `DAT_08abff10 <= 0`, read here as `0`) | 88 |
 | `0x08880984` | `Camera_FramingFov` | `2 * atan((camera+0x268 * 0.5) / distance)` in degrees, `distance` from the station's eye to the subject; `65.0` with no station | 88 |
-| `0x08880c04` | `Camera_UpdateSpectatorView` | the per-frame look-at, one `switch` on `camera+0x1dc` (cases 0 to 8) | 85 |
-| `0x0887fd3c` | `Camera_UpdateSpectator` | the controller's per-frame update: a ten second timer, the hand-over to another craft, then `Camera_UpdateSpectatorView` | 70 |
+| `0x08880c04` | `Camera_UpdateSpectatorView` | the per-frame look-at, one `switch` on `camera+0x1dc` (cases 0 to 8) | 90 |
+| `0x0887fd3c` | `Camera_UpdateSpectator` | the controller's per-frame update: a ten second timer, the hand-over to another craft, then `Camera_UpdateSpectatorView` | 80 |
 | `0x08880168` | `Camera_RepickNearSubject_q` | picks a random station among those whose aim is within 60 units of the subject, but only when the current one's aim is farther than 60 | 62 |
 
 **A station is an authored `Camera` node, and its aim is in its payload.** The runtime
@@ -458,8 +458,8 @@ not.
 | `0x0888058c` | `Camera_SetSubject` | 85 |
 | `0x0887fedc` | `Camera_PickStation` | 88 |
 | `0x08880984` | `Camera_FramingFov` | 88 |
-| `0x08880c04` | `Camera_UpdateSpectatorView` | 85 |
-| `0x0887fd3c` | `Camera_UpdateSpectator` | 70 |
+| `0x08880c04` | `Camera_UpdateSpectatorView` | 90 |
+| `0x0887fd3c` | `Camera_UpdateSpectator` | 80 |
 | `0x08880168` | `Camera_RepickNearSubject_q` | 62 |
 | `0x08878874` | `Camera_SubmitScene` | 80 |
 | `0x08885d78` | `Camera_PublishTripod` | 88 |
@@ -1431,3 +1431,164 @@ says `far`** (the first run wrote the default out) and stays on it: that cannot 
 told from a choice, so it is not migrated. The Wipeout 2048 options picker starts on
 `OPT_CLOSE`, as its own definition declares. A comparison against a capture taken on
 `OPT_FAR` (the `hull-sparks.md` ones) now needs `--camera-view far`.
+
+## The spectator view's craft-relative modes, and the director's hand-off rules (2026-10-02)
+
+Lane `pulse-spectator-cam`. Read from the decompile and the raw disassembly of
+`Camera_UpdateSpectatorView` (`0x08880c04`), and **measured on PPSSPP** (software renderer,
+Pulse PSP USA, a Single Race, `scripts/psp-spectator-capture.py`: a breakpoint on the function's
+single `jr ra` at `0x08882ae8`, once a frame, logging the camera object, the matrix the view
+wrote and the matrix of the craft it read, from the same instant). 407 frames in modes 2 and 3
+(the mode word written to 2 and 3 on stretches of the run, and the director's own rolls), 700
+frames in all, plus two wreck runs with the camera object logged every frame
+(`scripts/psp-wreck-capture.py --camera`).
+
+### The switch, and what the decompile hides
+
+The decompile's `case` labels are right, but the function is long enough that they are easy to
+misread, so the jump table is recorded here: `lui at, 0x8a8; lw at, -0x30e8(at)` is
+`0x08a7cf18`, nine words:
+
+| Mode `cam+0x1dc` | Target | What it is |
+| ---: | --- | --- |
+| 0 | `0x08880f68` | a look-at from the station's eye at the craft (not read further) |
+| 1 | `0x088810d8` | a craft view of the same family as 2 and 3, with a field of 65 (not read further) |
+| **2** | `0x0888132c` | **the rear view, below** |
+| **3** | `0x088816e8` | **the front view, below** |
+| 4 | `0x08881ba8` | a craft view that uses the same three globals as mode 3 (not read) |
+| 5, 6, 7 | `0x08880cb4` | the node cameras ([above](#the-destroy-camera-mode-5-read-and-measured-2026-10-01)) |
+| 8 | `0x0888219c` | not read |
+
+**The craft's matrix is `*(entity + 0x794)`**: four rows of four floats, unit length, the rows
+**left, up, forward** and then the position. It equals the rigid body's own matrix (the one at
+`*(craft + 0x1cc)`) to the bit in every frame captured; no `0.75` scale is on it (that factor
+is applied at draw time, see [the 3/4 section](#the-34-factor-is-g_craft_scale-a-code-literal-and-it-is-the-scale-this-project-already-knew)).
+The first row is the craft's **left**: `row0 x row1` is `row2`, the nose, so the rows are not a
+right-handed `X, Y, Z = right, up, back`. Whether a barrel roll is inside this matrix was not seen
+(no roll ran).
+
+The view matrix the function writes (at `[*0x08ab10b0] + 0x40`) stores the camera's three axes as
+**columns** and, in the fourth row, the **negated eye** (not the rotated translation), the same
+layout [the pose section](#the-live-pose-is-capturable-per-tick-and-the-node-stores-it-transposed)
+recorded.
+
+### Case 2: the rear view (mode 2), confidence 93
+
+```text
+camera axes = the craft's own                      (right, up, back)
+n   = normalize(up + (0, 0.5, 0))                  up = row 1
+u   = n / |n . up|                                 (FUN_0897e140 is fabsf)
+eye = position + 2.5 * u + 6.0 * back              back = the camera's own third axis
+field of view = 65.0 degrees, written every frame (g_camera_fov_degrees)
+```
+
+In the original's own rows this is `rows' = (-row0, row1, -row2)`: the code builds a yaw of
+`2/PI * PI = 2` quarter turns with `vcos.s` and `vsin.s` (the VFPU's angle unit is a quarter
+turn, so `2.0` is 180 degrees), multiplies it onto the craft matrix **in the craft's own frame**
+and moves the translation row by `2.5 * u + 6 * row2'`. The result is a camera 6 units **behind**
+the craft and 2.5 above it, looking where it flies. `u` is the craft's up tipped half a unit
+toward the world's up and rescaled to stay 1 unit along the craft's own up, so a rolled craft's
+camera is lifted toward the sky rather than into the track.
+
+### Case 3: the front view (mode 3), confidence 93
+
+```text
+camera axes = the craft's, turned 180 degrees about its own up
+eye = position + 12.0 * forward + 3.0 * up
+field of view = 65.0 degrees
+```
+
+The same function turns the matrix by a yaw (`cam+0x344`) and a pitch (`cam+0x340`) first, then adds
+`row2 * g(0x08ab10d0) + row1 * g(0x08ab10cc) + row0 * g(0x08ab10c8)`: **12.0, 3.0 and 0.0**, read from
+the file and from the running emulator (`log["globals"]`). The camera sits **12 units ahead** of
+the craft and 3 above it, looking back at it. Both globals are read only by this function (cases 3
+and 4). **`cam+0x340`/`+0x344` are `0.0` in the director**: the constructor zeroes both
+(`0x0887fca8`), and the only writers are `FUN_08814014` (called from `InGame_UpdatePauseInput`
+`0x08813244`) through `FUN_088808a8` (pitch) and `FUN_08880918` (`yaw += dt * 0.05`, wrapped at
+`+-2 pi`): the pause menu's look-around, which a spectating player does not touch. Neither
+function is a callee of the view and neither is renamed here.
+
+**The previous lane's names were swapped by guesswork** (`above` for 2, `front` for 3): by geometry
+2 is the close rear view and 3 is the front view. Neither was ever above the craft.
+
+**Measured**: for every frame in mode 2 and 3 the rotation of the written matrix equalled the
+prediction exactly and the eye to `5.7e-5` units (`data/scratch/pulse-spectator-cam/analyse2.py`,
+407 frames, 199 in mode 2 and 208 in mode 3), with the craft matrices read live, including banked and
+pitched ones (`up.y` down to 0.86). `oag_render::camera::craft_view` carries the two most banked
+frames as tests. Frames: `data/scratch/pulse-spectator-cam/cap1/m.png` (mode 2 on top, mode 3
+below).
+
+### What `cam+0x1e8` is, and what the director cuts by
+
+Cases 0, 2 and 3 end with `cam+0x1e8 = FUN_0883e434(cam+0x1e4)`, which is
+`*(char *)(*(entity + 0xae4) + 0x60)`: a **signed byte that counted up 12, 13, 14, ... 19 as the
+craft advanced** along the circuit (about one step per 40 to 60 frames, 700 frames), and equals
+the value the function wrote back each frame (`node_byte` in the log). It looks like the craft's current
+track section; the structure `entity+0xae4` points to was not read, so this is a **hypothesis** and
+`FUN_0883e434` is not renamed. **It is not a cut input**: `Camera_UpdateSpectator` cuts by `cam+0x1d4`, the
+current station, whatever the mode is, and clears `+0x1e8` to `-1` with the ten second timer (the same
+frame it is written again).
+
+### The director's own rules, read in full
+
+`Camera_UpdateSpectator` (`0x0887fd3c`):
+
+1. `cam+0x3c += dt`, and bit 4 of the player's scene node flags (`*(player + 0x8b0) + 0x2c`) is set.
+2. Past `10.0` s: the timer is zeroed, `cam+0x1e0` (subject) is cleared unless `cam+0x274` is set, and
+   `+0x1e8 = -1`.
+3. **If the subject is in state 6 and its timer `entity+0x874` is `<= 0`, the subject is cleared.**
+4. A cleared subject is re-picked by `Camera_PickSubject` (below).
+5. With no station (`cam+0x1d4 == 0`) it takes the nearest (`Camera_PickStation`) and sets the
+   drawn craft (`+0x1e4`) to the subject, **without rolling a mode**. With a station it runs the 60-unit test on
+   the **subject's** position: if a new station was taken, **`Camera_PickRandomMode`, and
+   `+0x1e4 = +0x1e0`**; otherwise it tries again from the *drawn* craft's position and ignores the result (the
+   station may change, the mode and the drawn craft do not).
+6. `Camera_UpdateSpectatorView`.
+
+**The craft drawn is `+0x1e4`, not the subject `+0x1e0`**: every case reads `*(+0x1e4) + 0x794`, and the
+subject only becomes the drawn craft at a cut. Seen: at view frame 599 of the capture the ten second timer
+re-picked the subject and a cut took it at the same frame (`subject` and `previous` both change in the log); in
+the wreck run the subject changed at `k+240` and the drawn craft at `k+279`.
+
+`Camera_PickSubject` (`0x08880a58`), read in full: with `cam+0x274 == 0` and a race manager, the subject is
+the **player** (`manager+0x2c0`); if the drawn craft carries `flags(+0x860) & 0x1000` the drawn craft is
+reset to the player; then, while the subject equals the drawn craft and more than one craft is live, a random
+live craft is taken (`rand() % count`). With `cam+0x274 != 0` the subject is the global `DAT_08ab0df8` (a photo
+mode or a replay, not seen). **`Camera_PickRandomMode` (`0x08880b38`) is gated on `cam+0x26c`** (a byte, `1`
+from the constructor): when it is zero the function changes nothing.
+
+### After a player wreck the camera stays in mode 5 for good, confidence 92
+
+`Ship_SetState` case 4 (`0x08844508` to `0x08844524`): `Camera_SetSubject(cam, entity, 1)`,
+`cam+0x2c |= 6`, **`cam+0x26c = 0`** (`sb a2, 0x26c(a0)` with `a2 = 0`, `0x08844520`), then
+`Camera_SetMode(cam, 5)`. With the flag clear `Camera_PickRandomMode` does nothing, so the cuts that follow
+still move the camera between nodes but never out of mode 5 (view width 35). That is why the
+original "stays in mode 5" where the port started its director in mode 7. The other writers of
+`+0x26c` are `FUN_088dfb90` (the griefing report, not a race ending) and two callers in `0x08966xxx` (not read).
+
+**What triggers the hand-off is the wreck's own timer, not a constant** (`wreckA`, 2026-10-02: wreck injected
+at race time 1.02 s, ten camera fields logged per frame; the earlier `wreck2` run agrees to the frame):
+state 4 for 30 frames, state 5 for 90, state 6 for 120: `entity+0x874` crosses zero at **`k+240`**, the same frame
+`cam+0x1e0` changes to another live craft. The drawn craft stays the wreck until the next cut: `k+279` in this
+run (the new subject first had to be more than 60 units from the node's aim point and a node within 60 units of
+it had to exist), `k+290` in the earlier one. **The "259 ticks" the end-photo lane quoted is a single sample of
+the cut delay**, not a rule; the fixed rule is `k+240` for the subject and the first qualifying cut for the picture.
+The ten second timer was zeroed at `k` (`timer3c 0.000`) and reads `4.0` at `k+240`, so the next
+re-pick is at `k+600`.
+
+### Names
+
+No function is renamed here. `Camera_UpdateSpectatorView` goes `85 -> 90` (cases 2, 3 and the exit
+measured; cases 0, 1, 4 and 8 still unread), `Camera_UpdateSpectator` `70 -> 80` (read in full, its timer
+and cut rules seen live) and `Camera_PickSubject`, `Camera_PickRandomMode` `80 -> 85` and `75 -> 85` in
+[`race-finish.md`](race-finish.md). Three data names, the row scales case 3 and case 4 read (static bytes in
+the executable, and live):
+
+| Address | Name | Value | Confidence |
+| --- | --- | ---: | ---: |
+| `0x08ab10c8` | `g_spectator_row_scale_left` | `0.0` | 85 |
+| `0x08ab10cc` | `g_spectator_row_scale_up` | `3.0` | 85 |
+| `0x08ab10d0` | `g_spectator_row_scale_forward` | `12.0` | 85 |
+
+Not read: cases 0, 1, 4, 8; `cam+0x274`; the structure at `entity+0xae4`; whether a barrel roll is in
+`+0x794`; what `FUN_088dfb90` does to the camera; the PS2's version of any of this.
