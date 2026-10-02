@@ -442,7 +442,6 @@ impl App {
             suspended_race: None,
             campaign_cell: None,
             campaign_cursor: crate::campaign_stage::CellCursor::default(),
-            unlock_gate: None,
             campaign_difficulty: None,
             campaign_ai_skill_scale: None,
             tournament: None,

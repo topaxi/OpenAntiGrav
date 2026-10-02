@@ -225,21 +225,13 @@ pub(crate) struct Cli {
     /// headless run always loses - it finishes in far less real time than the
     /// movie takes to play, so `--until` spends its tick ceiling on a picture
     /// that has barely moved. See `crate::audio::Audio::movie_playhead` and
-    /// ADR-0019. `--dump-audio` already forces the same backend and works for
-    /// this too, but it also requires `--screenshot` and grows a sample buffer
-    /// for the length of the run; this is the plain way to ask for the
-    /// tick-clocked movie leg alone. Conflicts with `--tap-audio` for the same
-    /// reason it conflicts with `--dump-audio`: both need a real stream to
-    /// read from, and this one forces there to be none.
+    /// ADR-0019. `--dump-audio` forces the same backend and works too, but also requires
+    /// `--screenshot` and grows a sample buffer for the run; this is the plain way to ask for the
+    /// tick-clocked movie leg alone. Conflicts with `--tap-audio`, which needs a real stream.
     #[arg(long, conflicts_with_all = ["dump_audio", "tap_audio"])]
     pub(crate) no_audio: bool,
 
-    /// Offer every circuit in the Race Box, whatever the campaign has cleared.
-    ///
-    /// **Ours, not the game's**: a developer and capture escape so a still or
-    /// a test is not blocked by a lock. It mirrors, as context only, the
-    /// original's own dev-unlock byte (profile `+0x45f`, read by
-    /// `Definition_IsUnlocked`). Nothing a player is meant to use.
+    /// Ours: offer every circuit in the Race Box, whatever is cleared (`oag_game::unlock`).
     #[arg(long)]
     pub(crate) unlock_all: bool,
 

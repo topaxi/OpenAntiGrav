@@ -114,6 +114,13 @@ impl Gate {
 }
 
 impl Gate {
+    /// `tracks` cut to the circuits [`Self::offers`] passes, order kept.
+    #[must_use]
+    pub fn offered(&self, tracks: &[Track], records: &Store, title: &str) -> Vec<Track> {
+        let keep = |track: &&Track| self.offers(track, records, title);
+        tracks.iter().filter(keep).cloned().collect()
+    }
+
     /// The gate `title`'s circuits answer to, read off its own archives.
     ///
     /// Pulse names its campaign grids in `<Unlock Grid="...">`; no other title
@@ -133,5 +140,23 @@ impl Gate {
                 Self::open()
             }
         }
+    }
+}
+
+/// `tracks` as Track Select lists them from `archives`: gated when `kind` is Track
+/// and a source is at hand, whole otherwise. The records are read from disk
+/// the way every capture reads them.
+#[must_use]
+pub fn offered_on(
+    kind: oag_ui::picker::Kind,
+    archives: Option<&mut oag_assets::Archives>,
+    title: &str,
+    tracks: &[Track],
+) -> Vec<Track> {
+    match archives {
+        Some(archives) if kind == oag_ui::picker::Kind::Track => {
+            Gate::read(title, archives).offered(tracks, &records::load(), title)
+        }
+        _ => tracks.to_vec(),
     }
 }

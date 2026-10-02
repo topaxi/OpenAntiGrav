@@ -112,29 +112,25 @@ impl Session {
         self.open_picker(model, layout, LiveryAxis::Variant, sources, distances)
     }
 
-    /// The circuit gate, read off the source's own archives on first use.
-    ///
-    /// Open (nothing locked) when no source is at hand to read grids from.
-    fn unlock_gate(&mut self) -> oag_game::unlock::Gate {
-        if self.unlock_gate.is_none() {
-            let title = self.shell.as_ref().map(|shell| shell.title.name);
-            let opened = self.race_options.as_ref().and_then(|options| {
-                let (packs, pure_packs, _) = oag_game::dlc::packs_from_defaults(
-                    &options.dlc,
-                    &oag_game::boot::default_dlc_cache_dir(),
-                );
-                oag_game::title::open_source(&options.source, packs, pure_packs)
-                    .map_err(|error| warn!("cannot open the source to read its unlocks: {error:#}"))
-                    .ok()
-            });
-            self.unlock_gate = Some(match (title, opened) {
-                (Some(title), Some(mut opened)) => {
-                    oag_game::unlock::Gate::read(title, &mut opened.archives)
-                }
-                _ => oag_game::unlock::Gate::open(),
-            });
+    /// The circuit gate, read off the source's own archives. Open (nothing
+    /// locked) when no source is at hand to read grids from.
+    fn unlock_gate(&self) -> oag_game::unlock::Gate {
+        let title = self.shell.as_ref().map(|shell| shell.title.name);
+        let opened = self.race_options.as_ref().and_then(|options| {
+            let (packs, pure_packs, _) = oag_game::dlc::packs_from_defaults(
+                &options.dlc,
+                &oag_game::boot::default_dlc_cache_dir(),
+            );
+            oag_game::title::open_source(&options.source, packs, pure_packs)
+                .map_err(|error| warn!("cannot open the source to read its unlocks: {error:#}"))
+                .ok()
+        });
+        match (title, opened) {
+            (Some(title), Some(mut opened)) => {
+                oag_game::unlock::Gate::read(title, &mut opened.archives)
+            }
+            _ => oag_game::unlock::Gate::open(),
         }
-        self.unlock_gate.clone().unwrap_or_default()
     }
 
     /// Reads every circuit in `order` on its own thread and measures its lap

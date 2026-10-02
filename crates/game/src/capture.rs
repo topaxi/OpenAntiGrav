@@ -580,20 +580,9 @@ pub fn run(
                     }
                     None => None,
                 };
-                // The live screen's list: a circuit its campaign has not
-                // unlocked is not on it (`oag_game::unlock`).
-                let tracks: Vec<_> = match (kind, archives.as_mut()) {
-                    (oag_ui::picker::Kind::Track, Some(archives)) => {
-                        let gate = crate::unlock::Gate::read(title.name, archives);
-                        let records = crate::records::load();
-                        tracks
-                            .iter()
-                            .filter(|track| gate.offers(track, &records, title.name))
-                            .cloned()
-                            .collect()
-                    }
-                    _ => tracks.to_vec(),
-                };
+                // The live screen's list: locked circuits are absent.
+                let tracks =
+                    crate::unlock::offered_on(kind, archives.as_mut(), title.name, &tracks);
                 let selected = tracks
                     .iter()
                     .find(|track| track.id == options.settings.race.track);
