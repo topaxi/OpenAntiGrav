@@ -65,6 +65,15 @@ def camera_row(dbg):
     cam = dbg.read_u32(CAMERA_OBJECT)
     row = {"mode": dbg.read_u32(cam + 0x1DC), "subject": hex(dbg.read_u32(cam + 0x1E4))}
     f = lambda off, n=1: list(struct.unpack("<%df" % n, dbg.read(cam + off, 4 * n)))
+    # The director's own state (`Camera_UpdateSpectator`): the ten second timer, the subject it
+    # picks (`+0x1e0`, `subject` above is the one drawn, `+0x1e4`) and the 2026-10-02 additions
+    # that tell a timer re-pick from a fixed delay.
+    row["timer_3c"] = f(0x3C)[0]
+    row["subject_1e0"] = hex(dbg.read_u32(cam + 0x1E0))
+    row["flag_274"] = dbg.read(cam + 0x274, 1)[0]
+    manager = dbg.read_u32(RACE_MANAGER)
+    if pair.ram(manager):
+        row["race_time"] = struct.unpack("<f", dbg.read(manager + 0x2B8, 4))[0]
     row["fov"], row["fov_target"], row["fov_rate"] = f(0x220)[0], f(0x224)[0], f(0x228)[0]
     row["focus"], row["focus_target"] = f(0x230, 3), f(0x240, 3)
     row["focus_rate"], row["frame_size"] = f(0x250)[0], f(0x268)[0]

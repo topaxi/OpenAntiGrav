@@ -15,12 +15,11 @@
 //! | the subject is re-picked every [`SUBJECT_PERIOD_TICKS`] frames: the player, unless that is the previous subject, then a random live craft | measured, and the previous-subject rule read |
 //! | a cut when the subject is [`NODE_RADIUS`] or more from the node's aim point: a random node within [`NODE_RADIUS`] of the subject, then a mode roll of `3` 26 %, `2` 25 %, `6` 25 %, `7` 24 % | read from the decompile; the cut instants are random and cannot be matched frame for frame |
 //! | modes `6` and `7` (and `5`): eye at the node, aimed at a smoothed subject, the fov easing to `2 atan(width / 2 / distance)` | read from the decompile |
+//! | mode `2`, a rigid rear view 6 behind and 2.5 above the craft, and mode `3`, a rigid front view 12 ahead and 3 above, looking back; both at a fixed 65 degrees | read from the decompile and **measured** on PPSSPP, 407 frames to `6e-5` ([`oag_render::camera::craft_view`]) |
+//! | the craft the view shows is the *previous* subject (`cam+0x1e4`), which takes the subject's place only when the director cuts to a new node | read from the decompile and seen in the capture (the 600 frame re-pick lands on a cut) |
 //!
 //! # What is chosen, not measured
 //!
-//! - **Modes `2` and `3`** are craft-relative views (`above`, `front`) whose geometry was not
-//!   read. The ordinary chase camera stands in for them, so about half the cuts leave the
-//!   chase view where the original shows something else.
 //! - **The random stream.** The original draws from C's `rand`; this draws from its own
 //!   seeded [`Rng`], view-side and never the simulation's, so the sequence matches the
 //!   *distribution* and not the frames.
@@ -29,6 +28,7 @@
 
 use super::*;
 
+use oag_render::camera::craft_view;
 use oag_render::camera::destroy::{self, Destroy, Station};
 
 /// Frames after the finishing frame on which the director starts.
@@ -58,7 +58,7 @@ const INITIAL_WIDTH: f32 = destroy::START_FRAME_SIZE;
 /// What a mode roll can land on, with the original's thresholds on `rand() % 100`.
 const MODE_ROLLS: [(u32, ViewMode); 4] = [
     (26, ViewMode::Front),
-    (51, ViewMode::Above),
+    (51, ViewMode::Rear),
     (76, ViewMode::Close),
     (100, ViewMode::Track),
 ];
@@ -66,9 +66,9 @@ const MODE_ROLLS: [(u32, ViewMode); 4] = [
 /// The cameras the spectator director can be in, by the original's own numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewMode {
-    /// `2`: craft-relative, **not read**; the chase camera stands in.
-    Above,
-    /// `3`: craft-relative, **not read**; the chase camera stands in.
+    /// `2`: bolted to the craft, 6 units behind it and 2.5 above, looking the way it flies.
+    Rear,
+    /// `3`: bolted to the craft, 12 units ahead of it and 3 above, looking back at it.
     Front,
     /// `6`: a node camera, view width `17`.
     Close,
@@ -83,7 +83,7 @@ impl ViewMode {
         match self {
             Self::Close => Some(17.0),
             Self::Track => Some(50.0),
-            Self::Above | Self::Front => None,
+            Self::Rear | Self::Front => None,
         }
     }
 
@@ -104,6 +104,8 @@ pub struct Subject {
     pub slot: usize,
     /// The craft's position this tick.
     pub position: Vec3,
+    /// The rigid body's orientation this tick: what the two craft-relative views ride on.
+    pub orientation: Quat,
 }
 
 /// The director's state. View-side: nothing here reaches the simulation or its hash.
@@ -126,11 +128,11 @@ pub struct FinishCamera {
     /// Whether `camera_override` is this director's, so a `--camera-pose` one is never cleared.
     imposed: bool,
     /// How many times the picture has jumped: the take-over, a new node while a node camera
-    /// is showing, and each switch between a node camera and the chase stand-in. What
-    /// [`Race::camera_cuts`] adds so the temporal upscaler's history is dropped across them.
+    /// is showing, a new mode and a new craft being watched. What [`Race::camera_cuts`] adds
+    /// so the temporal upscaler's history is dropped across them.
     cuts: u32,
-    /// Whether the last frame was a node camera.
-    was_node: bool,
+    /// What the last frame showed: the mode, the node when it was a node camera, the craft.
+    last_shot: Option<(ViewMode, Option<usize>, usize)>,
 }
 
 impl FinishCamera {
@@ -153,7 +155,7 @@ impl FinishCamera {
             fov: 65.0,
             imposed: false,
             cuts: 0,
-            was_node: false,
+            last_shot: None,
         }
     }
 
@@ -179,8 +181,8 @@ impl FinishCamera {
     /// One frame. `since_finish` is how many ticks have passed since the player's finishing
     /// tick; `live` holds every craft still in the race, `player` is the player's slot.
     ///
-    /// The pose to draw from, or `None` to leave the chase camera: before the start, with no
-    /// nodes, and in the two craft-relative modes.
+    /// The pose to draw from, or `None` before the start and with no nodes (a circuit that
+    /// authors none never leaves the chase camera: the director has nothing to cut by).
     pub fn step(
         &mut self,
         since_finish: u64,
@@ -190,25 +192,26 @@ impl FinishCamera {
         if since_finish < START_TICKS || self.nodes.is_empty() {
             return None;
         }
-        let node_before = self.node;
         if !self.running {
             self.start(live, player);
         } else {
             self.director(live, player);
         }
-        let subject = live.iter().find(|s| s.slot == self.subject)?;
-        // With the player down the chase camera is the wreck, not a view of anything: the
-        // two craft-relative modes (not read) show the node camera instead, **chosen, not
-        // measured**, so a wrecked player watches the field rather than their own hulk.
-        let player_down = live.iter().all(|s| s.slot != player);
-        let pose = self.pose(subject.position, player_down);
+        // The craft the view shows is `cam+0x1e4`, which only takes the subject's place when
+        // the director cuts; a craft that left the race is replaced by the subject.
+        let watched = live
+            .iter()
+            .find(|s| Some(s.slot) == self.previous)
+            .or_else(|| live.iter().find(|s| s.slot == self.subject))?;
+        let pose = self.pose(watched);
         // A jump the upscaler must not blend across: the picture changes shot.
-        let showing = pose.is_some();
-        if showing != self.was_node || (showing && self.node != node_before) {
+        let node = self.mode.is_node_camera().then_some(self.node).flatten();
+        let shot = (self.mode, node, watched.slot);
+        if self.last_shot != Some(shot) {
             self.cuts = self.cuts.wrapping_add(1);
         }
-        self.was_node = showing;
-        pose
+        self.last_shot = Some(shot);
+        Some(pose)
     }
 
     /// How many times the picture has jumped to a different shot. See [`Race::camera_cuts`].
@@ -349,31 +352,52 @@ impl FinishCamera {
         }
     }
 
-    /// The node cameras' own update (cases `5`, `6`, `7` of `Camera_UpdateSpectatorView`): the
-    /// aim point follows the subject, the fov eases to its target, and the eye is the node. The
-    /// pose is the destroy camera's own ([`Destroy::to_world`]), which is this arm's body.
-    fn pose(&mut self, subject: Vec3, player_down: bool) -> Option<CameraOverride> {
-        if !self.mode.is_node_camera() && !player_down {
-            return None;
+    /// The camera's own update for the craft it shows: the node cameras (cases `5`, `6`, `7` of
+    /// `Camera_UpdateSpectatorView`: the aim point follows the craft, the fov eases to its
+    /// target, the eye is the node, the pose is the destroy camera's own
+    /// [`Destroy::to_world`]) and the two craft-relative views (cases `2` and `3`,
+    /// [`craft_view`]).
+    fn pose(&mut self, watched: &Subject) -> CameraOverride {
+        match self.mode {
+            ViewMode::Rear => craft_view_override(craft_view::rear(
+                watched.position,
+                watched.orientation,
+            )),
+            ViewMode::Front => craft_view_override(craft_view::front(
+                watched.position,
+                watched.orientation,
+            )),
+            ViewMode::Close | ViewMode::Track => {
+                let node = self.node.map_or(Vec3::ZERO, |node| self.nodes[node].eye);
+                let subject = watched.position;
+                let reach = node.distance(subject).max(f32::EPSILON);
+                let target_fov = destroy::framing_fov_degrees(self.width, reach);
+                self.smoothed += (subject - self.smoothed) * self.smoothing;
+                self.fov += (target_fov - self.fov) * destroy::FOV_RATE;
+                let pose = Destroy {
+                    eye: node,
+                    focus: self.smoothed,
+                    focus_target: self.smoothed,
+                    fov: self.fov,
+                    focus_rate: self.smoothing,
+                };
+                let (_, orientation, _) = pose.to_world().to_scale_rotation_translation();
+                CameraOverride {
+                    eye: node,
+                    orientation,
+                    fov_deg: Some(self.fov),
+                }
+            }
         }
-        let eye = self.nodes[self.node?].eye;
-        let reach = eye.distance(subject).max(f32::EPSILON);
-        let target_fov = destroy::framing_fov_degrees(self.width, reach);
-        self.smoothed += (subject - self.smoothed) * self.smoothing;
-        self.fov += (target_fov - self.fov) * destroy::FOV_RATE;
-        let pose = Destroy {
-            eye,
-            focus: self.smoothed,
-            focus_target: self.smoothed,
-            fov: self.fov,
-            focus_rate: self.smoothing,
-        };
-        let (_, orientation, _) = pose.to_world().to_scale_rotation_translation();
-        Some(CameraOverride {
-            eye,
-            orientation,
-            fov_deg: Some(self.fov),
-        })
+    }
+}
+
+/// A craft-relative pose as the renderer's override: the field is the fixed 65 degrees.
+fn craft_view_override(pose: craft_view::Pose) -> CameraOverride {
+    CameraOverride {
+        eye: pose.eye,
+        orientation: pose.orientation,
+        fov_deg: Some(craft_view::FOV_DEGREES),
     }
 }
 
@@ -417,6 +441,7 @@ impl Race {
             .map(|slot| Subject {
                 slot,
                 position: self.sim.world.ships[slot].physics.body.position,
+                orientation: self.sim.world.ships[slot].physics.body.orientation,
             })
             .collect();
         let since = self

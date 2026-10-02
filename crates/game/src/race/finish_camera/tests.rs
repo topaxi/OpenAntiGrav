@@ -16,6 +16,7 @@ fn craft(slot: usize, x: f32) -> Subject {
     Subject {
         slot,
         position: Vec3::new(x, 0.0, 0.0),
+        orientation: Quat::IDENTITY,
     }
 }
 
@@ -118,7 +119,7 @@ fn a_cut_rolls_a_mode_and_the_node_modes_set_the_view_width() {
             match mode {
                 ViewMode::Close => assert_eq!(camera.width, 17.0),
                 ViewMode::Track => assert_eq!(camera.width, 50.0),
-                ViewMode::Above | ViewMode::Front => {}
+                ViewMode::Rear | ViewMode::Front => {}
             }
         }
     }
@@ -136,7 +137,7 @@ fn the_mode_rolls_follow_the_original_thresholds() {
         camera.roll_mode();
         let index = match camera.mode {
             ViewMode::Front => 0,
-            ViewMode::Above => 1,
+            ViewMode::Rear => 1,
             ViewMode::Close => 2,
             ViewMode::Track => 3,
         };
@@ -153,15 +154,59 @@ fn the_mode_rolls_follow_the_original_thresholds() {
 }
 
 #[test]
-fn the_craft_relative_modes_leave_the_chase_camera() {
+fn the_craft_relative_modes_ride_on_the_craft_they_show_at_a_fixed_65_degrees() {
     let mut camera = director(1);
-    camera.step(START_TICKS, &[craft(0, 0.0)], 0);
-    for mode in [ViewMode::Front, ViewMode::Above] {
+    let player = Subject {
+        slot: 0,
+        position: Vec3::new(5.0, -3.0, 40.0),
+        orientation: Quat::from_rotation_y(0.7) * Quat::from_rotation_z(0.2),
+    };
+    camera.step(START_TICKS, &[player], 0);
+    for (mode, want) in [
+        (
+            ViewMode::Rear,
+            craft_view::rear(player.position, player.orientation),
+        ),
+        (
+            ViewMode::Front,
+            craft_view::front(player.position, player.orientation),
+        ),
+    ] {
         camera.mode = mode;
-        assert!(camera.step(START_TICKS + 1, &[craft(0, 0.0)], 0).is_none());
+        let pose = camera
+            .step(START_TICKS + 1, &[player], 0)
+            .expect("a craft view");
+        assert_eq!(pose.eye, want.eye, "{mode:?}");
+        assert_eq!(pose.orientation, want.orientation, "{mode:?}");
+        assert_eq!(pose.fov_deg, Some(65.0), "{mode:?}");
     }
     camera.mode = ViewMode::Close;
-    assert!(camera.step(START_TICKS + 2, &[craft(0, 0.0)], 0).is_some());
+    let pose = camera
+        .step(START_TICKS + 2, &[player], 0)
+        .expect("a node camera");
+    assert_eq!(pose.eye, camera.nodes[camera.node.expect("a node")].eye);
+}
+
+/// `Camera_UpdateSpectatorView` draws the craft in `cam+0x1e4`, which only takes the subject's
+/// place when the director cuts; the 600 frame re-pick on its own does not move the picture.
+#[test]
+fn the_view_stays_on_the_previous_subject_until_a_cut_takes_the_new_one() {
+    let field = [craft(0, 5.0), craft(1, 6.0), craft(2, 7.0)];
+    let mut camera = director(7);
+    camera.step(START_TICKS, &field, 0);
+    camera.mode = ViewMode::Rear;
+    for since in START_TICKS + 1..START_TICKS + 600 {
+        camera.step(since, &field, 0);
+    }
+    // The re-pick lands with every craft within a few units of the node's aim: no cut.
+    camera.step(START_TICKS + 600, &field, 0);
+    let subject = camera.subject().expect("running");
+    assert_ne!(subject, 0, "the re-pick moved the subject");
+    let pose = camera
+        .step(START_TICKS + 601, &field, 0)
+        .expect("a craft view");
+    let on_player = craft_view::rear(field[0].position, field[0].orientation);
+    assert_eq!(pose.eye, on_player.eye, "still showing the player");
 }
 
 #[test]
@@ -221,14 +266,14 @@ fn the_same_seed_flies_the_same_cuts() {
 }
 
 #[test]
-fn the_take_over_a_new_node_and_a_switch_to_the_chase_stand_in_each_count_as_a_cut() {
+fn the_take_over_a_new_node_a_new_mode_and_a_new_craft_each_count_as_a_cut() {
     let mut camera = director(3);
     assert_eq!(camera.cuts(), 0);
     camera.step(START_TICKS, &[craft(0, 0.0)], 0);
     assert_eq!(camera.cuts(), 1, "the take-over");
     camera.step(START_TICKS + 1, &[craft(0, 1.0)], 0);
     assert_eq!(camera.cuts(), 1, "the same node, the same shot");
-    // Past sixty units: a new node. The mode roll may leave a node camera, which is a second jump.
+    // Past sixty units: a new node. The mode roll may change the mode as well.
     camera.mode = ViewMode::Track;
     camera.step(START_TICKS + 2, &[craft(0, 61.0)], 0);
     assert!(camera.cuts() >= 2, "a new node is a cut");
@@ -238,21 +283,17 @@ fn the_take_over_a_new_node_and_a_switch_to_the_chase_stand_in_each_count_as_a_c
     let before = camera.cuts();
     camera.mode = ViewMode::Front;
     camera.step(START_TICKS + 4, &[craft(0, 61.0)], 0);
+    assert_eq!(camera.cuts(), before + 1, "node camera to the front view");
+    camera.step(START_TICKS + 5, &[craft(0, 62.0)], 0);
     assert_eq!(
         camera.cuts(),
         before + 1,
-        "node camera to the chase stand-in"
-    );
-    camera.step(START_TICKS + 5, &[craft(0, 61.0)], 0);
-    assert_eq!(
-        camera.cuts(),
-        before + 1,
-        "the chase stand-in keeps its shot"
+        "a craft view that follows its craft keeps its shot"
     );
 }
 
 /// A wrecked player (slot 0, not in the live list) is never the subject, at the start or at
-/// a re-pick, and the craft-relative modes show a node camera instead of the wreck.
+/// a re-pick, so the craft views and the node cameras alike show the field.
 #[test]
 fn a_wrecked_player_is_never_followed_and_the_stand_in_modes_still_show_the_field() {
     let mut camera = director(7);
@@ -264,9 +305,5 @@ fn a_wrecked_player_is_never_followed_and_the_stand_in_modes_still_show_the_fiel
         showing += u32::from(camera.step(since, &field, 0).is_some());
         assert_ne!(camera.subject(), Some(0), "tick {since}");
     }
-    assert_eq!(
-        showing,
-        3 * SUBJECT_PERIOD_TICKS - 1,
-        "never the chase stand-in"
-    );
+    assert_eq!(showing, 3 * SUBJECT_PERIOD_TICKS - 1, "always a pose");
 }
