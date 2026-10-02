@@ -91,3 +91,35 @@ factory's team choice was not traced end to end.
 
 Two limits worth keeping: this is **Pulse only**. Pure's definition marks `Zone_01` as `type="Zone"` and a Pure Zone
 race presumably reads it; HD's `/data/ships/zone` is the same shape. Neither executable was read.
+
+## What sounds an opponent's destruction makes (answer to the `_BLOWUP` open question)
+
+`_BLOWUP` (`~BLOWUP`) is played through `FUN_0883e9b0`, a wrapper that tests `craft+0x368 == 0` (and that the race
+manager is in state 2) before `Sound_PlayNamedInSlot`, so an opponent plays nothing there: confirmed by reading the
+wrapper (`0x0883e9b0`, a clean decompile). The sounds of the *sequence* an opponent goes through were logged live on a
+Single Race grid (`16_Track` start area, a neighbouring track's pose, Venom, 8 craft; `Ship_SetState(entity, 4)` injected
+on a grid opponent at a `Ship_UpdateCraft` stop, as `scripts/psp-wreck-capture.py` does, with a breakpoint on
+`Scream_PlaySoundByName` `0x08991b20` and, in a second run, on `Sound_Play` `0x089392b0`; the opponent was also moved
+15 units from the player in two of the runs, to rule out a distance cull):
+
+| Frames after the injection | What | Path | Opponent | Local player |
+| --- | --- | --- | --- | --- |
+| 0 | `~BLOWUP` | `FUN_0883e9b0`, gated on `craft+0x368 == 0` | **nothing** (not in the log window; by the wrapper) | held loop |
+| 29 (state 5 entry, 0.5 s) | `EXPLSMALL` | `FUN_0883e064` `0x0883e150`: `craft+0x368 == 0` ? dry `EXPLSMALL_PC` : `Sound_Play(emitter = entity+0x50, "EXPLSMALL")` | `Sound_Play` entered, emitter flags `0`, an instance is queued; **no `Scream_PlaySoundByName` followed in 6 s, in three runs, 15 units away included** | `EXPLSMALL_PC` dry, logged at 29 |
+| 119 (state 6 entry, 1.5 s later) | `EXPLBIG` | `FUN_088407b0` `0x0884082c / 0x088408e4`: dry `EXPLBIG_PC` or `Sound_Play(..."EXPLBIG")` | `Sound_Play` entered with the emitter's `+0x5c` bit 0 **set** and `param_6 == 0`, so it returns without queuing (`Sound_Play`'s first test); nothing started | `EXPLBIG_PC` dry, logged at 119 |
+| 167-168 (state 6 expiry) | **`cont_elim`** | `FUN_08840500` (`0x08840590`), `Sound_PlayNamedInSlot` dry at `0x400` | **plays**, in the `speech.bnk` the mode opened, in modes other than 2, 8 and 18 | plays (logged at 239 for the player, whose state 6 runs longer) |
+
+So **the audible sound of an opponent's destruction in a Single Race is the announcer line `cont_elim` and nothing else
+that was seen**: the explosion sounds are positional through an emitter, and on this evidence they never start. The
+opponent's `EXPLSMALL` absence is the weak half (confidence **65**: three runs and a mechanism not read - the queued
+instance's start is deferred to an emitter update nobody traced); the `EXPLBIG` drop is read in `Sound_Play`'s first
+`if` and watched once (**80**); `cont_elim` is three live logs and a decompile (**90**). `cont_elim` exists in both
+`speech.bnk` and `speech_elim.bnk`; the frame (167-168 from the injection) is `0.5 + 1.5 + 0.8 = 2.8 s` of states 4, 5
+and 6, to the frame.
+
+**Not wired.** The sound is found and the trigger is state 6's expiry for a non-player craft, but the trigger lives in
+`Race::tick_destroyed_craft` (`crates/game/src/race/eliminator.rs`), the Eliminator lane's craft-state bookkeeping,
+and it needs a new `Cue` plus the mode's speech bank loaded the way `Ready`/`Go` are. Ready to wire:
+a `Cue` for `cont_elim`, raised `1.5 + 0.8 = 2.3 s` after a non-player craft enters `CraftState::Eliminated`, in every
+mode except those whose game-mode ids are 2, 8 and 18; none for `EXPLSMALL`/`EXPLBIG`, which the original does not
+voice for an opponent on this evidence.
