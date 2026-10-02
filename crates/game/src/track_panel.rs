@@ -226,6 +226,10 @@ impl Overlay {
 
 /// Builds an overlay for `assets` and draws it once - what a headless capture does, with no
 /// stage to keep one in. A panel that will not build is skipped with a warning.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a draw call's own device, target and pose, each a separate fact"
+)]
 pub fn draw_once(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
