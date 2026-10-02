@@ -30,7 +30,7 @@ fn teams() -> Option<Vec<Team>> {
     Some(catalogue::teams(&xml))
 }
 
-fn price<'a>(rows: &'a [LoyaltyRow], any: bool) -> &'a LoyaltyRow {
+fn price(rows: &[LoyaltyRow], any: bool) -> &LoyaltyRow {
     rows.iter()
         .find(|row| row.team.eq_ignore_ascii_case("any") == any)
         .expect("each variant authors an own-team and an any row")
