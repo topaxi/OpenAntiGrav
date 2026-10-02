@@ -493,6 +493,7 @@ fn track(id: &str, folder: &str, reversed: bool) -> (Track, String) {
             location: format!(r"Data\Environments\{folder}"),
             reversed,
             available_in_zone: false,
+            unlock_grid: None,
         },
         if reversed {
             format!("{id} REVERSE")

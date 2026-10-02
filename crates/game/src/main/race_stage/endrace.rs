@@ -19,7 +19,6 @@
 
 use anyhow::Result;
 
-use oag_tables::race_campaign::Medal;
 use oag_ui::endrace::{
     EliminationResults, EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards,
     TournamentResults, TournamentRow, ZoneResults,
@@ -620,17 +619,7 @@ pub(crate) fn zone_results(
     }
 }
 
-/// `oag_game::records::Medal` restated as `oag_tables::race_campaign::Medal` -
-/// the identical conversion `crate::campaign_stage::to_campaign_medal`
-/// makes, duplicated rather than shared per that function's own doc.
-#[must_use]
-pub(crate) fn to_campaign_medal(medal: oag_game::records::Medal) -> Medal {
-    match medal {
-        oag_game::records::Medal::Gold => Medal::Gold,
-        oag_game::records::Medal::Silver => Medal::Silver,
-        oag_game::records::Medal::Bronze => Medal::Bronze,
-    }
-}
+pub(crate) use oag_game::unlock::to_campaign_medal;
 
 /// What this race's own outcome feeds `loyalty_award` - one field per term
 /// `Race_ComputeLoyaltyAward` reads. Two of the seven are always `0`/`false`

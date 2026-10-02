@@ -73,6 +73,7 @@ pub mod source;
 pub mod sprite;
 pub mod title;
 pub mod track_panel;
+pub mod unlock;
 pub mod upscale;
 pub mod wem;
 

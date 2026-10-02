@@ -529,6 +529,9 @@ pub(crate) struct Session {
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
     pub(crate) campaign_cursor: crate::campaign_stage::CellCursor, // kept across campaign openings
+    /// What gates the race box's circuit list - read off the archives the
+    /// first time Track Select opens, then kept. See `oag_game::unlock`.
+    pub(crate) unlock_gate: Option<oag_game::unlock::Gate>,
     /// [`Self::campaign_cell`]'s own difficulty rung, draining into
     /// [`RaceStage::campaign_difficulty`] the identical way and at the
     /// identical moment - see [`Session::launch_campaign_cell`]'s own doc

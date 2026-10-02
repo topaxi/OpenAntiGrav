@@ -234,6 +234,15 @@ pub(crate) struct Cli {
     #[arg(long, conflicts_with_all = ["dump_audio", "tap_audio"])]
     pub(crate) no_audio: bool,
 
+    /// Offer every circuit in the Race Box, whatever the campaign has cleared.
+    ///
+    /// **Ours, not the game's**: a developer and capture escape so a still or
+    /// a test is not blocked by a lock. It mirrors, as context only, the
+    /// original's own dev-unlock byte (profile `+0x45f`, read by
+    /// `Definition_IsUnlocked`). Nothing a player is meant to use.
+    #[arg(long)]
+    pub(crate) unlock_all: bool,
+
     /// Record what the **device** is handed to a WAV, while it plays.
     ///
     /// Not `--dump-audio`, which forces the null backend so that it can pull

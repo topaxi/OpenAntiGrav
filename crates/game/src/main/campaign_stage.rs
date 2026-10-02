@@ -15,16 +15,7 @@
 use oag_tables::race_campaign;
 use oag_ui::campaign::selection::{Campaign, CampaignSelection};
 
-/// `oag_game::records::Medal` restated as `oag_tables::race_campaign::Medal`.
-/// The two are duplicated on purpose, not shared, per `records.rs`'s own
-/// module doc; this is the one conversion this file needs, in one place.
-fn to_campaign_medal(medal: oag_game::records::Medal) -> race_campaign::Medal {
-    match medal {
-        oag_game::records::Medal::Gold => race_campaign::Medal::Gold,
-        oag_game::records::Medal::Silver => race_campaign::Medal::Silver,
-        oag_game::records::Medal::Bronze => race_campaign::Medal::Bronze,
-    }
-}
+use oag_game::unlock::{campaign_medal_of, to_campaign_medal};
 
 /// [`to_campaign_medal`]'s own sibling, for
 /// `oag_game::records::CampaignRecord::best_difficulty` - **HD only**;
@@ -438,12 +429,7 @@ impl CampaignStage {
         let Some(grid) = self.grids.get(which) else {
             return false;
         };
-        let medal_of = |cell_name: &str| {
-            self.records
-                .campaign_medal(&self.title, cell_name)?
-                .best_medal
-                .map(to_campaign_medal)
-        };
+        let medal_of = campaign_medal_of(&self.records, &self.title);
         if !grid.locked || grid.points_earned(&medal_of) > 0 {
             return true;
         }
