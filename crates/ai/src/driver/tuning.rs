@@ -147,6 +147,18 @@ pub struct Tuning {
     pub look_max: f32,
     /// Gain from turn-rate error onto the steering input.
     pub rate_gain: f32,
+    /// The slowest speed the steering asks its turn rate at, in units a second.
+    ///
+    /// **Chosen, not measured**, no confidence score. The wanted yaw rate is the
+    /// aim point's curvature times the craft's speed, so a craft crawling along
+    /// a wall asks for almost no turn and stays there: on `05_Track` (de
+    /// Konstruct Black) the field's wedged craft crept at 2-5 units a second
+    /// with the throttle full for hundreds of ticks while the next arrival
+    /// piled onto them. A floor of 10 lets a slow craft ask for the turn that
+    /// gets it out; any floor from 10 to 60 cut the field's destroyed craft on
+    /// that circuit from 27 to 4-9 of 84 (see `docs/gameplay/ai.md`), so the
+    /// number is not fitted. It changes nothing above it.
+    pub steer_speed_floor: f32,
     /// Ceiling on the turn rate the geometry may ask for, in radians per second.
     ///
     /// A craft thrown far off its line computes an enormous required curvature;
@@ -619,6 +631,7 @@ impl Default for Tuning {
             look_speed: 0.30,
             look_max: 90.0,
             rate_gain: 5.0,
+            steer_speed_floor: 10.0,
             max_turn_rate: 1.8,
             lateral_accel: 260.0,
             brake_lookahead: 2.5,

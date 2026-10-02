@@ -3,6 +3,16 @@
 
 use oag_core::math::Vec3;
 
+/// How much road before a gap counts as the run-up to a takeoff, in units.
+///
+/// **Chosen, not measured**, no confidence score. `05_Track`'s first jump has its
+/// crest bend (curvature 0.0126, a speed target of 124 against a 127 craft)
+/// 20 to 30 samples before the first unsupported one, and a driver that reads
+/// that crest as a corner coasts off it and leaves the ground 1 to 5 units a
+/// second short of the clearing speed. Seventy-five units covers that crest on
+/// this circuit; it is the one gap it was looked at on.
+pub const TAKEOFF_RUNUP: f32 = 75.0;
+
 /// How much room a craft has either side of the line, and which way "aside" is.
 ///
 /// **Both bounds are relative to the line itself**, so `left` is at most zero
@@ -79,6 +89,10 @@ pub struct Line {
     /// Parallel to [`Self::points`], or empty: `true` where the track has no
     /// surface under the line. See [`Self::with_unsupported`].
     unsupported: Vec<bool>,
+    /// Parallel to [`Self::points`], or empty: `true` on the run-up to a gap,
+    /// the [`TAKEOFF_RUNUP`] of road before the first unsupported sample of
+    /// each run. See [`Self::is_takeoff`].
+    takeoff: Vec<bool>,
 }
 
 impl Line {
@@ -89,6 +103,7 @@ impl Line {
             points,
             corridor: Vec::new(),
             unsupported: Vec::new(),
+            takeoff: Vec::new(),
         }
     }
 
@@ -109,6 +124,7 @@ impl Line {
             points,
             corridor,
             unsupported: Vec::new(),
+            takeoff: Vec::new(),
         }
     }
 
@@ -139,7 +155,43 @@ impl Line {
         } else {
             Vec::new()
         };
+        self.takeoff = self.takeoff_runups();
         self
+    }
+
+    /// The [`TAKEOFF_RUNUP`] of road before each run of unsupported samples.
+    ///
+    /// Walked backwards from the first unsupported sample of a run, summing
+    /// segment lengths, so it is a distance and not a sample count (samples are
+    /// not evenly spaced across circuits). Wraps, as the line does.
+    fn takeoff_runups(&self) -> Vec<bool> {
+        let n = self.points.len();
+        let mut marked = vec![false; if self.unsupported.is_empty() { 0 } else { n }];
+        for start in 0..marked.len() {
+            let previous = (start + n - 1) % n;
+            if !self.unsupported[start] || self.unsupported[previous] {
+                continue;
+            }
+            let mut at = start;
+            let mut walked = 0.0;
+            while walked < TAKEOFF_RUNUP {
+                let back = (at + n - 1) % n;
+                if back == start || self.unsupported[back] {
+                    break;
+                }
+                walked += (self.points[at] - self.points[back]).length();
+                marked[back] = true;
+                at = back;
+            }
+        }
+        marked
+    }
+
+    /// Whether `index` lies on the run-up to a gap: the road a craft is still
+    /// on before it leaves the ground, wrapping.
+    #[must_use]
+    pub fn is_takeoff(&self, index: usize) -> bool {
+        !self.takeoff.is_empty() && self.takeoff[index % self.takeoff.len()]
     }
 
     /// Whether the track has no surface under the line at `index`, wrapping.
@@ -409,7 +461,8 @@ impl Line {
         let (at_c, c, _) = self.ahead(index, span * 3.0);
         // Over a gap the craft is flying, not steering: see
         // [`Self::with_unsupported`].
-        if self.is_unsupported(at_a) || self.is_unsupported(at_b) || self.is_unsupported(at_c) {
+        let over_gap = |at| self.is_unsupported(at) || self.is_takeoff(at);
+        if over_gap(at_a) || over_gap(at_b) || over_gap(at_c) {
             return 0.0;
         }
         let into = b - a;

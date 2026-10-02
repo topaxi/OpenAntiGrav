@@ -62,7 +62,16 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
     let count = race.ship_count() as usize;
-    let slots: Vec<usize> = if field { (1..count).collect() } else { vec![1] };
+    let slots: Vec<usize> = if field {
+        (1..count).collect()
+    } else {
+        vec![
+            std::env::var("OAG_LONE_SLOT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1),
+        ]
+    };
     for slot in 0..count {
         if !slots.contains(&slot) {
             race.sim.world.ships[slot].active = false;
@@ -74,12 +83,46 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     let mut seen_resp = vec![0u32; count];
     let mut dead = vec![false; count];
     let mut best_laps = 0;
+    let mut tk: Vec<(usize, u64, f32, u32)> = Vec::new();
+    let mut tick_no = 0u64;
+    let mut rs: Vec<(usize, u64, u32)> = Vec::new();
+    let mut took = vec![false; count];
+    let mut landed_ok: Vec<Option<u32>> = vec![None; count];
+    let mut landed = vec![false; count];
     for _ in 0..TICKS {
+        tick_no += 1;
         let at: Vec<u32> = (0..count)
             .map(|s| race.sim.world.ships[s].driver.index)
             .collect();
         race.tick(&PlayerInputs::none());
         for &s in &slots {
+            if !took[s]
+                && race.sim.world.ships[s].physics.grounded == 0.0
+                && (100..260).contains(&at[s])
+            {
+                took[s] = true;
+                println!(
+                    "TAKEOFF seed {seed} slot {s} idx {} v {:.1} accelcap {:?}",
+                    at[s],
+                    race.sim.world.ships[s]
+                        .physics
+                        .body
+                        .linear_velocity
+                        .length(),
+                    race.sim.world.ships[s].handling.engine.accelcap
+                );
+                landed_ok[s] = Some(race.respawns_of(s));
+                tk.push((
+                    s,
+                    tick_no,
+                    race.sim.world.ships[s]
+                        .physics
+                        .body
+                        .linear_velocity
+                        .length(),
+                    race.respawns_of(s),
+                ));
+            }
             let now = race.wall_shield_charged_of(s);
             if now > seen_charge[s] {
                 if let Some(c) = charge[s].get_mut((at[s] / CLUSTER) as usize) {
@@ -91,6 +134,7 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
             if r != seen_resp[s] {
                 seen_resp[s] = r;
                 tally.respawns_at.push(at[s]);
+                rs.push((s, tick_no, at[s]));
             }
             if !dead[s] && race.sim.world.ships[s].physics.craft_state != CraftState::Racing {
                 dead[s] = true;
@@ -98,6 +142,12 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
             }
             best_laps = best_laps.max(race.sim.world.ships[s].standing.lap);
         }
+    }
+    for (s, t0, v, _) in &tk {
+        let short = rs.iter().any(|(rs_s, t, i)| {
+            rs_s == s && *t >= *t0 && *t <= *t0 + 400 && (150..260).contains(i)
+        });
+        println!("OUTCOME seed {seed} slot {s} v {v:.1} short {short}");
     }
     tally.runs += 1;
     for &s in &slots {
@@ -111,7 +161,11 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
         }
         for (b, c) in charge[s].iter().enumerate() {
             if *c > 0.0 {
-                match tally.clusters.iter_mut().find(|(k, _)| *k == b as u32 * CLUSTER) {
+                match tally
+                    .clusters
+                    .iter_mut()
+                    .find(|(k, _)| *k == b as u32 * CLUSTER)
+                {
                     Some(e) => e.1 += *c,
                     None => tally.clusters.push((b as u32 * CLUSTER, *c)),
                 }
@@ -196,7 +250,9 @@ fn field_census() {
     }
     let mut report = String::new();
     for class in classes() {
-        for folder in ["01", "02", "03", "04", "05", "06", "07", "09", "10", "13", "14", "16"] {
+        for folder in [
+            "01", "02", "03", "04", "05", "06", "07", "09", "10", "13", "14", "16",
+        ] {
             for reversed in [false, true] {
                 let Some(entry) = entry_of(&format!("{folder}_Track"), reversed) else {
                     continue;
@@ -223,8 +279,14 @@ fn field_trace() {
     let Some(entry) = entry(false) else { return };
     let class = std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".into());
     let lone = std::env::var_os("OAG_LONE").is_some();
-    let from: u64 = std::env::var("OAG_FROM").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
-    let to: u64 = std::env::var("OAG_TO").ok().and_then(|s| s.parse().ok()).unwrap_or(900);
+    let from: u64 = std::env::var("OAG_FROM")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let to: u64 = std::env::var("OAG_TO")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(900);
     let image = image().unwrap();
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -240,7 +302,14 @@ fn field_trace() {
     let mut race = race::Race::start(loaded.setup);
     let count = race.ship_count() as usize;
     for slot in 0..count {
-        if slot == 0 || (lone && slot != 1) {
+        if slot == 0
+            || (lone
+                && slot
+                    != std::env::var("OAG_LONE_SLOT")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(1))
+        {
             race.sim.world.ships[slot].active = false;
         }
     }
@@ -253,9 +322,14 @@ fn field_trace() {
                 if !sh.active {
                     continue;
                 }
+                let off = race.ai_sample(sh.driver.index as usize).map_or(0.0, |sm| {
+                    let lat = oag_core::math::Vec3::from_array(sm.lateral);
+                    (sh.physics.body.position - oag_core::math::Vec3::from_array(sm.pos)).dot(lat)
+                });
                 line.push_str(&format!(
-                    " | {:>4} v{:>5.1} t{:.2} b{:.2} g{:.1} s{:>5.1} r{}",
+                    " | {:>4} o{:>6.1} v{:>5.1} t{:.2} b{:.2} g{:.1} s{:>5.1} r{}",
                     sh.driver.index,
+                    off,
                     sh.physics.body.linear_velocity.length(),
                     sh.physics.thrust,
                     sh.physics.brake,
@@ -266,5 +340,49 @@ fn field_trace() {
             }
             println!("{line}");
         }
+    }
+}
+
+#[test]
+#[ignore = "a scratch probe: set OAG_SWEEP"]
+fn line_profile() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(entry) = entry(false) else { return };
+    let image = image().unwrap();
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".into(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(entry),
+        ..race::Options::default()
+    })
+    .unwrap();
+    let race = race::Race::start(loaded.setup);
+    let line = race.racing_line();
+    let from: usize = std::env::var("OAG_FROM")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(480);
+    let to: usize = std::env::var("OAG_TO")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(660);
+    for i in (from..to).step_by(4) {
+        let k = line.max_curvature(i, 6.0, 11.0);
+        let k4 = line.max_curvature(i, 6.0, 4.0);
+        let t = if k > 1e-6 {
+            (260.0f32 / k).sqrt().min(1.556 / k)
+        } else {
+            f32::INFINITY
+        };
+        let fr = line.aim(i, 0.0).corridor;
+        println!(
+            "PROFILE idx {i} k11 {k:.4} target {t:.1} left {:?} right {:?} line {:?}",
+            fr.map(|f| f.left),
+            fr.map(|f| f.right),
+            line.point(i)
+        );
     }
 }

@@ -399,7 +399,13 @@ impl Driver {
         } else {
             throttle(speed, target, tuning)
         };
-        let thrust = thrust * self.caution(ctx, &personality);
+        // **No lift on the run-up to a gap**: the clearing speed is the one
+        // thing a craft cannot buy back in the air. Chosen, not measured.
+        let thrust = if line.is_takeoff(index) {
+            thrust
+        } else {
+            thrust * self.caution(ctx, &personality)
+        };
         // Neither timer is a **momentary** hit flag: both are seconds still
         // running, so a craft is "recovering" for as long as either does,
         // which is exactly the window the differential buys nothing in - see
@@ -506,8 +512,8 @@ impl Driver {
         // Positive is to the craft's right.
         let offset = to_aim.dot(body.right());
         let curvature = 2.0 * offset / (distance * distance);
-        let wanted =
-            (curvature * speed.max(1.0)).clamp(-tuning.max_turn_rate, tuning.max_turn_rate);
+        let wanted = (curvature * speed.max(tuning.steer_speed_floor))
+            .clamp(-tuning.max_turn_rate, tuning.max_turn_rate);
 
         // Positive yaw about the craft's own up axis turns it **left** - the
         // right-hand rule, with forward on `-Z`. Working in "rate of turning to
