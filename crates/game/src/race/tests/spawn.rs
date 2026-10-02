@@ -36,6 +36,29 @@ fn a_field_of_one_reports_no_place() {
     assert_eq!(race.player_place(), 1);
 }
 
+/// A Zone craft is in the original's grid state through the countdown like every other
+/// mode's: `Ship_HoverFourCorner`'s epilogue carries the same `craft+0x2a4` guard on the
+/// bank-to-yaw term as the two-point law's (`0x0884b76c`, `docs/physics/grid-state.md`). It
+/// was left off for Zone until 2026-10-02 because that epilogue had not been read.
+///
+/// Only the first 200 ticks: this fixture's craft leaves the straight synthetic track soon
+/// after, and a respawn rebuilds the physics state (`on_grid` off, `released` on, as for a
+/// craft that was never on a grid), which is not what is under test.
+#[test]
+fn a_zone_craft_is_on_the_grid_through_the_countdown() {
+    let mut setup = setup(Handling::ZERO);
+    setup.mode = oag_race::Mode::Zone;
+    let mut race = Race::start(setup);
+    for tick in 0..200 {
+        race.tick(&PlayerInputs::none());
+        assert!(
+            race.sim.world.ships[0].physics.on_grid,
+            "tick {tick}: a countdown tick, so the craft is on the grid"
+        );
+        assert!(!race.sim.world.ships[0].physics.released);
+    }
+}
+
 /// A ship must arrive on the track with its mass in the body, or the hover
 /// spring and the integrator disagree about how heavy it is.
 #[test]

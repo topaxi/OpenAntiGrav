@@ -87,8 +87,9 @@ settles onto the `1.1` degree bank in the first 40 ticks and then yaws at
 `0.29` degrees a second: `1.29` degrees by the 272 ticks of countdown.
 
 `ShipState::on_grid` is the original's state `0` (measured on Pulse PSP only; the
-race applies it to every title by extension, which is **chosen, not measured**,
-and not to Zone, whose four-corner hover epilogue was not read), written from the race's
+race applies it to every title by extension, which is **chosen, not measured**, and
+to Zone since 2026-10-02, whose four-corner hover epilogue carries the same guard, below),
+written from the race's
 countdown clock (`RaceState::thrust_gated`) on every ship at the top of
 `Race::tick` - for every craft, not only the player, which is how the original
 does it - and read by the one term. Derived from the clock rather than stored,
@@ -184,6 +185,22 @@ watched, held through the countdown is within 0.4 units of the original at 120 f
 (it was 18 behind). The `craft+0x2d8`/`+0x2dc` pair that "runs 100 to 0" over the same
 window is not a boost percentage: it is the airbrake flaps' visual position
 (`Ship_UpdateAirbrakes`) releasing from the grid's forced-full.
+
+## Zone: the four-corner epilogue has the same guard (2026-10-02)
+
+Zone runs `Ship_HoverFourCorner` (`0x0884ae90`) where every other mode runs
+`Ship_HoverTwoPoint`. Its epilogue, `0x0884b76c`-`0x0884b7ac`, is the same term with the same guard
+and a different gain: `lw a0,0x2a4(s0)` / `beq a0,zero,0x0884b798` skips, in state `0`,
+`craft+0x340.y += 50.0 * craft+0x174 * (1.0 - craft+0x280)` - the right axis' `y` and the magstrip
+blend, exactly the two-point twin's (`0x0884ad2c`-`0x0884ad74`, `30.0`, same `craft+0x340`
+accumulator). **Read from the instructions; Zone was not run on the original**, and the
+craft state in Zone is read from `Race_PlaceGrid`, which is mode-independent. Confidence **82**
+(decompile and disassembly of both epilogues agree, no live run, Zone is greyed on a fresh profile).
+
+Ported: `ShipState::on_grid` is now written for Zone too (`a_zone_craft_is_on_the_grid_through_the_countdown`).
+**Not ported**: this engine flies Zone on the two-point law, so after release the coupling is `30.0`
+where the original's is `50.0`; the four-corner probe set and its own gains are still the open
+item in [README.md](README.md) (the four-corner variant and its auto-speed law).
 
 ## The second circuit: `01_Track` (Basilico Black), Time Trial and Single Race
 
