@@ -718,6 +718,10 @@ pub struct Loaded {
     pub platform: oag_disc::Platform,
     /// The HUD's layout, atlas, fonts and strings.
     pub hud: crate::hud::Assets,
+    /// The track-description panel drawn over the pre-race flyby, off Pulse's PSP disc only.
+    /// `None` elsewhere and when a part of it would not read - the load report says which. See
+    /// [`crate::track_panel`].
+    pub track_panel: Option<crate::track_panel::Assets>,
     /// The circuit's own `stats.xml`, for the HUD's `RECORD` readout. `None`
     /// off Pulse's PSP disc, or when the file did not read - the load report
     /// says which.

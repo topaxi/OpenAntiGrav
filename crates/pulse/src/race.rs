@@ -392,3 +392,49 @@ mod tests {
         );
     }
 }
+
+/// Where the track-description screen is authored: `InGame_Definition.xml`, the file `Skin.xml`'s
+/// `LoadXML` list names last. It holds `InGameTrackDescriptionScreen`, the panel the original
+/// puts over the pre-race flyby - see `docs/gameplay/race-intro.md`.
+pub const TRACK_DESCRIPTION_DEFINITION: &str = r"Data\Plugins\PI001\GUI\InGame_Definition.xml";
+
+/// The screen name in [`TRACK_DESCRIPTION_DEFINITION`].
+pub const TRACK_DESCRIPTION_SCREEN: &str = "InGameTrackDescriptionScreen";
+
+/// The panel's two `Text` widgets: the circuit's name, and its paragraph. Both author
+/// `string=""`; the race constructor (`RaceManager_Construct`, `0x088296a0`) fills them.
+pub const TRACK_NAME_WIDGET: &str = "InGameTrackName";
+
+/// See [`TRACK_NAME_WIDGET`].
+pub const TRACK_TEXT_WIDGET: &str = "InGameTrackText";
+
+/// The string-table id of a circuit's paragraph: `MSC_TRACK_%.2s` of its `PI_Track` id, so
+/// `16_Track` and `32_Track` read `MSC_TRACK_16` and `MSC_TRACK_32`. The name is the id itself,
+/// looked up in the same table (`16_Track` is "Talon's Junction White").
+///
+/// Read from the format string at `0x08a7a720` and its one caller, `RaceManager_Construct`, which
+/// passes the current race's circuit id (`*(DAT_08b310b4 + 0x74)`) to the name widget unchanged
+/// and to `sprintf` for the paragraph. `None` for an id shorter than two characters.
+#[must_use]
+pub fn track_description_id(track_id: &str) -> Option<String> {
+    let digits: String = track_id.chars().take(2).collect();
+    (digits.chars().count() == 2).then(|| format!("MSC_TRACK_{digits}"))
+}
+
+#[cfg(test)]
+mod track_description_tests {
+    use super::*;
+
+    #[test]
+    fn the_paragraph_id_is_the_first_two_characters_of_the_circuit_id() {
+        assert_eq!(
+            track_description_id("16_Track").as_deref(),
+            Some("MSC_TRACK_16")
+        );
+        assert_eq!(
+            track_description_id("32_Track").as_deref(),
+            Some("MSC_TRACK_32")
+        );
+        assert_eq!(track_description_id("7"), None);
+    }
+}

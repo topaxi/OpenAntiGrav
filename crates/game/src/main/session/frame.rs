@@ -632,6 +632,9 @@ impl Session {
                 // by a headless run, whose loop drives `Race::tick` from tick 0.
                 Stage::Race(stage) if !self.no_intro && stage.race.intro_to_play() => {
                     stage.race.begin_intro();
+                    if pointer.clicked {
+                        stage.race.skip_intro();
+                    }
                     stage.race.tick_intro(&inputs);
                 }
                 Stage::Race(stage) => {

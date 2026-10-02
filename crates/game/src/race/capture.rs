@@ -314,6 +314,7 @@ pub fn capture(
         shadow_hulls,
         setup,
         hud,
+        track_panel,
         track_model,
         liveries,
         collision_model,
@@ -815,6 +816,21 @@ pub fn capture(
         Some(framebuffer) => (framebuffer.output().clone(), rect),
         None => (view.clone(), viewport),
     };
+    // The track-description panel, over the flyby and fading out behind the chase view - the
+    // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there.
+    if let (Some(assets), Some(progress)) = (track_panel, race.track_panel_progress()) {
+        match crate::track_panel::Overlay::new(&device, &queue, format, assets) {
+            Ok(mut panel) => panel.draw(
+                &device,
+                &queue,
+                &mut encoder,
+                &hud_view,
+                progress,
+                hud_viewport,
+            ),
+            Err(why) => warn!("the track panel did not build ({why}); capturing without it"),
+        }
+    }
     match race.results() {
         Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
             Ok(mut overlay) => {

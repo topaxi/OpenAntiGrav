@@ -746,10 +746,6 @@ impl Renderer {
                     // By index, not `y` - a label shares its row's `y`.
                     let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
                     match wrap_width {
-                        // No caller combines the two: a wrapped block is a
-                        // multi-line paragraph and `clip` is the marquee's
-                        // single-line scrolling window, so `bounds` is dropped
-                        // rather than threaded through every line.
                         Some(width) => {
                             self.push_wrapped_text(
                                 GlyphSlot::Primary,
@@ -761,6 +757,7 @@ impl Renderer {
                                 *align,
                                 text,
                                 *width,
+                                bounds,
                             );
                         }
                         None => self.push_text(
@@ -810,7 +807,7 @@ impl Renderer {
                     match wrap_width {
                         Some(width) => {
                             self.push_wrapped_text(
-                                slot, *x, *y, *scale, *color, border, *align, text, *width,
+                                slot, *x, *y, *scale, *color, border, *align, text, *width, bounds,
                             );
                         }
                         None => self

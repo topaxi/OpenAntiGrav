@@ -32,7 +32,8 @@
 //! - **A cut is every one-frame translation key pair** ([`oag_vex::grid_camera`]).
 //! - **The scenery's animation clock is the world's tick**, so it holds still under the
 //!   flyby; the original's runs on.
-//! - The track-description panel that the original draws over the flyby is not drawn here.
+//! - **The panel's leave starts on the tick the flyby ends**; the original's started one or two
+//!   ticks after its substate changed. The panel itself is [`oag_ui::track_panel`].
 //!
 //! # What is not ported
 //!
@@ -135,6 +136,9 @@ pub struct IntroCamera {
     cuts: u32,
     /// The animation time shown on the previous tick, so a cut is a step across a key pair.
     last_shown: Option<f32>,
+    /// A pointer press asked to skip. It stands in for a held Cross and **stays held until the
+    /// lock lifts**: a tap is one tick long and the lock is 60, so an edge alone would miss it.
+    skip_requested: bool,
 }
 
 impl IntroCamera {
@@ -148,6 +152,7 @@ impl IntroCamera {
             timeline,
             cuts: 0,
             last_shown: None,
+            skip_requested: false,
         }
     }
 
@@ -175,6 +180,11 @@ impl IntroCamera {
         self.timeline.ticks()
     }
 
+    /// A pointer press: skip as a held Cross would, as soon as the lock allows.
+    pub fn request_skip(&mut self) {
+        self.skip_requested = true;
+    }
+
     /// Starts it. A no-op once started.
     pub fn begin(&mut self) {
         if self.phase == Phase::Dormant {
@@ -189,7 +199,7 @@ impl IntroCamera {
         if self.phase != Phase::Playing {
             return None;
         }
-        let shown = match self.timeline.step(skip_held, dt) {
+        let shown = match self.timeline.step(skip_held || self.skip_requested, dt) {
             Beat::Over => {
                 self.phase = Phase::Finished;
                 self.cuts = self.cuts.wrapping_add(1);
@@ -249,6 +259,14 @@ impl Race {
         self.view.intro.as_ref().is_some_and(IntroCamera::playing)
     }
 
+    /// A pointer press on the flyby: skips it as a held Cross does, as soon as the lock lifts.
+    /// The pointer's half of the panel's input - the panel itself has no button to press.
+    pub fn skip_intro(&mut self) {
+        if let Some(intro) = &mut self.view.intro {
+            intro.request_skip();
+        }
+    }
+
     /// One flyby tick, in place of [`Race::tick`]. `skip_held` is whether the player holds
     /// [`Button::Cross`].
     pub fn tick_intro(&mut self, inputs: &PlayerInputs) {
@@ -279,6 +297,24 @@ impl Race {
     #[must_use]
     pub fn motion_tick(&self) -> u64 {
         self.sim.world.tick + self.view.intro.as_ref().map_or(0, |i| u64::from(i.ticks()))
+    }
+
+    /// Where the track-description panel is, while it is on screen: up through the flyby, then
+    /// fading out as the chase view returns. `None` before the flyby, with none, and once it has
+    /// faded. The panel's own timing is [`oag_ui::track_panel`]; the clock is the 60 Hz tick.
+    #[must_use]
+    pub fn track_panel_progress(&self) -> Option<oag_ui::track_panel::Progress> {
+        let intro = self.view.intro.as_ref()?;
+        let tick = 1.0 / 60.0;
+        let progress = oag_ui::track_panel::Progress {
+            entered: intro.ticks() as f32 * tick,
+            left: match intro {
+                intro if intro.playing() => None,
+                intro if intro.finished() => Some(self.sim.world.tick as f32 * tick),
+                _ => return None,
+            },
+        };
+        progress.visible().then_some(progress)
     }
 
     /// Whether the HUD is drawn: not through the flyby, and not for [`HUD_DELAY_TICKS`] ticks of

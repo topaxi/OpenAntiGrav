@@ -38,3 +38,61 @@ pub(super) fn read(
     });
     grid
 }
+
+/// The `PI_Track` id of the circuit `track` (a `.vex` entry name) is the race on: the entry in
+/// the plugin definition with the same environment directory and the same `Reversed`.
+///
+/// The race loader is handed a file, not an id, and the panel names the id: `16_Track` and
+/// `32_Track` fly one directory's `track.vex` and `track_reversed.vex`. Zone's files are the same
+/// pair with a prefix, so they resolve to the same entries. `None` when no entry matches.
+fn track_id(
+    archives: &mut oag_assets::source::Archives,
+    title: &'static oag_title::Title,
+    track: &str,
+) -> Option<String> {
+    let (directory, file) = track.rsplit_once('\\')?;
+    let reversed = file.contains("reversed");
+    let xml = oag_tables::fexml::text(&archives.read_name(title.plugin_definition).ok()?).ok()?;
+    let mut ids = crate::catalogue::tracks(&xml)
+        .into_iter()
+        .filter(|t| t.location == directory && t.reversed == reversed);
+    ids.next().map(|t| t.id)
+}
+
+/// The track-description panel for the circuit `track`, or `None` off Pulse's PSP disc and when
+/// anything it needs will not read. Says which in `report`.
+pub(super) fn read_panel(
+    archives: &mut oag_assets::source::Archives,
+    title: &'static oag_title::Title,
+    track: &str,
+    pulse_psp: bool,
+    preferred_language: Option<&str>,
+    report: &mut Vec<String>,
+) -> Option<crate::track_panel::Assets> {
+    if !pulse_psp {
+        return None;
+    }
+    let Some(id) = track_id(archives, title, track) else {
+        report.push(format!(
+            "track panel: no PI_Track in {} matches {track}; no panel",
+            title.plugin_definition
+        ));
+        return None;
+    };
+    let plugins = title
+        .front_end
+        .map_or::<&[&str], _>(&[], |f| f.language_plugins);
+    let languages = crate::boot::load_languages(archives, plugins, report);
+    let chosen = crate::boot::chosen_language(&languages, preferred_language);
+    let strings = crate::boot::load_strings(archives, &languages, preferred_language, report);
+    let menu_role = title.front_end?.menu?.menu_font?;
+    let menu = crate::race::hud::hud_font(archives, &languages, chosen, menu_role, report);
+    let default = crate::race::hud::hud_font(
+        archives,
+        &languages,
+        chosen,
+        oag_ui::language::roles::DEFAULT,
+        report,
+    );
+    crate::track_panel::read(archives, &id, &strings, (menu, default), report)
+}

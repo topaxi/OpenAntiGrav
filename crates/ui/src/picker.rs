@@ -742,7 +742,7 @@ fn is_title(text: &Text) -> bool {
     text.font.eq_ignore_ascii_case("Title")
 }
 
-fn fill_draw(fill: &Fill) -> Draw {
+pub(crate) fn fill_draw(fill: &Fill) -> Draw {
     let rect = [
         fill.x,
         fill.y,

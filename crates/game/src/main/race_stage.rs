@@ -27,6 +27,9 @@ pub(crate) struct RaceStage {
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see
     /// `oag_game::hud::countdown`.
     pub(crate) countdown: Option<oag_game::hud::Countdown>,
+    /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
+    /// when any part of it would not read - see `oag_game::track_panel`.
+    pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
     /// Which circuit/mode/class row [`oag_game::records`] persists this
     /// race's outcome under - resolved once, at load, from
     /// [`oag_game::race::Loaded::title`] and the [`oag_game::race::Options`]
@@ -474,6 +477,11 @@ impl RaceStage {
                 viewport,
             ),
             None => {
+                if let (Some(panel), Some(progress)) =
+                    (&mut self.track_panel, self.race.track_panel_progress())
+                {
+                    panel.draw(gpu.device(), gpu.queue(), encoder, view, progress, viewport);
+                }
                 if let Some(hud) = &mut self.hud
                     && self.race.hud_shown()
                 {
