@@ -29,6 +29,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let mut hits = 0usize;
+    let mut systems = Vec::new();
+    for index in 0..wad.len() as usize {
+        if let Ok(head) = wad.peek(index, 4)
+            && oag_vex::pob::looks_like_particle_system(&head)
+            && let Ok(blob) = wad.read(index)
+            && let Ok(system) = oag_vex::pob::ParticleSystem::parse(&blob)
+        {
+            systems.push(system.name.clone());
+        }
+    }
+    systems.sort();
+    println!("{} systems: {}", systems.len(), systems.join(" "));
     for index in 0..wad.len() as usize {
         let Ok(blob) = wad.read(index) else { continue };
         let Ok(nodes) = vex::nodes(&blob) else {

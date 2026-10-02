@@ -105,20 +105,59 @@ through the same function and are read statically.
 ## What a player sees, and how ours compares
 
 Frames on Basilico Black at matched poses (`psp-trace.py --camera` rows fed to
-`oag-game --pose-from`), under `data/scratch/pulse-psys/` (gitignored). The
-original's welder at `(-756, 31, 741)` reads as a **white core inside a large
-blue-violet halo**, with a few small blue sparks falling, re-flashing every few
-frames on the tunnel's left wall. Ours puts its sparks in the same place but
-draws them as long blue streaks with **no halo**. The halo is the effect's
-`GLOW` template; ours parses that template's size channel as 19,662 keys, almost
-all `0.0068`, so it draws at about 0.2 units. That is a misread in the `.pob`
-interpreter, open below, not a placement difference.
+`oag-game --pose-from`), under `data/scratch/pulse-psys/` (gitignored;
+`welder-orig-vs-ours.png` is the side-by-side). The original's welder at
+`(-756, 31, 741)` reads as a **white core inside a large blue-violet halo**,
+with a few small blue sparks falling, re-flashing every few frames on the
+tunnel's left wall. The halo is the effect's `GLOW` template: a 65,535-tick
+life whose size channel loops every 20 ticks with four jumps to full size (30
+units), authored as pairs of keys at one time. Ours dropped every equal-time key
+when it unrolled a periodic channel, which erased the jumps and left the halo at
+about 0.2 units; fixed 2026-10-02 (`psys::template::unroll`), and ours now
+flashes the halo at the same place.
+
+Still different: ours draws the sparks as long blue streaks across the tunnel
+where the original's are short falling dots, and ours has less of the white
+core. Neither is read.
+
+Outpost 7's steam vents were confirmed spawned live (18 loads, below) but not
+compared on screen: from the racing line the vents sit 80 or more units off and
+below the road, and neither side shows them in the frames sampled.
+
+### Outpost 7, live
+
+Outpost 7 White, the same breakpoint: **18 hits, all `WO_MODESTO_STEAM_A`**,
+every parent tagged `0x08a6ba64`, matching `07_Track\track.vex`'s 18 nodes.
+
+## The weather is not a node's: `TrackStartup`'s `Weather` element
+
+`WO_RAIN`, `WO_RAIN_LENS` and `WO_SNOW` are named by no `ParticleSystem` node and
+by no string in the executable. They are named by two circuits' `TrackStartup`
+XML, under `LevelFx` / `Weather`: Outpost 7's (`EnvPsys = data\psys\WO_SNOW.POB`,
+plus `Mist.mip` and drift/wind values) and Fort Gale's (`EnvPsys =
+data\psys\WO_RAIN.POB`, `ScreenPsys = data\psys\WO_RAIN_LENS.POB`, `WindSound`).
+
+| Address | Name | Confidence | Evidence |
+| --- | --- | ---: | --- |
+| `0x088f184c` | `Weather_Construct` | 82 | Called from `TrackStartup_Parse`'s `Weather` branch on a `0x470`-byte node parented to `DAT_08b34320`, with the parsed `0x324`-byte config. Loads the config's `EnvPsys` (`+0x110`) and spawns it as fourcc `FXW1` with a matrix at `node+0xa0`; loads `ScreenPsys` (`+0x210`), when present, as `FXW2` in mode 2; builds a mist overlay node (`FUN_088fa0a0`); keeps the env effect's first modifier (`+0x9b4`) at `node+0x8c`. Calls `PsysNode_Tag` for both spawns. |
+| `0x088f1e58` | `Weather_Update` | 70 | The `+0x24` (update) slot of its vtable `0x08ad0e64`. Copies a camera node's matrix into `node+0xa0` (the env instance's frame) when the camera is outside, resets it to a constant and hides the instance (`+0x160 | 0x200000`) when inside (`FUN_0887866c` region tests), throttles the screen effect's emission on the switch, and writes the wind vector (`node+0x410 * 0.3`) into the env effect's modifier every frame. |
+| `0x08a6ed04` | `Weather_Tag` | 75 | The identity tag both functions stamp. |
+
+Gates read in `TrackStartup_Parse`: the `LevelFx` block is skipped when
+`g_display+0x5dec` is set, and the weather node is not built in Zone
+(`g_game_mode == 6`). **Not wired**: the trigger is read, but what the player
+sees depends on the camera-relative frame, the inside/outside switch and the
+wind, none of which this engine models yet. What `weatherPos` (`0x3da`) nodes do
+is still open; they carry no attributes, so they do not name an effect.
 
 ## Open
 
-- **`GLOW`'s size channel.** 19,662 keys on one channel is not authored data.
-  Read `WO_BLUE_WELDER.POB`'s `GLOW` template record by hand and find where its
-  key count comes from.
+- **The welder's sparks are streaks in ours, dots in the original**, and its
+  white core reads weaker. The emitter is render class `Streak` (`Capped`); read
+  the streak length law against a live particle.
+- **The weather** (section above): port `Weather_Update`'s camera-relative frame,
+  inside/outside switch and wind, then play `WO_RAIN`/`WO_RAIN_LENS` on Fort Gale
+  and `WO_SNOW` on Outpost 7.
 - **Culling.** Whether the draw slot (`0x08915fd0`) skips a node outside the
   visible sections is unread; ours draws every placed effect.
 - **The emitter frame's rotation about `+Y`.** The original hands the instance

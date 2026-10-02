@@ -1221,3 +1221,6 @@
 0x0892e384	function	AnimationTrigger_RegisterClass	90	placed-particle-systems.md
 0x08a727cc	function	AnimationTrigger_Tag	85	placed-particle-systems.md
 0x08945284	function	Node_SetLocalMatrix	75	placed-particle-systems.md
+0x088f184c	function	Weather_Construct	82	placed-particle-systems.md
+0x088f1e58	function	Weather_Update	70	placed-particle-systems.md
+0x08a6ed04	function	Weather_Tag	75	placed-particle-systems.md

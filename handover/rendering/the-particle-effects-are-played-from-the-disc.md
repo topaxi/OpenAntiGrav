@@ -1,56 +1,87 @@
-# The particle effects are played from the disc, and most of them have no recovered trigger
+# The particle effects are played from the disc; 27 of the PSP's 35 play, 8 wait on a trigger
 
-2026-08-12. `oag_vex::pob` parses every emitter tree, `oag_render::psys::Library` loads any `Data\Psys\<name>.POB` by name, and `psys::Stage` plays any number at once (`attach`/`follow`/`detach` for one riding a moving owner, `play` for a burst). **The mechanism is generic and finished; what is per-effect is the trigger**, which is reverse-engineering and not code. **The count and list below are as of 2026-08-12 and already stale** - see `handover/weapons-seven-of-thirteen-and-two-pages-were.md` for the current, larger `race::RACE_EFFECTS` and what each addition since has moved out of the unwired list below; `WO_MISSILE_HEAD` in particular is wired now (the Missile's own flare, gated the same way the Rocket's is) and is a stale entry in the list that follows, kept as written rather than hand-edited out of an already-dated snapshot. **Asset exists, trigger not recovered, so deliberately unwired** (PSP disc, 35 systems, as of 2026-08-12): `WO_SHIP_COLL_SPARK_NODAMAGE` (named in `sparks.rs`, and `ShipCollisionFx_Trigger` picks it when the contact dealt no damage - this engine has no damage flag at the contact yet), `WO_SHIP_EXPLOSION`, `WO_SHIP_DEATH_SPARKS`, `WO_SHIP_FXNODE_EXPLO`, `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`, `WO_CANNON_SPARKS`, `WO_MINE_EXPLO`, `WO_MISSILE_HEAD`/`_EXPLO`/`_BOUNCE`, `WO_PLASMA_HEAD`/`_FLASH`, `WO_SHURIKEN_HEAD`/`_TRAIL`/`_BOUNCE`/`_EXPIRE`, `WO_LEACHBEAM_CHARGING`/`_ENERGY`, `WO_REPULSER`/`_BLAST`, `WO_QUAKE`, `WO_WEAPON_ABSORB`, `WO_BOMB_SMOKERING`, `WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A`, `WO_RAIN`/`_LENS`, `WO_SNOW`. Most of the weapon ones need the weapon itself built first; the four environmental ones (`RAIN`, `SNOW`, `MODESTO_STEAM_A`, `BLUE_WELDER`) need to know which track places them and where, which nothing has read. **Do not fire any of them on a guess** - see the do-not-invent rule in `CLAUDE.md`. **What is still not implemented in the interpreter**, each authored in files that already parse: ~~the sprite atlases and textures (a procedural falloff stands in)~~ - the pixels are now decoded, `oag_vex::pob::texture`, 2026-09-17; the renderer still does not sample them, see `docs/formats/pob.md`'s "The sprite pixels are on the disc after all" - billboard roll, the emitter extent (particles spawn at the anchor), the emission-scale channel, and the animated-attribute array. Two instance-level scales read out of the executable on 2026-08-12 and also unmodelled: alpha is `particle_alpha * instance[+0x40]` and drawn size is `particle_size * instance[+0x34]` (`ParticleSystem_UpdateParticles`, `0x088f635c`); severity is the second of those and the first is not fed by anything here.
+2026-08-12, census rewritten 2026-10-02. `oag_vex::pob` parses every emitter
+tree, `oag_render::psys::Library` loads any `Data\Psys\<name>.POB` by name, and
+`psys::Stage` plays any number at once (`attach`/`follow`/`detach` for one riding
+a moving owner, `play` for a burst). **The mechanism is generic and finished;
+what is per-effect is the trigger.** `crates/game/tests/psys_inventory_ground_truth.rs`
+is the authority on which bucket each disc effect is in and fails when one is
+unaccounted for; the table below is its reading on 2026-10-02.
+
+## Census: the PSP disc's 35 systems
+
+**Wired, trigger recovered (25):**
+
+| Effect | Trigger | Where |
+| --- | --- | --- |
+| `WO_SHIP_COLL_SPARK_DAMAGE` | wall contact, and `Ship_Damage`'s weapon branch | `race::tick`, `race::hit_sparks` |
+| `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` | a LeachBeam drain's hit | `race::hit_sparks` |
+| `WO_WEAPON_ABSORB` | `Ship_PlayAbsorbFeedback` | `race::absorb` |
+| `WO_SHIP_FXNODE_EXPLO`, `WO_SHIP_DEATH_SPARKS`, `WO_SHIP_EXPLOSION` | a wreck | `race::wreck_fx` |
+| `WO_ROCKET_FLARE`, `WO_ROCKET_EXPLO`, `WO_ROCKET_EXPLO_TRACK` | Rocket init / craft hit / track hit | weapons visuals |
+| `WO_MISSILE_HEAD`, `WO_MISSILE_EXPLO`, `WO_MISSILE_BOUNCE` | Missile init / detonation / bounce | weapons visuals |
+| `WO_PLASMA_HEAD`, `WO_PLASMA_FLASH` | Plasma init / detonation | weapons visuals |
+| `WO_SHURIKEN_HEAD`, `WO_SHURIKEN_BOUNCE`, `WO_SHURIKEN_EXPIRE` | Shuriken init / bounce / teardown | weapons visuals |
+| `WO_MINE_EXPLO`, `WO_BOMB_SMOKERING`, `WO_CANNON_SPARKS` | detonations, a round's wall hit | weapons visuals |
+| `WO_QUAKE`, `WO_LEACHBEAM_ENERGY`, `WO_LEACHBEAM_CHARGING` | the Quake wave, the beam, the held pickup | weapons visuals |
+| **`WO_BLUE_WELDER`** (new) | placed by circuits 01 and 05 as `ParticleSystem` nodes, played from load | `race::scenery_fx` |
+| **`WO_MODESTO_STEAM_A`** (new) | placed by circuits 05 and 07 the same way | `race::scenery_fx` |
+
+**Embedded in a wired tree (2):** `WO_SHIP_COLL_SPARK`, `WO_SHIP_COLL_SPARK_TRAIL`.
+
+**Not wired (8), ranked by how often a player would see them:**
+
+| Rank | Effect | State | Best lead |
+| ---: | --- | --- | --- |
+| 1 | `WO_RAIN` + `WO_RAIN_LENS` | trigger read, unwired | Fort Gale's `TrackStartup` `Weather` element; `Weather_Construct` `0x088f184c`, `Weather_Update` `0x088f1e58` |
+| 2 | `WO_SNOW` | trigger read, unwired | Outpost 7's `TrackStartup` `Weather`, same functions |
+| 3 | `WO_SHIP_COLL_SPARK_NODAMAGE` | trigger read, not seen live | `Ship_DispatchCollisionFx` `0x0883df38`: a contact with non-positive friction (floor, magstrip) |
+| 4 | `WO_SHURIKEN_TRAIL` | trigger read, unwired | `Shuriken_Init` `0x08877280`: a second anchor rotated -pi/2 about the blade; a `Projectile` here has no roll |
+| 5 | `WO_REPULSER`, `WO_REPULSER_BLAST` | weapon not built | strings `0x08a7cd2c`, `0x08a7cd18` |
+| 6 | `WO_SHIP_COLL_SPARK_TRAIL_SMOKE` | unread | no string in the executable; a sibling of the embedded `_TRAIL`, nothing found referencing it |
+
+Evidence for the new rows and the weather:
+[placed-particle-systems.md](../../docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md);
+for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md).
 
 ## Open
 
-- Most of the 35 disc particle systems have a parsed asset but no recovered trigger, so they stay deliberately unwired.
-- ~~The interpreter does not yet implement sprite atlases/textures~~ - PSP billboards sample their own sprite and atlas cell since 2026-09-24, and shape 1/4/7 extents are placed as read (see the weapon-blasts thread in `handover/rendering/`). Still not implemented: HD's `.gtf` sprites, sprites on streaks, the atlas frame over life, billboard roll, the other shapes' extents, or the animated-attribute array.
-- The two instance-level scales (`instance[+0x40]` alpha, `instance[+0x34]` size) are read but unmodelled; the alpha factor is not fed by anything here.
-- **The environmental four are narrower than they looked, and the class is now
-  confirmed live rather than dead code - only the effect *selection* is still
-  open.** `weatherPos` `0x3da`'s registration is found
-  (`WeatherPos_RegisterClass`, `0x0892c684`), and so is a genuine runtime
-  constructor for it (`FUN_0892c404`, allocates and tags a real instance).
-  Every static search for its caller came back empty, by four independent
-  methods including a raw byte-pattern scan for its address as data - and
-  that result was reported as "genuinely unreached" until a **live PPSSPP
-  capture found the caller in minutes**: a breakpoint on `0x0892c404` fires
-  while loading a real Time Trial on Talon's Junction, called through a
-  generic per-class spawner (`FUN_08908f98`) resolving `weatherPos`'s own
-  `+0x7c` `init` slot at runtime - invisible to every static search because
-  the call is indirect, through a value only ever loaded into a register, not
-  written anywhere as an immediate. **Confirmed it really is `weatherPos`**,
-  not just "landed at the right address": the live descriptor the call runs
-  against matches `weatherPos`'s own registration on four separate fields
-  (class id, identity tag, and two more). So the class *is* exercised; what still
-  isn't recovered is which of `WO_RAIN`/`WO_SNOW`/`WO_MODESTO_STEAM_A`/
-  `WO_BLUE_WELDER` an instance carries, or whether Talon's Junction's 14 all
-  carry the same one - no node payload, Maya name, or `PI_Track` attribute has
-  a signal. `param_3` (`2048.0` as `f32`, stored at the new instance's
-  `+0x4c`) turned out, on a second live read, to be **shared with the parent
-  `Transform`'s own `+0x4c`** - a generic default rather than a per-instance
-  selector, downgrading it from the earlier "strongest lead". A second live
-  pass also settled what `FUN_08908f98`'s per-record data format is (a raw
-  numeric class id, confirmed against real `Mesh`/`Texture` spawns matching
-  `vex.md`'s table exactly) but could not isolate `weatherPos`'s own record
-  specifically - that breakpoint fires on every node spawn program-wide, too
-  often to interleave with driving the front end in the time available.
-  Detail, including the class-identity-tag mechanism and the full
-  live-capture method, in
-  [`docs/ghidra/functions/psp-pulse-usa/weatherpos.md`](../../docs/ghidra/functions/psp-pulse-usa/weatherpos.md).
-  Separately, `WO_MODESTO_STEAM_A` may not even be a Pulse trigger at all -
-  `modesto_heights` matches a **Pure** circuit, not a Pulse one.
-- **`pob.md`'s "dead end" reading of `ParticleSystem`'s registered slot
-  (`FUN_08a6bd18`) may be the same mistake `weatherpos.md` made and then
-  corrected.** Not re-checked this session - `weatherpos.md` found that the
-  identical-shaped value for `weatherPos` is a live class-identity tag, read
-  by `Vex_LoadModel`'s per-class node gather, not inert. Worth the same check
-  before trusting `pob.md`'s framing on `ParticleSystem`.
+- **The weather** (ranks 1-2): the trigger is read and needs a port.
+  - `Weather_Update` puts the env instance on a camera node's matrix, hides it
+    when the camera is inside (`FUN_0887866c` region tests), throttles the
+    screen effect on the switch, and writes a wind vector into the env effect's
+    first modifier each frame.
+  - It also builds a screen-mist node (`FUN_088fa0a0`).
+  - Not built in Zone; the whole `LevelFx` block is skipped when
+    `g_display+0x5dec` is set.
+- **`weatherPos` (`0x3da`)** carries no attributes and names no effect, so it is
+  not what places rain or snow. What it does is open; see
+  [weatherpos.md](../../docs/ghidra/functions/psp-pulse-usa/weatherpos.md).
+- **The welder against the original** (matched frames on Basilico Black):
+  - The halo now flashes where the original's does. The fix: a periodic
+    channel keeps its equal-time keys.
+  - Ours still draws the sparks as long streaks where the original's are short
+    falling dots, and ours has less white core.
+- **The steam vents were not compared on screen.** Outpost 7's 18 loads are
+  live-confirmed, but the vents sit 80 or more units off and below the racing line.
+- **Placed effects are not culled.** Unread whether the draw slot `0x08915fd0`
+  skips them; ours draws all of them. They are also Pulse PSP only: Pure, HD and
+  the PS2 port were not checked for placed nodes.
+- **Interpreter gaps**, unchanged:
+  - HD's `.gtf` sprites, sprites on streaks and the atlas frame over life.
+  - Billboard roll, the extents of shapes 2/3/6/8 and the animated-attribute array.
+  - The `instance[+0x40]` alpha scale, which nothing feeds here.
 
 ## Next Steps
 
-- Recover triggers for the unwired effects - weapon ones need the weapon itself built first. For the four environmental ones, the constructor's call chain is confirmed live; `param_3`/`+0x4c` is ruled out as the effect selector (shared with the parent, a generic default). The record format (`FUN_08908f98`'s per-node class id) is now known; what's missing is isolating `weatherPos`'s own `0x3da` record among the noise of every other class spawning through the same call - a free-running capture that filters on the resolved id rather than trying to interleave menu input with the breakpoint is the likely way in, per `psp-pulse-usa/weatherpos.md`'s Open section.
-- Re-check `pob.md`'s `ParticleSystem` "dead end" claim against the class-identity-tag mechanism `weatherpos.md` found, before relying on it.
-- ~~Implement the missing interpreter features (atlases/textures, ...)~~ - PSP sprites are sampled (2026-09-24); next is HD's separate `.gtf` sprites onto the same sheet. Remaining: billboard roll, extents of shapes 2/3/6/8, the frame-rate channel, animated-attribute array.
-- Do not fire any effect on a guess - follow the do-not-invent rule in `CLAUDE.md`.
+- Port the weather: a camera-attached env instance for `WO_RAIN`/`WO_SNOW`, the
+  `ScreenPsys` lens effect, the inside/outside switch and the wind modifier.
+  Then compare on Fort Gale and Outpost 7 against PPSSPP. Start at
+  `Weather_Update` (`0x088f1e58`) and `FUN_08912930`, the camera-matrix source.
+- `NODAMAGE`: catch a live `damaged == 0` hit (`ShipCollisionFx_Trigger`
+  `0x089246b4`, `a2`). A craft dropped onto magstrip or the floor at speed is the
+  candidate. Then add a reporting-only floor-impact field to
+  `oag_physics::wall::WallResponse` without touching `reacts()`.
+- Read the welder's streak law (render class `Streak`, `Capped`) against one
+  live particle.
+- Do not fire any effect on a guess (the do-not-invent rule in `CLAUDE.md`).
