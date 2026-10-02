@@ -93,7 +93,7 @@ fn an_eliminator_grid() -> Race {
 }
 
 /// The Eliminator's state 8: the player comes back `1.0` s after state 5's
-/// dwell, an opponent `2.0` s after it (`Ship_SetState` case 8, counted down by
+/// dwell, an opponent `0.8` s after it (`Ship_SetState` case 8, counted down by
 /// `Ship_UpdateRespawn`), so the destroy camera is still on the wreck when the
 /// big explosion goes off and lets go a second later.
 #[test]
@@ -158,7 +158,7 @@ fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
     );
     let opponent = opponent_back.expect("the opponent returns");
     assert!(
-        (208..=212).contains(&opponent),
-        "3.5 s from tick 0: {opponent}"
+        (136..=140).contains(&opponent),
+        "2.3 s from tick 0: {opponent}"
     );
 }

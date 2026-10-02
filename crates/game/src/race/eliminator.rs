@@ -1,12 +1,31 @@
 //! What happens to a destroyed craft: Eliminator's respawn and the kill/death
-//! bookkeeping that makes it a mode about kills rather than position, and a
-//! single race's own opponent respawn, which the original runs through the
-//! same craft states (5 then 6) in every mode and only the player's own
-//! ending cuts short.
+//! bookkeeping that makes it a mode about kills rather than position, and the
+//! absence of any respawn everywhere else - a craft destroyed in a single race
+//! stays a wreck for good, the player and every opponent alike.
 //!
 //! Split out of `tick.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`, the same reason every other `race/*.rs`
 //! module split out of `race.rs` in the first place.
+//!
+//! # A destroyed craft outside the Eliminator stays down
+//!
+//! **Measured live, 2026-10-02 (pulse-state6, PPSSPP v1.20.4, Pulse USA,
+//! Single Race, two runs, two slots, two ways of destroying the craft)**: an AI
+//! craft that reaches state 5 goes to state 6 after `1.5` s, its `entity+0x874`
+//! timer (`0.8` s, `Ship_SetState`'s case 6) crosses zero about `0.8` s later,
+//! and **the state stays 6 for the 13 seconds the capture watched, with the
+//! destroyed bit `0x1000` set, the wreck as the live model, and the craft at
+//! rest where it came down**. A write watchpoint on `entity+0x8C` saw two
+//! writers in the whole run, both `Ship_SetState`, 4 to 5 and 5 to 6
+//! (`ra` `0x08844598` and `0x088445e4`); nothing wrote it afterwards. That
+//! agrees with the per-state jump table at `0x08a7bb88`, which sends state 6
+//! to `FUN_08840500`, a bare timer countdown, and state 8 alone to
+//! `Ship_UpdateRespawn` - and state 8 is the Eliminator's. So **a destroyed
+//! craft in a single race does not come back**; this port used to return an
+//! opponent after `1.5 + 0.8` s on a misreading of `shield.md`. Confidence 85:
+//! two runs under injection (`Ship_SetState(4)` and `Ship_Damage`), 13 s each,
+//! not a natural death by a weapon and not a full race to the flag. See
+//! `docs/ghidra/functions/psp-pulse-usa/shield.md`.
 //!
 //! # What is measured here, and what is chosen
 //!
@@ -54,36 +73,32 @@ pub const LAP_REFILL_FRACTION: f32 = 0.2;
 /// After `DESTROYED_DURATION`'s own half-second explosion. Confidence 85.
 pub(super) const DESTROYED_DWELL: f32 = 1.5;
 
-/// Seconds an AI craft then waits in state 6 before `Ship_UpdateRespawn`
-/// (`0x08847914`) puts it back: `Ship_SetState`'s case 6 writes `0.8` for a
-/// craft whose `entity+0x368` is set and `2.0` for the local player, who
-/// never reaches it in a single race. Confidence 85 for the timer.
-///
-/// **Whether anything puts the craft back afterwards is in doubt** (2026-10-02):
-/// the per-state jump table at `0x08a7bb88` sends state 6 to `FUN_08840500`,
-/// which only counts the timer down, and `Ship_UpdateRespawn` is reached from
-/// state 8 alone. Nothing read revives a state-6 craft, so this single-race
-/// opponent return is the port's reading of `shield.md` and is unverified
-/// against a live run. See `docs/ghidra/functions/psp-pulse-usa/shield.md`.
-pub(super) const AI_RESPAWN_WAIT: f32 = 0.8;
-
 /// Seconds the local player waits in the Eliminator's state 8: `Ship_SetState`'s
 /// case 8 (`0x088446ec`) writes `1.0` into `entity+0x874` for the craft whose
 /// `entity+0x368` is zero. State 8's own update is `Ship_UpdateRespawn`
 /// (`0x08847914`): the per-state jump table at `0x08a7bb88` sends state `8` to
 /// the call at `0x08841e44`, counts the timer down, and at zero relocates the
-/// craft, refills the shield and goes to state 1. Confidence 88 (the table and
-/// the call read, no live run of an Eliminator wreck).
+/// craft, refills the shield and goes to state 1. **Measured live 2026-10-02
+/// (pulse-state6, run `e3`)**: the player's craft wrecked by `Ship_Damage` in an
+/// Eliminator went 4 (0.5 s), 5 (1.5 s), 8 with `+0x874` reading `1.0`, then state 1
+/// with a refilled shield 60 frames later. Confidence 90: one run, agreeing with the
+/// disassembly (`lui 0x3F80` on the zero branch).
 pub(super) const ELIMINATOR_PLAYER_WAIT: f32 = 1.0;
 
-/// The same wait for every other craft: `2.0`, the opposite ratio to a
-/// single race's state 6. Confidence 88, as [`ELIMINATOR_PLAYER_WAIT`].
-pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 2.0;
+/// The same wait for every other craft: **`0.8`**, the same constant state 6's
+/// case arms for a non-zero `entity+0x368`. **Measured live 2026-10-02
+/// (pulse-state6, runs `e1` and `e2`, two boots of one race, slots 2 and 4)**: an
+/// Eliminator opponent destroyed by `Ship_Damage` on PPSSPP went 4 (0.5 s), 5 (1.5 s),
+/// 8 with `entity+0x874` reading `0.8`, then state 1 and a refilled shield `48` frames
+/// later, both times. This used to be `2.0`, read off `Ship_SetState`'s case 8
+/// with its branch-delay `lui 0x3F4C` (which executes on both paths) taken for
+/// dead code. Confidence 92: two runs and the corrected disassembly agree.
+pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 0.8;
 
 /// Seconds an Eliminator craft spends out before it returns: state 5's
 /// [`DESTROYED_DWELL`] and then state 8's own wait, so `2.5` s for the local
 /// player (whose destroy camera is still on the wreck for the second after the
-/// big explosion) and `3.5` s for anyone else.
+/// big explosion) and `2.3` s for anyone else.
 pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
     DESTROYED_DWELL
         + if is_player {
@@ -96,17 +111,15 @@ pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
 impl Race {
     /// Brings a destroyed craft back, on the terms its mode sets.
     ///
-    /// **Two modes bring one back, and the third does not.** In an Eliminator
-    /// every craft returns after [`eliminator_respawn_delay`], with the
-    /// death and kill bookkeeping the mode is about. In a race with opponents,
-    /// a single race, an *opponent* returns after
-    /// [`DESTROYED_DWELL`] plus [`AI_RESPAWN_WAIT`], which is the original's
-    /// own state 5 then state 6 (`Ship_UpdateDestroyed`, `Ship_UpdateRespawn`,
-    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`), and the player does
-    /// not: the Arcade race's own update (`FUN_0882c5c4`) ends the race on
-    /// the player's destroyed bit before state 6 can run, which is
-    /// [`RaceState::eliminate`]'s job here. Zone, a time trial and a speed
-    /// lap field nobody else, so only the player's own ending applies.
+    /// **Only the Eliminator brings one back.** Every craft there returns after
+    /// [`eliminator_respawn_delay`] (the original's state 8,
+    /// `Ship_UpdateRespawn`), with the death and kill bookkeeping the mode is
+    /// about. In every other mode a destroyed craft stays down: the original
+    /// sends it to state 6, a bare timer that no code revives (measured live,
+    /// the module doc), so a single
+    /// race's opponent is out for good like the player, whose own ending is
+    /// the Arcade race's update (`FUN_0882c5c4`) reading the destroyed bit,
+    /// [`RaceState::eliminate`]'s job here.
     ///
     /// Call once a tick, after every craft has been stepped
     /// ([`Race::step_opponents`] included) and before
@@ -131,10 +144,9 @@ impl Race {
             }
             let delay = if mode == Mode::Eliminator {
                 eliminator_respawn_delay(slot == player)
-            } else if slot != player && mode.has_opponents() {
-                DESTROYED_DWELL + AI_RESPAWN_WAIT
             } else {
-                // The player's own ending, or a solo mode: `RaceState::eliminate`.
+                // The player's own ending is `RaceState::eliminate`; an
+                // opponent's wreck stays where it is (state 6, measured).
                 continue;
             };
 

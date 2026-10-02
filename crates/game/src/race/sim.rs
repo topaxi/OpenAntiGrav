@@ -135,7 +135,8 @@ pub struct RaceSim {
     /// from a death by wall: see `crate::race::eliminator`. Hashed.
     pub(super) last_weapon_hit: [u64; oag_gameplay::MAX_SHIPS],
     /// Seconds left before an Eliminated craft returns to the race, once it
-    /// has reached that state - see `crate::race::eliminator`. Hashed: a
+    /// has reached that state - **the Eliminator only**, since a craft
+    /// destroyed in any other mode stays down; see `crate::race::eliminator`. Hashed: a
     /// craft one tick out on its respawn is one tick out on everything after.
     pub(super) respawn_delay: [f32; oag_gameplay::MAX_SHIPS],
     /// How many barrel rolls each craft has armed this race, and what they
