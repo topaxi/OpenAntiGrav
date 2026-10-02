@@ -596,7 +596,7 @@ What this does not cover, so the numbers are not read wider than they are:
   The windowed `--race` loads before its window exists, and `--trace-out`,
   `--dry-run` and the 2048 front-end capture build no scene from that device;
   those keep every texture on the CPU as before.
-- **The GPU side is not in RSS on this machine** (a discrete adapter). On a
+- **The GPU side is not in RSS on this machine** (an AMD Radeon RX 7800 XT, RADV, discrete). On a
   software or integrated adapter the uploaded bytes live in the process, and the
   total there is the GPU column, which this does not shrink.
 - **HD's `sky.gtf` is still decoded on the CPU** (24 MiB kept in the loader
@@ -616,10 +616,12 @@ track model names are all BC7 chains: **0 single-level and 0 off the block grid
 on every circuit**, and 1 refused as blocks that still decodes on `amphiseum`
 and on `modesto_heights`, forward and reversed (the report counts it but does not
 name the file).
-The disc does ship at least 846 single-level `.gnf` files (a scratch census
-over the files `gnf::Texture::parse` accepts - it also rejected a large share
-of the `.gnf` names it was handed, not looked into here), all of which decode: 99 under `environments2048/mall`, 71 `tower`,
-59 `shared`, 135 `art/published`, and the rest front-end and particle art - but
+The archives do hold 846 single-level `.gnf` entries (a scratch census over
+the base and patch archives **without deduplicating a path present in both**, so
+an upper bound on distinct files; it also could not parse a large share of the
+`.gnf` names it was handed, not looked into here), all of which decode: 99 under
+`environments2048/mall`, 71 `tower`, 59 `shared`, 135 `art/published`, and the
+rest front-end and particle art - but
 no circuit's track model names one. Whether the 200 to 690 unresolved draws each
 `environments2048` circuit reports (identical on `main`) are materials that
 name them was not checked.

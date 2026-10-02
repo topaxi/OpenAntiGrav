@@ -25,12 +25,11 @@ thread opens an `oag_render::mesh_render::TextureSinkScope` around `race::load`,
 and every texture an `.rcsmodel` build decodes (Omega, HD, 2048) goes up through
 `Queue::write_texture` at once and is replaced in its `Model` by a
 `Texels::Uploaded` view. The scene on `race-build` then binds those views
-instead of uploading, which is why `race scene built` on Omega Tech De Ra
-dropped from 8.2 s to 0.9 s in a debug build on a software rasteriser (timing
-contended, indicative only): the uploads moved onto `race-load`, behind the
-loading screen's frames. Loading frames stayed responsive: median 55 ms and
-max 98 ms against 71 and 232 ms before, same machine, lavapipe. Memory numbers
-are in [`omega-status.md`](../formats/omega-status.md#what-one-race-costs-in-memory).
+instead of uploading, so the uploads sit on `race-load` and not `race-build`:
+both are off the frame thread and the loading screen keeps drawing through
+them. No wall-clock figure is recorded here for the change - the one debug,
+software-rasteriser run taken was contended and this page's protocol is a
+release build with `--measure-race-load 2`. Memory numbers are in [`omega-status.md`](../formats/omega-status.md#what-one-race-costs-in-memory).
 
 `Session::advance_race_build` is the only place the frame loop touches the
 build: on the frame the circuit's load lands it copies what the build reads
