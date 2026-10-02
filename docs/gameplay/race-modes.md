@@ -270,26 +270,23 @@ answers here. Confidence 90 on both, the same bar the rest of `oag_2048::race`
 holds itself to for an unread executable - see `oag_title::ZoneCraft::PlayerShip`
 and `oag_title::ZoneCircuit::SameCircuit`.
 
-### Every title ships one Zone handling block, and this engine does not read it
+### Every title ships one Zone handling block; Pulse's executable never reads it
 
-**The shipped answer to "what handling does a Zone craft have" is one block
-shared by every team**, not the player's own. All three titles carry a Zone-mode
-craft directory - `Data\Ships\Zone_01` on both PSP titles, `/data/ships/zone` on
-HD - whose `handlingstats.xml` opens `<Stats team="ZoneMode">` and authors **no
-`<Class>` block at all**, where a team file authors four or five.
+**The shipped answer on Pulse is the player's own team and class**, read 2026-10-02 from the executable
+([zone-rest.md](../ghidra/functions/psp-pulse-usa/zone-rest.md), confidence **82**). All three titles carry a Zone-mode
+craft directory - `Data\Ships\Zone_01` on both PSP titles, `/data/ships/zone` on HD - whose `handlingstats.xml` opens
+`<Stats team="ZoneMode">` and authors **no `<Class>` block at all**. On Pulse nothing reaches it: neither `Zone_01` nor
+`ZoneMode` is a string in `BOOT.BIN`, the definition lists no team of `type="Zone"` (only a `PI_TeamModel name="Zone"`
+per team, the `Zone.vex` hull), and `Ship_LoadHandlingStats`, `Ship_LoadModel` and `Ship_InitCraft` all go through the
+player's own team directory and `craft+0x70 = stats + class * 0x80 + 0x94`, with no Zone test. So this engine flying the
+player's team numbers **is** the original's behaviour on Pulse, and the file is a leftover from Pure.
 
-That fits the mode: a `<Class>` carries engine, brakes and turning, and Zone
-replaces the engine with the auto-speed law, disables the brakes and flies a
-four-corner hover variant - all three selected by the Zone expression rather
-than read from a team.
+What Zone does replace, inside that handling: the engine (the auto-speed law), the brakes (disabled) and the hover
+variant (`Ship_HoverFourCorner`, whose bank-to-yaw gain is `50.0` against the two-point law's `30.0`; ported).
 
-**It is unread here**, so a Zone race flies the player's own team's numbers and
-`race::load` says so on every Zone load. Closing it is a physics question -
-which blocks the mode is actually meant to supply, and where turning comes from
-when no class authors one - rather than a naming one, and no title's Zone
-handling path has been read in any executable. Watch the near-miss on Pulse:
-`Data\Ships\Zone` is `<Stats team="Zone">` **with** classes and is the
-unlockable Zone *livery*, a raceable team; `Zone_01` is the mode.
+**Pure and HD are unread.** Pure's definition marks `Zone_01` as `type="Zone"`, so a Pure Zone race presumably flies
+that block; neither that executable nor HD's was read. Watch the near-miss on Pulse: `Data\Ships\Zone` is
+`<Stats team="Zone">` **with** classes and is the unlockable Zone *livery*, a raceable team; `Zone_01` is the leftover.
 
 ### Zone flies its own environment, and the disc authors every bit of it
 
