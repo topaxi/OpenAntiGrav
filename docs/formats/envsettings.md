@@ -326,6 +326,23 @@ so reading it against HD's `FOG_COLOUR`/`FOG_DENSITY` constants would be
 exactly the same title-key-mismatch this section exists to document a second
 time. Modelling 2048's own fog and bloom schema is unstarted.
 
+## Wipeout: Omega Collection: the Nova triple and the `Tonemap` block
+
+2026-10-02, `omega-lightmap`. Omega's `.EnvSettings` is 2048's spelling
+(`Constant ambient colour`, `Sun diffuse colour`) with two additions the
+executable registers (`FUN_015c1f20`) and this crate now reads:
+
+- `"Lighting.Nova prelit scale bias power"` - **three scalars**, not HD's
+  per-channel vectors. The circuit pixel shaders compute `scale *
+  pow(lightmap.rgb, power) + bias`; a file that omits it keeps the
+  executable's `(1.4, 0.2, 1.5)`. 88 of 97 files author it
+  ([`NOVA_PRELIT`](../../crates/tables/src/envsettings.rs)). Evidence:
+  [lightmap-prelit](../ghidra/functions/ps4-omega-eu/lightmap-prelit.md).
+- `"Tonemap.*"` and `"TonemapHDR.*"` - ten keys each (exposure
+  minimum/maximum/response/time, luminance and source-colour end a/b
+  coefficients, start and end angle), read whole by `EnvSettings::tonemap`.
+  **Nothing consumes them yet**: the consumer is not located.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer across the whole disc

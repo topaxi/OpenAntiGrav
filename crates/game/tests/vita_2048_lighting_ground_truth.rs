@@ -79,4 +79,10 @@ fn altimas_own_sun_and_ambient_are_drawn_not_the_stand_in_rig() {
         light_line.contains("ambient [0.15, 0.25, 0.38]"),
         "expected Altima's own Constant ambient colour (0.15, 0.25, 0.38); was {light_line}"
     );
+    // 2048 authors the Nova triple too (`1 0 1 0`), but its shader is unread:
+    // only Wipeout: Omega Collection's PS4 container takes the Nova path.
+    assert_eq!(
+        loaded.light.nova, 0.0,
+        "2048 must not take Omega's prelit combination"
+    );
 }
