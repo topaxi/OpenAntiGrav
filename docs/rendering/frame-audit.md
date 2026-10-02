@@ -547,11 +547,17 @@ names, `pSphereShape1` with `cage_collision2_ADD.tga`, is the whole of **WAD ent
 1078 of `DATA.WAD`**, `Data\visual_effects\cage_collision_curved.vex` (its source
 path inside the file is `cage_collision_curved.mb`; 9,552 bytes). It is **not** the
 track node `1078` this page keeps meeting - same number, different namespace. What
-spawns it is unread: the roadmap records `Cage Collision` (`0x3e7`) as having no
-node on the PSP disc, and `leaving-the-track.md` records the `collisionCageEnabled`
-plugin attribute on 11 of 24 circuits, read at the definition parse (`0x088c40a8`)
-and not followed. A lead, not a reading: an effect model the game plays on a
-track-containment contact, which a craft yawed into a wall would be.
+spawns it was read 2026-10-02 (`docs/ghidra/functions/psp-pulse-usa/collision-cage.md`):
+`CageEffect_Construct` (`0x0883170c`, one caller in `RaceManager_Construct`, once per
+race load) loads the vex and builds a ring of four scene objects parked at the identity;
+`CageEffect_Spawn` (`0x08832b0c`) poses one at a contact point and advances the ring.
+**Not recovered:** what reaches the spawn. The only path read is a per-craft query
+(`0x08831aa4`) that spawns on a hit within 15 units; it returned "nothing" (127) on every
+sampled tick on `03_Track`, and the spawn's entry never fired through a wall scrape or four
+off-track teleports. So nothing is drawn: the pose, fade and trigger are unread
+(`pulse-cage` lane, 2026-10-02). The roadmap's `Cage Collision` (`0x3e7`) has no node on the
+PSP disc, and the `collisionCageEnabled` attribute (`0x088c40a8`, stored at definition
+`+0x16f`) has no reader found; the constructor does not test it.
 
 **Confidence.** 80 for "the Talon loop dumps hold every moving draw the mask
 passes" (20 dumps, two cold boots, a count-and-diameter match). 70 for "a moving
