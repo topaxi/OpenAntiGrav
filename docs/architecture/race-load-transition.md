@@ -19,6 +19,19 @@ while it is still running:
 | Building the race scene and warming its pipelines | `race-build` (`crate::race_build::BuildWorker`) | `BuildWorker::take`, a poll |
 | Releasing a parked race's GPU resources on `LAUNCH RACE` | `race-drop` (`race_build::drop_off_thread`) | nothing - fire and forget |
 
+**`race-load` uploads textures as it decodes them.** `LAUNCH RACE` hands the
+worker the frame loop's own device and queue as a `race::TextureSink`; the
+thread opens an `oag_render::mesh_render::TextureSinkScope` around `race::load`,
+and every texture an `.rcsmodel` build decodes (Omega, HD, 2048) goes up through
+`Queue::write_texture` at once and is replaced in its `Model` by a
+`Texels::Uploaded` view. The scene on `race-build` then binds those views
+instead of uploading, which is why `race scene built` on Omega Tech De Ra
+dropped from 8.2 s to 0.9 s in a debug build on a software rasteriser (timing
+contended, indicative only): the uploads moved onto `race-load`, behind the
+loading screen's frames. Loading frames stayed responsive: median 55 ms and
+max 98 ms against 71 and 232 ms before, same machine, lavapipe. Memory numbers
+are in [`omega-status.md`](../formats/omega-status.md#what-one-race-costs-in-memory).
+
 `Session::advance_race_build` is the only place the frame loop touches the
 build: on the frame the circuit's load lands it copies what the build reads
 into a `race_build::Request` and spawns the worker, and on every later frame

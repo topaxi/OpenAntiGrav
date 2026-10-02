@@ -24,7 +24,7 @@ use super::{Report, Textures, glass_sheen};
 /// the file authors, and [`blocks`] says exactly when. Decoding those to RGBA8
 /// was costing 4.5x the memory for the same picture.
 pub(super) fn decode_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
-    ModelTexture::from_gtf(label, blob)
+    ModelTexture::from_gtf(label, blob).map(crate::mesh_render::offer_to_texture_sink)
 }
 
 /// One texture slot per material, in material-table order.

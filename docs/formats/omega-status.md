@@ -559,13 +559,70 @@ PSARC readers seek. **(e) refuted as a large item** - the whole circuit's
 geometry is 215 MiB per copy, against 2 GiB of textures; a 2.38M-triangle
 circuit's parse costs about 380 MiB transient.
 
-**What the peak still is.** Every model's textures are decoded before the
-scene builds any of them, so the peak (3,360 MiB) is all of them at once,
-before the first upload frees anything. After the uploads RSS falls to 2,585
-MiB, and that is glibc holding freed pages: with
-`MALLOC_MMAP_THRESHOLD_=1048576` it is 1,167 MiB. Uploading each texture as
-it is decoded would take the peak to about the steady state; it needs the
-model loaders to see a device, which they do not today.
+**What the peak was, and the change that removed it** (`omega-texture-stream`,
+2026-10-02). Every model's textures were decoded before the scene built any of
+them, so the peak (3,360 MiB) was all of them at once; after the uploads RSS
+fell to 2,585 MiB and stayed there because glibc keeps freed pages. A load
+given a device now uploads each texture as it is decoded
+(`race::TextureSink`, `oag_render::mesh_render::TextureSinkScope`,
+`Texels::Uploaded`; the mechanism is in
+[`race-load-transition.md`](../architecture/race-load-transition.md)), so a
+`Model` never holds the blocks and glibc never has them to keep.
+
+Same method, same circuit (Tech De Ra forward, `--race --hold cross --ticks
+300 --screenshot`, debug build, peak from `getrusage`, steady RSS read at the
+last log line; the two builds were run back to back on one machine):
+
+| | before (main `503eb268`) | after |
+| --- | ---: | ---: |
+| **Peak RSS** | **3,417 MiB** | **792 MiB** |
+| RSS at the still, after every upload | 2,650 MiB | 560 MiB |
+| `CPU kept` in the loader's texture line (track, sky, craft) | 2,043 + 236 / 128 / 171 each | 0 |
+| `GPU uploaded` in the same line | unchanged | unchanged (2,043 + 236, 128, 171 each) |
+| Still, `cmp` against the before still | | byte-identical |
+
+The shared RCS path moved too, and draws the same pixels:
+
+| `--race --hold cross --ticks 300 --screenshot`, default circuit | peak before | peak after | still |
+| --- | ---: | ---: | --- |
+| Wipeout HD Fury (`hdfury-ps3-eu-dec.iso`, Dion) | 769 MiB | 667 MiB | byte-identical |
+| Wipeout 2048 (Vita `PCSF00007`, Altima) | 701 MiB | 349 MiB | byte-identical |
+
+What this does not cover, so the numbers are not read wider than they are:
+
+- **Only a caller whose scene is built from the device it loaded through opens
+  the sink**: the menus' `LAUNCH RACE` (the frame loop's own device) and the
+  headless `--race --screenshot` (which now opens its device before the load).
+  The windowed `--race` loads before its window exists, and `--trace-out`,
+  `--dry-run` and the 2048 front-end capture build no scene from that device;
+  those keep every texture on the CPU as before.
+- **The GPU side is not in RSS on this machine** (a discrete adapter). On a
+  software or integrated adapter the uploaded bytes live in the process, and the
+  total there is the GPU column, which this does not shrink.
+- **HD's `sky.gtf` is still decoded on the CPU** (24 MiB kept in the loader
+  line): the sky cube path builds its textures without going through the
+  `.rcsmodel` decode sites the sink is wired into.
+- The flush rule (a submit and a non-blocking poll every 64 MiB uploaded) is
+  **chosen, not measured**; the peak above is with it, and no run without it
+  was taken.
+
+**Single-level `.gnf` textures per circuit.** The `.rcsmodel` loader report now
+carries one clause, `; N .gnf texture(s) kept as BC7 blocks, M decoded to RGBA8
+with a synthesised chain (S single-level, O off the block grid, R refused as
+blocks)`, from `ModelTexture::from_gnf_form`. Over the 27 `environments/*` loads
+that succeed (15 circuits, forwards and reversed where one ships; `zone_3`
+loads to no triangles) and the 10 `environments2048/*` forwards, the textures the
+track model names are all BC7 chains: **0 single-level and 0 off the block grid
+on every circuit**, and 1 refused as blocks that still decodes on `amphiseum`
+and on `modesto_heights`, forward and reversed (the report counts it but does not
+name the file).
+The disc does ship at least 846 single-level `.gnf` files (a scratch census
+over the files `gnf::Texture::parse` accepts - it also rejected a large share
+of the `.gnf` names it was handed, not looked into here), all of which decode: 99 under `environments2048/mall`, 71 `tower`,
+59 `shared`, 135 `art/published`, and the rest front-end and particle art - but
+no circuit's track model names one. Whether the 200 to 690 unresolved draws each
+`environments2048` circuit reports (identical on `main`) are materials that
+name them was not checked.
 
 **A picture difference, and it is the mips.** The still differs from the RGBA8
 one by a mean 0.88 of 255, 0.7% of pixels over 16, at high-contrast edges:

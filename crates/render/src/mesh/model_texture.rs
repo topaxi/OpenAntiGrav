@@ -88,6 +88,87 @@ pub enum Texels {
         format: BlockFormat,
         levels: Vec<Vec<u8>>,
     },
+    /// **Already on the GPU**, uploaded as the texture was decoded by an open
+    /// [`crate::mesh_render::TextureSinkScope`], so the decoded texels never
+    /// sat on the CPU beside every other texture of the circuit.
+    ///
+    /// The race load decodes every texture of every model before the scene
+    /// builds a single `Drawable`; holding them all until then made the peak
+    /// the sum of the whole circuit (Tech De Ra: 2.3 GiB of BC7 blocks).
+    /// [`crate::mesh_render`]'s uploader hands this view back instead of
+    /// uploading, so a model decoded under a sink binds exactly the picture a
+    /// model decoded without one would have uploaded.
+    ///
+    /// **Tied to the device that was open when it was decoded.** The one
+    /// caller that opens a scope builds the scene from the same device.
+    Uploaded {
+        view: wgpu::TextureView,
+        /// What the upload occupies, mip chain included - see
+        /// `mesh_render::texture::gpu_bytes`.
+        gpu_bytes: u64,
+        /// Whether it went up as the disc's own blocks.
+        block_compressed: bool,
+    },
+}
+
+/// Which way a `.gnf` went: kept as the disc's blocks, or one of the three
+/// reasons it was decoded to RGBA8 and given a synthesised chain instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GnfForm {
+    /// A BC7 chain of two levels or more, uploaded as authored.
+    Blocks,
+    /// The file authors one level only, so there is no chain to keep.
+    SingleLevel,
+    /// A base level that is not a whole number of 4x4 blocks, which WebGPU
+    /// refuses for a compressed texture.
+    OffGrid,
+    /// [`oag_texture::gnf::Texture::block_levels`] refused it: a corrupt block
+    /// in a level, or a file that is not one 2D chain.
+    BlocksRefused,
+}
+
+/// How many `.gnf` textures of a build took each [`GnfForm`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GnfCounts {
+    pub blocks: usize,
+    pub single_level: usize,
+    pub off_grid: usize,
+    pub blocks_refused: usize,
+}
+
+impl GnfCounts {
+    /// Counts one decoded `.gnf`.
+    pub fn record(&mut self, form: GnfForm) {
+        match form {
+            GnfForm::Blocks => self.blocks += 1,
+            GnfForm::SingleLevel => self.single_level += 1,
+            GnfForm::OffGrid => self.off_grid += 1,
+            GnfForm::BlocksRefused => self.blocks_refused += 1,
+        }
+    }
+
+    /// The textures that fell back to RGBA8: everything but [`GnfForm::Blocks`].
+    #[must_use]
+    pub const fn fell_back(&self) -> usize {
+        self.single_level + self.off_grid + self.blocks_refused
+    }
+
+    /// One clause for a loader report, empty when the build decoded no `.gnf`.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        if self.blocks + self.fell_back() == 0 {
+            return String::new();
+        }
+        format!(
+            "; {} .gnf texture(s) kept as BC7 blocks, {} decoded to RGBA8 with a synthesised chain \
+             ({} single-level, {} off the block grid, {} refused as blocks)",
+            self.blocks,
+            self.fell_back(),
+            self.single_level,
+            self.off_grid,
+            self.blocks_refused
+        )
+    }
 }
 
 /// A block-compressed texel format, as the disc stores it.
@@ -210,11 +291,25 @@ impl ModelTexture {
     /// refuses draws nothing.
     #[must_use]
     pub fn from_gnf(label: &str, blob: &[u8]) -> Option<Self> {
+        Self::from_gnf_form(label, blob).map(|(texture, _)| texture)
+    }
+
+    /// [`Self::from_gnf`], and which of its four outcomes the file took.
+    ///
+    /// What a loader counts to say how many textures of a circuit fell back to
+    /// RGBA8 with a box-filtered chain, and why - see [`GnfForm`].
+    #[must_use]
+    pub fn from_gnf_form(label: &str, blob: &[u8]) -> Option<(Self, GnfForm)> {
         let parsed = oag_texture::gnf::Texture::parse(blob).ok()?;
-        let blocks = (parsed.width % 4 == 0 && parsed.height % 4 == 0)
-            .then(|| parsed.block_levels(blob).ok())
-            .flatten()
-            .filter(|levels| levels.len() > 1);
+        let (blocks, form) = if parsed.width % 4 != 0 || parsed.height % 4 != 0 {
+            (None, GnfForm::OffGrid)
+        } else {
+            match parsed.block_levels(blob) {
+                Ok(levels) if levels.len() > 1 => (Some(levels), GnfForm::Blocks),
+                Ok(_) => (None, GnfForm::SingleLevel),
+                Err(_) => (None, GnfForm::BlocksRefused),
+            }
+        };
         let texels = match blocks {
             Some(levels) => Texels::Blocks {
                 format: BlockFormat::Bc7,
@@ -222,13 +317,14 @@ impl ModelTexture {
             },
             None => Texels::Rgba8(parsed.decode(blob).ok()?.into_iter().flatten().collect()),
         };
-        Some(Self {
+        let texture = Self {
             label: label.to_string(),
             width: parsed.width,
             height: parsed.height,
             texels,
             mip_count: None,
-        })
+        };
+        Some((texture, form))
     }
 
     /// The disc's own blocks and mip chain, for a texture this can bind
@@ -301,10 +397,12 @@ impl ModelTexture {
             Texels::Rgba8(rgba) => rgba.len() as u64,
             Texels::Chain(levels) => levels.iter().map(|level| level.len() as u64).sum(),
             Texels::Blocks { levels, .. } => levels.iter().map(|level| level.len() as u64).sum(),
+            Texels::Uploaded { .. } => 0,
         }
     }
 
-    /// The base level as RGBA8, or `None` for one still in its blocks.
+    /// The base level as RGBA8, or `None` for one still in its blocks or
+    /// already uploaded.
     ///
     /// For a consumer that reads texels on the CPU rather than binding them and
     /// knows it is holding a decoded one - the HUD's sight sheet is the only
@@ -315,7 +413,7 @@ impl ModelTexture {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(rgba),
             Texels::Chain(levels) => levels.first().map(Vec::as_slice),
-            Texels::Blocks { .. } => None,
+            Texels::Blocks { .. } | Texels::Uploaded { .. } => None,
         }
     }
 
@@ -332,6 +430,7 @@ impl ModelTexture {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(std::borrow::Cow::Borrowed(rgba)),
             Texels::Chain(levels) => levels.first().map(|l| std::borrow::Cow::Borrowed(&l[..])),
+            Texels::Uploaded { .. } => None,
             Texels::Blocks { format, levels } => {
                 let decoded = format.decode_level(levels.first()?, self.width, self.height)?;
                 Some(std::borrow::Cow::Owned(
@@ -354,7 +453,12 @@ impl ModelTexture {
             label: self.label.clone(),
             width: self.width,
             height: self.height,
-            texels: Texels::Rgba8(Vec::new()),
+            // An uploaded texture holds no texels to drop, and its view is the
+            // one thing the uploader still needs from the stub.
+            texels: match &self.texels {
+                Texels::Uploaded { .. } => self.texels.clone(),
+                _ => Texels::Rgba8(Vec::new()),
+            },
             mip_count: self.mip_count,
         }
     }

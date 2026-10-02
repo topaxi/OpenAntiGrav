@@ -35,13 +35,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use super::{Loaded, Options};
+use super::{Loaded, Options, TextureSink};
 
 /// A circuit being read, on a thread.
 ///
 /// Holds no GPU and hands back none: [`super::load`] produces plain data -
 /// vertex and index buffers, handling blocks, a spline - and the device only
 /// enters at `Stage::race`, which runs on the frame thread with the result.
+/// The one exception is an optional [`TextureSink`], which only *receives*
+/// decoded textures.
 /// That is what makes the split cheap rather than a rewrite; see
 /// [`super::Setup`]'s own "no GPU anywhere in sight".
 #[derive(Debug)]
@@ -63,16 +65,31 @@ impl LoadWorker {
     /// `None` where the caller has no name to give, which draws no line rather
     /// than a made-up one.
     #[must_use]
-    pub fn spawn(options: Options, label: Option<String>) -> Self {
-        Self::spawn_with(label, move || super::load(&options))
+    ///
+    /// `sink` is the device the scene will be built from, where the caller has
+    /// one: every texture is then uploaded as it is decoded instead of being
+    /// held for the scene - see [`super::TextureSink`].
+    pub fn spawn(options: Options, label: Option<String>, sink: Option<TextureSink>) -> Self {
+        Self::spawn_with(label, move || {
+            let _scope = TextureSink::open_if(sink.as_ref());
+            super::load(&options)
+        })
     }
 
     /// [`Self::spawn`] for a Wipeout 2048 campaign event, resolved on the
     /// thread through [`super::load_event`] - the same overlay `--event`
     /// applies, reached from the front end's own map.
     #[must_use]
-    pub fn spawn_event(options: Options, event: String, label: Option<String>) -> Self {
-        Self::spawn_with(label, move || super::load_event(&options, &event))
+    pub fn spawn_event(
+        options: Options,
+        event: String,
+        label: Option<String>,
+        sink: Option<TextureSink>,
+    ) -> Self {
+        Self::spawn_with(label, move || {
+            let _scope = TextureSink::open_if(sink.as_ref());
+            super::load_event(&options, &event)
+        })
     }
 
     fn spawn_with(
