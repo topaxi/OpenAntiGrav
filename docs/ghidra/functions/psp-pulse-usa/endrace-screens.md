@@ -709,12 +709,32 @@ Image_NormalizeUv(bar)     # 0x088a68ec  UVs /= texture size, flag +0xd0 = 1; +0
   with no brighter column anywhere. The earlier note that the reference showed the "whole
   bar lit" mistook that background for fill.
 
-Confidence **88** for the width law: decompile at two independent call sites plus the
-`100000` -> `124` coincidence plus the reference frame at one point. **The live evidence
-is a single point near zero**, which rules the fraction reading out (it would be ~11
-pixels at 90) but does not pin the slope; a PPSSPP memory poke of the team record's `+8`
-(the `FUN_08808664(DAT_08b31774, ...)` result) to `50000` on this screen, expecting a
-62 px bright fill, would take it into the 90s. Not run this pass.
+Confidence **88** for the width law from the decompile and the one point near zero;
+**raised to 93 on 2026-10-02 (`pulse-cursor-live`)** by two live points on the slope, below.
+
+### The slope, measured at two totals (2026-10-02, `pulse-cursor-live`)
+
+PPSSPP v1.20.4, `pulse-psp-usa.chd`, Xvfb, a campaign Time Trial (`grid0_3_2`, Assegai) finished with the game's own
+autopilot pickup (`psp-postrace.py`'s method: fire word `|= 0x1000`, countdown `record+0x148` raised) and
+`g_race_laps` written to 1 to shorten it. A breakpoint at `Loyalty_AccumulateTotal` (`0x08807884`) wrote the team
+record's `+8` (`a0 + 8`; it read 0 on the first race and 50080 on the second) to a chosen value just before the
+award is added, so the screen reads `chosen + award` (the award read 80 at the hit, from `a1`; it was not decomposed).
+`EndRace Results` was then stepped through with `Cross`, and `EndRace Rewards` captured at 960x544.
+
+| Poked, then total shown | Predicted fill | Bright fill measured (row y=241, runs brighter than 200) | Our render, same total |
+| --- | --- | --- | --- |
+| 50080 (`Total loyalty: 50080`) | 62.1 px = 124.2 screen px | 681..803, ten full segments and the 11th cut after 3 px: **123 px** | 680..803, the same cut: **123-124 px** |
+| 20080 (`Total loyalty: 20080`) | 24.9 px = 49.8 screen px | 681..729, four full segments and a 1 px sliver: **49 px** | not rendered |
+
+Both land within one screen pixel of `total * 0.00124` PSP pixels (the second point's slope against the first,
+`(123 - 49) / 30000 = 0.00247` screen px per point, is `0.00123` PSP px). The bar is cropped, not squashed: the
+11th segment is cut mid-bar and the segment pitch is unchanged. Our render comes from `--menu-page
+endrace-rewards-gold` with the page's hardcoded award and total temporarily set to 80 and 50080 (not committed), laid
+next to the capture: ten full segments and a half-cut 11th in both, the same edge to within a pixel
+(`data/scratch/pulse-cursor-live/bar-compare-50080.png`). Preconditions that are pokes, not the game's own path: the
+record's `+8` was written, and `g_race_laps` was shortened; the displayed total therefore says nothing about earning
+50000 points. Each point was seen once (one race each). Confidence **93**
+for the width law and slope (a runtime trace, one binary); the pre-ticker visibility below is still unchased.
 
 Visible bit: `loyaltybar`, `loyaltybg` and `loyaltynum` get `+0x2c |= 4` only inside the
 end-of-ticker branch (`cycle == reasonCount`), so the original probably keeps them hidden

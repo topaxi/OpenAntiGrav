@@ -244,7 +244,7 @@ names), and a live campaign race that earned bronze -
 | Loyalty award/total, `SingleRace`/`Zone`/`Eliminator` branches | Decompiled, **not independently live-verified** | same page's own "Still open"; drawn under the same law regardless |
 | `SingleRace`'s own difficulty multiplier | **Never applied** (`multiplier` fixed at `1`) | this project's `[ai] difficulty` (4 tiers) has no honest mapping to the original's campaign-cell `easy`/`medium`/`hard` (3 tiers, `AI_ResolveSkillScale`, unimplemented) - see `crate::race_stage::endrace::loyalty_award`'s own doc |
 | "Perfect lap"/"perfect zone" counts feeding the award | **Always `0`** | this project keeps no running tally for either - see [Open](#open) |
-| `loyaltybar`'s own fill width | Measured, confidence 88: `total * 0.00124` pixels, cropped (width and U extent together); live point only near zero | [The loyalty bar](#the-loyalty-bar-is-pixels-not-a-fraction) |
+| `loyaltybar`'s own fill width | Measured, confidence 93: `total * 0.00124` pixels, cropped (width and U extent together); live points at 90, 20080 and 50080 | [The loyalty bar](#the-loyalty-bar-is-pixels-not-a-fraction) |
 | A confirm anywhere on `Results`/`Rewards` advances | Matches the disc's own `ContinueButton`/cross-or-start reading | `docs/formats/endrace-screens.md` |
 | `RETURN TO GRID` re-launches through the existing campaign session flow, not a parallel path | Chosen, reusing `oag_game::campaign`/`Session::open_campaign`/`CellSelection::select_by_name` | this project's own "don't fork it" convention |
 
@@ -308,9 +308,13 @@ width to `total * 0.00124` (a crop, where the old code narrowed the rectangle an
 the whole 124-texel window in it, squashing all twenty segments into a few pixels).
 `--menu-page endrace-rewards` at total `90` now reads ~126 on every segment along the
 bar, against the reference's ~130, with no bright column. A unit test pins the slope
-at `90`, `50000` and `100000`. **Confidence 88**; the only live point is near zero, so
-a PPSSPP poke of the team record's `+8` to `50000` (expect a 62 px bright fill) is the
-step that would settle the slope. **Also unchased:** the original sets the bar, its
+at `90`, `50000` and `100000`. **Confidence 88, raised to 93 on 2026-10-02
+(`pulse-cursor-live`)**: a PPSSPP poke of the team record's `+8` gave totals of 50080 and
+20080 on the real `EndRace Rewards`, and the bright fill measured 123 and 49 screen pixels
+against the predicted 124.2 and 49.8 (within one pixel), cropped mid-segment exactly as
+ours is at 50080 - see [the decompile page's
+measurement](../ghidra/functions/psp-pulse-usa/endrace-screens.md#the-slope-measured-at-two-totals-2026-10-02-pulse-cursor-live).
+No code change was needed. **Also unchased:** the original sets the bar, its
 background and `loyaltynum` visible only once the ticker finishes, this build draws
 them from the first frame.
 
