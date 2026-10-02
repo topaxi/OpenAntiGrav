@@ -1224,3 +1224,11 @@
 0x088f184c	function	Weather_Construct	82	placed-particle-systems.md
 0x088f1e58	function	Weather_Update	70	placed-particle-systems.md
 0x08a6ed04	function	Weather_Tag	75	placed-particle-systems.md
+0x0892c528	function	WeatherPos_Init	85	weather.md
+0x0887866c	function	Section_IsCovered	85	weather.md
+0x08878644	function	Camera_PublishSection	80	weather.md
+0x088f1570	function	Weather_UpdateWind	85	weather.md
+0x088fb11c	function	Modifier_WrapBox	80	weather.md
+0x088fbcec	function	ParticleSystem_EmitRect	85	weather.md
+0x088f2918	function	Perlin_Noise1	85	weather.md
+0x088f2aa4	function	Perlin_Fractal	85	weather.md

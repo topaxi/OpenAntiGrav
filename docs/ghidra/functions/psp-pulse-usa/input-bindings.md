@@ -630,6 +630,16 @@ The other side of the same `if` is the release event that
 | grounded -> airborne | `!(craft+0x1c0 & 1)` and `craft+0x860 & 0x200` | `0x08846ab4`-`0x08846ac8` clear both arm bits `0x80`/`0x100` |
 | airborne -> grounded | `craft+0x1c0 & 1` and `!(craft+0x860 & 0x200)` | if armed and `|craft+0x87c| > 0.5`, set the payout timer `+0x898`; then clear both arm bits |
 
+**The payout is once per arm (fixed in the port 2026-10-03).** The landing's
+`|craft+0x87c| > 0.5` test sits inside the "armed" test, and the landing clears
+both arm bits whether or not it paid. `+0x87c` itself is not reset there: it runs
+on to `+/-1.0` and stays until the next completed alternation writes `0.0`. The
+port had gated on the phase alone, so every later landing paid again (maintainer
+report from play: on a wavy track, "insane boosts"); `ShipState::roll_armed` is
+now the arm-bit pair. The grounded-to-airborne clear is omitted because an armed
+roll cannot exist on the ground (the tap history is zeroed there), so it would
+clear nothing. Static read, confidence 85; no live leg.
+
 `craft+0x860 & 0x200` is this function's own copy of last call's contact bit,
 written at `0x08847220`-`0x08847240` at the tail. So the release is the
 **landing**, which is what the port already had, and it now rests on a reading

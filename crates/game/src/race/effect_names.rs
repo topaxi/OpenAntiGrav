@@ -390,3 +390,19 @@ pub const BLUE_WELDER_EFFECT: &str = "WO_BLUE_WELDER";
 /// explain it. Same placement mechanism and evidence as
 /// [`BLUE_WELDER_EFFECT`]; Outpost 7's eighteen loads were caught live too.
 pub const MODESTO_STEAM_EFFECT: &str = "WO_MODESTO_STEAM_A";
+
+/// Fort Gale's rain, its `<Weather EnvPsys>`.
+///
+/// **Recovered, confidence 80, played by `race::scenery_fx::weather`.** The
+/// trigger is `Weather_Construct` (`0x088f184c`) off the circuit's
+/// `TrackStartup`; the name here is only for [`super::RACE_EFFECTS`]'s loader,
+/// the circuit's own XML names the effect it plays. See
+/// `docs/ghidra/functions/psp-pulse-usa/weather.md`.
+pub const RAIN_EFFECT: &str = "WO_RAIN";
+
+/// Fort Gale's raindrops on the glass, its `<Weather ScreenPsys>`; same footing as
+/// [`RAIN_EFFECT`], played by `race::scenery_fx::lens`.
+pub const RAIN_LENS_EFFECT: &str = "WO_RAIN_LENS";
+
+/// Outpost 7's snow, its `<Weather EnvPsys>`; same footing as [`RAIN_EFFECT`].
+pub const SNOW_EFFECT: &str = "WO_SNOW";

@@ -279,7 +279,7 @@ impl Billboard {
 }
 
 /// A circuit's startup manifest.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct TrackStartup {
     /// `<LoadSoundBank Filename="...">`, relative to the circuit's directory.
     pub sound_bank: Option<String>,
@@ -287,6 +287,8 @@ pub struct TrackStartup {
     pub underwater_sound: Option<u32>,
     /// `<LevelFx><WindSound type="N">`.
     pub wind_sound: Option<u32>,
+    /// `<LevelFx><Weather>`, on the two circuits that author one.
+    pub weather: Option<Weather>,
     /// Every `<Billboard>`, in document order.
     pub billboards: Vec<Billboard>,
 }
@@ -323,6 +325,7 @@ impl TrackStartup {
                 }
                 "underwatersound" => out.underwater_sound = element.attr("type").and_then(number),
                 "windsound" => out.wind_sound = element.attr("type").and_then(number),
+                "weather" => out.weather = Some(Weather::from_element(element)),
                 "billboard" => {
                     let Some(num) = element.attr("num").and_then(number) else {
                         continue;
@@ -403,6 +406,9 @@ fn entry_name(location: &str) -> String {
         location.trim_start_matches(['/', '\\']).replace('\\', "/")
     )
 }
+
+mod weather;
+pub use weather::{Weather, effect_name};
 
 #[cfg(test)]
 mod tests;

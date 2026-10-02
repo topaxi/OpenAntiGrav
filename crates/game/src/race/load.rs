@@ -887,7 +887,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .map(|livery| livery.collision_fx.iter().map(|a| a.position).collect())
                 .collect(),
             collision_fx,
-            scenery_fx: Vec::new(),
+            scenery_fx: Default::default(),
             effects,
             sounds,
             track_emitters,
@@ -960,7 +960,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if !(pulse_psp && options.track_shine) {
         loaded.track_model.shine_draws.clear();
     }
-    pulse_psp::finish(&mut loaded, pulse_psp, &track_blob);
+    pulse_psp::finish(&mut loaded, pulse_psp, &track_blob, (&mut archives, &track));
     pulse_ps2::finish(
         &mut loaded,
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),

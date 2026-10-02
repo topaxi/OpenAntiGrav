@@ -110,6 +110,7 @@ pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
 pub use repeating::Playing;
 pub use track::TrackEmitters;
+pub(crate) use track::circuit_manifest;
 use travel::TravelVoices;
 
 /// The seed the effects generator starts from.

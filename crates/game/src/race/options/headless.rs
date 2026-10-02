@@ -110,7 +110,7 @@ impl Setup {
             spu_vertex_lights: true,
             spark_anchors: Vec::new(),
             collision_fx: Vec::new(),
-            scenery_fx: Vec::new(),
+            scenery_fx: Default::default(),
             effects: psys::Library::default(),
             sounds: crate::audio::sfx::Banks::default(),
             track_emitters: crate::audio::sfx::TrackEmitters::default(),

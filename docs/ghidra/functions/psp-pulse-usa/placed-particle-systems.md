@@ -147,19 +147,14 @@ data\psys\WO_RAIN.POB`, `ScreenPsys = data\psys\WO_RAIN_LENS.POB`, `WindSound`).
 
 Gates read in `TrackStartup_Parse`: the `LevelFx` block is skipped when
 `g_display+0x5dec` is set, and the weather node is not built in Zone
-(`g_game_mode == 6`). **Not wired**: the trigger is read, but what the player
-sees depends on the camera-relative frame, the inside/outside switch and the
-wind, none of which this engine models yet. What `weatherPos` (`0x3da`) nodes do
-is still open; they carry no attributes, so they do not name an effect.
+(`g_game_mode == 6`). **Wired 2026-10-02**, see [weather.md](weather.md): the camera-relative frame, the covered/open switch and the wind are ported. `weatherPos` nodes carry no attributes and name no effect, but they are the anchors the weather sits at under cover.
 
 ## Open
 
 - **The welder's sparks are streaks in ours, dots in the original**, and its
   white core reads weaker. The emitter is render class `Streak` (`Capped`); read
   the streak length law against a live particle.
-- **The weather** (section above): port `Weather_Update`'s camera-relative frame,
-  inside/outside switch and wind, then play `WO_RAIN`/`WO_RAIN_LENS` on Fort Gale
-  and `WO_SNOW` on Outpost 7.
+- **The weather** is ported; its open items (mist overlay, Outpost 7's snow draw) are in [weather.md](weather.md).
 - **Culling.** Whether the draw slot (`0x08915fd0`) skips a node outside the
   visible sections is unread; ours draws every placed effect.
 - **The emitter frame's rotation about `+Y`.** The original hands the instance
