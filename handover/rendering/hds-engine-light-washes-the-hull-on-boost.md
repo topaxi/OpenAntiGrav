@@ -113,13 +113,16 @@ the light than ours.
   flare locator). Full survey and the reasoning: renderer.md, "Candidate 1
   ... is closed ... candidate 2 ... gets a disc-verified, per-ship
   mechanism" (2026-09-25, later still).
-- **What is still open**: whether the *original's* `Distance = 0.0` ships
-  (`assegai`, `harimau`, `ag_systems`, `triakis`) also wash at boost. No
-  live capture of one of them boosted exists on either side yet -
-  `bp-081.png` is Piranha, `Distance = 0.4`. If the original washes there
-  too, this is correct per-ship behaviour and the thread closes with no
-  code change. If it does not, the vertex-side hull geometry (panel
-  distances against `D`, not the blend or the space) is what is left.
+- **Answered 2026-10-02: the original's `Distance = 0.0` hulls do not wash.**
+  Live on RPCS3, the player's own light read boosted (`(36, 90, 360)`) and the
+  hull clean, on `Assegai` and `Harimau` (team read from memory, not the
+  screen); falsifier met, so "our wash is correct per ship" is **false** and
+  the `Distance` correlation is not the original's behaviour. Method, the
+  trap of picking the player's light out of the visible list, and the frames:
+  renderer.md, "The original does not wash a `Distance = 0.0` hull at the
+  boost snap" (confidence 75, one verified boot per ship). The paired frame of
+  ours is **not** at the same stretch of track (sunlit, a pale spine already at
+  rest), so the evidence of our wash is a same-place on/off A/B of the craft's light term, now on the classic `assegai` (tick 295: spine and wing go flat white, tick 220 mild) as well as `assegai_n1`.
 - **Candidate 3's clamp reading, not measured.** The `SVC1` vertex program
   decodes into `o[TC0]`, a texcoord output, not `o[COL0]`/`o[COL1]` - RSX
   colour-output clamping would not apply there, consistent with
@@ -130,20 +133,24 @@ the light than ours.
 
 ## Next Steps
 
-1. A live RPCS3 capture of a `Distance = 0.0` team (`assegai`, `harimau`,
-   `ag_systems` or `triakis`) boosted at player size, the way `bp-081.png`
-   caught Piranha. `data/scratch/hd-svc1-bit/drive.py` already reads the
-   player's hull record and the visible SPU light list at the same
-   breakpoint a screenshot is taken on (`hits.jsonl`'s `"lights"` field on
-   `BP_TAKEN_PASS` hits), so one run gets both halves at once.
-2. If that hull washes on the original too: close this thread, no code
-   change - name the per-ship split as correct in the light term's own doc
-   comment.
-3. If it does not: measure the hull's own panel-to-anchor distances
-   against `D` on a `Distance = 0.0` ship, the way
-   `hd_engine_light_reach_probe.rs` already does for the track floor.
+1. Read the per-vertex weight in `EdgeGeom` (`0x007f6d80`,
+   `data/extracted/ps3/spu-jobs/edgegeom-0x007f6d80.dis`) for what it does with
+   a hull chunk: the space `|d|` is taken in against `D`, where the normal for
+   `N.L` comes from, and which lights the hull's stream is built from. Each is
+   a candidate for why the original's panels beside the nozzle get weight zero
+   at a `360` light; none is measured.
+2. Identify the record every `0x003eb368` stop carried (`0xca6e90` on one boot)
+   as the player's hull or not: the model-pointer read in the drive script's
+   `snapshot` (`model + 0x204c`) failed on this binary, so it was not read.
+3. A same-place original/ours pair: drive our craft onto the Talon's Junction
+   pad (the original's player light at `(-237, -74, 55)` on the pad; our trace
+   frame did not line up with the light list's, so the pad location in our
+   coordinates is still to find) so the paired frame stops being confounded by
+   lighting. The on/off A/B on our side exists; this is the other half.
+4. Second verified boots for `Assegai` and `Harimau` (the extra attempts missed
+   the pad; the player's boost depends on the line taken).
 
-What would falsify "this is correct behaviour": the original's `Distance =
-0.0` ships do not wash at boost. What would falsify "the geometry itself is
-wrong": the hull's own panels already sit outside `D` of the anchor on
-paper, so a working formula would not wash them either.
+What would falsify "the original's hull has weight zero here": a frame of the
+original, player's own light at `360`, with the rear panels flat white. What
+would name the law: the `EdgeGeom` read in step 1 reproducing the clean hull
+from the captured light record and the hull's own vertices.
