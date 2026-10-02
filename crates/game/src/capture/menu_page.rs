@@ -666,23 +666,41 @@ pub(super) fn picker_page(
             grid_columns = columns;
             (entries, previews)
         }
-        Kind::Ship => teams
-            .iter()
-            .map(|team| {
-                // The same axis rule the live screen applies - see
-                // `session::picker::open_ship_picker`: the team's own skins
-                // where it declares any, the title's variants otherwise.
-                let variants: Vec<(String, String)> =
-                    if !team.skins.is_empty() {
+        Kind::Ship => {
+            let gates = crate::unlock::gates_variants(title.name);
+            let saved = if gates {
+                crate::records::load()
+            } else {
+                crate::records::Store::default()
+            };
+            teams
+                .iter()
+                .map(|team| {
+                    // The same axis rule the live screen applies - see
+                    // `session::picker::open_ship_picker`: the team's own skins
+                    // where it declares any, the title's variants otherwise.
+                    let variants: Vec<(String, String)> = if !team.skins.is_empty() {
                         std::iter::once((
                             String::new(),
                             strings
                                 .get_or_id(crate::catalogue::BASELINE_SKIN)
                                 .to_string(),
                         ))
-                        .chain(team.skins.iter().map(|skin| {
-                            (skin.name.clone(), strings.get_or_id(&skin.name).to_string())
-                        }))
+                        .chain(
+                            team.skins
+                                .iter()
+                                .filter(|skin| {
+                                    !gates
+                                        || crate::unlock::loyalty_unlocked(
+                                            &skin.unlock,
+                                            &saved,
+                                            title.name,
+                                        )
+                                })
+                                .map(|skin| {
+                                    (skin.name.clone(), strings.get_or_id(&skin.name).to_string())
+                                }),
+                        )
                         .collect()
                     } else if let Some(team_variants) = title.race.team_variants_for(&team.id) {
                         team_variants
@@ -699,26 +717,28 @@ pub(super) fn picker_page(
                             .map(|variant| (variant.stem.to_string(), variant.label.to_string()))
                             .collect()
                     };
-                let stats = team.variant_stats(variants.iter().map(|(id, _)| id.as_str()));
-                (
-                    Entry {
-                        id: team.id.clone(),
-                        label: team.label(strings).to_string(),
-                        details: Details::Ship {
-                            rating: team.rating.map(|rating| oag_ui::picker::Rating {
-                                speed: rating.speed,
-                                thrust: rating.thrust,
-                                handling: rating.handling,
-                                shield: rating.shield,
-                            }),
-                            variants,
-                            stats,
+                    let stats = team.variant_stats(variants.iter().map(|(id, _)| id.as_str()));
+                    (
+                        Entry {
+                            id: team.id.clone(),
+                            label: team.label(strings).to_string(),
+                            details: Details::Ship {
+                                loyalty: gates.then(|| saved.loyalty_total(title.name, &team.id)),
+                                rating: team.rating.map(|rating| oag_ui::picker::Rating {
+                                    speed: rating.speed,
+                                    thrust: rating.thrust,
+                                    handling: rating.handling,
+                                    shield: rating.shield,
+                                }),
+                                variants,
+                                stats,
+                            },
                         },
-                    },
-                    format!(r"{}\ship_FE.vex", team.location),
-                )
-            })
-            .unzip(),
+                        format!(r"{}\ship_FE.vex", team.location),
+                    )
+                })
+                .unzip()
+        }
     };
     let skinned = teams
         .iter()

@@ -425,6 +425,25 @@ pub struct Team {
     /// `8/8.5/10/8`). Empty on Pulse and Pure, whose `PI_TeamModel`s author
     /// no `<FE>` and whose ratings are [`Self::rating`]. See [`TeamModel`].
     pub models: Vec<TeamModel>,
+    /// The `<Unlock>` rows of every `PI_TeamModel` that names a hull file,
+    /// keyed by its `Values location` stem (`extra` for Concept, `zone01` for
+    /// Zone). Empty rows for a model that authors none. Not the same list as
+    /// [`Self::models`], which holds only HD's `<FE>`-carrying models.
+    pub hull_unlocks: Vec<(String, Vec<LoyaltyRow>)>,
+}
+
+/// One `<Unlock Team=".." loyalty=".." Exclusive="..">` row of a craft
+/// variant - the only shape a `PI_ModelSkin`/`PI_TeamModel` carries on Pulse.
+/// How rows combine is `crate::unlock::loyalty_unlocked`'s, read off
+/// `Definition_IsUnlocked`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoyaltyRow {
+    /// The team whose running total is compared, or `any` for "any team's".
+    pub team: String,
+    /// The total that team needs; `0` for a row naming none.
+    pub loyalty: u32,
+    /// `Exclusive`: this row alone suffices, rather than being ANDed.
+    pub exclusive: bool,
 }
 
 /// One `PI_TeamModel` that authors its own front-end ratings - see
@@ -488,6 +507,9 @@ pub struct ModelSkin {
     /// and `crate::livery`'s module docs both record. Nothing may `format!`
     /// this path out of a team id.
     pub location: String,
+    /// The skin's `<Unlock>` rows, in file order. Empty for a skin that
+    /// authors none, which is then always offered.
+    pub unlock: Vec<LoyaltyRow>,
 }
 
 impl Team {
@@ -582,6 +604,7 @@ fn read_team(node: &Node) -> Option<Team> {
         skins: read_skins(node),
         rating: read_rating(node),
         models: read_models(node),
+        hull_unlocks: read_hull_unlocks(node),
     })
 }
 
@@ -703,7 +726,34 @@ fn read_skins(team: &Node) -> Vec<ModelSkin> {
                     .next()?
                     .attr("location")?
                     .to_string(),
+                unlock: read_unlock_rows(skin),
             })
+        })
+        .collect()
+}
+
+/// The `<Unlock>` children of `node` as [`LoyaltyRow`]s, in file order.
+fn read_unlock_rows(node: &Node) -> Vec<LoyaltyRow> {
+    node.children_named("Unlock")
+        .map(|row| LoyaltyRow {
+            team: row.attr("Team").unwrap_or_default().to_string(),
+            loyalty: row
+                .attr("loyalty")
+                .and_then(|value| value.trim().parse().ok())
+                .unwrap_or(0),
+            exclusive: row
+                .attr("Exclusive")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true") || v == "1"),
+        })
+        .collect()
+}
+
+/// Every `PI_TeamModel`'s hull-file stem with its unlock rows.
+fn read_hull_unlocks(team: &Node) -> Vec<(String, Vec<LoyaltyRow>)> {
+    team.children_named("PI_TeamModel")
+        .filter_map(|model| {
+            let stem = model.children_named("Values").next()?.attr("location")?;
+            Some((stem.to_string(), read_unlock_rows(model)))
         })
         .collect()
 }

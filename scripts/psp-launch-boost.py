@@ -74,6 +74,9 @@ def main():
     parser.add_argument("--drop-at", type=int, default=None,
                         help="at this many rows after state 1, move the craft 400 units down, "
                         "to provoke a respawn and watch whether the boost window runs again")
+    parser.add_argument("--game-mode", type=int, default=None,
+                        help="write g_game_mode (0x08b31048) at every racing frame after the restart's load, to run a Zone "
+                        "engine (6) in a race the menu would not let this profile start")
     parser.add_argument("--max-rows", type=int, default=2400)
     parser.add_argument("--timeout", type=float, default=90.0)
     args = parser.parse_args()
@@ -87,6 +90,10 @@ def main():
     try:
         restart(dbg, args.hold)
         for _, _ in dbg.each_hit(WEAPONS_DISPATCH_FIRE, 100000, timeout=args.timeout):
+            if args.game_mode is not None:
+                # Written at the first racing frame: a restart that loads under the
+                # Zone mode never finishes loading on a profile that cannot pick Zone.
+                dbg.write_u32(0x08B31048, args.game_mode)
             manager = dbg.read_u32(RACE_MANAGER)
             if not ram(manager):
                 continue
@@ -118,6 +125,9 @@ def main():
                 "state": c[0x2A4 // 4],
                 "flags": c[0x1C0 // 4],
                 "mul294": cf(0x294),
+                "zone_28c": c[0x28C // 4],
+                "game_mode": dbg.read_u32(0x08B31048),
+                "autospeed": [dbg.read_f32(0x08B36BE0), dbg.read_f32(0x08B36BE4)],
                 "edge_2d5": c[0x2D4 // 4] >> 8 & 0xFF,
                 "latch_2d4": c[0x2D4 // 4] & 0xFF,
                 "air_2d8": cf(0x2D8),

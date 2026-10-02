@@ -758,7 +758,7 @@
 0x088ee2f8	function	TrackSelection_ApplySelection	80	race-box-screens.md
 0x088ed6cc	function	TrackSelection_OnExit	80	race-box-screens.md
 0x088ed4f4	function	TrackSelection_Destruct	72	race-box-screens.md
-0x0888e29c	function	Definition_IsUnlocked	72	race-box-screens.md
+0x0888e29c	function	Definition_IsUnlocked	88	race-box-screens.md
 0x088e9c00	function	TeamSelection_OnEnter	72	race-box-screens.md
 0x088eab14	function	TeamSelection_Update	78	race-box-screens.md
 0x088e9e5c	function	TeamSelection_OnExit	74	race-box-screens.md
@@ -1212,3 +1212,4 @@
 0x0883170c	function	CageEffect_Construct	75	collision-cage.md
 0x08832b0c	function	CageEffect_Spawn	58	collision-cage.md
 0x08ab0c88	data	g_cage_effect	80	collision-cage.md
+0x088c3f7c	function	TrackDefinition_ReadXml	78	zone-start.md

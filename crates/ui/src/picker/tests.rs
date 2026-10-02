@@ -96,6 +96,7 @@ fn left_and_right_move_the_livery_only_when_there_is_one_to_move_to() {
         id: id.to_string(),
         label: id.to_uppercase(),
         details: Details::Ship {
+            loyalty: None,
             rating: None,
             variants,
             stats: Vec::new(),
@@ -507,6 +508,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             id: "Feisar".into(),
             label: "FEISAR".into(),
             details: Details::Ship {
+                loyalty: None,
                 rating: None,
                 variants: Vec::new(),
                 stats: Vec::new(),
@@ -516,6 +518,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             id: "Qirex".into(),
             label: "QIREX".into(),
             details: Details::Ship {
+                loyalty: None,
                 rating: None,
                 variants: Vec::new(),
                 stats: Vec::new(),
@@ -525,6 +528,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             id: "Auricom".into(),
             label: "AURICOM".into(),
             details: Details::Ship {
+                loyalty: None,
                 rating: None,
                 variants: Vec::new(),
                 stats: Vec::new(),
@@ -720,6 +724,7 @@ fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
             id: (*id).into(),
             label: id.to_uppercase(),
             details: Details::Ship {
+                loyalty: None,
                 rating: None,
                 variants: Vec::new(),
                 stats: Vec::new(),
@@ -787,6 +792,7 @@ fn the_wheel_steps_the_entry_and_livery_arrows_step_the_livery() {
         id: id.to_string(),
         label: id.to_uppercase(),
         details: Details::Ship {
+            loyalty: None,
             rating: None,
             variants,
             stats: Vec::new(),
@@ -858,6 +864,7 @@ fn a_team_step_keeps_the_model_row_only_on_the_across_layout() {
         id: id.to_string(),
         label: id.to_uppercase(),
         details: Details::Ship {
+            loyalty: None,
             rating: None,
             variants: vec![
                 ("".into(), "HD".into()),

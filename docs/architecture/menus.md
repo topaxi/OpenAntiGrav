@@ -118,7 +118,7 @@ twenty-four, and no amount of path arithmetic recovers the difference. The
 settings file stores the plugin id and only the source can say which `.vex` that
 id loads.
 
-## Unlocks: Pulse's circuits gate, craft variants do not yet
+## Unlocks: Pulse's circuits and craft variants gate
 
 **Circuits (Pulse): gated, since 2026-10-02.** A profile now exists
 (`records.toml` keeps campaign medals and per-team loyalty), so Pulse's Track
@@ -130,12 +130,15 @@ developer and capture escape. The original's mode-gated per-track byte
 (`+0x16e`) is not modelled and stays open. Every other title's race box still
 offers everything: Pure authors no `<Unlock>`, HD and Omega are not wired.
 
-**Craft variants: still ungated, deliberately.** Earning loyalty is recovered
-and kept (`Race_ComputeLoyaltyAward`, `records::Store::record_loyalty`), but
-what `Team="any"` means beside an own-team row, and how two `Exclusive` rows
-combine, is in `Definition_IsUnlocked`'s untraced predicates. Gating on a
-guess would be an invention, so RACE and RACE REMIX still offer every variant
-and the Loyalty bar is not drawn.
+**Craft variants (Pulse): gated, since 2026-10-02.** Each `PI_ModelSkin` and
+`PI_TeamModel` carries an own-team and a `Team="any"` `Exclusive` loyalty row;
+`Definition_IsUnlocked` ORs them, and `any` is met by the best single team's
+total, not the sum (`race-box-screens.md`, "Traced 2026-10-02"). Team
+Selection's livery row therefore offers `Classic` plus only the skins the
+profile's loyalty has earned, a locked one **absent** as in the original
+(`oag_game::unlock::loyalty_unlocked`), and the RACE page's VARIANT row drops
+`Concept` the same way (`gated_variant_choices`). `--unlock-all` lifts both.
+RACE REMIX's craft-side variant row is still ungated.
 
 ### What the originals actually do, because the contrast is the point
 

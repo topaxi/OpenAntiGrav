@@ -20,9 +20,11 @@ pub(super) fn body(
 ) -> Vec<Draw> {
     let mut out = Vec::new();
     let screen = &layout.screen;
-    // The loyalty block - its title row and its bar row - is left out
-    // whole: nothing here keeps the counter it would show. Both rows are
-    // found by their named widget and everything sharing that row goes.
+    // The loyalty block - its title row and its bar row - is drawn only for
+    // a team that carries a running total ([`Details::Ship::loyalty`]); a
+    // title that keeps none leaves it out whole, since an empty bar would
+    // read as a loyalty of zero. Both rows are found by their named widget
+    // and everything sharing that row goes.
     let loyalty = screen
         .images
         .iter()
@@ -52,11 +54,15 @@ pub(super) fn body(
         Some(Details::Ship { rating, .. }) => *rating,
         _ => None,
     };
+    let loyalty_total = match picker.selected().map(|entry| &entry.details) {
+        Some(Details::Ship { loyalty, .. }) => *loyalty,
+        _ => None,
+    };
     let variants = picker.variants().len();
     for image in &screen.images {
         // The loyalty bar and its own dim backing share a rect; neither is
-        // drawn, since nothing here keeps the counter it would show.
-        if on_loyalty_row(image.y) {
+        // drawn when there is no counter to show.
+        if loyalty_total.is_none() && on_loyalty_row(image.y) {
             continue;
         }
         let Some(placed) = sprites(&image.src) else {
@@ -66,6 +72,12 @@ pub(super) fn body(
         let mut color = argb_to_rgba(image.color);
         color[3] *= fade_in(image.transition, picker.seconds());
         match image.name.as_deref() {
+            Some("Loyalty Bar") => {
+                let (Some(total), Some(width)) = (loyalty_total, image.width) else {
+                    continue;
+                };
+                fraction = loyalty_bar_pixels(total) / width.max(1.0);
+            }
             Some(name) if name.ends_with(" Bar") => {
                 let Some(rating) = rating else { continue };
                 let stat = name.trim_end_matches(" Bar");
@@ -147,7 +159,7 @@ pub(super) fn body(
         Kind::Ship => vec![entry.label.clone()],
     };
     for text in &screen.texts {
-        if on_loyalty_row(text.y) {
+        if loyalty_total.is_none() && on_loyalty_row(text.y) {
             continue;
         }
         // The title is chrome - see [`Layout::read`] - not a body widget.
@@ -192,7 +204,8 @@ pub(super) fn body(
             // Only ever shown for a forced or suggested craft, and for a
             // team with nothing to cycle - neither of which this build has
             // a rule for yet.
-            "skin fixed" | "Suggest" | "Loyalty" => None,
+            "skin fixed" | "Suggest" => None,
+            "Loyalty" => loyalty_total.map(|total| total.to_string()),
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
@@ -244,6 +257,18 @@ pub(super) fn body(
         ));
     }
     out
+}
+
+/// The loyalty bar's drawn width in pixels, `FEScreen_SetStatBar`'s own
+/// `(scale * min(value, max)) / max` in integer arithmetic with `scale` 150
+/// and `max` 100000 (`TeamSelection_Update`'s call for `Loyalty`): whole
+/// pixels, rounded down. The widget authors 148, so a full bar is two
+/// pixels wider than its rect, as the original sets both width and U extent
+/// to this one number.
+fn loyalty_bar_pixels(total: u32) -> f32 {
+    const SCALE: u32 = 150;
+    const MAX: u32 = 100_000;
+    (SCALE * total.min(MAX) / MAX) as f32
 }
 
 /// How much of a widget's own alpha shows, `seconds` after its screen

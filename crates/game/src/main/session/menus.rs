@@ -127,7 +127,7 @@ pub(crate) fn backdrop_seed(
 
 #[path = "menus/variant.rs"]
 mod variant;
-pub(crate) use variant::{combine_variant, variant_choices};
+pub(crate) use variant::{combine_variant, gated_variant_choices, variant_choices};
 
 #[path = "menus/team.rs"]
 mod team;
@@ -197,7 +197,8 @@ impl Session {
         // settled against that list for the reason RACE REMIX's own rows are
         // below - `race.variant` defaults to empty, which is a real value
         // only on the titles whose first variant is the unsuffixed one.
-        let race_variants = variant_choices(shell.title, &self.settings.race.team);
+        let race_variants =
+            gated_variant_choices(shell.title, &self.settings.race.team, &shell.team_details);
         remix_menu::settle(&mut self.settings.race.variant, &race_variants);
         model.supply(menu::ValueSource::RaceVariant, &race_variants);
         // The booted title's own ladder, filtered to the rungs this build can
@@ -597,7 +598,8 @@ impl Session {
     /// nothing has loaded a shell yet - see [`Self::resupply_tracks_for_mode`].
     pub(crate) fn resupply_race_variant(&mut self) {
         let Some(shell) = &self.shell else { return };
-        let choices = variant_choices(shell.title, &self.settings.race.team);
+        let choices =
+            gated_variant_choices(shell.title, &self.settings.race.team, &shell.team_details);
         remix_menu::settle(&mut self.settings.race.variant, &choices);
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::RaceVariant, &choices);

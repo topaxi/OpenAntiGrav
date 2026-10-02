@@ -16,11 +16,11 @@
 //! (shipped with no lock), which would open every `Grid0`-gated circuit on a
 //! fresh profile.
 //!
-//! **Not modelled, and open:** the mode-gated per-track byte at `+0x16e` that
-//! `TrackSelection_PopulateList` also tests when its cached `Mode == 6`, and
-//! the always-fails byte at `+0x99`. Neither is tied to an attribute
-//! `Definition.xml` carries (`availableInZone` is on 16 circuits, the byte on
-//! three), so nothing here guesses at them.
+//! The mode-gated per-track byte at `+0x16e` that `TrackSelection_PopulateList`
+//! tests when its cached `Mode == 6` is `availableInZone` (the definition loader
+//! writes it from that attribute; 6 is `Zone`), which the Zone circuit list
+//! already filters on, so this gate has nothing to add for it. **Not modelled,
+//! and open:** the always-fails byte at `+0x99`.
 //!
 //! `--unlock-all` ([`Gate::open`]) is **ours**: a developer and capture escape
 //! that mirrors, as context only, the original's own dev byte at profile
@@ -30,7 +30,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use oag_tables::race_campaign::{self, Grid, Medal};
 
-use crate::catalogue::Track;
+use crate::catalogue::{LoyaltyRow, Track};
 use crate::records::{self, Store};
 
 /// A campaign medal as the campaign tables name it. The one conversion,
@@ -143,6 +143,52 @@ impl Gate {
     }
 }
 
+/// Whether a craft variant's `<Unlock>` rows pass: `Definition_IsUnlocked`'s
+/// own combine, restricted to the one condition Pulse's variants author
+/// (`loyalty`).
+///
+/// A row that is not `Exclusive` must hold together with every other such
+/// row; an `Exclusive` row that holds unlocks the variant on its own, ahead
+/// of anything before it; an `Exclusive` row that fails leaves the variant
+/// locked unless a later one holds. No rows: unlocked. `Team="any"` is met by
+/// the best single team ([`Store::loyalty_best`]), any other name by that
+/// team's own total. [`unlock_all`] opens everything - ours, not the
+/// original's.
+#[must_use]
+pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &str) -> bool {
+    if unlock_all() {
+        return true;
+    }
+    let met = |row: &LoyaltyRow| {
+        row.loyalty != 0
+            && row.loyalty
+                <= if row.team.eq_ignore_ascii_case("any") {
+                    records.loyalty_best(title)
+                } else {
+                    records.loyalty_total(title, &row.team)
+                }
+    };
+    let mut unlocked = true;
+    for row in rows {
+        if row.exclusive {
+            if met(row) {
+                return true;
+            }
+            unlocked = false;
+        } else if row.loyalty != 0 {
+            unlocked = unlocked && met(row);
+        }
+    }
+    unlocked
+}
+
+/// Whether `title` gates its craft variants at all: Pulse authors the
+/// loyalty rows, and no other title's definition here carries them.
+#[must_use]
+pub fn gates_variants(title: &str) -> bool {
+    title == oag_pulse::TITLE.name
+}
+
 /// `tracks` as Track Select lists them from `archives`: gated when `kind` is Track
 /// and a source is at hand, whole otherwise. The records are read from disk
 /// the way every capture reads them.
@@ -158,5 +204,49 @@ pub fn offered_on(
             Gate::read(title, archives).offered(tracks, &records::load(), title)
         }
         _ => tracks.to_vec(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(team: &str, loyalty: u32, exclusive: bool) -> LoyaltyRow {
+        LoyaltyRow {
+            team: team.to_string(),
+            loyalty,
+            exclusive,
+        }
+    }
+
+    #[test]
+    fn no_rows_means_unlocked_and_a_missed_exclusive_row_means_locked() {
+        let store = Store::default();
+        assert!(loyalty_unlocked(&[], &store, "t"));
+        assert!(!loyalty_unlocked(&[row("a", 10, true)], &store, "t"));
+    }
+
+    #[test]
+    fn exclusive_rows_are_alternatives_and_any_is_the_best_team() {
+        let mut store = Store::default();
+        store.record_loyalty("t", "b", 50);
+        let rows = [row("a", 10, true), row("any", 50, true)];
+        assert!(loyalty_unlocked(&rows, &store, "t"), "b alone reaches any");
+        store.record_loyalty("t", "c", 30);
+        let rows = [row("a", 10, true), row("any", 80, true)];
+        assert!(
+            !loyalty_unlocked(&rows, &store, "t"),
+            "50 and 30 are not 80"
+        );
+    }
+
+    #[test]
+    fn plain_rows_must_all_hold() {
+        let mut store = Store::default();
+        store.record_loyalty("t", "a", 10);
+        let rows = [row("a", 10, false), row("b", 5, false)];
+        assert!(!loyalty_unlocked(&rows, &store, "t"));
+        store.record_loyalty("t", "b", 5);
+        assert!(loyalty_unlocked(&rows, &store, "t"));
     }
 }

@@ -112,6 +112,10 @@ pub enum Details {
         rating: Option<Rating>,
         variants: Vec<(String, String)>,
         stats: Vec<Option<hd::Stats>>,
+        /// The team's running loyalty total, which `Team Selection`'s
+        /// `Loyalty` block shows. `None` where the title keeps no such
+        /// counter, and the block is then not drawn at all.
+        loyalty: Option<u32>,
     },
 }
 

@@ -30,12 +30,12 @@ per-slot heading, landed; the write-up and every measurement are in
   base `1.0` move the pose by 0.002 to 0.004 units either way. The earlier 75.8 against
   99.8 loss was the brake ramping on the grid and not being zeroed at release. See
   [launch-boost.md](../../docs/physics/launch-boost.md#the-three-other-state-0-terms-tried-and-left-out).
-- **Zone** runs `Ship_HoverFourCorner`; `on_grid` is off there. **Read 2026-10-02**: the epilogue
-  (`0x0884b76c`) carries the same `craft+0x2a4` guard, gain `50.0` for the two-point law's `30.0`,
-  but writing the flag for Zone moved `zone_ground_truth`'s 300-tick speed `103.4` to `91.2` km/h
-  because this port's Zone craft is already moving through the countdown (auto-speed is not gated by
-  it). Left off until the original's Zone engine in state `0` (`Ship_UpdateEngine`, `0x0884c8c8`) is
-  read; see [grid-state.md](../../docs/physics/grid-state.md#zone-the-four-corner-epilogue-has-the-same-guard-and-stays-off-2026-10-02).
+- ~~**Zone**~~ **Landed 2026-10-02 (`pulse-zone-start`)**: the engine's Zone branch is gated on flags bit 1, the
+  grid state, so a Zone craft stands through the countdown; `on_grid` covers Zone and the auto-speed carries the launch
+  multiplier (1.159 coasting over held at 28 frames, as read live); see
+  [zone-start.md](../../docs/ghidra/functions/psp-pulse-usa/zone-start.md). Its own leftovers: the four-corner
+  epilogue's `50.0` bank coupling (`0x0884b76c`) is not ported, and the capture patched `g_game_mode` on a Single Race
+  grid, so a native Zone race was not watched (Zone is greyed on a fresh profile).
 - ~~**`01_Track` slot 1's heading**~~ is the edge chord, resolved with the grid walk above.
 - **The AI board moved**: `04_Track` RAPIER `CleanLap` to `Died` (one death at tick
   17714 of 18000 after four clean laps). Regenerated, not tuned; worth a look when
@@ -44,8 +44,7 @@ per-slot heading, landed; the write-up and every measurement are in
 ## Next Steps
 
 1. ~~The grid walk~~ landed.
-2. Zone: read `Ship_UpdateEngine`'s state-0 branch for Zone's auto-speed (`0x0884c8c8`), then switch
-   `on_grid` on there and see whether `zone_ground_truth`'s speed bound still means what it did.
+2. ~~Zone~~ landed.
 3. The junction hop in `oag_gameplay::grid_walk::locate`, only if a circuit-direction's
    grid ever comes within a control point of a path end again (today only `03_Track`, by under
    0.1 unit).

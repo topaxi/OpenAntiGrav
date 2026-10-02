@@ -434,6 +434,7 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         skins: Vec::new(),
         rating: None,
         models: Vec::new(),
+        hull_unlocks: Vec::new(),
     };
 
     // In the table and also carrying a declared name: the table still wins, or

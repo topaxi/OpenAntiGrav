@@ -55,6 +55,7 @@ fn team(id: &str, stats: Vec<Option<Stats>>) -> Entry {
         id: id.to_string(),
         label: id.to_uppercase(),
         details: Details::Ship {
+            loyalty: None,
             rating: None,
             variants: vec![
                 (String::new(), "HD".into()),
