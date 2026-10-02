@@ -89,7 +89,7 @@ settles onto the `1.1` degree bank in the first 40 ticks and then yaws at
 `ShipState::on_grid` is the original's state `0` (measured on Pulse PSP only; the
 race applies it to every title by extension, which is **chosen, not measured**,
 and not to Zone, whose four-corner hover epilogue carries the same guard but which stays off, see
-[Zone](#zone-the-four-corner-epilogue-has-the-same-guard-and-stays-off-2026-10-02)), written from the race's
+[Zone](#zone-the-grid-state-gates-the-auto-speed-and-on_grid-is-on-2026-10-02)), written from the race's
 countdown clock (`RaceState::thrust_gated`) on every ship at the top of
 `Race::tick` - for every craft, not only the player, which is how the original
 does it - and read by the one term. Derived from the clock rather than stored,
