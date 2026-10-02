@@ -114,24 +114,12 @@ impl FlyerShot {
     }
 }
 
-/// [`crate::records::Medal`] restated as [`oag_tables::race_campaign::Medal`],
-/// the same duplicated-on-purpose conversion `crate::campaign_stage::to_campaign_medal`
-/// makes for the live session, redone here rather than shared: that one
-/// lives in the `oag-game` *binary* crate (`main.rs`'s own `mod campaign_stage`),
-/// this file in the *library* crate `pub mod capture` is built from, and
-/// nothing crosses that split.
-fn to_campaign_medal(medal: crate::records::Medal) -> oag_tables::race_campaign::Medal {
-    match medal {
-        crate::records::Medal::Gold => oag_tables::race_campaign::Medal::Gold,
-        crate::records::Medal::Silver => oag_tables::race_campaign::Medal::Silver,
-        crate::records::Medal::Bronze => oag_tables::race_campaign::Medal::Bronze,
-    }
-}
+use crate::unlock::to_campaign_medal;
 
 /// [`to_campaign_medal`]'s own sibling, for
 /// [`crate::records::CampaignRecord::best_difficulty`] - **HD only**, redone
-/// here rather than shared for the identical reason `to_campaign_medal`'s
-/// own doc gives.
+/// here rather than shared for the identical reason (the binary crate and
+/// the library crate share nothing).
 fn to_campaign_difficulty(
     difficulty: crate::records::Difficulty,
 ) -> oag_tables::race_campaign::Difficulty {

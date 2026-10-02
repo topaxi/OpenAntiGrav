@@ -44,10 +44,16 @@ impl Session {
         let title = shell.title;
         let hd = layout.hd_track.is_some();
         let zone = mode == oag_race::Mode::Zone;
+        let offered: Vec<_> = shell.tracks_for(mode).to_vec();
+        let gate = self.unlock_gate();
+        let offered: Vec<_> = offered
+            .into_iter()
+            .filter(|(track, _)| gate.offers(track, &self.records, title.name))
+            .collect();
         let (listed, columns) = if hd {
-            catalogue::direction_rows(title, mode, shell.tracks_for(mode))
+            catalogue::direction_rows(title, mode, &offered)
         } else {
-            (shell.tracks_for(mode).to_vec(), 0)
+            (offered, 0)
         };
         let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = listed
             .iter()
@@ -104,6 +110,27 @@ impl Session {
         }
         let distances = self.spawn_distance_worker(order);
         self.open_picker(model, layout, LiveryAxis::Variant, sources, distances)
+    }
+
+    /// The circuit gate, read off the source's own archives. Open (nothing
+    /// locked) when no source is at hand to read grids from.
+    fn unlock_gate(&self) -> oag_game::unlock::Gate {
+        let title = self.shell.as_ref().map(|shell| shell.title.name);
+        let opened = self.race_options.as_ref().and_then(|options| {
+            let (packs, pure_packs, _) = oag_game::dlc::packs_from_defaults(
+                &options.dlc,
+                &oag_game::boot::default_dlc_cache_dir(),
+            );
+            oag_game::title::open_source(&options.source, packs, pure_packs)
+                .map_err(|error| warn!("cannot open the source to read its unlocks: {error:#}"))
+                .ok()
+        });
+        match (title, opened) {
+            (Some(title), Some(mut opened)) => {
+                oag_game::unlock::Gate::read(title, &mut opened.archives)
+            }
+            _ => oag_game::unlock::Gate::open(),
+        }
     }
 
     /// Reads every circuit in `order` on its own thread and measures its lap

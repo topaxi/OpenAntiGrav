@@ -749,7 +749,10 @@ fn load_omega(
 /// titles author the same `PI_Grid`/`PI_Cell` schema
 /// ([`oag_tables::race_campaign`]) behind a `Definition.xml` naming the same
 /// shape of `Src=` list, dictionary-shortened on both.
-fn read_grids(archives: &mut oag_assets::Archives, definition_entry: &str) -> Result<Vec<Grid>> {
+pub fn read_grids(
+    archives: &mut oag_assets::Archives,
+    definition_entry: &str,
+) -> Result<Vec<Grid>> {
     let definition_blob = archives
         .read_name(definition_entry)
         .with_context(|| format!("reading {definition_entry}"))?;

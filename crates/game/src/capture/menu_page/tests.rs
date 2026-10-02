@@ -95,6 +95,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
         location: r"Data\Environments\01_Track".to_string(),
         reversed: true,
         available_in_zone: true,
+        unlock_grid: None,
     };
     let tracks = [track.clone()];
     model.supply(

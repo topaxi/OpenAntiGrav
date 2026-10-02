@@ -118,27 +118,24 @@ twenty-four, and no amount of path arithmetic recovers the difference. The
 settings file stores the plugin id and only the source can say which `.vex` that
 id loads.
 
-## Unlocks: our race box offers everything, deliberately
+## Unlocks: Pulse's circuits gate, craft variants do not yet
 
-**This is a divergence from every original, and it is a decision rather than a
-gap.** Our RACE and RACE REMIX pages offer every circuit the source declares,
-every team on its roster and every craft variant those teams carry, with no
-progression gate of any kind. Nothing on those pages is ever hidden, greyed or
-priced.
+**Circuits (Pulse): gated, since 2026-10-02.** A profile now exists
+(`records.toml` keeps campaign medals and per-team loyalty), so Pulse's Track
+Select offers a circuit only when its `<Unlock Grid="...">` is met - 3 on a
+fresh profile, as the original's, up to all 24. A locked circuit is **absent**
+from the list rather than greyed (`TrackSelection_PopulateList` filters). The
+mechanism is `oag_game::unlock::Gate`; `--unlock-all` lifts it and is ours, a
+developer and capture escape. The original's mode-gated per-track byte
+(`+0x16e`) is not modelled and stays open. Every other title's race box still
+offers everything: Pure authors no `<Unlock>`, HD and Omega are not wired.
 
-The reason is that **there is no profile in this build.** A gate needs something
-to gate against - a campaign record, a per-team loyalty balance, a save slot -
-and this project has none of those, so a lock here could only ever be a lock
-against a value that is always zero. That is not the original's behaviour
-reproduced; it is a permanently closed door. Offering everything is the honest
-shape for a build whose race box is a way to reach a circuit, not a reward for
-having reached it.
-
-**"For now" is meant literally.** If a profile lands, this decision is worth
-revisiting, and the data to revisit it with is already read - see
-[race-setup](../formats/race-setup.md#two-unlock-axes-and-they-are-not-the-same-axis).
-Until then, a contributor finding an ungated row here should read it as this
-section and not as an unimplemented feature.
+**Craft variants: still ungated, deliberately.** Earning loyalty is recovered
+and kept (`Race_ComputeLoyaltyAward`, `records::Store::record_loyalty`), but
+what `Team="any"` means beside an own-team row, and how two `Exclusive` rows
+combine, is in `Definition_IsUnlocked`'s untraced predicates. Gating on a
+guess would be an invention, so RACE and RACE REMIX still offer every variant
+and the Loyalty bar is not drawn.
 
 ### What the originals actually do, because the contrast is the point
 

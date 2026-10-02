@@ -159,6 +159,14 @@ pub struct Track {
     /// finds either by the name each title already knows its own circuits
     /// by, rather than by which of the two spellings the disc used.
     pub available_in_zone: bool,
+    /// The name a `<Unlock Grid="...">` child of this `PI_Track` carries -
+    /// `Grid0`, `Grid1`, ... - or `None` for the circuits that author no
+    /// `<Unlock>` at all (`16_Track`, `03_Track`, `18_Track` on Pulse).
+    ///
+    /// A **name**, not an index, exactly as the disc spells it
+    /// (`docs/formats/race-setup.md`, "Two unlock axes"). What gates on it is
+    /// [`crate::unlock`]; this only carries what the disc authored.
+    pub unlock_grid: Option<String>,
 }
 
 impl Track {
@@ -789,6 +797,10 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
         // inconsistent about it and `flag` accepts either, which is the whole
         // reason it exists.
         available_in_zone: values.flag("availableInZone").unwrap_or(false),
+        unlock_grid: node
+            .children_named("Unlock")
+            .find_map(|unlock| unlock.attr("Grid"))
+            .map(str::to_string),
     })
 }
 
