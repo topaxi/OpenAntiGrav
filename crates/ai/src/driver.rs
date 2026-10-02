@@ -399,7 +399,13 @@ impl Driver {
         } else {
             throttle(speed, target, tuning)
         };
-        let thrust = thrust * self.caution(ctx, &personality);
+        // **No lift on the run-up to a gap**: the clearing speed is the one
+        // thing a craft cannot buy back in the air. Chosen, not measured.
+        let thrust = if line.is_takeoff(index) {
+            thrust
+        } else {
+            thrust * self.caution(ctx, &personality)
+        };
         // Neither timer is a **momentary** hit flag: both are seconds still
         // running, so a craft is "recovering" for as long as either does,
         // which is exactly the window the differential buys nothing in - see
