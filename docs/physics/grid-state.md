@@ -189,8 +189,9 @@ window is not a boost percentage: it is the airbrake flaps' visual position
 ## Zone: the grid state gates the auto-speed, and `on_grid` is on (2026-10-02)
 
 Zone runs `Ship_HoverFourCorner` (`0x0884ae90`) where every other mode runs `Ship_HoverTwoPoint`. Its epilogue
-(`0x0884b76c`) carries the same `craft+0x2a4` guard with gain `50.0`. **That coupling is still not ported** (the
-four-corner variant is the open item in [README.md](README.md)); what landed is the engine's side.
+(`0x0884b76c`) carries the same `craft+0x2a4` guard with gain `50.0`. **That coupling is ported since**
+(`ShipState::four_corner`, `hover::BANK_TO_YAW_GAIN_FOUR_CORNER`; evidence on
+[zone-rest.md](../ghidra/functions/psp-pulse-usa/zone-rest.md)); the rest of the four-corner function is not.
 
 `Ship_UpdateEngine`'s Zone branch is `((flags & 1) && !(flags & 2)) ? autospeed : 0.0`, and bit 1 is the grid state, so
 a Zone craft **stands through the countdown**: read live on a Zone engine, `flags` `0x3` and `0.02` units/s for the whole

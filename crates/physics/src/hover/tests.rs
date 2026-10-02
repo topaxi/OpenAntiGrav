@@ -743,3 +743,23 @@ fn a_zero_handling_ship_never_finds_the_floor() {
     );
     assert_eq!(hover.contacts, 0);
 }
+
+/// Zone runs `Ship_HoverFourCorner`, whose bank-to-yaw gain is `50.0` where the
+/// two-point law's is `30.0` (`0x0884b778`, `lui 0x4248`). Both keep the grid guard.
+#[test]
+fn the_four_corner_bank_coupling_is_fifty_over_thirty_and_keeps_the_grid_guard() {
+    let world = flat_floor();
+    let handling = test_handling();
+    let mut state = state_at(3.0);
+    state.body.orientation = oag_core::math::Quat::from_rotation_z(0.2);
+
+    let two_point = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
+    state.four_corner = true;
+    let four_corner = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
+    let ratio = four_corner.local_angular_torque.y / two_point.local_angular_torque.y;
+    assert!((ratio - 50.0 / 30.0).abs() < 1e-5, "ratio was {ratio}");
+
+    state.on_grid = true;
+    let held = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
+    assert_eq!(held.local_angular_torque, Vec3::ZERO);
+}

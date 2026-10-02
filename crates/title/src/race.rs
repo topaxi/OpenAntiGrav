@@ -583,7 +583,7 @@ pub struct SoundBanks {
 /// name was probed at all, because there is no name to probe - see
 /// [`Self::PlayerShip`].
 ///
-/// # Every title ships a `ZoneMode` handling file, and nothing reads it
+/// # Every title ships a `ZoneMode` handling file; Pulse's executable never reads it
 ///
 /// The finding that does **not** fit this enum, recorded here because this is
 /// where the next reader will look for it. All three titles carry a dedicated
@@ -592,26 +592,18 @@ pub struct SoundBanks {
 /// `<Stats team="ZoneMode">` and authors **no `<Class>` block at all**, where
 /// every team file authors four or five.
 ///
-/// So the shipped answer to "what handling does a Zone craft have" is *one
-/// block, shared by every team* rather than the player's own - which is
-/// consistent with the mode overriding exactly the parts a `<Class>` would
-/// carry: [`zone-mode.md`] has the engine replaced by the auto-speed law, the
-/// brakes disabled and a four-corner hover variant, all three selected by the
-/// Zone expression rather than read from a team.
-///
-/// **This engine does not read it.** `oag_gameplay::handling_for` needs a
-/// `<Class>` and panics without one, so a Zone race still takes its per-class
-/// handling from the player's own team, and `oag_game::race::load` says so in
-/// the report. Closing that is a physics question - which of those blocks the
-/// mode is actually meant to supply - not a naming one, and no title's Zone
-/// handling path has been read in any executable.
+/// **On Pulse nothing reads it** (2026-10-02, confidence 82): neither name is a
+/// string in the executable, the definition has no team of `type="Zone"`, and
+/// the craft's stats come from the player's own team directory and class in
+/// every mode - `docs/ghidra/functions/psp-pulse-usa/zone-rest.md`. A Zone race
+/// here taking its handling from the player's team is the original's behaviour,
+/// not a gap. Pure's definition does mark `Zone_01` as `type="Zone"`, and neither
+/// that executable nor HD's has been read.
 ///
 /// Note the near-miss beside it on Pulse: `Data\Ships\Zone` is `<Stats
 /// team="Zone">` **with** class blocks, and is the unlockable Zone *livery*, a
-/// raceable team. `Zone_01` is the mode. The two differ by a suffix and are not
-/// the same thing.
-///
-/// [`zone-mode.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/psp-pulse-usa/zone-mode.md
+/// raceable team. `Zone_01` is the file nothing reads. The two differ by a
+/// suffix and are not the same thing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoneCraft {
     /// The player keeps their team and the *model files* change, to these

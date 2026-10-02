@@ -598,6 +598,14 @@ pub struct ShipState {
     /// same multiplier. Written by the race from the countdown clock, not hashed,
     /// for [`Self::on_grid`]'s reason.
     pub released: bool,
+    /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
+    /// `Ship_UpdateHover` (`0x0884870c`) picks it every frame on
+    /// `g_game_mode == 6 && g_debug_mode_override == 0`, which is Zone. Today it
+    /// changes one number, the bank-to-yaw gain (`50.0` against `30.0`, see
+    /// [`crate::hover::BANK_TO_YAW_GAIN_FOUR_CORNER`]); the four-corner probe layout
+    /// and its downforce law are not ported. `false` for every non-Zone craft.
+    /// Written by the race each tick, not hashed, for [`Self::on_grid`]'s reason.
+    pub four_corner: bool,
     /// The launch boost: `craft+0x294` and what decides it. See
     /// [`crate::launch`].
     ///
@@ -832,6 +840,7 @@ impl Default for ShipState {
             // `docs/ghidra/functions/psp-pulse-usa/engine.md`.
             time_since_landing: 10.0,
             on_grid: false,
+            four_corner: false,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,

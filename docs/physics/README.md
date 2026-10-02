@@ -644,9 +644,11 @@ Three consequences, and the first is the interesting one:
 - **The `craft+0x2a4` mode enum**, which selects a `-0.9` drag coefficient, a `-5.0` roll
   damping and a disabled `rebound` in mode 0, and skips the control block entirely in 4,
   5, 6 and 8. Naming it is a guess at confidence 40, so the racing values are used.
-- **The four-corner hover variant and its auto-speed law.** The selector is now *known* -
-  `DAT_08ab07e3 == 0 && DAT_08b31048 == 6`, confidence 84 - and the same condition gates
-  the brakes off, but what the mode *is* sits at confidence 50.
+- **The four-corner hover variant.** The selector is known (`Ship_UpdateHover`, every frame:
+  `g_game_mode == 6`, confidence 95) and the epilogue's bank-to-yaw gain `50.0` is ported
+  (`ShipState::four_corner`, [zone-rest.md](../ghidra/functions/psp-pulse-usa/zone-rest.md),
+  confidence 90). Still unported: the four-probe layout, and the downforce without a
+  groundedness or magstrip factor.
 - **One branch of the speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`), down from
   two. `if (craft+0x2cc < 1.0) f *= craft+0x2cc` fades the boost in over a second after
   flag `0x200` clears, and `0x200` is one of the eleven undecoded bits of `craft+0x1c0`,
