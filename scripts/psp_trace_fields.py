@@ -136,12 +136,6 @@ ENTITY_FIELDS = [
     ("steer_lean", 0x854),
     ("cam_lean", 0x844),
     ("cam_lean_follower", 0x848),
-    ("look_x", 0x810), ("look_y", 0x814), ("look_z", 0x818),
-    ("eye_lift", 0x870),
-    ("itr_right_x", 0xA0), ("itr_right_y", 0xA4), ("itr_right_z", 0xA8),
-    ("itr_up_x", 0xB0), ("itr_up_y", 0xB4), ("itr_up_z", 0xB8),
-    ("itr_fwd_x", 0xC0), ("itr_fwd_y", 0xC4), ("itr_fwd_z", 0xC8),
-    ("itr_pos_x", 0xD0), ("itr_pos_y", 0xD4), ("itr_pos_z", 0xD8),
     ("roll_phase", 0x87C),
     ("roll_eased", 0x880),
 ]
@@ -209,12 +203,6 @@ BODY_FIELDS = [
 # into the node, not the craft.
 CAMERA_UPDATE_BREAK = 0x0883C13C
 CAMERA_NODE_OFFSET = 0x3C
-
-# The two rows `FUN_088455ec` reads through pointers in the entity: `+0x374` is the
-# forward row it pushes the eye along and `+0x37c` the side row `headtilt` leans
-# the up vector by (camera.md, "the internal rig"). Dereferenced once a tick by
-# `psp-trace.py` into `node_fwd_*` and `node_side_*`.
-ENTITY_ROW_POINTERS = [("node_fwd", 0x374), ("node_side", 0x37C)]
 
 CAMERA_FIELDS = [
     ("cam_right_x", 0x000), ("cam_right_y", 0x004), ("cam_right_z", 0x008),

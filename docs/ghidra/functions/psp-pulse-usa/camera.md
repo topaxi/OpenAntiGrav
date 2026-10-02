@@ -1187,8 +1187,9 @@ pins it, and a mutated delta limit fails it. Confidence **90** for the filter.
 direction, then rolled by the barrel roll. The `side` row (`entity+0x37c`) is the
 ship's **left** (the recorded `right_*` columns are the left, `oag-trace run
 --basis left-up-forward`), so in this engine a positive lean adds the ship's **right**
-to the up vector: the view leans into the turn. Over the same capture, with the
-body's own rows and the node rows read live, the angle between the predicted and
+to the up vector: the view leans into the turn. Over the same capture, re-taken with a local, uncommitted extension of
+`psp-trace.py` that also read the tripod at `entity+0xa0`, the rows behind
+`entity+0x374`/`+0x37c` and `entity+0x810`, and with the body's own rows, the angle between the predicted and
 the recorded tripod up is smallest at `k = +0.3 * lean` (RMS 0.261 rad) and rises
 on both sides (`k = 0`: 0.312, `+0.6`: 0.284, `-0.3`: 0.416, `-0.6`: 0.526), where
 `0.3` is this ship's authored `headtilt`. That supports the sign and the scale and
