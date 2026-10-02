@@ -2,7 +2,7 @@
 categories: [rendering, frontend]
 ---
 
-# The pre-race flyby plays; its panel, its settle and its tail do not
+# The pre-race flyby plays with its panel; its settle and its tail do not
 
 2026-10-01. The maintainer's play report (the original flies the circuit before a race) was
 measured and ported: the camera is `start_grid.vex`'s `grid_camera1` animation, not a `Camera`
@@ -15,9 +15,14 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 ## Open
 
-- **The track-description panel** over the flyby (circuit name, a paragraph, the 30-tick
-  fade-out as the chase view returns) is not drawn. The text is a per-circuit string nobody
-  has located; the screen is a front-end one and carries pointer rules.
+- ~~The track-description panel~~ **landed 2026-10-02**: `InGameTrackDescriptionScreen` read off
+  `InGame_Definition.xml`, name = the `PI_Track` id as a table key and paragraph =
+  `MSC_TRACK_<nn>` (`RaceManager_Construct`), fade measured per frame (0.7 s linear, a 2 s width
+  wipe in, 0.7 s out - not the 30 ticks this said), pointer press skips. See
+  [race-intro.md](../../docs/gameplay/race-intro.md#the-track-description-panel). What is left of
+  it: the name draws 2-3 % narrower than the original's and the paragraph's wrap width (450) is
+  chosen, not measured (line breaks match on `16_Track` and `03_Track`); only Single Race and
+  Time Trial were measured; Zone, Eliminator and the others take the same path unwatched.
 - **The world does not settle** under the flyby, by choice (ticking it would move every hash):
   the craft sits at its placement pose, about two units low on `16_Track`. A faithful fix is a
   view-side settle of the draw pose, or moving the placement pose, both a decision.
@@ -37,9 +42,7 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 ## Next Steps
 
-1. Locate the track-description string (the string table, per circuit) and draw the panel with
-   its fade, with the pointer support a new screen needs.
-2. Split `scene/frame.rs`, then give the scenery and the gantry's clock `Race::motion_tick`.
-3. Decide the settle: a view-side offset on the drawn craft for the flyby, or leave it.
-4. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load
+1. Split `scene/frame.rs`, then give the scenery and the gantry's clock `Race::motion_tick`.
+2. Decide the settle: a view-side offset on the drawn craft for the flyby, or leave it.
+3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load
    Zone or Eliminator race.

@@ -402,7 +402,7 @@ pub const TRACK_DESCRIPTION_DEFINITION: &str = r"Data\Plugins\PI001\GUI\InGame_D
 pub const TRACK_DESCRIPTION_SCREEN: &str = "InGameTrackDescriptionScreen";
 
 /// The panel's two `Text` widgets: the circuit's name, and its paragraph. Both author
-/// `string=""`; the race constructor (`RaceManager_Construct`, `0x088296a0`) fills them.
+/// `string=""`; the race constructor (`RaceManager_Construct`, `0x08829124`) fills them.
 pub const TRACK_NAME_WIDGET: &str = "InGameTrackName";
 
 /// See [`TRACK_NAME_WIDGET`].
@@ -412,8 +412,8 @@ pub const TRACK_TEXT_WIDGET: &str = "InGameTrackText";
 /// `16_Track` and `32_Track` read `MSC_TRACK_16` and `MSC_TRACK_32`. The name is the id itself,
 /// looked up in the same table (`16_Track` is "Talon's Junction White").
 ///
-/// Read from the format string at `0x08a7a720` and its one caller, `RaceManager_Construct`, which
-/// passes the current race's circuit id (`*(DAT_08b310b4 + 0x74)`) to the name widget unchanged
+/// Read from the format string at `0x08a7a720` and its one caller, `RaceManager_Construct`
+/// (`0x08829124`, the references at `0x088296a0` and `0x088296ec`), which passes the current race's circuit id (`*(DAT_08b310b4 + 0x74)`) to the name widget unchanged
 /// and to `sprintf` for the paragraph. `None` for an id shorter than two characters.
 #[must_use]
 pub fn track_description_id(track_id: &str) -> Option<String> {

@@ -112,7 +112,8 @@ pub fn draw_lists(
         let Some(placed) = sprites(&image.src) else {
             continue;
         };
-        let mut draw = crate::campaign::draw::sprite_draw(image, placed, image.x, image.y, image.color);
+        let mut draw =
+            crate::campaign::draw::sprite_draw(image, placed, image.x, image.y, image.color);
         draw.fade(alpha);
         frame.push(draw);
     }
