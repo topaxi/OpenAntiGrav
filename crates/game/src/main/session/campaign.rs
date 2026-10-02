@@ -127,6 +127,7 @@ impl Session {
                         circuit_names,
                         records,
                         campaign.flyers,
+                        self.campaign_cursor,
                     ));
                 }
             }
@@ -194,7 +195,10 @@ impl Session {
                     let chosen = model.selected();
                     campaign.open_grid_selection(chosen);
                 }
-                (Screen::Selection(_), Event::Back) => stage.campaign = None,
+                (Screen::Selection(_), Event::Back) => {
+                    self.campaign_cursor = campaign.cursor_on_close();
+                    stage.campaign = None;
+                }
                 (Screen::Grid(model), Event::Confirmed) => {
                     // The gate itself is the recovered `Unlock_GridPointsMet`
                     // law (`CampaignStage::grid_is_unlocked`), not the
@@ -224,7 +228,10 @@ impl Session {
                 (Screen::Grid(_), Event::Back) if campaign.has_selection() => {
                     campaign.open_selection();
                 }
-                (Screen::Grid(_), Event::Back) => stage.campaign = None,
+                (Screen::Grid(_), Event::Back) => {
+                    self.campaign_cursor = campaign.cursor_on_close();
+                    stage.campaign = None;
+                }
                 (Screen::Cell { model, .. }, Event::Confirmed) => {
                     // The identical reasoning as the tier arm above, on
                     // `PI_Cell.Locked`.
@@ -381,8 +388,10 @@ impl Session {
         // on this path.
         self.tournament =
             is_tournament.then(|| crate::race::tournament::Progress::new(leg_entries));
-        if let Stage::Menu(stage) = &mut self.stage {
-            stage.campaign = None;
+        if let Stage::Menu(stage) = &mut self.stage
+            && let Some(campaign) = stage.campaign.take()
+        {
+            self.campaign_cursor = campaign.cursor_on_close();
         }
         if !self.open_ship_picker() {
             self.launch_campaign_race();

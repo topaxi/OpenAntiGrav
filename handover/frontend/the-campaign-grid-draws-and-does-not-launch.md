@@ -1,5 +1,18 @@
 # The campaign grid draws and does not launch
 
+**Update, 2026-10-02, `pulse-cursor-live` lane: the cursor measured and fixed, the loyalty slope pinned.**
+`Cell Selection`'s cursor is **one `(x, y)` slot shared by every grid**, kept across leaving the campaign
+(PPSSPP, two boots, a breakpoint reading the screen's `+0xdc`): `grid0_3_2` then `grid1` lands on `grid1_3_2`,
+`grid1_3_1` then `grid0` lands on `grid0_3_1`. A slot is carried only when the new grid's cell there shows no lock glyph (the screen's own predicate, not the
+`Locked` byte: a cell a gold neighbour unlocked keeps the cursor with its byte still 1); a glyph-visible one
+(including re-entering the same grid on it) falls to the default scan.
+`CellCursors` is replaced by `CellCursor` plus `Session::campaign_cursor`. Not measured: a cell whose lock glyph a
+medal cleared, a slot the new grid lacks, HD/Fury (still chosen), and a grid reached by the game's own unlock path
+(`grid1` was opened by writing its `Locked` byte). The loyalty bar slope is measured at 20080 and 50080 totals,
+123 and 49 screen px against 124.2 and 49.8 predicted: no code change. Detail: `docs/ui/campaign-screens.md`'s
+"Where the cursor lives" and `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`'s "The slope, measured at two
+totals".
+
 **Update, 2026-10-02, `pulse-loyaltybar` lane: where the original keeps the cursor
 across a back-out is decompiled.** `CellSelection_OnEnter`/`_Update` hold it as the
 `Selector` widget's own `(x, y)` slot, one position shared by every grid; `+0xdc` (the
@@ -7,9 +20,7 @@ selected cell) is derived from it each frame, and `OnEnter` re-resolves it by th
 the *current* grid at that slot, running the first-visit default scan only when that fails
 (and not around `Cell Help`). This build's per-grid `CellCursors` is therefore **chosen and
 probably wrong for a second grid**; not changed, because the same-grid case is the only one
-measured and the tile-flag filter (`FUN_088a37cc`) is unread. Next: a PPSSPP walk that
-backs out of `grid0_3_2` and enters another unlocked grid, then key `CellCursors` by
-`(x, y)` if it reproduces. Detail: `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+measured and the tile-flag filter (`FUN_088a37cc`) is unread. ~~Next: a PPSSPP walk that backs out of `grid0_3_2` and enters another unlocked grid, then key `CellCursors` by `(x, y)` if it reproduces.~~ Done by the update above. Detail: `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
 "Where `Cell Selection` keeps its cursor across a back-out".
 
 **Update, 2026-09-28, `pulse-cellsel` lane: the two live capture findings

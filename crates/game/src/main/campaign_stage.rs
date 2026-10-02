@@ -54,41 +54,62 @@ pub(crate) enum Screen {
     },
 }
 
-/// `Cell Selection`'s own cursor, remembered per grid for as long as the
-/// campaign screens stay open, so backing out to `Grid Selection` and
-/// re-entering the same grid lands on the cell the player left rather than
-/// on `CellSelection::new`'s own first-visit default.
+/// `Cell Selection`'s cursor: **one `(x, y)` slot shared by every grid**, not a
+/// memory per grid.
 ///
-/// **Measured** (PPSSPP, `pulse-psp-usa.chd`, `docs/ui/campaign-screens.md`'s
-/// Open entry on `Cell Selection`'s initial cursor): moved to `grid0_3_2`,
-/// backed out, came back in on `grid0_3_2`, not `grid0_3_1`. **Chosen, not
-/// measured**: keying by grid (a different grid keeps its own cursor, or
-/// its first-visit default if never entered), and forgetting everything
-/// once the campaign screens close (`CampaignStage` is rebuilt on every
-/// `RACE CAMPAIGN` entry) - neither case was observed on the original.
-/// Also chosen, not measured: that HD/Fury's own `Cell Selection` (which
-/// shares this stage) persists its cursor the same way - only Pulse PSP
-/// was observed.
-#[derive(Debug, Default)]
-pub(crate) struct CellCursors(Vec<(usize, String)>);
+/// **Measured** (PPSSPP, `pulse-psp-usa.chd`, 2026-10-02, two boots,
+/// `docs/ui/campaign-screens.md`'s "Where the cursor lives"): the original
+/// keeps the cursor as the `Selector` widget's own `(x, y)` and re-resolves it
+/// by the *current* grid's name on entry. Left on `grid0_3_2`, entering `grid1`
+/// lands on `grid1_3_2`, not on `grid1`'s first-unlocked default; left on
+/// `grid1_3_1`, entering `grid0` lands on `grid0_3_1`, not on the `grid0_3_2`
+/// it was last left on. The slot is kept only when the new grid has a cell
+/// there that **shows no lock glyph** - the rule the screen draws with
+/// (`Locked` set, no medal of its own, no medalled hex neighbour), which is
+/// the original's own tile-flag test on the lock layer: a play-unlocked cell
+/// (`Locked` still 1, glyph hidden by a medalled neighbour) keeps the cursor,
+/// a glyph-visible one falls to the first-unlocked default (`grid0_2_2` into
+/// `grid1`, and `grid0_2_1` back into `grid0` itself, both measured). It also survives
+/// leaving the campaign altogether, which is why [`Session`] holds it rather
+/// than this stage.
+///
+/// **Chosen, not measured**: that HD/Fury's own `Cell Selection` (which shares
+/// this stage) behaves the same way - only Pulse PSP was observed.
+///
+/// [`Session`]: crate::session::Session
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CellCursor(Option<(u32, u32)>);
 
-impl CellCursors {
-    /// Records `model`'s selected cell as grid `which`'s own cursor.
-    pub(crate) fn remember(&mut self, which: usize, model: &oag_ui::campaign::CellSelection) {
-        let Some(name) = model.selected().map(|cell| cell.name.clone()) else {
-            return;
-        };
-        match self.0.iter_mut().find(|(grid, _)| *grid == which) {
-            Some((_, remembered)) => *remembered = name,
-            None => self.0.push((which, name)),
+impl CellCursor {
+    /// Records `model`'s selected cell's slot as the cursor. A cell whose
+    /// name carries no `(x, y)` leaves the slot as it was.
+    pub(crate) fn remember(&mut self, model: &oag_ui::campaign::CellSelection) {
+        if let Some(slot) = model.selected().and_then(|cell| cell.grid_coords()) {
+            self.0 = Some(slot);
         }
     }
 
-    /// Moves `model`'s cursor to grid `which`'s remembered cell, if any -
-    /// a no-op on a grid never entered, which keeps the first-visit default.
-    pub(crate) fn restore(&self, which: usize, model: &mut oag_ui::campaign::CellSelection) {
-        if let Some((_, name)) = self.0.iter().find(|(grid, _)| *grid == which) {
-            model.select_by_name(name);
+    /// Moves `model`'s cursor to the cell at the remembered slot, when this
+    /// grid has one and it shows no lock glyph; otherwise a no-op, which
+    /// keeps `CellSelection::new`'s first-unlocked default.
+    pub(crate) fn restore(&self, model: &mut oag_ui::campaign::CellSelection) {
+        let Some(slot) = self.0 else {
+            return;
+        };
+        let Some(target) = model
+            .cells()
+            .iter()
+            .find(|cell| cell.grid_coords() == Some(slot))
+            .map(|cell| cell.name.clone())
+        else {
+            return;
+        };
+        let before = model.selected().map(|cell| cell.name.clone());
+        model.select_by_name(&target);
+        if model.selected_is_locked()
+            && let Some(before) = before
+        {
+            model.select_by_name(&before);
         }
     }
 }
@@ -177,8 +198,8 @@ pub(crate) struct CampaignStage {
     /// `Session::records` while a campaign screen is open, only a finished
     /// or escaped race does, and reaching one closes this stage first.
     records: oag_game::records::Store,
-    /// See [`CellCursors`]'s own doc.
-    cell_cursors: CellCursors,
+    /// See [`CellCursor`]'s own doc.
+    cell_cursor: CellCursor,
     /// **HD only.** The flyer cards `Grid Selection` draws behind its
     /// widgets - see [`oag_game::flyer`]. `None` on every other title.
     pub(crate) flyers: Option<oag_game::flyer::Flyers>,
@@ -205,6 +226,7 @@ impl CampaignStage {
         circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,
         flyers: Option<oag_game::flyer::Flyers>,
+        cell_cursor: CellCursor,
     ) -> Self {
         let grid_range = 0..grids.len();
         // `Campaign Selection` is HD's own screen ahead of `Grid
@@ -243,7 +265,7 @@ impl CampaignStage {
             title,
             circuit_names,
             records,
-            cell_cursors: CellCursors::default(),
+            cell_cursor,
             flyers,
         }
     }
@@ -594,7 +616,7 @@ impl CampaignStage {
         if self.is_hd() {
             model = model.with_default_difficulty(race_campaign::Difficulty::Easy);
         }
-        self.cell_cursors.restore(which, &mut model);
+        self.cell_cursor.restore(&mut model);
         self.screen = Screen::Cell { model, which };
         true
     }
@@ -666,11 +688,22 @@ impl CampaignStage {
         ))
     }
 
+    /// The cursor as it stands as the campaign closes, for the session to
+    /// carry to the next `RACE CAMPAIGN` (measured: the original's survives
+    /// leaving the campaign, see [`CellCursor`]).
+    pub(crate) fn cursor_on_close(&self) -> CellCursor {
+        let mut cursor = self.cell_cursor;
+        if let Screen::Cell { model, .. } = &self.screen {
+            cursor.remember(model);
+        }
+        cursor
+    }
+
     /// Returns to `Grid Selection`, on the tier `Cell Selection` was opened
     /// from.
     pub(crate) fn back_to_grid_selection(&mut self) {
-        if let Screen::Cell { model, which } = &self.screen {
-            self.cell_cursors.remember(*which, model);
+        if let Screen::Cell { model, .. } = &self.screen {
+            self.cell_cursor.remember(model);
         }
         let index = match &self.screen {
             Screen::Cell { which, .. } => which.saturating_sub(self.grid_range.start),
@@ -704,7 +737,7 @@ impl CampaignStage {
 
 #[cfg(test)]
 mod tests {
-    use super::CellCursors;
+    use super::CellCursor;
     use oag_tables::race_campaign::{Cell, Mode};
     use oag_ui::campaign::CellSelection;
 
@@ -738,27 +771,93 @@ mod tests {
         model.selected().map_or("", |cell| cell.name.as_str())
     }
 
-    /// The measured case: a cursor moved on one grid survives the model
-    /// being rebuilt on re-entry to that same grid, instead of resetting
-    /// to `CellSelection::new`'s own first-visit default.
+    fn locked_cell(name: &str) -> Cell {
+        Cell {
+            locked: None,
+            ..cell(name)
+        }
+    }
+
+    /// The measured cross-grid case: the slot a cursor was left on in one
+    /// grid is where it lands in another, not on the new grid's default and
+    /// not on the cell that other grid was last left on.
     #[test]
-    fn a_re_entered_grid_restores_the_cursor_it_was_left_on() {
-        let cells = vec![cell("grid0_3_1"), cell("grid0_3_2")];
-        let mut cursors = CellCursors::default();
+    fn the_cursor_is_one_slot_shared_by_every_grid() {
+        let grid0 = vec![cell("grid0_3_1"), cell("grid0_3_2")];
+        let grid1 = vec![cell("grid1_3_1"), cell("grid1_3_2")];
+        let mut cursor = CellCursor::default();
 
-        let mut first = CellSelection::new(cells.clone());
-        assert_eq!(selected(&first), "grid0_3_1");
+        let mut first = CellSelection::new(grid0.clone());
         first.select_by_name("grid0_3_2");
-        cursors.remember(0, &first);
+        cursor.remember(&first);
 
-        let mut again = CellSelection::new(cells.clone());
-        cursors.restore(0, &mut again);
-        assert_eq!(selected(&again), "grid0_3_2");
+        let mut other = CellSelection::new(grid1.clone());
+        assert_eq!(selected(&other), "grid1_3_1");
+        cursor.restore(&mut other);
+        assert_eq!(selected(&other), "grid1_3_2");
 
-        // A grid never entered keeps its own first-visit default - chosen,
-        // not measured; see `CellCursors`'s own doc.
-        let mut other = CellSelection::new(cells);
-        cursors.restore(1, &mut other);
-        assert_eq!(selected(&other), "grid0_3_1");
+        other.select_by_name("grid1_3_1");
+        cursor.remember(&other);
+        let mut back = CellSelection::new(grid0);
+        cursor.restore(&mut back);
+        assert_eq!(selected(&back), "grid0_3_1");
+    }
+
+    /// A slot whose cell is locked, or that the grid does not have, falls to
+    /// the first-visit default (`grid0_2_2` into `grid1`, measured).
+    #[test]
+    fn a_locked_or_absent_slot_keeps_the_default() {
+        let mut cursor = CellCursor::default();
+        let mut first = CellSelection::new(vec![cell("grid0_3_1"), cell("grid0_2_2")]);
+        first.select_by_name("grid0_2_2");
+        cursor.remember(&first);
+
+        let mut locked = CellSelection::new(vec![cell("grid1_3_1"), locked_cell("grid1_2_2")]);
+        cursor.restore(&mut locked);
+        assert_eq!(selected(&locked), "grid1_3_1");
+
+        let mut absent = CellSelection::new(vec![cell("grid1_3_1"), cell("grid1_3_2")]);
+        cursor.restore(&mut absent);
+        assert_eq!(selected(&absent), "grid1_3_1");
+    }
+
+    /// A cell whose `Locked` byte is still set but whose glyph a medalled hex
+    /// neighbour hides keeps the cursor (`grid0_2_2` beside the gold
+    /// `grid0_3_2`, measured); one with no medal near it does not (`grid0_2_1`).
+    #[test]
+    fn a_cell_a_neighbouring_medal_unlocked_keeps_the_cursor() {
+        let cells = vec![
+            cell("grid0_3_1"),
+            cell("grid0_3_2"),
+            locked_cell("grid0_2_2"),
+            locked_cell("grid0_2_1"),
+        ];
+        let with_gold = |cells: Vec<Cell>| {
+            CellSelection::with_medals(cells, &|name| {
+                (name == "grid0_3_2").then_some(oag_tables::race_campaign::Medal::Gold)
+            })
+        };
+        let mut cursor = CellCursor::default();
+
+        let mut left = with_gold(cells.clone());
+        left.select_by_name("grid0_2_2");
+        cursor.remember(&left);
+        let mut again = with_gold(cells.clone());
+        cursor.restore(&mut again);
+        assert_eq!(selected(&again), "grid0_2_2");
+
+        left.select_by_name("grid0_2_1");
+        cursor.remember(&left);
+        let mut again = with_gold(cells);
+        cursor.restore(&mut again);
+        assert_eq!(selected(&again), "grid0_3_1");
+    }
+
+    /// Nothing remembered yet is the first-visit default, untouched.
+    #[test]
+    fn a_fresh_cursor_changes_nothing() {
+        let mut model = CellSelection::new(vec![locked_cell("grid0_2_1"), cell("grid0_3_1")]);
+        CellCursor::default().restore(&mut model);
+        assert_eq!(selected(&model), "grid0_3_1");
     }
 }

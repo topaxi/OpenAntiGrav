@@ -2109,8 +2109,9 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 
 Headless decompile of `CellSelection_OnEnter` (`0x088d59c4`) and `CellSelection_Update`
 (`0x088d6430`), reading the one question the earlier passes left: what the "cursor" is
-and where it lives. Confidence **70** (decompile only; the lifetime of the screen object
-across leaving the campaign is not measured).
+and where it lives. Confidence **70** from the decompile alone; **raised to 90 on
+2026-10-02 (`pulse-cursor-live`)** by a runtime read on two boots, see the last bullet
+and [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md)'s "Where the cursor lives".
 
 - **The cursor is the `Selector` grid-controller widget's own slot**, `(+0xa0, +0xa4)`,
   not a cell pointer. `CellSelection_Update` rebuilds the name `"%s %d %d"` of the current
@@ -2128,15 +2129,22 @@ across leaving the campaign is not measured).
   previous/next names, `+0x18c`/`+0x1e8` of its definition). That is why backing out of
   `Cell Selection` keeps `grid0_3_2` (the measured case): the Selector widget and the
   screen object outlive the exit, and nothing resets the slot.
-- **Consequence for the build, not applied**: the persisted thing is **one Selector
+- **Consequence for the build (applied 2026-10-02, see the measured bullet below)**: the persisted thing is **one Selector
   position shared by every grid**, not a per-grid memory. Entering a different grid keeps
   the same `(x, y)` when that grid has a cell there (named for the new grid) and falls to
   the default scan otherwise. `CellCursors` (`crates/game/src/main/campaign_stage.rs`)
-  keys per grid, which is **chosen, not measured** and disagrees with this reading for a
-  second grid. Left alone: our cell names carry no parsed `(x, y)`, the tile-flag filter
-  is unread, and nothing on the original was observed crossing grids. **Next measurement**:
-  PPSSPP, `grid0` to `grid0_3_2`, back out, enter a second unlocked grid, read which cell
-  holds the cursor (the decompile predicts `(3, 2)` of that grid if it has one).
+  keyed per grid, which the measurement below falsified; it is now one shared slot.
 - Whether the Selector survives leaving the campaign altogether (to `Main Menu` and back)
   depends on the screen object's lifetime and is not read here.
+- **Measured 2026-10-02 (`pulse-cursor-live`, PPSSPP, two boots, a breakpoint at
+  `CellSelection_Update` reading screen `+0xdc` and the cell's name at `cell+0x74`).** One shared
+  slot: `grid0_3_2` then entering `grid1` lands on `grid1_3_2` (not `grid1`'s default `grid1_3_1`);
+  `grid1_3_1` then entering `grid0` lands on `grid0_3_1` (not the `grid0_3_2` it was left on). The
+  screen object (`0x08d73170`) is the same across a leave to `Main Menu` and back, and the cursor
+  survives it. The `FUN_088a37cc(selector, 4, x, y, 4) == 0` test (layer 4 is the lock glyph, see "The cell unlock
+  rule") behaves as "the new grid's tile at the slot shows no lock glyph", not as the `Locked` byte: a glyph-visible
+  `grid1_2_2`/`grid0_2_2`/`grid0_2_1` at the slot gives the default scan's `_3_1`, including re-entering the same grid,
+  while `grid0_2_2` (byte `+0xb9` still 1) beside a gold `grid0_3_2` keeps the cursor. Confidence 90 (shared slot,
+  persistence), 85 (the glyph filter: one boot, one control). `CellCursor` in `campaign_stage.rs` now implements it
+  (the screen's own lock predicate) - not the byte, which a first draft used and the gold-neighbour row refuted.
 

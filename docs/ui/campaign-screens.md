@@ -2571,6 +2571,78 @@ frame - a fresh capture call site that draws unclipped text starts from
 real viewport catches the omission, since `oag_ui::campaign::footer`'s own
 unit tests only check the *draw*, never how a caller clips it.
 
+## Where the cursor lives: one shared slot, measured 2026-10-02
+
+`pulse-cursor-live` lane. PPSSPP v1.20.4 (SDL, software renderer, muted), Xvfb, `pulse-psp-usa.chd`, two
+boots. The cursor is read as raw state, not only from a picture: a breakpoint at `CellSelection_Update`
+(`0x088d6430`) reads the screen object (`a0`, `0x08d73170` on every read, so the same object throughout), its
+selected-cell pointer at `+0xdc`, and that cell's name (the pointer at `cell+0x74`). Screenshots under
+`data/scratch/pulse-cursor-live/` (gitignored).
+
+**Falsifier written before the first capture.** The decompile
+([`CellSelection_OnEnter`](../ghidra/functions/psp-pulse-usa/race-campaign.md#where-cell-selection-keeps-its-cursor-across-a-back-out-2026-10-02-pulse-loyaltybar))
+predicts one `(x, y)` slot shared by every grid. If instead the cursor were per-grid (what this build did), or reset on
+entry, a second grid would land on its own remembered cell or its first-unlocked default. The obvious walk
+("`grid0_3_2`, then enter `grid1`") cannot tell those apart if the new grid's `(3, 2)` is locked, so the cell
+definitions were read first: `grid0` and `grid1` both author `_3_1` and `_3_2` with `Locked="false"` (and
+`grid0`'s and `grid1`'s first-unlocked default is `_3_1` in both), so `(3, 2)` into `grid1` separates "shared slot"
+(`grid1_3_2`) from "default" (`grid1_3_1`), and the reverse walk separates "shared" from "per-grid".
+
+**Precondition (a poke, not the game's own path).** A fresh profile has only `grid0` unlocked, and a confirm on a
+locked tier does nothing. `grid1`'s `PI_Grid` was found by searching for the pointer to its name string (`grid1`
+at `0x08d09100`, held at `+0x74` of the object at `0x08f609e0`; `+0xa0` = `Locked` = 1, `+0xa4` = `RequiredPoints`
+= 16) and its `Locked` byte written to 0 from `Main Menu`, before entering `Grid Selection`. After that `grid1` opens
+normally. Addresses were identical on both boots.
+
+| # | Boot | Walk | Read | Shared slot predicts | Per-grid / default predicts |
+| --- | --- | --- | --- | --- | --- |
+| A | 1 | `grid0`: default `3_1`, `down` to `3_2`; back to `Grid Selection`; enter `grid1` | **`grid1_3_2`** | `grid1_3_2` | `grid1_3_1` (default) |
+| B1 | 1 | in `grid1` `up` to `3_1`; back; enter `grid0` | **`grid0_3_1`** | `grid0_3_1` | `grid0_3_2` (per-grid memory) |
+| R2 | 2 | fresh boot: `grid0` `3_1` -> `3_2`; **leave to `Main Menu`**; `RACE CAMPAIGN`; enter `grid1` | **`grid1_3_2`** | `grid1_3_2` | `grid1_3_1` |
+| R2-3 | 2 | in `grid1` `up` to `3_1`; back; enter `grid0` | **`grid0_3_1`** | `grid0_3_1` | `grid0_3_2` |
+
+**Result: the shared-slot reading holds, the per-grid memory is falsified.** A cursor left on `(3, 2)` in `grid0` is on
+`grid1_3_2`, and one left on `(3, 1)` in `grid1` is on `grid0_3_1` rather than the `grid0_3_2` that grid was last
+left on. A and R2 also fall to `grid1_3_1` under the old per-grid code, so they falsify it on their own.
+
+**Leaving the campaign.** In boot 1 the cursor was left on `grid0_3_2`, backed out through `Grid Selection` to `Main
+Menu`, and `RACE CAMPAIGN` re-entered: `Cell Selection` opened on `grid0_3_2`, same screen object. Boot 2's R2 row does
+the same across a leave and lands on the carried slot. The screen object outlives the campaign, so the slot does too;
+`CampaignStage` was rebuilt on every `RACE CAMPAIGN` and forgot it.
+
+**What the slot is checked against: the new grid's cell must show no lock glyph.** The decompile's filter is
+`FUN_088a37cc(selector, 4, x, y, 4) == 0`, a flag test on the lock layer (layer `4`) of the tile at the slot, so the
+question is the glyph, not the `Locked` byte (the default scan reads the byte; the two differ on any cell a medal
+unlocked). Rows B2 to E1 were taken on a fresh profile, where byte and glyph agree on every cell and so cannot tell
+them apart; G1/G2 were taken after the two races had put a gold on `grid0_3_2` (the saved medal persisted across a
+reboot), which hides the glyph on its six hex neighbours without touching their `Locked` byte:
+
+| # | Walk | Read | Reading |
+| --- | --- | --- | --- |
+| B2 | cursor left on locked `grid0_2_2`; enter `grid1` (has a locked `grid1_2_2`) | `grid1_3_1` (default) | glyph at the slot: rejected |
+| B3 | cursor left on locked `grid1_2_2`; enter `grid0` (has a locked `grid0_2_2`) | `grid0_3_1` (default) | same |
+| C1 | cursor left on locked `grid0_2_2`; leave and re-enter **the same grid** | `grid0_3_1` (default) | not carried even within one grid |
+| D2 | `grid0_2_2`'s `Locked` byte written 0 (`cell + 0xb9`, was 1) while on `Grid Selection`; cursor left on it; re-enter `grid0` | `grid0_2_2` | glyph gone, carried (byte and glyph agree) |
+| E1 | cursor left on `grid0_2_2` (byte now 0); enter `grid1` where `(2, 2)` is locked | `grid1_3_1` (default) | the **new** grid's tile decides, not the old one's |
+| **G1** | gold on `grid0_3_2`; cursor left on `grid0_2_2` (byte `+0xb9` read **1**, glyph hidden by the gold neighbour); leave and re-enter `grid0` | `grid0_2_2` | **the glyph decides: the raw byte rule would have reset it** |
+| G2 | same boot; cursor left on `grid0_2_1` (byte absent, glyph still drawn, no medal beside it); leave and re-enter | `grid0_3_1` (default) | control: a visible glyph resets it |
+
+G1/G2 are one boot each, one walk each (frames `71`-`74` under `data/scratch/pulse-cursor-live/`). The first
+implementation keyed on `Locked == false` and would have failed G1; it now asks the screen's own lock predicate
+(`CellSelection::selected_is_locked`: byte set, no medal of its own, no medalled hex neighbour).
+
+**Not measured:** a slot the new grid has no cell at (every slot tried existed), a glyph still fading out at the
+moment of re-entry (the lock layer's fade flag is a second bit this walk did not separate), anything on HD/Fury, and a
+grid reached by the game's own unlock path rather than the `Locked` poke.
+
+**Implemented** (`crates/game/src/main/campaign_stage.rs`, `CellCursor`, four unit tests): the slot is the cell's
+`(x, y)` from its name (`Cell::grid_coords`); `restore` selects the cell at the slot and puts the cursor back on the
+default if `selected_is_locked()` says that cell still shows a glyph; `Session::campaign_cursor` carries it across
+`RACE CAMPAIGN` openings (written when the campaign closes on any path, including launching a race). HD/Fury run the
+same code through the shared stage: **chosen, not measured** there. Confidence **90** for the shared slot and its
+persistence across leaving the campaign (decompile plus a runtime read on two boots, one binary), **85** for the
+glyph filter (a runtime read, G1 and its control seen once each, the decompile's layer-4 flag test agreeing).
+
 ## Open
 
 - ~~`Cell Selection`'s initial cursor was "first cell in document order"~~ -
@@ -2592,19 +2664,22 @@ unit tests only check the *draw*, never how a caller clips it.
   `CellSelection` on every call instead, so a re-entry here always lands
   back on the document-order default rather than wherever the player left
   it. ~~Not fixed this pass.~~ **Fixed, 2026-09-28 (`pulse-campaign-flow`
-  lane)**: `CampaignStage` now keeps a per-grid `CellCursors` memory,
+  lane)**: `CampaignStage` now keeps a per-grid `CellCursors` memory (**superseded
+  2026-10-02**: the cursor is one slot shared by every grid and kept across leaving the
+  campaign, see "Where the cursor lives" above),
   written by `back_to_grid_selection` and restored by
   `open_cell_selection` (test
   `campaign_stage::tests::a_re_entered_grid_restores_the_cursor_it_was_left_on`),
   and verified live under Xvfb: moved to `grid0_3_2` (Time Trial, Metropia
-  White), backed out to `Grid 1`, re-entered on `grid0_3_2`. **Chosen, not
+  White), backed out to `Grid 1`, re-entered on `grid0_3_2`. ~~**Chosen, not
   measured**: that the memory is keyed per grid (a grid never entered keeps
   its own first-visit default) and that it is forgotten once the campaign
-  screens close - the original was only observed backing out of and
-  re-entering the same grid. Also chosen, not measured: HD/Fury share
+  screens close~~ - **both falsified 2026-10-02 (`pulse-cursor-live`)**: one slot is shared
+  by every grid and survives leaving the campaign, see "Where the cursor lives" above.
+  Still chosen, not measured: HD/Fury share
   `CampaignStage`, so their `Cell Selection` now persists the cursor too,
   though only Pulse PSP was observed doing it. **Decompile, 2026-10-02
-  (`pulse-loyaltybar`, 70)**: the original keeps the cursor as the `Selector` widget's own
+  (`pulse-loyaltybar`, 70; measured and implemented the same day, above)**: the original keeps the cursor as the `Selector` widget's own
   `(x, y)` slot, shared by every grid, so the per-grid keying above probably disagrees on a
   second grid (it would keep `(3, 2)` if the new grid has a cell there). Not changed: see
   [`race-campaign.md`'s section](../ghidra/functions/psp-pulse-usa/race-campaign.md#where-cell-selection-keeps-its-cursor-across-a-back-out-2026-10-02-pulse-loyaltybar)
@@ -3481,7 +3556,7 @@ reproduce. What a player sees, screen by screen (two or more frames each):
 11. **Cursor persistence on Fury**: `Down` to the Eliminator cell (The
     Amphiseum, `TARGET 200 (NOVICE)`, footer `Difficulty (NOVICE)`), Back,
     Enter - the cursor came back on the Eliminator cell. That is our
-    `CellCursors`, still **chosen, not measured** on HD.
+    `CellCursors` (now the shared `CellCursor`, see "Where the cursor lives"), still **chosen, not measured** on HD.
 
 Screenshots are under `data/scratch/drive-2026-09-28/clw/shots/h*.png`
 (gitignored, game content). Left open by this walk: the `EndRace Menu`
