@@ -99,8 +99,8 @@ parent's tag:
 
 Three hits, then none for 120 s: exactly `01_Track`'s three nodes, every matrix
 word identical to the disc's payload, and no parent an `animationTrigger`, so all
-three spawn. Circuits five and seven were not captured live; their nodes go
-through the same function and are read statically.
+three spawn. Outpost 7 was captured the same way afterwards (below); circuit
+five was not, and its nodes go through the same function.
 
 ## What a player sees, and how ours compares
 
@@ -122,7 +122,9 @@ core. Neither is read.
 
 Outpost 7's steam vents were confirmed spawned live (18 loads, below) but not
 compared on screen: from the racing line the vents sit 80 or more units off and
-below the road, and neither side shows them in the frames sampled.
+below the road, and neither side shows them in the frames sampled. Ours, with
+the camera put 40 units from a vent row (`--camera-pose`), draws faint white
+plumes rising out of the vent holes; the original was not shot from there.
 
 ### Outpost 7, live
 

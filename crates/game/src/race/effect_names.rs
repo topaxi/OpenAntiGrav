@@ -388,6 +388,5 @@ pub const BLUE_WELDER_EFFECT: &str = "WO_BLUE_WELDER";
 /// The steam vents circuits five and seven place: two on five, eighteen on
 /// seven. **A Pulse effect**, despite the name: no Pure circuit is needed to
 /// explain it. Same placement mechanism and evidence as
-/// [`BLUE_WELDER_EFFECT`], read statically; the live capture covered
-/// Basilico, which places no steam.
+/// [`BLUE_WELDER_EFFECT`]; Outpost 7's eighteen loads were caught live too.
 pub const MODESTO_STEAM_EFFECT: &str = "WO_MODESTO_STEAM_A";
