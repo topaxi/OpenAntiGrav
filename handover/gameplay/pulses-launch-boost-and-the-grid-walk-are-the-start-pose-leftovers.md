@@ -34,7 +34,7 @@ per-slot heading, landed; the write-up and every measurement are in
   grid state, so a Zone craft stands through the countdown; `on_grid` covers Zone and the auto-speed carries the launch
   multiplier (1.159 coasting over held at 28 frames, as read live); see
   [zone-start.md](../../docs/ghidra/functions/psp-pulse-usa/zone-start.md). Its own leftovers: the four-corner
-  epilogue's `50.0` bank coupling (`0x0884b76c`) is not ported, and the capture patched `g_game_mode` on a Single Race
+  epilogue's `50.0` bank coupling (`0x0884b76c`) **landed 2026-10-02** (`pulse-zone-rest`, zone-rest.md), and the capture patched `g_game_mode` on a Single Race
   grid, so a native Zone race was not watched (Zone is greyed on a fresh profile).
 - ~~**`01_Track` slot 1's heading**~~ is the edge chord, resolved with the grid walk above.
 - **The AI board moved**: `04_Track` RAPIER `CleanLap` to `Died` (one death at tick

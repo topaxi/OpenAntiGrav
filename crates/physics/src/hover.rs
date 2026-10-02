@@ -1071,7 +1071,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // has tipped out of the world horizontal, and cancelled by a magstrip lock
     // like the rest of the suspension.
     // Skipped on the grid: `craft+0x2a4 != 0` guards it, see `ShipState::on_grid`.
-    let bank = BANK_TO_YAW_GAIN * right.y * (1.0 - state.mag_lock_blend);
+    let bank = bank::gain(state) * right.y * (1.0 - state.mag_lock_blend);
     let local_angular_torque = Vec3::new(0.0, if state.on_grid { 0.0 } else { bank }, 0.0);
 
     // Two probes both penetrating would each ask for a teleport, and applying
@@ -1097,5 +1097,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
 }
 
+mod bank;
+pub use bank::BANK_TO_YAW_GAIN_FOUR_CORNER;
 #[cfg(test)]
 mod tests;

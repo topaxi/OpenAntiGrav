@@ -71,9 +71,12 @@ impl Race {
         // included (it has a countdown; its auto-speed is not multiplied yet, see
         // `oag_physics::engine::engine`).
         let released = !RaceState::thrust_gated(self.sim.world.tick + 1);
+        // Zone's hover is the four-corner variant for every craft in the field.
+        let four_corner = self.sim.world.mode() == Mode::Zone;
         for ship in &mut self.sim.world.ships {
             ship.physics.on_grid = on_grid;
             ship.physics.released = released;
+            ship.physics.four_corner = four_corner;
         }
         // The one craft a person is flying this tick. `0` under
         // `World::SINGLE_PLAYER`, which is every session this engine starts, so
