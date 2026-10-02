@@ -77,8 +77,8 @@ are never reached because `t < 1` ends the flash first.
 `WO_SHIP_DEATH_SPARKS` at each node of the **wreck** (`oag_game::race::wreck_fx`;
 read live, see [ship-wreck-model.md](ship-wreck-model.md)); then `WO_SHIP_EXPLOSION`
 at the placement below, and `Camera_ArmShake` for the player on both (`(0.3, 0.4,
-camera, 3)` at state 5 and `(0.8, 0.6, camera, 1)` at state 6, left out where the
-race ends on the state 5 edge), and **the `Bomb_Shockwave.vex` ring below, built 2026-10-01**
+camera, 3)` at state 5 and `(0.8, 0.6, camera, 1)` at state 6, both played where the
+race ends on the state 5 edge too, since 2026-10-02 the finished race steps its cosmetics, `Race::tick_cosmetics`), and **the `Bomb_Shockwave.vex` ring below, built 2026-10-01**
 ([ship-shockwave.md](ship-shockwave.md)). **Not built:** the two sounds.
 
 ### `Ship_SpawnExplosionBig`'s placement, read and measured 2026-10-01

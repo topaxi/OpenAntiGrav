@@ -442,7 +442,7 @@ hypothesis on state 6.** Three of the states have their own per-tick update:
 | --- | --- | --- |
 | 4 | `Ship_UpdateExploding` (`0x088404c8`) | `+0x874 -= dt`; at zero, `Ship_SetState(5)` |
 | 5 | `Ship_UpdateDestroyed` (`0x08847650`) | `+0x874 -= dt`; at zero counts the kill (`craft+0x8d4`), announces `FIRST KILL` / `5 KILLS LEFT` / `3` / `1` / `cont_elim` in Elimination (modes `8`/`0x12`, against the target `DAT_08b30fb0`), then `Ship_SetState(6)` - or `8` in Elimination |
-| 6 | `Ship_UpdateRespawn` (`0x08847914`) | `+0x874 -= dt` (the `2.0` s the player waits, `0.8` s an AI); at zero plays `RESET` for the player, clears the boost/stun fields, **relocates the craft onto the spline** - at the AI-corridor midpoint, 5 units up, facing 40 units down the tangent - sets the hover height from the handling block (`+0x78c * 0.25 + 50`), `Ship_SetState(1)`, `Ship_ResetShield`, and clears the destroyed bit `0x1000` |
+| 6 (**wrong, see the 2026-10-02 correction below: this is state 8's update**) | `Ship_UpdateRespawn` (`0x08847914`) | `+0x874 -= dt` (the `2.0` s the player waits, `0.8` s an AI); at zero plays `RESET` for the player, clears the boost/stun fields, **relocates the craft onto the spline** - at the AI-corridor midpoint, 5 units up, facing 40 units down the tangent - sets the hover height from the handling block (`+0x78c * 0.25 + 50`), `Ship_SetState(1)`, `Ship_ResetShield`, and clears the destroyed bit `0x1000` |
 
 So state 6 is the **respawn delay after destruction**, not a false-start stall
 (which [race-modes.md](../../../gameplay/race-modes.md) had already measured
@@ -454,6 +454,36 @@ State `2` is *finished*: `Race_FinishAllCrafts` (`0x08824e10`,
 to its autopilot; state `7` is a networked craft whose peer dropped
 (`FUN_08847f54`). States `0` and `1` are grid and racing, set by
 `Race_PlaceGrid` and `Race_StartRacing`.
+
+**Correction, 2026-10-02 (pulse-wreck-3): the per-state update table says state 8, not 6, is
+`Ship_UpdateRespawn`.** `FUN_088418e0` dispatches on `Ship_State` through the nine-entry table at
+`0x08a7bb88` (`sltiu 9`, `lui 0x8a8`, `lw -0x4478`, `jr`; read headless, whole table below):
+
+| State | Entry | Update |
+| --- | --- | --- |
+| 0, 1, 2, 3 | `0x08841d68`, `d7c`, `dc8`, `ddc` | `FUN_0883fde0`, `Ship_UpdateStartBoost` (when `craft+0x368` is 0 or 2), `FUN_0883ff64`, `FUN_0883ff6c` |
+| 4 | `0x08841df0` | `Ship_UpdateExploding` |
+| 5 | `0x08841e04` | `Ship_UpdateDestroyed` (call at `0x08841e08`) |
+| 6 | `0x08841e18` | **`FUN_08840500`: `+0x874 -= dt`, and the frame it crosses zero plays `cont_elim` in modes other than 2, 8 and 18. Nothing else** |
+| 7 | `0x08841e2c` | `FUN_088405c8` (back to state 1 when `DAT_08b313dc[craft+0x364]` is set, for a local or networked craft) |
+| 8 | `0x08841e40` | **`Ship_UpdateRespawn`** (call at `0x08841e44`, its only caller) |
+
+So the table above that reads state 6 as "the respawn delay" is half right: `Ship_SetState`'s case 6 does arm `2.0`/`0.8` s, but
+nothing read counts it into a respawn. The relocation, the `RESET` cue, `Ship_ResetShield` and `Ship_SetState(entity, 1)` belong to
+**state 8**, which only the Eliminator reaches (`Ship_UpdateDestroyed` picks 8 for modes 8 and 18, 6 for the rest). Consequences:
+the Eliminator's return is state 5's `1.5` s then state 8's `1.0` s (the local player) or `2.0` s (anyone else), ported as
+`eliminator::eliminator_respawn_delay` (confidence 88: table and call read, no live Eliminator wreck); and **what brings a single
+race's wrecked AI craft back from state 6 is not found** - the port's `DESTROYED_DWELL + AI_RESPAWN_WAIT` return below is
+unverified. **The search for another way in or out** (headless, all 20 `Ship_SetState` call sites, `0x08844100`'s xrefs): the only
+call that passes `8` is `Ship_UpdateDestroyed`'s (`0x088478ec`); every other caller is a fixed state (`Race_PlaceGrid` 0,
+`Race_StartRacing` 1, `Race_FinishAllCrafts`, `FUN_0882d578`, `FUN_088dfb90`, `FUN_08824a44`, `Race_ResetCraftBoosts_q` 2, the
+`FUN_088418e0` sites 2 and 3, `Ship_Damage` 4, `Ship_UpdateDestroyed` 6 and 8, `FUN_088405c8` and `Ship_UpdateRespawn` 1,
+`FUN_08847f54` 7). The two `FUN_088418e0` routes to state 3 need the destroyed bit `0x1000` clear, and only `Ship_UpdateRespawn`
+clears it. So **no path read brings a state-6 craft back before `Race_StartRacing`** - which fits the announcer line the state-6
+timer plays at expiry (`cont_elim`, "contender eliminated": a single race's destroyed AI craft may simply be out, as
+`RaceState::eliminate` already argues for the player). Consistency, not proof: `Ship_UpdateRespawn`'s own `cont_elim` branch
+(modes other than 2, 8, 18) is dead code if only the Eliminator reaches it, which suggests the update was once state 6's. A live
+run on PPSSPP decides it. `Ship_UpdateDestroyed` also writes `4.0` into `+0x874` before `Ship_SetState` overwrites it (read, no effect seen).
 
 **The address-resolution trap, and how state 7's table was actually read**:
 both addresses state 7's own disassembly computes (`lui`/`lw`-offset pairs, not

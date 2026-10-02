@@ -46,6 +46,7 @@ mod spawn;
 mod spline;
 mod trail_hits;
 mod weapons;
+mod wreck_finished;
 mod wreck_fx;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.

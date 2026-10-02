@@ -131,17 +131,18 @@ fn the_players_explosions_shake_their_camera() {
     );
 }
 
-/// Where the race ends on the state 5 edge the first shake is left out - a
-/// finished race is not stepped and would hold it at its largest frame.
+/// Where the race ends on the state 5 edge the first shake is armed too: the
+/// finished race steps its cosmetics, so it decays instead of holding at its
+/// largest frame (`wreck_finished` pins the playing out).
 #[test]
-fn a_race_that_ends_on_the_edge_is_not_left_mid_shake() {
+fn a_race_that_ends_on_the_edge_is_shaken_like_any_other() {
     let mut race = with_a_station();
     assert_ne!(race.sim.world.mode(), Mode::Eliminator);
     race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
     race.advance_craft_flashes();
     race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
     race.advance_craft_flashes();
-    assert!(!race.view.shake.active());
+    assert!((race.view.shake.magnitude() - 0.3).abs() < 1e-6);
 }
 
 /// State 4 cancels a shake already running, as `Ship_SetState` case 4 does.

@@ -113,6 +113,49 @@ impl Race {
         self.finished() && self.sim.world.ships[self.player_slot()].standing.finished()
     }
 
+    /// One tick of a race that ended another way than the player's crossing:
+    /// the world stands still, and only what a player can *see* keeps moving.
+    ///
+    /// A wreck that ends a Single Race or a Zone run is state 5, and the
+    /// original goes on running behind the panels: the state-5 shake, the
+    /// wreck's fire, the big explosion 1.5 s on and its shockwave ring, the
+    /// screen flashes and the destroy camera's ease. They are all presentation
+    /// state on [`RaceView`] (the particle stage, the shake, the flash, the blast
+    /// pool, the camera's easing) and none of them reaches
+    /// [`RaceSim::state_hash`]; this writes nothing under `self.sim`, `world.tick`
+    /// included, so the standings and the board stay frozen exactly as
+    /// [`Race::runs_on_after_the_line`]'s own rows say. In [`Race::tick`]'s order.
+    ///
+    /// **Chosen, not measured:** only the player's wreck was looked at, so every
+    /// other thing the original's running world does under the panels (the
+    /// opponents flying on, shots in flight, the engines' trails) is left
+    /// standing as before.
+    pub fn tick_cosmetics(&mut self) {
+        let dt = self.sim.dt;
+        self.view.shake.advance(dt);
+        self.advance_bomb_blast_models(dt);
+        self.advance_wreck_fx();
+        self.view.stage.advance(dt, &mut self.view.stage_rng);
+        self.advance_craft_flashes();
+        self.advance_destroy_camera();
+        let eye = self.camera_position();
+        if let Some(flash) = &mut self.view.screen_flash {
+            flash.advance(dt, eye);
+        }
+    }
+
+    /// One tick of a finished race, for whoever drives the frame loop: the
+    /// whole world after the player's last crossing ([`Race::runs_on_after_the_line`],
+    /// neutral input because the panels consume the pad), only the cosmetics
+    /// ([`Race::tick_cosmetics`]) after any other ending.
+    pub fn tick_finished(&mut self) {
+        if self.runs_on_after_the_line() {
+            self.tick(&oag_gameplay::PlayerInputs::none());
+        } else {
+            self.tick_cosmetics();
+        }
+    }
+
     /// The results screens' tallies. See [`RunStats`].
     #[must_use]
     pub fn run_stats(&self) -> RunStats {
