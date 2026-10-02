@@ -75,6 +75,7 @@
 //!   one.
 
 use crate::world::{MAX_SHIPS, Ship};
+use oag_physics::damage::CraftState;
 use oag_tables::weapons::LeachBeamStats;
 
 /// Seconds a beam fired with no lock lasts before it gives up.
@@ -273,9 +274,12 @@ impl Beam {
 
     /// Whether the link should break this tick.
     ///
-    /// The five reasons, all from `LeachBeam_UpdatePool`'s own chain: the
-    /// lifetime ran out, either craft left the race, the target put a Shield
-    /// pickup up, or the two drifted further apart than [`Self::range`].
+    /// The reasons, all from `LeachBeam_UpdatePool`'s own chain: the lifetime
+    /// ran out, either craft left the race, the target put a Shield pickup up,
+    /// either craft is not in `Ship_State` 1 (racing), or the two drifted
+    /// further apart than [`Self::range`]. The original also breaks when the
+    /// shooter's own `entity+0x120` leach accumulator is positive; with one
+    /// beam per race nothing else writes it, so it cannot fire here.
     ///
     /// **The target's invulnerability bit (`target+0x860 & 0x1000`) is not
     /// reproduced** - it is the respawn/rescue state, which this engine
@@ -295,6 +299,15 @@ impl Beam {
             return true;
         }
         if target.physics.shield_pickup_timer > 0.0 {
+            return true;
+        }
+        // `Ship_State(target) == 1 && Ship_State(owner) == 1` or the link
+        // breaks: a craft that is exploding, eliminated or waiting to respawn
+        // lets go, and a broken link never re-forms, so a respawned target is
+        // not drained.
+        if owner.physics.craft_state != CraftState::Racing
+            || target.physics.craft_state != CraftState::Racing
+        {
             return true;
         }
         let separation = owner.physics.body.position - target.physics.body.position;
