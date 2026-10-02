@@ -378,8 +378,8 @@ impl EngineForce {
 ///
 /// **Not implemented, all of it flag-gated on the undecoded `craft+0x1c0`:** the
 /// uncapped mode (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo's
-/// boost lift, the kill switch at bit `0x2000`, and the four-corner mode's own
-/// `(flags & 1) && !(flags & 2)` gate. Each needs a flag nobody has decoded, so
+/// boost lift and the kill switch at bit `0x2000`. (The four-corner mode's own
+/// `(flags & 1) && !(flags & 2)` gate is groundedness and [`ShipState::on_grid`].) Each needs a flag nobody has decoded, so
 /// implementing them would mean inventing their triggers.
 #[must_use]
 pub fn engine(
