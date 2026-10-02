@@ -3432,3 +3432,69 @@ it is a planning aid and says of itself that it is no claim about the original).
 `race::Options::opponents` remains, and now means only "field a grid from a mode
 that would not ask for one" - which is what the grid's own ground-truth test
 wants. See the M5 `AI` item on the [roadmap](../overview/roadmap.md).
+
+## de Konstruct Black: the field dies where one craft does not (2026-10-03)
+
+**Which file.** `Definition.xml` lists each White/Black pair in file order, and for
+`05` the reversed entry (`21_Track`, `track_reversed.vex`) comes first, so **Black
+is the forward `05_Track`** (`track.vex`) and White the reversed one. That is the
+same rule that makes `01_Track` Basilico *Black* in
+[the PPSSPP debugger notes](../reverse-engineering/ppsspp-debugger.md), where
+`17_Track` is listed before it. It is inferred from the definition order and the
+maintainer's report, **not** checked against a PPSSPP grid position for `05`.
+
+**The report, measured** (`crates/game/tests/ai_dekonstruct_black_board.rs`,
+`OAG_SWEEP=1`: seven Aces plus the parked player slot, three seeds, 21 craft per
+cell, 18,000 ticks, weapons as the mode ships them). Craft **destroyed** of 21:
+
+| class | Black before | Black after | White (reversed, control) |
+| --- | ---: | ---: | ---: |
+| VENOM | 19 | 15 | 1 |
+| FLASH | 19 | 13 | 2 |
+| RAPIER | 13 | 11 | 3 |
+| PHANTOM | 13 | 10 | 6 |
+
+The lone Ace (slot 1) never died on Black at VENOM and died once at FLASH, which
+is why the twelve-circuit gate was green all along. Across every circuit in both
+directions (two seeds, VENOM and RAPIER) forward `05` is the worst VENOM field
+(13 of 14 destroyed, 37,048 wall-contact ticks against 07's 6,116 and 18 respawns
+against 0), and its reversed twin is among the best.
+
+**Mechanisms found, in order of how much they explain:**
+
+1. **The first jump's crest is read as a corner.** `05_Track`'s line has a crest
+   bend (curvature 0.0126, a speed target of 124 against a craft doing 127) 20-30
+   samples *before* the first unsupported sample, so the driver coasts off the
+   ramp. A lone Ace at the pole arrives at 118.9; the field arrives at 105-119 and
+   a craft leaving the ground a few units a second short clips the far lip at 204-206
+   and loses 70 of its speed. Fixed by `Line::curvature` reading **yaw only** on the
+   75 units before a gap of 40+ unsupported samples, and `Driver::drive` skipping
+   the caution lift there. Takeoff speeds at VENOM went from 105-119 to 118-134.
+   **Chosen, not measured.** The first version marked every gap and silenced real
+   corners before `07_Track`'s gap (399 to 708 contact ticks), and the 5- and
+   12-sample lips on `06` and `01` took 20-40 more contact ticks for a faster lap.
+2. **A wedge at 586-600.** After a bad landing a craft swings across the road and
+   ends up 17-29 units left of the line (the corridor is +-10) creeping at 1-3 units
+   a second with the throttle full, and the next arrival piles onto it. The stall
+   rescue needs under 1 unit a second for 120 ticks, so a creeper waits 800+ ticks.
+   **Not fixed.** What did not work, each measured against the field's destroyed
+   count and the gate: a speed floor on the yaw demand (10-60 cut 27 to 4-9 over 6,000 ticks but only
+   about 4 over 18,000, and cost contact on 07, 10, 16 and 09 and regressed 04
+   RAPIER), a lookahead that grows with cross-track error (25-33 against 4), a
+   speed cap off the line, steering held straight in the air (the lone Ace then
+   needed 4 respawns), a wider stall trigger (the pile forms faster than 300 ticks).
+3. **Not causes**, each switched off in turn: craft-to-craft contact, the speed
+   pads, weapons (Black's *reversed* twin dies only from them), the personality
+   axes (a plain line follower in slots 2, 4, 6 and 7 alone on the circuit dies at
+   600-650 as well - slot 1 is the pole, the one grid position that arrives fast
+   enough).
+
+**Where it stands.** `ai_dekonstruct_black_ground_truth.rs` bounds the field's
+destroyed craft per (class, seed) on both layouts: 64 before, 49 after across the
+twelve forward cells, 12 and 12 reversed. `ai_clean_lap_gate`'s four `05` rows moved
+(FLASH `Eliminated` to `CleanLap`, 1,700 contact ticks to 140; laps 26-35 ticks
+quicker; PHANTOM contact 203 to 232); every other row reproduced exactly, and the
+twelve-circuit gate stays all-twelve-clean with `01` and `06` unchanged.
+Roughly half the field still dies on Black: the wedge and a second crest at
+idx 399-484 (a craft at 250 units a second after a pad flies it and lands wide) are
+open.

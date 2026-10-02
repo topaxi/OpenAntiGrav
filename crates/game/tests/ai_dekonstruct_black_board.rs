@@ -227,7 +227,7 @@ fn dekonstruct_board() {
     for class in classes() {
         for reversed in [false, true] {
             let Some(entry) = entry(reversed) else { return };
-            let name = if reversed { "05 Black" } else { "05 forward" };
+            let name = if reversed { "05 White (rev)" } else { "05 Black (fwd)" };
             for field in [false, true] {
                 let mut t = Tally::default();
                 for seed in if field { seeds() } else { vec![1] } {
