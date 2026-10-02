@@ -55,22 +55,24 @@ impl Race {
         // and a restart, which rebuilds the race, always begins in it. Physics
         // reads the flag; see `oag_physics::ShipState::on_grid`.
         //
-        // **Zone included** (2026-10-02). The term the flag gates is
-        // `Ship_HoverTwoPoint`'s, and Zone runs `Ship_HoverFourCorner`
-        // (`Ship_UpdateHover`, `0x0884870c`), whose epilogue is the same term with the
-        // same guard: `0x0884b76c  lw a0,0x2a4(s0)` / `beq a0,zero,0x0884b798` skips
-        // `craft+0x340.y += 50.0 * right.y * (1 - magLockBlend)` in state 0, where the
-        // two-point twin (`0x0884ad2c`) skips `30.0 *`. Read from the instructions, not
-        // watched live in Zone. This port flies Zone on the two-point law, so its
-        // post-release coupling keeps `30.0` where the original's is `50.0`.
-        // Measured on a Time Trial only otherwise.
+        // **Not Zone, and no longer for want of reading.** The term the flag gates is
+        // `Ship_HoverTwoPoint`'s; Zone runs `Ship_HoverFourCorner` (`Ship_UpdateHover`,
+        // `0x0884870c`), whose epilogue carries the same guard (`0x0884b76c  lw
+        // a0,0x2a4(s0)` / `beq a0,zero,0x0884b798`, gain `50.0` where the two-point
+        // twin's is `30.0`). It stays off because this port's Zone craft is already
+        // moving through the countdown (auto-speed is not gated by it: 98 km/h at tick 267
+        // in `zone_ground_truth`), where what the original's Zone engine does in state 0
+        // is unread, and switching the coupling off under a moving craft took that test's
+        // 300-tick speed from 103.4 to 91.2 km/h. See `docs/physics/grid-state.md`.
+        // Measured on a Time Trial only.
         //
         // **One tick before thrust is released**, not the same one: the craft
         // enters state 1 on the frame *before* the throttle word steps
         // (`flags_1c0` and `state_2a4` read `0x1`/`1` there on four live runs,
         // `docs/physics/grid-state.md`), so the coupling and the launch boost's
         // clock both start a tick ahead of the first thrust. Measured on Pulse PSP.
-        let on_grid = RaceState::thrust_gated(self.sim.world.tick + 1);
+        let on_grid =
+            RaceState::thrust_gated(self.sim.world.tick + 1) && self.sim.world.mode() != Mode::Zone;
         // The launch boost's clock starts at the same tick in every mode, Zone
         // included (it has a countdown; its auto-speed is not multiplied yet, see
         // `oag_physics::engine::engine`).
