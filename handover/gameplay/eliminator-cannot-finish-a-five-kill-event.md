@@ -34,6 +34,7 @@ plus the respawn-keeps-its-place test).
 ## Next Steps
 
 1. ~~Credit beam, Cannon and Quake kills~~ done 2026-10-02.
+1b. ~~Leech Beam outlived a kill and drained the respawned craft~~ fixed 2026-10-02: `Beam::link_broken` now requires both craft in `CraftState::Racing` (the original's `Ship_State == 1` pair); a broken link never re-forms.
 2. Wall deaths: log where opponents die with no weapon hit and whether the shield was already low.
 3. A drop/discard rule for held Mine, Bomb, Cannon and Beam in Eliminator, labelled chosen.
 4. A held-Turbo chase: keep Turbo until a craft is 100 to 400 units ahead, then fire it.

@@ -2305,6 +2305,23 @@ clear):
    amplitude on the shooter), and - whenever that rate is positive - calls
    `LeachBeam_Drain` (below).
 
+### 2026-10-02: the race-state half of the disconnect gate, read whole
+
+`LeachBeam_UpdatePool` (`0x08866b08`) decompiled in full. A live kind-1 link
+sets `instance+0x3c |= 0x40` (`LeachBeam_MarkDisconnected`) when ANY of:
+`FUN_08872f54 > range` (owner craft node at `+0x5c`->`+0x30` matrix `+0x30`
+minus target node `+0xa0` matrix `+0x30`, floored at `instance+0x13c`);
+`target+0x860 & 0x1000` (set by state 5); `target->entity+0x1b8 & 0x10`;
+the **owner entity's `+0x120` pending-leach > 0**; `Ship_State(target) != 1`;
+`Ship_State(owner) != 1`; or `LeachBeam_Advance` returned 0 (lifetime). The mark
+is one-way: a disconnected link only lingers (`+0.5 s`) and retires, it never
+re-forms. So a kill (state 4 then 5) and the whole respawn wait (states 6/8)
+disconnect the beam, and a respawned target is not drained. Static read of the
+decompile, confidence 85; not watched live on PPSSPP. Ours lacked both
+`Ship_State` tests (it only tested slot occupancy) and now has them
+(`Beam::link_broken`). The owner `+0x120` arm is not ported: only the beam
+writes that accumulator and there is one beam per race, so it cannot fire.
+
 ### `LeachBeam_Drain` (`0x08866804`) - the transfer, both directions
 
 ```c

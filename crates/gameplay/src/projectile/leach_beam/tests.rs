@@ -7,6 +7,7 @@
 use super::*;
 use oag_core::math::Vec3;
 use oag_physics::DamageRules;
+use oag_physics::damage::CraftState;
 
 /// The Race table's own LeachBeam, as parsed off `pulse-psp-usa.chd` - see
 /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
@@ -253,4 +254,44 @@ fn a_victim_that_is_not_racing_is_not_throttled() {
 
     beam.advance(&mut ships, 2, rules(), DT);
     assert_eq!(ships[1].pending_thrust_scale, 1.0);
+}
+
+/// `LeachBeam_UpdatePool` breaks the link unless `Ship_State` is 1 for both
+/// craft: a kill (Destroyed, then Eliminated) lets go of the beam.
+#[test]
+fn a_kill_breaks_the_link() {
+    for state in [CraftState::Destroyed, CraftState::Eliminated] {
+        let mut ships = field(50.0);
+        let mut beam = Beam::locked(0, 1, &stats());
+        assert!(beam.advance(&mut ships, 2, rules(), DT).drained);
+        ships[1].physics.craft_state = state;
+        let report = beam.advance(&mut ships, 2, rules(), DT);
+        assert!(report.disconnected, "{state:?} target kept the link");
+        assert!(!report.drained);
+    }
+}
+
+/// The same check on the shooter: a beam does not outlive its owner's death.
+#[test]
+fn a_dead_shooter_breaks_the_link() {
+    let mut ships = field(50.0);
+    let mut beam = Beam::locked(0, 1, &stats());
+    ships[0].physics.craft_state = CraftState::Destroyed;
+    assert!(beam.advance(&mut ships, 2, rules(), DT).disconnected);
+}
+
+/// A broken link never re-forms: the respawned target is not drained again.
+#[test]
+fn a_respawned_target_is_not_drained() {
+    let mut ships = field(50.0);
+    let mut beam = Beam::locked(0, 1, &stats());
+    ships[1].physics.craft_state = CraftState::Eliminated;
+    assert!(beam.advance(&mut ships, 2, rules(), DT).disconnected);
+    ships[1].physics.craft_state = CraftState::Racing;
+    let shield = ships[1].physics.shield;
+    for _ in 0..10 {
+        assert!(!beam.advance(&mut ships, 2, rules(), DT).drained);
+    }
+    assert_eq!(ships[1].physics.shield, shield);
+    assert!(!beam.connected());
 }
