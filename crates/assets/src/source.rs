@@ -271,7 +271,7 @@ impl Archives {
             None => Container::open(spec),
         };
         let data = mount(&layout.data)?;
-        let fe = layout.fe.as_deref().map(&mount).transpose()?;
+        let fe = layout.fe.as_deref().map(mount).transpose()?;
         let extra = layout
             .extra
             .iter()
