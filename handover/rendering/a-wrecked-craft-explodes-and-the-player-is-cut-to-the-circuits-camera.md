@@ -22,14 +22,25 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
 
 ## Open
 
-- **A finished race freezes the world**, so a player's wreck in a Single Race or Zone is
-  one frozen frame under the results panel: the destroy camera, but no state 6, no big
-  explosion for the player and, by choice, no state-5 shake (it would freeze at its
-  largest frame). The original keeps running. Only an Eliminator plays the sequence.
-- **The Eliminator respawns the craft at the same tick the big explosion goes off**
-  (`ELIMINATOR_RESPAWN_DELAY` is the state-5 dwell alone; the original adds state 8's
-  timer), so the player never sees the explosion from the destroy camera. The blast
-  is placed with the matrix the craft was wrecked with, so it still lands on the wreck.
+- ~~**A finished race freezes the world**~~ **Closed 2026-10-02 (pulse-wreck-3).** A race a wreck ended (Single Race, Zone) now
+  steps its cosmetics under the results (`Race::tick_cosmetics`, called by `Session::frame` and the headless capture where they stopped
+  stepping a finished race): the player's state-5 shake (armed in every mode now), the wreck's fire, the big explosion 1.5 s on, its
+  ring, the screen flashes and the destroy camera's ease. It writes nothing under `sim` (`world.tick` included), so the standings and
+  the board stay frozen; `wreck_finished` pins the hash. Seen at 480x272 (`data/scratch/pulse-wreck-3/shots/sheet.png`): the camera
+  stays on the wreck, the explosion's fireball and the kind 7 wash play under the panels, the picture is clear again by about 100
+  frames. **Chosen, not measured:** only the player's wreck was looked at, so the opponents, shots in flight and trails stay
+  frozen under it (the original goes on running them).
+- ~~**The Eliminator respawns the craft at the same tick the big explosion goes off**~~ **Closed 2026-10-02 (pulse-wreck-3).** State 8's
+  update is `Ship_UpdateRespawn` (`FUN_088418e0`'s per-state jump table at `0x08a7bb88`: state 8 goes to the call at `0x08841e44`),
+  so the Eliminator waits state 5's `1.5` s and then state 8's `1.0` s (the player) or `2.0` s (anyone else):
+  `eliminator::eliminator_respawn_delay`. The destroy camera is on the wreck as the explosion goes off and lets go with the respawn
+  (`data/scratch/pulse-wreck-3/shots/sheet_e.png`: the fireball seen from the circuit's camera, then the RESET wash and the chase
+  camera). Confidence 88: the table and the call read, no live run of an Eliminator wreck.
+- **The same table says state 6 is `FUN_08840500`, a bare `+0x874` countdown** (plus the `cont_elim` line at expiry in modes other
+  than 2, 8 and 18), not `Ship_UpdateRespawn`; nothing read revives a craft in state 6. `shield.md` and the port both had a
+  single-race opponent return after `1.5 + 0.8` s through `Ship_UpdateRespawn`. **Unreconciled, not changed here** (it is
+  `oag-game` sim timing outside this lane): watch an AI craft driven to state 4 in a Single Race on PPSSPP for 5 s and see whether
+  it ever leaves state 6.
 - ~~The explosion's smoke is thinner and its fire brighter and longer in ours at k 160 to
   180 (2.2x to 2.4x).~~ **Closed 2026-10-01 (pulse-fx-recheck)**: the matrix's `0.75` rows scale every root
   emitter's spawn offset and velocity (and not sizes), an emitter's run is one tick short, a template dies one tick
@@ -78,12 +89,13 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
 
 ## Next Steps
 
-1. Let a finished race keep stepping its cosmetics (shake, particles, the wreck's explosion)
-   so a Single Race or Zone wreck plays out under the results; then arm the state-5 shake there.
-2. Give the Eliminator the original's state-8 wait so the destroy camera holds through the
-   explosion (the HUD already hides at state 5, as the original's does).
+1. ~~Let a finished race keep stepping its cosmetics~~ Done 2026-10-02 (`Race::tick_cosmetics`). Left: the opponents, shots and trails
+   under a wreck's results (measure a Single Race the player wrecks in, on the original, for what the field does).
+2. ~~Give the Eliminator the original's state-8 wait~~ Done 2026-10-02 (`1.0` s player, `2.0` s others). Left: a live Eliminator
+   wreck on PPSSPP to confirm the `+0x874` log (the one-craft run needs the campaign Eliminator or a `Ship_SetState(entity, 8)` poke).
 3. ~~Compare the explosion emitter by emitter, then read what scale the matrix applies.~~ Done 2026-10-01
    (`scripts/psp-wreck-capture.py --pools/--templates/--hits/--ge-dump-k`). ~~Why the first five frames read white~~ done
    (the `Glow` template's own sprite). Next: the mode-2 spawn spread, and what delays the explosion's particles by about 2.7 frames
    behind the ring (`particle-system.md`, measured once, mechanism unread).
 4. `scripts/psp-wreck-capture.py --state 5` on a craft an Eliminator run really eliminated.
+5. Settle state 6 (see the Open item above): does a single race's wrecked AI craft ever come back, and through what?

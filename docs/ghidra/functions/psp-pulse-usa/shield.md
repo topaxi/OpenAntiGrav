@@ -455,6 +455,27 @@ to its autopilot; state `7` is a networked craft whose peer dropped
 (`FUN_08847f54`). States `0` and `1` are grid and racing, set by
 `Race_PlaceGrid` and `Race_StartRacing`.
 
+**Correction, 2026-10-02 (pulse-wreck-3): the per-state update table says state 8, not 6, is
+`Ship_UpdateRespawn`.** `FUN_088418e0` dispatches on `Ship_State` through the nine-entry table at
+`0x08a7bb88` (`sltiu 9`, `lui 0x8a8`, `lw -0x4478`, `jr`; read headless, whole table below):
+
+| State | Entry | Update |
+| --- | --- | --- |
+| 0, 1, 2, 3 | `0x08841d68`, `d7c`, `dc8`, `ddc` | `FUN_0883fde0`, `Ship_UpdateStartBoost` (when `craft+0x368` is 0 or 2), `FUN_0883ff64`, `FUN_0883ff6c` |
+| 4 | `0x08841df0` | `Ship_UpdateExploding` |
+| 5 | `0x08841e04` | `Ship_UpdateDestroyed` (call at `0x08841e08`) |
+| 6 | `0x08841e18` | **`FUN_08840500`: `+0x874 -= dt`, and the frame it crosses zero plays `cont_elim` in modes other than 2, 8 and 18. Nothing else** |
+| 7 | `0x08841e2c` | `FUN_088405c8` (back to state 1 when `DAT_08b313dc[craft+0x364]` is set, for a local or networked craft) |
+| 8 | `0x08841e40` | **`Ship_UpdateRespawn`** (call at `0x08841e44`, its only caller) |
+
+So the table above that reads state 6 as "the respawn delay" is half right: `Ship_SetState`'s case 6 does arm `2.0`/`0.8` s, but
+nothing read counts it into a respawn. The relocation, the `RESET` cue, `Ship_ResetShield` and `Ship_SetState(entity, 1)` belong to
+**state 8**, which only the Eliminator reaches (`Ship_UpdateDestroyed` picks 8 for modes 8 and 18, 6 for the rest). Consequences:
+the Eliminator's return is state 5's `1.5` s then state 8's `1.0` s (the local player) or `2.0` s (anyone else), ported as
+`eliminator::eliminator_respawn_delay` (confidence 88: table and call read, no live Eliminator wreck); and **what brings a single
+race's wrecked AI craft back from state 6 is not found** - the port's `DESTROYED_DWELL + AI_RESPAWN_WAIT` return below is
+unverified. `Ship_UpdateDestroyed` also writes `4.0` into `+0x874` before `Ship_SetState` overwrites it (read, no effect seen).
+
 **The address-resolution trap, and how state 7's table was actually read**:
 both addresses state 7's own disassembly computes (`lui`/`lw`-offset pairs, not
 `jal` targets) failed to read back through `inspect_memory_content` at their

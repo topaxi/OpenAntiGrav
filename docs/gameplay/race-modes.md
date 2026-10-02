@@ -668,9 +668,11 @@ strings settled before any of this landed.
 **A 1.5-second dwell before the respawn is measured, separately from the
 explosion.** `oag_physics::CraftState::Eliminated`'s own doc comment records
 the original moving on "after 1.5 s, into a respawn or the Eliminator's kill
-bookkeeping" - `eliminator::ELIMINATOR_RESPAWN_DELAY` is that figure, counted
+bookkeeping" - `eliminator::DESTROYED_DWELL` is that figure, counted
 from the tick the craft reaches `Eliminated` (i.e. *after*
-`DESTROYED_DURATION`'s own half-second explosion has already run).
+`DESTROYED_DURATION`'s own half-second explosion has already run);
+the Eliminator then waits state 8's `1.0` s (the player) or `2.0` s (anyone else) before the
+respawn (`eliminator::eliminator_respawn_delay`, 2026-10-02, `shield.md`).
 
 ### Kill attribution is chosen, not recovered
 
