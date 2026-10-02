@@ -197,10 +197,16 @@ impl Race {
                 // from tick 3025 to the end of the run. The original's `Ship_UpdateRespawn` places the
                 // craft at the AI corridor's midpoint, which is a place near
                 // the wreck, not a place near a stale index.
+                // Searched in a window around the stale index and not the
+                // whole ring: a circuit that passes over or under itself
+                // within a wreck's reach must not put the craft back on the
+                // other level. The window is the forward reach of a coast
+                // (about 250 units, 100 samples at 2.5 units, measured on
+                // `16_Track`) with room to spare.
                 let index = self.sim.racing_line.nearest(
                     self.sim.world.ships[slot].physics.body.position,
-                    0,
-                    self.sim.racing_line.len(),
+                    self.sim.world.ships[slot].driver.index as usize,
+                    RESPAWN_SEARCH_WINDOW,
                 );
                 self.sample_index_of(index)
             };
@@ -285,15 +291,14 @@ impl Race {
     /// only to bunch the field is acceptable is the maintainer's call**: it is
     /// catch-up by slowing the front. Measured with it off (`PACK_MIN_THRUST = 1.0`) on `16_Track`,
     /// player parked, eight fixed seeds, six game-minutes: 0 of 8 fields reach
-    /// five kills, against 24 of 24 over three sets of eight with it on.
+    /// five kills, against 22 of 24 over three sets of eight with it on.
     ///
     /// **Why the earlier setting looked insensitive, 2026-10-02**: the scale was
     /// logged per tick per slot. At `PACK_REACH = 60` a leader with any follower
     /// inside 60 units ran full, which a tight pack is nearly always, so the
-    /// easing acted on 73 of 1,680 samples; and `PACK_LOST` never bound at
-    /// 1,500 because every craft the respawn fault (see
-    /// [`Race::tick_destroyed_craft`]) had put a lap down read thousands of units
-    /// behind, past it, and so was not counted in the pack at all. The knob was
+    /// easing acted on 73 of 1,680 samples; and every craft the respawn fault
+    /// (see [`Race::tick_destroyed_craft`]) had put a lap down read thousands of
+    /// units behind, past `PACK_LOST`, so it was not counted in the pack at all. The knob was
     /// sensitive all along - `PACK_REACH` 60 against 0 is 1 against 3 fields in
     /// eight finishing - the sample just never showed it.
     ///
@@ -420,7 +425,11 @@ const PACK_EASE_SPAN: f32 = 30.0;
 /// The fraction of its throttle a leader keeps at full easing. Chosen.
 const PACK_MIN_THRUST: f32 = 0.1;
 
-/// A craft further behind than this is not part of the pack. Chosen. It binds
-/// now that a respawned craft keeps its lap: 300 against 1,500 is 8 fields of
-/// eight finishing against 7.
-const PACK_LOST: f32 = 300.0;
+/// A craft further behind than this is not part of the pack. Chosen. Unchanged:
+/// 300 and 1,500 both finish 22 of 24 seeds once a respawned craft keeps its lap.
+const PACK_LOST: f32 = 1500.0;
+
+/// How many racing-line samples forward of its stale index a destroyed craft's
+/// respawn looks for the wreck. `RacingLine::nearest` also looks a quarter of
+/// that back. Chosen, covering the 100 samples a wreck was measured to coast.
+const RESPAWN_SEARCH_WINDOW: usize = 160;

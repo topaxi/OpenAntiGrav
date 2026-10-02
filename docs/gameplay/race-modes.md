@@ -741,7 +741,7 @@ list, it is greyed outside an Eliminator, and the pick is the Eliminator's kill 
 (`oag_game::settings::Race::eliminator_kill_target`). RACE REMIX has no such row and keeps the
 default.
 
-### Who is credited with a kill, and why this build's Eliminator does not finish (2026-09-30)
+### Who is credited with a kill, and how this build's Eliminator reaches five (2026-10-02)
 
 `Ship_Damage` (`0x088439ac`): on the blow that empties the shield, in mode 8, **when the damage
 source is a weapon**, the victim's recorded last attacker gets `+0x8d8` (kills) raised, unless
@@ -750,40 +750,67 @@ erase the attacker. This build used to clear the attacker on any wall contact an
 only a direct hit, never splash: a third of deaths credited nobody. Now credited on the fatal
 weapon blow, splash included (`oag_game::race::eliminator`).
 
-**With the player parked on `16_Track` this build's field reaches about 11 kills in five
-game-minutes, averaged over four seeds (5, 9, 16, 13), nearly all of them spread over seven
-craft.** Five kills for one craft is a long wait; two takes half a minute to a few. The original
-did 21 kills in 85 s. Measured causes:
+**A parked-player Eliminator on `16_Track` now finishes at the original's target of 5 on 22 of 24
+seeds in six game-minutes** (three fixed sets of eight, the last two never swept on; the finish
+test pins 5, 9, 13 and 16, all of which finish), in **about 100 to 345 s, median about 230 s,
+against the original's 85 s**. Before 2026-10-02 it was 1 of 8 and about 11 kills in five
+minutes. Two changes, both in Eliminator only (Single Race and Time Trial are byte-identical, the
+lone-craft gate is unchanged):
 
-- **The field strings out.** Identical craft on one racing line: the spread between first and
-  last was 118 units at the start and 3,900 by minute six. The original's AI only fires readily at
-  a craft **inside 100 units ahead** (`WeaponAi`'s skill index is 3 there, else 0, times the
-  Eliminator rate table `0.001..0.1` times 5), so it depends on a dense field, and gets one from
-  an AI known to cheat. This build gets some density from a leader that eases off the throttle
-  when the pack is out of reach (`Race::eliminator_pack_scale`, **chosen, not measured**; only
-  ever a reduction, so the AI keeps the player's physics). It roughly doubled kills in a
-  four-seed sample; the easing parameters were not found to matter.
-**The leader easing, in full (chosen, not measured; no confidence score).** In an Eliminator
-an opponent with nobody ahead of it, whose nearest racing opponent behind is more than
-`PACK_REACH` (60 units of track) back, scales its throttle down linearly to `PACK_MIN_THRUST`
-(0.3) over the next `PACK_EASE_SPAN` (120) units; a craft more than `PACK_LOST` (1,500) behind
-is not counted, and the human's slot is not part of the pack. The throttle is only reduced.
-Four seeds, five game-minutes, parked player: 22 kills and 52 deaths without it, 43 kills and
-93 with it. **Changing the parameters (`PACK_MIN_THRUST` 0.0, 0.3, 0.6; reach 30 to 200) gave
-identical totals**, so the mechanism is not understood: only the presence of any easing
-mattered, and a leader was eased in a small share of ticks. Treat the effect as real in the
-sample but unexplained.
+1. **A destroyed opponent is put back near its wreck, not at the driver's stale index.**
+   `Driver::drive` does not run while a craft is down, so the index stops at the death and the
+   wreck coasts on, measured at about 250 units (100 samples). A wreck that crossed the start line
+   in that time was respawned *behind* it, which `Standing::update` reads as a backward wrap: one
+   lap lost, the gate reset to `NeedsNearHalf`, and so the next forward crossing earned nothing.
+   The craft was a lap down for the rest of the race (seed 5, slot 2, from tick 3025: distance
+   -258 beside a pack at 5,000), invisible to every other craft's `Field` and outside every pack
+   rule. This was most of the "string out": 1 of 8 seeds finished, 5 of 8 after this alone, same
+   settings, and 11 of 24 over all three sets. The search is windowed around the stale index
+   (`RESPAWN_SEARCH_WINDOW`), so a circuit that passes over itself cannot put a wreck on the
+   other level; it gave the same result as a whole-ring search on `16_Track`. Guarded by
+   `eliminator_finish_ground_truth::a_respawned_craft_keeps_its_place_in_the_race`.
+2. **The leader tether is tighter** (`eliminator_pack_scale`, **chosen, not measured**; no
+   confidence score): `PACK_REACH` 0, `PACK_EASE_SPAN` 30, `PACK_MIN_THRUST` 0.1
+   (`PACK_LOST` stays 1,500; 300 gives the same 22 of 24). A craft with nobody ahead lifts as its nearest follower falls back. Only ever a
+   throttle *reduction*, so the AI keeps the player's physics; **whether catch-up by slowing the
+   front is acceptable is the maintainer's call**. Fix alone, 11 of 24; fix plus this tether, 22
+   of 24; with the easing off (`PACK_MIN_THRUST` 1.0) 0 of 8. What the leader does under it: below half
+   its top speed for 9 to 18 % of ticks and for at most 2.5 to 5.1 s at a stretch over six
+   seeds (cornering and crash recovery included; not separated from the tether).
+   **Tried and dropped: wider forward-weapon gates** (cone 0.8, curvature 0.01 in place of 0.94
+   and 1/400). With the old tether they raised kills but cut finishes (3 of 8 against 5 of 8); with
+   the strong tether they added 2 finishes in 24. Not worth a new public `Tuning` field.
+   **A held-Turbo chase was not tried**: Turbo (and speed pads) are lawful speed advantages, and
+   Turbo is currently fired the moment it is picked up.
 
-- **Every craft ended holding a weapon.** Eliminator refuses absorption, so a craft with a
-  weapon it cannot use stops receiving pickups. `wants_to_fire` needs a craft ahead in a
-  20 degree cone, 20 to 200 units, on a straight; 79 % of the consults found nobody ahead
-  inside `AWARENESS_RANGE` (120).
-- **Wall deaths.** In a 330 s parked run 9 of 20 deaths had no weapon hit in the last second.
+**Why the earlier easing looked insensitive to its parameters.** The scale was logged per tick
+per slot: at `PACK_REACH` 60 a leader with any follower inside 60 units ran at full throttle,
+which a tight pack nearly always has, so the easing acted on 73 of 1,680 samples; and every craft
+the respawn fault had put a lap down read thousands of units behind, past `PACK_LOST`, so it was
+not in the pack at all. Reach 60 against 0 is 1 against 3 fields in eight finishing; the
+knob was sensitive, the sample just did not show it.
+
+Still open:
+
+- **Time to five is 2.5 times the original's.** Of 30 deaths in a 233 s run (seed 5), 19 had a weapon hit
+  in the last second and 11 did not: wall deaths and weapons that credit nothing here (a Leech
+  Beam's damage does not set `last_weapon_hit`, so a kill by beam is uncredited; not confirmed
+  against the original).
+- **Held weapons.** Over that run craft spent 3,283 craft-ticks holding a Mine, 6,874 a Bomb,
+  8,032 a Cannon and 5,874 a Leech Beam, none of which is used against a leader or a tail with
+  nobody behind, and Eliminator refuses absorbing, so those craft stop receiving pickups.
+- **Wall deaths** (priority 3 of the thread) are not investigated.
+- **A backward wrap costs a lap in every mode.** `Standing::update` lowers the lap and resets the
+  gate to `NeedsNearHalf`, and the forward re-crossing then earns nothing, so any craft shoved
+  back over the line ends one lap short (Eliminator's respawn was one way in). This sits against
+  `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`, which pins the no-lap half.
+  Not changed here: Single Race must not move.
+- **The player's Eliminator respawn** reads `last_on_track`, latched each tick the craft is near
+  the spline, so a player wreck that coasts over the line may lose a lap the same way. Not
+  checked, nobody drives in the finish test.
 
 The original's decision is `WeaponAi_DecideFireOrAbsorb` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)),
-still unported. Guarded by `crates/game/tests/eliminator_finish_ground_truth.rs`
-(a parked-player Eliminator reaches a finish at a target of 2; five is not reachable in six
-minutes).
+still unported. Guarded by `crates/game/tests/eliminator_finish_ground_truth.rs`.
 
 ### What is deliberately out of scope
 
