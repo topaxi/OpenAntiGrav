@@ -23,8 +23,8 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let track = args.next().unwrap_or_else(|| "16_Track".to_string());
     let class = args.next().unwrap_or_else(|| "VENOM".to_string());
-    let image = std::env::var("OAG_IMAGE")
-        .unwrap_or_else(|_| "data/images/pulse-psp-usa.chd".to_string());
+    let image =
+        std::env::var("OAG_IMAGE").unwrap_or_else(|_| "data/images/pulse-psp-usa.chd".to_string());
     let mut archives = oag_pulse::open(&image).expect("mounting the disc");
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
@@ -84,7 +84,10 @@ fn main() {
     }
     let step_us = in_step.as_secs_f64() * 1e6 / f64::from(ticks);
     let drive_us = in_drive.as_secs_f64() * 1e6 / f64::from(ticks);
-    println!("{track} {class}: {ticks} ticks, final index {}", driver.index);
+    println!(
+        "{track} {class}: {ticks} ticks, final index {}",
+        driver.index
+    );
     println!("  physics step  {step_us:8.2} us/tick");
     println!("  driver drive  {drive_us:8.2} us/tick");
     // Option 2 of the speed-plan brief: 8 craft x 9 candidates x 90 ticks.
