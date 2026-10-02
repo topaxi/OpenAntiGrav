@@ -431,6 +431,137 @@ well-posed dump (batches it splits differently, or culls by a bound we lack); th
 is unexamined, not a finding. The end-to-end picture check is one
 pose; the two rest poses show a few-pixel change before and after.
 
+### Moving draws the original does not submit: frustum or rule (2026-10-02)
+
+*Question and falsifier, written before the work (`pulse-moving-draws`):* of the
+moving draws that pass the section mask and the section's box and still have no
+twin in the original's list, is the cause the view (the draw's own box is outside
+it) or something else? "The view" is falsified by a draw the original **submits**
+although its own box is outside the view, and by a missing draw whose box is
+inside it. **The brief's premise was already closed**: Metropia node `225` and Tech
+De Ra `1076`/`1078` were a census artifact (the subsection above), so they are not
+what was separated; the residue is the "visible, no twin" column of the table
+above.
+
+**Method.** `AnimTransform::sample` documents one global clock that every node
+reads, so the dump's moving PRIMs pin the instant: `pvs_moving_phase` scores every
+`T` on a 1/60 s grid (0 to 620 s, refined to 1/480) by how many observed boxes
+coincide, to 0.7 units, with a moving draw of ours of the same vertex count and
+diameter, and prints the world box of **every** moving draw at that `T`.
+`scripts/pvs-moving-residue.py` then tests each box against the dump's own view and
+projection (the game's corner outcode, as `pvs-cull-check.py`) and calls a draw
+*present* when the dump holds a box of its vertex count within 0.7 units of it
+(`--tol`; held apart from the clock's `--solve-tol`). The 22 existing Metropia and
+Tech De Ra dumps were re-used, and the loop was captured fresh (below). **Chosen,
+not measured**: the 0.7 and 1.5 unit tolerances, the box being the extremal
+vertices along 13 axes (a lower bound on the exact box, a unit or two small, so it
+is grown by 1.5 before the view test), and the mesh's own box being stood in for by
+the union of its batches' vertices.
+
+**The clock is identified on Metropia only.** Seven Metropia dumps solve to
+`T` = 89.2 to 94.2 s with 17 to 28 boxes matched, 4 to 8 above the best
+non-peak time (a constant-position baseline of 13 to 21 matches everything
+else); the same `T` recurs 120 s and 600 s later, which is read here as the moving
+nodes' loop lengths and **not** checked against their `loop_seconds`. Tech De Ra
+dumps score 0 to 2 above that baseline and the Talon loop dumps 0 to 1 (its only
+moving draws near the loop are two large rotating structures, nodes `223` and
+`915`, whose boxes the solver cannot pin): their `T` is **not** known, so a
+verdict that depends on a *missing* draw's position is not available there and is
+not claimed. (On Talon this showed up as 22 draws "missing by box" that the
+count-and-diameter join finds in the list: a wrong clock, not a missing draw.)
+
+**Result, Metropia (7 dumps, one boot; 188 moving draws pass the craft's mask in a
+section the view reaches - 156 opaque, 22 transparent, 10 cutout - the same 188
+`pvs-cull-check.py` counts as 25 twinless and 163 with a twin).**
+
+| List | missing, own box outside the view | missing, inside | submitted, outside | submitted, inside |
+| --- | --- | --- | --- | --- |
+| transparent | 11 | 0 | 6 | 5 |
+| opaque | 2 | 0 | 115 | 39 |
+| cutout | 0 | 0 | 8 | 2 |
+
+1. **Missing by box: 13. By count and diameter as well: 10.** The old join and this
+   one differ on 3 (at `--tol` 1.5 and 3, 1: the extremal box undershoots, and the
+   one that stays is a rotated mesh); those 10 are the unambiguous residue, and all
+   10 are outside the view. The two 'missing' opaque draws are one batch of node
+   `154`.
+2. **That is not evidence for the view, because most of the population is outside
+   it.** 142 of the 188 (75 %) are outside the view at the dump's instant, so 13
+   of 13 missing draws being outside is what chance gives about once in 40
+   (Fisher, p about 0.02) - on draws that come from about eight nodes at seven
+   poses and are not independent. Among the transparent ones, 11 of the 17 outside
+   are missing and 0 of the 5 inside; the margins do not separate the groups
+   either (the missing transparent draws are 108 to 3,620 clip units outside, the
+   submitted ones 280 to 1,180).
+3. **The own-box test is not a rule `pvs::visible` can take.** It rejects 129
+   moving draws the original *does* submit (6 transparent, 115 opaque, 8 cutout),
+   and for those the box tested is the dump's own PRIM box, so it needs no clock.
+   The brief's acceptance - a count that drops without dropping a draw the
+   original submits - cannot be met, so nothing was changed in
+   `oag_render::pvs::visible`. For opaque and cutout moving draws (123 submitted
+   outside the view, 2 missing) the own box is plainly not what the original culls
+   by. For the transparent list the six are two objects (node `229`, and `117`,
+   `119`, `121` at one pose), so that half is a small-sample reading and is scored
+   below accordingly.
+4. **The hold counter does not rescue it.** `Mesh_SubmitNode` keeps a mesh it saw
+   in view drawing for `8 + rand() % 7` more frames (`section-view-cull.md`). Taking
+   the node's box at each of the previous 14 frames against the *same* view, 2 of
+   the 6 transparent submitted-and-outside draws turn out to have been inside it
+   (4 of 6 remain). The camera moves across 14 frames and the original's `rand()`
+   is unseeded, so this is a bound, not a refutation.
+5. **Player-visible, Metropia: nothing.** Every one of its missing draws lies wholly
+   outside the view, so the GPU clips it to no pixel either way; what the
+   difference costs is the submission. That is scoped to Metropia: Tech De Ra's
+   residue is unresolved for want of a clock.
+
+Tech De Ra (14 dumps, clock unpinned) reads 36 missing transparent draws outside
+the view and 8 inside, 4 submitted outside and 39 inside. The 8 are nodes `962`,
+`966` and `288` at four poses; nodes `962`/`966` and `284`/`288` share a signature
+(diameters 56.9 and 53.7), so which instance the dump's one box belongs to depends
+on the clock, and with none they are **not** evidence of a rule. No opaque or
+cutout moving draw is missing on Tech De Ra.
+
+**A circuit with a loop: Talon's Junction `16_Track`, 20 dumps on two cold boots
+(12 and 8), PPSSPP's software renderer (the GE list does not depend on it).** The
+track's inverted stretch is rows 1263 to 1401 (`oag-trace track`: 139 samples with
+the craft's down axis pointing up); Moa Therma and Arc Prime were not used because
+Talon is the circuit the menu walk reaches with no track select. Placed with
+`psp-drive.py place`, forwards and backwards along the spline; the tool said "looks
+like a respawn" for 12 of the 25 placements (the game moved the craft), so each
+dump is labelled by where the trace shows the craft: nearest spline row 1198 (twice),
+1261, 1292, 1294, 1361, 1388, 1402, 1415, 1422, 1427, 1444 on the first boot and
+1199 (twice), 1214, 1224, 1295, 1361, 1402, 1420 on the second, six of them inside
+the inverted stretch. With the section mask and the count-and-diameter twin: **9
+moving draws pass at every pose and 9 have a twin, 0 missing** on both boots (at
+the five poses in section 24 the mask passes 23, and the 14 extra are all in a
+section the view rejects, 0 of them in the list; `pvs-cull-check.py` finds no
+falsifier at any of the 20). `DROPS` is 0 at 17 dumps and 1 at three, each a
+four-vertex quad (node `258`, diameter 38.1 against 38.2, first boot near row 1261;
+node `351`, 38.8 against 39.7, on **both** boots, near rows 1292 and 1295), matched
+on count and diameter alone - the weakest signature the census has, and not
+distinguishable from a coincidence. So the loop adds no moving-draw difference, on
+either boot, and the frustum-or-rule question has no subject there.
+
+**The collision-cage sphere (note, not a fix).** The yawed-pose sphere the thread
+names, `pSphereShape1` with `cage_collision2_ADD.tga`, is the whole of **WAD entry
+1078 of `DATA.WAD`**, `Data\visual_effects\cage_collision_curved.vex` (its source
+path inside the file is `cage_collision_curved.mb`; 9,552 bytes). It is **not** the
+track node `1078` this page keeps meeting - same number, different namespace. What
+spawns it is unread: the roadmap records `Cage Collision` (`0x3e7`) as having no
+node on the PSP disc, and `leaving-the-track.md` records the `collisionCageEnabled`
+plugin attribute on 11 of 24 circuits, read at the definition parse (`0x088c40a8`)
+and not followed. A lead, not a reading: an effect model the game plays on a
+track-containment contact, which a craft yawed into a wall would be.
+
+**Confidence.** 80 for "the Talon loop dumps hold every moving draw the mask
+passes" (20 dumps, two cold boots, a count-and-diameter match). 70 for "a moving
+opaque or cutout draw is not culled by its own box" (123 submitted outside the view,
+the box being the dump's own). **No score** for "the transparent missing draws are
+outside the view" or for any transparent rule: 13 draws from about eight nodes on
+one circuit and one boot, against a base rate of 75 %. Scripts:
+`scripts/pvs-moving-residue.py`, the `pvs_moving_phase` example; raw dumps
+`data/scratch/pulse-moving-draws/poses/`.
+
 ## Reproducing
 
 ```sh
@@ -441,11 +572,16 @@ uv run --with websocket-client scripts/psp-drive.py --port 45093 place --pos=X,Y
 uv run --with websocket-client scripts/psp-trace.py --port 45093 --ticks 3 --camera --out t.csv --shot-every 1 --shot-dir shots
 # the original's submitted batches at a pose (section 3)
 uv run --with websocket-client --with zstandard scripts/psp-ge-dump.py dump --port 45093 --out frame.ppdmp
-uv run --with zstandard scripts/psp-ge-dump.py census frame.ppdmp --out frame.prims.json
+uv run --with zstandard --with numpy scripts/psp-ge-dump.py census frame.ppdmp --out frame.prims.json
 # the moving-draw census, ours and the join (section 3, second table)
 cargo build -q -p oag-render --example pvs_moving_census
 python3 scripts/pvs-moving-census.py --spline spline.csv --pose-dir dir \\
     --entry 'Data\\Environments\\03_Track\\track.vex'
+# which of the missing moving draws are outside the view (needs `--with numpy` on the census: without it
+# `diam` is silently null and every join reads 0 matches)
+cargo build -q -p oag-render --example pvs_moving_phase --example pvs_section_boxes
+python3 scripts/pvs-moving-residue.py --spline spline.csv --pose-dir dir --prims dir/prims.json \\
+    --entry 'Data\\Environments\\03_Track\\track.vex' --list
 # ours
 oag-game --race --no-audio --size 480x272 --render-scale 100 --msaa off --motion-blur off \
     --screen-filter off --anisotropy off --ticks 1 --pose-from t.csv --pose-tick 2 --screenshot ours.png
