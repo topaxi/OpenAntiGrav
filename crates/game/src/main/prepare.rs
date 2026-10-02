@@ -211,6 +211,7 @@ impl Pending {
         let options = self.boot_options(source);
 
         let (mut boot_shell, archives, title) = boot::load_shell(&options)?;
+        log::info!("{}: {source}", title.name);
         // Drained rather than iterated: `boot::assemble` appends its own lines
         // to this same list, and the hand-off prints what it finds there.
         // Leaving these in would print the whole first half twice, seconds

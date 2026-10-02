@@ -57,10 +57,11 @@ through `oag_game::loader_log`:
   is absent or was not used at `warn`.
 - `loader_log::lines_at(Level::Trace, ...)` is the same for a report with one
   line per item.
-- One report puts at most eight absences at `warn`. The rest go to `debug`
-  and one more `warn` line says how many there were: 2048 lacks thirty-odd
+- One report gives at most eight absences a `warn` line of their own. The rest go to `debug`
+  and one more `warn` line names each of them: 2048 lacks thirty-odd
   particle effects, and thirty near-identical lines bury the three that differ.
-  The cap is `WARN_CAP`; nothing is dropped, only moved.
+  The cap is `WARN_CAP`; nothing is dropped, only moved, and the closing line
+  names every absence it holds back.
 - What counts as "says an asset is absent" is one list, `ABSENCE` in
   `crates/game/src/loader_log.rs`, with a test over lines taken from real
   reports. A loader that learns a new way to say "this draws nothing" adds its

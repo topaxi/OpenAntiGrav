@@ -56,14 +56,13 @@ pub fn level_of(line: &str, quiet: Level) -> Level {
     if is_absence(line) { Level::Warn } else { quiet }
 }
 
-/// How many absences one report may put at `warn` before the rest are counted
-/// instead of listed.
+/// How many absences one report may give a `warn` line of their own.
 ///
 /// A source can lack dozens of assets of one kind (2048 ships none of the 30-odd
 /// particle effects), and thirty lines saying nearly the same thing bury the
-/// three that differ. The lines past the cap are logged at `debug` and a final
-/// `warn` says how many there are and how to read them, so the absence is still
-/// stated and still counted, only not recited.
+/// three that differ. Past the cap each absence's full line is logged at
+/// `debug`, and one closing `warn` names every one of them, so nothing is
+/// unstated at the default filter: it is named, not recited.
 const WARN_CAP: usize = 8;
 
 /// Logs a loader's report at `debug`, with each absence at `warn`.
@@ -76,24 +75,29 @@ pub fn lines<S: AsRef<str>>(report: impl IntoIterator<Item = S>) {
 /// even `debug` would print hundreds of lines.
 pub fn lines_at<S: AsRef<str>>(quiet: Level, report: impl IntoIterator<Item = S>) {
     let report: Vec<S> = report.into_iter().collect();
-    let (levels, over) = plan(report.iter().map(AsRef::as_ref), quiet);
+    let (levels, held_back) = plan(report.iter().map(AsRef::as_ref), quiet);
     for (line, level) in report.iter().zip(levels) {
         let line = line.as_ref();
         log::log!(level, "{line}");
     }
-    if over > 0 {
+    if !held_back.is_empty() {
         log::warn!(
-            "{over} more absence(s) in this report are logged at debug, not shown here; \
-             RUST_LOG=warn,oag=debug lists them"
+            "{} more absence(s), full lines at debug: {}",
+            held_back.len(),
+            held_back.join(", ")
         );
     }
 }
 
-/// The level each line is logged at, and how many absences were held back at
-/// `quiet` by [`WARN_CAP`]. Pure, so the cap is testable without a logger.
-fn plan<'a>(report: impl Iterator<Item = &'a str>, quiet: Level) -> (Vec<Level>, usize) {
+/// The level each line is logged at, and the name of every absence [`WARN_CAP`]
+/// moved down to `quiet`. Pure, so the cap is testable without a logger.
+///
+/// The name is the text before the line's first `": "` - the asset, in every
+/// loader that writes `"<asset>: absent ..."` - or the whole line when it has
+/// none, so a held-back absence is still *named* at `warn`.
+fn plan<'a>(report: impl Iterator<Item = &'a str>, quiet: Level) -> (Vec<Level>, Vec<&'a str>) {
     let mut warned = 0;
-    let mut over = 0;
+    let mut held_back = Vec::new();
     let levels = report
         .map(|line| match level_of(line, quiet) {
             Level::Warn if warned < WARN_CAP => {
@@ -101,13 +105,13 @@ fn plan<'a>(report: impl Iterator<Item = &'a str>, quiet: Level) -> (Vec<Level>,
                 Level::Warn
             }
             Level::Warn => {
-                over += 1;
+                held_back.push(line.split_once(": ").map_or(line, |(name, _)| name));
                 quiet
             }
             level => level,
         })
         .collect();
-    (levels, over)
+    (levels, held_back)
 }
 
 #[cfg(test)]
@@ -162,24 +166,24 @@ mod tests {
     }
 
     #[test]
-    fn a_report_of_many_absences_warns_for_the_first_few_and_counts_the_rest() {
+    fn a_report_of_many_absences_warns_for_the_first_few_and_names_the_rest() {
         let absent = "x.POB: not in the archive set - x will not be drawn";
         let report: Vec<&str> = std::iter::repeat_n(absent, WARN_CAP + 5)
             .chain(["racing on Pulse"])
             .collect();
-        let (levels, over) = plan(report.iter().copied(), Level::Debug);
+        let (levels, held_back) = plan(report.iter().copied(), Level::Debug);
         assert_eq!(
             levels.iter().filter(|l| **l == Level::Warn).count(),
             WARN_CAP
         );
-        assert_eq!(over, 5);
+        assert_eq!(held_back, vec!["x.POB"; 5]);
         assert_eq!(levels.last(), Some(&Level::Debug));
     }
 
     #[test]
     fn a_report_within_the_cap_loses_nothing() {
-        let (levels, over) = plan(ABSENT[..WARN_CAP].iter().copied(), Level::Debug);
+        let (levels, held_back) = plan(ABSENT[..WARN_CAP].iter().copied(), Level::Debug);
         assert!(levels.iter().all(|l| *l == Level::Warn));
-        assert_eq!(over, 0);
+        assert!(held_back.is_empty());
     }
 }

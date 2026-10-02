@@ -44,6 +44,7 @@ pub(crate) fn run_windowless(
     music_discs: audio::MusicDiscs,
 ) -> Result<()> {
     let mut loaded = boot::load(options)?;
+    log::info!("{}: {}", loaded.title.name, options.source);
     if cli.overlay {
         loaded.frontend.set_overlay(true);
     }
