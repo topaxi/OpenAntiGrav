@@ -139,6 +139,11 @@ pub struct RaceSim {
     /// destroyed in any other mode stays down; see `crate::race::eliminator`. Hashed: a
     /// craft one tick out on its respawn is one tick out on everything after.
     pub(super) respawn_delay: [f32; oag_gameplay::MAX_SHIPS],
+    /// Seconds until `cont_elim` is raised for each wrecked opponent, `0.0`
+    /// while the craft is not down and `-1.0` once raised for this wreck.
+    /// Bookkeeping for a cue, which is an output: outside the state hash. See
+    /// `Race::tick_wreck_voice`.
+    pub(super) wreck_voice: [f32; oag_gameplay::MAX_SHIPS],
     /// How many barrel rolls each craft has armed this race, and what they
     /// cost it.
     ///

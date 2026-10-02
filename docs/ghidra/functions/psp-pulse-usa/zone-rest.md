@@ -117,9 +117,13 @@ instance's start is deferred to an emitter update nobody traced); the `EXPLBIG` 
 `speech.bnk` and `speech_elim.bnk`; the frame (167-168 from the injection) is `0.5 + 1.5 + 0.8 = 2.8 s` of states 4, 5
 and 6, to the frame.
 
-**Not wired.** The sound is found and the trigger is state 6's expiry for a non-player craft, but the trigger lives in
-`Race::tick_destroyed_craft` (`crates/game/src/race/eliminator.rs`), the Eliminator lane's craft-state bookkeeping,
-and it needs a new `Cue` plus the mode's speech bank loaded the way `Ready`/`Go` are. Ready to wire:
-a `Cue` for `cont_elim`, raised `1.5 + 0.8 = 2.3 s` after a non-player craft enters `CraftState::Eliminated`, in every
-mode except those whose game-mode ids are 2, 8 and 18; none for `EXPLSMALL`/`EXPLBIG`, which the original does not
-voice for an opponent on this evidence.
+**Wired 2026-10-02 (`pulse-elim-credit`).** `Cue::ContElim` (`"cont_elim"`) loads with `Ready`/`Go` from the
+mode's speech bank (`Cue::COUNTDOWN`), and `Race::tick_wreck_voice` (called from `tick_destroyed_craft`) raises it
+2.3 s (`WRECK_VOICE_DELAY`) after a non-player craft is first seen `Eliminated`, once per wreck, in every mode
+except `Mode::Eliminator`. The mode gate: game modes 2 (`Demo`), 8 (`Elimination`) and 18 (`Multiplayer
+Elimination`) are the exclusions, by `g_game_mode_names` in [state-machine.md](state-machine.md); only 8 exists
+here (it is `Mode::Eliminator`). No `EXPLSMALL`/`EXPLBIG` for an opponent. Pinned by
+`race::tests::wreck_voice` (tick, once per wreck, not Eliminator, not the player, not an unvoiced title) and, on
+the disc, by `wreck_voice_ground_truth` (Single Race, an opponent wrecked at tick 300: one cue at tick 438, and the
+third run of speech in the speech-only WAV `data/shots/wreck-voice-single-race.wav` starts at tick 438, 1.5 s long).
+The 2.3 s is the live 2.8 s less the 0.5 s this build's `Eliminated` has already spent in state 4.

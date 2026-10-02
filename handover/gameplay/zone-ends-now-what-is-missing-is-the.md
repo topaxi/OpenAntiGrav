@@ -27,7 +27,7 @@ after the doc had already moved past it. Full evidence:
 - `0x08ab2120`'s identity (`(*addr)+0x58 = 0`, a byte) has no lead from static reading - single use, no other reference to the corrected address anywhere in the program.
 - `0x08ab10e8`'s identity is a structural guess (paired with the active-camera object) at confidence 55, not confirmed - needs a live read.
 - States 6 and 8 (respawn, and the Eliminator's kill bookkeeping) are unmodelled.
-- ~~What sound plays for an opponent's destruction~~ **Found 2026-10-02 (`pulse-zone-rest`, live)**: the announcer line `cont_elim` at state 6's expiry (`FUN_08840500`), 2.8 s after the destruction begins, in modes other than 2, 8 and 18; the explosion sounds `EXPLSMALL`/`EXPLBIG` do not start for an opponent. **Not wired** (it is the state-6 bookkeeping of the Eliminator lane and needs a new cue and the speech bank): see [zone-rest.md](../../docs/ghidra/functions/psp-pulse-usa/zone-rest.md#what-sounds-an-opponents-destruction-makes-answer-to-the-_blowup-open-question).
+- ~~What sound plays for an opponent's destruction~~ **Found 2026-10-02 (`pulse-zone-rest`, live)**: the announcer line `cont_elim` at state 6's expiry (`FUN_08840500`), 2.8 s after the destruction begins, in modes other than 2, 8 and 18; the explosion sounds `EXPLSMALL`/`EXPLBIG` do not start for an opponent. **Wired 2026-10-02** (`Cue::ContElim`, `Race::tick_wreck_voice`): see [zone-rest.md](../../docs/ghidra/functions/psp-pulse-usa/zone-rest.md#what-sounds-an-opponents-destruction-makes-answer-to-the-_blowup-open-question).
 
 ## Next Steps
 

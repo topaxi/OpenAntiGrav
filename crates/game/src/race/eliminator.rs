@@ -127,6 +127,7 @@ impl Race {
     /// that respawns this tick is placed where it is *put*, not where the
     /// explosion left it.
     pub(super) fn tick_destroyed_craft(&mut self) {
+        self.tick_wreck_voice();
         let mode = self.sim.world.mode();
         let player = self.sim.world.primary_slot();
 
@@ -367,6 +368,48 @@ impl Race {
         }
     }
 
+    /// Raises `cont_elim` for a wrecked opponent, once per wreck.
+    ///
+    /// The original's only sound for an opponent's destruction: state 6's expiry
+    /// plays it dry (`FUN_08840500`, `0x08840590`, confidence 90), `1.5 + 0.8 s`
+    /// after the craft's state 5 begins - taken here as [`WRECK_VOICE_DELAY`]
+    /// after the craft is first seen `Eliminated`. Every game mode except 2, 8 and
+    /// 18; of those only 8 ("Elimination", [`Mode::Eliminator`]) exists in this
+    /// build (`state-machine.md`'s `g_game_mode` table: 2 is Demo, 18 is
+    /// Multiplayer Elimination), so every other mode raises it. The
+    /// opponent's `EXPLSMALL`/`EXPLBIG` are not voiced. A title that does not
+    /// voice its start has no speech bank loaded and raises nothing.
+    fn tick_wreck_voice(&mut self) {
+        if !self.sim.countdown_voice || self.sim.world.mode() == Mode::Eliminator {
+            return;
+        }
+        let player = self.sim.world.primary_slot();
+        for slot in 0..self.sim.world.ship_count as usize {
+            let down = self.sim.world.ships[slot].active
+                && self.sim.world.ships[slot].physics.craft_state
+                    == oag_physics::CraftState::Eliminated;
+            if slot == player || !down {
+                self.sim.wreck_voice[slot] = 0.0;
+                continue;
+            }
+            let timer = &mut self.sim.wreck_voice[slot];
+            if *timer < 0.0 {
+                continue;
+            }
+            if *timer == 0.0 {
+                *timer = WRECK_VOICE_DELAY;
+            }
+            *timer -= self.sim.dt;
+            if *timer <= 0.0 {
+                *timer = -1.0;
+                self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                    crate::audio::sfx::Cue::ContElim,
+                    player,
+                ));
+            }
+        }
+    }
+
     /// Notes that a weapon hit got through to `victim` this tick, for
     /// [`Self::credit_kill`].
     ///
@@ -438,6 +481,11 @@ impl Race {
         }
     }
 }
+
+/// Seconds from a wrecked opponent's `Eliminated` to its `cont_elim`: state 5's
+/// 1.5 s and state 6's 0.8 s, measured live (frames 167-168 from the injection,
+/// less the 0.5 s of state 4 this build's `Eliminated` has already spent).
+const WRECK_VOICE_DELAY: f32 = 2.3;
 
 /// How many ticks before a craft is seen to be `Eliminated` a weapon hit may
 /// have landed and still count as the blow that destroyed it.

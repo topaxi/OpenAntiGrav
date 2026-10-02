@@ -666,6 +666,15 @@ pub enum Cue {
     /// update that applies thrust**, which is the last gated tick here. See
     /// [`Self::Ready`] for the bank and the trigger's home.
     Go,
+    /// The announcer line `"cont_elim"`, the only sound an opponent's destruction
+    /// makes in the original: `FUN_08840500` (`0x08840590`) plays it dry
+    /// (`Sound_PlayNamedInSlot`, `0x400`) when a non-player craft's state 6
+    /// expires, in every game mode except 2, 8 and 18 (Demo, Elimination,
+    /// Multiplayer Elimination), confidence 90 (three live logs and a decompile;
+    /// `docs/ghidra/functions/psp-pulse-usa/zone-rest.md`). It is in the mode's
+    /// speech bank, so it loads beside [`Self::Ready`] and [`Self::Go`]. Raised
+    /// by `Race::tick_destroyed_craft`.
+    ContElim,
 }
 
 mod tables;
