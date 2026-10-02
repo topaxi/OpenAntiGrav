@@ -135,6 +135,7 @@ fn releasing_past_the_split_runs_on_to_completion() {
     let mut state = ShipState {
         roll_target: 1.0,
         roll_phase: 0.6,
+        roll_armed: true,
         ..ShipState::default()
     };
     let completed = release(&mut state);
@@ -150,6 +151,7 @@ fn releasing_short_of_the_split_falls_back_to_zero() {
     let mut state = ShipState {
         roll_target: 1.0,
         roll_phase: 0.4,
+        roll_armed: true,
         ..ShipState::default()
     };
     let completed = release(&mut state);
@@ -164,6 +166,7 @@ fn releasing_a_negative_phase_uses_the_same_split() {
     let mut state = ShipState {
         roll_target: -1.0,
         roll_phase: -0.6,
+        roll_armed: true,
         ..ShipState::default()
     };
     assert!(release(&mut state));
@@ -695,4 +698,38 @@ fn a_second_roll_the_other_way_travels_one_turn_and_not_two() {
         travelled <= 1.0,
         "the second roll travelled {travelled} of phase, and one turn is 1.0"
     );
+}
+
+/// The maintainer's report from play: a roll pays out on its landing, and then
+/// again on every later airborne-to-grounded transition, because `release` left
+/// `roll_target` and `roll_phase` at `+-1.0` with nothing to say the roll was
+/// spent. The original gates the payout on the arm bit, which its landing
+/// clears. One roll, one payout, however many landings follow.
+#[test]
+fn a_roll_pays_out_once_however_many_landings_follow() {
+    let (mut state, dimensions) = armable();
+    assert!(arm(&mut state, &dimensions, 8.0, 1.0));
+    advance_phase(&mut state, 1.5, 1.0);
+
+    let mut payouts = 0;
+    for _ in 0..5 {
+        if release(&mut state) {
+            payouts += 1;
+        }
+        advance_phase(&mut state, 1.5, 1.0);
+    }
+    assert_eq!(payouts, 1);
+    assert_eq!(state.roll_phase, 1.0, "the phase still runs on to the end");
+}
+
+#[test]
+fn a_second_roll_pays_out_again_after_the_first() {
+    let (mut state, dimensions) = armable();
+    for _ in 0..2 {
+        assert!(arm(&mut state, &dimensions, 8.0, -1.0));
+        state.roll_phase = 0.0;
+        advance_phase(&mut state, 1.5, 1.0);
+        assert!(release(&mut state));
+        assert!(!release(&mut state));
+    }
 }

@@ -18,9 +18,16 @@
 //! was not set last tick), in the same `if` that arms the payout off
 //! `|entity+0x87c| > 0.5`. So [`release`]'s event was the right guess and is
 //! now a reading. A second clear runs on the opposite, grounded-to-airborne
-//! transition (`0x08846ab4`-`0x08846ac8`); this port has no equivalent because
-//! the grounded gate in [`advance_gesture`] makes an armed roll on the ground
-//! unreachable in the first place.
+//! transition (`0x08846ab4`-`0x08846ac8`); this port omits it because the
+//! grounded gate in [`advance_gesture`] makes an armed roll on the ground
+//! unreachable, so it would clear nothing.
+//!
+//! # The payout is gated on the arm, not on the phase
+//!
+//! The landing's `|entity+0x87c| > 0.5` test sits inside an "armed" test, and the
+//! landing clears the arm bits. [`ShipState::roll_armed`] is that pair. Without
+//! it a completed roll left the phase at `+-1.0` and every later landing paid
+//! again (maintainer report from play: on a wavy track, "insane boosts").
 
 use crate::params::Dimensions;
 use crate::ship::{ShipControls, ShipState};
@@ -169,6 +176,7 @@ pub fn arm(state: &mut ShipState, dimensions: &Dimensions, roll_cost: f32, sign:
     }
     state.shield -= cost;
     state.roll_target = sign;
+    state.roll_armed = true;
     true
 }
 
@@ -195,13 +203,17 @@ pub fn advance_phase(state: &mut ShipState, roll_speed: f32, dt: f32) {
 /// flags clear. Past [`COMPLETION_SPLIT`], [`ShipState::roll_target`] is left
 /// where it is (so [`advance_phase`] runs the rest of the way to `+/-1.0`) and
 /// this returns `true`. At or short of it, the target drops to `0.0` (so the
-/// phase ramps back down) and this returns `false`. A ship that was never
-/// armed (`roll_target == 0.0` and `roll_phase == 0.0`) is left untouched and
-/// reports `false`.
+/// phase ramps back down) and this returns `false`. A ship with no armed
+/// roll ([`ShipState::roll_armed`] clear) is left untouched and reports
+/// `false`, which is what stops a landing after a completed roll paying again.
 pub fn release(state: &mut ShipState) -> bool {
-    if state.roll_target == 0.0 && state.roll_phase == 0.0 {
+    // The original's landing clears both arm bits whether or not it paid, and
+    // the payout is gated on them, so a roll pays at most once. `roll_target`
+    // is left at `+-1.0` on a completion so the phase still runs on.
+    if !state.roll_armed {
         return false;
     }
+    state.roll_armed = false;
     let completed = state.roll_phase.abs() > COMPLETION_SPLIT;
     if !completed {
         state.roll_target = 0.0;

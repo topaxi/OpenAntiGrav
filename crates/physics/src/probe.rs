@@ -380,6 +380,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         roll_tap_timer,
         roll_phase,
         roll_target,
+        roll_armed,
         roll_payout_timer,
         roll_axis_zone,
         time_since_landing,
@@ -446,6 +447,9 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     hasher.write_f32(roll_tap_timer);
     hasher.write_f32(roll_phase);
     hasher.write_f32(roll_target);
+    if roll_armed {
+        hasher.write_u8(1);
+    }
     hasher.write_f32(roll_payout_timer);
     // `None` is `0`, and the two sides are the original's own `1`/`2`, the same
     // encoding `roll_taps` above carries.
