@@ -152,8 +152,8 @@ impl Renderer {
     /// exactly as one call to [`Self::push_text`] would, stacked downward
     /// from `y` by the chosen atlas's own line height at `scale` - the same
     /// quantity a real font's `.fnt` carries and menu rows already step by.
-    /// No `clip`: a wrapped block is a multi-line paragraph, not a scrolling
-    /// single line, so nothing has needed the two together yet.
+    /// `clip` is the same horizontal window [`Self::push_text`] takes, applied to every
+    /// line: the track-description panel's width wipe cuts a paragraph mid-glyph.
     ///
     /// [`Draw::Text`]: oag_ui::frontend::Draw::Text
     /// [`Draw::FacedText`]: oag_ui::frontend::Draw::FacedText
@@ -172,6 +172,7 @@ impl Renderer {
         align: Align,
         text: &str,
         width: f32,
+        clip: Option<(f32, f32)>,
     ) {
         // [`GlyphSlot::Buttons`] with nothing loaded - see [`Self::push_text`]'s
         // own doc; no caller wraps buttons-atlas text today, but the guard
@@ -190,7 +191,7 @@ impl Renderer {
                 border,
                 align,
                 &line,
-                None,
+                clip,
             );
         }
     }

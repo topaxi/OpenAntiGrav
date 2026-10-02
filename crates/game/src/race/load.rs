@@ -18,6 +18,7 @@ mod geometry;
 mod global;
 mod intro;
 mod pads;
+mod pose;
 mod pulse_psp;
 pub(super) mod ripple;
 mod roster;
@@ -818,24 +819,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ),
     }
 
-    // Resolved here rather than in `Race::start`: the spline supplies the attitude, and `load` is where it is.
-    let pose_override = options.pose.and_then(|request| match request {
-        PoseRequest::SplineAligned { position, yaw } => {
-            let (_, sample, distance) = spline.nearest(position)?;
-            report.push(format!(
-                "pose override: {position:?} yaw {:.1} deg, attitude from the spline sample \
-                 {distance:.1} units away",
-                yaw.to_degrees()
-            ));
-            Some(Pose::from_position_on_sample(sample, position, yaw))
-        }
-        // Verbatim: the whole point of an exact pose is that nothing here
-        // second-guesses the recorded basis against the spline.
-        PoseRequest::Exact(pose) => {
-            report.push(format!("pose override: exact, at {:?}", pose.position));
-            Some(pose)
-        }
-    });
+    let pose_override = pose::resolve(options.pose, &spline, &mut report);
 
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
     let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
@@ -921,6 +905,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
             camera_override: options.camera,
         },
         hud,
+        track_panel: intro::read_panel(
+            &mut archives,
+            title,
+            &track,
+            pulse_psp,
+            options.language.as_deref(),
+            &mut report,
+        ),
         track_stats,
         track_model,
         gantry,

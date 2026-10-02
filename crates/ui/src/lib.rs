@@ -28,3 +28,4 @@ pub mod screen;
 pub mod state_machine;
 pub mod strings;
 pub mod tag_entry;
+pub mod track_panel;

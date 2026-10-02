@@ -397,6 +397,7 @@ impl Stage {
             setup,
             title,
             hud,
+            track_panel,
             track_model,
             liveries,
             collision_model,
@@ -546,6 +547,13 @@ impl Stage {
             })
             .transpose()
             .context("building the countdown overlay")?;
+        // The track-description panel the original lays over the flyby, built the same way.
+        let track_panel = track_panel
+            .map(|assets| {
+                oag_game::track_panel::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), assets)
+            })
+            .transpose()
+            .context("building the track-description panel")?;
         // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
@@ -587,6 +595,7 @@ impl Stage {
             hud: overlay,
             scoreboard,
             countdown,
+            track_panel,
             result_key,
             record_target,
             personal_best: None,

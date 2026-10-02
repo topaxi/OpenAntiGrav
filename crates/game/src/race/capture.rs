@@ -314,6 +314,7 @@ pub fn capture(
         shadow_hulls,
         setup,
         hud,
+        track_panel,
         track_model,
         liveries,
         collision_model,
@@ -815,32 +816,24 @@ pub fn capture(
         Some(framebuffer) => (framebuffer.output().clone(), rect),
         None => (view.clone(), viewport),
     };
+    // The track-description panel, over the flyby and fading out behind the chase view - the
+    // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there.
+    if let (Some(assets), Some(progress)) = (track_panel, race.track_panel_progress()) {
+        crate::track_panel::draw_once(
+            &device,
+            &queue,
+            format,
+            assets,
+            &mut encoder,
+            &hud_view,
+            progress,
+            hud_viewport,
+        );
+    }
     match race.results() {
         Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
             Ok(mut overlay) => {
-                // The same conversion `RaceStage::observation` makes for the
-                // real session, duplicated rather than shared: this capture
-                // has no `RaceStage` to call it on, and `crate::records` is
-                // deliberately free of a dependency on `Race` itself - see
-                // that module's own doc.
-                let standing = &race.sim.world.ships[0].standing;
-                let observation = crate::records::Observation {
-                    finished: race.finished(),
-                    place: Some(race.player_place()),
-                    laps_completed: crate::records::laps_completed(
-                        standing.lap,
-                        race.finished(),
-                        race.sim.world.laps_target(),
-                    ),
-                    tick: oag_race::race_clock_ticks(
-                        standing.finish_tick.unwrap_or(race.sim.world.tick),
-                    ),
-                    best_lap_ticks: standing.best_lap_ticks,
-                    // No campaign cell is selected for a headless capture
-                    // either - see `RaceStage::observation`'s own doc.
-                    campaign_medal: None,
-                    campaign_difficulty: None,
-                };
+                let observation = describe::observation(&race);
                 let personal_best = crate::records::PersonalBest::compare(
                     options.previous_best.as_ref(),
                     &observation,

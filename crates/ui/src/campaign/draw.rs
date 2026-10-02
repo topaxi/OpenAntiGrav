@@ -755,7 +755,7 @@ const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
 
 /// An image widget's draw, with its position and colour overridden - what
 /// [`centred_selector_draw`]/[`tinted_medal_draw`] feed.
-pub(super) fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
+pub(crate) fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
     let width = image.width.unwrap_or(placed.width as f32);
     let height = image.height.unwrap_or(placed.height as f32);
     let sampled = [
