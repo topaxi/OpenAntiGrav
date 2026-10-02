@@ -41,7 +41,10 @@ Two things that are not obvious from the table:
   `--prefetch` progress, `--autopilot`, `--zone-stage`, the shadow dump from
   `OAG_DUMP_SUN_OCCLUSION`: the user asked, so the answer is theirs to see at
   the default filter. `--trace` raises screen transitions to `info` for the
-  same reason.
+  same reason. A line that **reports the result of a `--screenshot` or
+  `--trace-out` capture** is the same kind of thing (`frame at tick N: ... draw(s)
+  submitted`), and `wreck_ground_truth` parses it: leave such a line where it is
+  and grep `crates/*/tests` and `scripts/` for its text before moving any.
 
 ## Loader reports
 

@@ -742,7 +742,9 @@ pub fn capture(
     // pair (or `--lod`, or frustum culling) can be compared by count as well as
     // by picture. The overlay's own figures, which a screenshot cannot show
     // without drawing them into the picture being compared.
-    log::debug!(
+    // `info`, and kept there: `wreck_ground_truth` reads this line out of the
+    // log, and a `--pvs` comparison reads it by eye.
+    log::info!(
         "frame at tick {}: {} draw(s) submitted, {} culled, {} triangle(s)",
         race.sim.world.tick,
         stats.draws_submitted,
