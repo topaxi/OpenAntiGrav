@@ -299,8 +299,11 @@ confirmed by writing 70.0 and reading the HUD's record follow within 0.5 s:
 | 20.5 % | after the drop from 50 %: about 0.97 s of flashing (28 frames), then a steady `20` | the post-hit window, no threshold flash |
 | 15 %, 5 % | flashes, the digits `15` and `5` | |
 | Rise to 60 % | the flash ends the same tick | |
-| Post-hit arming | 60.9 to 60.2 %: `hud+0x110` stays `0.0` (3 of 3); 60.2 to 59.9 %: `0.2286`, `0.2298`, `0.2330` a quarter second on (3 of 3); a rise arms nothing | **`fctiwz`-truncated whole percent** |
+| Post-hit arming | 60.9 to 60.2 %: `hud+0x110` stays `0.0`; 60.2 to 59.9 %: 0.20-0.234 a quarter second on; a rise arms nothing - in each of **three boots**, three reps a boot (first boot `0.2286`, `0.2298`, `0.2330`) | **`fctiwz`-truncated whole percent** |
 | Absorb | fill and number blink, background white | row `c` |
+
+`scripts/rpcs3-hud-probe.py arming` reproduces the arming rows (`schedule` films
+the rest, `sweep` reads the absorb stamps).
 
 The flash accumulator `hud+0x1e8` was read at 0.9833, 0.9574, 0.9395 and 0.9269
 when a flash ended and picked up from there on the next, so **the phase at

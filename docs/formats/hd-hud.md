@@ -982,8 +982,8 @@ numbers, the cells poked and the method are on
 Where this build differed it is fixed:
 
 - **The post-hit window arms on a drop of the truncated whole percentage**,
-  not on any drop: 60.9 to 60.2 % arms nothing and 60.2 to 59.9 % does (3 of 3
-  reps each, read off the HUD's own `+0x110`). `Race::advance_shield_flash_whole`
+  not on any drop: 60.9 to 60.2 % arms nothing and 60.2 to 59.9 % does (3 reps
+  in each of three boots, read off the HUD's own `+0x110`). `Race::advance_shield_flash_whole`
   is the twin of Pulse's step with `fctiwz`'s test.
 - **The phase a flash starts in is the original's accumulator** (`+0x1e8`,
   kept between flashes, wrapped past 1.0) and not the race clock:

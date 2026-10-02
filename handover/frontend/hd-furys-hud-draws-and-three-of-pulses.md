@@ -117,6 +117,13 @@ other pickup clears did; `ship+0x6958` is the LeachBeam manager's flag.
   line in 35 s of thrust); the AI's three were. A steered run onto a weapon pad,
   then a button tap, would give the player's `ship+0x6a80` and the real blink.
 - **`0x0067e6d0`'s traversal order** (which `DamageBar` it binds) is unread.
+- **A frame-for-frame look found the top plate and the pickup slot's hexagon
+  outline drawn heavier than the original's**: at 100 % the original's outline is a
+  light translucent grey and its top plate shows the scene through it; this build's
+  outline is near-black and its plate opaque (`data/scratch/hd-hud-flash/cmp/ring.png`,
+  original left, this build right, same crop). Not touched - it is not the flash,
+  and `hd-hud.md` records the outline as measured "in its authored grey" - but the
+  two pictures disagree, so check the blend and the baked alpha of that atlas region.
 - The per-lap rows still draw on no reference frame at all - none of the three
   captures completes a lap. Confidence 70 stands; see `hd-hud.md`'s per-lap
   section.
