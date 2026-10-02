@@ -45,6 +45,8 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   and its neighbours (nodes `518`, `524`, `527`, `530`, `535`, `537`, at `x = -137` and `x = -52`, `z` about `-146`); with all opaque draws off the picture is the original's stand.
   Candidates: the second-tier section box test (`oag_render::pvs::section_view`, ours is never narrower than the picture), a state mesh of the start structure the original
   hides by animation, or a draw flag. `scripts/psp-wreck-capture.py --ge-dump-k` on the original at that pose, and a draw list of its frame, is the next measurement.
+- **Zone and Eliminator wrecks** use the destroy camera too, which now masks by the wreck's section: **changed, not seen**.
+- **Untested call site**: `scene/frame.rs`'s `race.visible_set(..)` (drop it and `visible_set` is never read; `station_camera_section` and `set_exact` are tested, the wiring is not).
 - **The wall frames of the manual wreck run** (`pulse-end-photo/sheet_manual3.png`, solid teal and olive): found and fixed. A camera on an authored station
   (the destroy camera, the director) sits hundreds of units from the craft, where our camera section lookup failed and fell to "draw everything": the shot from
   inside a structure showed its inside. The original masks with the section of the craft it draws (`cam+0x1e8`, published through `FUN_08878644` in every mode).
@@ -59,6 +61,6 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
 1. A Single Race finished in a lower place, to read the throttle's source
    (`AI_ComputeOpponentThrust`'s rank terms are the first suspect).
 2. ~~Read `FUN_08880c04`'s cases `2` and `3`, then replace the chase stand-in.~~ Done 2026-10-02 (see Open).
-5. Find why a station camera still draws a wall the original sees past (Open, above): take a GE dump of the original at that pose (`psp-wreck-capture.py --place -104.18,-49.69,-180.31 --ge-dump-k 30`) and list which of nodes `518`-`537` it submits.
 3. ~~Read `Race End Photo`'s enter and X handler~~ done for the line (measured, not read); what a wreck waits for is next, see Open.
 4. Name `FUN_088418e0` (the per-entity update; the finish rule is in it) once its other duties are read.
+5. Find why a station camera still draws a wall the original sees past (Open, above): take a GE dump of the original at that pose (`psp-wreck-capture.py --place -104.18,-49.69,-180.31 --ge-dump-k 30`) and list which of nodes `518`-`537` it submits.
