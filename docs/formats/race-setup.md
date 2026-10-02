@@ -640,8 +640,10 @@ team read:
 | `Zone` | 16,000 | 90,000 |
 | `Concept` | 25,000 | 100,000 |
 
-That second axis is what the `Loyalty` bar on `Team Selection` displays, and it
-is why craft availability cannot be modelled with the circuit unlock's shape.
+The `Loyalty` bar on `Team Selection` shows the selected team's own total, not
+either price. The two rows are alternatives and `any` means the best single
+team (`race-box-screens.md`, "Traced 2026-10-02"); that is why craft
+availability cannot be modelled with the circuit unlock's shape.
 
 ## The Race Campaign: the disc's own campaign grid, shape yes, content no
 

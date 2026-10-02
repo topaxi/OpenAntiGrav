@@ -19,7 +19,7 @@
 use std::sync::{Arc, Mutex};
 
 use log::{debug, warn};
-use oag_game::catalogue;
+use oag_game::{catalogue, records, unlock};
 use oag_ui::picker::{self, Details, Entry, Event, Kind, Picker};
 
 use crate::picker_stage::{Distances, LiveryAxis, PickerStage, PreviewSource};
@@ -191,6 +191,12 @@ impl Session {
             return false;
         };
         let title = shell.title;
+        let gates = unlock::gates_variants(title.name);
+        let records = if gates {
+            records::load()
+        } else {
+            records::Store::default()
+        };
         let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
             .teams
             .iter()
@@ -207,6 +213,10 @@ impl Session {
                     .map(|team| {
                         team.skins
                             .iter()
+                            .filter(|skin| {
+                                !gates
+                                    || unlock::loyalty_unlocked(&skin.unlock, &records, title.name)
+                            })
                             .map(|skin| (skin.name.clone(), skin.location.clone()))
                             .collect()
                     })
@@ -248,6 +258,8 @@ impl Session {
                             }),
                             variants,
                             stats,
+                            loyalty: gates
+                                .then(|| records.loyalty_total(title.name, &choice.value)),
                         },
                     },
                     PreviewSource::Ship {
