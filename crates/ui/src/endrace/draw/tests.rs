@@ -310,6 +310,70 @@ fn rewards_draws_the_loyalty_row_once_the_model_carries_an_award() {
     assert_eq!(sprite_count(&layers), 4, "{:?}", layers.body);
 }
 
+/// The `loyaltybar` sprite of a rewards draw list: the `10`-tall one drawn at
+/// full alpha (`loyaltybg` is the same rectangle at half alpha).
+fn loyalty_bar(layers: &crate::menu::Layers) -> Option<([f32; 4], [f32; 4])> {
+    layers.body.iter().find_map(|draw| match draw {
+        Draw::Sprite { rect, uv, color } if rect[3] == 10.0 && color[3] > 0.99 => {
+            Some((*rect, *uv))
+        }
+        _ => None,
+    })
+}
+
+fn rewards_bar_at(total: u32) -> Option<([f32; 4], [f32; 4])> {
+    let model = Rewards {
+        medal: None,
+        campaign: true,
+        loyalty: Some(crate::endrace::Loyalty {
+            team_name: "Assegai".to_string(),
+            award: 90,
+            total,
+        }),
+    };
+    loyalty_bar(&rewards_draw_list(
+        &model,
+        &rewards_layout(),
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| {
+            // The real `pulse_assets.mip` sheet is larger than the bar's
+            // `124`-texel window; the `32`-square `placed()` would turn a
+            // wider crop into a tiled sprite.
+            placed().map(|p| crate::frontend::Placed {
+                width: 512,
+                height: 512,
+                ..p
+            })
+        },
+    ))
+}
+
+/// `loyaltybar` is `total * 0.00124` **pixels** wide and as many texels of
+/// the sheet (`EndRaceRewards_Update` `0x088dd2b8` writes the one number to
+/// the widget's width and U extent), so a total of 90 is a sliver under one
+/// pixel - the reference frame shows only the dim `loyaltybg` - and `50000`
+/// is half of the authored `124`. Fails if the fill goes back to
+/// "a fraction of the authored width" (`11` px at `90`) or squashes the whole
+/// texture into the narrowed rectangle (UV width stuck at the full texture).
+#[test]
+fn the_loyalty_bar_is_total_times_point_00124_pixels_and_texels_wide() {
+    let (rect, uv) = rewards_bar_at(90).expect("the bar draws at total 90");
+    assert!(rect[2] < 1.0 && rect[2] > 0.1, "{rect:?}");
+    assert!((uv[2] - rect[2]).abs() < 1e-6, "{rect:?} {uv:?}");
+
+    let (rect, uv) = rewards_bar_at(50_000).expect("the bar draws at 50000");
+    assert!((rect[2] - 62.0).abs() < 1e-3, "{rect:?}");
+    assert!((uv[2] - 62.0).abs() < 1e-3, "crop, not squash: {uv:?}");
+
+    let (rect, uv) = rewards_bar_at(100_000).expect("the bar draws at the cap");
+    assert!((rect[2] - 124.0).abs() < 1e-3, "{rect:?}");
+    assert!((uv[2] - 124.0).abs() < 1e-3, "{uv:?}");
+}
+
 /// A non-campaign race hides `MedalImg` outright, and an earned medal
 /// leaves it undrawn too - the trophy is the composition root's own layer,
 /// not this crate's.

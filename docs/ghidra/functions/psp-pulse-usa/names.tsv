@@ -1200,3 +1200,5 @@
 0x08883484	function	Camera_IntroProgress	78	race-intro.md
 0x08908a70	function	GridCamera_Progress	88	race-intro.md
 0x08908394	function	GridCamera_Update	80	race-intro.md
+0x088a6a9c	function	Image_DenormalizeUv	80	endrace-screens.md
+0x088a68ec	function	Image_NormalizeUv	80	endrace-screens.md

@@ -329,7 +329,7 @@ pub struct Loyalty {
     pub award: u32,
     /// The team's running total *after* this race's award is folded in -
     /// `loyaltynum`'s `"%s %d"` of `ER_TOT_LOY` and this, and `loyaltybar`'s
-    /// own fill fraction (`total * 0.00124`).
+    /// own fill width in pixels (`total * 0.00124`, not a fraction).
     pub total: u32,
 }
 
