@@ -2610,31 +2610,38 @@ Menu`, and `RACE CAMPAIGN` re-entered: `Cell Selection` opened on `grid0_3_2`, s
 the same across a leave and lands on the carried slot. The screen object outlives the campaign, so the slot does too;
 `CampaignStage` was rebuilt on every `RACE CAMPAIGN` and forgot it.
 
-**What the slot is checked against: the new grid's cell must be unlocked.** A slot is kept only if the new grid has a
-cell there whose `Locked` byte is `false` (the default scan's own test):
+**What the slot is checked against: the new grid's cell must show no lock glyph.** The decompile's filter is
+`FUN_088a37cc(selector, 4, x, y, 4) == 0`, a flag test on the lock layer (layer `4`) of the tile at the slot, so the
+question is the glyph, not the `Locked` byte (the default scan reads the byte; the two differ on any cell a medal
+unlocked). Rows B2 to E1 were taken on a fresh profile, where byte and glyph agree on every cell and so cannot tell
+them apart; G1/G2 were taken after the two races had put a gold on `grid0_3_2` (the saved medal persisted across a
+reboot), which hides the glyph on its six hex neighbours without touching their `Locked` byte:
 
 | # | Walk | Read | Reading |
 | --- | --- | --- | --- |
-| B2 | cursor left on locked `grid0_2_2`; enter `grid1` (has a locked `grid1_2_2`) | `grid1_3_1` (default) | locked cell at the slot: rejected |
+| B2 | cursor left on locked `grid0_2_2`; enter `grid1` (has a locked `grid1_2_2`) | `grid1_3_1` (default) | glyph at the slot: rejected |
 | B3 | cursor left on locked `grid1_2_2`; enter `grid0` (has a locked `grid0_2_2`) | `grid0_3_1` (default) | same |
 | C1 | cursor left on locked `grid0_2_2`; leave and re-enter **the same grid** | `grid0_3_1` (default) | not carried even within one grid |
-| D2 | `grid0_2_2`'s `Locked` byte written 0 (`cell + 0xb9`, was 1) while on `Grid Selection`; cursor left on it; re-enter `grid0` | `grid0_2_2` | the byte, not a stale glyph, decides |
-| E1 | cursor left on `grid0_2_2` (byte now 0); enter `grid1` where `(2, 2)` is locked | `grid1_3_1` (default) | the **new** grid's cell decides, not the old tile's state |
+| D2 | `grid0_2_2`'s `Locked` byte written 0 (`cell + 0xb9`, was 1) while on `Grid Selection`; cursor left on it; re-enter `grid0` | `grid0_2_2` | glyph gone, carried (byte and glyph agree) |
+| E1 | cursor left on `grid0_2_2` (byte now 0); enter `grid1` where `(2, 2)` is locked | `grid1_3_1` (default) | the **new** grid's tile decides, not the old one's |
+| **G1** | gold on `grid0_3_2`; cursor left on `grid0_2_2` (byte `+0xb9` read **1**, glyph hidden by the gold neighbour); leave and re-enter `grid0` | `grid0_2_2` | **the glyph decides: the raw byte rule would have reset it** |
+| G2 | same boot; cursor left on `grid0_2_1` (byte absent, glyph still drawn, no medal beside it); leave and re-enter | `grid0_3_1` (default) | control: a visible glyph resets it |
 
-This is the `FUN_088a37cc(selector, 4, x, y, 4) == 0` filter of the decompile, read as "the cell at the slot is
-unlocked". Taken from rows seen once each (D2 and E1 depend on one poke of one byte); the unlocked-slot carries (A, B1,
-R2, R2-3, and the same-grid `grid0_3_2` re-entry the earlier pass saw) were each seen twice or more across two boots.
+G1/G2 are one boot each, one walk each (frames `71`-`74` under `data/scratch/pulse-cursor-live/`). The first
+implementation keyed on `Locked == false` and would have failed G1; it now asks the screen's own lock predicate
+(`CellSelection::selected_is_locked`: byte set, no medal of its own, no medalled hex neighbour).
 
-**Not measured:** a locked cell whose lock *glyph* a medal cleared (`Locked` still `true`), a slot the new grid has no
-cell at (every slot tried existed), and anything on HD/Fury or on a profile that has run races. A grid reached by the
-game's own unlock path rather than the `Locked` poke was not tried.
+**Not measured:** a slot the new grid has no cell at (every slot tried existed), a glyph still fading out at the
+moment of re-entry (the lock layer's fade flag is a second bit this walk did not separate), anything on HD/Fury, and a
+grid reached by the game's own unlock path rather than the `Locked` poke.
 
-**Implemented** (`crates/game/src/main/campaign_stage.rs`, `CellCursor`, three unit tests): the slot is the cell's
-`(x, y)` from its name (`Cell::grid_coords`); `restore` picks the cell at the slot with `locked == Some(false)` and
-otherwise leaves `CellSelection::new`'s default; `Session::campaign_cursor` carries it across `RACE CAMPAIGN`
-openings (written when the campaign closes on any path, including launching a race). Confidence **90** for the shared
-slot and its persistence across leaving the campaign (decompile plus a runtime read on two boots, one binary), **85**
-for the unlocked-cell filter (a runtime read, three differently-shaped rows, one poke each in D2/E1).
+**Implemented** (`crates/game/src/main/campaign_stage.rs`, `CellCursor`, four unit tests): the slot is the cell's
+`(x, y)` from its name (`Cell::grid_coords`); `restore` selects the cell at the slot and puts the cursor back on the
+default if `selected_is_locked()` says that cell still shows a glyph; `Session::campaign_cursor` carries it across
+`RACE CAMPAIGN` openings (written when the campaign closes on any path, including launching a race). HD/Fury run the
+same code through the shared stage: **chosen, not measured** there. Confidence **90** for the shared slot and its
+persistence across leaving the campaign (decompile plus a runtime read on two boots, one binary), **85** for the
+glyph filter (a runtime read, G1 and its control seen once each, the decompile's layer-4 flag test agreeing).
 
 ## Open
 

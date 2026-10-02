@@ -3,8 +3,9 @@
 **Update, 2026-10-02, `pulse-cursor-live` lane: the cursor measured and fixed, the loyalty slope pinned.**
 `Cell Selection`'s cursor is **one `(x, y)` slot shared by every grid**, kept across leaving the campaign
 (PPSSPP, two boots, a breakpoint reading the screen's `+0xdc`): `grid0_3_2` then `grid1` lands on `grid1_3_2`,
-`grid1_3_1` then `grid0` lands on `grid0_3_1`. A slot is carried only when the new grid has a cell there with
-`Locked == false`; a locked one (including re-entering the same grid on a locked cell) falls to the default scan.
+`grid1_3_1` then `grid0` lands on `grid0_3_1`. A slot is carried only when the new grid's cell there shows no lock glyph (the screen's own predicate, not the
+`Locked` byte: a cell a gold neighbour unlocked keeps the cursor with its byte still 1); a glyph-visible one
+(including re-entering the same grid on it) falls to the default scan.
 `CellCursors` is replaced by `CellCursor` plus `Session::campaign_cursor`. Not measured: a cell whose lock glyph a
 medal cleared, a slot the new grid lacks, HD/Fury (still chosen), and a grid reached by the game's own unlock path
 (`grid1` was opened by writing its `Locked` byte). The loyalty bar slope is measured at 20080 and 50080 totals,

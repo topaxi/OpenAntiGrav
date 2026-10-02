@@ -2141,9 +2141,10 @@ and [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md)'s "Where th
   slot: `grid0_3_2` then entering `grid1` lands on `grid1_3_2` (not `grid1`'s default `grid1_3_1`);
   `grid1_3_1` then entering `grid0` lands on `grid0_3_1` (not the `grid0_3_2` it was left on). The
   screen object (`0x08d73170`) is the same across a leave to `Main Menu` and back, and the cursor
-  survives it. The `FUN_088a37cc(selector, 4, x, y, 4) == 0` test behaves as "the new grid's
-  cell at the slot has `Locked == false`": a locked `grid1_2_2`/`grid0_2_2` at the slot gives the
-  default scan's `_3_1`, including re-entering the same grid on a locked cell, and clearing
-  `grid0_2_2`'s `+0xb9` makes the slot stick. Confidence 90 (shared slot, persistence), 85 (the
-  unlocked filter). `CellCursor` in `campaign_stage.rs` now implements it.
+  survives it. The `FUN_088a37cc(selector, 4, x, y, 4) == 0` test (layer 4 is the lock glyph, see "The cell unlock
+  rule") behaves as "the new grid's tile at the slot shows no lock glyph", not as the `Locked` byte: a glyph-visible
+  `grid1_2_2`/`grid0_2_2`/`grid0_2_1` at the slot gives the default scan's `_3_1`, including re-entering the same grid,
+  while `grid0_2_2` (byte `+0xb9` still 1) beside a gold `grid0_3_2` keeps the cursor. Confidence 90 (shared slot,
+  persistence), 85 (the glyph filter: one boot, one control). `CellCursor` in `campaign_stage.rs` now implements it
+  (the screen's own lock predicate) - not the byte, which a first draft used and the gold-neighbour row refuted.
 

@@ -320,6 +320,10 @@ them from the first frame.
 
 ## Open
 
+- **`EndRace Rewards` loyalty row text (seen 2026-10-02, `pulse-cursor-live`, not chased):** the reference reads one
+  mixed-case string `Assegai Loyalty: 80 Points` and `Total loyalty: 50080`; this build draws upper-case
+  `ASSEGAI LOYALTY` and `80 POINTS` as two columns, the same shared-table font gap as above.
+
 - ~~**The trophy model is not wired this pass.**~~ **Wired 2026-09-28** -
   see "The trophy" above; the struck text is kept for its history.
   `oag_game::preview::model` can

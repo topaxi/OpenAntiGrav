@@ -64,16 +64,17 @@ pub(crate) enum Screen {
 /// lands on `grid1_3_2`, not on `grid1`'s first-unlocked default; left on
 /// `grid1_3_1`, entering `grid0` lands on `grid0_3_1`, not on the `grid0_3_2`
 /// it was last left on. The slot is kept only when the new grid has a cell
-/// there whose `Locked` byte is `false` - the same test the default scan
-/// uses; a locked or absent cell falls to the default (`grid0_2_2` into `grid1`,
-/// and `grid0_2_2` back into `grid0` itself, both measured). It also survives
+/// there that **shows no lock glyph** - the rule the screen draws with
+/// (`Locked` set, no medal of its own, no medalled hex neighbour), which is
+/// the original's own tile-flag test on the lock layer: a play-unlocked cell
+/// (`Locked` still 1, glyph hidden by a medalled neighbour) keeps the cursor,
+/// a glyph-visible one falls to the first-unlocked default (`grid0_2_2` into
+/// `grid1`, and `grid0_2_1` back into `grid0` itself, both measured). It also survives
 /// leaving the campaign altogether, which is why [`Session`] holds it rather
 /// than this stage.
 ///
-/// **Chosen, not measured**: that a cell whose lock glyph a medal cleared
-/// (`Locked` still `true`) is still refused, and that HD/Fury's own `Cell
-/// Selection` (which shares this stage) behaves the same way - only Pulse PSP
-/// was observed.
+/// **Chosen, not measured**: that HD/Fury's own `Cell Selection` (which shares
+/// this stage) behaves the same way - only Pulse PSP was observed.
 ///
 /// [`Session`]: crate::session::Session
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -89,19 +90,26 @@ impl CellCursor {
     }
 
     /// Moves `model`'s cursor to the cell at the remembered slot, when this
-    /// grid has one that is unlocked; otherwise a no-op, which keeps
-    /// `CellSelection::new`'s first-unlocked default.
+    /// grid has one and it shows no lock glyph; otherwise a no-op, which
+    /// keeps `CellSelection::new`'s first-unlocked default.
     pub(crate) fn restore(&self, model: &mut oag_ui::campaign::CellSelection) {
         let Some(slot) = self.0 else {
             return;
         };
-        let name = model
+        let Some(target) = model
             .cells()
             .iter()
-            .find(|cell| cell.grid_coords() == Some(slot) && cell.locked == Some(false))
-            .map(|cell| cell.name.clone());
-        if let Some(name) = name {
-            model.select_by_name(&name);
+            .find(|cell| cell.grid_coords() == Some(slot))
+            .map(|cell| cell.name.clone())
+        else {
+            return;
+        };
+        let before = model.selected().map(|cell| cell.name.clone());
+        model.select_by_name(&target);
+        if model.selected_is_locked()
+            && let Some(before) = before
+        {
+            model.select_by_name(&before);
         }
     }
 }
@@ -811,6 +819,38 @@ mod tests {
         let mut absent = CellSelection::new(vec![cell("grid1_3_1"), cell("grid1_3_2")]);
         cursor.restore(&mut absent);
         assert_eq!(selected(&absent), "grid1_3_1");
+    }
+
+    /// A cell whose `Locked` byte is still set but whose glyph a medalled hex
+    /// neighbour hides keeps the cursor (`grid0_2_2` beside the gold
+    /// `grid0_3_2`, measured); one with no medal near it does not (`grid0_2_1`).
+    #[test]
+    fn a_cell_a_neighbouring_medal_unlocked_keeps_the_cursor() {
+        let cells = vec![
+            cell("grid0_3_1"),
+            cell("grid0_3_2"),
+            locked_cell("grid0_2_2"),
+            locked_cell("grid0_2_1"),
+        ];
+        let with_gold = |cells: Vec<Cell>| {
+            CellSelection::with_medals(cells, &|name| {
+                (name == "grid0_3_2").then_some(oag_tables::race_campaign::Medal::Gold)
+            })
+        };
+        let mut cursor = CellCursor::default();
+
+        let mut left = with_gold(cells.clone());
+        left.select_by_name("grid0_2_2");
+        cursor.remember(&left);
+        let mut again = with_gold(cells.clone());
+        cursor.restore(&mut again);
+        assert_eq!(selected(&again), "grid0_2_2");
+
+        left.select_by_name("grid0_2_1");
+        cursor.remember(&left);
+        let mut again = with_gold(cells);
+        cursor.restore(&mut again);
+        assert_eq!(selected(&again), "grid0_3_1");
     }
 
     /// Nothing remembered yet is the first-visit default, untouched.
