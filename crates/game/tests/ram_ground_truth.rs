@@ -99,8 +99,17 @@ fn across(race: &race::Race, slot: usize) -> Option<(f32, f32, f32)> {
 
 /// One shift, and what became of the craft that threw it.
 struct Shift {
-    /// The room the craft itself had on the side it went, on the tick before
-    /// the timer armed - which is the tick the driver decided on.
+    /// The room the craft itself had on the side it went: where it stood at the end of the
+    /// tick before the timer armed - the state the driver decided from - against the
+    /// corridor at the index the driver holds on the arming tick.
+    ///
+    /// **Not against the corridor at last tick's index**, which this used to read and which
+    /// is two samples behind: `Driver::ram` asks `aim(self.index)` with the index it has
+    /// just advanced, so the corridor it measured is the arming tick's. On a corridor that
+    /// narrows that is a few tenths: on 2026-10-02 a Pulse grid walk that moved every
+    /// starting slot a fraction of a unit put one shove at seed 24 on a tapered stretch,
+    /// read `11.68` against last tick's index and `12.05` against the index the driver
+    /// used, and the 0.1 slack below was never meant to carry a taper.
     room: f32,
     /// The furthest it ended up past that corridor edge within [`WATCH`].
     past_edge: f32,
@@ -125,8 +134,9 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
 
     let ships = race.ship_count() as usize;
     let mut shifting = [false; 8];
-    // Last tick's `across`, which is what the driver saw when it decided.
-    let mut previous: [Option<(f32, f32, f32)>; 8] = [None; 8];
+    // Where each craft stood at the end of last tick, which is what the driver saw when it
+    // decided.
+    let mut previous: [Option<oag_core::math::Vec3>; 8] = [None; 8];
     let mut watching: Vec<(usize, usize, f32, f32, Shift)> = Vec::new();
     let mut done: Vec<Shift> = Vec::new();
 
@@ -161,9 +171,17 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
                 } else {
                     -1.0
                 };
-                let room = previous[slot].map_or(f32::INFINITY, |(offset, left, right)| {
-                    let edge = if toward > 0.0 { right } else { -left };
-                    edge - offset * toward
+                let room = previous[slot].map_or(f32::INFINITY, |position| {
+                    let aim = race.racing_line().aim(ship.driver.index as usize, 0.0);
+                    aim.corridor.map_or(f32::INFINITY, |frame| {
+                        let offset = (position - aim.point).dot(frame.lateral);
+                        let edge = if toward > 0.0 {
+                            frame.right
+                        } else {
+                            -frame.left
+                        };
+                        edge - offset * toward
+                    })
                 });
                 watching.push((
                     slot,
@@ -177,7 +195,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
                 ));
             }
             shifting[slot] = on;
-            previous[slot] = across(&race, slot);
+            previous[slot] = Some(ship.physics.body.position);
         }
     }
     done
