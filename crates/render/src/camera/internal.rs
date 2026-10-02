@@ -30,7 +30,7 @@
 //!   with the literal visible.
 //! - **`headtilt` rolls the up vector by the steering lean.** The original takes
 //!   `up - side * (craft[0x844] * headtilt)`, with `craft+0x844` the smoothed raw
-//!   stick (`oag_physics::ShipState::steer_lean`, `-1..=1`). See [`view`] and
+//!   stick (`oag_physics::ShipState::camera_lean`, `-1..=1`). See [`view`] and
 //!   `camera.md`. The external rigs never read the lean at all.
 //! - **No `0.75`.** The original scales both *external* rigs by a global length
 //!   factor of `0.75` and does not touch the internal one with it. That factor is
@@ -119,10 +119,10 @@ pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
 /// matrix in `FUN_088418e0` was. Labelled here so that distinction is not
 /// lost: the ship's roll is measured, the cockpit's is inferred from it.
 #[must_use]
-pub fn view(target: Target, params: &InternalParams, roll_phase: f32, steer_lean: f32) -> Mat4 {
+pub fn view(target: Target, params: &InternalParams, roll_phase: f32, camera_lean: f32) -> Mat4 {
     let eye = eye(target, params);
     let aim = look_at_point(target, params);
-    let up = tilted_up(target, params, aim - eye, steer_lean);
+    let up = tilted_up(target, params, aim - eye, camera_lean);
     let up = crate::roll::rotation(target.forward, roll_phase) * up;
     camera::look_at(eye, aim, up)
 }
@@ -131,22 +131,32 @@ pub fn view(target: Target, params: &InternalParams, roll_phase: f32, steer_lean
 /// headtilt)`, then `u` taken perpendicular to the view direction, as
 /// `FUN_088455ec` does with `cross(d, cross(u, d))`.
 ///
-/// `side` is the body's right axis, `forward x up` here. **Handedness is carried
-/// by [`HEADTILT_SIDE_SIGN`].** An absent `headtilt` tilts nothing, as the original
+/// `side` is the original's side row, which is this engine's left; see
+/// [`HEADTILT_SIDE_SIGN`]. An absent `headtilt` tilts nothing, as the original
 /// never reads one it was not given.
-fn tilted_up(target: Target, params: &InternalParams, dir: Vec3, steer_lean: f32) -> Vec3 {
-    let Some(headtilt) = params.headtilt.filter(|_| steer_lean != 0.0) else {
+fn tilted_up(target: Target, params: &InternalParams, dir: Vec3, camera_lean: f32) -> Vec3 {
+    let Some(headtilt) = params.headtilt.filter(|_| camera_lean != 0.0) else {
         return target.up;
     };
     let side = target.forward.cross(target.up) * HEADTILT_SIDE_SIGN;
-    let u = target.up - side * (steer_lean * headtilt);
+    let u = target.up - side * (camera_lean * headtilt);
     let perp = u * dir.length_squared() - dir * dir.dot(u);
     perp.normalize_or_zero()
 }
 
 /// Which way the original's `craft+0x37c` side row points relative to this
-/// engine's right (`forward x up`). See `camera.md`, "headtilt".
-pub const HEADTILT_SIDE_SIGN: f32 = 1.0;
+/// engine's right (`forward x up`): **its left**, so `-1.0`.
+///
+/// The original's body row 0 is the ship's left: `oag-trace run --basis
+/// left-up-forward` is the measured reading of the recorded `right_*` columns,
+/// and a right-handed `+Y` up, `+Z` forward frame puts `up x forward` on the left
+/// as well. So `up - side * (lean * headtilt)` is `up + right * (lean *
+/// headtilt)` here: the view's up vector leans **into** the turn, which is also
+/// what the arithmetic's own sign pattern (a positive stick gives a positive lean)
+/// predicts. Checked against the original's tripod: with the raw rows, the
+/// residual of `up - side * lean * 0.3` over the whole capture is lowest at
+/// `+0.3` and rises on the other side of zero (`camera.md`, "headtilt").
+pub const HEADTILT_SIDE_SIGN: f32 = -1.0;
 
 #[cfg(test)]
 mod tests {
@@ -272,6 +282,10 @@ mod tests {
         let side = target.forward.cross(target.up) * HEADTILT_SIDE_SIGN;
         let expect = (target.up - side * 0.2).normalize();
         assert!((up - expect).length() < 1.0e-6, "{up} vs {expect}");
+        assert!(
+            up.dot(target.forward.cross(target.up)) > 0.0,
+            "a positive lean tips the up vector toward the ship's right: {up}"
+        );
         let none = InternalParams {
             headtilt: None,
             ..tilted

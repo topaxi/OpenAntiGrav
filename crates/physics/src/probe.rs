@@ -361,10 +361,10 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         thrust,
         brake,
         steer,
-        // Not hashed, see `ShipState::steer_lean_target`: derived from the controls and
+        // Not hashed, see `ShipState::camera_lean_follower`: derived from the controls and
         // read only by the cockpit camera.
-        steer_lean_target: _,
-        steer_lean: _,
+        camera_lean_follower: _,
+        camera_lean: _,
         reverse_controls,
         stun_timer,
         wall_contact_prev,

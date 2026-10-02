@@ -205,9 +205,10 @@ fn a_missing_element_is_an_error() {
 /// and one schema generation later. **Wipeout HD's team files omit the
 /// attribute** - `<InternalCamera fov="65" height="0" length="3" pitch="0"/>`
 /// on Feisar - where its own Zone and Detonator ships still carry it, so the
-/// absence is a fact about a document rather than a defect in one. Nothing in
-/// this project applies `headtilt` (see `oag_render::camera::internal`), so
-/// what an `Option` buys here is only that a typo cannot become a silent zero.
+/// absence is a fact about a document rather than a defect in one. Only the
+/// cockpit view applies `headtilt` (see `oag_render::camera::internal`), and an
+/// absence there tilts nothing; what an `Option` buys here is that a typo cannot
+/// become a silent zero.
 #[test]
 fn an_absent_headtilt_is_none_and_a_broken_one_is_still_an_error() {
     let doc = all_four();

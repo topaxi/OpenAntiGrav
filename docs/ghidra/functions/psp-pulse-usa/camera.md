@@ -990,9 +990,8 @@ So:
   the literal visible.
 - **`<InternalCamera headtilt>` rolls the view's up vector**, by
   `side * craft[0x844] * headtilt`, so the horizon leans by an amount proportional
-  to the attribute times an unidentified per-craft quantity. The *shape* is
-  confidence 80; `craft+0x844` was **not** identified, so the magnitude and the
-  sign of the roll are unknown.
+  to the attribute times the smoothed raw-stick lean (`craft+0x844`, identified
+  2026-08-09 and measured 2026-10-02 - see below). Ported 2026-10-02.
 - **No `g_craft_scale`** anywhere in this rig, per the section above.
 - Two further dynamic terms exist and are named here so their absence from a
   reimplementation is not read as an oversight: `craft+0x810`, a per-frame smoothed
@@ -1007,11 +1006,10 @@ So:
   [input-bindings.md](input-bindings.md#the-roll-is-drawn-0x87c-eases-into-0x880-which-rolls-the-ship-about-its-nose).
 
 **Applied 2026-08-08** as `oag_render::camera::internal`, with `pitch` implemented
-as the rise it is and `headtilt` **parsed, carried and deliberately not applied** -
-a lean applied with the wrong sign leans the horizon the wrong way through every
-corner, which is worse than a horizon that does not lean. The original already
-discards `<BackwardCamera headtilt>` outright, so an unapplied headtilt is at least
-a thing this format does elsewhere.
+as the rise it is. `headtilt` was carried and unapplied until 2026-10-02, when the
+steering lean it multiplies was ported and measured - see "`craft+0x844` is a
+smoothed steering lean" below. The original discards `<BackwardCamera headtilt>`
+outright, so only the internal block's value ever reaches a view.
 
 ## Correction: `craft+0x790` has a second write site, and it is speed-proportional
 
@@ -1153,20 +1151,56 @@ So the lean **leans into the turn**, is driven by steering, is rate-limited and
 then smoothed with a `4/s` first-order filter, and saturates at `0.6` (or `0.3`
 on the other sign).
 
-**This is not yet portable, and an earlier revision of this section said it was.**
-That claim - "a port needs no new capture: everything above is arithmetic on
-values this project already has" - contradicts the confidence note three
-paragraphs below, which puts **0** on what the input actually is. Both were
-written in the same pass and only one can be acted on. The *shape* of the filter
-is portable; its **input is not**, because `*(craft+0x94) + 0x78`'s first float
-is unidentified and the `+/-10.0` terms sitting beside a `steer * 0.01` say its
-units are not what a first reading assumes. Porting on the arithmetic alone
-would ship a lean of unknown magnitude and call it recovered.
+**Read at instruction level and measured 2026-10-02; ported as
+`oag_physics::controls::update_camera_lean`.** Corrections to the prose above,
+from the instructions at `0x0883fab4` and a PPSSPP capture of `entity+0x844` and
+`entity+0x848` (Talons Junction, Assegai/Venom, `verification/scenarios/steer-lean.inputs`,
+`data/traces/talons-junction-steer-lean.csv`):
 
-**What is settled is the sign**: the craft leans *into* the turn. What is not is
-the scale. Identifying that one field - the first float of
-`*(craft+0x94) + 0x78` - is what makes this portable, and it is a smaller job
-than the filter was.
+- **The base is the entity**, not the craft: `FUN_0883fab4`'s `a0` is the same
+  `entity` the `0x854` filter lives on (`entity+0x94` is the craft). The page's
+  "craft+0x844" is entity+0x844 throughout.
+- **`0.6` and `0.3` clamp the delta, not the lean.** `d = target - follower`; `d`
+  is clamped to `+/-0.6` when its sign matches the raw stick's and to `+/-0.3`
+  otherwise (stick centred, or opposing), then `follower += d * 5.4 * dt`. The
+  lean itself therefore settles at the target, `+/-1.0` at most, not at `0.6`.
+- **The input is closed**: `*(*(craft+0x94)+0x78)` +0x00 is the raw `+/-100` stick
+  record (`cannon-quake-leachbeam.md`, item 5), so `target = stick * 0.01`.
+  The capture agrees: a full right settles at `0.982`, a record of 98.2.
+- **A partial stick is not linear.** Scripted `stick_x=-0.5` settles at `-0.109`
+  (a record of about `-11`), and the ramped `steer` at about `-11`..`-18`; our
+  `ShipControls::steer_x * 100` gives `-50` for the same input and `-37` on the
+  ramped `steer`. The original shapes the analog axis before the record; ours does
+  not. The lean inherits whatever the stick path does, and this is a gap in the
+  stick path rather than in the lean.
+- **Omitted, chosen, not measured**: the `+/-10.0` terms from `entity+0x8a4` and
+  `+0x8a8` and the negate on `entity+0x860 & 2` are treated as clear. None of the
+  three is identified, and all three were clear throughout the capture (the lean
+  never left `+/-1`).
+
+**Measured**: replaying the lean filter over the capture reproduces `+0x844` and
+`+0x848` to **RMS 0.0003** over 480 ticks (a full right, a release, a half left, a
+release), at one tick of capture latency; `crates/trace/tests/camera_lean_ground_truth.rs`
+pins it, and a mutated delta limit fails it. Confidence **90** for the filter.
+
+**The roll.** `up' = up - side * (lean * headtilt)`, taken perpendicular to the view
+direction, then rolled by the barrel roll. The `side` row (`entity+0x37c`) is the
+ship's **left** (the recorded `right_*` columns are the left, `oag-trace run
+--basis left-up-forward`), so in this engine a positive lean adds the ship's **right**
+to the up vector: the view leans into the turn. Over the same capture, with the
+body's own rows and the node rows read live, the angle between the predicted and
+the recorded tripod up is smallest at `k = +0.3 * lean` (RMS 0.261 rad) and rises
+on both sides (`k = 0`: 0.312, `+0.6`: 0.284, `-0.3`: 0.416, `-0.6`: 0.526), where
+`0.3` is this ship's authored `headtilt`. That supports the sign and the scale and
+no more: **0.26 rad of the tripod's up is explained by something else**, because
+`tgt += craft[0x810]` and the rows `craft+0x374`/`+0x37c` point at nodes whose full
+behaviour was not ported or fitted here. Confidence **70** for the sign and scale
+of the roll, **90** for the lean it multiplies. Ours is
+`oag_render::camera::internal::view`'s `tilted_up`, with `HEADTILT_SIDE_SIGN = -1`.
+
+The tripod rows at `entity+0xa0` are stored mirrored in `z` against the body's rows
+(the tripod's yaw is minus the body's, to 0.1 degree at rest), which is why a naive
+dot product against the body looks like a camera lagging by 180 degrees.
 
 The same function computes a **second** pair the same way - `craft+0x858` as the
 follower at rate `5.0` and `craft+0x854` smoothed at `3.0` - from a richer input
@@ -1187,11 +1221,11 @@ it as inert is dropping a visible term. See
 
 **Confidence 80** for the arithmetic, read end to end at instruction level, with
 the reader and writer sets established by an operand scan over all 635,908
-instructions rather than by an xref search. **Confidence 0** for what either
-quantity *means* physically: `*(craft+0x94) + 0x78`'s fields are not identified,
-and the `+/-10.0` contributions from `craft+0x8a4`/`0x8a8` are large against a
-`steer * 0.01` term, which says the input's units are not what a first reading
-assumes.
+instructions rather than by an xref search; raised to **90** for the `0x844` filter
+on 2026-10-02 by the capture above. What `+0x844` *means* is no longer open: it is
+the raw stick, smoothed. The **second** pair (`0x854`, the ship's display lean) is
+still not ported and its input still carries the two `0.005` terms and the
+`0x1000` gate described above; the camera does not read it.
 
 ### A wrong name was live in the Ghidra database, on this very function
 

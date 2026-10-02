@@ -1,0 +1,15 @@
+# A full right, then a half left, each held long enough to settle: the steering
+# lean (entity+0x844, craft+0x844 in camera.md) follows the stick and lets go of it.
+#
+#     just trace --port 47810 --script verification/scenarios/steer-lean.inputs \
+#         --script-lead 2 --warmup-hold cross --warmup 6 \
+#         --out data/traces/talons-junction-steer-lean.csv
+#
+# Fed to the capture identically to the replay, like every file here. Note that
+# the original's own stick shaping makes -0.5 a record of about -11, not -50.
+
+60 cross
+150 cross stick_x=1.0
+60 cross
+150 cross stick_x=-0.5
+60 cross

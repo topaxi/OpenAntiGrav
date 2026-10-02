@@ -528,8 +528,8 @@ unknown element.
 What did not parse: **`<InternalCamera>` has no `headtilt`** on HD's team files.
 It is now `Option<f32>`, the same treatment `easyshield`, `sideshift`,
 `weight_distribution` and `<pitch>` already had, and it costs nothing because
-nothing in this project applies `headtilt` - `oag_render::camera::internal`
-carries the value and documents why it does not roll the view by it. The
+`oag_render::camera::internal` treats an absent `headtilt` as no tilt (it rolls
+Pulse's cockpit view by `lean * headtilt` since 2026-10-02). The
 absence is a fact about a generation of the schema, not a defect: **HD's own
 mode ships still carry the attribute.**
 

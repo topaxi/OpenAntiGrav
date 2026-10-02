@@ -195,7 +195,7 @@ impl Race {
                 target,
                 &self.view.internal_params,
                 self.ship().physics.roll_phase,
-                self.ship().physics.steer_lean,
+                self.ship().physics.camera_lean,
             )
         } else {
             self.view.camera.view(target, &self.view.chase_params)

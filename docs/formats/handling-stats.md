@@ -129,8 +129,8 @@ Two decisions are worth stating, because both are load-bearing:
 
 The confidence scores above are all about *meaning*, not about parsing, and none
 reaches 95 because none is runtime-verified. That the `Camera` fields are read
-correctly is not in doubt; that `headtilt` is the roll-follow amount is a reading
-of the name, which is why the camera rows sit at 60 under the
+correctly is not in doubt; that `headtilt` multiplies the steering lean to roll the cockpit view's up vector
+was read at instruction level and fitted against a capture on 2026-10-02 (`camera.md`); the other camera rows are readings of names, which is why the camera rows sit at 60 under the
 [rubric](../reverse-engineering/confidence-rubric.md). The physics rows are higher
 because they were confirmed twice - see the cross-check below.
 

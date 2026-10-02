@@ -47,6 +47,7 @@ from psp_trace_fields import (
     CAMERA_UPDATE_BREAK,
     CRAFT_FIELDS,
     ENTITY_FIELDS,
+    ENTITY_ROW_POINTERS,
     ENTITY_OWNER,
     ENTITY_POINTER,
     FLARE_FIELDS,
@@ -322,6 +323,7 @@ def main():
             [name for name, _ in CRAFT_FIELDS]
             + [name for name, _ in ENTITY_FIELDS]
             + [name for name, _ in BODY_FIELDS]
+            + ["%s_%s" % (n, a) for n, _ in ENTITY_ROW_POINTERS for a in "xyz"]
         )
         if args.camera:
             names += [name for name, _ in CAMERA_FIELDS]
@@ -436,6 +438,9 @@ def main():
                 for _, at in ENTITY_FIELDS
             ]
             values += [struct.unpack("<f", body_blob[at : at + 4])[0] for _, at in BODY_FIELDS]
+            for _, at in ENTITY_ROW_POINTERS:
+                row = struct.unpack("<I", entity_blob[at - entity_lo :][:4])[0]
+                values += list(struct.unpack("<3f", dbg.read(row, 12)))
             if camera_node is not None:
                 # Read at the ship stop: the node holds whatever the last
                 # camera update wrote, so its phase against this row is a
