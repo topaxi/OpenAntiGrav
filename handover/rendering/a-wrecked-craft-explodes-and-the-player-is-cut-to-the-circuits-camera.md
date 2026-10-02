@@ -28,7 +28,12 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   ring, the screen flashes and the destroy camera's ease. It writes nothing under `sim` (`world.tick` included), so the standings and
   the board stay frozen; `wreck_finished` pins the hash. Seen at 480x272 (`data/scratch/pulse-wreck-3/shots/sheet.png`): the camera
   stays on the wreck, the explosion's fireball and the kind 7 wash play under the panels, the picture is clear again by about 100
-  frames. **Chosen, not measured:** only the player's wreck was looked at, so the opponents, shots in flight and trails stay
+  frames; a Zone wreck plays the same (`sheet_z.png`; Zone's own overexposed circuit look). **Over it the results panel is drawn at once**,
+  and the original's is not: `data/scratch/pulse-fx-3/hudT` (the original, a player wreck after GO) shows no panel at 40, 80 or 120 frames
+  with the circuit's camera and the fire/wreck clear, so the sequence this change plays is **hidden by ours** for the player
+  (`data/scratch/pulse-wreck-3/shots/cmp_original_vs_ours.png`: same camera composition, panel on ours only). That is the
+  `Race End Photo` state (`after-the-finish.md`: about a second of clean view, then the legend, then the panels on X), which the
+  EndRace lane owns; until it lands the explosion is only visible under a semi-transparent panel. **Chosen, not measured:** only the player's wreck was looked at, so the opponents, shots in flight and trails stay
   frozen under it (the original goes on running them).
 - ~~**The Eliminator respawns the craft at the same tick the big explosion goes off**~~ **Closed 2026-10-02 (pulse-wreck-3).** State 8's
   update is `Ship_UpdateRespawn` (`FUN_088418e0`'s per-state jump table at `0x08a7bb88`: state 8 goes to the call at `0x08841e44`),
@@ -40,7 +45,9 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   than 2, 8 and 18), not `Ship_UpdateRespawn`; nothing read revives a craft in state 6. `shield.md` and the port both had a
   single-race opponent return after `1.5 + 0.8` s through `Ship_UpdateRespawn`. **Unreconciled, not changed here** (it is
   `oag-game` sim timing outside this lane): watch an AI craft driven to state 4 in a Single Race on PPSSPP for 5 s and see whether
-  it ever leaves state 6.
+  it ever leaves state 6. Static evidence so far (`shield.md`, the 2026-10-02 correction): of the 20 `Ship_SetState` call sites only
+  `Ship_UpdateDestroyed` passes 8, and none revives a state-6 craft, which fits the `cont_elim` ("contender eliminated") line state 6
+  plays at expiry: a single race's destroyed AI craft may be out for good, as the player is.
 - ~~The explosion's smoke is thinner and its fire brighter and longer in ours at k 160 to
   180 (2.2x to 2.4x).~~ **Closed 2026-10-01 (pulse-fx-recheck)**: the matrix's `0.75` rows scale every root
   emitter's spawn offset and velocity (and not sizes), an emitter's run is one tick short, a template dies one tick
