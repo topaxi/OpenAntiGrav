@@ -1,34 +1,39 @@
-# A parked-player Eliminator cannot finish a five-kill event
+# A parked-player Eliminator finishes at five, slowly; the remaining gap is the original's 85 s
 
-2026-09-30, from the `eliminator-finish` lane. Evidence: `docs/gameplay/race-modes.md`
-("Who is credited with a kill, and why this build's Eliminator does not finish") and
-`docs/ghidra/functions/psp-pulse-usa/eliminator-kill-target.md`. Guarded by
-`crates/game/tests/eliminator_finish_ground_truth.rs`, which finishes at a target of 2 only.
+2026-10-02, from the `pulse-eliminator` lane. Evidence: `docs/gameplay/race-modes.md` ("Who is
+credited with a kill, and how this build's Eliminator reaches five"). Guarded by
+`crates/game/tests/eliminator_finish_ground_truth.rs` (target 5, seeds 5, 9, 13, 16, one test each,
+plus the respawn-keeps-its-place test).
 
 ## Open
 
-- **A 5-kill finish is not reached** with the player parked on `16_Track`: about 11 kills in
-  five game-minutes over four seeds (5, 9, 16, 13), spread over seven craft. The original
-  reached 5 in 85 s.
-- **The field strings out**, 118 units at the start to 3,900 by minute six. Identical craft on
-  one racing line; the original's weapon AI fires readily only at a craft inside 100 units ahead.
-- **Unfired weapons.** Every opponent ended a run holding a pickup, and Eliminator refuses
-  absorbing, so pads stop paying out. 79 % of fire consults found nobody ahead inside 120.
-- **Wall deaths**: 9 of 20 deaths in one run had no weapon hit in the last second, and credit
-  nobody, as in the original.
-- **Why the pack knob works is not understood.** The leader easing (`eliminator_pack_scale`,
-  chosen, not measured) doubled kills in the sample, but its parameters changed nothing.
-- **`WeaponAi_DecideFireOrAbsorb` is not ported.** A probe showed the port alone would add no
-  shots: its Eliminator skill index is 3 only with a craft ahead within 100, else 0, so it fires
-  about once in 45 s. The original's shots come from a dense field, which its AI gets by cheating.
-  Its `+0x52` predicted-path test and the fields `+0x44`, `+0x4c`, `+0x5c` are also unread.
-- **Ghidra data rename rejected**: the bridge refused `g_eliminator_kill_target` for
-  `0x08b30fb0` (Hungarian-prefix check). The function rename applied; the docs and `names.tsv`
-  are authoritative for the data name.
+- **Time to five is about 2.7 times the original's**: about 100 to 345 s, median 230 s, over 24
+  seeds on `16_Track`, player parked, against 85 s. 22 of 24 finish within six game-minutes.
+- **The leader tether is catch-up by slowing the front** (`eliminator_pack_scale`, chosen, not
+  measured). It is the lever that makes the mode finish (off: 0 of 8) and it is a throttle
+  reduction only, but whether it is acceptable under the AI-obeys-player-physics rule is the
+  maintainer's call. The respawn fix alone gives 11 of 24 (it finishes the four pinned seeds); the tether lifts it to 22.
+  Wider forward-weapon gates were tried and dropped. A chase on equal speed cannot close; **a
+  held-Turbo chase (Turbo is lawful speed) was not tried**.
+- **Uncredited deaths**: 11 of 30 in a 233 s run had no landed weapon hit. A Leech Beam's damage
+  never sets `last_weapon_hit`, so a kill by beam credits nobody; the original's behaviour for a
+  beam kill is not read. Wall deaths are not investigated (why opponents scrape lethally here).
+- **Held weapons**: Mine, Bomb, Cannon and Leech Beam together were held for about a quarter of all
+  craft-ticks and are rarely usable by a leader or a tail; Eliminator refuses absorbing so those
+  craft stop collecting pickups. A discard or a drop rule would free the slot (chosen, would need a label).
+- **A backward wrap costs a lap in every mode** (`Standing::update`: lap lowered, gate reset, the
+  forward re-crossing earns nothing), so any craft shoved back over the line ends a lap short.
+  Not fixed (Single Race must not move); sits against `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`.
+  The player's Eliminator respawn (`last_on_track`) may lose a lap the same way; unchecked.
+- **`WeaponAi_DecideFireOrAbsorb` is not ported.** Its `+0x52` predicted-path test and the fields `+0x44`, `+0x4c`, `+0x5c` are unread.
+- **Ghidra data rename rejected**: `g_eliminator_kill_target` for `0x08b30fb0` (Hungarian-prefix
+  check). The docs and `names.tsv` are authoritative for the data name.
 
 ## Next Steps
 
-1. Find why the easing is insensitive to its parameters: log the scale per tick per slot.
-2. Try a real hunting behaviour (chase the nearest craft around the ring) instead of a leader wait.
-3. Look at wall deaths: why do opponents scrape lethally in Eliminator when a lone craft does not?
-4. Only then port the WeaponAi decision, if density alone does not reach 5 kills.
+1. Credit beam, Cannon and Quake kills if the original does (read `Ship_Damage`'s callers for the
+   beam path), then re-measure uncredited deaths.
+2. Wall deaths: log where opponents die with no weapon hit and whether the shield was already low.
+3. A drop/discard rule for held Mine, Bomb, Cannon and Beam in Eliminator, labelled chosen.
+4. A held-Turbo chase: keep Turbo until a craft is 100 to 400 units ahead, then fire it.
+5. Port the WeaponAi decision only if the above leaves the finish time far from 85 s.
