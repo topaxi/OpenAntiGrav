@@ -662,7 +662,12 @@ mod tests {
             .poll(wgpu::PollType::wait_indefinitely())
             .expect("poll");
         let data = readback.slice(..).get_mapped_range().expect("mapped");
-        let sum: u64 = data.chunks_exact(4).map(|p| u64::from(p[0])).sum();
+        let sum: u64 = data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| u64::from(p[0]))
+            .sum();
         let mean = sum as f32 / (SIZE.0 * SIZE.1) as f32;
         Some(mean - f32::from(rgb))
     }
