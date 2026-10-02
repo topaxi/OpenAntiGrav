@@ -78,18 +78,25 @@ pub(super) const DESTROYED_DWELL: f32 = 1.5;
 /// `entity+0x368` is zero. State 8's own update is `Ship_UpdateRespawn`
 /// (`0x08847914`): the per-state jump table at `0x08a7bb88` sends state `8` to
 /// the call at `0x08841e44`, counts the timer down, and at zero relocates the
-/// craft, refills the shield and goes to state 1. Confidence 88 (the table and
-/// the call read, no live run of an Eliminator wreck).
+/// craft, refills the shield and goes to state 1. Confidence 85: the disassembly
+/// (`lui 0x3F80` on the zero branch), the table and the call read; **not run
+/// live for the player** (only an opponent was, below).
 pub(super) const ELIMINATOR_PLAYER_WAIT: f32 = 1.0;
 
-/// The same wait for every other craft: `2.0`, the opposite ratio to a
-/// single race's state 6. Confidence 88, as [`ELIMINATOR_PLAYER_WAIT`].
-pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 2.0;
+/// The same wait for every other craft: **`0.8`**, the same constant state 6's
+/// case arms for a non-zero `entity+0x368`. **Measured live 2026-10-02
+/// (pulse-state6)**: an Eliminator opponent destroyed by `Ship_Damage` on PPSSPP
+/// went 4 (0.5 s), 5 (1.5 s), 8 with `entity+0x874` reading `0.8`, then state 1 and
+/// a refilled shield `48` frames later. This used to be `2.0`, read off
+/// `Ship_SetState`'s case 8 (`0x088446ec`) with its branch-delay `lui 0x3F4C`
+/// (which executes on both paths) taken for dead code. Confidence 90: a
+/// runtime trace and the corrected disassembly agree; one run.
+pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 0.8;
 
 /// Seconds an Eliminator craft spends out before it returns: state 5's
 /// [`DESTROYED_DWELL`] and then state 8's own wait, so `2.5` s for the local
 /// player (whose destroy camera is still on the wreck for the second after the
-/// big explosion) and `3.5` s for anyone else.
+/// big explosion) and `2.3` s for anyone else.
 pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
     DESTROYED_DWELL
         + if is_player {

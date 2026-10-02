@@ -74,9 +74,9 @@ fn a_destroyed_opponent_in_a_single_race_never_comes_back() {
     race.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
     race.sim.world.ships[1].physics.shield = 0.0;
 
-    // Past state 5's 1.5 s, state 6's 0.8 s, the Eliminator's longest wait
-    // (3.5 s) and then the 13 s the live capture watched.
-    let ticks = ((DESTROYED_DWELL + 0.8 + 3.5 + 13.0) / race.dt()).round() as usize;
+    // Past state 5's 1.5 s, state 6's 0.8 s, the Eliminator's longest return
+    // (2.5 s) and then the 13 s the live capture watched.
+    let ticks = ((DESTROYED_DWELL + 0.8 + 2.5 + 13.0) / race.dt()).round() as usize;
     for tick in 0..ticks {
         race.tick(&PlayerInputs::none());
         assert_eq!(
