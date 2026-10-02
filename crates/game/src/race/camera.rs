@@ -329,6 +329,23 @@ impl Race {
         (craft, camera)
     }
 
+    /// What may be drawn this frame: the one row of the section a station camera is placed by
+    /// ([`Self::station_camera_section`]), or the craft's and the camera's own sections with
+    /// padding for every other camera ([`Self::visibility_sections`]), narrowed to the view.
+    pub(super) fn visible_set(
+        &self,
+        visibility: &super::visibility::TrackVisibility,
+        view_projection: &Mat4,
+    ) -> VisibleSet {
+        match self.station_camera_section() {
+            Some(section) => visibility.set_exact(section, view_projection),
+            None => {
+                let (craft, camera) = self.visibility_sections();
+                visibility.set(craft, camera, view_projection)
+            }
+        }
+    }
+
     /// The one section the draws are masked with when the camera stands on an authored station
     /// rather than on the craft, `None` for every other camera.
     ///

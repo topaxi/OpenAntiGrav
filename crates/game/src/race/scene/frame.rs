@@ -106,13 +106,7 @@ impl Scene {
             .as_ref()
             .filter(|_| pvs_cull)
             .filter(|visibility| visibility.has_sections())
-            .map(|visibility| match race.station_camera_section() {
-                Some(section) => visibility.set_exact(section, &section_view),
-                None => {
-                    let (craft, camera) = race.visibility_sections();
-                    visibility.set(craft, camera, &section_view)
-                }
-            });
+            .map(|visibility| race.visible_set(visibility, &section_view));
         // Tier one on a PS3 circuit, which partitions by chunk rather than by
         // section - see `oag_render::pvs::ChunkSet`. Located from world
         // positions rather than from spline sample ids because `track.pvs`
