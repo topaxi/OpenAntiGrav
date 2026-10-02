@@ -11,8 +11,8 @@ plus the respawn-keeps-its-place test).
   seeds on `16_Track`, player parked, against 85 s. 22 of 24 finish within six game-minutes.
 - **The leader tether is catch-up by slowing the front** (`eliminator_pack_scale`, chosen, not
   measured). It is the lever that makes the mode finish (off: 0 of 8) and it is a throttle
-  reduction only, but whether it is acceptable under the AI-obeys-player-physics rule is the
-  maintainer's call. The respawn fix alone gives 11 of 24 (it finishes the four pinned seeds); the tether lifts it to 22.
+  reduction only. **Accepted by the maintainer 2026-10-02** under the AI-obeys-player-physics
+  rule (catch-up by slowing the front is fine; extra speed or thrust for the back is not). The respawn fix alone gives 11 of 24 (it finishes the four pinned seeds); the tether lifts it to 22.
   Wider forward-weapon gates were tried and dropped. A chase on equal speed cannot close; **a
   held-Turbo chase (Turbo is lawful speed) was not tried**.
 - **Uncredited deaths**: 11 of 30 in a 233 s run had no landed weapon hit. A Leech Beam's damage
