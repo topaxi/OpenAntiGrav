@@ -633,27 +633,38 @@ Two changes, one commit:
    decoded-blocks and synthesised-RGBA8 arms, so a 16,384-by-4,096 chain on an
    8,192 device goes up from level 1, 8,192 by 2,048). **Chosen, not measured**:
    nothing is known of how the original treated an oversize texture. A texture
-   with no fitting level (a single-level one over the limit) is not uploaded; its
-   slot takes the same fallback a texture that never decoded does (a 1x1 white
-   albedo, as for the "undecoded" draws, so this is **not** "draw nothing" - it
-   is the existing mechanism, and no Omega texture reaches it). Both cases are
+   with no fitting level (a single-level one over the limit) is not uploaded and
+   its slot is bound as a texture that never decoded is: the same path as a `.gnf`
+   the decoder refuses (`a_gnf_the_decoder_refuses_draws_nothing`: the slot is
+   `None` and the build binds its 1x1 "undecoded" white, which on a surface that
+   carries real art is a plain white surface, see the Talon's Junction check
+   below). That is the codebase's existing convention for a texture it cannot
+   hold, not a new mechanism, and no Omega texture reaches it. Both cases are
    named in the loader line: `N texture(s) wider than this device's
    max_texture_dimension_2d of L uploaded from the first mip level that fits -
    chosen, not measured: <labels>` and, for the refusal, a warning. The census's
    `GPU uploaded` figure counts what went up, not what the disc holds
    (`texture::plan` mirrors `texture::upload`).
 
-Forcing an 8,192 device (a sink on `DeviceDescriptor::default()`) over the 25
-`environments/*` and `environments2048/*` circuits that load: Talon's Junction
-and Modesto Heights are the only two that trim, one texture each, from level 1;
-no texture is left undrawn anywhere. `zone_3` still loads to no triangles
-(unchanged, on `main` too). Checked on a real race, `--race --hold cross
---ticks 120 --screenshot`, on the RX 7800 XT (16,384): all 25 loadable circuits
-reach the still without a panic, and Talon's Junction draws its hex floor
-(`data/scratch/omega-talon-crash/talon_t700.png`, `talon_lvp_t30.png` under
-lavapipe). Tech De Ra's still, HD Dion's and 2048 Altima's are byte-identical
-before and after. Tests: `texture::tests` (the rule, the descriptor's limit, an
-over-limit chain / RGBA8 / BC7 on a 1,024 device, a refusal) and
+Forcing an 8,192 device (a sink on `DeviceDescriptor::default()`) over every
+circuit that loads - 15 `environments/*` forwards, 12 reversed (`zone_*` ship no
+reversed entry, `zone_3` loads to no triangles on `main` too: 27 loads, the same
+27 as the census below) and the 10 `environments2048/*` forwards: Talon's Junction
+and Modesto Heights, forwards and reversed, are the only ones that trim, one
+texture each, from level 1; no texture is left undrawn anywhere. Checked on a
+real race, `--race --hold cross --ticks 120 --screenshot`, on the RX 7800 XT
+(16,384): all 27 loads reach the still without a panic (and the 10
+`environments2048` ones). **What `ds_floor_cs.gnf` is**, found by making `upload`
+refuse it locally (not committed) and differencing the stills: the circuit's
+**road surface**. With it refused, the road in the `--ticks 300` frame is plain
+white where it is textured otherwise (3.3 % of the frame differs, all of it road;
+`talon_t300.png` against `talon_nofloor_t300.png` and `talon_diff_t300.png` under
+`data/scratch/omega-talon-crash/`), so Talon's Junction draws its floor with the
+whole 16,384 texture on this machine, and the white road is also what a refusal
+would look like. Also viewed: `talon_t700.png`, `talon_lvp_t30.png` (lavapipe).
+Tech De Ra's still, HD Dion's and 2048 Altima's are byte-identical before and
+after. Tests: `texture::tests` (the rule, the descriptor's limit, an over-limit
+chain / RGBA8 / BC7 on a 1,024 device, a refusal) and
 `texture_stream_ground_truth`'s two Talon's Junction tests (an 8,192 device, the
 renderer's own).
 

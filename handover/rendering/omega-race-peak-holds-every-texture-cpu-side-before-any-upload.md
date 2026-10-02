@@ -40,8 +40,9 @@ their peaks at 769 to 667 and 701 to 349 MiB. Numbers, method and caveats are in
   16,384-wide `.gnf` against the default 8,192 limit. Fixed (the device asks for
   the adapter's limit; an oversize texture uploads from the first level that
   fits, chosen, not measured); see `docs/formats/omega-status.md`, "Textures
-  wider than the device allows". A texture with no fitting level takes the
-  "undecoded" 1x1 white fallback rather than being left undrawn; no Omega
+  wider than the device allows". A texture with no fitting level is bound as a
+  `.gnf` the decoder refuses is (slot `None`, the build's 1x1 white), the existing
+  convention; on Talon's Junction's road that would be a white road. No Omega
   texture reaches it.
 - HD's 5 pitched `.gtf` files and Vita `.gxt` textures stay RGBA8 on the way in,
   and are uploaded as such now.
