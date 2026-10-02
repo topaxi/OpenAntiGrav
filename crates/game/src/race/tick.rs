@@ -762,6 +762,9 @@ impl Race {
         // `Self::advance_shield_blink`'s own doc comment for why both must
         // already reflect this tick.
         self.advance_shield_blink();
+        // HD's twin of the pair above, for the title whose readout arms on a
+        // whole-percent drop - see `Self::advance_shield_flash_whole`.
+        self.advance_shield_flash_whole();
         // 2048's own trail, independent of the two above - see
         // `Self::advance_energy_bar_delay`.
         self.advance_energy_bar_delay();

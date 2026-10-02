@@ -57,6 +57,9 @@ pub struct CaptureOptions {
     /// would - state 4, then state 5 half a second later. See
     /// [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
+    /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
+    /// percentage of its maximum, written at the end of that tick.
+    pub force_shield: Vec<(u32, f32)>,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a

@@ -38,30 +38,33 @@ pub(super) fn shield_digits(readout: &Readout) -> String {
     format!("{}", percent(readout) as u32)
 }
 
-/// Whether the readout is flashing this frame.
+/// Whether the readout is flashing this frame: at or under the critical
+/// percentage, through the post-hit window, or absorbing.
 ///
-/// **The post-hit half reuses [`Readout::shield_flashing`]**, Pulse's own
-/// one-second window, which is the same shape HD's is - armed on a drop,
-/// counted up by the tick's `dt`, cleared once it reaches `1.0`. One
-/// difference is not reproduced: HD arms only when the *truncated whole*
-/// percentage drops, where this arms on any drop. The third condition HD
-/// flashes on, a ship-side event it keys off `0x000cf490`, is unread and
-/// never fires here.
+/// The post-hit window is [`Readout::shield_flashing_whole`], HD's own: armed
+/// by a drop of the **truncated whole** percentage, which the running
+/// original shows (60.9 to 60.2 arms nothing, 60.2 to 59.9 does; hud-readouts.md).
+/// The third condition is `0x000cf490`, "within a second of `ship+0x6a80`",
+/// and `ship+0x6a80` is stamped as the pickup absorb's feedback starts, so it
+/// is [`Readout::shield_absorbing`]. The other half of the original's test,
+/// `ship+0x6958` (a craft with a live beam of a weapon type 4), is not wired.
 fn flashing(shield: &ShieldReadout, readout: &Readout) -> bool {
-    readout.shield_flashing || percent(readout) <= shield.critical_percent as f32
+    readout.shield_absorbing
+        || readout.shield_flashing_whole
+        || percent(readout) <= shield.critical_percent as f32
 }
 
-/// Whether a flash is in its "on" phase: `floor(t * phases_per_second)` even.
+/// Whether a flash is in its "on" phase: `floor(t * phases_per_second)` even,
+/// `t` being the original's own accumulator ([`Readout::shield_blink_phase_whole`]).
 ///
-/// **The phase's origin is chosen, not measured.** The original's `t` is a
-/// timer of its own that runs only while flashing and wraps once it passes
-/// one second, keeping its value between flashes; this takes `t` from the
-/// race clock instead, so the rate and the duty cycle are the original's and
-/// where in the cycle a flash starts is not.
+/// That accumulator runs only while flashing, **keeps its value between
+/// flashes** and wraps once it passes one second, so where in its cycle a
+/// flash starts is the original's too: a flash that begins at a stored
+/// 0.9833 starts on an "off" phase (`floor(7.9)` is odd), measured on the
+/// running original.
 fn phase_on(shield: &ShieldReadout, readout: &Readout) -> bool {
-    let seconds = readout.race_ticks as f64 / super::TICKS_PER_SECOND;
-    let phase = (seconds * f64::from(shield.phases_per_second)).floor() as u64;
-    phase.is_multiple_of(2)
+    let phase = (readout.shield_blink_phase_whole * shield.phases_per_second as f32).floor() as i64;
+    phase.rem_euclid(2) == 0
 }
 
 /// The readout's colour this frame, `0xRRGGBB`.
@@ -82,7 +85,8 @@ fn rgb(shield: &ShieldReadout, readout: &Readout) -> u32 {
 ///
 /// `ShieldBarText` is opaque in the readout's colour, and fully transparent
 /// on a flash's "off" phase; `DamageBarBg` is white, or the warning colour
-/// on a flash's "on" phase.
+/// on a flash's "on" phase - **except while absorbing**, when the background
+/// stays white and the fill blinks with the number instead (`shield_fill`).
 pub(super) fn colour(cx: &Context<'_>, readout: &Readout, name: &str) -> Option<[f32; 4]> {
     let shield = &cx.art.runtime?.shield;
     let blinking = flashing(shield, readout);
@@ -92,7 +96,7 @@ pub(super) fn colour(cx: &Context<'_>, readout: &Readout, name: &str) -> Option<
         return Some(argb_to_rgba(alpha | rgb(shield, readout)));
     }
     if name == shield.background {
-        let argb = if blinking && on {
+        let argb = if blinking && on && !readout.shield_absorbing {
             OPAQUE | shield.warning_rgb
         } else {
             0xFFFF_FFFF
@@ -139,7 +143,14 @@ pub(super) fn shield_fill(
         return None;
     }
     let mut cropped = crop_vertically(fill, fraction);
-    cropped.color = argb_to_rgba(OPAQUE | rgb(shield, readout));
+    // The fill is solid through a plain flash and blinks with the number
+    // only while absorbing (`0x00086dd8` onward, the third row of the table).
+    let alpha = if readout.shield_absorbing && !phase_on(shield, readout) {
+        0
+    } else {
+        OPAQUE
+    };
+    cropped.color = argb_to_rgba(alpha | rgb(shield, readout));
     sprite_draw(&cropped, cx.sheet)
 }
 

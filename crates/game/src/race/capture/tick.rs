@@ -38,6 +38,12 @@ pub(super) fn advance_one_tick(
     {
         race.force_shake(severity);
     }
+    for &(at, percent) in &options.force_shield {
+        if at == tick {
+            let ship = &mut race.sim.world.ships[0];
+            ship.physics.shield = ship.handling.dimensions.shield * percent / 100.0;
+        }
+    }
     if let Some((at, slot)) = options.force_wreck
         && at == tick
     {

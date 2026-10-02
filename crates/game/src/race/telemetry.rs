@@ -174,6 +174,8 @@ impl Race {
             shield_flashing: self.view.shield_flash_timer > 0.0,
             shield_absorbing: self.absorb_window_active(self.player_slot()),
             shield_blink_phase: self.view.shield_blink_timer,
+            shield_flashing_whole: self.view.shield_flash_timer_whole > 0.0,
+            shield_blink_phase_whole: self.view.shield_blink_timer_whole,
             energy_bar_delay_fraction: self.view.energy_bar_delay_fraction,
             mode: self.sim.world.mode(),
             // Not this struct's to know: it needs the campaign cell and the
@@ -293,6 +295,36 @@ impl Race {
             shield_blink_step(self.view.shield_blink_timer, blinking, self.sim.dt);
     }
 
+    /// Advances HD's twin of [`Self::advance_shield_flash`] and
+    /// [`Self::advance_shield_blink`] for the next [`Self::readout`].
+    ///
+    /// `Hud_UpdateShieldReadout` (`0x000866c8`) is the same machine as
+    /// Pulse's `Hud_UpdateEnergyBar` with one difference measured on the
+    /// running original: the post-hit timer arms on a drop of the
+    /// **truncated whole** percentage ([`shield_flash_step_whole`]). It then
+    /// blinks on `percent <= 20`, the running timer, or the absorb window -
+    /// `0x000cf490` is "within a second of `ship+0x6a80`", the stamp the pickup
+    /// handler writes as the absorb feedback starts (hud-readouts.md). The
+    /// second half of that condition, `ship+0x6958`, is not wired.
+    pub(super) fn advance_shield_flash_whole(&mut self) {
+        let ship = self.ship();
+        let current =
+            oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
+        let (timer, prev) = shield_flash_step_whole(
+            self.view.shield_flash_timer_whole,
+            self.view.shield_flash_prev_whole,
+            current,
+            self.sim.dt,
+        );
+        self.view.shield_flash_timer_whole = timer;
+        self.view.shield_flash_prev_whole = prev;
+        let blinking = current <= oag_physics::damage::CRITICAL_PERCENT
+            || timer > 0.0
+            || self.absorb_window_active(self.player_slot());
+        self.view.shield_blink_timer_whole =
+            shield_blink_step(self.view.shield_blink_timer_whole, blinking, self.sim.dt);
+    }
+
     /// Advances 2048's `EnergyBarDelay` trail for the next [`Self::readout`].
     ///
     /// Called once a tick, from [`Self::tick`]. **Not `dt`-scaled** -
@@ -334,7 +366,17 @@ const ENERGY_BAR_DELAY_RATE: f32 = 0.1;
 ///
 /// [shield.md]: ../../../../docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-0x0881c638-tints-the-bar-from-a-20-threshold-not-a-gradient
 fn shield_flash_step(timer: f32, prev: f32, current: f32, dt: f32) -> (f32, f32) {
-    let dropped = current < prev;
+    flash_step(timer, current, dt, current < prev)
+}
+
+/// [`shield_flash_step`] with HD's drop test: the percentages compared after
+/// truncation to whole numbers, as `Hud_UpdateShieldReadout`'s `fctiwz` pair
+/// does. A fall inside one whole percent arms nothing.
+fn shield_flash_step_whole(timer: f32, prev: f32, current: f32, dt: f32) -> (f32, f32) {
+    flash_step(timer, current, dt, current.trunc() < prev.trunc())
+}
+
+fn flash_step(timer: f32, current: f32, dt: f32, dropped: bool) -> (f32, f32) {
     let mut timer = timer;
     if dropped || timer > 0.0 {
         timer += dt;
@@ -365,7 +407,7 @@ fn shield_blink_step(timer: f32, blinking: bool, dt: f32) -> f32 {
 
 #[cfg(test)]
 mod shield_flash_tests {
-    use super::shield_flash_step;
+    use super::{shield_flash_step, shield_flash_step_whole};
 
     /// One 60 Hz tick, the same fixed step [`super::Race`] runs at.
     const DT: f32 = 1.0 / 60.0;
@@ -410,6 +452,22 @@ mod shield_flash_tests {
             timer, 0.0,
             "expired: 1.1s have passed since the drop with no further one"
         );
+    }
+
+    /// HD arms on a drop of the truncated whole percentage: 60.9 to 60.2 is a
+    /// fall inside one whole percent and arms nothing, 60.2 to 59.9 crosses
+    /// one and does. Pulse's step arms on both. Measured on the running
+    /// original through the HUD's own timer, three reps each.
+    #[test]
+    fn hd_arms_only_on_a_whole_percent_drop() {
+        let (timer, _) = shield_flash_step_whole(0.0, 60.9, 60.2, DT);
+        assert_eq!(timer, 0.0, "inside one whole percent");
+        let (timer, _) = shield_flash_step_whole(0.0, 60.2, 59.9, DT);
+        assert!(timer > 0.0, "across one");
+        let (timer, _) = shield_flash_step(0.0, 60.9, 60.2, DT);
+        assert!(timer > 0.0, "Pulse's float compare arms on the same fall");
+        let (timer, _) = shield_flash_step_whole(0.0, 30.0, 40.0, DT);
+        assert_eq!(timer, 0.0, "a rise arms nothing");
     }
 
     /// A further drop mid-window changes nothing, per the branch rather than

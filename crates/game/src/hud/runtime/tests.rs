@@ -197,12 +197,12 @@ fn half_a_shield_crops_the_fill_from_the_top() {
 /// second, while the fill stays opaque.
 #[test]
 fn a_critical_readout_flashes_the_background_and_blinks_the_number() {
-    let at = |race_ticks| Readout {
-        race_ticks,
+    let at = |shield_blink_phase_whole| Readout {
+        shield_blink_phase_whole,
         ..readout(15.0)
     };
-    // Tick 0 is phase 0 (on); tick 8 is 0.133 s, phase 1 (off).
-    let (on, off) = (at(0), at(8));
+    // The accumulator at 0 is phase 0 (on); at 0.133 s it is phase 1 (off).
+    let (on, off) = (at(0.0), at(0.133));
     with_hd(oag_hd::hud::ART, |cx| {
         assert_eq!(colour(cx, &on, "DamageBarBg"), Some(argb(0xFFFF_0000)));
         assert_eq!(colour(cx, &on, "ShieldBarText"), Some(argb(0xFF16_64FF)));
@@ -217,15 +217,82 @@ fn a_critical_readout_flashes_the_background_and_blinks_the_number() {
     }
 }
 
-/// A hit flashes a healthy readout too, through [`Readout::shield_flashing`].
+/// A hit flashes a healthy readout too, through
+/// [`Readout::shield_flashing_whole`] - HD's own window, not Pulse's.
 #[test]
 fn a_hit_flashes_a_healthy_readout() {
     let r = Readout {
+        shield_flashing_whole: true,
+        ..readout(90.0)
+    };
+    let pulse = Readout {
         shield_flashing: true,
         ..readout(90.0)
     };
     with_hd(oag_hd::hud::ART, |cx| {
+        assert_eq!(colour(cx, &pulse, "DamageBarBg"), Some(argb(0xFFFF_FFFF)));
+    });
+    with_hd(oag_hd::hud::ART, |cx| {
         assert_eq!(colour(cx, &r, "DamageBarBg"), Some(argb(0xFFFF_0000)));
+    });
+}
+
+/// Where the flash starts in its cycle is the accumulator's, not the race
+/// clock's: the same race tick draws either phase, 0.9833 s into the
+/// accumulator being `floor(7.87)`, odd, so off - measured on the original.
+#[test]
+fn the_phase_is_the_accumulators_and_not_the_race_clock() {
+    let r = |race_ticks, phase| Readout {
+        race_ticks,
+        shield_blink_phase_whole: phase,
+        ..readout(15.0)
+    };
+    with_hd(oag_hd::hud::ART, |cx| {
+        for ticks in [0, 8, 1000] {
+            assert_eq!(
+                colour(cx, &r(ticks, 0.9833), "DamageBarBg"),
+                Some(argb(0xFFFF_FFFF)),
+                "off at {ticks} whatever the clock says"
+            );
+            assert_eq!(
+                colour(cx, &r(ticks, 0.0), "DamageBarBg"),
+                Some(argb(0xFFFF_0000))
+            );
+        }
+    });
+}
+
+/// Absorbing is the third row of the original's table: the background stays
+/// white (never the warning colour), and the fill blinks with the number -
+/// the opposite of a plain flash, where the fill is solid.
+#[test]
+fn absorbing_blinks_the_fill_and_the_number_and_keeps_the_background_white() {
+    let at = |shield_blink_phase_whole| Readout {
+        shield_absorbing: true,
+        shield_blink_phase_whole,
+        ..readout(90.0)
+    };
+    let (on, off) = (at(0.0), at(0.133));
+    with_hd(oag_hd::hud::ART, |cx| {
+        for r in [&on, &off] {
+            assert_eq!(colour(cx, r, "DamageBarBg"), Some(argb(0xFFFF_FFFF)));
+        }
+        assert_eq!(colour(cx, &on, "ShieldBarText"), Some(argb(0xFF16_64FF)));
+        assert_eq!(colour(cx, &off, "ShieldBarText"), Some(argb(0x0016_64FF)));
+    });
+    let colour_of = |r: &Readout| match fill_draw(r) {
+        Some(Draw::Sprite { color, .. }) => color,
+        _ => panic!("a fill at 90%"),
+    };
+    assert_eq!(colour_of(&on), argb(0xFF16_64FF));
+    assert_eq!(colour_of(&off), argb(0x0016_64FF));
+    // And a low shield that is absorbing is still the absorbing row.
+    let low = Readout {
+        shield: 10.0,
+        ..off
+    };
+    with_hd(oag_hd::hud::ART, |cx| {
+        assert_eq!(colour(cx, &low, "DamageBarBg"), Some(argb(0xFFFF_FFFF)));
     });
 }
 

@@ -453,6 +453,7 @@ pub fn run(
                 force_shake: None,
                 intro_ticks: 0,
                 force_wreck: None,
+                force_shield: Vec::new(),
                 scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,

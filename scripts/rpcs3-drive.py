@@ -88,7 +88,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rpcs3_pad
 import xvfb_display
 
-TTY = os.path.expanduser("~/.cache/rpcs3/TTY.log")
+def xdg_cache():
+    """`$XDG_CACHE_HOME`, or `~/.cache` - where RPCS3 puts `TTY.log` and the log.
+
+    A member running its own RPCS3 under a private `XDG_CACHE_HOME` gets its
+    own `TTY.log`; reading `~/.cache` regardless would wait on the wrong file.
+    """
+    return os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+
+
+def xdg_config():
+    return os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+
+
+TTY = os.path.join(xdg_cache(), "rpcs3", "TTY.log")
 DISPLAY_NUMBER = int(os.environ.get("OAG_RPCS3_DISPLAY", "77"))
 DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
 
@@ -97,7 +110,7 @@ DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
 #: display that was already there. Not under `/tmp`: this script has no
 #: cache dir of its own the way pcsx2-drive.py does, so it gets one. See
 #: `xvfb_display` for why this exists at all.
-DISPLAY_MARKER = os.path.expanduser("~/.cache/oag-rpcs3-drive/xvfb.owner.json")
+DISPLAY_MARKER = os.path.join(xdg_cache(), "oag-rpcs3-drive", "xvfb.owner.json")
 # Taller than 720p on purpose: RPCS3's own home-menu overlay is nine rows and
 # does not scroll, so at 1280x720 the last three - `SaveState` among them - are
 # simply not on screen, and the highlight walking off the bottom reads exactly
@@ -154,13 +167,18 @@ TRACK_LINE = re.compile(r"Loading track model (\S+)")
 
 #: RPCS3's own configuration, the one its GUI edits. Never written by this
 #: script: everything below reads it and writes a *copy*.
-STOCK_CONFIG = os.path.expanduser("~/.config/rpcs3/config.yml")
+STOCK_CONFIG = os.path.join(xdg_config(), "rpcs3", "config.yml")
 
 #: Where the generated copy goes. Under `data/` because that is gitignored,
 #: and beside the other tool state rather than under `/tmp` (a 32 GiB tmpfs
 #: this project has wedged before).
-SCRATCH_CONFIG = str(Path(__file__).resolve().parent.parent
-                     / "data" / "tools" / "rpcs3-scratch-config.yml")
+SCRATCH_CONFIG = os.environ.get("OAG_RPCS3_SCRATCH_CONFIG") or str(
+    Path(__file__).resolve().parent.parent
+    / "data" / "tools" / "rpcs3-scratch-config.yml")
+
+#: `OAG_RPCS3_GDB=127.0.0.1:2391` moves the GDB stub off the shared 2345 in the
+#: generated copy, so two members' emulators never contend for the port.
+GDB_SERVER = os.environ.get("OAG_RPCS3_GDB")
 
 #: `Session(config=MUTED)` - the default - generates the copy below and passes
 #: it as `--config`. `config=None` launches on the stock file untouched.
@@ -168,7 +186,7 @@ MUTED = "muted"
 
 #: `RPCS3.log`, where the emulator dumps the configuration it actually booted
 #: with (`Used configuration:`) - what `Session.config_report` reads back.
-RPCS3_LOG = os.path.expanduser("~/.cache/rpcs3/RPCS3.log")
+RPCS3_LOG = os.path.join(xdg_cache(), "rpcs3", "RPCS3.log")
 
 
 def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
@@ -198,6 +216,8 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
     `Session.config_report()` pulls the two lines out of it.
     """
     edits = {("Audio", "Renderer"): "\"Null\""}
+    if GDB_SERVER:
+        edits[("Miscellaneous", "GDB Server")] = GDB_SERVER
     if interpreter:
         edits[("Core", "PPU Decoder")] = "Interpreter (static)"
     section = None

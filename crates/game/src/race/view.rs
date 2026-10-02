@@ -196,6 +196,22 @@ pub struct RaceView {
     /// a race is known to start "on" only under that assumption. Render-side,
     /// like [`Self::shield_was_up`], and out of the hash.
     pub(super) shield_blink_timer: f32,
+    /// HD's `hud+0x10c`: the shield percentage as of the previous tick, the
+    /// memory behind [`Self::shield_flash_timer_whole`]. A twin of
+    /// [`Self::shield_flash_prev`] because HD and Pulse disagree on what a
+    /// drop is, and the two readouts are not told apart here. Render-side, and
+    /// out of the hash.
+    pub(super) shield_flash_prev_whole: f32,
+    /// HD's `hud+0x110`, the post-hit timer: armed by a drop of the
+    /// **truncated whole** percentage, where [`Self::shield_flash_timer`]
+    /// arms on any drop. `Hud_UpdateShieldReadout` compares the two
+    /// percentages after `fctiwz`, so 60.9 to 60.2 arms nothing and 60.2 to
+    /// 59.9 does (3 of 3 reps each, hud-readouts.md). Render-side, out of the hash.
+    pub(super) shield_flash_timer_whole: f32,
+    /// HD's `hud+0x1e8`, the flash accumulator: the same freeze-not-reset
+    /// shape as [`Self::shield_blink_timer`], gated on
+    /// [`Self::shield_flash_timer_whole`]. Render-side, out of the hash.
+    pub(super) shield_blink_timer_whole: f32,
     /// 2048's `EnergyBarDelay`: the lagging shield fraction
     /// [`crate::hud::Readout::energy_bar_delay_fraction`] reads out of it
     /// every tick - `Hud_UpdateEnergyBar`'s own `hud+0x1ec`
