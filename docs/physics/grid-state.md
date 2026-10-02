@@ -186,27 +186,21 @@ watched, held through the countdown is within 0.4 units of the original at 120 f
 window is not a boost percentage: it is the airbrake flaps' visual position
 (`Ship_UpdateAirbrakes`) releasing from the grid's forced-full.
 
-## Zone: the four-corner epilogue has the same guard, and stays off (2026-10-02)
+## Zone: the grid state gates the auto-speed, and `on_grid` is on (2026-10-02)
 
-Zone runs `Ship_HoverFourCorner` (`0x0884ae90`) where every other mode runs
-`Ship_HoverTwoPoint`. Its epilogue, `0x0884b76c`-`0x0884b7ac`, is the same term with the same guard
-and a different gain: `lw a0,0x2a4(s0)` / `beq a0,zero,0x0884b798` skips, in state `0`,
-`craft+0x340.y += 50.0 * craft+0x174 * (1.0 - craft+0x280)` - the right axis' `y` and the magstrip
-blend, exactly the two-point twin's (`0x0884ad2c`-`0x0884ad74`, `30.0`, same `craft+0x340`
-accumulator). **Read from the instructions; Zone was not run on the original.** Confidence **82**
-for "the guard and the term are the same" (both epilogues read, they agree; no live run, Zone is
-greyed on a fresh profile).
+Zone runs `Ship_HoverFourCorner` (`0x0884ae90`) where every other mode runs `Ship_HoverTwoPoint`. Its epilogue
+(`0x0884b76c`) carries the same `craft+0x2a4` guard with gain `50.0`. **That coupling is still not ported** (the
+four-corner variant is the open item in [README.md](README.md)); what landed is the engine's side.
 
-**Tried and not ported.** Writing `on_grid` for Zone too moved
-`zone_ground_truth::zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too` from `103.35` to
-`91.24` km/h at tick 300 (its bound is over `100`). The reason is not the term: this port's Zone craft
-is **already moving through the countdown** - Zone's auto-speed is not gated by it, only
-`controls.thrust` is - at `97.9` km/h on tick 267, `23` units a second along a heading `0.34`
-off `+x`, so removing the bank-to-yaw coupling under a moving craft changes its path (the measurement
-here is of a craft at rest). What the original's Zone engine does in state `0` (`Ship_UpdateEngine`
-reads `craft+0x2a4` at `0x0884c8c8`) is unread, and the likelier truth is that its Zone craft is
-not moving at GO either. So the flag stays off in Zone until the engine's state-0 branch is read; the
-four-corner variant and its auto-speed law are still the open item in [README.md](README.md).
+`Ship_UpdateEngine`'s Zone branch is `((flags & 1) && !(flags & 2)) ? autospeed : 0.0`, and bit 1 is the grid state, so
+a Zone craft **stands through the countdown**: read live on a Zone engine, `flags` `0x3` and `0.02` units/s for the whole
+state 0, `0x1` and thrust `95.2` from the first state-1 frame. Our Zone craft had been drifting through it (358 units
+before GO in the new `zone_ground_truth` test). `on_grid` now covers Zone, and `engine::engine` zeroes the auto-speed
+while it is set. Evidence, the table and the caveat (mode patched on a Single Race grid) are on
+[zone-start.md](../ghidra/functions/psp-pulse-usa/zone-start.md); confidence **85**.
+
+The launch multiplier is in the same tail and applies to Zone's auto-speed too: see
+[launch-boost.md](launch-boost.md#zone).
 
 ## The second circuit: `01_Track` (Basilico Black), Time Trial and Single Race
 

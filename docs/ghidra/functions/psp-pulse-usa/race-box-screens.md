@@ -624,8 +624,10 @@ own authored numbers agreeing on a scale factor, not from PS2 code.
 
 - **Implemented 2026-10-02 (`oag_game::unlock`)**: a locked circuit is absent from
   Track Select, not greyed - the list filter above plus the 3-vs-24 live capture.
-  Not modelled: the `+0x16e` mode-gated byte (it is not `availableInZone`, which is
-  on 16 circuits, incl. not `18_Track`) and the `+0x99` always-hidden byte.
+  The `+0x16e` mode-gated byte **is `availableInZone`** (2026-10-02,
+  [zone-start.md](zone-start.md): the definition loader writes it from that attribute, and
+  Mode 6 is `Zone`), already modelled by the Zone list. Not modelled: the `+0x99`
+  always-hidden byte.
   The `Team="any"` combine was traced 2026-10-02 (above) and craft variants
   are now gated; see `oag_game::unlock::loyalty_unlocked`.
 

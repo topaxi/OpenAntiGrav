@@ -323,12 +323,9 @@ predicts the file 24 times out of 24. A circuit without it carries no Zone
 environment, so this is load-correctness rather than menu data, and `race::load`
 says so by name when a Zone race asks for one that has none.
 
-**What is not wired: the menu still offers all 24 in Zone.** The track list is
-supplied once when the menus open and is not re-supplied when MODE changes, so
-picking a non-Zone circuit and then Zone gives a load error naming
-`availableInZone` rather than a row that was never offered. Deliberate: making
-the list mode-reactive is front-end work, and the error is honest in the
-meantime. `catalogue::tracks_of_kind` and `Track::available_in_zone` are the two
+**The Race Box's Zone list is the sixteen** (`Session::tracks_for(Mode::Zone)`),
+as the original's `TrackSelection_PopulateList` does: its `Mode == 6` byte `+0x16e`
+is `availableInZone` (read 2026-10-02, [zone-start](../ghidra/functions/psp-pulse-usa/zone-start.md)). `catalogue::tracks_of_kind` and `Track::available_in_zone` are the two
 listings such a filter would read; nothing dispatches between them, because
 which one applies is a title fact and `oag_title::ZoneCircuit` is where that
 lives.
@@ -370,8 +367,9 @@ says so rather than substituting numbers.
 - **The gate on the speed law.** The original applies it only when
   `(flags & 1) && !(flags & 2)` on the undecoded `craft+0x1c0`, and writes `0.0`
   when the test fails. Bit 0 is known to be the ground-contact bit - it is the
-  same bit that gates the brakes - so groundedness stands in for it. Bit 1 is not
-  decoded and is treated as always clear.
+  same bit that gates the brakes - so groundedness stands in for it. Bit 1 is the
+  grid state (read live 2026-10-02, [zone-start](../ghidra/functions/psp-pulse-usa/zone-start.md)),
+  so `on_grid` stands in for it: a Zone craft stands through the countdown.
 - **The shield recharge is live as of 2026-08-10.** It is implemented, it clamps
   to the ship's maximum the way `Ship_SetShield` does, and the pool now depletes:
   wall contact spends `|p| * 0.05 * 0.7` of it through `oag_physics::damage`. So

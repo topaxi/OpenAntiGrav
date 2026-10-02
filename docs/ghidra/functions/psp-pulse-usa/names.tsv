@@ -1212,3 +1212,4 @@
 0x0883170c	function	CageEffect_Construct	75	collision-cage.md
 0x08832b0c	function	CageEffect_Spawn	58	collision-cage.md
 0x08ab0c88	data	g_cage_effect	80	collision-cage.md
+0x088c3f7c	function	TrackDefinition_ReadXml	78	zone-start.md

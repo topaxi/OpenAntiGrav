@@ -593,14 +593,10 @@ pub struct ShipState {
     /// countdown, **in every mode, Zone included**, and `true` for a craft that
     /// was never on a grid.
     ///
-    /// The same fact as `!`[`Self::on_grid`] in every mode but Zone, where
-    /// `on_grid` stays `false`: the term it gates is `Ship_HoverTwoPoint`'s, Zone's
-    /// four-corner epilogue carries the same guard (`0x0884b76c`), and it is left off
-    /// because this port's Zone craft is already moving through the countdown - see
-    /// `docs/physics/grid-state.md`. The launch
-    /// boost's clock starts here ([`crate::launch`]); in the original Zone's auto-speed
-    /// goes through the same multiplier, which this port does not apply yet. Written by the race from the countdown clock,
-    /// not hashed, for [`Self::on_grid`]'s reason.
+    /// The same fact as `!`[`Self::on_grid`], in every mode. The launch boost's
+    /// clock starts here ([`crate::launch`]); Zone's auto-speed goes through the
+    /// same multiplier. Written by the race from the countdown clock, not hashed,
+    /// for [`Self::on_grid`]'s reason.
     pub released: bool,
     /// The launch boost: `craft+0x294` and what decides it. See
     /// [`crate::launch`].

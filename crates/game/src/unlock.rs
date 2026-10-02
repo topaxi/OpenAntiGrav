@@ -16,11 +16,11 @@
 //! (shipped with no lock), which would open every `Grid0`-gated circuit on a
 //! fresh profile.
 //!
-//! **Not modelled, and open:** the mode-gated per-track byte at `+0x16e` that
-//! `TrackSelection_PopulateList` also tests when its cached `Mode == 6`, and
-//! the always-fails byte at `+0x99`. Neither is tied to an attribute
-//! `Definition.xml` carries (`availableInZone` is on 16 circuits, the byte on
-//! three), so nothing here guesses at them.
+//! The mode-gated per-track byte at `+0x16e` that `TrackSelection_PopulateList`
+//! tests when its cached `Mode == 6` is `availableInZone` (the definition loader
+//! writes it from that attribute; 6 is `Zone`), which the Zone circuit list
+//! already filters on, so this gate has nothing to add for it. **Not modelled,
+//! and open:** the always-fails byte at `+0x99`.
 //!
 //! `--unlock-all` ([`Gate::open`]) is **ours**: a developer and capture escape
 //! that mirrors, as context only, the original's own dev byte at profile
