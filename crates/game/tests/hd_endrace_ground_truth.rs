@@ -115,6 +115,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         })
         .collect();
     let model = oag_ui::endrace::FieldResults {
+        loyalty: None,
         headline: oag_ui::endrace::Headline::Position(
             rows.iter()
                 .find(|row| row.player)
@@ -237,6 +238,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
         22.0,
     );
     let model = oag_ui::endrace::FieldResults {
+        loyalty: None,
         headline: oag_ui::endrace::Headline::Position(1),
         rows: vec![oag_ui::endrace::FieldRow {
             place: 1,
@@ -284,7 +286,7 @@ fn english(archives: &mut oag_assets::Archives) -> oag_ui::language::StringTable
 /// `BigPos` carries the place it is fed (3, not its authored `"1"`), the
 /// medal line resolves through HD's own table, and none of the loyalty
 /// row's placeholders (`"test"`/`"points!"`/`"line 2"`) or its tile draw -
-/// HD's loyalty law is not recovered. No race needed: the screen's own
+/// HD shows its loyalty on `Results` instead. No race needed: the screen's own
 /// widgets are what this pins.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
@@ -429,6 +431,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
         })
         .collect();
     let model = oag_ui::endrace::FieldResults {
+        loyalty: None,
         headline: oag_ui::endrace::Headline::Position(5),
         rows,
     };

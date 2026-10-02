@@ -10,6 +10,8 @@ use crate::gpu::GpuContext;
 pub(crate) mod endrace;
 #[path = "race_stage/ghost.rs"]
 pub(crate) mod ghost;
+#[path = "race_stage/hd_loyalty.rs"]
+pub(crate) mod hd_loyalty;
 
 /// A race, and everything only it needs.
 pub(crate) struct RaceStage {

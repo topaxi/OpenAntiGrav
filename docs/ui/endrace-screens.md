@@ -483,7 +483,7 @@ rewards model on HD. The screen is drawn only by
 | `BigPos` | the player's finishing place | chosen, not measured - the name and its `"1"` placeholder are the only evidence it is a place |
 | `RewardLine1` | `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA` on a campaign race, nothing otherwise | chosen, not measured - the widget authors the bare label `ER_MEDAL_AWARD`; the four tier idstrings are in HD's own English table |
 | `MedalImg`, `LoyaltyImg` | nothing | src-less 32x32 icons the original would texture at run time; a flat square of the authored colour would be a stand-in |
-| Loyalty row (`RewardLine2`, `RewardLoyaltyPoints`, `RewardLoyaltyActive`, `loyaltybar`) | nothing | HD's loyalty law is not recovered; Pulse's is the PSP's, and the placeholders (`"test"`, `"points!"`, `"line 2"`) never draw |
+| Loyalty row (`RewardLine2`, `RewardLoyaltyPoints`, `RewardLoyaltyActive`, `loyaltybar`) | nothing | HD never enters this screen and shows its loyalty on `Results` (below); Pulse's law is the PSP's, not HD's, and the placeholders (`"test"`, `"points!"`, `"line 2"`) never draw |
 | Confirm prompt (word) | the resolved `FE_CONFIRM` text, at the authored position | **measured, since 2026-09-25** - `crate::screen::Screens::collect_widgets` now walks a `NavigationController` the same as any other container |
 | Confirm prompt (icon glyph) | nothing | `font="buttons"` - a `Buttons`-role atlas now loads (2026-09-25, HD's campaign footer), but this screen's own draw path does not yet route to it; see `docs/formats/hd-endrace-screens.md`'s own doc for the gap and why a wrong glyph would be worse than none in the meantime |
 
@@ -583,6 +583,47 @@ Up, Down Down stepping top-to-bottom (`h13-15-crops.png`); pointer hover
 moving the focus and a click on `RETURN TO GRID` landing on Cell Selection
 (`h16-hover-crop.png`, `h17-after-click.png`). All under
 `data/scratch/drive-2026-09-28/erp/` (gitignored).
+
+### HD's loyalty block on `Results` (2026-10-02, `hd-endrace-loyalty`)
+
+HD shows its loyalty on `Results`, not on a `Rewards` screen. The law is HD's
+own - **not Pulse's** - recovered statically in
+[`endrace-loyalty.md`](../ghidra/functions/ps3-hdfury-eu/endrace-loyalty.md)
+(`Race_ComputeLoyaltyAward` `0x00023f98`, confidence 82; the Results ticker
+`0x00224488`/`0x00225030` agrees on every rate): HD's Eliminator pays 15/25 a
+lap, zones pay 5/15, Detonator pays 150 a stage with no kill term, a race with
+an AI craft is x2/x3/x4 by the rung with no x1, and there is no suggested-ship
+doubling. `oag_hd::loyalty` is that law, `crate::race_stage::hd_loyalty` maps
+this project's race onto it, and `Session::build_endrace` banks the award
+(`records::record_loyalty`, the same `100000` ceiling) and hands
+`oag_ui::endrace::FieldResults::loyalty` to the draw.
+
+| Widget | Draws | Source |
+| --- | --- | --- |
+| `loyalty1.1` | `"<award> POINTS"` (`"%d %s"` of the award and `ER_POINTS`) | `0x00224488`'s zero-award state and `0x00225030`'s last step |
+| `loyalty1.2` | nothing | the ticker ends on `""` |
+| `loyalty2` | the team's total as a bare number | `"%d"`, `0x007940f0` |
+| the bar | **nothing, on purpose** | HD's Results code has no `loyaltybar` (no such string anywhere in the executable); Pulse's `total * 0.00124` pixels is not ported |
+
+An award of `0` still draws `0 POINTS` and the total (the executable's own
+zero-award path). With no team on the launch (`--race` with no `--team`) the
+block draws absent, never the disc's `834 POINTS`/`3745` placeholders.
+
+**What is chosen, not measured:** a race with no campaign cell uses the `Easy`
+rung (HD's own campaign model opens on it here; the executable always holds a
+rung); `Head2Head`, which HD does not ship, counts as a single race; perfect
+laps and perfect zones are never counted (nothing in this project tallies
+either), so the award is short by what they would have paid. **Not
+reproduced:** the ticker's animation (a line per reason, a fade and a cap on
+the speed, `0x00225030`) - the final state only. **Not measured:** the whole
+law is decompilation, no RPCS3 run (the cap on every row is 84).
+
+Capture: `--menu-page endrace-results --size 1280x720` against
+`hdfury-ps3-eu-dec.iso` draws `LOYALTY` / `135 POINTS` / `TOTAL 4020` at the
+block the file authors (`x = 1180`, `y = 368`) - the numbers are the capture's
+own **chosen** sample (a three-lap single race on the medium rung banked onto
+3885), since a `--menu-page` capture has no race behind it. Kept under
+`data/scratch/hd-endrace-loyalty/` (gitignored).
 
 ### Captures
 

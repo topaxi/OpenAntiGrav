@@ -116,6 +116,7 @@ fn grid_slot_matches_only_the_numeric_column_dot_row_names() {
 #[test]
 fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
     let model = FieldResults {
+        loyalty: None,
         headline: Headline::TimeTrial,
         rows: vec![
             FieldRow {
@@ -154,6 +155,7 @@ fn row_y_steps_down_from_the_grid_s_own_measured_top() {
 #[test]
 fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
     let model = FieldResults {
+        loyalty: None,
         headline: Headline::TimeTrial,
         rows: vec![FieldRow {
             place: 1,
@@ -201,6 +203,7 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
 #[test]
 fn results_repositions_the_highlight_onto_the_player_s_row() {
     let model = FieldResults {
+        loyalty: None,
         headline: Headline::TimeTrial,
         rows: vec![
             FieldRow {
@@ -272,6 +275,7 @@ fn menu_draws_only_the_options_the_model_actually_lists() {
 #[test]
 fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_placeholders() {
     let model = FieldResults {
+        loyalty: None,
         headline: Headline::Position(1),
         rows: vec![FieldRow {
             place: 1,
@@ -444,4 +448,51 @@ fn rewards_on_a_campaign_race_with_no_medal_says_so() {
         campaign: true,
     });
     assert!(texts(&layers).contains(&"NO MEDAL AWARDED".to_string()));
+}
+
+/// The loyalty block's final state: `loyalty1.1` is `"%d %s"` of the award and
+/// `ER_POINTS`, `loyalty2` the team's total as a bare number, and neither is
+/// the disc's own `834 POINTS`/`3745` placeholder. An award of `0` still draws
+/// both, since the executable's own zero-award path jumps straight to this state
+/// (`docs/ghidra/functions/ps3-hdfury-eu/endrace-loyalty.md`).
+#[test]
+fn results_draws_the_loyalty_block_off_the_award_and_the_total() {
+    let strings = StringTable::from_xml(
+        r#"<Strings><Entry ID="ER_POINTS" String="POINTS"></Entry></Strings>"#,
+    );
+    let draw = |loyalty| {
+        let model = FieldResults {
+            loyalty,
+            headline: Headline::Position(1),
+            rows: Vec::new(),
+        };
+        texts(&hd_results_draw_list(
+            &model,
+            &results_layout(),
+            &skin(),
+            &Frame::default(),
+            &strings,
+            None,
+            false,
+            &|_| None,
+        ))
+    };
+
+    let shown = draw(Some(crate::endrace::HdLoyalty {
+        award: 135,
+        total: 4_020,
+    }));
+    assert!(shown.contains(&"135 POINTS".to_string()), "{shown:?}");
+    assert!(shown.contains(&"4020".to_string()), "{shown:?}");
+    assert!(!shown.contains(&"834 POINTS".to_string()), "{shown:?}");
+    assert!(!shown.contains(&"3745".to_string()), "{shown:?}");
+
+    let nothing = draw(Some(crate::endrace::HdLoyalty { award: 0, total: 0 }));
+    assert!(nothing.contains(&"0 POINTS".to_string()), "{nothing:?}");
+
+    let absent = draw(None);
+    assert!(
+        !absent.iter().any(|text| text.contains("POINTS")),
+        "no loyalty on the model draws no points line: {absent:?}"
+    );
 }

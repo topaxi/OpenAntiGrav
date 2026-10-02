@@ -455,6 +455,14 @@ fn hd_endrace_page(
     let layers = match kind {
         EndRaceKind::Results => {
             let model = oag_ui::endrace::FieldResults {
+                // **Chosen, not measured**: a capture has no race behind it, so
+                // these are `oag_hd::loyalty`'s own three-lap single race on
+                // the medium rung (`3 * 15 * 3`) banked onto a team that
+                // already held 3885.
+                loyalty: Some(oag_ui::endrace::HdLoyalty {
+                    award: 135,
+                    total: 4_020,
+                }),
                 headline: oag_ui::endrace::Headline::Position(1),
                 rows: vec![
                     oag_ui::endrace::FieldRow {

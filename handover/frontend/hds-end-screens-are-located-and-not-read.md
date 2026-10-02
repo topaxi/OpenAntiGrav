@@ -39,11 +39,18 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   `oag_ui::endrace::hd::hd_rewards_draw_list`, reachable only by
   `--menu-page endrace-rewards`; the live flow stays Results -> Menu.
   **Still open under it**: `DFENGINE.SPRX` (encrypted) was not grepped; a
-  live RPCS3 end-of-race walk is what would lift 85. The loyalty row draws
-  nothing (HD's loyalty law is unrecovered), and so does the `Results`
-  loyalty block, which is where HD actually shows loyalty - recovering that
-  law from `EndRaceResults_Screen.cpp`'s code (strings at `0x7845b0`) is the
-  next useful step for either screen.
+  live RPCS3 end-of-race walk is what would lift 85. The `Rewards` loyalty row
+  draws nothing, correctly (HD never enters it).
+- ~~HD's loyalty law is unrecovered~~ **2026-10-02 (`hd-endrace-loyalty`):
+  recovered and drawn on `Results`.** `Race_ComputeLoyaltyAward` (`0x00023f98`,
+  82) and the Results ticker (`0x00224488`/`0x00225030`) agree on every rate;
+  they are **not Pulse's** (`ps3-hdfury-eu/endrace-loyalty.md`).
+  `oag_hd::loyalty` is the law, `Session::build_endrace` banks it, `Results`
+  draws `<award> POINTS` and the total. **No bar** - HD's Results code has no
+  `loyaltybar`. **Still open under it**: no live RPCS3 run (static, so every
+  row <= 84); perfect laps and perfect zones are never counted by this project;
+  a race with no cell uses the `Easy` rung (chosen); the ticker's animation
+  is not reproduced; what byte `0x009384e1` and `g_GameState+0xe4` are.
 - **`EndRace Podium` (`DATA05`/`DATA06` only) is inventoried, not modelled.**
   Its three `pod_head.{1,2,3}` widgets all carry the identical idstring
   `IG_HUD_1ST`, which reads as an authoring placeholder rather than something
@@ -95,10 +102,9 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
 
 ## Next Steps
 
-1. Recover HD's loyalty law from `EndRaceResults_Screen.cpp`'s code (the
-   `loyalty1.1`/`loyalty1.2`/`loyalty2`/`ER_POINTS` strings at `0x7845b0` in
-   `EBOOT.elf`; use `scripts/ps3-toc.py` for xrefs). That fills the `Results`
-   loyalty block, the screen HD actually shows it on.
+1. ~~Recover HD's loyalty law~~ Done 2026-10-02, see Open above. Next on
+   it: count perfect laps/zones in the race so the award is whole, and
+   animate the ticker if it ever matters.
 2. A live RPCS3 walk to a finished race would confirm Results -> Race End
    Save -> Menu with no Rewards in between, and settle which `skin.xml`/
    `EndRace_Definition.xml` copy is served.

@@ -52,9 +52,7 @@
 //!   section.
 //! - **`Gridp.{row}` (`ER_PERFECT`), `GridStrikeThrough`, `MedalBlock` (a 3-D
 //!   `<ImageModel>` trophy, not a 2-D image `oag_ui::screen` collects),
-//!   `Target Title`/`RecordNotifyBlock` and the loyalty block Results itself
-//!   carries (`loyalty1.1`/`loyalty2`, `834 POINTS`/`3745` placeholders) -
-//!   none of these draw this pass. Every one is a real widget with no
+//!   `Target Title`/`RecordNotifyBlock` - none of these draw this pass. Every one is a real widget with no
 //!   settled law behind its trigger, the same "not this pass" this project
 //!   already leaves Pulse's own trophy model in - see
 //!   [`super::Rewards`]'s module doc for the precedent.
@@ -320,8 +318,15 @@ pub fn hd_results_draw_list(
             // pass (see the module doc), which would otherwise leak
             // through the generic fallback arm below exactly the way
             // `ER_PERFECT` would if `Gridp.{row}` were not excluded too.
-            "Target Title" | "Target0" | "Target1" | "Target2" | "loyalty1.1" | "loyalty1.2"
-            | "loyalty2" => None,
+            "Target Title" | "Target0" | "Target1" | "Target2" => None,
+            // The loyalty block's final state. `loyalty1.2` is the ticker's
+            // reason text and ends on `""`, so it draws nothing; with no
+            // `loyalty` on the model the disc's placeholders stay hidden.
+            "loyalty1.1" => model
+                .loyalty
+                .map(|loyalty| format!("{} {}", loyalty.award, strings.get_or_id("ER_POINTS"))),
+            "loyalty2" => model.loyalty.map(|loyalty| loyalty.total.to_string()),
+            "loyalty1.2" => None,
             // The `NavigationController`'s own icon glyph - `font="buttons"`
             // (`ps_buttons.fnt`) - still draws nothing **here**, unchanged
             // by this widget's own local `Layout` never learning a
@@ -493,9 +498,9 @@ fn race_cell_text(col: usize, row: usize, model: &FieldResults) -> Option<String
 ///   Pulse's own `RewardLine1` resolves through.
 /// - **The loyalty row draws nothing at all** - `LoyaltyImg`, `RewardLine2`,
 ///   `RewardLoyaltyPoints`, `RewardLoyaltyActive` (placeholders `"test"`/
-///   `"points!"`/`"line 2"`). HD's own loyalty law is not recovered, and
-///   Pulse's is the PSP's. `loyaltybar` is a `<Slider>`, which
-///   [`crate::screen`] does not collect.
+///   `"points!"`/`"line 2"`). HD never enters this screen, and it shows its
+///   loyalty on `Results` instead (see [`hd_results_draw_list`]). `loyaltybar`
+///   is a `<Slider>`, which [`crate::screen`] does not collect.
 /// - `EndRaceCountDown` (authored empty) and every other named widget draw
 ///   nothing: the text loop below matches names explicitly and defaults to
 ///   drawing nothing, so a placeholder this function does not know about

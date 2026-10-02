@@ -11,6 +11,7 @@ use crate::race_stage::endrace::{
     EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, hd_field_rows, headline,
     loyalty_award, menu_options, to_campaign_medal, tournament_results, zone_results,
 };
+use crate::race_stage::hd_loyalty::{HdRace, hd_award};
 use crate::stage::Stage;
 
 use super::Session;
@@ -166,12 +167,35 @@ impl Session {
 
         let is_hd = title_ref.name == oag_hd::TITLE.name;
 
+        // HD shows its loyalty on `Results` itself. The law is HD's own
+        // (`oag_hd::loyalty`), not the Pulse `award` above, which only the
+        // Pulse `Rewards` row below reads. `None` when this launch named no
+        // team, which draws the block absent rather than inventing one.
+        let hd_loyalty = if is_hd {
+            team.clone().map(|team| {
+                let award = hd_award(HdRace {
+                    mode,
+                    laps: observation.laps_completed,
+                    kills: standing.kills,
+                    zones: u32::from(stage.race.sim.world.primary_race().zone),
+                    difficulty: stage.campaign_difficulty,
+                });
+                let total = self.records.record_loyalty(&title, &team, award);
+                if let Err(e) = oag_game::records::save(&self.records) {
+                    warn!("could not save the loyalty total: {e:#}");
+                }
+                oag_ui::endrace::HdLoyalty { award, total }
+            })
+        } else {
+            None
+        };
+
         // HD's original never enters its own `EndRace Rewards` (no redirect
         // names it and the executable registers no screen class for it -
         // `docs/formats/hd-endrace-screens.md`), so this flow does not
         // either: no `Rewards` model means `EndRaceRuntime::advance` goes
         // Results -> Menu, the route HD's own `EndRaceMenuRedirect` authors.
-        // Pulse's loyalty law is not HD's, so no loyalty is recorded here.
+        // Its loyalty is `hd_loyalty` above, on `Results`, not a Rewards row.
         let rewards = if is_hd {
             None
         } else {
@@ -248,6 +272,7 @@ impl Session {
             ResultsModel::Hd(oag_ui::endrace::FieldResults {
                 headline: headline(mode, observation.place),
                 rows: hd_field_rows(board.as_ref()),
+                loyalty: hd_loyalty,
             })
         } else {
             ResultsModel::Pulse(oag_ui::endrace::Results {

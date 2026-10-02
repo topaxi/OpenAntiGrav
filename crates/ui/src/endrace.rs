@@ -293,6 +293,24 @@ pub struct FieldRow {
 pub struct FieldResults {
     pub headline: Headline,
     pub rows: Vec<FieldRow>,
+    /// The loyalty block `Results` itself carries on HD (`loyalty1.1`,
+    /// `loyalty2`). `None` draws neither - a race with no team behind it has
+    /// no total to show, and the disc's own placeholder text never draws.
+    pub loyalty: Option<HdLoyalty>,
+}
+
+/// HD's loyalty block, in its final state - the one the ticker
+/// (`EndRaceResults_UpdateLoyaltyTicker`, `0x00225030`) ends on and the one a
+/// zero award jumps straight to
+/// (`docs/ghidra/functions/ps3-hdfury-eu/endrace-loyalty.md`). The ticker's
+/// own animation, a line per reason, is not reproduced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HdLoyalty {
+    /// This race's award - `loyalty1.1`'s `"%d %s"` of this and `ER_POINTS`.
+    pub award: u32,
+    /// The team's running total after the award - `loyalty2`'s `"%d"`. No bar:
+    /// HD's `Results` code looks up no slider.
+    pub total: u32,
 }
 
 /// `EndRace Rewards`: the medal award, whether a campaign cell was in play
@@ -335,10 +353,10 @@ pub struct Loyalty {
 }
 
 /// Wipeout HD/Fury's own `EndRace Rewards` - see [`hd::hd_rewards_draw_list`]
-/// for what draws off it and why. **No loyalty field**: HD's own loyalty law
-/// is not recovered (the one this project has, [`Loyalty`]'s, is the PSP's),
-/// so the screen's four loyalty widgets draw nothing rather than Pulse's
-/// numbers under HD's layout.
+/// for what draws off it and why. **No loyalty field**: HD shows its loyalty on
+/// `Results` ([`HdLoyalty`], on [`FieldResults`]), and its own law is not
+/// [`Loyalty`]'s (the PSP's), so this screen's four loyalty widgets draw
+/// nothing rather than Pulse's numbers under HD's layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HdRewards {
     /// The player's own finishing place, 1-based - `BigPos`'s figure.
