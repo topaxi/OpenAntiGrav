@@ -42,9 +42,9 @@ pub const START_TICKS: u64 = 61;
 /// **Measured** (PPSSPP, 2026-10-02, two runs): the timer crossed zero on `k+240` after the
 /// injected `Ship_SetState(4)` (`0.5 + 1.5 + 2.0` s), the same frame the subject changed, and the
 /// mode state went to 3 on `k+31`; this port's race ends on the tick state 5 begins, `k+30`, so
-/// the hand-off is `209` ticks on. The picture changes *later*, at the first cut: see
+/// the hand-off is `210` ticks on (pinned to the call by `the_director_starts_240_ticks_after_the_wreck_call`). The picture changes *later*, at the first cut: see
 /// [`Wreck`].
-pub const WRECK_HANDOFF_TICKS: u64 = 209;
+pub const WRECK_HANDOFF_TICKS: u64 = 210;
 
 /// What the camera's ten second timer (`cam+0x3c`) reads at the hand-off: it was zeroed by
 /// `Ship_SetState`'s case 4 at the wreck and has run `240` frames.

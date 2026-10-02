@@ -31,7 +31,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   the same legend and panels on the line's timing - the legend at all, and its delay, **chosen, not measured, contradicted by the original**.
   **Camera, settled 2026-10-02 (lane pulse-spectator-cam):** the original stays in **mode 5 for good** (`Ship_SetState` case 4 clears `cam+0x26c`, the flag
   `Camera_PickRandomMode` tests), the subject changes at `k+240` when the wreck's state-6 timer crosses zero and the picture at the next 60-unit cut
-  (`k+279`, `k+290` seen); ours now does the same from 209 ticks after the race ended, not the old single-sample 259. Open: what the original's wreck race
+  (`k+279`, `k+290` seen); ours now does the same from 240 ticks after the wreck call (210 after the race ended, pinned by a test), not the old single-sample 259. Open: what the original's wreck race
   waits for, a wreck drained rather than injected, the pause menu from that state, Zone and Eliminator.
 - ~~**Modes `2` and `3` of the spectator camera**~~ **Ported 2026-10-02**: mode 2 is a rigid rear view (6 behind, 2.5 above), mode 3 a rigid front view
   (12 ahead, 3 above, looking back), 65 degrees, measured on PPSSPP (407 frames, rotation exact, eye to `6e-5`). Still unread: what sets `cam+0x274`, cases

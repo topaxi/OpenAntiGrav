@@ -15,6 +15,19 @@ fn a_race_the_wreck_ended() -> Race {
 }
 
 fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
+    let mut race = a_race_ready_for_a_wreck(mode);
+    race.force_destroy(0);
+    for _ in 0..120 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        if race.finished() {
+            return race;
+        }
+    }
+    panic!("the destroyed player's single race never ended");
+}
+
+/// The fixtures a wreck needs - the effect it throws, a destroy camera station - and no wreck yet.
+fn a_race_ready_for_a_wreck(mode: Mode) -> Race {
     let mut race = race_with_a_grid();
     if mode != Mode::SingleRace {
         race = zone_grid(mode);
@@ -31,14 +44,7 @@ fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
         }],
         0.4,
     );
-    race.force_destroy(0);
-    for _ in 0..120 {
-        race.tick(&oag_gameplay::PlayerInputs::none());
-        if race.finished() {
-            return race;
-        }
-    }
-    panic!("the destroyed player's single race never ended");
+    race
 }
 
 /// Zone's wreck ends the race the same way but was not looked at, so the world stands
@@ -245,7 +251,7 @@ fn zone_grid(mode: Mode) -> Race {
 /// station sits in. Any other camera has no such section.
 #[test]
 fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
-    let mut race = race_with_a_grid();
+    let race = race_with_a_grid();
     assert_eq!(race.station_camera_section(), None, "the chase camera");
     let mut race = a_race_the_wreck_ended();
     assert!(
@@ -279,4 +285,35 @@ fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
         race.station_camera_section(),
         Some(race.section_of_slot(slot))
     );
+}
+
+/// The hand-off is a law of the wreck: `Camera_UpdateSpectator` clears the subject when the
+/// wreck's state-6 timer crosses zero, `240` frames after `Ship_SetState(4)` (measured twice
+/// on PPSSPP: `0.5 + 1.5 + 2.0` s). Pinned to the call, not to a derived offset.
+#[test]
+fn the_director_starts_240_ticks_after_the_wreck_call() {
+    use crate::race::finish_camera::{FinishCamera, SPECTATOR_SEED};
+    let mut race = a_race_ready_for_a_wreck(Mode::SingleRace);
+    race.view.finish_camera = Some(FinishCamera::new(
+        vec![oag_render::camera::destroy::Station {
+            eye: Vec3::new(400.0, 30.0, 0.0),
+            aim: Vec3::new(10.0, 0.0, 0.0),
+        }],
+        0.4,
+        SPECTATOR_SEED,
+    ));
+    race.force_destroy(0);
+    let called = race.sim.world.tick;
+    for _ in 0..600 {
+        if race.finished() {
+            race.tick_finished();
+        } else {
+            race.tick(&oag_gameplay::PlayerInputs::none());
+        }
+        if race.spectator_mode().is_some() {
+            assert_eq!(race.sim.world.tick - called, 240);
+            return;
+        }
+    }
+    panic!("the director never started");
 }
