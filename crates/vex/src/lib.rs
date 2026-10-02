@@ -44,3 +44,4 @@ pub mod track;
 pub mod track_coverage;
 pub mod vex;
 pub mod vif;
+pub mod weather;
