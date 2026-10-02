@@ -147,12 +147,16 @@ The walk starts at the `"start position"` registry entry (the authored node,
 located on the spline with radius 100), fills **slot 8 first** and steps
 *forward* seven times - so the node is the back of the grid, as measured. The
 lateral base is not the centreline: each slot sits at the **midpoint of the
-AI corridor** (`SplinePt+0x4c`/`+0x50`), and the sign of the first `10.0` is
+track's two edges** (**corrected 2026-10-02**: this read `SplinePt+0x4c`/`+0x50`,
+the AI corridor; the instructions read `+0x44`/`+0x48`, the half-widths, see
+[the grid walk](#the-grid-walk-read-to-the-end-2026-10-02)), and the sign of the first `10.0` is
 chosen by which corridor edge the authored node is nearer, so the stagger
 always begins on the node's own side. Per-slot orientation is built from the
 sample (`FUN_0882663c`): heading follows the spline at each slot rather than
 the anchor's fixed frame, which on a straight start is the same thing to the
-four decimal places the capture saw.
+four decimal places the capture saw. **Read to the end 2026-10-02**: it is the
+unit sum of the left-edge and right-edge chords over 20 units, not the tangent,
+see [the grid walk](#the-grid-walk-read-to-the-end-2026-10-02).
 
 Two mode branches, both worth having: in **Zone** (`g_game_mode == 6`) the
 lateral offset and the step are both `0`, so the single craft sits on the
@@ -273,7 +277,8 @@ in a Single Race. The sample's own tangent is within 0.05 degrees of every one
 (`every_grid_slot_points_along_the_tracks_own_frame_as_the_original_does`, worst
 0.045). Confidence **88** for "built from the located sample" (the heading
 tracks the sample to 0.05 degrees on eight slots; `FUN_0882663c` itself, a long
-VFPU function, was not read to the end). The other titles keep the node's
+VFPU function, was not read to the end - **it is now, and the heading is the edge
+chords'**, see [the grid walk](#the-grid-walk-read-to-the-end-2026-10-02)). The other titles keep the node's
 heading: nothing was measured for them. See
 [grid-state.md](../../../physics/grid-state.md), which also records an exact walk
 that was tried and reverted, and the second circuit (`01_Track`).
@@ -717,3 +722,152 @@ Single Race and Time Trial. Live captures (PPSSPP, `16_Track`, four runs) show t
 in state 2 at **its own** crossing by `FUN_088418e0`, and the AI takes it through the autopilot weight `craft+0x1d4`. The function
 itself is unchanged; see [race-finish.md](race-finish.md) and
 [after-the-finish.md](../../../gameplay/after-the-finish.md).
+
+## The grid walk, read to the end (2026-10-02)
+
+**Status: read in full and reproduced against the original to 0.001 units on `01_Track`.**
+`pulse-grid-walk`, PPSSPP 1.20.4 on `pulse-psp-usa.iso`, `FUN_0882663c`, the locate chain
+under it and `Race_ComputeGridLayout`'s loop read instruction by instruction, then the walk
+checked against eight craft on each of three circuits and against the eight located records
+read live out of the loop.
+
+| Address | Name | What it is | Confidence |
+| --- | --- | --- | ---: |
+| `0x0882663c` | `Race_ComputeGridHeading` | the heading at a located point: locate it, locate `+20 * tangent`, return `normalize(unit(L1 - L0) + unit(R1 - R0))` of the two samples' left and right edge points | 90 |
+| `0x0887cf88` | `AiTrack_BuildLocatedRecord` | picks the four control points of the segment between the cursor's point and its nearer neighbour, runs `FUN_0887c340` for `t`, hands `t` to `FUN_0887c7e8` | 85 |
+| `0x0887c340` | `Spline_ProjectOntoSegment` | three Gauss-Newton steps from `t = 0.5`, `t -= (C(t) - p) . C'(t) / (C'(t) . C'(t))`, unclamped inside the loop and clamped to `0..1` after it | 88 |
+| `0x0887c1e0` | `Spline_EvalPointAndDerivative` | the uniform cubic B-spline of four `vec4` at `t` (`0x0887c1f4`..`0x0887c2a0`) and its derivative (`0x0887c2b4`..`0x0887c334`), the basis rows `(-1,3,-3,1) (3,-6,0,4) (-3,3,3,1) (1,0,0,0) / 6` and their derivative | 88 |
+| `0x0887c7e8` | `Spline_SampleSegment` (named at 75 on [scene-light.md](scene-light.md), kept) | blends the `0x70`-byte record over the same four control points with the weights multiplied by `vfim.s 0x3155`; **this read's evidence scores it 90** (the `w` lane read live, the chain it feeds exact to 0.0002), and its row is left for that page's owner to rescore | 75 |
+
+`0x0887ce78` `AiTrack_LocatePosition` and `0x0887e464` `AiTrack_UpdateCursor` keep their names and
+scores. **Ghidra's prototype for `AiTrack_LocatePosition` is wrong and the call sites show
+it**: the radius is the float register `f12`, then `a0 = track`, `a1 = the record to fill`, `a2 =
+the position`, `a3 = a cursor to keep (0 at every grid call)`, `t0 = a path to exclude (-1)`,
+`t1 = force a full scan (0)`. The body's `lv.q C400,0x0(a2)` at `0x0887ce7c` is the position
+copy and its `move s1,a3` / `beq a3,zero` at `0x0887ceb4`/`0x0887cec0` the cursor, which the
+decompile's six integer parameters read as a different thing. At `0x0882b60c`-`0x0882b624`,
+and again at `0x0882bda0`-`0x0882bdbc`, the layout sets `f12 = 100.0`, `a0 = [s3 + 0x4c]`,
+`a1 = a2 = s7` (its own record, `sp + 0x60`), `a3 = 0`, `t0 = -1`, `t1 = 0`. Both the
+position in and the record out are `s7`: the call overwrites the point it was given.
+
+### The loop
+
+`Race_ComputeGridLayout` (`0x0882b3b0`), a record at `s7`:
+
+1. `0x0882b624` locates the node (`[registry entry + 0x30]`, the authored position) into `s7`.
+2. The side of the first `10.0`: the node's distance to `pos - lateral * [+0x44]` (the **left** edge)
+   against `pos + lateral * [+0x48]` (the **right**), `0x0882b6a0`-`0x0882b794`. Nearer the left
+   edge negates the `10.0`, and every slot negates it again (`neg.s f22` at `0x0882bdc4`).
+3. Each of eight iterations, slot 8 first: the midpoint of the two edge points, the unit direction
+   from it to the right edge point (kept unnormalised below `1e-4` squared length,
+   `0x0882ba0c`-`0x0882ba78`), the slot at `midpoint + direction * sign`; then `FUN_0882663c` at
+   `0x0882bb54` for the heading; then the up row from the record's own `down`; the drop
+   raycasts; and the step `s7.pos += s7.tangent * 19.8` (`0x0882bd48`-`0x0882bd9c`, the `19.8` in
+   `0xc38(sp)`, stored at `0x0882b600`) followed by `AiTrack_LocatePosition` again (`0x0882bdbc`).
+
+The chain is `p(k+1) = locate(p(k) + tangent_k * 19.8)`, **where `p(k)` is the located record's
+own position and `tangent_k` its own interpolated tangent**, and the step is from the centreline
+and not from the laterally offset slot.
+
+### Two things the fit could not have found
+
+**The locate is a projection, not a nearest sample.** `AiTrack_UpdateCursor` finds the nearest
+control point (`FUN_0887d5bc`, `FUN_0887d6c8`: **not read**, the port takes the globally nearest and
+the eight live records agree), `FUN_0887cf88` steps the cursor twice one way
+(`FUN_0887d17c`, `0x0887cfdc`, `0x0887cffc`) and three times the other (`FUN_0887d270`,
+`0x0887d01c`-`0x0887d03c`), compares the position's squared distance to the point one way
+and the point the other way (`vsub.t`/`vmul.t`/`vfad.t` and `c.le.s` at `0x0887d06c`-`0x0887d09c`),
+shifts the four-point window one place when the second is nearer (`0x0887d0a4`-`0x0887d0d8`), and
+calls `FUN_0887c340` (`0x0887d0fc`) and `FUN_0887c7e8` (`0x0887d114`): the window is the cursor's
+point and the nearer neighbour. Which of `FUN_0887d17c`/`FUN_0887d270` steps toward higher
+indices was not read; the rule only compares distances, so it does not matter to the port. `FUN_0887c340` then projects onto
+that segment's cubic B-spline of the **lifted** control points (`pos - 3.0 * down`,
+`AiTrack_LoadPathPoints`), clamping `t` last. The project's old `STEPS_PER_SEGMENT = 4` resample
+put every slot on the nearest of samples 1.5 units apart: the sawtooth.
+
+**The record is scaled by `0.999756`.** `FUN_0887c7e8` loads `vfim.s S733, 0x3155` (`0x0887c86c`),
+builds the four cubic weights (`0x0887c870`-`0x0887c900`) and multiplies the weight vector by it:
+the half-float immediate `0x3155` is `0.1666259765625`, where `1/6` is `0.1666666667`. Every field
+of the record (the four `vec4` and the six scalars at `+0x40`-`+0x54`, `0x0887c928`-`0x0887c964`
+and again at each of the next three points) is then blended with those weights and stored
+(`0x0887cd20`-`0x0887cd44`). The position scales toward the world origin, the tangent shortens, the
+`w` lane reads `6 * 0.1666259765625 = 0.999755859375`. **Read live**, on all eight records
+at `0x0882bb54` on Metropia reversed (`scripts/psp-grid-walk.py`): `w = 0.999755859375` exactly,
+and the tangent's length `0.99974`-`0.99976`. The consequences are position-dependent, which is
+why a constant step fitted one circuit and not another: the scale shifts a point by
+`0.000244 * |coordinate|` (0.17 units at `x = -721`, 0.07 along `z = 283` on `01_Track`), and
+the along-track part of that is lost from every step. Fitting the step length alone gave
+`19.82`, `19.74` and `19.67` for the three circuits (probe scan, worst slot 0.07, 0.18, 0.17):
+it is `19.8 * 0.99976 * 0.99976` and the origin, not a different constant.
+
+### The heading
+
+`FUN_0882663c` (`0x0882663c`..`0x08826b14`): locate the position (`0x0882674c`, record at `sp + 0x20`),
+`pos2 = pos + tangent * 20.0` (`vscl.q` by `0x41a00000`, `0x08826760`-`0x08826770`), locate `pos2`
+(`0x088267d8`, record at `sp + 0x90`), and with `L = pos - lateral * [+0x44]` (`0x08826820`-`0x0882682c`,
+`0x088268b0`-`0x088268fc`) and `R = pos + lateral * [+0x48]` (`0x08826848`-`0x08826894`,
+`0x08826920`-`0x08826974`) for each sample, return `normalize(normalize(L2 - L1) + normalize(R2 -
+R1))` (the three `vdot.t`/`vsqrt.s`/`vrcp.s` sequences at `0x088269dc`, `0x08826a4c` and
+`0x08826abc`, the result stored at `0x08826ae4`).
+It is the direction the track's **edges** run, which is the tangent only where both edges
+parallel it. The matrix row for forward is that, the up row the record's `-down` orthogonalised
+against it, the left row their cross product (`0x0882bbb0`-`0x0882bc38`).
+
+### Against the original
+
+Eight craft read at placement (`scripts/psp-grid-pose.py`), and the walk through
+`oag_gameplay::grid_walk` (`crates/game/tests/grid_walk_ground_truth.rs`), xz distance and
+heading in degrees:
+
+| circuit | worst slot before | worst slot now | worst heading before | now |
+| --- | ---: | ---: | ---: | ---: |
+| `01_Track` (Basilico Black) | 1.73 | **0.001** | 0.22 (slot 1) | 0.0005 |
+| `16_Track` (Talon's Junction) | 0.62 | 0.043 | 0.045 | 0.0009 |
+| Metropia reversed | 1.13 | 0.070 | - | - |
+
+`01_Track` slot 1's `-0.0069` heading, "0.22 degrees, cause unknown" in
+[grid-state.md](../../../physics/grid-state.md), is the edge chord: the track widens there and
+the tangent does not see it. The eight located records read live on Metropia match
+`locate`'s chain to **0.0002** units. The remaining 0.04-0.07 on `16_Track` and Metropia is **probably** the placement drop (the
+original raycasts along the sample's own down axis, then `+2`; ours drops along world `-Y`) and,
+on Metropia, the two-decimal readings: not measured, and `16_Track`'s 0.043 shows with no raycast in the
+probe at all, so it may be something in the walk itself.
+
+Confidence **94** that this is `Race_ComputeGridLayout`'s walk on Pulse PSP (USA): a runtime
+trace of the records, eight craft on three circuits agreeing to hundredths and the headings to
+thousandths. It does not reach 95: **no second binary** (the EU PSP build and the PS2
+executable were not compared). The names above are scored below it, on what each read gave.
+
+### Corrections this read made
+
+- The corridor midpoint is the **track edges'** midpoint, not the AI corridor's: the loop reads
+  `[+0x44]`/`[+0x48]` (`lwc1 f12,0xa8(sp)` at `0x0882b62c`, `lwc1 f13,0xa4(sp)` at `0x0882b6d8`,
+  against a record at `sp + 0x60`), the half-widths. `ai_bound_left`/`right` are `-(hw - 8)`/`hw - 8` in the grid
+  regions of the three circuits measured, which is why the 2026-09-29 rule fitted; elsewhere on
+  the same tracks they differ by up to 64 units. `grid_stagger_ground_truth`'s corridor-midpoint
+  test still passes on all 24 circuit-directions, since the two rules agree within its 1.5
+  there.
+- The reversed branch (`-19.8`, slot index `9 - i`) stays unported: Metropia reversed, laid out
+  forward, matches to 0.07, so it is still the measured layout that is ported and not the
+  decompile's.
+
+### Not ported, and one circuit that is
+
+- **The hash cache and the junction hop.** The original seeds from a spatial hash and steps its
+  four-point window across a junction at a path's end. `oag_gameplay::grid_walk::locate` scans every
+  control point and clamps. `03_Track`'s front slot sits one control point from its path's
+  end: the clamp costs under a tenth of a unit there. No other circuit-direction's grid comes
+  within seven control points of a path end (`09_Track` is next, at 7).
+- **`25_Track` reversed** puts its authored node 25.9 units under the located sample (the
+  nearest control point is on a ramp over it; the other 23 circuit-directions are 0.3 to 4.4
+  off). What the original does there was not captured; the walk refuses a node more than 12
+  units off (`oag_gameplay::grid_walk::MAX_NODE_HEIGHT_OFFSET`, **chosen, not measured**) and
+  the node-anchored grid stays.
+- Pulse PS2, Pure and the HD titles keep their layouts: only Pulse PSP was read.
+
+### Reproducing
+
+```sh
+python3 scripts/psp-drive.py --port 45491 menu --single-race --track-down 2     # Metropia
+python3 scripts/psp-grid-walk.py --port 45491 --out data/scratch/<lane>/walk.json
+```

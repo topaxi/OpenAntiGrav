@@ -1,8 +1,9 @@
 # The grid state: what a craft on the start line does differently
 
 **Status: one term ported (the bank-to-yaw coupling), three read, tried and left
-out, and the launch effect that was measured here ported on its own page
-([launch-boost.md](launch-boost.md)).** Measured on Pulse PSP (USA) in
+out, the launch effect that was measured here ported on its own page
+([launch-boost.md](launch-boost.md)), and the grid walk ported on 2026-10-02 from the
+original's own code - the slots along the track and every heading, below.** Measured on Pulse PSP (USA) in
 PPSSPP 1.20.4, 2026-10-01, Time Trial, Venom, Assegai, `16_Track`; the Single
 Race grid on the same circuit.
 
@@ -87,7 +88,8 @@ settles onto the `1.1` degree bank in the first 40 ticks and then yaws at
 
 `ShipState::on_grid` is the original's state `0` (measured on Pulse PSP only; the
 race applies it to every title by extension, which is **chosen, not measured**,
-and not to Zone, whose four-corner hover epilogue was not read), written from the race's
+and not to Zone, whose four-corner hover epilogue carries the same guard but which stays off, see
+[Zone](#zone-the-four-corner-epilogue-has-the-same-guard-and-stays-off-2026-10-02)), written from the race's
 countdown clock (`RaceState::thrust_gated`) on every ship at the top of
 `Race::tick` - for every craft, not only the player, which is how the original
 does it - and read by the one term. Derived from the clock rather than stored,
@@ -118,35 +120,43 @@ take that frame (`oag_gameplay::orientation_on_sample`, gated by
 `Setup::grid_frame_from_sample`); the worst of the eight is 0.045 degrees out,
 and the Time Trial's yaw at GO is `-0.191` against `-0.146` (0.045), from 0.145.
 
+**Superseded 2026-10-02.** `FUN_0882663c` read to the end: the heading is the unit sum of the
+left-edge and right-edge chords over 20 units, not the tangent. Through
+`oag_gameplay::grid_walk` the eight slots are within **0.001 degrees** of the original's (it
+was 0.045), and the Time Trial's yaw at GO follows. See
+[grid.md](../ghidra/functions/psp-pulse-usa/grid.md#the-grid-walk-read-to-the-end-2026-10-02).
+
 **Position, 0.10 units in z.** The original places the craft 2 units above the
 floor and the spring raises it along the craft's own up axis, which on this
 banked start moves it 0.04 in z, and it slides 0.03 more through the countdown
 under brake and airbrake that ours does not hold. Ours is placed at its rest
 height. Not ported: sub-0.1 and not on the path of anything measured.
 
-**Slots along the track: tried, and reverted.** The grid walk stops at the last
-track sample not exceeding `7 * 19.8`, so each slot is short of its target by up
-to one sample spacing (1.5 units). Against the original that reads as a sawtooth:
-on `01_Track`'s Single Race (`orig-grid-01-single-a.json`) the eight slots are
-`0.97, 0.73, 0.47, 1.72, 1.47, 1.20, 0.95` units behind the original's, slot 1 to 7,
-where the original's own steps are near-uniform (`19.69` to `19.76` along the
-track against the `19.8` the code reads). Interpolating the last segment and
-measuring from the node's own place along the track (not the anchor sample) took
-`01_Track`'s worst slot from 1.72 to 0.52 and `16_Track`'s from 0.70 to 0.52, and
-**made `grid_stagger_ground_truth::metropia_reversed_is_the_originals_grid` worse,
-1.13 to 1.99 units on a circuit the sawtooth happens to flatter**, so it was
-reverted. Two things it did show: the original's slots are *not* on whole samples
-either, and what is left after an exact walk is a `0.07` units per slot bias
-(ours further along the track) plus a `0.4` to `0.5` along-track offset on every
-`16_Track` slot, slot 8 included, which is the authored node itself. Both fit the
-original **re-locating on its own spline after every step** (`grid.md`:
-`Race_ComputeGridLayout` "re-locates after each step"): `p(k+1) = project(p(k) +
-tangent * 19.8)`, a chord that loses a little to the curve each time, onto a spline
-that is not our resampling. That chain is the next thing to try, with these three
-circuits' eight slots as its test, and it needs `FUN_0882663c` and the locate
-function read rather than fitted. Side note from the attempt: the Time Trial's slot
-1 on `16_Track` is 0.014 units from the original along the track as the code
-stands, by luck; the slots either side are 0.6 out.
+**Slots along the track: the walk, ported 2026-10-02.** The 2026-10-01 attempt (an exact
+walk of the resampled samples) made Metropia worse and was reverted, and left two residues
+unexplained: a `0.07` units per slot bias (ours further along the track) and a `0.4` to `0.5`
+offset on every `16_Track` slot. Both are in the original's code and neither is a fit.
+`Race_ComputeGridLayout` steps `19.8` along the located record's **own tangent** and locates
+again - `p(k+1) = locate(p(k) + tangent * 19.8)` - and the locate is a projection onto the
+B-spline of the lifted control points (three Gauss-Newton steps), not a nearest sample. The
+record it writes is **scaled by `0.999756`** (`FUN_0887c7e8` multiplies its weights by the
+half-float immediate `0x3155`, `0.16662598` for `1/6`): the position moves toward the world
+origin by `0.000244` of its coordinate and the tangent shortens by as much, so a point at
+`x = -721` is 0.17 units from where its coordinates say and the step along `z = 283` loses 0.07
+a slot - which is the `19.82`, `19.74` and `19.67` the three circuits fitted separately.
+
+| worst slot, xz | before | now |
+| --- | ---: | ---: |
+| `01_Track` | 1.73 | **0.001** |
+| `16_Track` | 0.62 | 0.043 |
+| Metropia reversed | 1.13 | 0.070 |
+
+The eight located records read live on Metropia match the chain to 0.0002 units. The
+chain, the scale and the heading are `oag_gameplay::grid_walk`; the account with every
+address is [grid.md](../ghidra/functions/psp-pulse-usa/grid.md#the-grid-walk-read-to-the-end-2026-10-02),
+and `crates/game/tests/grid_walk_ground_truth.rs` pins it (dropping the scale fails the
+located-chain test, `01_Track`'s and Metropia's, and two of the unit tests). Side note from the old attempt that stands: the Time Trial's slot 1 on `16_Track`
+was 0.014 units from the original along the track "by luck"; it is 0.038 now, by the walk.
 
 **The launch boost.** The original's craft accelerates faster than ours once
 GO comes with thrust already held:
@@ -176,6 +186,28 @@ watched, held through the countdown is within 0.4 units of the original at 120 f
 window is not a boost percentage: it is the airbrake flaps' visual position
 (`Ship_UpdateAirbrakes`) releasing from the grid's forced-full.
 
+## Zone: the four-corner epilogue has the same guard, and stays off (2026-10-02)
+
+Zone runs `Ship_HoverFourCorner` (`0x0884ae90`) where every other mode runs
+`Ship_HoverTwoPoint`. Its epilogue, `0x0884b76c`-`0x0884b7ac`, is the same term with the same guard
+and a different gain: `lw a0,0x2a4(s0)` / `beq a0,zero,0x0884b798` skips, in state `0`,
+`craft+0x340.y += 50.0 * craft+0x174 * (1.0 - craft+0x280)` - the right axis' `y` and the magstrip
+blend, exactly the two-point twin's (`0x0884ad2c`-`0x0884ad74`, `30.0`, same `craft+0x340`
+accumulator). **Read from the instructions; Zone was not run on the original.** Confidence **82**
+for "the guard and the term are the same" (both epilogues read, they agree; no live run, Zone is
+greyed on a fresh profile).
+
+**Tried and not ported.** Writing `on_grid` for Zone too moved
+`zone_ground_truth::zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too` from `103.35` to
+`91.24` km/h at tick 300 (its bound is over `100`). The reason is not the term: this port's Zone craft
+is **already moving through the countdown** - Zone's auto-speed is not gated by it, only
+`controls.thrust` is - at `97.9` km/h on tick 267, `23` units a second along a heading `0.34`
+off `+x`, so removing the bank-to-yaw coupling under a moving craft changes its path (the measurement
+here is of a craft at rest). What the original's Zone engine does in state `0` (`Ship_UpdateEngine`
+reads `craft+0x2a4` at `0x0884c8c8`) is unread, and the likelier truth is that its Zone craft is
+not moving at GO either. So the flag stays off in Zone until the engine's state-0 branch is read; the
+four-corner variant and its auto-speed law are still the open item in [README.md](README.md).
+
 ## The second circuit: `01_Track` (Basilico Black), Time Trial and Single Race
 
 Reached through the dev-unlock byte ([ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)),
@@ -186,16 +218,18 @@ Reached through the dev-unlock byte ([ppsspp-debugger.md](../reverse-engineering
 | | Original | Ours |
 | --- | --- | --- |
 | Yaw, frames 0 to GO | `90.396` degrees, constant to the third decimal | `90.176`, constant |
-| Yaw at GO, and the first Single Race slot | `-0.0069` of forward `x` | `-0.0031`: 0.22 degrees out |
+| Yaw at GO, and the first Single Race slot | `-0.0069` of forward `x` | `-0.0069` (it was `-0.0031`, 0.22 degrees out) |
 | The other seven slots' forward `x` | `-0.0014 ... +0.0002` | within 0.1 degrees |
-| Position at GO | `(-721.163, 4.012, 282.583)` | 0.95 out along the track, the sawtooth above |
+| Position at GO | `(-721.163, 4.012, 282.583)` | 0.001 out (it was 0.95 along the track, the sawtooth) |
 | GO + 120 | `z 400.96`, `106.4` units/s | `z 381.71`, `100.3` |
 
 The gate holds on the second circuit (a banked start with a different heading
 and a node on the corridor's *left*, the branch `grid.md` had only from the
 decompile): yaw constant through the countdown in both. Slot 1's heading is an
-outlier in the original (`-0.0069` against `-0.0014` for slot 2); ours follows
-the track sample, which does not have the kink, and the cause is not known.
+outlier in the original (`-0.0069` against `-0.0014` for slot 2): **it is the edge
+chord** (2026-10-02). The heading is not the tangent but the direction the track's
+two edges run, and the track widens at that slot; `FUN_0882663c`'s rule reproduces
+all eight `01_Track` headings to 0.0005 degrees.
 
 The eight Single Race craft hold their heading through the countdown too (read
 at placement, then 2.5 and 3.5 s later on `16_Track`: forward `z` identical to

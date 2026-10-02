@@ -55,10 +55,16 @@ impl Race {
         // and a restart, which rebuilds the race, always begins in it. Physics
         // reads the flag; see `oag_physics::ShipState::on_grid`.
         //
-        // **Not Zone.** The term the flag gates is `Ship_HoverTwoPoint`'s; Zone
-        // runs `Ship_HoverFourCorner` (`Ship_UpdateHover`, `0x0884870c`), whose
-        // own epilogue was not read for the guard, and this port flies Zone on
-        // the two-point law regardless. Measured on a Time Trial only.
+        // **Not Zone, and no longer for want of reading.** The term the flag gates is
+        // `Ship_HoverTwoPoint`'s; Zone runs `Ship_HoverFourCorner` (`Ship_UpdateHover`,
+        // `0x0884870c`), whose epilogue carries the same guard (`0x0884b76c  lw
+        // a0,0x2a4(s0)` / `beq a0,zero,0x0884b798`, gain `50.0` where the two-point
+        // twin's is `30.0`). It stays off because this port's Zone craft is already
+        // moving through the countdown (auto-speed is not gated by it: 98 km/h at tick 267
+        // in `zone_ground_truth`), where what the original's Zone engine does in state 0
+        // is unread, and switching the coupling off under a moving craft took that test's
+        // 300-tick speed from 103.4 to 91.2 km/h. See `docs/physics/grid-state.md`.
+        // Measured on a Time Trial only.
         //
         // **One tick before thrust is released**, not the same one: the craft
         // enters state 1 on the frame *before* the throttle word steps

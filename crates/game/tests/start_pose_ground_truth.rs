@@ -153,6 +153,12 @@ const ORIGINAL_GRID: [(f32, f32); 8] = [
     (-132.291, -0.3495),
 ];
 
+/// Every slot's heading against the original's, within 0.08 degrees (**chosen, not measured**;
+/// the table's own `forward.z` quantisation is 0.03). Read 0.045 at worst while a slot took
+/// the sample tangent's frame and **0.002 now that it takes the edge chords'**
+/// (`oag_gameplay::grid_walk`, `grid_walk_ground_truth.rs` pins it at 0.001 against the
+/// full-precision axes). The name is the 2026-10-01 reading and is kept so the pages that cite
+/// it still resolve.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_grid_slot_points_along_the_tracks_own_frame_as_the_original_does() {

@@ -14,32 +14,38 @@ per-slot heading, landed; the write-up and every measurement are in
   [launch-boost.md](../../docs/physics/launch-boost.md). Its own leftovers: the AI's grade 3
   (read, not watched, not ported), the perfect-start effect trigger `FUN_08904fd4`, and the
   PS2/other-PSP discs applied by extension.
-- **The grid walk.** Our slots are on whole track samples (up to 1.5 units short of
-  the walked distance); an exact walk was tried and made
-  `metropia_reversed_is_the_originals_grid` worse (1.13 to 1.99), so it was
-  reverted. The residue fits the original re-locating on its own spline after every
-  step. Needs `FUN_0882663c` and the locate function read to the end, then a chain
-  `p(k+1) = project(p(k) + tangent * 19.8)` tested against three circuits' eight
-  slots (`orig-grid-16-single-b.json`, `orig-grid-01-single-a.json`, and
-  Metropia reversed in `grid_stagger_ground_truth`).
+- ~~**The grid walk.**~~ **Landed 2026-10-02 (`pulse-grid-walk`)**: the walk is a projection onto
+  the lifted B-spline, stepped `19.8` along the located record's own tangent, with the record
+  scaled `0.999756` by a half-float immediate in the original's evaluator; the heading is the
+  edge chords'. `01_Track` 1.73 to 0.001, `16_Track` 0.62 to 0.043, Metropia 1.13 to 0.070; see
+  [grid-state.md](../../docs/physics/grid-state.md) and
+  [grid.md](../../docs/ghidra/functions/psp-pulse-usa/grid.md#the-grid-walk-read-to-the-end-2026-10-02).
+  Its own leftovers: the junction hop (the walk clamps at a path's end; `03_Track`'s front slot is
+  one control point from it, under 0.1 unit), `25_Track` reversed (its node is 25.9 units under
+  the nearest sample, so the node-anchored grid stays there, what the original does was not
+  captured), the PS2/Pure/HD layouts (unread, unported), and the EU PSP build (not compared).
 - ~~**Three more state-0 terms**~~ **Tried on top of the boost, none pays, none ported**
   (2026-10-01): forced airbrakes with the brake held at zero leave the pose at GO and
   every launch speed unchanged to three decimals; roll damping `-5` and the `rebound`
   base `1.0` move the pose by 0.002 to 0.004 units either way. The earlier 75.8 against
   99.8 loss was the brake ramping on the grid and not being zeroed at release. See
   [launch-boost.md](../../docs/physics/launch-boost.md#the-three-other-state-0-terms-tried-and-left-out).
-- **Zone** runs `Ship_HoverFourCorner`; `on_grid` is off there because its epilogue
-  was not read for the guard.
-- **`01_Track` slot 1's heading** is `-0.0069` in the original against `-0.0014` for
-  slot 2 and `-0.0031` from our sample frame: 0.22 degrees, cause unknown.
+- **Zone** runs `Ship_HoverFourCorner`; `on_grid` is off there. **Read 2026-10-02**: the epilogue
+  (`0x0884b76c`) carries the same `craft+0x2a4` guard, gain `50.0` for the two-point law's `30.0`,
+  but writing the flag for Zone moved `zone_ground_truth`'s 300-tick speed `103.4` to `91.2` km/h
+  because this port's Zone craft is already moving through the countdown (auto-speed is not gated by
+  it). Left off until the original's Zone engine in state `0` (`Ship_UpdateEngine`, `0x0884c8c8`) is
+  read; see [grid-state.md](../../docs/physics/grid-state.md#zone-the-four-corner-epilogue-has-the-same-guard-and-stays-off-2026-10-02).
+- ~~**`01_Track` slot 1's heading**~~ is the edge chord, resolved with the grid walk above.
 - **The AI board moved**: `04_Track` RAPIER `CleanLap` to `Died` (one death at tick
   17714 of 18000 after four clean laps). Regenerated, not tuned; worth a look when
   the AI lane next touches that row.
 
 ## Next Steps
 
-1. The grid walk: read `FUN_0882663c` and the locate function to the end, then test the
-   chain `p(k+1) = project(p(k) + tangent * 19.8)` against the three circuits' eight slots
-   (an afternoon if the locate function is short, a day if it is the VFPU one).
-2. Zone's four-corner hover epilogue guard, so `on_grid` applies there (and the launch
-   window runs from the right frame).
+1. ~~The grid walk~~ landed.
+2. Zone: read `Ship_UpdateEngine`'s state-0 branch for Zone's auto-speed (`0x0884c8c8`), then switch
+   `on_grid` on there and see whether `zone_ground_truth`'s speed bound still means what it did.
+3. The junction hop in `oag_gameplay::grid_walk::locate`, only if a circuit-direction's
+   grid ever comes within a control point of a path end again (today only `03_Track`, by under
+   0.1 unit).
