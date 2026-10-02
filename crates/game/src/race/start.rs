@@ -29,6 +29,7 @@ impl Race {
             trail_sparks,
             seed,
             zone,
+            ai,
             spline,
             course,
             start_position,
@@ -154,6 +155,16 @@ impl Race {
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.
         let base = spawn_pose(&spline, start_position.as_ref(), &collision, &handling);
+        // Pulse PSP lays its grid out the way `Race_ComputeGridLayout` does: a walk of the
+        // located curve, not of resampled samples. `None` where the track has no node, off
+        // a PSP Pulse disc, or where the node is not on the track it locates (one circuit,
+        // `25_Track` reversed), and every one of those keeps the node-anchored grid below.
+        let walked = grid_frame_from_sample
+            .then_some(start_position.as_ref())
+            .flatten()
+            .and_then(|slot| {
+                oag_gameplay::grid_walk::walk(&ai, oag_core::math::Vec3::from_array(slot.position))
+            });
         // A solo mode (time trial, speed lap, Zone) grids the player alone, and
         // alone they go on slot 1, not slot 8.
         //
@@ -194,6 +205,7 @@ impl Race {
                     &collision,
                     spawn_height(&handling),
                     grid_frame_from_sample,
+                    walked.as_ref(),
                 )[0]
             });
         // A full grid puts the player on slot 8, and slot 8 is the authored node
@@ -209,6 +221,7 @@ impl Race {
                 &collision,
                 spawn_height(&handling),
                 grid_frame_from_sample,
+                walked.as_ref(),
             )[GRID_SLOTS as usize - 1]
         });
         if let Some(pose) = pose_override
@@ -281,6 +294,7 @@ impl Race {
                 &collision,
                 spawn_height(&handling),
                 grid_frame_from_sample,
+                walked.as_ref(),
             );
             // **A short field packs to the back**, mirroring the original's
             // own compaction rule for a field smaller than the grid

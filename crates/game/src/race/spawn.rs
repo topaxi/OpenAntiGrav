@@ -254,6 +254,7 @@ pub(super) fn grid_poses(
     collision: &CollisionWorld,
     height: f32,
     frame_from_sample: bool,
+    walked: Option<&[Pose; GRID_SLOTS as usize]>,
 ) -> [Pose; GRID_SLOTS as usize] {
     // Pulse PSP builds each slot's matrix from the track's frame at the slot
     // (`oag_gameplay::orientation_on_sample`); every other title keeps the
@@ -299,11 +300,13 @@ pub(super) fn grid_poses(
     core::array::from_fn(|index| {
         let slot = u8::try_from(index + 1).unwrap_or(GRID_SLOTS);
         let back = GRID_SLOTS - slot;
-        let mut pose = match (anchor, walk, anchor_sample, node_lateral) {
+        let mut pose = match (walked, anchor, walk, anchor_sample, node_lateral) {
+            // Pulse PSP: the original's own walk, position and heading both.
+            (Some(walked), ..) => walked[index],
             // `back == 0` is slot 8, `base` itself: it keeps its own place along
             // the track and only its lateral position is re-derived, from the
             // corridor midpoint rather than from where the node was authored.
-            (Some(_), Some(_), Some(sample), Some(node_lateral)) if back == 0 => {
+            (_, Some(_), Some(_), Some(sample), Some(node_lateral)) if back == 0 => {
                 let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
                 Pose {
                     position: base.position
@@ -311,7 +314,7 @@ pub(super) fn grid_poses(
                     orientation: orientation_at(sample),
                 }
             }
-            (Some(anchor), Some(direction), Some(_), Some(_)) => {
+            (_, Some(anchor), Some(direction), Some(_), Some(_)) => {
                 let target = f32::from(back) * oag_gameplay::GRID_ROW_PITCH;
                 let (walked, sample_pos, sample_lateral, ran_off_the_end) =
                     walk_along(spline, anchor, direction, target);

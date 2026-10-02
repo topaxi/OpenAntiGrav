@@ -198,7 +198,7 @@ pub fn orientation_on_sample(sample: &Sample) -> Quat {
 /// once blended. Degenerate input (either axis zero, or the two parallel) yields
 /// the identity, which is wrong but recoverable, where a `NaN` quaternion would
 /// poison the state hash for the rest of the race.
-fn orientation_from_axes(forward: Vec3, up: Vec3) -> Quat {
+pub(crate) fn orientation_from_axes(forward: Vec3, up: Vec3) -> Quat {
     try_orientation_from_axes(forward, up).unwrap_or(Quat::IDENTITY)
 }
 
