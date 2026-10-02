@@ -59,6 +59,7 @@ pub mod endrace;
 pub mod frontend;
 pub mod hud;
 pub mod loading;
+pub mod loyalty;
 pub mod race;
 
 /// Wipeout HD / Fury, as the asset layer needs to know it.

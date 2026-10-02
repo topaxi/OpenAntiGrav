@@ -3550,7 +3550,8 @@ reproduce. What a player sees, screen by screen (two or more frames each):
    the HD race record and `[[campaign]] cell = "grid0_3_1"
    last_difficulty = "easy"`. No `[[loyalty]]` row, which is correct: HD's
    loyalty law is not recovered and the Rewards screen that banks it is
-   never entered.
+   never entered. (Superseded 2026-10-02: the law is recovered and a race
+   launched with a team banks on `Results` - `endrace-screens.md`'s HD section.)
 10. **Back, Back** returns through `Grid Selection` to `Campaign
     Selection`, with the frame still on HD.
 11. **Cursor persistence on Fury**: `Down` to the Eliminator cell (The

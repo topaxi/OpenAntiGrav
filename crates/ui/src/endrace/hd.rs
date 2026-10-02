@@ -52,9 +52,7 @@
 //!   section.
 //! - **`Gridp.{row}` (`ER_PERFECT`), `GridStrikeThrough`, `MedalBlock` (a 3-D
 //!   `<ImageModel>` trophy, not a 2-D image `oag_ui::screen` collects),
-//!   `Target Title`/`RecordNotifyBlock` and the loyalty block Results itself
-//!   carries (`loyalty1.1`/`loyalty2`, `834 POINTS`/`3745` placeholders) -
-//!   none of these draw this pass. Every one is a real widget with no
+//!   `Target Title`/`RecordNotifyBlock` - none of these draw this pass. Every one is a real widget with no
 //!   settled law behind its trigger, the same "not this pass" this project
 //!   already leaves Pulse's own trophy model in - see
 //!   [`super::Rewards`]'s module doc for the precedent.
@@ -311,6 +309,26 @@ pub fn hd_results_draw_list(
         if matches!(name, "GridHead3" | "GridHead4") {
             continue;
         }
+        // The loyalty group's two `<Block>`s (`ER_LOY`, `IG_HUD_TOTAL`) author no
+        // `name`, so they cannot be looked up the way the grid headers are: the
+        // block sharing this text's position is its box, in `HD_Blue` behind the
+        // white label. Drawn as the text alone they were white on the light panel.
+        if name.is_empty()
+            && let Some(block) = unnamed_block_at(screen, text)
+        {
+            if let Some(content) = text.string.as_deref() {
+                block_draw(
+                    block,
+                    Some((text, content)),
+                    None,
+                    0.0,
+                    frame,
+                    layout,
+                    &mut out,
+                );
+            }
+            continue;
+        }
         let content = match name {
             "Line1" => hd_headline_text(model.headline, strings),
             // Online-only - see the module doc.
@@ -320,8 +338,15 @@ pub fn hd_results_draw_list(
             // pass (see the module doc), which would otherwise leak
             // through the generic fallback arm below exactly the way
             // `ER_PERFECT` would if `Gridp.{row}` were not excluded too.
-            "Target Title" | "Target0" | "Target1" | "Target2" | "loyalty1.1" | "loyalty1.2"
-            | "loyalty2" => None,
+            "Target Title" | "Target0" | "Target1" | "Target2" => None,
+            // The loyalty block's final state. `loyalty1.2` is the ticker's
+            // reason text and ends on `""`, so it draws nothing; with no
+            // `loyalty` on the model the disc's placeholders stay hidden.
+            "loyalty1.1" => model
+                .loyalty
+                .map(|loyalty| format!("{} {}", loyalty.award, strings.get_or_id("ER_POINTS"))),
+            "loyalty2" => model.loyalty.map(|loyalty| loyalty.total.to_string()),
+            "loyalty1.2" => None,
             // The `NavigationController`'s own icon glyph - `font="buttons"`
             // (`ps_buttons.fnt`) - still draws nothing **here**, unchanged
             // by this widget's own local `Layout` never learning a
@@ -493,9 +518,9 @@ fn race_cell_text(col: usize, row: usize, model: &FieldResults) -> Option<String
 ///   Pulse's own `RewardLine1` resolves through.
 /// - **The loyalty row draws nothing at all** - `LoyaltyImg`, `RewardLine2`,
 ///   `RewardLoyaltyPoints`, `RewardLoyaltyActive` (placeholders `"test"`/
-///   `"points!"`/`"line 2"`). HD's own loyalty law is not recovered, and
-///   Pulse's is the PSP's. `loyaltybar` is a `<Slider>`, which
-///   [`crate::screen`] does not collect.
+///   `"points!"`/`"line 2"`). HD never enters this screen, and it shows its
+///   loyalty on `Results` instead (see [`hd_results_draw_list`]). `loyaltybar`
+///   is a `<Slider>`, which [`crate::screen`] does not collect.
 /// - `EndRaceCountDown` (authored empty) and every other named widget draw
 ///   nothing: the text loop below matches names explicitly and defaults to
 ///   drawing nothing, so a placeholder this function does not know about
@@ -695,6 +720,14 @@ fn find_block<'a>(screen: &'a Screen, name: &str) -> Option<&'a BlockWidget> {
         .blocks
         .iter()
         .find(|block| block.name.as_deref() == Some(name))
+}
+
+/// The `<Block>` with no `name` that sits where `text` does - the half of an
+/// unnamed block [`crate::screen`] folded into [`Screen::texts`].
+fn unnamed_block_at<'a>(screen: &'a Screen, text: &Text) -> Option<&'a BlockWidget> {
+    screen.blocks.iter().find(|block| {
+        block.name.is_none() && (block.x - text.x).abs() < 0.5 && (block.y - text.y).abs() < 0.5
+    })
 }
 
 /// Where a Block's label sits inside it, `(40, 3)`: `0x00189c38` puts the

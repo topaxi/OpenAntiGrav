@@ -188,6 +188,7 @@ fn a_menu_target_is_the_blocks_own_resting_box() {
 #[test]
 fn a_race_lays_its_grid_out_as_the_executable_does() {
     let model = FieldResults {
+        loyalty: None,
         headline: Headline::Position(2),
         rows: vec![
             FieldRow {

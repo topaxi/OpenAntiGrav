@@ -67,7 +67,7 @@ by ten columns" the inventory pass guessed before this one read the file.
 | `Target0`/`Target1`/`Target2` | `<Text>`, placeholder `string="value"`, each paired with a `Hexmedal_HD.mip` icon | 90 - the three medal-target figures (gold/silver/bronze cutoffs), same idiom as `IG_HUD_TARGET` elsewhere |
 | `MedalModelGold`/`Silver`/`Bronze` | `<ImageModel>`, `Src="Data\FE\Trophies\hd_gold.vex"` etc., `StartEnabled="false"` | 90 - a 3-D trophy, not a 2-D image; `oag_ui::screen::Screens::collect_widgets` has no `"imagemodel"` arm, so none of the three is collected at all |
 | `RecordNotifyBlock` | `<Text>` group, `ER_RECORD_NOT` caption, `RecLogoSL`/`TT`/`Z` mode icons, `RecValue` | 85 - a "new record" banner, untraced trigger |
-| Loyalty block (`Item OffsetX="1180" OffsetY="368"`) | `ER_LOYSTAT` caption, two `<Block>`s (`ER_LOY`/`IG_HUD_TOTAL`), `loyalty1.1`/`loyalty1.2`/`loyalty2` placeholder text (`"834 POINTS"`/`"3745"`) | 85 - **on `Results`, not a separate `Rewards` screen the way Pulse keeps it** |
+| Loyalty block (`Item OffsetX="1180" OffsetY="368"`) | `ER_LOYSTAT` caption, two `<Block>`s (`ER_LOY`/`IG_HUD_TOTAL`), `loyalty1.1`/`loyalty1.2`/`loyalty2` placeholder text (`"834 POINTS"`/`"3745"`) | 85 - **on `Results`, not a separate `Rewards` screen the way Pulse keeps it**; read and drawn 2026-10-02 - [`endrace-loyalty.md`](../ghidra/functions/ps3-hdfury-eu/endrace-loyalty.md), no bar |
 | `DelayPostMsg` | `idstring="ONL_MSG_DELAYPOST"` | 95 - online-only |
 | `RecordsCycleButton`/`RecordsCycle` | `δ` glyph / `idstring="ER_GLOB_REC"` | 95 - online leaderboard cycling, no binding possible offline |
 | `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 - direct idstrings, same convention as Pulse; see "A malformed tag upstream" below for the parser bug that used to keep this screen alone from drawing either one, fixed 2026-09-25 |
@@ -192,7 +192,7 @@ and the executable's strings without a decompile (2026-09-25):
    `reward` in any case, ASCII, UTF-16LE or UTF-16BE. None of the Rewards widget names
    (`RewardLine1`, `BigPos`, `MedalImg`, `loyaltybar`) appear either, while
    Results' own `loyalty1.1`/`loyalty1.2`/`loyalty2` sit in the
-   `EndRaceResults_Screen.cpp` string cluster (`0x7845b0`), beside
+   `EndRaceResults_Screen.cpp` string cluster (`0x007945b0`), beside
    `ER_POINTS`. HD moved the loyalty readout onto `Results`; `ER_TOT_LOY` is
    referenced from the `ShowUnlocks_Screen.cpp` cluster (`0x788e88`), not
    from any end screen.
@@ -215,7 +215,7 @@ Widgets, off `DATA02`'s copy (confidence 90, direct read):
 | `MedalImg` / `LoyaltyImg` | `<Image>`, `32x32` at `600,360` / `600,530`, `Color="0xff8AC0CA"`, **no `src`** | no - a src-less icon the original would assign at run time |
 | `BigPos` | `<Text>`, `string="1"`, `align="centre"`, `x="610" y="370"` - centred inside `MedalImg`'s square | the player's finishing place (chosen) |
 | `RewardLine1` | `idstring="ER_MEDAL_AWARD"` (`"MEDAL AWARDED:"`), `x="670" y="360"` | the medal tier on a campaign race (chosen) |
-| `RewardLine2` / `RewardLoyaltyPoints` / `RewardLoyaltyActive` | placeholders `"test"` / `"points!"` / `"line 2"` | no - HD's loyalty law is not recovered |
+| `RewardLine2` / `RewardLoyaltyPoints` / `RewardLoyaltyActive` | placeholders `"test"` / `"points!"` / `"line 2"` | no - HD never enters this screen; its loyalty is on `Results` (`loyalty1.1`/`loyalty2`, drawn since 2026-10-02) |
 | `loyaltybar` | `<Slider>`, `idstring="ER_TOT_LOY"`, `minSlide="0" maxSlide="100000"` | no - `oag_ui::screen` does not collect a `<Slider>` |
 | `ControlTextConfirmButton` | inside a `<NavigationController>`, `font="buttons"` | no - `oag_ui::endrace::hd`'s own `text_draw` has no `face_role` check, so this screen still risks the raw codepoint (a Greek letter) rather than the disc's own glyph even though a `Buttons`-role atlas now loads (2026-09-25, `oag_ui::campaign::footer::face_role`); a real gap, left open rather than fixed in the same pass that found it - see `oag_ui::endrace::hd::hd_results_draw_list`'s own doc |
 | `ControlTextConfirm` | inside the same `<NavigationController>`, `idstring="FE_CONFIRM"` | **yes, since 2026-09-25** - `crate::screen::Screens::collect_widgets` now walks a `NavigationController` the same as any other container; confirmed live, `--menu-page endrace-rewards` |
