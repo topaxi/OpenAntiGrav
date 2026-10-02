@@ -989,9 +989,9 @@ Three things happen on that tick, and they are in three layers on purpose:
 **The table is ours and is labelled as one.** The original ends a race in a
 sequence of screens whose names are recovered - `"Race End Photo"`,
 `"Race End Save"`, `"Race End Records"`, `"Race End Proceed"`,
-`"Race End Alone"`, and `"EndRace_Results"` from `Zone_UpdateResults` - and
-**none of them has had its screen, its layout or its transitions read**, so none
-is reproduced. What is drawn instead is a plain list of positions in the built-in
+`"Race End Alone"`, and `"EndRace_Results"` from `Zone_UpdateResults`. **`Race End Photo`
+has been read and is reproduced for a finish by the line** (2026-10-02,
+[after-the-finish.md](after-the-finish.md)); the others have not, so none of them is. What is drawn instead is a plain list of positions in the built-in
 grid, the same kind of stand-in [our own menus](../ui/menus-original.md) are.
 See `crates/game/src/scoreboard.rs`, which carries the argument and what would
 retire it. A row names its grid slot rather than a team, because the team a slot

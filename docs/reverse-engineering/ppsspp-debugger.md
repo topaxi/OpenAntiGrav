@@ -1896,6 +1896,10 @@ photographs. See [after-the-finish.md](../gameplay/after-the-finish.md) for what
 - **A resume can be answered by a stop the wait never sees**: `cpu.status` then says the CPU is stopped at the
   breakpoint's own address while `wait_for_break` times out. The script's `hits()` yields that stop instead of raising.
 - **The weapon pickup's autopilot runs only 4.95 s unless its timer is raised**; the timer lives at `record+0x148`.
+- **`--state-every N`** reads the front end's state name every N frames (default 30; `1` pins the frame `Race End Photo` is entered on:
+  `F+61`). `psp-wreck-capture.py --ui-state` logs the same plus the manager's mode state, which is how a wreck was shown to stay on `InGame`
+  for 17,800 frames (2026-10-02). After a capture ends the emulator is left running; a one-second poll of `state_name()` plus a
+  photograph on each change watches it for minutes at no cost.
 - **From `Race End Photo` the pause menu does not exist**: `psp-drive.py restart` and the script's restart walk both
   press into the end-race panels. `cross` five times lands on `Main Menu` (`Race End Photo`, `EndRace Results`, `Rewards`,
   `Menu`), then `psp-drive.py menu`.

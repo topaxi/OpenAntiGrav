@@ -20,10 +20,15 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   craft at the AI's own pace, about 125-135 u/s against the original's 92-110. Measure a Single Race
   the player finishes **not first** (`scripts/psp-postrace.py` finishes it on the pickup; the player
   would have to be held back, e.g. by a `Craft_SetAutopilotBlend` write or a late start).
-- **The `Race End Photo` state**: about a second after the flag the front end enters it, draws
-  `PRESS SELECT BUTTON FOR PHOTO MODE / PRESS X TO CONTINUE` over the running race and waits for X
-  before `EndRace Results`. Ours shows the panels at once. Its legend, its SELECT photo mode and the
-  trigger on `F+61` (`FUN_08880788`) are unread.
+- ~~**The `Race End Photo` state**~~ **Ported 2026-10-02 (pulse-end-photo), line finishes only.** The state is entered at `F+61` and the legend
+  (`InGame_Definition.xml`'s own two `Stats` texts) fades in over 42 frames; ours holds the clean view, draws the disc's lines and leaves on
+  X/Start/click; SELECT does nothing. **Still open on it**: photo mode itself (`forward="select"` goes to `InGame Photo`), why the fade is
+  0.7 s, and the real `Pulse_14.fnt` atlas (ours is the menu face scaled, narrowed by a measured 0.90).
+- **A player wreck never reaches `Race End Photo`** (measured 2026-10-02): mode state goes to 3 and the HUD hides, then the front end stays on
+  `InGame` for 17,800+ frames with the field racing on and the spectator camera cutting. What ends that race in the original (the player's
+  `finished` flag? the field finishing? only the pause menu?) is unread; ours puts the panels up at once at a wreck, chosen. Also unlooked at:
+  Eliminator and Zone endings. Next: read what `Race End Photo`'s entry waits for (`FUN_08880788`'s caller) and test a wreck that is drained
+  rather than injected.
 - **Modes `2` and `3` of the spectator camera** (`above`, `front`): craft-relative, in the large
   `FUN_08880c04` switch, not read. The chase camera stands in (**chosen, not measured**), so about
   half the cuts differ from the original. Also unread: what sets `cam+0x274`.
@@ -40,5 +45,5 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
 1. A Single Race finished in a lower place, to read the throttle's source
    (`AI_ComputeOpponentThrust`'s rank terms are the first suspect).
 2. Read `FUN_08880c04`'s cases `2` and `3`, then replace the chase stand-in.
-3. Read `Race End Photo`'s enter and X handler, then give ours the same pause before the panels.
+3. ~~Read `Race End Photo`'s enter and X handler~~ done for the line (measured, not read); what a wreck waits for is next, see Open.
 4. Name `FUN_088418e0` (the per-entity update; the finish rule is in it) once its other duties are read.

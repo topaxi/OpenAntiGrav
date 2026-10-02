@@ -41,6 +41,15 @@ pub const ENTER_TICKS: u32 = 61;
 /// author for `enabletransition` (`docs/formats/fe-menu-definitions.md`).
 pub const FADE_TICKS: u32 = 42;
 
+/// How much narrower the original draws a `Stats` line than this build's
+/// `small` stand-in does. `Stats` is `Pulse_14.fnt`; no atlas of that file is
+/// loaded, so the text is the `menu` face scaled down, and its advances do not
+/// shrink in step with its height. **Measured, not derived**: the first line,
+/// `PRESS SELECT BUTTON FOR PHOTO MODE`, is 283 px wide on a 480-wide PSP
+/// capture and 315 px with the plain `small` scale, `283 / 315 = 0.90`. Retire
+/// it with the real atlas.
+const STATS_OVER_SMALL: f32 = 0.9;
+
 /// The legend's ink at `ticks` after the finish: `0` until [`ENTER_TICKS`],
 /// then a straight ramp to `1` over [`FADE_TICKS`].
 #[must_use]
@@ -82,7 +91,8 @@ pub fn photo_draw_list(layout: &Layout, ticks: u32) -> Vec<Draw> {
             let mut color = argb_to_rgba(text.color);
             color[3] *= alpha;
             let face = match text.font.to_ascii_lowercase().as_str() {
-                "stats" | "small" => layout.faces.small,
+                "stats" => layout.faces.small * STATS_OVER_SMALL,
+                "small" => layout.faces.small,
                 _ => 1.0,
             };
             Some(Draw::Text {
