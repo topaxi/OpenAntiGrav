@@ -15,9 +15,11 @@ plus the respawn-keeps-its-place test).
   rule (catch-up by slowing the front is fine; extra speed or thrust for the back is not). The respawn fix alone gives 11 of 24 (it finishes the four pinned seeds); the tether lifts it to 22.
   Wider forward-weapon gates were tried and dropped. A chase on equal speed cannot close; **a
   held-Turbo chase (Turbo is lawful speed) was not tried**.
-- **Uncredited deaths**: 11 of 30 in a 233 s run had no landed weapon hit. A Leech Beam's damage
-  never sets `last_weapon_hit`, so a kill by beam credits nobody; the original's behaviour for a
-  beam kill is not read. Wall deaths are not investigated (why opponents scrape lethally here).
+- **Beam and Quake kills are now credited** (the original credits all three of Cannon, Beam and
+  Quake via `+0x13c`, read statically, not live), and credit needs the shield-emptying blow, so a
+  wall death after a standing-shield hit credits nobody. Over seeds 1 to 24: 24 of 24 finish,
+  median 118 s (was 22 of 24, about 210 s), against the original's 85 s. Wall deaths
+  and why opponents scrape lethally here are still not investigated.
 - **Held weapons**: Mine, Bomb, Cannon and Leech Beam together were held for about a quarter of all
   craft-ticks and are rarely usable by a leader or a tail; Eliminator refuses absorbing so those
   craft stop collecting pickups. A discard or a drop rule would free the slot (chosen, would need a label).
@@ -31,8 +33,7 @@ plus the respawn-keeps-its-place test).
 
 ## Next Steps
 
-1. Credit beam, Cannon and Quake kills if the original does (read `Ship_Damage`'s callers for the
-   beam path), then re-measure uncredited deaths.
+1. ~~Credit beam, Cannon and Quake kills~~ done 2026-10-02.
 2. Wall deaths: log where opponents die with no weapon hit and whether the shield was already low.
 3. A drop/discard rule for held Mine, Bomb, Cannon and Beam in Eliminator, labelled chosen.
 4. A held-Turbo chase: keep Turbo until a craft is 100 to 400 units ahead, then fire it.

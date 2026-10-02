@@ -40,7 +40,7 @@ fn loaded_eliminator_seeded(kill_target: Option<u32>, seed: Option<u64>) -> Opti
 /// matrix is the test axis rather than a loop in one process.
 ///
 /// Prints the finish in seconds beside the original's 85 s on `16_Track` with
-/// the player parked. This build is slower - about 100 to 345 s over 24 seeds - and
+/// the player parked. This build is slower - about 65 to 325 s over 24 seeds, median 118 s - and
 /// the gap is the AI not cheating: see `docs/gameplay/race-modes.md`.
 fn a_parked_player_eliminator_finishes_at_five(seed: u64) {
     let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());

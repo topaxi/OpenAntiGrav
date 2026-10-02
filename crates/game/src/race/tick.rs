@@ -320,7 +320,7 @@ impl Race {
                 self.view.shield[slot].hit();
             }
             if hit.landed {
-                self.sim.last_weapon_hit[slot] = self.sim.world.tick + 1;
+                self.note_weapon_hit(slot);
             }
         }
         // A hit that got through throws the struck hull's own sparks - the

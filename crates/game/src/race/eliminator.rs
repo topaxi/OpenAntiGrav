@@ -367,6 +367,41 @@ impl Race {
         }
     }
 
+    /// Notes that a weapon hit got through to `victim` this tick, for
+    /// [`Self::credit_kill`].
+    ///
+    /// **Eliminator keeps only the blow that finished the craft.**
+    /// `Ship_Damage` (`0x088439ac`) credits on the blow that empties the shield
+    /// and only when its source is a weapon, so a hit that leaves the shield
+    /// standing is not the killing blow, and a wall that finishes the craft
+    /// afterwards must credit nobody. Reading the shield straight after the hit
+    /// is that test; the time window in [`Self::credit_kill`] then only covers
+    /// the destroyed sequence between the blow and the craft being seen down.
+    /// Every other mode records every landed hit as before.
+    pub(super) fn note_weapon_hit(&mut self, victim: usize) {
+        if self.sim.world.mode() == Mode::Eliminator
+            && self.sim.world.ships[victim].physics.shield > 0.0
+        {
+            return;
+        }
+        self.sim.last_weapon_hit[victim] = self.sim.world.tick + 1;
+    }
+
+    /// Records a hit by a weapon that is not a projectile - the LeachBeam's
+    /// drain and the Quake's wave - as the original's pending-hit channel does:
+    /// the shooter's index goes into the victim's `+0x13c` that `Ship_Damage`
+    /// credits from (`LeachBeam_Drain` `0x08866804`; the Quake block of
+    /// `FUN_088418e0`, `0x08841e60`), confidence 80. Eliminator only, where the
+    /// original reads it; elsewhere nothing is written, so no other mode's
+    /// state moves.
+    pub(super) fn record_pending_hit(&mut self, victim: usize, attacker: u8) {
+        if self.sim.world.mode() != Mode::Eliminator {
+            return;
+        }
+        self.sim.last_damager[victim] = Some(attacker);
+        self.note_weapon_hit(victim);
+    }
+
     /// Credits a blast's owner with every craft it hurt.
     ///
     /// The direct-hit half is in `Race::tick`; this is the splash. **Ours**: the

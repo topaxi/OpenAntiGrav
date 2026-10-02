@@ -124,6 +124,11 @@ impl Race {
         // The wave's landed hits spark the struck hulls - see
         // `race::hit_sparks`. Last, once `course`'s borrow has ended.
         self.throw_hit_sparks(&hits, false);
+        for (slot, hit) in hits.iter().enumerate() {
+            if hit.landed {
+                self.record_pending_hit(slot, wave.owner);
+            }
+        }
         self.sim.world.quake = Some(wave);
     }
 
@@ -163,6 +168,7 @@ impl Race {
         // LeachBeam's own variant, once per locator per 0.8 s like every
         // other hit - see `race::hit_sparks`.
         if report.landed {
+            self.record_pending_hit(beam.target as usize, beam.owner);
             let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
             if let Some(hit) = hits.get_mut(beam.target as usize) {
                 hit.landed = true;
