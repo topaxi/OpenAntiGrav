@@ -718,6 +718,21 @@ impl Store {
             .map_or(0, |row| row.total)
     }
 
+    /// The largest running total any team of `title` holds - what an
+    /// `<Unlock Team="any" loyalty="N">` row compares: it passes when **some
+    /// one team** reached `N` (`Unlock_LoyaltyMet` loops the teams and stops at
+    /// the first that does), not when the teams' totals add up to it.
+    #[must_use]
+    pub fn loyalty_best(&self, title: &str) -> u32 {
+        let title = title.trim().to_ascii_lowercase();
+        self.loyalty
+            .iter()
+            .filter(|row| row.title == title)
+            .map(|row| row.total)
+            .max()
+            .unwrap_or(0)
+    }
+
     /// Adds `award` to `(title, team)`'s own running total, creating the row
     /// if this is the first race ever recorded for it, and returns the new
     /// total - `Loyalty_AccumulateTotal`'s own `record+8 += award`, capped

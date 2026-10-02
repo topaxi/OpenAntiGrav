@@ -31,6 +31,37 @@ pub(crate) fn variant_choices(title: &'static oag_title::Title, team: &str) -> V
         .collect()
 }
 
+/// [`variant_choices`] with Pulse's hull variants cut to the ones `team`'s own
+/// `<Unlock>` rows let through (`Definition_IsUnlocked`, via
+/// [`oag_game::unlock::loyalty_unlocked`]): a locked craft is absent from the
+/// row, as it is from Team Selection's. `details` is the booted title's own
+/// team catalogue; a team it does not hold, a title that does not gate
+/// ([`oag_game::unlock::gates_variants`]) and an axis that is a
+/// [`oag_title::TeamVariants`] one are returned whole.
+pub(crate) fn gated_variant_choices(
+    title: &'static oag_title::Title,
+    team: &str,
+    details: &[oag_game::catalogue::Team],
+) -> Vec<menu::Choice> {
+    let mut choices = variant_choices(title, team);
+    if !oag_game::unlock::gates_variants(title.name) || title.race.team_variants_for(team).is_some()
+    {
+        return choices;
+    }
+    let Some(declared) = details.iter().find(|candidate| candidate.id == team) else {
+        return choices;
+    };
+    let records = oag_game::records::load();
+    choices.retain(|choice| {
+        declared
+            .hull_unlocks
+            .iter()
+            .filter(|(stem, _)| stem.eq_ignore_ascii_case(&choice.value))
+            .all(|(_, rows)| oag_game::unlock::loyalty_unlocked(rows, &records, title.name))
+    });
+    choices
+}
+
 /// Combines `team` with whichever variant `stored` names, for launching.
 ///
 /// Two different things a title's own axis can mean, so two different halves

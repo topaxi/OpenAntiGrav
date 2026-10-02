@@ -109,7 +109,7 @@ the actual screen behaviour lives:
 
 ### `Definition_IsUnlocked` and the two-axis unlock read
 
-`FUN_0888e29c` (confidence 72, `Definition_IsUnlocked`) reads:
+`FUN_0888e29c` (confidence 88, `Definition_IsUnlocked`; raised from 72 on 2026-10-02 by the full decompile below) reads:
 
 - `+0x99`: a hard-hidden byte: nonzero always fails.
 - a "cheat/dev unlock" global (`sceKernelGetGPI() & 1`, or a flag byte at
@@ -128,6 +128,49 @@ the actual screen behaviour lives:
   condition against a plain named unlock needing only one. None of the nine
   predicates were individually traced; that is real remaining work, not
   guessed at here.
+
+**Traced 2026-10-02 (headless decompile of `/pulse/BOOT-psp-pulse-usa.BIN`),
+confidence 88: the row combine and the `Team` row.** Per `<Unlock>` row
+the loop first runs `FUN_0888e6e8`, the **context filter**: a row naming
+`Class`, `Team`, `Track`, `Tournament`, `Mode` or `Grid` context attributes
+(row fields `+0x8..+0x1c`) applies only when each matches the live front-end
+global of that name, case-insensitively; a row that does not match is
+skipped. Then:
+
+- **Non-`Exclusive` row** (`*row == 0`): each condition the row names
+  (`Medal`, `MedalCount`, `Loyalty`, `Grid`) is ANDed into a running result
+  that starts true.
+- **`Exclusive` row**: the result is set false, then the four `*_Met`
+  predicates are tried in order and **any one passing returns true at once**.
+  So `Exclusive` rows are **alternatives**: a variant with an own-team row and
+  a `Team="any"` row is unlocked when *either* holds. A failed `Exclusive`
+  row leaves the item locked unless a later row passes.
+- No rows at all: unlocked.
+
+`Unlock_LoyaltyMet` (`0x0888ea30`, now confirmed in full): the row's
+`Team` string is compared against the literal `any` (`0x08a7d5ec`).
+For `any` it collects every team definition (`FUN_088892d8`, a
+grow-until-it-fits enumerator over the team class, 100 entries then +20) and
+returns true as soon as **one** team's per-team record word (`record+8`, the
+total `Loyalty_AccumulateTotal` writes) is `>=` the row's `loyalty`. It is
+therefore **the best single team, not the sum**: two teams at 40,000 do not
+meet a 60,000 `any` row. For any other name it looks up that team's record by
+`Libc_HashString(name)` and compares the same word. A team with no record
+fails (a zero requirement is also a fail - `Unlock_LoyaltyValue` returning 0
+makes the predicate false).
+
+**How the original presents a locked variant: absent.** `FUN_088ea08c`
+builds `Team Selection`'s list as each team that passes
+`Definition_IsUnlocked(team, 1)`, then a null-skin entry (`Classic`), then
+each child definition that passes `Definition_IsUnlocked(child, 1)`; the
+second argument of 1 also requires a class-level virtual check
+(`vtable+0xd4`) that is not read. A locked skin is simply not appended, not
+greyed and not priced. `TeamSelection_Update` draws the `Loyalty` block with
+`FEScreen_SetStatBar(screen, "Loyalty", total, 100000, 150)` - see
+`FEScreen_SetStatBar` above: the number beside the bar is the selected
+team's own total and the bar is `150 * min(total, 100000) / 100000` pixels in
+integer arithmetic. Not run live on PPSSPP: the static read is unambiguous
+and the lane drew no breakpoint.
 
 ### `Top->Ship` has a confirmed referent after all
 
@@ -583,13 +626,13 @@ own authored numbers agreeing on a scale factor, not from PS2 code.
   Track Select, not greyed - the list filter above plus the 3-vs-24 live capture.
   Not modelled: the `+0x16e` mode-gated byte (it is not `availableInZone`, which is
   on 16 circuits, incl. not `18_Track`) and the `+0x99` always-hidden byte.
-  Not traced either: how `Definition_IsUnlocked` combines `Team="any"` with an
-  own-team `Exclusive` row, so craft variants stay ungated.
+  The `Team="any"` combine was traced 2026-10-02 (above) and craft variants
+  are now gated; see `oag_game::unlock::loyalty_unlocked`.
 
-- The nine unlock-predicate functions inside `Definition_IsUnlocked` are
-  unnamed and untraced - this is what "circuits gate on a named grid" and
-  "craft variants gate on loyalty" would need to become a confirmed
-  mechanism rather than an XML reading corroborated by one live capture.
+- Of the nine unlock-predicate functions inside `Definition_IsUnlocked`, the
+  Medal/MedalCount/Loyalty/Grid ones are named and read (`race-campaign.md`);
+  `FUN_0888e6e8` (the context filter above) and the four companion "has this
+  unlock type" gates are still unnamed.
 - `Mode == 6` reading as "Custom Race" is a 55-confidence hypothesis, not a
   finding - no enum table was located. **An enum table has since been located**
   (`0x08ab062c`, see [`race-campaign.md`](race-campaign.md)) and in *that* table

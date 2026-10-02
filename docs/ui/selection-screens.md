@@ -202,7 +202,7 @@ this build already had changes appearance.
   the RECORDS page keys them - circuit, mode and the RACE page's class.
 - **The counter is `n / 32` on a fresh profile**, not `1 / 3`: this build
   offers every circuit the definition authors, by design
-  ([menus.md](../architecture/menus.md#unlocks-pulses-circuits-gate-craft-variants-do-not-yet)).
+  ([menus.md](../architecture/menus.md#unlocks-pulses-circuits-and-craft-variants-gate)).
 - **The outline is darker than the original's.** It is drawn through the
   ordinary mesh pipeline with the stand-in light; the original's has a
   teal glow whose source (a blend class on the ribbon, a second pass, a
@@ -244,14 +244,16 @@ hull through the same texture-slot swap a race makes
 stored as `race.skin`, which the launched race reads the way `--skin`
 does. A team that declares no skin - every HD and 2048 team - gets the
 title's *variant* axis on the same row instead, the RACE page's VARIANT.
-No craft-variant unlock is checked: the `Team="any"`/`Exclusive` combination
-is untraced (see [menus.md](../architecture/menus.md#unlocks-pulses-circuits-gate-craft-variants-do-not-yet)).
+A skin is offered only when its `<Unlock>` rows pass (`oag_game::unlock::loyalty_unlocked`, own-team OR any-team; absent when locked, as the original's list builder does), so a fresh profile's row holds `Classic` alone and its arrows are dimmed.
 Track Select, by contrast, hides circuits whose `<Unlock Grid>` is not met
 (`oag_game::unlock`).
 
-**Loyalty is not drawn - title, bar and backing together.** It is a per-team
-counter the profile keeps and this build does not, and an empty bar would
-read as a loyalty of zero rather than as an absence.
+**The Loyalty block is drawn on Pulse** (2026-10-02): the title, the dim
+backing, the selected team's own running total beside it and the bar,
+`150 * min(total, 100000) / 100000` whole pixels wide (`FEScreen_SetStatBar`
+as `TeamSelection_Update` calls it; `crates/ui/src/picker/body.rs`). It is a
+read-out with no pointer behaviour. A title with no loyalty counter
+(`Details::Ship::loyalty` is `None`) still leaves the block out whole.
 
 ## The PS2 pressing
 

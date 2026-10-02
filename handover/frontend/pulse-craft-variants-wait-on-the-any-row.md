@@ -1,21 +1,15 @@
-# Pulse craft variants: earning is kept, the gate is not read
+# Pulse craft variants are gated on loyalty; RACE REMIX and two bytes are not
 
 ## Open
 
-- Loyalty is earned (`Race_ComputeLoyaltyAward`) and persisted per team
-  (`records::Store::record_loyalty`); the circuit gate landed (`oag_game::unlock`).
-- Craft variants (`PI_ModelSkin`/`PI_TeamModel`) carry two `Exclusive` rows,
-  `Team=<own>` and `Team="any"`. How `Definition_IsUnlocked` (`0x0888e29c`) combines
-  them, and what `any` sums or maxes over, is untraced. Gating on the plain reading
-  (own team total >= price) would be a guess; nothing is wired.
-- `Team Selection`'s Loyalty bar is undrawn yet: the
-  fill law is known (`total * 0.00124` px, `endrace-screens.md`) but the bar's
-  own screen read is not wired.
+- Landed 2026-10-02: `Definition_IsUnlocked`'s row combine and `Unlock_LoyaltyMet`'s `any` are traced (`race-box-screens.md`, "Traced 2026-10-02"); Team Selection's livery row and the RACE page's VARIANT row gate on them (`oag_game::unlock::loyalty_unlocked`, `--unlock-all` lifts it, ours); the Loyalty block is drawn.
+- RACE REMIX's craft-side VARIANT row (`resupply_remix_variant`) is still ungated: it is scoped to `remix.craft_title`, whose team catalogue is not the booted shell's.
+- The original's own list builder also checks a class virtual (`vtable+0xd4`) on each skin; unread.
+- Context-filter attributes on an `<Unlock>` row (`Class`, `Team`, `Track`, `Tournament`, `Mode`, `Grid`, `FUN_0888e6e8`) are not modelled; no shipped variant row authors one.
 - `+0x16e` (mode-gated per-track byte) and `+0x99` unmodelled.
-- The ghidra bridge was down for this lane (no instance); needs a decompile of
-  `Definition_IsUnlocked`'s Team handling or a PPSSPP probe setting loyalty.
+- Not run live on PPSSPP: the combine is a static read at confidence 88.
 
 ## Next Steps
 
-1. Decompile `Definition_IsUnlocked` / `Unlock_LoyaltyMet` for the `Team` field.
-2. Wire the variant gate and the Loyalty bar through `--unlock-all` too.
+1. Gate RACE REMIX's variant row off its own craft catalogue.
+2. Watch `Definition_IsUnlocked` in PPSSPP with loyalty written to confirm the `any` branch live.
