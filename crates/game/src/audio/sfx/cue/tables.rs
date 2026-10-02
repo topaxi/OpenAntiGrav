@@ -13,7 +13,7 @@ use crate::audio::sfx::{BankName, Placement};
 impl Cue {
     /// The two start-of-race cues, loaded on their own because their bank is
     /// the mode's and not the title's. See [`Self::Ready`].
-    pub const COUNTDOWN: [Self; 2] = [Self::Ready, Self::Go];
+    pub const COUNTDOWN: [Self; 3] = [Self::Ready, Self::Go, Self::ContElim];
 
     /// Every cue this port fires, which is every one it knows how to load.
     pub const ALL: [Self; 38] = [
@@ -92,9 +92,12 @@ impl Cue {
             | Self::ShurikenLaunch
             | Self::ShurikenHit
             | Self::ShurikenTravel => BankName::Weapons,
-            Self::ShieldActive | Self::Engaging | Self::Disengaging | Self::Ready | Self::Go => {
-                BankName::Speech
-            }
+            Self::ShieldActive
+            | Self::Engaging
+            | Self::Disengaging
+            | Self::Ready
+            | Self::Go
+            | Self::ContElim => BankName::Speech,
         }
     }
 
@@ -158,6 +161,7 @@ impl Cue {
             Self::Disengaging => "disengaging",
             Self::Ready => "ready",
             Self::Go => "go",
+            Self::ContElim => "cont_elim",
             Self::Blowup => "~BLOWUP",
             Self::LockOn => "~ROCKLOCK",
             Self::MineLaunch => "MINELAUNCH",
@@ -327,7 +331,7 @@ impl Cue {
             // `RaceMode_SetState` and `RaceMode_UpdateCountdown` both call
             // `Sound_PlayNamedInSlot` with no emitter and `0x400`: a voice in
             // the player's ear, the same shape as `Disengaging` above.
-            Self::Ready | Self::Go => Placement::Unplaced,
+            Self::Ready | Self::Go | Self::ContElim => Placement::Unplaced,
             // Read, not assumed: case 4 hands it to the path that takes no
             // emitter and a volume of `0x400`.
             Self::Blowup => Placement::Unplaced,

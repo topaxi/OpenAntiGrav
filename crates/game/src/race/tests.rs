@@ -48,6 +48,7 @@ mod trail_hits;
 mod weapons;
 mod wreck_finished;
 mod wreck_fx;
+mod wreck_voice;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.
 fn model(slots: usize, decoded: usize) -> Model {
