@@ -817,11 +817,12 @@ Still open:
   8,032 a Cannon and 5,874 a Leech Beam, none of which is used against a leader or a tail with
   nobody behind, and Eliminator refuses absorbing, so those craft stop receiving pickups.
 - **Wall deaths** (priority 3 of the thread) are not investigated.
-- **A backward wrap costs a lap in every mode.** `Standing::update` lowers the lap and resets the
-  gate to `NeedsNearHalf`, and the forward re-crossing then earns nothing, so any craft shoved
-  back over the line ends one lap short (Eliminator's respawn was one way in). This sits against
-  `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`, which pins the no-lap half.
-  Not changed here: Single Race must not move.
+- ~~**A backward wrap costs a lap in every mode.**~~ **Fixed 2026-10-02.** The original's lap target
+  is never lowered by a reverse crossing (`Craft_UpdateLapProgress`, static, confidence 92), so
+  `Standing` and `RaceState` keep a `reversed` deficit instead; see `lap-counting.md`. The
+  no-lap half of `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap` stands, its lap
+  value changed. No committed golden moved and the 24-seed Eliminator sweep is identical (no
+  craft ends a sweep with a deficit). Not observed live with a reversed craft.
 - **The player's Eliminator respawn** reads `last_on_track`, latched each tick the craft is near
   the spline, so a player wreck that coasts over the line may lose a lap the same way. Not
   checked, nobody drives in the finish test.

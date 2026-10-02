@@ -7,8 +7,9 @@ plus the respawn-keeps-its-place test).
 
 ## Open
 
-- **Time to five is about 2.7 times the original's**: about 100 to 345 s, median 230 s, over 24
-  seeds on `16_Track`, player parked, against 85 s. 22 of 24 finish within six game-minutes.
+- **Time to five is about 1.4 times the original's**: 65 to 325 s, median 118 s, over seeds 1 to 24
+  on `16_Track`, player parked, against 85 s; 24 of 24 finish within six game-minutes (after the
+  beam and quake credit).
 - **The leader tether is catch-up by slowing the front** (`eliminator_pack_scale`, chosen, not
   measured). It is the lever that makes the mode finish (off: 0 of 8) and it is a throttle
   reduction only. **Accepted by the maintainer 2026-10-02** under the AI-obeys-player-physics
@@ -23,10 +24,9 @@ plus the respawn-keeps-its-place test).
 - **Held weapons**: Mine, Bomb, Cannon and Leech Beam together were held for about a quarter of all
   craft-ticks and are rarely usable by a leader or a tail; Eliminator refuses absorbing so those
   craft stop collecting pickups. A discard or a drop rule would free the slot (chosen, would need a label).
-- **A backward wrap costs a lap in every mode** (`Standing::update`: lap lowered, gate reset, the
-  forward re-crossing earns nothing), so any craft shoved back over the line ends a lap short.
-  Not fixed (Single Race must not move); sits against `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`.
-  The player's Eliminator respawn (`last_on_track`) may lose a lap the same way; unchecked.
+- ~~A backward wrap costs a lap in every mode~~ fixed 2026-10-02 (static read of the original's
+  crossing count, confidence 92; a live reversed-craft capture on PPSSPP was not taken). The
+  player's Eliminator respawn is the same case and is covered.
 - **`WeaponAi_DecideFireOrAbsorb` is not ported.** Its `+0x52` predicted-path test and the fields `+0x44`, `+0x4c`, `+0x5c` are unread.
 - **Ghidra data rename rejected**: `g_eliminator_kill_target` for `0x08b30fb0` (Hungarian-prefix
   check). The docs and `names.tsv` are authoritative for the data name.
