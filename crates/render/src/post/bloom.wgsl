@@ -71,13 +71,15 @@ fn bytes(texel: vec3<f32>) -> vec3<u32> {
 // The GE multiplies and adds in 8-bit integers and each of the blur's eleven
 // taps is its own additive draw, so a tap's contribution is `floor(v * w /
 // 255)` before it joins the sum. A float sum keeps what truncation destroys:
-// the opaque mask stamp of `4` brightens a texel by at most 3, a tap of weight
-// 64 turns 3 into `floor(0.75) = 0`, and the whole background term of the
-// bloom is exactly zero in the original while a float chain carries it at
-// 3.43 x 0.686 of the stamp. Measured against PPSSPP's software renderer on
-// 2026-10-02 (`docs/ghidra/functions/psp-pulse-usa/bloom.md`, "Is ours
-// stronger"): the bloom's mean-luma contribution outside the craft was `0.33`
-// in the original, `4.52` here as floats and `0.37` truncated.
+// the opaque mask stamp of `4` leaves the bright pass at most 4 (a white
+// texel), the three centre taps of weight 64 keep 1 each, so the horizontal
+// pass leaves at most 3, and the vertical pass turns 3 into `floor(3 * 64 /
+// 255) = 0`. The stamp's whole contribution is exactly zero in the original,
+// while a float chain carries it at 3.43 x 0.686 of the stamp. Measured against
+// PPSSPP's software renderer on 2026-10-02 (`docs/ghidra/functions/psp-pulse-usa/bloom.md`,
+// "Is ours stronger"): the bloom's mean-luma contribution outside the craft on
+// a racing straight was `0.33` in the original, `4.52` here as floats and
+// `0.37` truncated.
 //
 // Truncation is what that measurement supports. That every stage truncates
 // rather than rounds is chosen, not measured, beyond the blur taps: they

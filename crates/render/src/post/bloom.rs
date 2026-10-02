@@ -24,11 +24,12 @@
 //! The GE adds in 8-bit integers and the blur is eleven separate additive
 //! draws, so each tap's `floor(v * w / 255)` is a whole byte before it joins
 //! the sum. `bloom.wgsl` does the same. It is not cosmetic: the opaque mask
-//! stamp of `4` can brighten a texel by at most 3, which a tap of weight 64
-//! truncates to nothing, so the original's bloom carries no background term at
-//! all, and a float chain carried one worth `4.5` mean luma over a racing
-//! frame against the original's `0.33` outside the craft. The measurement is
-//! under "Is ours stronger than the original" on `bloom.md`.
+//! stamp of `4` leaves the bright pass at most 4, the horizontal pass at most 3
+//! (three taps of weight 64 keep 1 each), and the vertical pass truncates that
+//! to nothing, so the original's bloom carries no background term at all. A
+//! float chain carried one worth `4.5` mean luma over a racing frame against
+//! the original's `0.33` outside the craft. The measurement is under "Is ours
+//! stronger than the original" on `bloom.md`.
 //!
 //! # Why the buffers are a fixed 240 x 136
 //!
@@ -673,7 +674,7 @@ mod tests {
     }
 
     /// **The mask stamp of `4` brightens nothing.** The original truncates
-    /// every tap to a byte, so a texel of at most 3 vanishes in the blur:
+    /// every tap to a byte, so a texel of at most 4 vanishes in the blur:
     /// measured outside the craft on Talon's Junction as `0.33` mean luma in
     /// the original against `4.52` for a float chain. A glow byte of `0xaf`
     /// on the same colour must still brighten the frame.
@@ -684,6 +685,8 @@ mod tests {
             return;
         };
         assert!(stamped.abs() < 0.01, "a stamp of 4 added {stamped}");
+        let white = mean_delta(255, 4).expect("the same adapter");
+        assert!(white.abs() < 0.01, "a stamp of 4 on white added {white}");
         let glowing = mean_delta(150, 0xaf).expect("the same adapter");
         assert!(glowing > 20.0, "a glow byte added only {glowing}");
     }
