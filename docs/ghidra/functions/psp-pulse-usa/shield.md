@@ -433,7 +433,7 @@ instructions, not decompiled):
 | 0, 1, 2 | `0x0884416c`, `0x0884417c`, `0x0884418c` | Identical: call `FUN_0003aae8(entity)`, then fall into the common tail at `0x08844720`. Three states sharing one body with no state-specific work of their own - plausibly grid/lights/racing, the three the countdown walks through before anything else diverges, but nothing here names which is which. |
 | 6 | `0x088445a0` | **Sets `entity->0x874` to `2.0` if `entity->0x368 == 0` (the local player - confirmed field, see below), or `0.8` otherwise.** `entity->0x874` is the *same field* states 4/5 use as the destruction timer (`0.5` then `1.5` seconds, per the table above this section). Then zeroes a byte at `craft->0x794->0x3bc->0x68`, calls `FUN_0018dd94` on that sub-object, and calls `FUN_0003a624(entity)` - a shape (silence something, then call one more function on the entity itself) that reads as "stop the engine, arm a timer" rather than anything shield- or damage-related. **Hypothesis, confidence 55: this is the false-start engine stall** `race-modes.md`'s "What no mode has yet" section already asserts from the user's own play knowledge ("silently kills the engine if you hold thrust before the lights") but had never traced. The local/remote timer split (2.0s vs 0.8s) would make sense as a harsher, visible penalty for the human and a shorter one that only needs to desync an AI/remote craft's own thrust briefly. Not yet runtime-verified - nothing has watched `entity->0x874` or `entity->0x368` during an actual false start. |
 | 7 | `0x088445ec` | Zeroes the same `craft->0x794->0x3bc->0x68` byte state 6 does, then reads a global byte at `0x08aae7e3` to pick between `0` and a value read off a global pointer's `+0xb8`, range-checks it against `19`, and indexes a *second* jump table at `0x08a7bc40` - **resolved** (see below), 18 of its 19 entries read this session, and they collapse to just **two** distinct targets, `0x0884463c` and `0x088446c0`, both still inside this same disassembled block. Both toggle the *same* bit this file's own `Ship_SetState` table already names - `entity->0x860` bit `0x1000`, the bit `zone-mode.md` confirms `Zone_UpdateRacing` reads as "this craft is destroyed" - but differently: `0x0884463c` conditionally sets or clears it based on `entity->0x368` (and, only when setting, calls `FUN_0003c7b0(entity)`); `0x088446c0` unconditionally clears it, no call. **Revised reading, confidence 55: state 7 is not a per-mode countdown dispatch - it reads as a "clear the destroyed flag" transition** (out of states 4/5, back to racing), where the *class* of the current game mode (index `0` invalid/unused, `1` and the last four indices route to the conditional-clear-plus-call path, the twelve in between to the plain unconditional clear) decides which of two clear-bit shapes runs. **This walked back the state-7-as-countdown hypothesis this thread's earlier pass made** - the per-mode *jump table* is real and resolved, but what it dispatches to is narrower and less countdown-shaped than first read. Still open: which twelve-vs-five-ish mode classes these two groups actually are, and what `FUN_0003c7b0` does. |
-| 8 | `0x088446ec` | Sets `entity->0x874` to `1.0` (not networked) or `2.0` (networked, per the same `entity->0x368` test) - **the opposite ratio from state 6** (there the local player got the *longer* timer; here the non-local craft does) - then calls `FUN_0018dd94` again on the `0x3bc`-relative sub-object. Falls into the same common tail. Not enough here to guess what distinguishes state 8 from state 6 beyond the timer and the inverted local/remote ratio - both look like "some kind of timed lockout, direction of the asymmetry depends on which state" rather than one being clearly the false start and the other something else. |
+| 8 | `0x088446ec` | Sets `entity->0x874` to `1.0` when `entity->0x368` is zero (the local player) and **`0.8`** otherwise (**corrected 2026-10-02**: this row read `2.0` for the non-local craft, taking the `lui a0,0x3F4C` in the `bne`'s delay slot at `0x088446f4` for dead code; it executes on both paths, and the `ori 0xCCCD` at `0x08844704` completes `0x3F4CCCCD = 0.8`, the same constant state 6's case arms for a non-zero `entity->0x368`; an Eliminator opponent measured live at `0.8`, see "State 8 measured" below) - then calls `FUN_0018dd94` again on the `0x3bc`-relative sub-object. Falls into the same common tail. Not enough here to guess what distinguishes state 8 from state 6 beyond the timer and the inverted local/remote ratio - both look like "some kind of timed lockout, direction of the asymmetry depends on which state" rather than one being clearly the false start and the other something else. |
 
 **The per-state *updates* were read 2026-09-16, and they retire the false-start
 hypothesis on state 6.** Three of the states have their own per-tick update:
@@ -471,10 +471,10 @@ to its autopilot; state `7` is a networked craft whose peer dropped
 So the table above that reads state 6 as "the respawn delay" is half right: `Ship_SetState`'s case 6 does arm `2.0`/`0.8` s, but
 nothing read counts it into a respawn. The relocation, the `RESET` cue, `Ship_ResetShield` and `Ship_SetState(entity, 1)` belong to
 **state 8**, which only the Eliminator reaches (`Ship_UpdateDestroyed` picks 8 for modes 8 and 18, 6 for the rest). Consequences:
-the Eliminator's return is state 5's `1.5` s then state 8's `1.0` s (the local player) or `2.0` s (anyone else), ported as
-`eliminator::eliminator_respawn_delay` (confidence 88: table and call read, no live Eliminator wreck); and **what brings a single
-race's wrecked AI craft back from state 6 is not found** - the port's `DESTROYED_DWELL + AI_RESPAWN_WAIT` return below is
-unverified. **The search for another way in or out** (headless, all 20 `Ship_SetState` call sites, `0x08844100`'s xrefs): the only
+the Eliminator's return is state 5's `1.5` s then state 8's `1.0` s (the local player) or `0.8` s (anyone else - this said `2.0` s
+until the same day's live measurement, "State 8 measured" below), ported as `eliminator::eliminator_respawn_delay`; and **what
+brings a single race's wrecked AI craft back from state 6 is not found** (and was then measured: nothing does, "State 6 measured
+on PPSSPP" below). **The search for another way in or out** (headless, all 20 `Ship_SetState` call sites, `0x08844100`'s xrefs): the only
 call that passes `8` is `Ship_UpdateDestroyed`'s (`0x088478ec`); every other caller is a fixed state (`Race_PlaceGrid` 0,
 `Race_StartRacing` 1, `Race_FinishAllCrafts`, `FUN_0882d578`, `FUN_088dfb90`, `FUN_08824a44`, `Race_ResetCraftBoosts_q` 2, the
 `FUN_088418e0` sites 2 and 3, `Ship_Damage` 4, `Ship_UpdateDestroyed` 6 and 8, `FUN_088405c8` and `Ship_UpdateRespawn` 1,
@@ -566,6 +566,22 @@ table and the 20-caller `Ship_SetState` survey. Short of 90 because the craft wa
 `Ship_Damage` call runs the whole destroy path, but not a weapon's or a wall's own caller), the window was 13 s past entry rather than
 a race run to the flag, and one track and one grid were seen. **Not measured**: what `Race_FinishAllCrafts` does to a wreck at the
 flag (the voided run's state 2 hints the field is set to state 2 whatever it was in), and whether the standings drop a wreck.
+
+### State 8 measured on PPSSPP: an Eliminator opponent waits 0.8 s (2026-10-02, pulse-state6)
+
+The same script on an Eliminator (`scripts/psp-drive.py menu --race-type 6`, the `KILLS (5)` HUD up, same non-Talon's-Junction track),
+`Ship_Damage(1e6, entity, 0, 0, 0)` on slot 2 (`entity+0x368 == 2`), write watchpoint on `entity+0x8C`, run `e1`:
+
+| Frames after the call | State | `entity+0x874` | Writer of `+0x8C` |
+| --- | --- | --- | --- |
+| 0 | 4 | 0.5 | (the call) |
+| 30 | 5 | 1.5 | `ra 0x08844598` |
+| 120 | **8** | **0.8** | `ra 0x08844718` (`Ship_UpdateDestroyed`'s call at `0x088478ec` passes 8) |
+| 168 | 1, shield `144.99` (refilled) | about 0 | `ra 0x08844184` (`Ship_UpdateRespawn`'s `Ship_SetState(1)`) |
+
+So an opponent is out `1.5 + 0.8 = 2.3` s in the Eliminator, not `3.5`. The player's `1.0` s is the same `0x368 == 0` branch of the same
+disassembly and was **not** run live (the player was parked and untouched). Confidence **90** for the opponent's `0.8` (a runtime trace
+agreeing with the corrected disassembly; one run), **85** for the player's `1.0` (disassembly only).
 
 **What would raise every confidence number in this table**: a live PPSSPP
 capture of an actual false start (hold thrust before the lights, per the

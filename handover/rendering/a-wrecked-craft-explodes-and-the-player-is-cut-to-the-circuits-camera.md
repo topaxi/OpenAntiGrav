@@ -37,7 +37,7 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   frozen under it (the original goes on running them).
 - ~~**The Eliminator respawns the craft at the same tick the big explosion goes off**~~ **Closed 2026-10-02 (pulse-wreck-3).** State 8's
   update is `Ship_UpdateRespawn` (`FUN_088418e0`'s per-state jump table at `0x08a7bb88`: state 8 goes to the call at `0x08841e44`),
-  so the Eliminator waits state 5's `1.5` s and then state 8's `1.0` s (the player) or `2.0` s (anyone else):
+  so the Eliminator waits state 5's `1.5` s and then state 8's `1.0` s (the player) or `0.8` s (anyone else; was `2.0`, corrected by a live run 2026-10-02):
   `eliminator::eliminator_respawn_delay`. The destroy camera is on the wreck as the explosion goes off and lets go with the respawn
   (`data/scratch/pulse-wreck-3/shots/sheet_e.png`: the fireball seen from the circuit's camera, then the RESET wash and the chase
   camera). Confidence 88: the table and the call read, no live run of an Eliminator wreck.
@@ -98,11 +98,11 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
 
 1. ~~Let a finished race keep stepping its cosmetics~~ Done 2026-10-02 (`Race::tick_cosmetics`). Left: the opponents, shots and trails
    under a wreck's results (measure a Single Race the player wrecks in, on the original, for what the field does).
-2. ~~Give the Eliminator the original's state-8 wait~~ Done 2026-10-02 (`1.0` s player, `2.0` s others). Left: a live Eliminator
-   wreck on PPSSPP to confirm the `+0x874` log (the one-craft run needs the campaign Eliminator or a `Ship_SetState(entity, 8)` poke).
+2. ~~Give the Eliminator the original's state-8 wait~~ Done 2026-10-02 (`1.0` s player, `0.8` s others - the `2.0` was a misread branch delay, fixed by a live opponent run, pulse-state6). Left: the player's own `1.0` s live
+   (an Eliminator wreck of the *player's* craft) (the one-craft run needs the campaign Eliminator or a `Ship_SetState(entity, 8)` poke).
 3. ~~Compare the explosion emitter by emitter, then read what scale the matrix applies.~~ Done 2026-10-01
    (`scripts/psp-wreck-capture.py --pools/--templates/--hits/--ge-dump-k`). ~~Why the first five frames read white~~ done
    (the `Glow` template's own sprite). Next: the mode-2 spawn spread, and what delays the explosion's particles by about 2.7 frames
    behind the ring (`particle-system.md`, measured once, mechanism unread).
-4. `scripts/psp-wreck-capture.py --state 5` on a craft an Eliminator run really eliminated.
+4. ~~`--state 5` on an Eliminator craft~~ Done for an opponent 2026-10-02 (`scripts/psp-state6-watch.py`, `Ship_Damage`): 4, 5, 8 at 0.8, 1. Left: the player.
 5. ~~Settle state 6~~ Done 2026-10-02: it never comes back (see the Open item above).

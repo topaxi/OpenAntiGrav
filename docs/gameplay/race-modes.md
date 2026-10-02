@@ -676,7 +676,7 @@ the original moving on "after 1.5 s, into a respawn or the Eliminator's kill
 bookkeeping" - `eliminator::DESTROYED_DWELL` is that figure, counted
 from the tick the craft reaches `Eliminated` (i.e. *after*
 `DESTROYED_DURATION`'s own half-second explosion has already run);
-the Eliminator then waits state 8's `1.0` s (the player) or `2.0` s (anyone else) before the
+the Eliminator then waits state 8's `1.0` s (the player) or `0.8` s (anyone else, measured live) before the
 respawn (`eliminator::eliminator_respawn_delay`, 2026-10-02, `shield.md`).
 
 ### Kill attribution is chosen, not recovered
