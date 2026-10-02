@@ -528,10 +528,7 @@ pub(crate) struct Session {
     /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
-    /// `Cell Selection`'s cursor slot, kept across `RACE CAMPAIGN` openings
-    /// because the original keeps it across leaving the campaign - see
-    /// [`crate::campaign_stage::CellCursor`].
-    pub(crate) campaign_cursor: crate::campaign_stage::CellCursor,
+    pub(crate) campaign_cursor: crate::campaign_stage::CellCursor, // kept across campaign openings
     /// [`Self::campaign_cell`]'s own difficulty rung, draining into
     /// [`RaceStage::campaign_difficulty`] the identical way and at the
     /// identical moment - see [`Session::launch_campaign_cell`]'s own doc
