@@ -127,6 +127,10 @@ pub struct Report {
     /// Nodes frozen at time zero past the table's ceiling - see
     /// [`placement::Plan::frozen`].
     pub frozen_nodes: usize,
+    /// How the `.gnf` textures this build decoded were held - see
+    /// [`ModelTexture::from_gnf_form`]. Counted per decode, so a texture two
+    /// materials name is counted once for each.
+    pub gnf: crate::mesh::GnfCounts,
 }
 
 impl Report {
@@ -197,9 +201,10 @@ impl Report {
                 self.node_bound, self.moving, self.anim_nodes
             )
         };
+        let gnf = self.gnf.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}{lightmaps}{nodes}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}{lightmaps}{nodes}{gnf}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -256,12 +261,19 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
 }
 
 /// Decodes a material's diffuse texture in whichever container its path names.
-fn decode_material_texture(path: &str, blob: &[u8]) -> Option<ModelTexture> {
-    if path.to_ascii_lowercase().ends_with(".gnf") {
-        ModelTexture::from_gnf(path, blob)
+///
+/// **Offered to the texture sink** ([`crate::mesh_render::TextureSinkScope`]),
+/// so a load that has a device uploads each texture as it is decoded.
+fn decode_material_texture(path: &str, blob: &[u8], report: &mut Report) -> Option<ModelTexture> {
+    let decoded = if path.to_ascii_lowercase().ends_with(".gnf") {
+        ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| {
+            report.gnf.record(form);
+            texture
+        })
     } else {
         decode_gxt_texture(path, blob)
-    }
+    };
+    decoded.map(crate::mesh_render::offer_to_texture_sink)
 }
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
@@ -526,7 +538,7 @@ fn bind_textures(
         let resolved = *slot.get_or_insert_with(|| {
             let path = decoded.materials[index].diffuse_texture()?;
             let blob = textures(path)?;
-            let texture = decode_material_texture(path, &blob)?;
+            let texture = decode_material_texture(path, &blob, report)?;
             let at = model.textures.len();
             model.textures.push(Some(std::sync::Arc::new(texture)));
             // Positionally beside the diffuse, as `Model::lightmaps` is
@@ -540,7 +552,7 @@ fn bind_textures(
                     .and_then(|lmap| {
                         let entry = atlases.entry(lmap).or_insert_with(|| {
                             let atlas = textures(lmap)
-                                .and_then(|blob| decode_material_texture(lmap, &blob))
+                                .and_then(|blob| decode_material_texture(lmap, &blob, report))
                                 .map(std::sync::Arc::new);
                             report.lightmaps += usize::from(atlas.is_some());
                             report.lightmap_misses += usize::from(atlas.is_none());

@@ -8,6 +8,7 @@ use super::*;
 use log::warn;
 
 mod describe;
+pub mod gpu;
 mod tick;
 use tick::advance_one_tick;
 
@@ -16,6 +17,8 @@ pub use describe::describe;
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
 pub struct CaptureOptions {
+    /// The device the load streamed its textures through; `None` opens one.
+    pub gpu: Option<gpu::CaptureGpu>,
     /// Where to write the PNG.
     pub path: std::path::PathBuf,
     /// Ticks to advance the simulation first.
@@ -410,16 +413,13 @@ pub fn capture(
         }
     }
 
-    let instance = crate::adapter::instance();
-    let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
-    // Asked here because this is where this path's adapter is - the capture
-    // builds its own rather than borrowing the window's. See
-    // `upscale::Temporal`.
+    let gpu::CaptureGpu {
+        adapter,
+        device,
+        queue,
+    } = options.open_gpu()?;
+    // Asked here because this path builds its own adapter; see `upscale::Temporal`.
     let temporal_supported = oag_render::post::fsr3::supported(&adapter);
-    let (device, queue) = pollster::block_on(adapter.request_device(
-        &oag_render::mesh_render::device_descriptor("oag-game race offscreen", &adapter),
-    ))
-    .context("requesting the device")?;
 
     // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline
     // writes gamma-space values and nothing may encode them again - see

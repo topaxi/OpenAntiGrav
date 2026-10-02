@@ -340,7 +340,7 @@ fn the_circuit_load_runs_on_a_worker_and_names_what_it_is_reading() {
         ..oag_game::race::Options::default()
     };
     let label = "TALON'S JUNCTION".to_string();
-    let mut worker = oag_game::race::LoadWorker::spawn(options, Some(label.clone()));
+    let mut worker = oag_game::race::LoadWorker::spawn(options, Some(label.clone()), None);
 
     // The screen's own view of it, before the load has necessarily finished.
     let progress = worker.progress();

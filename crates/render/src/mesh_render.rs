@@ -52,6 +52,9 @@ pub use pipeline_cache::Scope as BuildCacheScope;
 
 mod shadow_map;
 mod texture;
+mod texture_sink;
+pub use texture_sink::Scope as TextureSinkScope;
+pub(crate) use texture_sink::offer as offer_to_texture_sink;
 pub mod zone;
 
 /// The optional device features this renderer uses when the adapter has them.

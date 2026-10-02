@@ -971,7 +971,7 @@ mod draw_call;
 pub use draw_call::{Bounds, DrawCall};
 
 mod model_texture;
-pub use model_texture::{BlockFormat, ModelTexture, Texels, TextureSlots};
+pub use model_texture::{BlockFormat, GnfCounts, GnfForm, ModelTexture, Texels, TextureSlots};
 
 mod flame;
 pub mod groups;

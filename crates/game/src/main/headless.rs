@@ -422,9 +422,21 @@ pub(crate) fn run_race(
     // loading - see `race::load_event`'s own doc comment for what it
     // overrides and why this is a second entry point rather than a new
     // `race::Options` field.
-    let loaded = match &cli.event {
-        Some(name) => race::load_event(&options, name)?,
-        None => race::load(&options)?,
+    //
+    // **A screenshot opens its device first**, so the load can upload each
+    // texture as it decodes it instead of holding every one for the scene -
+    // `race::TextureSink`. The trace and `--dry-run` routes build no scene,
+    // and the window's own device does not exist yet on the windowed route.
+    let gpu = (cli.screenshot.is_some() && cli.trace_out.is_none() && !cli.dry_run)
+        .then(|| race::CaptureGpu::request(&settings.graphics.renderer))
+        .transpose()?;
+    let loaded = {
+        let sink = gpu.as_ref().map(race::CaptureGpu::texture_sink);
+        let _scope = race::TextureSink::open_if(sink.as_ref());
+        match &cli.event {
+            Some(name) => race::load_event(&options, name)?,
+            None => race::load(&options)?,
+        }
     };
     for line in &loaded.report {
         info!("{line}");
@@ -508,6 +520,7 @@ pub(crate) fn run_race(
         race::capture(
             loaded,
             &race::CaptureOptions {
+                gpu,
                 give: give_weapon(cli.give.as_deref())?,
                 autopilot: cli.autopilot,
                 autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
