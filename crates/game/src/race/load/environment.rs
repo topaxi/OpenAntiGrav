@@ -565,6 +565,7 @@ pub(super) fn envsettings_light(
     archives: &mut oag_assets::Archives,
     track: &str,
     psp2: bool,
+    ps4: bool,
     report: &mut Vec<String>,
 ) -> mesh_render::Light {
     let Some(name) = envsettings_name(track) else {
@@ -588,8 +589,9 @@ pub(super) fn envsettings_light(
         }
     };
     use oag_tables::envsettings::{
-        AMBIENT_COLOUR, PRELIT_POWER, PRELIT_SCALE, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR,
-        SUN_COLOUR, SUN_DIRECTION, SUN_SPECULAR_SCALE,
+        AMBIENT_COLOUR, NOVA_PRELIT, NOVA_PRELIT_DEFAULT, PRELIT_POWER, PRELIT_SCALE,
+        PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR, SUN_COLOUR, SUN_DIRECTION,
+        SUN_SPECULAR_SCALE,
     };
     let ambient_key = if psp2 {
         PSP2_AMBIENT_COLOUR
@@ -630,7 +632,25 @@ pub(super) fn envsettings_light(
         prelit_power,
         specular_scale,
     );
-    let combination = if psp2 {
+    // **Omega's lightmap combination**, read out of its pixel shaders
+    // (`docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`): the authored
+    // `Lighting.Nova prelit scale bias power` triple, or the executable's own
+    // static default `(1.4, 0.2, 1.5)` for a file that omits it - 9 of the
+    // title's 97 files do, none of them a circuit's.
+    let nova = ps4.then(|| env.vec3(NOVA_PRELIT).unwrap_or(NOVA_PRELIT_DEFAULT));
+    let light = match nova {
+        Some([scale, bias, power]) => light.with_nova_prelit(scale, bias, power),
+        None => light,
+    };
+    let prelit = match nova {
+        Some([scale, bias, power]) => format!("{scale:.1}*lightmap^{power:.1} + {bias:.2}"),
+        None => format!("{:.1}*lightmap^{:.1}", prelit_scale[0], prelit_power[0]),
+    };
+    let combination = if ps4 {
+        "Omega's own: pow(lightmap, power) * scale + bias on the raw atlas, no constant \
+         ambient on a lightmapped draw; the render target's saturation stands in for its \
+         unlocated tonemap"
+    } else if psp2 {
         "2048 authors no equivalent prelit or specular keys, so both stay at the identity"
     } else {
         "the combination is the microcode's own; the render target's saturation stands in \
@@ -638,7 +658,7 @@ pub(super) fn envsettings_light(
     };
     report.push(format!(
         "{name}: sun [{:.2}, {:.2}, {:.2}] colour [{:.2}, {:.2}, {:.2}] over ambient \
-         [{:.2}, {:.2}, {:.2}], prelit {:.1}*lightmap^{:.1}, specular x{:.2} - {combination}",
+         [{:.2}, {:.2}, {:.2}], prelit {prelit}, specular x{:.2} - {combination}",
         direction[0],
         direction[1],
         direction[2],
@@ -648,10 +668,17 @@ pub(super) fn envsettings_light(
         light.ambient[0],
         light.ambient[1],
         light.ambient[2],
-        prelit_scale[0],
-        prelit_power[0],
         specular_scale,
     ));
+    // The `Tonemap` block is read and reported, and applied by nothing: the
+    // executable registers it (`FUN_015c1f20`) and no reader of it is located.
+    if let (true, Some(t)) = (ps4, env.tonemap("Tonemap")) {
+        report.push(format!(
+            "{name}: Tonemap block read (exposure {:.2}..{:.2}, response {:.2}, time {:.2}); \
+             nothing applies it - its consumer in the executable is not located",
+            t.exposure_minimum, t.exposure_maximum, t.exposure_response, t.exposure_time,
+        ));
+    }
     light
 }
 
@@ -676,7 +703,7 @@ pub(super) struct Staging {
 /// Which title's `.rcsmodel` container [`staging`] is reading a light rig
 /// beside, where there is one.
 ///
-/// Both non-`None` variants set the flag `ps3_geometry` used to be - the two
+/// Every non-`None` variant sets the flag `ps3_geometry` used to be - the two
 /// readers that only a `.rcsmodel`-backed circuit answers stay gated on
 /// "either", per [`staging`]'s own doc. Only the light rig cares which one,
 /// because only its key spelling differs - see [`envsettings_light`]. A
@@ -693,6 +720,13 @@ pub(super) enum GeometryKind {
     /// Wipeout 2048's own container - the same extension, an unrelated binary
     /// shape (see `oag_rcs::rcsmodel::psp2`).
     Psp2,
+    /// Wipeout: Omega Collection's: 2048's container with eight-byte offsets
+    /// ([`oag_rcs::rcsmodel::psp2::is_ps4`]). **A kind of its own because its
+    /// pixel shaders are not 2048's**: Omega's lightmapped surfaces are lit by
+    /// the `Lighting.Nova prelit scale bias power` triple - see
+    /// [`mesh_render::Light::with_nova_prelit`] - which the Vita files author
+    /// (as `1 0 1 0`) and whose Vita shader is unread.
+    Ps4,
 }
 
 impl GeometryKind {
@@ -702,7 +736,13 @@ impl GeometryKind {
     pub(super) fn of(rcsmodel: Option<&[u8]>) -> Self {
         match rcsmodel {
             None => Self::None,
-            Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => Self::Psp2,
+            Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
+                if oag_rcs::rcsmodel::psp2::is_ps4(geometry) {
+                    Self::Ps4
+                } else {
+                    Self::Psp2
+                }
+            }
             Some(_) => Self::Hd,
         }
     }
@@ -742,7 +782,13 @@ pub(super) fn staging(
     // the same failure behaviour: no file, an unparsable one, or a degenerate
     // sun direction all fall back to the stand-in and say so. Nothing is
     // substituted for a value the file does not carry.
-    let light = envsettings_light(archives, track, geometry == GeometryKind::Psp2, report);
+    let light = envsettings_light(
+        archives,
+        track,
+        matches!(geometry, GeometryKind::Psp2 | GeometryKind::Ps4),
+        geometry == GeometryKind::Ps4,
+        report,
+    );
     // The circuit's authored distance fog, on the same file. **The curve is no
     // longer a guess**: every fogged fragment variant of an HD circuit
     // `.rcsmaterial` computes `exp(-(coefficient * view_depth)^2)` and lerps a

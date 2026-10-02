@@ -404,7 +404,11 @@ pub struct Light {
     /// `76d0f58e` read the circuit's combining equation off its own
     /// microcode; the magnitude is the disc's now, same as the direction.
     pub sun: [f32; 3],
-    _pad1: f32,
+    /// `1.0` where the prelit term is Wipeout: Omega Collection's
+    /// `scale * pow(lightmap, power) + bias` on the raw atlas, with no constant
+    /// ambient on a lightmapped draw - see [`Light::with_nova_prelit`]. `0.0`
+    /// everywhere else, which is every title but Omega.
+    pub nova: f32,
     /// `Lighting.Prelit ambient colour scale`, applied exactly where the
     /// circuit's own fragment microcode applies it:
     /// `prelit = scale * lightmap^power`. See [`Light::authored`] for what
@@ -418,7 +422,9 @@ pub struct Light {
     /// `Lighting.Prelit ambient colour power` - the exponent in the same
     /// prelit term.
     pub prelit_power: [f32; 3],
-    _pad2: f32,
+    /// The `bias` of [`Light::with_nova_prelit`], added to the powed lightmap.
+    /// Read only where [`Self::nova`] is set; `0.0` on every other title.
+    pub prelit_bias: f32,
     /// Pulse's GE light list for a craft's hull, or [`super::HullLights::OFF`].
     /// Read by `vs_main` alone, and only for a lit vertex - see
     /// [`super::HullLights`].
@@ -448,11 +454,11 @@ impl Light {
             ambient: [0.0; 3],
             _pad0: 0.0,
             sun: [0.0; 3],
-            _pad1: 0.0,
+            nova: 0.0,
             prelit_scale: [1.0; 3],
             specular_scale: 0.0,
             prelit_power: [1.0; 3],
-            _pad2: 0.0,
+            prelit_bias: 0.0,
             hull: super::HullLights::OFF,
         }
     }
@@ -484,7 +490,7 @@ impl Light {
             ambient,
             _pad0: 0.0,
             sun: colour,
-            _pad1: 0.0,
+            nova: 0.0,
             prelit_scale,
             specular_scale,
             // A power of zero would turn an unsampled black lightmap texel
@@ -492,8 +498,36 @@ impl Light {
             // lightmap without changing any authored value (the corpus
             // authors 1.0 to 2.0).
             prelit_power: std::array::from_fn(|i| prelit_power[i].max(1e-3)),
-            _pad2: 0.0,
+            prelit_bias: 0.0,
             hull: super::HullLights::OFF,
+        }
+    }
+
+    /// This rig with Wipeout: Omega Collection's prelit combination, read out of
+    /// its circuit pixel shaders (`ps4-omega-eu/lightmap-prelit.md` under
+    /// `docs/ghidra/functions/`), in place of HD's:
+    ///
+    /// ```text
+    /// prelit = scale * pow(lightmap.rgb, power) + bias        (raw atlas, no clamp)
+    /// light  = prelit + sun * max(dot(N, L), 0) * lightmap.a  (no constant ambient)
+    /// ```
+    ///
+    /// `(scale, bias, power)` is the circuit's `Lighting.Nova prelit scale bias
+    /// power` triple - three scalars, unlike HD's per-channel vectors - or the
+    /// executable's own default when the file omits it. Applies to draws that
+    /// carry a lightmap; every other draw keeps the constant ambient.
+    ///
+    /// **The power is floored at `1e-3`**, as [`Light::authored`] floors it: an
+    /// unsampled black texel would otherwise read as full white. No authored
+    /// triple is that low (the corpus runs 1 to 12).
+    #[must_use]
+    pub fn with_nova_prelit(self, scale: f32, bias: f32, power: f32) -> Self {
+        Self {
+            nova: 1.0,
+            prelit_scale: [scale; 3],
+            prelit_power: [power.max(1e-3); 3],
+            prelit_bias: bias,
+            ..self
         }
     }
 }

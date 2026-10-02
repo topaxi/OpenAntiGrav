@@ -133,6 +133,48 @@ pub const PRELIT_SCALE: &str = "Lighting.Prelit ambient colour scale";
 /// the same term [`PRELIT_SCALE`] scales.
 pub const PRELIT_POWER: &str = "Lighting.Prelit ambient colour power";
 
+/// Wipeout: Omega Collection's `"Lighting.Nova prelit scale bias power"`.
+/// **One triple of scalars**, `(scale, bias, power)` in file order, not three
+/// per-channel vectors: its pixel shaders compute
+/// `scale * pow(lightmap.rgb, power) + bias` on every channel - see
+/// `docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`. Authored by 88 of
+/// the title's 97 files (patch and base), 20 distinct triples.
+pub const NOVA_PRELIT: &str = "Lighting.Nova prelit scale bias power";
+
+/// What [`NOVA_PRELIT`] is when a file omits it: the executable's own static
+/// default, `(1.4, 0.2, 1.5)` (`FUN_015c2dc0`, `0x01e3de80`), not the identity.
+pub const NOVA_PRELIT_DEFAULT: [f32; 3] = [1.4, 0.2, 1.5];
+
+/// The `Tonemap.*` (or `TonemapHDR.*`) block Wipeout: Omega Collection authors.
+///
+/// The ten keys the executable registers (`FUN_015c1f20`) under both prefixes.
+/// **Read, and no consumer is located** - see
+/// `docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`, "The `Tonemap.*`
+/// block". Nothing in this project applies it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tonemap {
+    /// `Exposure minimum`.
+    pub exposure_minimum: f32,
+    /// `Exposure maximum`.
+    pub exposure_maximum: f32,
+    /// `Exposure response`.
+    pub exposure_response: f32,
+    /// `Exposure time`.
+    pub exposure_time: f32,
+    /// `Luminance a-coefficient`.
+    pub luminance_a: f32,
+    /// `Luminance b-coefficient`.
+    pub luminance_b: f32,
+    /// `Source color end a-coefficient`.
+    pub source_colour_end_a: f32,
+    /// `Source color end b-coefficient`.
+    pub source_colour_end_b: f32,
+    /// `Start angle`.
+    pub start_angle: f32,
+    /// `End angle`.
+    pub end_angle: f32,
+}
+
 /// `"Lighting.Sky colour"`. **Four bytes**, not floats - see the module docs.
 pub const SKY_COLOUR: &str = "Lighting.Sky colour";
 
@@ -299,6 +341,25 @@ impl EnvSettings {
             [x, y, z] => Some([*x, *y, *z]),
             _ => None,
         }
+    }
+
+    /// The [`Tonemap`] block under `prefix` (`"Tonemap"` or `"TonemapHDR"`),
+    /// or `None` unless **all ten** keys are present as one number each.
+    #[must_use]
+    pub fn tonemap(&self, prefix: &str) -> Option<Tonemap> {
+        let key = |leaf: &str| self.scalar(&format!("{prefix}.{leaf}"));
+        Some(Tonemap {
+            exposure_minimum: key("Exposure minimum")?,
+            exposure_maximum: key("Exposure maximum")?,
+            exposure_response: key("Exposure response")?,
+            exposure_time: key("Exposure time")?,
+            luminance_a: key("Luminance a-coefficient")?,
+            luminance_b: key("Luminance b-coefficient")?,
+            source_colour_end_a: key("Source color end a-coefficient")?,
+            source_colour_end_b: key("Source color end b-coefficient")?,
+            start_angle: key("Start angle")?,
+            end_angle: key("End angle")?,
+        })
     }
 
     /// Four bytes, for a key written as integers in `0..=255`.

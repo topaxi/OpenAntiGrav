@@ -90,14 +90,16 @@ struct Light {
     ambient: vec3<f32>,
     _lpad0: f32,
     sun: vec3<f32>,
-    _lpad1: f32,
+    // 1.0 where the prelit term is Wipeout: Omega Collection's - see
+    // `mesh_render::Light::with_nova_prelit` and `lit_texel`.
+    nova: f32,
     // The prelit (baked-lightmap) curve and the specular weight, from the
     // circuit's `.envsettings`, applied exactly where its own fragment
     // microcode applies them - see `lit_texel` and `mesh_render::Light`.
     prelit_scale: vec3<f32>,
     specular_scale: f32,
     prelit_power: vec3<f32>,
-    _lpad2: f32,
+    prelit_bias: f32,
     // Pulse's GE light list for a hull - `mesh_render::HullLights`. `.w` of
     // the ambient is the switch, `.w` of each direction that light's enable.
     hull_ambient: vec4<f32>,
@@ -1041,7 +1043,20 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // path will have to read which varying carries it.
     let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
     let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
-    let prelit = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
+    // **Wipeout: Omega Collection's combination, on a lightmapped draw.** Read
+    // out of its circuit pixel shaders (ps4-omega-eu/lightmap-prelit.md):
+    // `v_log_f32` / `v_mul_f32 power` / `v_exp_f32` / `v_mad_f32 scale, bias` on
+    // the *raw* atlas - its descriptor is BC7 UNORM on all 1,028 atlases, so
+    // there is no sRGB decode in front of the curve - and no constant ambient
+    // joins the sum (0 of 4,664 nova shaders declare one). `scale`, `bias` and
+    // `power` are the authored triple's three scalars. Gated on the lightmap
+    // bit: a draw with no lightmap binds the black placeholder, and the bias
+    // must not light it.
+    let nova = scene.light.nova > 0.5 && (in.slots & 1u) != 0u;
+    let prelit_hd = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
+    let prelit_nova = scene.light.prelit_scale * pow(baked.rgb, scene.light.prelit_power)
+        + vec3<f32>(scene.light.prelit_bias);
+    let prelit = select(prelit_hd, prelit_nova, nova);
     // `select` rather than a multiply by the override, so the value is not
     // touched at all where the flag is set. (Measured: it makes no difference
     // to the frame either way - both forms move the same 9 pixels of 1,175,040
@@ -1096,7 +1111,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let vertex_light_curved = scene.light.prelit_scale
         * pow(vertex_light, scene.light.prelit_power);
     let vertex_light_term = select(vertex_light, vertex_light_curved, no_ambient && !emissive);
-    let ambient_term = select(scene.light.ambient, vec3<f32>(0.0), no_ambient);
+    let ambient_term = select(scene.light.ambient, vec3<f32>(0.0), no_ambient || nova);
 
     // **The sun-occlusion mask, restored 2026-08-20.** Two independently
     // decoded carriers of the same scalar: a lightmapped chunk's shadow lives
