@@ -69,3 +69,101 @@ fn the_ps2_disc_authors_the_same_element_and_a_third_circuit() {
     assert_eq!(found[1].1, r"data\psys\WO_RAIN.POB");
     assert_eq!(found[1].2.as_deref(), Some(r"data\psys\WO_RAIN_LENS.POB"));
 }
+
+mod race {
+    use oag_game::race::{self, scenery_fx::Weather, scenery_fx::weather::Setup};
+    use oag_gameplay::PlayerInputs;
+    use oag_render::psys::field::Frame;
+
+    fn load(track: &str) -> Option<race::Loaded> {
+        let image = oag_testdata::image("pulse-psp-usa.chd")?;
+        Some(
+            race::load(&race::Options {
+                source: image.display().to_string(),
+                class: "VENOM".to_string(),
+                mode: oag_race::Mode::TimeTrial,
+                track: Some(format!(r"Data\Environments\{track}")),
+                ..race::Options::default()
+            })
+            .expect("loading the race"),
+        )
+    }
+
+    fn weather_after(track: &str, ticks: u32) -> Option<(bool, bool, usize)> {
+        let loaded = load(track)?;
+        let mut race = race::Race::start(loaded.setup);
+        for _ in 0..ticks {
+            race.tick(&PlayerInputs::none());
+        }
+        let weather = race.scenery_fx().weather();
+        Some((
+            weather.is_authored(),
+            weather.is_playing(),
+            weather.pool().alive_count(),
+        ))
+    }
+
+    /// Fort Gale's rain keeps 32 drops alive - 8 a tick for the 4 ticks of a
+    /// drop's life, read live - and Outpost 7's snow its own; a circuit that
+    /// authors no weather plays none.
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-usa.chd"]
+    fn the_two_circuits_play_their_weather_and_the_rest_do_not() {
+        let Some((authored, playing, rain)) = weather_after(r"14_Track\track_reversed.vex", 90)
+        else {
+            return;
+        };
+        assert!(authored && playing, "Fort Gale authors rain");
+        assert!(
+            (28..=32).contains(&rain),
+            "{rain} raindrops alive; the original holds 32"
+        );
+        let (authored, playing, snow) = weather_after(r"07_Track\track.vex", 92).expect("image");
+        assert!(authored && playing, "Outpost 7 authors snow");
+        // 64 a burst with a cap of 64 and a life of 5: the pool is full for five
+        // ticks and empty for the sixth.
+        assert!(snow > 0 && snow <= 64, "{snow} flakes alive");
+        let (authored, playing, none) = weather_after(r"01_Track\track.vex", 90).expect("image");
+        assert!(
+            !authored && !playing && none == 0,
+            "Basilico has no weather"
+        );
+    }
+
+    /// The mode is held state, switched on a section change only: the first
+    /// frame leaves "covered" (the startup section is below zero) for an open
+    /// section, a covered one puts the field at its anchor, and leaving it puts
+    /// the field back on the camera.
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-usa.chd"]
+    fn the_field_sits_at_the_anchor_only_while_the_camera_is_in_a_covered_section() {
+        let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
+            return;
+        };
+        let setup: Setup = loaded.setup.scenery_fx.weather.clone().expect("weather");
+        let covered = setup.anchors.first().expect("an anchor").section;
+        let open = (0..64u8)
+            .find(|s| !setup.anchors.iter().any(|a| a.section == *s))
+            .expect("an open section");
+        let mut weather = Weather::new(Some(setup));
+        let library = &loaded.setup.effects;
+        let camera = Frame::IDENTITY;
+        let step = |weather: &mut Weather, section: u8| {
+            weather.advance(library, 1.0 / 60.0, camera, i32::from(section));
+        };
+        step(&mut weather, open);
+        assert!(!weather.is_anchored(), "an open section rides the camera");
+        for _ in 0..3 {
+            step(&mut weather, open);
+        }
+        step(&mut weather, covered);
+        assert!(weather.is_anchored(), "a covered section holds the anchor");
+        step(&mut weather, covered);
+        assert!(
+            weather.is_anchored(),
+            "and keeps it while the section holds"
+        );
+        step(&mut weather, open);
+        assert!(!weather.is_anchored(), "leaving it returns to the camera");
+    }
+}

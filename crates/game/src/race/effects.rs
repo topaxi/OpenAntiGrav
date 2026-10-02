@@ -54,7 +54,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming
 /// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 31] = [
+pub const RACE_EFFECTS: [&str; 33] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     MISSILE_FLARE_EFFECT,
@@ -100,6 +100,10 @@ pub const RACE_EFFECTS: [&str; 31] = [
     // `race::scenery_fx`.
     BLUE_WELDER_EFFECT,
     MODESTO_STEAM_EFFECT,
+    // A circuit's `<Weather>` element names one of these - see
+    // `race::scenery_fx::weather`.
+    RAIN_EFFECT,
+    SNOW_EFFECT,
 ];
 
 impl Race {
@@ -802,6 +806,11 @@ impl Race {
             .scenery_fx
             .stage()
             .extend_vertices(additive, alpha_over, right, up);
+        let camera = self.camera_frame();
+        self.view
+            .scenery_fx
+            .weather()
+            .extend_vertices(additive, alpha_over, camera, right, up);
     }
 
     /// Runs the circuit's placed effects one step on the scenery clock - see
@@ -811,6 +820,7 @@ impl Race {
         self.view
             .scenery_fx
             .advance(&self.view.effects, dt, seconds);
+        self.advance_weather(dt);
     }
 
     /// The circuit's placed effects.

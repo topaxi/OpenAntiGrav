@@ -230,7 +230,7 @@ fn setup(handling: Handling) -> Setup {
         engine_lights: vec![None; MAX_SHIPS],
         spu_vertex_lights: true,
         collision_fx: Vec::new(),
-        scenery_fx: Vec::new(),
+        scenery_fx: Default::default(),
         // No disc, so no `.pob` at all: every effect trigger runs and
         // draws nothing, which is the same path a missing entry takes.
         // A headless test that wants real particles parses a blob itself

@@ -32,6 +32,11 @@
 //!   (`DAT_08ab2290`) and `z` the resource's **unscaled** `+0x40`. Every
 //!   shape-1 emitter in `WO_QUAKE` authors `z = 0`, so its particles are
 //!   born along the frame's `X` axis only.
+//! - **Shape 6, a box.** `ParticleSystem_EmitBox` (`0x088fc040`) draws each axis
+//!   `U(-e, e)` from the same extent global, so the weather's `WO_RAIN` and `WO_SNOW`
+//!   fill a cube of side `2e`. Read at confidence 75 (`particle-system.md`) and checked
+//!   live: Fort Gale's rain keeps 32 drops inside a 100-unit box - the wrap
+//!   [`super::field`] runs is the same `e`.
 //! - **Shapes 4 and 7, a sphere or hemisphere.** `ParticleSystem_EmitSphere`
 //!   (`particle-system.md`): the offset is the same unit direction the
 //!   particle flies along, at a radius shaped by `+0x3c` - `0` exactly `e`,
@@ -96,6 +101,11 @@ pub enum Spawn {
         /// `+0x40`, never scaled.
         depth: f32,
     },
+    /// Shape 6: a cube of side `2e` about the frame's origin.
+    Box {
+        /// `+0x34`, before scaling.
+        extent: f32,
+    },
     /// Shape 3: a ring or a disc in the frame's `XZ` plane, see [this module](self).
     Ring {
         /// `+0x34`, before scaling.
@@ -131,6 +141,9 @@ impl Spawn {
                 spread: if depth.is_finite() { depth } else { 0.0 },
                 mode,
             },
+            (6, _) => Self::Box {
+                extent: record.extent,
+            },
             (4 | 7, mode) => Self::Sphere {
                 extent: record.extent,
                 spread: if depth.is_finite() { depth } else { 0.0 },
@@ -164,6 +177,11 @@ impl Spawn {
                 let x = e * signed(rng);
                 let z = depth * signed(rng);
                 across * x + across.cross(up) * z
+            }
+            Self::Box { extent } => {
+                let e = (extent * scale).max(1e-5);
+                let (x, y, z) = (e * signed(rng), e * signed(rng), e * signed(rng));
+                across * x + up * y + across.cross(up) * z
             }
             Self::Ring {
                 extent,
