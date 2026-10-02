@@ -23,8 +23,8 @@
 //! use. "Clean" means only "no respawn happened during this lap"; it says
 //! nothing about the racing line taken. **A row can be clean by this
 //! definition while grinding a wall every lap** - `07_Track` is the standing
-//! example: every class here reads it `Died` (`Eliminated`, before a wreck
-//! came back), but before this project
+//! example: every class here reads it `Eliminated` (`Died`, 2026-09-16 to
+//! 2026-10-01, while a wreck came back), but before this project
 //! measured wall contact as its own quantity `07_Track` passed
 //! `race_ground_truth.rs`'s older gate while shedding shield to its own walls
 //! on every lap it drove. That is exactly why the `contact_ticks` column
@@ -40,7 +40,13 @@
 //!   2026-09-16, when a wrecked opponent started coming back after the
 //!   original's own 2.3 s: every row that read `Eliminated` before then reads
 //!   `Died` now, for the same driving, and `Eliminated` is reserved for a
-//!   craft dead at the run's end. A status is a category, not a
+//!   craft dead at the run's end. **Reverted 2026-10-02**: the original's wrecked
+//!   opponent does not come back (state 6, measured live), so the ten `Died`
+//!   rows read `Eliminated` again, for the same driving - a craft that dies now
+//!   stays dead, and `Died` is no longer reachable outside the Eliminator. The same regeneration
+//!   (`print_baseline_source`) dropped `contact_ticks` on eleven rows, from 283-937 to 179-602, because a craft
+//!   that dies early no longer drives on to touch more wall - read the inversion note below before
+//!   treating one of those ceilings as a bar a *surviving* craft must stay under. A status is a category, not a
 //!   number with a direction, and "asserted exactly" is what forces a human to
 //!   look at every change to it, including a craft newly *surviving* to a
 //!   clean lap. The failure message says which way the row moved: a regression
@@ -354,11 +360,12 @@ const CLASSES: [&str; 4] = ["VENOM", "FLASH", "RAPIER", "PHANTOM"];
 enum Status {
     /// Dead when the five minutes ran out.
     Eliminated,
-    /// Destroyed at least once and back on the track - since 2026-09-16 a
-    /// wrecked opponent respawns the way the original's states 5 and 6 bring
-    /// it back, so this is what `Eliminated` used to catch. Ranked below a
-    /// craft that never died, whatever its laps: dying is the thing this
-    /// gate most wants to see.
+    /// Destroyed at least once and back on the track. **Unreachable outside
+    /// the Eliminator since 2026-10-02**: a wrecked opponent stays down (the
+    /// original's state 6, measured live), so a death now reads `Eliminated`.
+    /// It was what `Eliminated` used to catch from 2026-09-16 to 2026-10-01,
+    /// when a wreck came back after 2.3 s. Ranked below a craft that never
+    /// died, whatever its laps: dying is the thing this gate most wants to see.
     Died,
     NoCleanLap,
     CleanLap,
@@ -405,7 +412,7 @@ const BASELINE: &[Row] = &[
     Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2223), contact_ticks: 158 },
     Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2281), contact_ticks: 325 },
     Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2641), contact_ticks: 97 },
-    Row { circuit: "07_Track", class: "VENOM", status: Status::Died, lap_ticks: Some(2988), contact_ticks: 592 },
+    Row { circuit: "07_Track", class: "VENOM", status: Status::Eliminated, lap_ticks: Some(2988), contact_ticks: 410 },
     Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2273), contact_ticks: 99 },
     Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2325), contact_ticks: 0 },
     Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2373), contact_ticks: 16 },
@@ -417,7 +424,7 @@ const BASELINE: &[Row] = &[
     Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1978), contact_ticks: 319 },
     Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2046), contact_ticks: 441 },
     Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2443), contact_ticks: 109 },
-    Row { circuit: "07_Track", class: "FLASH", status: Status::Eliminated, lap_ticks: Some(2845), contact_ticks: 871 },
+    Row { circuit: "07_Track", class: "FLASH", status: Status::Eliminated, lap_ticks: Some(2845), contact_ticks: 429 },
     Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2065), contact_ticks: 200 },
     Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2112), contact_ticks: 4 },
     Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2206), contact_ticks: 112 },
@@ -426,22 +433,22 @@ const BASELINE: &[Row] = &[
     Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1872), contact_ticks: 298 },
     Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2486), contact_ticks: 260 },
     Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2143), contact_ticks: 396 },
-    Row { circuit: "01_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1741), contact_ticks: 465 },
-    Row { circuit: "13_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(1903), contact_ticks: 888 },
+    Row { circuit: "01_Track", class: "RAPIER", status: Status::Eliminated, lap_ticks: Some(1741), contact_ticks: 304 },
+    Row { circuit: "13_Track", class: "RAPIER", status: Status::Eliminated, lap_ticks: Some(1903), contact_ticks: 602 },
     Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2299), contact_ticks: 158 },
-    Row { circuit: "07_Track", class: "RAPIER", status: Status::Died, lap_ticks: Some(2623), contact_ticks: 924 },
+    Row { circuit: "07_Track", class: "RAPIER", status: Status::Eliminated, lap_ticks: Some(2623), contact_ticks: 341 },
     Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1951), contact_ticks: 221 },
     Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2032), contact_ticks: 77 },
     Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2103), contact_ticks: 122 },
-    Row { circuit: "10_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1727), contact_ticks: 283 },
+    Row { circuit: "10_Track", class: "PHANTOM", status: Status::Eliminated, lap_ticks: Some(1727), contact_ticks: 179 },
     Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1763), contact_ticks: 236 },
-    Row { circuit: "04_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1766), contact_ticks: 445 },
+    Row { circuit: "04_Track", class: "PHANTOM", status: Status::Eliminated, lap_ticks: Some(1766), contact_ticks: 330 },
     Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2333), contact_ticks: 377 },
-    Row { circuit: "14_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1995), contact_ticks: 535 },
-    Row { circuit: "01_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1646), contact_ticks: 565 },
-    Row { circuit: "13_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(1965), contact_ticks: 582 },
+    Row { circuit: "14_Track", class: "PHANTOM", status: Status::Eliminated, lap_ticks: Some(1995), contact_ticks: 328 },
+    Row { circuit: "01_Track", class: "PHANTOM", status: Status::Eliminated, lap_ticks: Some(1646), contact_ticks: 269 },
+    Row { circuit: "13_Track", class: "PHANTOM", status: Status::Eliminated, lap_ticks: Some(1965), contact_ticks: 224 },
     Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2257), contact_ticks: 209 },
-    Row { circuit: "07_Track", class: "PHANTOM", status: Status::Died, lap_ticks: Some(2550), contact_ticks: 937 },
+    Row { circuit: "07_Track", class: "PHANTOM", status: Status::Eliminated, lap_ticks: Some(2550), contact_ticks: 332 },
 ];
 
 /// Runs one row and asserts it against its frozen [`BASELINE`] entry.
