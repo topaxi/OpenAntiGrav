@@ -378,8 +378,8 @@ impl EngineForce {
 ///
 /// **Not implemented, all of it flag-gated on the undecoded `craft+0x1c0`:** the
 /// uncapped mode (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo's
-/// boost lift, the kill switch at bit `0x2000`, and the four-corner mode's own
-/// `(flags & 1) && !(flags & 2)` gate. Each needs a flag nobody has decoded, so
+/// boost lift and the kill switch at bit `0x2000`. (The four-corner mode's own
+/// `(flags & 1) && !(flags & 2)` gate is groundedness and [`ShipState::on_grid`].) Each needs a flag nobody has decoded, so
 /// implementing them would mean inventing their triggers.
 #[must_use]
 pub fn engine(
@@ -413,22 +413,27 @@ pub fn engine(
     // **The gate is approximated.** The original tests `(flags & 1) && !(flags &
     // 2)` on the undecoded `craft+0x1c0` and writes `0.0` when it fails. Bit 0 is
     // known to mean ground contact - it is the same bit that gates `brakes` - so
-    // groundedness stands in for it here. Bit 1 is not decoded, and treating it
-    // as always clear is the assumption; the effect is that a Zone craft here
-    // always gets its auto-speed on the ground where the original might not.
+    // groundedness stands in for it here. Bit 1 is the grid state, `on_grid`.
     if let Some(target) = auto_speed {
-        let thrust = if grounded > 0.0 { target } else { 0.0 };
+        // Bit 1 of the original's `craft+0x1c0` is the grid state
+        // (`Craft_EnterGridState`, `0x088486d4`), so `on_grid` is that bit: the
+        // countdown writes `0.0` here and the craft sits until it is released.
+        // Read live 2026-10-02 on a Zone engine: `flags` `0x3` through state 0,
+        // the craft still (`0.02` units/s), `0x1` and `95.2` thrust from the
+        // first state-1 frame.
+        let thrust = if grounded > 0.0 && !state.on_grid {
+            target
+        } else {
+            0.0
+        };
         return EngineForce {
-            // **The launch multiplier is deliberately not applied here.** The
-            // original's tail is shared - this branch reaches `craft+0x294` at
-            // `0x0884c918` like the throttle one - so Zone's first second after GO
-            // would be graded too (a coasting craft `normalMul`, one holding
-            // accelerate `stallMul`), but that was never watched on a Zone race, and
-            // it would make the speed 28 ticks after GO depend on whether accelerate
-            // was held, which `zone_ground_truth` asserts it does not. Left at the
-            // resting `1.0` until Zone is measured; see `docs/physics/launch-boost.md`.
+            // **The launch multiplier applies here too.** The original's tail is shared
+            // (`craft+0x294`, `0x0884c918`) and its grader and boost writer read no
+            // mode. Watched live on a Zone engine 2026-10-02: GO read `34.0 * 1.4 * 2`
+            // = `95.2` thrust coasting (grade 0 throughout) and `1.2` once accelerate
+            // was held (grade 1), then `1.0` after 60 frames.
             thrust: one_shot_scale(
-                thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
+                thrust * state.launch.multiplier * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
                 thrust_scale,
             ),
             lift: 0.0,
@@ -829,6 +834,31 @@ mod auto_speed_tests {
         let state = grounded_ship();
         let force = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(10_000.0), 1.0).thrust;
         assert!(force > 0.0, "the cap bound a branch that has no cap");
+    }
+
+    #[test]
+    fn the_auto_speed_branch_carries_the_launch_multiplier() {
+        // `craft+0x294` is in the shared tail: watched live on a Zone engine, the
+        // first second after GO read `34.0 * 1.4 * 2` coasting and `1.2` held.
+        let mut state = grounded_ship();
+        state.launch.multiplier = 1.4;
+        let boosted = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(34.0), 1.0).thrust;
+        state.launch.multiplier = 1.0;
+        let resting = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(34.0), 1.0).thrust;
+        assert_eq!(boosted, resting * 1.4, "the launch multiplier was dropped");
+    }
+
+    #[test]
+    fn a_zone_craft_on_the_grid_gets_nothing_until_it_is_released() {
+        // `(flags & 1) && !(flags & 2)`: bit 1 is the grid state, so the
+        // countdown writes `0.0` and the first state-1 frame writes the target.
+        let mut state = grounded_ship();
+        state.on_grid = true;
+        let held = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        assert_eq!(held, 0.0, "auto-speed ran under the grid state");
+        state.on_grid = false;
+        let released = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        assert!(released > 0.0);
     }
 
     #[test]

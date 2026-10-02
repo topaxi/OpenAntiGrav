@@ -163,3 +163,11 @@ geometry [grid-state.md](grid-state.md) already named, not these terms.
 - The disc's four times all sit exactly on tick boundaries at 60 Hz, so
   `launch.ticks * dt` is used rather than a running sum of
   `dt` (the sum of sixty `1/60` in `f32` boosts a sixty-first tick, which a test pins).
+
+## Zone
+
+Watched 2026-10-02 on a Zone engine (`g_game_mode` patched to 6, see
+[zone-start.md](../ghidra/functions/psp-pulse-usa/zone-start.md)): the auto-speed goes through `craft+0x294` like the
+throttle. Coasting (no thrust edge, grade 0) reads `1.4` for 60 frames and thrust `34.0 * 1.4 * 2 = 95.2`; accelerate
+held reads grade 1 and `1.2`. Speed 28 frames after state 1 is `42.11` against `36.34` units/s (ratio 1.159; ours
+1.154). Ported, Zone included, so a Zone craft's first second depends on whether accelerate was held.
