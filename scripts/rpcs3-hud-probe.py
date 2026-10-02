@@ -18,6 +18,9 @@ heap moves a few kilobytes from boot to boot - and then does one of:
                timer (`+0x7a5c`), leach flag (`+0x6958`) and pickup slot state
                every ~1.2 s, to see which pickup events stamp.
 
+Run end to end from this script: `arming` (three boots) and `schedule` (one). `sweep` is the
+`arm2.py` sweep the absorb reading came from, folded in and not re-run from here.
+
 A member runs it under a private emulator (see `rpcs3-debugger.md`):
 
     export XDG_CONFIG_HOME=... XDG_CACHE_HOME=... OAG_RPCS3_DISPLAY=91 \\

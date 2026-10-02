@@ -988,7 +988,7 @@ Where this build differed it is fixed:
 - **The phase a flash starts in is the original's accumulator** (`+0x1e8`,
   kept between flashes, wrapped past 1.0) and not the race clock:
   `Readout::shield_blink_phase_whole`. The cycle itself was already right, at
-  3.95-4.00 cycles a second over three stretches.
+  3.91-4.03 cycles a second over six stretches in two boots.
 - **The third flash condition is wired for its absorb half.** Within a second
   of an absorb the fill and the number blink together and the background stays
   white - row `c` of the table - from `Readout::shield_absorbing`, the same

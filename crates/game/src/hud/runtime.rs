@@ -60,8 +60,8 @@ fn flashing(shield: &ShieldReadout, readout: &Readout) -> bool {
 /// That accumulator runs only while flashing, **keeps its value between
 /// flashes** and wraps once it passes one second, so where in its cycle a
 /// flash starts is the original's too: a flash that begins at a stored
-/// 0.9833 starts on an "off" phase (`floor(7.9)` is odd), measured on the
-/// running original.
+/// 0.9833 starts on an "off" phase (`floor(7.9)` is odd). The stored values were
+/// read off the running original; the off start follows from them.
 fn phase_on(shield: &ShieldReadout, readout: &Readout) -> bool {
     let phase = (readout.shield_blink_phase_whole * shield.phases_per_second as f32).floor() as i64;
     phase.rem_euclid(2) == 0

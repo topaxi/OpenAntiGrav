@@ -239,7 +239,8 @@ fn a_hit_flashes_a_healthy_readout() {
 
 /// Where the flash starts in its cycle is the accumulator's, not the race
 /// clock's: the same race tick draws either phase, 0.9833 s into the
-/// accumulator being `floor(7.87)`, odd, so off - measured on the original.
+/// accumulator being `floor(7.87)`, odd, so off (the stored value was read off
+/// the original; the off start follows from it).
 #[test]
 fn the_phase_is_the_accumulators_and_not_the_race_clock() {
     let r = |race_ticks, phase| Readout {

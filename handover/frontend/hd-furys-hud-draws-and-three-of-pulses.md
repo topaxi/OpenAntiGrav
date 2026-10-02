@@ -96,7 +96,7 @@ drawn by `oag_game::hud::runtime` off `oag_title::HudArt::runtime`:
 against the running original for the first time (private RPCS3, the shield
 poked through the GDB stub, the HUD recorded at 30 fps; evidence and numbers on
 [hud-readouts.md](../../docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md#what-the-running-original-does-at-low-shield)).
-Rate (3.95-4.00 cycles a second), the `<= 20` threshold, the red bracket, the
+Rate (3.91-4.03 cycles a second, six stretches in two boots), the `<= 20` threshold, the red bracket, the
 solid fill, the blinking number and the 1 s post-hit window all agreed. Three
 things were fixed: the window now arms on a **whole-percent** drop (60.9 to
 60.2 arms nothing, 60.2 to 59.9 does - read off `hud+0x110`), the flash phase
@@ -117,8 +117,9 @@ other pickup clears did; `ship+0x6958` is the LeachBeam manager's flag.
   line in 35 s of thrust); the AI's three were. A steered run onto a weapon pad,
   then a button tap, would give the player's `ship+0x6a80` and the real blink.
 - **`0x0067e6d0`'s traversal order** (which `DamageBar` it binds) is unread.
-- **A frame-for-frame look found the top plate and the pickup slot's hexagon
-  outline drawn heavier than the original's**: at 100 % the original's outline is a
+- **A look at one frame each found the top plate and the pickup slot's hexagon
+  outline drawn heavier than the original's** (different scenes - this build was
+  rendered at its default circuit, the capture is Talon's - so unmeasured): at 100 % the original's outline is a
   light translucent grey and its top plate shows the scene through it; this build's
   outline is near-black and its plate opaque (`data/scratch/hd-hud-flash/cmp/ring.png`,
   original left, this build right, same crop). Not touched - it is not the flash,

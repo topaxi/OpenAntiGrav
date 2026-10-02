@@ -294,11 +294,11 @@ confirmed by writing 70.0 and reading the HUD's record follow within 0.5 s:
 
 | Question | Measured | Matches |
 | --- | --- | --- |
-| Flash rate | cycles per second at 30 fps over 22, 17 and 14 cycles: 3.95, 3.98, 4.00 | 8 phases a second |
+| Flash rate | cycles per second at 30 fps over 22, 17 and 14 cycles (first boot): 3.95, 3.98, 4.00; over 14, 9 and 9 (second boot, `scripts/rpcs3-hud-probe.py schedule`): 3.96, 3.91, 4.03 | 8 phases a second |
 | 20.0 % | flashes without end: red bracket and the number on, pale bracket and an empty plate off; the fill solid blue throughout | `<= 20` |
-| 20.5 % | after the drop from 50 %: about 0.97 s of flashing (28 frames), then a steady `20` | the post-hit window, no threshold flash |
+| 20.5 % | after the drop from 50 %: about 0.97 s of flashing (28 frames; 29-30 in the second boot), then a steady `20` for the rest of the 5 s | the post-hit window, no threshold flash |
 | 15 %, 5 % | flashes, the digits `15` and `5` | |
-| Rise to 60 % | the flash ends the same tick | |
+| Rise to 60 % | the flash ends within a frame of the poke (30 fps, a poke freezes the clip, so a tick cannot be resolved) | |
 | Post-hit arming | 60.9 to 60.2 %: `hud+0x110` stays `0.0`; 60.2 to 59.9 %: 0.20-0.234 a quarter second on; a rise arms nothing - in each of **three boots**, three reps a boot (first boot `0.2286`, `0.2298`, `0.2330`) | **`fctiwz`-truncated whole percent** |
 | Absorb | fill and number blink, background white | row `c` |
 
@@ -306,8 +306,14 @@ confirmed by writing 70.0 and reading the HUD's record follow within 0.5 s:
 the rest, `sweep` reads the absorb stamps).
 
 The flash accumulator `hud+0x1e8` was read at 0.9833, 0.9574, 0.9395 and 0.9269
-when a flash ended and picked up from there on the next, so **the phase at
-which a flash starts is the accumulator's, not the race clock's**.
+when a flash ended and picked up from there on the next (the values are read; that
+a flash starting at 0.98 therefore starts on an "off" phase, `floor(7.9)` being odd,
+is arithmetic on them - no recorded frame isolates a flash's first phase), so
+**the phase at which a flash starts is the accumulator's, not the race clock's**.
+
+Only the `arming` mode of the probe script has been run end to end three times;
+`schedule` once (the second boot above); `sweep` is the `arm2.py` sweep that the
+absorb reading comes from, folded into the script and not re-run from it.
 
 ## Not read
 
