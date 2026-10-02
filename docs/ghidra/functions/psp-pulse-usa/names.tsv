@@ -1188,12 +1188,12 @@
 0x0888058c	function	Camera_SetSubject	85	camera.md
 0x0887fedc	function	Camera_PickStation	88	camera.md
 0x08880984	function	Camera_FramingFov	88	camera.md
-0x08880c04	function	Camera_UpdateSpectatorView	85	camera.md
-0x0887fd3c	function	Camera_UpdateSpectator	70	camera.md
+0x08880c04	function	Camera_UpdateSpectatorView	90	camera.md
+0x0887fd3c	function	Camera_UpdateSpectator	80	camera.md
 0x08880168	function	Camera_RepickNearSubject	62	camera.md
 0x08848664	function	Craft_SetAutopilotBlend	90	race-finish.md
-0x08880a58	function	Camera_PickSubject	80	race-finish.md
-0x08880b38	function	Camera_PickRandomMode	75	race-finish.md
+0x08880a58	function	Camera_PickSubject	85	race-finish.md
+0x08880b38	function	Camera_PickRandomMode	85	race-finish.md
 0x0885ecf0	function	ShipShockwave_Construct	85	ship-shockwave.md
 0x0885efc4	function	ShipShockwave_Update	88	ship-shockwave.md
 0x088834bc	function	Camera_PickGridCamera	70	race-intro.md
@@ -1206,3 +1206,6 @@
 0x0887cf88	function	AiTrack_BuildLocatedRecord	85	grid.md
 0x0887c340	function	Spline_ProjectOntoSegment	88	grid.md
 0x0887c1e0	function	Spline_EvalPointAndDerivative	88	grid.md
+0x08ab10c8	data	g_spectator_row_scale_left	85	camera.md
+0x08ab10cc	data	g_spectator_row_scale_up	85	camera.md
+0x08ab10d0	data	g_spectator_row_scale_forward	85	camera.md

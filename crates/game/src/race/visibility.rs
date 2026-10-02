@@ -219,6 +219,30 @@ impl TrackVisibility {
         VisibleSet::around(&self.pvs, &self.padding, &self.swaps, craft, camera)
             .within_view(&self.pvs, view_projection)
     }
+
+    /// What may be drawn with the camera placed by `section` alone: that section's own row,
+    /// with no padding and no second viewpoint, as the original masks a camera that stands on
+    /// an authored station ([`Race::station_camera_section`]).
+    #[must_use]
+    pub(super) fn set_exact(
+        &self,
+        section: u8,
+        view_projection: &oag_core::math::Mat4,
+    ) -> VisibleSet {
+        self.row_only(section)
+            .within_view(&self.pvs, view_projection)
+    }
+
+    /// `section`'s own row, before the view narrows it.
+    fn row_only(&self, section: u8) -> VisibleSet {
+        VisibleSet::around(
+            &self.pvs,
+            &SectionPadding::default(),
+            &self.swaps,
+            section,
+            section,
+        )
+    }
 }
 
 /// How far off the nearest spline sample a point may be and still be trusted to
@@ -378,5 +402,45 @@ mod tests {
             ),
             "the craft's own section was narrowed away"
         );
+    }
+
+    /// A camera that stands on an authored station is masked by one section's row and nothing
+    /// else (`FUN_0891e908`), where the chase camera's set adds the spline neighbours' own
+    /// geometry: on a real circuit `set_exact` is the circuit's own row, section by section,
+    /// and the padded `set` is wider for at least one of them. The row for section 11 read
+    /// off PPSSPP at `g_display + 0x5bb8 + 11 * 8` is `0x08000003f0003c02`.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_station_cameras_set_is_the_circuits_row_with_no_padding() {
+        let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+            return;
+        };
+        let entry = r"Data\Environments\16_Track\track.vex";
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+        let blob = archives.read_name(entry).expect("track.vex");
+        let model = oag_render::mesh::build_with_textures(entry, &blob, None).expect("model");
+        let nodes = oag_vex::vex::nodes(&blob).expect("nodes");
+        let node = oag_vex::track::find_node(&blob, &nodes).expect("a WO Track node");
+        let ai = oag_vex::track::parse(&blob[node.payload()]).expect("spline");
+        let visibility =
+            TrackVisibility::build(&model, &blob, &ai).expect("the circuit's sections");
+
+        assert_eq!(visibility.pvs.visible_from(11), 0x0800_0003_f000_3c02);
+        let mut padded_wider = 0;
+        for id in visibility.pvs.ids() {
+            let exact = visibility.row_only(id).mask();
+            assert_eq!(exact, visibility.pvs.visible_from(id), "section {id}");
+            let padded = VisibleSet::around(
+                &visibility.pvs,
+                &visibility.padding,
+                &visibility.swaps,
+                id,
+                id,
+            )
+            .mask();
+            assert_eq!(exact & padded, exact, "the padded set holds the row");
+            padded_wider += usize::from(padded != exact);
+        }
+        assert!(padded_wider > 0, "the padding added nothing anywhere");
     }
 }

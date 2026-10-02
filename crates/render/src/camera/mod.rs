@@ -1,6 +1,6 @@
 //! Cameras.
 //!
-//! Five of them, all pure maths over plain vectors so they can be tested
+//! Six of them, all pure maths over plain vectors so they can be tested
 //! without a window or a GPU:
 //!
 //! - [`orbit`], which an asset viewer wants: yaw, pitch and zoom around a point.
@@ -10,6 +10,8 @@
 //! - [`internal`], the cockpit view, whose parameters come from the same file.
 //! - [`destroy`], the fixed camera the original cuts to when the player's own craft
 //!   is destroyed, placed at one of the circuit's authored `Camera` nodes.
+//! - [`craft_view`], the post-finish director's two views that ride on a craft: a rigid
+//!   rear view and a rigid front view looking back.
 //!
 //! The last two are the ones a player cycles between with a button, and both take
 //! the same [`chase::Target`] so the caller describes the ship once. Which of them
@@ -27,6 +29,7 @@
 //! `docs/architecture/workspace-layout.md`.
 
 pub mod chase;
+pub mod craft_view;
 pub mod destroy;
 pub mod free;
 pub mod internal;

@@ -15,6 +15,19 @@ fn a_race_the_wreck_ended() -> Race {
 }
 
 fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
+    let mut race = a_race_ready_for_a_wreck(mode);
+    race.force_destroy(0);
+    for _ in 0..120 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        if race.finished() {
+            return race;
+        }
+    }
+    panic!("the destroyed player's single race never ended");
+}
+
+/// The fixtures a wreck needs - the effect it throws, a destroy camera station - and no wreck yet.
+fn a_race_ready_for_a_wreck(mode: Mode) -> Race {
     let mut race = race_with_a_grid();
     if mode != Mode::SingleRace {
         race = zone_grid(mode);
@@ -31,14 +44,7 @@ fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
         }],
         0.4,
     );
-    race.force_destroy(0);
-    for _ in 0..120 {
-        race.tick(&oag_gameplay::PlayerInputs::none());
-        if race.finished() {
-            return race;
-        }
-    }
-    panic!("the destroyed player's single race never ended");
+    race
 }
 
 /// Zone's wreck ends the race the same way but was not looked at, so the world stands
@@ -113,18 +119,19 @@ fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
     );
 }
 
-/// The spectator director takes over from the destroy camera `WRECK_START_TICKS` after the
-/// race ended - not on the line's `START_TICKS` - and follows a craft that is still live.
+/// The spectator director takes over from the destroy camera `WRECK_HANDOFF_TICKS` after the
+/// race ended - not on the line's `START_TICKS` - in the death camera's mode 5, and follows
+/// a craft that is still live.
 #[test]
 fn the_director_takes_over_from_the_destroy_camera_after_a_single_race_wreck() {
-    use crate::race::finish_camera::{FinishCamera, SPECTATOR_SEED, WRECK_START_TICKS};
+    use crate::race::finish_camera::{FinishCamera, SPECTATOR_SEED, ViewMode, WRECK_HANDOFF_TICKS};
     let mut race = a_race_the_wreck_ended();
     let station = oag_render::camera::destroy::Station {
         eye: Vec3::new(400.0, 30.0, 0.0),
         aim: Vec3::new(10.0, 0.0, 0.0),
     };
     race.view.finish_camera = Some(FinishCamera::new(vec![station], 0.4, SPECTATOR_SEED));
-    for _ in 0..WRECK_START_TICKS - 1 {
+    for _ in 0..WRECK_HANDOFF_TICKS - 1 {
         race.tick_finished();
     }
     assert_eq!(
@@ -134,7 +141,11 @@ fn the_director_takes_over_from_the_destroy_camera_after_a_single_race_wreck() {
     );
     race.tick_finished();
     race.tick_finished();
-    assert!(race.spectator_mode().is_some(), "then the director starts");
+    assert_eq!(
+        race.spectator_mode(),
+        Some(ViewMode::Death),
+        "then the director starts, in the death camera's mode"
+    );
 }
 
 /// `race_with_a_grid` with the mode switched: eight craft in an Eliminator.
@@ -232,4 +243,77 @@ fn zone_grid(mode: Mode) -> Race {
         forward: [1.0, 0.0, 0.0],
     });
     Race::start(setup)
+}
+
+/// A camera that stands on an authored station is masked by the section of the craft it
+/// draws (`cam+0x1e8`, which `Camera_UpdateSpectatorView` publishes in every mode), not by
+/// where it stands: that is how the original leaves out the inside of the structure a
+/// station sits in. Any other camera has no such section.
+#[test]
+fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
+    let race = race_with_a_grid();
+    assert_eq!(race.station_camera_section(), None, "the chase camera");
+    let mut race = a_race_the_wreck_ended();
+    assert!(
+        race.destroy_camera_now().is_some(),
+        "the destroy camera has the picture"
+    );
+    assert_eq!(
+        race.station_camera_section(),
+        Some(race.section_of_slot(0)),
+        "the wreck's own section"
+    );
+    // The director draws whichever craft it was handed: a live opponent after a cut.
+    race.view.finish_camera = Some(crate::race::finish_camera::FinishCamera::new(
+        vec![oag_render::camera::destroy::Station {
+            eye: Vec3::new(400.0, 30.0, 0.0),
+            aim: Vec3::new(10.0, 0.0, 0.0),
+        }],
+        0.4,
+        crate::race::finish_camera::SPECTATOR_SEED,
+    ));
+    for _ in 0..crate::race::finish_camera::WRECK_HANDOFF_TICKS + 2 {
+        race.tick_finished();
+    }
+    let slot = race
+        .view
+        .finish_camera
+        .as_ref()
+        .and_then(crate::race::finish_camera::FinishCamera::drawn_slot)
+        .expect("the director has started");
+    assert_eq!(
+        race.station_camera_section(),
+        Some(race.section_of_slot(slot))
+    );
+}
+
+/// The hand-off is a law of the wreck: `Camera_UpdateSpectator` clears the subject when the
+/// wreck's state-6 timer crosses zero, `240` frames after `Ship_SetState(4)` (measured twice
+/// on PPSSPP: `0.5 + 1.5 + 2.0` s). Pinned to the call, not to a derived offset.
+#[test]
+fn the_director_starts_240_ticks_after_the_wreck_call() {
+    use crate::race::finish_camera::{FinishCamera, SPECTATOR_SEED};
+    let mut race = a_race_ready_for_a_wreck(Mode::SingleRace);
+    race.view.finish_camera = Some(FinishCamera::new(
+        vec![oag_render::camera::destroy::Station {
+            eye: Vec3::new(400.0, 30.0, 0.0),
+            aim: Vec3::new(10.0, 0.0, 0.0),
+        }],
+        0.4,
+        SPECTATOR_SEED,
+    ));
+    race.force_destroy(0);
+    let called = race.sim.world.tick;
+    for _ in 0..600 {
+        if race.finished() {
+            race.tick_finished();
+        } else {
+            race.tick(&oag_gameplay::PlayerInputs::none());
+        }
+        if race.spectator_mode().is_some() {
+            assert_eq!(race.sim.world.tick - called, 240);
+            return;
+        }
+    }
+    panic!("the director never started");
 }
