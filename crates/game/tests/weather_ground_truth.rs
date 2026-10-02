@@ -104,8 +104,9 @@ mod race {
     }
 
     /// Fort Gale's rain keeps 32 drops alive - 8 a tick for the 4 ticks of a
-    /// drop's life, read live - and Outpost 7's snow its own; a circuit that
-    /// authors no weather plays none.
+    /// drop's life, read live. Outpost 7's snow is withheld until the
+    /// original's invisible flakes are explained (`place_weather`'s doc); a
+    /// circuit that authors no weather plays none.
     #[test]
     #[ignore = "needs data/images/pulse-psp-usa.chd"]
     fn the_two_circuits_play_their_weather_and_the_rest_do_not() {
@@ -119,10 +120,10 @@ mod race {
             "{rain} raindrops alive; the original holds 32"
         );
         let (authored, playing, snow) = weather_after(r"07_Track\track.vex", 92).expect("image");
-        assert!(authored && playing, "Outpost 7 authors snow");
-        // 64 a burst with a cap of 64 and a life of 5: the pool is full for five
-        // ticks and empty for the sixth.
-        assert!(snow > 0 && snow <= 64, "{snow} flakes alive");
+        assert!(
+            !authored && !playing && snow == 0,
+            "Outpost 7's snow is withheld"
+        );
         let (authored, playing, none) = weather_after(r"01_Track\track.vex", 90).expect("image");
         assert!(
             !authored && !playing && none == 0,

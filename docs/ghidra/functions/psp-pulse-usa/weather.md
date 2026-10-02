@@ -52,7 +52,9 @@ renderer) on Fort Gale White and Outpost 7 White. Ported in
 - **Outpost 7's open-air snow does not match.** Ours draws visible white flakes in the sky.
   Three original frames at an open section (`07_Track`, section 18, `env_flags 0x2013`, `64`
   flakes live) show none. `WO_SNOW`'s size channel is `Random`, `12`/`12`, and its draw is
-  unread, so ours is probably too big or too bright. Open.
+  unread, so ours is probably too big or too bright. Open. **Withheld since 2026-10-03**
+  (maintainer's call): `place_weather` loads no snow on Outpost 7 and says so in the loader
+  report, rather than drawing flakes the original does not show.
 - **The noise clock** is the manager's `0x08ab224c` (seconds, measured: it ran `0.57` per
   wall second under a slow emulator); ours is the race clock and a seeded table.
 - **The original updates at its frame rate**: the wind step is not scaled by `dt`, so on the

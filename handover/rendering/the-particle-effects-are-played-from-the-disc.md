@@ -44,10 +44,11 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
 
 ## Open
 
-- **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see
+- **The weather is wired** (Fort Gale rain and lens; Outpost 7's snow withheld), see
   [weather.md](../../docs/ghidra/functions/psp-pulse-usa/weather.md). Open:
   - Outpost 7's open-air snow draws visible flakes in ours and none in three
-    original frames; `WO_SNOW`'s `Random` 12/12 size and its draw are unread.
+    original frames; `WO_SNOW`'s `Random` 12/12 size and its draw are unread. Withheld
+    (maintainer, 2026-10-03): `race::load::pulse_psp::place_weather` skips it until this is read.
   - The mist overlay (`FUN_088fa0a0`) is not played.
   - The PS2 disc authors `<Weather>` on three circuits and plays none here.
   - Covered-section rain was not distinguishable in either side's frames.
@@ -69,7 +70,8 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
 ## Next Steps
 
 - Read `WO_SNOW`'s draw (size channel `Random` 12/12) and why the original shows
-  no flakes where ours does; then read the mist overlay.
+  no flakes where ours does, then lift the withhold in `place_weather`; then read the mist
+  overlay.
 - `NODAMAGE`: catch a live `damaged == 0` hit (`ShipCollisionFx_Trigger`
   `0x089246b4`, `a2`). A craft dropped onto magstrip or the floor at speed is the
   candidate. Then add a reporting-only floor-impact field to
