@@ -122,7 +122,7 @@ the light than ours.
   renderer.md, "The original does not wash a `Distance = 0.0` hull at the
   boost snap" (confidence 75, one verified boot per ship). The paired frame of
   ours is **not** at the same stretch of track (sunlit, a pale spine already at
-  rest), so the evidence of our wash remains `rear-ab.png`'s same-place A/B.
+  rest), so the evidence of our wash is a same-place on/off A/B of the craft's light term, now on the classic `assegai` (tick 295: spine and wing go flat white, tick 220 mild) as well as `assegai_n1`.
 - **Candidate 3's clamp reading, not measured.** The `SVC1` vertex program
   decodes into `o[TC0]`, a texcoord output, not `o[COL0]`/`o[COL1]` - RSX
   colour-output clamping would not apply there, consistent with
@@ -142,9 +142,11 @@ the light than ours.
 2. Identify the record every `0x003eb368` stop carried (`0xca6e90` on one boot)
    as the player's hull or not: the model-pointer read in the drive script's
    `snapshot` (`model + 0x204c`) failed on this binary, so it was not read.
-3. A same-place pair: drive our craft onto the Talon's Junction pad (the
-   original's player light at `(-237, -74, 55)` on the pad) and capture the
-   boost snap there, so the paired frame stops being confounded by lighting.
+3. A same-place original/ours pair: drive our craft onto the Talon's Junction
+   pad (the original's player light at `(-237, -74, 55)` on the pad; our trace
+   frame did not line up with the light list's, so the pad location in our
+   coordinates is still to find) so the paired frame stops being confounded by
+   lighting. The on/off A/B on our side exists; this is the other half.
 4. Second verified boots for `Assegai` and `Harimau` (the extra attempts missed
    the pad; the player's boost depends on the line taken).
 
