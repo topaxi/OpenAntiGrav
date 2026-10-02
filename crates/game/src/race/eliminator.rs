@@ -271,20 +271,31 @@ impl Race {
     ///
     /// **Chosen, not measured; no confidence score.** The mode is won on kills,
     /// and a field of identical craft on one racing line strings itself out
-    /// until nobody is inside shooting range of anybody. Measured on `16_Track`
-    /// with the player parked, the spread between first and last opponent went
-    /// from 118 units at the start to 3,900 by the six-minute mark. The
-    /// original's own weapon AI fires readily only at a craft **inside 100
-    /// units ahead** (`WeaponAi`'s skill score is `3` there and `0` otherwise,
+    /// until nobody is inside shooting range of anybody. The original's weapon
+    /// AI fires readily only at a craft **inside 100 units ahead** (`WeaponAi`'s
+    /// skill score is `3` there and `0` otherwise,
     /// `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`), so it is a dense
     /// field the original's mode runs on. The original gets that density from
-    /// an AI that is known to cheat; this gets some of it by **a leader that
-    /// lets the pack catch up**: a craft with nobody ahead of it, and whose
-    /// nearest opponent behind is more than [`PACK_REACH`] back, lifts off the
-    /// throttle, down to [`PACK_MIN_THRUST`] once the pack is
-    /// [`PACK_REACH`] + [`PACK_EASE_SPAN`] behind. The throttle is only ever
-    /// *reduced*, so the AI obeys the player's physics and gets nothing the
-    /// player's craft lacks.
+    /// an AI that is known to cheat; this gets it by **a leader that lets the
+    /// pack catch up**: a craft with nobody ahead of it lifts off the throttle
+    /// as its nearest follower falls back, down to [`PACK_MIN_THRUST`] once
+    /// that follower is [`PACK_REACH`] + [`PACK_EASE_SPAN`] behind. The throttle
+    /// is only ever *reduced*, so the AI obeys the player's physics and gets
+    /// nothing the player's craft lacks. **Whether a throttle lift that exists
+    /// only to bunch the field is acceptable is the maintainer's call**: it is
+    /// catch-up by slowing the front. Measured with it off (`PACK_MIN_THRUST = 1.0`) on `16_Track`,
+    /// player parked, eight fixed seeds, six game-minutes: 0 of 8 fields reach
+    /// five kills, against 24 of 24 over three sets of eight with it on.
+    ///
+    /// **Why the earlier setting looked insensitive, 2026-10-02**: the scale was
+    /// logged per tick per slot. At `PACK_REACH = 60` a leader with any follower
+    /// inside 60 units ran full, which a tight pack is nearly always, so the
+    /// easing acted on 73 of 1,680 samples; and `PACK_LOST` never bound at
+    /// 1,500 because every craft the respawn fault (see
+    /// [`Race::tick_destroyed_craft`]) had put a lap down read thousands of units
+    /// behind, past it, and so was not counted in the pack at all. The knob was
+    /// sensitive all along - `PACK_REACH` 60 against 0 is 1 against 3 fields in
+    /// eight finishing - the sample just never showed it.
     ///
     /// Only opponents count as the pack: the human's slot is left out, or a
     /// parked player would hold every opponent back. Craft that are down are
@@ -399,14 +410,17 @@ impl Race {
 const FATAL_BLOW_WINDOW_TICKS: u64 = 60;
 
 /// How far behind the leader the nearest opponent may be before it eases off,
-/// in units of track. Chosen, not measured.
-const PACK_REACH: f32 = 60.0;
+/// in units of track. Chosen, not measured. Zero: the leader never gets ahead
+/// of its nearest follower by more than the span below.
+const PACK_REACH: f32 = 0.0;
 
 /// The extra gap over which the easing builds to its full effect. Chosen.
-const PACK_EASE_SPAN: f32 = 120.0;
+const PACK_EASE_SPAN: f32 = 30.0;
 
 /// The fraction of its throttle a leader keeps at full easing. Chosen.
-const PACK_MIN_THRUST: f32 = 0.3;
+const PACK_MIN_THRUST: f32 = 0.1;
 
-/// A craft further behind than this is not part of the pack. Chosen.
-const PACK_LOST: f32 = 1500.0;
+/// A craft further behind than this is not part of the pack. Chosen. It binds
+/// now that a respawned craft keeps its lap: 300 against 1,500 is 8 fields of
+/// eight finishing against 7.
+const PACK_LOST: f32 = 300.0;
