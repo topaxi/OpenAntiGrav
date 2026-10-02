@@ -99,6 +99,7 @@ fn model(lightmapped: bool, texel: u8) -> Model {
         shine_draws: Vec::new(),
         vertex_colour_is_light: false,
         stamps_glow: false,
+        glow_by_texel: false,
         flame: None,
         absorb_shell: false,
         alpha_test_ref: None,

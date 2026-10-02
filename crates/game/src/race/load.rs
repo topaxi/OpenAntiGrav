@@ -16,9 +16,11 @@ mod environment;
 mod gantry_visibility;
 mod geometry;
 mod global;
+mod glow_mask;
 mod intro;
 mod pads;
 mod pose;
+mod pulse_ps2;
 mod pulse_psp;
 pub(super) mod ripple;
 mod roster;
@@ -958,6 +960,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         loaded.track_model.shine_draws.clear();
     }
     pulse_psp::finish(&mut loaded, pulse_psp, &track_blob);
+    pulse_ps2::finish(
+        &mut loaded,
+        vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),
+    );
     Ok(loaded)
 }
 

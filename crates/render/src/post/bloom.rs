@@ -51,14 +51,14 @@ use anyhow::Result;
 
 /// A scratch colour buffer: sampled by the next pass, drawn into by this one.
 #[derive(Debug)]
-struct Target {
+pub(super) struct Target {
     #[expect(dead_code, reason = "held so the view stays valid")]
     texture: wgpu::Texture,
-    view: wgpu::TextureView,
+    pub(super) view: wgpu::TextureView,
 }
 
 impl Target {
-    fn new(
+    pub(super) fn new(
         device: &wgpu::Device,
         label: &str,
         format: wgpu::TextureFormat,

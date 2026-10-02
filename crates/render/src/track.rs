@@ -174,6 +174,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
 
         vertex_colour_is_light: false,
         stamps_glow: false,
+        glow_by_texel: false,
 
         flame: None,
         absorb_shell: false,

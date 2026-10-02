@@ -210,6 +210,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
 
         vertex_colour_is_light: false,
         stamps_glow: false,
+        glow_by_texel: false,
 
         flame: None,
         absorb_shell: false,

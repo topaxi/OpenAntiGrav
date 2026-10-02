@@ -945,25 +945,27 @@ impl Scene {
                 hd_bloom_timestamps,
             );
             stats.hd_bloom_encoded = true;
-        } else if let Some(bloom) = &self.bloom {
+        } else if self.bloom.is_some() || self.ps2_bloom.is_some() {
             // The recovered post-process, reading the alpha channel the scene
-            // stamped (`GlowMask::Stamped`) and adding a blurred copy of the masked
-            // colour back over the frame. `view` is the resolved image in both
-            // the MSAA and the single-sample case, which is why this runs on
-            // it rather than on `attachment_view`. See `oag_render::post::bloom` -
-            // its own `Frame` fields document `size`/`origin`/`viewport` in full.
+            // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and
+            // adding a blurred copy of the masked colour back over the frame.
+            // `view` is the resolved image in both the MSAA and the
+            // single-sample case, which is why this runs on it rather than on
+            // `attachment_view`. See `oag_render::post::bloom` - its own
+            // `Frame` fields document `size`/`origin`/`viewport` in full - and
+            // `oag_render::post::ps2_bloom` for the PS2's own chain.
             let size = self.depth.size();
-            bloom.render(
-                device,
-                queue,
-                encoder,
-                oag_render::post::bloom::Frame {
-                    scene: view,
-                    size: (size.width, size.height),
-                    origin: (viewport.0, viewport.1),
-                    viewport: (viewport.2 as u32, viewport.3 as u32),
-                },
-            );
+            let frame = oag_render::post::bloom::Frame {
+                scene: view,
+                size: (size.width, size.height),
+                origin: (viewport.0, viewport.1),
+                viewport: (viewport.2 as u32, viewport.3 as u32),
+            };
+            if let Some(bloom) = &self.bloom {
+                bloom.render(device, queue, encoder, frame);
+            } else if let Some(bloom) = &self.ps2_bloom {
+                bloom.render(device, queue, encoder, frame);
+            }
         }
         // Motion blur, last: it smears the finished frame - glow included,
         // which is what a bright thing sweeping past a lens does - and it

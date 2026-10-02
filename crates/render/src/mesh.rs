@@ -218,6 +218,12 @@ pub struct Model {
     /// Set by a race loader for Pulse on the PSP, the one source measured;
     /// `false` everywhere else, and for a model cloned into another effect.
     pub stamps_glow: bool,
+    /// With [`Self::stamps_glow`]: the mask value is the fragment's own alpha,
+    /// the texel's times the vertex colour's, on a batch with the glow bits,
+    /// and nothing anywhere else - the **PS2**'s rule, read off GS dumps, in
+    /// place of the PSP's constant-per-batch stencil reference. See
+    /// `mesh_render::GlowMask::StampedByTexel`.
+    pub glow_by_texel: bool,
     /// Wipeout HD's engine-flare shading, for the one model that is one, and
     /// `None` for every other model of every title. See [`Flame`].
     pub flame: Option<Flame>,
@@ -315,6 +321,7 @@ impl Model {
 
             vertex_colour_is_light: false,
             stamps_glow: false,
+            glow_by_texel: false,
 
             flame: None,
             absorb_shell: false,
@@ -763,7 +770,11 @@ fn build_class(
                         anim,
                         xform,
                         sun_mask: 1.0,
-                        slots: crate::mesh::slots::DEFAULT,
+                        slots: if batch.pass_mask & glow::STAMP_BITS != 0 {
+                            crate::mesh::slots::DEFAULT | crate::mesh::slots::GLOW_BATCH
+                        } else {
+                            crate::mesh::slots::DEFAULT
+                        },
                         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                         glow: glow::batch_value(&batch, material_texture, &glow_bytes),
                     });
@@ -945,6 +956,7 @@ fn build_class(
 
         vertex_colour_is_light: false,
         stamps_glow: false,
+        glow_by_texel: false,
 
         flame: None,
         absorb_shell: false,

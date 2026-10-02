@@ -271,6 +271,9 @@ pub struct Scene {
     /// writer: it blooms the glow mask, and any surface that opts into the mask
     /// is handled by the same three passes. See `oag_render::post::bloom`.
     bloom: Option<oag_render::post::bloom::Bloom>,
+    /// Pulse PS2's own bloom, in place of [`Self::bloom`] over a PS2 race's
+    /// glow mask. See `oag_render::post::ps2_bloom`.
+    ps2_bloom: Option<oag_render::post::ps2_bloom::Ps2Bloom>,
     /// Wipeout HD's post chain: the linear float scene target the whole race
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
     /// into the caller's own view. `None` for every other title, where the
@@ -495,6 +498,7 @@ impl Scene {
             })
             .transpose()?;
         let measured_mask = track_model.stamps_glow; // see `bloom` below
+        let ps2_mask = measured_mask && track_model.glow_by_texel;
         let track_shine = shine::TrackShine::build(
             device,
             queue,
@@ -798,13 +802,23 @@ impl Scene {
         // dimmer, not broken. The HD chain replaces this pass outright, and it
         // runs only over a mask stamped as Pulse PSP's is measured to be -
         // Pure's and the PS2's are not (docs/rendering/glow-mask.md).
-        let bloom = match (hd.is_none() && measured_mask)
+        let bloom = match (hd.is_none() && measured_mask && !ps2_mask)
             .then(|| oag_render::post::bloom::Bloom::new(device, format))
             .transpose()
         {
             Ok(bloom) => bloom,
             Err(e) => {
                 warn!("bloom unavailable ({e}) - the frame draws without it");
+                None
+            }
+        };
+        let ps2_bloom = match (hd.is_none() && ps2_mask)
+            .then(|| oag_render::post::ps2_bloom::Ps2Bloom::new(device, format))
+            .transpose()
+        {
+            Ok(bloom) => bloom,
+            Err(e) => {
+                warn!("PS2 bloom unavailable ({e}) - the frame draws without it");
                 None
             }
         };
@@ -839,6 +853,7 @@ impl Scene {
         Ok(Self {
             build_cache,
             bloom,
+            ps2_bloom,
             hd,
             motion_blur,
             velocity,

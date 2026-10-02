@@ -34,15 +34,37 @@ pub enum GlowMask {
     /// REPLACE)` left on under the blend - read off a GE dump of Outpost 7
     /// (`glow-mask.md`, "Transparent batches stamp").
     Stamped,
+    /// **The PS2's mask: what the fragment's own alpha is.** Read off a GS
+    /// dump of Moa Therma, replayed with a readback draw appended
+    /// (`docs/rendering/ps2-bloom.md`, "The mask, measured"): the frame clears
+    /// to alpha `0`, opaque batches leave alpha alone, and the nine groups that
+    /// write it draw `_GLOW`-textured batches with `FBMSK = 0` and the texture
+    /// function on `MODULATE`, so what lands is the texel's alpha times the
+    /// vertex colour's. A batch with the glow bits ([`crate::mesh::slots::GLOW_BATCH`])
+    /// writes that; every other batch writes `0`, the clear's own value, which
+    /// is the same picture because the original's opaque batches never touch
+    /// alpha and its stamps run after them, depth-tested.
+    ///
+    /// The structure is [`Self::Stamped`]'s - opaque and cutout pipelines write
+    /// it, blended ones leave it to a second stamp draw - and only the value
+    /// differs, which `mesh.wgsl`'s `glow_texel` override switches.
+    StampedByTexel,
 }
 
 impl GlowMask {
+    /// Whether this choice stamps the mask through the stamp machinery,
+    /// whichever rule gives the value.
+    #[must_use]
+    pub fn stamps(self) -> bool {
+        matches!(self, Self::Stamped | Self::StampedByTexel)
+    }
+
     /// The colour write mask this choice implies.
     #[must_use]
     pub fn writes(self) -> wgpu::ColorWrites {
         match self {
             Self::Protected => wgpu::ColorWrites::COLOR,
-            Self::Written | Self::Stamped => wgpu::ColorWrites::ALL,
+            Self::Written | Self::Stamped | Self::StampedByTexel => wgpu::ColorWrites::ALL,
         }
     }
 
@@ -52,7 +74,7 @@ impl GlowMask {
     #[must_use]
     pub fn blend_writes(self) -> wgpu::ColorWrites {
         match self {
-            Self::Stamped => wgpu::ColorWrites::COLOR,
+            Self::Stamped | Self::StampedByTexel => wgpu::ColorWrites::COLOR,
             other => other.writes(),
         }
     }
