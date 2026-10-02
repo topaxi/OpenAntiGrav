@@ -1,5 +1,7 @@
 # `weatherPos`'s registration is found, and its runtime constructor fires on a real race
 
+> **2026-10-02:** what `weatherPos` is for is settled - the weather's anchor in a covered section. See [weather.md](weather.md).
+
 Found while working the open question of unrecovered particle triggers:
 the four environmental effects (`WO_RAIN`, `WO_SNOW`, `WO_MODESTO_STEAM_A`,
 `WO_BLUE_WELDER`) need to know which track places them and where, and

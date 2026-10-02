@@ -104,24 +104,16 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // `Ship_PlayAbsorbFeedback` (`0x08840640`), which both absorb paths call:
     // one instance per `Ship Collision Fx` node, staggered 0.1 s. See
     // `oag_game::race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
-    (
-        "WO_RAIN",
-        "the trigger is read: Fort Gale's `TrackStartup` `Weather` element names \
-         it as `EnvPsys`, and `Weather_Construct` (`0x088f184c`) spawns it on a \
-         camera-relative node that `Weather_Update` (`0x088f1e58`) hides indoors \
-         and blows with the wind. None of that frame is modelled here yet.",
-    ),
-    (
-        "WO_RAIN_LENS",
-        "Fort Gale's `ScreenPsys`, same as `WO_RAIN`.",
-    ),
-    ("WO_SNOW", "Outpost 7's `EnvPsys`, same as `WO_RAIN`."),
+    // **Not `WO_RAIN`, `WO_RAIN_LENS` or `WO_SNOW`** - wired 2026-10-02 off a
+    // circuit's `TrackStartup` `<Weather>` element (`Weather_Construct`
+    // `0x088f184c`, `Weather_Update` `0x088f1e58`) - see
+    // `oag_game::race::scenery_fx::weather` and `::lens`. Pulse PSP only: the PS2
+    // disc authors the same element on three circuits and plays none yet, and
+    // Wipeout HD carries none of the three.
     // **Not `WO_BLUE_WELDER` or `WO_MODESTO_STEAM_A`** - wired 2026-10-02.
     // The circuits place them as `ParticleSystem` (`0x3c4`) nodes and
     // `PsysNode_Init` (`0x089156a0`) spawns each at load; three Basilico
     // welders confirmed live. See `oag_game::race::scenery_fx`. `RAIN`,
-    // `RAIN_LENS` and `SNOW` are placed by no `ParticleSystem` node on the
-    // disc, which leaves `weatherPos` (`0x3da`) as their likely owner.
 ];
 
 /// The eight the PS2 port authors, the PSP does not, and nothing triggers.
@@ -151,8 +143,14 @@ const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
         "a damaged-hull effect; this engine tracks shield but plays nothing \
          for it and nothing has been read that says when this starts.",
     ),
-    ("WO_MODESTO_STEAM_B", "environment, same as `WO_RAIN`."),
-    ("WO_UNDERWATER_DEBRIS", "environment, same as `WO_RAIN`."),
+    (
+        "WO_MODESTO_STEAM_B",
+        "environment; the PS2 port's second steam, placed by no node read.",
+    ),
+    (
+        "WO_UNDERWATER_DEBRIS",
+        "environment; the PS2 port's, no trigger read.",
+    ),
     (
         "WO_TRACK_ROCK_DEBRIS",
         "scenery struck by something; no trigger read.",
@@ -203,6 +201,11 @@ const PSP_WIRED: &[&str] = &[
     // Placed by the circuits themselves - see `oag_game::race::scenery_fx`.
     "WO_BLUE_WELDER",
     "WO_MODESTO_STEAM_A",
+    // A circuit's `<Weather>` element names them - see
+    // `oag_game::race::scenery_fx::weather`.
+    "WO_RAIN",
+    "WO_RAIN_LENS",
+    "WO_SNOW",
 ];
 
 /// The PS2 carries all ten of the PSP's plus its own engine flare.
@@ -488,6 +491,10 @@ mod hd {
         let Some(image) = image() else { return };
         let found = scan(&image);
         for name in RACE_EFFECTS {
+            // Pulse's weather is not on HD's disc; `RACE_EFFECTS` is a superset.
+            if matches!(name, "WO_RAIN" | "WO_RAIN_LENS" | "WO_SNOW") {
+                continue;
+            }
             assert!(
                 found.contains_key(name),
                 "{name}: wired but not on this disc"

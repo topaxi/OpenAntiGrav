@@ -1,4 +1,4 @@
-# The particle effects are played from the disc; 27 of the PSP's 35 play, 8 wait on a trigger
+# The particle effects are played from the disc; 30 of the PSP's 35 play, 5 wait on a trigger
 
 2026-08-12, census rewritten 2026-10-02. `oag_vex::pob` parses every emitter
 tree, `oag_render::psys::Library` loads any `Data\Psys\<name>.POB` by name, and
@@ -29,12 +29,10 @@ unaccounted for; the table below is its reading on 2026-10-02.
 
 **Embedded in a wired tree (2):** `WO_SHIP_COLL_SPARK`, `WO_SHIP_COLL_SPARK_TRAIL`.
 
-**Not wired (8), ranked by how often a player would see them:**
+**Not wired (5), ranked by how often a player would see them:**
 
 | Rank | Effect | State | Best lead |
 | ---: | --- | --- | --- |
-| 1 | `WO_RAIN` + `WO_RAIN_LENS` | trigger read, unwired | Fort Gale's `TrackStartup` `Weather` element; `Weather_Construct` `0x088f184c`, `Weather_Update` `0x088f1e58` |
-| 2 | `WO_SNOW` | trigger read, unwired | Outpost 7's `TrackStartup` `Weather`, same functions |
 | 3 | `WO_SHIP_COLL_SPARK_NODAMAGE` | trigger read, not seen live | `Ship_DispatchCollisionFx` `0x0883df38`: a contact with non-positive friction (floor, magstrip) |
 | 4 | `WO_SHURIKEN_TRAIL` | trigger read, unwired | `Shuriken_Init` `0x08877280`: a second anchor rotated -pi/2 about the blade; a `Projectile` here has no roll |
 | 5 | `WO_REPULSER`, `WO_REPULSER_BLAST` | weapon not built | strings `0x08a7cd2c`, `0x08a7cd18` |
@@ -46,17 +44,13 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
 
 ## Open
 
-- **The weather** (ranks 1-2): the trigger is read and needs a port.
-  - `Weather_Update` puts the env instance on a camera node's matrix, hides it
-    when the camera is inside (`FUN_0887866c` region tests), throttles the
-    screen effect on the switch, and writes a wind vector into the env effect's
-    first modifier each frame.
-  - It also builds a screen-mist node (`FUN_088fa0a0`).
-  - Not built in Zone; the whole `LevelFx` block is skipped when
-    `g_display+0x5dec` is set.
-- **`weatherPos` (`0x3da`)** carries no attributes and names no effect, so it is
-  not what places rain or snow. What it does is open; see
-  [weatherpos.md](../../docs/ghidra/functions/psp-pulse-usa/weatherpos.md).
+- **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see
+  [weather.md](../../docs/ghidra/functions/psp-pulse-usa/weather.md). Open:
+  - Outpost 7's open-air snow draws visible flakes in ours and none in three
+    original frames; `WO_SNOW`'s `Random` 12/12 size and its draw are unread.
+  - The mist overlay (`FUN_088fa0a0`) is not played.
+  - The PS2 disc authors `<Weather>` on three circuits and plays none here.
+  - Covered-section rain was not distinguishable in either side's frames.
 - **The welder against the original** (matched frames on Basilico Black):
   - The halo now flashes where the original's does. The fix: a periodic
     channel keeps its equal-time keys.
@@ -74,10 +68,8 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
 
 ## Next Steps
 
-- Port the weather: a camera-attached env instance for `WO_RAIN`/`WO_SNOW`, the
-  `ScreenPsys` lens effect, the inside/outside switch and the wind modifier.
-  Then compare on Fort Gale and Outpost 7 against PPSSPP. Start at
-  `Weather_Update` (`0x088f1e58`) and `FUN_08912930`, the camera-matrix source.
+- Read `WO_SNOW`'s draw (size channel `Random` 12/12) and why the original shows
+  no flakes where ours does; then read the mist overlay.
 - `NODAMAGE`: catch a live `damaged == 0` hit (`ShipCollisionFx_Trigger`
   `0x089246b4`, `a2`). A craft dropped onto magstrip or the floor at speed is the
   candidate. Then add a reporting-only floor-impact field to

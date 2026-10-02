@@ -354,6 +354,20 @@ fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
 /// `01_Track`'s fifty non-`gentrak` emitters spell.
 fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
     let at = track.rfind(['/', '\\'])?;
+    let (directory, separator) = (&track[..at], &track[at..=at]);
+    let file = circuit_manifest(archives, track)?.sound_bank?;
+    Some(format!("{directory}{separator}{file}"))
+}
+
+/// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none.
+///
+/// One read for everything a circuit asks for beside its `.vex`: the sound bank
+/// above and, from `race::scenery_fx`, its weather.
+pub(crate) fn circuit_manifest(
+    archives: &mut Archives,
+    track: &str,
+) -> Option<oag_tables::trackstartup::TrackStartup> {
+    let at = track.rfind(['/', '\\'])?;
     // The circuit's own separator, kept rather than normalised: Pulse spells a
     // path with `\\` and Wipeout HD with `/`, and a name that mixes them reads
     // like a bug even where the archive's hash tolerates it.
@@ -361,9 +375,9 @@ fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
     let manifest = archives
         .read_name(&format!("{directory}{separator}trackstartup.xml"))
         .ok()?;
-    let file = oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&manifest))
-        .sound_bank?;
-    Some(format!("{directory}{separator}{file}"))
+    Some(oag_tables::trackstartup::TrackStartup::parse(
+        &String::from_utf8_lossy(&manifest),
+    ))
 }
 
 /// The held voices a circuit's ambience owns, one slot per authored emitter.

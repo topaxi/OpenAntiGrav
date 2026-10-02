@@ -19,12 +19,18 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 /// Lights the hulls with the circuit's own `AmbientLight`/`DirectionalLight`
 /// nodes and marks every `.vex` model the race draws as stamping the glow
 /// mask. A no-op when `pulse_psp` is false.
-pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
+pub(super) fn finish(
+    loaded: &mut Loaded,
+    pulse_psp: bool,
+    track_blob: &[u8],
+    (archives, track): (&mut oag_assets::Archives, &str),
+) {
     if !pulse_psp {
         return;
     }
     let nodes = oag_vex::vex::nodes(track_blob).unwrap_or_default();
     place_scenery_fx(loaded, track_blob, &nodes);
+    place_weather(loaded, track_blob, &nodes, archives, track);
     match mesh_render::HullLights::from_track(track_blob, &nodes, 255) {
         Some(hull) => {
             loaded.report.push(format!(
@@ -95,5 +101,41 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
             .report
             .push(format!("placed effect: {count} x {name}, {state}"));
     }
-    loaded.setup.scenery_fx = placed;
+    loaded.setup.scenery_fx.placed = placed;
+}
+
+/// The circuit's `<Weather>` element and the `weatherPos` anchors it is
+/// played against, as `race::scenery_fx::weather` describes. Pulse PSP only:
+/// `Weather_Update` was read there, and the PS2 disc's three circuits that
+/// author the element are not played by extension.
+///
+/// Nothing in Zone: `TrackStartup_Parse` does not build the weather there.
+fn place_weather(
+    loaded: &mut Loaded,
+    track_blob: &[u8],
+    nodes: &[oag_vex::vex::Node],
+    archives: &mut oag_assets::Archives,
+    track: &str,
+) {
+    let Some(config) =
+        crate::audio::sfx::circuit_manifest(archives, track).and_then(|manifest| manifest.weather)
+    else {
+        return;
+    };
+    if loaded.setup.zone.is_some() {
+        loaded
+            .report
+            .push("weather: authored, and not built in Zone, as the original skips it".into());
+        return;
+    }
+    let anchors = oag_vex::weather::anchors(track_blob, nodes);
+    loaded.report.push(format!(
+        "weather: {} on {} covered section(s), the effect ridden on the camera in the open and \
+         held at the section's anchor under cover; the screen lens and the mist overlay are not \
+         played",
+        config.env_psys.as_deref().unwrap_or("no EnvPsys"),
+        anchors.len()
+    ));
+    loaded.setup.scenery_fx.weather =
+        Some(crate::race::scenery_fx::weather::Setup { config, anchors });
 }

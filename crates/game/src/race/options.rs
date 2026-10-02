@@ -581,7 +581,7 @@ pub struct Setup {
     /// contact point itself, aimed along world up.
     pub collision_fx: Vec<crate::livery::SparkAnchor>,
     /// The circuit's own placed effects - see `race::scenery_fx`. Empty off Pulse PSP.
-    pub scenery_fx: Vec<oag_vex::placed_psys::Placed>,
+    pub scenery_fx: super::scenery_fx::Plan,
     /// Every [`RACE_EFFECTS`] entry that loaded, parsed from the disc's own
     /// `Data\Psys\*.POB`.
     ///

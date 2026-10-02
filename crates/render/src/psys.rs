@@ -50,12 +50,17 @@ use oag_vex::pob::{self, Channel, ChannelMode, ParticleSystem};
 
 use crate::mesh::GpuVertex;
 
+mod emitter_state;
+pub mod field;
 pub mod frames;
+mod library;
 pub mod spawn;
 pub mod sprite;
 pub mod streak;
 
+use emitter_state::EmitterState;
 use frames::FrameAdvance;
+pub use library::Library;
 use spawn::Spawn;
 use sprite::{Atlas, Sheet, Sprite};
 use streak::StreakDraw;
@@ -343,6 +348,10 @@ pub struct Effect {
     pub name: String,
     /// The emitter tree.
     pub emitters: Vec<EmitterSpec>,
+    /// The wrapping box a weather effect fills - see [`field`].
+    pub field: Option<pob::field::FieldBox>,
+    /// The root's `+0x98`, how far ahead of the lens a weather effect sits.
+    pub view_depth: f32,
     /// Which emitters start on [`System::ignite`]: the root and its sibling
     /// chain, but not a child, which starts when its parent's particle does.
     roots: Vec<usize>,
@@ -459,6 +468,11 @@ impl Effect {
         let mut effect = Self {
             name: system.name.clone(),
             emitters,
+            field: records.first().and_then(|root| system.field_box(root)),
+            view_depth: records
+                .first()
+                .and_then(|root| system.view_depth(data, root))
+                .unwrap_or(0.0),
             roots,
             skipped_templates: 0,
         };
@@ -618,48 +632,6 @@ impl EmitterSpec {
     }
 }
 
-/// One running emitter: which spec, how much longer, and where it is.
-///
-/// A child instance carries its own anchor and drift rather than a
-/// reference to the parent particle that spawned it: the parent's slot can
-/// be recycled under it, and an index into a pool that reuses slots is the
-/// kind of aliasing that produces an effect anchored to the wrong thing.
-/// The drift is the parent's velocity at spawn, integrated linearly - the
-/// parent's own drag is not reapplied, so a fast, heavily damped parent
-/// drags its child slightly too far.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct EmitterState {
-    spec: u16,
-    ticks_left: f32,
-    /// Ticks until the next emission; `<= 0` means "due now", matching the
-    /// original's countdown at `instance + 0x04`, which emits on its very
-    /// first update.
-    until_next: f32,
-    anchor: Vec3,
-    drift: Vec3,
-    /// Velocity added to every particle this emitter spawns - a child
-    /// inherits its parent particle's, scaled by the child's own
-    /// `+0x4d0`.
-    inherited: Vec3,
-    /// Whether this instance rides its own drift (a child) or the caller's
-    /// anchor (a root).
-    is_child: bool,
-    active: bool,
-}
-
-impl EmitterState {
-    const IDLE: Self = Self {
-        spec: 0,
-        ticks_left: 0.0,
-        until_next: 0.0,
-        anchor: Vec3::ZERO,
-        drift: Vec3::ZERO,
-        inherited: Vec3::ZERO,
-        is_child: false,
-        active: false,
-    };
-}
-
 /// A live instance of an [`Effect`]: one pool of particles and the emitters
 /// filling it.
 ///
@@ -690,6 +662,8 @@ pub struct System {
     /// maps to - see [`System::advance`]'s own `up` parameter. Always a unit
     /// vector; `new()`'s default is world up, unrotated.
     up: Vec3,
+    /// `res+0x54` as a caller holds it for the instance - see [`System::set_azimuth`].
+    azimuth: Option<f32>,
     ignitions: u32,
 }
 
@@ -712,6 +686,7 @@ impl System {
             across: Vec3::X,
             anchor: Vec3::ZERO,
             up: Vec3::Y,
+            azimuth: None,
             ignitions: 0,
         }
     }
@@ -975,7 +950,7 @@ impl System {
         let frame_scale = if spec.world_space { 1.0 } else { frame_scale };
         let (direction, offset) = spawn::place(
             spec.spawn,
-            spec.direction,
+            (spec.direction, self.azimuth),
             self.scale * self.extent_scale * emission_scale * frame_scale,
             self.across,
             self.up,
@@ -1226,87 +1201,6 @@ impl System {
 #[must_use]
 pub fn effect_path(name: &str) -> String {
     format!(r"Data\Psys\{name}.POB")
-}
-
-/// The effects a caller has loaded, by name.
-///
-/// The generic half of playing the disc's own effects: every
-/// `Data\Psys\*.POB` reaches a [`Stage`] the same way, so nothing about an
-/// effect needs code of its own. What is *not* generic, and cannot be, is
-/// **when** each one fires - that is per-effect reverse-engineering, and the
-/// caller that recovered a trigger is the one that names the effect here.
-///
-/// A `Vec` rather than a map: a race loads a handful of effects, lookups
-/// happen at trigger time rather than per particle, and the order stays the
-/// caller's so a loader report reads the same way twice.
-#[derive(Debug, Clone, Default)]
-pub struct Library {
-    effects: Vec<(String, std::sync::Arc<Effect>)>,
-    /// Every loaded billboard's sprite, packed - see [`sprite`].
-    sheet: Sheet,
-}
-
-impl Library {
-    /// An empty library.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Adds `effect` under `name`, replacing any effect already there.
-    ///
-    /// Places each billboard emitter's sprite on the library's [`Sheet`]
-    /// first; one that does not fit keeps the procedural profile.
-    pub fn insert(&mut self, name: &str, mut effect: Effect) {
-        for spec in &mut effect.emitters {
-            // A streak samples only where its strip is read - see [`streak`].
-            let sampled = spec.render == Render::Billboard || spec.streak != StreakDraw::Procedural;
-            if let (true, Some(sprite)) = (sampled, &spec.sprite) {
-                spec.sheet_rect = self.sheet.place(sprite);
-            }
-        }
-        let effect = std::sync::Arc::new(effect);
-        match self.effects.iter_mut().find(|(key, _)| key == name) {
-            Some(slot) => slot.1 = effect,
-            None => self.effects.push((name.to_string(), effect)),
-        }
-    }
-
-    /// The effect loaded under `name`, if it loaded at all.
-    ///
-    /// `None` is the normal answer in a headless test with no disc, and the
-    /// answer a caller must handle by drawing nothing.
-    #[must_use]
-    pub fn get(&self, name: &str) -> Option<&std::sync::Arc<Effect>> {
-        self.effects
-            .iter()
-            .find(|(key, _)| key == name)
-            .map(|(_, effect)| effect)
-    }
-
-    /// How many effects loaded.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.effects.len()
-    }
-
-    /// Whether nothing loaded.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.effects.is_empty()
-    }
-
-    /// Their names, in load order.
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.effects.iter().map(|(name, _)| name.as_str())
-    }
-
-    /// The sprites every loaded effect draws with, for
-    /// [`Pipeline::sync_sheet`].
-    #[must_use]
-    pub fn sheet(&self) -> &Sheet {
-        &self.sheet
-    }
 }
 
 /// Effects a [`Stage`] plays at once.

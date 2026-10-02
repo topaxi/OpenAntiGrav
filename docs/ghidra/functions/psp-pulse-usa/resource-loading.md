@@ -294,10 +294,8 @@ debug string.
 
 ## Open questions
 
-- What the third collected class (`FUN_08a6ba4c`'s tag, up to 64 per model,
-  `+0xa4`/`+0xa8`) is. The per-element call `FUN_088786d0(*(node+0x58))`
-  sits in the camera code's address range, so lights or cameras are the
-  candidates; not read.
+- ~~What the third collected class is.~~ It is `section` (`0x3c9`); the per-element
+  call sets the covered-section bit for the weather - see [weather.md](weather.md).
 - Which class tags `FUN_08a6bd6c` and `FUN_08a6bfc0` return. The first is
   the world/root cache the EU lighting pass found; the second gates the
   env-map basis.

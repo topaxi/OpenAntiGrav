@@ -468,6 +468,8 @@ pub const MAX_CHANNEL_KEYS: usize = (CHANNEL_LEN - 0x14) / 8;
 
 /// The records `+0x93c` counts: what re-derives an emitter's extents every tick.
 pub mod attribute;
+/// The weather's wrapping box.
+pub mod field;
 /// Emitter-record flag bits, `+0x20`. Its own file: the evidence behind
 /// [`flags::LOOPING`] alone runs longer than the rest of this module's
 /// constants put together.
