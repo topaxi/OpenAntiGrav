@@ -19,6 +19,18 @@
 //! The writers this project reproduces are listed on `bloom.md`; the exhaust
 //! is merely the first.
 //!
+//! # The blur truncates every tap to a byte
+//!
+//! The GE adds in 8-bit integers and the blur is eleven separate additive
+//! draws, so each tap's `floor(v * w / 255)` is a whole byte before it joins
+//! the sum. `bloom.wgsl` does the same. It is not cosmetic: the opaque mask
+//! stamp of `4` leaves the bright pass at most 4, the horizontal pass at most 3
+//! (three taps of weight 64 keep 1 each), and the vertical pass truncates that
+//! to nothing, so the original's bloom carries no background term at all. A
+//! float chain carried one worth `4.5` mean luma over a racing frame against
+//! the original's `0.33` outside the craft. The measurement is under "Is ours
+//! stronger than the original" on `bloom.md`.
+//!
 //! # Why the buffers are a fixed 240 x 136
 //!
 //! The original's scratch buffers are exactly half of the PSP's 480 x 272, and
@@ -561,5 +573,121 @@ mod tests {
     #[test]
     fn the_buffers_are_half_the_psp_framebuffer() {
         assert_eq!((BLOOM_WIDTH * 2, BLOOM_HEIGHT * 2), (480, 272));
+    }
+    /// Runs the chain over a flat `rgb` / `alpha` scene and returns the
+    /// composite's mean red delta, or `None` with no adapter to run on.
+    fn mean_delta(rgb: u8, alpha: u8) -> Option<f32> {
+        const SIZE: (u32, u32) = (512, 272);
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
+            .into_iter()
+            .next()?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&Default::default())).expect("a device");
+        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let scene = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("bloom test scene"),
+            size: wgpu::Extent3d {
+                width: SIZE.0,
+                height: SIZE.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let texels: Vec<u8> = (0..SIZE.0 * SIZE.1)
+            .flat_map(|_| [rgb, rgb, rgb, alpha])
+            .collect();
+        queue.write_texture(
+            scene.as_image_copy(),
+            &texels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(SIZE.0 * 4),
+                rows_per_image: Some(SIZE.1),
+            },
+            wgpu::Extent3d {
+                width: SIZE.0,
+                height: SIZE.1,
+                depth_or_array_layers: 1,
+            },
+        );
+        let bloom = Bloom::new(&device, format).expect("the pipelines build");
+        let view = scene.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = device.create_command_encoder(&Default::default());
+        bloom.render(
+            &device,
+            &queue,
+            &mut encoder,
+            Frame {
+                scene: &view,
+                size: SIZE,
+                origin: (0.0, 0.0),
+                viewport: SIZE,
+            },
+        );
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("bloom test readback"),
+            size: u64::from(SIZE.0 * SIZE.1 * 4),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            scene.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(SIZE.0 * 4),
+                    rows_per_image: Some(SIZE.1),
+                },
+            },
+            wgpu::Extent3d {
+                width: SIZE.0,
+                height: SIZE.1,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.submit([encoder.finish()]);
+        readback
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, |r| r.expect("map"));
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("poll");
+        let data = readback.slice(..).get_mapped_range().expect("mapped");
+        let sum: u64 = data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| u64::from(p[0]))
+            .sum();
+        let mean = sum as f32 / (SIZE.0 * SIZE.1) as f32;
+        Some(mean - f32::from(rgb))
+    }
+
+    /// **The mask stamp of `4` brightens nothing.** The original truncates
+    /// every tap to a byte, so a texel of at most 4 vanishes in the blur:
+    /// measured outside the craft on Talon's Junction as `0.33` mean luma in
+    /// the original against `4.52` for a float chain. A glow byte of `0xaf`
+    /// on the same colour must still brighten the frame.
+    #[test]
+    fn the_opaque_stamp_adds_no_glow_and_a_glow_byte_does() {
+        let Some(stamped) = mean_delta(150, 4) else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        assert!(stamped.abs() < 0.01, "a stamp of 4 added {stamped}");
+        let white = mean_delta(255, 4).expect("the same adapter");
+        assert!(white.abs() < 0.01, "a stamp of 4 on white added {white}");
+        let glowing = mean_delta(150, 0xaf).expect("the same adapter");
+        assert!(glowing > 20.0, "a glow byte added only {glowing}");
     }
 }

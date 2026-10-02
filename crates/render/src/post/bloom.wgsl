@@ -53,18 +53,37 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
     return out;
 }
 
-// `g_bloom_blur_weights` (`DAT_08ab2348`), the eleven bytes verbatim, over
-// 255 because the original sends each as a vertex colour under `MODULATE`.
+// `g_bloom_blur_weights` (`DAT_08ab2348`), the eleven bytes verbatim. The
+// original sends each as a vertex colour under `MODULATE`.
 //
 // **These are deliberately not normalised.** They sum to 472/255 = 1.85, so
 // each axis brightens by that and the two together by 3.43x. That gain is the
 // original's and is a large part of why its glow is as strong as it is;
 // dividing it out here would be inventing a different effect.
-const WEIGHTS = array<f32, 11>(
-    20.0 / 255.0, 30.0 / 255.0, 40.0 / 255.0, 50.0 / 255.0, 64.0 / 255.0,
-    64.0 / 255.0,
-    64.0 / 255.0, 50.0 / 255.0, 40.0 / 255.0, 30.0 / 255.0, 20.0 / 255.0,
-);
+const WEIGHTS = array<u32, 11>(20u, 30u, 40u, 50u, 64u, 64u, 64u, 50u, 40u, 30u, 20u);
+
+// A sampled texel as the 8-bit integers the GE holds it in.
+fn bytes(texel: vec3<f32>) -> vec3<u32> {
+    return vec3<u32>(floor(texel * 255.0 + 0.5));
+}
+
+// **Every product below is truncated to a whole byte, as the original's is.**
+// The GE multiplies and adds in 8-bit integers and each of the blur's eleven
+// taps is its own additive draw, so a tap's contribution is `floor(v * w /
+// 255)` before it joins the sum. A float sum keeps what truncation destroys:
+// the opaque mask stamp of `4` leaves the bright pass at most 4 (a white
+// texel), the three centre taps of weight 64 keep 1 each, so the horizontal
+// pass leaves at most 3, and the vertical pass turns 3 into `floor(3 * 64 /
+// 255) = 0`. The stamp's whole contribution is exactly zero in the original,
+// while a float chain carries it at 3.43 x 0.686 of the stamp. Measured against
+// PPSSPP's software renderer on 2026-10-02 (`docs/ghidra/functions/psp-pulse-usa/bloom.md`,
+// "Is ours stronger"): the bloom's mean-luma contribution outside the craft on
+// a racing straight was `0.33` in the original, `4.52` here as floats and
+// `0.37` truncated.
+//
+// Truncation is what that measurement supports. That every stage truncates
+// rather than rounds is chosen, not measured, beyond the blur taps: they
+// are the only stage whose rounding the background term depends on.
 
 // Pass 0: `scratch = framebuffer.rgb * framebuffer.a`.
 @fragment
@@ -74,23 +93,26 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
     // radius a constant fraction of the picture at every render scale.
     let at = min(in.uv * constants.uv_scale, constants.uv_max);
     let texel = textureSample(source_tex, source_sampler, at);
-    return vec4<f32>(texel.rgb * texel.a, 1.0);
+    let alpha = u32(floor(texel.a * 255.0 + 0.5));
+    return vec4<f32>(vec3<f32>(bytes(texel.rgb) * alpha / 255u) / 255.0, 1.0);
 }
 
 // Passes 1 and 2: eleven taps at -5..+5 texels along `direction`.
 //
 // The original emits eleven separate additive draws, each offset by one step
 // and tinted by its weight, because the GE has no loop; summing the same
-// eleven taps in one pass is the same arithmetic and the same result.
+// eleven taps in one pass is the same arithmetic provided each tap is
+// truncated before it is added, as it is there.
 @fragment
 fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
     let step = constants.texel * constants.direction;
-    var sum = vec3<f32>(0.0);
+    var sum = vec3<u32>(0u);
     for (var i = 0; i < 11; i = i + 1) {
         let offset = f32(i - 5) * step;
-        sum = sum + textureSample(source_tex, source_sampler, in.uv + offset).rgb * WEIGHTS[i];
+        let v = bytes(textureSample(source_tex, source_sampler, in.uv + offset).rgb);
+        sum = min(sum + v * WEIGHTS[i] / 255u, vec3<u32>(255u));
     }
-    return vec4<f32>(sum, 1.0);
+    return vec4<f32>(vec3<f32>(sum) / 255.0, 1.0);
 }
 
 // Pass 3: the composite's own colour. The additive `framebuffer +=` half is

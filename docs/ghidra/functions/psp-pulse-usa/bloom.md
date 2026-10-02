@@ -530,3 +530,90 @@ hardware:
 fullscreen-pass plumbing (FXAA, SMAA, FSR 1), so steps 2-4 fit its existing
 shape. **Step 1 is the real work**, and it reaches every surface that should
 glow - see the correction above, which is the first known consumer.
+
+## Is ours stronger than the original? Yes, by the background term (2026-10-02)
+
+The maintainer, playing: "I had bloom active and it was VERY strong on Pulse."
+Measured against PPSSPP v1.20.4's **software** renderer, matched on circuit,
+craft and pose, on Pulse PSP's own bloom.
+
+**Method.** The original has no bloom switch, and `g_bloom_composite_strength`
+(`0x08ab2344`) is a no-op to poke: the composite's blend factor is baked into a
+display list. The list is in RAM: the one hit for the bytes `af af af e0`
+(`GE_CMD_BLENDFIXEDA`, `0xafafaf`, followed by `ff ff ff e1`) over user RAM was
+`0x08fb61f8` on all three boots. Writing `00 00 00` there through the debugger
+removes the composite on the next frame (a no-op of the `jal` at `0x089077e4`
+did nothing). `data/scratch/bloom-setting/pair.sh` captures 48 ticks of
+Talon's Junction (Venom, Assegai), `--shot-every 1`, and pokes at tick 24.
+Because the scene drifts (the mean of ticks 16-27 against 34-47 differs with
+**no** poke), each poke run is paired with a control run that writes the *same*
+value back; the figure is poke minus control. Ours is the same pose,
+`--pose-from` that trace, `--ticks 1`, bloom on against off through
+`settings.toml`, 480 x 272. **Ours needs the exhaust forced to the capture's
+state** (`--pose-boost 10 --pose-intensity 1.0 --pose-speed 23.6`): a
+`--pose-from` frame at `--ticks 1` renders the flare cold, which an earlier
+version of this section did not do (see the correction below).
+
+Mean luma added by the bloom, whole frame / around the craft (x 170-310,
+y 140-272) / everywhere else:
+
+| | racing straight, 82 km/h, flare `1.0` | at rest on the grid, flare `0` |
+| --- | --- | --- |
+| the original, boot 1 (3 poke, 2 control) | 1.32 / 7.3 / 0.33 | |
+| the original, boot 2 (2 poke, 1 control) | 1.0 / 6.0 / 0.36 | |
+| the original, boot 3 (2 poke, 2 control) | | 8.4 / 8.2 / 8.4 |
+| ours before, float chain | **5.6-5.7** / 12.4-13.0 / **4.52** | 11.8 / 14.5 / 11.4 |
+| ours after, truncated taps | 1.55-1.63 / 8.6-9.3 / 0.36-0.38 | **8.3** / 10.8 / 7.9 |
+
+**Ours was 4.4-5.7 times the original over a racing frame and 1.4 times at
+rest.** At rest the truncated chain matches the original to 0.4 % over the whole
+frame (`8.32` against `8.35`), which is a second, independent test of the fix:
+the grid's glow strips and the countdown gantry carry real mask bytes, and
+only the stamp-4 floor differs. On the straight, outside the craft, the float
+chain was 13 times the original (`4.52` against `0.33`), and that is where all
+of the excess was.
+
+**The cause: 8-bit arithmetic.** Every opaque batch stamps `4` into the mask
+(`glow-mask.md`), so the bright pass writes `rgb * 4 / 255`, at most 4 (a white
+texel). The GE blends each of the blur's eleven taps as its own additive draw
+and keeps a whole byte: in the horizontal pass the three weight-64 taps keep 1
+each, so at most 3 survives, and in the vertical pass `floor(3 * 64 / 255) = 0`.
+**The stamp's whole contribution is zero in the original.** Our single-pass
+float sum kept it and amplified it by the `3.43x` kernel gain. Truncating each
+tap to a byte (`bloom.wgsl`, `fs_bright` and `fs_blur`) reproduces `0.33`
+outside the craft as `0.37`; rounding to nearest gives `2.74`, so it is
+truncation specifically. That the bright pass and the composite also truncate
+is chosen, not measured (a unit test pins the stamp's zero, on white and on
+grey).
+
+**It is resolution independent** (the buffers are fixed at 240 x 136): the same
+pose at 480 x 272, 960 x 544 at render scale 200 and 1920 x 1080 gives a delta
+within 2 % (`23.1`, `23.1`, `22.7` for the float chain on the pad pose, and
+`0.45` against `0.48` truncated, 480 x 272 against 1080, on the straight with
+the cold flare). There was no scaling bug to fix.
+
+**What remains.** On the racing straight ours is still `1.2-1.6x` the original
+over the frame and about `1.3x` around the craft (`8.6-9.3` against `6.0-7.3`).
+The flare and the plume are the candidates (their drawn size and mask ramp at
+`flare_speed_kmh` 85 are the things this did not vary); unexplained, and not
+chased here.
+
+**Correction, same day.** The first version of this section measured ours with
+the exhaust cold (`--pose-from` at `--ticks 1` starts the flare at intensity
+`0`) and concluded the exhaust glow was "about a seventh of the original's".
+That was a posing artefact, the same one this page retracted on 2026-08-10, and
+the `0.95` around the craft in it is retracted. The glow mask over the craft box
+with the flare forced reads `115` on 863 pixels (`0.45 * 255`, saturated
+intensity), as the 2026-08-10 measurement did.
+
+**Not achieved.** A boost-pad pair in the original: only 1 of 4 placed
+approaches triggered the pad, so there is no matched on/off number for it, only
+the side-by-side (the pad's glow was comparable in size) and a pad-pose delta of
+`23.1` (float) to `19.4` (truncated) with a cold flare. Three boots, one circuit
+and ship. Confidence **80** for "the original's background bloom is zero
+because of per-tap truncation" (three boots, controls, two scenes, the
+rounding alternative refuted); **60** for the racing whole-frame ratio, whose
+control subtraction carries about `+-0.4` luma on a number near 1.
+
+Scripts and frames: `data/scratch/bloom-setting/` (`pair.sh`, `nop.py`,
+`ours.sh`, `ours2.sh`, `reg.py`, `cap/`).
