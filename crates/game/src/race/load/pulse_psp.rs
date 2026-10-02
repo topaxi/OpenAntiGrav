@@ -7,7 +7,6 @@
 //! See `docs/ghidra/functions/psp-pulse-usa/scene-light.md` and
 //! `docs/rendering/glow-mask.md`.
 
-use oag_render::mesh::Model;
 use oag_render::mesh_render;
 
 use super::Loaded;
@@ -50,47 +49,7 @@ pub(super) fn finish(loaded: &mut Loaded, pulse_psp: bool, track_blob: &[u8]) {
         &mut loaded.report,
     );
 
-    let stamp = |model: &mut Model| model.stamps_glow = true;
-    stamp(&mut loaded.track_model);
-    for model in [
-        &mut loaded.sky_model,
-        &mut loaded.pad_model,
-        &mut loaded.weapon_pad_model,
-        &mut loaded.shield_cockpit,
-        &mut loaded.rocket_model,
-        &mut loaded.mine_model,
-        &mut loaded.bomb_model,
-        &mut loaded.cannon_model,
-    ]
-    .into_iter()
-    .flatten()
-    {
-        stamp(model);
-    }
-    // The Bomb's blast dome: `hemisphere_disperse1_ADD_GLOW`, a transparent batch with the
-    // glow bit, which the original's state list stamps (`0x50`) like the arch lights. The
-    // shockwave beside it has no glow bits, so for it the flag is a no-op.
-    for model in [
-        &mut loaded.bomb_blast_models.hemisphere,
-        &mut loaded.bomb_blast_models.shockwave,
-    ]
-    .into_iter()
-    .flatten()
-    {
-        stamp(model);
-    }
-    for livery in &mut loaded.liveries {
-        stamp(&mut livery.hull);
-        if let Some(wreck) = &mut livery.wreck {
-            stamp(&mut wreck.model);
-        }
-        for model in [&mut livery.boost, &mut livery.shield]
-            .into_iter()
-            .flatten()
-        {
-            stamp(model);
-        }
-    }
+    super::glow_mask::stamp_models(loaded, false);
     loaded
         .report
         .push(match oag_render::shine::build_track(&loaded.track_model) {

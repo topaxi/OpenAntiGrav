@@ -442,3 +442,14 @@ covers), `254` and `255` (that banner, `hub_banner_GLOW`, uncovered or scrolled)
 pixels). So `WO_SHIP_EXPLOSION`'s particles, like the Rocket's, leave the mask alone, and the orange band along the
 horizon is the `Bomb_Shockwave.vex` ring ([ship-shockwave.md](../ghidra/functions/psp-pulse-usa/ship-shockwave.md)),
 not a bloom of the fire. One boot, four frames read in detail: seen once.
+
+## Pulse PS2 writes a different mask (2026-10-02)
+
+Everything above is the PSP's: a stencil reference, a constant per batch, `4`
+under every opaque batch. **The PS2 has none of those.** Read off replayed GS
+dumps of Moa Therma, the PS2's frame alpha clears to `0`, opaque batches leave
+it alone, and the groups that write it write `texel alpha * vertex colour alpha
+>> 7`, a ramp, over `_GLOW` batches only - 96.7 to 98.7 % of a frame reads `0`
+and 222 to 249 levels are in use. The measurement, the readout method and the
+port are on [`ps2-bloom.md`](ps2-bloom.md): `GlowMask::StampedByTexel`, with the
+loader's `pulse_ps2` marking the models, and the PSP's `Stamped` rule unchanged.

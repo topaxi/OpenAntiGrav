@@ -270,6 +270,14 @@ pub mod slots {
     /// [`RIM_GLOW`] and the same page.
     pub const RIM_EDGE: u32 = 1 << 12;
 
+    /// This batch carries the glow bits (`pass_mask & 0xc0`), the one thing
+    /// the PS2's mask rule reads: such a batch stamps its fragments' own
+    /// alpha and every other batch stamps nothing. Set by `mesh::build` on
+    /// every `.vex` batch, and read only by a model with
+    /// [`Model::glow_by_texel`](super::Model::glow_by_texel); the PSP's rule
+    /// keeps carrying its constant in [`GpuVertex::glow`](super::GpuVertex::glow).
+    pub const GLOW_BATCH: u32 = 1 << 13;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///

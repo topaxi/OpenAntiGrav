@@ -1606,10 +1606,27 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
 // `oag_render::mesh::glow` and docs/rendering/glow-mask.md.
 override glow_stamp: f32 = 0.0;
 
+// **Whether that stamp is the PS2's rule** - 1.0 only for a drawable built with
+// `mesh_render::GlowMask::StampedByTexel`. The PS2 writes the fragment's own
+// alpha (texel times vertex colour) from a batch with the glow bits and nothing
+// from any other, where the PSP writes a constant the batch names. See
+// `GlowMask::StampedByTexel` and docs/rendering/ps2-bloom.md.
+override glow_texel: f32 = 0.0;
+
+// `slots::GLOW_BATCH`: the batch carries the glow bits.
+const SLOT_GLOW_BATCH: u32 = 8192u;
+
+// What this fragment stamps, before any alpha test: the batch's constant on the
+// PSP's rule, the fragment's own alpha on a glow batch on the PS2's.
+fn stamp_value(in: VertexOutput, shaded_alpha: f32) -> f32 {
+    let ps2 = select(0.0, shaded_alpha, (in.slots & SLOT_GLOW_BATCH) != 0u);
+    return mix(in.glow, ps2, glow_texel);
+}
+
 // The opaque and cutout pipelines' alpha: `1.0` as it always was, or the
 // batch's stamp where the model stamps.
-fn stamped_alpha(in: VertexOutput) -> f32 {
-    return mix(1.0, in.glow, glow_stamp);
+fn stamped_alpha(in: VertexOutput, shaded_alpha: f32) -> f32 {
+    return mix(1.0, stamp_value(in, shaded_alpha), glow_stamp);
 }
 
 @fragment
@@ -1622,7 +1639,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // exactly. `fs_main_blend` below is the one that actually reads it.
     return vec4<f32>(
         fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-        stamped_alpha(in)
+        stamped_alpha(in, shaded.a)
     );
 }
 
@@ -1718,7 +1735,7 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     return vec4<f32>(
         fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-        stamped_alpha(in)
+        stamped_alpha(in, shaded.a)
     );
 }
 
@@ -1749,18 +1766,22 @@ fn stamp_discards(shaded: vec4<f32>, glow: f32) -> bool {
 
 @fragment
 fn fs_main_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
-    if stamp_discards(lit_texel(in), in.glow) {
+    let shaded = lit_texel(in);
+    let glow = stamp_value(in, shaded.a);
+    if stamp_discards(shaded, glow) {
         discard;
     }
-    return vec4<f32>(0.0, 0.0, 0.0, in.glow);
+    return vec4<f32>(0.0, 0.0, 0.0, glow);
 }
 
 @fragment
 fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
-    if stamp_discards(lit_texel(in), in.glow) {
+    let shaded = lit_texel(in);
+    let glow = stamp_value(in, shaded.a);
+    if stamp_discards(shaded, glow) {
         discard;
     }
-    return MrtOutput(vec4<f32>(0.0, 0.0, 0.0, in.glow), velocity_of(in));
+    return MrtOutput(vec4<f32>(0.0, 0.0, 0.0, glow), velocity_of(in));
 }
 
 // The velocity-writing twins of `fs_main` and `fs_main_alpha_test`, for the
@@ -1775,7 +1796,7 @@ fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
     return MrtOutput(
         vec4<f32>(
             fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-            stamped_alpha(in)
+            stamped_alpha(in, shaded.a)
         ),
         velocity_of(in),
     );
@@ -1790,7 +1811,7 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     return MrtOutput(
         vec4<f32>(
             fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-            stamped_alpha(in)
+            stamped_alpha(in, shaded.a)
         ),
         velocity_of(in),
     );

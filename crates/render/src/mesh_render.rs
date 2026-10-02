@@ -269,13 +269,18 @@ pub fn build(
     // A model that stamps the mask stamps it whatever the call site asked -
     // see [`Model::stamps_glow`]. That is also what stops the PSP plume and
     // shield writing it: their batches are transparent without the glow bits.
-    let glow = if model.stamps_glow {
-        GlowMask::Stamped
-    } else {
-        glow
+    let glow = match (model.stamps_glow, model.glow_by_texel) {
+        (true, true) => GlowMask::StampedByTexel,
+        (true, false) => GlowMask::Stamped,
+        // A PS2 model that opts out of the mask: it writes colour only.
+        (false, true) => GlowMask::Protected,
+        (false, false) => glow,
     };
-    if glow == GlowMask::Stamped {
+    if glow.stamps() {
         constants.push(("glow_stamp", 1.0));
+    }
+    if glow == GlowMask::StampedByTexel {
+        constants.push(("glow_texel", 1.0));
     }
     if receives_shadow != ShadowReceiver::Never {
         constants.push(("receives_shadow", receives_shadow.constant()));
@@ -709,7 +714,7 @@ pub fn build(
         ));
     }
 
-    let stamp_pipeline = (glow == GlowMask::Stamped).then(|| {
+    let stamp_pipeline = glow.stamps().then(|| {
         stamp::pipelines(&stamp::Shared {
             device,
             shader,

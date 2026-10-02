@@ -1132,6 +1132,7 @@ impl Pipeline {
         trail_blend: wgpu::BlendState,
         sample_count: u32,
         velocity: crate::mesh_render::Velocity,
+        trail_stamps_mask: bool,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("exhaust"),
@@ -1288,12 +1289,14 @@ impl Pipeline {
         );
         // The caller's, not [`TRAIL_BLEND`]: a title that authors its ribbon
         // passes its material's own pair - `race::Loaded::trail_blend`.
-        let trail_pipeline = build_pipeline(
-            "exhaust trail",
-            trail_blend,
-            wgpu::ColorWrites::ALL,
-            &trail_constants,
-        );
+        // The PSP's ribbon stamps its ramp, the PS2's is in no mask.
+        let trail_writes = if trail_stamps_mask {
+            wgpu::ColorWrites::ALL
+        } else {
+            wgpu::ColorWrites::COLOR
+        };
+        let trail_pipeline =
+            build_pipeline("exhaust trail", trail_blend, trail_writes, &trail_constants);
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("exhaust uniforms"),
