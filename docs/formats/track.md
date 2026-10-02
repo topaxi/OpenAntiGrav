@@ -488,6 +488,22 @@ incremental advance:
 6. **Self-correction**: if the result lands more than 100 units away, it
    recurses with the hash bypassed.
 
+**The prototype Ghidra shows is wrong, and the call sites say what it is** (2026-10-02,
+`pulse-grid-walk`): `AiTrack_LocatePosition(float radius /* f12 */, track /* a0 */, record
+/* a1, 0x70 bytes out */, position /* a2 */, cursor /* a3, 0 for a fresh one */, excluded_path
+/* t0, -1 */, force_scan /* t1 */)`. The grid layout passes the same buffer as position and as
+record, so the call overwrites the point it was given.
+
+**What it computes is a projection** (confidence 88): the nearest control point, the segment
+between it and its nearer neighbour, then three Gauss-Newton steps on the cubic B-spline of the
+**lifted** control points from `t = 0.5` (`FUN_0887c340`), clamped to `0..1` last, and the record
+blended at that `t` (`FUN_0887c7e8`). **Every field of the record comes out `8190/8192` of the true
+blend**: the evaluator multiplies its weights by the half-float immediate `0x3155`
+(`0.16662598`, not `1/6`), so the `w` lane of a located position reads `0.999755859375`, the
+tangent is `0.99976` long and the position is `0.000244` of its coordinate toward the world
+origin. See [grid.md](../ghidra/functions/psp-pulse-usa/grid.md#the-grid-walk-read-to-the-end-2026-10-02);
+`oag_gameplay::grid_walk::locate` is the port.
+
 The section index then comes from the spline point, not from a geometric query:
 evaluating the spline writes `section_id` and OR-accumulates `flags` across the
 four control points.
