@@ -18,6 +18,13 @@ pub(super) enum Which {
     Menu,
 }
 
+/// Whether a race's end-race flow opens on `Race End Photo`: the race ended in a way whose
+/// world runs on (the line, or a Single Race wreck - `Race::runs_on_after_the_end`), the disc's
+/// screen read, and the title is not Wipeout HD/Fury, whose equivalent was not read.
+pub(super) fn opens_on_photo(runs_on: bool, photo_read: bool, hd: bool) -> bool {
+    runs_on && photo_read && !hd
+}
+
 /// The screen on top and, on `Race End Photo`, the ticks since the finish.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Flow {
@@ -85,6 +92,20 @@ impl Flow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_race_whose_world_runs_on_opens_on_the_photo_and_not_hd() {
+        assert!(opens_on_photo(true, true, false));
+        assert!(
+            !opens_on_photo(false, true, false),
+            "a Zone wreck, an Eliminator end"
+        );
+        assert!(
+            !opens_on_photo(true, false, false),
+            "the screen did not read"
+        );
+        assert!(!opens_on_photo(true, true, true), "HD's was not read");
+    }
 
     #[test]
     fn a_race_whose_photo_screen_read_starts_there_and_one_whose_did_not_does_not() {
