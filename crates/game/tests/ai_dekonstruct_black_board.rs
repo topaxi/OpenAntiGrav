@@ -88,7 +88,6 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     let mut rs: Vec<(usize, u64, u32)> = Vec::new();
     let mut took = vec![false; count];
     let mut landed_ok: Vec<Option<u32>> = vec![None; count];
-    let mut landed = vec![false; count];
     for _ in 0..TICKS {
         tick_no += 1;
         let at: Vec<u32> = (0..count)
@@ -227,7 +226,11 @@ fn dekonstruct_board() {
     for class in classes() {
         for reversed in [false, true] {
             let Some(entry) = entry(reversed) else { return };
-            let name = if reversed { "05 White (rev)" } else { "05 Black (fwd)" };
+            let name = if reversed {
+                "05 White (rev)"
+            } else {
+                "05 Black (fwd)"
+            };
             for field in [false, true] {
                 let mut t = Tally::default();
                 for seed in if field { seeds() } else { vec![1] } {
@@ -371,7 +374,6 @@ fn line_profile() {
         .unwrap_or(660);
     for i in (from..to).step_by(4) {
         let k = line.max_curvature(i, 6.0, 11.0);
-        let k4 = line.max_curvature(i, 6.0, 4.0);
         let t = if k > 1e-6 {
             (260.0f32 / k).sqrt().min(1.556 / k)
         } else {
