@@ -119,10 +119,19 @@ pub(crate) fn offer(texture: ModelTexture) -> ModelTexture {
         if matches!(texture.texels, Texels::Uploaded { .. }) {
             return texture;
         }
-        let gpu_bytes = texture::gpu_bytes(&texture, sink.blocks);
         let cpu_bytes = texture.cpu_bytes();
         let block_compressed = matches!(texture.texels, Texels::Blocks { .. }) && sink.blocks;
-        let view = texture::upload(&sink.device, &sink.queue, &texture, sink.blocks);
+        // A texture no level of which fits the device is handed back as it came,
+        // texels and all: the build's own upload refuses it again and the loader
+        // line names it. Counted in none of the stats.
+        let Some(texture::Placed {
+            view,
+            gpu_bytes,
+            dropped_levels,
+        }) = texture::upload(&sink.device, &sink.queue, &texture, sink.blocks)
+        else {
+            return texture;
+        };
         sink.stats.textures += 1;
         sink.stats.block_compressed += usize::from(block_compressed);
         sink.stats.gpu_bytes += gpu_bytes;
@@ -140,6 +149,7 @@ pub(crate) fn offer(texture: ModelTexture) -> ModelTexture {
                 view,
                 gpu_bytes,
                 block_compressed,
+                dropped_levels,
             },
             ..texture
         }

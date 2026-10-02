@@ -108,6 +108,11 @@ pub enum Texels {
         gpu_bytes: u64,
         /// Whether it went up as the disc's own blocks.
         block_compressed: bool,
+        /// How many of the source's leading mip levels were left out because
+        /// the base was wider than the device's `max_texture_dimension_2d` -
+        /// **chosen, not measured**, 0 for every texture on a device that
+        /// holds it whole.
+        dropped_levels: u32,
     },
 }
 

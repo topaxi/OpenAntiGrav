@@ -62,6 +62,11 @@ pub(super) const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 /// depth, where known - see [`crate::mesh::ModelTexture::mip_count`]. `None`
 /// keeps the full chain down to 1x1, today's behaviour for every path that
 /// has not measured its own asset's depth yet.
+///
+/// **A base level wider than the device allows is not uploaded**: the chain
+/// goes up from the first level that fits (see [`first_fitting_level`]), and
+/// the number of levels left out is returned beside the view. `None` when no
+/// level fits.
 pub(super) fn upload_rgba(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -70,18 +75,68 @@ pub(super) fn upload_rgba(
     rgba: &[u8],
     label: &str,
     max_levels: Option<u32>,
-) -> wgpu::TextureView {
+) -> Option<Placed> {
     let mut mips = mip_chain(width, height, rgba);
     if let Some(max_levels) = max_levels {
         mips.truncate(max_levels as usize);
     }
-    upload_levels(
-        device,
-        queue,
-        label,
-        mips.iter()
-            .map(|(w, h, texels)| (*w, *h, texels.as_slice())),
-    )
+    let skip = first_fitting_level(
+        width,
+        height,
+        mips.len(),
+        device.limits().max_texture_dimension_2d,
+        1,
+    )?;
+    let levels = mips[skip..]
+        .iter()
+        .map(|(w, h, texels)| (*w, *h, texels.as_slice()));
+    let gpu_bytes = levels
+        .clone()
+        .map(|(_, _, texels)| texels.len() as u64)
+        .sum();
+    Some(Placed {
+        view: upload_levels(device, queue, label, levels),
+        gpu_bytes,
+        dropped_levels: skip as u32,
+    })
+}
+
+/// A texture on the GPU: its view, what it occupies, and how many of the
+/// source's leading mip levels were left out to fit the device.
+pub(super) struct Placed {
+    pub(super) view: wgpu::TextureView,
+    pub(super) gpu_bytes: u64,
+    /// **Chosen, not measured**: the base level is skipped whole when it is
+    /// wider than `max_texture_dimension_2d`, and so is every level after it
+    /// until one fits.
+    pub(super) dropped_levels: u32,
+}
+
+/// The first of `levels` mip levels, counting from the base at `width` by
+/// `height`, whose sides both fit in `limit`; `None` when none does.
+///
+/// **The one rule every `create_texture` here goes through.** A level `n` is
+/// `max(width >> n, 1)` by `max(height >> n, 1)`, so a chain whose base is too
+/// large for the device still holds a level that is not, and the picture goes
+/// up at that level's size rather than panicking in wgpu's validation. **Chosen,
+/// not measured**: nothing about how the original handled an oversize texture is
+/// known, because no GPU the originals ran on had one.
+///
+/// `align` is the block size the chosen base must be a whole number of: 1 for an
+/// uncompressed texture and 4 for BC, which WebGPU refuses to create at a base
+/// that is not (the levels under it round up and need no such check).
+pub(super) fn first_fitting_level(
+    width: u32,
+    height: u32,
+    levels: usize,
+    limit: u32,
+    align: u32,
+) -> Option<usize> {
+    (0..levels).find(|&level| {
+        let shift = u32::try_from(level).unwrap_or(u32::MAX).min(31);
+        let (w, h) = ((width >> shift).max(1), (height >> shift).max(1));
+        w <= limit && h <= limit && w % align == 0 && h % align == 0
+    })
 }
 
 /// Uploads a chain the caller already holds, one `(width, height, texels)` per
@@ -143,8 +198,10 @@ pub(super) fn upload_shared(
     queue: &wgpu::Queue,
     texture: &std::sync::Arc<ModelTexture>,
     blocks: bool,
-) -> wgpu::TextureView {
-    super::pipeline_cache::cached_texture_view(texture, || upload(device, queue, texture, blocks))
+) -> Option<wgpu::TextureView> {
+    super::pipeline_cache::cached_texture_view(texture, || {
+        upload(device, queue, texture, blocks).map(|placed| placed.view)
+    })
 }
 
 /// Uploads one [`ModelTexture`], in the form it came in.
@@ -155,30 +212,51 @@ pub(super) fn upload_shared(
 /// block-compressed texture is decoded back to RGBA8 here rather than left
 /// undrawn - one memory win traded away on an adapter that cannot take it,
 /// which is the GL backend and nothing this project ships by default.
+///
+/// **`None` is a texture nothing on the device can hold**: no level of its
+/// chain fits `max_texture_dimension_2d`. The caller binds nothing for it, as
+/// it does for any texture that did not decode, and the loader report names it
+/// ([`log_census`]). A chain whose base is too large but a later level is not
+/// goes up from that level - see [`first_fitting_level`].
 pub(super) fn upload(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &ModelTexture,
     blocks: bool,
-) -> wgpu::TextureView {
+) -> Option<Placed> {
+    let limit = device.limits().max_texture_dimension_2d;
     // Decoded under a `texture_sink` scope: the picture is already up, and this
     // is the one place that would otherwise put it there a second time.
-    if let Texels::Uploaded { view, .. } = &texture.texels {
-        return view.clone();
+    if let Texels::Uploaded {
+        view,
+        gpu_bytes,
+        dropped_levels,
+        ..
+    } = &texture.texels
+    {
+        return Some(Placed {
+            view: view.clone(),
+            gpu_bytes: *gpu_bytes,
+            dropped_levels: *dropped_levels,
+        });
     }
+    let level_dims = |level: usize| {
+        (
+            (texture.width >> level.min(31)).max(1),
+            (texture.height >> level.min(31)).max(1),
+        )
+    };
     if let Texels::Chain(levels) = &texture.texels {
-        return upload_levels(
-            device,
-            queue,
-            &texture.label,
-            levels.iter().enumerate().map(|(level, texels)| {
-                (
-                    (texture.width >> level).max(1),
-                    (texture.height >> level).max(1),
-                    texels.as_slice(),
-                )
-            }),
-        );
+        let skip = first_fitting_level(texture.width, texture.height, levels.len(), limit, 1)?;
+        let kept = levels[skip..].iter().enumerate().map(|(index, texels)| {
+            let (width, height) = level_dims(skip + index);
+            (width, height, texels.as_slice())
+        });
+        return Some(Placed {
+            view: upload_levels(device, queue, &texture.label, kept),
+            gpu_bytes: levels[skip..].iter().map(|level| level.len() as u64).sum(),
+            dropped_levels: skip as u32,
+        });
     }
     let Texels::Blocks { format, levels } = &texture.texels else {
         let rgba = texture.rgba().expect("the other arm is Texels::Blocks");
@@ -193,16 +271,22 @@ pub(super) fn upload(
         );
     };
     if !blocks {
-        // `first()` rather than `[0]`: `Texels::Blocks` is a public variant, and
-        // an empty chain built elsewhere should decode to nothing and bind a
-        // blank rather than panic here. `skin::blocks` never produces one.
+        // The first level that fits, not `levels.first()`: an oversize base
+        // would otherwise be decoded to RGBA8 in full before anything dropped
+        // it. `first()` rather than `[0]` still holds in spirit: `Texels::Blocks`
+        // is a public variant, and an empty chain built elsewhere decodes to
+        // nothing and binds a blank rather than panicking here. `skin::blocks`
+        // never produces one.
+        let skip =
+            first_fitting_level(texture.width, texture.height, levels.len().max(1), limit, 1)?;
+        let (width, height) = level_dims(skip);
         let decoded = levels
-            .first()
-            .and_then(|base| format.decode_level(base, texture.width, texture.height));
+            .get(skip)
+            .and_then(|level| format.decode_level(level, width, height));
         let rgba: Vec<u8> = decoded.into_iter().flatten().flatten().collect();
         // A chain that decoded to nothing binds a blank rather than sending
         // `mip_chain` off the end of an empty buffer.
-        let full = u64::from(texture.width) * u64::from(texture.height) * 4;
+        let full = u64::from(width) * u64::from(height) * 4;
         if rgba.len() as u64 != full {
             return upload_rgba(
                 device,
@@ -214,43 +298,49 @@ pub(super) fn upload(
                 None,
             );
         }
-        return upload_rgba(
+        let mut placed = upload_rgba(
             device,
             queue,
-            texture.width,
-            texture.height,
+            width,
+            height,
             &rgba,
             &texture.label,
-            texture.mip_count,
-        );
+            texture
+                .mip_count
+                .map(|count| count.saturating_sub(skip as u32)),
+        )?;
+        placed.dropped_levels += skip as u32;
+        return Some(placed);
     }
+    let skip = first_fitting_level(texture.width, texture.height, levels.len(), limit, 4)?;
+    let (base_width, base_height) = level_dims(skip);
     let gpu = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&texture.label),
         size: wgpu::Extent3d {
-            width: texture.width,
-            height: texture.height,
+            width: base_width,
+            height: base_height,
             depth_or_array_layers: 1,
         },
-        mip_level_count: levels.len() as u32,
+        mip_level_count: (levels.len() - skip) as u32,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: format.wgpu(),
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
-    for (level, texels) in levels.iter().enumerate() {
+    for (index, texels) in levels[skip..].iter().enumerate() {
         // **The block-aligned size, not the level's own.** A 2048x2048 chain
         // ends 2x2 and 1x1, and a compressed copy is validated in whole blocks
         // against the level's *physical* extent - which WebGPU defines as the
         // logical one rounded up to the block grid. Passing the logical size
         // there is "Copy height is not a multiple of block height", and the
         // last two levels of every mipped texture hit it.
-        let width = (texture.width >> level).max(1).div_ceil(4) * 4;
-        let height = (texture.height >> level).max(1).div_ceil(4) * 4;
+        let width = (base_width >> index).max(1).div_ceil(4) * 4;
+        let height = (base_height >> index).max(1).div_ceil(4) * 4;
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &gpu,
-                mip_level: level as u32,
+                mip_level: index as u32,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
@@ -270,30 +360,64 @@ pub(super) fn upload(
             },
         );
     }
-    gpu.create_view(&wgpu::TextureViewDescriptor::default())
+    Some(Placed {
+        view: gpu.create_view(&wgpu::TextureViewDescriptor::default()),
+        gpu_bytes: levels[skip..].iter().map(|level| level.len() as u64).sum(),
+        dropped_levels: skip as u32,
+    })
 }
 
-/// Bytes a texture occupies once uploaded, mip chain included.
+/// What [`upload`] will do with a texture on a device whose
+/// `max_texture_dimension_2d` is `limit`: how many leading mip levels it leaves
+/// out and how many bytes the rest occupy, mip chain included. `None` where
+/// [`upload`] returns `None`.
 ///
 /// Arithmetic, not a readback: [`upload`] is the one place a texture reaches
-/// the GPU and this mirrors its three outcomes - the disc's own blocks and
-/// chain, blocks decoded back to RGBA8 on an adapter without
-/// `TEXTURE_COMPRESSION_BC`, and RGBA8 with the box-filtered chain.
-pub(super) fn gpu_bytes(texture: &ModelTexture, blocks: bool) -> u64 {
-    if let Texels::Uploaded { gpu_bytes, .. } = &texture.texels {
-        return *gpu_bytes;
+/// the GPU and this mirrors its outcomes - the disc's own blocks and chain,
+/// blocks decoded back to RGBA8 on an adapter without `TEXTURE_COMPRESSION_BC`,
+/// and RGBA8 with the box-filtered chain, each from the first level that fits.
+pub(super) fn plan(texture: &ModelTexture, blocks: bool, limit: u32) -> Option<(u32, u64)> {
+    let sum = |levels: &[Vec<u8>]| levels.iter().map(|level| level.len() as u64).sum();
+    let synthesised = |width: u32, height: u32, max: Option<u32>| {
+        let mut levels = mip_chain_dims(width, height);
+        if let Some(max) = max {
+            levels.truncate(max as usize);
+        }
+        let skip = first_fitting_level(width, height, levels.len(), limit, 1)?;
+        let bytes = levels[skip..]
+            .iter()
+            .map(|(w, h)| u64::from(*w) * u64::from(*h) * 4)
+            .sum();
+        Some((skip as u32, bytes))
+    };
+    match &texture.texels {
+        Texels::Uploaded {
+            gpu_bytes,
+            dropped_levels,
+            ..
+        } => Some((*dropped_levels, *gpu_bytes)),
+        Texels::Chain(levels) => {
+            let skip = first_fitting_level(texture.width, texture.height, levels.len(), limit, 1)?;
+            Some((skip as u32, sum(&levels[skip..])))
+        }
+        Texels::Blocks { levels, .. } if blocks => {
+            let skip = first_fitting_level(texture.width, texture.height, levels.len(), limit, 4)?;
+            Some((skip as u32, sum(&levels[skip..])))
+        }
+        Texels::Blocks { levels, .. } => {
+            let skip =
+                first_fitting_level(texture.width, texture.height, levels.len().max(1), limit, 1)?;
+            let (_, bytes) = synthesised(
+                (texture.width >> skip.min(31)).max(1),
+                (texture.height >> skip.min(31)).max(1),
+                texture
+                    .mip_count
+                    .map(|count| count.saturating_sub(skip as u32)),
+            )?;
+            Some((skip as u32, bytes))
+        }
+        Texels::Rgba8(_) => synthesised(texture.width, texture.height, texture.mip_count),
     }
-    if let (Texels::Blocks { levels, .. }, true) = (&texture.texels, blocks) {
-        return levels.iter().map(|level| level.len() as u64).sum();
-    }
-    if let Texels::Chain(levels) = &texture.texels {
-        return levels.iter().map(|level| level.len() as u64).sum();
-    }
-    let mut levels = mip_chain_dims(texture.width, texture.height);
-    if let Some(max) = texture.mip_count {
-        levels.truncate(max as usize);
-    }
-    levels.iter().map(|(w, h)| u64::from(w * h) * 4).sum()
 }
 
 /// The size of every level [`mip_chain`] builds, without building it.
@@ -315,12 +439,14 @@ fn mip_chain_dims(width: u32, height: u32) -> Vec<(u32, u32)> {
 /// reported. Each distinct texture is counted once however many material
 /// slots share its `Arc`; `cpu` is what the [`Model`](crate::mesh::Model)
 /// keeps alive after the upload and `gpu` what [`upload`] sends.
-pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool) {
+pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool, limit: u32) {
     let mut seen = std::collections::HashSet::new();
     let mut counts = [0usize; 2];
     let mut cpu = [0u64; 2];
     let mut gpu = [0u64; 2];
     let mut compressed = 0usize;
+    let mut trimmed: Vec<String> = Vec::new();
+    let mut refused: Vec<&str> = Vec::new();
     for (role, slots) in [(0, &model.textures), (1, &model.lightmaps)] {
         for texture in slots.iter().flatten() {
             if !seen.insert(std::sync::Arc::as_ptr(texture) as usize) {
@@ -328,7 +454,15 @@ pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool) {
             }
             counts[role] += 1;
             cpu[role] += texture.cpu_bytes();
-            gpu[role] += gpu_bytes(texture, blocks);
+            match plan(texture, blocks, limit) {
+                Some((dropped, bytes)) => {
+                    gpu[role] += bytes;
+                    if dropped > 0 {
+                        trimmed.push(format!("{} (from level {dropped})", texture.label));
+                    }
+                }
+                None => refused.push(&texture.label),
+            }
             compressed += usize::from(match &texture.texels {
                 Texels::Blocks { .. } => blocks,
                 Texels::Uploaded {
@@ -356,4 +490,25 @@ pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool) {
         mib((model.vertices.len() * std::mem::size_of::<crate::mesh::GpuVertex>()) as u64),
         mib((model.indices.len() * 4) as u64),
     );
+    if !trimmed.is_empty() {
+        log::info!(
+            "{}: {} texture(s) wider than this device's max_texture_dimension_2d of {limit} \
+             uploaded from the first mip level that fits - chosen, not measured: {}",
+            model.label,
+            trimmed.len(),
+            trimmed.join(", "),
+        );
+    }
+    if !refused.is_empty() {
+        log::warn!(
+            "{}: {} texture(s) have no mip level within this device's max_texture_dimension_2d \
+             of {limit} and are not drawn - chosen, not measured: {}",
+            model.label,
+            refused.len(),
+            refused.join(", "),
+        );
+    }
 }
+
+#[cfg(test)]
+mod tests;

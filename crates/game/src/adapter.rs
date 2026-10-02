@@ -39,7 +39,8 @@ use oag_display::display::Renderer;
 ///
 /// `PRIMARY` - Vulkan, Metal, Dx12 - and deliberately not `GL`, which is wgpu's
 /// own second tier and which this renderer has never been run on: the device is
-/// requested with `DeviceDescriptor::default()`, so `Limits::default()`, which is
+/// requested with `Limits::default()` (its texture-dimension limits raised to
+/// the adapter's own, see `oag_render::mesh_render::required_limits`), which is
 /// exactly what GLES routinely cannot meet, and pipeline creation is a second
 /// place it could diverge. Listing a `gl:` row would be offering a player
 /// something untested, and the CPU path loses nothing by it - lavapipe is a
