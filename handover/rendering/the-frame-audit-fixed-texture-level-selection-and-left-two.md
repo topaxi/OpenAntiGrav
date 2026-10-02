@@ -44,8 +44,11 @@ of it the same day; see `frame-audit.md`.
   dump. Not drawn by us and not read: what spawns it, and why it sat there while
   the craft was merely yawed, are open. **Identified 2026-10-02**
   (`pulse-moving-draws`): it is **WAD entry 1078 of `DATA.WAD`**, `Data\visual_effects\cage_collision_curved.vex`
-  (not the track node 1078); the spawn is still unread, with `collisionCageEnabled`
-  (`leaving-the-track.md`) as the lead - `frame-audit.md`, "The collision-cage sphere".
+  (not the track node 1078); the spawn function and the four-slot ring are
+  read (`CageEffect_Construct` `0x0883170c`, `CageEffect_Spawn` `0x08832b0c`, page
+  `collision-cage.md`) but **nothing was seen to reach the spawn**: next, a breakpoint on
+  `0x08832b0c` while a craft is driven into the leaky edge on `07_Track`, then the
+  pose writer `0x08832fb0`. Nothing is drawn until the trigger and pose are measured.
 - ~~**Factory roofs on the Talon straight.**~~ **Fixed 2026-09-30, and repeated
   2026-10-01.** The roofs are draws 1479..1494 (four animated slab transports,
   `track.vex` nodes 789, 793, 804, 806), not 1381..1391; the original's GE list

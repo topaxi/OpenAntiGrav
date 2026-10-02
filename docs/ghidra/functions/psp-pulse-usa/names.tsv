@@ -1209,3 +1209,6 @@
 0x08ab10c8	data	g_spectator_row_scale_left	85	camera.md
 0x08ab10cc	data	g_spectator_row_scale_up	85	camera.md
 0x08ab10d0	data	g_spectator_row_scale_forward	85	camera.md
+0x0883170c	function	CageEffect_Construct	75	collision-cage.md
+0x08832b0c	function	CageEffect_Spawn	58	collision-cage.md
+0x08ab0c88	data	g_cage_effect	80	collision-cage.md
