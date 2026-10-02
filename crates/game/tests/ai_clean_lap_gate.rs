@@ -432,7 +432,7 @@ const BASELINE: &[Row] = &[
     Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2277), contact_ticks: 96 },
     Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2326), contact_ticks: 0 },
     Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2377), contact_ticks: 23 },
-    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2050), contact_ticks: 31 },
+    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2050), contact_ticks: 66 },
     Row { circuit: "05_Track", class: "FLASH", status: Status::Eliminated, lap_ticks: Some(2158), contact_ticks: 1700 },
     Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2107), contact_ticks: 94 },
     Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2718), contact_ticks: 28 },

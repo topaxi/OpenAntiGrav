@@ -541,6 +541,13 @@ pub struct ShipState {
     /// `[2, 1, 2]` arm, `-1.0` after `[1, 2, 1]`, or `0.0` once the roll has
     /// released short of completion. See [`crate::barrel_roll::release`].
     pub roll_target: f32,
+    /// Whether a roll is armed and not yet spent: the original's
+    /// `entity+0x860 & 0x100`/`& 0x80` pair, set by [`crate::barrel_roll::arm`]
+    /// and cleared by the landing in [`crate::barrel_roll::release`]. The
+    /// payout is gated on it, so one roll pays out once however many landings
+    /// follow. Hashed only while set, so a ship that never rolls keeps its
+    /// committed hash.
+    pub roll_armed: bool,
     /// Seconds left on the barrel roll's landing payout, ours - the original's
     /// `craft+0x1c0 & 0x400`, held for `<Special roll_turbotime>` after a
     /// completed roll touches down. While it runs, [`crate::airbrake::lateral_grip`]
@@ -830,6 +837,7 @@ impl Default for ShipState {
             roll_tap_timer: crate::barrel_roll::INTER_TAP_TIMEOUT,
             roll_phase: 0.0,
             roll_target: 0.0,
+            roll_armed: false,
             roll_payout_timer: 0.0,
             roll_axis_zone: None,
             // `Ship_InitCraft` (`0x08849354`) sets `craft+0x2b4` to `10.0` -
