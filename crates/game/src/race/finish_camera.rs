@@ -205,6 +205,19 @@ impl FinishCamera {
         self.running.then_some(self.mode)
     }
 
+    /// The craft the director draws (`cam+0x1e4`), `None` before it starts. After a Single Race
+    /// wreck this is the player until the first cut.
+    #[must_use]
+    pub fn drawn_slot(&self) -> Option<usize> {
+        self.running.then(|| self.previous.unwrap_or(self.subject))
+    }
+
+    /// Whether the camera override in force is this director's.
+    #[must_use]
+    pub(super) fn is_imposed(&self) -> bool {
+        self.imposed
+    }
+
     /// The craft the director follows, `None` before it starts.
     #[must_use]
     pub fn subject(&self) -> Option<usize> {

@@ -219,6 +219,25 @@ impl TrackVisibility {
         VisibleSet::around(&self.pvs, &self.padding, &self.swaps, craft, camera)
             .within_view(&self.pvs, view_projection)
     }
+
+    /// What may be drawn with the camera placed by `section` alone: that section's own row,
+    /// with no padding and no second viewpoint, as the original masks a camera that stands on
+    /// an authored station ([`Race::station_camera_section`]).
+    #[must_use]
+    pub(super) fn set_exact(
+        &self,
+        section: u8,
+        view_projection: &oag_core::math::Mat4,
+    ) -> VisibleSet {
+        VisibleSet::around(
+            &self.pvs,
+            &SectionPadding::default(),
+            &self.swaps,
+            section,
+            section,
+        )
+        .within_view(&self.pvs, view_projection)
+    }
 }
 
 /// How far off the nearest spline sample a point may be and still be trusted to

@@ -61,8 +61,8 @@ The functions below are named on [`camera.md`](camera.md#the-destroy-camera-mode
 
 | Address | Name | Confidence | What it does |
 | --- | --- | --- | --- |
-| `0x08880a58` | `Camera_PickSubject` | 80 | starts from the player (`manager+0x2c0`), then while that equals the previous subject (`+0x1e4`) and more than one craft is live takes a random live craft (`rand() % count`) |
-| `0x08880b38` | `Camera_PickRandomMode` | 75 | `Psys_RandIntRange(0, 100)`: `< 26` mode `3`, `< 51` mode `2`, `< 76` mode `6`, else mode `7`; called when `Camera_UpdateSpectator` takes a new node |
+| `0x08880a58` | `Camera_PickSubject` | 85 | starts from the player (`manager+0x2c0`); if the drawn craft (`+0x1e4`) carries `flags(+0x860) & 0x1000` it is reset to the player; then while the subject equals the drawn craft and more than one craft is live takes a random live craft (`rand() % count`). With `cam+0x274` set the subject is the global `DAT_08ab0df8` instead |
+| `0x08880b38` | `Camera_PickRandomMode` | 85 | `Psys_RandIntRange(0, 100)`: `< 26` mode `3`, `< 51` mode `2`, `< 76` mode `6`, else mode `7`; called when `Camera_UpdateSpectator` takes a new node. **Gated on `cam+0x26c`** (a byte, `1` from the constructor): with it zero the function changes nothing, which is what `Ship_SetState` case 4 does at a player's wreck |
 
 `Camera_SetMode` (`0x08880724`) stores the view width `+0x268`: mode `5` -> `35.0`, `6` -> `17.0`, `7` -> `50.0`; the
 constructor leaves `60.0`. `Camera_PickStation` and `Camera_RepickNearSubject` pick by the node's **aim point**.
@@ -95,8 +95,9 @@ fov rate `0.06` (`0x3d75c28f`). Mode `5` is the death camera (`Ship_SetState` st
 
 **The node list was read live** (`16_Track`, forward track, PPSSPP): ten nodes at `cam+0x40`, each with a unit vector at `node+0x80` (the camera's back axis), the **eye at `node+0x90`** and an **aim point at `node+0xa0`**; the eye is the track `.vex` node's world translation and the aim is the three floats at `+0x10` of its `Camera` payload, all ten matching to 0.1 unit and in file order. The director picks nodes by the aim point and sits at the eye. Ported as `oag_game::race::finish_camera`.
 
-**Not read**: modes `1`-`4` (`internal`, `above`, `front`, `close`), the large body of `FUN_08880c04` that draws them,
-what drives `+0x274`, and the trigger that makes `Race End Photo` call `FUN_08880788` on frame `F+61`.
+Modes `2` and `3` are read and measured: a rigid rear view and a rigid front view, see
+[camera.md](camera.md#the-spectator-views-craft-relative-modes-and-the-directors-hand-off-rules-2026-10-02).
+**Not read**: cases `0`, `1`, `4` and `8` of the view, what drives `+0x274`, and the trigger that makes `Race End Photo` call `FUN_08880788` on frame `F+61`.
 
 ## Names
 

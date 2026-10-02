@@ -329,6 +329,45 @@ impl Race {
         (craft, camera)
     }
 
+    /// The one section the draws are masked with when the camera stands on an authored station
+    /// rather than on the craft, `None` for every other camera.
+    ///
+    /// `Camera_UpdateSpectatorView` publishes the section of the craft in `cam+0x1e4`
+    /// (`cam+0x1e8`, through `FUN_08878644`) in every mode, and the visible set the draws are
+    /// masked with is that section's row alone (`FUN_0891e908`; no padding, no second source).
+    /// The destroy camera and the director's cameras sit hundreds of units from the craft,
+    /// where the camera's own section cannot be told from the craft's spline window and was
+    /// falling to [`UNPLACED`], which draws everything: Talon's Junction's station 0 sits
+    /// inside a tube whose inside the original's mask leaves out.
+    #[must_use]
+    pub fn station_camera_section(&self) -> Option<u8> {
+        self.drawn_craft_of_a_station_camera()
+            .map(|slot| self.section_of_slot(slot))
+    }
+
+    /// The craft the camera draws when it stands on an authored station: the destroy camera's
+    /// wreck (the player) or the director's drawn craft. `None` for every other camera.
+    fn drawn_craft_of_a_station_camera(&self) -> Option<usize> {
+        if let Some(director) = &self.view.finish_camera
+            && director.is_imposed()
+            && let Some(slot) = director.drawn_slot()
+        {
+            return Some(slot);
+        }
+        (self.view.camera_override.is_none() && self.destroy_camera_now().is_some())
+            .then(|| self.player_slot())
+    }
+
+    /// The section of the craft in `slot`, or [`UNPLACED`] where it cannot be told.
+    pub(super) fn section_of_slot(&self, slot: usize) -> u8 {
+        let ship = &self.sim.world.ships[slot];
+        let index = usize::from(ship.segment);
+        if index >= self.sim.spline.len() {
+            return UNPLACED;
+        }
+        self.section_of(index, ship.physics.body.position)
+    }
+
     /// The section of the sample at `index`, or [`UNPLACED`] when `position` is
     /// too far from it to trust. See [`Self::visibility_sections`].
     pub(super) fn section_of(&self, index: usize, position: Vec3) -> u8 {

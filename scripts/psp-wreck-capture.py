@@ -71,6 +71,8 @@ def camera_row(dbg):
     row["timer_3c"] = f(0x3C)[0]
     row["subject_1e0"] = hex(dbg.read_u32(cam + 0x1E0))
     row["flag_274"] = dbg.read(cam + 0x274, 1)[0]
+    row["flag_26c"] = dbg.read(cam + 0x26C, 1)[0]
+    row["section_1e8"] = struct.unpack("<i", dbg.read(cam + 0x1E8, 4))[0]
     manager = dbg.read_u32(RACE_MANAGER)
     if pair.ram(manager):
         row["race_time"] = struct.unpack("<f", dbg.read(manager + 0x2B8, 4))[0]

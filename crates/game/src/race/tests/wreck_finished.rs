@@ -238,3 +238,45 @@ fn zone_grid(mode: Mode) -> Race {
     });
     Race::start(setup)
 }
+
+/// A camera that stands on an authored station is masked by the section of the craft it
+/// draws (`cam+0x1e8`, which `Camera_UpdateSpectatorView` publishes in every mode), not by
+/// where it stands: that is how the original leaves out the inside of the structure a
+/// station sits in. Any other camera has no such section.
+#[test]
+fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
+    let mut race = race_with_a_grid();
+    assert_eq!(race.station_camera_section(), None, "the chase camera");
+    let mut race = a_race_the_wreck_ended();
+    assert!(
+        race.destroy_camera_now().is_some(),
+        "the destroy camera has the picture"
+    );
+    assert_eq!(
+        race.station_camera_section(),
+        Some(race.section_of_slot(0)),
+        "the wreck's own section"
+    );
+    // The director draws whichever craft it was handed: a live opponent after a cut.
+    race.view.finish_camera = Some(crate::race::finish_camera::FinishCamera::new(
+        vec![oag_render::camera::destroy::Station {
+            eye: Vec3::new(400.0, 30.0, 0.0),
+            aim: Vec3::new(10.0, 0.0, 0.0),
+        }],
+        0.4,
+        crate::race::finish_camera::SPECTATOR_SEED,
+    ));
+    for _ in 0..crate::race::finish_camera::WRECK_HANDOFF_TICKS + 2 {
+        race.tick_finished();
+    }
+    let slot = race
+        .view
+        .finish_camera
+        .as_ref()
+        .and_then(crate::race::finish_camera::FinishCamera::drawn_slot)
+        .expect("the director has started");
+    assert_eq!(
+        race.station_camera_section(),
+        Some(race.section_of_slot(slot))
+    );
+}
