@@ -11,11 +11,11 @@
 /// anything here or by `RUST_LOG`: a filter must not be able to silence the
 /// thing the command was run for.
 ///
-/// The default filter is `warn` globally with our own crates at `debug`, and
+/// The default filter is `warn` globally with our own crates at `info`, and
 /// the format carries the level and nothing else. Both match `oag-game`'s
 /// `init_logging`, whose doc comment gives the reasoning for each.
 pub fn init() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,oag=debug"))
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,oag=info"))
         .format_timestamp(None)
         .format_target(false)
         .init();

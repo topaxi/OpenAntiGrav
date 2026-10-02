@@ -53,6 +53,7 @@ pub use oag_gameplay::input;
 pub use oag_input::keys;
 pub mod launcher;
 pub mod livery;
+pub mod loader_log;
 pub mod loading;
 pub mod movie;
 pub mod mp3;
@@ -75,8 +76,6 @@ pub mod track_panel;
 pub mod upscale;
 pub mod wem;
 
-use log::info;
-
 /// Frames of the reel `Intro Screen->IntroMovie1` can possibly show, plus one.
 ///
 /// That state stops at frame 260 whatever the movie's length, so the reel leg
@@ -85,16 +84,22 @@ use log::info;
 /// one by hand.
 pub const INTRO_FRAMES_NEEDED: usize = oag_ui::frontend::FINISH_FRAME + 1;
 
-/// Logs transitions, always for entries and only under `trace` for exits.
+/// Logs screen transitions: entries at `debug`, and entries and exits both at
+/// `info` under `--trace`.
 ///
-/// Both at `info` rather than the exits at `debug`: `trace` is `--trace`, and a
-/// level that hid what the flag was asked for would make the flag do nothing at
-/// the default filter.
+/// `info` under the flag rather than `debug`: `--trace` is the request to see
+/// these, and a level that hid them at the default filter would make the flag do
+/// nothing.
 pub fn report(events: &[oag_ui::state_machine::Event], trace: bool) {
+    let level = if trace {
+        log::Level::Info
+    } else {
+        log::Level::Debug
+    };
     for event in events {
         match event {
-            oag_ui::state_machine::Event::Enter(name) => info!("-> {name}"),
-            oag_ui::state_machine::Event::Exit(name) if trace => info!("<- {name}"),
+            oag_ui::state_machine::Event::Enter(name) => log::log!(level, "-> {name}"),
+            oag_ui::state_machine::Event::Exit(name) if trace => log::log!(level, "<- {name}"),
             oag_ui::state_machine::Event::Exit(_) => {}
         }
     }

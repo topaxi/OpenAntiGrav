@@ -32,7 +32,7 @@
 
 use std::time::Instant;
 
-use log::{info, warn};
+use log::{debug, warn};
 
 use oag_display::display::{Brightness, FilterStrength, Gamma};
 use oag_render::post::screen::{self, Preset};
@@ -86,7 +86,7 @@ impl super::Framebuffer {
     pub fn set_screen_filter(&mut self, device: &wgpu::Device, preset: Option<&Preset>) {
         let Some(preset) = preset else {
             if self.screen.take().is_some() {
-                info!("screen filter: off");
+                debug!("screen filter: off");
             }
             return;
         };
@@ -99,7 +99,7 @@ impl super::Framebuffer {
         }
         let pass = match screen::Screen::new(device, self.format, preset) {
             Ok(pass) => {
-                info!(
+                debug!(
                     "screen filter: {} ({}, revision {})",
                     preset.name, preset.id, preset.revision
                 );

@@ -36,7 +36,7 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use log::{info, warn};
+use log::{debug, warn};
 use oag_render::post::screen::Preset;
 use oag_ui::menu;
 
@@ -127,12 +127,12 @@ impl Catalogue {
         catalogue.poll();
         let user = catalogue.user.iter().filter(|f| f.preset.is_some()).count();
         match &catalogue.directory {
-            Some(dir) => info!(
+            Some(dir) => debug!(
                 "screen filters: {} built in, {user} from {}",
                 catalogue.built_in.len(),
                 dir.display()
             ),
-            None => info!("screen filters: {} built in", catalogue.built_in.len()),
+            None => debug!("screen filters: {} built in", catalogue.built_in.len()),
         }
         catalogue
     }
@@ -253,7 +253,7 @@ fn read_into(file: &mut UserFile, revision: u64) -> bool {
         Ok(mut preset) => match preset.validate() {
             Ok(()) => {
                 preset.revision = revision;
-                info!(
+                debug!(
                     "screen filter {id}: loaded from {} (revision {revision})",
                     file.path.display()
                 );

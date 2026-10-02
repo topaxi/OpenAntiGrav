@@ -4,7 +4,7 @@
 //! the window existed and hands it to a [`Session`] on the first resume.
 
 use anyhow::{Context, Result};
-use log::{error, info};
+use log::{debug, error, info};
 use oag_core::{TickClock, TickRate};
 
 use oag_display::display;
@@ -339,7 +339,7 @@ impl App {
         let blur_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And a fourth - see `Session::hd_bloom_cost`.
         let hd_bloom_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
-        info!(
+        debug!(
             "GPU timing: {}",
             if pass_timer.is_some() {
                 "the scene pass, the motion-blur chain, the HD bloom chain and the FSR 3.1 chain are timed"

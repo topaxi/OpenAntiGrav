@@ -38,6 +38,7 @@ Then, depending on what you are here to do:
 | Keep the loading screen from freezing | [Load-to-race transition](architecture/race-load-transition.md) |
 | Add or change a menu | [Menus](architecture/menus.md) |
 | Persist something to a player's own machine | [Persistence](architecture/persistence.md) |
+| Choose a log level, or see more of what a launch did | [Logging](architecture/logging.md) |
 | Verify against the original | [Verification protocol](reverse-engineering/verification-protocol.md) |
 
 ## Tree

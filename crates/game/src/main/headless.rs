@@ -6,7 +6,7 @@
 //! worker for the frames it is about to draw.
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{debug, warn};
 
 use oag_game::{audio, boot, capture, loading, prefetch, race, records, settings};
 use oag_gameplay::ControlScheme;
@@ -44,6 +44,7 @@ pub(crate) fn run_windowless(
     music_discs: audio::MusicDiscs,
 ) -> Result<()> {
     let mut loaded = boot::load(options)?;
+    log::info!("{}: {}", loaded.title.name, options.source);
     if cli.overlay {
         loaded.frontend.set_overlay(true);
     }
@@ -53,7 +54,7 @@ pub(crate) fn run_windowless(
     // save.
     match (cli.pick_language, settings.language.as_deref()) {
         (false, Some(name)) if loaded.frontend.preselect_language(name) => {
-            info!("language {name} from settings, skipping the picker");
+            debug!("language {name} from settings, skipping the picker");
         }
         (false, Some(name)) => {
             warn!("this source does not offer {name:?}, so the picker is shown");
@@ -62,13 +63,11 @@ pub(crate) fn run_windowless(
         // never presents to a player, so it must not be the one this build
         // waits on - see `Frontend::skip_never_shown_picker`.
         (false, None) if loaded.frontend.skip_never_shown_picker(loaded.title) => {
-            info!("HD's own language picker never presents to a player; defaulting to English");
+            debug!("HD's own language picker never presents to a player; defaulting to English");
         }
         _ => {}
     }
-    for line in &loaded.report {
-        info!("{line}");
-    }
+    oag_game::loader_log::lines(&loaded.report);
 
     // Wipeout 2048's own career, read the same way `Session::finish_loading`
     // does - see that function's own comment. **Read-only**, the same
@@ -160,9 +159,7 @@ pub(crate) fn run_windowless(
             loaded.entries.as_deref(),
             crate::args::style_of(settings),
         );
-        for note in &assets.notes {
-            info!("{note}");
-        }
+        oag_game::loader_log::lines(&assets.notes);
         capture::loading(
             &assets,
             loaded.font.clone(),
@@ -438,9 +435,7 @@ pub(crate) fn run_race(
             None => race::load(&options)?,
         }
     };
-    for line in &loaded.report {
-        info!("{line}");
-    }
+    oag_game::loader_log::lines(&loaded.report);
 
     if cli.dry_run {
         return Ok(());

@@ -2,7 +2,7 @@
 //! progress, and the handoff into a race.
 
 use anyhow::Result;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 use oag_game::render::VideoFormat;
 use oag_game::{audio, boot, loading, movie, prefetch, race, records};
@@ -212,9 +212,7 @@ impl Session {
             .as_mut()
             .map(boot::MediaWorker::join)
             .unwrap_or_default();
-        for line in &media.report {
-            info!("{line}");
-        }
+        oag_game::loader_log::lines(&media.report);
         let mut loaded = boot::assemble(shell, media);
         if self.boot_overlay {
             loaded.frontend.set_overlay(true);
@@ -264,7 +262,7 @@ impl Session {
         // halves have met.
         match (self.pick_language, self.settings.language.as_deref()) {
             (false, Some(name)) if loaded.frontend.preselect_language(name) => {
-                info!("language {name} from settings, skipping the picker");
+                debug!("language {name} from settings, skipping the picker");
             }
             (false, Some(name)) => {
                 warn!("this source does not offer {name:?}, so the picker is shown");
@@ -274,13 +272,13 @@ impl Session {
             // this build waits on - see
             // `Frontend::skip_never_shown_picker`.
             (false, None) if loaded.frontend.skip_never_shown_picker(loaded.title) => {
-                info!("HD's own language picker never presents to a player; defaulting to English");
+                debug!(
+                    "HD's own language picker never presents to a player; defaulting to English"
+                );
             }
             _ => {}
         }
-        for line in &loaded.report {
-            info!("{line}");
-        }
+        oag_game::loader_log::lines(&loaded.report);
         // A source with no intro reel at all - which is every PS2 source, whose
         // intro is an MPEG-2 program stream outside the archives - has no video
         // format either, and the front end draws without one.
@@ -370,9 +368,7 @@ impl Session {
             entries.as_deref(),
             crate::args::style_of(&self.settings),
         );
-        for note in &assets.notes {
-            info!("{note}");
-        }
+        oag_game::loader_log::lines(&assets.notes);
         self.loading_assets = assets;
     }
 
@@ -598,9 +594,7 @@ impl Session {
             .unwrap_or_else(|| Err(anyhow::anyhow!("the circuit's load thread would not start")));
         match loaded {
             Ok(loaded) => {
-                for line in &loaded.report {
-                    info!("{line}");
-                }
+                oag_game::loader_log::lines(&loaded.report);
                 let request = crate::race_build::Request {
                     gpu: self.gpu.handles(),
                     allocation: self.framebuffer.allocation(),
@@ -688,7 +682,7 @@ impl Session {
         // taken: `Session::frame` reads it again once the first race frame
         // presents.
         if let Some(ready_at) = self.race_ready_at {
-            info!(
+            debug!(
                 "race hand-off: {:?} since the scene was ready",
                 ready_at.elapsed()
             );
@@ -731,7 +725,7 @@ impl Session {
                 &boot::default_audio_cache_dir(),
             ),
         }
-        info!("race music started in {:?}", music_start.elapsed());
+        debug!("race music started in {:?}", music_start.elapsed());
         self.gpu
             .window
             .set_title(&hints::race_title(&strings::project_table(

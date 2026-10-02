@@ -17,7 +17,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use log::info;
+use log::debug;
 
 use oag_game::{audio, boot, loading, movie, prefetch, race, settings};
 use oag_ui::frontend;
@@ -190,7 +190,7 @@ impl Pending {
             return audio::MusicDiscs::default();
         }
         let discs = audio::MusicDiscs::survey(source);
-        info!("audio: music discs, {}", discs.describe());
+        debug!("audio: music discs, {}", discs.describe());
         discs
     }
 
@@ -211,13 +211,12 @@ impl Pending {
         let options = self.boot_options(source);
 
         let (mut boot_shell, archives, title) = boot::load_shell(&options)?;
+        log::info!("{}: {source}", title.name);
         // Drained rather than iterated: `boot::assemble` appends its own lines
         // to this same list, and the hand-off prints what it finds there.
         // Leaving these in would print the whole first half twice, seconds
         // apart, which reads as the disc having been opened again.
-        for line in boot_shell.report.drain(..) {
-            info!("{line}");
-        }
+        oag_game::loader_log::lines(boot_shell.report.drain(..));
         let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
 
         // Every team the player's own source declares, in the definition's file
@@ -266,9 +265,7 @@ impl Pending {
                 boot_shell.entries.as_deref(),
                 crate::args::style_of(&self.settings),
             );
-            for note in &assets.notes {
-                info!("{note}");
-            }
+            oag_game::loader_log::lines(&assets.notes);
             assets
         };
 

@@ -807,7 +807,7 @@ pub(super) fn draw_preview(
         // a skin that will not read leaves the hull's own and says so.
         if let Some(entry) = &request.skin {
             for line in crate::preview::paint(&mut archives, entry, &request.entry, &mut model) {
-                log::info!("preview {}: {line}", request.entry);
+                log::debug!("preview {}: {line}", request.entry);
             }
         }
         crate::preview::Preview::new(
@@ -915,13 +915,11 @@ pub(super) fn picker_stills(
             (draws, show.model.clone())
         }
         Err(error) => {
-            log::info!("{error:#} - {location} shows no stills");
+            log::warn!("{error:#} - {location} shows no stills");
             (Vec::new(), None)
         }
     };
-    for line in report {
-        log::info!("{line}");
-    }
+    crate::loader_log::lines(report);
     (stills, mode3d)
 }
 

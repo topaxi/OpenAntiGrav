@@ -59,7 +59,6 @@
 
 use std::collections::BTreeMap;
 
-use log::info;
 use oag_assets::source::Archives;
 use oag_formats::sblk;
 use oag_vex::sound_emitters::{self, SoundEmitter};
@@ -284,9 +283,7 @@ impl TrackEmitters {
                 "track audio: {nodes} node(s) name {bank}{cue} and play nothing: {why}"
             ));
         }
-        for line in &parsed.report {
-            info!("{line}");
-        }
+        crate::loader_log::lines(&parsed.report);
         parsed
     }
 

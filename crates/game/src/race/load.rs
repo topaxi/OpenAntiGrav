@@ -121,6 +121,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         track
     };
 
+    log::info!("racing on {}: {track}", title.name);
+
     let spec = archives
         .locate(&track)
         .ok_or_else(|| assets::zone_circuit_miss(&track, options.mode, title, &archives))?

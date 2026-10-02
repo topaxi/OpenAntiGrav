@@ -213,7 +213,7 @@ impl Session {
                     // "Unlock rules, cell and tier".
                     let index = model.index();
                     if !campaign.grid_is_unlocked(index) {
-                        log::info!(
+                        log::debug!(
                             "grid {index} is locked - Confirm does nothing, chosen not measured"
                         );
                     } else if !campaign.open_cell_selection_at_grid_slot(index) {
@@ -236,7 +236,7 @@ impl Session {
                     // The identical reasoning as the tier arm above, on
                     // `PI_Cell.Locked`.
                     if model.selected_is_locked() {
-                        log::info!(
+                        log::debug!(
                             "{} is locked - Confirm does nothing, chosen not measured",
                             model
                                 .selected()

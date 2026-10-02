@@ -43,6 +43,9 @@ impl Session {
         let Some(race_options) = self.race_options.as_ref() else {
             return;
         };
+        // Past the guards that make this run once per finished race, so the
+        // line is the race ending, not a per-frame retry.
+        log::info!("race finished");
 
         let mode = race_options.mode;
         let source = race_options.source.clone();

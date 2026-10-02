@@ -357,7 +357,7 @@ fn ps3_model(
             archives.read_name(path).ok()
         })
         .with_context(|| format!("decoding the preview mesh {entry}"))?;
-    log::info!("preview {entry}: {}", report.describe());
+    log::debug!("preview {entry}: {}", report.describe());
     model.keep_nearest();
     Ok((model, textures))
 }

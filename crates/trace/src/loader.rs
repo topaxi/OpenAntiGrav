@@ -6,7 +6,7 @@
 //! speed class arriving as a **name** - see [`checked_class`].
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{debug, warn};
 use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{CollisionWorld, Handling};
 use oag_pulse as pulse;
@@ -54,7 +54,7 @@ pub(crate) fn load(
         .with_context(|| format!("reading {track} out of {where_from}"))?;
     let nodes = collision::from_vex(&track_blob).map_err(|e| anyhow::anyhow!("{track}: {e}"))?;
     let collision = collision_world(&nodes);
-    info!(
+    debug!(
         "{track}: {} collision node(s) -> {} collider(s)",
         nodes.len(),
         collision.colliders().len()
@@ -102,7 +102,7 @@ pub(crate) fn load(
             stats.ladder()
         )
     })?;
-    info!(
+    debug!(
         "{stats_name}: team {:?}, {class} class, mass {}, ride_height {}",
         stats.team, handling.physical.mass, handling.antigrav.ride_height
     );

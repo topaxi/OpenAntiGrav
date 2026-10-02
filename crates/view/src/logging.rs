@@ -11,7 +11,7 @@
 /// gets the same Wayland key-repeat noise a race does.
 pub fn init() {
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("warn,oag=debug,calloop=error"),
+        env_logger::Env::default().default_filter_or("warn,oag=info,calloop=error"),
     )
     .format_timestamp(None)
     .format_target(false)

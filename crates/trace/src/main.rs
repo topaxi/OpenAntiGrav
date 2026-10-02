@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use log::{info, warn};
+use log::{debug, info, warn};
 use oag_core::math::Vec3;
 use oag_gameplay::ControlScheme;
 use oag_gameplay::Ship;
@@ -1169,7 +1169,7 @@ fn ai_of(blob: &[u8], name: &str) -> Result<track::AiTrack> {
         .get(node.payload())
         .context("the WO Track payload runs past the end of the file")?;
     let ai = track::parse(payload).map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
-    info!(
+    debug!(
         "{name}: {} path(s), {} junction(s), {} control point(s)",
         ai.paths.len(),
         ai.junctions.len(),
@@ -1256,7 +1256,7 @@ fn dump_track(source: &str, name: &str, steps: usize) -> Result<()> {
         row.push(s.flags.to_string());
         println!("{}", row.join(","));
     }
-    info!("{} sample(s) at {steps} per segment", samples.len());
+    debug!("{} sample(s) at {steps} per segment", samples.len());
     Ok(())
 }
 
@@ -1355,7 +1355,7 @@ fn dump_pads(source: &str, name: &str, before: &[f32]) -> Result<()> {
             total += 1;
         }
     }
-    info!(
+    debug!(
         "{total} pad(s), course length {:.1}, start at ring index {}",
         course.length(),
         course.start_index()
