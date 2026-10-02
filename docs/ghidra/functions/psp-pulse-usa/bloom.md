@@ -530,3 +530,72 @@ hardware:
 fullscreen-pass plumbing (FXAA, SMAA, FSR 1), so steps 2-4 fit its existing
 shape. **Step 1 is the real work**, and it reaches every surface that should
 glow - see the correction above, which is the first known consumer.
+
+## Is ours stronger than the original? Yes, by the background term (2026-10-02)
+
+The maintainer, playing: "I had bloom active and it was VERY strong on Pulse."
+Measured against PPSSPP v1.20.4's **software** renderer, matched on circuit,
+craft and pose, so this settles the question for Pulse PSP's own bloom.
+
+**Method.** The original has no bloom switch, and `g_bloom_composite_strength`
+(`0x08ab2344`) is a no-op to poke: the composite's blend factor is baked into a
+display list. The list is in RAM: the one hit for the bytes `af af af e0`
+(`GE_CMD_BLENDFIXEDA`, `0xafafaf`, followed by `ff ff ff e1`) over user RAM was
+`0x08fb61f8` on both boots. Writing `00 00 00` there through the debugger
+removes the composite on the next frame (a no-op of the `jal` at `0x089077e4`
+did nothing). `data/scratch/bloom-setting/pair.sh` captures 48 ticks of
+Talon's Junction at racing speed (82 km/h, flare intensity `1.0`, on the
+straight after the grid), `--shot-every 1`, and pokes at tick 24. Because the
+scene drifts as the craft moves (the mean of ticks 16-27 against 34-47 differs
+by `1.3` with **no** poke), each poke run is paired with a control run that
+writes the *same* value back; the figure is poke minus control.
+Ours is the same pose, `--pose-from` that trace, `--ticks 1`, bloom on against
+off through `settings.toml`, at 480 x 272.
+
+| Mean luma added by the bloom | whole frame | around the craft (x 170-310, y 140-272) | everywhere else |
+| --- | ---: | ---: | ---: |
+| the original, boot 1 (3 poke runs, 2 control runs) | 1.32 | 7.3 | 0.33 |
+| the original, boot 2 (2 poke runs, 1 control run) | 1.0 | 6.0 | 0.36 |
+| ours before, float chain (poses 20 and 40) | **4.46** | 4.0 | **4.52** |
+| ours after, truncated taps (poses 20 and 40) | 0.45 | 0.95 | 0.37 |
+
+**Ours was about 3.4 times the original over the whole frame**, and all of
+the excess was the background: `4.52` against `0.33`, thirteen times. At the
+same time the original's glow around the craft is far stronger than ours, so
+what the player saw was a wash over the whole picture and not the exhaust.
+
+**The cause: 8-bit arithmetic.** Every opaque batch stamps `4` into the mask
+(`glow-mask.md`), so the bright pass writes `rgb * 4 / 255`, at most 3. The
+GE blends each of the blur's eleven taps as its own additive draw, and a tap
+of weight 64 turns 3 into `floor(3 * 64 / 255) = 0`. **The stamp's whole
+contribution is zero in the original.** Our single-pass float sum kept it and
+amplified it by the `3.43x` kernel gain. Truncating each tap to a byte
+(`bloom.wgsl`, `fs_bright` and `fs_blur`) reproduces the original's `0.33`
+outside the craft as `0.37`; rounding to nearest instead gives `2.74`, so it
+is truncation specifically. Truncation is what the measurement supports; that
+the bright pass and composite also truncate is chosen, not measured.
+
+**It is resolution independent** (the buffers are fixed at 240 x 136): the same
+pose at 480 x 272, 960 x 544 at render scale 200 and 1920 x 1080 gives a float-chain
+delta of `23.1`, `23.1` and `22.7` on the pad pose, and the truncated chain `0.45` at 480 x 272 and
+`0.48` at 1080 on the straight. There was no scaling bug to fix.
+
+**What this leaves open, and it is now the larger error.** Around the craft
+the original adds `6.0-7.3` and ours `0.95`: the exhaust glow is about a
+seventh of the original's at racing intensity (this is the `0.125`-versus-racing
+residual the section above already named). Before this fix the float
+background wash hid it. On a boost pad the glow was the same size in both
+(the strip's own texture glow byte, not the stamp), and truncation moves the
+pad pose's delta from `23.1` to `19.4`. The original's exhaust glow is not the
+mask alone: whether its flare quad stamps, and where, is the next measurement.
+
+**Not achieved.** The pad pair: only 1 of 4 placed approaches triggered the
+pad, the on and off windows were not matched, so no original on/off number
+exists for the pad, only the side-by-side. Two boots, one circuit, one ship
+(Venom, Assegai), one speed. Confidence **75** for "the original's background
+bloom is zero because of per-tap truncation" (two boots, controls, the
+rounding alternative refuted); **60** for the whole-frame ratio, whose
+control subtraction carries about `+-0.4`.
+
+Scripts and frames: `data/scratch/bloom-setting/` (`pair.sh`, `nop.py`,
+`ours.sh`, `cmp.py`, `cap/`).
