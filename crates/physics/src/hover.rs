@@ -454,13 +454,6 @@ pub const ALIGNMENT_GAIN: f32 = 400.0;
 /// the hover epilogue's writes; `docs/physics/README.md` records the term without it.
 pub const BANK_TO_YAW_GAIN: f32 = 30.0;
 
-/// The same coupling in `Ship_HoverFourCorner`'s epilogue, which Zone runs where every
-/// other mode runs `Ship_HoverTwoPoint`: `0x0884b778 - 0x0884b794` loads `0x42480000`
-/// (`50.0`) where the two-point law (`0x0884ad2c`) uses `30.0`, behind the same
-/// `craft+0x2a4 != 0` guard and the same `(1 - magLockBlend)`. Selected by
-/// [`crate::ShipState::four_corner`]. See `docs/ghidra/functions/psp-pulse-usa/zone-rest.md`.
-pub const BANK_TO_YAW_GAIN_FOUR_CORNER: f32 = 50.0;
-
 /// The grounded downforce, `-track_gravity * mass * grounded * (1 - magLockBlend)`
 /// along the averaged contact normal.
 ///
@@ -1078,12 +1071,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // has tipped out of the world horizontal, and cancelled by a magstrip lock
     // like the rest of the suspension.
     // Skipped on the grid: `craft+0x2a4 != 0` guards it, see `ShipState::on_grid`.
-    let gain = if state.four_corner {
-        BANK_TO_YAW_GAIN_FOUR_CORNER
-    } else {
-        BANK_TO_YAW_GAIN
-    };
-    let bank = gain * right.y * (1.0 - state.mag_lock_blend);
+    let bank = bank::gain(state) * right.y * (1.0 - state.mag_lock_blend);
     let local_angular_torque = Vec3::new(0.0, if state.on_grid { 0.0 } else { bank }, 0.0);
 
     // Two probes both penetrating would each ask for a teleport, and applying
@@ -1109,5 +1097,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
 }
 
+mod bank;
+pub use bank::BANK_TO_YAW_GAIN_FOUR_CORNER;
 #[cfg(test)]
 mod tests;
