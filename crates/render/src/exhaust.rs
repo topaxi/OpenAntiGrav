@@ -1121,6 +1121,7 @@ impl Pipeline {
     /// `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` decoded by
     /// `oag_texture::texture`. `format` must match the caller's render pass and
     /// `sample_count` its multisample state - see `mesh_render::build`.
+    /// `trail_stamps_mask` is whether the ribbon writes the bloom's glow mask.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
@@ -1132,6 +1133,7 @@ impl Pipeline {
         trail_blend: wgpu::BlendState,
         sample_count: u32,
         velocity: crate::mesh_render::Velocity,
+        trail_stamps_mask: bool,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("exhaust"),
@@ -1291,7 +1293,13 @@ impl Pipeline {
         let trail_pipeline = build_pipeline(
             "exhaust trail",
             trail_blend,
-            wgpu::ColorWrites::ALL,
+            // The PSP's ribbon stamps its ramp into the glow mask; the PS2's
+            // readout shows no ribbon in the mask at all (`ps2-bloom.md`).
+            if trail_stamps_mask {
+                wgpu::ColorWrites::ALL
+            } else {
+                wgpu::ColorWrites::COLOR
+            },
             &trail_constants,
         );
 

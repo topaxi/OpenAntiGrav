@@ -92,8 +92,9 @@ the oval and the arches as flat full-brightness blocks.
 
 - Stamps: the `_GLOW` surfaces (the gantry oval and its arch, the banners, the
   pad chevrons, the track-edge strips, the lit panels), the craft's engine and
-  blink lights and the plume's base.
-- Does not: the sky, the opaque scene, the plume's body (a blended draw), and
+  blink lights and the small lit block at the nozzle (the hull's, not the plume's).
+- Does not: the sky, the opaque scene, **the exhaust ribbon and the boost plume
+  (nothing of their length is in the readout)**, and
   **nothing at all outside a glow batch** - the PS2 has no floor of `4`.
 - A blended batch with the glow bits stamps too (`ABE` groups 258, 546, 548): the
   blend never touches alpha, so what lands is the same `Ct * Cv`.
@@ -136,6 +137,12 @@ Junction was not reached**, so one circuit.
   of the viewport on each axis, so at anything but 512 x 512 it is a scaling of
   the original's offset. The ghost craft stamps nothing on PS2 (its stamp
   pipeline follows the PSP bloom). Neither is a measurement.
+- **The plume, the shield shell and the exhaust ribbon write no mask on PS2**
+  (`Model::glow_by_texel` without `stamps_glow` builds `GlowMask::Protected`;
+  `exhaust::Pipeline::new`'s `trail_stamps_mask` is `false`). The first build of
+  this port let the PSP-recovered ribbon stamp its ramp on PS2 and the craft box of
+  a boosting frame read 7.7 added luma against the original's 0.40; the original's
+  readout has no ribbon in it.
 
 ## Is ours as strong as the original? (matched grid pose)
 
@@ -161,6 +168,16 @@ comparison because the racing dump's pose is not recoverable (no position read
 out of the emulator), so the 1.2-1.6x residual the PSP chain carries on a straight
 is not known for the PS2. Confidence **70**: one matched frame, the same
 renderer on the original side as everywhere else.
+
+**Racing, craft box only, pose not matched** (the chase camera puts the craft in
+the same place whatever the pose): the racing dump's craft box (x 240-460, y
+290-512 at 682 x 512) gains 0.404 luma from the bloom, ours with the flare forced
+hot at about 133 km/h (`--pose-boost 10 --pose-intensity 1.0 --pose-speed 38.3`)
+gains **0.84**, 2.1 times, and the mask in that box agrees with the original's
+readout nearly pixel for pixel (hull lights, nozzle block). A shield frame
+(`--force-shield 1:50`) does not white out (craft box 0.94). Whole-frame racing
+numbers are not comparable: our pose faces the gantry. The excess is
+unexplained, as the PSP's is.
 
 `crates/render/tests/ps2_bloom_gain.rs` (a GPU, `#[ignore]`d) runs the chain on a
 known frame against the GS arithmetic in integers: it agrees to a level. The

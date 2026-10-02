@@ -770,6 +770,7 @@ impl Scene {
             // pipelines carry its (write-masked) second target - see
             // `mesh_render::Velocity`.
             mesh_render::Velocity::Write,
+            !ps2_mask,
         ));
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(
             device,

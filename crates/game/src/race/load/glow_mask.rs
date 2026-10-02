@@ -18,11 +18,17 @@ pub(super) fn stamp_models(loaded: &mut Loaded, by_texel: bool) {
         model.glow_by_texel = by_texel;
     };
     stamp(&mut loaded.track_model);
+    if let Some(model) = &mut loaded.shield_cockpit {
+        if by_texel {
+            model.glow_by_texel = true;
+        } else {
+            stamp(model);
+        }
+    }
     for model in [
         &mut loaded.sky_model,
         &mut loaded.pad_model,
         &mut loaded.weapon_pad_model,
-        &mut loaded.shield_cockpit,
         &mut loaded.rocket_model,
         &mut loaded.mine_model,
         &mut loaded.bomb_model,
@@ -54,7 +60,15 @@ pub(super) fn stamp_models(loaded: &mut Loaded, by_texel: bool) {
             .into_iter()
             .flatten()
         {
-            stamp(model);
+            if by_texel {
+                // The PS2's plume body and shell write no mask: its readout
+                // shows only a small block at the nozzle, not the plume's
+                // length (docs/rendering/ps2-bloom.md).
+                model.stamps_glow = false;
+                model.glow_by_texel = true;
+            } else {
+                stamp(model);
+            }
         }
     }
 }

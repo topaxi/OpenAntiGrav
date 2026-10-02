@@ -218,11 +218,13 @@ pub struct Model {
     /// Set by a race loader for Pulse on the PSP, the one source measured;
     /// `false` everywhere else, and for a model cloned into another effect.
     pub stamps_glow: bool,
-    /// With [`Self::stamps_glow`]: the mask value is the fragment's own alpha,
+    /// The PS2's rule, see `mesh_render::GlowMask::StampedByTexel`. With
+    /// [`Self::stamps_glow`]: the mask value is the fragment's own alpha,
     /// the texel's times the vertex colour's, on a batch with the glow bits,
     /// and nothing anywhere else - the **PS2**'s rule, read off GS dumps, in
     /// place of the PSP's constant-per-batch stencil reference. See
-    /// `mesh_render::GlowMask::StampedByTexel`.
+    /// `mesh_render::GlowMask::StampedByTexel`. **Without** `stamps_glow` it
+    /// means a PS2 model that writes no mask at all, whatever its call site asks.
     pub glow_by_texel: bool,
     /// Wipeout HD's engine-flare shading, for the one model that is one, and
     /// `None` for every other model of every title. See [`Flame`].

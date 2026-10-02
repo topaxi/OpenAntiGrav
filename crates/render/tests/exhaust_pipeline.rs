@@ -61,6 +61,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         exhaust::TRAIL_BLEND,
         1,
         oag_render::mesh_render::Velocity::None,
+        true,
     );
 
     // A lit exhaust, so there is something to draw rather than an empty buffer.

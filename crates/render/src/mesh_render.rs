@@ -272,7 +272,9 @@ pub fn build(
     let glow = match (model.stamps_glow, model.glow_by_texel) {
         (true, true) => GlowMask::StampedByTexel,
         (true, false) => GlowMask::Stamped,
-        (false, _) => glow,
+        // A PS2 model that opts out of the mask: it writes colour only.
+        (false, true) => GlowMask::Protected,
+        (false, false) => glow,
     };
     if glow.stamps() {
         constants.push(("glow_stamp", 1.0));

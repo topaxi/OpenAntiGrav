@@ -56,7 +56,7 @@ definition, and the only faithful value is the title's own.
   the mask (a glow batch's own alpha, zero elsewhere) was read back off replayed GS
   dumps and the chain (320x224, 7 integer taps, half-strength add) is
   `post::ps2_bloom`. Matched on Moa Therma's grid at slot 8, ours adds 1.06x the
-  original's mean luma (1.62 against 1.53). Open: **one circuit and a grid frame**
+  original's mean luma (1.62 against 1.53). Racing craft box (pose not matched): ours 0.84 against 0.40 luma, 2.1x, mask matching. Open: **one circuit and a grid frame**
   - Talon's Junction was not reached and no racing frame has a recoverable pose; the
   ghost craft stamps nothing on PS2; `ATST NOTEQUAL 6` and whether the HUD groups
   before the downsample take the composite are read from registers only. See
