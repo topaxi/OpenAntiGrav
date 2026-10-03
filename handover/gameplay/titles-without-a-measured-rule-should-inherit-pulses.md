@@ -22,8 +22,13 @@ the survey is below; none was trivial enough to fix in that lane.
   is the known one (`race-modes.md`, Zone ship).
 - **The absorb half and Mine/Bomb/Turbo/Cannon fire policy** of the opponent weapon AI are this
   project's own on every title, Pulse included: a Pulse gap, not a title one.
-- **HD's `EliminatorAIStats` row** (flip, absorb and use scales by difficulty, in
-  `weaponaistats.xml`) is authored and unread; Pulse's file has no such row, so this is HD-only.
+- **HD's `EliminatorAIStats` row** is parsed since 2026-10-03 (`weapons::ai`, every copy
+  ground-truthed) and **not consumed**: no mapping to Pulse's mode-8 terms reaches 70 (use
+  scales 10.5/12.5/15.5 against a flat x5; absorb scale falling with difficulty against one
+  `0.001`), so HD stays on Pulse's terms. HD's loader is pinned (`weapon-ai-stats.md`,
+  RaceManager `+6240`, fields `+176..+228`); its **reader is not found** - next is a Ghidra
+  xref on that field or an RPCS3 watchpoint. Omega's named file has no row, its
+  `WeaponAIStats2048.xml` does: pick the file by evidence before wiring.
 
 ## Next Steps
 

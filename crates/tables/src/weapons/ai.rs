@@ -42,7 +42,12 @@
 //!
 //! # The shipped values are nearly uniform, and that is not a parsing bug
 //!
-//! Every weapon authors `absorb="1.0"`. Every weapon but the Plasma and the
+//! **This paragraph is Pulse's file** (and Pure's). HD's, 2048's and Omega's
+//! `WeaponAIStats2048.xml` carry the same thirteen element names with
+//! different values (Bomb and Mines author `absorb="1.1"`) and two more rows,
+//! [`WeaponAiStats::all_weapons`] and [`WeaponAiStats::eliminator`].
+//!
+//! Every Pulse weapon authors `absorb="1.0"`. Every weapon but the Plasma and the
 //! Quake authors `useAgainstAI="1.2" useAgainstPlayer="1.1"`; those two author
 //! `1.0"/"1.0`. [`ai-stats.md`] spent two readings treating this as evidence the
 //! file could not be the fire-or-absorb decision, on the theory that a
@@ -144,6 +149,33 @@ pub struct WeaponAiOdds {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct WeaponAiStats {
     odds: Vec<(Weapon, WeaponAiOdds)>,
+    all_weapons: Option<WeaponAiOdds>,
+    eliminator: Option<EliminatorAiStats>,
+}
+
+/// The `<EliminatorAIStats>` row HD, 2048 and Omega author and Pulse's file
+/// does not: thirteen floats, by the attribute names the file itself uses.
+///
+/// **Parsed, not consumed.** Nothing in the simulation reads it. What it
+/// tunes is a hypothesis, recorded with its evidence in
+/// `docs/gameplay/race-modes.md` ("HD's `EliminatorAIStats` row"); the field
+/// names here are the file's own words, not a claim about the original's
+/// consumer. The three-step `easy`/`medium`/`hard` scales are kept by tier so
+/// a reader never has to guess which is which.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct EliminatorAiStats {
+    /// `normalFlip`.
+    pub normal_flip: f32,
+    /// `infrontFlip`.
+    pub infront_flip: f32,
+    /// `easyFlipScale`, `mediumFlipScale`, `hardFlipScale`.
+    pub flip_scale: [f32; 3],
+    /// `easyAbsorbScale`, `mediumAbsorbScale`, `hardAbsorbScale`.
+    pub absorb_scale: [f32; 3],
+    /// `easyUseScale`, `mediumUseScale`, `hardUseScale`.
+    pub use_scale: [f32; 3],
+    /// `easyScoreScale`, `mediumScoreScale`, `hardScoreScale`.
+    pub score_scale: [f32; 3],
 }
 
 impl WeaponAiStats {
@@ -154,6 +186,21 @@ impl WeaponAiStats {
             .iter()
             .find(|(w, _)| *w == weapon)
             .map(|(_, o)| *o)
+    }
+
+    /// The `<AllWeapons>` row HD, 2048 and Omega author after the thirteen:
+    /// same three attributes, no weapon. Pulse's file has none. Parsed and
+    /// unconsumed.
+    #[must_use]
+    pub fn all_weapons(&self) -> Option<WeaponAiOdds> {
+        self.all_weapons
+    }
+
+    /// The `<EliminatorAIStats>` row, or `None` when the file authors none
+    /// (Pulse's and Pure's). Parsed and unconsumed.
+    #[must_use]
+    pub fn eliminator(&self) -> Option<EliminatorAiStats> {
+        self.eliminator
     }
 }
 
@@ -185,16 +232,57 @@ pub fn parse(xml: &str) -> Result<WeaponAiStats, Error> {
         let Some(node) = stats.children_named(element).next() else {
             continue;
         };
-        odds.push((
-            weapon,
-            WeaponAiOdds {
-                use_against_player: number(node, element, "useAgainstPlayer")?,
-                use_against_ai: number(node, element, "useAgainstAI")?,
-                absorb: number(node, element, "absorb")?,
-            },
-        ));
+        odds.push((weapon, odds_of(node, element)?));
     }
-    Ok(WeaponAiStats { odds })
+    let all_weapons = match stats.children_named("AllWeapons").next() {
+        Some(node) => Some(odds_of(node, "AllWeapons")?),
+        None => None,
+    };
+    let eliminator = match stats.children_named("EliminatorAIStats").next() {
+        Some(node) => Some(eliminator_of(node)?),
+        None => None,
+    };
+    Ok(WeaponAiStats {
+        odds,
+        all_weapons,
+        eliminator,
+    })
+}
+
+fn odds_of(node: &Node, element: &'static str) -> Result<WeaponAiOdds, Error> {
+    Ok(WeaponAiOdds {
+        use_against_player: number(node, element, "useAgainstPlayer")?,
+        use_against_ai: number(node, element, "useAgainstAI")?,
+        absorb: number(node, element, "absorb")?,
+    })
+}
+
+fn eliminator_of(node: &Node) -> Result<EliminatorAiStats, Error> {
+    const E: &str = "EliminatorAIStats";
+    Ok(EliminatorAiStats {
+        normal_flip: number(node, E, "normalFlip")?,
+        infront_flip: number(node, E, "infrontFlip")?,
+        flip_scale: [
+            number(node, E, "easyFlipScale")?,
+            number(node, E, "mediumFlipScale")?,
+            number(node, E, "hardFlipScale")?,
+        ],
+        absorb_scale: [
+            number(node, E, "easyAbsorbScale")?,
+            number(node, E, "mediumAbsorbScale")?,
+            number(node, E, "hardAbsorbScale")?,
+        ],
+        use_scale: [
+            number(node, E, "easyUseScale")?,
+            number(node, E, "mediumUseScale")?,
+            number(node, E, "hardUseScale")?,
+        ],
+        score_scale: [
+            number(node, E, "easyScoreScale")?,
+            number(node, E, "mediumScoreScale")?,
+            number(node, E, "hardScoreScale")?,
+        ],
+    })
 }
 
 /// The file's own element names, which is a fourth id space from
