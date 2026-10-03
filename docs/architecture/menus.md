@@ -729,7 +729,7 @@ disc's own French label set was current: "RETOUR") all correct, and four
 class rows (VENOM/FLASH/RAPIER/PHANTOM) drawn below them, nothing
 overlapping the footer bar. The machine's own real `records.toml` and
 `settings.toml` were used unmodified - not seeded - so every class row read
-`-`: the settings file's own `race.track` is `01_Track` (the Basilico entry titled Black),
+`-`: the settings file's own `race.track` is `01_Track` (Basilico Black),
 whose `Data\Plugins\PI001\Definition.xml` entry carries no `Reversed`
 attribute - confirmed by extracting the entry with `oag-wad cat --expand`
 rather than assumed from the id - so `Track::entry_name` resolves it to

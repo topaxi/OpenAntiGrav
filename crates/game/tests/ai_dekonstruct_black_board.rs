@@ -1,6 +1,4 @@
-//! Scratch board for "the AI really struggles with de Konstruct Black". Black is
-//! the reversed `21_Track`; the worst field it found is the forward `05_Track`,
-//! which is White.
+//! Scratch board for "the AI really struggles with de Konstruct Black".
 //!
 //! `#[ignore]`d and gated on `OAG_SWEEP`, printing rather than asserting. It
 //! races `05_Track` forward and reversed (`track.vex` and `track_reversed.vex`)
@@ -229,9 +227,9 @@ fn dekonstruct_board() {
         for reversed in [false, true] {
             let Some(entry) = entry(reversed) else { return };
             let name = if reversed {
-                "05 Black (rev)"
+                "05 White (rev)"
             } else {
-                "05 White (fwd)"
+                "05 Black (fwd)"
             };
             for field in [false, true] {
                 let mut t = Tally::default();
