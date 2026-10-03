@@ -448,8 +448,8 @@ Three findings that cost time:
   a base shader whose only change is `select(mix(plain, authored, w),
   authored, w == 1.0)` moves the same pixel identically. The driver's
   `mix(p, a, 1.0)` is not exactly `a`, so dropping `p` changes the bits;
-  the new value is the exact one. Kept out pending the maintainer's call;
-  patch in `data/perf/lt-s1.patch`.
+  the new value is the exact one. **Declined by the maintainer 2026-10-03:**
+  byte-exactness stays the bar, so do not re-propose it as a saving.
 
 Still open: the blur at full resolution is still 11 ms at 1600x900 and 50 ms
 at 3200x1800 on the iGPU; the gather's long strides at high extents are the
@@ -514,10 +514,10 @@ plus `--autopilot` (a still camera never runs the blur), `--presented
    project's own effect - but the maintainer judges grain (half was too much).
 2. **HD's opaque track, 21.6 ms after the folds above.** The per-title
    terms are folded (sun occlusion, nova); specular is live on every circuit.
-   What is left, by measured size: the plain-path branch (1.2 ms, one Omega
-   pixel, waiting on the maintainer - see "HD's opaque track by term"), then
-   the rig's remaining `pow`s (the atlas and albedo sRGB decodes, the
-   specular exponent, the encode), which are the picture rather than dead
+   The plain-path branch (1.2 ms) was declined for moving one Omega pixel -
+   see "HD's opaque track by term". What is left is the rig's remaining
+   `pow`s (the atlas and albedo sRGB decodes, the specular exponent, the
+   encode), which are the picture rather than dead
    terms, so any further saving costs byte-exactness.
 3. **Defaults for weak GPUs.** 200 % scale plus MSAA 4x is 16 samples a
    displayed pixel. An integrated or Deck-class adapter could start from a
