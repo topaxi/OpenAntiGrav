@@ -455,13 +455,36 @@ after touching anything in this list.
 
 ## Next Steps
 
-0. GPU side: re-profile the race pass with `OAG_RENDER_GPU_BENCH` on the iGPU
-   now that `lit_texel` is gated, then the motion blur chain (about 14 ms on
-   the iGPU, maintainer's measurement).
-1. A harness that presents N frames, so the AA chain's and `fn bind`'s
-   per-frame bind groups get a number rather than a reading. The counters are
-   all placed now; see the Open item for why `--presented` alone is not that
-   harness.
-2. If the `write_buffer` call count is worth attacking, it wants its own
-   thread: one uniform buffer with dynamic offsets rather than one per
-   drawable. Nothing smaller will move it.
+Ranked by measured cost on the Raphael iGPU, HD at the maintainer's 200 %
+scale (3200x1800, MSAA 4x) unless stated. Measure with `OAG_RENDER_GPU_BENCH`
+plus `--autopilot` (a still camera never runs the blur), `--presented
+--render-scale` for scaled extents, render flags pinned on the command line.
+
+1. **Full-resolution motion blur, 50 ms.** The gather's taps stride up to
+   `MAX_STRETCH` of the extent, so at 200 % they miss cache. Candidates: a
+   compute gather that stages each tile's neighbourhood in workgroup memory;
+   or gathering at presentation rather than render resolution when
+   `render_scale` > 100. Exactness is not the bar here - the blur is this
+   project's own effect - but the maintainer judges grain (half was too much).
+2. **HD's opaque track, about 24 ms after the prepass.** Shading, not
+   overdraw now (prepass: 1.2 fragments a pixel). `lit_texel` still runs
+   HD's authored rig with every term live; folding the per-title constants
+   into `override`s per pipeline - as `linear_out` already is - lets the
+   driver drop dead terms. Byte-exactness has held for every shader change so
+   far; keep it the bar.
+3. **Defaults for weak GPUs.** 200 % scale plus MSAA 4x is 16 samples a
+   displayed pixel. An integrated or Deck-class adapter could start from a
+   cheaper profile; `target_fps` dynamic resolution already exists to lean on.
+   A product decision first - ask.
+4. **The velocity target is written when nothing reads it** (blur off and no
+   temporal reconstruction): a 4x MSAA `Rg16Float` attachment cleared and
+   stored every frame. Unmeasured; pure bandwidth on a shared-memory iGPU.
+5. **On a real Steam Deck**: `just appimage-deck`, the perf overlay, the same
+   circuits. Every number above is the 2-CU iGPU standing in for the Deck's
+   8-CU one; the maintainer has the hardware.
+
+Later, smaller: HD bloom (3.2 ms) and HD shadow passes (about 2.4 ms); the
+shine's texture coordinates on the GPU (about 140 us of CPU, costs
+byte-exactness); a harness that presents N frames so the AA chain's
+per-frame bind groups get a number; one uniform buffer with dynamic offsets
+if the `write_buffer` call count ever matters.
