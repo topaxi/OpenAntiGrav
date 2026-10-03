@@ -461,3 +461,32 @@ fn a_plan_of_a_different_line_is_ignored() {
     );
     assert_eq!(controls.thrust, 1.0);
 }
+
+#[test]
+fn a_lower_level_holds_its_share_of_the_plans_pace_on_a_straight() {
+    // An unlimited plan whose verification did 60 here: an Ace at 60 holds
+    // the throttle, a level with a 0.88 pace share brakes to it.
+    let line = tight();
+    let state = moving(&line, 60.0);
+    let mut plan = SpeedPlan::unlimited(&line);
+    plan.pace.fill(60.0);
+    let drive = |level: crate::Difficulty| {
+        let tuning = level.tune(&tuning());
+        let mut driver = Driver {
+            index: 10,
+            ..Driver::default()
+        };
+        driver.drive(
+            &state,
+            &Context {
+                plan: Some(&plan),
+                ..Context::new(&line, &tuning)
+            },
+        )
+    };
+    assert_eq!(drive(crate::Difficulty::Ace).thrust, 1.0);
+    assert_eq!(drive(crate::Difficulty::Elite).thrust, 1.0);
+    let novice = drive(crate::Difficulty::Novice);
+    assert_eq!(novice.thrust, 0.0);
+    assert!(novice.airbrake_left > 0.0);
+}
