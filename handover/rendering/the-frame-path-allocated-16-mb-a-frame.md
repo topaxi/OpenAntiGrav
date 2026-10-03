@@ -274,13 +274,63 @@ a green-looking figure produced by a run that had not exercised the thing**:
     not. That is the same shape `OAG_RENDER_BENCH` already has around
     `Scene::render` in the same file.
 
+## The GPU side, on an integrated GPU (2026-10-03)
+
+`OAG_RENDER_GPU_BENCH=N` (beside `OAG_RENDER_BENCH`, in
+`crates/game/src/race/capture/bench.rs`) records the captured frame, submits
+it and waits for idle N times, timing submit-to-idle. Device time plus one
+submission's overhead; an A/B on one machine cancels the overhead. The adapter
+is `graphics.renderer` in the settings file - measured on the Ryzen 7900's
+Raphael iGPU (RADV, 2 CUs), where fill cost is visible at all. The dGPU hides
+it.
+
+**The race pass was fragment-bound on `mesh.wgsl`'s `lit_texel`.** At
+1600x900, MSAA off, swapping `lit_texel` for one albedo fetch took Pulse's pass
+from 10.5 ms to 2.1 ms. The shader computed every title's every path on every
+pixel and `mix`ed or `select`ed the unwanted ones away at weight zero: nine
+Zone fetches, two flame, two absorb, two rim, the glow fetch, and HD's whole
+authored rig (lightmap fetch, sun occlusion, half a dozen `pow`s), all for
+Pulse. Each is now behind a branch on what already selected it: `zone.enabled`
+and `light.enabled` (uniforms), `flame_shading` and `absorb_shading`
+(overrides), slot bits 8, 11 and 12 (a flat varying - `lit_texel` carries
+`@diagnostic(off, derivative_uniformity)`, and its comment says why the
+derivatives stay sound).
+
+Median `Scene::render` GPU time, start grid, `single_race`, 1600x900, the
+maintainer's own render profiles (Pulse: MSAA 4x, scale 100; HD: MSAA 4x, scale
+200), three interleaved pairs at load ~6:
+
+| step | Pulse PSP | Wipeout HD |
+| --- | --- | --- |
+| before | 13.7 ms | 37.2 ms |
+| Zone gated | 11.5 | 32.6 |
+| flame, absorb, rim gated | 9.7 | 26.4 |
+| authored rig gated | 6.5 | 26.7 (rig is on; no change expected) |
+| glow fetch gated | 6.6 | 24.2 |
+
+**Ten captures were compared byte for byte at each step** (Pulse PSP still,
+rocket volley, shield, Zone; Pulse PS2 still; HD still, Zone, plasma, shield,
+leech beam). Every step after the first is byte-identical to the one before.
+**The first step moved 2-8 pixels of 921,600 by one level on the four HD
+captures that are not the still frame, and Pulse not at all.** `hd-zone` is
+among them, a capture where the new branch is *taken* and the arithmetic is
+the same, so the difference is the driver compiling the restructured shader
+differently (contraction or scheduling on HD's float target, amplified by the
+bloom), not a gated value leaking. Not chased further.
+
+Still not measured: overdraw, whether front-to-back opaque order or a depth
+prepass pays now that per-pixel cost is lower, and the motion blur chain,
+which the maintainer measured at about 14 ms on the same iGPU - **the next
+GPU-side target**, after re-profiling what is left of the race pass.
+
 ## Not measurable here
 
-No window presents on this machine, so none of these were tested and none are
-claimed either way: overdraw and fill cost, whether the sky's `Always`-compare
-full-viewport paint is worth a depth prepass, GPU-side cost of the six motion
-blur passes, and whether finding 4's saving is visible on an integrated GPU (it
-is a CPU-side saving; the GPU sees fewer descriptor binds).
+No window presents on the machine the 2026-09-02 numbers came from, so none of
+these were tested there: overdraw and fill cost, whether the sky's
+`Always`-compare full-viewport paint is worth a depth prepass, and whether
+finding 4's saving is visible on an integrated GPU (it is a CPU-side saving;
+the GPU sees fewer descriptor binds). `OAG_RENDER_GPU_BENCH` above now reaches
+the GPU side headlessly.
 
 ## The instrumentation is still here, behind an off-by-default feature
 
@@ -307,6 +357,9 @@ OAG_RENDER_PERF=1 cargo run --release -p oag-game --features perf-probe -- \
 OAG_RENDER_BENCH=300 cargo run --release -p oag-game --features perf-probe -- \
   data/images/pulse-psp-usa.chd --race --mode single_race \
   --screenshot /tmp/race.png --ticks 600
+OAG_RENDER_GPU_BENCH=150 cargo run --release -p oag-game --features perf-probe -- \
+  data/images/pulse-psp-eu.chd --no-audio --race --mode single_race \
+  --screenshot /tmp/race.png --ticks 600 --size 1600x900
 ```
 
 **`just` does not build with the feature on**, deliberately - a second clippy
@@ -316,6 +369,9 @@ after touching anything in this list.
 
 ## Next Steps
 
+0. GPU side: re-profile the race pass with `OAG_RENDER_GPU_BENCH` on the iGPU
+   now that `lit_texel` is gated, then the motion blur chain (about 14 ms on
+   the iGPU, maintainer's measurement).
 1. A harness that presents N frames, so the AA chain's and `fn bind`'s
    per-frame bind groups get a number rather than a reading. The counters are
    all placed now; see the Open item for why `--presented` alone is not that

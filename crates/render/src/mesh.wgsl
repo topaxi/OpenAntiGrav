@@ -986,6 +986,13 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
     return max(up * (1.0 - window_depth) * drive * vis, vec3<f32>(0.0));
 }
 
+// **A branch on `slots` keeps its derivatives.** `slots` is a flat varying,
+// and a 2x2 fragment quad - helper lanes included - is always shaded for one
+// primitive, so every lane of a quad reads the same flat value and takes the
+// same side of the branch. An implicit-derivative fetch inside it therefore
+// has the neighbours it needs. WGSL's analysis cannot see that about a
+// varying, so it is told here.
+@diagnostic(off, derivative_uniformity)
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
 
@@ -994,6 +1001,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let key = max(dot(n, normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0);
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
+
+    let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
+
+    // **Everything from here to `authored` is the authored rig's, and only
+    // runs when the rig is on.** Off - `Light::stand_in`, which is every
+    // circuit with no `.envsettings` to read, Pulse's and Pure's included -
+    // the output mixes this whole path in at weight zero, and it was costing
+    // a lightmap fetch, the sun-occlusion lookup and half a dozen `pow`s a
+    // pixel for nothing: half the race pass on an integrated GPU.
+    // `enabled` is a uniform, so the fetches keep their derivatives.
 
     // **The circuit's own baked lighting.** A material naming an
     // `lmaps/*-lmap.gtf` in its second texture slot is drawn through it,
@@ -1010,178 +1027,182 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // that switches the term off. `slots::SECOND_IS_LIGHTMAP` is the material's
     // own four-signal reading; without it the value is the placeholder's, to
     // the bit.
-    let atlas = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
-    let baked = select(
-        vec4<f32>(0.0, 0.0, 0.0, 1.0),
-        atlas,
-        (in.slots & 1u) != 0u,
-    );
+    var authored = vec3<f32>(0.0);
+    var mask = 0.0;
+    var emissive = false;
+    if scene.light.enabled != 0.0 {
+        let atlas = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
+        let baked = select(
+            vec4<f32>(0.0, 0.0, 0.0, 1.0),
+            atlas,
+            (in.slots & 1u) != 0u,
+        );
 
-    // The authored rig, and the combination is no longer this project's: it is
-    // the one every lit variant of an HD circuit `.rcsmaterial` computes,
-    // read out of the fragment microcode
-    // (docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The lit track
-    // material"). The lightmap enters through a power curve - `Prelit ambient
-    // colour scale/power`, the .envsettings names - and is *added* to a
-    // constant, not multiplied by one:
-    //
-    //     block #9, lightmapped:  pow(lightmap, power) * scale + f[TC1]
-    //     block #8, no lightmap:  f[TC1] + constantAmbientColour
-    //
-    // and that sum multiplies the albedo. **Neither block has an `N.L` or a
-    // sun colour of its own** - `track_surface`'s 15 chunks of Talon's
-    // Junction compute exactly this and nothing more.
-    //
-    // `scene.light.ambient` is `constantAmbientColour` - the preimage of the
-    // hash the microcode patches into block #8's `{const}`. `f[TC1]` is HD's
-    // per-vertex light, which `mesh/rcs.rs` decodes out of the colour set and
-    // hands over in `in.colour.rgb`; it is **added**, as both variants add
-    // it, and is zero on a chunk that declares no colour set - which is what
-    // the original's own vertex programs broadcast there. Note `f[TC1]` is
-    // that material's interpolator and not a convention: the same closer
-    // arrives on `f[TC0]` in `talons_junction/bluemetal`, so a per-material
-    // path will have to read which varying carries it.
-    let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
-    let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
-    // **Wipeout: Omega Collection's combination, on a lightmapped draw.** Read
-    // out of its circuit pixel shaders (ps4-omega-eu/lightmap-prelit.md):
-    // `v_log_f32` / `v_mul_f32 power` / `v_exp_f32` / `v_mad_f32 scale, bias` on
-    // the *raw* atlas - its descriptor is BC7 UNORM on all 1,028 atlases, so
-    // there is no sRGB decode in front of the curve - and no constant ambient
-    // joins the sum (0 of 4,664 nova shaders declare one). `scale`, `bias` and
-    // `power` are the authored triple's three scalars. Gated on the lightmap
-    // bit: a draw with no lightmap binds the black placeholder, and the bias
-    // must not light it.
-    let nova = scene.light.nova > 0.5 && (in.slots & 1u) != 0u;
-    let prelit_hd = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
-    let prelit_nova = scene.light.prelit_scale * pow(baked.rgb, scene.light.prelit_power)
-        + vec3<f32>(scene.light.prelit_bias);
-    let prelit = select(prelit_hd, prelit_nova, nova);
-    // `select` rather than a multiply by the override, so the value is not
-    // touched at all where the flag is set. (Measured: it makes no difference
-    // to the frame either way - both forms move the same 9 pixels of 1,175,040
-    // by one level, and that movement is the `tint` line below rather than this
-    // one. Kept because not multiplying is the clearer statement.)
-    let vertex_light = select(vec3<f32>(0.0), in.colour.rgb, colour_is_light > 0.5);
+        // The authored rig, and the combination is no longer this project's: it is
+        // the one every lit variant of an HD circuit `.rcsmaterial` computes,
+        // read out of the fragment microcode
+        // (docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The lit track
+        // material"). The lightmap enters through a power curve - `Prelit ambient
+        // colour scale/power`, the .envsettings names - and is *added* to a
+        // constant, not multiplied by one:
+        //
+        //     block #9, lightmapped:  pow(lightmap, power) * scale + f[TC1]
+        //     block #8, no lightmap:  f[TC1] + constantAmbientColour
+        //
+        // and that sum multiplies the albedo. **Neither block has an `N.L` or a
+        // sun colour of its own** - `track_surface`'s 15 chunks of Talon's
+        // Junction compute exactly this and nothing more.
+        //
+        // `scene.light.ambient` is `constantAmbientColour` - the preimage of the
+        // hash the microcode patches into block #8's `{const}`. `f[TC1]` is HD's
+        // per-vertex light, which `mesh/rcs.rs` decodes out of the colour set and
+        // hands over in `in.colour.rgb`; it is **added**, as both variants add
+        // it, and is zero on a chunk that declares no colour set - which is what
+        // the original's own vertex programs broadcast there. Note `f[TC1]` is
+        // that material's interpolator and not a convention: the same closer
+        // arrives on `f[TC0]` in `talons_junction/bluemetal`, so a per-material
+        // path will have to read which varying carries it.
+        let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
+        // **Wipeout: Omega Collection's combination, on a lightmapped draw.** Read
+        // out of its circuit pixel shaders (ps4-omega-eu/lightmap-prelit.md):
+        // `v_log_f32` / `v_mul_f32 power` / `v_exp_f32` / `v_mad_f32 scale, bias` on
+        // the *raw* atlas - its descriptor is BC7 UNORM on all 1,028 atlases, so
+        // there is no sRGB decode in front of the curve - and no constant ambient
+        // joins the sum (0 of 4,664 nova shaders declare one). `scale`, `bias` and
+        // `power` are the authored triple's three scalars. Gated on the lightmap
+        // bit: a draw with no lightmap binds the black placeholder, and the bias
+        // must not light it.
+        let nova = scene.light.nova > 0.5 && (in.slots & 1u) != 0u;
+        let prelit_hd = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
+        let prelit_nova = scene.light.prelit_scale * pow(baked.rgb, scene.light.prelit_power)
+            + vec3<f32>(scene.light.prelit_bias);
+        let prelit = select(prelit_hd, prelit_nova, nova);
+        // `select` rather than a multiply by the override, so the value is not
+        // touched at all where the flag is set. (Measured: it makes no difference
+        // to the frame either way - both forms move the same 9 pixels of 1,175,040
+        // by one level, and that movement is the `tint` line below rather than this
+        // one. Kept because not multiplying is the clearer statement.)
+        let vertex_light = select(vec3<f32>(0.0), in.colour.rgb, colour_is_light > 0.5);
 
-    // `slots::NO_AMBIENT`/`slots::NO_SUN`, bits 6/7 - read here, ahead of
-    // `emissive`'s own paragraph below, because the ambient fix that follows
-    // needs `no_ambient` before that point and this keeps the two bit reads
-    // from drifting apart.
-    let no_ambient = (in.slots & 64u) != 0u;
-    let no_sun = (in.slots & 128u) != 0u;
-    let emissive = no_ambient && no_sun;
+        // `slots::NO_AMBIENT`/`slots::NO_SUN`, bits 6/7 - read here, ahead of
+        // `emissive`'s own paragraph below, because the ambient fix that follows
+        // needs `no_ambient` before that point and this keeps the two bit reads
+        // from drifting apart.
+        let no_ambient = (in.slots & 64u) != 0u;
+        let no_sun = (in.slots & 128u) != 0u;
+        emissive = no_ambient && no_sun;
 
-    // **The disc's own compiled shader table carries three ambient sources
-    // per chunk, not one** - see
-    // docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The per-material
-    // microcode sweep: none of the four ceiling programs ever references
-    // the ambient constant...". Selected by `Features::chunk_word`:
-    // `IleLightmap` -> the `prelit` curve above (already this chunk's only
-    // term, untouched here); `IleVertex` -> the same curve shape applied to
-    // the baked per-vertex colour set instead of the lightmap texel -
-    // `pow(colour_set, prelitBias) * prelitScaleSpecular`; `Ambient`
-    // (neither) -> flat `constantAmbientColour`, i.e. `scene.light.ambient`
-    // unmodified. `slots::NO_AMBIENT` is exactly "this chunk's own program
-    // is not the `Ambient` case" - confirmed on every chunk measured on
-    // Amphiseum, Anulpha Pass and Talon's Junction. Dropping
-    // `scene.light.ambient` alone on these chunks regresses an
-    // `IleVertex`/no-lightmap/sun-occluded chunk to near-black, because the
-    // raw (uncurved) vertex colour this project already wires as
-    // `vertex_light` is far dimmer than the curved value - so the drop and
-    // the curve are one change, not two.
-    //
-    // `prelitBias`/`prelitScaleSpecular` resolve to the same two
-    // `.envsettings` keys already bound above as `prelit_scale`/
-    // `prelit_power`: `Scene_PrepareFrame` binds `Prelit ambient colour
-    // scale`/`power` into the per-draw shader-parameter table at offsets
-    // `+0x198`/`+0x1b8` (renderer.md, "`Constant ambient color` (`+0x420`)
-    // is confirmed wired..."), and the engine's own 81-entry parameter
-    // table uses `offset = 0x18 + slot * 0x20` (renderer.md, "The engine's
-    // own parameter table") - solving that for `0x198`/`0x1b8` gives slots
-    // 12/13, which the same table names `prelitScaleSpecular`/`prelitBias`.
-    // Two independently-traced offset chains landing on the same slot
-    // indices, not a name-string or value/shape match alone.
-    //
-    // No sRGB predecode here, unlike `prelit` above: the colour-set vertex
-    // program reads `v[3]` raw (`LG2 -> MUL -> EX2 -> MUL`), not through the
-    // lightmap's `pow(_, 2.2)` step. `EMISSIVE` chunks (`no_ambient &&
-    // no_sun`) are excluded from the curve below - this is additive to that
-    // branch, not a rewrite of it.
-    let vertex_light_curved = scene.light.prelit_scale
-        * pow(vertex_light, scene.light.prelit_power);
-    let vertex_light_term = select(vertex_light, vertex_light_curved, no_ambient && !emissive);
-    let ambient_term = select(scene.light.ambient, vec3<f32>(0.0), no_ambient || nova);
+        // **The disc's own compiled shader table carries three ambient sources
+        // per chunk, not one** - see
+        // docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The per-material
+        // microcode sweep: none of the four ceiling programs ever references
+        // the ambient constant...". Selected by `Features::chunk_word`:
+        // `IleLightmap` -> the `prelit` curve above (already this chunk's only
+        // term, untouched here); `IleVertex` -> the same curve shape applied to
+        // the baked per-vertex colour set instead of the lightmap texel -
+        // `pow(colour_set, prelitBias) * prelitScaleSpecular`; `Ambient`
+        // (neither) -> flat `constantAmbientColour`, i.e. `scene.light.ambient`
+        // unmodified. `slots::NO_AMBIENT` is exactly "this chunk's own program
+        // is not the `Ambient` case" - confirmed on every chunk measured on
+        // Amphiseum, Anulpha Pass and Talon's Junction. Dropping
+        // `scene.light.ambient` alone on these chunks regresses an
+        // `IleVertex`/no-lightmap/sun-occluded chunk to near-black, because the
+        // raw (uncurved) vertex colour this project already wires as
+        // `vertex_light` is far dimmer than the curved value - so the drop and
+        // the curve are one change, not two.
+        //
+        // `prelitBias`/`prelitScaleSpecular` resolve to the same two
+        // `.envsettings` keys already bound above as `prelit_scale`/
+        // `prelit_power`: `Scene_PrepareFrame` binds `Prelit ambient colour
+        // scale`/`power` into the per-draw shader-parameter table at offsets
+        // `+0x198`/`+0x1b8` (renderer.md, "`Constant ambient color` (`+0x420`)
+        // is confirmed wired..."), and the engine's own 81-entry parameter
+        // table uses `offset = 0x18 + slot * 0x20` (renderer.md, "The engine's
+        // own parameter table") - solving that for `0x198`/`0x1b8` gives slots
+        // 12/13, which the same table names `prelitScaleSpecular`/`prelitBias`.
+        // Two independently-traced offset chains landing on the same slot
+        // indices, not a name-string or value/shape match alone.
+        //
+        // No sRGB predecode here, unlike `prelit` above: the colour-set vertex
+        // program reads `v[3]` raw (`LG2 -> MUL -> EX2 -> MUL`), not through the
+        // lightmap's `pow(_, 2.2)` step. `EMISSIVE` chunks (`no_ambient &&
+        // no_sun`) are excluded from the curve below - this is additive to that
+        // branch, not a rewrite of it.
+        let vertex_light_curved = scene.light.prelit_scale
+            * pow(vertex_light, scene.light.prelit_power);
+        let vertex_light_term = select(vertex_light, vertex_light_curved, no_ambient && !emissive);
+        let ambient_term = select(scene.light.ambient, vec3<f32>(0.0), no_ambient || nova);
 
-    // **The sun-occlusion mask, restored 2026-08-20.** Two independently
-    // decoded carriers of the same scalar: a lightmapped chunk's shadow lives
-    // in its lightmap's own alpha, and a vertex-lit chunk's lives in its
-    // colour set's fourth byte - `in.sun_mask`, from
-    // `oag_formats::rcsmodel::Mesh::vertex_light`. They never both carry real
-    // data (a chunk bakes into the lightmap atlas *or* its vertices, never
-    // both - see `mesh/rcs.rs`), and each side's absence is `1.0`
-    // (unmasked): the no-lightmap placeholder's alpha, and `sun_mask`'s own
-    // default for a chunk with no colour set. So the product reads whichever
-    // side is real and is the identity where neither is.
-    //
-    // **A prior version of this comment said no sun term belonged here at
-    // all**, because the general block #8/#9 formula above has none. That
-    // was the read on two materials; seven read variant-by-variant on
-    // 2026-08-20 refute it. `diffuse_with_specular_from_alpha` (86 chunks of
-    // Talon's Junction), `..._scalar` (80), `diffusewithalphachannel` (43),
-    // `track_wall` (33) and `glasstest` (33) - **275 of Talon's Junction's
-    // 301 drawn materials, against `track_surface`'s 15** - each normalise
-    // their interpolated world normal, dot it against the sun direction,
-    // multiply by the sun colour, gate it by this same mask, add the prelit
-    // term and multiply the sum into the albedo. So this is the rule and
-    // `track_surface` the exception, applied to every chunk alike for want of
-    // the per-material branch that would tell the two apart - a stand-in of
-    // the same shape as the shared specular exponent below, and the
-    // 15-of-301 minority it is wrong for reads unlit rather than lit, which
-    // this project has not yet measured against the frame.
-    //
-    // **What this replaces.** A `sun * (ndl * baked.a)` summand once stood
-    // here with `baked.a` fixed at the no-lightmap placeholder's `1.0` -
-    // full sun, unoccluded, everywhere - measured at 14.3 % of the frame
-    // clipped to white against the reference's 5.8 %, worse than the sun
-    // term being absent entirely, which is why it was removed rather than
-    // left wrong. `mesh/rcs.rs` used to take only `.rgb` from the colour set
-    // and this mask did not exist yet.
-    // **Times the road's mask under a craft**, `sun_occlusion` above: 1.0 on
-    // every draw that is not a hull with a map, so nothing else here moves.
-    let mask = baked.a * in.sun_mask * sun_occlusion(in.world);
-    let sun_diffuse = scene.light.sun * (ndl * mask);
-    // **`scene.light.ambient` and `vertex_light` are gated above** (`ambient_term`,
-    // `vertex_light_term`), on `slots::NO_AMBIENT` - 251 of Anulpha Pass's 309
-    // drawn materials, 922 of its 1,101 chunks. Gating `scene.light.ambient`
-    // on that bit *alone* was tried on 2026-08-24 and was a regression: the
-    // materials without an ambient are three families, not one, and
-    // `sign_emissive` and its kin (declaring only `fogColour`) went black
-    // when multiplied by an `authored` with the ambient simply dropped. The
-    // fix above is the drop *and* the vertex-colour curve together, which is
-    // what keeps the `IleLightmap`/`IleVertex` families lit; `EMISSIVE`
-    // below is the third family, excluded from both terms the same way it
-    // always was.
-    //
-    // **A program fed no scene light is emissive, and the rig must not touch
-    // it.** `slots::EMISSIVE` is the material's own declaration: neither
-    // `constantAmbientColour` nor `directionalLight0*`. On Anulpha Pass that
-    // is 33 materials over 95 chunks and on Talon's Junction 35 over 151, and
-    // every name in both is a sign or a glow - `sign_emissive`, `cf_glow_tube`,
-    // `cf_plasma_glow2`, `dc_lightcone`, `scanlinebillboard` - which is a
-    // confirmation the split was not designed for.
-    //
-    // Multiplying by `1.0` rather than adding anything: the albedo *is* the
-    // picture for these, exactly as the microcode leaves it. The specular goes
-    // with it, because a program with no sun has no half-vector term either.
-    // **Plus Wipeout HD's SPU vertex lights**, which the `SVC1` fragment
-    // programs add in exactly this slot - the pre-albedo diffuse sum beside
-    // the ambient, the sun and the lightmap, never the specular, the fog or
-    // the emissive add (renderer.md, "The `SVC1` combine is read"). Zero on
-    // every draw that binds no list, and on an `EMISSIVE` chunk the whole
-    // sum is replaced below, which is the original's own no-op there.
-    let lit_sum = ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light;
-    let authored = select(lit_sum, vec3<f32>(1.0), emissive);
+        // **The sun-occlusion mask, restored 2026-08-20.** Two independently
+        // decoded carriers of the same scalar: a lightmapped chunk's shadow lives
+        // in its lightmap's own alpha, and a vertex-lit chunk's lives in its
+        // colour set's fourth byte - `in.sun_mask`, from
+        // `oag_formats::rcsmodel::Mesh::vertex_light`. They never both carry real
+        // data (a chunk bakes into the lightmap atlas *or* its vertices, never
+        // both - see `mesh/rcs.rs`), and each side's absence is `1.0`
+        // (unmasked): the no-lightmap placeholder's alpha, and `sun_mask`'s own
+        // default for a chunk with no colour set. So the product reads whichever
+        // side is real and is the identity where neither is.
+        //
+        // **A prior version of this comment said no sun term belonged here at
+        // all**, because the general block #8/#9 formula above has none. That
+        // was the read on two materials; seven read variant-by-variant on
+        // 2026-08-20 refute it. `diffuse_with_specular_from_alpha` (86 chunks of
+        // Talon's Junction), `..._scalar` (80), `diffusewithalphachannel` (43),
+        // `track_wall` (33) and `glasstest` (33) - **275 of Talon's Junction's
+        // 301 drawn materials, against `track_surface`'s 15** - each normalise
+        // their interpolated world normal, dot it against the sun direction,
+        // multiply by the sun colour, gate it by this same mask, add the prelit
+        // term and multiply the sum into the albedo. So this is the rule and
+        // `track_surface` the exception, applied to every chunk alike for want of
+        // the per-material branch that would tell the two apart - a stand-in of
+        // the same shape as the shared specular exponent below, and the
+        // 15-of-301 minority it is wrong for reads unlit rather than lit, which
+        // this project has not yet measured against the frame.
+        //
+        // **What this replaces.** A `sun * (ndl * baked.a)` summand once stood
+        // here with `baked.a` fixed at the no-lightmap placeholder's `1.0` -
+        // full sun, unoccluded, everywhere - measured at 14.3 % of the frame
+        // clipped to white against the reference's 5.8 %, worse than the sun
+        // term being absent entirely, which is why it was removed rather than
+        // left wrong. `mesh/rcs.rs` used to take only `.rgb` from the colour set
+        // and this mask did not exist yet.
+        // **Times the road's mask under a craft**, `sun_occlusion` above: 1.0 on
+        // every draw that is not a hull with a map, so nothing else here moves.
+        mask = baked.a * in.sun_mask * sun_occlusion(in.world);
+        let sun_diffuse = scene.light.sun * (ndl * mask);
+        // **`scene.light.ambient` and `vertex_light` are gated above** (`ambient_term`,
+        // `vertex_light_term`), on `slots::NO_AMBIENT` - 251 of Anulpha Pass's 309
+        // drawn materials, 922 of its 1,101 chunks. Gating `scene.light.ambient`
+        // on that bit *alone* was tried on 2026-08-24 and was a regression: the
+        // materials without an ambient are three families, not one, and
+        // `sign_emissive` and its kin (declaring only `fogColour`) went black
+        // when multiplied by an `authored` with the ambient simply dropped. The
+        // fix above is the drop *and* the vertex-colour curve together, which is
+        // what keeps the `IleLightmap`/`IleVertex` families lit; `EMISSIVE`
+        // below is the third family, excluded from both terms the same way it
+        // always was.
+        //
+        // **A program fed no scene light is emissive, and the rig must not touch
+        // it.** `slots::EMISSIVE` is the material's own declaration: neither
+        // `constantAmbientColour` nor `directionalLight0*`. On Anulpha Pass that
+        // is 33 materials over 95 chunks and on Talon's Junction 35 over 151, and
+        // every name in both is a sign or a glow - `sign_emissive`, `cf_glow_tube`,
+        // `cf_plasma_glow2`, `dc_lightcone`, `scanlinebillboard` - which is a
+        // confirmation the split was not designed for.
+        //
+        // Multiplying by `1.0` rather than adding anything: the albedo *is* the
+        // picture for these, exactly as the microcode leaves it. The specular goes
+        // with it, because a program with no sun has no half-vector term either.
+        // **Plus Wipeout HD's SPU vertex lights**, which the `SVC1` fragment
+        // programs add in exactly this slot - the pre-albedo diffuse sum beside
+        // the ambient, the sun and the lightmap, never the specular, the fog or
+        // the emissive add (renderer.md, "The `SVC1` combine is read"). Zero on
+        // every draw that binds no list, and on an `EMISSIVE` chunk the whole
+        // sum is replaced below, which is the original's own no-op there.
+        let lit_sum = ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light;
+        authored = select(lit_sum, vec3<f32>(1.0), emissive);
+    }
 
     // **Which texture is the picture and which is the coverage, off the
     // material's own microcode** - see `oag_render::mesh::slots` and
@@ -1292,11 +1313,17 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // of the texture across it. See `oag_render::mesh::Emissive::rate`.
     let glow_v = (in.texcoord.y + glow_tint_offset.w) * glow_scale.x
         + scene.time.x * glow_scale.y;
-    let glow_sample = textureSample(
-        lightmap,
-        albedo_sampler,
-        vec2<f32>(in.texcoord.x, glow_v),
-    );
+    // Fetched only where `ADD_SECOND` is set: everywhere else `glow_gate`
+    // below is zero and the sample is multiplied away. A branch on `slots`,
+    // which `lit_texel`'s own attribute explains.
+    var glow_sample = vec4<f32>(0.0);
+    if (in.slots & 256u) != 0u {
+        glow_sample = textureSample(
+            lightmap,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, glow_v),
+        );
+    }
     // Gated by the *diffuse* alpha, which is `first.a` rather than the
     // resolved `texel.a`: the microcode's `H0.wwww` is the unit-0 fetch's own
     // fourth channel, before any of the role bits above choose where the
@@ -1330,17 +1357,30 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // silhouette, and the two summands are silhouette-weighted. The eye comes
     // out of the fog block, the one slot in bind group 2 that carries a
     // position; the specular term below reads it from there too.
-    let zone_to_eye = normalize(scene.fog.camera - in.world);
-    let zone_colours = zone_set(in.slots, in.world);
-    let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
-    let zone = zone_sample(in.texcoord, in.slots, in.world);
-    let zone_linear = pow(zone, vec3<f32>(2.2)) * zone_colours.effect.rgb + zone_base;
-    let zone_gamma = zone * zone_colours.effect.rgb + zone_base;
-    // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
-    // rather than trusting `effect.w` to be zero off a Zone race, the same
-    // belt-and-braces `surface_linear`/`plain` below already take.
-    let zone_glow_term =
-        zone_glow(n, in.clip.z, in.texcoord, in.slots, in.world) * scene.zone.enabled;
+    //
+    // **Branched, not just weighted.** Every reader below mixes these in by
+    // `enabled`, so off a Zone race they contribute nothing - but computing
+    // them anyway costs nine texture fetches a pixel, about a fifth of the
+    // race pass on an integrated GPU (`OAG_RENDER_GPU_BENCH`). `enabled` is a
+    // uniform, so the branch is uniform control flow and the fetches inside it
+    // keep their implicit derivatives. Zero is what the mixes already reduced
+    // these to, so the picture is unchanged to the byte.
+    var zone_linear = vec3<f32>(0.0);
+    var zone_gamma = vec3<f32>(0.0);
+    var zone_glow_term = vec3<f32>(0.0);
+    if scene.zone.enabled != 0.0 {
+        let zone_to_eye = normalize(scene.fog.camera - in.world);
+        let zone_colours = zone_set(in.slots, in.world);
+        let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
+        let zone = zone_sample(in.texcoord, in.slots, in.world);
+        zone_linear = pow(zone, vec3<f32>(2.2)) * zone_colours.effect.rgb + zone_base;
+        zone_gamma = zone * zone_colours.effect.rgb + zone_base;
+        // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
+        // rather than trusting `effect.w` to be zero off a Zone race, the same
+        // belt-and-braces `surface_linear`/`plain` below already take.
+        zone_glow_term =
+            zone_glow(n, in.clip.z, in.texcoord, in.slots, in.world) * scene.zone.enabled;
+    }
 
     // The read specular term: half-vector against the sun, raised to
     // `in.specular_exponent` - each material's own inline constant, decoded
@@ -1356,60 +1396,65 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // the original samples it too). Zero whenever the authored rig is off:
     // the stand-in never had one.
     let to_eye = normalize(scene.fog.camera - in.world);
-    let half_vector = to_eye + scene.light.direction;
-    let ndh = clamp(
-        dot(half_vector, n) / max(length(half_vector), 1e-6),
-        0.0,
-        1.0,
-    );
-    let specular = scene.light.sun
-        * (pow(ndh, in.specular_exponent) * ndl * mask * texel.a * scene.light.specular_scale
-            * scene.light.enabled * in.lit * select(1.0, 0.0, emissive));
+    // The authored rig's half of the output, computed only when the rig is
+    // on - see the same branch above `atlas`.
+    var authored_rgb = vec3<f32>(0.0);
+    if scene.light.enabled != 0.0 {
+        let half_vector = to_eye + scene.light.direction;
+        let ndh = clamp(
+            dot(half_vector, n) / max(length(half_vector), 1e-6),
+            0.0,
+            1.0,
+        );
+        let specular = scene.light.sun
+            * (pow(ndh, in.specular_exponent) * ndl * mask * texel.a * scene.light.specular_scale
+                * scene.light.enabled * in.lit * select(1.0, 0.0, emissive));
 
-    // The authored path shades in linear light, as the RSX does: the samples
-    // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
-    // the result is saturated (the stand-in for HD's exposure stage) and
-    // encoded back here; on the linear float target it leaves **unclamped**,
-    // because values above 1.0 are exactly what the bloom gate reads, and the
-    // saturate-and-encode happens in `post::hd_bloom`'s own pass instead.
-    // The vertex colour is **inside** `authored` on this path, not a factor
-    // outside it: the microcode's `(prelit + f[TC1]) * albedo` adds the two
-    // light terms and multiplies the albedo once. It stays a factor on the
-    // stand-in path below, where it is a tint and every other title authors
-    // it as one.
-    let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
-    // `surface = zoneCol`, then `colour = light * surface` - the microcode's
-    // own order, and on this path both terms are linear. The Zone surface
-    // **replaces** the albedo rather than adding to it, so `enabled` is the
-    // mix weight: it is 0.0 for every draw that is not a Zone race with all
-    // its inputs resolved, and there this is `texel_linear` unchanged.
-    let surface_linear = mix(texel_linear, zone_linear, scene.zone.enabled);
-    // `colour = light * surface + glow` - the microcode's own order, and
-    // **both glows are on the far side of the multiply because that is where
-    // the disc puts them**. Read off `uvanim_diffuse_emissive`'s lit fragment
-    // block on Amphiseum, block #3, with `scripts/ps3-microcode.py`:
-    //
-    //     @0x22  MUL H4.xyz, H0, H4      ; albedo * (prelit + ambient + ndl*sun)
-    //     @0x23  MAD H0.xyz, H0.wwww, H1, H4   ; + diffuse alpha * tinted glow
-    //
-    // Its unlit block #2 (`MUL` at 0x0b, `MAD` at 0x0f) and its second lit
-    // block #4 (0x23, 0x25) have the same pair in the same order. Three
-    // variants, no exceptions - so the accumulate reads a value the light has
-    // already multiplied, and a glow is not itself lit.
-    //
-    // **`glow_linear` belongs here and used to reach only `plain`**, which is
-    // what made HD's emissive layer very nearly invisible: this fragment
-    // resolves `mix(plain_rgb, authored_rgb, enabled * in.lit)` and HD's rig is
-    // always enabled, so every `in.lit == 1` chunk - the track, the tubes, the
-    // signs, everything near the camera - dropped it. Only the far background
-    // and the hull ever saw it.
-    let lit_linear =
-        surface_linear * authored + specular + zone_glow_term + glow_linear;
-    let encoded = pow(
-        clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
-        vec3<f32>(1.0 / 2.2),
-    );
-    let authored_rgb = mix(encoded, lit_linear, linear_out);
+        // The authored path shades in linear light, as the RSX does: the samples
+        // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
+        // the result is saturated (the stand-in for HD's exposure stage) and
+        // encoded back here; on the linear float target it leaves **unclamped**,
+        // because values above 1.0 are exactly what the bloom gate reads, and the
+        // saturate-and-encode happens in `post::hd_bloom`'s own pass instead.
+        // The vertex colour is **inside** `authored` on this path, not a factor
+        // outside it: the microcode's `(prelit + f[TC1]) * albedo` adds the two
+        // light terms and multiplies the albedo once. It stays a factor on the
+        // stand-in path below, where it is a tint and every other title authors
+        // it as one.
+        let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
+        // `surface = zoneCol`, then `colour = light * surface` - the microcode's
+        // own order, and on this path both terms are linear. The Zone surface
+        // **replaces** the albedo rather than adding to it, so `enabled` is the
+        // mix weight: it is 0.0 for every draw that is not a Zone race with all
+        // its inputs resolved, and there this is `texel_linear` unchanged.
+        let surface_linear = mix(texel_linear, zone_linear, scene.zone.enabled);
+        // `colour = light * surface + glow` - the microcode's own order, and
+        // **both glows are on the far side of the multiply because that is where
+        // the disc puts them**. Read off `uvanim_diffuse_emissive`'s lit fragment
+        // block on Amphiseum, block #3, with `scripts/ps3-microcode.py`:
+        //
+        //     @0x22  MUL H4.xyz, H0, H4      ; albedo * (prelit + ambient + ndl*sun)
+        //     @0x23  MAD H0.xyz, H0.wwww, H1, H4   ; + diffuse alpha * tinted glow
+        //
+        // Its unlit block #2 (`MUL` at 0x0b, `MAD` at 0x0f) and its second lit
+        // block #4 (0x23, 0x25) have the same pair in the same order. Three
+        // variants, no exceptions - so the accumulate reads a value the light has
+        // already multiplied, and a glow is not itself lit.
+        //
+        // **`glow_linear` belongs here and used to reach only `plain`**, which is
+        // what made HD's emissive layer very nearly invisible: this fragment
+        // resolves `mix(plain_rgb, authored_rgb, enabled * in.lit)` and HD's rig is
+        // always enabled, so every `in.lit == 1` chunk - the track, the tubes, the
+        // signs, everything near the camera - dropped it. Only the far background
+        // and the hull ever saw it.
+        let lit_linear =
+            surface_linear * authored + specular + zone_glow_term + glow_linear;
+        let encoded = pow(
+            clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
+            vec3<f32>(1.0 / 2.2),
+        );
+        authored_rgb = mix(encoded, lit_linear, linear_out);
+    }
 
     // The stand-in path, byte-for-byte what every other title always drew.
     // Prelit geometry (`lit` 0.0) takes it even under the authored rig: its
@@ -1472,48 +1517,56 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // output. Multiplying it in - which the line below this one does for every
     // other surface - is what held the flame at about a third of its
     // brightness.
-    let rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
-    let flame_alpha = flame_alpha_scale
-        * (1.0 - (pow(rim, flame_rim_power) * flame_rim_scale + flame_rim_min));
-    // **The program's two taps, both of them.** It samples `unit0` twice from
-    // one texture: a *noise* tap whose `v` scrolls with the engine clock, and
-    // a *colour* tap at doubled coordinates displaced by the noise the first
-    // returned. Neither is this file's invention - block #1 and block #2 of
-    // `flame_test.rcsmaterial` schedule the identical pair through different
-    // registers, and `time`'s provider is engine parameter slot 0. See
-    // `oag_render::mesh::Flame` and
-    // docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md.
     //
-    //     @0x0a  MAD R0.y, {Speed}, {time}, Uv1.y   <- the scrolled row
-    //     @0x11  TEX R2.w, R0 unit0                 <- its ALPHA is the noise
-    //     @0x1e  ADD R1.xy, R1, R2.zwzz             <- (2u, 2v + noise)
-    //     @0x1f  TEX H0.xyz, R1 unit0               <- the colour
-    //
-    // The doubling stays a plain multiply rather than a fract: the sampler
-    // repeats, and the authored `Uv1` runs outside 0..1 on one node already.
-    let flame_noise = textureSample(
-        albedo,
-        albedo_sampler,
-        vec2<f32>(in.texcoord.x, in.texcoord.y + flame_speed * scene.time.x),
-    ).a;
-    let flame_texel = textureSample(
-        albedo,
-        albedo_sampler,
-        vec2<f32>(in.texcoord.x * 2.0, in.texcoord.y * 2.0 + flame_noise),
-    );
-    let flame_rgb = flame_texel.rgb * flame_colour_scale;
-    // **Not decoded on the linear target, on purpose - and this is a change
-    // of mind recorded in place.** The decode used to sit here on the "what a
-    // sampler hands back is authored-space" argument, but the flame's own
-    // program is read instruction by instruction and applies no transfer
-    // function anywhere: the original multiplies the raw sample into a
-    // target the exposure resolve then scales, `ADD_SAT`s and presents with
-    // no gamma arithmetic (renderer.md, "no `1/2.2` ... exists anywhere in
-    // it"). Decoding here dimmed the flame's mid-tones by up to a third
-    // against that arithmetic - the same divergence the HD trail's path had,
-    // fixed the same day. See
-    // docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
-    let flame = vec4<f32>(flame_rgb, flame_alpha * in.colour.a);
+    // **Only on a flame pipeline.** `flame_shading` is an `override`, so this
+    // branch is a constant the driver deletes on every other pipeline, which
+    // otherwise paid the two fetches below on every pixel for a mix weight of
+    // zero.
+    var flame = vec4<f32>(0.0);
+    if flame_shading != 0.0 {
+        let rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
+        let flame_alpha = flame_alpha_scale
+            * (1.0 - (pow(rim, flame_rim_power) * flame_rim_scale + flame_rim_min));
+        // **The program's two taps, both of them.** It samples `unit0` twice from
+        // one texture: a *noise* tap whose `v` scrolls with the engine clock, and
+        // a *colour* tap at doubled coordinates displaced by the noise the first
+        // returned. Neither is this file's invention - block #1 and block #2 of
+        // `flame_test.rcsmaterial` schedule the identical pair through different
+        // registers, and `time`'s provider is engine parameter slot 0. See
+        // `oag_render::mesh::Flame` and
+        // docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md.
+        //
+        //     @0x0a  MAD R0.y, {Speed}, {time}, Uv1.y   <- the scrolled row
+        //     @0x11  TEX R2.w, R0 unit0                 <- its ALPHA is the noise
+        //     @0x1e  ADD R1.xy, R1, R2.zwzz             <- (2u, 2v + noise)
+        //     @0x1f  TEX H0.xyz, R1 unit0               <- the colour
+        //
+        // The doubling stays a plain multiply rather than a fract: the sampler
+        // repeats, and the authored `Uv1` runs outside 0..1 on one node already.
+        let flame_noise = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + flame_speed * scene.time.x),
+        ).a;
+        let flame_texel = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x * 2.0, in.texcoord.y * 2.0 + flame_noise),
+        );
+        let flame_rgb = flame_texel.rgb * flame_colour_scale;
+        // **Not decoded on the linear target, on purpose - and this is a change
+        // of mind recorded in place.** The decode used to sit here on the "what a
+        // sampler hands back is authored-space" argument, but the flame's own
+        // program is read instruction by instruction and applies no transfer
+        // function anywhere: the original multiplies the raw sample into a
+        // target the exposure resolve then scales, `ADD_SAT`s and presents with
+        // no gamma arithmetic (renderer.md, "no `1/2.2` ... exists anywhere in
+        // it"). Decoding here dimmed the flame's mid-tones by up to a third
+        // against that arithmetic - the same divergence the HD trail's path had,
+        // fixed the same day. See
+        // docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+        flame = vec4<f32>(flame_rgb, flame_alpha * in.colour.a);
+    }
 
     let shaded = vec4<f32>(
         mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
@@ -1541,14 +1594,18 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // caller writes into it. `texel.a` does not reach the output. Not decoded
     // on the linear target, for the reason the flame gives: the program
     // applies no transfer function.
-    let absorb_offset = textureSample(albedo, albedo_sampler, in.texcoord).a * 0.5
-        + 5.0 * scene.time.x;
-    let absorb_rgb = textureSample(
-        albedo,
-        albedo_sampler,
-        in.texcoord + vec2<f32>(absorb_offset, absorb_offset),
-    ).rgb;
-    let absorb = vec4<f32>(absorb_rgb, in.colour.a);
+    // Branched on its `override` for the flame's reason.
+    var absorb = vec4<f32>(0.0);
+    if absorb_shading != 0.0 {
+        let absorb_offset = textureSample(albedo, albedo_sampler, in.texcoord).a * 0.5
+            + 5.0 * scene.time.x;
+        let absorb_rgb = textureSample(
+            albedo,
+            albedo_sampler,
+            in.texcoord + vec2<f32>(absorb_offset, absorb_offset),
+        ).rgb;
+        absorb = vec4<f32>(absorb_rgb, in.colour.a);
+    }
     let composed = mix(mix(shaded_or_sheen, flame, flame_shading), absorb, absorb_shading);
 
     // **Wipeout HD's two rim-shaded weapon glows**, `slots::RIM_GLOW` (the
@@ -1571,6 +1628,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // `rim` is `flame`'s own angle, for `flame`'s own reason: the vertex
     // program dots an untransformed normal against `eye - position`, and the
     // angle survives the rigid transform this path applies first.
+    //
+    // **Branched on the two bits**, so the two fetches run on the two weapon
+    // glows that read them and nowhere else. `slots` is a flat varying, which
+    // WGSL's uniformity analysis cannot see is constant per quad, hence this
+    // function's `derivative_uniformity` diagnostic - see its own attribute.
+    let rim_glow_on = (in.slots & 2048u) != 0u;
+    let rim_edge_on = (in.slots & 4096u) != 0u;
+    if !(rim_glow_on || rim_edge_on) {
+        return composed;
+    }
     let rim_noise = textureSample(
         albedo,
         albedo_sampler,
@@ -1594,8 +1661,6 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // RIM_EDGE: `MUL H1.w, rim^5, 1000`, times the tap; the alpha is the
     // material's `0x7611a2d8`, which `rim_glow::classify` only routes at 1.0.
     let rim_edge = vec4<f32>(1000.0 * rim_5 * rim_c, 1.0);
-    let rim_glow_on = (in.slots & 2048u) != 0u;
-    let rim_edge_on = (in.slots & 4096u) != 0u;
     return select(select(composed, rim_glow, rim_glow_on), rim_edge, rim_edge_on);
 }
 
