@@ -2,8 +2,8 @@
 //! struggles with de Konstruct Black - unnecessary slow driving, and hitting a
 //! wall to full stop".
 //!
-//! Both layouts, because which one the report meant was settled late: White is
-//! the forward `05_Track` (`track.vex`) and Black the reversed `21_Track`
+//! Both layouts. Black is the forward `05_Track` (`track.vex`) on the disc's
+//! own titles, live on PPSSPP, and White the reversed `21_Track`
 //! (`track_reversed.vex`), `docs/formats/track.md`. Per craft over five
 //! simulated minutes or the flag, three symptoms:
 //!
@@ -22,7 +22,7 @@
 //! magstrip line, its corridor and the beneath-the-line rescue landed, with a
 //! little room; before them, 05 forward had no verified plan at all (so no
 //! trough or lap figure), and its field lost 49 of 84 craft (see
-//! `docs/gameplay/ai.md`, "de Konstruct White: the first jump is a magstrip").
+//! `docs/gameplay/ai.md`, "de Konstruct Black: the first jump is a magstrip").
 
 use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
@@ -276,7 +276,7 @@ fn de_konstruct_symptoms_venom() {
 /// lap) until a run-up floored the share (`RUN_UP_SHARE` in `oag-ai`).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_novice_clears_de_konstruct_whites_first_jump() {
+fn a_novice_clears_de_konstruct_blacks_first_jump() {
     let Some(novice) = measure("05_Track", "VENOM", false, oag_ai::Difficulty::Novice) else {
         return;
     };

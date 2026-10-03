@@ -174,7 +174,7 @@ RECORDS", MODE/CIRCUIT/BACK (this disc's own French label set was current:
 drawn below them, nothing overlapping the footer bar. The machine's own real
 `records.toml` and `settings.toml` were used unmodified - not seeded - so
 every class row read `-`. Checked, not assumed: the settings file's own
-`race.track` is `01_Track` (the Basilico entry titled Black); extracting `Data\Plugins\
+`race.track` is `01_Track` (Basilico Black); extracting `Data\Plugins\
 PI001\Definition.xml` with `oag-wad cat --expand` shows its entry carries no
 `Reversed` attribute, so `Track::entry_name` resolves it to
 `Data\Environments\01_Track\track.vex` - and `grep -in 01_track

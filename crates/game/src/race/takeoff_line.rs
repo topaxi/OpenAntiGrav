@@ -10,7 +10,7 @@
 //! VENOM, 78 units/s of climb at the lip on the line against 87 for the race's
 //! lone Ace six units to the right on plain floor, which clears where the line
 //! falls short and drops into the pit under the upper road. See
-//! `docs/gameplay/ai.md`, "de Konstruct White: the first jump is a magstrip".
+//! `docs/gameplay/ai.md`, "de Konstruct Black: the first jump is a magstrip".
 //!
 //! The rule reads only the track's own collision: on every sample the line
 //! marks as a takeoff run-up (`oag_ai::Line::is_takeoff`), cast down at the

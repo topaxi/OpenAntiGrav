@@ -85,7 +85,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
 
     // Basilico White: a real pair from `Data\Plugins\PI001\Definition.xml`
     // where the reversed id (`17_Track`) shares its base id's own
-    // directory (`01_Track`, the Basilico entry titled Black - the two ids' own names come
+    // directory (`01_Track`, Basilico Black - the two ids' own names come
     // from `entries.xml`, not from this file, and do not track which one
     // carries `Reversed`) - `Track::entry_name`'s `Reversed` branch, not
     // the identity case a track named after its own directory would pass

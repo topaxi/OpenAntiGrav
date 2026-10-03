@@ -3534,7 +3534,7 @@ original timing there is.
 
 `crates/game/tests/speed_plan_ground_truth.rs` pins the exact set, at the
 title-default team: **91 of 96** layout-class plans verify clean (87 until
-`05_Track` forward's four did, [below](#de-konstruct-white-the-first-jump-is-a-magstrip)).
+`05_Track` forward's four did, [below](#de-konstruct-black-the-first-jump-is-a-magstrip)).
 Not: `06_Track` VENOM and RAPIER
 (the corner after the gap at 1196-1200), `14_Track` PHANTOM and `29_Track`
 RAPIER and PHANTOM (rescued, in the air or off the line, at 1247 and
@@ -3565,9 +3565,11 @@ to ten ticks' worth.
   teams would need one per handling.
 - Lap 1 is learned from a standing start the race also has, but not with the
   race's countdown launch boost.
-- **de Konstruct White's first jump is a plan test case now**: its plans verify
-  at all four classes and `ai_dekonstruct_symptoms_ground_truth` measures the
-  lone Ace and the field on both layouts against them.
+- **de Konstruct Black's first jump is a plan test case now**: Black is
+  `05_Track` forward, its plans verify at all four classes
+  ([below](#de-konstruct-black-the-first-jump-is-a-magstrip)), and
+  `ai_dekonstruct_symptoms_ground_truth` measures the lone Ace and the field on
+  both layouts against them.
 - The cross-platform gate for the plan is
   `crates/ai/tests/determinism.rs::the_speed_plan_matches_the_committed_reference`,
   on the probe's invented circuit; a disc-backed plan is pinned only as
@@ -3586,30 +3588,31 @@ it is a planning aid and says of itself that it is no claim about the original).
 that would not ask for one" - which is what the grid's own ground-truth test
 wants. See the M5 `AI` item on the [roadmap](../overview/roadmap.md).
 
-## de Konstruct White: the field dies where one craft does not (2026-10-03)
+## de Konstruct Black: the field dies where one craft does not (2026-10-03)
 
-**Which file.** White is the forward `05_Track` (`track.vex`) and Black the
-reversed `21_Track` (`track_reversed.vex`), by the convention in
-[track.md](../formats/track.md#white-and-black) (maintainer, 2026-10-03). An
-earlier version of this section inferred the opposite from `Definition.xml`'s entry
-order, and the maintainer's report ("the AI really struggles with de Konstruct
-Black") was read against the wrong file. What was measured below is therefore
-**White**, the worse field; Black, the circuit the report names, was the better
-one all along, so **the report itself is not reproduced and is open** (Black still
-lost 1-6 of 21 craft before the plan and drives a verified, clean plan now).
+**Which file.** **Black is the forward `05_Track`** (`track.vex`) and White the
+reversed one, `21_Track` (`track_reversed.vex`). That is what the disc's own
+string table says (`21_Track` reads "de Konstruct White", `05_Track` "de
+Konstruct Black") and it was **measured live on PPSSPP, 2026-10-03**: the Track
+Select entry titled Black started the craft at (-39.86, -16.40, -193.97), ours on
+the forward `05_Track` is (-39.57, -16.40, -191.02); the entry titled White
+started at (21.98, -17.48, -63.71), ours on `21_Track` is (20.05, -17.40, -67.61).
+See [track.md](../formats/track.md#white-and-black). The maintainer's report ("the
+AI really struggles with de Konstruct Black") was therefore about the forward
+`05_Track`, which is the worse field measured below.
 
 **The report, measured** (`crates/game/tests/ai_dekonstruct_black_board.rs`,
 `OAG_SWEEP=1`: seven Aces plus the parked player slot, three seeds, 21 craft per
 cell, 18,000 ticks, weapons as the mode ships them). Craft **destroyed** of 21:
 
-| class | White before | White after | Black (reversed, control) |
+| class | Black before | Black after | White (reversed, control) |
 | --- | ---: | ---: | ---: |
 | VENOM | 19 | 15 | 1 |
 | FLASH | 19 | 13 | 2 |
 | RAPIER | 13 | 11 | 3 |
 | PHANTOM | 13 | 10 | 6 |
 
-The lone Ace (slot 1) never died on White at VENOM and died once at FLASH, which
+The lone Ace (slot 1) never died on Black at VENOM and died once at FLASH, which
 is why the twelve-circuit gate was green all along. Across every circuit in both
 directions (two seeds, VENOM and RAPIER) forward `05` is the worst VENOM field
 (13 of 14 destroyed, 37,048 wall-contact ticks against 07's 6,116 and 18 respawns
@@ -3639,22 +3642,22 @@ against 0), and its reversed twin is among the best.
    speed cap off the line, steering held straight in the air (the lone Ace then
    needed 4 respawns), a wider stall trigger (the pile forms faster than 300 ticks).
 3. **Not causes**, each switched off in turn: craft-to-craft contact, the speed
-   pads, weapons (White's *reversed* twin, Black, dies only from them), the personality
+   pads, weapons (Black's *reversed* twin dies only from them), the personality
    axes (a plain line follower in slots 2, 4, 6 and 7 alone on the circuit dies at
    600-650 as well - slot 1 is the pole, the one grid position that arrives fast
    enough).
 
 **Where it stands.** `ai_dekonstruct_black_ground_truth.rs` bounds the field's
 destroyed craft per (class, seed) on both layouts: 64 before, 49 after across the
-twelve White (forward) cells, 12 and 12 Black (reversed). `ai_clean_lap_gate`'s four `05` rows moved
+twelve forward cells, 12 and 12 reversed. `ai_clean_lap_gate`'s four `05` rows moved
 (FLASH `Eliminated` to `CleanLap`, 1,700 contact ticks to 140; laps 26-35 ticks
 quicker; PHANTOM contact 203 to 232); every other row reproduced exactly, and the
 twelve-circuit gate stays all-twelve-clean with `01` and `06` unchanged.
-Roughly half the field still dies on White: the wedge and a second crest at
+Roughly half the field still dies on Black: the wedge and a second crest at
 idx 399-484 (a craft at 250 units a second after a pad flies it and lands wide) are
 open.
 
-## de Konstruct White: the first jump is a magstrip
+## de Konstruct Black: the first jump is a magstrip
 
 Added 2026-10-03 (lane `pulse-ai-05`). Ours throughout: every rule below is
 **chosen, not measured**, and carries no confidence score; the measurements
@@ -3730,19 +3733,27 @@ its boost is spent 260 samples before the ramp.
 | | before | after |
 | --- | --- | --- |
 | `05_Track` forward plans that verify | 0 of 4 | **4 of 4** (9,700-29,000 steps, were ~130,000) |
-| White field destroyed of 21, VENOM / FLASH / RAPIER / PHANTOM | 15 / 13 / 11 / 10 | **0 / 0 / 1 / 3** |
-| White field wall-contact ticks, VENOM | 46,616 | 565 |
-| White field end-of-run shield, VENOM / PHANTOM | 18.4 / 14.5 | 50.7 / 35.9 |
+| Black field destroyed of 21, VENOM / FLASH / RAPIER / PHANTOM | 15 / 13 / 11 / 10 | **0 / 0 / 1 / 3** |
+| Black field wall-contact ticks, VENOM | 46,616 | 565 |
+| Black field end-of-run shield, VENOM / PHANTOM | 18.4 / 14.5 | 50.7 / 35.9 |
 | lone Ace best lap, ticks, VENOM / FLASH / RAPIER / PHANTOM | 2,354 / 2,136 / 1,884 / 1,737 | **2,091 / 1,833 / 1,554 / 1,329** |
 | lone Ace wall contact ticks, VENOM / PHANTOM | 68 / 232 | 0 / 0 |
 | field dead stops (seed 1), VENOM / FLASH / RAPIER / PHANTOM | 8 / 3 / 3 / 9 | 0 / 0 / 1 / 0 |
 
-Black (the reversed `21_Track`) is unchanged by all four: its line has no such
-run-up, and no Black cell moved on the board. The board is
+White (the reversed `21_Track`) is unchanged by all four: its line has no such
+run-up, and no White cell moved on the board. The board is
 `ai_dekonstruct_black_board.rs` (`OAG_SWEEP=1`), three seeds; the symptoms are
 `ai_dekonstruct_symptoms_ground_truth.rs`.
 
 ### The maintainer's report, measured on both layouts
+
+The report ("the AI really struggles with de Konstruct Black - unnecessary slow
+driving, and hitting a wall to full stop") is about **this** layout: Black is
+`05_Track` forward on the disc's own titles, live on PPSSPP
+([track.md](../formats/track.md#white-and-black)). Both symptoms were real
+here: with no verified plan the lone Ace drove the corner model 11-23 % slower
+than the plan now laps, and the field hit the first jump's lip and the pit's
+dead end at full stop (8 / 3 / 3 / 9 dead stops by class, seed 1).
 
 `ai_dekonstruct_symptoms_ground_truth.rs` counts, per craft, **dead stops** (a
 wall-contact tick on which forward speed fell from 60+ to 15 or less within 20
@@ -3750,17 +3761,17 @@ ticks), **trough ticks** (on a clean flying lap, under 75 % of the speed the
 plan's own verification lap did there) and the best clean lap against the
 plan's. A lone Ace on either layout, every class: no dead stop, no trough tick,
 best lap 0.0-0.7 % over the plan's. The field: one dead stop in eight cells
-(`05_Track` RAPIER at the lip, 207).
+(`05_Track` RAPIER at the lip, 207). A Novice at VENOM clears the first jump.
 
-On Black at the lower levels there is no dead stop either; the slow driving is
-the level's own handicap: a lone Novice or Skilled at PHANTOM spends 1,725 and
-1,171 ticks a run under 75 % of the plan's pace, from `plan_margin`'s corner
-fractions (0.55 and 0.69) and `pace_share`. If that is what the report saw, it
-is a difficulty question, not a fault.
+At the lower levels there is no dead stop on either layout now; what slow
+driving is left is the level's own handicap: on White (`21_Track`) a lone
+Novice or Skilled at PHANTOM spends 1,725 and 1,171 ticks a run under 75 % of
+the plan's pace, from `plan_margin`'s corner fractions (0.55 and 0.69) and
+`pace_share`. That is a difficulty question, not a fault.
 
 ### Still open
 
-- **The 428 pad on White's upper road** pushes left on a crest: a lone Ace at
+- **The 428 pad on Black's upper road** pushes left on a crest: a lone Ace at
   RAPIER flies 43 units left at 157 u/s and touches a `Reset` sheet at 509-511,
   three times in 18,000 ticks, though the plan's own verification never does.
 - The field's remaining pit falls are craft arriving at the ramp at 91-108 u/s

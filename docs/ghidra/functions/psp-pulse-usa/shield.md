@@ -636,7 +636,7 @@ returns to the saved state and, if `+0x44 > 0`, calls
 shield** and costs an AI craft nothing. Since `+0x79c` starts at `0`, the
 relocation happens on the entry tick.
 
-**Measured** (`01_Track`, the Basilico entry titled Black, Time Trial, reached with the
+**Measured** (`01_Track`, Basilico Black, Time Trial, reached with the
 dev-unlock byte in [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md)):
 the player's craft placed on the upper deck at sample 10 and coasted off the
 lip at 20 u/s landed upside down on the floor below. `+0x284` was `0` until the

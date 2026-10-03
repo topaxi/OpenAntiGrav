@@ -227,7 +227,7 @@ profile's front end (`race-setup.md`: only `16`, `03` and `18` are unlocked), so
 no original capture of a left-side grid exists yet - though since 2026-09-29
 every circuit is, through the dev-unlock byte in
 [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29),
-and a Single Race on `01_Track` (the Basilico entry titled Black) was logged with it; it is the same code path with the sign flipped,
+and a Single Race on Basilico Black (`01_Track`) was logged with it; it is the same code path with the sign flipped,
 and it is what the 24-circuit test checks.
 
 **All 24 circuit-directions, all eight slots** (`grid_stagger_ground_truth.rs`,
@@ -821,7 +821,7 @@ heading in degrees:
 
 | circuit | worst slot before | worst slot now | worst heading before | now |
 | --- | ---: | ---: | ---: | ---: |
-| `01_Track` (the Basilico entry titled Black) | 1.73 | **0.001** | 0.22 (slot 1) | 0.0005 |
+| `01_Track` (Basilico Black) | 1.73 | **0.001** | 0.22 (slot 1) | 0.0005 |
 | `16_Track` (Talon's Junction) | 0.62 | 0.043 | 0.045 | 0.0009 |
 | Metropia reversed | 1.13 | 0.070 | - | - |
 

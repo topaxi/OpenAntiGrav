@@ -58,24 +58,65 @@ from 177 to 269 of 1,142 entries.
 
 ### White and Black
 
-**A circuit's White variant is its forward layout (`NN_Track\track.vex`) and its
-Black variant is the reversed one (`track_reversed.vex`).** For de Konstruct,
-Black is the reversed `05` layout, which this codebase calls `21_Track` (its
-`Definition.xml` entry has `Reversed="True"` and `location=...05_Track`).
-Maintainer, 2026-10-03; a statement, not a measurement, so it carries no
-confidence score. The entry's position in `Definition.xml` says nothing about
-the colour: two lanes inferred the opposite from entry order and were wrong.
-Talon's Junction agrees (`16_Track` White, `32_Track` Black, the latter
-`Reversed="True"`).
+**There is no fixed rule.** Which of a circuit's two Track Select entries is
+titled White and which Black depends on the circuit: see the table. Maintainer ruling, 2026-10-03: *align with the original*; the authors
+may have relabelled tracks, so this build reads the disc and invents no
+convention. Earlier lanes inferred a colour from `Definition.xml`'s entry order, and a
+later one from a "White = forward" rule; neither is evidence, and the second is
+wrong for five of the twelve circuits.
 
-**Unsettled: Basilico.** The Track Select entry titled Basilico Black was run
-live and started on `01_Track`'s own grid (slot 1 within 0.001 of ours; see
-[grid-state.md](../physics/grid-state.md)), the forward layout, which this
-convention would call White. Either the title and `01_Track` are swapped in the
-string table for this one circuit, or the title screenshot was misread. A
-fresh read of the `01_Track` and `17_Track` entries' display strings, plus a
-second live start on the entry titled Basilico White, would settle it. Until
-then docs label that circuit by layout file (`01_Track`) and not by colour.
+**Mechanism.** An entry's display title is its `PI_Track` id looked up in the
+language's `entries.xml` (`PI008`-`PI012` carry the same English text), ending in
+"White" or "Black". The entry's `location` and `Reversed` flag pick the file:
+`NN_Track\track.vex`, or `track_reversed.vex` when `Reversed="True"`. This build
+does the same - `oag_game::catalogue::label` and `Track::entry_name` - so our
+Track Select shows the disc's titles and starts the layout the original starts.
+`crates/game/tests/pulse_variant_titles_ground_truth.rs` pins the table below on
+both PSP discs (colour words only; the titles stay on the disc).
+
+| Circuit | White entry | White loads | Black entry | Black loads | Confidence |
+| --- | --- | --- | --- | --- | ---: |
+| Talon's Junction | `16_Track` | `16` forward | `32_Track` | `16` reversed | 85 |
+| Moa Therma | `03_Track` | `03` forward | `19_Track` | `03` reversed | 85 |
+| Metropia | `18_Track` | **`02` reversed** | `02_Track` | **`02` forward** | 95 (White live) |
+| Arc Prime | `10_Track` | `10` forward | `26_Track` | `10` reversed | 85 |
+| de Konstruct | `21_Track` | **`05` reversed** | `05_Track` | **`05` forward** | 95 (both live) |
+| Tech de Ra | `04_Track` | `04` forward | `20_Track` | `04` reversed | 85 |
+| The Amphiseum | `25_Track` | **`09` reversed** | `09_Track` | **`09` forward** | 85 |
+| Fort Gale | `30_Track` | **`14` reversed** | `14_Track` | **`14` forward** | 85 |
+| Basilico | `17_Track` | **`01` reversed** | `01_Track` | **`01` forward** | 95 (both live) |
+| Platinum Rush | `13_Track` | `13` forward | `29_Track` | `13` reversed | 85 |
+| Vertica | `06_Track` | `06` forward | `22_Track` | `06` reversed | 85 |
+| Outpost 7 | `07_Track` | `07` forward | `23_Track` | `07` reversed | 85 |
+
+Five circuits (Metropia, de Konstruct, The Amphiseum, Fort Gale, Basilico) have
+White on the reversed layout and Black on the forward one; the other seven have
+the opposite. Nothing in the circuit's number or in the entry's position predicts the group,
+so the table is the only source.
+
+**Evidence.** The disc rows come from reading all 24 entries off
+`pulse-psp-usa.chd` and `pulse-psp-eu.chd` (identical on both; raw dump in
+`data/scratch/pulse-variant-map/titles-usa.tsv`). Live rows, PPSSPP 1.20.4,
+2026-10-03, dev-unlock byte, Time Trial, VENOM, the Track Select entry started
+by its on-screen title (screenshots beside the dump), craft position once the
+countdown ended, against our own start on each layout
+(`--race --trace-out`, tick 0):
+
+| Entry started | Original start | Ours, forward | Ours, reversed | Matches |
+| --- | --- | --- | --- | --- |
+| Basilico Black | (-721.16, 4.01, 282.58) | (-721.16, 4.00, 282.63) | (-701.21, 4.00, 144.44) | forward |
+| Basilico White | (-701.21, 4.01, 141.55) | | | reversed |
+| de Konstruct Black | (-39.86, -16.40, -193.97) | (-39.57, -16.40, -191.02) | (20.05, -17.40, -67.61) | forward |
+| de Konstruct White | (21.98, -17.48, -63.71) | | | reversed |
+| Metropia White | (533.28, -12.91, 169.66) | (394.09, -13.38, 192.40) | (529.36, -12.93, 169.73) | reversed |
+
+Every live row lands on the layout the disc table names; Metropia White is the
+discriminating one among the three circuits a fresh profile offers, because there
+White is *not* the forward layout. The live starts sit within 4 units of ours
+(the countdown settle) against 20 to 140 for the wrong layout. Each de Konstruct row was started on two
+separate boots and agreed. Confidence 95 for a row with a live start, 85 for a
+row read off the disc alone: the mechanism (title, then `Reversed`, then file)
+is measured on five entries covering both orders.
 
 ### Not every circuit has the zone pair, and the entry says which do
 

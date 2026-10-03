@@ -7,7 +7,7 @@
 //!
 //! `PsysNode_Init` (`0x089156a0`) spawns one instance per `ParticleSystem`
 //! node at load, named by the node's `Name` attribute. A live PPSSPP capture on
-//! Basilico, the entry titled Black (`01_Track`) caught exactly three `WO_BLUE_WELDER` loads with
+//! Basilico Black (`01_Track`) caught exactly three `WO_BLUE_WELDER` loads with
 //! these three nodes' own matrices. See
 //! `docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md`.
 

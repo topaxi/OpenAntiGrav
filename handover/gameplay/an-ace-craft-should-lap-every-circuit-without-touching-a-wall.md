@@ -543,17 +543,15 @@ outcome: the measured prize behind it (eliminations 11 -> 8, charged -11 %,
 end-of-run pool +9 %, respawns 35 -> 20, a clean lap, at lap-time parity) is
 reachable without touching authored data.
 
-## Step 10 is done in part: de Konstruct White, the field rather than the lone Ace (2026-10-03)
+## Step 10 is done in part: de Konstruct Black, the field rather than the lone Ace (2026-10-03)
 
 Maintainer report: "the AI really struggles with de Konstruct Black". Black is the
-reversed `21_Track` and White the forward `05_Track` (maintainer, 2026-10-03); the
-lane that did this work read it the other way round, so what it measured and
-fixed is **White**, and the report about Black is not reproduced (Black's field
-lost 1-6 of 21 craft before the speed plan, and it now drives a verified, clean
-plan at all four classes). On White a lone Ace at the pole clears it; a field of
-seven loses 13-19 of 21 craft over five minutes in every class, against 1-6 on
-Black. Cause of the first domino: the crest before the first jump read as a corner
-(see `docs/gameplay/ai.md`, "de Konstruct White"). Step 9's "no jump model" is
+forward `05_Track` and White the reversed `21_Track`: the disc's own titles say
+so and PPSSPP's start positions confirmed it live on 2026-10-03 (`docs/formats/track.md`,
+"White and Black"), so the report is about the layout measured here. A lone Ace at the pole clears it; a field of seven loses
+13-19 of 21 craft over five minutes in every class, against 1-6 on the reversed
+twin. Cause of the first domino: the crest before the first jump read as a corner
+(see `docs/gameplay/ai.md`, "de Konstruct Black"). Step 9's "no jump model" is
 now one: `Line::curvature` forgives the convex pitch on the 75 units before a gap of
 40+ samples, and the caution lift is skipped there. Field destroyed 64 -> 49 over
 twelve cells; `05` FLASH `Eliminated` -> `CleanLap`. Still open: the wedge at
@@ -730,11 +728,11 @@ plain floor. Three changes, all chosen, not measured:
 4. A lower level's pace share is floored at 0.96 within 450 units of a takeoff
    run-up (a Novice at VENOM hit the far lip every lap).
 
-White field destroyed of 21 (three seeds): VENOM 15 -> 0, FLASH 13 -> 0,
+de Konstruct Black (`05_Track` forward, the layout the maintainer's report names) field destroyed of 21 (three seeds): VENOM 15 -> 0, FLASH 13 -> 0,
 RAPIER 11 -> 1, PHANTOM 10 -> 3. Lone Ace laps 11-23 % faster, within 0.7 % of
 the plan's own lap, no dead stop and no trough on either layout
 (`ai_dekonstruct_symptoms_ground_truth`). Full account:
-[ai.md, "de Konstruct White: the first jump is a magstrip"](../../docs/gameplay/ai.md#de-konstruct-white-the-first-jump-is-a-magstrip).
+[ai.md, "de Konstruct Black: the first jump is a magstrip"](../../docs/gameplay/ai.md#de-konstruct-black-the-first-jump-is-a-magstrip).
 
 ## Open
 
@@ -745,26 +743,10 @@ the plan's own lap, no dead stop and no trough on either layout
   (it pushes left), flies 43 units left at 157 u/s and touches a `Reset` sheet
   at 509-511, three times in 18,000 ticks; the plan's own verification never
   meets it.
-- **de Konstruct Black (`21_Track`)**, the layout the maintainer named, was not
-  touched by this lane's changes and shows no dead stop for any level. Its
-  "slow driving" at Novice and Skilled is the level handicap: 1,171-1,725 ticks
-  a run under 75 % of the plan's pace at PHANTOM, lone.
-- **Three verified rows still touch**: `17_Track` VENOM (1 tick), `09_Track`
-  PHANTOM (6), `25_Track` PHANTOM (21).
-- **The team axis on plans**: 89 (Feisar), 87 (Assegai), 83 (Piranha) of 96
-  verify; the race builds one plan from slot 1's handling, which is right only
-  while every opponent flies the player's handling (`Race::start` today).
-- **Field wall contact against field spread**: a pilot's character returns
-  inside 40 units of a rival (sticking 2,101 -> 523 pair-ticks), which costs
-  field wall contact 32,440 -> 39,804 (113,203 before the plan). The range is
-  chosen; a smarter overtaking line would beat both.
-- **A reset-volume respawn loop** in the field, `29_Track` VENOM: one craft
-  put back at sample 45 every 46 ticks, 61 times. Race rules, not the plan.
-- **`10_Track` FLASH laps 1.8 s slower** on the gate, with its contact 66 -> 0.
-- **The counters charge a live craft sitting at zero shield.** The `Racing` gate
-  stops a wreck, not that. Capping at the pool is the workaround the totals use;
-  a cleaner counter would gate on `physics.shield > 0.0` too.
-- Pure and HD are unmeasured at every class.
+- **de Konstruct White (`21_Track`)** was not touched by this lane's changes and
+  shows no dead stop for any level. Its slow driving at Novice and Skilled is
+  the level handicap: 1,171-1,725 ticks a run under 75 % of the plan's pace at
+  PHANTOM, lone.
 
 ## Next Steps
 
