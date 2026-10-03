@@ -729,7 +729,7 @@ plain floor. Three changes, all chosen, not measured:
    run-up (a Novice at VENOM hit the far lip every lap).
 
 de Konstruct Black (`05_Track` forward, the layout the maintainer's report names) field destroyed of 21 (three seeds): VENOM 15 -> 0, FLASH 13 -> 0,
-RAPIER 11 -> 1, PHANTOM 10 -> 3. Lone Ace laps 11-23 % faster, within 0.7 % of
+RAPIER 11 -> 1, PHANTOM 10 -> 3. Sweep: lone clean 84 -> **87 of 96**, field destroyed 28 -> 18, field contact 39,804 -> 17,073; twelve-circuit gate twelve clean (05: 39.2 -> 34.8 s). Lone Ace laps 11-23 % faster, within 0.7 % of
 the plan's own lap, no dead stop and no trough on either layout
 (`ai_dekonstruct_symptoms_ground_truth`). Full account:
 [ai.md, "de Konstruct Black: the first jump is a magstrip"](../../docs/gameplay/ai.md#de-konstruct-black-the-first-jump-is-a-magstrip).

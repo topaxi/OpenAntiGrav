@@ -3740,6 +3740,19 @@ its boost is spent 260 samples before the ramp.
 | lone Ace wall contact ticks, VENOM / PHANTOM | 68 / 232 | 0 / 0 |
 | field dead stops (seed 1), VENOM / FLASH / RAPIER / PHANTOM | 8 / 3 / 3 / 9 | 0 / 0 / 1 / 0 |
 
+On the speed-plan sweep (`ai_speed_plan_sweep.rs`, 24 layouts x 4 classes,
+same harness as [above](#what-it-buys)): lone Ace clean **84 -> 87 of 96**,
+contact 1,231 -> 949, respawns 1 -> 1, destroyed 1 -> 1; the field (672
+craft-rows) clean 151 -> 158, contact 39,804 -> 17,073, destroyed 28 -> 18,
+respawns 41 -> 41, per-lap shield lost (field, VENOM, forward) 11.7 -> 8.7,
+end-of-run shield 64.6 -> 68.6. Every reversed lone row is unchanged; the
+reversed field moved only through the beneath rescue (PHANTOM destroyed 6 -> 4).
+Of the nine lone rows still not clean, five are the unverified plans, three are
+the verified rows that already touched, and one is `05_Track` PHANTOM's single
+rescue at the 428 pad. `race_ground_truth`'s twelve-circuit gate stays twelve
+clean; `05_Track` laps 39.2 -> 34.8 s, every other row identical. The
+Eliminator finishes 24 of 24 seeds, median 139.03 s (was 139.0).
+
 White (the reversed `21_Track`) is unchanged by all four: its line has no such
 run-up, and no White cell moved on the board. The board is
 `ai_dekonstruct_black_board.rs` (`OAG_SWEEP=1`), three seeds; the symptoms are
