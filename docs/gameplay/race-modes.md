@@ -821,7 +821,8 @@ Still open:
   `64521c88` (later than the 147 s median of 2026-10-02): parked player, `16_Track`, six
   game-minutes, seeds 1 to 24: 24 of 24 finish, **median 135 s**, 33 to 196 s; seeds 1 to 240:
   240 of 240, **median 117 s**, mean 122 s, 13 to 225 s, the field scoring **8.1 kills a minute**.
-  The original: 85 s.
+  The original: 85 s. With empty-slot opponents steering for weapon pads (below), **median 108 s**,
+  mean 108 s, 17 to 232 s, **9.1 kills a minute**.
 - **Wall deaths are not a lever (2026-10-03).** Every opponent death in that 24-seed sweep was
   logged with the shield lost to walls and to weapons over the 2 s before it (the wall's share
   read off `wall_shield_charged_of`, the rest of the pool's drop taken as weapon): of **393
@@ -868,6 +869,73 @@ Still open:
 
 The original's decision is `WeaponAi_DecideFireOrAbsorb` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)),
 still unported. Guarded by `crates/game/tests/eliminator_finish_ground_truth.rs`.
+
+### Steering for weapon pads (2026-10-03)
+
+**Ours, chosen, not measured.** In an Eliminator an opponent whose weapon slot is empty steers for
+the next weapon pad on its line instead of driving the authored line over it. Nothing read of the
+original says its AI does this: the weapon-pad list (`world+0x10c`, count `+0x1d4`) has three
+documented readers, `World_CollectNodeLists`, `WeaponPads_TestCraft` and the weapons-off reset
+([pads.md](../ghidra/functions/psp-pulse-usa/pads.md)), and none is AI code. That is a reading of
+the documented callers, not an exhaustive cross-reference. It obeys the player's physics: the
+driver is handed a place in the road, never thrust, speed or shield.
+
+How it works. `Race::pad_for` (`crates/game/src/race/field/pad_seek.rs`) projects each pad's
+centre onto the AI line once at the start, and each tick hands an empty-slot craft the next armed
+pad within 150 units, as `oag_ai::Field::pad` (distance ahead, offset across the line). Of a pair
+straddling the line it picks the one nearer across to where the craft already is. `Driver::drift`
+blends its finished lateral offset toward the pad's offset on a smoothstep, total inside 40 units
+(`crates/ai/src/driver/pads.rs`), and drops the pull while it is dodging a laid charge. The
+corridor clamp still bounds it. `PadSeeking::for_mode` turns it on for an Eliminator and off for
+every other mode, and a driver handed no pad computes the same bits as before, so no golden hash
+moved. A held weapon blocks a pickup, so a full-slot craft keeps the line.
+
+The pickup gap it closes. With the player parked on `16_Track`, opponents spend 54 % of their
+racing ticks with an empty slot and wait a median 9.7 s from emptying to the next pickup. The
+circuit's nine pads sit up to 19.8 units off the line (two pairs straddle it).
+
+Sweep: parked player, VENOM, kill target 5, six game-minutes, one binary with the steering
+switched per arm (`Race::set_pad_seeking`). Shield lost to walls is the sum over the run of
+`wall_shield_charged_of`, per craft-minute of racing. It is not a per-lap figure and not an
+end-of-run shield.
+
+| `16_Track`, seeds 1 to 240 | off | empty slot (ships) | every craft |
+| --- | --- | --- | --- |
+| finishes | 240 | 240 | 240 |
+| median time to five | 117 s | **108 s** | 107 s |
+| mean | 122 s | **108 s** | 105 s |
+| min to max | 13 to 225 s | 17 to 232 s | 17 to 200 s |
+| quartiles | 94 / 117 / 149 s | 85 / 108 / 135 s | 88 / 107 / 123 s |
+| kills a minute (field) | 8.11 | **9.08** | 9.41 |
+| pickups per craft-minute | 3.07 | 3.60 | 3.75 |
+| share of racing ticks with an empty slot | 0.54 | 0.45 | 0.44 |
+| median wait for a refill | 9.7 s | 7.6 s | 7.2 s |
+| wall-contact ticks per craft-minute | 10.24 | 10.70 | 11.83 |
+| shield lost to walls per craft-minute | 1.75 | 1.86 | 2.05 |
+| paired median shift against off, 95 % bootstrap | - | -6.3 s [-22.1, -2.7] | -12.3 s [-20.5, -5.0] |
+| seeds faster than off | - | 141 of 240 | 148 of 240 |
+
+Every craft against empty slot only: -3.4 s [-11.4, +3.9], within noise, and it costs more wall
+contact. Empty slot only ships.
+
+Two other circuits, seeds 1 to 48, off against empty slot:
+
+| | median | mean | kills a minute | wall-contact ticks per craft-minute | shield to walls per craft-minute | paired shift |
+| --- | --- | --- | --- | --- | --- | --- |
+| `01_Track` | 128 to 112 s | 133 to 115 s | 7.54 to 8.47 | 9.59 to 11.25 | 1.97 to 2.27 | -13.7 s [-37.8, -2.6] |
+| `09_Track` | 133 to 116 s | 135 to 124 s | 7.25 to 8.64 | 5.83 to 9.51 | 1.00 to 1.84 | -13.4 s [-43.1, +12.1] |
+
+Tuning tried and not shipped, seeds 1 to 240 on `16_Track`, paired against the shipped 150/40:
+a 220-unit pull total inside 100 (+2.9 s [-5.6, +10.5]), and an aim extrapolated through the pad
+once it is nearer than the steering lookahead (capped at three times; with 150/40, -0.9 s
+[-8.1, +3.8]; with 220/100, -1.6 s [-9.6, +1.5]). All within noise. The far pad of `16_Track`
+(19.8 units left, outside the 17.8-unit corridor) is still mostly missed: the craft swings about
+10 units toward it and arrives short, because the steering aims a lookahead past the pad.
+
+The remaining gap to the original's 85 s is the same as before: the fire decision
+(`WeaponAi_DecideFireOrAbsorb`'s fire half) is unported. Guarded by
+`crates/game/tests/eliminator_pads_ground_truth.rs` (pickups per empty craft-minute over seeds 1
+to 6, one game-minute each: 7.20 with the steering, 5.48 without).
 
 ### What is deliberately out of scope
 

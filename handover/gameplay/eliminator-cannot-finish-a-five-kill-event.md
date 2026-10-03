@@ -7,9 +7,17 @@ plus the respawn-keeps-its-place test).
 
 ## Open
 
-- **Time to five is about 1.4 times the original's** (2026-10-03, main at `64521c88`): seeds 1 to
-  24, 24 of 24 finish, median 135 s, 33 to 196 s; seeds 1 to 240, median 117 s, 13 to 225 s, the
-  field scoring 8.1 kills a minute. The original: 85 s.
+- **Time to five is about 1.3 times the original's** (2026-10-03): seeds 1 to 240, median
+  **108 s**, mean 108 s, 17 to 232 s, the field scoring 9.1 kills a minute, with empty-slot
+  opponents steering for weapon pads. Before that (main at `64521c88`): median 117 s, 13 to
+  225 s, 8.1 kills a minute; seeds 1 to 24 median 135 s. The original: 85 s.
+- **Pad steering shipped** (2026-10-03, `pulse-eliminator-pads`, chosen, not measured): an
+  Eliminator opponent with an empty slot steers for the next weapon pad (`Field::pad`,
+  `PadSeeking`). Paired median shift -6.3 s [-22.1, -2.7] on `16_Track` over 240 seeds; about
+  -13 s on `01_Track` and `09_Track` (48 seeds each). Costs some wall contact (10.2 to 10.7
+  ticks a craft-minute on `16_Track`, 5.8 to 9.5 on `09_Track`). Steering every craft and a
+  longer or leading pull were within noise of it. Sweep table in `docs/gameplay/race-modes.md`.
+  Still missed: `16_Track`'s far pad, 19.8 units off the line and outside the corridor.
 - **The leader tether is catch-up by slowing the front** (`eliminator_pack_scale`, chosen, not
   measured). It is the lever that makes the mode finish (off: 0 of 8) and it is a throttle
   reduction only. **Accepted by the maintainer 2026-10-02** under the AI-obeys-player-physics
@@ -58,6 +66,10 @@ plus the respawn-keeps-its-place test).
 3. ~~A drop/discard rule for held weapons~~ done 2026-10-03: swept, within noise, not shipped;
    the Eliminator absorb-to-Shield law found on the way is ported for the player.
 4. ~~A held-Turbo chase~~ closed 2026-10-03: the Eliminator table authors no Turbo.
+4b. ~~Steer the AI for weapon pads~~ done 2026-10-03: empty-slot opponents only, median 117 to
+   108 s over 240 seeds. Per-step times (parked player, `16_Track`, seeds 1 to 240): off 117 s
+   (13 to 225); empty slot 108 s (17 to 232), shipped; every craft 107 s (17 to 200), not
+   shipped (within noise of empty slot, more wall contact).
 5. Port the fire half of `WeaponAi_DecideFireOrAbsorb` (how often a held Rocket, Missile, Plasma
    or Shuriken is fired, `weapon-ai.md`), measured against the 240-seed sweep. Opponent weapon
    behaviour is a design axis here, so a port ships only if it moves the time to five.

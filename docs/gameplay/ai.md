@@ -354,8 +354,9 @@ driving better, never by being handed thrust. That single rule is what makes
    - lateral noise on the line, and how much of the corridor it uses
    - reaction latency to weapons and traffic - built, see
      [Reaction latency](#reaction-latency-a-driver-takes-time-to-notice).
-     **Pads are not in it**: nothing in this controller reacts to a pad at all,
-     so there is no reaction there to be late with
+     **Pads are not in it**: the one pad reaction, an Eliminator opponent with an
+     empty slot steering for a weapon pad, passes through with no latency, as a
+     laid charge does
    - explicit mistake injection, with a recovery behaviour rather than a
      teleport back to the line
    - weapon competence: selection, timing, and how well it aims
@@ -2480,6 +2481,14 @@ is ever tried again it should ride `trigger` rather than the difficulty. It was
 tried, and a trigger-happy field collected 17 weapons against a timid field's
 19 - noise, and confounded besides, since a pilot that fires more empties its
 slot sooner and can pick up again.
+
+**Weapon pads in an Eliminator are the exception, and they ship (2026-10-03).**
+There a pickup is worth kills rather than lap time, and an opponent with an empty
+slot waits a median 9.7 s for its next one on `16_Track`. Steering an empty-slot
+craft at the next weapon pad cut the median time to five kills from 117 s to
+108 s over 240 seeds. The channel is `Field::pad`, gated on the slot being empty
+and the mode being Eliminator, so no other race moves. Chosen, not measured: see
+[race-modes.md](race-modes.md#steering-for-weapon-pads-2026-10-03).
 
 ### Pilots you can author
 
