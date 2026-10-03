@@ -255,23 +255,24 @@ pub fn write_view(model: &Model, out: &mut Vec<GpuVertex>, view: Mat4, seconds: 
     // normal to the circuit's. Not an inverse transpose, as the vertex shader's
     // own normal is not: the animated meshes under a non-uniformly scaled node
     // are the ones this skews.
-    let placed: Vec<GpuVertex> = model
-        .vertices
-        .iter()
-        .map(|v| {
-            let mut v = *v;
-            if let Some(m) = (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
-                let n = Vec3::new(
-                    m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
-                    m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
-                    m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
-                );
-                v.normal = n.normalize_or_zero().to_array();
-            }
-            v
-        })
-        .collect();
-    texgen::environment_map(&placed, out, Mat4::IDENTITY, right, up);
+    //
+    // Placed and mapped in one pass rather than copied into a placed list
+    // first. The arithmetic is the two-pass form's to the bit: a placed normal
+    // is renormalised, then goes through the identity the map's model matrix
+    // was, and is renormalised again.
+    let identity = oag_core::math::Mat3::IDENTITY;
+    texgen::environment_map_by(&model.vertices, out, right, up, |v| {
+        let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
+            Some(m) => Vec3::new(
+                m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
+                m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
+                m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
+            )
+            .normalize_or_zero(),
+            None => Vec3::from_array(v.normal),
+        };
+        identity * normal
+    });
 }
 
 /// The vertices of `model` (a [`build`] result) with their texture coordinates

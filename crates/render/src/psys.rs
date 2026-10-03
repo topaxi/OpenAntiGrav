@@ -1097,10 +1097,10 @@ impl System {
         self.emitters.iter().any(|state| state.active)
     }
 
-    /// Whether anything is still emitting or alive.
+    /// Whether anything is still emitting or alive; the first live particle settles it.
     #[must_use]
     pub fn is_running(&self) -> bool {
-        self.alive_count() > 0 || self.emitters.iter().any(|state| state.active)
+        self.particles.iter().any(|p| p.alive()) || self.emitters.iter().any(|state| state.active)
     }
 
     /// How many times [`System::ignite`] has fired, ever.

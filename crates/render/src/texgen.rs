@@ -160,18 +160,34 @@ pub fn environment_map(
     light0: Vec3,
     light1: Vec3,
 ) {
+    let normals = oag_core::math::Mat3::from_mat4(model);
+    environment_map_by(base, out, light0, light1, |v| {
+        normals * Vec3::from_array(v.normal)
+    });
+}
+
+/// [`environment_map`], with the world normal - before it is renormalised -
+/// taken from `normal` rather than from one matrix for the whole model. For a
+/// caller whose vertices each ride their own node, which would otherwise copy
+/// the whole vertex list once to place the normals and again to map them.
+pub fn environment_map_by(
+    base: &[GpuVertex],
+    out: &mut Vec<GpuVertex>,
+    light0: Vec3,
+    light1: Vec3,
+    normal: impl Fn(&GpuVertex) -> Vec3,
+) {
     let l0 = light0.normalize_or_zero();
     let l1 = light1.normalize_or_zero();
-    let normals = oag_core::math::Mat3::from_mat4(model);
 
     out.clear();
     out.reserve(base.len());
     out.extend(base.iter().map(|v| {
-        let mut v = *v;
         // `normalize_or_zero` rather than `normalize`: a degenerate normal
         // would produce NaN texture coordinates, and a NaN UV takes the whole
         // batch off screen rather than drawing one bad vertex.
-        let n = (normals * Vec3::from_array(v.normal)).normalize_or_zero();
+        let n = normal(v).normalize_or_zero();
+        let mut v = *v;
         v.texcoord = [(1.0 + n.dot(l0)) * 0.5, (1.0 + n.dot(l1)) * 0.5];
         v
     }));
