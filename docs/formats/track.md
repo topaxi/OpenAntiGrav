@@ -56,6 +56,27 @@ so the `location` attribute plus the binary's `%s\%strack%s.vex` template gives
 `zone_track_reversed.vex`. Mining those raised name resolution in `Data.wad`
 from 177 to 269 of 1,142 entries.
 
+### White and Black
+
+**A circuit's White variant is its forward layout (`NN_Track\track.vex`) and its
+Black variant is the reversed one (`track_reversed.vex`).** For de Konstruct,
+Black is the reversed `05` layout, which this codebase calls `21_Track` (its
+`Definition.xml` entry has `Reversed="True"` and `location=...05_Track`).
+Maintainer, 2026-10-03; a statement, not a measurement, so it carries no
+confidence score. The entry's position in `Definition.xml` says nothing about
+the colour: two lanes inferred the opposite from entry order and were wrong.
+Talon's Junction agrees (`16_Track` White, `32_Track` Black, the latter
+`Reversed="True"`).
+
+**Unsettled: Basilico.** The Track Select entry titled Basilico Black was run
+live and started on `01_Track`'s own grid (slot 1 within 0.001 of ours; see
+[grid-state.md](../physics/grid-state.md)), the forward layout, which this
+convention would call White. Either the title and `01_Track` are swapped in the
+string table for this one circuit, or the title screenshot was misread. A
+fresh read of the `01_Track` and `17_Track` entries' display strings, plus a
+second live start on the entry titled Basilico White, would settle it. Until
+then docs label that circuit by layout file (`01_Track`) and not by colour.
+
 ### Not every circuit has the zone pair, and the entry says which do
 
 `availableInZone="true"` above is **load-correctness, not menu decoration**: a

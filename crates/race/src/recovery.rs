@@ -183,7 +183,7 @@ pub const STALL_TICKS: u32 = 120;
 /// probe touched, `0x08849e28` adds `dt` otherwise), which this project already
 /// carries as `oag_physics::ShipState::time_airborne`.
 ///
-/// Measured in PPSSPP on `01_Track` (Basilico Black, reached with the dev-unlock
+/// Measured in PPSSPP on `01_Track` (the Basilico entry titled Black, reached with the dev-unlock
 /// byte): a craft coasted off the lip at samples 31-42 at 20 u/s landed
 /// upside down on the floor below, its probes pointing at the sky; the clock ran
 /// from the tick it left the deck, read 3.99 on the tick before, and the craft

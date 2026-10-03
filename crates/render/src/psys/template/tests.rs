@@ -78,7 +78,7 @@ fn a_life_shorter_than_the_period_takes_part_of_the_first_cycle() {
 /// `WO_BLUE_WELDER`'s `GLOW` as authored: a twenty-tick loop whose duplicate
 /// key times are jumps - four flashes a cycle, each a jump to full size and a
 /// fall. Read off `WO_BLUE_WELDER.POB`; the original's frames show the halo
-/// re-flashing every few frames on Basilico Black
+/// re-flashing every few frames on `01_Track` (the Basilico entry titled Black)
 /// (`docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md`).
 fn welder_glow_size() -> Channel {
     Channel {

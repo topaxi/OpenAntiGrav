@@ -11,7 +11,7 @@
 //! (`0x08915cdc`) hands the instance the node's world matrix every frame and
 //! destroys the node once the instance has finished, so a looping effect
 //! runs for the whole race and a burst plays once. Confirmed live on PPSSPP:
-//! Basilico Black loads `WO_BLUE_WELDER` three times, with local matrices
+//! `01_Track` (the Basilico entry titled Black) loads `WO_BLUE_WELDER` three times, with local matrices
 //! byte-identical to the three nodes here. See
 //! `docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md`.
 //!
