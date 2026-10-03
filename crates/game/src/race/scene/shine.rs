@@ -56,18 +56,53 @@ impl TrackShine {
 }
 
 impl Scene {
-    /// Draws the circuit, then its extra pass over it: the pass is tested
-    /// against the circuit's depth, so it follows the circuit and precedes
-    /// everything drawn after it.
+    /// Draws the circuit's solid lists, the sky, the circuit's blended list,
+    /// then the circuit's extra pass over it: the pass is tested against the
+    /// circuit's depth, so it follows the circuit and precedes everything
+    /// drawn after it.
+    ///
+    /// **The sky goes behind the solid circuit rather than first.** It writes
+    /// no depth, so it used to be drawn first comparing `Always`, filling the
+    /// whole viewport for the circuit to cover - every covered sample shaded
+    /// for nothing, the full frame's worth: 5.1 ms of HD's 47 ms race pass at
+    /// 3200x1800 on an integrated GPU, and the largest single span in Pulse's.
+    /// Drawn here with its depth range pinned to the far plane, it compares
+    /// `LessEqual` against the 1.0 the pass cleared to, so it lands on exactly
+    /// the samples nothing solid has reached - the ones it was visible on
+    /// before. The blended list still draws over it, as it always did, and
+    /// nothing solid ever read the colour underneath it.
+    ///
+    /// Neither culling tier is offered it: a skybox is never outside the
+    /// frustum and belongs to no visibility section, which is the behaviour
+    /// ADR-0011 already assumes for it. Its draw calls are deliberately **not**
+    /// added to the stats either: being exempt from both tiers, folding them in
+    /// would shift the denominator ADR-0011's and the roadmap's PVS
+    /// effectiveness figures are quoted against.
     pub(super) fn draw_track(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        viewport: (f32, f32, f32, f32),
         sections: Option<&DrawSections>,
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
     ) -> SceneStats {
-        let mut stats = self.track.draw(pass, sections, set, chunks, frustum);
+        oag_render::perfprobe::marks::mark(pass, "track solid");
+        let mut stats = self
+            .track
+            .draw_lists(pass, sections, set, chunks, frustum, Lists::Solid);
+        oag_render::perfprobe::marks::mark(pass, "sky");
+        if let Some(sky) = &self.sky {
+            let (x, y, w, h) = viewport;
+            pass.set_viewport(x, y, w, h, 1.0, 1.0);
+            let _ = sky.draw(pass, None, None, None, None);
+            pass.set_viewport(x, y, w, h, 0.0, 1.0);
+        }
+        oag_render::perfprobe::marks::mark(pass, "track blended");
+        stats.add(
+            self.track
+                .draw_lists(pass, sections, set, chunks, frustum, Lists::Blended),
+        );
         oag_render::perfprobe::marks::mark(pass, "track shine");
         if let Some(shine) = &self.track_shine {
             stats.add(shine.drawable.draw_track_shine(

@@ -149,11 +149,16 @@ pub struct Built {
 ///
 /// The race pass clears depth to 1.0 and everything else compares `Less`, so a
 /// sky drawn at the far plane would fail the test and be invisible. Rather than
-/// place it in depth at all, [`Depth::Sky`] takes it out of the question: drawn
-/// first, comparing `Always` and writing nothing, so it fills the frame and then
-/// every later draw covers it wherever there is geometry. That also means the
-/// sky needs no far plane large enough to contain it, which matters because its
-/// authored cube is tens of units across while a track is thousands.
+/// place it in depth by its geometry, [`Depth::Sky`] writes nothing and
+/// compares `LessEqual`, and the race draws it after the solid circuit with its
+/// viewport's depth range pinned to 1.0 - so it passes on exactly the samples
+/// still at the clear value, the ones no solid geometry covers. See
+/// `race::Scene::draw_track`. Drawn first instead, it passes everywhere (its
+/// cube sits well short of the far plane) and every later draw covers it,
+/// which is how it was drawn until 2026-10-03 and costs a full frame of
+/// shading. Either way the sky needs no far plane large enough to contain it,
+/// which matters because its authored cube is tens of units across while a
+/// track is thousands.
 ///
 /// **The one size constraint that remains: a sky's half-extent must exceed the
 /// near plane.** Taking depth out of the question does not take *clipping* out
@@ -226,7 +231,7 @@ pub fn build(
     // is what [`Depth`] chooses between.
     let (depth_write, depth_compare) = match depth {
         Depth::Scene => (true, wgpu::CompareFunction::Less),
-        Depth::Sky => (false, wgpu::CompareFunction::Always),
+        Depth::Sky => (false, wgpu::CompareFunction::LessEqual),
         Depth::Overlay => (false, wgpu::CompareFunction::LessEqual),
     };
 

@@ -759,25 +759,11 @@ impl Scene {
         });
         oag_render::perfprobe::mark("pass-open");
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
-        // First, and that ordering is as load-bearing as the exhaust's being
-        // last. The sky writes no depth and compares `Always`, so it paints the
-        // whole viewport and every later draw covers it wherever the track has
-        // geometry; drawn at any other point it would overwrite what is already
-        // there. Neither culling tier is offered it: a skybox is never outside
-        // the frustum and belongs to no visibility section, which is the
-        // behaviour ADR-0011 already assumes for it.
-        //
-        // Its draw calls are deliberately **not** added to `stats`. Being exempt
-        // from both tiers, folding them in would shift the denominator that
-        // ADR-0011's and the roadmap's PVS effectiveness figures are quoted
-        // against - a silently moved percentage nobody would think to question.
-        oag_render::perfprobe::marks::mark(&mut pass, "sky");
-        if let Some(sky) = &self.sky {
-            let _ = sky.draw(&mut pass, None, None, None, None);
-        }
-        oag_render::perfprobe::marks::mark(&mut pass, "track");
+        // The sky draws inside this, between the circuit's solid and blended
+        // lists - see `draw_track` for why there.
         let mut stats = self.draw_track(
             &mut pass,
+            viewport,
             self.visibility.as_ref().map(|v| &v.sections),
             visible_set.as_ref(),
             chunk_set.as_ref(),

@@ -31,10 +31,10 @@
 /// of adding it.
 #[must_use]
 pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
-    // Inside-pass timestamps only for `perfprobe::marks`, so a default build
+    // Inside-pass timestamps and fragment counts only for `perfprobe::marks`, so a default build
     // asks a device for exactly what it always did.
     let probe = if cfg!(feature = "perf-probe") {
-        wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES
+        wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES | wgpu::Features::PIPELINE_STATISTICS_QUERY
     } else {
         wgpu::Features::empty()
     };

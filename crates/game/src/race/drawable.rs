@@ -13,6 +13,17 @@ mod instance;
 /// shared between the models, because each `mesh_render::build` creates its own bind
 /// group layouts and pairing a bind group with another pipeline's layout is a
 /// validation error waiting to happen.
+/// Which of a drawable's lists one [`Drawable::draw_lists`] call draws.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Lists {
+    /// Opaque, cutout, then blended - [`Drawable::draw`].
+    All,
+    /// Opaque and cutout: everything that writes depth.
+    Solid,
+    /// The blended list and the glow stamps over it.
+    Blended,
+}
+
 pub(super) struct Drawable {
     model: std::sync::Arc<Model>,
     pipeline: wgpu::RenderPipeline,
@@ -609,7 +620,25 @@ impl Drawable {
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
     ) -> SceneStats {
+        self.draw_lists(pass, sections, set, chunks, frustum, Lists::All)
+    }
+
+    /// [`Self::draw`], restricted to `lists`. The circuit draws its solid
+    /// lists and its blended one in two calls so the sky can go between them -
+    /// see `Scene::draw_track`.
+    pub(super) fn draw_lists(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        sections: Option<&DrawSections>,
+        set: Option<&VisibleSet>,
+        chunks: Option<&ChunkSet>,
+        frustum: Option<&Frustum>,
+        lists: Lists,
+    ) -> SceneStats {
         let mut stats = SceneStats::default();
+        let none: &[DrawCall] = &[];
+        let solid = lists != Lists::Blended;
+        let blended = lists != Lists::Solid;
         let mut binds = oag_render::perfprobe::Binds::default();
         let mut last_bound: Option<usize> = None;
         // A model with no placement table has every draw call unplaced, which
@@ -634,7 +663,10 @@ impl Drawable {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
-        for (index, draw) in self.model.draws.iter().enumerate() {
+        for (index, draw) in (if solid { &self.model.draws[..] } else { none })
+            .iter()
+            .enumerate()
+        {
             // A tier the switch has off is not culled, it is not there.
             if !self.lod_shows(draw) {
                 continue;
@@ -686,7 +718,14 @@ impl Drawable {
             by_reference: &self.cutout_pipelines,
         };
         let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
-        for (index, draw) in self.model.alpha_tested_draws.iter().enumerate() {
+        for (index, draw) in (if solid {
+            &self.model.alpha_tested_draws[..]
+        } else {
+            none
+        })
+        .iter()
+        .enumerate()
+        {
             if !self.lod_shows(draw) {
                 continue;
             }
@@ -743,6 +782,9 @@ impl Drawable {
             authored: &self.authored_pipelines,
         };
         let mut current: Option<&wgpu::RenderPipeline> = None;
+        if !blended {
+            return stats;
+        }
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
             if !self.lod_shows(draw) {
                 continue;

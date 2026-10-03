@@ -64,12 +64,12 @@ pub struct Scene {
     /// presentation, and this is where the rest of the presentation lives.
     /// See [`crate::race::zone_grade::ZoneGrade`].
     zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
-    /// The track's `Skycube`, drawn camera-centred before anything else -
+    /// The track's `Skycube`, drawn camera-centred behind the solid circuit -
     /// `None` when the file authors no sky, which is every Pure track and every
-    /// non-track `.vex`. Its own [`mesh_render::Depth::Sky`] pipelines compare
-    /// `Always` and write no depth, so it fills the frame and everything drawn
-    /// after covers it - see [`Scene::render`] for why it is not scaled to the
-    /// far plane instead.
+    /// non-track `.vex`. Its own [`mesh_render::Depth::Sky`] pipelines write no
+    /// depth and land only where nothing solid has - see `Scene::draw_track`,
+    /// and [`mesh_render::Depth`] for why it is not scaled to the far plane
+    /// instead.
     sky: Option<Drawable>,
     /// The track's `Speedup Pad` geometry, drawn with the track. Same
     /// pipeline, same textures, same fog, same world matrix as

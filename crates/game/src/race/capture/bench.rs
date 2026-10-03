@@ -53,7 +53,7 @@ pub(super) fn run(
             std::array::from_fn(|_| PassTimer::new(device, queue));
         let mut spans: [Vec<f64>; 3] = Default::default();
         let marks = oag_render::perfprobe::marks::Marks::new(device, queue);
-        let mut groups: Vec<(&'static str, Vec<f64>)> = Vec::new();
+        let mut groups: Vec<(&'static str, Vec<f64>, Option<u64>)> = Vec::new();
         // The first tenth warms caches and clocks and is not counted.
         let warmup = runs / 10;
         for run in 0..warmup + runs {
@@ -110,10 +110,15 @@ pub(super) fn run(
             }
             if run >= warmup {
                 samples.push(elapsed);
-                for (label, span) in marks.as_ref().map(|m| m.read(device)).unwrap_or_default() {
-                    match groups.iter_mut().find(|(l, _)| *l == label) {
-                        Some((_, list)) => list.push(span),
-                        None => groups.push((label, vec![span])),
+                for span in marks.as_ref().map(|m| m.read(device)).unwrap_or_default() {
+                    // The same frame each time, so the count is the same
+                    // each time; the last one is kept.
+                    match groups.iter_mut().find(|(l, ..)| *l == span.label) {
+                        Some((_, list, fragments)) => {
+                            list.push(span.micros);
+                            *fragments = span.fragments;
+                        }
+                        None => groups.push((span.label, vec![span.micros], span.fragments)),
                     }
                 }
             }
@@ -131,8 +136,11 @@ pub(super) fn run(
                 report(name, span);
             }
         }
-        for (label, span) in &mut groups {
+        for (label, span, fragments) in &mut groups {
             report(&format!("  race pass / {label}"), span);
+            if let Some(fragments) = fragments {
+                println!("bench   race pass / {label}: {fragments} fragment invocation(s)");
+            }
         }
     }
 }

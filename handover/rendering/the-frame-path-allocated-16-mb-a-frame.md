@@ -328,8 +328,29 @@ HD split after the last step (two pairs each, before -> after): motion blur
 off 32.9 -> 20.6 ms, so the blur chain is about 3 ms of it at this size; MSAA
 off as well, 25.0 -> 16.9 ms.
 
-Still not measured: overdraw, whether front-to-back opaque order or a depth
-prepass pays now that per-pixel cost is lower, and the motion blur chain,
+**Split by draw group, at the maintainer's 200% scale (3200x1800, MSAA 4x,
+blur off).** `perfprobe::marks` writes timestamps and fragment-invocation
+counts between the race pass's draw groups; the GPU bench prints both. HD,
+before the sky moved: race pass 47 ms, of which the track's opaque list 31.8
+ms over 12.1 M fragments (2.1x the 5.76 M pixels), its cutout and blended
+lists 2.2 ms each, the craft 2.3 ms, effects 1.1 ms, and **the sky 5.1 ms over
+5.76 M fragments - every pixel, for a picture the track then covered almost
+entirely**. Pulse's sky was its largest single span, 5.8 ms. HD bloom is 3.2
+ms beside the pass. Anisotropy 16x against 1x is about 10 % of HD's track.
+
+**The sky now draws after the circuit's solid lists**, at the far plane,
+landing only where nothing solid did: 256 k fragments, 0.45 ms. Race pass
+19.1 -> 13.8 ms on Pulse and 48.2 -> 43.7 ms on HD, ten captures and a 2048
+race byte-identical, render flags pinned. See `Scene::draw_track`.
+
+**Pin the render flags in any capture comparison.** The game rewrites the
+settings file, and the maintainer turning HD's motion blur off mid-session
+made every HD capture differ for a reason that had nothing to do with the
+change under test.
+
+Still open: HD's opaque track overdraw (2.1x) - a depth prepass or a
+front-to-back sort, neither exact by construction because a coplanar tie
+resolves differently under either, and the motion blur chain,
 which the maintainer measured at about 14 ms on the same iGPU - **the next
 GPU-side target**, after re-profiling what is left of the race pass.
 

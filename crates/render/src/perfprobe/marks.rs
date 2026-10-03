@@ -9,6 +9,10 @@
 //! (`TIMESTAMP_QUERY_INSIDE_PASSES`); `mesh_render::optional_features` asks for
 //! it only with `perf-probe` on, and [`Marks::new`] declines without it.
 //!
+//! Where the device also offers pipeline statistics, each span counts its
+//! fragment-shader invocations too, which divided by the viewport's pixels is
+//! that group's overdraw.
+//!
 //! Only armed while a bench holds a [`Marks`]: [`mark`] is a no-op otherwise,
 //! and the whole module folds away without the feature.
 
@@ -19,6 +23,10 @@ const CAPACITY: u32 = 64;
 
 struct Armed {
     queries: wgpu::QuerySet,
+    /// One fragment-invocation count per span, when the device can.
+    fragments: Option<wgpu::QuerySet>,
+    /// Whether a statistics query is open on the pass being recorded.
+    open: bool,
     labels: Vec<&'static str>,
 }
 
@@ -29,6 +37,8 @@ static ARMED: Mutex<Option<Armed>> = Mutex::new(None);
 pub struct Marks {
     resolved: wgpu::Buffer,
     readback: wgpu::Buffer,
+    fragments_resolved: wgpu::Buffer,
+    fragments_readback: wgpu::Buffer,
     period: f32,
 }
 
@@ -57,8 +67,22 @@ impl Marks {
             ty: wgpu::QueryType::Timestamp,
             count: CAPACITY,
         });
+        let fragments = device
+            .features()
+            .contains(wgpu::Features::PIPELINE_STATISTICS_QUERY)
+            .then(|| {
+                device.create_query_set(&wgpu::QuerySetDescriptor {
+                    label: Some("perf mark fragments"),
+                    ty: wgpu::QueryType::PipelineStatistics(
+                        wgpu::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS,
+                    ),
+                    count: CAPACITY,
+                })
+            });
         *ARMED.lock().ok()? = Some(Armed {
             queries,
+            fragments,
+            open: false,
             labels: Vec::new(),
         });
         Some(Self {
@@ -68,6 +92,14 @@ impl Marks {
             ),
             readback: buffer(
                 "perf marks readback",
+                wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            ),
+            fragments_resolved: buffer(
+                "perf mark fragments resolved",
+                wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+            ),
+            fragments_readback: buffer(
+                "perf mark fragments readback",
                 wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             ),
             period: queue.get_timestamp_period(),
@@ -80,6 +112,7 @@ impl Marks {
             && let Some(armed) = armed.as_mut()
         {
             armed.labels.clear();
+            armed.open = false;
         }
     }
 
@@ -93,37 +126,79 @@ impl Marks {
         }
         encoder.resolve_query_set(&armed.queries, 0..count, &self.resolved, 0);
         encoder.copy_buffer_to_buffer(&self.resolved, 0, &self.readback, 0, u64::from(count) * 8);
+        // The last mark closes the last span and opens none.
+        if let Some(fragments) = &armed.fragments
+            && count > 1
+        {
+            let spans = count - 1;
+            encoder.resolve_query_set(fragments, 0..spans, &self.fragments_resolved, 0);
+            encoder.copy_buffer_to_buffer(
+                &self.fragments_resolved,
+                0,
+                &self.fragments_readback,
+                0,
+                u64::from(spans) * 8,
+            );
+        }
     }
 
-    /// The submitted recording's spans, as `(label, microseconds)` - each
-    /// label's span runs from its mark to the next one. Blocks on the device.
+    /// The submitted recording's spans - each label's runs from its mark to
+    /// the next one - with the fragment invocations in it where the device
+    /// counts them. Blocks on the device.
     #[must_use]
-    pub fn read(&self, device: &wgpu::Device) -> Vec<(&'static str, f64)> {
-        let labels = match ARMED.lock() {
-            Ok(armed) => armed.as_ref().map(|a| a.labels.clone()).unwrap_or_default(),
+    pub fn read(&self, device: &wgpu::Device) -> Vec<Span> {
+        let (labels, counted) = match ARMED.lock() {
+            Ok(armed) => armed
+                .as_ref()
+                .map(|a| (a.labels.clone(), a.fragments.is_some()))
+                .unwrap_or_default(),
             Err(_) => return Vec::new(),
         };
         if labels.len() < 2 {
             return Vec::new();
         }
-        let slice = self.readback.slice(..labels.len() as u64 * 8);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
-        let _ = device.poll(wgpu::PollType::wait_indefinitely());
-        let Ok(view) = slice.get_mapped_range() else {
-            return Vec::new();
+        let ticks = read_u64s(device, &self.readback, labels.len());
+        let fragments = if counted {
+            read_u64s(device, &self.fragments_readback, labels.len() - 1)
+        } else {
+            Vec::new()
         };
-        let ticks: Vec<u64> = bytemuck::cast_slice(&view).to_vec();
-        drop(view);
-        self.readback.unmap();
         labels
             .windows(2)
             .zip(ticks.windows(2))
-            .map(|(label, tick)| {
+            .enumerate()
+            .map(|(i, (label, tick))| {
                 let span = tick[1].saturating_sub(tick[0]) as f64 * f64::from(self.period);
-                (label[0], span / 1000.0)
+                Span {
+                    label: label[0],
+                    micros: span / 1000.0,
+                    fragments: fragments.get(i).copied(),
+                }
             })
             .collect()
     }
+}
+
+/// One labelled stretch of a pass.
+#[derive(Debug, Clone, Copy)]
+pub struct Span {
+    pub label: &'static str,
+    pub micros: f64,
+    /// Fragment-shader invocations, where the device counts them.
+    pub fragments: Option<u64>,
+}
+
+fn read_u64s(device: &wgpu::Device, buffer: &wgpu::Buffer, count: usize) -> Vec<u64> {
+    let slice = buffer.slice(..count as u64 * 8);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
+    let Ok(view) = slice.get_mapped_range() else {
+        return Vec::new();
+    };
+    let values = bytemuck::cast_slice(&view).to_vec();
+    drop(view);
+    buffer.unmap();
+    values
 }
 
 impl Drop for Marks {
@@ -147,6 +222,16 @@ pub fn mark(pass: &mut wgpu::RenderPass<'_>, label: &'static str) {
     };
     if index >= CAPACITY {
         return;
+    }
+    if let Some(fragments) = &armed.fragments {
+        if armed.open {
+            pass.end_pipeline_statistics_query();
+        }
+        // `end` closes the last span; every other mark opens one.
+        armed.open = label != "end";
+        if armed.open {
+            pass.begin_pipeline_statistics_query(fragments, index);
+        }
     }
     pass.write_timestamp(&armed.queries, index);
     armed.labels.push(label);
