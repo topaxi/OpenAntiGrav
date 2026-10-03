@@ -91,6 +91,6 @@ pub use driver::{
     hull_yaw_ceiling,
 };
 pub use field::{Field, Hazard, Rival};
-pub use line::{Aim, Frame, Line};
+pub use line::{Aim, Frame, Line, shift as line_shift};
 pub use pilot::{Lean, Pilot, Span, pilot_for_slot};
 pub use plan::SpeedPlan;

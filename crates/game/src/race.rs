@@ -157,6 +157,7 @@ mod spawn;
 mod speed_plan;
 mod spline;
 mod start;
+mod takeoff_line;
 mod telemetry;
 mod texture_sink;
 mod tick;

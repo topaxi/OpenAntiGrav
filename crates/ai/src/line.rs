@@ -3,6 +3,8 @@
 
 use oag_core::math::Vec3;
 
+pub mod shift;
+
 /// How much road before a gap counts as the run-up to a takeoff, in units.
 ///
 /// **Chosen, not measured**, no confidence score. `05_Track`'s first jump has its

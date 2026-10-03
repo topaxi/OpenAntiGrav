@@ -20,12 +20,6 @@ use oag_game::{catalogue, race};
 /// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
 /// section.
 const NOT_CLEAN: &[(&str, &str)] = &[
-    // The crest lip at sample ~206 and the walls at 424-637 after it: the
-    // craft touches them at 15 units/s too, so it is the line, not the speed.
-    ("05_Track", "VENOM"),
-    ("05_Track", "FLASH"),
-    ("05_Track", "RAPIER"),
-    ("05_Track", "PHANTOM"),
     // The corner after the gap at 1196-1200: walls at 1234-1238, and at
     // VENOM a stall at 1217 once pad boosts are in the learning run.
     ("06_Track", "VENOM"),
