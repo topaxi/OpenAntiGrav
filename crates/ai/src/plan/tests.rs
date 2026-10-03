@@ -187,6 +187,9 @@ fn build_on(line: &Line) -> (SpeedPlan, Report) {
         dt: 1.0 / 60.0,
         off_line: OFF_LINE,
         respawn: &respawn,
+        reset: &|_, _, _| false,
+        max_airborne: f32::INFINITY,
+        pad: &|_, _| None,
     };
     SpeedPlan::build(&course, &craft(line), &tuning())
 }
@@ -202,6 +205,9 @@ fn verify(line: &Line, plan: &SpeedPlan) -> Report {
         dt: 1.0 / 60.0,
         off_line: OFF_LINE,
         respawn: &respawn,
+        reset: &|_, _, _| false,
+        max_airborne: f32::INFINITY,
+        pad: &|_, _| None,
     };
     let craft = craft(line);
     let yaw = crate::hull_yaw_ceiling(&craft.handling);
@@ -382,4 +388,75 @@ fn an_unmeasured_speed_borrows_the_nearest_measured_one_below() {
         Decel::FALLBACK,
         "nothing measured is the fallback"
     );
+}
+
+/// A craft at `speed` along the stadium's first straight.
+fn moving(line: &Line, speed: f32) -> ShipState {
+    let mut state = placed(line, 10);
+    let heading = (line.point(11) - line.point(10)).normalize_or_zero();
+    state.body.linear_velocity = heading * speed;
+    state
+}
+
+#[test]
+fn a_driver_on_a_plan_brakes_for_the_plan_and_not_without_it() {
+    // The wiring: `Context::plan` is what decides the longitudinal controls
+    // when it is there. A straight the corner model would take flat out, with
+    // a plan that says 20, is braked for; the same plan unlimited is not.
+    let line = tight();
+    let tuning = tuning();
+    let state = moving(&line, 60.0);
+    let mut slow = SpeedPlan::unlimited(&line);
+    slow.ceiling.fill(20.0);
+    slow.derive_targets();
+
+    let drive = |plan: Option<&SpeedPlan>| {
+        let mut driver = Driver {
+            index: 10,
+            ..Driver::default()
+        };
+        driver.drive(
+            &state,
+            &Context {
+                plan,
+                ..Context::new(&line, &tuning)
+            },
+        )
+    };
+    let braked = drive(Some(&slow));
+    assert_eq!(braked.thrust, 0.0);
+    assert!(braked.airbrake_left > 0.0 && braked.airbrake_right > 0.0);
+
+    let free = drive(Some(&SpeedPlan::unlimited(&line)));
+    assert_eq!(free.thrust, 1.0);
+    assert_eq!(
+        drive(None).thrust,
+        1.0,
+        "the corner model brakes on a straight"
+    );
+}
+
+#[test]
+fn a_plan_of_a_different_line_is_ignored() {
+    // A plan whose length is not the line's was built for another layout, and
+    // following it would brake at the wrong places.
+    let line = tight();
+    let tuning = tuning();
+    let state = moving(&line, 60.0);
+    let other = stadium(40.0, 300.0);
+    let mut wrong = SpeedPlan::unlimited(&other);
+    wrong.ceiling.fill(20.0);
+    wrong.derive_targets();
+    let mut driver = Driver {
+        index: 10,
+        ..Driver::default()
+    };
+    let controls = driver.drive(
+        &state,
+        &Context {
+            plan: Some(&wrong),
+            ..Context::new(&line, &tuning)
+        },
+    );
+    assert_eq!(controls.thrust, 1.0);
 }

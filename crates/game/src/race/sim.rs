@@ -72,6 +72,11 @@ pub struct RaceSim {
     /// The identity permutation on nine of the disc's twelve circuits. See
     /// [`ai_order`], and [`Race::ai_sample`] for the lookup itself.
     pub(super) ai_order: Vec<u32>,
+    /// The speed plan the opponents' drivers follow, built at the start from
+    /// this line, this collision and the field's handling, or `None` when the
+    /// race has no opponents or the plan did not verify clean. See
+    /// [`Race::field_speed_plan`] and `oag_ai::plan`.
+    pub(super) speed_plan: Option<oag_ai::SpeedPlan>,
     /// What the opponents' drivers are flown with. One set for the whole field:
     /// per-craft variation is the skill work, and this is the basic driver.
     pub(super) ai_tuning: oag_ai::Tuning,

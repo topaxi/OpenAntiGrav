@@ -246,6 +246,7 @@ impl Race {
                 pilot: &pilot,
                 field: &field,
                 yaw_ceiling: Some(yaw_ceiling),
+                plan: self.sim.speed_plan.as_ref(),
             },
         )
     }
@@ -377,6 +378,7 @@ impl Race {
                         // global belief was wrong for all of them. See
                         // `oag_ai::hull_yaw_ceiling`.
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling)),
+                        plan: self.sim.speed_plan.as_ref(),
                     },
                 )
             } else {

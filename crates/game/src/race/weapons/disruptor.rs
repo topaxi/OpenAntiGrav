@@ -86,6 +86,7 @@ impl Race {
             pilot: &self.sim.ai_pilots[slot],
             field,
             yaw_ceiling: None,
+            plan: None,
         };
         if self.sim.world.ships[slot]
             .driver

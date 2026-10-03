@@ -76,6 +76,7 @@ fn thrust_over(reaction_ticks: u16, ticks: usize) -> Vec<f32> {
                         pilot: &pilot,
                         field: &field,
                         yaw_ceiling: None,
+                        plan: None,
                     },
                 )
                 .thrust
@@ -139,6 +140,7 @@ fn a_driver_does_not_fire_at_a_rival_it_has_not_noticed() {
         pilot: &pilot,
         field: &field,
         yaw_ceiling: None,
+        plan: None,
     };
     for tick in 0..30 {
         driver.drive(&state, &context);
@@ -182,6 +184,7 @@ fn a_driver_does_not_lay_mines_at_a_craft_ahead() {
         pilot: &pilot,
         field: &field,
         yaw_ceiling: None,
+        plan: None,
     };
     for tick in 0..300 {
         driver.drive(&state, &context);
@@ -238,6 +241,7 @@ fn a_driver_does_not_fire_forward_at_a_craft_behind() {
         pilot: &pilot,
         field: &field,
         yaw_ceiling: None,
+        plan: None,
     };
     for tick in 0..300 {
         driver.drive(&state, &context);

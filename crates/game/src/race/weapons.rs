@@ -747,6 +747,7 @@ impl Race {
                         pilot: &self.sim.ai_pilots[slot],
                         field: &field,
                         yaw_ceiling: None,
+                        plan: None,
                     })
             };
             if !holds_fire {

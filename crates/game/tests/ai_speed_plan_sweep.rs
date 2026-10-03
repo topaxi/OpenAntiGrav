@@ -88,6 +88,13 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> St
     } else {
         (1..race.sim.world.ship_count as usize).collect()
     };
+    // Diagnostic: every measured craft a plain line-follower (seed 0, no
+    // personality), to separate the plan from what a pilot does to it.
+    if std::env::var_os("OAG_SWEEP_PLAIN").is_some() {
+        for &slot in &measured {
+            race.sim.world.ships[slot].driver.seed = 0;
+        }
+    }
     let mut crafts: Vec<Craft> = measured
         .iter()
         .map(|&slot| Craft {
@@ -105,6 +112,14 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> St
         for (craft, &slot) in crafts.iter_mut().zip(&measured) {
             if race.respawns_of(slot) != craft.respawns_before {
                 craft.recovered = true;
+                if std::env::var_os("OAG_SWEEP_CAUSES").is_some() {
+                    let ship = &race.sim.world.ships[slot];
+                    eprintln!(
+                        "respawn {id} {class} slot {slot} tick {tick} index {} cause {:?}",
+                        ship.driver.index,
+                        race.last_respawn_cause_of(slot)
+                    );
+                }
             }
             let ship = &race.sim.world.ships[slot];
             if ship.standing.lap != craft.lap {

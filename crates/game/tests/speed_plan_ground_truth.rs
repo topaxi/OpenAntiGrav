@@ -26,11 +26,14 @@ const NOT_CLEAN: &[(&str, &str)] = &[
     ("05_Track", "FLASH"),
     ("05_Track", "RAPIER"),
     ("05_Track", "PHANTOM"),
-    // The corner after the gap at 1196-1200, one class only.
+    // The corner after the gap at 1196-1200: walls at 1234-1238, and at
+    // VENOM a stall at 1217 once pad boosts are in the learning run.
+    ("06_Track", "VENOM"),
     ("06_Track", "RAPIER"),
-    // Leaves the line at full throttle at 1267 and at 2440: an excursion no
-    // ceiling the search tried closes.
+    // Rescued - in the air too long, or off the line - at 1247 and at
+    // 2402-2441, with every ceiling the search tried.
     ("14_Track", "PHANTOM"),
+    ("29_Track", "RAPIER"),
     ("29_Track", "PHANTOM"),
 ];
 

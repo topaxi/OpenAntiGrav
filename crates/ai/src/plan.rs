@@ -77,6 +77,19 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
     /// A fresh craft placed on the line at an index, as the race's own rescue
     /// places one. See [`SpeedPlan::learn`] for when the search uses it.
     pub respawn: &'a dyn Fn(usize) -> ShipState,
+    /// Whether the craft touched a reset volume this tick, given its state,
+    /// the environment it was stepped with and where it started the tick.
+    /// The race passes `oag_physics::reset::contact` over its own collision.
+    pub reset: &'a dyn Fn(&ShipState, &Environment, oag_core::math::Vec3) -> bool,
+    /// Seconds without a hover contact after which the race rescues a craft.
+    pub max_airborne: f32,
+    /// The push direction of the speed pad the craft is inside, given where it
+    /// started the previous tick and where it starts this one - the race's own
+    /// pad test, so the plan is learned with the boosts the race will give.
+    pub pad: &'a dyn Fn(
+        Option<oag_core::math::Vec3>,
+        oag_core::math::Vec3,
+    ) -> Option<oag_core::math::Vec3>,
 }
 
 /// The craft the plan is for, and where it starts.
@@ -365,6 +378,9 @@ struct Run {
     tick: u32,
     /// Consecutive ticks under [`STALL_SPEED`].
     slow: u32,
+    /// Where the craft started the previous tick, for the pad sweep; `None`
+    /// on the grid and after a rescue, as the race's own is.
+    last_position: Option<oag_core::math::Vec3>,
 }
 
 /// Why a tick counted as a failure.
@@ -378,6 +394,9 @@ pub enum Failure {
     Wrecked,
     /// Stopped for longer than [`STALL_TICKS`].
     Stalled,
+    /// Something the race rescues a craft for that is not a wall: a reset
+    /// volume touched, or longer in the air than [`Course::max_airborne`].
+    Rescued,
 }
 
 /// What one tick did.
@@ -423,7 +442,12 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
         controls.airbrake_right = right;
 
         let index = run.driver.index as usize;
-        let env = self.env_at(index);
+        let position_before = run.state.body.position;
+        let env = Environment {
+            pad_hit: (self.pad)(run.last_position, position_before),
+            ..self.env_at(index)
+        };
+        run.last_position = Some(position_before);
         let evaluated = oag_physics::step(
             &mut run.state,
             &controls,
@@ -445,6 +469,14 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             Some(Failure::Wall)
         } else if away > self.off_line || !run.state.body.position.is_finite() {
             Some(Failure::OffLine)
+        } else if run.state.time_airborne > self.max_airborne
+            || (self.reset)(&run.state, &env, position_before)
+        {
+            // The race's own two rescues: a reset volume, and the original's
+            // four seconds without a hover contact. A plan that only counted
+            // walls drove `01_Track` at PHANTOM clean in isolation and was
+            // rescued four times in the race, in the air off a crest.
+            Some(Failure::Rescued)
         } else if run.tick > STALL_GRACE && run.slow > STALL_TICKS {
             Some(Failure::Stalled)
         } else {
@@ -511,6 +543,7 @@ impl SpeedPlan {
             progress: 0,
             tick: 0,
             slow: 0,
+            last_position: None,
         }
     }
 
@@ -566,6 +599,7 @@ impl SpeedPlan {
                 progress: run.progress + RESPAWN_SKIP as i64,
                 tick: run.tick,
                 slow: 0,
+                last_position: None,
             };
         }
         if run.progress >= 2 * n && !respawned_on_flying_lap {
@@ -677,6 +711,7 @@ impl SpeedPlan {
                     progress: run.progress + RESPAWN_SKIP as i64,
                     tick: run.tick,
                     slow: 0,
+                    last_position: None,
                 };
                 recent.clear();
                 checkpoints.push(run);
