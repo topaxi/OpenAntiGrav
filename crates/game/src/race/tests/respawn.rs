@@ -593,3 +593,62 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
         "the shell did not flash cyan on the absorbed hit: red is {red}"
     );
 }
+
+/// Puts opponent 1 `depth` below its own line point along the sample's up,
+/// on the ground, and returns the race. The fixture has no floor under its
+/// line, so every sample reads as a gap; `supported` rebuilds the line without
+/// that mask, which is what a line over road is.
+fn opponent_beneath(depth: f32, supported: bool) -> Race {
+    let mut race = race_with_a_grid();
+    race.tick(&PlayerInputs::none());
+    if supported {
+        let line = &race.sim.racing_line;
+        race.sim.racing_line = oag_ai::Line::new((0..line.len()).map(|i| line.point(i)).collect());
+    }
+    let index = race.sim.world.ships[1].driver.index as usize;
+    let sample = *race.ai_sample(index).expect("a grid race has samples");
+    let up = -Vec3::from_array(sample.down).normalize_or_zero();
+    let ship = &mut race.sim.world.ships[1];
+    ship.physics.craft_state = oag_physics::CraftState::Racing;
+    ship.physics.time_airborne = 0.0;
+    ship.physics.body.position = race.sim.racing_line.point(index) - up * depth;
+    race
+}
+
+/// **A craft driving a road under its own line is lost**, though it is close
+/// to the line point: `05_Track` forward's pit under the upper road, 30-80
+/// units down and inside the distance trigger. See [`BENEATH_LINE`].
+#[test]
+fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
+    let mut race = opponent_beneath(BENEATH_LINE + 5.0, true);
+    assert!(race.beneath_the_line(1));
+    for _ in 0..RESCUE_TICKS - 1 {
+        assert!(
+            !race.lost_off_the_circuit(1),
+            "flagged before the dwell elapsed"
+        );
+    }
+    assert!(
+        race.lost_off_the_circuit(1),
+        "the dwell elapsed and nothing happened"
+    );
+}
+
+/// The controls: a craft a little below its line (a dip, the hover), one in
+/// the air under it (a jump), and one under a line that arcs over a gap (it
+/// landed early) are not beneath it.
+#[test]
+fn a_craft_slightly_below_airborne_or_under_a_gap_is_not_beneath_its_line() {
+    let race = opponent_beneath(BENEATH_LINE - 5.0, true);
+    assert!(!race.beneath_the_line(1));
+    let mut race = opponent_beneath(BENEATH_LINE + 5.0, true);
+    race.sim.world.ships[1].physics.time_airborne = 0.5;
+    assert!(!race.beneath_the_line(1));
+    let race = opponent_beneath(BENEATH_LINE + 5.0, false);
+    assert!(
+        race.sim
+            .racing_line
+            .is_unsupported(race.sim.world.ships[1].driver.index as usize)
+    );
+    assert!(!race.beneath_the_line(1));
+}

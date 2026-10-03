@@ -23,6 +23,9 @@ pub enum RespawnCause {
     ResetZone,
     /// An opponent stayed far from its driver's sample - invented.
     LostCircuit,
+    /// An opponent stayed on the ground well below its driver's sample, on a
+    /// road under the circuit - invented, see [`BENEATH_LINE`].
+    Beneath,
     /// An opponent stayed stopped while asking to move - invented.
     Stalled,
     /// The player stayed far from the nearest spline sample - invented.
@@ -47,14 +50,14 @@ impl Race {
     /// See [`RESCUE_HALF_WIDTHS`] for why this exists next to the reset volumes
     /// rather than instead of them.
     pub(super) fn lost_off_the_circuit(&mut self, slot: usize) -> bool {
-        let ship = &self.sim.world.ships[slot];
-        let index = ship.driver.index as usize;
-        let away = ship
+        let index = self.sim.world.ships[slot].driver.index as usize;
+        let away = self.sim.world.ships[slot]
             .physics
             .body
             .position
             .distance(self.sim.racing_line.point(index))
-            > self.sim.rescue_distance;
+            > self.sim.rescue_distance
+            || self.beneath_the_line(slot);
         self.sim.lost_ticks[slot] = if away {
             self.sim.lost_ticks[slot].saturating_add(1)
         } else {
@@ -69,6 +72,25 @@ impl Race {
             && !self.sim.respawn_disabled[slot]
             && self.sim.respawn_cooldown[slot] == 0
             && self.sim.lost_ticks[slot] >= RESCUE_TICKS
+    }
+
+    /// Whether this opponent is on the ground more than [`BENEATH_LINE`] below
+    /// its driver's line point, measured along that sample's own up.
+    pub(super) fn beneath_the_line(&self, slot: usize) -> bool {
+        let ship = &self.sim.world.ships[slot];
+        let index = ship.driver.index as usize;
+        // Off the ground nothing is "on" a road, and over a gap the line arcs
+        // through the air: a craft that comes down early lands beneath it on
+        // the road it was always going to land on (`25_Track` reversed,
+        // samples 690-740, 77 ticks in the census).
+        if ship.physics.time_airborne > 0.0 || self.sim.racing_line.is_unsupported(index) {
+            return false;
+        }
+        let Some(sample) = self.ai_sample(index) else {
+            return false;
+        };
+        let up = -Vec3::from_array(sample.down).normalize_or_zero();
+        (self.sim.racing_line.point(index) - ship.physics.body.position).dot(up) > BENEATH_LINE
     }
 
     /// Whether this opponent has been stopped, while asking to move, for long

@@ -201,6 +201,7 @@ fn measure(
             let cause = match race.last_respawn_cause_of(slot) {
                 Some(RespawnCause::ResetZone) => "reset",
                 Some(RespawnCause::LostCircuit) => "lost",
+                Some(RespawnCause::Beneath) => "beneath",
                 Some(RespawnCause::Stalled) => "stalled",
                 Some(RespawnCause::OffTrack) => "offtrack",
                 Some(RespawnCause::Airborne) => "airborne",

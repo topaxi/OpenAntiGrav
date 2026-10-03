@@ -534,7 +534,9 @@ impl Race {
             let reset = self.reset_zone_touched(slot, &env, position);
             let airborne = self.airborne_too_long(slot);
             if alive && (lost || stalled || airborne || reset) {
-                self.sim.last_respawn_cause[slot] = Some(if lost {
+                self.sim.last_respawn_cause[slot] = Some(if lost && self.beneath_the_line(slot) {
+                    respawn::RespawnCause::Beneath
+                } else if lost {
                     respawn::RespawnCause::LostCircuit
                 } else if stalled {
                     respawn::RespawnCause::Stalled

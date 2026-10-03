@@ -57,6 +57,23 @@ pub const RESPAWN_GIVE_UP: u32 = 5;
 /// by two orders of magnitude within seconds.
 pub const RESCUE_HALF_WIDTHS: f32 = 8.0;
 
+/// How far **below** its own line an opponent may drive, on the ground, before
+/// it counts as lost - on a different road under the circuit.
+///
+/// **Ours, chosen, not measured against the original**, and nothing in the RE
+/// tree says what the original does with such a craft. The racing line sits a
+/// hover height above its own road, so a craft whose hover probes are touching
+/// a surface well beneath the line is on another one: on `05_Track` forward, a
+/// craft that falls short of the first jump (line samples 162-210) lands in a
+/// pit 30-80 units under the upper road and drives it to a dead end at samples
+/// 586-614, where it creeps along the end wall at 1-3 units/s with the
+/// throttle full. It is 33-50 units from its line point there, far inside
+/// [`RESCUE_HALF_WIDTHS`], too fast for [`STALL_SPEED`], and no authored `Reset`
+/// volume reaches the pit floor. Shares [`RESCUE_TICKS`] with the distance
+/// trigger. Measured before it was chosen: see `docs/gameplay/ai.md`, "de
+/// Konstruct White: the first jump is a magstrip".
+pub const BENEATH_LINE: f32 = 15.0;
+
 /// How long an opponent has to stay that far away before it is put back.
 ///
 /// A second and a half at 60 Hz. **The dwell matters more than the distance**:
