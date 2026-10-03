@@ -3515,7 +3515,7 @@ is the mean pool lost per completed lap, **end** the pool when the run stops.
 | lone | FLASH | 2 -> **23** | 2,688 -> 72 | 1 -> 0 | 2 -> 0 | 38.3 -> 34.7 s | 6.5 -> 1.0 | 70.6 -> 91.1 |
 | lone | RAPIER | 1 -> **21** | 3,295 -> 368 | 6 -> 0 | 2 -> 0 | 34.7 -> 31.2 s | 10.5 -> 1.9 | 55.9 -> 87.4 |
 | lone | PHANTOM | 0 -> **19** | 4,475 -> 716 | 7 -> 1 | 4 -> 1 | 32.5 -> 28.3 s | 13.8 -> 2.2 | 34.4 -> 84.2 |
-| field (7 craft) | all | 85 -> **151** of 672 | 113,203 -> 39,804 | 60 -> 41 | 101 -> **28** | 2.3-4.5 s faster per class | | |
+| field (7 craft) | all | 85 -> **151** of 672 | 113,203 -> 39,804 | 60 -> 41 | 101 -> **28** | 2.3-4.5 s faster per class | 13.5 -> 8.6 | 46.7 -> 62.1 |
 
 Lone totals: clean 7 -> **84 of 96**, contact 11,790 -> 1,231, respawns
 14 -> 1, destroyed 8 -> 1. Of the twelve lone rows still not clean, nine are
@@ -3546,9 +3546,11 @@ Assegai 87, Piranha (1.30) 83 of 96.
 One `oag_physics::step` for one craft against real collision is 21-25 us in
 release on a loaded machine, the driver 1.3-2.6 us
 (`examples/physics_step_cost.rs`). A plan is 7,000-130,000 steps: **0.1-2.0 s
-per layout, median 0.18 s, mean 0.31 s**, the slow ones being exactly the
-plans that do not verify and are then thrown away. Not cached: a race start
-pays it once. The short-horizon rollout idea (8 craft x 9 candidates x 90
+per layout, median 0.18 s, mean 0.31 s** in release (what `just play` runs;
+the dev profile builds the simulation crates at opt-level 2 and measures the
+same), the slow ones being exactly the plans that do not verify and are then
+thrown away - only `05_Track`'s four take over a second. Not cached: a race
+start pays it once. The short-horizon rollout idea (8 craft x 9 candidates x 90
 ticks = 6,480 steps) would cost about 150-175 ms per full-field replan, nine
 to ten ticks' worth.
 
@@ -3562,6 +3564,14 @@ to ten ticks' worth.
   teams would need one per handling.
 - Lap 1 is learned from a standing start the race also has, but not with the
   race's countdown launch boost.
+- **de Konstruct Black's jump findings are not test cases for the plan yet**:
+  Black is `05_Track` forward, whose plan does not verify, so
+  `ai_dekonstruct_black_ground_truth` still exercises the corner model there
+  (its reversed control does drive a plan).
+- The cross-platform gate for the plan is
+  `crates/ai/tests/determinism.rs::the_speed_plan_matches_the_committed_reference`,
+  on the probe's invented circuit; a disc-backed plan is pinned only as
+  verified-or-not (`speed_plan_ground_truth.rs`), not bit for bit.
 
 ## Where this sits
 
