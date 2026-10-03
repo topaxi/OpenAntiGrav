@@ -394,7 +394,14 @@ impl Driver {
         // less grip, so an Ace drives the plan and a Novice drives under it.
         let followed = ctx.plan.filter(|plan| plan.len() == line.len());
         let target = match followed {
-            Some(plan) => planned::target(plan, index, speed, tuning, &personality),
+            Some(plan) => planned::target(
+                plan,
+                index,
+                speed,
+                tuning,
+                &personality,
+                line.takeoff_within(index, planned::RUN_UP_REACH),
+            ),
             None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),
         };
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.

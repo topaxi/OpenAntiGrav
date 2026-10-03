@@ -3533,9 +3533,9 @@ original timing there is.
 ### Plans that do not verify
 
 `crates/game/tests/speed_plan_ground_truth.rs` pins the exact set, at the
-title-default team: **87 of 96** layout-class plans verify clean. Not:
-`05_Track` at all four classes (the crest lip at ~206, then walls at 424-637
-touched at 15 u/s too - the line, not the speed), `06_Track` VENOM and RAPIER
+title-default team: **91 of 96** layout-class plans verify clean (87 until
+`05_Track` forward's four did, [below](#de-konstruct-black-the-first-jump-is-a-magstrip)).
+Not: `06_Track` VENOM and RAPIER
 (the corner after the gap at 1196-1200), `14_Track` PHANTOM and `29_Track`
 RAPIER and PHANTOM (rescued, in the air or off the line, at 1247 and
 2402-2441 with every ceiling tried). By team: Feisar (`Turning` 1.80) 89,
@@ -3549,14 +3549,15 @@ release on a loaded machine, the driver 1.3-2.6 us
 per layout, median 0.18 s, mean 0.31 s** in release (what `just play` runs;
 the dev profile builds the simulation crates at opt-level 2 and measures the
 same), the slow ones being exactly the plans that do not verify and are then
-thrown away - only `05_Track`'s four take over a second. Not cached: a race
+thrown away. `05_Track` forward's four took over a second each (about 130,000
+steps) until they verified; they take 9,700-29,000 steps now. Not cached: a race
 start pays it once. The short-horizon rollout idea (8 craft x 9 candidates x 90
 ticks = 6,480 steps) would cost about 150-175 ms per full-field replan, nine
 to ten ticks' worth.
 
 ### Still open
 
-- The nine unverified plans, `05_Track` above all.
+- The five unverified plans.
 - A reset-volume respawn loop seen once in the field: `29_Track` VENOM, one
   craft put back at sample 45 every 46 ticks, 61 times - the rescue pose
   lands in a reset volume. Race rules, not the plan.
@@ -3564,10 +3565,11 @@ to ten ticks' worth.
   teams would need one per handling.
 - Lap 1 is learned from a standing start the race also has, but not with the
   race's countdown launch boost.
-- **de Konstruct Black's jump findings are not test cases for the plan yet**:
-  Black is `05_Track` forward, whose plan does not verify, so
-  `ai_dekonstruct_black_ground_truth` still exercises the corner model there
-  (its reversed control does drive a plan).
+- **de Konstruct Black's first jump is a plan test case now**: Black is
+  `05_Track` forward, its plans verify at all four classes
+  ([below](#de-konstruct-black-the-first-jump-is-a-magstrip)), and
+  `ai_dekonstruct_symptoms_ground_truth` measures the lone Ace and the field on
+  both layouts against them.
 - The cross-platform gate for the plan is
   `crates/ai/tests/determinism.rs::the_speed_plan_matches_the_committed_reference`,
   on the probe's invented circuit; a disc-backed plan is pinned only as
@@ -3654,3 +3656,149 @@ twelve-circuit gate stays all-twelve-clean with `01` and `06` unchanged.
 Roughly half the field still dies on Black: the wedge and a second crest at
 idx 399-484 (a craft at 250 units a second after a pad flies it and lands wide) are
 open.
+**Superseded the same day**: the wedge and the field's deaths were one fall into
+a pit under the upper road, caused by the line riding a magstrip up the first
+jump's ramp; see [below](#de-konstruct-black-the-first-jump-is-a-magstrip).
+
+## de Konstruct Black: the first jump is a magstrip
+
+Added 2026-10-03 (lane `pulse-ai-05`). Ours throughout: every rule below is
+**chosen, not measured**, and carries no confidence score; the measurements
+are of our own physics on the disc's own collision.
+
+### The walls at 424-637 are a pit, not the circuit
+
+`05_Track` forward's speed plan failed at all four classes, and the search
+reported walls at line samples 424-637 that the craft "touches at 15 u/s too".
+A per-tick probe of the plan's own drive (`oag_ai::plan::probe`, printed by
+`crates/game/tests/ai_plan_probe.rs`) showed the craft **50-77 units below the
+line** from sample 200 on. Casting straight down from the line finds the road
+3 units under it everywhere from 216, and a second floor 26-81 units further
+down from 216 to 576; casting up from the craft finds road 25-75 units overhead.
+So a craft that falls short of the first jump (samples 162-210 have no surface
+under the line) lands in a pit under the upper road, and the driver's windowed
+locator keeps it on upper-line indices while it meets the pit's own walls. The
+pit ends at a wall at 586-614, where the craft creeps along it at 1-3 u/s with
+the throttle full, 33-50 units from its line point: **the wedge of the section
+above is the same fall**. No authored `Reset` volume reaches the pit floor (the
+nearest sheets sit 15-30 units above it), and at full throttle the plan's craft
+fell short on every lap.
+
+### Why it fell short: the run-up is a magstrip
+
+The race's lone Ace cleared the same jump on the corner model. The difference
+was where it drove: six units right of the authored line, where the ramp from
+sample 64 to 154 is `Floor Collision`. The line itself runs up the left two
+thirds, which are `Mag Floor Collision`. `oag_physics::maglock` projects the
+surface-normal component out of a craft's velocity while it is locked, so over
+the ramp's convex top a craft on the strip leaves along the road rather than
+with the climb it carried. Measured at full throttle, VENOM: **78 u/s of climb
+at takeoff on the line, 87 off the strip**; the first lands 35 units under the
+lip, the second on the upper road. Moving the line six units right at sample
+110 cleared it with no other change, and the speed pad at 2845 (which the
+race's Ace happened to cross, 16.6 units right of the line) does not by itself:
+its boost is spent 260 samples before the ramp.
+
+### The changes
+
+1. **The line leaves a magstrip on a takeoff run-up** (`race/takeoff_line.rs`,
+   `oag_ai::line_shift::toward`). On every sample `Line::is_takeoff` marks
+   whose line point is over `Mag Floor`, the line moves to the nearest corridor
+   offset whose surface, and 2.5 units either side of it, is plain `Floor`,
+   easing in and out over 120 units; a run-up with no such room is left alone.
+   It reads only the collision. **Only `05_Track` forward has such a run-up**
+   (32 samples move); every other layout's line is byte-identical.
+2. **The corridor stops short of the strip** on every sample the move reached.
+   In a field the character a pilot gets back in traffic
+   ([above](#what-a-driver-does-with-it)) put craft back on the strip at -5 to
+   -8 units; field takeoffs that fell into the pit, VENOM, three seeds, went
+   18 -> 7, RAPIER 4 -> 3.
+3. **`oag_race::recovery::BENEATH_LINE`**: an opponent on the ground, on a
+   supported sample, more than 15 units below its own line point along the
+   sample's up is lost, on the distance trigger's own `RESCUE_TICKS` dwell.
+   The original's rescues are `Reset` volumes and the four-second airborne
+   clock; what it does with a craft in this pit is not known. Measured before
+   it was chosen, all 24 layouts, seed 1, 18,000 ticks: a lone Ace at VENOM and
+   PHANTOM never spends a tick grounded-beneath; a field of seven trips it 4
+   times in 48 races, each a craft knocked onto a lower road (`07_Track` 657,
+   `23_Track` 246, 714, 715). Leaving out unsupported samples is load-bearing:
+   `25_Track` reversed's drop at 690-740 put a craft that landed early 77
+   ticks under the line.
+4. **A lower level holds at least 0.96 of the plan's pace within 450 units of
+   a takeoff run-up** (`RUN_UP_SHARE`, `RUN_UP_REACH`). A Novice at 0.88 of the
+   plan's 128 u/s hit the far lip on every lap at VENOM; the field's takeoffs
+   fell short at 119-120 and cleared from 120.4. A floor and not a lift to
+   one: at one a Skilled craft landed at full pace at PHANTOM and could not
+   brake to its own corner margin after the landing. **It reaches every layout
+   with a gap of 40+ samples** (02, 05, 09, 10, 14, 18, 25, 26, 30) and only
+   the Novice level (Skilled already holds 0.96). Novice lone on those nine at
+   four classes, floor off -> on: dead stops 7 -> 1, rescues 10 -> 1,
+   destroyed 3 -> 4; worse rows are `10_Track` PHANTOM (one dead stop, lap
+   +64 ticks), `25_Track` PHANTOM and RAPIER (one destroyed each) and
+   `26_Track` PHANTOM (one rescue).
+
+### What it bought
+
+| | before | after |
+| --- | --- | --- |
+| `05_Track` forward plans that verify | 0 of 4 | **4 of 4** (9,700-29,000 steps, were ~130,000) |
+| Black field destroyed of 21, VENOM / FLASH / RAPIER / PHANTOM | 15 / 13 / 11 / 10 | **0 / 0 / 1 / 3** |
+| Black field wall-contact ticks, VENOM | 46,616 | 565 |
+| Black field end-of-run shield, VENOM / PHANTOM | 18.4 / 14.5 | 50.7 / 35.9 |
+| lone Ace best lap, ticks, VENOM / FLASH / RAPIER / PHANTOM | 2,354 / 2,136 / 1,884 / 1,737 | **2,091 / 1,833 / 1,554 / 1,329** |
+| lone Ace wall contact ticks, VENOM / PHANTOM | 68 / 232 | 0 / 0 |
+| field dead stops (seed 1), VENOM / FLASH / RAPIER / PHANTOM | 8 / 3 / 3 / 9 | 0 / 0 / 1 / 0 |
+
+On the speed-plan sweep (`ai_speed_plan_sweep.rs`, 24 layouts x 4 classes,
+same harness as [above](#what-it-buys)): lone Ace clean **84 -> 87 of 96**,
+contact 1,231 -> 949, respawns 1 -> 1, destroyed 1 -> 1; the field (672
+craft-rows) clean 151 -> 158, contact 39,804 -> 17,073, destroyed 28 -> 18,
+respawns 41 -> 41, per-lap shield lost (field, VENOM, forward) 11.7 -> 8.7,
+end-of-run shield 64.6 -> 68.6. Every reversed lone row is unchanged; the
+reversed field moved only through the beneath rescue (PHANTOM destroyed 6 -> 4).
+Of the nine lone rows still not clean, five are the unverified plans, three are
+the verified rows that already touched, and one is `05_Track` PHANTOM's single
+rescue at the 428 pad. `race_ground_truth`'s twelve-circuit gate stays twelve
+clean; `05_Track` laps 39.2 -> 34.8 s, every other row identical. The
+Eliminator finishes 24 of 24 seeds, median 139.03 s (was 139.0).
+
+White (the reversed `21_Track`) is unchanged by all four: its line has no such
+run-up, and no White cell moved on the board. The board is
+`ai_dekonstruct_black_board.rs` (`OAG_SWEEP=1`), three seeds; the symptoms are
+`ai_dekonstruct_symptoms_ground_truth.rs`.
+
+### The maintainer's report, measured on both layouts
+
+The report ("the AI really struggles with de Konstruct Black - unnecessary slow
+driving, and hitting a wall to full stop") is about **this** layout: Black is
+`05_Track` forward on the disc's own titles, live on PPSSPP
+([track.md](../formats/track.md#white-and-black)). Both symptoms were real
+here: with no verified plan the lone Ace drove the corner model 11-23 % slower
+than the plan now laps, and the field hit the first jump's lip and the pit's
+dead end at full stop (8 / 3 / 3 / 9 dead stops by class, seed 1).
+
+`ai_dekonstruct_symptoms_ground_truth.rs` counts, per craft, **dead stops** (a
+wall-contact tick on which forward speed fell from 60+ to 15 or less within 20
+ticks), **trough ticks** (on a clean flying lap, under 75 % of the speed the
+plan's own verification lap did there) and the best clean lap against the
+plan's. A lone Ace on either layout, every class: no dead stop, no trough tick,
+best lap 0.0-0.7 % over the plan's. The field: one dead stop in eight cells
+(`05_Track` RAPIER at the lip, 207). A Novice at VENOM clears the first jump.
+
+At the lower levels there is no dead stop on either layout now; what slow
+driving is left is the level's own handicap: on White (`21_Track`) a lone
+Novice or Skilled at PHANTOM spends 1,725 and 1,171 ticks a run under 75 % of
+the plan's pace, from `plan_margin`'s corner fractions (0.55 and 0.69) and
+`pace_share`. That is a difficulty question, not a fault.
+
+### Still open
+
+- **The 428 pad on Black's upper road** pushes left on a crest: a lone Ace at
+  RAPIER flies 43 units left at 157 u/s and touches a `Reset` sheet at 509-511,
+  three times in 18,000 ticks - **all after the flag** (it finishes at tick
+  6,570; the race keeps running under AI), so not in a race a player sees, but
+  the same pad in traffic is untested.
+- The field's remaining pit falls are craft arriving at the ramp at 91-108 u/s
+  after contact on lap 1; the beneath rescue now puts them back.
+- What the original does with a craft in this pit (a PPSSPP capture) was not
+  measured.

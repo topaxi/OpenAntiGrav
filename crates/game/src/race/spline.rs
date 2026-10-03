@@ -41,7 +41,7 @@ pub(super) fn racing_line(
         .iter()
         .filter_map(|&index| spline.sample(index as usize))
         .collect();
-    let points: Vec<Vec3> = samples
+    let mut points: Vec<Vec3> = samples
         .iter()
         .map(|sample| {
             let down = Vec3::from_array(sample.down);
@@ -50,7 +50,7 @@ pub(super) fn racing_line(
                 + sample.racing_line * lateral
         })
         .collect();
-    let corridor = samples
+    let mut corridor: Vec<oag_ai::Frame> = samples
         .iter()
         .map(|sample| oag_ai::Frame {
             // Already unit length: checked on all 34,261 control points, and
@@ -66,20 +66,48 @@ pub(super) fn racing_line(
     // craft's hover probes reach, and the cast `race_ground_truth`'s "nothing
     // under the line" table makes. See `oag_ai::Line::with_unsupported` for
     // what a driver does with it and why (chosen, not measured).
-    let unsupported = samples
+    let ups: Vec<Vec3> = samples
         .iter()
-        .zip(&points)
-        .map(|(sample, &point)| {
-            let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
-            oag_physics::Raycaster::raycast(
-                collision,
-                oag_physics::Ray::new(point + up * reach, -up, reach * 2.0),
-                None,
-                false,
-            )
-            .is_none()
-        })
+        .map(|sample| (-Vec3::from_array(sample.down)).normalize_or_zero())
         .collect();
+    let unsupported_under = |points: &[Vec3]| -> Vec<bool> {
+        points
+            .iter()
+            .zip(&ups)
+            .map(|(&point, &up)| {
+                oag_physics::Raycaster::raycast(
+                    collision,
+                    oag_physics::Ray::new(point + up * reach, -up, reach * 2.0),
+                    None,
+                    false,
+                )
+                .is_none()
+            })
+            .collect()
+    };
+    let unsupported = unsupported_under(&points);
+    // Off a magstrip on the run-up to a jump: see `takeoff_line`. The gaps are
+    // re-read under the moved line, which is the one a craft flies.
+    let takeoff: Vec<bool> = {
+        let probe = oag_ai::Line::new(points.clone()).with_unsupported(unsupported.clone());
+        (0..points.len()).map(|i| probe.is_takeoff(i)).collect()
+    };
+    let moved = super::takeoff_line::off_magstrips(
+        &mut points,
+        &mut corridor,
+        &ups,
+        &takeoff,
+        collision,
+        reach,
+    );
+    if moved > 0 {
+        log::info!("ai line: {moved} takeoff run-up sample(s) moved off a magstrip");
+    }
+    let unsupported = if moved > 0 {
+        unsupported_under(&points)
+    } else {
+        unsupported
+    };
     oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
 }
 

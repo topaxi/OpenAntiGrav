@@ -97,7 +97,7 @@ use oag_gameplay::{
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_pulse::race::ships;
 use oag_race::recovery::{
-    PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
+    BENEATH_LINE, PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
     RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
 };
 use oag_race::sight;
@@ -157,6 +157,7 @@ mod spawn;
 mod speed_plan;
 mod spline;
 mod start;
+mod takeoff_line;
 mod telemetry;
 mod texture_sink;
 mod tick;

@@ -198,15 +198,9 @@ fn measure(
         if now_respawns != prev_respawns {
             prev_respawns = now_respawns;
             summary.events += 1;
-            let cause = match race.last_respawn_cause_of(slot) {
-                Some(RespawnCause::ResetZone) => "reset",
-                Some(RespawnCause::LostCircuit) => "lost",
-                Some(RespawnCause::Stalled) => "stalled",
-                Some(RespawnCause::OffTrack) => "offtrack",
-                Some(RespawnCause::Airborne) => "airborne",
-                Some(RespawnCause::Destroyed) => "wrecked",
-                None => "?",
-            };
+            let cause = race
+                .last_respawn_cause_of(slot)
+                .map_or("?", RespawnCause::label);
             // The tick that fired the respawn also teleported the craft, so the
             // newest record is the post-teleport pose and not part of the fall.
             ring.pop_back();
