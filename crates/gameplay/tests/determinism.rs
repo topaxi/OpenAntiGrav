@@ -585,9 +585,18 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   every tick of both and every controller byte is `0` but slot 0's `1`.
 ///   Replaces `0xa31c_f93f_c44f_7004` / `0xe197_c1d8_e0b5_d07e` at 60 ticks and
 ///   `0xbe25_d8d5_f406_e799` / `0xc8b7_8f68_8555_be83` at 600.
+///
+/// - **Moved 2026-10-03**, when `Ship::weapon_ai` (two `u32` clocks for the
+///   original's opponent fire law, `oag_ai::weapon_ai`) joined the hash: eight
+///   more bytes per ship per tick. Neither scenario here steps an opponent, so
+///   every clock stays `0`. **Isolated the documented way**: with the two
+///   writes taken out of `write_ship` and nothing else changed, the previous
+///   constants reproduced bit for bit at both tick counts for both scenarios.
+///   Replaces `0x57a6_3ed9_c3d1_ede7` / `0x5706_b5b3_ef8f_3411` at 60 ticks and
+///   `0xf313_687a_6471_7f52` / `0xf931_ba11_7aca_8358` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x57a6_3ed9_c3d1_ede7, 0x5706_b5b3_ef8f_3411),
-    (600, 0xf313_687a_6471_7f52, 0xf931_ba11_7aca_8358),
+    (60, 0x5879_0798_3068_5567, 0x2c97_d702_c8e1_58b1),
+    (600, 0xac74_cd4a_cb3b_9dd2, 0x11eb_c0b9_fd45_0178),
 ];
 
 #[test]

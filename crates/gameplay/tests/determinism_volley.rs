@@ -254,9 +254,18 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   Isolated by commit: the previous regeneration was green before it.
 ///   Replaces `0xdb77_1466_f784_d9b9` / `0x299e_b849_daed_4a92` at 60 ticks and
 ///   `0x4129_e4fd_ccdd_4d1c` (trajectory) at 600.
+///
+/// - **Moved 2026-10-03**, when `Ship::weapon_ai` (two `u32` clocks for the
+///   original's opponent fire law, `oag_ai::weapon_ai`) joined the hash: eight
+///   more bytes per ship per tick, all zero here - no clock is ever advanced
+///   in this fixture. Isolated the documented way: with the two writes taken
+///   out of `write_ship` and nothing else changed, the previous constants
+///   reproduced bit for bit. Replaces `0x72ba_a575_f0b3_bdf4` /
+///   `0x2e0f_a99e_309c_ed96` at 60 ticks and `0x5b48_d436_7dbc_09e7` /
+///   `0x7a1f_821f_3771_eb31` at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x72ba_a575_f0b3_bdf4, 0x2e0f_a99e_309c_ed96),
-    (600, 0x5b48_d436_7dbc_09e7, 0x7a1f_821f_3771_eb31),
+    (60, 0x3fa9_0a39_7bac_41b4, 0xa334_e125_421c_f896),
+    (600, 0xfe22_9e45_21ac_9c67, 0xbc86_1210_e167_7831),
 ];
 
 #[test]
