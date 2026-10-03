@@ -30,6 +30,16 @@ pub(super) struct Drawable {
     /// One pair per equation this model's own file authors - see
     /// `mesh_render::Built::authored_pipelines`. Empty on a Pulse model.
     authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])>,
+    /// The depth prepass pair, for the one drawable built with it - Wipeout
+    /// HD's circuit. See `mesh_render::Prepass`.
+    prepass: Option<mesh_render::Prepass>,
+    /// The index buffer with its triangles in reverse order, each triangle's
+    /// own vertices untouched, for the prepass's shaded half - see
+    /// `draw_lists`. `None` without a prepass.
+    reversed_indices: Option<wgpu::Buffer>,
+    /// The opaque draws one `draw_lists` call shows, refilled per call -
+    /// see `draw_lists`.
+    shown: std::cell::RefCell<draw::Shown>,
     /// The alpha-only glow-mask stamp for blended batches - see
     /// `mesh_render::Built::stamp_pipeline` and [`Self::draw_stamps`].
     stamp_pipeline: Option<mesh_render::Stamp>,
@@ -126,6 +136,7 @@ impl Drawable {
             shadow_maps,
             receives_shadow,
             mesh_render::Texcoords::Interleaved,
+            false,
         )
     }
 
@@ -149,9 +160,13 @@ impl Drawable {
         shadow_maps: mesh_render::ShadowMaps<'_>,
         receives_shadow: mesh_render::ShadowReceiver,
         texcoords: mesh_render::Texcoords,
+        // Whether the opaque list draws through a depth prepass - see
+        // `mesh_render::Prepass` and `draw_lists`.
+        prepass: bool,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
+            prepass,
             alpha_test_pipeline,
             cutout_pipelines,
             blend_pipeline,
@@ -190,7 +205,27 @@ impl Drawable {
             shadow_maps,
             receives_shadow,
             texcoords,
+            prepass,
         )?;
+        let reversed_indices = prepass.is_some().then(|| {
+            let reversed: Vec<u32> = model
+                .indices
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .rev()
+                .flatten()
+                .copied()
+                .collect();
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("reversed indices"),
+                size: std::mem::size_of_val(&reversed[..]) as u64,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&reversed));
+            buffer
+        });
         let texcoords = (texcoords == mesh_render::Texcoords::Streamed).then(|| {
             let coordinates: Vec<[f32; 2]> = model.vertices.iter().map(|v| v.texcoord).collect();
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -251,6 +286,9 @@ impl Drawable {
             unblended_pipeline,
             authored_pipelines,
             stamp_pipeline,
+            prepass,
+            shown: std::cell::RefCell::default(),
+            reversed_indices,
             vertices,
             texcoords,
             indices,

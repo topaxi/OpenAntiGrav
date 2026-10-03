@@ -348,16 +348,26 @@ settings file, and the maintainer turning HD's motion blur off mid-session
 made every HD capture differ for a reason that had nothing to do with the
 change under test.
 
-**HD's opaque circuit list now draws nearest first** (`Scene::sort_opaque`):
-13.0 M -> 10.7 M fragments, race pass 44.1 -> 37.4 ms at 3200x1800, about
-30 us of CPU a frame. **Not byte-identical, and accepted as such by the
-maintainer on 2026-10-03**: coplanar opaque surfaces now resolve to the nearer
-batch rather than the file's first, 1 to 419 pixels across the five HD
-captures. Pulse stays in its own order - 1.2 fragments a pixel, no measured
-gain - and its captures are unchanged.
+**HD's opaque circuit list draws through a depth prepass**
+(`mesh_render::Prepass`): depth first, nearest batch first, with the fragment
+stage masked, then the real shading against it under `LessEqual`, in the
+model's own order **reversed by draw and by triangle** (a reversed index
+buffer). Under the prepass every exactly coplanar surface passes, so the last
+one shaded wins; reversed, that is the first in draw order - the one plain
+`Less` lets win. Track-solid fragments 13.0 M -> 7.0 M, race pass 37.9 -> 32.0
+ms at 3200x1800, and **ten captures and a 2048 race byte-identical to the
+picture before any reordering**.
 
-Still open: what the sort leaves of HD's overdraw (a depth prepass would go
-further, with the same tie caveat), and the motion blur chain,
+How it got there, because two of the steps are traps: sorting the *shading*
+front to back was tried first and shipped briefly (44.1 -> 37.4 ms, 1 to 419
+pixels drifting at coplanar ties, accepted by the maintainer). A prepass that
+reversed draws but not triangles drifted the same pixels again - ties inside
+one draw. `@invariant` on the clip position changed nothing: depth was already
+bit-identical across the two pipelines, since `vs_main` carries no pipeline
+constants. Pulse keeps the plain pipeline: its list shades 1.2 fragments a
+pixel.
+
+Still open: the motion blur chain,
 which the maintainer measured at about 14 ms on the same iGPU - **the next
 GPU-side target**, after re-profiling what is left of the race pass.
 

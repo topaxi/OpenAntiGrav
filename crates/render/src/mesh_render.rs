@@ -25,8 +25,10 @@ pub use stamp::Stamp;
 pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
 pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
+mod prepass;
 mod velocity;
 mod vertex_layout;
+pub use prepass::Prepass;
 pub use uniforms::{
     DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowMaps, ShadowReceiver,
     UNIFORMS_SIZE, Zone, ZoneSet, write_uniforms, write_uniforms_raw,
@@ -68,6 +70,9 @@ pub use device::{device_descriptor, optional_features, required_limits};
 pub struct Built {
     /// Opaque pass: depth write on, no blending. Draws [`Model::draws`].
     pub pipeline: wgpu::RenderPipeline,
+    /// The depth prepass pair, when [`build_with`] was asked for it - see
+    /// [`Prepass`].
+    pub prepass: Option<Prepass>,
     /// Cutout pass: depth write on, no blending, `discard` below
     /// `mesh.wgsl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
@@ -234,6 +239,7 @@ pub fn build(
         shadow_maps,
         receives_shadow,
         Texcoords::Interleaved,
+        false,
     )
 }
 
@@ -264,6 +270,8 @@ pub fn build_with(
     // `colour_is_light` beside it.
     receives_shadow: ShadowReceiver,
     texcoords: Texcoords,
+    // Whether to build [`Built::prepass`] - see [`Prepass`].
+    prepass: bool,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -552,6 +560,21 @@ pub fn build_with(
             })
         },
     );
+
+    let prepass = prepass.then(|| {
+        prepass::pipelines(&prepass::Shared {
+            device,
+            shader,
+            layout: &pipeline_layout,
+            vertex_buffers: &vertex_buffers,
+            constants,
+            velocity,
+            targets: &targets,
+            fragment_entry,
+            primitive,
+            multisample,
+        })
+    });
 
     // Second pipeline for `Model::alpha_tested_draws`: same shader module,
     // bind group layouts, vertex layout and depth state as the opaque
@@ -898,6 +921,7 @@ pub fn build_with(
     });
 
     Ok(Built {
+        prepass,
         anim_bind,
         anim_buffer,
         node_anim_buffer,

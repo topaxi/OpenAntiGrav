@@ -181,6 +181,7 @@ pub fn capture_pixels_from(
         anim_buffer,
         node_anim_buffer,
         stamp_pipeline: _,
+        prepass: _,
     } = build(
         &device,
         &queue,

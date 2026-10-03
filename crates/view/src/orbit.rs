@@ -295,6 +295,7 @@ impl Session {
             anim_buffer,
             node_anim_buffer,
             stamp_pipeline: _,
+            prepass: _,
         } = mesh_render::build(
             &device,
             &queue,

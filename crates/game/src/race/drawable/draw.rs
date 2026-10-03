@@ -10,13 +10,24 @@ pub(in crate::race) enum Lists<'a> {
     /// Opaque, cutout, then blended - [`Drawable::draw`].
     All,
     /// Opaque and cutout: everything that writes depth. `order`, when given,
-    /// is the order the opaque list draws in, as `(key, index)` pairs into
-    /// [`Drawable::opaque_draws`] - otherwise the model's own. Only the
-    /// opaque list: the cutout list's pipeline switches and the blended
-    /// list's order both matter.
+    /// is the order a drawable with a depth prepass lays its opaque depth
+    /// down in, as `(key, index)` pairs into [`Drawable::opaque_draws`]. The
+    /// shading always keeps the model's own order, which is what keeps the
+    /// picture the original's; without a prepass `order` is ignored.
     Solid { order: Option<&'a [(f32, u32)]> },
     /// The blended list and the glow stamps over it.
     Blended,
+}
+
+/// The scratch [`Drawable::draw_lists`] gathers its opaque draws into.
+#[derive(Debug, Default)]
+pub(in crate::race) struct Shown {
+    /// What this frame shows, in the model's order.
+    natural: Vec<u32>,
+    /// The same, in the prepass's order.
+    depth: Vec<u32>,
+    /// Per draw, whether it is in `natural`.
+    flags: Vec<bool>,
 }
 
 impl Drawable {
@@ -86,17 +97,16 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         let opaque_draws = if solid { &self.model.draws[..] } else { none };
-        let ordered = order.map(|order| {
-            order
-                .iter()
-                .filter_map(|&(_, i)| Some((i as usize, opaque_draws.get(i as usize)?)))
-        });
-        let natural = order.is_none().then(|| opaque_draws.iter().enumerate());
-        for (index, draw) in ordered
-            .into_iter()
-            .flatten()
-            .chain(natural.into_iter().flatten())
-        {
+        // The draws this frame shows, in the model's order, gathered first
+        // because a prepass walks them twice - the second time backwards.
+        let mut shown = self.shown.borrow_mut();
+        let Shown {
+            natural: shown,
+            depth: depth_order,
+            flags,
+        } = &mut *shown;
+        shown.clear();
+        for (index, draw) in opaque_draws.iter().enumerate() {
             // A tier the switch has off is not culled, it is not there.
             if !self.lod_shows(draw) {
                 continue;
@@ -107,6 +117,33 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
+            shown.push(index as u32);
+        }
+        // The prepass's own order: `order` where given, filtered to what is
+        // shown. Depth under `Less` is the nearest surface whatever the order
+        // it arrives in, so nearest first only lets the depth test reject
+        // sooner - it cannot change a pixel.
+        depth_order.clear();
+        if let Some(order) = order.filter(|_| self.prepass.is_some()) {
+            flags.clear();
+            flags.resize(opaque_draws.len(), false);
+            for &index in shown.iter() {
+                flags[index as usize] = true;
+            }
+            depth_order.extend(
+                order
+                    .iter()
+                    .map(|&(_, index)| index)
+                    .filter(|&index| flags.get(index as usize).copied().unwrap_or(false)),
+            );
+        } else {
+            depth_order.extend_from_slice(shown);
+        }
+        // `reversed`: draw from `reversed_indices`, where a range `s..e` of
+        // the model's own sits at `n - e..n - s`.
+        let index_count = self.model.indices.len() as u32;
+        let mut draw_one = |pass: &mut wgpu::RenderPass<'_>, index: u32, reversed: bool| {
+            let draw = &opaque_draws[index as usize];
             let slot = draw
                 .texture
                 .map_or(0, |t| t + 1)
@@ -130,7 +167,45 @@ impl Drawable {
                 pass.set_bind_group(1, &self.textures[slot], &[]);
                 last_bound = Some(slot);
             }
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            let range = if reversed {
+                index_count - draw.range.end..index_count - draw.range.start
+            } else {
+                draw.range.clone()
+            };
+            pass.draw_indexed(range, 0, 0..1);
+        };
+        match &self.prepass {
+            // Depth first, then the shading against it, **backwards** - see
+            // `mesh_render::Prepass` for why the reversal keeps every
+            // coplanar tie where the plain pipeline puts it.
+            //
+            // Backwards by triangle as well as by draw: two coplanar
+            // triangles in one draw tie the same way two draws do, so the
+            // shaded half reads `reversed_indices`, every triangle in reverse
+            // order with its own vertices - and so its provoking vertex -
+            // untouched.
+            Some(prepass) if !shown.is_empty() => {
+                pass.set_pipeline(&prepass.depth);
+                for &index in depth_order.iter() {
+                    draw_one(pass, index, false);
+                }
+                pass.set_pipeline(&prepass.shade);
+                let reversed = self.reversed_indices.as_ref();
+                if let Some(reversed) = reversed {
+                    pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
+                }
+                for &index in shown.iter().rev() {
+                    draw_one(pass, index, reversed.is_some());
+                }
+                if reversed.is_some() {
+                    pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
+                }
+            }
+            _ => {
+                for &index in shown.iter() {
+                    draw_one(pass, index, false);
+                }
+            }
         }
 
         // Second pipeline group, same pass: alpha-tested batches, cutout.

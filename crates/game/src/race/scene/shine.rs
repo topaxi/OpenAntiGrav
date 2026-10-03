@@ -51,6 +51,7 @@ impl TrackShine {
             shadow_maps,
             mesh_render::ShadowReceiver::Never,
             mesh_render::Texcoords::Streamed,
+            false,
         )?;
         Ok(Some(Self {
             drawable,
@@ -84,18 +85,17 @@ impl Scene {
     /// would shift the denominator ADR-0011's and the roadmap's PVS
     /// effectiveness figures are quoted against.
     /// Sorts the circuit's opaque draws nearest first from `eye`, under HD's
-    /// chain only, so the depth test rejects what is behind before it is
-    /// shaded rather than after.
+    /// chain only, as the order its depth prepass lays depth down in - so the
+    /// depth test rejects what is behind as early as it can. See
+    /// `mesh_render::Prepass`.
     ///
-    /// **A deliberate departure from the original's own order, accepted by
-    /// the maintainer 2026-10-03.** HD's opaque circuit list shades 2.1
-    /// fragments a pixel in the model's order; sorted, the race pass at
-    /// 3200x1800 on an integrated GPU fell from 43 ms to 36 ms. The cost is
-    /// ties: two exactly coplanar opaque surfaces resolve to whichever draws
-    /// first, and that is now the nearer batch's sphere rather than the
-    /// file's first - measured as 1 to 419 pixels a capture, at z-fighting
-    /// decals. Pulse is left in its own order: its list shades 1.2 fragments
-    /// a pixel and sorting measured no gain.
+    /// **Only the prepass reads it, and that is why it moves no pixel.** The
+    /// depth `Less` leaves is the nearest surface whatever order it arrives
+    /// in; the shading that follows keeps the model's own order. Sorting the
+    /// shading itself was tried first, 2026-10-03: 44.1 -> 37.4 ms at
+    /// 3200x1800 on an integrated GPU, at the cost of 1 to 419 pixels a
+    /// capture where coplanar ties resolved to the nearer batch. The prepass
+    /// took that to 32.4 ms with the original's picture back.
     ///
     /// The key is the distance from `eye` to the nearest point of each
     /// batch's bounding sphere; `sort_by` is stable, so equal keys keep the

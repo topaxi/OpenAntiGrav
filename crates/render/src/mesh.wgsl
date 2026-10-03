@@ -1881,3 +1881,17 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
         velocity_of(in),
     );
 }
+
+// The depth prepass's fragment stage - `mesh_render::prepass`. Every target's
+// write mask is empty, so what this returns reaches nothing; it exists only
+// because a pass with colour attachments wants a fragment stage that names
+// them.
+@fragment
+fn fs_depth_only() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.0);
+}
+
+@fragment
+fn fs_depth_only_velocity() -> MrtOutput {
+    return MrtOutput(vec4<f32>(0.0), vec2<f32>(0.0));
+}

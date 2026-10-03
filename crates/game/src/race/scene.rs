@@ -514,7 +514,7 @@ impl Scene {
             zone_art,
             shadow_maps,
         )?;
-        let track = Drawable::new(
+        let track = Drawable::new_with(
             device,
             queue,
             track_model,
@@ -531,6 +531,10 @@ impl Scene {
             // `shadowMapTex` and a craft's does not. It reads the `mapped`
             // tier's depth map too, hence `Both`.
             mesh_render::ShadowReceiver::Both,
+            mesh_render::Texcoords::Interleaved,
+            // HD's circuit alone: its opaque list shades about two fragments
+            // a pixel, where Pulse's shades 1.2 - see `mesh_render::Prepass`.
+            hd.is_some(),
         )?;
         // One per grid slot, each drawing **its own team's hull**. Built up
         // front rather than on demand, because a `Drawable` needs the device
