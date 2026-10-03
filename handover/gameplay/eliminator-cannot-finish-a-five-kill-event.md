@@ -20,8 +20,8 @@ plus the respawn-keeps-its-place test).
   Quake via `+0x13c`, read statically, not live), and credit needs the shield-emptying blow, so a
   wall death after a standing-shield hit credits nobody. Over seeds 1 to 24: 24 of 24 finish,
   median 118 s (was 22 of 24, about 210 s), against the original's 85 s.
-- ~~Wall deaths~~ **not a lever** (2026-10-03): 391 of 393 deaths over seeds 1 to 24 were credited
-  kills and 1 was finished by a wall; see `docs/gameplay/race-modes.md`.
+- ~~Wall deaths~~ **not a lever** (2026-10-03): of 393 opponent deaths over seeds 1 to 24, 392 were
+  finished by a weapon blow and 1 by a wall; see `docs/gameplay/race-modes.md`.
 - **Held weapons are not a lever** (2026-10-03): the original's own mode-8 rule (untargeted
   Mine/Bomb drops, absorb at 0.001 a decision) and a chosen 10 s absorb on top were swept over 240
   seeds; median shifts -4.8 s [-15.7, +4.6] and -2.3 s [-14.5, +8.4], kill rate flat at 8 a
@@ -47,6 +47,14 @@ plus the respawn-keeps-its-place test).
 1. ~~Credit beam, Cannon and Quake kills~~ done 2026-10-02.
 1b. ~~Leech Beam outlived a kill and drained the respawned craft~~ fixed 2026-10-02 (sweep after: 24 of 24 finish, 63 to 245 s, median 147 s, was 118 s; the tail comes from the beam no longer being OP): `Beam::link_broken` now requires both craft in `CraftState::Racing` (the original's `Ship_State == 1` pair); a broken link never re-forms.
 2. ~~Wall deaths~~ done 2026-10-03: 1 of 393 deaths; not a lever.
+
+   Per-step times (parked player, `16_Track`, six game-minutes):
+   - baseline, main `64521c88`, seeds 1 to 24: 24 of 24, median 135 s, 33 to 196 s;
+   - step 2 shipped (`Race::eliminator_absorb`, player path): seeds 1 to 24 identical, by
+     construction (the player is parked);
+   - step 2 prototypes, seeds 1 to 240, not shipped: off 117 s (13 to 225), the original's
+     mode-8 rule 112 s (13 to 239), plus a chosen 10 s absorb 115 s (13 to 223);
+   - steps 1 and 3: no code change.
 3. ~~A drop/discard rule for held weapons~~ done 2026-10-03: swept, within noise, not shipped;
    the Eliminator absorb-to-Shield law found on the way is ported for the player.
 4. ~~A held-Turbo chase~~ closed 2026-10-03: the Eliminator table authors no Turbo.

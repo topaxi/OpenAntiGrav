@@ -824,14 +824,16 @@ Still open:
   The original: 85 s.
 - **Wall deaths are not a lever (2026-10-03).** Every opponent death in that 24-seed sweep was
   logged with the shield lost to walls and to weapons over the 2 s before it (the wall's share
-  read off `wall_shield_charged_of`, the rest of the pool's drop taken as weapon): **391 of
-  393 deaths were credited kills**, **1 was finished by a wall** (seed 14, tick 1085, after a
-  94-point weapon hit that left 1 point), and the one other uncredited death is the race's last,
-  which ends on the fifth kill before the wreck reaches the credit. The 2 s before a death average
+  read off `wall_shield_charged_of`, the rest of the pool's drop taken as weapon): of **393
+  opponent deaths, 392 were finished by a weapon blow and 1 by a wall** (seed 14, tick 1085,
+  after a 94-point weapon hit that left 1 point). Per seed, kills credited run level with
+  deaths; the only shortfalls are that wall death and a death in a race's last half second
+  (13 to 29 ticks before the finish on seeds 3, 13, 14 and 19), whose credit would land after
+  the race has ended on the fifth kill. The 2 s before a death average
   37.7 points of weapon loss against 0.08 of wall. The older figure ("11 of 30 deaths with no
   weapon hit", seed 5) predates the beam and quake credit and no longer holds.
 - **Held weapons are not a lever either (2026-10-03).** Over seeds 1 to 48 opponents hold a
-  weapon for about 31 % of craft-ticks: Missile 19 % of that, Leech Beam 14 %, Shuriken 14 %,
+  weapon for about 45 % of their craft-ticks (wrecked ticks included in the denominator): Missile 19 % of that, Leech Beam 14 %, Shuriken 14 %,
   Cannon 13 %, Plasma 13 %, Rocket 12 %, Mine 7 %, Bomb 5 %, Quake 3 %. Two outlets were built
   and swept over seeds 1 to 240 against the same binary with them off:
 
