@@ -9,6 +9,10 @@
 use super::*;
 
 mod opponent_weapons;
+mod pad_seek;
+
+pub use pad_seek::PadSeeking;
+pub(super) use pad_seek::line_positions as pad_seek_positions;
 
 /// How much of an Autopilot pickup is left when the announcer warns.
 ///
@@ -630,6 +634,7 @@ impl Race {
         let mut field = oag_ai::Field {
             place: places[slot],
             hazard: self.hazard_for(slot, forward, right),
+            pad: self.pad_for(slot),
             ..oag_ai::Field::EMPTY
         };
         let (mut best_ahead, mut best_behind, mut best_alongside) =

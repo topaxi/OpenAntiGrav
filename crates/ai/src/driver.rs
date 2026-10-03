@@ -31,6 +31,7 @@ use crate::pilot::Pilot;
 
 pub use avoidance::LOOKAHEAD as AVOIDANCE_LOOKAHEAD;
 use pace::{airbrakes, corner_target, curvature_span, throttle, track_peak_curvature, trail};
+pub use pads::LOOKAHEAD as PAD_LOOKAHEAD;
 pub use personality::Personality;
 use planned::plan_slack;
 pub use reflex::Reflex;
@@ -842,10 +843,10 @@ impl Driver {
         // and are never scaled: a lone craft has nobody to answer.
         let wanted =
             (personality.line_bias + wobbled + inside + social + avoidance).clamp(-1.0, 1.0);
-        // Every term above is in the same fraction-of-the-room units and is
-        // clamped once here, so no term can fight the corridor: the clamp below
-        // is the backstop and not the mechanism.
+        // The terms above are fractions of the room, clamped once here; the pad
+        // pull is in units, and the corridor clamp backstops both.
         let offset = wanted * frame.room(wanted) * ctx.tuning.corridor_use * personality.width;
+        let offset = Self::toward_pad(offset, ctx.field.pad, avoidance != 0.0);
         frame.lateral * frame.clamp(offset)
     }
 }
@@ -985,6 +986,7 @@ impl Steer {
 
 mod avoidance;
 mod pace;
+mod pads;
 pub use pace::hull_yaw_ceiling;
 mod personality;
 mod planned;

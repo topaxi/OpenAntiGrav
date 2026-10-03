@@ -381,6 +381,7 @@ impl Race {
         let chase_params = super::access::chase_block_for(camera_view, chase, chase_close);
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase_params);
 
+        let weapon_pad_line = super::field::pad_seek_positions(&line, &weapon_pads);
         let mut race = Self {
             sim: RaceSim {
                 racing_line: line,
@@ -450,6 +451,8 @@ impl Race {
                 weapon_pads,
                 weapon_pad_current: [None; MAX_SHIPS],
                 weapon_pad_refresh,
+                weapon_pad_line,
+                pad_seeking: super::PadSeeking::for_mode(mode),
                 weapons,
                 allowed_weapons,
                 class,

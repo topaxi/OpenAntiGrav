@@ -333,6 +333,11 @@ pub struct RaceSim {
     /// How long a stamped weapon pad stays inert - see
     /// [`Setup::weapon_pad_refresh`].
     pub(super) weapon_pad_refresh: f32,
+    /// Each weapon pad's nearest sample on [`Self::racing_line`] and its
+    /// offset across it - see `field::pad_seek::line_positions`.
+    pub(super) weapon_pad_line: Vec<(u32, f32)>,
+    /// Which opponents steer for a weapon pad - see [`super::PadSeeking`].
+    pub(super) pad_seeking: super::PadSeeking,
     /// This race's weapon table - see [`Setup::weapons`].
     pub(super) weapons: Option<oag_tables::weapons::WeaponStats>,
     /// Restricts what a `Weapon Pad` hands out - see

@@ -88,6 +88,24 @@ pub struct Hazard {
     pub offset: f32,
 }
 
+/// A pad on the track a driver would like to pass over.
+///
+/// **Plain numbers the caller measured**, for the same reason as [`Hazard`]:
+/// this crate does not know what a pad hands out or which mode wants one.
+/// `oag_game::Race::field_for` decides whether a craft wants a pad at all
+/// (today: an opponent with an empty weapon slot, in an Eliminator) and which
+/// one, and hands over where it is **relative to the line**, not to the craft -
+/// a target fixed in the corridor rather than one that moves as the craft
+/// swings toward it. See [`crate::Driver`]'s `toward_pad`.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Pad {
+    /// How far ahead along the line its centre sits, in units. Always positive.
+    pub distance: f32,
+    /// How far across the line its centre sits, positive to the line's right -
+    /// the corridor's own [`crate::Frame::lateral`] axis and sign.
+    pub offset: f32,
+}
+
 /// The rivals a driver may react to, and its own place.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Field {
@@ -103,6 +121,11 @@ pub struct Field {
     /// Not a rival, so not one of the three above: a mine does not close, does
     /// not have a place and cannot be blocked. See [`Hazard`].
     pub hazard: Option<Hazard>,
+    /// A pad worth swinging over, if the caller wants this craft to have one.
+    ///
+    /// `None` in every race but an Eliminator, which is what keeps every other
+    /// mode's line byte-identical - see [`Pad`].
+    pub pad: Option<Pad>,
     /// This craft's own race position, `1`-based.
     ///
     /// Zero when nothing places it - a track with no closed ring, or the tick
@@ -123,6 +146,7 @@ impl Field {
         behind: None,
         alongside: None,
         hazard: None,
+        pad: None,
         place: 0,
     };
 }
@@ -144,6 +168,7 @@ mod tests {
         assert!(Field::EMPTY.behind.is_none());
         assert!(Field::EMPTY.alongside.is_none());
         assert!(Field::EMPTY.hazard.is_none());
+        assert!(Field::EMPTY.pad.is_none());
     }
 
     /// Zero is "nobody has placed this craft yet", and a driver that read it as
