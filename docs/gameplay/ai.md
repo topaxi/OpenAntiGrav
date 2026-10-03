@@ -3478,7 +3478,7 @@ verified pace** everywhere (`Difficulty::pace_share`), because the plan leaves
 most straights unlimited and a corner margin alone shrank the ladder to
 0.95 / 0.99 / 1.00 / 1.00 of the Ace's distance. Calibrated against
 `difficulty_ground_truth` on the corner model (0.865 / 0.96 / 1.00 / 1.00);
-with the share it reads 6051 / 6726 / 7062 / 7172, strictly ordered.
+with the share it reads 6038 / 6706 / 7074 / 7160, strictly ordered.
 
 **A pilot's line is a handicap on a plan.** `Personality::spent` blends the
 driving axes - line bias, wander, inside line, lookahead, patience,
@@ -3491,6 +3491,15 @@ provocation and the barrel roll are untouched, and so are the social terms
 lateral axes on the plan's slack ahead 15-23, all lateral axes off 45, and
 every driving axis spent 84; a pilot's own lookahead alone put `06_Track`
 FLASH into the wall at samples 723-740 every lap, under the plan's own pace.
+
+**And in traffic a pilot is a pilot again.** A field of Aces all on the
+plan's one line at its one pace ran nose to tail:
+`craft_sticking_ground_truth` went 1,558 -> 2,101 overlapped pair-ticks,
+1,420 of them sustained, past the old pathology's 1,062. So the share spent
+is `max(level, traffic)`, `traffic` rising from zero at a 40-unit gap to one
+at contact with the nearest rival noticed. It reads 523 (275 sustained); a
+lone craft has nobody and is unchanged. The cost is field wall contact,
+32,440 without it and 39,804 with it (49,833 at a 120-unit range).
 
 ### What it buys
 
@@ -3506,7 +3515,7 @@ is the mean pool lost per completed lap, **end** the pool when the run stops.
 | lone | FLASH | 2 -> **23** | 2,688 -> 72 | 1 -> 0 | 2 -> 0 | 38.3 -> 34.7 s | 6.5 -> 1.0 | 70.6 -> 91.1 |
 | lone | RAPIER | 1 -> **21** | 3,295 -> 368 | 6 -> 0 | 2 -> 0 | 34.7 -> 31.2 s | 10.5 -> 1.9 | 55.9 -> 87.4 |
 | lone | PHANTOM | 0 -> **19** | 4,475 -> 716 | 7 -> 1 | 4 -> 1 | 32.5 -> 28.3 s | 13.8 -> 2.2 | 34.4 -> 84.2 |
-| field (7 craft) | all | 85 -> **232** of 672 | 113,203 -> 32,440 | 60 -> 42 | 101 -> **24** | 2-4.4 s faster per class | | |
+| field (7 craft) | all | 85 -> **151** of 672 | 113,203 -> 39,804 | 60 -> 41 | 101 -> **28** | 2.3-4.5 s faster per class | | |
 
 Lone totals: clean 7 -> **84 of 96**, contact 11,790 -> 1,231, respawns
 14 -> 1, destroyed 8 -> 1. Of the twelve lone rows still not clean, nine are
@@ -3515,9 +3524,9 @@ other three touch 1, 6 and 21 ticks (`17_Track` VENOM, `09_Track` PHANTOM,
 `25_Track` PHANTOM). `ai_clean_lap_gate` went `Eliminated` 11 -> 1 and
 contact 8,828 -> 1,243 over its 48 rows; `10_Track` FLASH is the one row that
 laps slower, 34.2 -> 36.0 s, trading 66 contact ticks for none. The
-parked-player Eliminator finishes 24 of 24 seeds, 64-262 s, median 121.6 s
-(147 s before; the original's own is 85 s, and the gap is still the AI not
-cheating). No original lap times or AI lap times are documented anywhere in
+parked-player Eliminator finishes 24 of 24 seeds (`examples/eliminator_seed_sweep.rs`)
+(147 s before; 33-196 s, median 139.0 s, with the traffic rule below; the
+original's own is 85 s, and the gap is still the AI not cheating). No original lap times or AI lap times are documented anywhere in
 this tree to compare the solo laps against; the Eliminator's 85 s is the only
 original timing there is.
 

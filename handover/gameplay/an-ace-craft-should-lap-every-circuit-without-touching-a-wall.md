@@ -717,6 +717,10 @@ model unchanged.
 - **The team axis on plans**: 89 (Feisar), 87 (Assegai), 83 (Piranha) of 96
   verify; the race builds one plan from slot 1's handling, which is right only
   while every opponent flies the player's handling (`Race::start` today).
+- **Field wall contact against field spread**: a pilot's character returns
+  inside 40 units of a rival (sticking 2,101 -> 523 pair-ticks), which costs
+  field wall contact 32,440 -> 39,804 (113,203 before the plan). The range is
+  chosen; a smarter overtaking line would beat both.
 - **A reset-volume respawn loop** in the field, `29_Track` VENOM: one craft
   put back at sample 45 every 46 ticks, 61 times. Race rules, not the plan.
 - **`10_Track` FLASH laps 1.8 s slower** on the gate, with its contact 66 -> 0.
