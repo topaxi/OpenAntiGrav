@@ -33,6 +33,7 @@ fn main() {
         class: class.clone(),
         mode: oag_race::Mode::SingleRace,
         track: Some(entry),
+        team: std::env::var("OAG_TEAM").ok(),
         ..race::Options::default()
     })
     .expect("loading the race");

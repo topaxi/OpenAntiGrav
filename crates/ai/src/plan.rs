@@ -116,6 +116,10 @@ pub struct SpeedPlan {
     hold: Vec<bool>,
     /// Distance along the line from each sample to the next.
     spacing: Vec<f32>,
+    /// The forward speed the last verification run did at each sample on its
+    /// flying lap, or infinity where it never stood. What a level's
+    /// `Tuning::pace_share` is a share of.
+    pace: Vec<f32>,
     /// The braking the backward pass was built with.
     decel: Decel,
 }
@@ -219,6 +223,7 @@ impl SpeedPlan {
             target: vec![f32::INFINITY; n],
             hold: vec![false; n],
             spacing: spacing_of(line),
+            pace: vec![f32::INFINITY; n],
             decel: Decel::FALLBACK,
         }
     }
@@ -257,6 +262,16 @@ impl SpeedPlan {
     #[must_use]
     pub fn holds(&self, index: usize) -> bool {
         !self.hold.is_empty() && self.hold[index % self.hold.len()]
+    }
+
+    /// The forward speed the plan's own verification lap did at `index`, or
+    /// infinity where it has none.
+    #[must_use]
+    pub fn pace(&self, index: usize) -> f32 {
+        if self.pace.is_empty() {
+            return f32::INFINITY;
+        }
+        self.pace[index % self.pace.len()]
     }
 
     /// The braking the plan was built with.
@@ -550,7 +565,7 @@ impl SpeedPlan {
     /// Two laps from the grid that follow the plan and change nothing; returns
     /// the failure ticks and fills the verification fields of `report`.
     fn verify<R: Raycaster + ?Sized>(
-        &self,
+        &mut self,
         course: &Course<'_, R>,
         craft: &Craft,
         tuning: &Tuning,
@@ -563,6 +578,7 @@ impl SpeedPlan {
         let mut lap_mark: Option<u32> = None;
         report.verify_lap_ticks = None;
         report.verify_respawns = 0;
+        let mut pace = vec![f32::INFINITY; self.len()];
         let mut respawned_on_flying_lap = false;
         let limit = (4 * n as u64).max(4_000) as u32 * 2;
         while run.progress < 2 * n && run.tick < limit {
@@ -571,6 +587,9 @@ impl SpeedPlan {
             });
             report.steps += 1;
             contacts += u32::from(tick.contact);
+            if run.progress >= n {
+                pace[run.driver.index as usize] = forward_speed(&run.state);
+            }
             if lap_mark.is_none() && run.progress >= n {
                 lap_mark = Some(run.tick);
             }
@@ -605,6 +624,7 @@ impl SpeedPlan {
         if run.progress >= 2 * n && !respawned_on_flying_lap {
             report.verify_lap_ticks = lap_mark.map(|mark| run.tick - mark);
         }
+        self.pace = pace;
         report.verify_failures = failures;
         report.verify_contacts = contacts;
         failures

@@ -387,12 +387,20 @@ impl Driver {
         let planned = ctx.plan.filter(|plan| plan.len() == line.len());
         let target = match planned {
             Some(plan) => {
-                plan.target_ahead(
+                let corners = plan.target_ahead(
                     index,
                     speed,
                     crate::plan::LEAD_TICKS * personality.patience,
                     PLAN_DT,
-                ) * plan_margin(tuning, &personality)
+                ) * plan_margin(tuning, &personality);
+                // The level's share of the plan's own pace, which is what
+                // reaches the straights - see `Tuning::pace_share`. At one it
+                // is no cap at all, so the top two levels drive the plan.
+                if tuning.pace_share < 1.0 {
+                    corners.min(plan.pace(index) * tuning.pace_share)
+                } else {
+                    corners
+                }
             }
             None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),
         };
@@ -829,9 +837,11 @@ impl Driver {
         // [`Driver::avoidance`].
         let avoidance = self.avoidance(ctx.field.hazard);
         // **On a plan, the character is a handicap**: see [`plan_slack`].
-        // Avoidance is a hazard, not a character, and is never scaled.
+        // Avoidance and the social terms - yielding, blocking, the contact
+        // floor - are about other craft, not character, and are never scaled:
+        // a lone craft has nobody to answer, so they cost a clean lap nothing.
         let slack = plan_slack(ctx, personality);
-        let wanted = ((personality.line_bias + wobbled + inside + social) * slack + avoidance)
+        let wanted = ((personality.line_bias + wobbled + inside) * slack + social + avoidance)
             .clamp(-1.0, 1.0);
         // Every term above is in the same fraction-of-the-room units and is
         // clamped once here, so no term can fight the corridor: the clamp below
