@@ -23,8 +23,9 @@
 //! was measured: the first frame at which a drawn vertex samples the authored
 //! green. That is the frame the `u` offset finishes stepping across to the
 //! green marker column - the same "green step" Pulse's tick 273 was pinned on.
-//! Nothing here is a measurement of HD's own countdown: no capture of it
-//! exists.
+//! HD's own countdown was captured on RPCS3 on 2026-10-04 (confidence 75): the
+//! green step lands on the release within one 30 fps video frame, which is what
+//! this edge-to-release rule gives. The held span is still chosen.
 
 use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::TexAnims;

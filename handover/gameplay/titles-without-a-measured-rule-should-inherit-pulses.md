@@ -26,6 +26,12 @@ the survey is below; none was trivial enough to fix in that lane.
   xref on that field or an RPCS3 watchpoint. Omega's named file has no row, its
   `WeaponAIStats2048.xml` does: pick the file by evidence before wiring.
 
+- **HD's gantry `GO` pulse phase** (2026-10-04): the start tick is measured (green step on the
+  release, confidence 75), but the original's `GO` is bright on the step frame and its first dark
+  gap is ~27 ticks earlier than ours; the held loop 221..359 and the 8-tick alpha ramp are not the
+  original's (`docs/rendering/start-gantry.md`, "HD's countdown on RPCS3"). Next: a `Z2`
+  watchpoint on the billboard UV write for the per-tick curve time, or a thrust-gate read.
+
 ## Next Steps
 
 1. Wreck effects, hit sparks and the absorb burst: each title's locator names first. (The gantry clock landed 2026-10-03: HD runs Pulse's rule on its own `GO` edge, frame 203 / tick 70; 2048 and Omega place no gantry - `docs/rendering/start-gantry.md`.)
