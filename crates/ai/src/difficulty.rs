@@ -213,6 +213,26 @@ impl Difficulty {
         }
     }
 
+    /// The share of a speed plan's verified pace this level holds - on a plan,
+    /// the level's handicap on the straights, where the plan itself asks for
+    /// everything the craft has.
+    ///
+    /// **Calibrated, not measured off the original**: chosen so the
+    /// `difficulty_ground_truth` ladder keeps the shape it had on the corner
+    /// model, where the four levels' leaders covered 5,885, 6,534, 6,806 and
+    /// 6,807 units in a minute (0.865, 0.96, 1.00, 1.00 of the Ace's) on the
+    /// tree the plan landed on. With the plan's corner margin alone they
+    /// covered 0.95, 0.99, 1.00, 1.00. See `docs/gameplay/ai.md`, "The speed
+    /// plan".
+    #[must_use]
+    pub fn pace_share(self) -> f32 {
+        match self {
+            Self::Novice => 0.88,
+            Self::Skilled => 0.96,
+            Self::Elite | Self::Ace => 1.0,
+        }
+    }
+
     /// How often a driver misses a braking point, as a multiplier on the base
     /// rate. Zero means never.
     #[must_use]
@@ -233,6 +253,7 @@ impl Difficulty {
             max_turn_rate: measured.max_turn_rate * self.turn_allowed(),
             mistake_rate: MISTAKE_BASE * self.mistakes(),
             reaction_ticks: self.reaction_ticks(),
+            pace_share: self.pace_share(),
             ..*measured
         }
     }
@@ -279,6 +300,7 @@ impl Difficulty {
                 t,
             )
             .round() as u16,
+            pace_share: lerp(lo.pace_share, hi.pace_share, t),
             ..*measured
         }
     }

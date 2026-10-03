@@ -40,6 +40,7 @@ fn stewing(driver: &mut Driver, line: &Line, field: &Field, personality: &Person
             pilot: &Pilot::BALANCED,
             field,
             yaw_ceiling: None,
+            plan: None,
         },
         personality,
     );
@@ -78,6 +79,7 @@ fn shove(driver: &Driver, state: &ShipState, line: &Line, field: &Field, ram: f3
             pilot: &Pilot::BALANCED,
             field,
             yaw_ceiling: None,
+            plan: None,
         },
         &Personality {
             ram,
@@ -114,6 +116,7 @@ fn across(personality: &Personality, line: &Line, field: &Field) -> f32 {
                 pilot: &Pilot::BALANCED,
                 field,
                 yaw_ceiling: None,
+                plan: None,
             },
             personality,
         )

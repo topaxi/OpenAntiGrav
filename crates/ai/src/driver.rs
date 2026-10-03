@@ -32,6 +32,7 @@ use crate::pilot::Pilot;
 pub use avoidance::LOOKAHEAD as AVOIDANCE_LOOKAHEAD;
 use pace::{airbrakes, corner_target, curvature_span, throttle, track_peak_curvature, trail};
 pub use personality::Personality;
+use planned::plan_slack;
 pub use reflex::Reflex;
 pub use tuning::Tuning;
 
@@ -65,6 +66,11 @@ pub struct Context<'a> {
     /// what lets a caller with no craft to hand - a synthetic closed-loop test,
     /// a probe - stay on the old reading rather than invent a hull.
     pub yaw_ceiling: Option<f32>,
+    /// The speed plan for this line and this craft's handling, when the race
+    /// built one - see [`crate::plan`]. `None` keeps the corner model
+    /// (`pace::corner_target`), which is what every synthetic test and any
+    /// line without a verified plan drives on.
+    pub plan: Option<&'a crate::SpeedPlan>,
 }
 
 impl<'a> Context<'a> {
@@ -77,6 +83,7 @@ impl<'a> Context<'a> {
             pilot: &Pilot::BALANCED,
             field: &Field::EMPTY,
             yaw_ceiling: None,
+            plan: None,
         }
     }
 }
@@ -351,6 +358,14 @@ impl Driver {
         };
 
         let personality = self.personality(ctx.pilot);
+        // On a plan, a driver's line is a handicap: see `Personality::spent`
+        // and `planned::plan_slack`. Off one, untouched - not even multiplied
+        // by one, which would move the corner model's bits.
+        let personality = if ctx.plan.is_some_and(|plan| plan.len() == line.len()) {
+            personality.spent(plan_slack(ctx, &personality))
+        } else {
+            personality
+        };
         let body = &state.body;
         let forward = body.forward();
 
@@ -372,7 +387,16 @@ impl Driver {
         let step = curvature_span(tuning, look);
         let curvature =
             line.max_curvature_stepped(index, window, pace::curvature_chord(tuning, step), step);
-        let target = corner_target(curvature, tuning, &personality, ctx.yaw_ceiling);
+        // **The speed plan, when the race built one for this line**, and the
+        // corner model otherwise. The plan is what our own physics showed the
+        // craft can carry, braking zones included (`crate::plan`); a level and
+        // a pilot handicap it by [`plan_margin`] rather than by believing in
+        // less grip, so an Ace drives the plan and a Novice drives under it.
+        let followed = ctx.plan.filter(|plan| plan.len() == line.len());
+        let target = match followed {
+            Some(plan) => planned::target(plan, index, speed, tuning, &personality),
+            None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),
+        };
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.
         self.peak_curvature =
             track_peak_curvature(curvature, f32::from_bits(self.peak_curvature), tuning).to_bits();
@@ -396,6 +420,9 @@ impl Driver {
             // our own driver's behaviour, not a recovered one - see
             // `docs/gameplay/ai.md#the-jump-clearing-failure-the-mechanism-a-real-bug-that-turned-out-not-to-be-it-and-why-this-is-where-the-chase-stops`.
             (1.0, 0.0)
+        } else if followed.is_some() {
+            // The plan's own follower, the law it was learned with.
+            crate::plan::longitudinal(speed, target)
         } else {
             throttle(speed, target, tuning)
         };
@@ -419,7 +446,11 @@ impl Driver {
             tuning,
             &personality,
         );
-        let (airbrake_left, airbrake_right) = airbrakes(brake, differential, tuning.brake_floor);
+        let (airbrake_left, airbrake_right) = if followed.is_some() {
+            crate::plan::airbrakes(brake, differential)
+        } else {
+            airbrakes(brake, differential, tuning.brake_floor)
+        };
 
         ShipControls {
             steer_x: steer.command,
@@ -798,6 +829,10 @@ impl Driver {
         // the terms here and it still has to win the argument; see
         // [`Driver::avoidance`].
         let avoidance = self.avoidance(ctx.field.hazard);
+        // On a plan the bias, wander and inside line arrive already spent -
+        // see `Personality::spent`. Avoidance and the social terms - yielding,
+        // blocking, the contact floor - are about other craft, not character,
+        // and are never scaled: a lone craft has nobody to answer.
         let wanted =
             (personality.line_bias + wobbled + inside + social + avoidance).clamp(-1.0, 1.0);
         // Every term above is in the same fraction-of-the-room units and is
@@ -945,6 +980,7 @@ mod avoidance;
 mod pace;
 pub use pace::hull_yaw_ceiling;
 mod personality;
+mod planned;
 mod ram;
 mod reflex;
 mod roll;

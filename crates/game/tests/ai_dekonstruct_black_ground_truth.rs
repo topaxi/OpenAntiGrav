@@ -66,19 +66,26 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 }
 
 /// Ceilings on craft destroyed, `(class, seed, forward, reversed)`.
+///
+/// **Regenerated 2026-10-03 for the AI speed plan** (`oag_ai::SpeedPlan`): the
+/// reversed control now drives a verified plan, Black does not (its plan does
+/// not verify, so its column is unchanged). Reversed destroyed over the twelve
+/// cells 11 -> 10: four cells fell by one, two rose by one (RAPIER seed 3,
+/// PHANTOM seed 2), which is the per-seed spread of a field with weapons on,
+/// not a column getting worse.
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 6, 0),
     ("VENOM", 2, 4, 0),
     ("VENOM", 3, 5, 1),
     ("FLASH", 1, 4, 0),
     ("FLASH", 2, 5, 0),
-    ("FLASH", 3, 4, 1),
+    ("FLASH", 3, 4, 0),
     ("RAPIER", 1, 1, 0),
-    ("RAPIER", 2, 6, 1),
-    ("RAPIER", 3, 4, 2),
+    ("RAPIER", 2, 6, 0),
+    ("RAPIER", 3, 4, 3),
     ("PHANTOM", 1, 2, 1),
-    ("PHANTOM", 2, 4, 3),
-    ("PHANTOM", 3, 4, 2),
+    ("PHANTOM", 2, 4, 4),
+    ("PHANTOM", 3, 4, 1),
 ];
 
 fn check(class: &str, seed: u64) {

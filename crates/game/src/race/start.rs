@@ -381,10 +381,13 @@ impl Race {
         let chase_params = super::access::chase_block_for(camera_view, chase, chase_close);
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase_params);
 
-        let race = Self {
+        let mut race = Self {
             sim: RaceSim {
                 racing_line: line,
                 ai_order: order,
+                // Built below, once the field is seated: see
+                // `Race::field_speed_plan`.
+                speed_plan: None,
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.
@@ -587,6 +590,7 @@ impl Race {
         // original never holds anything in the pickup slot through the
         // countdown; granting it at tick 0 put a HUD icon on screen during
         // those 272 ticks that the disc never draws.
+        race.sim.speed_plan = race.field_speed_plan();
         race
     }
 }

@@ -140,6 +140,32 @@ impl Personality {
         roll_airtime: 0.0,
     };
 
+    /// This personality with its **driving** axes spent only `share` of the
+    /// way out from [`Self::NEUTRAL`]: the line bias, the wander, the inside
+    /// line, the lookahead, the patience, the differential and the width.
+    ///
+    /// What a driver on a speed plan flies with - see `planned::plan_slack`.
+    /// The plan was learned by the neutral driver, so every one of these axes
+    /// steers a line or brakes at a point the plan never tried; an Ace spends
+    /// none of them and a Novice all. **The commitment is not here**, because
+    /// it already is the plan's margin, and nothing social, aggressive or
+    /// airborne is either: those are about other craft and the roll, not the
+    /// line.
+    #[must_use]
+    pub fn spent(&self, share: f32) -> Self {
+        let toward = |value: f32, neutral: f32| neutral + (value - neutral) * share;
+        Self {
+            line_bias: self.line_bias * share,
+            wander: self.wander * share,
+            inside: self.inside * share,
+            look: toward(self.look, 1.0),
+            patience: toward(self.patience, 1.0),
+            trail: toward(self.trail, 1.0),
+            width: toward(self.width, 1.0),
+            ..*self
+        }
+    }
+
     /// Derives a personality from a seed.
     ///
     /// **Seed zero is [`Self::NEUTRAL`], as a special case rather than by

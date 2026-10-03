@@ -21,14 +21,14 @@ impl Race {
     /// units of movement observed), a scripted 200-unit same-tick teleport
     /// does (`199.999969`, confirmed to take the direct-test branch by
     /// breakpoint). See `pads.md`'s `Pad_SweptTest` section.
-    const PAD_SWEEP_LIMIT: f32 = 25.0;
+    pub(super) const PAD_SWEEP_LIMIT: f32 = 25.0;
 
     /// How many interpolated points the swept test checks.
     ///
     /// `Pad_SweptTest` walks `t = 0.25, 0.5, 0.75, 1.0` - the destination is
     /// included and the origin is not, because the origin was this test's
     /// destination last tick.
-    const PAD_SWEEP_STEPS: u32 = 4;
+    pub(super) const PAD_SWEEP_STEPS: u32 = 4;
 
     /// How far the ship moved since the last pad test, and the path it swept.
     ///

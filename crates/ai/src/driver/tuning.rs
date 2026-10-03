@@ -610,6 +610,13 @@ pub struct Tuning {
     ///
     /// [`Difficulty::reaction_ticks`]: crate::Difficulty::reaction_ticks
     pub reaction_ticks: u16,
+    /// The share of the speed plan's verified pace a driver of this level
+    /// holds anywhere on the lap, straights included. One at the top two
+    /// levels, which drive the plan's own targets; see
+    /// [`Difficulty::pace_share`] for the ladder and where it comes from.
+    ///
+    /// [`Difficulty::pace_share`]: crate::Difficulty::pace_share
+    pub pace_share: f32,
 }
 
 impl Default for Tuning {
@@ -646,6 +653,7 @@ impl Default for Tuning {
             // existing closed-loop assertion measures, and none of them chose
             // a difficulty. See `super::reflex`.
             reaction_ticks: 0,
+            pace_share: 1.0,
         }
     }
 }

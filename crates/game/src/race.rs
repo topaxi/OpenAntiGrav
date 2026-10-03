@@ -154,6 +154,7 @@ pub mod scenery_fx;
 mod shadow;
 mod sim;
 mod spawn;
+mod speed_plan;
 mod spline;
 mod start;
 mod telemetry;

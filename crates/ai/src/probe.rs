@@ -519,6 +519,7 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
                     pilot,
                     field: &fields[slot],
                     yaw_ceiling: None,
+                    plan: None,
                 },
             );
             oag_physics::step(
@@ -562,6 +563,65 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
         curvature: (if lowest == f32::MAX { 0.0 } else { lowest }, highest),
         travelled: travelled.into_iter().fold(f32::MAX, f32::min),
     }
+}
+
+/// The speed plan [`crate::SpeedPlan::build`] learns on [`circuit`], hashed:
+/// every sample's ceiling, target and verified pace as bits, then the build's
+/// own report. What the determinism gate pins for the plan, on the same
+/// invented circuit, hull and floor every other scenario here uses - the plan
+/// is built at race start from disc data on a player's machine, so a platform
+/// that learned a different plan would field a different race.
+#[must_use]
+pub fn speed_plan() -> (u64, crate::plan::Report) {
+    let line = circuit();
+    let handling = handling();
+    let tuning = tuning();
+    let placed = |index: usize| {
+        let here = line.point(index);
+        let along = (line.point(index + 1) - here).normalize_or_zero();
+        ShipState {
+            body: Body {
+                position: here + Vec3::Y * 4.0,
+                orientation: Quat::from_rotation_arc(Vec3::Z, along),
+                ..Body::default()
+            },
+            ..ShipState::default()
+        }
+    };
+    let course = crate::plan::Course {
+        line: &line,
+        samples: &[],
+        raycaster: &Plane,
+        env: Environment::default(),
+        dt: TICK,
+        off_line: CORRIDOR * 2.0,
+        respawn: &placed,
+        reset: &|_, _, _| false,
+        max_airborne: f32::INFINITY,
+        pad: &|_, _| None,
+    };
+    let craft = crate::plan::Craft {
+        handling,
+        start: placed(0),
+        start_index: 0,
+    };
+    let (plan, report) = crate::SpeedPlan::build(&course, &craft, &tuning);
+    let mut hasher = StateHasher::new();
+    for index in 0..plan.len() {
+        hasher.write_f32(plan.ceiling(index));
+        hasher.write_f32(plan.target(index));
+        hasher.write_f32(plan.pace(index));
+    }
+    hasher.write_u64(report.steps);
+    hasher.write_u32(report.passes);
+    hasher.write_u32(report.lowerings);
+    hasher.write_u32(report.unresolved.len() as u32);
+    hasher.write_u32(report.respawns);
+    hasher.write_u32(report.verify_failures);
+    hasher.write_u32(report.verify_contacts);
+    hasher.write_u32(report.verify_respawns);
+    hasher.write_u32(report.verify_lap_ticks.unwrap_or(u32::MAX));
+    (hasher.finish(), report)
 }
 
 /// One craft's hashable state: what it is doing, and what its driver remembers.

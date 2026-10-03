@@ -3420,6 +3420,159 @@ before the airbrake fix and 3 after it. `07_Track` still respawns once (at tick
   samples** ([above](#the-clean-ace-board-every-circuit-every-speed-class-wall-contact-counted)),
   a separate open fault.
 
+## The speed plan
+
+Added 2026-10-03 (lane `pulse-ai-speedplan`), against the maintainer's
+standard: *"I'd expect the AI to do perfect laps at almost full speed and
+airbrake use."* **Ours, not the original's**: the original's opponents take
+their speed from a schedule keyed on the player (see
+[what we build instead](#what-we-build-instead)); this uses nothing a player's
+craft does not have. Every constant below is **chosen, not measured**, and
+carries no confidence score.
+
+### What it is
+
+`oag_ai::SpeedPlan` is a speed per racing-line sample, learned at race start
+by driving the authored line in **our own physics** - the same
+`oag_physics::step`, the same collision, the same handling, the race's own
+pads, reset volumes and four-second airborne rescue. `Race::start` builds one
+for the field (every opponent flies the same handling), from opponent slot 1's
+grid pose. `crates/ai/src/plan.rs` and `plan/brake.rs`:
+
+1. **Calibration.** Full throttle from the grid, then full symmetric
+   airbrake from the fastest point; the deceleration actually seen is binned
+   by speed (10 u/s bins, 80 % of it banked). A first guess the search
+   corrects, not the arbiter.
+2. **Learning, two laps from the grid.** The neutral driver
+   (`Driver::default()`, seed 0, the top level's `Tuning`) steers; the plan
+   decides throttle and the symmetric brake (`plan::longitudinal`); the
+   driver's own differential is kept and folded on top (`plan::airbrakes`).
+   A **failure** is what the race would see: a wall contact (the clean-lap
+   board's own `contacts > floor_contacts`), a wreck, leaving the rescue
+   distance, a reset volume, more than 4 s airborne, or a stall. On a failure
+   the ceilings over the last 45 *grounded* ticks are lowered to 0.96 of
+   `min(speed done, ceiling)` - harder each third retry at the same spot -
+   the backward pass re-derives the braking zones, and the run rewinds to a
+   checkpoint before the earliest sample whose target moved.
+3. **Backward pass.** `v0^2 = v1^2 + 2 a ds` from each sample to the one
+   before, `a` off the calibration, twice round the ring, never through a
+   *held* sample, and nothing above 1,000 u/s.
+4. **Jumps.** A wall touched after more than 0.5 s in the air with braking on
+   the run-up marks the run-up *held*: ceilings lifted, nothing brakes through
+   it. A stall at full throttle all along is beyond any plan: the craft is put
+   back past the spot the way the race's rescue would, and on the flying lap
+   the spot is recorded as unresolved.
+5. **Verification.** Two laps from the grid following the finished plan,
+   nothing learned. **The race only uses a plan that verified clean** - no
+   wall, no rescue; otherwise its opponents keep the corner model
+   (`pace::corner_target`) and the loader log says so.
+
+### What a driver does with it
+
+`Context::plan` carries it. With a plan, the target speed is the plan's
+lowest target over the next `6 x patience` ticks of travel (the airbrake
+ramp), times **`sqrt(grip_believed x commitment)`, capped at one** - the
+difficulty table's own corner-speed fractions, 0.55 / 0.69 / 0.84 / 1.00 from
+Novice to Ace. Novice and Skilled also hold **0.88 and 0.96 of the plan's
+verified pace** everywhere (`Difficulty::pace_share`), because the plan leaves
+most straights unlimited and a corner margin alone shrank the ladder to
+0.95 / 0.99 / 1.00 / 1.00 of the Ace's distance. Calibrated against
+`difficulty_ground_truth` on the corner model (0.865 / 0.96 / 1.00 / 1.00);
+with the share it reads 6038 / 6706 / 7074 / 7160, strictly ordered.
+
+**A pilot's line is a handicap on a plan.** `Personality::spent` blends the
+driving axes - line bias, wander, inside line, lookahead, patience,
+differential, width - toward neutral by `(1 - margin) / 0.452`, so a balanced
+Ace drives the plan's line exactly and a Novice keeps all of its character.
+Commitment stays the margin; courtesy, defence, caution, ramming, weapons,
+provocation and the barrel roll are untouched, and so are the social terms
+(yielding, blocking, the contact floor) and mine avoidance. Measured on the
+96 lone rows: the plan with full character was clean on 15, gating only the
+lateral axes on the plan's slack ahead 15-23, all lateral axes off 45, and
+every driving axis spent 84; a pilot's own lookahead alone put `06_Track`
+FLASH into the wall at samples 723-740 every lap, under the plan's own pace.
+
+**And in traffic a pilot is a pilot again.** A field of Aces all on the
+plan's one line at its one pace ran nose to tail:
+`craft_sticking_ground_truth` went 1,558 -> 2,101 overlapped pair-ticks,
+1,420 of them sustained, past the old pathology's 1,062. So the share spent
+is `max(level, traffic)`, `traffic` rising from zero at a 40-unit gap to one
+at contact with the nearest rival noticed. It reads 523 (275 sustained); a
+lone craft has nobody and is unchanged. The cost is field wall contact,
+32,440 without it and 39,804 with it (49,833 at a 120-unit range).
+
+### What it buys
+
+Same harness before and after, `crates/game/tests/ai_speed_plan_sweep.rs`:
+24 layouts (12 forward, 12 reversed) x 4 classes, Ace, `SingleRace`, 18,000
+ticks or the finish, team the title default (Assegai). **Clean** is a row
+with no wall contact, rescue or death. Shield is reported twice: **per lap**
+is the mean pool lost per completed lap, **end** the pool when the run stops.
+
+| scenario | class | clean | contact ticks | respawns | destroyed | mean best clean lap | per-lap shield lost | end-of-run shield |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| lone | VENOM | 4 -> **21** of 24 | 1,332 -> 75 | 0 -> 0 | 0 -> 0 | 42.1 -> 39.3 s | 3.6 -> 0.8 | 84.1 -> 92.6 |
+| lone | FLASH | 2 -> **23** | 2,688 -> 72 | 1 -> 0 | 2 -> 0 | 38.3 -> 34.7 s | 6.5 -> 1.0 | 70.6 -> 91.1 |
+| lone | RAPIER | 1 -> **21** | 3,295 -> 368 | 6 -> 0 | 2 -> 0 | 34.7 -> 31.2 s | 10.5 -> 1.9 | 55.9 -> 87.4 |
+| lone | PHANTOM | 0 -> **19** | 4,475 -> 716 | 7 -> 1 | 4 -> 1 | 32.5 -> 28.3 s | 13.8 -> 2.2 | 34.4 -> 84.2 |
+| field (7 craft) | all | 85 -> **151** of 672 | 113,203 -> 39,804 | 60 -> 41 | 101 -> **28** | 2.3-4.5 s faster per class | 13.5 -> 8.6 | 46.7 -> 62.1 |
+
+Lone totals: clean 7 -> **84 of 96**, contact 11,790 -> 1,231, respawns
+14 -> 1, destroyed 8 -> 1. Of the twelve lone rows still not clean, nine are
+layouts whose plan did not verify (below) and so drive the corner model; the
+other three touch 1, 6 and 21 ticks (`17_Track` VENOM, `09_Track` PHANTOM,
+`25_Track` PHANTOM). `ai_clean_lap_gate` went `Eliminated` 11 -> 1 and
+contact 8,828 -> 1,243 over its 48 rows; `10_Track` FLASH is the one row that
+laps slower, 34.2 -> 36.0 s, trading 66 contact ticks for none. The
+parked-player Eliminator finishes 24 of 24 seeds (`examples/eliminator_seed_sweep.rs`)
+(147 s before; 33-196 s, median 139.0 s, with the traffic rule below; the
+original's own is 85 s, and the gap is still the AI not cheating). No original lap times or AI lap times are documented anywhere in
+this tree to compare the solo laps against; the Eliminator's 85 s is the only
+original timing there is.
+
+### Plans that do not verify
+
+`crates/game/tests/speed_plan_ground_truth.rs` pins the exact set, at the
+title-default team: **87 of 96** layout-class plans verify clean. Not:
+`05_Track` at all four classes (the crest lip at ~206, then walls at 424-637
+touched at 15 u/s too - the line, not the speed), `06_Track` VENOM and RAPIER
+(the corner after the gap at 1196-1200), `14_Track` PHANTOM and `29_Track`
+RAPIER and PHANTOM (rescued, in the air or off the line, at 1247 and
+2402-2441 with every ceiling tried). By team: Feisar (`Turning` 1.80) 89,
+Assegai 87, Piranha (1.30) 83 of 96.
+
+### What it costs
+
+One `oag_physics::step` for one craft against real collision is 21-25 us in
+release on a loaded machine, the driver 1.3-2.6 us
+(`examples/physics_step_cost.rs`). A plan is 7,000-130,000 steps: **0.1-2.0 s
+per layout, median 0.18 s, mean 0.31 s** in release (what `just play` runs;
+the dev profile builds the simulation crates at opt-level 2 and measures the
+same), the slow ones being exactly the plans that do not verify and are then
+thrown away - only `05_Track`'s four take over a second. Not cached: a race
+start pays it once. The short-horizon rollout idea (8 craft x 9 candidates x 90
+ticks = 6,480 steps) would cost about 150-175 ms per full-field replan, nine
+to ten ticks' worth.
+
+### Still open
+
+- The nine unverified plans, `05_Track` above all.
+- A reset-volume respawn loop seen once in the field: `29_Track` VENOM, one
+  craft put back at sample 45 every 46 ticks, 61 times - the rescue pose
+  lands in a reset volume. Race rules, not the plan.
+- The plan is built for slot 1's handling and grid pose; a field of mixed
+  teams would need one per handling.
+- Lap 1 is learned from a standing start the race also has, but not with the
+  race's countdown launch boost.
+- **de Konstruct Black's jump findings are not test cases for the plan yet**:
+  Black is `05_Track` forward, whose plan does not verify, so
+  `ai_dekonstruct_black_ground_truth` still exercises the corner model there
+  (its reversed control does drive a plan).
+- The cross-platform gate for the plan is
+  `crates/ai/tests/determinism.rs::the_speed_plan_matches_the_committed_reference`,
+  on the probe's invented circuit; a disc-backed plan is pinned only as
+  verified-or-not (`speed_plan_ground_truth.rs`), not bit for bit.
+
 ## Where this sits
 
 The prerequisites were all done before this landed: the

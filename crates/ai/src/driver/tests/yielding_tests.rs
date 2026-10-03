@@ -170,6 +170,7 @@ fn a_driver_lifts_for_a_craft_it_is_closing_on() {
         pilot: &Pilot::BALANCED,
         field,
         yaw_ceiling: None,
+        plan: None,
     };
     let driver = Driver::default();
     assert_eq!(driver.caution(&context(&Field::EMPTY), &wary), 1.0);
@@ -200,6 +201,7 @@ fn a_driver_that_sees_nobody_drives_exactly_the_line_it_did_before() {
                 pilot: &pilot,
                 field: &Field::EMPTY,
                 yaw_ceiling: None,
+                plan: None,
             },
         );
         let unseen = blind.drive(
@@ -210,6 +212,7 @@ fn a_driver_that_sees_nobody_drives_exactly_the_line_it_did_before() {
                 pilot: &pilot,
                 field: &Field::default(),
                 yaw_ceiling: None,
+                plan: None,
             },
         );
         assert_eq!(seen, unseen, "{name}");

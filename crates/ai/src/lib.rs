@@ -82,6 +82,7 @@ mod field;
 mod line;
 mod noise;
 mod pilot;
+pub mod plan;
 pub mod probe;
 
 pub use difficulty::Difficulty;
@@ -92,3 +93,4 @@ pub use driver::{
 pub use field::{Field, Hazard, Rival};
 pub use line::{Aim, Frame, Line};
 pub use pilot::{Lean, Pilot, Span, pilot_for_slot};
+pub use plan::SpeedPlan;
