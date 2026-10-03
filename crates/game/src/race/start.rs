@@ -54,6 +54,7 @@ impl Race {
             speedup_pads,
             weapon_pads,
             weapons,
+            weapon_ai,
             allowed_weapons,
             weapon_pad_refresh,
             class,
@@ -453,6 +454,12 @@ impl Race {
                 weapon_pad_refresh,
                 weapon_pad_line,
                 pad_seeking: super::PadSeeking::for_mode(mode),
+                fire_law: if weapon_ai.is_some() {
+                    super::FireLaw::Original
+                } else {
+                    super::FireLaw::Ours
+                },
+                weapon_ai,
                 weapons,
                 allowed_weapons,
                 class,

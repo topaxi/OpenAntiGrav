@@ -338,6 +338,10 @@ pub struct RaceSim {
     pub(super) weapon_pad_line: Vec<Option<(u32, f32)>>,
     /// Which opponents steer for a weapon pad - see [`super::PadSeeking`].
     pub(super) pad_seeking: super::PadSeeking,
+    /// Which rule fires an opponent's forward weapon - see [`super::FireLaw`].
+    pub(super) fire_law: super::FireLaw,
+    /// The odds the original's fire law reads - see [`Setup::weapon_ai`].
+    pub(super) weapon_ai: Option<oag_tables::weapons::ai::WeaponAiStats>,
     /// This race's weapon table - see [`Setup::weapons`].
     pub(super) weapons: Option<oag_tables::weapons::WeaponStats>,
     /// Restricts what a `Weapon Pad` hands out - see

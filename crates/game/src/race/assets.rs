@@ -763,6 +763,44 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 ///
 /// Two failures, two lines, and a third kind that is neither - see
 /// `oag_tables::weapons::WeaponStats::skipped`.
+/// The title's `WeaponAIstats.xml` - the odds an opponent fires each weapon
+/// at, see [`oag_title::weapons::Weapons::ai`] - or `None`, with a report line
+/// saying what that costs.
+///
+/// Read on every mode for the reason `load_weapons` is: a broken file is a
+/// line on every run. A title that names no such file gets a line too, because
+/// its opponents fire on this project's own rule rather than the original's.
+pub(super) fn load_weapon_ai(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    report: &mut Vec<String>,
+) -> Option<oag_tables::weapons::ai::WeaponAiStats> {
+    let Some(entry) = title.weapons.ai else {
+        report.push(
+            "no weapon-AI table named for this title; opponents fire on this \
+             build's own rule"
+                .to_string(),
+        );
+        return None;
+    };
+    let parsed = archives
+        .read_name(entry)
+        .with_context(|| format!("reading {entry} out of {}", archives.layout.describe()))
+        .and_then(|blob| Ok(oag_tables::weapons::ai::from_blob(&blob)?));
+    match parsed {
+        Ok(stats) => {
+            report.push(format!("{entry}: opponents fire on its odds"));
+            Some(stats)
+        }
+        Err(e) => {
+            report.push(format!(
+                "{entry}: {e}; opponents fire on this build's own rule"
+            ));
+            None
+        }
+    }
+}
+
 pub(super) fn load_weapons(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,

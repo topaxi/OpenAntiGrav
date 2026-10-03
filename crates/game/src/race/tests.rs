@@ -262,6 +262,7 @@ fn setup(handling: Handling) -> Setup {
         // No restriction - the same "empty is no override" state every
         // non-2048 race is in. See `Setup::allowed_weapons`'s own doc
         // comment.
+        weapon_ai: None,
         allowed_weapons: Vec::new(),
         weapon_pad_refresh: 0.0,
         // These tests run on a synthetic straight and want the ordinary

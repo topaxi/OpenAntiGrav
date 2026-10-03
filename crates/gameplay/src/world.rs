@@ -122,6 +122,14 @@ pub struct Ship {
     /// so the array is still a `memcpy`. The line it indexes into is *track*
     /// data and is not in the world at all; see [`oag_ai::Line`].
     pub driver: oag_ai::Driver,
+    /// This craft's weapon-AI clocks: how long it has held its pickup and the
+    /// window an aimed weapon opened, for the original's fire law
+    /// (`oag_ai::weapon_ai`).
+    ///
+    /// Beside [`Self::driver`] for that field's reason: it decides what the
+    /// craft does next tick, so a snapshot without it is not the same race.
+    /// Every craft carries one; only an opponent's is advanced.
+    pub weapon_ai: oag_ai::weapon_ai::WeaponAi,
     /// Where this craft is in the race: its lap, its place on the circuit and
     /// whether it has finished.
     ///
@@ -214,6 +222,7 @@ impl Default for Ship {
             segment: 0,
             pickup: crate::pickup::Held::empty(),
             driver: oag_ai::Driver::default(),
+            weapon_ai: oag_ai::weapon_ai::WeaponAi::default(),
             standing: oag_race::Standing::default(),
             autopilot_timer: 0.0,
             pending_slowdown: 0.0,

@@ -317,6 +317,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
+    let weapon_ai = assets::load_weapon_ai(&mut archives, title, &mut report);
     if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
@@ -899,6 +900,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             speedup_pads,
             weapon_pads,
             weapons,
+            weapon_ai,
             // No caller of the general `load` sets this - only
             // `race::load::campaign::load_event` does, on the `Loaded` this
             // returns, after this whole function has already run. See

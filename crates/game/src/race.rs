@@ -180,7 +180,7 @@ pub use camera::chase_params;
 pub use capture::gpu::CaptureGpu;
 pub use capture::{CaptureOptions, Presented, capture, describe};
 pub use effect_names::*;
-pub use field::PadSeeking;
+pub use field::{FireLaw, PadSeeking};
 pub use held_buttons::HeldButtons;
 pub use hud::hud_layout;
 pub use load::ripple::{Ripples, SpanPlaces};
