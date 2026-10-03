@@ -556,12 +556,12 @@ impl Race {
                 _ => return,
             }
         } else {
-            // **Eliminator refuses this outright.** `MSC_EVENT_ELIM`: "you
-            // cannot absorb pickups" - see `Mode::pickups_absorb`. The pickup
-            // is kept rather than spent, the same "nothing happened, so
-            // nothing is lost" rule the no-op weapon arms above already
-            // follow.
+            // **Eliminator pays no energy for an absorb** (`MSC_EVENT_ELIM`:
+            // "you cannot absorb pickups", `Mode::pickups_absorb`), **and the
+            // press is not refused either**: the held weapon becomes the
+            // mode's one-second Shield. See `Race::eliminator_absorb`.
             if !self.sim.world.mode().pickups_absorb() {
+                self.eliminator_absorb(slot);
                 return;
             }
             let Some(amount) = weapons.absorb(weapon) else {
