@@ -103,7 +103,11 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\weaponstats_Race_2048.xml",
         elimination: Some(r"Data\XML\weaponstats_Elimination_2048.xml"),
-        ai: None,
+        // `WeaponAIStats.xml` and `WeaponAIStats2048.xml` both ship and are
+        // byte-identical (searched 2026-10-03); the suffixed one follows the
+        // two tables above. Opponents run Pulse's fire law on it: **inherited
+        // from Pulse, unmeasured on 2048**.
+        ai: Some(r"Data\XML\WeaponAIStats2048.xml"),
     },
     // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
     // tree, not Pulse's, so reusing Pulse's `.vex` paths the way `oag_pure`

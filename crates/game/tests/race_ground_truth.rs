@@ -1626,14 +1626,9 @@ fn the_players_place_reaches_the_hud() {
 /// the number is a filter or a wall. The synthetic half is `oag-ai`'s
 /// `a_driver_fires_at_a_craft_ahead_and_inside_its_cone`.
 ///
-/// It hands the field the trigger rather than waiting for the pickup draw,
-/// because what is being measured is whether the *aiming* gates ever open, not
-/// how often a rocket comes out of a pad.
-///
-/// **Pinned to `FireLaw::Ours`** since a Pulse race fires on the original's law
-/// (2026-10-03): `wants_to_fire` is now the rule a title without
-/// `WeaponAIstats.xml` runs, and this is still its real-geometry check. The
-/// law's own is `opponent_fire_ground_truth.rs`.
+/// It hands the field the trigger rather than waiting for the pickup draw:
+/// what is measured is whether the *aiming* gates ever open. Pinned to
+/// `FireLaw::Ours`; the law's own check is `opponent_fire_ground_truth.rs`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
