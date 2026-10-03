@@ -556,6 +556,14 @@ appimage *ARGS:
 appimage-portable *ARGS:
     ./scripts/build-appimage.sh --container "$@"
 
+# The Steam Deck's AppImage: the portable container build, compiled for the
+# Deck's own Zen 2 core (`-C target-cpu=znver2`), written as
+# data/appimage/OpenAntiGrav-x86_64-steamdeck.AppImage. It refuses to start on a
+# CPU without AVX2/FMA/BMI2, which is why `appimage-portable` stays the
+# baseline. See docs/tools/packaging.md, "A CPU-tier build".
+appimage-deck *ARGS:
+    ./scripts/build-appimage.sh --container --target-cpu znver2 --out data/appimage/OpenAntiGrav-x86_64-steamdeck.AppImage "$@"
+
 # Install a .desktop entry and icon for this checkout into ~/.local/share, so a
 # Wayland taskbar has something to resolve the window's app_id against - see
 # docs/tools/packaging.md and scripts/install-desktop-file.sh

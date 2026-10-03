@@ -16,11 +16,17 @@
 # Usage:
 #   scripts/build-appimage.sh [--out <file>] [--container] [--skip-build]
 #                             [--binary <path>] [--no-strip]
+#                             [--target-cpu <cpu>]
 #
 #   --container  Build inside Debian bookworm (glibc 2.36) instead of natively,
 #                so the AppImage also loads on a distribution older than this
 #                one - which is the whole point on a Steam Deck. Needs podman or
 #                docker; see docs/tools/packaging.md#glibc.
+#   --target-cpu Build with -C target-cpu=<cpu>, in a target directory of its
+#                own, and name the AppImage after it. `znver2` is the Steam
+#                Deck's core, which `just appimage-deck` passes; the binary then
+#                refuses to start on a CPU without AVX2/FMA/BMI2. See
+#                docs/tools/packaging.md, "A CPU-tier build".
 #   --binary     Package a binary built elsewhere. Implies --skip-build. Must
 #                run on this host: the icon step below now invokes it
 #                directly (--write-icon), so a binary for another OS/arch
@@ -56,6 +62,7 @@ skip_build=0
 strip_binary=1
 container=0
 binary=""
+target_cpu=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -64,6 +71,7 @@ while [[ $# -gt 0 ]]; do
         --binary)     binary="${2:?--binary needs a value}"; skip_build=1; shift 2 ;;
         --skip-build) skip_build=1; shift ;;
         --no-strip)   strip_binary=0; shift ;;
+        --target-cpu) target_cpu="${2:?--target-cpu needs a value}"; shift 2 ;;
         # Print the header comment block, however long it happens to be.
         -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \
                        "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -75,7 +83,13 @@ die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 
-step "Building oag-game (release)"
+step "Building oag-game (release${target_cpu:+, target-cpu=$target_cpu})"
+
+# Both build paths below read these. Empty for a baseline build, so nothing
+# about one changes; a tier build gets its own target directory so the two
+# never invalidate each other's incremental state.
+rustflags="${target_cpu:+-C target-cpu=$target_cpu}"
+target_suffix="${target_cpu:+-$target_cpu}"
 
 if [[ -n $binary ]]; then
     echo "using $binary"
@@ -106,7 +120,7 @@ Build natively instead and mind the glibc floor this script prints."
     # data/, so a container build neither shares nor invalidates the host's
     # incremental state - the two use different compilers against different
     # libcs.
-    container_target="$work_dir/container/target"
+    container_target="$work_dir/container/target$target_suffix"
     container_cargo="$work_dir/container/cargo"
     mkdir -p "$container_target" "$container_cargo"
 
@@ -115,24 +129,32 @@ Build natively instead and mind the glibc floor this script prints."
     # --user there; without it the mounted directories come back owned by root.
     engine_args=(--rm -v "$project_root:/src" -w /src
                  -e CARGO_HOME=/src/data/appimage/container/cargo
-                 -e CARGO_TARGET_DIR=/src/data/appimage/container/target)
+                 -e CARGO_TARGET_DIR="/src/data/appimage/container/target$target_suffix")
+    # Only when set, so a baseline build's environment is the one it always had.
+    [[ -n $rustflags ]] && engine_args+=(-e "RUSTFLAGS=$rustflags")
     [[ $engine == docker ]] && engine_args+=(--user "$(id -u):$(id -g)")
 
     "$engine" run "${engine_args[@]}" "$CONTAINER_IMAGE" \
         bash -c 'ldd --version | head -1 && cargo build --release -p oag-game'
     binary="$container_target/release/oag-game"
 elif (( skip_build )); then
-    echo "skipped, using whatever is in target/release"
-    binary="$project_root/target/release/oag-game"
+    native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
+    echo "skipped, using whatever is in $native_target/release"
+    binary="$native_target/release/oag-game"
 else
-    cargo build --release -p oag-game --manifest-path "$project_root/Cargo.toml"
-    binary="$project_root/target/release/oag-game"
+    # `target/cpu-<cpu>`, the directory `just build-cpu` uses, so the two share
+    # one incremental build.
+    native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
+    CARGO_TARGET_DIR="$native_target" RUSTFLAGS="$rustflags" \
+        cargo build --release -p oag-game --manifest-path "$project_root/Cargo.toml"
+    binary="$native_target/release/oag-game"
 fi
 
 [[ -x $binary ]] || die "$binary not found; run without --skip-build"
 
 if [[ -z $out ]]; then
     (( container )) && suffix="-portable" || suffix=""
+    suffix="$suffix$target_suffix"
     out="$work_dir/OpenAntiGrav-x86_64${suffix}.AppImage"
 fi
 

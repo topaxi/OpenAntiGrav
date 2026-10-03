@@ -17,13 +17,18 @@ not on a machine with no working GPU driver. See
 ```sh
 just appimage                       # release build, then pack
 just appimage-portable              # the same, built against an older glibc
+just appimage-deck                  # portable, compiled for the Steam Deck's CPU
 just appimage --skip-build          # pack whatever is in target/release
 just appimage --out /tmp/oag.AppImage
 ```
 
-**For a Steam Deck, use `just appimage-portable`.** A native build links against
+**For a Steam Deck, use `just appimage-deck`.** A native build links against
 whatever glibc this machine has, and refuses to start on anything older; the
-portable one is built in a container and loads on glibc 2.34 or newer. That is
+portable one is built in a container and loads on glibc 2.34 or newer, and the
+Deck's is that same container build compiled for the Deck's Zen 2 core
+(`-C target-cpu=znver2`, see [A CPU-tier build](#a-cpu-tier-build)), written as
+`OpenAntiGrav-x86_64-steamdeck.AppImage`. `just appimage-portable` stays the
+baseline x86-64 build, for an older Linux machine that may not have AVX2. That is
 [the glibc floor](#glibc), the one real portability constraint here, and the only
 reason there are two recipes rather than one.
 
@@ -43,9 +48,13 @@ the two can never draw two different pictures.
 into `target/cpu-<cpu>/`, leaving the baseline build alone. The default,
 `x86-64-v3`, assumes AVX2, FMA and BMI2 - every Intel since Haswell and every
 Zen - and so every Steam Deck; `znver2` is the Deck's own core and adds only
-its scheduling model. **Neither is what `just appimage` ships yet**: the
-baseline x86-64 build still starts on anything, and a tier binary refuses to
-start on a CPU without the instructions.
+its scheduling model. `just appimage-deck` ships the `znver2` one, through
+`scripts/build-appimage.sh --target-cpu`; `just appimage` and
+`just appimage-portable` stay baseline, which starts on anything, where a tier
+binary refuses to start on a CPU without the instructions. (Checked on the
+Deck AppImage's binary: 128,224 instructions touch a `ymm` register against
+1,223 in the baseline build, and BMI2's `shlx`/`sarx`/`shrx` appear 3,392 times
+against 13.)
 
 Measured 2026-10-03 on a Ryzen 9 7900, against the baseline build of the same
 commit:
