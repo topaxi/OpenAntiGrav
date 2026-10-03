@@ -221,11 +221,20 @@ fn check(class: &str) {
         return;
     }
     let mut wrong = Vec::new();
-    for id in ["05_Track", "21_Track"] {
+    // `OAG_LAYOUTS` (comma-separated ids) measures other layouts; only the
+    // two de Konstruct ones carry bounds.
+    let layouts: Vec<String> = std::env::var("OAG_LAYOUTS").map_or_else(
+        |_| vec!["05_Track".to_string(), "21_Track".to_string()],
+        |list| list.split(',').map(str::to_string).collect(),
+    );
+    for id in layouts.iter().map(String::as_str) {
         let Some(lone) = measure(id, class, false, oag_ai::Difficulty::Ace) else {
             return;
         };
         print(&format!("{id} {class} lone"), &lone);
+        if std::env::var_os("OAG_LONE_ONLY").is_some() {
+            continue;
+        }
         let Some(field) = measure(id, class, true, oag_ai::Difficulty::Ace) else {
             return;
         };

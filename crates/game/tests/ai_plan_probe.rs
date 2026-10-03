@@ -209,10 +209,15 @@ fn race_probe() {
     let line = race.racing_line().clone();
     println!("tick\tindex\tspeed\toffset\theight\tthrust\tbrake\tgrounded\tclimb\tpitch\tsteer");
     let mut respawns = 0;
+    let mut finished_seen = false;
     let mut last = (0u32, Vec3::ZERO, 0.0f32, 0.0f32);
     for tick in 0..var("OAG_TICKS", 6000u32) {
         race.tick(&oag_gameplay::PlayerInputs::none());
         let sh = &race.sim.world.ships[slot];
+        if sh.standing.finished() && !finished_seen {
+            finished_seen = true;
+            println!("FINISHED tick {tick} lap {}", sh.standing.lap);
+        }
         if race.respawns_of(slot) != respawns {
             respawns = race.respawns_of(slot);
             println!(

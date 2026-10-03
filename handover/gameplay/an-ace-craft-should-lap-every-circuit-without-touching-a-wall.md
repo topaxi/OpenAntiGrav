@@ -741,8 +741,11 @@ the plan's own lap, no dead stop and no trough on either layout
   RAPIER and PHANTOM. Those rows drive the corner model.
 - **`05_Track` forward's second crest**: a lone Ace at RAPIER takes the 428 pad
   (it pushes left), flies 43 units left at 157 u/s and touches a `Reset` sheet
-  at 509-511, three times in 18,000 ticks; the plan's own verification never
-  meets it.
+  at 509-511, three times in 18,000 ticks, all after the flag (finish at tick
+  6,570). In-race and in traffic it is unmeasured.
+- **The Novice run-up floor reaches nine layouts**, not only 05: net dead stops
+  7 -> 1 and rescues 10 -> 1, but `10_Track` PHANTOM, `25_Track` PHANTOM and
+  RAPIER and `26_Track` PHANTOM each got one event worse (ai.md lists them).
 - **de Konstruct White (`21_Track`)** was not touched by this lane's changes and
   shows no dead stop for any level. Its slow driving at Novice and Skilled is
   the level handicap: 1,171-1,725 ticks a run under 75 % of the plan's pace at

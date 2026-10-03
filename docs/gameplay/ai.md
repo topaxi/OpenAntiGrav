@@ -3656,6 +3656,9 @@ twelve-circuit gate stays all-twelve-clean with `01` and `06` unchanged.
 Roughly half the field still dies on Black: the wedge and a second crest at
 idx 399-484 (a craft at 250 units a second after a pad flies it and lands wide) are
 open.
+**Superseded the same day**: the wedge and the field's deaths were one fall into
+a pit under the upper road, caused by the line riding a magstrip up the first
+jump's ramp; see [below](#de-konstruct-black-the-first-jump-is-a-magstrip).
 
 ## de Konstruct Black: the first jump is a magstrip
 
@@ -3726,7 +3729,13 @@ its boost is spent 260 samples before the ramp.
    plan's 128 u/s hit the far lip on every lap at VENOM; the field's takeoffs
    fell short at 119-120 and cleared from 120.4. A floor and not a lift to
    one: at one a Skilled craft landed at full pace at PHANTOM and could not
-   brake to its own corner margin after the landing.
+   brake to its own corner margin after the landing. **It reaches every layout
+   with a gap of 40+ samples** (02, 05, 09, 10, 14, 18, 25, 26, 30) and only
+   the Novice level (Skilled already holds 0.96). Novice lone on those nine at
+   four classes, floor off -> on: dead stops 7 -> 1, rescues 10 -> 1,
+   destroyed 3 -> 4; worse rows are `10_Track` PHANTOM (one dead stop, lap
+   +64 ticks), `25_Track` PHANTOM and RAPIER (one destroyed each) and
+   `26_Track` PHANTOM (one rescue).
 
 ### What it bought
 
@@ -3786,7 +3795,9 @@ the plan's pace, from `plan_margin`'s corner fractions (0.55 and 0.69) and
 
 - **The 428 pad on Black's upper road** pushes left on a crest: a lone Ace at
   RAPIER flies 43 units left at 157 u/s and touches a `Reset` sheet at 509-511,
-  three times in 18,000 ticks, though the plan's own verification never does.
+  three times in 18,000 ticks - **all after the flag** (it finishes at tick
+  6,570; the race keeps running under AI), so not in a race a player sees, but
+  the same pad in traffic is untested.
 - The field's remaining pit falls are craft arriving at the ramp at 91-108 u/s
   after contact on lap 1; the beneath rescue now puts them back.
 - What the original does with a craft in this pit (a PPSSPP capture) was not
