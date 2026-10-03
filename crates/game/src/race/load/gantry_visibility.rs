@@ -81,19 +81,19 @@ pub(super) fn build(
         // another gets that one drawn rather than Pulse's substituted for it.
         if let Some(model) = manifest.billboard(8).and_then(|b| b.location()) {
             named_slot_8 = true;
-            // The timeline's start is measured on Pulse alone - HD's PS3
-            // geometry, and 2048's, keep it off the race start.
-            let clock_start = if has_ps3_geometry {
-                0
+            // Pulse's clock is measured; every other title runs Pulse's rule
+            // on its own asset's `GO` edge (`gantry::clock`).
+            let clock = if has_ps3_geometry {
+                super::super::gantry::ClockRule::InheritedFromPulse
             } else {
-                super::super::gantry::CLOCK_START_TICK
+                super::super::gantry::ClockRule::Measured
             };
             gantry = super::super::gantry::place(
                 archives,
                 model,
                 track_model,
                 start_position,
-                clock_start,
+                clock,
                 report,
             );
         }

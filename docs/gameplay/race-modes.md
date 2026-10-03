@@ -1439,8 +1439,9 @@ to `GO` lands on the green step above, tick 273, which puts frame 0 at **tick 92
 `GO` is therefore the timeline's own handover frame landing on the release, and
 the "about a second of `GO` before the craft can move" the gantry docs recorded
 was our clock starting at tick 0, not the original's behaviour.
-`crates/game/src/race/gantry.rs::CLOCK_START_TICK`, **Pulse only**: HD and 2048
-keep their gantry timeline off the race start (chosen, not measured). The
+`crates/game/src/race/gantry.rs::CLOCK_START_TICK`, **Pulse only**: every other
+title runs Pulse's rule on its own `GO` edge (HD: frame 203, tick 70; inherited
+from Pulse, unmeasured - `docs/rendering/start-gantry.md`). The
 cockpit-view overlay
 (`Cockpit_321GO.vex`, only drawn where no gantry is) was **not** measured in the
 original and still runs off `world.tick / 60`.

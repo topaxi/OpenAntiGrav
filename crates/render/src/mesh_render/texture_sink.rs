@@ -106,6 +106,25 @@ impl Drop for Scope {
     }
 }
 
+/// Runs `f` with this thread's [`Scope`] set aside, so a texture it decodes
+/// stays on the CPU, and puts the scope back afterwards.
+///
+/// For a caller that has to *read* a model's texels at load - the start gantry
+/// looks for the frame its board turns green - and builds one small model to
+/// do it. A texture decoded under a scope is replaced by [`Texels::Uploaded`]
+/// and has no texels to read.
+pub fn without_scope<T>(f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<Sink>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let held = self.0.take();
+            SINK.with(|cell| *cell.borrow_mut() = held);
+        }
+    }
+    let _restore = Restore(SINK.with(|cell| cell.borrow_mut().take()));
+    f()
+}
+
 /// Uploads `texture` if a [`Scope`] is open on this thread, and returns it with
 /// its texels replaced by the view; otherwise returns it unchanged.
 ///

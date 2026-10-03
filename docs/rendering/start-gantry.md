@@ -257,13 +257,71 @@ dark-red panel until tick 132 (`3` reads white), tick 178 (`2`) and tick 222
   11 ticks, so they bracket the green step rather than confirm it to a tick.
 
 The clock uses 92, and the digits may sit up to ~7 ticks early or late against
-the original; only `GO` on the release is pinned. **Pulse only**: HD's and 2048's
-gantry files are different timelines (2048's `GO` slides in at frame 200), and
-their countdown was not captured, so they keep the timeline running off the race
-start as before - chosen, not measured.
+the original; only `GO` on the release is pinned. **The 92 is Pulse only**; the
+rule is not. HD's and 2048's gantry files are different timelines (2048's `GO`
+slides in at frame 200), so their start tick is not 92 - see
+[the inherited rule](#every-other-title-pulses-rule-on-its-own-go-edge).
 
-`crates/game/src/race/gantry.rs::CLOCK_START_TICK` is that measurement, and the
-gantry's clock is `(tick - 92) / 60`.
+`crates/game/src/race/gantry.rs::CLOCK_START_TICK` is that measurement, and
+Pulse's gantry clock is `(tick - 92) / 60`.
+
+### Every other title: Pulse's rule on its own `GO` edge
+
+**Inherited from Pulse, unmeasured on HD (2026-10-03, maintainer's rule: a title
+with no measured rule runs the known one). No confidence score.** The rule is
+that the board's `GO` edge lands on the tick after the thrust gate (273) and
+the clock is held on `GO` from there. `race::gantry::clock::go_edge` reads the
+edge off the title's own asset: **the first frame at which a drawn vertex
+samples the authored green texel** of the board's texture, walking the model's
+own texture tracks (`TexAnims`) at 60 frames a second, and
+`Clock::inherited` sets `start_tick = 273 - go_frame`.
+
+- **Check against the one measured title.** Run on Pulse's own
+  `321Go_StartFinish.vex`, the rule finds **frame 181** - the `u` step the
+  capture was pinned on - so it gives `273 - 181 = 92` with no Pulse constant in
+  it (`start_gantry_clock_inherit_ground_truth.rs`). The same walk finds the
+  first frame a drawn node leaves its place after the edge at **350** (the
+  `Board` teleport), one frame past the chosen loop end of 349.
+- **HD**: the edge is **frame 203**. `321_go_64.gtf`'s backdrop column steps
+  from its red texels to the green marker column (cols 57-59) as the Edge
+  Animation curve's `u` ramps 0.861 -> 0.901 over frames 198-204, so
+  frame 0 is **tick 70**. The digits then read `3` about tick 110, `2` about 160,
+  `1` about 210, against Pulse's captured 132, 178 and 222: the asset's own
+  spacing, not a fitted one. `GO`'s letters reach full opacity a few frames
+  after the green (alpha 72 at frames 207-210, 255 from 211), so on HD the
+  board is green on the release tick and `GO` is fully lit about 8 ticks
+  later; Pulse's single `u` step makes both land on the same tick.
+- **Held**: the clock loops frames **221 to 359** instead of running into the
+  exit, as Pulse's loops 216-349. 359 is the last frame before the glyph node's
+  own exit keys at 359/360, found by walking the drawn nodes' motion. 221 is
+  the first frame from the edge at which every vertex that sampled lit white
+  before it (the digits) samples no alpha: starting the loop at the edge itself
+  replays the fading `1` beside `GO` every 2.3 s, which Pulse never does and
+  which a first version of this did. Where an asset's digits and `GO` share
+  texels (Pulse's own board does) the walk finds no such frame and the loop
+  starts at the edge; only HD uses it. The span is chosen, not measured; only
+  that `GO` stays up on Pulse was measured.
+- **2048 and Omega place no gantry**, so there is no clock to set. Loaded
+  through `race::load`: all ten native 2048 circuits, **thirteen of the sixteen
+  HD-ported 2048 circuits** (the base package's four - `Anulpha_Pass`,
+  `Chenghou_Project`, `Moa_Therma`, `Vineta_K` - and nine of the DLC's, under
+  `Data\art\published\DLC1\environments\`), and on Omega the default circuit,
+  Tech De Ra (HD's circuit) and Altima (2048's) all report `no start gantry:
+  this circuit's track authors no 321backplate/billboard8 surface`
+  (`start_gantry_clock_inherit_ground_truth.rs`). The three HD-ported circuits
+  not loaded are `zone_2`-`zone_4`. Whether 2048's psp2 copy of HD's
+  `321Go_StartFinish.vex` carries the Edge curve `go_edge` walks was not tested,
+  since no circuit stands one; 2048's native `321Go_2048.vex` (`GO` node sliding
+  in at frame 200) has no texture track at all, so `go_edge` would report none
+  and the clock would run from the race start, chosen.
+- **A title whose edge is not found** keeps the timeline running from the race
+  start, chosen, and the loader says why (`start gantry clock: no GO edge
+  found in ...`).
+
+Played on HD (`oag-game --race --track /data/environments/talons_junction/track.vex
+--ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`): red banner and a fading `1`
+at tick 270, green banner at 271-273, `GO` letters at 276-280, then `GO`
+strobing through tick 1500 where the raw clock had emptied the board by 400.
 
 ### What the original does after `GO`: it holds `GO`
 
@@ -299,9 +357,9 @@ behaviour it stands in for: `GO` strobing indefinitely. How the original keeps
 the strobe going (a loop on the offset track, a per-state write, the gated
 accumulator at `0x0890cf34` above) is unrecovered. The strobe's period in the
 capture is visibly of the same order as the authored one (about 0.7 s) but
-was not measured against it. HD and 2048 are untouched: HD's glyph teleports
-+10.004 at the same 6.000 s (`start_gantry_hd_ground_truth.rs`), and very
-likely shows the same strip, but its countdown was not captured.
+was not measured against it. HD and 2048 take the inherited rule (above): HD's glyph
+teleports +10.004 at the same 6.000 s (`start_gantry_hd_ground_truth.rs`),
+so its clock is held on `GO` too, but its countdown was not captured.
 `crates/game/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
 never leaves the aperture on the held clock and does on the raw one.
 
@@ -1271,7 +1329,7 @@ Three things the coordinates alone did not say, found by rendering:
    extent sits outside the **mount's authored width**, which is 6 or 7 of the
    model's 15 on every circuit - the two states whose trigger is unrecovered,
    and nothing else.
-3. **The gantry's clock starts at tick 92 and is held at frame 559** - the last
+3. **The gantry's clock starts at tick 92 on Pulse (other titles: [Pulse's rule on their own edge](#every-other-title-pulses-rule-on-its-own-go-edge)) and is held at frame 559** - the last
    frame before `Final_Lap`'s own first key. The 92 is measured, not chosen: it
    puts the asset's `GO` step on the thrust release, as the original does - see
    [the timing section](#timing-against-the-measured-countdown).
