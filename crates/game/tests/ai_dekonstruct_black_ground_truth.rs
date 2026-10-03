@@ -75,19 +75,26 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// cells 11 -> 10: four cells fell by one, two rose by one (RAPIER seed 3,
 /// PHANTOM seed 2), which is the per-seed spread of a field with weapons on,
 /// not a column getting worse.
+///
+/// **Tightened 2026-10-03 again (lane `pulse-ai-05`)**: Black's plan verifies
+/// now (its line leaves a magstrip on the first jump's run-up, the corridor
+/// there stops short of the strip, and an opponent grounded well beneath its
+/// line is rescued), so its column fell 49 -> 4 over the twelve cells. The
+/// reversed column regenerated identical. Without the corridor bound alone
+/// Black reads 6 (RAPIER seeds 2 and 3, PHANTOM seed 3 each one higher).
 const BOUND: &[(&str, u64, u32, u32)] = &[
-    ("VENOM", 1, 6, 0),
-    ("VENOM", 2, 4, 0),
-    ("VENOM", 3, 5, 1),
-    ("FLASH", 1, 4, 0),
-    ("FLASH", 2, 5, 0),
-    ("FLASH", 3, 4, 0),
+    ("VENOM", 1, 0, 0),
+    ("VENOM", 2, 0, 0),
+    ("VENOM", 3, 0, 1),
+    ("FLASH", 1, 0, 0),
+    ("FLASH", 2, 0, 0),
+    ("FLASH", 3, 0, 0),
     ("RAPIER", 1, 1, 0),
-    ("RAPIER", 2, 6, 0),
-    ("RAPIER", 3, 4, 3),
-    ("PHANTOM", 1, 2, 1),
-    ("PHANTOM", 2, 4, 4),
-    ("PHANTOM", 3, 4, 1),
+    ("RAPIER", 2, 0, 0),
+    ("RAPIER", 3, 0, 3),
+    ("PHANTOM", 1, 0, 1),
+    ("PHANTOM", 2, 2, 4),
+    ("PHANTOM", 3, 1, 1),
 ];
 
 fn check(class: &str, seed: u64) {
