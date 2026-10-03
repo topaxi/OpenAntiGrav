@@ -325,8 +325,21 @@ by one level at the same step and none after it, and the Pulse and HD front
 ends (backdrop, `Velocity::None` pipelines) are byte-identical.
 
 HD split after the last step (two pairs each, before -> after): motion blur
-off 32.9 -> 20.6 ms, so the blur chain is about 3 ms of it at this size; MSAA
-off as well, 25.0 -> 16.9 ms.
+off 32.9 -> 20.6 ms, MSAA off as well 25.0 -> 16.9 ms. **That is not the blur
+chain's cost**: the chain encodes only when the camera moved, and a stationary
+`--race` capture re-recording one frame never moves it. With `--autopilot` it
+runs, and it is **15.9 ms at 1600x900 and 58.9 ms at 3200x1800** on HD - the
+maintainer's 14 ms. `--presented --render-scale 200` is the capture that
+reaches the window's 200 % scale.
+
+**The blur chain by pass** (HD, 1600x900, MSAA 4x, `high`): prepare 0.64 ms,
+tile-max x 0.46, tile-max y and neighbour-max under 0.02, **reconstruct 14.6**,
+copy 0.19. Reconstruct is 15 taps of two fetches each over every moving pixel,
+spread up to the reach cap - `MAX_STRETCH` of the viewport height, so at 200 %
+the same taps cover four times the texels and miss cache. Scaling the tap
+count with the smear's length (`ceil(len / 4 px)`, odd, 5..15) measured
+13.7 -> 9.4 ms at 1600x900 and 52.6 -> 42.6 at 3200x1800, mean change 0.7/255
+- not shipped, it is a picture change.
 
 **Split by draw group, at the maintainer's 200% scale (3200x1800, MSAA 4x,
 blur off).** `perfprobe::marks` writes timestamps and fragment-invocation

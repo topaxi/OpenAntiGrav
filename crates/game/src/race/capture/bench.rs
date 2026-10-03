@@ -137,9 +137,9 @@ pub(super) fn run(
             }
         }
         for (label, span, fragments) in &mut groups {
-            report(&format!("  race pass / {label}"), span);
+            report(&format!("  span / {label}"), span);
             if let Some(fragments) = fragments {
-                println!("bench   race pass / {label}: {fragments} fragment invocation(s)");
+                println!("bench   span / {label}: {fragments} fragment invocation(s)");
             }
         }
     }

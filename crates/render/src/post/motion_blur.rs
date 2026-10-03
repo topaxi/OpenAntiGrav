@@ -589,7 +589,7 @@ impl MotionBlur {
         let grid_rect = clamped(reduced(frame.viewport, (t, t)), tiles);
 
         let mut pass =
-            |label: &str,
+            |label: &'static str,
              pipeline: &wgpu::RenderPipeline,
              groups: &[&wgpu::BindGroup],
              target: &wgpu::TextureView,
@@ -612,6 +612,7 @@ impl MotionBlur {
                     occlusion_query_set: None,
                     multiview_mask: None,
                 });
+                crate::perfprobe::marks::mark(&mut pass, label);
                 pass.set_pipeline(pipeline);
                 // **The scissor as well as the viewport**, which is belt and
                 // braces rather than duplication: a viewport is a transform
@@ -625,6 +626,11 @@ impl MotionBlur {
                     pass.set_bind_group(index as u32, Some(*group), &[]);
                 }
                 pass.draw(0..3, 0..1);
+                if label == "motion blur copy" {
+                    crate::perfprobe::marks::mark(&mut pass, "end");
+                } else {
+                    crate::perfprobe::marks::close(&mut pass);
+                }
             };
 
         let prepare_pipeline = if groups.multisampled {

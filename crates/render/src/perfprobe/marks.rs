@@ -236,3 +236,19 @@ pub fn mark(pass: &mut wgpu::RenderPass<'_>, label: &'static str) {
     pass.write_timestamp(&armed.queries, index);
     armed.labels.push(label);
 }
+
+/// Ends the fragment count a [`mark`] opened on `pass`, for a pass that closes
+/// before the next mark: a statistics query cannot span two passes, so a
+/// chain of passes marks each one's start and closes each one's end.
+#[inline]
+pub fn close(pass: &mut wgpu::RenderPass<'_>) {
+    if !cfg!(feature = "perf-probe") {
+        return;
+    }
+    let Ok(mut armed) = ARMED.lock() else { return };
+    let Some(armed) = armed.as_mut() else { return };
+    if armed.fragments.is_some() && armed.open {
+        pass.end_pipeline_statistics_query();
+        armed.open = false;
+    }
+}
