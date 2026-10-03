@@ -709,13 +709,46 @@ residual are all moot wherever a plan verifies - the plan replaces
 matter on the layouts whose plan does not verify, which drive the corner
 model unchanged.
 
+## Step 12 is done: `05_Track` forward's plan verifies, and the walls were a pit (2026-10-03)
+
+The walls at 424-637 that a craft "touched at 15 u/s too" are not on the
+circuit. A craft that falls short of the first jump (line samples 162-210 over
+a gap) lands in a pit 30-80 units under the upper road, and the windowed
+locator keeps it on upper-line indices while it meets that pit's walls and
+dead end (586-614: the "wedge"). It fell short because the authored line
+climbs the ramp on a **magstrip** and `oag_physics::maglock` holds the craft to
+the ramp's convex top: 78 u/s of climb at the lip against 87 six units right on
+plain floor. Three changes, all chosen, not measured:
+
+1. The line leaves a magstrip on a takeoff run-up (`race/takeoff_line.rs`,
+   `oag_ai::line_shift`); only `05_Track` forward has one. Its plans verify at
+   all four classes: `speed_plan_ground_truth` 87 -> **91 of 96**.
+2. The corridor there stops short of the strip, so a pilot handed its
+   character back in traffic does not wander onto it.
+3. `oag_race::recovery::BENEATH_LINE`: an opponent grounded more than 15 units
+   below its own line (on a supported sample) is lost after `RESCUE_TICKS`.
+4. A lower level's pace share is floored at 0.96 within 450 units of a takeoff
+   run-up (a Novice at VENOM hit the far lip every lap).
+
+White field destroyed of 21 (three seeds): VENOM 15 -> 0, FLASH 13 -> 0,
+RAPIER 11 -> 1, PHANTOM 10 -> 3. Lone Ace laps 11-23 % faster, within 0.7 % of
+the plan's own lap, no dead stop and no trough on either layout
+(`ai_dekonstruct_symptoms_ground_truth`). Full account:
+[ai.md, "de Konstruct White: the first jump is a magstrip"](../../docs/gameplay/ai.md#de-konstruct-white-the-first-jump-is-a-magstrip).
+
 ## Open
 
-- **Nine layout-class plans do not verify** (`speed_plan_ground_truth.rs`
-  pins the set): `05_Track` at every class, `06_Track` VENOM and RAPIER,
-  `14_Track` PHANTOM, `29_Track` RAPIER and PHANTOM. Those rows drive the
-  corner model and carry most of the remaining contact. `05_Track` touches
-  walls at 424-637 at 15 u/s too, so it is the line there, not the speed.
+- **Five layout-class plans do not verify** (`speed_plan_ground_truth.rs`
+  pins the set): `06_Track` VENOM and RAPIER, `14_Track` PHANTOM, `29_Track`
+  RAPIER and PHANTOM. Those rows drive the corner model.
+- **`05_Track` forward's second crest**: a lone Ace at RAPIER takes the 428 pad
+  (it pushes left), flies 43 units left at 157 u/s and touches a `Reset` sheet
+  at 509-511, three times in 18,000 ticks; the plan's own verification never
+  meets it.
+- **de Konstruct Black (`21_Track`)**, the layout the maintainer named, was not
+  touched by this lane's changes and shows no dead stop for any level. Its
+  "slow driving" at Novice and Skilled is the level handicap: 1,171-1,725 ticks
+  a run under 75 % of the plan's pace at PHANTOM, lone.
 - **Three verified rows still touch**: `17_Track` VENOM (1 tick), `09_Track`
   PHANTOM (6), `25_Track` PHANTOM (21).
 - **The team axis on plans**: 89 (Feisar), 87 (Assegai), 83 (Piranha) of 96
@@ -735,9 +768,8 @@ model unchanged.
 
 ## Next Steps
 
-1. **`05_Track`'s plan**: trace why a craft on the plan touches 424-637 at 15
-   u/s (`examples/speed_plan_trace.rs`, `speed_plan_probe.rs`), which is a line
-   question; the crest lip at ~206 is a standing-start one.
+1. **`05_Track` forward's 428 pad**: a pad whose push points off the road on a
+   crest; read whether the plan should steer across it or avoid it.
 2. **The two rescue cases** (`14_Track` PHANTOM at 1247, `29_Track` at
    2402-2441): the search lowers ceilings and the craft still leaves; read
    whether a held run-up or a lower one is the answer.
