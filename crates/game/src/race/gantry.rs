@@ -70,7 +70,7 @@
 
 mod clock;
 
-pub use clock::{Clock, GoEdge, SEARCH_FRAMES, go_edge};
+pub use clock::{Clock, GoEdge, HD_PRE_LAP_WINDOW, ReleaseWindow, SEARCH_FRAMES, go_edge};
 
 use super::*;
 
@@ -154,11 +154,24 @@ pub fn clock_seconds(start_tick: u64, tick: u64) -> f32 {
 pub struct Placed {
     pub(super) model: Model,
     pub(super) matrix: Mat4,
-    /// Where the timeline starts and whether `GO` is held: [`Clock::PULSE`]
-    /// where it was measured, the title's own `GO` edge on Pulse's rule where
-    /// it was not ([`Clock::inherited`]), or the timeline off the race start
-    /// where no edge could be found.
+    /// Where the timeline starts and what keeps it on `GO`: [`Clock::PULSE`]
+    /// on Pulse, HD's race-manager window on the PS3 titles ([`Clock::hd`]),
+    /// or the timeline off the race start where no edge could be found.
     pub(super) clock: Clock,
+}
+
+impl Placed {
+    /// The gantry model as placed, for a test to sample what the clock shows.
+    #[must_use]
+    pub fn model(&self) -> &Model {
+        &self.model
+    }
+
+    /// The clock the loader chose for it.
+    #[must_use]
+    pub fn clock(&self) -> Clock {
+        self.clock
+    }
 }
 
 impl std::fmt::Debug for Placed {
@@ -235,7 +248,7 @@ pub(super) fn place(
     ));
     let clock = match clock {
         ClockRule::Measured => Clock::PULSE,
-        ClockRule::InheritedFromPulse => inherited_clock(&model, name, report),
+        ClockRule::HdRaceManager => hd_clock(&model, name, report),
     };
     Some(Placed {
         model,
@@ -249,37 +262,45 @@ pub(super) fn place(
 pub(super) enum ClockRule {
     /// Pulse's own, measured against the original: [`Clock::PULSE`].
     Measured,
-    /// Every other title: Pulse's rule on the title's own asset - **inherited
-    /// from Pulse; on HD the start tick is also measured (confidence 75)**.
-    InheritedFromPulse,
+    /// The PS3 geometry titles: the start tick off the asset's own `GO` edge
+    /// as [`Clock::inherited`] gives it, then from the release
+    /// HD's own race-manager window ([`Clock::hd`]), **read from HD's EBOOT
+    /// and matched against its RPCS3 capture**.
+    HdRaceManager,
 }
 
-/// Pulse's rule on `model`'s own `GO` edge, or the timeline off the race
-/// start with the reason in the report.
-fn inherited_clock(model: &Model, name: &str, report: &mut Vec<String>) -> Clock {
-    match go_edge(model).map(|edge| (edge, Clock::inherited(edge))) {
+/// HD's clock on `model`'s own `GO` edge, or the timeline off the race start
+/// with the reason in the report.
+fn hd_clock(model: &Model, name: &str, report: &mut Vec<String>) -> Clock {
+    match go_edge(model).map(|edge| (edge, Clock::hd(edge))) {
         Ok((edge, Some(clock))) => {
+            let window = HD_PRE_LAP_WINDOW;
             report.push(format!(
                 "start gantry clock: {name}'s own GO edge is asset frame {} (the first frame the \
-                 board samples its authored green), landed on tick {} - one tick after the thrust \
-                 gate - so frame 0 is tick {}, and the clock is held over frames {}..{}, from the digits' last fade to the exit (chosen, not \
-                 measured). The start tick is measured on Wipeout HD (2026-10-04, confidence 75): \
-                 the board's red-to-green step lands within one 30 fps video frame of the race \
-                 clock's zero and the craft's first movement, on two boots; the original's GO \
-                 pulse runs earlier than this held loop, see docs/rendering/start-gantry.md",
+                 board samples its authored green), so frame 0 is tick {} and the edge would land \
+                 on tick {}; from tick {} the clock is kept in [{:.2}, {:.2}) s and reset to {:.2} \
+                 when outside it, the window HD's race manager (0x0005e948) holds the gantry in \
+                 before the first line crossing - so GO is lit on the release and then loops \
+                 every {} ticks (read from the EBOOT, confidence 85; the green step on the release \
+                 is measured on RPCS3, 2026-10-04, confidence 75, and bounds the start tick from \
+                 below). The later laps' windows are not played: see \
+                 docs/rendering/start-gantry.md",
                 edge.frame,
-                oag_race::COUNTDOWN_TICKS + 1,
                 clock.start_tick,
-                edge.settled_frame,
-                edge.last_frame_before_exit,
+                oag_race::COUNTDOWN_TICKS + 1,
+                window.from_tick,
+                window.from,
+                window.to,
+                window.from,
+                window.period(),
             ));
             clock
         }
         Ok((edge, None)) => {
             report.push(format!(
                 "start gantry clock: {name}'s GO edge (frame {}) is later than the thrust gate, so \
-                 Pulse's rule has no start tick for it; the timeline runs from the race start \
-                 (chosen, not measured)",
+                 there is no start tick for it; the timeline runs from the race start (chosen, \
+                 not measured)",
                 edge.frame
             ));
             Clock::FROM_RACE_START

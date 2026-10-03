@@ -24,8 +24,21 @@
 //! green. That is the frame the `u` offset finishes stepping across to the
 //! green marker column - the same "green step" Pulse's tick 273 was pinned on.
 //! HD's own countdown was captured on RPCS3 on 2026-10-04 (confidence 75): the
-//! green step lands on the release within one 30 fps video frame, which is what
-//! this edge-to-release rule gives. The held span is still chosen.
+//! green step lands on the release within one 30 fps video frame. Since the
+//! release jump below, that bounds the start tick from below rather than
+//! measuring it: any start that keeps the free run short of the edge at the
+//! release turns the board green on the release.
+//!
+//! # What HD does after the release: [`ReleaseWindow`]
+//!
+//! HD's clock is not held on a loop of this project's choosing. **Read from
+//! the EBOOT** (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`): the
+//! billboard's curve time is the gantry node's own animation time, and the
+//! race manager's per-frame update (`0x0005e948`) keeps that time inside a
+//! window for the race phase it is in, resetting it to the window's start when
+//! it is outside. Before the craft first crosses the line the window is
+//! `[3.83, 5.25)` s, so on the release the clock jumps from frame ~203 to frame
+//! 229.8 (`GO` already lit) and then loops 86 ticks. [`HD_PRE_LAP_WINDOW`].
 
 use oag_render::mesh::{DrawCall, Model};
 use oag_render::mesh_render::TexAnims;
@@ -52,6 +65,87 @@ pub struct Clock {
     /// The span, in seconds, the clock loops once `GO` is up, or `None` to run
     /// the authored timeline straight on.
     pub hold: Option<(f32, f32)>,
+    /// A window the title's own race code forces the clock into from a tick
+    /// on, taking over from `hold`: HD's, [`HD_PRE_LAP_WINDOW`]. `None` on
+    /// Pulse and on every inherited clock.
+    pub window: Option<ReleaseWindow>,
+}
+
+/// A race-phase window the original's race manager keeps the gantry's time
+/// in, resetting it to `from` whenever it reads outside `[from, to)`.
+///
+/// One tick of the window is: advance the time by one 60 Hz tick, then reset it
+/// to `from` if it is outside. The two halves run in different functions in
+/// the original (the window check in the race manager, the advance in the
+/// node's own update), and which runs first in a frame was not read, so the
+/// visible phase carries one tick of uncertainty.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ReleaseWindow {
+    /// The time the clock is reset to, in seconds.
+    pub from: f32,
+    /// The first time outside the window, in seconds.
+    pub to: f32,
+    /// The race tick the window first applies on.
+    pub from_tick: u64,
+}
+
+/// HD's window before the first line crossing: `[3.83, 5.25)` s, from the
+/// release on.
+///
+/// **Read from `EBOOT.BIN`, confidence 85.** `0x0005e948` (the race manager's
+/// per-frame update) compares the gantry node's time against the TOC floats at
+/// `0x008a6a74` (`0x40751eb8`, 3.83) and `0x008a6a90` (`0x40a80000`, 5.25) while
+/// the player's lap counter (`ship+0x7810`) is 0, and calls `SetTime(3.83)`
+/// (`0x002c1b30` -> `0x002be978`) when it is outside. The window code runs in
+/// race phases 2 to 4 (`RaceManager+0x1970`); that phase 2 begins on the
+/// release is the 2026-10-04 RPCS3 capture (the green step on the race clock's
+/// zero, confidence 75), so `from_tick` is the tick after the thrust gate, the
+/// tick the inherited rule already lands the green on. The same capture's `GO`
+/// dark centres, +23, +61 and +109 ticks from the step, are this window's
+/// frames 252.8 and 290.8 and the second loop's 252.8: 86 ticks apart.
+pub const HD_PRE_LAP_WINDOW: ReleaseWindow = ReleaseWindow {
+    from: f32::from_bits(0x4075_1eb8),
+    to: f32::from_bits(0x40a8_0000),
+    from_tick: COUNTDOWN_TICKS + 1,
+};
+
+impl ReleaseWindow {
+    /// Whether `seconds` is inside the window.
+    fn holds(&self, seconds: f32) -> bool {
+        seconds >= self.from && seconds < self.to
+    }
+
+    /// Ticks from `from` until the next reset: the loop's period.
+    #[must_use]
+    pub fn period(&self) -> u64 {
+        self.ticks_inside(self.from)
+    }
+
+    /// How many ticks the clock stays inside from `start`, `start` included.
+    fn ticks_inside(&self, start: f32) -> u64 {
+        let mut n = 0u64;
+        while self.holds(start + n as f32 / 60.0) {
+            n += 1;
+        }
+        n
+    }
+
+    /// The clock `ticks` after [`ReleaseWindow::from_tick`], given the time
+    /// the free-running clock read on that tick.
+    #[must_use]
+    pub fn seconds(&self, at_from_tick: f32, ticks: u64) -> f32 {
+        let start = if self.holds(at_from_tick) {
+            at_from_tick
+        } else {
+            self.from
+        };
+        let first = self.ticks_inside(start);
+        if ticks < first {
+            start + ticks as f32 / 60.0
+        } else {
+            self.from + ((ticks - first) % self.period()) as f32 / 60.0
+        }
+    }
 }
 
 impl Clock {
@@ -61,6 +155,7 @@ impl Clock {
     pub const FROM_RACE_START: Self = Self {
         start_tick: 0,
         hold: None,
+        window: None,
     };
 
     /// Pulse's, **measured** (confidence 85): frame 0 on tick 92 and `GO`
@@ -68,6 +163,7 @@ impl Clock {
     pub const PULSE: Self = Self {
         start_tick: CLOCK_START_TICK,
         hold: Some(GO_LOOP),
+        window: None,
     };
 
     /// Pulse's rule on a title's own asset: `edge`'s `GO` frame lands on the
@@ -86,12 +182,34 @@ impl Clock {
                 edge.settled_frame as f32 / 60.0,
                 edge.last_frame_before_exit as f32 / 60.0,
             )),
+            window: None,
+        })
+    }
+
+    /// HD's: the timeline free-runs from the inherited start tick until the
+    /// release and is then kept in [`HD_PRE_LAP_WINDOW`] by the rule HD's own
+    /// race manager runs.
+    ///
+    /// `None` when the edge is later than the release, as for
+    /// [`Clock::inherited`].
+    #[must_use]
+    pub fn hd(edge: GoEdge) -> Option<Self> {
+        Some(Self {
+            hold: None,
+            window: Some(HD_PRE_LAP_WINDOW),
+            ..Self::inherited(edge)?
         })
     }
 
     /// The gantry's clock in seconds at race tick `tick`.
     #[must_use]
     pub fn seconds(&self, tick: u64) -> f32 {
+        if let Some(window) = self.window
+            && tick >= window.from_tick
+        {
+            let at_release = super::clock_seconds(self.start_tick, window.from_tick);
+            return window.seconds(at_release, tick - window.from_tick);
+        }
         let seconds = super::clock_seconds(self.start_tick, tick);
         match self.hold {
             Some(span) => super::held_within(seconds, span),
@@ -328,6 +446,65 @@ mod tests {
             assert!(seconds < 359.0 / 60.0, "tick {tick}: {seconds}");
         }
         assert!(clock.seconds(COUNTDOWN_TICKS + 5000) >= 222.0 / 60.0);
+    }
+
+    /// HD's window, read from the EBOOT: on the release the clock jumps from
+    /// the free run's frame 203 to 3.83 s and loops every 86 ticks; the
+    /// capture's `GO` dark centres at +23, +61 and +109 ticks are 86 apart at
+    /// the first and third.
+    #[test]
+    fn hds_window_jumps_on_the_release_and_loops_86_ticks() {
+        let clock = Clock::hd(GoEdge {
+            frame: 203,
+            settled_frame: 221,
+            last_frame_before_exit: 359,
+        })
+        .expect("before the release");
+        assert_eq!(clock.start_tick, 70);
+        assert_eq!(HD_PRE_LAP_WINDOW.from, 3.83);
+        assert_eq!(HD_PRE_LAP_WINDOW.to, 5.25);
+        assert_eq!(HD_PRE_LAP_WINDOW.period(), 86);
+        let release = COUNTDOWN_TICKS + 1;
+        // Free-running until the release: the board is still red there.
+        assert_eq!(clock.seconds(release - 1) * 60.0, 202.0);
+        // On the release the clock is at the window's start, past the
+        // digits' fade and `GO`'s alpha ramp, not at the edge.
+        assert_eq!(clock.seconds(release), 3.83);
+        for k in 0..2000 {
+            let seconds = clock.seconds(release + k);
+            assert!(HD_PRE_LAP_WINDOW.holds(seconds), "+{k}: {seconds}");
+            assert_eq!(seconds, clock.seconds(release + k + 86), "+{k}");
+        }
+        // Frame 252.8, the first measured dip, is +23 ticks and again +109.
+        let frame = |k: u64| clock.seconds(release + k) * 60.0;
+        assert!((frame(23) - 252.8).abs() < 0.01, "{}", frame(23));
+        assert!((frame(109) - 252.8).abs() < 0.01, "{}", frame(109));
+        assert!((frame(61) - 290.8).abs() < 0.01, "{}", frame(61));
+    }
+
+    /// A clock already inside the window on its first tick carries on from
+    /// there and resets only when it leaves.
+    #[test]
+    fn a_clock_inside_the_window_is_not_reset() {
+        let window = ReleaseWindow {
+            from: 1.0,
+            to: 2.0,
+            from_tick: 0,
+        };
+        assert_eq!(window.period(), 60);
+        assert_eq!(window.seconds(1.5, 0), 1.5);
+        assert_eq!(window.seconds(1.5, 29), 1.5 + 29.0 / 60.0);
+        assert_eq!(window.seconds(1.5, 30), 1.0);
+        assert_eq!(window.seconds(1.5, 90), 1.0);
+        assert_eq!(window.seconds(2.5, 0), 1.0);
+        assert_eq!(window.seconds(0.5, 0), 1.0);
+    }
+
+    /// Pulse's clock has no window: the HD law never reaches it.
+    #[test]
+    fn pulse_has_no_window() {
+        assert_eq!(Clock::PULSE.window, None);
+        assert_eq!(Clock::PULSE.seconds(COUNTDOWN_TICKS + 1) * 60.0, 181.0);
     }
 
     /// Without a hold the clock is the plain timeline, as it was for every

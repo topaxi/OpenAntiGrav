@@ -1,5 +1,5 @@
-//! The start gantry's clock on every title that stands one: Pulse's rule on
-//! the title's own `GO` edge.
+//! The start gantry's clock on every title that stands one: Pulse's measured
+//! clock, and HD's own race-manager window off its asset's `GO` edge.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content; run it with
 //! `just test-data`. The tests skip with a message when an image is absent and
@@ -16,10 +16,13 @@
 //!   tick 92 - the number measured against the original. That is the check the
 //!   rule is read the same way on every title.
 //! - **HD**: the rule finds frame 203, so frame 0 is tick 70, and the loader
-//!   says so. **The start tick is measured on HD** (2026-10-04, confidence 75,
-//!   two RPCS3 boots): the board's red-to-green step is on the video frame the
-//!   race clock reads zero and the craft first moves, i.e. the release, within
-//!   one 30 fps frame (2 ticks). The held span 221..359 is chosen, not measured.
+//!   says so. From the release on, HD runs its own race manager's window
+//!   (`0x0005e948`, read from the EBOOT, confidence 85): the clock jumps to
+//!   3.83 s and loops `[3.83, 5.25)`, 86 ticks. Pinned against the 2026-10-04
+//!   RPCS3 capture: `GO` is lit on the release and its dark centres land
+//!   within 2 ticks of the measured +23, +61 and +109. The start tick is
+//!   bounded from below by the same capture (the green step on the release,
+//!   confidence 75), not measured.
 //! - **2048 and Omega**: no circuit that was tried stands a gantry at all
 //!   (`oag_render::gantry::mount` finds no `321backplate`) - 2048's ten native
 //!   circuits, thirteen of its sixteen HD-ported ones (the base package's four
@@ -58,9 +61,47 @@ fn pulses_own_asset_gives_pulses_measured_start_through_the_rule() {
     );
 }
 
+/// How much lit white the board's animated vertices sample at `seconds`: the
+/// sum of the alpha of every white texel a drawn, texture-animated vertex
+/// lands on. `GO`'s bright and dark phases are this rising and falling.
+fn lit_white(model: &mesh::Model, seconds: f32) -> u32 {
+    let table = oag_render::mesh_render::TexAnims::sample(model, seconds);
+    let mut total = 0;
+    let lists: [&[mesh::DrawCall]; 3] = [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ];
+    for draw in lists.into_iter().flatten() {
+        let Some(texture) = draw.texture.and_then(|t| model.textures.get(t)?.as_ref()) else {
+            continue;
+        };
+        let Some(rgba) = texture.to_rgba() else {
+            continue;
+        };
+        let (w, h) = (texture.width as usize, texture.height as usize);
+        for index in &model.indices[draw.range.start as usize..draw.range.end as usize] {
+            let vertex = &model.vertices[*index as usize];
+            if vertex.anim == 0 {
+                continue;
+            }
+            let [su, sv, ou, ov] = table.transform[vertex.anim as usize];
+            let u = (vertex.texcoord[0] * su + ou).rem_euclid(1.0);
+            let v = (vertex.texcoord[1] * sv + ov).rem_euclid(1.0);
+            let x = ((u * w as f32) as usize).min(w - 1);
+            let y = ((v * h as f32) as usize).min(h - 1);
+            let p = &rgba[(y * w + x) * 4..(y * w + x) * 4 + 4];
+            if p[0] >= 200 && p[1] >= 200 && p[2] >= 200 {
+                total += u32::from(p[3]);
+            }
+        }
+    }
+    total
+}
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hds_go_edge_lands_on_the_release_and_is_held() {
+fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
@@ -76,42 +117,50 @@ fn hds_go_edge_lands_on_the_release_and_is_held() {
         .find(|l| l.starts_with("start gantry clock:"))
         .unwrap_or_else(|| panic!("no gantry clock line: {:#?}", loaded.report));
     assert!(line.contains("asset frame 203"), "{line}");
-    assert!(line.contains("landed on tick 273"), "{line}");
     assert!(line.contains("frame 0 is tick 70"), "{line}");
-    assert!(
-        line.contains("measured on Wipeout HD (2026-10-04, confidence 75)"),
-        "{line}"
-    );
+    assert!(line.contains("kept in [3.83, 5.25) s"), "{line}");
+    assert!(line.contains("loops every 86 ticks"), "{line}");
+    assert!(line.contains("0x0005e948"), "{line}");
 
-    // The hold span, read back out of what the loader derived rather than
-    // restated here: the digits are gone from `from` and the glyph's exit
-    // keys start after `to`.
-    let span = line
-        .split("held over frames ")
-        .nth(1)
-        .and_then(|rest| rest.split(',').next())
-        .and_then(|span| span.split_once(".."))
-        .map(|(from, to)| (from.parse::<u32>().unwrap(), to.parse::<u32>().unwrap()))
-        .unwrap_or_else(|| panic!("no hold span in: {line}"));
-    assert_eq!(span, (221, 359), "{line}");
+    let placed = loaded
+        .gantry
+        .as_ref()
+        .expect("Talon's Junction stands a gantry");
+    let (model, clock) = (placed.model(), placed.clock());
+    assert_eq!(clock.window, Some(gantry::HD_PRE_LAP_WINDOW));
+    let release = oag_race::COUNTDOWN_TICKS + 1;
+    let lit = |tick: u64| lit_white(model, clock.seconds(tick));
+    let full = (release..release + 200).map(lit).max().expect("ticks");
+    assert!(full > 0, "GO never lights");
 
-    let edge = gantry::GoEdge {
-        frame: 203,
-        settled_frame: span.0,
-        last_frame_before_exit: span.1,
-    };
-    let clock = gantry::Clock::inherited(edge).expect("before the release");
-    assert_eq!(clock.start_tick, 70);
-    assert_eq!(clock.seconds(oag_race::COUNTDOWN_TICKS + 1) * 60.0, 203.0);
-    for tick in (0..30_000).step_by(11) {
-        let frame = clock.seconds(tick) * 60.0;
-        assert!(
-            frame < span.1 as f32 && (tick < 70 + 203 || frame >= 203.0),
-            "tick {tick} is at frame {frame}"
-        );
-        if tick > 70 + span.1 as u64 {
-            assert!(frame >= span.0 as f32, "tick {tick} replays frame {frame}");
+    // `GO` is fully lit on the release itself, as on the original's step
+    // frame; the tick before is still the red board. The inherited clock put
+    // only the fading digits' ghost here, 3% of this.
+    assert_eq!(lit(release), full, "GO is not lit on the release");
+    assert!(lit(release - 1) < full / 10, "lit before the release");
+
+    // The dark phases: runs where nothing lit white is sampled, as ticks
+    // from the release. The 2026-10-04 capture's dark centres are +23, +61
+    // and +109 on both boots (2 ticks a video frame); the clock held over
+    // 221..359 put them at +50, +89 and +129.
+    let mut centres = Vec::new();
+    let mut run: Option<u64> = None;
+    for k in 0..=130 {
+        match (lit(release + k) == 0, run) {
+            (true, None) => run = Some(k),
+            (false, Some(start)) => {
+                centres.push((start + k - 1) as f32 / 2.0);
+                run = None;
+            }
+            _ => {}
         }
+    }
+    assert_eq!(centres.len(), 3, "{centres:?}");
+    for (centre, measured) in centres.iter().zip([23.0, 61.0, 109.0]) {
+        assert!(
+            (centre - measured).abs() <= 2.0,
+            "dark centre +{centre} against the capture's +{measured}: {centres:?}"
+        );
     }
 }
 
