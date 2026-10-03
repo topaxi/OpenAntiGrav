@@ -21,6 +21,32 @@ impl Race {
     /// level handicaps it at the driver.
     #[must_use]
     pub fn build_speed_plan(&self, slot: usize) -> (oag_ai::SpeedPlan, oag_ai::plan::Report) {
+        self.with_plan_course(slot, |course, craft| {
+            oag_ai::SpeedPlan::build(course, craft, &oag_ai::Tuning::default())
+        })
+    }
+
+    /// Drives slot `slot`'s craft from the grid at a speed held to `speed`,
+    /// with the plan's own steering, logging every tick. A diagnostic: see
+    /// `oag_ai::plan::probe`.
+    #[must_use]
+    pub fn probe_speed_plan(
+        &self,
+        slot: usize,
+        speed: f32,
+        ticks: u32,
+    ) -> Vec<oag_ai::plan::probe::Row> {
+        self.with_plan_course(slot, |course, craft| {
+            oag_ai::plan::probe::drive(course, craft, &oag_ai::Tuning::default(), speed, ticks, 32)
+        })
+    }
+
+    /// The plan's `Course` and `Craft` for slot `slot`, handed to `f`.
+    fn with_plan_course<T>(
+        &self,
+        slot: usize,
+        f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
+    ) -> T {
         let line = &self.sim.racing_line;
         let samples: Vec<Option<oag_physics::TrackSample>> = (0..line.len())
             .map(|index| self.ai_sample(index).map(Spline::track_sample))
@@ -86,7 +112,7 @@ impl Race {
             start: ship.physics,
             start_index: ship.driver.index,
         };
-        oag_ai::SpeedPlan::build(&course, &craft, &oag_ai::Tuning::default())
+        f(&course, &craft)
     }
 
     /// The plan the field drives, or `None`.

@@ -49,6 +49,7 @@ use std::collections::BTreeMap;
 use crate::{Context, Driver, Line, Tuning};
 
 mod brake;
+pub mod probe;
 #[cfg(test)]
 mod tests;
 
@@ -421,6 +422,8 @@ pub enum Failure {
 struct Tick {
     failure: Option<Failure>,
     contact: bool,
+    /// The steering the driver asked for, for [`probe`].
+    steer: f32,
 }
 
 impl<R: Raycaster + ?Sized> Course<'_, R> {
@@ -500,7 +503,11 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
         } else {
             None
         };
-        Tick { failure, contact }
+        Tick {
+            failure,
+            contact,
+            steer: controls.steer_x,
+        }
     }
 }
 
