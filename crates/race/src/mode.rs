@@ -532,6 +532,11 @@ impl Mode {
     /// `oag_game::race::Race::tick`'s to apply, on the same `lap_completed`
     /// edge the free Time Trial/Speed Lap turbo already reads.
     ///
+    /// **`false` is not "the press does nothing".** The original's absorb in
+    /// an Eliminator spends the held weapon on a one-second Shield
+    /// (`Ship_AbsorbHeldPickup`'s mode-8 path); that is
+    /// `oag_game::race::Race::eliminator_absorb`'s to apply.
+    ///
     /// **`true` for Tournament too, mirroring [`Self::SingleRace`]** - see
     /// [`Self::Tournament`]'s own doc; nothing in `MSC_EVENT_TOURN`'s text
     /// says otherwise.

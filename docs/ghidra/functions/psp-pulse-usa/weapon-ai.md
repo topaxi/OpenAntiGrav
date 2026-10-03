@@ -234,7 +234,9 @@ real one.
 - **`DAT_08ab07e3`**, gating a `mode == 8` (Eliminator) branch in
   `WeaponAi_DecideFireOrAbsorb` that zeroes `+0x34` and forces a minimum
   fire chance when `+0x38` clamps to `0`. Reads like a network/authority
-  flag ("is this the local sim") but not read past that. **Still open.**
+  flag ("is this the local sim") but not read past that. **Still open**;
+  what the branch does is now read at instruction level, see
+  [below](#mode-8-what-the-original-does-with-a-held-weapon-read-2026-10-03).
 - **`self+0x44`**, an integer field `FUN_088508d4` and the Bomb/Mine setup
   read (`== 1`, `> 1`, `!= 0`) that is not the nearest-behind distance
   (`+0x40`, a float) despite sitting four bytes after it. Read enough to
@@ -408,3 +410,47 @@ one thing left un-measured is `+0x52`'s own predicted-path corridor test
 (`FUN_08850edc`), which is read but not ported this pass; see
 `crates/game/src/race/field/weapon_ai.rs`'s own doc comment for what stands
 in for it and why.
+
+## Mode 8: what the original does with a held weapon, read 2026-10-03
+
+Read off the disassembly of the extracted `BOOT.BIN` (image base `0x08804000`)
+for the `pulse-eliminator-pace` lane, to answer "does the original's AI ever
+throw away a weapon it cannot use in an Eliminator". Confidence **80**: a
+direct instruction read, not observed live.
+
+**The flag gates both Eliminator terms.** At `0x08851a8c` the byte
+`DAT_08ab07e3` is tested with `ori $7, $zero, 0` in the branch's delay slot,
+so `$7 = (DAT_08ab07e3 == 0 && g_game_mode == 8)`. When that holds, `+0x34` is
+stored `0` and, if `+0x38` is `0`, `+0x38` becomes `1`. The `use *= 2.0` (mode
+2) and `use *= 5.0` (mode 8) multipliers at `0x08851b10..5c` are gated on the
+same byte the same way. Every Eliminator reading on this page assumes the byte
+is `0` in a single-player race.
+
+**So, in an Eliminator:**
+
+- **Absorb** is `rate_eliminator[0] * absorb` = `0.001 * 1.0` per decision,
+  whatever the craft's own shield, after `0.2` s held. Four decisions a second
+  make that about once in four minutes of holding.
+- **What an absorb does** is not energy. `Ship_AbsorbHeldPickup`
+  (`0x08844ec4`) reads the controller record's absorb byte (`+0x17`, which
+  this function sets for an opponent) and, in mode 8 or `0x12` with a weapon
+  held, turns the weapon into the mode's one-second Shield - see
+  [race-modes.md](../../../gameplay/race-modes.md#eliminator), "No energy from
+  an absorb".
+- **A Mine or a Bomb is laid with no target.** Neither sets `+0x58` (not an
+  aimed weapon), so the fire branch never waits on `+0x52`. Fire chance per
+  decision is `rate_eliminator[+0x38] * use * 5`, after `0.8` s held, with
+  `+0x38` built by `FUN_08850ac4`/`FUN_08850b7c` (above): `1`, `+2` with a craft
+  inside 100 behind, `+1` with one inside 300 ahead (and the `+0x4c` term, under
+  50, not read). With nobody near and `useAgainstAI` `1.2`
+  (`WeaponAIstats.xml`'s Bomb and Mines rows), `0.002 * 1.2 * 5 = 0.012` a
+  decision, about one drop in twenty seconds.
+- **A Cannon or a Leech Beam** is aimed (`+0x58`), so with no target in its
+  predicted path it waits three seconds (`+0x54`) and is otherwise kept.
+
+**Measured on this build, and not ported.** Both halves above (untargeted
+drops and the `0.001` absorb), and a chosen 10 s absorb on top, were swept over
+240 seeds of a parked-player Eliminator: no shift in the time to five kills
+outside its 95 % interval, and the field's kill rate unchanged. See
+[race-modes.md](../../../gameplay/race-modes.md#eliminator).
+

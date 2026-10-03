@@ -1997,6 +1997,12 @@ stationary on the grid after the countdown, with the chase camera.
   pickup's shield value, clears the slot, stamps `+0x878` and calls
   `Ship_PlayAbsorbFeedback`, all read in its decompile and seen live) ran on
   that real input: the slot went back to `-1` and the stamp was written.
+  **Its Eliminator path** (`g_game_mode` 8 or `0x12`, read 2026-10-03 off the
+  disassembly, confidence 80, not live) pays no energy: it rewrites the held id
+  to `5` (`0x088612e8`), calls `Weapon_RequestFire` (case 5 sets bit `0x20`,
+  the Shield), skips `Ship_AddShield` in every arm, clears the slot and skips
+  the feedback, so the press raises the mode's one-second Shield. See
+  [race-modes.md](../../../gameplay/race-modes.md#eliminator).
 - **The organic control.** An AI craft absorbed on its own during the
   baseline (nothing was cheated for it), and the same draw-side signal
   appeared for it, also for 0.97 s.

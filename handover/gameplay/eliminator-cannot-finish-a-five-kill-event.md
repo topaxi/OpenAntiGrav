@@ -7,27 +7,38 @@ plus the respawn-keeps-its-place test).
 
 ## Open
 
-- **Time to five is about 1.4 times the original's**: 65 to 325 s, median 118 s, over seeds 1 to 24
-  on `16_Track`, player parked, against 85 s; 24 of 24 finish within six game-minutes (after the
-  beam and quake credit).
+- **Time to five is about 1.4 times the original's** (2026-10-03, main at `64521c88`): seeds 1 to
+  24, 24 of 24 finish, median 135 s, 33 to 196 s; seeds 1 to 240, median 117 s, 13 to 225 s, the
+  field scoring 8.1 kills a minute. The original: 85 s.
 - **The leader tether is catch-up by slowing the front** (`eliminator_pack_scale`, chosen, not
   measured). It is the lever that makes the mode finish (off: 0 of 8) and it is a throttle
   reduction only. **Accepted by the maintainer 2026-10-02** under the AI-obeys-player-physics
   rule (catch-up by slowing the front is fine; extra speed or thrust for the back is not). The respawn fix alone gives 11 of 24 (it finishes the four pinned seeds); the tether lifts it to 22.
-  Wider forward-weapon gates were tried and dropped. A chase on equal speed cannot close; **a
-  held-Turbo chase (Turbo is lawful speed) was not tried**.
+  Wider forward-weapon gates were tried and dropped. A chase on equal speed cannot close, and a
+  held-Turbo chase cannot happen here (no Turbo on the Eliminator's pads).
 - **Beam and Quake kills are now credited** (the original credits all three of Cannon, Beam and
   Quake via `+0x13c`, read statically, not live), and credit needs the shield-emptying blow, so a
   wall death after a standing-shield hit credits nobody. Over seeds 1 to 24: 24 of 24 finish,
-  median 118 s (was 22 of 24, about 210 s), against the original's 85 s. Wall deaths
-  and why opponents scrape lethally here are still not investigated.
-- **Held weapons**: Mine, Bomb, Cannon and Leech Beam together were held for about a quarter of all
-  craft-ticks and are rarely usable by a leader or a tail; Eliminator refuses absorbing so those
-  craft stop collecting pickups. A discard or a drop rule would free the slot (chosen, would need a label).
+  median 118 s (was 22 of 24, about 210 s), against the original's 85 s.
+- ~~Wall deaths~~ **not a lever** (2026-10-03): 391 of 393 deaths over seeds 1 to 24 were credited
+  kills and 1 was finished by a wall; see `docs/gameplay/race-modes.md`.
+- **Held weapons are not a lever** (2026-10-03): the original's own mode-8 rule (untargeted
+  Mine/Bomb drops, absorb at 0.001 a decision) and a chosen 10 s absorb on top were swept over 240
+  seeds; median shifts -4.8 s [-15.7, +4.6] and -2.3 s [-14.5, +8.4], kill rate flat at 8 a
+  minute. Neither shipped. The prototype is not in the tree.
+- **An Eliminator absorb is a 1 s Shield, not a refusal** (2026-10-03, static, confidence 80):
+  ported for the player (`Race::eliminator_absorb`). Not confirmed live: a PPSSPP absorb in an
+  Eliminator watching `craft+0x1b8` bit `0x10` and `+0x188` would settle it
+  (`scripts/psp-absorb-frames.py` grants and presses circle already).
+- **No Turbo exists in this mode**: `WeaponStats_Elimination.xml` gives it zero odds, so a
+  held-Turbo chase cannot happen.
 - ~~A backward wrap costs a lap in every mode~~ fixed 2026-10-02 (static read of the original's
   crossing count, confidence 92; a live reversed-craft capture on PPSSPP was not taken). The
   player's Eliminator respawn is the same case and is covered.
-- **`WeaponAi_DecideFireOrAbsorb` is not ported.** Its `+0x52` predicted-path test and the fields `+0x44`, `+0x4c`, `+0x5c` are unread.
+- **`WeaponAi_DecideFireOrAbsorb` is not ported.** Its mode-8 branch is now read
+  (`weapon-ai.md`, "Mode 8"); its `+0x52` predicted-path test and the fields `+0x44`, `+0x4c`,
+  `+0x5c` are unread. **The fire half is the remaining lever**: the kill rate did not move with
+  anything done to held weapons.
 - **Ghidra data rename rejected**: `g_eliminator_kill_target` for `0x08b30fb0` (Hungarian-prefix
   check). The docs and `names.tsv` are authoritative for the data name.
 
@@ -35,7 +46,11 @@ plus the respawn-keeps-its-place test).
 
 1. ~~Credit beam, Cannon and Quake kills~~ done 2026-10-02.
 1b. ~~Leech Beam outlived a kill and drained the respawned craft~~ fixed 2026-10-02 (sweep after: 24 of 24 finish, 63 to 245 s, median 147 s, was 118 s; the tail comes from the beam no longer being OP): `Beam::link_broken` now requires both craft in `CraftState::Racing` (the original's `Ship_State == 1` pair); a broken link never re-forms.
-2. Wall deaths: log where opponents die with no weapon hit and whether the shield was already low.
-3. A drop/discard rule for held Mine, Bomb, Cannon and Beam in Eliminator, labelled chosen.
-4. A held-Turbo chase: keep Turbo until a craft is 100 to 400 units ahead, then fire it.
-5. Port the WeaponAi decision only if the above leaves the finish time far from 85 s.
+2. ~~Wall deaths~~ done 2026-10-03: 1 of 393 deaths; not a lever.
+3. ~~A drop/discard rule for held weapons~~ done 2026-10-03: swept, within noise, not shipped;
+   the Eliminator absorb-to-Shield law found on the way is ported for the player.
+4. ~~A held-Turbo chase~~ closed 2026-10-03: the Eliminator table authors no Turbo.
+5. Port the fire half of `WeaponAi_DecideFireOrAbsorb` (how often a held Rocket, Missile, Plasma
+   or Shuriken is fired, `weapon-ai.md`), measured against the 240-seed sweep. Opponent weapon
+   behaviour is a design axis here, so a port ships only if it moves the time to five.
+6. Live-confirm the Eliminator absorb-to-Shield on PPSSPP (see Open).
