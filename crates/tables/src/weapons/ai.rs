@@ -42,7 +42,12 @@
 //!
 //! # The shipped values are nearly uniform, and that is not a parsing bug
 //!
-//! Every weapon authors `absorb="1.0"`. Every weapon but the Plasma and the
+//! **This paragraph is Pulse's file** (and Pure's). HD's, 2048's and Omega's
+//! `WeaponAIStats2048.xml` carry the same thirteen element names with
+//! different values (Bomb and Mines author `absorb="1.1"`) and two more rows,
+//! [`WeaponAiStats::all_weapons`] and [`WeaponAiStats::eliminator`].
+//!
+//! Every Pulse weapon authors `absorb="1.0"`. Every weapon but the Plasma and the
 //! Quake authors `useAgainstAI="1.2" useAgainstPlayer="1.1"`; those two author
 //! `1.0"/"1.0`. [`ai-stats.md`] spent two readings treating this as evidence the
 //! file could not be the fire-or-absorb decision, on the theory that a

@@ -60,7 +60,11 @@ fn check(found: &[(String, Vec<u8>)], count: usize) -> Vec<Option<EliminatorAiSt
         let e = stats.eliminator();
         if let Some(e) = e {
             assert_shape(&e);
-            assert_eq!(*first.get_or_insert(e), e, "{label} differs from its sibling");
+            assert_eq!(
+                *first.get_or_insert(e),
+                e,
+                "{label} differs from its sibling"
+            );
         }
         println!("{label}: eliminator row {e:?}");
         rows.push(e);
@@ -80,7 +84,7 @@ fn hd_ships_two_copies() {
     };
     let found = copies(
         &image.display().to_string(),
-        &oag_hd::TITLE,
+        oag_hd::TITLE,
         &[r"Data\XML\WeaponAIstats.xml"],
     );
     let rows = check(&found, 2);
@@ -96,7 +100,7 @@ fn two_thousand_forty_eight_ships_the_same_row_under_both_spellings() {
     let source = path.display().to_string();
     let found = copies(
         &source,
-        &oag_2048::TITLE,
+        oag_2048::TITLE,
         &[
             r"Data\XML\WeaponAIStats.xml",
             r"Data\XML\WeaponAIStats2048.xml",
@@ -109,7 +113,7 @@ fn two_thousand_forty_eight_ships_the_same_row_under_both_spellings() {
     let hd = oag_testdata::image("hdfury-ps3-eu-dec.iso").map(|image| {
         copies(
             &image.display().to_string(),
-            &oag_hd::TITLE,
+            oag_hd::TITLE,
             &[r"Data\XML\WeaponAIstats.xml"],
         )
     });
@@ -128,7 +132,7 @@ fn omega_ships_the_same_row() {
     };
     let found = copies(
         &path.display().to_string(),
-        &oag_omega::TITLE,
+        oag_omega::TITLE,
         &[
             r"Data\XML\WeaponAIstats.xml",
             r"Data\XML\WeaponAIStats2048.xml",
@@ -136,8 +140,32 @@ fn omega_ships_the_same_row() {
     );
     println!("omega census: {:?}", labels(&found));
     assert!(!found.is_empty(), "Omega ships no weapon-AI table");
-    let rows = check(&found, found.len());
-    assert!(rows.iter().any(Option::is_some), "no Omega copy has the row");
+    let rows = check(&found, 2);
+    // `data00.psarc` ships both spellings: the unsuffixed one `oag_omega::TITLE`
+    // names has no row, the `WeaponAIStats2048.xml` copy has it.
+    assert_eq!(rows, [None, rows[1]], "{rows:?}");
+    assert!(rows[1].is_some(), "no Omega copy has the row");
+}
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_us_pressing_of_2048_ships_the_same_bytes() {
+    let (Some(eu), Some(us)) = (
+        oag_testdata::exact("data/extracted/vita/PCSF00007"),
+        oag_testdata::exact("data/extracted/vita/PCSA00015"),
+    ) else {
+        return;
+    };
+    let names = [
+        r"Data\XML\WeaponAIStats.xml",
+        r"Data\XML\WeaponAIStats2048.xml",
+    ];
+    let eu = copies(&eu.display().to_string(), oag_2048::TITLE, &names);
+    let us = copies(&us.display().to_string(), oag_2048::TITLE, &names);
+    check(&us, 2);
+    for (a, b) in eu.iter().zip(&us) {
+        assert_eq!(a.1, b.1, "{} vs {}", a.0, b.0);
+    }
 }
 
 #[test]

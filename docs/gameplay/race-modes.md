@@ -989,21 +989,78 @@ physics; only when it presses the button changed. The Cannon (its fire byte reac
 the original), Mine, Bomb and Turbo keep this project's own rules. A race whose title names no
 `WeaponAIstats.xml` keeps the old rule and says so in the loader report; none does now.
 
-**Which titles ship the table (searched 2026-10-03).** All five. Pulse and Pure carry
-`Data\XML\WeaponAIstats.xml`. HD/Fury's `DATA00.PSARC` carries `/data/xml/weaponaistats.xml`: the
-thirteen rows, plus an `AllWeapons` row and an `EliminatorAIStats` row (flip, absorb and use
-scales by difficulty) that the parser ignores and nothing reads. 2048's `data.psarc` carries
-`WeaponAIStats.xml` and `WeaponAIStats2048.xml`, byte-identical to each other and to HD's
-(md5 `21e1062b`); `oag_2048::TITLE` names the suffixed one. Omega's `data00.psarc` carries both
-spellings too (`weaponaistats.xml`, `WeaponAIStats2048.xml`); `oag_omega::TITLE` names the
-unsuffixed one. So the maintainer's rule (an unmeasured title runs Pulse's law) needed no
-restated table: **every title runs `oag_ai::weapon_ai` on its own odds, inherited from Pulse and
-unmeasured on HD, Omega and 2048**, with no confidence score for those three. HD's and Omega's
-decision code is unread, and HD's `EliminatorAIStats` row is a lead on how Pulse's x5 Eliminator
-multiplier is authored there. `crates/game/tests/fire_law_inherit_ground_truth.rs` pins that a
-race on each of the three loads the table and runs `FireLaw::Original`. A title with no table
-would still have to run Pulse's odds; that case does not exist, so no cross-title read or
-restated constant was built for it.
+**Which titles ship the table (searched 2026-10-03, census redone below).** All five. Pulse and
+Pure carry `Data\XML\WeaponAIstats.xml`. HD/Fury's `DATA00.PSARC` carries
+`/data/xml/weaponaistats.xml` (1,369 bytes): the thirteen element names with HD's own values, plus
+an `AllWeapons` row and an `EliminatorAIStats` row. 2048's `data.psarc` carries `WeaponAIStats.xml`
+and `WeaponAIStats2048.xml`, both 1,369 bytes and byte-identical to each other and to HD's
+`DATA00` copy (md5 `21e1062b`); `oag_2048::TITLE` names the suffixed one. Omega's `data00.psarc`
+carries both spellings too; `oag_omega::TITLE` names the unsuffixed one, which has **no**
+Eliminator row (see the next section). So the maintainer's rule (an unmeasured title runs Pulse's
+law) needed no restated table: **every title runs `oag_ai::weapon_ai` on its own odds, inherited
+from Pulse and unmeasured on HD, Omega and 2048**, with no confidence score for those three. HD's
+and Omega's decision code is unread.
+`crates/game/tests/fire_law_inherit_ground_truth.rs` pins that a race on each of the three loads
+the table and runs `FireLaw::Original`. A title with no table would still have to run Pulse's
+odds; that case does not exist, so no cross-title read or restated constant was built for it.
+
+#### HD's `EliminatorAIStats` row (2026-10-03)
+
+**Census** (`scripts/psarc.py list` over every `.psarc` under `data/extracted/ps3`, `ps4` and
+`vita`: 7 HD archives, 9 Omega, 9 for 2048's two pressings with patches and DLC, 25 in all;
+Omega's per-copy sizes were not listed, `psarc.py` reads a PS4 `data00` as one entry):
+
+| Where | Copy | Bytes | `AllWeapons` | `EliminatorAIStats` |
+| --- | --- | --- | --- | --- |
+| HD `DATA00.PSARC` | `weaponaistats.xml` | 1,369 | yes | **yes** |
+| HD `DATA02.PSARC` (the base game's) | `weaponaistats.xml` | 1,046 | yes | no |
+| 2048 EU `PCSF00007` `data.psarc` | `WeaponAIStats.xml`, `WeaponAIStats2048.xml` | 1,369 each | yes | yes, both |
+| 2048 US `PCSA00015` `data.psarc` | the same two | 1,369 each | yes | yes, both |
+| Omega `data00.psarc` | `weaponaistats.xml` (named by `oag_omega::TITLE`) | n/a | yes | **no** |
+| Omega `data00.psarc` | `WeaponAIStats2048.xml` | n/a | yes | yes |
+
+Every other archive (HD `DATA01`, `03` to `06`, Omega `data01` to `04` and the patch's `data05`,
+`07`, `08`, `09`, the 2048 patches and DLC) holds none. `HD DATA00` and `DATA02` both being listed
+corrects the earlier "DATA00 only"; which one HD's runtime reads is not established
+(`Archives::read_name` takes `DATA00`'s). The row is Fury-era: the base game's copy has none.
+`oag_tables::weapons::ai` now parses both rows (`WeaponAiStats::all_weapons`,
+`WeaponAiStats::eliminator`), refuses a short row by name and ignores attributes it does not
+know. `crates/game/tests/eliminator_ai_stats_ground_truth.rs` decodes every copy above and pins
+relations rather than literals (ADR-0006): the three copies that carry the row are equal, the
+`easy`/`medium`/`hard` flip, use and score scales rise, the absorb scale falls, and Pulse's and
+Pure's files carry neither row.
+
+**The row, as authored** (values are the file's; this page quotes them as analysis, not as data
+the repository ships): `normalFlip` and `infrontFlip`, then flip, absorb, use and score scales
+for each of easy, medium and hard.
+
+**What HD's loader does with it** (`docs/ghidra/functions/ps3-hdfury-eu/weapon-ai-stats.md`,
+confidence 85 for the offsets, read off the instructions): the parse stores the fourteen floats
+at `+176 .. +228` of a 232-byte object embedded in the RaceManager at `+6240`, in the order
+`normalFlip`, `infrontFlip`, flip e/m/h, use e/m/h, absorb e/m/h, score e/m/h. The constructor
+defaults the two flips to `1.0` and every scale to `0.0`, so a file without the row (`DATA02`'s,
+Omega's unsuffixed one) leaves every scale at zero. `AllWeapons` is the 14th three-float row,
+stored after the thirteen weapons. **The consumer of those fields was not found** within the
+hour: no direct `lfs` of `RaceManager+6416..6468` exists, so the reads go through a computed
+pointer.
+
+**Against Pulse's hard-coded Eliminator terms** (`weapon-ai.md`, "Mode 8"):
+
+| Pulse (mode 8) | HD's row | Verdict | Confidence |
+| --- | --- | --- | --- |
+| `use *= 5.0`, flat | `*UseScale` 10.5 / 12.5 / 15.5 by tier | A tiered scale in the same slot is plausible; the numbers are not 5, and a different base rate could still make the product agree. Unproven | 25 |
+| absorb rate `0.001` | `*AbsorbScale` 3.6 / 2.6 / 0.6, falling with difficulty | Opposite shape: Pulse's is one tiny constant for every skill. Conflicts on its face | 20 |
+| `+0x34` forced `0` (a skill index) | none | Not a flip; no counterpart | n/a |
+| none | `normalFlip`, `infrontFlip`, `*FlipScale` | New. Plausibly the chance a craft that is ahead, or in front of the player, flips a pickup into a different weapon; **unread, a hypothesis** | below 50 |
+| none | `*ScoreScale` | New | below 50 |
+
+No mapping reaches 70, so **nothing is wired**: HD, Omega and 2048 stay on Pulse's hard-coded
+mode-8 terms (the maintainer's inherit rule), Pulse and Pure are untouched, and no golden moved.
+`WeaponAiStats::eliminator` has no caller.
+
+The file-selection trap, for whoever wires it: Omega's named file has no row while its
+`WeaponAIStats2048.xml` has one, so "use the row where the file carries it" would split Omega from
+2048 on a spelling. Do not switch Omega's named file without evidence of which copy Omega loads.
 
 Parked player, `16_Track`, Venom, seeds 1 to 240, paired against the old rule on one binary:
 
