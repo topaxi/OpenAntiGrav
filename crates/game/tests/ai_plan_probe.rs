@@ -183,7 +183,15 @@ fn race_probe() {
         source: image.display().to_string(),
         class,
         mode: oag_race::Mode::SingleRace,
-        difficulty: oag_ai::Difficulty::Ace,
+        difficulty: std::env::var("OAG_DIFFICULTY")
+            .ok()
+            .and_then(|d| {
+                oag_ai::Difficulty::ALL
+                    .iter()
+                    .find(|(n, _)| n.eq_ignore_ascii_case(&d))
+                    .map(|&(_, l)| l)
+            })
+            .unwrap_or(oag_ai::Difficulty::Ace),
         track: Some(entry),
         seed: Some(1),
         ..race::Options::default()
