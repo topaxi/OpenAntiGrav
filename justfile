@@ -170,6 +170,14 @@ fsr-reference:
 build:
     cargo build --workspace
 
+# A release `oag-game` tuned for a CPU tier, in its own target directory so the
+# baseline build is untouched: `just build-cpu` for `x86-64-v3` (AVX2, FMA,
+# BMI2 - any Intel since Haswell, any Zen), `just build-cpu znver2` for the
+# Steam Deck's own core. The simulation hashes are unchanged under either -
+# see docs/tools/packaging.md, "A CPU-tier build", for what was measured.
+build-cpu cpu="x86-64-v3" *ARGS:
+    CARGO_TARGET_DIR=target/cpu-{{cpu}} RUSTFLAGS="-C target-cpu={{cpu}}" cargo build --release -p oag-game {{ARGS}}
+
 docs:
     cargo doc --workspace --no-deps --document-private-items
 

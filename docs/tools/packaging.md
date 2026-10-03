@@ -37,6 +37,37 @@ freshly built binary's own `--write-icon`, which rasterises
 - the same code path `main/window.rs` uses for the live window/taskbar icon, so
 the two can never draw two different pictures.
 
+## A CPU-tier build
+
+`just build-cpu [cpu]` builds a release `oag-game` with `-C target-cpu=<cpu>`
+into `target/cpu-<cpu>/`, leaving the baseline build alone. The default,
+`x86-64-v3`, assumes AVX2, FMA and BMI2 - every Intel since Haswell and every
+Zen - and so every Steam Deck; `znver2` is the Deck's own core and adds only
+its scheduling model. **Neither is what `just appimage` ships yet**: the
+baseline x86-64 build still starts on anything, and a tier binary refuses to
+start on a CPU without the instructions.
+
+Measured 2026-10-03 on a Ryzen 9 7900, against the baseline build of the same
+commit:
+
+| | baseline | `x86-64-v3` | `znver2` |
+| --- | --- | --- | --- |
+| `Scene::render` CPU, Pulse, rocket volley (`OAG_RENDER_BENCH`), median of three | 604 us | 585 us | 566 us |
+| load plus 900 ticks, HD | 2.96 s | 2.97 s | - |
+
+**The simulation is unaffected, and that was checked rather than assumed.**
+Rust never contracts `a * b + c` into a fused multiply-add on its own and
+never reassociates float arithmetic, so the instructions a tier adds change
+how wide integer and copy loops run, not what a float sum comes to. All four
+determinism suites (`oag-core`, `oag-physics`, `oag-gameplay`, `oag-ai`) pass
+under both tiers against the committed references, and ten race captures
+across Pulse PSP, Pulse PS2 and HD are byte-identical to the baseline build's.
+A future `mul_add` or algebraic float op in a gameplay crate would break that,
+which [determinism](../architecture/determinism.md) already forbids there.
+
+The gain is small because the CPU is rarely the limit: on an integrated GPU
+the frame is GPU-bound twenty times over.
+
 ## Why AppImage, and not Flatpak
 
 Decided 2026-07. **AppImage now, Flatpak later if the project ever wants to be
