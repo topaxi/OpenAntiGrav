@@ -888,7 +888,18 @@ blends its finished lateral offset toward the pad's offset on a smoothstep, tota
 (`crates/ai/src/driver/pads.rs`), and drops the pull while it is dodging a laid charge. The
 corridor clamp still bounds it. `PadSeeking::for_mode` turns it on for an Eliminator and off for
 every other mode, and a driver handed no pad computes the same bits as before, so no golden hash
-moved. A held weapon blocks a pickup, so a full-slot craft keeps the line.
+moved. A held weapon blocks a pickup, so a full-slot craft keeps the line. The player's own slot
+is never handed a pad, so an autopilot driving the player does not detour.
+
+**A pad off the lap's road is skipped.** `05_Track`, `14_Track` and `07_Track` author pads on
+the branch of a split their lap ring does not drive, and `07_Track` one on a deck stacked over
+the line. Projected onto the line, those come out 34 to 153 units across a corridor of 0 to 17,
+or up to 64 units off its lateral axis, and steering at one would pin a craft to the corridor's
+edge every lap. `line_positions` drops a pad whose centre overhangs the corridor by more than
+5 units (about the pad's half-width) or sits more than 8 units off the line's lateral axis.
+Checked on all twelve circuits: every pad a lap can reach overhangs by at most 2.0 units
+(`16_Track`'s far pad) and sits within 3.3, and every skipped one overhangs by 10.2 or more or
+sits 28 or more off the axis.
 
 The pickup gap it closes. With the player parked on `16_Track`, opponents spend 54 % of their
 racing ticks with an empty slot and wait a median 9.7 s from emptying to the next pickup. The
@@ -918,12 +929,33 @@ end-of-run shield.
 Every craft against empty slot only: -3.4 s [-11.4, +3.9], within noise, and it costs more wall
 contact. Empty slot only ships.
 
+Shield, opponents only, seeds 1 to 240: **per-lap**, the shield a craft carries as it crosses
+the line, averaged over every crossing, is 56.4 off and 56.3 with the steering; **end-of-run**,
+the field's mean shield on the finish tick, is 45.1 off and 45.2 with it. A respawn resets the
+shield, so neither is a survivor's figure.
+
 Two other circuits, seeds 1 to 48, off against empty slot:
 
 | | median | mean | kills a minute | wall-contact ticks per craft-minute | shield to walls per craft-minute | paired shift |
 | --- | --- | --- | --- | --- | --- | --- |
 | `01_Track` | 128 to 112 s | 133 to 115 s | 7.54 to 8.47 | 9.59 to 11.25 | 1.97 to 2.27 | -13.7 s [-37.8, -2.6] |
 | `09_Track` | 133 to 116 s | 135 to 124 s | 7.25 to 8.64 | 5.83 to 9.51 | 1.00 to 1.84 | -13.4 s [-43.1, +12.1] |
+| `14_Track` | 151 to 133 s | 146 to 134 s | 6.32 to 6.97 | 6.49 to 7.37 | 1.29 to 1.36 | -5.3 s [-42.7, +13.3] |
+
+The two split circuits whose pads the lap mostly does not drive are where it matters most,
+because there the field is starved of pickups (a median 26 to 31 s between them, off). An
+unfinished run counts as 360 s here:
+
+| seeds 1 to 48 | finishes | median | kills a minute | median refill | wall-contact ticks per craft-minute | shield to walls per craft-minute |
+| --- | --- | --- | --- | --- | --- | --- |
+| `05_Track` off | 37 | 289 s | 3.44 | 26.0 s | 7.64 | 1.62 |
+| `05_Track` with | **46** | **216 s** | 4.28 | 13.9 s | 7.69 | 1.40 |
+| `07_Track` off | 24 | over 360 s | 2.83 | 31.3 s | 16.90 | 2.29 |
+| `07_Track` with | **48** | **207 s** | 4.60 | 18.6 s | 18.95 | 2.76 |
+
+Per-lap shield at the line and end-of-run shield at the finish tick, off to with: `05_Track`
+58.3 to 59.3 and 49.9 to 46.7; `07_Track` 58.6 to 55.1 and 49.3 to 45.6; `14_Track` 57.2 to
+53.4 and 46.5 to 46.3.
 
 Tuning tried and not shipped, seeds 1 to 240 on `16_Track`, paired against the shipped 150/40:
 a 220-unit pull total inside 100 (+2.9 s [-5.6, +10.5]), and an aim extrapolated through the pad

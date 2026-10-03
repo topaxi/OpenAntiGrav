@@ -18,6 +18,11 @@ plus the respawn-keeps-its-place test).
   ticks a craft-minute on `16_Track`, 5.8 to 9.5 on `09_Track`). Steering every craft and a
   longer or leading pull were within noise of it. Sweep table in `docs/gameplay/race-modes.md`.
   Still missed: `16_Track`'s far pad, 19.8 units off the line and outside the corridor.
+  Pads off the lap's road (the split circuits' other branch) are skipped. On `05_Track` and
+  `07_Track` it is what makes the mode finish: 37 to 46 and 24 to 48 of 48 seeds. Shield at the
+  line per lap and at the finish tick unchanged on `16_Track` (56.4 / 45.1 off, 56.3 / 45.2 on).
+  **Open: `05_Track` and `07_Track` still take over 200 s** (median 216 s and 207 s): their
+  field is pickup-starved (13.9 and 18.6 s median refill even with the steering).
 - **The leader tether is catch-up by slowing the front** (`eliminator_pack_scale`, chosen, not
   measured). It is the lever that makes the mode finish (off: 0 of 8) and it is a throttle
   reduction only. **Accepted by the maintainer 2026-10-02** under the AI-obeys-player-physics
