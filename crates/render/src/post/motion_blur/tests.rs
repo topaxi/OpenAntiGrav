@@ -355,9 +355,16 @@ fn a_still_surface_over_a_moving_background_keeps_its_colour() {
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
 
-    // A frame whose tile grid is square and exact, and one whose is not.
-    for (size, block) in [(64u32, (30u32, 30u32)), (50, (44, 44))] {
-        let red = still_block_over_a_moving_background(&device, &queue, size, block);
+    // A frame whose tile grid is square and exact, and one whose is not -
+    // at both gather resolutions, the half one being where a plain bilinear
+    // upsample read 201 at the silhouette.
+    for (size, block, half) in [
+        (64u32, (30u32, 30u32), false),
+        (50, (44, 44), false),
+        (64, (30, 30), true),
+        (50, (44, 44), true),
+    ] {
+        let red = still_block_over_a_moving_background(&device, &queue, size, block, half);
         let at = |x: u32, y: u32| red[(y * size + x) as usize];
         let (bx, by) = block;
         // Both silhouette columns, which are where the background's taps land
@@ -368,8 +375,8 @@ fn a_still_surface_over_a_moving_background_keeps_its_colour() {
         for x in [bx, bx + 3] {
             assert!(
                 at(x, by + 1) >= 254,
-                "at {size}px the background bled across the still block's \
-                 silhouette at x={x}: {}",
+                "at {size}px (half: {half}) the background bled across the \
+                 still block's silhouette at x={x}: {}",
                 at(x, by + 1)
             );
         }
@@ -393,6 +400,7 @@ fn still_block_over_a_moving_background(
     queue: &wgpu::Queue,
     size: u32,
     (bx, by): (u32, u32),
+    half: bool,
 ) -> Vec<u8> {
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let extent = wgpu::Extent3d {
@@ -471,6 +479,7 @@ fn still_block_over_a_moving_background(
     upload(&depth, &depths);
 
     let mut blur = MotionBlur::new(device, format).expect("building the pipelines");
+    blur.set_half_resolution(half);
     let mut encoder = device.create_command_encoder(&Default::default());
     blur.render(
         device,
@@ -715,6 +724,17 @@ fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
 /// ```
 #[test]
 fn the_multisampled_prepare_variant_reads_sample_zero_and_the_chain_runs() {
+    multisampled_chain(false);
+}
+
+/// The same at half resolution, which is where a two-pixel block once stayed
+/// sharp - see `fs_reconstruct_half`.
+#[test]
+fn the_half_resolution_gather_smears_a_two_pixel_block() {
+    multisampled_chain(true);
+}
+
+fn multisampled_chain(half: bool) {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
@@ -819,6 +839,7 @@ fn the_multisampled_prepare_variant_reads_sample_zero_and_the_chain_runs() {
     queue.submit(Some(clear.finish()));
 
     let mut blur = MotionBlur::new(&device, format).expect("building the pipelines");
+    blur.set_half_resolution(half);
     let mut encoder = device.create_command_encoder(&Default::default());
     blur.render(
         &device,

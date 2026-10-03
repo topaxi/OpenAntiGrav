@@ -99,3 +99,66 @@ impl From<MotionBlur> for String {
         mode.to_string()
     }
 }
+
+/// At what resolution the blur gathers its smear.
+///
+/// **A cost against a look, so the player's to make.** `Full` gathers every
+/// pixel; `Half` gathers a quarter of them and blends the smear back over the
+/// full-size frame by depth - about a third of the chain's cost on an
+/// integrated GPU, at the price of a grainier smear. Full is the default: a
+/// GPU with the headroom should not pay in picture for a saving it does not
+/// need. See `docs/rendering/motion-blur.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum BlurResolution {
+    /// Every pixel gathered.
+    #[default]
+    Full,
+    /// A quarter of the pixels gathered, blended back at full size.
+    Half,
+}
+
+impl BlurResolution {
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Half => "half",
+        }
+    }
+
+    /// Every choice, for the menus and for error messages.
+    pub const ALL: [Self; 2] = [Self::Full, Self::Half];
+}
+
+impl std::str::FromStr for BlurResolution {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| format!("{text:?} is not a motion blur resolution; try full or half"))
+    }
+}
+
+impl std::fmt::Display for BlurResolution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl TryFrom<String> for BlurResolution {
+    type Error = String;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse()
+    }
+}
+
+impl From<BlurResolution> for String {
+    fn from(mode: BlurResolution) -> Self {
+        mode.to_string()
+    }
+}

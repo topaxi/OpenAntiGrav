@@ -358,6 +358,19 @@ impl Session {
                     return;
                 }
             },
+            // Live as well: the frame hands it to the race's blur pass before
+            // every draw - see `race::Scene::set_blur_resolution`.
+            "graphics.motion_blur_resolution" => match text.parse::<display::BlurResolution>() {
+                Ok(resolution) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.motion_blur_resolution = resolution;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied by the next frame the race draws: the session hands the
             // preset to `Race::set_model_detail` every frame, and every model
             // is built with all its tiers whatever this says.

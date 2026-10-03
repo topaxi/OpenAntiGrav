@@ -44,7 +44,7 @@ mod screen_filter;
 mod shadows;
 
 pub use {
-    aspect::Aspect, motion_blur::MotionBlur, msaa::Msaa, reconstruction::Reconstruction,
+    aspect::Aspect, motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
     screen_filter::FilterStrength, shadows::Shadows,
 };
 

@@ -299,11 +299,33 @@ three tile targets depend on the edge now, and
 seven bind groups are still rebuilt on a step, which is the shape the
 `Groups` cache exists to keep off the *per-frame* path and is left there.
 
-The rest is the gather itself and is inherent to the tier: 15 taps, two
-fetches each, at presentation resolution, on a frame where nearly everything
-moves - the `dominant_len <= 0.5` early-out that carries a still scene almost
-never fires in a race. The tap count is the next lever and it is a
-picture-changing one, so it wants a from-play judgement rather than a patch.
+The rest is the gather itself: up to 15 taps, two fetches each, on a frame
+where nearly everything moves - the `dominant_len <= 0.5` early-out that
+carries a still scene almost never fires in a race. Measured 2026-10-03 on HD
+on an integrated GPU (Ryzen 7900's Raphael, `OAG_RENDER_GPU_BENCH` with
+`--autopilot`, `high`), the gather was 14.6 of the chain's 15.9 ms at
+1600x900 and the chain 59 ms at 3200x1800, the reach cap being a fraction of
+the extent so the same taps stride four times the texels. Two changes, both
+picture changes judged from the captures:
+
+- **The tap count follows the smear.** One tap per 4 px of the
+  neighbourhood's reach, odd, between 5 and 15 (`TAP_SPACING_PX`,
+  `MIN_TAPS`): a short smear sampled fifteen times re-read the same texels.
+  The chain 15.4 -> 11.1 ms at 1600x900, 59.3 -> 49.9 at 3200x1800, for a
+  mean change of 0.7/255 over the frame.
+- **BLUR RESOLUTION `half`** (`display::BlurResolution`, per render profile,
+  `full` by default) gathers at half size each way and blends the smear back
+  over the full-size frame - premultiplied by the share of the result the
+  taps rather than the centre contributed, and upsampled by depth as well as
+  distance so a still edge keeps its own side. The chain 4.6 ms at 1600x900
+  and 19.3 at 3200x1800. The smear reads grainier, which the maintainer
+  judged too much to make it the default: it is the setting for hardware
+  that needs it. Two shapes failed on the way and are pinned by the tests: a
+  *difference* from the half-size centre left a two-pixel block unsmeared
+  (`the_half_resolution_gather_smears_a_two_pixel_block`), and a plain
+  bilinear upsample bled the background across a still silhouette, 201 of
+  255 (`a_still_surface_over_a_moving_background_keeps_its_colour`, now run
+  at both resolutions).
 
 **The setting** follows `AntiAliasing` exactly, because it is the fullest
 worked example in the tree: an enum in `oag_display::display` with `name()`,

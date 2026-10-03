@@ -465,6 +465,7 @@ pub fn run(
                 camera_view: options.settings.graphics.camera_view,
                 msaa: render_profile.msaa,
                 motion_blur: render_profile.motion_blur,
+                motion_blur_resolution: render_profile.motion_blur_resolution,
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

@@ -740,6 +740,10 @@ pub fn menu_seeds(
             "graphics.motion_blur",
             text(&profile.motion_blur.to_string()),
         ),
+        (
+            "graphics.motion_blur_resolution",
+            text(&profile.motion_blur_resolution.to_string()),
+        ),
         ("graphics.shadows", text(&profile.shadows.to_string())),
         (
             "graphics.model_detail",

@@ -379,6 +379,14 @@ impl super::Scene {
 }
 
 impl super::Scene {
+    /// The blur's gather resolution from the next frame on. Called before
+    /// every draw rather than once, so the menu row applies live, the way
+    /// `Race::set_texture_detail` does.
+    pub fn set_blur_resolution(&self, resolution: oag_display::display::BlurResolution) {
+        self.blur_half
+            .set(resolution == oag_display::display::BlurResolution::Half);
+    }
+
     /// Encodes the motion blur over the finished frame, `false` when the
     /// pass is absent or off. `views` are the frame, the velocity attachment
     /// and the depth attachment. `camera_shake` is
@@ -401,7 +409,9 @@ impl super::Scene {
         };
         let size = self.depth.size();
         let [scene, velocity, depth] = views;
-        pass.borrow_mut().render(
+        let mut pass = pass.borrow_mut();
+        pass.set_half_resolution(self.blur_half.get());
+        pass.render(
             device,
             queue,
             encoder,

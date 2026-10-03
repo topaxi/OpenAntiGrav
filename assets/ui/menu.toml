@@ -918,6 +918,17 @@ string_id = "OAG_GRAPHICS_MOTION_BLUR"
 setting = "graphics.motion_blur"
 values = ["off", "low", "medium", "high"]
 
+# Where the blur above spends its cost. `half` gathers a quarter of the pixels
+# and blends the smear back by depth: about a third of the chain's cost on an
+# integrated GPU, and a grainier smear, which is why `full` is the default.
+# Applies live, like the strength.
+[[page.entry]]
+kind = "choice"
+label = "BLUR RESOLUTION"
+string_id = "OAG_GRAPHICS_MOTION_BLUR_RESOLUTION"
+setting = "graphics.motion_blur_resolution"
+values = ["full", "half"]
+
 # What casts a shadow, and what draws it. **A technique, not a strength** - the
 # ladder is not monotonic in quality, which is what `docs/rendering/shadows.md`
 # settled before this row existed: a flat authored hull projected onto the road

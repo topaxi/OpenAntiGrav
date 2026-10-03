@@ -299,6 +299,10 @@ pub struct Scene {
     /// unlike the camera-reprojection tier this replaced there is no MSAA
     /// gate. See `oag_render::post::motion_blur` and ADR-0030.
     motion_blur: Option<std::cell::RefCell<oag_render::post::motion_blur::MotionBlur>>,
+    /// Whether that blur gathers at half resolution - the profile's
+    /// `motion_blur_resolution`, handed in before each frame by
+    /// [`Scene::set_blur_resolution`].
+    blur_half: std::cell::Cell<bool>,
     /// The scene's velocity attachment: every draw's screen-space motion
     /// since the previous tick, in uv units -
     /// `oag_render::mesh_render::VELOCITY_FORMAT`, at the scene's own sample
@@ -866,6 +870,7 @@ impl Scene {
             ps2_bloom,
             hd,
             motion_blur,
+            blur_half: std::cell::Cell::new(false),
             velocity,
             motion: std::cell::RefCell::new(None),
             frame_index: std::cell::Cell::new(0),

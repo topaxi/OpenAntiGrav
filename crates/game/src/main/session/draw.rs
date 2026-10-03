@@ -309,6 +309,9 @@ impl Session {
                     parked
                         .race
                         .set_texture_detail(render_profile.texture_detail);
+                    parked
+                        .scene
+                        .set_blur_resolution(render_profile.motion_blur_resolution);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -359,9 +362,13 @@ impl Session {
                 // frame, not one per drawable that reads it.
                 let spectrum = self.audio.output().spectrum().levels();
                 let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
-                // Every frame, so the MODEL DETAIL and TEXTURE DETAIL rows apply live.
+                // Every frame, so the MODEL DETAIL, TEXTURE DETAIL and BLUR
+                // RESOLUTION rows apply live.
                 stage.race.set_model_detail(render_profile.model_detail);
                 stage.race.set_texture_detail(render_profile.texture_detail);
+                stage
+                    .scene
+                    .set_blur_resolution(render_profile.motion_blur_resolution);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,

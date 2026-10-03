@@ -187,6 +187,11 @@ pub struct RenderProfile {
     /// blur's prepare stage reads sample 0 of the multisampled attachments.
     #[serde(default)]
     pub motion_blur: oag_display::display::MotionBlur,
+    /// At what resolution that blur gathers: `full`, or `half` for about a
+    /// third of the chain's cost and a grainier smear. Per title for the
+    /// reason `motion_blur` is - see `oag_display::display::BlurResolution`.
+    #[serde(default)]
+    pub motion_blur_resolution: oag_display::display::BlurResolution,
     /// What casts a shadow, and what draws it: `off` or `blob`.
     ///
     /// **In this per-title table rather than flat in `[graphics]`** for both
@@ -280,6 +285,7 @@ impl Default for RenderProfile {
             upscale_sharpness: oag_display::display::Sharpness::default(),
             msaa: oag_display::display::Msaa::default(),
             motion_blur: oag_display::display::MotionBlur::default(),
+            motion_blur_resolution: oag_display::display::BlurResolution::default(),
             shadows: oag_display::display::Shadows::default(),
             screen_filter: default_screen_filter(),
             screen_filter_strength: oag_display::display::FilterStrength::default(),
@@ -316,7 +322,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 12] = [
+pub(super) const PROFILE_KEYS: [&str; 13] = [
     "render_scale",
     "target_fps",
     "minimum_resolution",
@@ -324,6 +330,7 @@ pub(super) const PROFILE_KEYS: [&str; 12] = [
     "upscale_sharpness",
     "msaa",
     "motion_blur",
+    "motion_blur_resolution",
     "shadows",
     "screen_filter",
     "screen_filter_strength",

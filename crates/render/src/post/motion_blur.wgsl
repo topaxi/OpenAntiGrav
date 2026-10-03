@@ -206,6 +206,10 @@ fn fs_neighbour_max(in: VertexOutput) -> @location(0) vec2<f32> {
 // An odd count so one tap can land on the pixel itself; the per-pixel jitter
 // below hides the banding a fixed lattice of this few taps would show.
 const TAPS: i32 = 15;
+// The fewest taps a moving pixel gets, and the smear length each further tap
+// is spent on - see `fs_reconstruct`.
+const MIN_TAPS: i32 = 5;
+const TAP_SPACING_PX: f32 = 4.0;
 
 // How far apart two NDC depths must be before one surface counts as
 // decisively in front of the other. Chosen for this renderer's projection
@@ -252,8 +256,21 @@ fn reach_px(velocity: vec2<f32>) -> vec2<f32> {
     return px;
 }
 
-@fragment
-fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
+// What one gather found: the weighted `sum` of its taps and their total
+// `weight`, the centre tap's own share of it, and whether the neighbourhood
+// moved at all - `colour` is the plain centre when it did not.
+struct Gathered {
+    colour: vec4<f32>,
+    weight: f32,
+    centre_weight: f32,
+    moved: bool,
+}
+
+// The gather both resolutions share, at `position` on the full-size pixel
+// grid.
+fn gather(position: vec4<f32>) -> Gathered {
+    var in: VertexOutput;
+    in.position = position;
     let pixel = vec2<i32>(in.position.xy);
     let here = target_uv(in.position);
     let centre = textureSampleLevel(colour_tex, colour_sampler, here, 0.0);
@@ -263,7 +280,7 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
     // rounds to whole pixels and this is what the boundary one does.
     let local = (here - constants.rect_offset) / constants.rect_size;
     if local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0 {
-        return centre;
+        return Gathered(centre, 0.0, 0.0, false);
     }
 
     // **The tile lookup is jittered by up to half a tile, and has to be.** A
@@ -301,7 +318,7 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
     let dominant_len = length(dominant);
     if dominant_len <= 0.5 {
         // Nothing in this neighbourhood moves as much as a pixel.
-        return centre;
+        return Gathered(centre, 0.0, 0.0, false);
     }
 
     let own = textureLoad(prepared_tex, pixel, 0);
@@ -311,15 +328,23 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
     // The centre tap's weight: the paper's `N / (K * |v(X)|)` shape - a
     // fast-moving pixel trusts its own sample less, spreading its energy
     // along its path, while a still one keeps most of its own colour.
-    var weight = f32(TAPS) / max(own_reach, 0.5);
+    // **As many taps as the smear is long, up to `TAPS`**: one per
+    // `TAP_SPACING_PX` of the neighbourhood's reach, odd so one still lands on
+    // the pixel, and never fewer than `MIN_TAPS`. A short smear sampled
+    // fifteen times re-reads the same few texels; this spends the fetches
+    // where the distance is. Measured on HD at 1600x900 on an integrated GPU,
+    // the gather 13.7 -> 9.4 ms for a mean change of 0.7/255.
+    let taps = clamp(i32(ceil(dominant_len / TAP_SPACING_PX)) | 1, MIN_TAPS, TAPS);
+    let centre_weight = f32(taps) / max(own_reach, 0.5);
+    var weight = centre_weight;
     var sum = centre * weight;
 
     let dither = jitter(in.position.xy);
-    for (var i = 0; i < TAPS; i += 1) {
-        if i == TAPS / 2 {
+    for (var i = 0; i < taps; i += 1) {
+        if i == taps / 2 {
             continue; // the centre tap, already counted
         }
-        let t = (f32(i) + dither + 1.0) / f32(TAPS + 1) - 0.5;
+        let t = (f32(i) + dither + 1.0) / f32(taps + 1) - 0.5;
         let offset_px = dominant * t;
         let distance = length(offset_px);
         let uv = here + offset_px / constants.rect_pixels * constants.rect_size;
@@ -364,7 +389,96 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
         sum += textureSampleLevel(colour_tex, colour_sampler, tap_uv, 0.0) * w;
         weight += w;
     }
-    return sum / max(weight, 1e-4);
+    return Gathered(sum, weight, centre_weight, true);
+}
+
+// The full-resolution gather: every pixel, written straight into the
+// scratch target `fs_copy` carries home.
+@fragment
+fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
+    let found = gather(in.position);
+    if !found.moved {
+        return found.colour;
+    }
+    return found.colour / max(found.weight, 1e-4);
+}
+
+// **At half resolution, and what it writes is a blend.** The pass runs over a
+// target half the scene's size each way, so `position` is scaled to the
+// full-size pixel grid first: a half-size texel centre `i + 0.5` lands on
+// `2i + 1`, the corner four full-size pixels share. What it returns is the
+// blurred colour premultiplied by `amount` - the share of the result that came
+// from taps other than the centre - with `amount` in alpha, and `fs_composite`
+// blends the scene toward it at full resolution. A neighbourhood that does not
+// move returns zero and keeps every texel of its own detail; a still pixel a
+// fast surface smears across takes the smear, because its taps carry the
+// weight; only the smear itself is resolved at half resolution. A quarter of
+// the gather's fragments - see `docs/rendering/motion-blur.md`.
+//
+// **Not a difference from the half-size centre**, which was tried first: added
+// back onto the full-size scene, it leaves anything smaller than a half-size
+// texel unsmeared, and `the_multisampled_prepare_variant_reads_sample_zero_
+// and_the_chain_runs`'s two-pixel block stayed sharp.
+@fragment
+fn fs_reconstruct_half(half_res: VertexOutput) -> @location(0) vec4<f32> {
+    let found = gather(vec4<f32>(half_res.position.xy * 2.0, half_res.position.zw));
+    if !found.moved {
+        return vec4<f32>(0.0);
+    }
+    let total = max(found.weight, 1e-4);
+    let amount = 1.0 - found.centre_weight / total;
+    return vec4<f32>((found.colour / total).rgb * amount, amount);
+}
+
+// The half-size blend `fs_reconstruct` wrote, laid over the scene at full
+// resolution into the scratch target `fs_copy` then carries home.
+//
+// **Upsampled by depth as well as by distance.** Each of the four half-size
+// texels around this pixel is weighted bilinearly *and* by how near the depth
+// of the full-size pixel it was gathered for lies to this pixel's own, on the
+// gather's own `SOFT_Z` scale - so a still surface's edge pixel takes its own
+// side's blend and not the smear of a fast background beside it. Plain
+// bilinear read 201 of 255 at the still block's silhouette in
+// `a_still_surface_over_a_moving_background_keeps_its_colour`. Where no texel
+// shares the pixel's depth, the nearest in depth stands in.
+//
+// The blend is premultiplied, so a texel with no smear pulls toward nothing
+// rather than toward black. Bound differently from the gather: the blend is
+// `colour_tex`, the full-size depths are `prepared_tex`, and the scene is read
+// exactly through `tile_tex`'s load slot. Alpha is the scene's own - the glow
+// mask the bloom has already read.
+@fragment
+fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
+    let pixel = vec2<i32>(in.position.xy);
+    let scene = textureLoad(tile_tex, pixel, 0);
+    let depth = textureLoad(prepared_tex, pixel, 0).z;
+    let half_last = vec2<i32>(textureDimensions(colour_tex)) - vec2<i32>(1);
+    let full_last = vec2<i32>(textureDimensions(prepared_tex)) - vec2<i32>(1);
+    let h = in.position.xy * 0.5 - vec2<f32>(0.5);
+    let base = vec2<i32>(floor(h));
+    let f = h - floor(h);
+    var sum = vec4<f32>(0.0);
+    var total = 0.0;
+    var nearest = vec4<f32>(0.0);
+    var nearest_dz = 1.0e9;
+    for (var j = 0; j < 2; j += 1) {
+        for (var i = 0; i < 2; i += 1) {
+            let texel = clamp(base + vec2<i32>(i, j), vec2<i32>(0), half_last);
+            let gathered_for = min(texel * 2 + vec2<i32>(1), full_last);
+            let dz = abs(textureLoad(prepared_tex, gathered_for, 0).z - depth);
+            let smear = textureLoad(colour_tex, texel, 0);
+            let bilinear = select(1.0 - f.x, f.x, i == 1) * select(1.0 - f.y, f.y, j == 1);
+            let w = bilinear * max(1.0 - dz / SOFT_Z, 0.0);
+            sum += smear * w;
+            total += w;
+            if dz < nearest_dz {
+                nearest_dz = dz;
+                nearest = smear;
+            }
+        }
+    }
+    let smear = select(nearest, sum / max(total, 1.0e-6), total > 1.0e-4);
+    return vec4<f32>(scene.rgb * (1.0 - smear.a) + smear.rgb, scene.a);
 }
 
 // The result back onto the scene target: the gather cannot sample the

@@ -776,17 +776,9 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) msaa: Option<oag_display::display::Msaa>,
 
-    /// Motion blur strength: off, low, medium or high.
-    ///
-    /// Overrides `[render_profiles.<title>] motion_blur` for *every* title, for
-    /// this run only; the file on disk is not changed - see `--reconstruction`'s own
-    /// doc for why every title rather than one. Here for the reason
-    /// `--msaa` is: two captures differing only by this flag are how
-    /// the blur gets compared against itself off, and a capture honours it by
-    /// rendering a primer frame at the tick-before-last camera first - see
-    /// `race::CaptureOptions::motion_blur`.
-    #[arg(long)]
-    pub(crate) motion_blur: Option<oag_display::display::MotionBlur>,
+    /// `--motion-blur` and `--motion-blur-resolution` - see [`extra::BlurArgs`].
+    #[command(flatten)]
+    pub(crate) blur: extra::BlurArgs,
 
     /// What casts a shadow: off or blob.
     ///

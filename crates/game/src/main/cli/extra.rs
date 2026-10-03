@@ -207,3 +207,26 @@ pub(crate) struct IntroArgs {
     #[arg(long, value_name = "TICKS", default_value_t = 0)]
     pub(crate) intro_ticks: u32,
 }
+
+/// The motion blur's two overrides.
+#[derive(clap::Args, Debug)]
+pub(crate) struct BlurArgs {
+    /// Motion blur strength: off, low, medium or high.
+    ///
+    /// Overrides `[render_profiles.<title>] motion_blur` for *every* title, for
+    /// this run only; the file on disk is not changed - see `--reconstruction`'s own
+    /// doc for why every title rather than one. Here for the reason
+    /// `--msaa` is: two captures differing only by this flag are how
+    /// the blur gets compared against itself off, and a capture honours it by
+    /// rendering a primer frame at the tick-before-last camera first - see
+    /// `race::CaptureOptions::motion_blur`.
+    #[arg(long)]
+    pub(crate) motion_blur: Option<oag_display::display::MotionBlur>,
+
+    /// The blur's gather resolution: full or half.
+    ///
+    /// Overrides `[render_profiles.<title>] motion_blur_resolution` for every
+    /// title, for this run only, the way `--motion-blur` does.
+    #[arg(long)]
+    pub(crate) motion_blur_resolution: Option<oag_display::display::BlurResolution>,
+}

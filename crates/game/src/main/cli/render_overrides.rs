@@ -33,8 +33,11 @@ impl Cli {
         if let Some(msaa) = self.msaa {
             profile.msaa = msaa;
         }
-        if let Some(motion_blur) = self.motion_blur {
+        if let Some(motion_blur) = self.blur.motion_blur {
             profile.motion_blur = motion_blur;
+        }
+        if let Some(resolution) = self.blur.motion_blur_resolution {
+            profile.motion_blur_resolution = resolution;
         }
         if let Some(shadows) = self.shadows {
             profile.shadows = shadows;

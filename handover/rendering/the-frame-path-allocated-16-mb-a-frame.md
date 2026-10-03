@@ -337,9 +337,10 @@ tile-max x 0.46, tile-max y and neighbour-max under 0.02, **reconstruct 14.6**,
 copy 0.19. Reconstruct is 15 taps of two fetches each over every moving pixel,
 spread up to the reach cap - `MAX_STRETCH` of the viewport height, so at 200 %
 the same taps cover four times the texels and miss cache. Scaling the tap
-count with the smear's length (`ceil(len / 4 px)`, odd, 5..15) measured
-13.7 -> 9.4 ms at 1600x900 and 52.6 -> 42.6 at 3200x1800, mean change 0.7/255
-- not shipped, it is a picture change.
+count with the smear's length and an opt-in half-resolution gather (BLUR
+RESOLUTION) have since shipped - figures and the two failed shapes in
+`docs/rendering/motion-blur.md`. Full stays the default: the maintainer found
+half too grainy for hardware that does not need it.
 
 **Split by draw group, at the maintainer's 200% scale (3200x1800, MSAA 4x,
 blur off).** `perfprobe::marks` writes timestamps and fragment-invocation
@@ -404,9 +405,9 @@ rounds differently), not done. Two traps from that change, both silent:
 `just build-cpu` / `just appimage-deck` (`-C target-cpu=znver2`) take another
 3-6 % off; see `docs/tools/packaging.md`.
 
-Still open: the motion blur chain,
-which the maintainer measured at about 14 ms on the same iGPU - **the next
-GPU-side target**, after re-profiling what is left of the race pass.
+Still open: the blur at full resolution is still 11 ms at 1600x900 and 50 ms
+at 3200x1800 on the iGPU; the gather's long strides at high extents are the
+cost.
 
 ## Not measurable here
 
