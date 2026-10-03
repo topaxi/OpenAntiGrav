@@ -71,6 +71,19 @@ fn traffic(ctx: &Context<'_>) -> f32 {
         .fold(0.0, f32::max)
 }
 
+/// How far ahead of a takeoff run-up a lower level stops holding its share of
+/// the plan's pace: room for a craft held to 0.88 of it to reach full speed
+/// again, which near the top end takes two to three seconds. **Chosen, not
+/// measured.**
+pub(super) const RUN_UP_REACH: f32 = 450.0;
+
+/// The least share of the plan's pace a level holds on the way into a jump.
+/// The field's measured takeoffs at `05_Track` forward's first jump (VENOM,
+/// three seeds) fell short at 119-120 units/s and cleared from 120.4, against
+/// the plan's 128; this is the Skilled level's own share, 123 there. **Chosen
+/// from that measurement, not measured off the original.**
+const RUN_UP_SHARE: f32 = 0.96;
+
 /// The speed a driver of this level and character holds at `index` on
 /// `plan`: the plan's lowest target over the airbrake ramp ahead, times
 /// [`plan_margin`], and for the lower levels no more than their
@@ -81,6 +94,7 @@ pub(super) fn target(
     speed: f32,
     tuning: &Tuning,
     personality: &Personality,
+    run_up: bool,
 ) -> f32 {
     let corners = plan.target_ahead(
         index,
@@ -91,8 +105,21 @@ pub(super) fn target(
     // The level's share of the plan's own pace, which is what reaches the
     // straights. At one it is no cap at all, so the top two levels drive the
     // plan.
-    if tuning.pace_share < 1.0 {
-        corners.min(plan.pace(index) * tuning.pace_share)
+    // **Not much below the plan on the way into a jump.** A share of the
+    // plan's pace on the straight before a gap is a craft that arrives short
+    // of the far lip: a Novice at VENOM on `05_Track` forward, held to 0.88
+    // of the plan's 128 units/s, hit the lip at sample 207 on every lap. On
+    // a run-up the share is at least [`RUN_UP_SHARE`]. Not lifted all the way
+    // to one: a Skilled craft that then landed at the plan's full pace at
+    // PHANTOM could not brake to its own corner margin after the landing and
+    // left the road at samples 330-410. Chosen, not measured.
+    let share = if run_up {
+        tuning.pace_share.max(RUN_UP_SHARE)
+    } else {
+        tuning.pace_share
+    };
+    if share < 1.0 {
+        corners.min(plan.pace(index) * share)
     } else {
         corners
     }

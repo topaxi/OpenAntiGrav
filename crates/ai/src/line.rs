@@ -211,6 +211,30 @@ impl Line {
         !self.takeoff.is_empty() && self.takeoff[index % self.takeoff.len()]
     }
 
+    /// Whether a takeoff run-up ([`Self::is_takeoff`]) starts within
+    /// `distance` of travel ahead of `index`, `index` itself included.
+    #[must_use]
+    pub fn takeoff_within(&self, index: usize, distance: f32) -> bool {
+        let n = self.takeoff.len();
+        if n == 0 {
+            return false;
+        }
+        let mut at = index % n;
+        let mut travelled = 0.0;
+        for _ in 0..n {
+            if self.takeoff[at] {
+                return true;
+            }
+            let next = (at + 1) % n;
+            travelled += (self.points[next] - self.points[at]).length();
+            if travelled > distance {
+                return false;
+            }
+            at = next;
+        }
+        false
+    }
+
     /// Whether the track has no surface under the line at `index`, wrapping.
     #[must_use]
     pub fn is_unsupported(&self, index: usize) -> bool {
