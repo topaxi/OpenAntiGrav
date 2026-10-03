@@ -232,6 +232,40 @@ pub(super) fn grid(
     })
 }
 
+/// The grid's own team roster, independent of a live [`Loaded`](crate::race::Loaded) race -
+/// `grid`'s own [`available`]/[`crate::livery::teams_for_slots`]
+/// pair, for a caller reached after the `Race` this leg built is already
+/// gone. Used by a Tournament leg's `EndRace Results` standings
+/// (`crate::main::session::endrace::build_endrace`), which needs to know
+/// which team flew which grid slot to label a row - `slot_teams` itself is
+/// never stored on `Loaded`/`Race`, so this is a second, independent call
+/// rather than a threaded-through field.
+///
+/// **Deterministic in the same inputs.** `roster::available` reads the
+/// title's own plugin definition off the disc (no randomness), and
+/// `teams_for_slots` is a pure function of `(team, available, slots)` - so
+/// this reproduces the exact roster a tournament's own first-leg launch
+/// built, as long as the caller passes the same `team`/`opponent_teams`
+/// every leg, which a Tournament's own relaunch (`Session::advance_tournament_leg`)
+/// does: neither is touched between legs.
+///
+/// Here rather than in `load.rs` under the 1,000-line rule in
+/// `scripts/check-file-size.py`; a move, with no behaviour change.
+///
+/// Not a `Race Remix` path - always the single archive set a Tournament
+/// launch (campaign or Racebox) opens, never [`crate::remix::craft_of`]'s
+/// split case.
+pub fn slot_teams(
+    archives: &mut oag_assets::Archives,
+    craft_title: &'static oag_title::Title,
+    team: &str,
+    opponent_teams: &[String],
+) -> Vec<String> {
+    let mut report = Vec::new();
+    let available = available(archives, craft_title, opponent_teams, &mut report);
+    crate::livery::teams_for_slots(team, &available, oag_gameplay::MAX_SHIPS)
+}
+
 #[cfg(test)]
 mod tests {
     use super::apply_grid_teams;
