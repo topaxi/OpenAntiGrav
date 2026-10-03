@@ -24,6 +24,7 @@ mod pulse_ps2;
 mod pulse_psp;
 pub(super) mod ripple;
 mod roster;
+pub use roster::slot_teams;
 mod surfaces;
 mod track_stats;
 mod variant;
@@ -316,6 +317,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
+    let weapon_ai = assets::load_weapon_ai(&mut archives, title, &mut report);
     if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
@@ -898,6 +900,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             speedup_pads,
             weapon_pads,
             weapons,
+            weapon_ai,
             // No caller of the general `load` sets this - only
             // `race::load::campaign::load_event` does, on the `Loaded` this
             // returns, after this whole function has already run. See
@@ -966,35 +969,4 @@ pub fn load(options: &Options) -> Result<Loaded> {
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),
     );
     Ok(loaded)
-}
-
-/// The grid's own team roster, independent of a live [`Loaded`] race -
-/// [`grid`]'s own [`roster::available`]/[`crate::livery::teams_for_slots`]
-/// pair, for a caller reached after the `Race` this leg built is already
-/// gone. Used by a Tournament leg's `EndRace Results` standings
-/// (`crate::main::session::endrace::build_endrace`), which needs to know
-/// which team flew which grid slot to label a row - `slot_teams` itself is
-/// never stored on `Loaded`/`Race`, so this is a second, independent call
-/// rather than a threaded-through field.
-///
-/// **Deterministic in the same inputs.** `roster::available` reads the
-/// title's own plugin definition off the disc (no randomness), and
-/// `teams_for_slots` is a pure function of `(team, available, slots)` - so
-/// this reproduces the exact roster a tournament's own first-leg launch
-/// built, as long as the caller passes the same `team`/`opponent_teams`
-/// every leg, which a Tournament's own relaunch (`Session::advance_tournament_leg`)
-/// does: neither is touched between legs.
-///
-/// Not a `Race Remix` path - always the single archive set a Tournament
-/// launch (campaign or Racebox) opens, never [`crate::remix::craft_of`]'s
-/// split case.
-pub fn slot_teams(
-    archives: &mut oag_assets::Archives,
-    craft_title: &'static oag_title::Title,
-    team: &str,
-    opponent_teams: &[String],
-) -> Vec<String> {
-    let mut report = Vec::new();
-    let available = roster::available(archives, craft_title, opponent_teams, &mut report);
-    crate::livery::teams_for_slots(team, &available, oag_gameplay::MAX_SHIPS)
 }

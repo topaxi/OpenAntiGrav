@@ -82,19 +82,27 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// line is rescued), so its column fell 49 -> 4 over the twelve cells. The
 /// reversed column regenerated identical. Without the corridor bound alone
 /// Black reads 6 (RAPIER seeds 2 and 3, PHANTOM seed 3 each one higher).
+/// **Regenerated 2026-10-03 for the opponent fire law** (`oag_ai::weapon_ai`,
+/// the original's `WeaponAi_DecideFireOrAbsorb`): opponents fire forward
+/// weapons on a different schedule, so every race after the first shot is a
+/// different race. Black 4 -> 5 and reversed 10 -> 10 over the twelve cells;
+/// nine cells moved, up and down. Not weapon deaths: of the craft destroyed,
+/// one was finished by a weapon blow under either law (shield lost in the 2 s
+/// before, less wall charge, over 20), measured in release with both laws on
+/// one binary.
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
-    ("VENOM", 2, 0, 0),
-    ("VENOM", 3, 0, 1),
-    ("FLASH", 1, 0, 0),
+    ("VENOM", 2, 0, 1),
+    ("VENOM", 3, 0, 0),
+    ("FLASH", 1, 1, 0),
     ("FLASH", 2, 0, 0),
-    ("FLASH", 3, 0, 0),
+    ("FLASH", 3, 0, 2),
     ("RAPIER", 1, 1, 0),
-    ("RAPIER", 2, 0, 0),
-    ("RAPIER", 3, 0, 3),
-    ("PHANTOM", 1, 0, 1),
-    ("PHANTOM", 2, 2, 4),
-    ("PHANTOM", 3, 1, 1),
+    ("RAPIER", 2, 0, 1),
+    ("RAPIER", 3, 1, 3),
+    ("PHANTOM", 1, 0, 0),
+    ("PHANTOM", 2, 1, 1),
+    ("PHANTOM", 3, 1, 2),
 ];
 
 fn check(class: &str, seed: u64) {

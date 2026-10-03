@@ -667,6 +667,12 @@ pub struct Setup {
     /// nothing out rather than handing out an invented weapon - the same choice
     /// [`Setup::speedup_pads`]' tunables make. See `docs/formats/weapon-stats.md`.
     pub weapons: Option<oag_tables::weapons::WeaponStats>,
+    /// The odds an opponent fires each weapon at, out of the title's
+    /// `WeaponAIstats.xml` - see [`oag_title::weapons::Weapons::ai`].
+    ///
+    /// `None` runs the race on [`super::FireLaw::Ours`]: the original's law
+    /// needs these numbers and nothing invents them.
+    pub weapon_ai: Option<oag_tables::weapons::ai::WeaponAiStats>,
     /// Restricts which weapons a `Weapon Pad` may hand out to exactly this
     /// list, or does not restrict at all when empty - the same "empty is no
     /// override" convention [`Options::grid_teams`] uses.

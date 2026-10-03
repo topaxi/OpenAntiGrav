@@ -847,9 +847,10 @@ impl Race {
     ///
     /// # The player and an opponent use the same rule, on purpose
     ///
-    /// `oag_ai::Driver::wants_to_fire` decides whether an *opponent* pulls the
-    /// trigger, and its five gates are about that decision - is there somebody
-    /// ahead, is the road straight enough, has the trigger rolled. They are not
+    /// `Race::opponent_fires` decides whether an *opponent* pulls the trigger -
+    /// the original's law (`oag_ai::weapon_ai`), or `oag_ai::Driver::wants_to_fire`
+    /// without `WeaponAIstats.xml` - and its gates are about that decision: is
+    /// there somebody in the shot's path, has the roll come up. They are not
     /// the weapon's rule. `Ship_AcquireLock` is, and the original runs it for the
     /// player's craft; running it here for both means a missile's candidate
     /// target does not depend on who fired it.

@@ -24,7 +24,9 @@
 //!
 //! **Both functions are ours**, and it is worth saying once here rather than
 //! twice below. `WeaponAi_Update` (`0x08851550`) is where the original decides
-//! this, and only its authored *table* has been read - see
+//! this; its forward-weapon fire law is ported as [`crate::weapon_ai`] and is
+//! what a race runs wherever `WeaponAIstats.xml` was read, so
+//! [`Driver::wants_to_fire`] is the fallback for a race without it. See
 //! `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`. What the two share is
 //! deliberate: one noise stream, one trigger rate, one personality term, so a
 //! pilot that shoots readily also lays mines readily.

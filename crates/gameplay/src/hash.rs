@@ -116,6 +116,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         segment,
         pickup,
         driver,
+        weapon_ai,
         standing,
         autopilot_timer,
         pending_slowdown,
@@ -134,6 +135,15 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     hasher.write_u32(u32::from(*segment));
     write_held(hasher, pickup);
     write_driver(hasher, driver);
+    // Two counters, zero through every scenario the gate runs - none collects
+    // a pickup - so eight fixed bytes per ship per tick: adding them moved the
+    // committed hashes with no behaviour changing.
+    let oag_ai::weapon_ai::WeaponAi {
+        held_ticks,
+        wait_ticks,
+    } = weapon_ai;
+    hasher.write_u32(*held_ticks);
+    hasher.write_u32(*wait_ticks);
     write_standing(hasher, standing);
     // Zero through every scenario the gate runs - none collects a pickup - so
     // this contributes a fixed run of four bytes per ship per tick and nothing

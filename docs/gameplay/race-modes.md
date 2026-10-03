@@ -817,7 +817,9 @@ seed). The original's 85 s is still ahead of the median by about a third.
 
 Still open:
 
-- **Time to five is about 1.4 times the original's.** Re-measured 2026-10-03 on main at
+- ~~**Time to five is about 1.4 times the original's.**~~ **Now 0.9 times it (2026-10-03)**:
+  with opponents firing on the original's own law ([below](#firing-on-the-originals-law-2026-10-03)),
+  seeds 1 to 240, **median 75 s**, 17 to 154 s, 13.6 kills a minute. History: re-measured 2026-10-03 on main at
   `64521c88` (later than the 147 s median of 2026-10-02): parked player, `16_Track`, six
   game-minutes, seeds 1 to 24: 24 of 24 finish, **median 135 s**, 33 to 196 s; seeds 1 to 240:
   240 of 240, **median 117 s**, mean 122 s, 13 to 225 s, the field scoring **8.1 kills a minute**.
@@ -854,9 +856,9 @@ Still open:
 - **A held-Turbo chase cannot happen in this mode.** `WeaponStats_Elimination.xml` gives the
   Turbo zero pad odds in every column (`human`, `front`, `back`, `ai`), and no craft held or ran a
   Turbo in any sweep. Speed pads remain the only lawful speed advantage.
-- **What is left is the fire decision.** The field's kill rate stays near 8 a minute whatever
-  happens to held weapons; how often a held Rocket, Missile or Plasma is fired is
-  `WeaponAi_DecideFireOrAbsorb`'s other half, still unported.
+- ~~**What is left is the fire decision.**~~ **Ported 2026-10-03** - see
+  [below](#firing-on-the-originals-law-2026-10-03). It was the lever: the kill rate went from 9.1
+  to 13.6 a minute.
 - ~~**A backward wrap costs a lap in every mode.**~~ **Fixed 2026-10-02.** The original's lap target
   is never lowered by a reverse crossing (`Craft_UpdateLapProgress`, static, confidence 92), so
   `Standing` and `RaceState` keep a `reversed` deficit instead; see `lap-counting.md`. The
@@ -867,8 +869,9 @@ Still open:
   the spline, so a player wreck that coasts over the line may lose a lap the same way. Not
   checked, nobody drives in the finish test.
 
-The original's decision is `WeaponAi_DecideFireOrAbsorb` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)),
-still unported. Guarded by `crates/game/tests/eliminator_finish_ground_truth.rs`.
+The original's decision is `WeaponAi_DecideFireOrAbsorb` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md));
+its fire half is ported (below), its absorb half is not. Guarded by
+`crates/game/tests/eliminator_finish_ground_truth.rs`.
 
 ### Steering for weapon pads (2026-10-03)
 
@@ -964,10 +967,57 @@ once it is nearer than the steering lookahead (capped at three times; with 150/4
 (19.8 units left, outside the 17.8-unit corridor) is still mostly missed: the craft swings about
 10 units toward it and arrives short, because the steering aims a lookahead past the pad.
 
-The remaining gap to the original's 85 s is the same as before: the fire decision
-(`WeaponAi_DecideFireOrAbsorb`'s fire half) is unported. Guarded by
+The gap to the original's 85 s that remained here was the fire decision, ported in the next
+section. Guarded by
 `crates/game/tests/eliminator_pads_ground_truth.rs` (pickups per empty craft-minute over seeds 1
 to 6, one game-minute each: 7.20 with the steering, 5.48 without).
+
+### Firing on the original's law (2026-10-03)
+
+**Read, then ported.** An opponent now decides when to fire its Rocket, Missile, Plasma,
+Shuriken, LeachBeam or Quake on `WeaponAi_DecideFireOrAbsorb`'s fire half (`oag_ai::weapon_ai`),
+in every mode, on the odds out of the title's `WeaponAIstats.xml`. The read, its confidence and
+what was chosen around it are on
+[weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03).
+In short: a roll every tick at the rate table's entry for how close the nearest craft ahead and
+behind are, times the weapon's authored odds, times five in an Eliminator; nothing before 0.8 s
+held; and an aimed weapon also needs a craft inside an 8.5-degree cone along the shot's predicted
+path, any range out to 20 s of flight. **The difference from the rule it replaces is the range
+and the road**: `Driver::wants_to_fire` wanted a noticed craft inside 200 units and straight road
+between, so a held weapon waited 10 to 12 s for that to happen. The AI still obeys the player's
+physics; only when it presses the button changed. The Cannon (its fire byte reaches nothing in
+the original), Mine, Bomb and Turbo keep this project's own rules. A race whose title names no
+`WeaponAIstats.xml` keeps the old rule and says so in the loader report.
+
+Parked player, `16_Track`, Venom, seeds 1 to 240, paired against the old rule on one binary:
+
+| | old rule | original's law | original's law, decided 4 times a second |
+| --- | --- | --- | --- |
+| finishes | 240 of 240 | 240 of 240 | 240 of 240 |
+| time to five, median | 108 s | **75 s** | 93 s |
+| time to five, range | 17 to 232 s | 17 to 154 s | 25 to 167 s |
+| paired median shift, 95 % bootstrap | - | -29.5 s [-34.9, -22.7] | -15.5 s [-20.1, -8.0] |
+| field kills a minute | 9.08 | 13.63 | 10.70 |
+| held share (craft-ticks racing with a weapon held) | 0.555 | 0.299 | 0.492 |
+| forward weapon held before it goes | 10.4 to 12.0 s | 1.5 to 2.7 s | 7.0 to 9.4 s |
+| shield per lap, at the line | 56.3 | 60.1 | 58.1 |
+| shield at the finish tick, end of run | 45.2 | 43.7 | 44.8 |
+
+The four-a-second column is a sensitivity check on a prototype of the same law, not shipped: the read says every call (confidence
+65, see weapon-ai.md), and the cadence alone moves the median by 18 s. **75 s is now faster than
+the original's 85 s.** That figure's provenance is a single number; the result was not tuned
+toward it. The held share above divides by racing craft-ticks; the "about 45 %" further up
+divided by all craft-ticks, wrecked included, and is the same data.
+
+Single Race (seeds 1 to 48, parked player, six minutes, `16_Track`): the rate table's skill-0
+entry is zero, so an opponent with nobody inside 100 ahead never fires there. Forward-weapon
+spends per craft-minute moved from 0.097 to 0.122 (Rocket), 0.076 to 0.093 (Missile), 0.032 to
+0.040 (LeachBeam) and 0.026 to 0.036 (Plasma), and a forward weapon is held 27 to 57 s rather than
+73 to 115 s. Shield per lap at the line 67.4 to 70.4, at the end of the run 49.7 to 52.4.
+
+Guarded by `crates/game/tests/opponent_fire_ground_truth.rs` (the law is the one a Pulse race
+runs, and on seeds 1 and 2 a forward weapon is held less than half as long on it as on the old
+rule) and the `oag_ai::weapon_ai` unit tests.
 
 ### What is deliberately out of scope
 
@@ -987,9 +1037,10 @@ to 6, one game-minute each: 7.20 with the steering, 5.48 without).
   own ending does not need to answer that to work.
 - **Opponent aggression in Eliminator is a design axis, not a fidelity
   one** - the owner's own standing rule, *"AI doesn't have to be faithful,
-  but challenging"*. `oag_ai::Driver::wants_to_fire` is unchanged by this
-  work; how hard an opponent hunts another craft in a kill-count mode is
-  future tuning, not a recovery question.
+  but challenging"*. Since 2026-10-03 an opponent fires its forward weapons on
+  the original's own law (below) rather than on `oag_ai::Driver::wants_to_fire`;
+  how hard an opponent hunts another craft beyond that is future tuning, not a
+  recovery question.
 
 HUD layout: `Elimination_HUD.xml`, wired the same way every other mode's
 layout is (`oag_title::HudLayouts::elimination`) - see [the HUD

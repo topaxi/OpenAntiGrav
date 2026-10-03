@@ -54,7 +54,7 @@ times larger" - because the finding is the coupling, not the number.
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
-| Weapon selection and firing | **recovered** (2026-08-17), and unported. `WeaponAi_Update` (`0x08851550`) reconsiders four times a second and `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry difficulty tables. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) | 85 |
+| Weapon selection and firing | **recovered** (2026-08-17); **the fire half is ported** for the forward weapons (2026-10-03, `oag_ai::weapon_ai`). `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry rate tables on every call, and an aimed weapon also needs a craft in its predicted path. The absorb half is not ported. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
 Nothing here has been run under a debugger. Every score above rests on
@@ -2562,6 +2562,12 @@ quietly start depending on `~/.config/oag/pilots/`.
 
 ### Shooting at somebody
 
+**Since 2026-10-03 this is the fallback.** Wherever the title's
+`WeaponAIstats.xml` is read (Pulse and Pure), an opponent fires its forward
+weapons on the original's own law, `oag_ai::weapon_ai` - see
+[race-modes.md](race-modes.md#firing-on-the-originals-law-2026-10-03). What
+follows is the rule a race without that file still runs, and its history.
+
 **An opponent fires as of 2026-08-11**, and the delete-this-paragraph moment is
 worth marking: the firing *mechanism* was complete long before - rockets fly and
 collide with craft - and what was missing was only ever a driver willing to pick
@@ -2614,8 +2620,10 @@ opponent draws from the `ai` column of the shipped `<Pickupodds>` table rather
 than the `human` one - a distinction the disc's own data makes. `front` and
 `back` remain unreachable: they need race *positions*.
 
-**What an opponent does with what it draws is a policy, and the original's is now
-located but not ported.** `Data\XML\WeaponAIstats.xml` holds three values a weapon
+**What an opponent does with what it draws is a policy, and the original's fire
+half is ported for the forward weapons since 2026-10-03** (`oag_ai::weapon_ai`,
+[race-modes.md](race-modes.md#firing-on-the-originals-law-2026-10-03)); what follows
+is the history and the rules that are still ours. `Data\XML\WeaponAIstats.xml` holds three values a weapon
 - `useAgainstPlayer`, `useAgainstAI`, `absorb` - and `FUN_088518b4` reads them
 every frame, compares them against a normalised random draw and writes the fire
 request. So it is a **weighted random choice gated on an along-track range test**,
@@ -2840,7 +2848,7 @@ row is meant to say is - no `idstring`, no `string`, content unread.
 | --- | --- | --- |
 | An exhaust of its own | 2026-08-11 | [The field burns](#the-field-burns) |
 | A respawn when it falls off | 2026-08-12 | `Race::lost_off_the_circuit` |
-| A weapon aimed at somebody | 2026-08-12 | `Driver::wants_to_fire` |
+| A weapon aimed at somebody | 2026-08-12 | `Driver::wants_to_fire`; since 2026-10-03 the original's law, `oag_ai::weapon_ai`, with the former as the fallback |
 | Knowing the other craft are there | 2026-08-12 | `oag_ai::Field`, and the `courtesy`/`defence`/`caution` axes |
 | Mistake injection, with a recovery behaviour | 2026-08-12 | `Driver::blunder`, `Driver::mistake`; the rate comes from `Difficulty::tune`, **not** from a config key |
 | Difficulty selection | 2026-08-12 | `oag_ai::Difficulty`, and one `[ai] difficulty` key in `settings.rs` |

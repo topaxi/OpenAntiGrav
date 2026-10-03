@@ -74,6 +74,7 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\weaponstats.xml",
         elimination: None,
+        ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
     // Pure's own weapon models are unmeasured. **Restated, not imported** -
     // a title package does not depend on another title package outside

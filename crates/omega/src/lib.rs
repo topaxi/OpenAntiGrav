@@ -102,6 +102,7 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
+        ai: None,
     },
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
 };

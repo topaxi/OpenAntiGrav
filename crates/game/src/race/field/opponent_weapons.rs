@@ -20,41 +20,17 @@
 use super::*;
 
 impl Race {
-    /// Fires an opponent's Missile at the craft ahead, if its driver wants to.
+    /// Fires an opponent's Missile, once `Race::opponent_fires` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
     ///
     /// **Two gates rather than one**, and they answer different questions.
-    /// `wants_to_fire` is the *driver's*: is there somebody ahead, is the road
-    /// straight enough, has the trigger rolled this tick. `Race::fire_missile`
-    /// then runs the *weapon's* - `Ship_AcquireLock`'s recovered window, cone and
-    /// along-track screen - and declines if nothing is lockable.
-    ///
-    /// The driver's chosen slot is deliberately **not** used as the target. It is
-    /// its reason to press the button, not the missile's lock; letting it pick
-    /// would make a missile's target depend on who fired it, and the player's
-    /// path has no `wants_to_fire` to consult at all.
-    pub(in crate::race) fn fire_opponent_missile(
-        &mut self,
-        slot: usize,
-        field: &oag_ai::Field,
-    ) -> bool {
-        let context = oag_ai::Context {
-            line: &self.sim.racing_line,
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
-            field,
-            yaw_ceiling: None,
-            plan: None,
-        };
-        if self.sim.world.ships[slot]
-            .driver
-            .wants_to_fire(&context)
-            .is_none()
-        {
-            return false;
-        }
+    /// `Race::opponent_fires` is the *driver's*: has the roll come up, with
+    /// something in the shot's path. `Race::fire_missile` then runs the
+    /// *weapon's* - `Ship_AcquireLock`'s recovered window, cone and along-track
+    /// screen - and declines if nothing is lockable.
+    pub(in crate::race) fn fire_opponent_missile(&mut self, slot: usize) -> bool {
         let Some(stats) = self
             .sim
             .weapons
@@ -66,7 +42,7 @@ impl Race {
         self.fire_missile(slot, &stats)
     }
 
-    /// Fires an opponent's Rocket at the craft ahead, if its driver wants to.
+    /// Fires an opponent's Rocket, once `Race::opponent_fires` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
@@ -77,26 +53,7 @@ impl Race {
     /// `projectile::step` would then fly straight through the player and
     /// detonate on whoever actually fired them.
     /// `an_opponents_rocket_is_owned_by_the_slot_that_fired_it` pins it.
-    pub(in crate::race) fn fire_opponent_rocket(
-        &mut self,
-        slot: usize,
-        field: &oag_ai::Field,
-    ) -> bool {
-        let context = oag_ai::Context {
-            line: &self.sim.racing_line,
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
-            field,
-            yaw_ceiling: None,
-            plan: None,
-        };
-        if self.sim.world.ships[slot]
-            .driver
-            .wants_to_fire(&context)
-            .is_none()
-        {
-            return false;
-        }
+    pub(in crate::race) fn fire_opponent_rocket(&mut self, slot: usize) -> bool {
         let Some(stats) = self
             .sim
             .weapons
@@ -131,28 +88,11 @@ impl Race {
     /// **The busy check comes first**, matching `Weapon_FireQuake`'s own -
     /// only one Quake can be in flight in the whole race, so a driver that
     /// wants to fire into an already-travelling wave simply keeps the
-    /// pickup, the same as a full projectile pool would. **The same
-    /// `Driver::wants_to_fire` gate the Rocket and the Plasma use beyond
-    /// that** - the Quake has no lock and no cone to aim through, so there
-    /// is nothing more to decide, and a second invented gate would be
-    /// inventing a difference rather than recovering one.
-    fn fire_opponent_quake(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+    /// pickup, the same as a full projectile pool would. Whether to fire is
+    /// `Race::opponent_fires`'s, as for every forward weapon; under the
+    /// original's law the Quake is the one that needs nothing in its path.
+    fn fire_opponent_quake(&mut self, slot: usize) -> bool {
         if self.sim.world.quake.is_some() {
-            return false;
-        }
-        let context = oag_ai::Context {
-            line: &self.sim.racing_line,
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
-            field,
-            yaw_ceiling: None,
-            plan: None,
-        };
-        if self.sim.world.ships[slot]
-            .driver
-            .wants_to_fire(&context)
-            .is_none()
-        {
             return false;
         }
         let Some(stats) = self
@@ -210,23 +150,8 @@ impl Race {
     /// AI shot costs somebody else their turn, and letting an opponent hold on
     /// to it until it can actually use it makes it a threat instead of a
     /// nuisance. No confidence score, because nothing was measured.
-    fn fire_opponent_leach_beam(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+    fn fire_opponent_leach_beam(&mut self, slot: usize) -> bool {
         if self.sim.world.leach_beam.is_some() {
-            return false;
-        }
-        let context = oag_ai::Context {
-            line: &self.sim.racing_line,
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
-            field,
-            yaw_ceiling: None,
-            plan: None,
-        };
-        if self.sim.world.ships[slot]
-            .driver
-            .wants_to_fire(&context)
-            .is_none()
-        {
             return false;
         }
         let Some(stats) = self
@@ -274,31 +199,10 @@ impl Race {
     /// craft's hands rather than cashing it in - the `&&`-chain bug
     /// `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup` covers.
     ///
-    /// **The same gate the Rocket uses**, deliberately: `Driver::wants_to_fire`
-    /// is this engine's stand-in for a human deciding to press the button, and
-    /// nothing read says the original weighs the Plasma differently from the
-    /// Rocket at the moment of firing. `WeaponAiStats_Load` does author
-    /// per-weapon odds and the Plasma is one of the two weapons whose numbers
-    /// differ from the uniform `1.2`/`1.1` - but that whole decision is
-    /// unported for the reasons `Race::spend_opponent_pickup` gives at length,
-    /// so using a second, invented gate here would be inventing a difference
-    /// rather than recovering one.
-    fn fire_opponent_plasma(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
-        let context = oag_ai::Context {
-            line: &self.sim.racing_line,
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
-            field,
-            yaw_ceiling: None,
-            plan: None,
-        };
-        if self.sim.world.ships[slot]
-            .driver
-            .wants_to_fire(&context)
-            .is_none()
-        {
-            return false;
-        }
+    /// Whether to fire is `Race::opponent_fires`'s. Under the original's law
+    /// the Plasma differs from the Rocket in two read places only: its own
+    /// `WeaponAIstats.xml` row and its own shot speed in the path test.
+    fn fire_opponent_plasma(&mut self, slot: usize) -> bool {
         let Some(stats) = self
             .sim
             .weapons
@@ -332,10 +236,7 @@ impl Race {
     /// Throws an opponent's blade, if its driver wants a shot now.
     ///
     /// Returns whether anything left, for [`Race::fire_opponent_plasma`]'s
-    /// reason, and gates on the same `Driver::wants_to_fire` for the same one:
-    /// nothing read weighs this weapon differently at the moment of throwing,
-    /// and a second invented gate would be inventing a difference rather than
-    /// recovering one.
+    /// reason; whether to throw is `Race::opponent_fires`'s.
     ///
     /// **The coin is drawn from the world's generator here exactly as it is on
     /// the player's path**, and only once there is room in the array - see
@@ -343,22 +244,7 @@ impl Race {
     /// line. A driver that declines the shot draws nothing at all, so the
     /// generator stream does not depend on how many opponents happened to be
     /// holding a Shuriken this tick.
-    fn throw_opponent_shuriken(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
-        let context = oag_ai::Context {
-            line: &self.sim.racing_line,
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
-            field,
-            yaw_ceiling: None,
-            plan: None,
-        };
-        if self.sim.world.ships[slot]
-            .driver
-            .wants_to_fire(&context)
-            .is_none()
-        {
-            return false;
-        }
+    fn throw_opponent_shuriken(&mut self, slot: usize) -> bool {
         let Some(stats) = self
             .sim
             .weapons
@@ -397,39 +283,24 @@ impl Race {
 
     /// What an opponent does with a pickup it is holding.
     ///
-    /// # This is a policy, and it is the crudest one that is not "nothing"
+    /// # When a forward weapon fires is the original's; the rest is policy
     ///
-    /// **Nothing about it is recovered**, and the file this comment used to point
-    /// at turns out not to be the answer. `WeaponAIstats.xml`'s loader was found
-    /// on 2026-08-17 (`WeaponAiStats_Load`, `0x08851d88`, called one line after
-    /// `AiStats_LoadAll` in the same race-setup function) and its schema is three
-    /// floats a weapon: `useAgainstPlayer`, `useAgainstAI`, `absorb`. The shipped
-    /// values are nearly uniform - `1.0` absorb throughout, `1.2`/`1.1` for
-    /// everything but Plasma and Quake - so there is no weapon the file marks as
-    /// absorb-only or fire-only. **That is because they are probabilities, not
-    /// flags**: `FUN_088518b4` reads the record every frame and compares each
-    /// value against a normalised random draw, gated on an along-track range
-    /// test. **The whole decision is recovered as of 2026-08-17** -
-    /// `WeaponAi_Update` (`0x08851550`) reconsiders four times a second and
-    /// `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds
-    /// against a five-entry difficulty table (`0`, `0.0005`, `0.002`, `0.008`,
-    /// `0.05`, and a second table for Eliminator), with a `2.0` multiplier in
-    /// one mode and `5.0` in Eliminator. **It is not ported**, and porting it
-    /// needs the two skill indices and the `0..1` scalar the branches gate on,
-    /// none of which is read yet. See
-    /// `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`, and
-    /// `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`. The decision below is
-    /// therefore still invention, and still kept small enough to be obviously
-    /// provisional:
+    /// **The fire half of `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is
+    /// ported** (2026-10-03): `Race::opponent_fires` asks `oag_ai::weapon_ai`
+    /// for the Rocket, Missile, Plasma, Shuriken, LeachBeam and Quake, on the
+    /// odds out of the title's `WeaponAIstats.xml`, and falls back to
+    /// `oag_ai::Driver::wants_to_fire` where that file was not read. See
+    /// `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`. Its absorb half is
+    /// not ported, and everything below that is not a forward weapon is still
+    /// this project's own:
     ///
     /// - **Turbo is fired at once**, but only on a stretch the driver is not
     ///   braking for. A turbo spent into a corner is a turbo spent into a wall.
     ///   It arms that craft's own boost plume, the same reuse the player's Turbo
     ///   makes of the speed pad's visual.
-    /// - **A Rocket is aimed**, as of 2026-08-11, at whatever
-    ///   `oag_ai::Driver::wants_to_fire` picks - a craft ahead, in range, inside
-    ///   a cone, with straight enough road between. It is kept rather than spent
-    ///   when there is no target, no authored rocket or no free slot.
+    /// - **A forward weapon is fired when `Race::opponent_fires` says so**, and
+    ///   kept rather than spent when it does not, or when the weapon itself
+    ///   declines (no lock, no authored stats, no free slot).
     /// - **An Autopilot is absorbed**, and for once that is not a policy but
     ///   the only thing it could be: the pickup hands a craft to its driver, and
     ///   an opponent is already flown by one. There is nothing for it to do. It
@@ -459,6 +330,8 @@ impl Race {
         controls: &oag_physics::ShipControls,
         field: &oag_ai::Field,
     ) {
+        // Before anything returns: it advances this craft's weapon-AI clocks.
+        let fires = self.opponent_fires(slot, field);
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
@@ -549,30 +422,30 @@ impl Race {
             // effectively the tick it collected it. The comment that used to sit
             // here claimed the opposite in as many words. See
             // `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup`.
-            if !self.fire_opponent_rocket(slot, field) {
+            if !fires || !self.fire_opponent_rocket(slot) {
                 // No target, no authored rocket or no free slot. Keep it - the
                 // same rule the player's path follows, which is a `match` with
                 // early returns and always did.
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Missile {
-            if !self.fire_opponent_missile(slot, field) {
+            if !fires || !self.fire_opponent_missile(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Plasma {
-            if !self.fire_opponent_plasma(slot, field) {
+            if !fires || !self.fire_opponent_plasma(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Shuriken {
-            if !self.throw_opponent_shuriken(slot, field) {
+            if !fires || !self.throw_opponent_shuriken(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Quake {
-            if !self.fire_opponent_quake(slot, field) {
+            if !fires || !self.fire_opponent_quake(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::LeachBeam {
-            if !self.fire_opponent_leach_beam(slot, field) {
+            if !fires || !self.fire_opponent_leach_beam(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Disruptor {

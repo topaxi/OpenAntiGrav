@@ -84,6 +84,7 @@ mod noise;
 mod pilot;
 pub mod plan;
 pub mod probe;
+pub mod weapon_ai;
 
 pub use difficulty::Difficulty;
 pub use driver::{

@@ -33,6 +33,19 @@ pub struct Weapons {
     /// every mode. It is carried because the axis is about which files exist,
     /// and recording that Pure has one is the point of the axis.
     pub elimination: Option<&'static str>,
+    /// The table an opponent's fire odds are read from - `useAgainstPlayer`,
+    /// `useAgainstAI` and `absorb` a weapon, `oag_tables::weapons::ai` - or
+    /// `None` where it has not been looked for.
+    ///
+    /// **`None` is not a measurement here**, unlike [`Self::elimination`]'s:
+    /// Pulse's is read by `weapon_ai_ground_truth`, and Pure's `Data.wad`
+    /// carries an entry under the same name's hash (`0xac744a8d`, case folded
+    /// by the hash, so the spelling is Pulse's) that parses (2026-10-03). **So
+    /// a Pure race runs Pulse's law on Pure's odds; Pure's own decision code is
+    /// unread.** No other title's archives were searched. A race without the
+    /// file fires on this project's own rule rather than the original's - see
+    /// `oag_game::race::FireLaw`.
+    pub ai: Option<&'static str>,
 }
 
 /// Where a title keeps each weapon's own body model - the projectile itself,

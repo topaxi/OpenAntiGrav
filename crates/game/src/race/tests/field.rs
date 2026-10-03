@@ -103,60 +103,13 @@ fn craft_that_are_not_touching_are_left_alone() {
 fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     let mut race = race_with_a_grid();
     race.sim.weapons = Some(one_rocket_table());
-    // **A straight to shoot down.** The synthetic test track is a loop of
-    // about seven units' radius, so `wants_to_fire`'s "is the road between
-    // here and there straight enough" gate refuses every shot on it - which
-    // is the gate working, not a bug, but it makes this fixture useless for
-    // asking who owns the rocket.
-    race.sim.racing_line = oag_ai::Line::new(
-        (0..64)
-            .map(|step| Vec3::new(0.0, 0.0, -10.0 * step as f32))
-            .collect(),
-    );
-    // A driver that will take any shot it is offered, and a target dead
-    // ahead and in range.
+    // Whether to fire is `Race::opponent_fires`'s question, asked by the
+    // caller; this asks only who owns what leaves the rails.
     let firing = 3usize;
-    race.sim.ai_pilots[firing] = oag_ai::Pilot {
-        trigger: oag_ai::Span::fixed(1.0),
-        ..oag_ai::Pilot::BALANCED
-    };
-    let field = oag_ai::Field {
-        ahead: Some(oag_ai::Rival {
-            slot: 2,
-            gap: 80.0,
-            offset: 0.0,
-            closing: 0.0,
-            range: 80.0,
-            cos_bearing: 1.0,
-        }),
-        ..oag_ai::Field::EMPTY
-    };
-
-    // **A driver cannot shoot at a craft it has not noticed yet.**
-    // `wants_to_fire` reads the reaction-latency clock that `Driver::drive`
-    // advances, and `Race::step_opponents` drives every opponent a few lines
-    // before it spends its pickup - so in a race the two are the same tick.
-    // This fixture calls `fire_opponent_rocket` directly and has to advance the
-    // clock itself. See `oag_ai::Reflex`.
-    let latency = race.sim.ai_tuning.reaction_ticks;
-    for _ in 0..=latency {
-        race.sim.world.ships[firing]
-            .driver
-            .reflex
-            .advance(&field, latency);
-    }
-
-    // Sweep the phase so the trigger roll lands, then check who owns what.
-    let mut fired = false;
-    for phase in 0..2_000u32 {
-        race.sim.world.ships[firing].driver.phase = phase;
-        race.sim.world.projectiles = oag_gameplay::projectile::Projectiles::default();
-        if race.fire_opponent_rocket(firing, &field) {
-            fired = true;
-            break;
-        }
-    }
-    assert!(fired, "the driver never took a shot to check the owner of");
+    assert!(
+        race.fire_opponent_rocket(firing),
+        "nothing was fired to check the owner of"
+    );
 
     let owners: Vec<u8> = race
         .sim
