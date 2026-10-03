@@ -46,7 +46,29 @@ pub(super) fn plan_slack(ctx: &Context<'_>, personality: &Personality) -> f32 {
     if !ctx.plan.is_some_and(|plan| plan.len() == ctx.line.len()) {
         return 1.0;
     }
-    ((1.0 - plan_margin(ctx.tuning, personality)) / NOVICE_GAP).clamp(0.0, 1.0)
+    let level = ((1.0 - plan_margin(ctx.tuning, personality)) / NOVICE_GAP).clamp(0.0, 1.0);
+    level.max(traffic(ctx))
+}
+
+/// How close the nearest rival this driver has noticed is, one when touching
+/// and zero at [`TRAFFIC_RANGE`] or with nobody about.
+///
+/// **In traffic a pilot is a pilot again**: a field of Aces that all hold the
+/// plan's one line at the plan's one pace runs nose to tail and sticks -
+/// `craft_sticking_ground_truth` measured 2,101 overlapped pair-ticks, 1,420
+/// of them sustained, past the old pathology's 1,062 - so the character that
+/// spreads a field comes back as rivals close in, and a lone craft, which has
+/// nobody, still drives the plan's line. Chosen, not measured.
+/// Gap inside which a rival brings a pilot's character back. **Chosen, not
+/// measured.**
+const TRAFFIC_RANGE: f32 = 40.0;
+
+fn traffic(ctx: &Context<'_>) -> f32 {
+    [ctx.field.ahead, ctx.field.behind, ctx.field.alongside]
+        .into_iter()
+        .flatten()
+        .map(|rival| ((TRAFFIC_RANGE - rival.gap.abs()) / TRAFFIC_RANGE).clamp(0.0, 1.0))
+        .fold(0.0, f32::max)
 }
 
 /// The speed a driver of this level and character holds at `index` on
