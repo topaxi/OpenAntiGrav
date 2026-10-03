@@ -60,10 +60,10 @@ plus the respawn-keeps-its-place test).
   half at instruction level", and `race-modes.md`, "Firing on the original's law".
 - **The decision cadence is the soft spot** (confidence 65): the read says every call, and the
   call being once a frame is inferred. Decided four times a second instead, the median is 93 s.
-- **Not looked for**: whether Wipeout HD/Fury, Omega and 2048 ship a `WeaponAIstats.xml`
-  (`Weapons::ai` is `None` there, so they keep the old rule). **Pure's `WeaponAIstats.xml`
-  parses, so a Pure race now runs Pulse's law on Pure's odds; Pure's own decision code is
-  unread** (a behaviour change on Pure, not measured).
+- ~~Not looked for: whether HD/Fury, Omega and 2048 ship a `WeaponAIstats.xml`~~ all three do
+  (2026-10-03, `fire-law-inherit`, `race-modes.md`), so every title runs Pulse's law on its own
+  odds, inherited and unmeasured on HD, Omega and 2048 and on Pure. Their Eliminator times are
+  not measured.
 - **Ghidra data rename rejected**: `g_eliminator_kill_target` for `0x08b30fb0` (Hungarian-prefix
   check). The docs and `names.tsv` are authoritative for the data name.
 

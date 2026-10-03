@@ -987,7 +987,23 @@ and the road**: `Driver::wants_to_fire` wanted a noticed craft inside 200 units 
 between, so a held weapon waited 10 to 12 s for that to happen. The AI still obeys the player's
 physics; only when it presses the button changed. The Cannon (its fire byte reaches nothing in
 the original), Mine, Bomb and Turbo keep this project's own rules. A race whose title names no
-`WeaponAIstats.xml` keeps the old rule and says so in the loader report.
+`WeaponAIstats.xml` keeps the old rule and says so in the loader report; none does now.
+
+**Which titles ship the table (searched 2026-10-03).** All five. Pulse and Pure carry
+`Data\XML\WeaponAIstats.xml`. HD/Fury's `DATA00.PSARC` carries `/data/xml/weaponaistats.xml`: the
+thirteen rows, plus an `AllWeapons` row and an `EliminatorAIStats` row (flip, absorb and use
+scales by difficulty) that the parser ignores and nothing reads. 2048's `data.psarc` carries
+`WeaponAIStats.xml` and `WeaponAIStats2048.xml`, byte-identical to each other and to HD's
+(md5 `21e1062b`); `oag_2048::TITLE` names the suffixed one. Omega's `data00.psarc` carries both
+spellings too (`weaponaistats.xml`, `WeaponAIStats2048.xml`); `oag_omega::TITLE` names the
+unsuffixed one. So the maintainer's rule (an unmeasured title runs Pulse's law) needed no
+restated table: **every title runs `oag_ai::weapon_ai` on its own odds, inherited from Pulse and
+unmeasured on HD, Omega and 2048**, with no confidence score for those three. HD's and Omega's
+decision code is unread, and HD's `EliminatorAIStats` row is a lead on how Pulse's x5 Eliminator
+multiplier is authored there. `crates/game/tests/fire_law_inherit_ground_truth.rs` pins that a
+race on each of the three loads the table and runs `FireLaw::Original`. A title with no table
+would still have to run Pulse's odds; that case does not exist, so no cross-title read or
+restated constant was built for it.
 
 Parked player, `16_Track`, Venom, seeds 1 to 240, paired against the old rule on one binary:
 

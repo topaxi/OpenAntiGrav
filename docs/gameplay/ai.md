@@ -2563,10 +2563,11 @@ quietly start depending on `~/.config/oag/pilots/`.
 ### Shooting at somebody
 
 **Since 2026-10-03 this is the fallback.** Wherever the title's
-`WeaponAIstats.xml` is read (Pulse and Pure), an opponent fires its forward
+`WeaponAIstats.xml` is read (every title: Pulse, Pure, HD, Omega and 2048), an opponent fires its forward
 weapons on the original's own law, `oag_ai::weapon_ai` - see
 [race-modes.md](race-modes.md#firing-on-the-originals-law-2026-10-03). What
-follows is the rule a race without that file still runs, and its history.
+follows is the rule a race without that file still runs - the sweeps, through
+`set_fire_law` - and its history.
 
 **An opponent fires as of 2026-08-11**, and the delete-this-paragraph moment is
 worth marking: the firing *mechanism* was complete long before - rockets fly and
