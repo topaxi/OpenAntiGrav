@@ -103,6 +103,42 @@ pub(super) fn off_magstrips(
             targets.push(oag_ai::line_shift::Target { index: i, offset });
         }
     }
+    let before = points.to_vec();
     oag_ai::line_shift::toward(points, corridor, &targets, 0.0, EASE, 0.0);
+    // And the room a driver may stray into stops short of the strip, on every
+    // sample the move reached: a pilot's own line, or one handed back in
+    // traffic, otherwise wanders straight back onto it. Measured: in a field
+    // of Aces at VENOM the craft that still fell were the ones a rival had
+    // pushed back across, at -5 to -8 units, on the run-up.
+    for i in 0..n {
+        let moved = (points[i] - before[i]).dot(corridor[i].lateral);
+        if moved == 0.0 {
+            continue;
+        }
+        let frame = corridor[i];
+        let probe =
+            |offset: f32| surface_at(collision, points[i], ups[i], frame.lateral, offset, reach);
+        // The strip lies the way the line came from.
+        let toward_strip = -moved.signum();
+        let room = if toward_strip < 0.0 {
+            -frame.left
+        } else {
+            frame.right
+        };
+        let mut edge = room;
+        let mut d = 0.0;
+        while d <= room {
+            if probe(toward_strip * d) == Some(Surface::MagFloor) {
+                edge = (d - CLEARANCE).max(0.0);
+                break;
+            }
+            d += STEP;
+        }
+        if toward_strip < 0.0 {
+            corridor[i].left = corridor[i].left.max(-edge);
+        } else {
+            corridor[i].right = corridor[i].right.min(edge);
+        }
+    }
     targets.len()
 }
