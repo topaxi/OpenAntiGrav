@@ -54,7 +54,7 @@ times larger" - because the finding is the coupling, not the number.
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
-| Weapon selection and firing | **recovered** (2026-08-17), and unported. `WeaponAi_Update` (`0x08851550`) reconsiders four times a second and `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry difficulty tables. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) | 85 |
+| Weapon selection and firing | **recovered** (2026-08-17); **the fire half is ported** for the forward weapons (2026-10-03, `oag_ai::weapon_ai`). `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry rate tables on every call, and an aimed weapon also needs a craft in its predicted path. The absorb half is not ported. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
 Nothing here has been run under a debugger. Every score above rests on
@@ -2614,8 +2614,10 @@ opponent draws from the `ai` column of the shipped `<Pickupodds>` table rather
 than the `human` one - a distinction the disc's own data makes. `front` and
 `back` remain unreachable: they need race *positions*.
 
-**What an opponent does with what it draws is a policy, and the original's is now
-located but not ported.** `Data\XML\WeaponAIstats.xml` holds three values a weapon
+**What an opponent does with what it draws is a policy, and the original's fire
+half is ported for the forward weapons since 2026-10-03** (`oag_ai::weapon_ai`,
+[race-modes.md](race-modes.md#firing-on-the-originals-law-2026-10-03)); what follows
+is the history and the rules that are still ours. `Data\XML\WeaponAIstats.xml` holds three values a weapon
 - `useAgainstPlayer`, `useAgainstAI`, `absorb` - and `FUN_088518b4` reads them
 every frame, compares them against a normalised random draw and writes the fire
 request. So it is a **weighted random choice gated on an along-track range test**,

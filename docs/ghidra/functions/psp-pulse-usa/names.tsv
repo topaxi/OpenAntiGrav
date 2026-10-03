@@ -1232,3 +1232,9 @@
 0x088fbcec	function	ParticleSystem_EmitRect	85	weather.md
 0x088f2918	function	Perlin_Noise1	85	weather.md
 0x088f2aa4	function	Perlin_Fractal	85	weather.md
+0x088504f4	function	WeaponAi_RowForWeapon	85	weapon-ai.md
+0x0885058c	function	WeaponAi_LayInPlane	85	weapon-ai.md
+0x088506c4	function	WeaponAi_LayPointInPlane	85	weapon-ai.md
+0x0885a0e4	function	Missile_ClassSpeed	80	weapon-ai.md
+0x0885d22c	function	Rocket_ClassSpeed	80	weapon-ai.md
+0x0883d3c0	function	Math_FoldSigned	85	weapon-ai.md

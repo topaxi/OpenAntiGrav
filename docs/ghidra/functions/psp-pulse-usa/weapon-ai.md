@@ -25,6 +25,16 @@ recovered".
 | `0x08850cc8` | `WeaponAi_ScoreShield` | 85 |
 | `0x08850ac4` | `WeaponAi_ScoreBomb` | 85 |
 | `0x08850b7c` | `WeaponAi_ScoreMine` | 85 |
+| `0x088504f4` | `WeaponAi_RowForWeapon` | 85 |
+| `0x0885058c` | `WeaponAi_LayInPlane` | 85 |
+| `0x088506c4` | `WeaponAi_LayPointInPlane` | 85 |
+| `0x0885a0e4` | `Missile_ClassSpeed` | 80 |
+| `0x0885d22c` | `Rocket_ClassSpeed` | 80 |
+| `0x0883d3c0` | `Math_FoldSigned` | 85 |
+
+The last six, and the corrections marked 2026-10-03 below, are from
+[the instruction-level pass of 2026-10-03](#the-fire-half-at-instruction-level-read-2026-10-03),
+which is also what `oag_ai::weapon_ai` ports.
 
 **How it was found matters** and is on
 [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#but-the-log-is-the-prize-not-just-a-hazard):
@@ -56,7 +66,19 @@ far as they are used here:
 The two request bytes it writes are `craft+0x15` (**fire**) and `craft+0x17`
 (**absorb**).
 
-## It decides four times a second, not every frame - and one step of that is unverified
+Added 2026-10-03, from `WeaponAi_Construct` (`0x0885077c`) and the writer scan
+in [the fire-half pass](#the-fire-half-at-instruction-level-read-2026-10-03):
+`+0x3c`/`+0x40` the nearest gap ahead/behind, `+0x44` and `+0x4c` never
+written, `+0x52` "no craft in the shot's path", `+0x5c` a dead field the scan
+zeroes. The object is `0x68` bytes from the non-zeroing `operator new`.
+
+## It decides on every call after the first quarter-second - corrected 2026-10-03
+
+**Superseded heading**: this section was "It decides four times a second, not
+every frame". The 2026-10-03 pass found the second instruction-level fact that
+settles which way the paragraphs below lean - see
+[the decision cadence](#the-decision-cadence-every-call-confidence-65) - and the
+port runs every tick. The original text is kept for its evidence.
 
 `WeaponAi_Update` accumulates `dt` into `+0x30` and does nothing until it
 reaches **0.25**. So an opponent reconsiders its pickup four times a second -
@@ -237,19 +259,16 @@ real one.
   flag ("is this the local sim") but not read past that. **Still open**;
   what the branch does is now read at instruction level, see
   [below](#mode-8-what-the-original-does-with-a-held-weapon-read-2026-10-03).
-- **`self+0x44`**, an integer field `FUN_088508d4` and the Bomb/Mine setup
-  read (`== 1`, `> 1`, `!= 0`) that is not the nearest-behind distance
-  (`+0x40`, a float) despite sitting four bytes after it. Read enough to
-  place it structurally, not enough to say what it counts. **Under 50,
-  not named.**
-- **`self+0x5c`**, a float Turbo's own setup function (`FUN_08850c6c`)
-  compares against `300.0`. Structurally another along-track gap in the same
-  family as `+0x3c`/`+0x40`/`+0x60`, but which craft it is the gap to is not
-  read. **Under 50, not named.**
-- **`self+0x4c`**, an integer Shield's and the Bomb/Mine's own setup
-  functions read (`== 1`, `> 1`). Reads like a count of something nearby -
-  plausibly craft within some radius - but not corroborated. **Under 50, not
-  named.**
+- ~~**`self+0x44`**, an integer field ... not enough to say what it
+  counts.~~ **Read 2026-10-03: never written.** Nothing stores to it - see
+  [the three fields](#0x44-0x4c-and-0x5c-two-never-written-one-dead). Uninitialised heap,
+  the Cannon's fire-held byte's shape. Confidence 70.
+- ~~**`self+0x5c`**, a float Turbo's own setup function compares against
+  `300.0` ...~~ **Read 2026-10-03: a dead field.** `WeaponAi_Construct` writes
+  `10.0`, `WeaponAi_ScanTraffic` writes `0.0` before every setup and nothing
+  else writes it, so Turbo's `+0x38` is always `3`. Confidence 80.
+- ~~**`self+0x4c`** ... Reads like a count of something nearby~~ **Read
+  2026-10-03: never written**, as `+0x44`. Confidence 70.
 
 ## The six fields a port needs, read 2026-09-16
 
@@ -267,7 +286,11 @@ This page's own speculation ("reads like a shield or energy fraction") is
 wrong. `WeaponAi_Update` resets it to `0.0` the instant `+0x1c` ("is holding
 something") goes false, and while holding, adds the tick's `dt` to it **every
 time the 0.25 s accumulator fires** - so it grows without bound for as long as
-a craft sits on a pickup, four steps of roughly `0.25` a second. The `> 0.8`
+a craft sits on a pickup. **Corrected 2026-10-03:** it gains the frame's
+`dt` per decision, not `0.25` - the page said "four steps of roughly `0.25` a
+second", which the listing does not support (`param_1 = +0x2c + param_1`, with
+`param_1` the frame time). Read with the never-reset `+0x30`, that makes it
+real held seconds; see [the decision cadence](#the-decision-cadence-every-call-confidence-65). The `> 0.8`
 and `> 0.2` comparisons in the decision are therefore **hold-times in
 seconds**, not thresholds on a normalised scale: an opponent will not even
 roll to fire until it has held the weapon for about 0.8 s, and not roll to
@@ -369,15 +392,20 @@ existing read that Autopilot gets no aim. New at confidence 85.
 
 `FUN_08850edc`, called first every tick before the accumulator check even
 runs. It predicts the firing craft's own shot along a straight line at a
-per-weapon speed (`Plasma_ClassSpeed` for id 7, `FUN_0885a0e4` for ids 0-1,
-`FUN_0885d22c` - unread past this call, structurally a default/generic
-speed - for everything else), then for every other live craft extrapolates
-*that craft's own* straight-line motion and finds the closest approach
-between the two predicted paths. If the closest approach lands within `0 <
-t < 20` seconds and the miss distance is under `other_speed * 0.15 + 4.0`
-(a per-craft safety margin scaled by how fast that craft is moving), it
-writes `self->0x52 = 0` and returns immediately - a target found. If the loop
-finishes without any craft satisfying that, `self->0x52 = 1` - no target.
+per-weapon speed, then for every other live craft extrapolates *that craft's
+own* straight-line motion and finds the closest approach between the two
+predicted paths. If the closest approach lands within `0 < t < 20` seconds and
+the miss distance is under a margin, it writes `self->0x52 = 0` and returns
+immediately - a target found. If the loop finishes without any craft
+satisfying that, `self->0x52 = 1` - no target.
+
+**Two corrections, 2026-10-03, at instruction level**
+([below](#the-predicted-path-test-instruction-by-instruction)): the speed is
+the Missile's for id **1 only** and the Rocket's for id 0 and everything else
+(this page said "`FUN_0885a0e4` for ids 0-1"), and the margin is
+`0.15 * |shot velocity * t| + 4.0` - the distance **the shot** has flown to
+the closest approach, a cone of about 8.5 degrees - not the other craft's
+speed.
 
 **The sign is confirmed by which branch it feeds, not just by this reading in
 isolation.** `WeaponAi_DecideFireOrAbsorb`'s fire branch is
@@ -405,11 +433,9 @@ four lines, unambiguous).
 **There isn't one to invent.** Both skill indices are rebuilt from race
 geometry, this craft's own shield, and the weapon id every 0.25 s; the rate
 tables' five entries are indexed by a live score, not a fixed per-race
-setting. A port needs no "chosen, not measured" mapping here at all - the
-one thing left un-measured is `+0x52`'s own predicted-path corridor test
-(`FUN_08850edc`), which is read but not ported this pass; see
-`crates/game/src/race/field/weapon_ai.rs`'s own doc comment for what stands
-in for it and why.
+setting. A port needs no "chosen, not measured" mapping here at all. The fire
+half is ported as `oag_ai::weapon_ai`, predicted-path test included - see
+[the 2026-10-03 pass](#the-fire-half-at-instruction-level-read-2026-10-03).
 
 ## Mode 8: what the original does with a held weapon, read 2026-10-03
 
@@ -454,3 +480,154 @@ drops and the `0.001` absorb), and a chosen 10 s absorb on top, were swept over
 outside its 95 % interval, and the field's kill rate unchanged. See
 [race-modes.md](../../../gameplay/race-modes.md#eliminator).
 
+
+## The fire half at instruction level, read 2026-10-03
+
+Read for the `pulse-eliminator-fire` lane off a fresh headless Ghidra import of
+`BOOT.BIN` with the Allegrex module (analysed at base `0`, every address here
+rebased by `0x08804000`), decompile and listing side by side. Not observed
+live. This is the reading `oag_ai::weapon_ai` ports.
+
+### The predicted-path test, instruction by instruction
+
+`WeaponAi_FindTargetInPath` (`0x08850edc`), confidence **85**:
+
+1. **The shot's speed** (`0x08850ef4..f6c`): `slti a1,a0,2`, `blez a0`, then
+   `li a1,7`. Id **1** calls `Missile_ClassSpeed` (`0x0885a0e4`), id **7**
+   calls `Plasma_ClassSpeed` (`0x0885c650`), and id **0 and every other id**
+   call `Rocket_ClassSpeed` (`0x0885d22c`). Each is the same shape: the
+   WeaponStats block `*(&DAT_08b32420 + DAT_08b32428 * 4)` at the class index
+   `DAT_08b31040`, reading `+0x34..+0x40` (the Missile's four class speeds,
+   [missile.md](missile.md)), `+0xac..+0xb8` (the Plasma's) and `+0x08..+0x14`
+   (the Rocket's, the offsets `Rocket_SpeedForClass` reads). The result goes
+   straight into `vscl.q` at `0x08850fbc`: **no `/ 3.6`**, which the launchers
+   apply ([weapon-stats.md](../../../formats/weapon-stats.md)).
+2. **The frame** is the shooter's node `*(entity + 0x794)`: `+0x10` the up row,
+   `+0x20` the nose, `+0x30` the position ([camera.md](camera.md)). The shot's
+   velocity is `WeaponAi_LayInPlane(up, nose * speed)` (`0x08850fe0`).
+3. **The candidates** come from `Race_CountLiveCrafts` (`0x08826dc8`, called at
+   `0x08850ff8` on `*(0x08b317b4)`): not destroyed (`+0x860 & 0x1000`) and
+   `Ship_State != 7`. The shooter is skipped by entity pointer (`0x088510fc`).
+   **The player is one candidate among the rest**, not singled out.
+4. **Per craft**: its position laid into the shooter's plane by
+   `WeaponAi_LayPointInPlane` (`0x08851138`), its velocity (`body + 0x140`) by
+   `WeaponAi_LayInPlane` (`0x08851150`); `d = P - own`, `dv = V - shot`, each
+   laid in again (`0x088511d0`, `0x088511e8`).
+5. `t = -(d . dv) / (dv . dv)` (`neg.s` `0x08851240`, `div.s` `0x08851244`).
+   `c.le.s t, 0` skips (`0x08851248`); `c.lt.s t, 20.0` false skips
+   (`0x08851258`, `20.0` = `0x41a00000` loaded at `0x0885109c`). A `NaN`
+   fails both and is skipped.
+6. `miss = |d + dv t|` (`vsqrt.s` at `0x088512cc`) and
+   `flown = |(own + shot t) - own|` (`0x088512f0..0x0885137c`).
+7. `miss < flown * 0.15 + 4.0` (`mul.s` by `f24` = `0x3e19999a` at
+   `0x08851388`, `add.s` `f26` = `0x40800000`, `c.lt.s` at `0x08851390`)
+   stores `0` at `+0x52` and returns (`0x08851448`). The loop falling through
+   stores `1`.
+
+`WeaponAi_LayInPlane` (`0x0885058c`) is `v - (v . n) n`, rescaled to `|v|`
+unless its own length is under `1e-8`. `WeaponAi_LayPointInPlane`
+(`0x088506c4`) is `p0 + LayInPlane(n, p - p0)`. Both confidence 85: two short
+bodies, read whole.
+
+**So the corridor is a cone of about 8.5 degrees off the nose plus four units,
+with a 20 s horizon and no other range limit**, measured against where the
+target will be rather than where it is, and with no wall test: a craft round a
+corner is a target if the straight line passes it.
+
+### What else the decision reads, corrected
+
+- **`WeaponAi_RowForWeapon`** (`0x088504f4`, confidence 85): a switch from the
+  craft's held id (`craft + 0x1bc`) to the `WeaponAIstats` row the rest of the
+  AI indexes by: `3 -> 5`, `4 -> 3`, `5 -> 4`, `8 -> 9`, `9 -> 8`, the rest
+  unchanged, `-1` otherwise. That is [ai-stats.md](ai-stats.md)'s "fourth id
+  space" (Turbo, Shield and Cannon rotated) plus the Bomb and Mine swapped. The
+  ids in this page's tables are rows, not held ids.
+- **The three-second window is not a wait.** The full roll runs on every
+  decision whatever `+0x54` says. While it is open, an aimed weapon with a
+  craft in its path gets one more chance first, at the table's top rate
+  (`rate[4]`, `0.1` in an Eliminator), bypassing the hold time and the odds.
+  A roll that succeeds with nothing in the path re-arms it at `3.0`.
+- **`WeaponAi_ScanTraffic`'s gaps** are written only when `0x0883dbf4`'s
+  out-flag is set (a test on the two craft's track sections, `0x0887d970`, not
+  read further), and that gap is folded by
+  `Math_FoldSigned` (`0x0883d3c0`, confidence 85: two loops, read whole) into
+  half a lap either way.
+
+### `+0x44`, `+0x4c` and `+0x5c`: two never written, one dead
+
+`WeaponAi_Construct` (`0x0885077c`) writes `+0x00`, `+0x04`..`+0x18` (through
+its helpers), `+0x24`..`+0x30`, `+0x3c = 100.0`, `+0x40 = 50.0`, `+0x52 = 0`,
+`+0x54 = 0`, `+0x5c = 10.0`, `+0x60 = 50.0` and `+0x64`. **Not `+0x44` and not
+`+0x4c`.** Its caller `0x08834d58` allocates the `0x68` bytes with
+`operator new` (`0x08946ce4`), which does not zero
+([memory.md](memory.md), [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md)'s
+"allocated without a zero-fill" for the Cannon's fire-held byte, the same
+shape).
+
+Two store scans, with their scope said:
+
+- Every `sw`/`swc1`/`sb`/`sh`/`sv.s` at `0x44`, `0x4c` or `0x5c` off a register
+  other than `sp`, in `0x0884c000..0x08853000`: three. `0x08850da8 swc1
+  f20,0x5c(s0)` is `WeaponAi_ScanTraffic` writing `0.0`, `0x088507b0` is the
+  constructor's `10.0`, and `0x0884d114 sw zero,0x44(a0)` lies outside every
+  function and outside the object's methods.
+- Image-wide there are 558 such stores. The eight in functions that also touch
+  a byte at `+0x50..+0x58` are none of the WeaponAi's (`0x08844100`,
+  `0x08873d3c`, `0x088eeaf8`, `0x0890e998`, `0x08912b80`, `0x08919cf8`,
+  `0x0898f864`, `0x089c54dc`). **A filter, not a proof**: the object's vtable
+  (`0x08aca284`..) holds its destructor (`0x08850890`) and `WeaponAi_Update`,
+  and neither writes them.
+
+So:
+
+- **`+0x44` and `+0x4c` are never written: uninitialised heap.** Confidence
+  70. What a real PSP holds there is not known. `+0x44` is the
+  `WeaponAi_ScoreForwardWeapon` term that adds `2` to the fire index with
+  nothing inside 100 ahead (and the Quake's coin flip above `2`); in an
+  Eliminator it is the difference between index 1 and 2, `0.002` against
+  `0.01`. `+0x4c` feeds the Shield, Bomb and Mine setups.
+- **`+0x5c` is dead.** The scan writes `0.0` before every setup, so Turbo's
+  `+0x38` is always `3` after the first decision. Confidence 80.
+
+### The decision cadence: every call, confidence 65
+
+Two instruction-level facts agree:
+
+1. `+0x30` gains `dt` and is never reset (`0x08851648..60`, its only store), so
+   the `0.25 <=` gate opens a quarter-second after construction and stays open.
+2. `+0x2c` gains the frame's `dt` per decision. At four decisions a second the
+   `0.2`, `0.8` and `15` s thresholds would be reached after about 3, 12 and
+   225 s of real holding.
+
+So the decision runs on **every call** after the first quarter-second,
+confidence 80. That the call is once a frame rests on the stored vtable slot
+(`0x08aca29c`, its walker not located) and on racing presenting at about
+59.94 Hz ([ADR-0007](../../../architecture/adr/0007-fixed-timestep-vs-original.md)),
+so **65** combined. A live hit count on `0x088518b4` against frames in a
+Single Race on PPSSPP would settle it.
+
+### What is ported, and what is chosen
+
+`oag_ai::weapon_ai` ports the fire half for the Rocket, Missile, Plasma,
+Shuriken and LeachBeam (aimed) and the Quake (not aimed), in every mode, on the
+odds out of `WeaponAIstats.xml` (`oag_tables::weapons::ai`, through
+`oag_title::weapons::Weapons::ai`). Everything above is read; these are
+**chosen, not measured**:
+
+- one decision a tick from the first tick, the clocks in 60 Hz ticks (`0.8` s
+  is 48);
+- `+0x44` and `+0x4c` taken as `0`;
+- a craft not in `CraftState::Racing` does not fire (the original's guard,
+  `entity + 0xae4`, is not read);
+- the gaps from `Standing::distance`, folded by the course length, over every
+  active craft;
+- two `oag_ai` noise streams for the two draws;
+- the Cannon (its fire byte reaches nothing), Mine, Bomb, Turbo and the absorb
+  half stay on this project's own rules.
+
+**Measured** (parked player, `16_Track`, seeds 1 to 240, Venom): time to five
+kills median **108 s -> 75 s** (17 to 232 s -> 17 to 154 s), field kill rate
+9.08 -> 13.63 a minute, craft-ticks holding any weapon 0.555 -> 0.299. A forward
+weapon is held about 1.9 s before it goes, against 10 to 12 s. With one
+decision every 15 ticks instead (the four-a-second reading): 93 s. See
+[race-modes.md](../../../gameplay/race-modes.md#eliminator).
