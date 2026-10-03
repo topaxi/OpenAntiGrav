@@ -78,6 +78,9 @@ struct Cache {
             wgpu::TextureView,
         ),
     >,
+    /// Pipeline constants every `build()` in the scope appends - see
+    /// [`Scope::lit_by`].
+    constants: Vec<(&'static str, f64)>,
     texture_calls: u32,
     texture_hits: u32,
     shader_calls: u32,
@@ -113,6 +116,25 @@ impl Scope {
     pub fn open() -> Self {
         CACHE.with(|cell| *cell.borrow_mut() = Some(Cache::default()));
         Self { _private: () }
+    }
+
+    /// Every pipeline built in this scope draws under `light`'s title rig, so
+    /// the paths only another title's rig takes compile out of it.
+    ///
+    /// Only Omega's nova prelit curve so far: a light that is not nova is a
+    /// title that never is, since nothing mid-race turns it on - a Zone grade
+    /// rebuilds the light from this one and carries its flag, never sets it.
+    /// A drawable built outside the scope keeps `mesh.wgsl`'s live default and
+    /// shades the same, only without the saving. Call it before the first
+    /// `build()`: a pipeline built earlier is cached without the constant.
+    pub fn lit_by(&self, light: &super::Light) {
+        if light.nova <= 0.5 {
+            CACHE.with(|cell| {
+                if let Some(cache) = cell.borrow_mut().as_mut() {
+                    cache.constants.push(("nova_prelit", 0.0));
+                }
+            });
+        }
     }
 
     /// `(shader module: calls, reused)` over this scope's life so far.
@@ -155,6 +177,16 @@ fn with_open_cache<R>(read: impl FnOnce(&Cache) -> R) -> R {
                 .as_ref()
                 .expect("Scope is open for the life of `self`"),
         )
+    })
+}
+
+/// The constants [`Scope::lit_by`] set, for `build` to append; none with no
+/// scope open.
+pub(crate) fn scope_constants() -> Vec<(&'static str, f64)> {
+    CACHE.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map_or_else(Vec::new, |cache| cache.constants.clone())
     })
 }
 

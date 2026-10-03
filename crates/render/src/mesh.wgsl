@@ -208,6 +208,17 @@ struct ShadowMap {
 // miss it.
 override linear_out: f32 = 0.0;
 
+// 0.0 on a pipeline whose scene can never light by Omega's nova prelit curve,
+// so `lit_texel` folds `scene.light.nova` away and the driver deletes the
+// curve's second `pow` a channel: 0.55 ms of HD's 22.5 ms opaque track at
+// 3200x1800 on the Raphael iGPU. **1.0, the uniform deciding, by default**,
+// so every pipeline built outside a race scene - the viewer, a test, a front
+// end - shades as it always did. Set by `race::Scene::new` through
+// `mesh_render::BuildCacheScope::lit_by`. A constant rather than a rewrite of
+// the curve: selecting the `pow`'s input instead stops the driver folding
+// HD's `pow(pow(x, 2.2), power)` into one `exp2` and moves pixels.
+override nova_prelit: f32 = 1.0;
+
 // **Wipeout HD's engine-flare program**, off by default and on only for a model
 // whose material declares the whole parameter set it reads - see
 // `oag_render::mesh::Flame`, which carries the arithmetic and the evidence, and
@@ -1072,7 +1083,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // `power` are the authored triple's three scalars. Gated on the lightmap
         // bit: a draw with no lightmap binds the black placeholder, and the bias
         // must not light it.
-        let nova = scene.light.nova > 0.5 && (in.slots & 1u) != 0u;
+        let nova = nova_prelit != 0.0 && scene.light.nova > 0.5 && (in.slots & 1u) != 0u;
         let prelit_hd = scene.light.prelit_scale * pow(baked_linear, scene.light.prelit_power);
         let prelit_nova = scene.light.prelit_scale * pow(baked.rgb, scene.light.prelit_power)
             + vec3<f32>(scene.light.prelit_bias);
@@ -1169,7 +1180,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // and this mask did not exist yet.
         // **Times the road's mask under a craft**, `sun_occlusion` above: 1.0 on
         // every draw that is not a hull with a map, so nothing else here moves.
-        mask = baked.a * in.sun_mask * sun_occlusion(in.world);
+        // **Not even called on the track's pipelines** (`receives_shadow` 2,
+        // `ShadowReceiver::Both`, which is the track and the gantry and never
+        // a hull): its early return was already taken there, but the
+        // function's four-tap loop held registers for it, 0.25 ms of HD's
+        // 22.5 ms opaque track at 3200x1800 on the Raphael iGPU. Only a hull
+        // names a layer, and a hull is `ShadowReceiver::Mapped`.
+        mask = baked.a * in.sun_mask;
+        if receives_shadow != 2.0 {
+            mask = mask * sun_occlusion(in.world);
+        }
         let sun_diffuse = scene.light.sun * (ndl * mask);
         // **`scene.light.ambient` and `vertex_light` are gated above** (`ambient_term`,
         // `vertex_light_term`), on `slots::NO_AMBIENT` - 251 of Anulpha Pass's 309

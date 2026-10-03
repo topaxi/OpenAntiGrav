@@ -405,6 +405,52 @@ rounds differently), not done. Two traps from that change, both silent:
 `just build-cpu` / `just appimage-deck` (`-C target-cpu=znver2`) take another
 3-6 % off; see `docs/tools/packaging.md`.
 
+**HD's opaque track by term, 2026-10-03.** `lit_texel`'s authored rig, each
+term stubbed alone and timed against the same binary (`span / track solid`,
+HD single race at the start grid, 3200x1800, MSAA 4x, blur off, shadows
+`original`, anisotropy 16x, three interleaved pairs, load 2-4). Base 22.5 ms,
+6.96 M fragments:
+
+| term stubbed | ms | saved |
+| --- | --- | --- |
+| Omega's nova curve (second `pow`) | 21.9 | 0.55 |
+| specular | 21.0 | 1.5 |
+| the stand-in/plain path | 20.9 | 1.6 |
+| the `sun_occlusion` call | 22.1 | 0.36 |
+
+What landed, cumulative, **16 captures byte-identical at each step** (the ten
+of `data/perf/matrix.sh`, plus a 2048 race, HD with `--msaa off`, HD with
+`--shadows off`, an Omega race and the HD and Pulse `main` menu pages):
+
+| step | track solid |
+| --- | --- |
+| before | 22.45 ms |
+| `sun_occlusion` skipped where `receives_shadow` is 2 (track, gantry) | 22.20 |
+| `nova_prelit` override, 0 under a non-nova rig (`BuildCacheScope::lit_by`) | 21.64 |
+
+Three findings that cost time:
+
+- **Specular stays.** `Lighting.Sun specular scale` is 1.0-3.5 on every HD
+  circuit with a rig (Modesto Heights and Tech de Ra light with the stand-in);
+  none is 0, so there is no per-circuit fold.
+- **The nova curve cannot be a runtime `select` of the `pow`'s input.** That
+  moved 1-4 pixels on four HD captures, with or without the bias: the driver
+  folds HD's `pow(pow(x, 2.2), power)` into one `exp2` (`log2(exp2(m))`), and a
+  select between the two `pow`s blocks the fold. An override folds the select
+  at compile time and keeps HD's expression as it was. **The Omega capture
+  does not exercise the curve** (its race reads no lightmaps yet), so its
+  guard is the live default plus `crates/render/tests/omega_nova_prelit.rs`;
+  re-capture Omega once its lightmaps draw.
+- **The plain path cannot be branched past byte-exactly.** Skipping it where
+  `light.enabled * lit == 1` (a dynamic branch, no override needed - `lit` is
+  per vertex) is another 1.2 ms (21.64 -> 20.34 ms with both folds above), and
+  every capture holds except one Omega pixel, one level. Proven, not assumed:
+  a base shader whose only change is `select(mix(plain, authored, w),
+  authored, w == 1.0)` moves the same pixel identically. The driver's
+  `mix(p, a, 1.0)` is not exactly `a`, so dropping `p` changes the bits;
+  the new value is the exact one. Kept out pending the maintainer's call;
+  patch in `data/perf/lt-s1.patch`.
+
 Still open: the blur at full resolution is still 11 ms at 1600x900 and 50 ms
 at 3200x1800 on the iGPU; the gather's long strides at high extents are the
 cost.
@@ -466,12 +512,13 @@ plus `--autopilot` (a still camera never runs the blur), `--presented
    or gathering at presentation rather than render resolution when
    `render_scale` > 100. Exactness is not the bar here - the blur is this
    project's own effect - but the maintainer judges grain (half was too much).
-2. **HD's opaque track, about 24 ms after the prepass.** Shading, not
-   overdraw now (prepass: 1.2 fragments a pixel). `lit_texel` still runs
-   HD's authored rig with every term live; folding the per-title constants
-   into `override`s per pipeline - as `linear_out` already is - lets the
-   driver drop dead terms. Byte-exactness has held for every shader change so
-   far; keep it the bar.
+2. **HD's opaque track, 21.6 ms after the folds above.** The per-title
+   terms are folded (sun occlusion, nova); specular is live on every circuit.
+   What is left, by measured size: the plain-path branch (1.2 ms, one Omega
+   pixel, waiting on the maintainer - see "HD's opaque track by term"), then
+   the rig's remaining `pow`s (the atlas and albedo sRGB decodes, the
+   specular exponent, the encode), which are the picture rather than dead
+   terms, so any further saving costs byte-exactness.
 3. **Defaults for weak GPUs.** 200 % scale plus MSAA 4x is 16 samples a
    displayed pixel. An integrated or Deck-class adapter could start from a
    cheaper profile; `target_fps` dynamic resolution already exists to lean on.

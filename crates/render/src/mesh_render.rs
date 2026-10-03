@@ -353,6 +353,7 @@ pub fn build_with(
     if model.absorb_shell {
         constants.push(("absorb_shading", 1.0));
     }
+    constants.extend(pipeline_cache::scope_constants());
     let constants = constants.as_slice();
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

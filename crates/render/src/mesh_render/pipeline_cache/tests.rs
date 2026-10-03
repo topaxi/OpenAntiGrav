@@ -270,3 +270,30 @@ fn a_bc7_chain_uploads_on_a_device_without_block_compression() {
     let view = crate::mesh_render::texture::upload(&device, &queue, &texture, false);
     drop(view);
 }
+
+/// A scene lit by any rig but Omega's compiles the nova curve out of every
+/// pipeline it builds, and one lit by Omega's - or no scene at all - keeps
+/// `mesh.wgsl`'s live default.
+#[test]
+fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
+    assert_eq!(
+        super::scope_constants(),
+        Vec::new(),
+        "no scope, no constants"
+    );
+
+    let scope = Scope::open();
+    scope.lit_by(&mesh_render::Light::stand_in().with_nova_prelit(1.4, 0.2, 1.5));
+    assert_eq!(super::scope_constants(), Vec::new());
+    drop(scope);
+
+    let scope = Scope::open();
+    scope.lit_by(&mesh_render::Light::stand_in());
+    assert_eq!(super::scope_constants(), vec![("nova_prelit", 0.0)]);
+    drop(scope);
+    assert_eq!(
+        super::scope_constants(),
+        Vec::new(),
+        "closed with its scope"
+    );
+}

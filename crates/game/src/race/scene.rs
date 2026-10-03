@@ -440,6 +440,7 @@ impl Scene {
         // distinct ones - about 7 MiB of resident memory per weapon drawable,
         // 8.4 GiB for a Pulse race. See `pipeline_cache`.
         let cache_scope = mesh_render::BuildCacheScope::open();
+        cache_scope.lit_by(&light);
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
         // waste the depth range on empty space.
