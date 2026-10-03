@@ -78,6 +78,42 @@ impl Scene {
     /// added to the stats either: being exempt from both tiers, folding them in
     /// would shift the denominator ADR-0011's and the roadmap's PVS
     /// effectiveness figures are quoted against.
+    /// Sorts the circuit's opaque draws nearest first from `eye`, under HD's
+    /// chain only, so the depth test rejects what is behind before it is
+    /// shaded rather than after.
+    ///
+    /// **A deliberate departure from the original's own order, accepted by
+    /// the maintainer 2026-10-03.** HD's opaque circuit list shades 2.1
+    /// fragments a pixel in the model's order; sorted, the race pass at
+    /// 3200x1800 on an integrated GPU fell from 43 ms to 36 ms. The cost is
+    /// ties: two exactly coplanar opaque surfaces resolve to whichever draws
+    /// first, and that is now the nearer batch's sphere rather than the
+    /// file's first - measured as 1 to 419 pixels a capture, at z-fighting
+    /// decals. Pulse is left in its own order: its list shades 1.2 fragments
+    /// a pixel and sorting measured no gain.
+    ///
+    /// The key is the distance from `eye` to the nearest point of each
+    /// batch's bounding sphere; `sort_by` is stable, so equal keys keep the
+    /// model's order.
+    pub(super) fn sort_opaque(&self, eye: Vec3) {
+        let mut order = self.opaque_order.borrow_mut();
+        order.clear();
+        if self.hd.is_none() {
+            return;
+        }
+        order.extend(
+            self.track
+                .opaque_draws()
+                .iter()
+                .zip(0u32..)
+                .map(|(draw, i)| {
+                    let centre = Vec3::from_array(draw.bounds.centre);
+                    (centre.distance(eye) - draw.bounds.radius, i)
+                }),
+        );
+        order.sort_by(|a, b| a.0.total_cmp(&b.0));
+    }
+
     pub(super) fn draw_track(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
@@ -88,9 +124,11 @@ impl Scene {
         frustum: Option<&Frustum>,
     ) -> SceneStats {
         oag_render::perfprobe::marks::mark(pass, "track solid");
-        let mut stats = self
-            .track
-            .draw_lists(pass, sections, set, chunks, frustum, Lists::Solid);
+        let order = self.opaque_order.borrow();
+        let order = (!order.is_empty()).then_some(&order[..]);
+        let mut stats =
+            self.track
+                .draw_lists(pass, sections, set, chunks, frustum, Lists::Solid { order });
         oag_render::perfprobe::marks::mark(pass, "sky");
         if let Some(sky) = &self.sky {
             let (x, y, w, h) = viewport;

@@ -348,9 +348,16 @@ settings file, and the maintainer turning HD's motion blur off mid-session
 made every HD capture differ for a reason that had nothing to do with the
 change under test.
 
-Still open: HD's opaque track overdraw (2.1x) - a depth prepass or a
-front-to-back sort, neither exact by construction because a coplanar tie
-resolves differently under either, and the motion blur chain,
+**HD's opaque circuit list now draws nearest first** (`Scene::sort_opaque`):
+13.0 M -> 10.7 M fragments, race pass 44.1 -> 37.4 ms at 3200x1800, about
+30 us of CPU a frame. **Not byte-identical, and accepted as such by the
+maintainer on 2026-10-03**: coplanar opaque surfaces now resolve to the nearer
+batch rather than the file's first, 1 to 419 pixels across the five HD
+captures. Pulse stays in its own order - 1.2 fragments a pixel, no measured
+gain - and its captures are unchanged.
+
+Still open: what the sort leaves of HD's overdraw (a depth prepass would go
+further, with the same tie caveat), and the motion blur chain,
 which the maintainer measured at about 14 ms on the same iGPU - **the next
 GPU-side target**, after re-profiling what is left of the race pass.
 

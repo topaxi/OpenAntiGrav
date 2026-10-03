@@ -761,6 +761,7 @@ impl Scene {
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
         // The sky draws inside this, between the circuit's solid and blended
         // lists - see `draw_track` for why there.
+        self.sort_opaque(race.camera_position());
         let mut stats = self.draw_track(
             &mut pass,
             viewport,

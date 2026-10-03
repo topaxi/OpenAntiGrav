@@ -212,7 +212,8 @@ use assets::{particle_effect, unrecovered_or_absent, untextured_note};
 use camera::target_of;
 #[cfg(test)]
 pub(crate) use drawable::Uniforms;
-use drawable::{Drawable, Lists, model_matrix_of};
+use drawable::draw::Lists;
+use drawable::{Drawable, model_matrix_of};
 use effects::exhaust_seed;
 #[cfg(test)]
 pub(crate) use held_buttons::key_for_button;
