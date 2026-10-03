@@ -257,3 +257,27 @@ fn the_driver_remembers_where_it_was() {
     );
     assert_eq!(driver.index, 20);
 }
+
+#[test]
+fn a_personality_spent_on_a_plan_keeps_its_temper_and_loses_its_line() {
+    // Seeded, so every driving axis is off neutral to begin with.
+    let drawn = Personality::from_pilot_seed(&Pilot::BALANCED, 0x5eed);
+    let none = drawn.spent(0.0);
+    assert_eq!(none.line_bias, 0.0);
+    assert_eq!(none.wander, 0.0);
+    assert_eq!(none.inside, 0.0);
+    assert_eq!(
+        (none.look, none.patience, none.trail, none.width),
+        (1.0, 1.0, 1.0, 1.0)
+    );
+    // What is about other craft, the roll and the margin is untouched.
+    assert_eq!(none.commitment, drawn.commitment);
+    assert_eq!(none.defence, drawn.defence);
+    assert_eq!(none.courtesy, drawn.courtesy);
+    assert_eq!(none.trigger, drawn.trigger);
+    assert_eq!(none.roll_chance, drawn.roll_chance);
+    // All of it spent is the drawn line again.
+    let all = drawn.spent(1.0);
+    assert!((all.line_bias - drawn.line_bias).abs() < 1e-6);
+    assert!((all.look - drawn.look).abs() < 1e-6);
+}

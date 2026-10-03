@@ -358,6 +358,14 @@ impl Driver {
         };
 
         let personality = self.personality(ctx.pilot);
+        // On a plan, a driver's line is a handicap: see `Personality::spent`
+        // and `planned::plan_slack`. Off one, untouched - not even multiplied
+        // by one, which would move the corner model's bits.
+        let personality = if ctx.plan.is_some_and(|plan| plan.len() == line.len()) {
+            personality.spent(plan_slack(ctx, &personality))
+        } else {
+            personality
+        };
         let body = &state.body;
         let forward = body.forward();
 
@@ -836,13 +844,12 @@ impl Driver {
         // the terms here and it still has to win the argument; see
         // [`Driver::avoidance`].
         let avoidance = self.avoidance(ctx.field.hazard);
-        // **On a plan, the character is a handicap**: see [`plan_slack`].
-        // Avoidance and the social terms - yielding, blocking, the contact
-        // floor - are about other craft, not character, and are never scaled:
-        // a lone craft has nobody to answer, so they cost a clean lap nothing.
-        let slack = plan_slack(ctx, personality);
-        let wanted = ((personality.line_bias + wobbled + inside) * slack + social + avoidance)
-            .clamp(-1.0, 1.0);
+        // On a plan the bias, wander and inside line arrive already spent -
+        // see `Personality::spent`. Avoidance and the social terms - yielding,
+        // blocking, the contact floor - are about other craft, not character,
+        // and are never scaled: a lone craft has nobody to answer.
+        let wanted =
+            (personality.line_bias + wobbled + inside + social + avoidance).clamp(-1.0, 1.0);
         // Every term above is in the same fraction-of-the-room units and is
         // clamped once here, so no term can fight the corridor: the clamp below
         // is the backstop and not the mechanism.

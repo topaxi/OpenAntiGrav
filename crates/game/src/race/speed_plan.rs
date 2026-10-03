@@ -117,4 +117,11 @@ impl Race {
         );
         clean.then_some(plan)
     }
+
+    /// The plan the field is following, if any. Read-only, for a diagnostic
+    /// that has to compare a craft's speed against the target it was given.
+    #[must_use]
+    pub fn speed_plan(&self) -> Option<&oag_ai::SpeedPlan> {
+        self.sim.speed_plan.as_ref()
+    }
 }
