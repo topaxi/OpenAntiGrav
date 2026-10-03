@@ -267,7 +267,10 @@ Pulse's gantry clock is `(tick - 92) / 60`.
 
 ### Every other title: Pulse's rule on its own `GO` edge
 
-**Inherited from Pulse, unmeasured on HD (2026-10-03, maintainer's rule: a title
+**HD's start tick is now measured (2026-10-04, confidence 75; see
+[HD's countdown on RPCS3](#hds-countdown-on-rpcs3-measured-2026-10-04)); the
+rest of this section is the rule that reproduced it. Everything else here is
+inherited from Pulse, unmeasured (2026-10-03, maintainer's rule: a title
 with no measured rule runs the known one). No confidence score.** The rule is
 that the board's `GO` edge lands on the tick after the thrust gate (273) and
 the clock is held on `GO` from there. `race::gantry::clock::go_edge` reads the
@@ -290,7 +293,8 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   spacing, not a fitted one. `GO`'s letters reach full opacity a few frames
   after the green (alpha 72 at frames 207-210, 255 from 211), so on HD the
   board is green on the release tick and `GO` is fully lit about 8 ticks
-  later; Pulse's single `u` step makes both land on the same tick.
+  later **in this build; the 2026-10-04 capture contradicts that half: the
+  original's `GO` is bright on the green step's own frame**; Pulse's single `u` step makes both land on the same tick.
 - **Held**: the clock loops frames **221 to 359** instead of running into the
   exit, as Pulse's loops 216-349. 359 is the last frame before the glyph node's
   own exit keys at 359/360, found by walking the drawn nodes' motion. 221 is
@@ -322,6 +326,84 @@ Played on HD (`oag-game --race --track /data/environments/talons_junction/track.
 --ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`): red banner and a fading `1`
 at tick 270, green banner at 271-273, `GO` letters at 276-280, then `GO`
 strobing through tick 1500 where the raw clock had emptied the board by 400.
+
+### HD's countdown on RPCS3, measured 2026-10-04
+
+**Question: at which race tick does HD's board turn green and `GO` light,
+against the frame the craft can first move?** Answer: **on the release, to
+within one 30 fps video frame (2 ticks). Confidence 75.** The inherited start
+tick 70 (frame 203 on tick 273) stands, now measured; the held span does not
+match the original, below.
+
+Method. `scripts/rpcs3-drive.py countdown` boots HD on a private RPCS3 (own
+`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, display :91, GDB port 2391, silent), walks
+`Team Selection -> InGame`, starts RPCS3's own recording on `Team Selection` so
+the load and the whole countdown are in the file, taps cross once to skip the
+track fly-over (the race opens on a fly-over with a `START RACE` prompt) and
+then holds thrust. `scripts/hd-countdown-frames.py` reads the recording
+(Talon's Junction entered through the Campaign path the harness walks - `Campaign Selection -> Grid Selection Fury -> Cell Selection -> Team Selection` - not a Single Race, which was not captured; the default grid ship, 1280x720; every video frame is a new image, consecutive-frame road differences never fall below 9, so it is a true 30 fps and a frame is 2 ticks).
+Three things share one clock - the video:
+
+- **The board.** Red `3`, `2`, `1` strip on a dark teal board, then in **one
+  video frame** the red is gone and a bright `GO` is on the teal board: frame 223
+  on both boots (red pixels in the board crop 271 -> 16 and 237 -> 4, teal 2 ->
+  580 and 11 -> 594).
+- **The race clock.** The HUD lap timer reads `0.00.0` until frame 226 (boot 2) /
+  227 (boot 3), `0.00.1`, then +0.1 every 3.0 frames out to `0.01.3`: the video is
+  real time and the clock zero is frame 223.0 (boot 2) / 224.0 (boot 3), +-1.
+- **The craft.** The road crop's difference against a held frame sits at the idle
+  noise (4-5) until frame 222 (boot 2) / 223 (boot 3) and then climbs 11, 19, 26,
+  31 (boot 2) / 4, 12, 20, 27 (boot 3): first movement at frame 223-224.
+
+So the green step is at the clock's zero and the craft's first movement, 223 vs
+223-224 vs 223-224. Two ticks per frame puts the step at tick 272 +-2 where the
+inherited rule says 273. First `3` sliding in: frame 146 / 144, i.e. about 150
+ticks before the step (inherited: `3` about tick 110, 163 before; so the digits
+read up to ~13 ticks later than the asset-walk estimate on this capture).
+
+Where it **does not** match the inherited build:
+
+- **`GO` arrives at once.** The original's `GO` is bright on the step frame
+  (223) and the `1` is gone with the red. Ours at tick 273 is the teal board
+  with a ghost of the `2 1` digits and no `GO`; the letters reach half at 279 and
+  full at ~286, the 8 ticks of alpha ramp the asset authors (72 at frames
+  207-210, 255 from 211). One 30 fps frame cannot show a ramp, so the original
+  either skips it or runs it inside 2 ticks; **not resolved**.
+- **After `GO` the original pulses, and not in our phase.** `GO` goes bright ->
+  empty -> bright repeatedly (so "held" was wrong in that it is not steady;
+  ours pulses too, from the asset's own glyph walk). Dark centres, in ticks
+  from the step: original +23, +61, +109 (video frames 235, 254, 278; both
+  boots agree to a frame); ours +50, +89, +129 (ticks 323, 362, 402). As asset
+  frames under start tick 70 the original's dips fall at about 226, 264 and 312
+  against ours at 253, 292 and 332; the spacing (38 then 48 ticks) is not yet a
+  loop period. The
+  original's first bright stretch is ~14 ticks (frames 223-230), ours ~26.
+  Shifting the start tick cannot fix both: moving it 25 ticks earlier would
+  put the green step 25 ticks before the release, which is the one thing that
+  was measured sharply. Unresolved: the pulse is probably driven by a curve
+  with its own phase, or the hold loop the original runs starts elsewhere than
+  frame 221.
+
+Reproduce, from the repo root:
+
+```sh
+S=data/scratch/<lane>; export XDG_CONFIG_HOME=$S/xdg/config XDG_CACHE_HOME=$S/xdg/cache
+export OAG_RPCS3_DISPLAY=91 OAG_RPCS3_GDB=127.0.0.1:2391
+python3 scripts/rpcs3-drive.py display
+uv run --with evdev python3 scripts/rpcs3-drive.py --log-dir $S/boot --image data/images/hdfury-ps3-eu-dec.iso countdown
+python3 scripts/hd-countdown-frames.py <recording.mp4> --out $S/frames
+```
+
+(Copy `~/.config/rpcs3` into `$S/xdg/config` first, minus `savestates`.) The
+side-by-side: original frames `f` against ours at tick `273 + 2 (f - 223)`, from
+`oag-game --race --track /data/environments/talons_junction/track.vex --ticks N
+--screenshot`. Captures: `data/scratch/hd-countdown-capture/` (`boot2.mp4`,
+`boot3.mp4`, `compare_strip_a_digits_to_go.png`,
+`compare_strip_b_go_pulse.png`, `b2_timer_sheet.png`, `b2_go_perframe.png`,
+`b3_go_perframe.png`, `ours_go_perframe.png`). Limits: 2 ticks per frame, the
+video is of a ~30 fps presentation, the lap timer is read by eye, and the
+"release" is taken as the clock's zero and first road motion (no thrust-gate
+read; a `Z2` watchpoint on the gate would give the tick exactly).
 
 ### What the original does after `GO`: it holds `GO`
 

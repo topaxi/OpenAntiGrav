@@ -1251,6 +1251,62 @@ def cmd_record(args):
     return 0
 
 
+def cmd_countdown(args):
+    """Record the whole load and countdown, thrust held from the HUD on.
+
+    `record` starts its capture after a fixed wait, which is after the
+    countdown has run; this starts it on `Team Selection`, one press before the
+    race loads, so the gantry's `3 2 1 GO` and the race clock's first tick are
+    both in the video. The recording is the observable (30 fps, every frame a new
+    image on the countdown: measured); `scripts/hd-countdown-frames.py` reads it.
+    """
+    before = set(recordings())
+    with open_session(args) as session:
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
+            print("never reached the Main Menu", file=sys.stderr)
+            return 1
+        time.sleep(args.settle)
+        recording = False
+        for index in range(1, 16):
+            screen = current_screen()
+            if screen in RACE_ARRIVED:
+                break
+            if screen == "Team Selection" and not recording:
+                time.sleep(SCREEN_SETTLE_BEFORE_RECORD)
+                session.toggle_recording()
+                recording = True
+                print("recording started at %s" % screen, flush=True)
+            was, now = session.press_once("cross")
+            print("  press %2d  %-22s -> %s" % (index, was, now), flush=True)
+        if not recording:
+            print("never saw Team Selection; no recording", file=sys.stderr)
+            return 1
+        started = time.time()
+        held = False
+        while time.time() - started < args.load + args.drive:
+            if not held and time.time() - started > args.load:
+                # The race opens on a fly-over of the track with a START RACE
+                # prompt; a tap skips it and the countdown follows.
+                session.pad.press("cross", 0.15)
+                time.sleep(args.skip_gap)
+                session.pad.set("cross", True)
+                held = True
+                print("thrust held at +%.1f s (%s)"
+                      % (time.time() - started, current_screen()), flush=True)
+            time.sleep(0.2)
+        session.pad.set("cross", False)
+        session.toggle_recording()
+        time.sleep(8.0)
+    fresh = [path for path in recordings() if path not in before]
+    for path in fresh:
+        print("%s  %.1f MiB" % (path, os.path.getsize(path) / 1048576.0))
+    return 0 if fresh else 1
+
+
+SCREEN_SETTLE_BEFORE_RECORD = 2.0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--image",
@@ -1409,6 +1465,20 @@ def main(argv=None):
     rec.add_argument("--drive", type=float, default=30.0,
                      help="seconds of held thrust to capture")
     rec.set_defaults(run=cmd_record)
+
+    cd = sub.add_parser("countdown",
+                        help="record the load and the start countdown")
+    cd.add_argument("--timeout", type=float, default=180.0)
+    cd.add_argument("--settle", type=float, default=12.0)
+    cd.add_argument("--load", type=float, default=25.0,
+                    help="seconds after the last press before the intro is "
+                         "skipped with a tap and thrust is held")
+    cd.add_argument("--drive", type=float, default=40.0,
+                    help="seconds recorded after --load")
+    cd.add_argument("--skip-gap", type=float, default=1.0,
+                    help="seconds between the intro-skipping tap and holding "
+                         "thrust")
+    cd.set_defaults(run=cmd_countdown)
 
     args = parser.parse_args(argv)
     if args.stock_config:

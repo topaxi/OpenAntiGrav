@@ -137,8 +137,8 @@ pub fn held_within(seconds: f32, (from, to): (f32, f32)) -> f32 {
 ///
 /// **`start_tick` is [`CLOCK_START_TICK`] on Pulse - measured - and, on every
 /// other title, the tick [`Clock::inherited`] derives from that title's own
-/// `GO` edge: Pulse's rule, unmeasured there.** Only Pulse's countdown was
-/// captured; HD's and 2048's gantry files are different timelines (2048's own
+/// `GO` edge: Pulse's rule - measured on HD since 2026-10-04, unmeasured
+/// elsewhere.** Pulse's and HD's countdowns were captured; HD's and 2048's gantry files are different timelines (2048's own
 /// `GO` slides in at frame 200, not 181), so the literal 92 is not copied, the
 /// rule is. A title whose edge cannot be found keeps `0` - chosen, not
 /// measured. [`Gantry::write`] clamps it at [`CLOCK_LIMIT`].
@@ -250,7 +250,7 @@ pub(super) enum ClockRule {
     /// Pulse's own, measured against the original: [`Clock::PULSE`].
     Measured,
     /// Every other title: Pulse's rule on the title's own asset - **inherited
-    /// from Pulse, unmeasured on this title**, with no confidence score.
+    /// from Pulse; on HD the start tick is also measured (confidence 75)**.
     InheritedFromPulse,
 }
 
@@ -262,8 +262,11 @@ fn inherited_clock(model: &Model, name: &str, report: &mut Vec<String>) -> Clock
             report.push(format!(
                 "start gantry clock: {name}'s own GO edge is asset frame {} (the first frame the \
                  board samples its authored green), landed on tick {} - one tick after the thrust \
-                 gate - so frame 0 is tick {}, and the clock is held over frames {}..{}, from the digits' last fade to the exit. Inherited from \
-                 Pulse, unmeasured on this title: no capture of its countdown exists",
+                 gate - so frame 0 is tick {}, and the clock is held over frames {}..{}, from the digits' last fade to the exit (chosen, not \
+                 measured). The start tick is measured on Wipeout HD (2026-10-04, confidence 75): \
+                 the board's red-to-green step lands within one 30 fps video frame of the race \
+                 clock's zero and the craft's first movement, on two boots; the original's GO \
+                 pulse runs earlier than this held loop, see docs/rendering/start-gantry.md",
                 edge.frame,
                 oag_race::COUNTDOWN_TICKS + 1,
                 clock.start_tick,

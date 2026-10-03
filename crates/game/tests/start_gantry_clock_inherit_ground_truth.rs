@@ -16,7 +16,10 @@
 //!   tick 92 - the number measured against the original. That is the check the
 //!   rule is read the same way on every title.
 //! - **HD**: the rule finds frame 203, so frame 0 is tick 70, and the loader
-//!   says so. Nothing here is measured on HD.
+//!   says so. **The start tick is measured on HD** (2026-10-04, confidence 75,
+//!   two RPCS3 boots): the board's red-to-green step is on the video frame the
+//!   race clock reads zero and the craft first moves, i.e. the release, within
+//!   one 30 fps frame (2 ticks). The held span 221..359 is chosen, not measured.
 //! - **2048 and Omega**: no circuit that was tried stands a gantry at all
 //!   (`oag_render::gantry::mount` finds no `321backplate`) - 2048's ten native
 //!   circuits, thirteen of its sixteen HD-ported ones (the base package's four
@@ -76,7 +79,7 @@ fn hds_go_edge_lands_on_the_release_and_is_held() {
     assert!(line.contains("landed on tick 273"), "{line}");
     assert!(line.contains("frame 0 is tick 70"), "{line}");
     assert!(
-        line.contains("Inherited from Pulse, unmeasured on this title"),
+        line.contains("measured on Wipeout HD (2026-10-04, confidence 75)"),
         "{line}"
     );
 
