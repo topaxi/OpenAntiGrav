@@ -77,6 +77,11 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 - A lane that changed only docs, `handover/` or `HANDOVER.md` runs
   `just check-docs` (plus `check-names`, `check-handover` or `check-status`
   when those files moved) instead of the full gate.
+- **A commit after your last full gate that touches any `.rs` file, even one
+  test line or a doc comment, needs `just` re-run before you report.** On
+  2026-10-03 a "docs plus one test line" final commit pushed
+  `race_ground_truth.rs` 5 lines over `check-size`'s ceiling, and `main` went
+  red. `just` (without `test-data`) is enough when no logic changed.
 - The brief states the baseline failure count. Anything red beyond it is
   yours.
 - **Never end a turn waiting for a background job to notify you.** No member
