@@ -126,7 +126,12 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
-        ai: None,
+        // `Data\XML\WeaponAIstats.xml` is in `DATA00.PSARC` (searched
+        // 2026-10-03) and carries Pulse's thirteen rows plus an `AllWeapons`
+        // row and an `EliminatorAIStats` row the parser does not read. The
+        // opponents run Pulse's fire law on these odds: the law is **inherited
+        // from Pulse, unmeasured on HD** - HD's own decision code is unread.
+        ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
     weapon_models: race::WEAPON_MODELS,
 };

@@ -102,7 +102,11 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
-        ai: None,
+        // `data00.psarc` carries `weaponaistats.xml` and `WeaponAIStats2048.xml`
+        // beside the weapon tables (searched 2026-10-03). The unsuffixed one,
+        // for the reason the stats above are unsuffixed. Opponents run Pulse's
+        // fire law on it: **inherited from Pulse, unmeasured on Omega**.
+        ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
 };
