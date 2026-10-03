@@ -32,7 +32,7 @@ impl super::super::Scene {
     /// hull's own depth is present to occlude it - the same ordering
     /// [`super::super::Scene::exhaust`] and [`super::super::Scene::sparks`]
     /// need and for the same reason.
-    pub(super) fn draw_beam(&self, pass: &mut wgpu::RenderPass<'_>) {
+    pub(in crate::race::scene) fn draw_beam(&self, pass: &mut wgpu::RenderPass<'_>) {
         if let Some(beam) = &self.beam {
             beam.borrow().draw(pass);
         }

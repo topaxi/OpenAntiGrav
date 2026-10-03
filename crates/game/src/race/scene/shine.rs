@@ -68,6 +68,7 @@ impl Scene {
         frustum: Option<&Frustum>,
     ) -> SceneStats {
         let mut stats = self.track.draw(pass, sections, set, chunks, frustum);
+        oag_render::perfprobe::marks::mark(pass, "track shine");
         if let Some(shine) = &self.track_shine {
             stats.add(shine.drawable.draw_track_shine(
                 pass,

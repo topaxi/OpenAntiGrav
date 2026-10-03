@@ -31,7 +31,15 @@
 /// of adding it.
 #[must_use]
 pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
-    adapter.features() & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TIMESTAMP_QUERY)
+    // Inside-pass timestamps only for `perfprobe::marks`, so a default build
+    // asks a device for exactly what it always did.
+    let probe = if cfg!(feature = "perf-probe") {
+        wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES
+    } else {
+        wgpu::Features::empty()
+    };
+    adapter.features()
+        & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TIMESTAMP_QUERY | probe)
 }
 
 /// The device descriptor every `request_device` in this workspace uses.

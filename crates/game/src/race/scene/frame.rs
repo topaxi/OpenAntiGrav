@@ -771,9 +771,11 @@ impl Scene {
         // from both tiers, folding them in would shift the denominator that
         // ADR-0011's and the roadmap's PVS effectiveness figures are quoted
         // against - a silently moved percentage nobody would think to question.
+        oag_render::perfprobe::marks::mark(&mut pass, "sky");
         if let Some(sky) = &self.sky {
             let _ = sky.draw(&mut pass, None, None, None, None);
         }
+        oag_render::perfprobe::marks::mark(&mut pass, "track");
         let mut stats = self.draw_track(
             &mut pass,
             self.visibility.as_ref().map(|v| &v.sections),
@@ -786,6 +788,7 @@ impl Scene {
         // Frustum culling applies; the PVS does not, because a pad carries no
         // `section` id to look up - the same exemption the sky takes, for a
         // different reason.
+        oag_render::perfprobe::marks::mark(&mut pass, "pads, gantry, shadow");
         if let Some(pads) = &self.pads {
             stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
         }
@@ -811,6 +814,7 @@ impl Scene {
         // polygon across the middle of the screen. See `Race::draws_own_ship`.
         // Only the *player's* hull is skipped in the cockpit view. The opponents
         // in front are exactly what a cockpit view is for.
+        oag_render::perfprobe::marks::mark(&mut pass, "craft, weapons, shields");
         for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
             if self.hull_skipped(race, index) {
                 continue;
@@ -919,13 +923,7 @@ impl Scene {
         // flare to be occluded by it. Sparks are the same kind of blended,
         // depth-tested-not-written geometry, so they follow right after for the
         // same reason.
-        self.exhaust.borrow().draw(&mut pass);
-        self.sparks.borrow().draw(&mut pass);
-        self.draw_beam(&mut pass);
-        self.clouds.borrow().draw(&mut pass);
-        self.weapon_quads.pipeline.borrow().draw(&mut pass);
-        self.draw_ghost(race, lod_eye, &mut pass, &mut stats);
-        self.sparks.borrow().draw_flash(&mut pass);
+        self.draw_effects(race, lod_eye, &mut pass, &mut stats);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);

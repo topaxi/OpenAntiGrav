@@ -20,6 +20,8 @@
 //! Everything is a relaxed atomic and everything reports through
 //! [`report_frame`], which prints only when `OAG_RENDER_PERF` is set.
 
+pub mod marks;
+
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 

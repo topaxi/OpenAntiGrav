@@ -663,7 +663,7 @@ pub fn capture(
     // rather than `#[cfg]`, so the harness still type-checks without
     // `perf-probe` and cannot rot between the runs that use it.
     if cfg!(feature = "perf-probe") {
-        bench::run(&device, &queue, |encoder| {
+        bench::run(&device, &queue, |encoder, timestamps| {
             scene.render(
                 &device,
                 &queue,
@@ -679,11 +679,9 @@ pub fn capture(
                 options.shadows,
                 camera_jitter,
                 &spectrum,
-                // A bench measures one thing per loop; a timestamp pair is a
-                // different number about a different thing.
-                None,
-                None,
-                None,
+                timestamps.scene,
+                timestamps.blur,
+                timestamps.bloom,
             );
         });
     }

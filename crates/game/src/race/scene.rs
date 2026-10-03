@@ -13,6 +13,7 @@ mod absorb_shell;
 mod beam;
 mod boost_flare;
 mod clouds;
+mod effects;
 mod frame;
 mod ghost;
 mod hd_chain;
