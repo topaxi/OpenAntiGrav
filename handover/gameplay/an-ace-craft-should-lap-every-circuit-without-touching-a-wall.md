@@ -683,111 +683,58 @@ The board already reports clean lap time in its `clean lap` column, which is the
 column to read this change against when it is built - the user's stated goal is
 faster laps, and step 3 cost 0.5-3.0 s a circuit that this should give back.
 
+## Step 11 is done: the speed plan (2026-10-03)
+
+The drivers follow `oag_ai::SpeedPlan`, a per-sample speed learned at race
+start by driving the line in our own physics, braking zones from a measured
+deceleration, jumps held, and used only when its own two-lap verification
+is clean. Full account, constants and measurements:
+[ai.md, "The speed plan"](../../docs/gameplay/ai.md#the-speed-plan).
+
+On this thread's own board (`ai_clean_lap_gate`, 48 forward rows):
+`Eliminated` 11 -> **1**, contact ticks 8,828 -> **1,243**, 38 rows at zero
+contact (was 4). Over all 24 layouts x 4 classes, lone Ace: rows with no
+contact, rescue or death **7 -> 84 of 96**, laps 2.5-5 s faster per class,
+end-of-run shield 34-84 -> 84-93 by class. `race_ground_truth`'s
+twelve-circuit gate stays twelve clean: ten circuits lap faster (`07_Track` 49.6 -> 45.0 s, `02_Track` 43.1 -> 35.4 s), `06_Track` is unchanged at 44.0 s (no verified plan at VENOM), and `10_Track` is slower, 38.9 -> 39.8 s.
+
+What it retired from this thread: the planned differential, the jump model,
+the curvature estimator, `07_Track`'s 2,150-2,199 cluster and the respawn
+residual are all moot wherever a plan verifies - the plan replaces
+`corner_target` there and its differential is the driver's own. They still
+matter on the layouts whose plan does not verify, which drive the corner
+model unchanged.
+
 ## Open
 
-- **Respawns are the new residual.** Board-wide 23 -> 35 under step 3, with
-  `01_Track` at RAPIER and PHANTOM the worst rows (ten recoveries each, no clean
-  lap). The mechanism is the trade the change makes: a craft that brakes earlier
-  wedges at low speed and is rescued, where before it crashed at speed and was
-  charged for it. Whether the answer is in the driver or in
-  `Race::lost_off_the_circuit`/the stall rescue is unread.
-- **`07_Track` is still the weakest row on the board at every class.** Step 3
-  moved it barely at all at VENOM - 375 -> 379 contact ticks, both rows charged
-  out at ~95 - but it does survive 1,876 ticks longer (12,968 -> 14,844) and it
-  is still destroyed. Its worst cluster is **2,150-2,199** at VENOM, FLASH and
-  RAPIER, which is exactly where Outpost 7 step 6 left it. Its named residual is
-  unchanged: `corner_target`'s windowed curvature understates the true local
-  apex by 1.66x/1.85x even at `curvature_span = 11`. A different *estimator* -
-  the max over a short span rather than a chord over a long one - is the untried
-  idea, and it is real work of its own that has to hold both field ground-truth
-  tests green.
-- **`13_Track` is the second-worst row at every class** and has never been
-  decomposed. Its VENOM and FLASH cluster is 1,600-1,649 and at RAPIER and
-  PHANTOM it moves to 2,850-2,899, so it is not one corner.
-- **`05_Track` at FLASH is a new elimination** that VENOM does not show, cluster
-  600-649. `05` is also the circuit with 134 unsupported racing-line samples
-  (161-211, 811-893) recorded in `race_ground_truth.rs` - a **different thread**,
-  noted here because 600-649 is not one of those runs and so is probably not it.
-- **Lap time is the unmeasured cost of step 3.** 0.5-3.0 s a circuit, and
-  nothing on the board or in the gate asserts on it. A row that laps 3 s slower
-  and survives is better by this thread's standard and worse by a racer's; no
-  measurement here separates "the AI is slower" from "the AI is correctly
-  slower".
-- **`Tuning::curvature_span = 11` is no longer supported by the sweep that chose
-  it.** That table - and its criterion, "the best point in a band bounded by two
-  field tests going red at span 10" - was measured with `corner_target` capping
-  at 1.8. It now caps at 1.204-1.667 depending on team, so every row of it
-  measured a different function from the one shipping. Nothing is broken (both
-  field tests are green at 11 today), but the *choice* wants re-establishing,
-  and Next Step 2 has to do it anyway.
+- **Nine layout-class plans do not verify** (`speed_plan_ground_truth.rs`
+  pins the set): `05_Track` at every class, `06_Track` VENOM and RAPIER,
+  `14_Track` PHANTOM, `29_Track` RAPIER and PHANTOM. Those rows drive the
+  corner model and carry most of the remaining contact. `05_Track` touches
+  walls at 424-637 at 15 u/s too, so it is the line there, not the speed.
+- **Three verified rows still touch**: `17_Track` VENOM (1 tick), `09_Track`
+  PHANTOM (6), `25_Track` PHANTOM (21).
+- **The team axis on plans**: 89 (Feisar), 87 (Assegai), 83 (Piranha) of 96
+  verify; the race builds one plan from slot 1's handling, which is right only
+  while every opponent flies the player's handling (`Race::start` today).
+- **A reset-volume respawn loop** in the field, `29_Track` VENOM: one craft
+  put back at sample 45 every 46 ticks, 61 times. Race rules, not the plan.
+- **`10_Track` FLASH laps 1.8 s slower** on the gate, with its contact 66 -> 0.
 - **The counters charge a live craft sitting at zero shield.** The `Racing` gate
   stops a wreck, not that. Capping at the pool is the workaround the totals use;
   a cleaner counter would gate on `physics.shield > 0.0` too.
-- **The planned differential is unbuilt** - step 5 sizes it at +24.5 % corner
-  speed and names the three things that have to change; none of them is done,
-  and step 6 is board evidence that the reactive half alone is a net loss.
-- **`Tuning::trail_peak_decay` ships at `1.0`, the latch**, because no leak
-  value pays on the board. It becomes worth re-sweeping the moment
-  `corner_target` banks the speed the differential buys.
-- **A jump model is the blocker, and it is in the driver.** Step 9 retires the
-  line theory: `05`'s stretch is an authored jump with no kink, no seam and no
-  splice, and the craft is airborne through it. What is missing is a term that
-  stops the driver braking *into* a takeoff - `Driver::drive` already handles
-  being airborne and does nothing about arriving there too slow. Until that
-  exists, `curvature_chord = 4` cannot ship, and with it the whole measured
-  prize stays locked. `13_Track`'s Novice jump pathology, already named in
-  `Driver::drive`'s own doc, is very likely the same missing term.
-- **How far short the combination still falls.** Eliminations 8 against main's
-  11 is better and it is **not zero**, and the user's standard is a clean lap on
-  every circuit in every class. At the best measured configuration that is
-  45 of 48 clean and 8 craft destroyed. This thread is not close to done.
-- **A different curvature estimator is no longer the first move.** Step 7
-  exhausts both of this one's knobs, but step 8 shows the existing one is good
-  enough *when paired with the differential*. The shape still to try is one whose denominator is
-  the distance the turning actually happens over rather than the chord's own
-  length - a chord triple spreads a sharp apex's whole turned angle across
-  `3 * span` of travel, which is exactly the 1.66x.
-- **The planned differential is built and parked, not abandoned** - branch
-  `ai/planned-differential`, tip **`456b3b2a`**. Its tip carries the merge of
-  main, the attribution test and the chord sweep, so it is the branch to resume
-  from rather than re-derive. Measured against merged main with
-  `curvature_chord = 4` it is the best board this thread has produced -
-  eliminations 11 -> **8**, charged -11 %, end-of-run pool +9 %, respawns
-  35 -> 20, one more clean lap, at lap-time parity - and **it cannot ship until
-  the driver has a jump model**: with chord 4 as the default the twelve-clean-lap
-  gate goes red on `05_Track` at VENOM, because the sharper chord brakes the
-  craft into an authored jump and it falls short (step 9). Chord 6 fails the
-  same gate on `01_Track`; chord 8 clears it and is worth nothing. Do not
-  re-sweep those. **When it lands, the AI determinism reference in
-  `crates/ai/tests/determinism.rs` will legitimately move, and `Scenario::Solo`
-  is expected to move with it** - a lone craft brakes against `corner_target`,
-  which is what changes. Regenerate with
-  `cargo run -q -p oag-ai --example ai_determinism_report`, in a separate
-  commit, extending `REFERENCE`'s history block; a `Field`-only move would be
-  the alarm.
-- **The curvature estimator now has two consumers it is wrong for**, not one:
-  `corner_target`'s speed and `trail`'s exit gate. Through `07`'s hairpin it
-  reports a falling curvature while the craft is at full lock into a wall.
-- **The airbrake arming distance is unmeasured.** `Airbrake.gain` decides how
-  far before an apex the differential has to be armed for the steady-state
-  ceiling step 5 computes to be real, and nothing has measured it.
 - Pure and HD are unmeasured at every class.
 
 ## Next Steps
 
-1. **Attack `07_Track`'s 2,150-2,199 cluster.** It is the largest bucket on the
-   board's worst row at three of four classes, and it is the corner Outpost 7
-   step 6 already decomposed - so the next move there is the estimator below,
-   not another measurement of the same window.
-2. **The estimator**, not the span: `corner_target` is fed
-   `Line::max_curvature(index, window, span)`, a chord long enough to dodge the
-   seam bug and therefore long enough to average an apex down against its
-   shoulders. Try the max over a short span. Hold both field ground-truth tests
-   green - span 10 failed them for an unrelated craft-wedging reason, so a
-   smaller number alone is not a guarantee.
-3. **Then the respawn residual**, which is now a larger board-wide loss than it
-   was (23 -> 35), and the two rows that newly die: `05` at FLASH (cluster
-   600-649) and `10` at PHANTOM (cluster 2,550-2,599).
+1. **`05_Track`'s plan**: trace why a craft on the plan touches 424-637 at 15
+   u/s (`examples/speed_plan_trace.rs`, `speed_plan_probe.rs`), which is a line
+   question; the crest lip at ~206 is a standing-start one.
+2. **The two rescue cases** (`14_Track` PHANTOM at 1247, `29_Track` at
+   2402-2441): the search lowers ceilings and the craft still leaves; read
+   whether a held run-up or a lower one is the answer.
+3. **Short-horizon rollouts** are the next lane's design question: 6,480 steps
+   per full-field replan is about 150-175 ms (`examples/physics_step_cost.rs`).
 4. Do **not** re-tune the wall response, `lateral_accel`, `grip_ground` or
    `grip_air` - Outpost 7 steps 1, 2 and 5 close all four.
 
