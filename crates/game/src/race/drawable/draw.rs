@@ -82,7 +82,7 @@ impl Drawable {
         pass.set_bind_group(2, &self.fog_bind, &[]);
         // Same reasoning as fog: the table is per frame, not per draw call.
         pass.set_bind_group(3, &self.anim_bind, &[]);
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         let opaque_draws = if solid { &self.model.draws[..] } else { none };

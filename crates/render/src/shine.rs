@@ -234,7 +234,7 @@ pub fn build_track(track: &Model) -> Option<TrackPass> {
     })
 }
 
-/// The vertices of a [`build_track`] model with texture coordinates generated
+/// The texture coordinates of a [`build_track`] model, one per vertex, generated
 /// for the camera `view` (world to view): the equation over the view matrix's
 /// first two **rows**, which are the camera's right and up in world space, so
 /// a normal facing right of the camera reaches the far end of `u`.
@@ -243,12 +243,17 @@ pub fn build_track(track: &Model) -> Option<TrackPass> {
 /// 2 batches carry lights 0 and 1 equal to rows 0 and 1 of the view matrix's
 /// rotation, not its columns, and a hull in the same frame is placed by the
 /// same matrix at view-space `(0, -1.8, -11.5)`, centred and ahead.
-pub fn write_view(model: &Model, out: &mut Vec<GpuVertex>, view: Mat4, seconds: f32) {
+pub fn write_view(model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f32) {
     let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
     let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
     let nodes = model.sample_anim_nodes(seconds);
+    // The identity is the model matrix the map takes for a circuit, kept as
+    // a multiply so the coordinates are the interleaved form's to the bit.
+    let identity = oag_core::math::Mat3::IDENTITY;
     if nodes.is_empty() {
-        texgen::environment_map(&model.vertices, out, Mat4::IDENTITY, right, up);
+        texgen::environment_texcoords_by(&model.vertices, out, right, up, |v| {
+            identity * Vec3::from_array(v.normal)
+        });
         return;
     }
     // An animated node's vertices are in the node's space; its matrix takes the
@@ -260,8 +265,7 @@ pub fn write_view(model: &Model, out: &mut Vec<GpuVertex>, view: Mat4, seconds: 
     // first. The arithmetic is the two-pass form's to the bit: a placed normal
     // is renormalised, then goes through the identity the map's model matrix
     // was, and is renormalised again.
-    let identity = oag_core::math::Mat3::IDENTITY;
-    texgen::environment_map_by(&model.vertices, out, right, up, |v| {
+    texgen::environment_texcoords_by(&model.vertices, out, right, up, |v| {
         let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
             Some(m) => Vec3::new(
                 m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],

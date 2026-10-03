@@ -183,14 +183,39 @@ pub fn environment_map_by(
     out.clear();
     out.reserve(base.len());
     out.extend(base.iter().map(|v| {
-        // `normalize_or_zero` rather than `normalize`: a degenerate normal
-        // would produce NaN texture coordinates, and a NaN UV takes the whole
-        // batch off screen rather than drawing one bad vertex.
-        let n = normal(v).normalize_or_zero();
-        let mut v = *v;
-        v.texcoord = [(1.0 + n.dot(l0)) * 0.5, (1.0 + n.dot(l1)) * 0.5];
-        v
+        let mut out = *v;
+        out.texcoord = coordinate(normal(v), l0, l1);
+        out
     }));
+}
+
+/// [`environment_map_by`], producing the coordinates alone - for a drawable
+/// that streams them in their own buffer
+/// (`mesh_render::Texcoords::Streamed`) rather than re-uploading every whole
+/// vertex to change eight bytes of each. The same arithmetic to the bit.
+pub fn environment_texcoords_by(
+    base: &[GpuVertex],
+    out: &mut Vec<[f32; 2]>,
+    light0: Vec3,
+    light1: Vec3,
+    normal: impl Fn(&GpuVertex) -> Vec3,
+) {
+    let l0 = light0.normalize_or_zero();
+    let l1 = light1.normalize_or_zero();
+    out.clear();
+    out.reserve(base.len());
+    out.extend(base.iter().map(|v| coordinate(normal(v), l0, l1)));
+}
+
+/// One vertex's coordinate from its world normal, not yet renormalised.
+///
+/// `normalize_or_zero` rather than `normalize`: a degenerate normal would
+/// produce NaN texture coordinates, and a NaN UV takes the whole batch off
+/// screen rather than drawing one bad vertex.
+#[inline]
+fn coordinate(normal: Vec3, l0: Vec3, l1: Vec3) -> [f32; 2] {
+    let n = normal.normalize_or_zero();
+    [(1.0 + n.dot(l0)) * 0.5, (1.0 + n.dot(l1)) * 0.5]
 }
 
 #[cfg(test)]

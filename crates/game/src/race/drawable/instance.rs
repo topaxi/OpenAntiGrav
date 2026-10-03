@@ -62,6 +62,7 @@ impl Drawable {
             authored_pipelines: self.authored_pipelines.clone(),
             stamp_pipeline: self.stamp_pipeline.clone(),
             vertices: self.vertices.clone(),
+            texcoords: self.texcoords.clone(),
             indices: self.indices.clone(),
             uniforms,
             uniform_bind,

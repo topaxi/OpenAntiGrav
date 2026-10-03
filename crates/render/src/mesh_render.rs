@@ -6,7 +6,7 @@
 
 use anyhow::Result;
 
-use crate::mesh::{GpuVertex, Model};
+use crate::mesh::Model;
 
 mod blend;
 mod glow_mask;
@@ -26,12 +26,14 @@ pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIM
 pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
 mod velocity;
+mod vertex_layout;
 pub use uniforms::{
     DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowMaps, ShadowReceiver,
     UNIFORMS_SIZE, Zone, ZoneSet, write_uniforms, write_uniforms_raw,
 };
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
+pub use vertex_layout::Texcoords;
 
 /// Headless capture, split into `crate::capture` so a pixel-returning entry
 /// point could be added there without pushing this file past its frozen
@@ -213,6 +215,41 @@ pub fn build(
     blend: wgpu::BlendState,
     glow: GlowMask,
     velocity: Velocity,
+    zone: &zone::StageArt,
+    shadow_maps: ShadowMaps<'_>,
+    receives_shadow: ShadowReceiver,
+) -> Result<Built> {
+    build_with(
+        device,
+        queue,
+        model,
+        format,
+        anisotropy,
+        sample_count,
+        depth,
+        blend,
+        glow,
+        velocity,
+        zone,
+        shadow_maps,
+        receives_shadow,
+        Texcoords::Interleaved,
+    )
+}
+
+/// [`build`], with the coordinates' source chosen - see [`Texcoords`].
+#[allow(clippy::too_many_arguments)]
+pub fn build_with(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    format: wgpu::TextureFormat,
+    anisotropy: Anisotropy,
+    sample_count: u32,
+    depth: Depth,
+    blend: wgpu::BlendState,
+    glow: GlowMask,
+    velocity: Velocity,
     // The Zone stage's two textures, or [`zone::StageArt::NONE`] outside an
     // HD Zone race - see that type for why there are two.
     zone: &zone::StageArt,
@@ -226,6 +263,7 @@ pub fn build(
     // uniform field keeps it a property of the model, like `flame_*` and
     // `colour_is_light` beside it.
     receives_shadow: ShadowReceiver,
+    texcoords: Texcoords,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -441,16 +479,8 @@ pub fn build(
     // The vertex layout never varies with the model, so it is built once and
     // shared by reference across every `create_render_pipeline` call below,
     // in place of the three identical inline copies this used to be.
-    const ATTRS: [wgpu::VertexAttribute; 12] = wgpu::vertex_attr_array![
-        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-        4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-        9 => Uint32, 10 => Float32, 11 => Float32
-    ];
-    let vertex_buffers = [Some(wgpu::VertexBufferLayout {
-        array_stride: std::mem::size_of::<GpuVertex>() as u64,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &ATTRS,
-    })];
+    let streamed = vertex_layout::streamed_attributes();
+    let vertex_buffers = vertex_layout::buffers(texcoords, &streamed);
     // Shared by the opaque and the cutout pipeline below - identical for
     // both, so it is computed once. `pipeline_cache::cached_pipeline` still
     // keys each of its own callers separately; this only avoids constructing
@@ -488,6 +518,7 @@ pub fn build(
     let fragment_entry = velocity.entry("fs_main", "fs_main_velocity");
     let pipeline = pipeline_cache::cached_pipeline(
         "vs_main",
+        &vertex_buffers,
         fragment_entry,
         &targets,
         primitive,
@@ -550,6 +581,7 @@ pub fn build(
         };
         pipeline_cache::cached_pipeline(
             "vs_main",
+            &vertex_buffers,
             cutout_fragment_entry,
             &targets,
             primitive,
@@ -645,6 +677,7 @@ pub fn build(
         };
         pipeline_cache::cached_pipeline(
             "vs_main",
+            &vertex_buffers,
             "fs_main_blend",
             &targets,
             primitive,

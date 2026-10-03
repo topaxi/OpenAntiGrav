@@ -34,6 +34,10 @@ pub(super) struct Drawable {
     /// `mesh_render::Built::stamp_pipeline` and [`Self::draw_stamps`].
     stamp_pipeline: Option<mesh_render::Stamp>,
     vertices: wgpu::Buffer,
+    /// The coordinates' own buffer, bound to slot 1, for a drawable built
+    /// [`mesh_render::Texcoords::Streamed`] - `None` for every other. See
+    /// [`Self::bind_vertices`].
+    texcoords: Option<wgpu::Buffer>,
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
     uniform_bind: wgpu::BindGroup,
@@ -105,11 +109,46 @@ impl Drawable {
         blend: wgpu::BlendState,
         glow: mesh_render::GlowMask,
         zone: &mesh_render::zone::StageArt,
+        shadow_maps: mesh_render::ShadowMaps<'_>,
+        receives_shadow: mesh_render::ShadowReceiver,
+    ) -> Result<Self> {
+        Self::new_with(
+            device,
+            queue,
+            model,
+            format,
+            anisotropy,
+            sample_count,
+            depth,
+            blend,
+            glow,
+            zone,
+            shadow_maps,
+            receives_shadow,
+            mesh_render::Texcoords::Interleaved,
+        )
+    }
+
+    /// [`Self::new`], with the coordinates' source chosen - see
+    /// [`mesh_render::Texcoords`].
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn new_with(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        model: Model,
+        format: wgpu::TextureFormat,
+        anisotropy: Anisotropy,
+        sample_count: u32,
+        depth: mesh_render::Depth,
+        blend: wgpu::BlendState,
+        glow: mesh_render::GlowMask,
+        zone: &mesh_render::zone::StageArt,
         // The frame's shadow maps and whether this model's surfaces read them -
         // the track's do and a craft's do not, which is Wipeout HD's own split.
         // See `mesh_render::build`.
         shadow_maps: mesh_render::ShadowMaps<'_>,
         receives_shadow: mesh_render::ShadowReceiver,
+        texcoords: mesh_render::Texcoords,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -131,7 +170,7 @@ impl Drawable {
             anim_bind,
             anim_buffer,
             node_anim_buffer,
-        } = mesh_render::build(
+        } = mesh_render::build_with(
             device,
             queue,
             &model,
@@ -150,7 +189,19 @@ impl Drawable {
             zone,
             shadow_maps,
             receives_shadow,
+            texcoords,
         )?;
+        let texcoords = (texcoords == mesh_render::Texcoords::Streamed).then(|| {
+            let coordinates: Vec<[f32; 2]> = model.vertices.iter().map(|v| v.texcoord).collect();
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("streamed texcoords"),
+                size: std::mem::size_of_val(&coordinates[..]) as u64,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&coordinates));
+            buffer
+        });
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("race uniforms"),
@@ -201,6 +252,7 @@ impl Drawable {
             authored_pipelines,
             stamp_pipeline,
             vertices,
+            texcoords,
             indices,
             uniforms,
             uniform_bind,
@@ -214,6 +266,15 @@ impl Drawable {
             zone_rebind: std::sync::Arc::new(zone_rebind),
             ripple: std::cell::RefCell::new(None),
         })
+    }
+
+    /// Binds this drawable's vertex buffer - and its streamed coordinates,
+    /// when it has them - for the pipelines it built.
+    pub(super) fn bind_vertices(&self, pass: &mut wgpu::RenderPass<'_>) {
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        if let Some(texcoords) = &self.texcoords {
+            pass.set_vertex_buffer(1, texcoords.slice(..));
+        }
     }
 
     /// Rebuilds bind group 2 with `stage`'s four textures - see

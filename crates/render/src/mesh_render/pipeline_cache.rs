@@ -35,6 +35,11 @@ use std::collections::HashMap;
 #[derive(PartialEq, Eq, Hash)]
 struct Key {
     vertex_entry: &'static str,
+    /// The vertex buffers' layouts - stride, step and attributes. Not
+    /// optional: two pipelines differing only by where `texcoord` comes from
+    /// (`super::Texcoords`) are otherwise one key, and the second caller got
+    /// the first's pipeline reading a buffer it never bound.
+    vertex_buffers: Vec<Option<(u64, wgpu::VertexStepMode, Vec<wgpu::VertexAttribute>)>>,
     fragment_entry: &'static str,
     targets: Vec<Option<wgpu::ColorTargetState>>,
     primitive: wgpu::PrimitiveState,
@@ -185,6 +190,7 @@ fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn cached_pipeline(
     vertex_entry: &'static str,
+    vertex_buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
     fragment_entry: &'static str,
     targets: &[Option<wgpu::ColorTargetState>],
     primitive: wgpu::PrimitiveState,
@@ -198,6 +204,14 @@ pub(crate) fn cached_pipeline(
         Some(cache) => {
             let key = Key {
                 vertex_entry,
+                vertex_buffers: vertex_buffers
+                    .iter()
+                    .map(|layout| {
+                        layout
+                            .as_ref()
+                            .map(|l| (l.array_stride, l.step_mode, l.attributes.to_vec()))
+                    })
+                    .collect(),
                 fragment_entry,
                 targets: targets.to_vec(),
                 primitive,

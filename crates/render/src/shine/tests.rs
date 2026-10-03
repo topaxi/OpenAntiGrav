@@ -172,17 +172,17 @@ fn the_circuit_coordinate_follows_the_cameras_right_and_up_in_world_space() {
     model.vertices[2].normal = [1.0, 0.0, 0.0];
     write_view(&model, &mut out, view, 0.0);
     assert!(
-        (out[0].texcoord[0] - 1.0).abs() < 1.0e-5,
+        (out[0][0] - 1.0).abs() < 1.0e-5,
         "toward the camera's right: {:?}",
         out[0]
     );
     assert!(
-        (out[1].texcoord[1] - 1.0).abs() < 1.0e-5,
+        (out[1][1] - 1.0).abs() < 1.0e-5,
         "toward the camera's up: {:?}",
         out[1]
     );
     assert!(
-        (out[2].texcoord[0] - 0.5).abs() < 1.0e-5,
+        (out[2][0] - 0.5).abs() < 1.0e-5,
         "along its line of sight: {:?}",
         out[2]
     );
@@ -227,12 +227,12 @@ fn an_animated_nodes_normal_is_turned_by_its_matrix() {
     write_view(&flat, &mut still, view, 0.0);
     write_view(&pass.model, &mut turned, view, 0.0);
     assert!(
-        (still[0].texcoord[0] - 1.0).abs() < 1.0e-5,
+        (still[0][0] - 1.0).abs() < 1.0e-5,
         "faces right: {:?}",
         still[0]
     );
     assert!(
-        (turned[0].texcoord[1] - 1.0).abs() < 1.0e-5,
+        (turned[0][1] - 1.0).abs() < 1.0e-5,
         "turned to face up: {:?}",
         turned[0]
     );

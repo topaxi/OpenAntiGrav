@@ -78,6 +78,7 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Stamp {
         };
         pipeline_cache::cached_pipeline(
             "vs_main",
+            shared.vertex_buffers,
             entry,
             &targets,
             primitive,

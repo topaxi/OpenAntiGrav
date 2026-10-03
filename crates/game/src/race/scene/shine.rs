@@ -16,6 +16,9 @@ use super::*;
 pub(super) struct TrackShine {
     drawable: Drawable,
     sources: Vec<usize>,
+    /// This frame's coordinates, refilled rather than rebuilt - the drawable
+    /// streams them alone (`mesh_render::Texcoords::Streamed`).
+    texcoords: std::cell::RefCell<Vec<[f32; 2]>>,
 }
 
 impl TrackShine {
@@ -34,7 +37,7 @@ impl TrackShine {
         let Some(pass) = oag_render::shine::build_track(track) else {
             return Ok(None);
         };
-        let drawable = Drawable::new(
+        let drawable = Drawable::new_with(
             device,
             queue,
             pass.model,
@@ -47,10 +50,12 @@ impl TrackShine {
             zone_art,
             shadow_maps,
             mesh_render::ShadowReceiver::Never,
+            mesh_render::Texcoords::Streamed,
         )?;
         Ok(Some(Self {
             drawable,
             sources: pass.sources,
+            texcoords: std::cell::RefCell::default(),
         }))
     }
 }
@@ -216,7 +221,9 @@ impl Scene {
                 .drawable
                 .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
             track.drawable.write_node_anims(queue, seconds);
-            track.drawable.write_view_map(queue, view, seconds, scratch);
+            track
+                .drawable
+                .write_view_map(queue, view, seconds, &mut track.texcoords.borrow_mut());
         }
         // The flaps the hull's base draw swings: the player's alone
         // (`deflect_airbrakes` runs for `ships.first()`), so a rival's pass

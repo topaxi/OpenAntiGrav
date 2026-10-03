@@ -73,7 +73,7 @@ impl Drawable {
         pass.set_bind_group(0, &self.uniform_bind, &[]);
         pass.set_bind_group(2, &self.fog_bind, &[]);
         pass.set_bind_group(3, &self.anim_bind, &[]);
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
         for draw in self
@@ -155,18 +155,23 @@ impl Drawable {
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
     }
 
-    /// Uploads this model's vertices with texture coordinates generated for
-    /// the camera `view` - [`oag_render::shine::write_view`], a circuit's extra
-    /// pass, whose coordinates follow the camera and so cannot be baked.
+    /// Uploads texture coordinates generated for the camera `view` -
+    /// [`oag_render::shine::write_view`], a circuit's extra pass, whose
+    /// coordinates follow the camera and so cannot be baked. Into the streamed
+    /// coordinate buffer when this drawable has one, which is the eight bytes
+    /// a vertex that change; the whole vertex is never rewritten.
     pub(in crate::race) fn write_view_map(
         &self,
         queue: &wgpu::Queue,
         view: oag_core::math::Mat4,
         seconds: f32,
-        scratch: &mut Vec<mesh::GpuVertex>,
+        scratch: &mut Vec<[f32; 2]>,
     ) {
+        let Some(texcoords) = &self.texcoords else {
+            return;
+        };
         oag_render::shine::write_view(&self.model, scratch, view, seconds);
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
+        queue.write_buffer(texcoords, 0, bytemuck::cast_slice(scratch));
     }
 
     /// Draws a circuit's extra pass: each of this model's draws when the
@@ -192,7 +197,7 @@ impl Drawable {
         pass.set_bind_group(0, &self.uniform_bind, &[]);
         pass.set_bind_group(2, &self.fog_bind, &[]);
         pass.set_bind_group(3, &self.anim_bind, &[]);
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
         let mut last_bound: Option<usize> = None;
