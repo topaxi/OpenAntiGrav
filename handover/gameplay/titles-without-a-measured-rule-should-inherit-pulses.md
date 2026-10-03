@@ -26,11 +26,22 @@ the survey is below; none was trivial enough to fix in that lane.
   xref on that field or an RPCS3 watchpoint. Omega's named file has no row, its
   `WeaponAIStats2048.xml` does: pick the file by evidence before wiring.
 
-- **HD's gantry `GO` pulse phase** (2026-10-04): the start tick is measured (green step on the
-  release, confidence 75), but the original's `GO` is bright on the step frame and its first dark
-  gap is ~27 ticks earlier than ours; the held loop 221..359 and the 8-tick alpha ramp are not the
-  original's (`docs/rendering/start-gantry.md`, "HD's countdown on RPCS3"). Next: a `Z2`
-  watchpoint on the billboard UV write for the per-tick curve time, or a thrust-gate read.
+- ~~**HD's gantry `GO` pulse phase**~~ closed 2026-10-04 (`hd-go-pulse`): HD's race manager
+  holds the gantry's time in `[3.83, 5.25)` s from the release, so `GO` is lit on the step and
+  loops 86 ticks, matching the capture's dark centres to two ticks
+  (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`). **Still open from that read:**
+  - **HD's lap windows are not played**: by `ship+0x7810` (1 on the first lap), `[6.017, 9.3)`
+    otherwise, `[9.5, 9.9)` on `lap == total - 1`, `[12.35, 13.3)` on `lap == total` (the
+    branch that cues `FINAL_LAP`). Ours keeps looping `GO` after the line crossing. Needs HD's
+    asset states at those times read, `ship+0x7810` reconciled with `standing.lap`, and
+    `clip_to_panel`'s later-state draws put back. RE first, not ready to wire.
+  - **The start tick in code**: what runs `RaceManager_ResetGantryTime` (`0x00055488`) during
+    a countdown. The capture bounds tick 70 from below only, and two cues point later: our
+    backdrop is part way to green at tick 271 where the original is red, and the capture's
+    digits come ~13 ticks later than ours.
+  - **Plasma's `UV_offset`** (`plasma.md`, 2026-09-25): `AnimNode_UpdateTransformTree`'s slot
+    `+0x40` on that node class is `MeshImporter_SetTime`, so the binding is the node's animation
+    time, not a keyframe evaluator's output.
 
 ## Next Steps
 
