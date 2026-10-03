@@ -108,3 +108,47 @@ fn a_non_numeric_attribute_is_an_error() {
         })
     );
 }
+
+const ELIMINATOR_FIXTURE: &str = r#"<WeaponAIStats>
+<Rockets useAgainstPlayer="1" useAgainstAI="2" absorb="3"/>
+<AllWeapons absorb="4" useAgainstAI="5" useAgainstPlayer="6"/>
+<EliminatorAIStats normalFlip="1" infrontFlip="2" easyFlipScale="3" mediumFlipScale="4" hardFlipScale="5" easyAbsorbScale="6" mediumAbsorbScale="7" hardAbsorbScale="8" easyUseScale="9" mediumUseScale="10" hardUseScale="11" easyScoreScale="12" mediumScoreScale="13" hardScoreScale="14" futureField="99"/>
+</WeaponAIStats>"#;
+
+#[test]
+fn the_eliminator_and_all_weapons_rows_read_by_name() {
+    let stats = parse(ELIMINATOR_FIXTURE).expect("parses");
+    assert_eq!(
+        stats.all_weapons(),
+        Some(WeaponAiOdds {
+            use_against_player: 6.0,
+            use_against_ai: 5.0,
+            absorb: 4.0,
+        })
+    );
+    let e = stats.eliminator().expect("authored");
+    assert_eq!((e.normal_flip, e.infront_flip), (1.0, 2.0));
+    assert_eq!(e.flip_scale, [3.0, 4.0, 5.0]);
+    assert_eq!(e.absorb_scale, [6.0, 7.0, 8.0]);
+    assert_eq!(e.use_scale, [9.0, 10.0, 11.0]);
+    assert_eq!(e.score_scale, [12.0, 13.0, 14.0]);
+}
+
+#[test]
+fn a_file_without_the_extra_rows_reads_none() {
+    let stats = parse(FIXTURE).expect("parses");
+    assert_eq!(stats.all_weapons(), None);
+    assert_eq!(stats.eliminator(), None);
+}
+
+#[test]
+fn a_short_eliminator_row_is_refused_by_name() {
+    let xml = r#"<WeaponAIStats><EliminatorAIStats normalFlip="1"/></WeaponAIStats>"#;
+    assert_eq!(
+        parse(xml),
+        Err(Error::MissingAttribute {
+            element: "EliminatorAIStats",
+            attribute: "infrontFlip"
+        })
+    );
+}
