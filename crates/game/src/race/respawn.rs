@@ -39,6 +39,22 @@ pub enum RespawnCause {
     Destroyed,
 }
 
+impl RespawnCause {
+    /// A short lowercase label for a survey line.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::ResetZone => "reset",
+            Self::LostCircuit => "lost",
+            Self::Beneath => "beneath",
+            Self::Stalled => "stalled",
+            Self::OffTrack => "offtrack",
+            Self::Airborne => "airborne",
+            Self::Destroyed => "wrecked",
+        }
+    }
+}
+
 impl Race {
     /// Whether this opponent has been away from its own driver's idea of where
     /// it is for long enough to count as lost.
