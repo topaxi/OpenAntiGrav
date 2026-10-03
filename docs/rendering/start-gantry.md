@@ -293,7 +293,8 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   spacing, not a fitted one. `GO`'s letters reach full opacity a few frames
   after the green (alpha 72 at frames 207-210, 255 from 211), so on HD the
   board is green on the release tick and `GO` is fully lit about 8 ticks
-  later; Pulse's single `u` step makes both land on the same tick.
+  later **in this build; the 2026-10-04 capture contradicts that half: the
+  original's `GO` is bright on the green step's own frame**; Pulse's single `u` step makes both land on the same tick.
 - **Held**: the clock loops frames **221 to 359** instead of running into the
   exit, as Pulse's loops 216-349. 359 is the last frame before the glyph node's
   own exit keys at 359/360, found by walking the drawn nodes' motion. 221 is
@@ -340,7 +341,7 @@ Method. `scripts/rpcs3-drive.py countdown` boots HD on a private RPCS3 (own
 the load and the whole countdown are in the file, taps cross once to skip the
 track fly-over (the race opens on a fly-over with a `START RACE` prompt) and
 then holds thrust. `scripts/hd-countdown-frames.py` reads the recording
-(Talon's Junction, Single Race, the default grid ship, 1280x720, 30 fps).
+(Talon's Junction entered through the Campaign path the harness walks - `Campaign Selection -> Grid Selection Fury -> Cell Selection -> Team Selection` - not a Single Race, which was not captured; the default grid ship, 1280x720; every video frame is a new image, consecutive-frame road differences never fall below 9, so it is a true 30 fps and a frame is 2 ticks).
 Three things share one clock - the video:
 
 - **The board.** Red `3`, `2`, `1` strip on a dark teal board, then in **one
@@ -372,7 +373,10 @@ Where it **does not** match the inherited build:
   empty -> bright repeatedly (so "held" was wrong in that it is not steady;
   ours pulses too, from the asset's own glyph walk). Dark centres, in ticks
   from the step: original +23, +61, +109 (video frames 235, 254, 278; both
-  boots agree to a frame); ours +50, +89, +129 (ticks 323, 362, 402). The
+  boots agree to a frame); ours +50, +89, +129 (ticks 323, 362, 402). As asset
+  frames under start tick 70 the original's dips fall at about 226, 264 and 312
+  against ours at 253, 292 and 332; the spacing (38 then 48 ticks) is not yet a
+  loop period. The
   original's first bright stretch is ~14 ticks (frames 223-230), ours ~26.
   Shifting the start tick cannot fix both: moving it 25 ticks earlier would
   put the green step 25 ticks before the release, which is the one thing that

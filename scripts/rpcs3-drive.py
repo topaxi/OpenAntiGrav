@@ -1257,8 +1257,8 @@ def cmd_countdown(args):
     `record` starts its capture after a fixed wait, which is after the
     countdown has run; this starts it on `Team Selection`, one press before the
     race loads, so the gantry's `3 2 1 GO` and the race clock's first tick are
-    both in the video. The recording is the observable (30 fps of a game that
-    renders at ~9 fps here); `scripts/hd-countdown-frames.py` reads it.
+    both in the video. The recording is the observable (30 fps, every frame a new
+    image on the countdown: measured); `scripts/hd-countdown-frames.py` reads it.
     """
     before = set(recordings())
     with open_session(args) as session:
