@@ -37,7 +37,10 @@
 //! `f32` only, no `mul_add`, no hashed containers, no clock, no randomness. The
 //! build is a pure function of its inputs, and the same inputs give a
 //! bit-identical plan on every platform the physics itself is bit-identical
-//! on. `plan/tests.rs` pins it.
+//! on. The cross-platform gate is `crates/ai/tests/determinism.rs`'s
+//! `the_speed_plan_matches_the_committed_reference`, which hashes the plan
+//! learned on `probe::circuit` against a committed constant on all three CI
+//! platforms; `plan/tests.rs` only checks that two builds in one process agree.
 
 use oag_physics::{CraftState, Environment, Handling, Raycaster, ShipControls, ShipState};
 

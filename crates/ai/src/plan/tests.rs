@@ -117,8 +117,10 @@ fn tuning() -> Tuning {
 const OFF_LINE: f32 = 15.0;
 
 /// A stadium: straights of `straight`, hairpins of `radius`. Built through
-/// `oag_core::math::sin_cos`, so the fixture is the same bits everywhere and
-/// the determinism test below is a portability test too.
+/// `oag_core::math::sin_cos`, so the fixture is the same bits everywhere. The
+/// platform gate is
+/// `tests/determinism.rs`; `a_build_is_bit_identical_twice` below only checks
+/// that two builds in one process agree.
 fn stadium(radius: f32, straight: f32) -> Line {
     let spacing = 2.5f32;
     let mut points = Vec::new();

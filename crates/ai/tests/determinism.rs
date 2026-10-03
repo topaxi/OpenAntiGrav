@@ -324,3 +324,22 @@ fn the_scenario_still_exercises_corners_and_craft_that_drive() {
         result.travelled
     );
 }
+
+/// The speed plan learned on the probe's circuit, hashed - see
+/// [`probe::speed_plan`]. Added 2026-10-03 with the plan itself; nothing above
+/// moved, because every scenario there drives with `plan: None`.
+const PLAN_REFERENCE: u64 = 0xc6b7_1a41_c017_d1b5;
+
+#[test]
+fn the_speed_plan_matches_the_committed_reference() {
+    let (hash, report) = probe::speed_plan();
+    println!("speed plan: {hash:#018x} {report:?}");
+    assert!(
+        report.verify_lap_ticks.is_some(),
+        "the probe's plan never completed its verification lap, so the hash pins a failure: {report:?}"
+    );
+    assert_eq!(
+        hash, PLAN_REFERENCE,
+        "the speed plan on the probe's circuit is not the committed one: {hash:#018x}"
+    );
+}
