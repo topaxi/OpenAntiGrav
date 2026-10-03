@@ -852,6 +852,12 @@ for all thirteen - so a pickup this engine cannot fire is still worth
 collecting. That is not a design choice; it is what happens when the file
 authors one attribute for everything.
 
+**Except in an Eliminator**, where `CIRCLE` pays nothing and spends the held
+weapon on a Shield for the Eliminator table's own Shield `time` (1 s) instead
+(`Ship_AbsorbHeldPickup`'s mode-8 path, read statically, confidence 80; see
+[race-modes.md](race-modes.md#eliminator)). This build refused the press there,
+and kept the weapon, until 2026-10-03.
+
 ## The refresh timer is a debounce, not a respawn
 
 `<WeaponPad refresh_time>` is `0.55` seconds for every speed class on both

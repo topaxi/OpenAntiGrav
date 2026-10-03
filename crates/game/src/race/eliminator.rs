@@ -273,6 +273,46 @@ impl Race {
         self.play_absorb_feedback(slot, false);
     }
 
+    /// An absorb in the Eliminator: the held weapon is spent on a Shield, and
+    /// no energy is paid.
+    ///
+    /// **Read statically, confidence 80** (instruction-level, not confirmed
+    /// live). `Ship_AbsorbHeldPickup` (`0x08844ec4`), when `g_game_mode` is 8
+    /// or `0x12` and the slot holds a weapon, calls `0x088612e8`, which writes
+    /// `5` into both copies of the held id (`craft+0x1bc` and `+0x1c0`), then
+    /// `Weapon_RequestFire` (`0x08862d9c`), whose case 5 sets fire bit `0x20` -
+    /// `Shield_Fire` (`0x08861568`), the Shield's arm, by the stat offset it
+    /// reads (`shield-pickup.md`). Every per-weapon arm of the absorb table then
+    /// skips `Ship_AddShield` on the same flag, `0x08862bc0` clears the slot, and
+    /// the tail skips `Ship_PlayAbsorbFeedback`. So the press arms the Shield
+    /// pickup for `WeaponStats_Elimination.xml`'s Shield `time`, **1 s** (5 s in
+    /// the race table), and the Shield is otherwise unobtainable here: its pad
+    /// odds in that file are zero in every column. `MSC_EVENT_ELIM`'s "you
+    /// cannot absorb pickups" is the energy half of this, and the mode used to
+    /// refuse the press outright, keeping the weapon.
+    ///
+    /// A running Shield is not refreshed (`Shield_Fire`'s own guard, the same
+    /// one the player's Shield arm follows), and the weapon is gone either way.
+    /// Id 5 is the Cannon in `ai-stats.md`'s naming; what the press does is
+    /// whatever bit `0x20` does, and that is the Shield. One edge is not ported:
+    /// the original requests the Shield *before* its autopilot-cancel test, so
+    /// an absorb under a running Autopilot also cancels it.
+    pub(super) fn eliminator_absorb(&mut self, slot: usize) {
+        let time = self
+            .sim
+            .weapons
+            .as_ref()
+            .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Shield))
+            .map(|shield| shield.time);
+        self.sim.world.ships[slot].pickup.take();
+        if let Some(time) = time
+            && self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0
+        {
+            self.sim.world.ships[slot].physics.shield_pickup_timer = time;
+            self.view.shield[slot].activate();
+        }
+    }
+
     /// How much of its throttle an Eliminator opponent uses, so the field stays
     /// within reach of itself. `1.0` everywhere but the front of the pack.
     ///

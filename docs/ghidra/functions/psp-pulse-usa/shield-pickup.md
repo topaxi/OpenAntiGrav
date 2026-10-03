@@ -59,6 +59,15 @@ and id 5 the Cannon. Both readings are left standing and the conflict recorded
 rather than resolved: that page already flags three loose ends in the same
 switch, and the offset evidence here does not say which of them is the mistake.
 
+**A corroborating data point, 2026-10-03, which does not resolve it.**
+`Weapon_RequestFire`'s jump table (`.rodata` at link address `0x00278710`,
+thirteen entries indexed by the held id) sends index 5 to `ori $4, $6, 0x20` -
+this page's Shield bit. And the Eliminator absorb (`Ship_AbsorbHeldPickup`,
+mode 8 or `0x12`) writes `5` into the held id through `0x088612e8` and then
+calls `Weapon_RequestFire`, so the one caller that picks an id on purpose picks
+5 to raise a Shield. Id 5 is the Cannon in `WeaponAiStats_Load`'s order. See
+[race-modes.md](../../../gameplay/race-modes.md#eliminator).
+
 ### Two addressing traps on the way, both worth writing down
 
 **`weapon-fire.md`'s five small-handler addresses are wrong by `0x4000`.** The

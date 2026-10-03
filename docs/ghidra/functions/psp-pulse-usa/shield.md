@@ -1142,8 +1142,9 @@ effect: `Sound_Play(1.0, entity+0x50, bank, 0, "ABSORB", 0)` once, then
 over up to ten of the craft's fx nodes with `DAT_08abf564 = i * 0.1` staggering
 them a tenth of a second apart. Naming it here because its callers are what
 settle where `ABSORB` is heard, and they are **four, all read**: this refill,
-the absorb handler's tail (`0x088455b8`, skipped in an Eliminator where the
-absorb itself is refused), and two arms of a network callback
+the absorb handler's tail (`0x088455b8`, skipped in an Eliminator, where the
+absorb pays no energy and spends the weapon on a Shield instead - see
+[race-modes.md](../../../gameplay/race-modes.md#eliminator)), and two arms of a network callback
 (`FUN_0883d5c0`: message `'B'`, and `'Q'` for a Quake absorbed remotely).
 **None is a wall contact.** The contact loop's shield branch takes
 `ShipShield_Hit` (`0x0885eb04`) instead of `Ship_DispatchCollisionFx`, and

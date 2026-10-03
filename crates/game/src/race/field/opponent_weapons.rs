@@ -614,9 +614,13 @@ impl Race {
             // `IMPLEMENTED` and this chain have to grow together, and
             // `every_implemented_weapon_has_a_fire_arm_on_both_paths` is what
             // makes that fail loudly.
-            // Eliminator refuses absorption for an opponent exactly as it
-            // does for the player - see `Race::spend_pickup` and
-            // `Mode::pickups_absorb`.
+            // **In the Eliminator an opponent keeps the weapon.** An absorb
+            // there pays no energy and spends the weapon on a one-second Shield
+            // (`Race::eliminator_absorb`, the player's path), and the original's
+            // AI takes that branch at about `0.001` a quarter-second decision
+            // (`WeaponAi_DecideFireOrAbsorb` forces `+0x34` to `0` in mode 8;
+            // `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`). Not ported:
+            // it measured as no change in the time to five kills.
             if !self.sim.world.mode().pickups_absorb() {
                 return;
             }

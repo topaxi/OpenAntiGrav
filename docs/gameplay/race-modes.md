@@ -633,10 +633,22 @@ status:
   Eliminator by name before this mode existed to read it. `race::load` selects
   it the same way it selects the weapon table above, falling back to the
   ordinary figure for a title with none. See [pickups](pickups.md#the-refresh-timer-is-a-debounce-not-a-respawn).
-- **No pickup absorption.** `Mode::pickups_absorb` answers `false` for
-  Eliminator alone; both the player's and an opponent's absorb path check it
-  and keep the pickup rather than spend it on nothing, the pattern this
-  project already uses for every no-effect weapon.
+- **No energy from an absorb; the absorb is a one-second Shield instead
+  (2026-10-03, read statically, confidence 80).** `Mode::pickups_absorb` answers
+  `false` for Eliminator alone. Until 2026-10-03 both absorb paths then kept
+  the pickup, which is not what the original does: `Ship_AbsorbHeldPickup`
+  (`0x08844ec4`), in `g_game_mode` 8 or `0x12` with a weapon held, calls
+  `0x088612e8` (writes `5` into both held-id copies, `craft+0x1bc` and
+  `+0x1c0`), then `Weapon_RequestFire` (`0x08862d9c`), whose jump-table entry 5
+  is `ori 0x20`: fire bit `0x20`, `Shield_Fire`
+  ([shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md)). Every
+  per-weapon arm of the absorb table then skips `Ship_AddShield` on the same
+  flag, `0x08862bc0` writes `-1` into the slot, and the tail skips
+  `Ship_PlayAbsorbFeedback`. `WeaponStats_Elimination.xml` authors the Shield's
+  `time` as **1 s** (5 s in `WeaponStats_Race.xml`) and its pad odds as zero in
+  every column, so this is the only shield the mode has. Ported for the player
+  (`Race::eliminator_absorb`); an opponent keeps its weapon, see "Held weapons are
+  not a lever" below. Not confirmed live.
 - **Health regenerates on a completed lap, in place of absorption - a fifth
   of the maximum, measured.** `Race::eliminator_lap_health_refill` runs on
   the same `outcome.lap_completed` edge the free Time Trial/Speed Lap turbo
@@ -805,15 +817,45 @@ seed). The original's 85 s is still ahead of the median by about a third.
 
 Still open:
 
-- **Time to five is 1.4 times the original's** (118 s median; it was 2.5 times before the credit).
-  Earlier note, from before the credit: **Time to five is 2.5 times the original's.** Of 30 deaths in a 233 s run (seed 5), 19 had a weapon hit
-  in the last second and 11 did not: wall deaths and weapons that credit nothing here (a Leech
-  Beam's damage does not set `last_weapon_hit`, so a kill by beam is uncredited; not confirmed
-  against the original).
-- **Held weapons.** Over that run craft spent 3,283 craft-ticks holding a Mine, 6,874 a Bomb,
-  8,032 a Cannon and 5,874 a Leech Beam, none of which is used against a leader or a tail with
-  nobody behind, and Eliminator refuses absorbing, so those craft stop receiving pickups.
-- **Wall deaths** (priority 3 of the thread) are not investigated.
+- **Time to five is about 1.4 times the original's.** Re-measured 2026-10-03 on main at
+  `64521c88` (later than the 147 s median of 2026-10-02): parked player, `16_Track`, six
+  game-minutes, seeds 1 to 24: 24 of 24 finish, **median 135 s**, 33 to 196 s; seeds 1 to 240:
+  240 of 240, **median 117 s**, mean 122 s, 13 to 225 s, the field scoring **8.1 kills a minute**.
+  The original: 85 s.
+- **Wall deaths are not a lever (2026-10-03).** Every opponent death in that 24-seed sweep was
+  logged with the shield lost to walls and to weapons over the 2 s before it (the wall's share
+  read off `wall_shield_charged_of`, the rest of the pool's drop taken as weapon): of **393
+  opponent deaths, 392 were finished by a weapon blow and 1 by a wall** (seed 14, tick 1085,
+  after a 94-point weapon hit that left 1 point). Per seed, kills credited run level with
+  deaths; the only shortfalls are that wall death and a death in a race's last half second
+  (13 to 29 ticks before the finish on seeds 3, 13, 14 and 19), whose credit would land after
+  the race has ended on the fifth kill. The 2 s before a death average
+  37.7 points of weapon loss against 0.08 of wall. The older figure ("11 of 30 deaths with no
+  weapon hit", seed 5) predates the beam and quake credit and no longer holds.
+- **Held weapons are not a lever either (2026-10-03).** Over seeds 1 to 48 opponents hold a
+  weapon for about 45 % of their craft-ticks (wrecked ticks included in the denominator): Missile 19 % of that, Leech Beam 14 %, Shuriken 14 %,
+  Cannon 13 %, Plasma 13 %, Rocket 12 %, Mine 7 %, Bomb 5 %, Quake 3 %. Two outlets were built
+  and swept over seeds 1 to 240 against the same binary with them off:
+
+  | Outlet | Median | Mean | Kills a minute | Median shift, 95 % bootstrap |
+  | --- | --- | --- | --- | --- |
+  | none | 117 s | 122 s | 8.11 | - |
+  | the original's own rule (below) | 112 s | 119 s | 8.09 | -4.8 s [-15.7, +4.6] |
+  | that, plus a held Cannon, Leech Beam, Mine or Bomb absorbed after 10 s (chosen) | 115 s | 122 s | 8.02 | -2.3 s [-14.5, +8.4] |
+
+  The first halved the craft-ticks spent on a Mine or Bomb, the second halved those on a Cannon
+  or Leech Beam, and the field's kill rate did not move with either, so neither shipped. **The
+  original's rule** is `WeaponAi_DecideFireOrAbsorb` read for mode 8 (see
+  [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#mode-8-what-the-original-does-with-a-held-weapon-read-2026-10-03)):
+  a Mine or Bomb is laid with no target at all, and anything is absorbed (into the one-second
+  Shield above) at `0.001` a quarter-second decision, so the original discards next to nothing
+  either.
+- **A held-Turbo chase cannot happen in this mode.** `WeaponStats_Elimination.xml` gives the
+  Turbo zero pad odds in every column (`human`, `front`, `back`, `ai`), and no craft held or ran a
+  Turbo in any sweep. Speed pads remain the only lawful speed advantage.
+- **What is left is the fire decision.** The field's kill rate stays near 8 a minute whatever
+  happens to held weapons; how often a held Rocket, Missile or Plasma is fired is
+  `WeaponAi_DecideFireOrAbsorb`'s other half, still unported.
 - ~~**A backward wrap costs a lap in every mode.**~~ **Fixed 2026-10-02.** The original's lap target
   is never lowered by a reverse crossing (`Craft_UpdateLapProgress`, static, confidence 92), so
   `Standing` and `RaceState` keep a `reversed` deficit instead; see `lap-counting.md`. The

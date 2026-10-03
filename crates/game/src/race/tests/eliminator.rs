@@ -189,3 +189,76 @@ fn a_pending_hit_writes_nothing_outside_eliminator() {
     race.record_pending_hit(1, 0);
     assert_eq!(race.sim.state_hash(), before);
 }
+
+/// The Eliminator's own table shape: a Mine on the pads, and a Shield authored
+/// with a `time` but zero odds everywhere, as `WeaponStats_Elimination.xml`
+/// ships it. Invented numbers, distinct from the absorb value.
+fn mine_and_unpicked_shield_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Shield"><Stats absorb="10" time="1.25"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
+               damage="20" slowdown_time="0.5" timetodie="3"
+               trigger_radius="2"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Mine"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Shield"><Stats ai="0" back="0" front="0" human="0"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
+/// An absorb press in the Eliminator spends the held weapon on the Shield
+/// pickup for the Shield's own `time`, and pays no energy:
+/// `Ship_AbsorbHeldPickup`'s mode-8 path, see [`Race::eliminator_absorb`].
+/// It used to be refused, and the weapon kept.
+#[test]
+fn an_eliminator_absorb_spends_the_weapon_on_the_shield_and_pays_no_energy() {
+    let mut race = race_with_weapon_table(
+        Mode::Eliminator,
+        enveloping_pad(),
+        1.0,
+        mine_and_unpicked_shield_table(),
+    );
+    let mut buttons = Buttons::new();
+    race.tick(&PlayerInputs::single(buttons.tick(0)));
+    assert_eq!(race.ship_pickup(), Some(oag_tables::weapons::Weapon::Mine));
+    race.sim.world.ships[0].physics.shield = 10.0;
+
+    race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
+
+    assert_ne!(
+        race.ship_pickup(),
+        Some(oag_tables::weapons::Weapon::Mine),
+        "the absorb must spend the held weapon"
+    );
+    assert!(
+        race.ship().physics.shield <= 10.0,
+        "an Eliminator absorb pays nothing into the pool: {}",
+        race.ship().physics.shield
+    );
+    let timer = race.ship().physics.shield_pickup_timer;
+    assert!(
+        timer > 1.25 - 2.0 * race.dt() && timer <= 1.25,
+        "the Shield must run for its own authored time, timer {timer}"
+    );
+}
+
+/// Every other mode still pays the absorb and raises no Shield.
+#[test]
+fn a_single_race_absorb_still_pays_energy_and_raises_no_shield() {
+    let mut race = race_with_weapon_table(
+        Mode::SingleRace,
+        enveloping_pad(),
+        1.0,
+        mine_and_unpicked_shield_table(),
+    );
+    let mut buttons = Buttons::new();
+    race.tick(&PlayerInputs::single(buttons.tick(0)));
+    race.sim.world.ships[0].physics.shield = 10.0;
+    race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
+    assert!((race.ship().physics.shield - 27.0).abs() < 1e-4);
+    assert_eq!(race.ship().physics.shield_pickup_timer, 0.0);
+}
