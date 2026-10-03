@@ -32,7 +32,7 @@
 //! windows put frame 0 at about 85, and against the texel-row windows at about
 //! 96, so the digits may be up to ~7 ticks off in either direction; only the
 //! `GO` handover is pinned to a tick. **Measured on Pulse only** - see
-//! [`clock_seconds`] for what every other title gets.
+//! [`clock`] for what every other title gets: Pulse's rule on its own `GO` edge.
 //!
 //! This **retires** the earlier reading of this module and of
 //! `docs/rendering/start-gantry.md`, which drove the gantry off `world.tick / 60`
@@ -67,6 +67,10 @@
 //! frame 360 in open air put the panel 9.99 units above the banner and replayed
 //! the whole strip there - the maintainer's report - so on Pulse the clock
 //! loops [`GO_LOOP`] instead, see [`held_on_go`].
+
+mod clock;
+
+pub use clock::{Clock, GoEdge, SEARCH_FRAMES, go_edge};
 
 use super::*;
 
@@ -114,7 +118,13 @@ pub const GO_LOOP: (f32, f32) = (216.0 / 60.0, 349.0 / 60.0);
 /// straight through until [`GO_LOOP`]'s end, then round that span forever.
 #[must_use]
 pub fn held_on_go(seconds: f32) -> f32 {
-    let (from, to) = GO_LOOP;
+    held_within(seconds, GO_LOOP)
+}
+
+/// `seconds` on a gantry clock held over `span`: straight through until its
+/// end, then round the span forever. [`held_on_go`] is Pulse's.
+#[must_use]
+pub fn held_within(seconds: f32, (from, to): (f32, f32)) -> f32 {
     if seconds < to {
         seconds
     } else {
@@ -125,13 +135,13 @@ pub fn held_on_go(seconds: f32) -> f32 {
 /// The gantry's own clock in seconds at race tick `tick`: zero until
 /// `start_tick`, then the asset's timeline at 60 frames a second.
 ///
-/// **`start_tick` is [`CLOCK_START_TICK`] on Pulse and `0` on every other
-/// title**: only Pulse's countdown was measured, and HD's and 2048's gantry
-/// files are different timelines (2048's `GO` slides in at frame 200, not 181),
-/// so a shift fitted to Pulse's would be a guess dressed as a measurement there.
-/// Those keep the timeline running off the race start, as before this was
-/// measured - chosen, not measured. [`Gantry::write`] clamps it at
-/// [`CLOCK_LIMIT`].
+/// **`start_tick` is [`CLOCK_START_TICK`] on Pulse - measured - and, on every
+/// other title, the tick [`Clock::inherited`] derives from that title's own
+/// `GO` edge: Pulse's rule, unmeasured there.** Only Pulse's countdown was
+/// captured; HD's and 2048's gantry files are different timelines (2048's own
+/// `GO` slides in at frame 200, not 181), so the literal 92 is not copied, the
+/// rule is. A title whose edge cannot be found keeps `0` - chosen, not
+/// measured. [`Gantry::write`] clamps it at [`CLOCK_LIMIT`].
 #[must_use]
 pub fn clock_seconds(start_tick: u64, tick: u64) -> f32 {
     tick.saturating_sub(start_tick) as f32 / 60.0
@@ -144,13 +154,11 @@ pub fn clock_seconds(start_tick: u64, tick: u64) -> f32 {
 pub struct Placed {
     pub(super) model: Model,
     pub(super) matrix: Mat4,
-    /// The race tick the timeline starts on: [`CLOCK_START_TICK`] where it was
-    /// measured (Pulse), `0` - the timeline off the race start - elsewhere.
-    pub(super) clock_start_tick: u64,
-    /// Whether the timeline is held in its `GO` state ([`held_on_go`]) rather
-    /// than run on to the states past it. Pulse's alone, the same axis the
-    /// measured [`CLOCK_START_TICK`] sits on.
-    pub(super) holds_go: bool,
+    /// Where the timeline starts and whether `GO` is held: [`Clock::PULSE`]
+    /// where it was measured, the title's own `GO` edge on Pulse's rule where
+    /// it was not ([`Clock::inherited`]), or the timeline off the race start
+    /// where no edge could be found.
+    pub(super) clock: Clock,
 }
 
 impl std::fmt::Debug for Placed {
@@ -158,8 +166,7 @@ impl std::fmt::Debug for Placed {
         f.debug_struct("Placed")
             .field("model", &self.model.label)
             .field("matrix", &self.matrix)
-            .field("clock_start_tick", &self.clock_start_tick)
-            .field("holds_go", &self.holds_go)
+            .field("clock", &self.clock)
             .finish()
     }
 }
@@ -175,7 +182,7 @@ pub(super) fn place(
     name: &str,
     track_model: &Model,
     start: Option<&StartPosition>,
-    clock_start_tick: u64,
+    clock: ClockRule,
     report: &mut Vec<String>,
 ) -> Option<Placed> {
     let Some(mount) = oag_render::gantry::mount(track_model) else {
@@ -194,7 +201,11 @@ pub(super) fn place(
         );
         return None;
     };
-    let model = match load(archives, name, report) {
+    // Built with the texture sink set aside: `clock::go_edge` reads this
+    // model's texels, and a sunk texture has none. One 64x128 texture, so the
+    // peak the sink exists to keep down does not move.
+    let model = match oag_render::mesh_render::without_texture_sink(|| load(archives, name, report))
+    {
         Ok(model) => model,
         Err(e) => {
             report.push(format!("no start gantry: {name} did not load ({e})"));
@@ -222,12 +233,62 @@ pub(super) fn place(
         mount.vertices,
         (mount.centre - Vec3::from(start.position)).length(),
     ));
+    let clock = match clock {
+        ClockRule::Measured => Clock::PULSE,
+        ClockRule::InheritedFromPulse => inherited_clock(&model, name, report),
+    };
     Some(Placed {
         model,
         matrix,
-        clock_start_tick,
-        holds_go: clock_start_tick != 0,
+        clock,
     })
+}
+
+/// How [`place`] sets the timeline's clock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ClockRule {
+    /// Pulse's own, measured against the original: [`Clock::PULSE`].
+    Measured,
+    /// Every other title: Pulse's rule on the title's own asset - **inherited
+    /// from Pulse, unmeasured on this title**, with no confidence score.
+    InheritedFromPulse,
+}
+
+/// Pulse's rule on `model`'s own `GO` edge, or the timeline off the race
+/// start with the reason in the report.
+fn inherited_clock(model: &Model, name: &str, report: &mut Vec<String>) -> Clock {
+    match go_edge(model).map(|edge| (edge, Clock::inherited(edge))) {
+        Ok((edge, Some(clock))) => {
+            report.push(format!(
+                "start gantry clock: {name}'s own GO edge is asset frame {} (the first frame the \
+                 board samples its authored green), landed on tick {} - one tick after the thrust \
+                 gate - so frame 0 is tick {}, and the clock is held over frames {}..{}, from the digits' last fade to the exit. Inherited from \
+                 Pulse, unmeasured on this title: no capture of its countdown exists",
+                edge.frame,
+                oag_race::COUNTDOWN_TICKS + 1,
+                clock.start_tick,
+                edge.settled_frame,
+                edge.last_frame_before_exit,
+            ));
+            clock
+        }
+        Ok((edge, None)) => {
+            report.push(format!(
+                "start gantry clock: {name}'s GO edge (frame {}) is later than the thrust gate, so \
+                 Pulse's rule has no start tick for it; the timeline runs from the race start \
+                 (chosen, not measured)",
+                edge.frame
+            ));
+            Clock::FROM_RACE_START
+        }
+        Err(why) => {
+            report.push(format!(
+                "start gantry clock: no GO edge found in {name} ({why}); the timeline runs from \
+                 the race start (chosen, not measured)"
+            ));
+            Clock::FROM_RACE_START
+        }
+    }
 }
 
 /// Rewrites every draw's bounds into the space [`Placed::matrix`] actually
@@ -462,8 +523,7 @@ fn matrix(mount: &Mount, forward: Vec3) -> Mat4 {
 pub(super) struct Gantry {
     drawable: Drawable,
     matrix: Mat4,
-    clock_start_tick: u64,
-    holds_go: bool,
+    clock: Clock,
 }
 
 impl Gantry {
@@ -501,19 +561,13 @@ impl Gantry {
         Ok(Self {
             drawable,
             matrix: placed.matrix,
-            clock_start_tick: placed.clock_start_tick,
-            holds_go: placed.holds_go,
+            clock: placed.clock,
         })
     }
 
     /// This gantry's timeline clock at race tick `tick`; see [`clock_seconds`].
     pub(super) fn clock_seconds(&self, tick: u64) -> f32 {
-        let seconds = clock_seconds(self.clock_start_tick, tick);
-        if self.holds_go {
-            held_on_go(seconds)
-        } else {
-            seconds
-        }
+        self.clock.seconds(tick)
     }
 
     /// The fog block this frame, shared with the rest of the scenery.

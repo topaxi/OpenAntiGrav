@@ -8,10 +8,6 @@ the survey is below; none was trivial enough to fix in that lane.
 
 ## Open
 
-- **The start gantry's clock** (`crates/game/src/race/gantry.rs`, `clock_seconds`): Pulse starts
-  its timeline at tick 92 (measured); every other title starts at `0`, chosen. HD's and 2048's
-  timelines differ (2048's `GO` is frame 200, not 181), so inheriting means aligning `GO` to the
-  release tick, not copying 92. Rendering lane.
 - **Wreck effects, hit sparks, absorb burst** (`wreck_fx.rs`, `hit_sparks.rs`, `absorb.rs`):
   Pulse-only. Pure and 2048/Omega draw nothing; HD has its own mechanisms. An honest absence,
   not a chosen rule, but under the maintainer's rule an unmeasured title would play Pulse's
@@ -32,4 +28,4 @@ the survey is below; none was trivial enough to fix in that lane.
 
 ## Next Steps
 
-1. Draw the gantry clock first: it is the one a player sees on every non-Pulse race start.
+1. Wreck effects, hit sparks and the absorb burst: each title's locator names first. (The gantry clock landed 2026-10-03: HD runs Pulse's rule on its own `GO` edge, frame 203 / tick 70; 2048 and Omega place no gantry - `docs/rendering/start-gantry.md`.)

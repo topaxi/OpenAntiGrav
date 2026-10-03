@@ -59,6 +59,7 @@ mod texture;
 mod texture_sink;
 pub use texture_sink::Scope as TextureSinkScope;
 pub(crate) use texture_sink::offer as offer_to_texture_sink;
+pub use texture_sink::without_scope as without_texture_sink;
 pub mod zone;
 
 mod device;

@@ -294,8 +294,8 @@ impl Scene {
             // runs both off the tick.
             drawable.write_node_anims(queue, seconds);
         }
-        // The gantry's own clock: 92 ticks in on Pulse so `GO` lands on the
-        // release (`race::gantry::CLOCK_START_TICK`); it clamps itself.
+        // The gantry's own clock: started so the title's `GO` edge lands on the
+        // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
             queue.write_buffer(gantry.fog(), 0, bytemuck::bytes_of(&scene));
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race.sim.world.tick));
