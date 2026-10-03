@@ -543,13 +543,17 @@ outcome: the measured prize behind it (eliminations 11 -> 8, charged -11 %,
 end-of-run pool +9 %, respawns 35 -> 20, a clean lap, at lap-time parity) is
 reachable without touching authored data.
 
-## Step 10 is done in part: de Konstruct Black, the field rather than the lone Ace (2026-10-03)
+## Step 10 is done in part: de Konstruct White, the field rather than the lone Ace (2026-10-03)
 
 Maintainer report: "the AI really struggles with de Konstruct Black". Black is the
-forward `05_Track`. A lone Ace at the pole clears it; a field of seven loses
-13-19 of 21 craft over five minutes in every class, against 1-6 on the reversed
-twin. Cause of the first domino: the crest before the first jump read as a corner
-(see `docs/gameplay/ai.md`, "de Konstruct Black"). Step 9's "no jump model" is
+reversed `21_Track` and White the forward `05_Track` (maintainer, 2026-10-03); the
+lane that did this work read it the other way round, so what it measured and
+fixed is **White**, and the report about Black is not reproduced (Black's field
+lost 1-6 of 21 craft before the speed plan, and it now drives a verified, clean
+plan at all four classes). On White a lone Ace at the pole clears it; a field of
+seven loses 13-19 of 21 craft over five minutes in every class, against 1-6 on
+Black. Cause of the first domino: the crest before the first jump read as a corner
+(see `docs/gameplay/ai.md`, "de Konstruct White"). Step 9's "no jump model" is
 now one: `Line::curvature` forgives the convex pitch on the 75 units before a gap of
 40+ samples, and the caution lift is skipped there. Field destroyed 64 -> 49 over
 twelve cells; `05` FLASH `Eliminated` -> `CleanLap`. Still open: the wedge at

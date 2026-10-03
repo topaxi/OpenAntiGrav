@@ -85,7 +85,7 @@ Confidence **80**.
 
 ## Confirmed live (PPSSPP 1.20.4, software renderer, 2026-10-02)
 
-Basilico Black, a Time Trial reached with the dev-unlock byte
+`01_Track` (the Basilico entry titled Black), a Time Trial reached with the dev-unlock byte
 ([`ppsspp-debugger.md`](../../../reverse-engineering/ppsspp-debugger.md)),
 breakpoint at `0x0891575c` (the `sprintf`) armed from Team Selection on,
 reading `a2` (the name), `s0` (the node), `*(s0+0x50)` (the matrix) and the
@@ -104,7 +104,7 @@ five was not, and its nodes go through the same function.
 
 ## What a player sees, and how ours compares
 
-Frames on Basilico Black at matched poses (`psp-trace.py --camera` rows fed to
+Frames on `01_Track` (the Basilico entry titled Black) at matched poses (`psp-trace.py --camera` rows fed to
 `oag-game --pose-from`), under `data/scratch/pulse-psys/` (gitignored;
 `welder-orig-vs-ours.png` is the side-by-side). The original's welder at
 `(-756, 31, 741)` reads as a **white core inside a large blue-violet halo**,

@@ -3564,10 +3564,12 @@ to ten ticks' worth.
   teams would need one per handling.
 - Lap 1 is learned from a standing start the race also has, but not with the
   race's countdown launch boost.
-- **de Konstruct Black's jump findings are not test cases for the plan yet**:
-  Black is `05_Track` forward, whose plan does not verify, so
+- **de Konstruct White's jump findings are not test cases for the plan yet**:
+  White is the forward `05_Track`, whose plan does not verify, so
   `ai_dekonstruct_black_ground_truth` still exercises the corner model there
-  (its reversed control does drive a plan).
+  (Black, the reversed `21_Track`, does drive a verified plan, clean at all four
+  classes in the lane's `plan-v5.txt`). The test's file name says "black" from an
+  earlier mix-up of the two.
 - The cross-platform gate for the plan is
   `crates/ai/tests/determinism.rs::the_speed_plan_matches_the_committed_reference`,
   on the probe's invented circuit; a disc-backed plan is pinned only as
@@ -3586,28 +3588,30 @@ it is a planning aid and says of itself that it is no claim about the original).
 that would not ask for one" - which is what the grid's own ground-truth test
 wants. See the M5 `AI` item on the [roadmap](../overview/roadmap.md).
 
-## de Konstruct Black: the field dies where one craft does not (2026-10-03)
+## de Konstruct White: the field dies where one craft does not (2026-10-03)
 
-**Which file.** `Definition.xml` lists each White/Black pair in file order, and for
-`05` the reversed entry (`21_Track`, `track_reversed.vex`) comes first, so **Black
-is the forward `05_Track`** (`track.vex`) and White the reversed one. That is the
-same rule that makes `01_Track` Basilico *Black* in
-[the PPSSPP debugger notes](../reverse-engineering/ppsspp-debugger.md), where
-`17_Track` is listed before it. It is inferred from the definition order and the
-maintainer's report, **not** checked against a PPSSPP grid position for `05`.
+**Which file.** White is the forward `05_Track` (`track.vex`) and Black the
+reversed `21_Track` (`track_reversed.vex`), by the convention in
+[track.md](../formats/track.md#white-and-black) (maintainer, 2026-10-03). An
+earlier version of this section inferred the opposite from `Definition.xml`'s entry
+order, and the maintainer's report ("the AI really struggles with de Konstruct
+Black") was read against the wrong file. What was measured below is therefore
+**White**, the worse field; Black, the circuit the report names, was the better
+one all along, so **the report itself is not reproduced and is open** (Black still
+lost 1-6 of 21 craft before the plan and drives a verified, clean plan now).
 
 **The report, measured** (`crates/game/tests/ai_dekonstruct_black_board.rs`,
 `OAG_SWEEP=1`: seven Aces plus the parked player slot, three seeds, 21 craft per
 cell, 18,000 ticks, weapons as the mode ships them). Craft **destroyed** of 21:
 
-| class | Black before | Black after | White (reversed, control) |
+| class | White before | White after | Black (reversed, control) |
 | --- | ---: | ---: | ---: |
 | VENOM | 19 | 15 | 1 |
 | FLASH | 19 | 13 | 2 |
 | RAPIER | 13 | 11 | 3 |
 | PHANTOM | 13 | 10 | 6 |
 
-The lone Ace (slot 1) never died on Black at VENOM and died once at FLASH, which
+The lone Ace (slot 1) never died on White at VENOM and died once at FLASH, which
 is why the twelve-circuit gate was green all along. Across every circuit in both
 directions (two seeds, VENOM and RAPIER) forward `05` is the worst VENOM field
 (13 of 14 destroyed, 37,048 wall-contact ticks against 07's 6,116 and 18 respawns
@@ -3637,17 +3641,17 @@ against 0), and its reversed twin is among the best.
    speed cap off the line, steering held straight in the air (the lone Ace then
    needed 4 respawns), a wider stall trigger (the pile forms faster than 300 ticks).
 3. **Not causes**, each switched off in turn: craft-to-craft contact, the speed
-   pads, weapons (Black's *reversed* twin dies only from them), the personality
+   pads, weapons (White's *reversed* twin, Black, dies only from them), the personality
    axes (a plain line follower in slots 2, 4, 6 and 7 alone on the circuit dies at
    600-650 as well - slot 1 is the pole, the one grid position that arrives fast
    enough).
 
 **Where it stands.** `ai_dekonstruct_black_ground_truth.rs` bounds the field's
 destroyed craft per (class, seed) on both layouts: 64 before, 49 after across the
-twelve forward cells, 12 and 12 reversed. `ai_clean_lap_gate`'s four `05` rows moved
+twelve White (forward) cells, 12 and 12 Black (reversed). `ai_clean_lap_gate`'s four `05` rows moved
 (FLASH `Eliminated` to `CleanLap`, 1,700 contact ticks to 140; laps 26-35 ticks
 quicker; PHANTOM contact 203 to 232); every other row reproduced exactly, and the
 twelve-circuit gate stays all-twelve-clean with `01` and `06` unchanged.
-Roughly half the field still dies on Black: the wedge and a second crest at
+Roughly half the field still dies on White: the wedge and a second crest at
 idx 399-484 (a craft at 250 units a second after a pad flies it and lands wide) are
 open.

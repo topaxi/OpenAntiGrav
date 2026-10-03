@@ -192,7 +192,7 @@ behaviour there was not measured.
 
 **Every circuit is reachable in PPSSPP** with the dev-unlock byte
 (`*(u32 *)0x08b31774 + 0x45f`, [ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)),
-and Basilico Black is `01_Track`. Two measurements, both driven or coasted in
+and the entry titled Basilico Black ran `01_Track`'s layout. Two measurements, both driven or coasted in
 the running original, neither teleported mid-flight:
 
 1. **The original's field flies the lip.** A Single Race, eight craft, logged

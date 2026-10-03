@@ -1,8 +1,11 @@
-//! The field on de Konstruct Black, which the lone-Ace gates cannot see.
+//! The field on de Konstruct, which the lone-Ace gates cannot see.
 //!
-//! **Black is the forward `05_Track`** (`track.vex`): `Definition.xml` lists each
-//! White/Black pair in file order and for `05` the reversed entry, `21_Track`,
-//! comes first. The reversed layout is the control and has an own bound.
+//! **White is the forward `05_Track`** (`track.vex`) and **Black is the reversed
+//! one**, `21_Track` (`track_reversed.vex`) - the maintainer's convention
+//! (2026-10-03), not a reading of `Definition.xml`'s entry order, which two lanes
+//! took the wrong way round. Both layouts have their own bound. The file name
+//! still says "black" from that mistake. The worst field measured is White; the
+//! player's report named Black, whose field was always the better of the two.
 //!
 //! The lone-Ace gates (`race_ground_truth.rs`, `ai_clean_lap_gate.rs`) race slot
 //! 1 alone, and slot 1 is the pole position: the one craft that arrives at the
@@ -65,11 +68,12 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
     Some(dead.iter().filter(|flag| **flag).count() as u32)
 }
 
-/// Ceilings on craft destroyed, `(class, seed, forward, reversed)`.
+/// Ceilings on craft destroyed, `(class, seed, white, black)`: White is the
+/// forward `05_Track`, Black the reversed `21_Track`.
 ///
 /// **Regenerated 2026-10-03 for the AI speed plan** (`oag_ai::SpeedPlan`): the
-/// reversed control now drives a verified plan, Black does not (its plan does
-/// not verify, so its column is unchanged). Reversed destroyed over the twelve
+/// reversed layout (Black) now drives a verified plan, White does not (its plan
+/// does not verify, so its column is unchanged). Black destroyed over the twelve
 /// cells 11 -> 10: four cells fell by one, two rose by one (RAPIER seed 3,
 /// PHANTOM seed 2), which is the per-seed spread of a field with weapons on,
 /// not a column getting worse.
@@ -89,22 +93,22 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
 ];
 
 fn check(class: &str, seed: u64) {
-    let Some(forward) = destroyed(class, seed, false) else {
+    let Some(white) = destroyed(class, seed, false) else {
         return;
     };
-    let reversed = destroyed(class, seed, true).expect("the reversed entry is on the disc");
-    let (_, _, forward_bound, reversed_bound) = BOUND
+    let black = destroyed(class, seed, true).expect("the reversed entry is on the disc");
+    let (_, _, white_bound, black_bound) = BOUND
         .iter()
         .find(|(c, s, _, _)| *c == class && *s == seed)
         .expect("a bound for every cell");
-    println!("{class} seed {seed}: forward {forward} destroyed, reversed {reversed}");
+    println!("{class} seed {seed}: White (forward) {white} destroyed, Black (reversed) {black}");
     assert!(
-        forward <= *forward_bound,
-        "{class} seed {seed}: {forward} of 7 destroyed on de Konstruct Black, bound {forward_bound}"
+        white <= *white_bound,
+        "{class} seed {seed}: {white} of 7 destroyed on de Konstruct White (forward 05_Track), bound {white_bound}"
     );
     assert!(
-        reversed <= *reversed_bound,
-        "{class} seed {seed}: {reversed} of 7 destroyed on the reversed layout, bound {reversed_bound}"
+        black <= *black_bound,
+        "{class} seed {seed}: {black} of 7 destroyed on de Konstruct Black (reversed 21_Track), bound {black_bound}"
     );
 }
 
@@ -140,12 +144,12 @@ fn print_bounds() {
     }
     for class in ["VENOM", "FLASH", "RAPIER", "PHANTOM"] {
         for seed in 1..=3 {
-            let (Some(forward), Some(reversed)) =
+            let (Some(white), Some(black)) =
                 (destroyed(class, seed, false), destroyed(class, seed, true))
             else {
                 return;
             };
-            println!("    (\"{class}\", {seed}, {forward}, {reversed}),");
+            println!("    (\"{class}\", {seed}, {white}, {black}),");
         }
     }
 }

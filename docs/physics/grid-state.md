@@ -203,7 +203,7 @@ while it is set. Evidence, the table and the caveat (mode patched on a Single Ra
 The launch multiplier is in the same tail and applies to Zone's auto-speed too: see
 [launch-boost.md](launch-boost.md#zone).
 
-## The second circuit: `01_Track` (Basilico Black), Time Trial and Single Race
+## The second circuit: `01_Track` (the Basilico entry titled Black), Time Trial and Single Race
 
 Reached through the dev-unlock byte ([ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)),
 17 downs from Talon's Junction White; identified by its start, `(-721.16, 4.01,
