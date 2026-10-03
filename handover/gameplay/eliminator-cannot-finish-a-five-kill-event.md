@@ -1,4 +1,4 @@
-# A parked-player Eliminator finishes at five, slowly; the remaining gap is the original's 85 s
+# A parked-player Eliminator finishes at five, now a little faster than the original's 85 s
 
 2026-10-02, from the `pulse-eliminator` lane. Evidence: `docs/gameplay/race-modes.md` ("Who is
 credited with a kill, and how this build's Eliminator reaches five"). Guarded by
@@ -7,9 +7,11 @@ plus the respawn-keeps-its-place test).
 
 ## Open
 
-- **Time to five is about 1.3 times the original's** (2026-10-03): seeds 1 to 240, median
-  **108 s**, mean 108 s, 17 to 232 s, the field scoring 9.1 kills a minute, with empty-slot
-  opponents steering for weapon pads. Before that (main at `64521c88`): median 117 s, 13 to
+- **Time to five is 0.9 times the original's** (2026-10-03, `pulse-eliminator-fire`): with
+  opponents firing on the original's own law (`oag_ai::weapon_ai`, below), seeds 1 to 240,
+  median **75 s**, mean 76 s, 17 to 154 s, 13.6 kills a minute. Not tuned toward 85 s, whose
+  provenance is a single number. Before it: median **108 s**, mean 108 s, 17 to 232 s, the field
+  scoring 9.1 kills a minute, with empty-slot opponents steering for weapon pads. Before that (main at `64521c88`): median 117 s, 13 to
   225 s, 8.1 kills a minute; seeds 1 to 24 median 135 s. The original: 85 s.
 - **Pad steering shipped** (2026-10-03, `pulse-eliminator-pads`, chosen, not measured): an
   Eliminator opponent with an empty slot steers for the next weapon pad (`Field::pad`,
@@ -48,10 +50,19 @@ plus the respawn-keeps-its-place test).
 - ~~A backward wrap costs a lap in every mode~~ fixed 2026-10-02 (static read of the original's
   crossing count, confidence 92; a live reversed-craft capture on PPSSPP was not taken). The
   player's Eliminator respawn is the same case and is covered.
-- **`WeaponAi_DecideFireOrAbsorb` is not ported.** Its mode-8 branch is now read
-  (`weapon-ai.md`, "Mode 8"); its `+0x52` predicted-path test and the fields `+0x44`, `+0x4c`,
-  `+0x5c` are unread. **The fire half is the remaining lever**: the kill rate did not move with
-  anything done to held weapons.
+- **`WeaponAi_DecideFireOrAbsorb`'s fire half is ported** (2026-10-03), for the Rocket, Missile,
+  Plasma, Shuriken, LeachBeam and Quake, in every mode, on `WeaponAIstats.xml`'s odds. Read at
+  instruction level: the `+0x52` path test is a cone of about 8.5 degrees plus 4 units off the
+  shot's own travel, 20 s horizon, no range limit; `+0x44`/`+0x4c` are never written
+  (uninitialised heap, taken as 0, chosen); `+0x5c` is dead. Paired median shift -29.5 s
+  [-34.9, -22.7]. Shield per lap at the line 56.3 -> 60.1, at the finish tick 45.2 -> 43.7.
+  Single Race moves too (forward-weapon spends up 20 to 40 %). See `weapon-ai.md`, "The fire
+  half at instruction level", and `race-modes.md`, "Firing on the original's law".
+- **The decision cadence is the soft spot** (confidence 65): the read says every call, and the
+  call being once a frame is inferred. Decided four times a second instead, the median is 93 s.
+- **Not looked for**: whether Wipeout HD/Fury, Omega and 2048 ship a `WeaponAIstats.xml`
+  (`Weapons::ai` is `None` there, so they keep the old rule). Pure carries an entry under the
+  name's hash; its schema was not checked against the parser, and the loader reports either way.
 - **Ghidra data rename rejected**: `g_eliminator_kill_target` for `0x08b30fb0` (Hungarian-prefix
   check). The docs and `names.tsv` are authoritative for the data name.
 
@@ -75,7 +86,11 @@ plus the respawn-keeps-its-place test).
    108 s over 240 seeds. Per-step times (parked player, `16_Track`, seeds 1 to 240): off 117 s
    (13 to 225); empty slot 108 s (17 to 232), shipped; every craft 107 s (17 to 200), not
    shipped (within noise of empty slot, more wall contact).
-5. Port the fire half of `WeaponAi_DecideFireOrAbsorb` (how often a held Rocket, Missile, Plasma
-   or Shuriken is fired, `weapon-ai.md`), measured against the 240-seed sweep. Opponent weapon
-   behaviour is a design axis here, so a port ships only if it moves the time to five.
+5. ~~Port the fire half of `WeaponAi_DecideFireOrAbsorb`~~ done 2026-10-03: median 108 -> 75 s
+   over seeds 1 to 240 (per-step: old rule 108 s, 17 to 232; original's law 75 s, 17 to 154,
+   shipped; the same law decided four times a second 93 s, 25 to 167, not shipped).
+5b. Live-count the decision cadence: PPSSPP, a Single Race, hits on `0x088518b4` for one
+   opponent against frames. Settles the 75 s against 93 s question above.
+5c. Read `+0x44` live (PPSSPP, any race with opponents): if the heap holds non-zero there, the
+   forward-weapon fire index gains 2 with nothing close ahead (5x the Eliminator rate).
 6. Live-confirm the Eliminator absorb-to-Shield on PPSSPP (see Open).
