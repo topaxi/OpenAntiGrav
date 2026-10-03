@@ -7,6 +7,7 @@
 use super::*;
 use log::warn;
 
+mod bench;
 mod describe;
 pub mod gpu;
 mod tick;
@@ -658,28 +659,15 @@ pub fn capture(
     let spectrum = zone_spectrum(options, audio);
     oag_render::perfprobe::reset();
     oag_render::perfprobe::mark("frame-start");
-    // `OAG_RENDER_BENCH=N` re-records the same frame N times into throwaway
-    // encoders and reports the CPU cost of `Scene::render` alone. No GPU
-    // submission and no presentation, so this is the command-recording half of
-    // a frame and nothing else - which is the half every finding here is about.
-    // `cfg!` rather than `#[cfg]`: without `perf-probe` this is `if false` and
-    // the optimiser drops all of it, while the compiler still type-checks it -
-    // so the harness cannot rot between the runs that use it.
-    if cfg!(feature = "perf-probe")
-        && let Ok(runs) = std::env::var("OAG_RENDER_BENCH")
-            .unwrap_or_default()
-            .parse::<u32>()
-    {
-        let mut samples = Vec::with_capacity(runs as usize);
-        for _ in 0..runs {
-            let mut bench = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("race bench"),
-            });
-            let start = std::time::Instant::now();
+    // `OAG_RENDER_BENCH` and `OAG_RENDER_GPU_BENCH`: see `bench`. `cfg!`
+    // rather than `#[cfg]`, so the harness still type-checks without
+    // `perf-probe` and cannot rot between the runs that use it.
+    if cfg!(feature = "perf-probe") {
+        bench::run(&device, &queue, |encoder| {
             scene.render(
                 &device,
                 &queue,
-                &mut bench,
+                encoder,
                 &view,
                 &race,
                 viewport,
@@ -691,26 +679,13 @@ pub fn capture(
                 options.shadows,
                 camera_jitter,
                 &spectrum,
-                // `OAG_RENDER_BENCH` measures the CPU side of encoding this
-                // pass and says so; a GPU timestamp is a different number
-                // about a different thing, and mixing them into one loop's
-                // output is how a bench stops meaning anything.
+                // A bench measures one thing per loop; a timestamp pair is a
+                // different number about a different thing.
                 None,
                 None,
                 None,
             );
-            samples.push(start.elapsed().as_secs_f64() * 1e6);
-            drop(bench);
-        }
-        samples.sort_by(f64::total_cmp);
-        let mean = samples.iter().sum::<f64>() / samples.len() as f64;
-        println!(
-            "bench Scene::render over {} runs: mean {mean:.1} us, median {:.1} us, p10 {:.1} us, p90 {:.1} us",
-            samples.len(),
-            samples[samples.len() / 2],
-            samples[samples.len() / 10],
-            samples[samples.len() * 9 / 10],
-        );
+        });
     }
     let stats = scene.render(
         &device,
