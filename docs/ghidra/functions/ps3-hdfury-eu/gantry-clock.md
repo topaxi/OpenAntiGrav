@@ -101,22 +101,27 @@ window by lap. The bounds are TOC floats, read as bit patterns:
 | --- | --- | --- | --- |
 | `lap == 0` (before the first line crossing) | `[3.83, 5.25)` | `0x008a6a74`, `0x008a6a90` | `0x40751eb8`, `0x40a80000` |
 | `lap == total - 1` | `[9.5, 9.9)` | `0x008a6a94`, `0x008a6a78` | `0x41180000`, `0x411e6666` |
-| `lap == total`, or `total <= ship+0x7814 - 2` (finished) | `[12.35, 13.3)` | `0x008a6a7c`, `0x008a6a80` | `0x4145999a`, `0x4154cccd` |
+| `lap == total`, or `total <= ship+0x7814 - 2` | `[12.35, 13.3)` | `0x008a6a7c`, `0x008a6a80` | `0x4145999a`, `0x4154cccd` |
 | any other lap | `[6.017, 9.3)` | `0x008a6a8c`, `0x008a6a88` | `0x40c08b44`, `0x4114cccd` |
 
 If `T < from` or `T >= to` it calls `AnimNode_UpdateTransformTree(from,
 node)` (`0x0005f694`, `0x0005f6ac`, `0x0005f760`), i.e. `SetTime(from)`. The
-finished window also queues an announcer cue once per player (`0x0005f0e0`,
-string at `*0x008a6a84`). The `lap == 0` window also sets a second tree,
+`[12.35, 13.3)` branch also queues an announcer cue once per player
+(`0x0005f0e0`, `Sound_QueueAnnouncerCue`), and its string `*0x008a6a84` =
+`0x0077ce90` is **`FINAL_LAP`**: that branch is the final lap, so `lap` counts
+the current lap from 1 and `lap == total - 1` is the lap before it. The `lap == 0` window also sets a second tree,
 `*(*TOC-0x6c48)+0x2ac -> +0xa4`, to the same time (`0x00083a58`), not
 identified. With split screen (`gamestate+0xe4 > 1`) each player keeps its own
 float at `this+0x2dd0` instead of the shared node; not followed.
 
-The frames these windows select are the asset's own states: 9.333 s is
-`Final_Lap`'s first key and 12.33 s the chequered state's
-([start-gantry.md](../../../rendering/start-gantry.md)). **These are the triggers
-for HD's `FINAL LAP` and chequered gantry states**, which this project still
-clips away (`oag_render::gantry::clip_to_panel`). Not wired: see below.
+**Which board state each later window shows is not settled.** On Pulse's
+timeline 9.333 s is `Final_Lap`'s first key and 12.33 s the chequered state's
+([start-gantry.md](../../../rendering/start-gantry.md)), but the `FINAL_LAP`
+cue sits in the `[12.35, 13.3)` branch, one lap after the window that lands
+near 9.333 s. HD's own asset timeline at those times was not walked for this
+page. These windows are the triggers for the gantry's later states, which this
+project still clips away (`oag_render::gantry::clip_to_panel`). Not wired: see
+below.
 
 ### 4. `this+0x1950` is the billboard's own node
 
@@ -165,10 +170,12 @@ shows 3.83 or 3.83 + dt.
 ## Open
 
 - The lap windows are not played. Ours keeps looping `GO` after the line
-  crossing, where the original jumps to 6.017 s (the board's exit and idle
-  dressing), and shows `FINAL LAP`/chequered on the last lap and finish. Wiring
-  them needs `ship+0x7810` reconciled with `standing.lap`, and the states
-  `clip_to_panel` removes put back.
+  crossing, where the original jumps to 6.017 s. Wiring them needs HD's own
+  asset states at 6.017-13.3 s read, `ship+0x7810` reconciled with
+  `standing.lap`, and the states `clip_to_panel` removes put back.
 - What calls `RaceManager_ResetGantryTime` during a countdown, and so the start
-  tick in code. The capture bounds 70 from below only.
+  tick in code. The capture bounds 70 from below only, and two cues point
+  later: at tick 271 our backdrop is already part way to green where the
+  original is red 2 ticks before the step, and the capture's digits come
+  about 13 ticks later than ours.
 - The phase jump table at `*(TOC-0x6c00)`.

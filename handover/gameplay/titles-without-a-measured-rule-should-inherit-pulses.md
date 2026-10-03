@@ -30,12 +30,15 @@ the survey is below; none was trivial enough to fix in that lane.
   holds the gantry's time in `[3.83, 5.25)` s from the release, so `GO` is lit on the step and
   loops 86 ticks, matching the capture's dark centres to two ticks
   (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`). **Still open from that read:**
-  - **HD's lap windows are not played**: `[6.017, 9.3)` middle laps, `[9.5, 9.9)` last lap,
-    `[12.35, 13.3)` finished. Ours keeps looping `GO` after the line crossing. Needs
-    `ship+0x7810` reconciled with `standing.lap` and `clip_to_panel`'s FINAL LAP/chequered
-    draws put back. Ready to wire once those two are read.
+  - **HD's lap windows are not played**: by `ship+0x7810` (1 on the first lap), `[6.017, 9.3)`
+    otherwise, `[9.5, 9.9)` on `lap == total - 1`, `[12.35, 13.3)` on `lap == total` (the
+    branch that cues `FINAL_LAP`). Ours keeps looping `GO` after the line crossing. Needs HD's
+    asset states at those times read, `ship+0x7810` reconciled with `standing.lap`, and
+    `clip_to_panel`'s later-state draws put back. RE first, not ready to wire.
   - **The start tick in code**: what runs `RaceManager_ResetGantryTime` (`0x00055488`) during
-    a countdown. The capture bounds tick 70 from below only.
+    a countdown. The capture bounds tick 70 from below only, and two cues point later: our
+    backdrop is part way to green at tick 271 where the original is red, and the capture's
+    digits come ~13 ticks later than ours.
   - **Plasma's `UV_offset`** (`plasma.md`, 2026-09-25): `AnimNode_UpdateTransformTree`'s slot
     `+0x40` on that node class is `MeshImporter_SetTime`, so the binding is the node's animation
     time, not a keyframe evaluator's output.

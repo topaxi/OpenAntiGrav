@@ -309,10 +309,12 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   free-running time (frame ~202, red board) is outside it, so the clock **jumps
   to frame 229.8, where `GO` is already lit and the digits long gone, and loops
   every 86 ticks**: `Clock::hd`, `HD_PRE_LAP_WINDOW`. This replaces the chosen
-  221..359 hold. The later windows are the `FINAL LAP` and chequered triggers:
-  `[6.017, 9.3)` on middle laps, `[9.5, 9.9)` on the last lap, `[12.35, 13.3)`
-  once finished. **Not played yet**: ours keeps looping `GO` after the line
-  crossing, and `clip_to_panel` still removes those states.
+  221..359 hold. The later windows, by the lap counter `ship+0x7810` (1 on the
+  first lap): `[6.017, 9.3)` otherwise, `[9.5, 9.9)` on `lap == total - 1`,
+  `[12.35, 13.3)` on `lap == total` (where the `FINAL_LAP` announcer cue also
+  fires). Which board state each shows on HD's own timeline is not read.
+  **Not played yet**: ours keeps looping `GO` after the line crossing, and
+  `clip_to_panel` still removes the later states.
 - **2048 and Omega place no gantry**, so there is no clock to set. Loaded
   through `race::load`: all ten native 2048 circuits, **thirteen of the sixteen
   HD-ported 2048 circuits** (the base package's four - `Anulpha_Pass`,
