@@ -3,6 +3,7 @@
 //! itself and `docs/gameplay/ai.md`, "The speed plan", for the measurements.
 
 use super::{Context, Personality, Tuning};
+use crate::SpeedPlan;
 
 /// The timestep the plan's lookahead is converted at. ADR-0007's fixed 60 Hz:
 /// a driver is never told its `dt`, and the simulation never runs at another.
@@ -46,6 +47,33 @@ pub(super) fn plan_slack(ctx: &Context<'_>, personality: &Personality) -> f32 {
         return 1.0;
     }
     ((1.0 - plan_margin(ctx.tuning, personality)) / NOVICE_GAP).clamp(0.0, 1.0)
+}
+
+/// The speed a driver of this level and character holds at `index` on
+/// `plan`: the plan's lowest target over the airbrake ramp ahead, times
+/// [`plan_margin`], and for the lower levels no more than their
+/// `Tuning::pace_share` of the plan's own verified pace.
+pub(super) fn target(
+    plan: &SpeedPlan,
+    index: usize,
+    speed: f32,
+    tuning: &Tuning,
+    personality: &Personality,
+) -> f32 {
+    let corners = plan.target_ahead(
+        index,
+        speed,
+        crate::plan::LEAD_TICKS * personality.patience,
+        PLAN_DT,
+    ) * plan_margin(tuning, personality);
+    // The level's share of the plan's own pace, which is what reaches the
+    // straights. At one it is no cap at all, so the top two levels drive the
+    // plan.
+    if tuning.pace_share < 1.0 {
+        corners.min(plan.pace(index) * tuning.pace_share)
+    } else {
+        corners
+    }
 }
 
 #[cfg(test)]

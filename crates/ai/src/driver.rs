@@ -32,7 +32,7 @@ use crate::pilot::Pilot;
 pub use avoidance::LOOKAHEAD as AVOIDANCE_LOOKAHEAD;
 use pace::{airbrakes, corner_target, curvature_span, throttle, track_peak_curvature, trail};
 pub use personality::Personality;
-use planned::{PLAN_DT, plan_margin, plan_slack};
+use planned::plan_slack;
 pub use reflex::Reflex;
 pub use tuning::Tuning;
 
@@ -392,24 +392,9 @@ impl Driver {
         // craft can carry, braking zones included (`crate::plan`); a level and
         // a pilot handicap it by [`plan_margin`] rather than by believing in
         // less grip, so an Ace drives the plan and a Novice drives under it.
-        let planned = ctx.plan.filter(|plan| plan.len() == line.len());
-        let target = match planned {
-            Some(plan) => {
-                let corners = plan.target_ahead(
-                    index,
-                    speed,
-                    crate::plan::LEAD_TICKS * personality.patience,
-                    PLAN_DT,
-                ) * plan_margin(tuning, &personality);
-                // The level's share of the plan's own pace, which is what
-                // reaches the straights - see `Tuning::pace_share`. At one it
-                // is no cap at all, so the top two levels drive the plan.
-                if tuning.pace_share < 1.0 {
-                    corners.min(plan.pace(index) * tuning.pace_share)
-                } else {
-                    corners
-                }
-            }
+        let followed = ctx.plan.filter(|plan| plan.len() == line.len());
+        let target = match followed {
+            Some(plan) => planned::target(plan, index, speed, tuning, &personality),
             None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),
         };
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.
@@ -435,7 +420,7 @@ impl Driver {
             // our own driver's behaviour, not a recovered one - see
             // `docs/gameplay/ai.md#the-jump-clearing-failure-the-mechanism-a-real-bug-that-turned-out-not-to-be-it-and-why-this-is-where-the-chase-stops`.
             (1.0, 0.0)
-        } else if planned.is_some() {
+        } else if followed.is_some() {
             // The plan's own follower, the law it was learned with.
             crate::plan::longitudinal(speed, target)
         } else {
@@ -461,7 +446,7 @@ impl Driver {
             tuning,
             &personality,
         );
-        let (airbrake_left, airbrake_right) = if planned.is_some() {
+        let (airbrake_left, airbrake_right) = if followed.is_some() {
             crate::plan::airbrakes(brake, differential)
         } else {
             airbrakes(brake, differential, tuning.brake_floor)
