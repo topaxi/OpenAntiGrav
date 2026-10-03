@@ -87,10 +87,10 @@ pub mod probe;
 
 pub use difficulty::Difficulty;
 pub use driver::{
-    AVOIDANCE_LOOKAHEAD, AWARENESS_RANGE, Context, Driver, Personality, Reflex, Tuning,
-    hull_yaw_ceiling,
+    AVOIDANCE_LOOKAHEAD, AWARENESS_RANGE, Context, Driver, PAD_LOOKAHEAD, Personality, Reflex,
+    Tuning, hull_yaw_ceiling,
 };
-pub use field::{Field, Hazard, Rival};
+pub use field::{Field, Hazard, Pad, Rival};
 pub use line::{Aim, Frame, Line, shift as line_shift};
 pub use pilot::{Lean, Pilot, Span, pilot_for_slot};
 pub use plan::SpeedPlan;

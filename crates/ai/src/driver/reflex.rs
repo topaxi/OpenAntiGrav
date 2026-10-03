@@ -119,6 +119,9 @@ impl Reflex {
             behind: self.noticed(BEHIND, field.behind),
             alongside: self.noticed(ALONGSIDE, field.alongside),
             hazard: field.hazard,
+            // A pad does not move and has no identity to notice, so it passes
+            // through with no latency, as a hazard does.
+            pad: field.pad,
             place: field.place,
         }
     }

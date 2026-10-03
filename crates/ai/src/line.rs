@@ -360,6 +360,13 @@ impl Line {
         })
     }
 
+    /// The corridor at sample `index`, wrapping; `None` on a line without one.
+    #[must_use]
+    pub fn corridor_at(&self, index: usize) -> Option<Frame> {
+        let count = self.corridor.len();
+        (count > 0).then(|| self.corridor[index % count])
+    }
+
     /// Walks `distance` along the line from `index`.
     ///
     /// Returns the segment it ended on (`at`, `next`), how far along that
