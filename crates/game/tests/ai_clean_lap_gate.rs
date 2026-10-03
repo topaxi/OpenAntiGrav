@@ -220,7 +220,7 @@
 //! window-artefact shape the grid-state note describes - not traced this time);
 //! `13_Track` PHANTOM `lap_ticks` `None` to `Some(1965)` (`Died` both). Not tuned.
 //!
-//! **Regenerated 2026-10-03 for de Konstruct White** (`05_Track`, the forward
+//! **Regenerated 2026-10-03 for de Konstruct Black** (`05_Track`, the forward
 //! layout): the crest a craft launches off, on the run-up to a 40+-sample gap, no
 //! longer reads as a corner (`Line::curvature`, yaw only there) and the caution lift
 //! is skipped on it. Only the four `05_Track` rows moved, every other row

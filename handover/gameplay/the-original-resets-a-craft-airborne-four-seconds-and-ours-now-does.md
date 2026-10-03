@@ -20,7 +20,7 @@ against 372). Survey: 589 rescue events to 9.
 **How the original was reached**: every circuit is selectable with the
 dev-unlock byte (`*(u32 *)0x08b31774 + 0x45f = 1`), recipe in
 [ppsspp-debugger.md](../../docs/reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29).
-The Track Select entry titled Basilico Black ran `01_Track`'s layout.
+Basilico Black is `01_Track`.
 
 ## Open
 

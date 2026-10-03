@@ -52,7 +52,7 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
   - The mist overlay (`FUN_088fa0a0`) is not played.
   - The PS2 disc authors `<Weather>` on three circuits and plays none here.
   - Covered-section rain was not distinguishable in either side's frames.
-- **The welder against the original** (matched frames on `01_Track`, the Basilico entry the menu titles Black; see `docs/formats/track.md` "White and Black" for why the colour is not relied on):
+- **The welder against the original** (matched frames on Basilico Black):
   - The halo now flashes where the original's does. The fix: a periodic
     channel keeps its equal-time keys.
   - Ours still draws the sparks as long streaks where the original's are short

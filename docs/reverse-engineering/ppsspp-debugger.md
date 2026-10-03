@@ -644,7 +644,7 @@ is the definition's order with each Black/White pair adjacent:
 | 2 | Moa Therma White | | 14 | Fort Gale White |
 | 3 | Moa Therma Black | | 15 | Fort Gale Black |
 | 4 | Metropia White | | 16 | Basilico White |
-| 5 | Metropia Black | | 17 | **Basilico, titled Black (ran `01_Track`'s layout)** |
+| 5 | Metropia Black | | 17 | **Basilico Black (`01_Track`)** |
 | 6 | Arc Prime White | | 18 | Platinum Rush White |
 | 7 | Arc Prime Black | | 19 | Platinum Rush Black |
 | 8 | De Konstruct White | | 20 | Vertica White |
@@ -652,14 +652,10 @@ is the definition's order with each Black/White pair adjacent:
 | 10 | Tech De Ra White | | 22 | Outpost 7 White |
 | 11 | Tech De Ra Black | | 23 | Outpost 7 Black |
 
-Identified by screenshot of each entry's title; only the Basilico entry titled
-Black was also matched to its `NN_Track` by where the race starts (the field's
-grid sits at racing-line samples 685-777 of this project's `01_Track`). Which of
-each other pair is the forward direction was not checked. By the convention in
-[track.md](../formats/track.md#white-and-black) Black is the *reversed* layout,
-which would make Basilico's Black `17_Track`, not `01_Track`: that entry's title
-and its measured start disagree and is **unsettled** (see track.md for what would
-settle it). The working scripts
+Identified by screenshot of each entry's title. Which `NN_Track` each title
+loads is in [track.md](../formats/track.md#white-and-black), read off the disc's
+own definition and string table and confirmed by start position for four of
+them (2026-10-03, `pulse-variant-map`). The working scripts
 (`unlock.py`, `to_track_select.py`, `race_log.py`, `place_trace.py`) were
 scratch, under `data/scratch/sunk-craft-2/`.
 

@@ -150,7 +150,7 @@ fn the_walk_is_the_originals_on_talons_junction() {
     assert!(heading < 0.005, "worst heading {heading:.4} degrees");
 }
 
-/// `01_Track` (the Basilico entry titled Black): every slot within 0.01 of a unit (worst measured 0.001; it
+/// `01_Track` (Basilico Black): every slot within 0.01 of a unit (worst measured 0.001; it
 /// was 1.73), which is what the record scale buys - without it the worst is 0.5 and the whole column sits 0.17 off the
 /// origin-ward side - and slot 1's kink, the 0.22 degrees `grid-state.md` could not explain,
 /// reproduced.
