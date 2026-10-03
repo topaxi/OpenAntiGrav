@@ -485,3 +485,9 @@
 0x000cf490	function	Ship_AbsorbWindowActive	75	hud-readouts.md
 0x000e9160	function	Ship_UpdatePickup	55	hud-readouts.md
 0x0013d7a8	function	LeachBeamManager_Update	65	hud-readouts.md
+0x002c0d78	function	AnimNode_GetTime	85	gantry-clock.md
+0x002be978	function	MeshImporter_SetTime	85	gantry-clock.md
+0x002be9c0	function	MeshImporter_AdvanceTime	80	gantry-clock.md
+0x0005e948	function	RaceManager_Update	72	gantry-clock.md
+0x00055488	function	RaceManager_ResetGantryTime	78	gantry-clock.md
+0x00056368	function	RaceManager_SetPhase	75	gantry-clock.md

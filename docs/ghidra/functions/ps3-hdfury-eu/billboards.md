@@ -1169,3 +1169,12 @@ asset's own clock against the ~6 s the measured thrust gate takes, and only
 one circuit and one boot were checked. None of these were smoothed over or
 explained away - they are reported as measured. The `+0xe4` table's own
 negative is unaffected by any of this and stands on its own live evidence.
+
+## 2026-10-04: the curve's time argument is the gantry node's clock, windowed by the race manager
+
+**`hd-go-pulse`.** The clock `Billboard_UpdateAndRender` hands
+`Billboard_UpdateInstanceUvs` is `AnimNode_GetTime(slot+0xc)`, the `.vex`
+node's own `+0xc0` animation time, and HD's race manager holds that time in a
+per-lap window (`[3.83, 5.25)` s before the first line crossing). The full
+chain, the window table and the identity argument for slot 8's node are on
+[gantry-clock.md](gantry-clock.md).

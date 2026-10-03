@@ -267,9 +267,10 @@ Pulse's gantry clock is `(tick - 92) / 60`.
 
 ### Every other title: Pulse's rule on its own `GO` edge
 
-**HD's start tick is now measured (2026-10-04, confidence 75; see
-[HD's countdown on RPCS3](#hds-countdown-on-rpcs3-measured-2026-10-04)); the
-rest of this section is the rule that reproduced it. Everything else here is
+**HD's start tick is bounded by its capture (2026-10-04, confidence 75; see
+[HD's countdown on RPCS3](#hds-countdown-on-rpcs3-measured-2026-10-04)), and
+what it does after the release is read from its EBOOT (the "After the release"
+bullet below). Everything else here is
 inherited from Pulse, unmeasured (2026-10-03, maintainer's rule: a title
 with no measured rule runs the known one). No confidence score.** The rule is
 that the board's `GO` edge lands on the tick after the thrust gate (273) and
@@ -292,19 +293,26 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   `1` about 210, against Pulse's captured 132, 178 and 222: the asset's own
   spacing, not a fitted one. `GO`'s letters reach full opacity a few frames
   after the green (alpha 72 at frames 207-210, 255 from 211), so on HD the
-  board is green on the release tick and `GO` is fully lit about 8 ticks
-  later **in this build; the 2026-10-04 capture contradicts that half: the
-  original's `GO` is bright on the green step's own frame**; Pulse's single `u` step makes both land on the same tick.
-- **Held**: the clock loops frames **221 to 359** instead of running into the
-  exit, as Pulse's loops 216-349. 359 is the last frame before the glyph node's
-  own exit keys at 359/360, found by walking the drawn nodes' motion. 221 is
-  the first frame from the edge at which every vertex that sampled lit white
-  before it (the digits) samples no alpha: starting the loop at the edge itself
-  replays the fading `1` beside `GO` every 2.3 s, which Pulse never does and
-  which a first version of this did. Where an asset's digits and `GO` share
-  texels (Pulse's own board does) the walk finds no such frame and the loop
-  starts at the edge; only HD uses it. The span is chosen, not measured; only
-  that `GO` stays up on Pulse was measured.
+  board would be green on the release tick and `GO` fully lit about 8 ticks
+  later. **On HD that ramp is never seen**: the release jump below lands past
+  it, which is what the 2026-10-04 capture shows (`GO` bright on the step
+  frame). Since the jump turns the board green on the release for any start
+  tick that keeps the free run short of frame 203 there, the capture bounds 70
+  from below rather than measuring it; the digits reading ~13 ticks late in the
+  capture point later.
+- **After the release, HD's own law, read from its EBOOT (2026-10-04,
+  confidence 85; [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md)).**
+  The billboard's curve time is the gantry node's animation time, and HD's race
+  manager (`RaceManager_Update`, `0x0005e948`) keeps it inside a window picked
+  by the player's lap, calling `SetTime(from)` whenever it reads outside. Before
+  the first line crossing the window is **`[3.83, 5.25)` s**. On the release the
+  free-running time (frame ~202, red board) is outside it, so the clock **jumps
+  to frame 229.8, where `GO` is already lit and the digits long gone, and loops
+  every 86 ticks**: `Clock::hd`, `HD_PRE_LAP_WINDOW`. This replaces the chosen
+  221..359 hold. The later windows are the `FINAL LAP` and chequered triggers:
+  `[6.017, 9.3)` on middle laps, `[9.5, 9.9)` on the last lap, `[12.35, 13.3)`
+  once finished. **Not played yet**: ours keeps looping `GO` after the line
+  crossing, and `clip_to_panel` still removes those states.
 - **2048 and Omega place no gantry**, so there is no clock to set. Loaded
   through `race::load`: all ten native 2048 circuits, **thirteen of the sixteen
   HD-ported 2048 circuits** (the base package's four - `Anulpha_Pass`,
@@ -323,9 +331,10 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   found in ...`).
 
 Played on HD (`oag-game --race --track /data/environments/talons_junction/track.vex
---ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`): red banner and a fading `1`
-at tick 270, green banner at 271-273, `GO` letters at 276-280, then `GO`
-strobing through tick 1500 where the raw clock had emptied the board by 400.
+--ticks N --screenshot`, `hdfury-ps3-eu-dec.iso`), since the release window (2026-10-04): the `3 2 1`
+strip at tick 271, a fully lit `GO` on tick 273 with no digit left, dark at
++18..+30, +59..+67 and +104..+116 ticks, and the same 86-tick loop on. The side
+by side against the capture is in the gantry-clock evidence page.
 
 ### HD's countdown on RPCS3, measured 2026-10-04
 
@@ -369,6 +378,12 @@ Where it **does not** match the inherited build:
   full at ~286, the 8 ticks of alpha ramp the asset authors (72 at frames
   207-210, 255 from 211). One 30 fps frame cannot show a ramp, so the original
   either skips it or runs it inside 2 ticks; **not resolved**.
+- **Both are resolved by HD's race-manager window** (2026-10-04, same day,
+  [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md)): the
+  clock jumps to 3.83 s on the release and loops `[3.83, 5.25)`, 86 ticks. Its
+  dark centres off the asset are +24, +63 and +110 against the capture's +23,
+  +61 and +109 (`start_gantry_clock_inherit_ground_truth.rs`). The two bullets
+  below are the mismatch as captured, kept as the evidence.
 - **After `GO` the original pulses, and not in our phase.** `GO` goes bright ->
   empty -> bright repeatedly (so "held" was wrong in that it is not steady;
   ours pulses too, from the asset's own glyph walk). Dark centres, in ticks
@@ -439,9 +454,10 @@ behaviour it stands in for: `GO` strobing indefinitely. How the original keeps
 the strobe going (a loop on the offset track, a per-state write, the gated
 accumulator at `0x0890cf34` above) is unrecovered. The strobe's period in the
 capture is visibly of the same order as the authored one (about 0.7 s) but
-was not measured against it. HD and 2048 take the inherited rule (above): HD's glyph
-teleports +10.004 at the same 6.000 s (`start_gantry_hd_ground_truth.rs`),
-so its clock is held on `GO` too, but its countdown was not captured.
+was not measured against it. HD's glyph teleports +10.004 at the same 6.000 s
+(`start_gantry_hd_ground_truth.rs`); HD's clock is kept on `GO` by its own race
+manager's window, read from its EBOOT (above), which never reaches that exit
+before the first line crossing.
 `crates/game/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
 never leaves the aperture on the held clock and does on the raw one.
 
