@@ -296,9 +296,12 @@ and `light.enabled` (uniforms), `flame_shading` and `absorb_shading`
 `@diagnostic(off, derivative_uniformity)`, and its comment says why the
 derivatives stay sound).
 
-Median `Scene::render` GPU time, start grid, `single_race`, 1600x900, the
-maintainer's own render profiles (Pulse: MSAA 4x, scale 100; HD: MSAA 4x, scale
-200), three interleaved pairs at load ~6:
+Median `Scene::render` GPU time, start grid, `single_race`, drawn at
+`--size 1600x900`, the maintainer's own render profiles (Pulse: MSAA 4x, no
+motion blur; HD: MSAA 4x, motion blur `high`, which `Scene::render` encodes
+inside the timed span), three interleaved pairs at load ~6. `render_scale`
+does not reach this path: `--render-scale 100` and the profile's 200 measured
+the same.
 
 | step | Pulse PSP | Wipeout HD |
 | --- | --- | --- |
@@ -316,7 +319,14 @@ captures that are not the still frame, and Pulse not at all.** `hd-zone` is
 among them, a capture where the new branch is *taken* and the arithmetic is
 the same, so the difference is the driver compiling the restructured shader
 differently (contraction or scheduling on HD's float target, amplified by the
-bloom), not a gated value leaking. Not chased further.
+bloom), not a gated value leaking. Not chased further. Checked after the
+commit against three more consumers of `lit_texel`: a 2048 race moves 3 pixels
+by one level at the same step and none after it, and the Pulse and HD front
+ends (backdrop, `Velocity::None` pipelines) are byte-identical.
+
+HD split after the last step (two pairs each, before -> after): motion blur
+off 32.9 -> 20.6 ms, so the blur chain is about 3 ms of it at this size; MSAA
+off as well, 25.0 -> 16.9 ms.
 
 Still not measured: overdraw, whether front-to-back opaque order or a depth
 prepass pays now that per-pixel cost is lower, and the motion blur chain,
