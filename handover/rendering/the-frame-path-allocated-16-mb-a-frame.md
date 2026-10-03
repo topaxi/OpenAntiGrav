@@ -367,6 +367,30 @@ bit-identical across the two pipelines, since `vs_main` carries no pipeline
 constants. Pulse keeps the plain pipeline: its list shades 1.2 fragments a
 pixel.
 
+**The CPU side of the frame, 2026-10-03** (`OAG_RENDER_BENCH` under `perf`,
+Pulse with a rocket volley). `Scene::render` 850 -> 587 us:
+`psys::System::is_running` counted every particle to answer yes or no (now
+`any`); the animated circuit shine copied its whole vertex list to place its
+normals, then rebuilt and re-uploaded every vertex to change eight bytes of
+each - environment mapping was 20 % of the profile and `memcpy` 18 %. The
+circuit shine now streams its coordinates alone
+(`mesh_render::Texcoords::Streamed`). What remains of it is the arithmetic,
+about 24 % of the profile and roughly 140 us a frame here; moving it into the
+vertex shader would remove it at the cost of byte-exactness (GPU `normalize`
+rounds differently), not done. Two traps from that change, both silent:
+
+- **`pipeline_cache` had no vertex layout in its key.** The craft's
+  interleaved shine pipeline and the circuit's streamed one were one key, and
+  whichever built second drew through the first's - reading a buffer it never
+  bound. The key now carries the layouts.
+- **Dropping an entry from `vertex_attr_array!` shifts every later offset**,
+  because the macro lays offsets out by position. It draws, just wrongly.
+  `vertex_layout::streamed_attributes` filters the full table instead, and a
+  test pins it.
+
+`just build-cpu` / `just appimage-deck` (`-C target-cpu=znver2`) take another
+3-6 % off; see `docs/tools/packaging.md`.
+
 Still open: the motion blur chain,
 which the maintainer measured at about 14 ms on the same iGPU - **the next
 GPU-side target**, after re-profiling what is left of the race pass.
