@@ -73,8 +73,11 @@ impl Race {
             .fire_disruptor(position, velocity, up, slot as u8, target, effect)
     }
 
-    /// Fires an opponent's Disruptor, if its driver wants to - the same two
-    /// gates `fire_opponent_missile` runs, for the same reasons.
+    /// Fires an opponent's Disruptor, if its driver wants to: two gates, the
+    /// driver's `oag_ai::Driver::wants_to_fire` and then the weapon's own lock,
+    /// the way `fire_opponent_missile`'s two used to be. **Not on the original's
+    /// fire law**: the Disruptor is Pure's, and the law is read off Pulse, which
+    /// has no Disruptor row to read.
     pub(in crate::race) fn fire_opponent_disruptor(
         &mut self,
         slot: usize,

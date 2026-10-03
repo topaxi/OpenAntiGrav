@@ -2562,6 +2562,12 @@ quietly start depending on `~/.config/oag/pilots/`.
 
 ### Shooting at somebody
 
+**Since 2026-10-03 this is the fallback.** Wherever the title's
+`WeaponAIstats.xml` is read (Pulse and Pure), an opponent fires its forward
+weapons on the original's own law, `oag_ai::weapon_ai` - see
+[race-modes.md](race-modes.md#firing-on-the-originals-law-2026-10-03). What
+follows is the rule a race without that file still runs, and its history.
+
 **An opponent fires as of 2026-08-11**, and the delete-this-paragraph moment is
 worth marking: the firing *mechanism* was complete long before - rockets fly and
 collide with craft - and what was missing was only ever a driver willing to pick
@@ -2842,7 +2848,7 @@ row is meant to say is - no `idstring`, no `string`, content unread.
 | --- | --- | --- |
 | An exhaust of its own | 2026-08-11 | [The field burns](#the-field-burns) |
 | A respawn when it falls off | 2026-08-12 | `Race::lost_off_the_circuit` |
-| A weapon aimed at somebody | 2026-08-12 | `Driver::wants_to_fire` |
+| A weapon aimed at somebody | 2026-08-12 | `Driver::wants_to_fire`; since 2026-10-03 the original's law, `oag_ai::weapon_ai`, with the former as the fallback |
 | Knowing the other craft are there | 2026-08-12 | `oag_ai::Field`, and the `courtesy`/`defence`/`caution` axes |
 | Mistake injection, with a recovery behaviour | 2026-08-12 | `Driver::blunder`, `Driver::mistake`; the rate comes from `Difficulty::tune`, **not** from a config key |
 | Difficulty selection | 2026-08-12 | `oag_ai::Difficulty`, and one `[ai] difficulty` key in `settings.rs` |

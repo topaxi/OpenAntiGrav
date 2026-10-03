@@ -40,9 +40,11 @@ pub struct Weapons {
     /// **`None` is not a measurement here**, unlike [`Self::elimination`]'s:
     /// Pulse's is read by `weapon_ai_ground_truth`, and Pure's `Data.wad`
     /// carries an entry under the same name's hash (`0xac744a8d`, case folded
-    /// by the hash, so the spelling is Pulse's). No other title's archives were
-    /// searched. A race without it fires on this project's own rule rather than
-    /// the original's - see `oag_game::race::FireLaw`.
+    /// by the hash, so the spelling is Pulse's) that parses (2026-10-03). **So
+    /// a Pure race runs Pulse's law on Pure's odds; Pure's own decision code is
+    /// unread.** No other title's archives were searched. A race without the
+    /// file fires on this project's own rule rather than the original's - see
+    /// `oag_game::race::FireLaw`.
     pub ai: Option<&'static str>,
 }
 

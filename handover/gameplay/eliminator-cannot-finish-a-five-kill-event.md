@@ -61,8 +61,9 @@ plus the respawn-keeps-its-place test).
 - **The decision cadence is the soft spot** (confidence 65): the read says every call, and the
   call being once a frame is inferred. Decided four times a second instead, the median is 93 s.
 - **Not looked for**: whether Wipeout HD/Fury, Omega and 2048 ship a `WeaponAIstats.xml`
-  (`Weapons::ai` is `None` there, so they keep the old rule). Pure carries an entry under the
-  name's hash; its schema was not checked against the parser, and the loader reports either way.
+  (`Weapons::ai` is `None` there, so they keep the old rule). **Pure's `WeaponAIstats.xml`
+  parses, so a Pure race now runs Pulse's law on Pure's odds; Pure's own decision code is
+  unread** (a behaviour change on Pure, not measured).
 - **Ghidra data rename rejected**: `g_eliminator_kill_target` for `0x08b30fb0` (Hungarian-prefix
   check). The docs and `names.tsv` are authoritative for the data name.
 
