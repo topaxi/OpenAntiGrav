@@ -260,6 +260,18 @@ Three things the disc authors that this project does not touch:
 
 ## Next Steps
 
+0. **2026-10-05, open: the fragment decoder now keeps source negate (bit 17)
+   and the condition field (commit `6428eae0`), and readings made before that
+   may move.** The pad's "specular scalar" turned out to be EXP2 fog once the
+   negate was honoured. Re-check, without re-deriving the pad itself, every
+   earlier conclusion that read decoded HD fragment programs:
+   `Program::specular_exponent` and `Program::dp3_feeding` (`crates/render/src/mesh.rs`,
+   `crates/rcs/tests/specular_power_ground_truth.rs`) and the `hd_specular_*`,
+   `hd_litex2_census` and `hd_dp3_feeding_lane_check` examples under
+   `crates/render/examples/`. The gate stayed green across the change, so no
+   asserted value moved; what is unchecked is the prose readings built on
+   those examples' output.
+
 In order of cost, cheapest first. Step 1 (finding the binding) is done; the
 old step 0 (which alpha channel gates the accumulate) is done too, and
 changed step 1's own cost estimate - see below. What is left is deciding
