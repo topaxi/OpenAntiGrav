@@ -24,7 +24,6 @@ mod pulse_ps2;
 mod pulse_psp;
 pub(super) mod ripple;
 mod roster;
-pub use roster::slot_teams;
 mod surfaces;
 mod track_stats;
 mod variant;

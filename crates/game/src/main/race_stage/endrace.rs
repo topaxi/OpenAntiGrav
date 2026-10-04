@@ -534,9 +534,9 @@ pub(crate) fn hd_field_rows(
 /// `Session::build_endrace` in the same frame), and
 /// `crate::race::tournament::Progress` for the cumulative totals and rank.
 /// `slot_teams` is this leg's own grid roster, in slot order -
-/// `crate::main::session::endrace::build_endrace` recomputes it off
-/// `crate::race::slot_teams`, since which team flew which slot is not
-/// carried on `Board`/`Progress` themselves. `None` team entries draw the
+/// `crate::main::session::endrace::build_endrace` reads it off the race
+/// (`Race::slot_teams`), since which team flew which slot is not carried on
+/// `Board`/`Progress` themselves. `None` team entries draw the
 /// name absent rather than a placeholder - see
 /// [`oag_ui::endrace::TournamentRow::team_name`]'s own doc.
 #[must_use]

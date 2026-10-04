@@ -115,13 +115,11 @@ pub enum Mode {
     /// finishing position is always `>= 1` and can never satisfy a `0`
     /// target by accident.
     ///
-    /// **Which team the opponent flies is not measured**, and deliberately
-    /// not chased further - it is the same open question
-    /// `crate::livery::teams_for_slots` already carries for
-    /// [`Self::SingleRace`]'s own seven opponents (`docs/ghidra/functions
-    /// /psp-pulse-usa/grid.md`'s "which team flies which slot"). This build
-    /// answers it the same way: `teams_for_slots`'s own cyclic assignment,
-    /// labelled chosen rather than measured at its own call site.
+    /// **Which team the opponent flies is not measured for this mode**. This
+    /// build answers it the way [`Self::SingleRace`]'s seven opponents are
+    /// answered: `oag_game::livery::teams_for_slots`, Pulse's roster draw
+    /// recovered off Single Race (`docs/ghidra/functions/psp-pulse-usa/grid.md`'s
+    /// "which team flies which slot"), inherited here rather than measured.
     ///
     /// **Deliberately absent from [`Self::ALL`]**, like [`Self::Tournament`],
     /// reachable only through a campaign cell

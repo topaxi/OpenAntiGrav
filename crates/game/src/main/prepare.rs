@@ -221,7 +221,7 @@ impl Pending {
 
         // Every team the player's own source declares, in the definition's file
         // order, DLC packs included. `livery::teams_for_slots` decides which
-        // slot flies which; that ordering is this project's, not the original's.
+        // slot flies which, with Pulse's own roster draw off the race seed.
         let race_options = self.race_options(
             source,
             boot_shell

@@ -160,9 +160,8 @@ impl VariantJoin {
 /// **There is no save or progression system in this project**, so `Unlock`'s
 /// `loyalty` thresholds cannot be modelled - the same gap
 /// [`TeamVariant`]/[`GuestRoster`] already leave for HD's and 2048's own
-/// reskins. Every variant is offered unconditionally, the same stand-in
-/// footing `oag_game::livery::teams_for_slots` already stands on for which
-/// team flies which grid slot.
+/// reskins. Every variant is offered unconditionally, chosen rather than
+/// measured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HullVariant {
     /// The file stem inside the team's own directory, always spelled out -
