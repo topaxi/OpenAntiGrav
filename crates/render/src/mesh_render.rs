@@ -827,7 +827,10 @@ pub fn build_with(
     // One bind group per material slot: its albedo and its lightmap, which the
     // shader multiplies. Split from `make` because the two are separate
     // textures paired per slot rather than one texture per group.
-    let bind = |albedo: &wgpu::TextureView, lightmap: &wgpu::TextureView, label: &str| {
+    let bind = |albedo: &wgpu::TextureView,
+                lightmap: &wgpu::TextureView,
+                pad_mask: &wgpu::TextureView,
+                label: &str| {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(label),
             layout: &texture_layout,
@@ -843,6 +846,10 @@ pub fn build_with(
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(lightmap),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(pad_mask),
                 },
             ],
         })
@@ -864,6 +871,10 @@ pub fn build_with(
     // surface with no lightmap has no mask to apply.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
     let no_lightmap = make(1, 1, &[0, 0, 0, 255], "no lightmap");
+    // A material with no pad mask binds a flat tangent-space normal
+    // (128, 128, 255) with zero alpha: the identity of both terms the mask
+    // feeds, though `slots::PAD_NE` gates the read so it is not sampled at all.
+    let no_pad_mask = make(1, 1, &[128, 128, 255, 0], "no pad mask");
 
     // **One upload per distinct texture, not one per slot naming it.** The
     // slots are positional (a chunk names its material by ordinal) and a
@@ -889,7 +900,7 @@ pub fn build_with(
             .clone()
     };
 
-    let mut texture_binds = vec![bind(&white, &no_lightmap, "white")];
+    let mut texture_binds = vec![bind(&white, &no_lightmap, &no_pad_mask, "white")];
     for (index, slot) in model.textures.iter().enumerate() {
         let albedo = slot
             .as_ref()
@@ -901,8 +912,14 @@ pub fn build_with(
             .and_then(Option::as_ref)
             .and_then(&mut view_of)
             .unwrap_or_else(|| make(1, 1, &[0, 0, 0, 255], "no lightmap"));
+        let pad_mask = model
+            .pad_masks
+            .get(index)
+            .and_then(Option::as_ref)
+            .and_then(&mut view_of)
+            .unwrap_or_else(|| no_pad_mask.clone());
         let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());
-        texture_binds.push(bind(&albedo, &lightmap, label));
+        texture_binds.push(bind(&albedo, &lightmap, &pad_mask, label));
     }
 
     texture::log_census(model, blocks, device.limits().max_texture_dimension_2d);
@@ -982,6 +999,18 @@ pub fn material_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayou
             // picture.
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            // HD's pad mask, `_ne`: sampled only where `slots::PAD_NE` is
+            // set, and a flat placeholder everywhere else.
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },

@@ -325,6 +325,10 @@ override colour_is_light: f32 = 0.0;
 // Every other draw binds a white 1x1, so the multiply below is the identity and
 // no branch is needed - the same arrangement `albedo` already uses.
 @group(1) @binding(2) var lightmap: texture_2d<f32>;
+// HD's pad mask (`_ne`): RGB a tangent-space normal, alpha the light-bar mask.
+// Bound third, beside the lightmap, and read only where `slots::PAD_NE` (bit
+// 14) is set - see `mesh::rcs::pad_ne`. A flat 1x1 everywhere else.
+@group(1) @binding(3) var pad_mask: texture_2d<f32>;
 @group(2) @binding(0) var<uniform> scene: Scene;
 // The Zone stage's `zoneModeTrack<n>.gtf`, and a sampler of its own
 // because it is addressed by a coordinate this shader builds rather than by
@@ -997,6 +1001,39 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
     return max(up * (1.0 - window_depth) * drive * vis, vec3<f32>(0.0));
 }
 
+// **The pad's tangent-space normal, in world space.** The pad programs build
+// `N = nx*T + ny*B + nz*N0` from the `_ne` texel (`x*2-1` on each lane), with
+// `T` an authored vertex attribute and `B = cross(N0, T) * w`
+// (`docs/rendering/pads.md`, "The pad's tangent frame"). Two measurements
+// shape this function:
+//
+// - The authored `T` points along `dP/du` of its triangle (mean dot 0.94 to
+//   0.99 over 252 to 503 triangles per chunk, `hd_pad_tangent_probe`), so
+//   `dP/du` from screen-space derivatives of the world position and the
+//   texture coordinate stands in for it, with no new vertex attribute.
+//   **The derived frame is chosen, not measured**: the authored stream is
+//   per vertex and smoothed, and was not decoded into `GpuVertex`.
+// - The authored `w` byte that scales `B` is `0` on 232 of 232 vertices of
+//   `12_sol_2`'s `Weapon Pad` chunks, on 839 and 836 of 840 on
+//   `talons_junction`'s, and on 209 to 213 of 216 on `12_sol_2`'s `Speedup
+//   Pad` chunks, so `B` is the zero vector and `ny` never reaches `N`. The
+//   disc's own normal is `nx*T + nz*N0`, and that is what this builds.
+@diagnostic(off, derivative_uniformity)
+fn pad_normal(ne: vec4<f32>, n: vec3<f32>, world: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    let q1 = dpdx(world);
+    let q2 = dpdy(world);
+    let s1 = dpdx(uv);
+    let s2 = dpdy(uv);
+    let det = s1.x * s2.y - s2.x * s1.y;
+    // A degenerate or unmapped pixel keeps the vertex normal.
+    if abs(det) < 1.0e-20 {
+        return n;
+    }
+    let dp_du = (q1 * s2.y - q2 * s1.y) / det;
+    let t = normalize(dp_du - n * dot(n, dp_du));
+    return normalize((ne.x * 2.0 - 1.0) * t + (ne.z * 2.0 - 1.0) * n);
+}
+
 // **A branch on `slots` keeps its derivatives.** `slots` is a flat varying,
 // and a 2x2 fragment quad - helper lanes included - is always shaded for one
 // primitive, so every lane of a quad reads the same flat value and takes the
@@ -1006,6 +1043,17 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
 @diagnostic(off, derivative_uniformity)
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
+    // **HD's pads** (`slots::PAD_NE`): the `_ne` texel replaces the vertex
+    // normal in the program's own `N.L` and `N.H` below, and its alpha gates
+    // the glow added after the light. `n` itself stays the vertex normal for
+    // everything else this function reads it for.
+    let pad_ne = (in.slots & 16384u) != 0u;
+    var pad_ne_texel = vec4<f32>(0.0);
+    var n_lit = n;
+    if pad_ne {
+        pad_ne_texel = textureSample(pad_mask, albedo_sampler, in.texcoord);
+        n_lit = pad_normal(pad_ne_texel, n, in.world, in.texcoord);
+    }
 
     // The stand-in: two invented directions, kept for every title whose own
     // rig has not been recovered. See this file's header.
@@ -1013,7 +1061,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
 
-    let ndl = clamp(dot(n, scene.light.direction), 0.0, 1.0);
+    let ndl = clamp(dot(n_lit, scene.light.direction), 0.0, 1.0);
 
     // **Everything from here to `authored` is the authored rig's, and only
     // runs when the rig is on.** Off - `Light::stand_in`, which is every
@@ -1369,6 +1417,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // brightness is what chose.
     let glow_linear =
         pow(glow_sample.rgb, vec3<f32>(2.2)) * glow_tint_offset.rgb * glow_gate;
+    // **HD's pad light bars**: `_ne.a * colour`, the program's `MAD H.xyz,
+    // R0.wwww, C, lit` - added after the light on the far side of the albedo
+    // multiply, ungated by the diffuse alpha, and not decoded in either
+    // domain (an alpha and an authored magnitude). The colour is the pad's
+    // own authored `W_Cycle`/`Colour`, riding in this material's glow-table
+    // tint; zero for every other material. Fog follows in `fogged`, which is
+    // where the program's own final `MAD` puts it too.
+    let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne);
 
     // The Zone surface, in both domains, from one sample. See `zone_sample`.
     //
@@ -1422,7 +1478,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     if scene.light.enabled != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
-            dot(half_vector, n) / max(length(half_vector), 1e-6),
+            dot(half_vector, n_lit) / max(length(half_vector), 1e-6),
             0.0,
             1.0,
         );
@@ -1468,7 +1524,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // signs, everything near the camera - dropped it. Only the far background
         // and the hull ever saw it.
         let lit_linear =
-            surface_linear * authored + specular + zone_glow_term + glow_linear;
+            surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow;
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),
@@ -1509,7 +1565,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // texture-lookup product, not an albedo sample, so it owes no sRGB
     // decode either way.
     let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light
-        + glow + zone_glow_term;
+        + glow + zone_glow_term + pad_glow;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's

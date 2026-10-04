@@ -197,6 +197,14 @@ pub struct Report {
     /// [`Self::emissive_surface_map_excluded`] for the population this *is*
     /// acted on.
     pub emissive_role_unresolved: usize,
+    /// HD pad materials whose `_ne` mask was bound and whose program's
+    /// `_ne`-alpha term was wired - see `super::pad_ne`.
+    pub pad_ne_bound: usize,
+    /// HD pad materials that name the `_ne` sampler and were left without it:
+    /// the file did not decode, or the material authors no value for the
+    /// parameter the program multiplies the mask's alpha by. Drawn without
+    /// the term rather than with an invented colour.
+    pub pad_ne_unread: usize,
     /// Chunks a **diagnostic** environment filter took out of this build.
     ///
     /// Always zero in an ordinary run. Non-zero means `OAG_SKIP_MATERIAL` or
@@ -289,6 +297,16 @@ impl Report {
             n => format!(
                 ", {n} accumulating material(s) with no disc-measured role for their \
                  second texture (kept as before)"
+            ),
+        } + &match self.pad_ne_bound {
+            0 => String::new(),
+            n => {
+                format!(", {n} pad material(s) with their _ne mask bound as normal and light bars")
+            }
+        } + &match self.pad_ne_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} pad material(s) whose _ne mask or its colour could not be read (drawn without)"
             ),
         } + &match self.isolated {
             0 => String::new(),

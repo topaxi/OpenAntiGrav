@@ -278,6 +278,15 @@ pub mod slots {
     /// keeps carrying its constant in [`GpuVertex::glow`](super::GpuVertex::glow).
     pub const GLOW_BATCH: u32 = 1 << 13;
 
+    /// This is one of HD's pad materials, whose fragment program reads the
+    /// `_ne` mask (bound third, [`Model::pad_masks`](super::Model::pad_masks))
+    /// as a tangent-space normal for its own `N.L`/`N.H` and adds
+    /// `_ne.a * W_Cycle` after the light - see `mesh::rcs::pad_ne`. The
+    /// colour `W_Cycle` is this material's [`Model::emissive`](super::Model::emissive)
+    /// tint, which a pad material has no other use for (it never carries
+    /// [`ADD_SECOND`]).
+    pub const PAD_NE: u32 = 1 << 14;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///

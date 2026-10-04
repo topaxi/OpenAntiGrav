@@ -98,7 +98,12 @@ fn main() -> anyhow::Result<()> {
                     let raw: Vec<[u8; 4]> = (0..sub_mesh.vertex_count)
                         .map(|k| {
                             let at = sub_mesh.vertex_offset + k * stride + 10;
-                            [model_blob[at], model_blob[at + 1], model_blob[at + 2], model_blob[at + 3]]
+                            [
+                                model_blob[at],
+                                model_blob[at + 1],
+                                model_blob[at + 2],
+                                model_blob[at + 3],
+                            ]
                         })
                         .collect();
                     let tangents: Vec<[f32; 3]> = raw
@@ -113,11 +118,13 @@ fn main() -> anyhow::Result<()> {
                     println!("  w byte histogram: {w_values:?}");
                     let (mut unit, mut perp, mut along_du, mut anti_du, mut right, mut left) =
                         (0, 0, 0, 0, 0, 0);
+                    let mut dots: Vec<f32> = Vec::new();
+                    let zero_w = raw.iter().filter(|b| b[3] == 0).count();
                     for (t, n) in tangents.iter().zip(&normals) {
                         unit += usize::from((dot(*t, *t).sqrt() - 1.0).abs() < 0.05);
                         perp += usize::from(dot(*t, *n).abs() < 0.05);
                     }
-                    for tri in indices.chunks_exact(3) {
+                    for tri in indices.as_chunks::<3>().0 {
                         let [a, b, c] = [tri[0] as usize, tri[1] as usize, tri[2] as usize];
                         let (e1, e2) = (sub(points[b], points[a]), sub(points[c], points[a]));
                         let (du1, du2) = (uvs[b][0] - uvs[a][0], uvs[c][0] - uvs[a][0]);
@@ -139,6 +146,7 @@ fn main() -> anyhow::Result<()> {
                         ]);
                         let t = tangents[a];
                         let d = dot(t, dpdu);
+                        dots.push(d);
                         if d > 0.7 {
                             along_du += 1;
                         } else if d < -0.7 {
@@ -151,6 +159,14 @@ fn main() -> anyhow::Result<()> {
                             left += 1;
                         }
                     }
+                    let mean = dots.iter().sum::<f32>() / dots.len().max(1) as f32;
+                    let min = dots.iter().cloned().fold(1.0, f32::min);
+                    println!(
+                        "  authored w byte is 0 on {zero_w} of {} vertices; mean dot(T, dP/du) \
+                         {mean:.4}, min {min:.4} over {} triangles",
+                        sub_mesh.vertex_count,
+                        dots.len()
+                    );
                     println!(
                         "  {} verts: tangent unit {unit}, perpendicular to N {perp}; \
                          per triangle: T along +dP/du {along_du}, along -dP/du {anti_du}; \

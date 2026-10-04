@@ -166,6 +166,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         transparent_draws: Vec::new(),
         textures: Vec::new(),
         lightmaps: Vec::new(),
+        pad_masks: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),

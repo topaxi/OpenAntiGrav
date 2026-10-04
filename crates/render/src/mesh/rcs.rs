@@ -171,6 +171,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 
 mod cutout;
 mod isolate;
+mod pad_ne;
 mod pads;
 pub use pads::{build_pads, build_weapon_pads};
 mod glass_sheen;

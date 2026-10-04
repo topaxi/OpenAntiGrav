@@ -145,6 +145,16 @@ pub struct Model {
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
     /// its materials.
     pub lightmaps: TextureSlots,
+    /// Each pad material's `_ne` mask - a tangent-space normal in RGB and
+    /// the light-bar mask in alpha - positionally beside [`Self::textures`]
+    /// and bound **third**, beside the lightmap rather than in place of it.
+    ///
+    /// Empty on every model but HD's pad models, where
+    /// `mesh::rcs::pad_ne` fills it for the materials whose fragment program
+    /// samples the `_ne` sampler, and sets [`slots::PAD_NE`] on exactly those.
+    /// A hole binds a 1x1 flat-normal, zero-alpha texel, which is the identity
+    /// of the term it feeds.
+    pub pad_masks: TextureSlots,
     /// What each material slot's own microcode says its two texture units are
     /// for, packed as [`slots`], in the same order as [`Self::textures`].
     ///
@@ -315,6 +325,7 @@ impl Model {
             transparent_draws: Vec::new(),
             textures: Vec::new(),
             lightmaps: Vec::new(),
+            pad_masks: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
@@ -951,6 +962,7 @@ fn build_class(
         shine_draws,
         textures,
         lightmaps: Vec::new(),
+        pad_masks: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
