@@ -326,6 +326,48 @@ fn a_class_6_streak_is_a_wedge_off_its_own_sprite() {
     assert!(out.iter().all(|v| v.normal[0] == 1.0), "samples the sheet");
 }
 
+/// An emitter's own class 6 (`0x08917c7c`) is a rectangle from end to end: two
+/// corners past each end by `aspect * size`, `size` either side.
+#[test]
+fn a_class_6_pool_streak_is_a_bar_capped_by_its_aspect() {
+    let spec = streak_spec(StreakDraw::Bar { aspect: 3.0 }, Some([0.0, 0.0, 1.0, 1.0]));
+    let out = streak_vertices(&spec, &streak_particle(Vec3::ZERO, Vec3::X * 10.0));
+    assert_eq!(out.len(), 6);
+    let mut xs: Vec<f32> = out.iter().map(|v| v.position[0]).collect();
+    xs.sort_by(f32::total_cmp);
+    xs.dedup();
+    assert_eq!(xs, [-3.0, 13.0], "two corners at each end, capped by 3");
+    let ys: Vec<f32> = out.iter().map(|v| v.position[1].abs()).collect();
+    assert!(ys.iter().all(|y| (y - 1.0).abs() < 1e-6), "{ys:?}");
+}
+
+/// A bar that has not moved is `2 size` across and `2 aspect size` tall:
+/// `WO_REPULSER`'s `0.05` draws a sliver, not a square.
+#[test]
+fn a_still_class_6_pool_streak_is_a_horizontal_sliver() {
+    let spec = streak_spec(StreakDraw::Bar { aspect: 0.05 }, Some([0.0, 0.0, 1.0, 1.0]));
+    let out = streak_vertices(&spec, &streak_particle(Vec3::ZERO, Vec3::ZERO));
+    let span = |axis: usize| {
+        let values = out.iter().map(|v| v.position[axis]);
+        values.clone().fold(f32::MIN, f32::max) - values.fold(f32::MAX, f32::min)
+    };
+    assert!((span(0) - 2.0).abs() < 1e-5, "{}", span(0));
+    assert!((span(1) - 0.1).abs() < 1e-5, "{}", span(1));
+}
+
+/// A template's class 6 stays the wedge.
+#[test]
+fn a_template_class_6_is_the_wedge() {
+    assert_eq!(
+        StreakDraw::of(Some(6), 0.05).for_template(),
+        StreakDraw::Wedge
+    );
+    assert_eq!(
+        StreakDraw::of(Some(6), 0.05),
+        StreakDraw::Bar { aspect: 0.05 }
+    );
+}
+
 /// `ParticleSystem_DrawCappedStreak` is a bar from one cap to the other;
 /// it rides one quad whose along-coordinate the shader folds into `v`.
 #[test]
@@ -636,6 +678,7 @@ fn an_animated_extent_widens_the_ring_over_the_emitters_run() {
         extent: 10.0,
         spread: 0.0,
         mode: 0,
+        arc: std::f32::consts::TAU,
     };
     built.emitters[0].extent_animation = Some(Channel {
         period: 0.0,

@@ -3,7 +3,7 @@
 //! `ParticleSystem_SpawnBurst` switches on the emitter's shape (`+0x30`) and
 //! each emit function places the particle's spawn offset in the emitter's own
 //! frame before `ParticleSystem_InitParticle` carries it through the node
-//! matrix. Three shapes are read and implemented here; the rest stay at the
+//! matrix. The shapes below are read and implemented here; any other stays at the
 //! anchor, as every shape did before:
 //!
 //! - **Shape 3, a ring or a disc.** `FUN_088fc634`, read in full on 2026-10-01 and
@@ -26,6 +26,10 @@
 //!   Missile's `shockrings` disc, where it changes nothing), and the aimed azimuth turns
 //!   the heading from `phi` to `phi + a`: `ParticleSystem_AimedVelocity` rotates `(x, z)`
 //!   by `+a`, the sense the rectangle below already played. See [`super::playback`].
+//! - **Shape 8, a half ring.** `ParticleSystem_EmitHalfRing` (`0x088fcb10`) is shape 3
+//!   over `[0, pi]` instead of `[0, 2 pi]` (see [`arc_of`]), so its particles sit on the
+//!   frame's `+Z` half. Measured live on `WO_REPULSER`: radius `50 * +0x2c` exactly and
+//!   local `z >= 0` on all twelve particles sampled (2026-10-04).
 //! - **Shape 1, a line (or a flat rectangle).** `FUN_088fcfec`, read at
 //!   instruction level on 2026-09-24: while `+0x3c` is `0..=2` the offset is
 //!   `(U(-e, e), 0, U(-z, z))`, `e` the scaled extent global
@@ -124,6 +128,9 @@ pub enum Spawn {
         spread: f32,
         /// `+0x3c`: `0` the ring, `1` the ring spread, `2` the disc.
         mode: u32,
+        /// The angle `phi` is drawn over: `2 pi` for shape 3, `pi` for shape 8's half
+        /// ring. The disc (`mode == 2`) never reads it.
+        arc: f32,
     },
     /// Shapes 4 and 7: out along the particle's own direction.
     Sphere {
@@ -146,10 +153,11 @@ impl Spawn {
                 extent: record.extent,
                 depth: if depth.is_finite() { depth } else { 0.0 },
             },
-            (3, mode @ 0..=2) => Self::Ring {
+            (shape @ (3 | 8), mode @ 0..=2) => Self::Ring {
                 extent: record.extent,
                 spread: if depth.is_finite() { depth } else { 0.0 },
                 mode,
+                arc: arc_of(shape),
             },
             (2, _)
                 if record.extent_unread[0].is_finite() && record.extent_unread[0].abs() < 1e4 =>
@@ -226,6 +234,7 @@ impl Spawn {
                 extent,
                 spread,
                 mode,
+                arc,
             } => {
                 let e = (extent * scale).max(1e-5);
                 let z_axis = across.cross(up);
@@ -244,7 +253,7 @@ impl Spawn {
                 } else {
                     e
                 };
-                let phi = phi.unwrap_or_else(|| rng.next_f32() * std::f32::consts::TAU);
+                let phi = phi.unwrap_or_else(|| rng.next_f32() * arc);
                 across * (radius * phi.cos()) + z_axis * (radius * phi.sin())
             }
             Self::Sphere {
@@ -337,6 +346,22 @@ pub(super) fn place(
         (other, _) => other,
     };
     (aim, placement.offset_at(scale, aim, (across, up), phi, rng))
+}
+
+/// The angle a ring shape draws `phi` over: `pi` for shape 8, `2 pi` otherwise.
+///
+/// Shape 8 (`ParticleSystem_EmitHalfRing`, `0x088fcb10`) is shape 3's
+/// `ParticleSystem_EmitRing` instruction for instruction except two `lui`
+/// immediates, `0x4049` (`pi`) for `0x40c9` (`2 pi`): the per-particle draw
+/// `U(0, pi)` at `0x088fcc64`, and the even step's start and `pi / count` at
+/// `0x088fcb88`. So the half ring is `z >= 0` in the emitter's frame.
+#[must_use]
+pub fn arc_of(shape: u32) -> f32 {
+    if shape == 8 {
+        std::f32::consts::PI
+    } else {
+        std::f32::consts::TAU
+    }
 }
 
 /// `across` made perpendicular to `up`, falling back to the frame's own

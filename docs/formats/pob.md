@@ -371,7 +371,7 @@ resource in a live PPSSPP session:
 | `+0x20` | u32 | flags (`0x0400001e`): `0x2` particles kept in the instance's frame and drawn through its live matrix (not world space, despite the old name: `particle-system.md`, "The emitter's clock and the burst laws"), `0x4` random initial roll, `0x8` random rotation sign, `0x20` sub-frame spread, pulling particle `i` back by `i / n` of the frame's motion, `0x200000` an evenly stepped ring (shape 3) or a Fibonacci sphere (shapes 4 and 7), `0x200` **gravity enable**, `0x800` immortal particles, `0x800000` repeat-count mode, `0x4000000` random atlas frame |
 | `+0x24` | f32 | emitter duration, ticks (32.0) |
 | `+0x28`,`+0x2c` | f32 | unknown pair (-0.0057292 both) |
-| `+0x30` | u32 | emitter shape: 0 point, 3 cone, 4 sphere, 6 box, 7 hemisphere (4) |
+| `+0x30` | u32 | emitter shape: 0 point, 1 line, 2 rectangle, 3 ring or disc, 4 sphere, 6 box, 7 hemisphere, 8 **half ring** (`ParticleSystem_EmitHalfRing`, shape 3 over `[0, pi]`, the frame's `+Z` half; `WO_REPULSER` only; measured 2026-10-04, see [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md), "Shape 8, the class-6 bar and the wave's width") |
 | `+0x34`,`+0x38`,`+0x40` | f32 | emitter extent per axis, world units, severity-scaled (0.0144, -0.0003575, 0) |
 | `+0x3c` | u32 | radius shaping: 0 exact, 1 spread, 2 `* sin(U(0,π/2))` (2) |
 | `+0x44` | u32 | velocity mode: 0/2 cone, 1 aimed, 2 tangent on spheres (1) |
@@ -387,7 +387,7 @@ resource in a live PPSSPP session:
 | `+0xbc` | u32 | colour mode: 2 = random table entry per particle; else over-life walk (2) |
 | `+0xc0` | u32 | blend class, dispatched by `ParticleSystem_ApplyBlendClass`: 2 additive, 3 alpha-over (3) |
 | `+0xc4` | u32[256] | RGBA colour table - a gradient, orange `(181,134,87,200)` → ember `(48,46,46,0)` here |
-| `+0x4c8` | f32 | **aspect**: a class 3 particle's half-width over its half-height (`ParticleSystem_DrawRolledQuads`, `0x089178c0`). `1.0` on 43 of the 45 class 3 emitters, `4.0` on the Shuriken's head and trail; `2`, `3` and `0.05` on class 6 and 7 streaks, whose use of it is unread. Played since 2026-09-30 (confidence 80, static read). See [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md), "An emitter's own particles" |
+| `+0x4c8` | f32 | **aspect**: a class 3 particle's half-width over its half-height (`ParticleSystem_DrawRolledQuads`, `0x089178c0`). `1.0` on 43 of the 45 class 3 emitters, `4.0` on the Shuriken's head and trail; `2`, `3` and `0.05` on class 6 and 7 streaks. On class 6 it is the bar's cap: `ParticleSystem_DrawPoolBars` (`0x08917c7c`) reaches `aspect * size` past each end of a `2 size`-wide rectangle (confidence 90, measured 2026-10-04). Class 7's use is unread. Played since 2026-09-30 (confidence 80, static read). See [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md), "An emitter's own particles" |
 | `+0x4cc` | f32 | **playback rate** (1.0): the emitter's own ticks per frame tick, times instance `+0x3c` (`1.0`), into `+0x70`; every clock reads it (countdowns, drag, integration, age, life, roll, frame). `4` on `WO_REPULSER_BLAST`, `2`/`1.5`/`0.8` on the LeachBeam charge, `2` on the Missile explosion's root, `0.8` on the Shuriken bounce and expiry and the absorb. Played since 2026-10-04 (confidence 90) |
 | `+0x4d0` | f32 | child velocity-inherit scale (1.0) |
 | `+0x4d4` | f32 | child spawn probability (0.1) |

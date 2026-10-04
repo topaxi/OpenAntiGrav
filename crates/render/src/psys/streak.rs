@@ -21,6 +21,19 @@
 //!   at `0x08916ba0`, `s1` being the position argument), so the quad is not
 //!   a rectangle: a sprite-sized head at the particle and a sliver out to
 //!   the origin. A zero-length streak collapses to a plain square.
+//! - **Class 6 on an emitter's own particle, `ParticleSystem_DrawPoolBars`
+//!   (`0x08917c7c`): a bar, not the wedge.** `ParticleSystem_DrawEmitterPool`
+//!   sends the pool's class 6 here; the wedge above is the template path only,
+//!   and no PSP template is class 6, so every class-6 particle on the disc is a
+//!   bar. With `dir = normalize(origin - position)` (screen `(0, 1)` at zero
+//!   length), `perp = (dir.y, -dir.x) * size` and `cap = dir * size * aspect`
+//!   (`res+0x4c8`, `vscl.p C400, C400, S701` at `0x08917f7c`), the corners are
+//!   `position - cap -+ perp` and `origin + cap -+ perp`: a rectangle from end to
+//!   end, `2 size` wide, reaching `aspect * size` past each end. `u` is 1 on the
+//!   `-perp` edge, `v` 0 at the position and 1 at the origin (the UV words at
+//!   `+0x10..+0x1c` of `FUN_08917358`'s frame table). So a particle that has not
+//!   moved is a sliver `2 size` across and `2 aspect size` tall - `WO_REPULSER`'s
+//!   aspect `0.05` makes it a thin horizontal streak. Confidence 82, static.
 //! - **Class 7, `ParticleSystem_DrawCappedStreak` (`0x08916d00`): a capped
 //!   bar.** Eight vertices, `u` 1 on the `-perp` edge and 0 on the `+perp`
 //!   one, and `v` `0 -> 0.5` over the cap beyond the position, a constant
@@ -73,26 +86,45 @@ impl Effect {
 }
 
 /// Which strip a two-point particle is built as.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StreakDraw {
     /// One rectangle with the procedural profile in `psys.wgsl`, whatever
     /// the class - every source but Pulse on the PSP.
     Procedural,
-    /// Class 6, the wedge.
+    /// Class 6 on a template, the wedge.
     Wedge,
+    /// Class 6 on an emitter's own particle, the bar, with the record's
+    /// `res+0x4c8` as the cap's share of the size.
+    Bar {
+        /// `res+0x4c8`.
+        aspect: f32,
+    },
     /// Class 7, the capped bar.
     Capped,
 }
 
 impl StreakDraw {
-    /// The strip draw class `class` builds; [`Self::Procedural`] for
-    /// anything but 6 and 7.
+    /// The strip an emitter's own particle of draw class `class` builds;
+    /// [`Self::Procedural`] for anything but 6 and 7. A template's class 6 is
+    /// [`Self::for_template`].
     #[must_use]
-    pub fn of(class: Option<u32>) -> Self {
+    pub fn of(class: Option<u32>, aspect: f32) -> Self {
         match class {
-            Some(6) => Self::Wedge,
+            Some(6) => Self::Bar { aspect },
             Some(7) => Self::Capped,
             _ => Self::Procedural,
+        }
+    }
+}
+
+impl StreakDraw {
+    /// The same class drawn as a template (`ParticleSystem_DrawParticle`), whose
+    /// class 6 is the wedge.
+    #[must_use]
+    pub fn for_template(self) -> Self {
+        match self {
+            Self::Bar { .. } => Self::Wedge,
+            other => other,
         }
     }
 }
@@ -136,6 +168,18 @@ pub(super) fn extend(
         texcoord: [u, v],
         ..bytemuck::Zeroable::zeroed()
     };
+    if let StreakDraw::Bar { aspect } = spec.streak {
+        let cap = cap * aspect;
+        let mut strip = [
+            corner(position - cap - perp, 1.0, 0.0),
+            corner(position - cap + perp, 0.0, 0.0),
+            corner(origin + cap - perp, 1.0, 1.0),
+            corner(origin + cap + perp, 0.0, 1.0),
+        ];
+        sprite::map_to_cell(&mut strip, cell);
+        out.extend_from_slice(&[strip[0], strip[1], strip[2], strip[1], strip[3], strip[2]]);
+        return;
+    }
     if spec.streak == StreakDraw::Wedge {
         let mut strip = [
             corner(position - cap - perp, 1.0, 0.0),

@@ -1303,10 +1303,21 @@
 0x088f41c0	function	ParticleSystem_ConstructInstance	85	particle-system.md
 0x088f4498	function	ParticleSystem_SetMatrix	92	particle-system.md
 0x088f3174	function	ParticleSystem_AllocInstance	75	particle-system.md
+0x088fcb10	function	ParticleSystem_EmitHalfRing	92	particle-system.md
+0x08917c7c	function	ParticleSystem_DrawPoolBars	90	particle-system.md
+0x08917358	function	ParticleSystem_BuildAtlasTable	88	particle-system.md
 0x0893280c	function	CloudGroup_Draw	92	clouds.md
+<<<<<<< HEAD
 0x08933c1c	function	CloudGroup_BuildField	93	clouds.md
 0x08931c3c	function	CloudCube_ScatterRecords	93	clouds.md
 0x08931bec	function	CloudCube_CountRecords	93	clouds.md
 0x08931b28	function	CloudCube_Init	90	clouds.md
 0x089322f8	function	CloudGroup_BuildAtlasUvs	90	clouds.md
 0x08a72d1c	function	Vex_CollectNodesOfClass	88	clouds.md
+
+||||||| e28c9c3a
+
+=======
+
+
+>>>>>>> main

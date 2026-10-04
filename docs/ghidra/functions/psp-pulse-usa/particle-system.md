@@ -1578,12 +1578,14 @@ ours started 13.6 units out and collapsed by update 20.
 
 **`Repulser_AdvanceWave` rescales its wave's extent.** Confidence **85**, read in the
 listing at `0x08877000..0x0887702c`. It reads the `WO_REPULSER` instance's co-factor
-block (`FUN_088f443c`), sets slot 1 (`+0x2c`, the extent co-factor) to
-`|current - previous| / 100` (the wave's step length, `0x42c8` being `100.0`), and
-writes the block back (`FUN_088f44d8`, which re-derives and recurses into the
-children). This is the Quake's mechanism with a different input. It is not played: the
-root's shape 8 is unread, so ours spawns it at the anchor. No other slot is written
-there; in particular the alpha scale `+0x40` is untouched.
+block (`FUN_088f443c`), sets slot 1 (`+0x2c`, the extent co-factor) to a length over
+`100` (`0x42c8` being `100.0`), and writes the block back (`FUN_088f44d8`, which
+re-derives and recurses into the children). This is the Quake's mechanism with a
+different input. No other slot is written there; in particular the alpha scale `+0x40`
+is untouched. **Corrected 2026-10-04 (pulse-psys-shape8): the length is the track's
+width, not the wave's step.** This page first said `|current - previous|`; the register
+flow says otherwise and a live read agrees - see "Shape 8, the class-6 bar and the
+wave's width" below.
 
 **The wave-start whiteout is `WO_REPULSER`, not the blast and not the flash.**
 With the two wave effects withheld, update 49 shows the original's blue tint (flash
@@ -1610,3 +1612,138 @@ position, size and aspect, and the root pool.
 | `0x088f4498` | `ParticleSystem_SetMatrix` | 92 |
 | `0x088f3174` | `ParticleSystem_AllocInstance` | 75 |
 
+
+## Shape 8, the class-6 bar and the wave's width (2026-10-04, pulse-psys-shape8)
+
+Read for `WO_REPULSER`, the only shape-8 emitter on the PSP disc (render mode 5, class 6,
+aspect `0.05`, flags `0x06100099`, extent `50`, two particles an emission, life 24 ticks).
+Every law below was read in the listing and then measured on PPSSPP 1.20.4 (software
+renderer, Talon's Junction Time Trial, a Repulser fired through the fire word): memory
+sampled at `Repulser_Update` (`data/scratch/pulse-psys-shape8/live1.jsonl`) and three
+GE frame dumps (`ge/`, `ge-s1/`, `ge-s2/`). Played by `oag_render::psys` since this
+change.
+
+### `ParticleSystem_EmitHalfRing` (`0x088fcb10`): shape 8 is half of shape 3
+
+`ParticleSystem_SpawnBurst` sends shape 8 to `0x088fcb10`. Its disassembly is
+`ParticleSystem_EmitRing`'s (`0x088fc634`) instruction for instruction except two
+`lui` immediates: `0x4049` (`pi`) where the ring has `0x40c9` (`2 pi`), at `0x088fcb88`
+(the even step's start `U(0, pi)` and step `pi / count` under flag `0x200000`) and at
+`0x088fcc64` (the per-particle `phi = U(0, pi)`). So the offset is `(r cos phi, 0,
+r sin phi)` with `phi` in `[0, pi]`: the half of the ring on the instance frame's `+Z`
+side. Radius modes `1` and `2` and the velocity dispatch are the ring's; mode `2`
+(the disc) never reads `phi`, so it stays a whole disc. No shape-8 emitter carries
+`0x200000`, so the `pi / count` step is read but has no carrier.
+
+**Measured.** Every particle born on a dumped update (updates 48, 49 and 50, both
+waves, 12 particles) sits at local `y = 0`, radius `20.03..20.06` = `50 * +0x2c` to
+two decimals, and local `z` between `0.40` and `19.99`, never negative
+(`shape8-live.txt`). Confidence **92**.
+
+### `Repulser_AdvanceWave` sets `+0x2c` to the track's width over 100
+
+At `0x08876fc0` the function loads `C300` from `s1 = sp+0x50` and `C310` from
+`sp+0x4e0`, a copy of `sp+0x60`. `sp+0x50` is `pos - lateral * point+0x44` (stored at
+`0x08876cbc`) and `sp+0x60` is `pos + lateral * point+0x48` (`0x08876d24`): the two
+track edges whose midpoint is the wave's translation. `vsub.q`, `vdot.t`, `vsqrt.s`,
+then `div.s` by `100.0` into slot 1. Neither register is rewritten in between. So the
+root's `50` becomes **half the track's width**, and the half ring spans it edge to edge.
+Live: `+0x2c` read `0.395..0.401` on both waves at Talon's Junction's start, where the
+forward wave stepped about 30 units an update (a step would read `0.30`). Confidence
+**92**.
+
+The matrix it builds (`local_40`) has `Y` the negated `down`, `Z = -(across x up)` for
+direction `0` and `across x up` for direction `1`, both normalised, then `X = Y x Z`.
+Under [track.md](../../../formats/track.md)'s handedness (`left x up = forward`) that is
+`Z` = **the wave's travel** on both waves, measured: the forward wave's `Z` read
+`(1.0, 0.003, -0.003)` while it moved `+x`, the backward wave's `(-1.0, ...)` while it
+moved `-x`. So the half ring bows ahead of each wave.
+
+### `ParticleSystem_DrawPoolBars` (`0x08917c7c`): an emitter's class 6 is a bar
+
+`ParticleSystem_DrawEmitterPool`'s index `5` (class 6) sets the view matrix to
+`DAT_08af2860` (`0.125` on the diagonal, undoing the `x8` below) and calls
+`0x08917c7c(instance, matrix, atlas table)`. Per live particle:
+
+1. `A = M * (particle+0x40)`, `B = M * (particle+0x50)`. Skipped if either `z > -1`
+   (`DAT_08a88500`); **no** near fade (the square draw has one, this has not).
+2. Under `res+0x20 & 0x3000000 == 0` and `DAT_08ab0628 == 0`, `B` is instead the
+   particle's `+0x60`: last drawn frame's reprojected `A`, seeded with this frame's `A`
+   (bit `4` of `+0x81`) and written back after the draw. **Read, not played**: ours
+   keeps the previous tick's world position. Its carriers are the class-6 emitters
+   with neither `0x1000000` nor `0x2000000`: `WO_CANNON_SPARKS`' `plasma_goo`,
+   `WO_MISSILE_HEAD`'s `trail`, `WO_PLASMA_HEAD`'s `plasma_spikes`, and the `bits` of
+   the four collision-spark systems. `DAT_08ab0628` has twenty readers (cameras, the
+   LeachBeam, `Trail_DrawRibbon`) and one writer (`FUN_0889683c`); a pause or
+   replay latch is the guess, below 50, unnamed.
+3. `zm = (A.z + B.z) / 2`, and both ends are scaled by `zm / z` onto that depth: the
+   same screen points, one depth (the template streak takes the farther, `min(z)`).
+4. `d = normalize(B.xy - A.xy)`, `(0, 1)` at zero length; `n = (d.y, -d.x) * size`
+   (`+0x70`), `a = d * size * aspect` (`res+0x4c8`, `vscl.p C400, C400, S701` at
+   `0x08917f7c`).
+5. Four strip vertices `A - a - n`, `A - a + n`, `B + a - n`, `B + a + n`, colour
+   `+0x74` as is, UV words from the atlas table: `u` 1 on the `-n` edge, `v` 0 at `A`.
+   Positions go out as `s16` at `x8` (`vf2in.q ..., 0x13` then `vi2s.q`), vertex type
+   `0x11e`, one `GU_TRIANGLE_STRIP` of `6n - 2` with the degenerate joins.
+
+So it is a **rectangle** end to end, `2 size` wide, reaching `aspect * size` past each
+end - not `ParticleSystem_DrawStreak`'s wedge, which is the template path only. No PSP
+template is class 6 (`pob_shape8_census`), so every class-6 particle on the disc is a
+bar. A particle that has not moved is `2 size` across and `2 aspect size` tall:
+`WO_REPULSER`'s `0.05` makes it a thin horizontal sliver, which is the original's
+streak where ours drew a white square.
+
+**Measured.** The class-6 dispatch was hit live for both `WO_REPULSER` instances every
+frame (breakpoint on `0x08917c7c`). In the GE dump, the one-particle draw (`ci 4453`,
+vertex type `0x11e`, 4 vertices) decodes to `(4.25, -0.25)`, `(-26.25, -3.0)`,
+`(4.375, -2.25)`, `(-26.0, -5.0)` at one depth `-12.125`, UVs `(1, .25)`, `(.75, .25)`,
+`(1, .5)`, `(.75, .5)` (a 4x4 atlas cell), colour `ffebf5cc` - the sampled
+particle's - so the width is `30.6 = 2 x 15.3`, the corner and UV order is the one
+above, and the perpendicular's sign is `(d.y, -d.x)` (`class6-live.txt`). Confidence
+**90**.
+
+### `ParticleSystem_BuildAtlasTable` (`0x08917358`)
+
+`(table, columns, rows)`, cached per grid in the list at `DAT_08ab225c`, `0x30` bytes a
+cell out of `DAT_08b33050`: `+0x0..+0xc` the floats `u0, v0, u1, v1`; `+0x10` `(u0, v1)`,
+`+0x14` `(u0, v0)`, `+0x18` `(u1, v1)`, `+0x1c` `(u1, v0)` as `u16` pairs scaled by
+`32767`, `u` in the low half; `+0x20` `(u0, vmid)` and `+0x24` `(u1, vmid)`, the class-7
+middle row. The square draw reads the floats, the bar the packed words. Read in full;
+the UVs in the dump are this table's. Confidence **88**.
+
+### What is still not the original's: the `shazzam` bar at the wave's start
+
+Ours still whites out the screen for one frame as the waves start. The GE dumps settle
+what the original submits there and leave why it shows nothing half-open:
+
+- At the first wave frame both `WO_REPULSER` templates (`shazzam`, size `20`, `+0x64`
+  `6.0`, colour `ffffffff`, life 10) **are drawn**: two vertex-type `0x19f` quads,
+  `x -112.8..127.2`, `y -23.7..16.3`, at view depth `-3.5` (`ci 4444`, `4462`). With
+  the frame's projection (`0.981`, `1.732`) and viewport (scale `240, -136` about
+  `2048`), their corners land at screen `x -7654..8634`, `y -1107..1608` pixels from
+  the centre. The GE's coordinate space is 4096 wide, so `+-2048` about the centre.
+  **Hypothesis, confidence 65**: the GE drops a primitive with a vertex outside that
+  range rather than clipping it, and that is why the original shows only the flash's
+  blue there. Not implemented: no in-range shazzam was caught to show the band drawing
+  when the vertices fit.
+- On the next two dumps only **one** shazzam is submitted (depth `-1.8`, then `-3.3`),
+  still out of range. The other wave's, which by then is tens of units ahead, is not
+  submitted at all, although `ParticleSystem_DrawParticle`'s only test is `z <= -1`
+  and the template list is non-empty at draw time. Unexplained.
+- Breakpoints on `ParticleSystem_DrawParticle` (`0x089186bc`), on its call site
+  `0x08917870`, and on `ParticleSystem_DrawRotatedSprite` (`0x08916610`) never fired
+  while the GE dumps show the quads drawn - today's trap again. A breakpoint at
+  `0x08917864`, a block start, did fire.
+
+The next step is a GE dump a few updates later, when the wave is 15 to 40 units out and
+the quad fits in `+-2048`: if the PSP draws a band there, the guard-band cull is the law.
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x088fcb10` | `ParticleSystem_EmitHalfRing` | 92 |
+| `0x08917c7c` | `ParticleSystem_DrawPoolBars` | 90 |
+| `0x08917358` | `ParticleSystem_BuildAtlasTable` | 88 |
+
+**Next address.** The class-7 pool draw, `FUN_08918160`, is to class 7 what this is
+to class 6, and ours plays the template routine's capped bar for it. It reads
+`DAT_08ab0628` too, so it probably has the same `+0x60` end. Unread.
