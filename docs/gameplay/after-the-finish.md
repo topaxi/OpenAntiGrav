@@ -24,7 +24,7 @@ the frame on every row marked `*`, except the throttle step, which reads `F+2`, 
 | --- | --- | --- |
 | `F` | `Craft_UpdateLapProgress` sets `finished`; the same frame `FUN_088418e0` calls `Ship_SetState(entity, 2)` on a craft in state 1 (`craft+0x2a4` reads 2). A craft does this at **its own** crossing, so the field finishes one by one | `*` |
 | `F+1` | the race manager's mode state goes `2 -> 3` (`ArcadeRace_UpdateRacing`: `Hud_Hide`, `Race_BuildEndRaceResult`, `RaceMode_SetState(3)`) and the **HUD is hidden** (`g_hud+0x168 = 1`). The craft's control record pointer (`craft+0x78`) moves from the pad's record to the blend buffer at `craft+0x44`: the AI now flies it | `*` |
-| `F+1 .. F+6` | the AI's throttle reads `100` for one to six frames, then **`56.7`** and stays there for the rest of the log (35 s, a whole lap and more); the steer swings `+-10..50` as a follower's does | `*` |
+| `F+1 .. F+6` | the AI's throttle reads `100` for one to six frames, then **`56.7`** and stays there for most of the log (35 s, a whole lap and more; late in `sr-noinput` it rose to `63.7` and `72.5`, the law's clamp letting go, [below](#the-throttle-is-the-ais-position-balancing-law-run-on-the-players-own-place)); the steer swings `+-10..50` as a follower's does | `*` |
 | `F+61` | the camera object (`0x08b32c64`) is given a subject, the player's craft, and node mode `7` | `*` (four captures, to the frame) |
 | `F+61` | the front end enters **`Race End Photo`** (state name read every frame on a fresh capture: `InGame` through `F+60`, `Race End Photo` from `F+61`, the same frame the spectator camera starts). The screen is `InGame_Definition.xml`'s, two `Stats`-font texts with nothing behind them: `PRESS SELECT BUTTON FOR PHOTO MODE` over `PRESS ε TO CONTINUE` (ε is the cross button's glyph in that font), left-aligned at x = 20, y = 212 and 242. **The legend fades in linearly from `F+62` to full ink at about `F+104`** (42 frames, 0.7 s; a photograph every second frame, two text lines, two-frame photograph lag allowed for). X leaves for `EndRace Results`, then `Rewards`, then `Menu` | `*` (state flip: four captures bracket it to `F+50..59 -> F+80..89`, the fifth pins it to `F+61`) |
 | every 600 frames | the subject is re-picked: a random live craft other than the previous one (`F+661`, `F+1261`, ...). Time Trial has one craft, so it stays the player | `*` |
@@ -47,14 +47,22 @@ that reads `0.0` through the 40 frames the pad flew the craft and **`1.0` on fra
 `Ship_UpdateCraft` copies the AI's record (`craft+0x40`) over the blend buffer. The same mechanism flies the Autopilot pickup, with the weight
 running down in the pickup's last second.
 
-### The throttle is not the AI's racing throttle, and its source is not found
+### The throttle is the AI's position-balancing law, run on the player's own place
 
-The finished player's throttle is a constant `56.7` (percent of full) against `100` for the Autopilot
-pickup on the same circuit and `75-112` for opponents. Opponents' own post-finish values are
-constants too (`84.3`, `100`, `111.9`), which reads as a per-craft, rank-balanced value
-(`AI_ComputeOpponentThrust`, player-coupled). Whether `56.7` is the rank-1 value, the player's AI
-tuning or something else is **open**: two captures are both rank 1 (a Time Trial, and a Single Race the
-pickup won). Nothing was ported from it; see [what ours does](#what-ours-does).
+**Found and measured 2026-10-04** ([race-finish.md](../ghidra/functions/psp-pulse-usa/race-finish.md#the-finished-players-thrust-ai_computeopponentthrust-with-the-players-own-rank-2026-10-04),
+confidence 90). The finished player's driver writes `100` until the racer record's copy of `finished` is set on `F+1`,
+then `AI_ComputeOpponentThrust`, the same law the opponents race on, indexed by the player's own finishing place `r`.
+For the finished player the law sits on its lower stop:
+
+```text
+thrust = off + (0.7 * AIThrust[r] - AIThrust[1]) * mul + AIThrust[1]
+```
+
+`AIThrust` is the race's speed class's `PlayerInPos1..8` row (`AIRaceStats_<class>.xml`), `off` and `mul` the class's
+`SkillScale` `ThrustOffset`/`ThrustMultiplier` at the race's skill scale. Venom, Easy, Talon's Junction: skill `0.9`,
+`off = -7.7`, so **first place `56.7`, fourth `56.0`**, both read live. It is **rank-dependent, and lower places do not drive
+faster**: the player aims about 250 units behind the craft one place ahead and the clamp holds it at 70 % of its place's
+`AIThrust`. The opponents' post-finish constants are the same law (`84.3`, `83.3`, `111.9`, `100`).
 
 ## What ours does
 
@@ -123,8 +131,8 @@ Eliminator are not part of the decision and keep their old endings. Seen in a wi
 
 - **A player's craft shot down after the finish.** Ours: an AI-flown craft that is destroyed is a wreck that never respawns (the world runs on, the race stays finished), and the spectator camera is checked before the destroy camera in `Race::view_unshaken`, so it stays on its node view where the original would be expected to switch to mode 5. Unmeasured.
 - **The engine voice** spins down under the panels while the craft is still flying at about 130 u/s: audio after the flag was not measured, so ours keeps its pre-existing finished-race behaviour.
-- What produces the `56.7` throttle, and whether it is rank-dependent. Measure a Single Race the player
-  finishes **not** first.
+- The finished player's thrust **when the clamp lets go** (more than about 195 units behind its target): it needs the
+  opponents' `spread` values (`FUN_08852ef4`), which this port does not model.
 - **What ends a wrecked player's race in the original** ([above](#a-player-wreck-never-reaches-race-end-photo)): unread; ours leaves by the legend
   and the panels as the maintainer decided. The Eliminator and Zone endings were not looked at; ours puts the panels up at once for both.
 - **Photo mode** (`SELECT` on `Race End Photo`): not built; `Race End Photo Redirect`'s `forward="select"` goes to `InGame Photo`.
@@ -155,11 +163,12 @@ and the photographs beside them (gitignored).
 | --- | --- | --- |
 | `sr-test` | Single Race, pickup autopilot throughout | finish `F`; craft laps on for 2,100 frames; opponents finish `F+107..F+375` |
 | `sr-noinput` | Single Race, pickup off and pad released 43 frames before the line | same, control record zero until `F`, the AI's from `F+1` |
-| `tt-noinput` | Time Trial, the same | same, `56.7` from `F+2` |
+| `tt-noinput` | Time Trial, the same | same, `56.7` from `F+2` (no place-2 craft: the law's `ref` is missing, `gap` is minus the craft's own progress, the lower stop) |
 | `tt-stock` | Time Trial, **stock three laps**, the same | finish on the fourth crossing; `craft+0x1d4` `0.0 -> 1.0` on `F`; `56.7` from `F+7`; 3,519 units in 35 s |
 | `probe-setstate` | `Ship_SetState` calls | every `(entity, 2)` comes from `0x08841ab8`, the player's first |
 | `probe-scale` | writes to `craft+0x1d4` | `0x08848664` from `0x08841b28` (every frame) and `0x0883bf34` (`PlayerStatus_Update`) |
+| `sr-back` (2026-10-04) | Single Race, the player left on the grid for 300 frames after GO (`--hold-back`), then the pickup | finishes **4th**; thrust `100` to `F+1`, `56.0` from `F+2`; the racer records and the player's driver logged every frame |
 | `probe-ctl` | writes to the pad record | `PlayerInput_Update` (`0x0883c870`) at its three stores, a frame after the flag the pad record is no longer what the craft reads |
 
 Single boots each for the probes; the four timeline captures agree with each other on every starred
-row. Not run: a second circuit, a Single Race the player finishes other than first.
+row. Not run: a second circuit, a second speed class or difficulty.

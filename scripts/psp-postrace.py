@@ -205,6 +205,7 @@ def craft_row(dbg, entity, full):
     }
     if ram(ctl):
         row["ctl"] = list(f32s(dbg, ctl, 5))
+    row["ai_driver"] = driver_row(dbg, craft)
     if ram(body):
         row["pos"] = list(f32s(dbg, body + 0x30, 3))
         row["vel"] = list(f32s(dbg, body + 0x140, 3))
@@ -220,6 +221,47 @@ def craft_row(dbg, entity, full):
         row["best_cs"] = u32s(dbg, entity + 0x92C, 2)
         row["lap_times"] = list(u32s(dbg, entity + 0x934, 6))
     return row
+
+
+RACER_RECORDS = 0x08B34420
+RACER_STRIDE = 0x370
+PLAYER_RECORD_PTR = 0x08B34410
+PLAYER_ENTITY_PTR = 0x08B34418
+SPEED_CLASS = 0x08B31040
+
+
+def racer_rows(dbg, count):
+    """The AI's per-racer records (`AI_ComputeOpponentThrust` reads them) and the AI drivers.
+
+    Record `+0x00` the entity, `+0x80..0x82` three flags (`+0x82` gates the finished player's
+    computed thrust), `+0x240` track progress, `+0x344` rank, `+0x360` "AI writes thrust".
+    """
+    rows = []
+    for i in range(count):
+        base = RACER_RECORDS + i * RACER_STRIDE
+        rows.append({
+            "record": base,
+            "entity": dbg.read_u32(base),
+            "flags80": list(dbg.read(base + 0x80, 3)),
+            "progress": f32s(dbg, base + 0x240, 1)[0],
+            "rank": dbg.read_u32(base + 0x344),
+            "ai_thrust_on": dbg.read_u8(base + 0x360),
+        })
+    return {"player_record": dbg.read_u32(PLAYER_RECORD_PTR),
+            "player_entity": dbg.read_u32(PLAYER_ENTITY_PTR),
+            "speed_class": dbg.read_u32(SPEED_CLASS), "racers": rows}
+
+
+def driver_row(dbg, craft):
+    """The AI driver behind `craft+0x40` (its control record is the driver's `+0x08`)."""
+    driver = dbg.read_u32(craft + 0x40) - 8
+    if not ram(driver):
+        return None
+    words = u32s(dbg, driver, 0x52)
+    floats = struct.unpack("<%df" % 0x52, struct.pack("<%dI" % 0x52, *words))
+    return {"driver": driver, "record": words[0], "entity": words[1],
+            "ctl": list(floats[2:6]), "spread": floats[0x1D], "gap": floats[0x27],
+            "is_player": dbg.read_u8(driver + 0xA8), "class_block": words[0x4E]}
 
 
 def manager_row(dbg, manager):
@@ -283,6 +325,9 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--arm-after", type=int, default=60,
                         help="arm the autopilot this many frames after GO")
+    parser.add_argument("--hold-back", action="store_true",
+                        help="release thrust at GO and leave the player on the grid until "
+                        "--arm-after, so it finishes behind the field (a not-first finish)")
     parser.add_argument("--laps-hack", type=int, help="write g_race_laps (a shortcut, said so in the log)")
     parser.add_argument("--no-restart", action="store_true")
     parser.add_argument("--disarm-x", type=float,
@@ -348,6 +393,9 @@ def main():
                 if go is None and throttle > 0.0:
                     go = frame
                     print("GO at stop frame %d" % go, file=sys.stderr)
+                    if args.hold_back:
+                        dbg.hold(cross=False)
+                        log["events"].append({"frame": frame, "held_back_from_go": True})
                 if go is not None and frame - go >= args.arm_after:
                     if args.laps_hack:
                         dbg.write_u32(G_RACE_LAPS, args.laps_hack)
@@ -416,7 +464,8 @@ def main():
                 crafts.append(craft_row(dbg, entity, full) if ram(entity) else None)
             ticks = dbg.call("cpu.status")["ticks"]
             row = {"frame": frame, "cycle_frame": int(ticks / CYCLES_PER_FRAME),
-                   "player_entity": player, "mgr": manager_row(dbg, manager), "crafts": crafts}
+                   "player_entity": player, "mgr": manager_row(dbg, manager), "crafts": crafts,
+                   "racers": racer_rows(dbg, min(n, 8))}
             if frame % args.state_every == 0:
                 state = dbg.state_name()
                 row["ui_state"] = state

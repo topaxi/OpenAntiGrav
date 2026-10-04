@@ -43,6 +43,84 @@ mode flag it sets (`manager+0x1a78`) read `0` through every capture; the player'
 real finish is the per-craft rule above. The function and its names stand (confidence unchanged); what is
 corrected is that nothing in these modes reaches it.
 
+## The finished player's thrust: `AI_ComputeOpponentThrust` with the player's own rank (2026-10-04)
+
+**Found and measured 2026-10-04 (lane `pulse-postfinish`).** The `56.7` the previous captures read is not a
+constant of its own: it is the AI's position-balancing thrust law run on the player's own driver, with the
+player's finishing place as the index. Confidence **90** for the law as stated below (decompile plus three live
+runs at two finishing places, every constant they show reproduced to 0.1), **80** for `+0x82` being the
+racer record's copy of `finished`.
+
+| Address | Name | Confidence | What it is |
+| --- | --- | --- | --- |
+| `0x08853a80` | `Ai_Update` | (already named) | per-driver update. Sets the driver's `+0xa8` byte to `1` when its craft is the player (`DAT_08b34418 == driver[1]`), then calls `0x08855dc4` |
+| `0x08855dc4` | `Ai_ComputeControls` | 75 | the driver's control record for this frame: steer (`out+8`), airbrakes (`out+0x10`, `+0x14`) and thrust (`out+4`). Thrust defaults to **`100`**; if the racer record's `+0x360` is set it calls `AI_ComputeOpponentThrust` **unless** the driver is the player's (`+0xa8`) and the racer record's `+0x82` is clear. Only the thrust branch is read |
+| `0x08855904` | `AI_ComputeOpponentThrust` | 82 (unchanged) | the law below. **It also drives the finished player**, which is new |
+
+The racer records are `0x08b34420 + i * 0x370`: `+0x00` the entity, `+0x80/0x81/0x82` three bytes that read
+`started`, a one-frame `crossed` pulse and `finished` one frame after the entity's own `+0x910..0x912` (watched:
+the player's `+0x82` goes `0 -> 1` on `F+1`, every opponent's on its own crossing), `+0x240` track progress,
+`+0x344` the place. `DAT_08b34410` points at the player's record, `DAT_08b34418` holds the player's entity.
+
+So the player's driver writes `100` until `+0x82` is set on `F+1`, and the law from `F+2`: the `100` for one to six
+frames and the step on `F+2..F+7` the four 2026-10-01 captures saw.
+
+### The law, as it reads for a craft whose `+0x82` is set
+
+```text
+A[]      = AIThrust of the race's speed class (AIRaceStats_<class>.xml, PlayerInPos1..8), A0 = A[0]
+(off, mul) = lerp over the class's SkillScalePoint1..3 at AI_ResolveSkillScale()   // ThrustOffset, ThrustMultiplier
+r        = the PLAYER's place (DAT_08b34410 + 0x344, 1-based)
+ref      = the racer whose place is r - 1 (the craft one place ahead); the place-2 racer when r == 1
+gap      = ref.progress + (own.spread - ref.spread) * 50 - own.progress    // spread: driver +0x74
+step     = clamp(gap * max(2 - 0.08 * race_time, 0.5), -0.3 * A[r-1], +0.3 * A[r-1])
+thrust   = off + (A[r-1] + step - A0) * mul + A0
+thrust   = min(thrust, 100)   if race_time > 20 and |own.progress - player.progress| < 350
+thrust   = max(thrust, 1)
+```
+
+With `+0x82` set the spread multiplier is the constant `50` and the field loop that finds the nearest craft ahead
+and behind includes the craft itself, so both rubber-band terms come out zero (`WhenLeading`/`WhenBehind` need a
+gap over `150`). Every craft indexes `A[]` and picks `ref` by **the player's** place, opponents included; that is
+the player coupling [`ai-stats.md`](ai-stats.md#the-skillscale-consumer-ai_computeopponentthrust) already records.
+
+**For the finished player `step` sits on its lower stop**: `ref.spread` reads about `5` (the gap logged at `F+2`
+was `-240.5` with the craft ahead only 10 units away), so the player aims about 250 units behind the craft ahead
+and lands on `-0.3 * A[r-1]`. The finished player's thrust is then
+
+```text
+thrust = off + (0.7 * A[r-1] - A0) * mul + A0
+```
+
+until it falls about 195 units behind its target, when the clamp lets go and the thrust rises a little.
+
+### The measurements
+
+Venom, Talon's Junction, Single Race, `g_skill_level = 0` (Easy). Read live off the running race: `A = 92, 92, 91, 91,
+90, 90, 89, 89`, `SkillScalePoint1..3` `ThrustOffset` `-7, 0, 6`, `ThrustMultiplier` `1, 1, 1`; `AI_ResolveSkillScale`'s
+inputs `SkillScaleValue[Venom][Easy] = 0.9` (16_Track's `stats.xml`), mode 3 (Race), weapons on, eight crafts, so
+`+ FullGridWithWeapons = 0.0` and no campaign cell: **skill `0.9`**, below Point1, so the lerp extrapolates:
+`off = -7 * 1.1 + 0 * -0.1 = -7.7`, `mul = 1`.
+
+| Run | Place | Predicted | Read |
+| --- | --- | --- | --- |
+| `sr-test`, `sr-noinput` (2026-10-01) | player 1st | `-7.7 + 0.7 * 92 = 56.7` | `56.7` |
+| `sr-back` (2026-10-04, `--hold-back`) | player **4th** | `-7.7 + 0.7 * 91 = 56.0` | **`56.0`** on 1,241 of 1,497 frames from `F+3`; the rest `56.1..60.4` as the clamp lets go (`F+1140`: gap `-51.8`, `-7.7 + 91 - 25.9 = 57.4`, read `57.38`) |
+| `sr-test` | an opponent at place 2 when the player won: its own `ref`, `gap = 0` | `-7.7 + 92 = 84.3` | `84.3` |
+| `sr-back` | the opponent at place 3, the 4th-placed player's `ref`, `gap = 0` | `-7.7 + 91 = 83.3` | `83.3` |
+| `sr-test`, `sr-noinput` | opponents behind the place-2 craft, far from the player | `-7.7 + 1.3 * 92 = 111.9` | `111.9` |
+| `sr-test` | the same, within 350 of the player after 20 s | `min(.., 100)` | `100.0` |
+
+The prediction written before the `sr-back` run was `100` flat for a not-first finish (the positive stop, `ref` ahead);
+it **failed**, and the reason is `ref.spread`, which puts the target behind `ref` rather than on it. The place is the
+finishing place and stays put: the player's `+0x344` read `4` for all 25 s although three crafts passed it on progress.
+Capture: `scripts/psp-postrace.py --hold-back --arm-after 300 --laps-hack 1`, which also logs the racer records and the
+player's driver now; `data/scratch/pulse-postfinish/sr-back/log.json`.
+
+**Not read**: the `spread` value's own law (`FUN_08852ef4`, a random wander between per-driver bounds, not renamed),
+so the unsaturated regime cannot be reproduced without the opponents' spreads; the steering half of
+`Ai_ComputeControls`.
+
 ## The mode state and the HUD
 
 `ArcadeRace_UpdateRacing` (`0x0882c5c4`, [shield.md](shield.md)) tests `player.flags & 0x1000 \|\| Ship_State(player) == 2`, then

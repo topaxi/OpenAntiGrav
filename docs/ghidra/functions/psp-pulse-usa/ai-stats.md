@@ -279,6 +279,13 @@ curve, and `oag_ai::Difficulty::tune_at_scale` is this project's own
 mean for its own four-axis AI - see `crates/tables/src/track_stats.rs` and
 `crates/ai/src/difficulty.rs`.
 
+**It also flies the finished player** (2026-10-04, measured): once the racer record's `+0x82` (`finished`)
+is set, the player's own driver runs this law with spread `50` and no rubber band, and the `56.7` the
+post-finish captures read is `ThrustOffset + 0.7 * AIThrust[place]` at skill `0.9`. Read live off the
+running race, the per-class block holds exactly the shipped `AIThrust` and `SkillScale` rows, the first
+runtime leg this page's layout has. See
+[race-finish.md](race-finish.md#the-finished-players-thrust-ai_computeopponentthrust-with-the-players-own-rank-2026-10-04).
+
 `AI_InterpolateThrustPoint` (`0x08852d14`) and `AI_InterpolateSkillScale`
 (`0x088347b8`, `AI_ResolveSkillScale`'s own helper) are the same one-line
 lerp (`a*(1-t) + t*b`), confidence 95 each - unambiguous decompile, no second
