@@ -213,5 +213,38 @@ pub fn advance(
     launch.ticks = launch.ticks.saturating_add(1);
 }
 
+/// Whether a driver that wants the perfect grade should keep its thrust off
+/// this tick: the craft has not thrust yet and the grader's clock has not
+/// reached the perfect window.
+///
+/// The player's law, timed from inside it, for a driver that is not a person:
+/// the first thrust lands on the first tick whose grader clock - the same
+/// `(ticks - 1) * dt` [`advance`] grades on - is at or past `window_start`. A
+/// thrust on the release tick itself (`ticks == 0`) would latch the edge with
+/// nothing graded, so that tick is held too. `false` once the edge is latched,
+/// before the release, and with no `params`: nothing to time.
+///
+/// **Chosen, not measured.** The original's AI does not thrust its way into
+/// the window at all: `Race_UpdateLaunchGrade` hands every non-human craft a
+/// grade of its own with no edge, at `boostMul` times a per-grid-slot figure
+/// (`docs/ghidra/functions/psp-pulse-usa/perfect-start.md`, confidence 85).
+/// That is a multiplier no player can earn, so this project's AI earns the
+/// player's perfect grade instead.
+#[must_use]
+pub fn holds_first_thrust(
+    launch: &LaunchState,
+    params: Option<&StartBoost>,
+    released: bool,
+    dt: f32,
+) -> bool {
+    let Some(p) = params else {
+        return false;
+    };
+    if !released || launch.latched {
+        return false;
+    }
+    launch.ticks == 0 || ((launch.ticks - 1) as f32 * dt) < p.window_start
+}
+
 #[cfg(test)]
 mod tests;

@@ -267,3 +267,45 @@ fn only_a_perfect_start_fires_the_flare_and_turbo() {
         }
     }
 }
+
+/// The field earns the perfect grade the player's way: every opponent holds its
+/// first thrust to the perfect window (`oag_physics::launch::holds_first_thrust`,
+/// chosen, not measured - the original's AI gets a grade of its own with no
+/// thrust edge, `perfect-start.md`), and a parked player is untouched. Fails if
+/// the hold is dropped: the field then thrusts on the first racing frame and is
+/// graded stall.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_field_times_its_first_thrust_into_the_perfect_window() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        track: Some(TRACK.to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        opponents: true,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    for _ in 0..COUNTDOWN_TICKS + 120 {
+        race.tick(&PlayerInputs::single(held(false)));
+    }
+    let world = &race.sim.world;
+    assert!(world.ship_count > 1, "a field to grade");
+    for slot in 1..world.ship_count as usize {
+        let launch = world.ships[slot].physics.launch;
+        assert!(launch.latched, "slot {slot} never thrust");
+        assert_eq!(
+            launch.grade,
+            oag_physics::launch::Grade::Perfect,
+            "slot {slot}"
+        );
+    }
+    assert!(
+        !world.ships[0].physics.launch.latched,
+        "the player never thrust"
+    );
+}

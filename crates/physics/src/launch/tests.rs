@@ -239,3 +239,28 @@ mod wired {
         );
     }
 }
+
+/// A driver that thrusts whenever [`holds_first_thrust`] lets it, from the
+/// release on, earns the perfect grade; the same driver ungated (thrusting from
+/// the first racing frame, as the countdown gate first lets it) is graded
+/// stall. The falsifier is the second half.
+#[test]
+fn holding_the_first_thrust_to_the_window_earns_the_perfect_grade() {
+    let mut timed = LaunchState::default();
+    let mut eager = LaunchState::default();
+    for tick in 0..120 {
+        let thrust = !holds_first_thrust(&timed, Some(&P), true, DT);
+        advance(&mut timed, Some(&P), true, thrust, DT);
+        advance(&mut eager, Some(&P), true, tick >= 1, DT);
+    }
+    assert_eq!(timed.grade, Grade::Perfect);
+    assert_eq!(eager.grade, Grade::Stall);
+    assert!(!holds_first_thrust(&timed, Some(&P), true, DT), "latched");
+    assert!(!holds_first_thrust(&LaunchState::default(), None, true, DT));
+    assert!(!holds_first_thrust(
+        &LaunchState::default(),
+        Some(&P),
+        false,
+        DT
+    ));
+}

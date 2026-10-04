@@ -398,6 +398,23 @@ impl Race {
             if RaceState::thrust_gated(self.sim.world.tick) {
                 controls.thrust = 0.0;
             }
+            // And past it, the first thrust is timed into the launch boost's
+            // perfect window: the player's grade law, earned the player's way.
+            // The original hands its AI a grade of its own with no thrust
+            // edge (`Race_UpdateLaunchGrade`'s grade 3, perfect-start.md),
+            // which this project's AI does not get. Chosen, not measured; see
+            // `oag_physics::launch::holds_first_thrust`.
+            {
+                let physics = &self.sim.world.ships[slot].physics;
+                if oag_physics::launch::holds_first_thrust(
+                    &physics.launch,
+                    self.sim.start_boost.as_ref(),
+                    physics.released,
+                    self.sim.dt,
+                ) {
+                    controls.thrust = 0.0;
+                }
+            }
             // An Eliminator leader waits for the pack; only ever a reduction.
             controls.thrust *= self.eliminator_pack_scale(slot);
             // An opponent under a Disruptor: always AI-driven, so the Stall
