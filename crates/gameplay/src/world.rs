@@ -384,6 +384,14 @@ pub struct World {
     /// between two craft rather than a position and a velocity. Simulation
     /// state, so [`crate::hash::hash_world`] covers it.
     pub leach_beam: Option<crate::projectile::leach_beam::Beam>,
+    /// The live Repulsers, in pool order, `None` for a free slot.
+    ///
+    /// Sixteen, `Weapon_FireRepulser`'s own cap. Beside [`Self::quake`] rather
+    /// than in [`Self::projectiles`] for the Quake's reason: a Repulser walks the
+    /// track's own points and has no position or velocity of its own. See
+    /// `crate::projectile::repulser`. Covered by [`crate::hash::hash_world`].
+    pub repulsers:
+        [Option<crate::projectile::repulser::Repulser>; crate::projectile::repulser::POOL_SIZE],
 }
 
 impl World {
@@ -400,6 +408,7 @@ impl World {
             projectiles: crate::projectile::Projectiles::new(),
             quake: None,
             leach_beam: None,
+            repulsers: [None; crate::projectile::repulser::POOL_SIZE],
         }
     }
 

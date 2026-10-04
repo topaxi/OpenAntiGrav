@@ -69,6 +69,9 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         projectiles,
         quake,
         leach_beam,
+        // Hashed from the next commit, which regenerates the references for
+        // the longer stream on its own.
+        repulsers: _,
     } = world;
 
     hasher.write_u64(*tick);

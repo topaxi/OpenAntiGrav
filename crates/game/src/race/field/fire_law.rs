@@ -58,7 +58,10 @@ impl Race {
             | Weapon::Missile
             | Weapon::Plasma
             | Weapon::Shuriken
-            | Weapon::LeachBeam => true,
+            | Weapon::LeachBeam
+            // `WeaponAi_Update`'s switch puts id 11 with these, "ahead" and
+            // `+0x58` both set - `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`.
+            | Weapon::Repulser => true,
             // Flagged "ahead" and not aimed: fired on the roll alone.
             Weapon::Quake => false,
             _ => return false,

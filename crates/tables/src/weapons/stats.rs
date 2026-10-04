@@ -630,6 +630,29 @@ pub struct QuakeStats {
     pub slowdown_time: f32,
 }
 
+/// The Repulser's `<Stats>`, less the one attribute nothing consumes.
+///
+/// Offsets `+0x128`..`+0x140` on the active stats block, read off
+/// `WeaponStats_ParseRepulser` (`0x0880d58c`); see
+/// `docs/ghidra/functions/psp-pulse-usa/repulser.md`. `blastradius` is authored
+/// (`40` on both Pulse tables) and **spent nowhere** in the original, so it is
+/// not decoded - the same treatment the Bomb's `damageradius` gets.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct RepulserStats {
+    /// Energy paid back for absorbing it rather than firing it.
+    pub absorb: f32,
+    /// Energy a wave costs each craft it sweeps, once (`+0x128`).
+    pub damage: f32,
+    /// The shove a wave gives a craft it sweeps, with **no falloff** (`+0x130`).
+    pub blastforce: f32,
+    /// Seconds of slowdown a wave charges a craft it sweeps (`+0x134`).
+    pub slowdown_time: f32,
+    /// Seconds from the fire to the waves starting (`+0x13c`).
+    pub blast_time: f32,
+    /// Seconds the waves run for once they start (`+0x140`).
+    pub wave_time: f32,
+}
+
 /// The Bomb's `<Stats>`, less the two attributes nothing consumes.
 ///
 /// # The Bomb is the Mine one size up, and that is the shipped data's shape

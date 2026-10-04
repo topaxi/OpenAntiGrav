@@ -444,6 +444,10 @@ impl Race {
             if !fires || !self.fire_opponent_quake(slot) {
                 return;
             }
+        } else if weapon == oag_tables::weapons::Weapon::Repulser {
+            if !fires || !self.fire_repulser(slot) {
+                return;
+            }
         } else if weapon == oag_tables::weapons::Weapon::LeachBeam {
             if !fires || !self.fire_opponent_leach_beam(slot) {
                 return;

@@ -85,6 +85,7 @@ pub mod mine;
 pub mod missile;
 pub mod plasma;
 pub mod quake;
+pub mod repulser;
 mod rocket;
 pub mod shuriken;
 

@@ -37,6 +37,7 @@ mod mode_override;
 mod models;
 mod pads;
 mod reconcile;
+mod repulser;
 mod respawn;
 mod run_stats;
 mod scene;
@@ -613,6 +614,23 @@ fn one_quake_table() -> oag_tables::weapons::WeaponStats {
                slowdown_time="63"/></Weapon>
              <Pickupodds class="Venom">
                <Weapon type="Quake"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
+/// The Repulser's own fixture. Invented numbers, distinct from every other
+/// weapon's here, but for `blast_time`/`wave_time`, which are short so a test
+/// reaches the waves in a handful of ticks.
+fn one_repulser_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="100"/></Weapon>
+             <Weapon type="Repulser"><Stats blastforce="71" blastradius="72" absorb="73"
+               damage="74" slowdown_time="0.75" blast_time="0.1" wave_time="0.5"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Repulser"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>
            </WeaponStats>"#,
     )

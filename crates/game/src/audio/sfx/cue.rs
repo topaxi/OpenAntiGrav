@@ -639,6 +639,23 @@ pub enum Cue {
     /// rode the craft's. Held per **projectile slot**, at the blade's position,
     /// radius `300.0`.
     ShurikenTravel,
+    /// The Repulser firing: `REPULSOR`, `weapons.bnk` cue 33, five waveforms.
+    ///
+    /// `Repulser_Init` (`0x08875210`, confidence 84) plays it with
+    /// `Sound_Play(1.0, firer_emitter, ..)` on the emitter its caller passes -
+    /// the firing craft's own (`rec->node->+0x50`). Pushed by
+    /// `Race::fire_repulser` on the firer's slot. See
+    /// `docs/ghidra/functions/psp-pulse-usa/repulser.md`.
+    Repulsor,
+    /// A Repulser wave hitting a craft: `REPULSORHIT`, `weapons.bnk` cue 35.
+    ///
+    /// `Repulser_HitCraft` (`0x0886d254`, confidence 84) points the Repulser's
+    /// own emitter at the struck craft's node, sets its radius to `300.0`
+    /// (`0x43960000`) and plays this. **The cue authors no waveform** on either
+    /// PSP disc (`oag-wad sounds` lists commands `87..88` and zero waveforms,
+    /// the same as `CANNONEXPLSHIP`), so it is raised and plays silence - wired
+    /// for the day a disc that authors one is loaded, not invented over.
+    RepulsorHit,
     /// The start-of-race voice: `"ready"`, a timeline of several waveforms.
     ///
     /// `RaceMode_SetState` (`0x08827350`) plays it when it enters state 1, the
