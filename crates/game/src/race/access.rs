@@ -31,6 +31,12 @@ impl Race {
             .map(|level| self.view.flap_graphics.amount * level / 100.0)
     }
 
+    /// The team id the craft in `slot` flies, when the grid named one.
+    #[must_use]
+    pub fn slot_team(&self, slot: usize) -> Option<&str> {
+        self.view.slot_teams.get(slot).map(String::as_str)
+    }
+
     /// Which scheme this race is being driven with.
     #[must_use]
     pub fn control_scheme(&self) -> ControlScheme {

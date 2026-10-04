@@ -101,6 +101,7 @@ mod layers;
 mod repeating;
 mod track;
 mod travel;
+mod xfade;
 pub use announcer::{Announcer, ClassAnnouncer};
 pub use bank_name::BankName;
 use banks::load_named_cue;
@@ -112,6 +113,7 @@ pub use repeating::Playing;
 pub use track::TrackEmitters;
 pub(crate) use track::circuit_manifest;
 use travel::TravelVoices;
+pub use xfade::{Craft as XfadeCraft, Inputs as XfadeInputs, Team as XfadeTeam};
 
 /// The seed the effects generator starts from.
 ///
@@ -136,6 +138,10 @@ pub(super) struct SfxVoices {
     /// generator in slot order, so a `--dump-audio` capture of one race is the
     /// same capture twice.
     engines: [Engine; oag_gameplay::MAX_SHIPS],
+    /// HD's crossfaded engine, one per grid slot whose team has a table. Built
+    /// on the first tick from [`Banks::xfade_team`]; empty on a title that
+    /// plays `~ENGINE`. See [`xfade`].
+    xfade: [Option<XfadeCraft>; oag_gameplay::MAX_SHIPS],
     /// Where the ear was last tick, `mgr+0x70`: the doppler term is held off
     /// on a tick the listener jumped more than `oag_audio::LISTENER_JUMP`,
     /// which is a camera cut and not a velocity.
@@ -250,6 +256,11 @@ impl Audio {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
+                xfade: std::array::from_fn(|slot| {
+                    race.slot_team(slot)
+                        .and_then(|team| race.sounds().xfade_team(team))
+                        .map(XfadeCraft::new)
+                }),
                 last_listener: None,
                 sight: oag_race::sight::State::Absent,
                 repeating: repeating::Held::default(),
@@ -282,6 +293,14 @@ impl Audio {
             .replace(listener)
             .is_some_and(|previous| !listener.jumped_from(&previous));
         let craft = craft_positions(race);
+        // The local player's throttle, `0..=100`: what `Ship_UpdateEngineCrossfade`
+        // reads as `ctrl[+4]` for the craft whose role is zero.
+        let throttle = [race
+            .sim
+            .world
+            .ships
+            .first()
+            .map_or(0.0, |ship| ship.physics.thrust)];
         // An owned snapshot, the same shape `craft` is - `Projectile` is
         // `Copy` and the array is small, and copying it out avoids holding a
         // borrow of `race` across the mixer closure below. Read after
@@ -650,6 +669,33 @@ impl Audio {
                 );
             }
 
+            // HD's engine: the same craft, the same ears, a table instead of a
+            // held pitch law. See [`xfade`].
+            for (slot, craft_xfade) in voices.xfade.iter_mut().enumerate() {
+                let Some(xfade) = craft_xfade else {
+                    continue;
+                };
+                let Some(&(position, speed)) = craft.get(slot).and_then(Option::as_ref) else {
+                    xfade.stop(mixer);
+                    continue;
+                };
+                let player = slot == 0;
+                xfade.tick(
+                    mixer,
+                    XfadeInputs {
+                        speed_field: speed
+                            * oag_render::exhaust::SPEED_TO_KMH
+                            * oag_render::exhaust::hd::SPEED_FIELD_GAIN,
+                        throttle: player.then(|| throttle[0]),
+                    },
+                    running,
+                    position.to_array(),
+                    &listener,
+                    doppler_enabled,
+                    DT,
+                );
+            }
+
             // The circuit's own ambience, from the same ears and the same law.
             // **After the craft**, so that on a starved pool the race's own
             // cues have already taken their voices - the original's pool is
@@ -694,6 +740,9 @@ impl Audio {
             self.output.with_mixer(|mixer| {
                 for engine in &mut voices.engines {
                     engine.stop(mixer);
+                }
+                for xfade in voices.xfade.iter_mut().flatten() {
+                    xfade.stop(mixer);
                 }
                 for id in voices.shield.drain(..) {
                     mixer.stop(id);

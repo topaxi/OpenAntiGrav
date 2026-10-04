@@ -506,3 +506,8 @@
 0x002ff628	function	XFadeShip_InitSystem	70	xfade.md
 0x002fcaa0	function	XFadeShip_CreateSound	60	xfade.md
 0x000d5968	function	Ship_UpdateEngineCrossfade	82	xfade.md
+0x000f56d0	function	Physics_QueueRayProbe	62	xfade.md
+0x000f5780	function	Physics_QueueSegmentProbe	62	xfade.md
+0x00623e40	function	Scream_UpdateVoiceBend	82	xfade.md
+0x00624158	function	Scream_SetVoiceBend	80	xfade.md
+0x0062bb58	function	Scream_SetVoiceParams	76	xfade.md

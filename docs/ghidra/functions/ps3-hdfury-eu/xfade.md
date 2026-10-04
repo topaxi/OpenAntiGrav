@@ -172,3 +172,128 @@ route and were not read.
 **The pitch unit** needs the voice function chain below
 `FUN_0031c948` (`FUN_006796b8` takes the pitch) or one pair of measured
 pitch-versus-input samples.
+
+## 2026-10-05, lane `hd-engine-wire`: what `X` is, the pitch unit, and the wiring
+
+### `X` is the first queued probe's length (confidence 60), and it follows the mean hover clearance (measured)
+
+`X = body[+0x260]`. Four findings, in the order they closed it:
+
+1. **`+0x260` is not a scalar field of its own.** The body keeps an eight-slot
+   query queue: the count is at `+0x4a0` (`< 8`), each slot is `0x50` bytes from
+   `+0x220` (type word at `+0x220`: `0` for a ray, `1` for a segment; vectors at
+   `+0x230`, `+0x240`, `+0x250`; a `float` at `+0x260`). Slot 0's float is
+   `body[+0x260]`, and `+0x260 + 0x50 * n` is slot `n`'s. Two pushers write it:
+   `0x000f56d0` (`Physics_QueueRayProbe_q`, type 0, three vectors and a trailing
+   word at `+0x264`) and `0x000f5780` (`Physics_QueueSegmentProbe_q`, type 1, two
+   vectors). The float is their first argument, and in the caller
+   `FUN_000f7770` (called from `Physics_StepWorld`) it is the probe record's
+   `+0x2c`, a length. Confidence 62: the slot layout is read off two decompiles
+   that agree with each other, and "length" is read from how the caller uses the
+   neighbouring fields.
+2. **Why the earlier search found no writer.** The pushers store the float
+   through a register pair, not an `stfs` at a literal `0x260(rN)`; the only
+   literal `stfs` at `0x260(r25)` (`FUN_000be530`) is a different class's XML
+   loader. `search_instructions` for `li`/`addi` of `0x260` lands on the stack
+   spills and on these two.
+3. **What it follows, measured.** `FUN_000ede88` (the hover update, called from
+   `FUN_000f18b8` and `FUN_000f1958`) walks four probes, writes each one's
+   clearance to `body[+0x364 + 4 * i]` (`0xee260`) and stores their mean to
+   `body[+0x354]` (`0.25 * sum`, `0xee044`/`0xee054`). On the twelve live samples
+   of `data/scratch/hd-engine-xfade/probe.json`, `X - body[+0x354]` is
+   **1.1246 on the first three** (grid and the first thrust) and **1.117 to
+   1.264 on the rest** (it moves with the craft's up vector, correlation -0.96
+   with `body[+0x1e4]`). So `X` is the first probe's length, and it is the mean
+   probe clearance plus about 1.12 world units: a hover reach, grown when the
+   craft rides higher.
+4. **Our equivalent.** `oag-physics` has the same two things, `HoverProbe::height`
+   (`dot(probe - hit, up)`) and the probe reach (`ride_height`, which
+   `hover::target_height` returns), but both are per-step locals and neither is
+   kept on `ShipState`. Reading them from the audio side needs a physics change,
+   which this lane does not make. The wire holds `X` at its grid value; see
+   below.
+
+What a write watchpoint would add: which of the two pushers fires for slot 0
+on a race tick, and what `FUN_000f7770`'s caller passes. The patched RPCS3 was
+not built (a multi-GiB clone, a full build, and Interpreter-only emulation of a
+title that took four minutes to boot under LLVM). The static route above got the
+writer and the quantity without it.
+
+### The pitch unit (confidence 82)
+
+`XFadeSystem_UpdateLayers` hands the clamped pitch word to `FUN_0031c948`
+(or `FUN_0031c338` when the layer's flag `0x2000` is set), which carries it as
+the pitch field of a voice-parameter block into `0x006796b8`, a thunk for
+`0x0062bb58` (`Scream_SetVoiceParams`). With the block's pitch flag set that
+function calls `0x0062b588`, a per-engine dispatch whose Scream engine
+(`type 5`) is `0x00624158` (`Scream_SetVoiceBend`): it stores the word in
+`voice[+0x9a]`, and `0x00623e40` (`Scream_UpdateVoiceBend`) then sums
+`voice[+0x9a] + voice[+0x98]`, clamps to `+-0x8000`, stores `voice[+0x82]`, and
+calls the already-named `Scream_ComputeVoiceNote` and `Scream_VoicePitch` and
+`CellMs_SetVoiceRate`. **So a layer's pitch word is a SCREAM bend, the unit
+`oag_game::audio::sfx::layers` already plays on Pulse**: linear in semitones
+across the cue descriptor's own bend range (`+0x08` down, `+0x09` up),
+`semitones = range * bend / 32768` below zero and `/ 32767` above. The crossfade's
+pitch curve at `0x200` is therefore no bend, and at `0x400` is a full bend up by
+the descriptor's range. The ramp argument `0x0031c338` passes (`ms * 0xf0 / 1000`)
+means the original slews the bend over the call; the port applies it per tick.
+
+Volume: `A[x] * slot_gain_1 * slot_gain_2 >> 20` with both slots at `0x400`
+leaves `A[x]` on a `0..0x400` scale. **That `0x400` is unity against the cue's
+authored volume is inferred, not traced**: the voice-parameter block's volume
+word (flag 1, default `0x7fffffff` for "unset") goes through
+`0x0062b9e8`, a per-engine dispatch that was not followed to its scale.
+
+One more thing the layer update does that the port does not copy: a layer whose
+`+0x16` is non-zero stops its voice when its volume reaches zero and restarts it
+when it rises (`FUN_00313608`); the three teams with `+0x16 == 0` keep the voice
+running. The port releases a voice whenever its post-attenuation gain is below
+`1e-4`, which matches the first group and drops a held-silent voice of the second.
+
+### The wiring (2026-10-05)
+
+`crates/game/src/audio/sfx/xfade.rs`. Per race, `Banks::load_xfade` reads
+`xfship_<team>.xfx` for each distinct slot team (only where the ship bank has no
+`~ENGINE`, so Pulse and Pure never read one) and binds every layer name to its
+`shiphd.bnk` cue. Per tick and craft, `Craft::tick` computes the four inputs of
+`Ship_UpdateEngineCrossfade`, runs the smoother, reads each layer's gain and
+bend, places the layer's voice with the same `Emitter::engine` and doppler the
+Pulse engine uses, and sets the mixer voice's gain and pitch.
+
+| Input | Source | Status |
+| --- | --- | --- |
+| `speed_field` | `speed * SPEED_TO_KMH * 1.5` (`exhaust::hd::SPEED_FIELD_GAIN`) | measured product, `engine-trail.md` |
+| `X` | held at 2.164, the mean of four grid readings (2.173, 2.167, 2.156, 2.160) | **chosen, not measured**; live it ran 2.17 to 4.49 |
+| channels 1 and 2 | held at zero | **chosen**: zero in all twelve samples |
+| throttle (channel 3) | the local player's `thrust` (`0..=100`), opponents write none | measured law, our field is the raw input like `craft+0x2b8` |
+| layer unity gain | `0x400` | **chosen, not measured** |
+| opponents' voices | open only while audible | **chosen** (mixer has 32 voices; 8 craft x 9 layers is 72) |
+
+Proof: `crates/game/tests/sfx_xfade_ground_truth.rs` (ignored, needs the disc):
+all 13 tables resolve to looping cues (feisar 8 layers, the others 9), a goteki
+craft sweeps its layers as it accelerates, and its afterburner layer is silent
+without throttle and at full gain with it. The goteki layer levels read off the
+smoother at rest, 200 km/h and 400 km/h:
+
+| Layer | rest | 200 km/h | 400 km/h |
+| --- | --- | --- | --- |
+| `~jet03 03` | gain 1.00, bend -8896 | 1.00, +895 | 0.60, +10687 |
+| `~jet05 04` | 0.00, -11776 | 0.27, -1920 | 1.00, +7999 |
+| `~n8` (first) | 0.54 | 0.65 | 0.75 |
+| `~n8` (second) | 0.75 | 0.62 | 0.34 |
+| `~afterburner` | 0.00 (no throttle) | 1.00 | 1.00 |
+| `~ABRes*` (4) | about 0 | about 0 | about 0 |
+
+Not done: an RPCS3 audio capture to compare by ear (no cheap way to record the
+emulator's output while it is muted), so what the crossfade sounds like against
+the original is unchecked.
+
+### Names added (2026-10-05)
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x000f56d0` | `Physics_QueueRayProbe` | 62 |
+| `0x000f5780` | `Physics_QueueSegmentProbe` | 62 |
+| `0x00623e40` | `Scream_UpdateVoiceBend` | 82 |
+| `0x00624158` | `Scream_SetVoiceBend` | 80 |
+| `0x0062bb58` | `Scream_SetVoiceParams` | 76 |

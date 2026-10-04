@@ -72,6 +72,10 @@ pub struct Banks {
     /// Cues that repeat while held and play as the list runs, in place of the
     /// flat pick or the one-shot timeline. See [`Cue::repeats`].
     pub(super) programs: BTreeMap<Cue, Program>,
+    /// HD's per-team engine crossfade tables, keyed by the disc's team name.
+    /// Empty on a title with a `~ENGINE` cue, which has no use for them. See
+    /// [`super::xfade`].
+    pub(super) xfade: BTreeMap<String, Arc<super::xfade::Team>>,
 }
 
 impl Banks {
@@ -175,6 +179,33 @@ impl Banks {
         }
         crate::loader_log::lines_at(log::Level::Trace, &report);
         self.report.extend(report);
+    }
+
+    /// Loads the crossfaded engine tables a grid needs, when this title's ship
+    /// bank has no `~ENGINE` cue to hold.
+    ///
+    /// **Gated on the missing cue and nothing else**: a title with `~ENGINE`
+    /// plays that, and must not also play a table, so Pulse and Pure never read
+    /// an `.xfx`. Never fails; see [`super::xfade::load`].
+    pub fn load_xfade(
+        &mut self,
+        archives: &mut Archives,
+        ship_bank: &str,
+        slot_teams: &[String],
+        report: &mut Vec<String>,
+    ) {
+        if self.sounds.contains_key(&Cue::Engine) {
+            return;
+        }
+        self.xfade = super::xfade::load(archives, ship_bank, slot_teams, report);
+    }
+
+    /// The crossfade table for the team a slot flies, when one loaded.
+    #[must_use]
+    pub fn xfade_team(&self, slot_team: &str) -> Option<Arc<super::xfade::Team>> {
+        self.xfade
+            .get(&super::xfade::table_name(slot_team))
+            .cloned()
     }
 
     /// Whether anything at all decoded.

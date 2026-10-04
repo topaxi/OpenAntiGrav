@@ -720,8 +720,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
-    let (sounds, announcer, class_announcer) =
-        audio::banks_and_announcers(&mut archives, title.race, options.mode, &mut report);
+    let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
+        &mut archives,
+        title.race,
+        options.mode,
+        &slot_teams,
+        &mut report,
+    );
     let track_emitters = audio::track_emitters(
         &mut archives,
         title.race.sounds,
