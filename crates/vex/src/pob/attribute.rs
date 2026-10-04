@@ -17,7 +17,9 @@
 //! **Selector `2` is the extent's co-factor** (`+0x2c`'s animated twin, `+0x48`):
 //! it multiplies the three emitter extents and nothing else. The corpus authors
 //! eleven records on eleven emitters, ten of them selector `2`; the eleventh,
-//! `WO_REPULSER_BLAST`'s selector `5` (`+0x54`), is not read.
+//! `WO_REPULSER_BLAST`'s selector `5`, is **the lifetime co-factor**: it lands at
+//! instance `+0x54`, which `ParticleSystem_InitParticle` multiplies into a newborn's
+//! life (`oag_render::psys::playback`, 2026-10-04).
 
 use oag_formats::ByteOrder;
 

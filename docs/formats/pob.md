@@ -368,7 +368,7 @@ resource in a live PPSSPP session:
 | offset | type | meaning |
 | --- | --- | --- |
 | `+0x00` | char[] | NUL-terminated emitter name |
-| `+0x20` | u32 | flags (`0x0400001e`): `0x2` emit in world space, `0x4` random initial roll, `0x8` random rotation sign, `0x20` sub-frame spread along emitter motion, `0x200` **gravity enable**, `0x800` immortal particles, `0x800000` repeat-count mode, `0x4000000` random atlas frame |
+| `+0x20` | u32 | flags (`0x0400001e`): `0x2` particles kept in the instance's frame and drawn through its live matrix (not world space, despite the old name: `particle-system.md`, "The emitter's clock and the burst laws"), `0x4` random initial roll, `0x8` random rotation sign, `0x20` sub-frame spread, pulling particle `i` back by `i / n` of the frame's motion, `0x200000` an evenly stepped ring (shape 3) or a Fibonacci sphere (shapes 4 and 7), `0x200` **gravity enable**, `0x800` immortal particles, `0x800000` repeat-count mode, `0x4000000` random atlas frame |
 | `+0x24` | f32 | emitter duration, ticks (32.0) |
 | `+0x28`,`+0x2c` | f32 | unknown pair (-0.0057292 both) |
 | `+0x30` | u32 | emitter shape: 0 point, 3 cone, 4 sphere, 6 box, 7 hemisphere (4) |
@@ -388,11 +388,11 @@ resource in a live PPSSPP session:
 | `+0xc0` | u32 | blend class, dispatched by `ParticleSystem_ApplyBlendClass`: 2 additive, 3 alpha-over (3) |
 | `+0xc4` | u32[256] | RGBA colour table - a gradient, orange `(181,134,87,200)` → ember `(48,46,46,0)` here |
 | `+0x4c8` | f32 | **aspect**: a class 3 particle's half-width over its half-height (`ParticleSystem_DrawRolledQuads`, `0x089178c0`). `1.0` on 43 of the 45 class 3 emitters, `4.0` on the Shuriken's head and trail; `2`, `3` and `0.05` on class 6 and 7 streaks, whose use of it is unread. Played since 2026-09-30 (confidence 80, static read). See [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md), "An emitter's own particles" |
-| `+0x4cc` | f32 | playback-rate base (1.0) |
+| `+0x4cc` | f32 | **playback rate** (1.0): the emitter's own ticks per frame tick, times instance `+0x3c` (`1.0`), into `+0x70`; every clock reads it (countdowns, drag, integration, age, life, roll, frame). `4` on `WO_REPULSER_BLAST`, `2`/`1.5`/`0.8` on the LeachBeam charge, `2` on the Missile explosion's root, `0.8` on the Shuriken bounce and expiry and the absorb. Played since 2026-10-04 (confidence 90) |
 | `+0x4d0` | f32 | child velocity-inherit scale (1.0) |
 | `+0x4d4` | f32 | child spawn probability (0.1) |
 | `+0x4d8`,`+0x5b8`,`+0x698`,`+0x778`,`+0x858` | block | channel blocks: size, alpha, rotation speed (**always a rate**, radians per tick, on an emitter - played since 2026-09-30: flag `0x4` starts the angle at `U(-pi, pi)`, flag `0x8` flips a coin per particle, a random channel draws its rate once at spawn, a keyframed one turns the opposite way round from the others; class 3 only), atlas frame rate (added 2026-09-24, see below), emission scale - each `{period f32, mode u32 (0 keyframed / 2 constant / 3 random), key count i32, lo f32, hi f32, (time,value) f32 pairs}` |
-| `+0x93c`,`+0x940` | i32, ptr | animated-attribute array (count, records of 0xec bytes: a channel block at `+0x00` and a selector at `+0xe0`, `1..6` to instance `+0x44, +0x48, +0x50, +0x4c, +0x54, +0x34`) - re-derives the severity-scaled params every tick when present (0, null). Parsed since 2026-10-01 as `Emitter::attribute_animations`; selector `2` is the extent's co-factor and widens `WO_BOMB_SMOKERING`'s spawn ring from 12.9 to 23.3 over its run (`particle-system.md`) |
+| `+0x93c`,`+0x940` | i32, ptr | animated-attribute array (count, records of 0xec bytes: a channel block at `+0x00` and a selector at `+0xe0`, `1..6` to instance `+0x44, +0x48, +0x50, +0x4c, +0x54, +0x34`) - re-derives the severity-scaled params every tick when present (0, null). Parsed since 2026-10-01 as `Emitter::attribute_animations`; selector `2` is the extent's co-factor and widens `WO_BOMB_SMOKERING`'s spawn ring from 12.9 to 23.3 over its run, selector `5` the newborn's lifetime co-factor (`WO_REPULSER_BLAST`'s `1.5`), both played (`particle-system.md`) |
 | `+0x944`,`+0x948`,`+0x94c` | ptr | on-death child system, per-particle child system, **next sibling emitter** (0, 0, `base+0xd20`) |
 | `+0x9a0` | u16,u16 | sprite-atlas grid (1, 1) |
 | `+0x9ac` | i32 | **not** the atlas frame count (corrected 2026-09-24): `ParticleSystem_InitParticle` ORs `Psys_RandIntRange(1, n) << 4` into a per-particle flag byte when it is above 1; its reader is untraced. The frame count is the `+0x9a0` grid's product |

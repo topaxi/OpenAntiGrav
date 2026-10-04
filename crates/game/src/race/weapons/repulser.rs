@@ -154,8 +154,13 @@ impl Race {
             // retried later, so the blast cannot appear late.
             if handles[0].is_none() && repulser.age <= dt * 1.5 {
                 if let Some(effect) = self.view.effects.get(REPULSER_BLAST_EFFECT).cloned() {
-                    self.view.repulser_effects[index][0] =
-                        self.view.stage.attach(&effect, firer, 1.0);
+                    let playing = self.view.stage.attach(&effect, firer, 1.0);
+                    // `Repulser_SpawnBlastEffect` hands `Psys_Spawn_q` its `+0x1a0` by
+                    // pointer (`param_5 = 1`), so the beads (flag `0x2`) ride it.
+                    if let Some(playing) = playing {
+                        self.view.stage.set_rides_frame(playing, true);
+                    }
+                    self.view.repulser_effects[index][0] = playing;
                 }
             } else if let Some(playing) = handles[0] {
                 self.view.stage.follow(playing, firer);
