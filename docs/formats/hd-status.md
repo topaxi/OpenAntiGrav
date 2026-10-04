@@ -786,7 +786,9 @@ progression and it is **not a measurement** of what the original gates - what
 - **`.pvs`, `.pvspatch`, `.probes`** - one of each per circuit direction, 28
   apiece. `talons_junction/track.pvs` is 114 KiB against 19 `section` nodes, so
   it is a finer structure than the mask in the `.vex`, not the same table moved.
-- **`.stencilvolume`, `.svml`, `.xfx`, `.points2`, `.effectsettings`,
+- **`.xfx`** - no longer unknown: the per-team engine crossfade table, read by
+  `oag_formats::xfx` on all 13 files; see [hd-xfx](hd-xfx.md).
+- **`.stencilvolume`, `.svml`, `.points2`, `.effectsettings`,
   `.envsettings`** - the last of these is plain text, a key/value list starting
   `"Lighting.Constant ambient color"=0.403922 0.392157 0.509804`.
 - **`.bik`** - the video, and no longer new to this build either: RAD's Bink 1

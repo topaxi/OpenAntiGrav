@@ -109,6 +109,10 @@ Two structural facts to expect, both different from every other binary here:
   becomes a 9-entry slot array indexed by its own `Num`, that it instantiates
   rather than textures existing geometry, and the one slot the engine
   overrides regardless of what its manifest authored.
+- [xfade.md](xfade.md) - the crossfade system HD drives a craft's engine
+  sound with: `XFadeSystem_AddCrossFader` and its update path, the ship-side
+  cache and instance, and `Ship_UpdateEngineCrossfade`, the per-tick writer of
+  four input channels (three of four terms recovered, one unidentified).
 - [sound.md](sound.md) - the SCREAM grain-opcode dispatch table
   (`0x00927614`), the located `0x05`/`0x06`/`0x08` "play/stop a child cue"
   handlers, guard `0x22`'s three-way variable-versus-immediate skip (the

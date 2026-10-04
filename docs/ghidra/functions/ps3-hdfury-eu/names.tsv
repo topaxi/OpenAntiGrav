@@ -491,3 +491,13 @@
 0x0005e948	function	RaceManager_Update	72	gantry-clock.md
 0x00055488	function	RaceManager_ResetGantryTime	78	gantry-clock.md
 0x00056368	function	RaceManager_SetPhase	75	gantry-clock.md
+0x00312660	function	XFadeSystem_AddCrossFader	90	xfade.md
+0x00313910	function	XFadeSystem_StartTrigger	72	xfade.md
+0x00313d10	function	XFadeSystem_UpdateChannels	72	xfade.md
+0x00314b00	function	XFadeSystem_UpdateLayers	72	xfade.md
+0x00314618	function	XFadeSystem_SetInput	72	xfade.md
+0x003164c8	function	XFadeSystem_Update	70	xfade.md
+0x002ff250	function	XFadeShip_GetTeamTable	78	xfade.md
+0x002ff628	function	XFadeShip_InitSystem	70	xfade.md
+0x002fcaa0	function	XFadeShip_CreateSound	60	xfade.md
+0x000d5968	function	Ship_UpdateEngineCrossfade	65	xfade.md
