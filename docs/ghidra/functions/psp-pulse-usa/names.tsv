@@ -1306,8 +1306,5 @@
 0x088fcb10	function	ParticleSystem_EmitHalfRing	92	particle-system.md
 0x08917c7c	function	ParticleSystem_DrawPoolBars	90	particle-system.md
 0x08917358	function	ParticleSystem_BuildAtlasTable	88	particle-system.md
-
-||||||| 6b9ff36c
-
 0x0893280c	function	CloudGroup_Draw	92	clouds.md
 
