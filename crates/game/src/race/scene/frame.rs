@@ -661,7 +661,7 @@ impl Scene {
             .upload(queue, &vp, race.camera_position(), vertices, trail);
         self.clouds
             .borrow_mut()
-            .upload(queue, &vp, race.sim.world.tick, right, up);
+            .upload(queue, &vp, race.sim.world.tick, &race.camera_frame());
         oag_render::perfprobe::mark("exhaust-upload");
         self.upload_particles(race, queue, &vp, right, up, additive, alpha);
         self.upload_mist(race, queue, 1.0 / projection.y_axis.y);
@@ -941,14 +941,18 @@ impl Scene {
                 origin: (viewport.0, viewport.1),
                 viewport: (viewport.2 as u32, viewport.3 as u32),
             };
+            // Pulse PSP's composite waits for the HUD: the caller runs
+            // `Scene::composite_bloom` after drawing it, as the original's
+            // queue order does (`bloom.md`, "The bloom draws over the HUD").
             if let Some(bloom) = &self.bloom {
-                bloom.render(device, queue, encoder, frame);
+                bloom.prepare(device, queue, encoder, frame);
+                self.bloom_pending.set(true);
             } else if let Some(bloom) = &self.ps2_bloom {
                 bloom.render(device, queue, encoder, frame);
             }
         }
         // Motion blur, last: it smears the finished frame - glow included,
-        // which is what a bright thing sweeping past a lens does - and it
+        // except Pulse PSP's, whose composite comes after the HUD - and it
         // runs before the caller composites the HUD over `view`, so the
         // readouts stay sharp however the world moves. `motion_blur` is the
         // strength read fresh off the settings this frame, so the row

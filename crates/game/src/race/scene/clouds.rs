@@ -55,8 +55,7 @@ impl Clouds {
         queue: &wgpu::Queue,
         view_projection: &[[f32; 4]; 4],
         tick: u64,
-        right: Vec3,
-        up: Vec3,
+        camera: &oag_render::psys::field::Frame,
     ) {
         let Some((layer, pipeline)) = self.state.as_mut() else {
             return;
@@ -68,7 +67,7 @@ impl Clouds {
             layer.advance();
         }
         let mut vertices = Vec::new();
-        layer.extend_vertices(&mut vertices, right, up);
+        layer.extend_vertices(&mut vertices, camera);
         pipeline.upload(queue, view_projection, &vertices);
     }
 

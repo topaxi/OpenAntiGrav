@@ -891,6 +891,15 @@ pub fn capture(
             Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
         },
     }
+    // Pulse PSP's bloom over the HUD, as the window adds it: see
+    // `Scene::composite_bloom`.
+    let hud_rect = (
+        hud_viewport.0,
+        hud_viewport.1,
+        hud_viewport.2,
+        hud_viewport.3,
+    );
+    scene.composite_bloom(&mut encoder, &hud_view, hud_rect);
     if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
         framebuffer.set_screen_filter(&device, options.screen_filter.as_ref());
         framebuffer.composite(

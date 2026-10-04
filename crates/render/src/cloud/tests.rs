@@ -48,7 +48,7 @@ fn at_phase_zero_the_quad_is_axis_aligned() {
         phase: 0.0,
         rate: 0.0,
     };
-    let verts = sprite.vertices(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+    let verts = sprite.vertices(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), 0.0);
     // bl, br, tl (the first triangle) at phase zero: centre (1, 2, 3),
     // half_size 2, so the corners are +/- 2 along each camera axis.
     assert_eq!(verts[0].position, [-1.0, 0.0, 3.0]);
@@ -59,9 +59,9 @@ fn at_phase_zero_the_quad_is_axis_aligned() {
     }
 }
 
-/// A quarter turn swaps which camera axis the quad's extent runs along -
-/// the same "rotate the basis, not the offsets" shape `CloudGroup_Draw`'s
-/// own `vtfm4_q` step takes, see the module doc.
+/// A quarter turn of phase swaps which camera axis the quad's extent runs
+/// along, turning from up towards right: `CloudGroup_Draw` rotates its corners
+/// by `roll - phase`, see the module doc.
 #[test]
 fn a_quarter_turn_swaps_the_quad_s_axes() {
     let sprite = Sprite {
@@ -71,12 +71,12 @@ fn a_quarter_turn_swaps_the_quad_s_axes() {
         phase: std::f32::consts::FRAC_PI_2,
         rate: 0.0,
     };
-    let verts = sprite.vertices(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
-    // right -> up, up -> -right at a quarter turn (cos=0, sin=1):
-    // r = right*0 + up*1 = up; u = up*0 - right*1 = -right.
+    let verts = sprite.vertices(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), 0.0);
+    // At an angle of minus a quarter turn (cos=0, sin=-1):
+    // r = -up; u = right. bl = -r - u = up - right.
     let bl = verts[0].position;
-    assert!((bl[0] - 1.0).abs() < 1e-5, "{bl:?}");
-    assert!((bl[1] - -1.0).abs() < 1e-5, "{bl:?}");
+    assert!((bl[0] - -1.0).abs() < 1e-5, "{bl:?}");
+    assert!((bl[1] - 1.0).abs() < 1e-5, "{bl:?}");
 }
 
 /// [`Layer::is_empty`] and [`Layer::advance`]/[`Layer::extend_vertices`] on a
@@ -101,7 +101,7 @@ fn a_layer_advances_every_sprite_and_emits_six_vertices_each() {
     }
 
     let mut out = Vec::new();
-    layer.extend_vertices(&mut out, vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+    layer.extend_vertices(&mut out, &Frame::IDENTITY);
     assert_eq!(out.len(), 2 * 6);
 }
 
@@ -113,6 +113,52 @@ fn an_empty_layer_is_empty_and_draws_nothing() {
     let layer = Layer::default();
     assert!(layer.is_empty());
     let mut out = Vec::new();
-    layer.extend_vertices(&mut out, vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+    layer.extend_vertices(&mut out, &Frame::IDENTITY);
     assert!(out.is_empty());
+}
+
+/// The camera rolled `angle` about its back axis, `Z`.
+fn rolled(angle: f32) -> Frame {
+    let (sin, cos) = angle.sin_cos();
+    Frame {
+        position: Vec3::ZERO,
+        right: vec3(cos, sin, 0.0),
+        up: vec3(-sin, cos, 0.0),
+        back: Vec3::Z,
+    }
+}
+
+/// `CloudGroup_Draw` subtracts `g_camera_roll` from the phase before it
+/// rotates the corners, so a sprite keeps its orientation in the world while
+/// the camera banks: the same sprite drawn by a level camera and by cameras
+/// rolled either way lands on the same world corners. Dropping the roll, or
+/// flipping its sign, turns the quad by twice the roll and fails this.
+#[test]
+fn a_cloud_keeps_its_world_orientation_as_the_camera_rolls() {
+    let layer = Layer {
+        sprites: vec![Sprite {
+            position: vec3(5.0, 1.0, -20.0),
+            half_size: 3.0,
+            colour: [1.0; 4],
+            phase: 0.7,
+            rate: 0.0,
+        }],
+    };
+    let mut level = Vec::new();
+    layer.extend_vertices(&mut level, &rolled(0.0));
+    for angle in [0.3, -0.3] {
+        let mut out = Vec::new();
+        layer.extend_vertices(&mut out, &rolled(angle));
+        for (a, b) in level.iter().zip(&out) {
+            for axis in 0..3 {
+                let d = (a.position[axis] - b.position[axis]).abs();
+                assert!(
+                    d < 1e-4,
+                    "roll {angle}: {:?} vs {:?}",
+                    a.position,
+                    b.position
+                );
+            }
+        }
+    }
 }
