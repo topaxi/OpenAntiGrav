@@ -31,7 +31,8 @@ pub struct Weather {
     pub drift_y: f32,
     /// `DriftMistMult`: the mist overlay's drift, `-(0.3 * wind)` times this.
     pub drift_mist_mult: f32,
-    /// `MistInside`, an integer flag in the original (`Xml_AttributeAsInt`):
+    /// `MistInside`, an integer flag in the original (`Xml_AttributeAsInt`, so
+    /// Outpost 7's authored `0.2` reads `0`, confirmed live 2026-10-04):
     /// non-zero keeps the mist overlay's opacity where it is on a cover edge,
     /// zero fades it to `0` under cover and back to `Alpha` in the open.
     pub mist_inside: f32,

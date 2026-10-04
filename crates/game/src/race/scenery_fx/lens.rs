@@ -24,7 +24,8 @@
 //!   leaning with the wind.
 //!
 //! Not read: the lens's draw state beyond its placement (the `+0x98` depth,
-//! `6`, and the instance matrix, read live), and the mist overlay.
+//! `6`, and the instance matrix, read live). The mist overlay is
+//! [`super::mist`].
 
 use std::sync::Arc;
 

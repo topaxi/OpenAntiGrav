@@ -210,4 +210,35 @@ mod race {
         assert_eq!(weather.lens().target(), 4.0);
         assert!(weather.lens().is_emitting());
     }
+
+    /// The mist overlay at the start line, read live 2026-10-04 on PPSSPP:
+    /// Fort Gale White starts in an open section with the opacity at its
+    /// `Alpha` of `0.3`; Outpost 7 White starts in section 1, covered, its
+    /// target `0` and the opacity eased to `4e-8`. Without the cover edge the
+    /// Outpost 7 start would sit at `0.3` too.
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-usa.chd"]
+    fn the_mist_is_on_at_fort_gales_start_and_off_at_outpost_7s() {
+        let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
+            return;
+        };
+        let mut race = race::Race::start(loaded.setup);
+        for _ in 0..300 {
+            race.tick(&PlayerInputs::none());
+        }
+        let weather = race.scenery_fx().weather();
+        let mist = weather.mist().expect("Fort Gale authors the mist");
+        assert!((mist.opacity() - 0.3).abs() < 1e-6, "{}", mist.opacity());
+        assert!(mist.vertices(0.6249).is_some());
+
+        let loaded = load(r"07_Track\track.vex").expect("image");
+        let mut race = race::Race::start(loaded.setup);
+        for _ in 0..300 {
+            race.tick(&PlayerInputs::none());
+        }
+        let weather = race.scenery_fx().weather();
+        let mist = weather.mist().expect("Outpost 7 authors the mist");
+        assert_eq!(weather.section(), 1, "the start line is in section 1");
+        assert!(mist.opacity() < 1e-3, "{}", mist.opacity());
+    }
 }

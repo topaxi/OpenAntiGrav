@@ -17,6 +17,7 @@ mod effects;
 mod frame;
 mod ghost;
 mod hd_chain;
+mod mist;
 mod motion;
 mod per_slot;
 mod queries;
@@ -213,6 +214,8 @@ pub struct Scene {
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
     weapon_quads: weapon_quads::Cannon,
     clouds: std::cell::RefCell<clouds::Clouds>,
+    /// The weather's mist overlay, once [`Scene::attach_mist`] built it.
+    mist: std::cell::RefCell<Option<oag_render::mist::Pipeline>>,
     /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
     beam: Option<std::cell::RefCell<oag_render::beam::Pipeline>>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
@@ -910,6 +913,7 @@ impl Scene {
             exhaust,
             weapon_quads,
             clouds: clouds::Clouds::build(device, queue, format, sample_count, cloud_layer),
+            mist: std::cell::RefCell::new(None),
             beam,
             sparks,
             shadow,
