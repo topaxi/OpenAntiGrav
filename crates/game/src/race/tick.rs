@@ -115,16 +115,6 @@ impl Race {
             controls.thrust = 0.0;
         }
 
-        // The free Time Trial/Speed Lap Turbo is granted at the release edge,
-        // not held through the countdown - the original never has anything
-        // in the pickup slot until the craft is actually released. This is
-        // the tick `RaceState::thrust_gated` first reads `false` for; see
-        // `Race::grant_free_turbo` for the mode, full-slot and missing-table
-        // gates that make this safe to call unconditionally here.
-        if self.sim.world.tick == oag_race::state::COUNTDOWN_TICKS {
-            self.grant_free_turbo(player);
-        }
-
         // **Before every craft is stepped, and over the whole field at once.**
         // The weapon slowdown a blast credited last tick becomes a running timer
         // here, so this tick's engine, hover and grip all see it - the original
@@ -618,8 +608,15 @@ impl Race {
                 }
             }
 
-            if outcome.lap_completed {
+            // The free Time Trial/Speed Lap Turbo, on every tick the player
+            // crosses the line forwards - the first crossing included - as the
+            // original's state-2 handlers do (`0x0882ddd8`, `0x0882d578`,
+            // `0x08823270`: `craft+0x911` set -> held = 4). Never at the
+            // release: a craft that has not reached the line holds nothing.
+            if outcome.lap_completed || outcome.first_crossing {
                 self.grant_free_turbo(player);
+            }
+            if outcome.lap_completed {
                 // Eliminator's own per-lap mechanic, a no-op on every other
                 // mode - see `Race::eliminator_lap_health_refill`.
                 self.eliminator_lap_health_refill(player);

@@ -117,11 +117,27 @@ fn a_clock_inside_the_window_is_not_reset() {
     assert_eq!(window.seconds(0.5, 0), 1.0);
 }
 
-/// Pulse's clock has no window: the HD law never reaches it.
+/// Pulse's clock runs free to the release, is reset to 3.2 s on the tick
+/// after it - past the 181 green step, so `GO` is lit on that tick - and then
+/// loops `[3.2, 5.5)` before the first crossing: frames 192..330, never the
+/// `Board` teleport at 350 and never a digit.
 #[test]
-fn pulse_has_no_window() {
-    assert_eq!(Clock::PULSE.window, None);
-    assert_eq!(Clock::PULSE.seconds(COUNTDOWN_TICKS + 1) * 60.0, 181.0);
+fn pulses_go_is_held_by_its_race_managers_window() {
+    let clock = Clock::PULSE;
+    assert_eq!(clock.window, Some(PULSE_PRE_LAP_WINDOW));
+    assert_eq!(clock.seconds(COUNTDOWN_TICKS) * 60.0, 180.0);
+    assert_eq!(clock.seconds(COUNTDOWN_TICKS + 1), 3.2);
+    let period = PULSE_PRE_LAP_WINDOW.period();
+    assert_eq!(period, 138);
+    for k in 1..3000 {
+        let seconds = clock.seconds(COUNTDOWN_TICKS + k);
+        assert!((3.2..5.5).contains(&seconds), "+{k}: {seconds}");
+        assert!(seconds * 60.0 < 350.0, "+{k}: {seconds}");
+    }
+    assert_eq!(
+        clock.seconds(COUNTDOWN_TICKS + 1 + period),
+        clock.seconds(COUNTDOWN_TICKS + 1)
+    );
 }
 
 /// Without a hold the clock is the plain timeline, as it was for every

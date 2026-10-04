@@ -44,38 +44,39 @@
 //! what this timeline rides. Nothing else on the track moves - the scenery's own
 //! animation is still `world.tick / 60`, and is not touched.
 //!
-//! # Why the clock stops, and where
+//! # After the release: the race manager's windows
 //!
-//! The asset's timeline keeps going after the countdown: at frame 560 the
-//! `FINAL LAP` board slides in, and at frame 740 the chequered one does. Those
-//! are two more states of the same object, and **their triggers are
-//! unrecovered** - a lap counter reaching the last lap is the obvious guess and
-//! a guess is exactly what `CLAUDE.md` says not to fire an effect on. Running
-//! the timeline through would announce the final lap nine seconds into lap one,
-//! on every race.
-//!
-//! So the clock is held at [`CLOCK_LIMIT`], the last frame before the lap
-//! board's own first key. The countdown plays in full off the disc's own
-//! timing; the two states with no trigger are simply never reached.
-//!
-//! # And on Pulse it stops earlier still: `GO` is held
+//! The asset's timeline keeps going after the countdown: the `Board` dressing
+//! teleports in at frame 350, the `FINAL LAP` board at 560 and the chequered
+//! one at 740. **What picks between them is read from `BOOT.BIN`**
+//! (`docs/ghidra/functions/psp-pulse-usa/gantry-clock.md`, confidence 85):
+//! `RaceManager_Update` (`0x08829778`) holds the gantry's time in a window
+//! chosen by the player's crossing count, resetting it to the window's start
+//! whenever it reads outside - `[3.2, 5.5)` before the first crossing (`GO`
+//! strobing, [`clock::PULSE_PRE_LAP_WINDOW`]), then `[6.0, 9.0)`, `[9.5,
+//! 12.0)` on the lap before the last and `[12.4, 13.3)` on the last
+//! ([`board::PULSE_LAP_WINDOWS`]). HD's race manager runs the same law with
+//! its own numbers. This replaces the chosen `GO` loop over frames 216..349,
+//! and the stop at [`CLOCK_LIMIT`], which now holds only on a clock with no
+//! windows (every title that inherits Pulse's rule unread).
 //!
 //! **Measured against the original, 2026-09-30** (PPSSPP, Talon's Junction,
 //! craft stationary, about 21 s of race clock): the board shows a strobing `GO`
 //! throughout. It never replays `3 2 1`, the panel never leaves the aperture,
-//! and the `Board` dressing never arrives. Playing the authored track through
-//! frame 360 in open air put the panel 9.99 units above the banner and replayed
-//! the whole strip there - the maintainer's report - so on Pulse the clock
-//! loops [`GO_LOOP`] instead, see [`held_on_go`].
+//! and the `Board` dressing never arrives - the pre-lap window, which ends at
+//! frame 330, twenty frames before the `Board` teleport.
 
 mod board;
 mod clock;
 
 pub use board::{
     BoardTracker, BoardWindow, HD_BETWEEN_LAPS_WINDOW, HD_CHEQUERED_WINDOW,
-    HD_FINAL_LAP_AHEAD_WINDOW, PanelCull, WindowEntry,
+    HD_FINAL_LAP_AHEAD_WINDOW, HD_LAP_WINDOWS, LapWindows, PULSE_LAP_WINDOWS, PanelCull,
+    WindowEntry,
 };
-pub use clock::{Clock, GoEdge, HD_PRE_LAP_WINDOW, ReleaseWindow, SEARCH_FRAMES, go_edge};
+pub use clock::{
+    Clock, GoEdge, HD_PRE_LAP_WINDOW, PULSE_PRE_LAP_WINDOW, ReleaseWindow, SEARCH_FRAMES, go_edge,
+};
 
 use super::*;
 
@@ -84,10 +85,12 @@ use oag_render::mesh::Bounds;
 
 /// Where the gantry's authored timeline is held, in seconds.
 ///
-/// **The frame is authored; stopping there is this project's decision.**
+/// **The frame is authored; stopping there is this project's decision**, and
+/// it applies only to a clock with no race-manager windows ([`Clock::laps`]):
+/// every title that inherits Pulse's rule without its own race code read.
 /// `docs/rendering/start-gantry.md`'s timeline table has frame 560/561
 /// (9.333 s) as `Final_Lap`'s first key, so this is the last frame before the
-/// first state whose trigger is unrecovered. Holding rather than looping is
+/// first state such a title has no trigger for. Holding rather than looping is
 /// what makes the gantry sit in its post-countdown idle - `Board`, `Text` and
 /// `Arrow` in place, the digit panel already teleported out of the aperture -
 /// for the rest of the race, which is the state the asset itself holds from
@@ -104,30 +107,9 @@ pub const CLOCK_LIMIT: f32 = 559.0 / 60.0;
 /// 92, the subtraction is only how it is spelled.
 pub const CLOCK_START_TICK: u64 = oag_race::COUNTDOWN_TICKS - 180;
 
-/// The span of the authored timeline Pulse's gantry loops on once `GO` is up,
-/// in seconds: frame 216 (where `GO`'s column has scrolled into the opaque
-/// strobe band, `docs/rendering/start-gantry.md`) to frame 349, the last frame
-/// before `Board`, `Text` and `Arrow` teleport in at 350/351.
-///
-/// **Chosen, not measured, and carries no confidence score.** What is measured
-/// is the behaviour it stands in for (`docs/rendering/start-gantry.md`, "What
-/// the original does after `GO`"): on Pulse the board keeps showing a strobing
-/// `GO` for at least 21 s of race clock. It never exits, never replays `3 2 1`
-/// and never shows the `Board` dressing, none of which the authored frames
-/// past 360 would let a *looping* clock avoid. How the original keeps the
-/// strobe going is unrecovered; looping the authored strobe span reproduces
-/// what a player sees and plays only frames the file authors.
-pub const GO_LOOP: (f32, f32) = (216.0 / 60.0, 349.0 / 60.0);
-
-/// `seconds` on Pulse's gantry clock, with the timeline held in its `GO` state:
-/// straight through until [`GO_LOOP`]'s end, then round that span forever.
-#[must_use]
-pub fn held_on_go(seconds: f32) -> f32 {
-    held_within(seconds, GO_LOOP)
-}
-
 /// `seconds` on a gantry clock held over `span`: straight through until its
-/// end, then round the span forever. [`held_on_go`] is Pulse's.
+/// end, then round the span forever: what [`Clock::inherited`] holds a
+/// title's `GO` on.
 #[must_use]
 pub fn held_within(seconds: f32, (from, to): (f32, f32)) -> f32 {
     if seconds < to {
@@ -245,17 +227,23 @@ pub(super) fn place(
     if clock == ClockRule::HdRaceManager {
         return Some(place_hd(model, matrix, &mount, name, report));
     }
+    // Slot 7's FX-350 art is never shown on Pulse in any reference frame, and
+    // what Pulse's slot 7 binds is unread: left out for the whole race.
     let fx350 = oag_render::gantry::strip_fx350_art(&mut model);
-    let parked = oag_render::gantry::clip_to_panel(&mut model, mount.width / 2.0, 0.0);
+    let (cull, parked) = panel_cull(&model, Vec::new(), &mount, &PULSE_LAP_WINDOWS);
     place_bounds(&mut model, matrix);
     report.push(format!(
         "start gantry {name} on node {:?}: centre {:?}, on a {:.1} x {:.1} surface \
          ({:.1} thick over {} vertices), {:.0} units ahead of the Start Position - \
          measured off this circuit's own geometry (docs/rendering/start-gantry.md). \
-         {parked} draw(s) parked outside the panel are not drawn: they are the FINAL \
-         LAP and chequered states, whose trigger is unrecovered. {fx350} draw(s) bound \
-         to slot 7's own fx350_nomip.gtf art are not drawn either: embedded in this \
-         model but never shown in a reference frame, on HD",
+         Before the first line crossing {parked} draw(s) parked outside the panel are not \
+         drawn; after it, Pulse's race manager (0x08829778) plays the Board, FINAL LAP and \
+         the chequered flag by lap, and each frame draws only what stands on the panel \
+         (read from BOOT.BIN, confidence 85). {fx350} draw(s) bound to slot 7's own \
+         fx350_nomip.gtf art are not drawn: embedded in this model but never shown in a \
+         reference frame on Pulse. Clock: frame 0 on tick {} (measured), then [{:.1}, {:.1}) \
+         s from the release, reset to its start when outside - GO strobes every {} ticks \
+         until the first crossing (read, confidence 85)",
         mount.node,
         mount.centre.to_array().map(|v| (v * 10.0).round() / 10.0),
         mount.width,
@@ -263,28 +251,30 @@ pub(super) fn place(
         mount.thickness,
         mount.vertices,
         (mount.centre - Vec3::from(start.position)).length(),
+        CLOCK_START_TICK,
+        PULSE_PRE_LAP_WINDOW.from,
+        PULSE_PRE_LAP_WINDOW.to,
+        PULSE_PRE_LAP_WINDOW.period(),
     ));
     Some(Placed {
         model,
         matrix,
         clock: Clock::PULSE,
-        cull: None,
+        cull: Some(cull),
     })
 }
 
-/// HD's gantry, which keeps every state it authors: the countdown's own
-/// leave-outs are named rather than removed, and the later windows cull per
-/// frame ([`PanelCull`]).
-fn place_hd(
-    mut model: Model,
-    matrix: Mat4,
+/// The per-frame cull for a panel on `mount`: `countdown` plus every draw
+/// [`oag_render::gantry::clip_to_panel`] would park, hidden before the
+/// later windows, and the panel test per frame across them. Returns the cull
+/// and how many draws were parked.
+fn panel_cull(
+    model: &Model,
+    mut countdown: Vec<u32>,
     mount: &Mount,
-    name: &str,
-    report: &mut Vec<String>,
-) -> Placed {
+    windows: &LapWindows,
+) -> (PanelCull, usize) {
     let half_width = mount.width / 2.0;
-    let mut countdown = oag_render::gantry::panel::fx350_draws(&model);
-    let fx350 = countdown.len();
     // Measured on a copy, so the count and the guard against clipping
     // everything stay `clip_to_panel`'s own.
     let mut probe = model.clone();
@@ -316,7 +306,23 @@ fn place_hd(
             countdown.push(*key);
         }
     }
-    let cull = PanelCull::build(&model, countdown, half_width, mount.height / 2.0);
+    let cull = PanelCull::build(model, countdown, windows, half_width, mount.height / 2.0);
+    (cull, parked.len())
+}
+
+/// HD's gantry, which keeps every state it authors: the countdown's own
+/// leave-outs are named rather than removed, and the later windows cull per
+/// frame ([`PanelCull`]).
+fn place_hd(
+    mut model: Model,
+    matrix: Mat4,
+    mount: &Mount,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Placed {
+    let countdown = oag_render::gantry::panel::fx350_draws(&model);
+    let fx350 = countdown.len();
+    let (cull, parked) = panel_cull(&model, countdown, mount, &HD_LAP_WINDOWS);
     place_bounds(&mut model, matrix);
     report.push(format!(
         "start gantry {name} on node {:?}: centre {:?}, on a {:.1} x {:.1} surface \
@@ -332,7 +338,7 @@ fn place_hd(
         mount.height,
         mount.thickness,
         mount.vertices,
-        parked.len(),
+        parked,
         mount.width,
         mount.height,
     ));
@@ -688,7 +694,10 @@ impl Gantry {
     pub(super) fn clock_seconds(&self, race: &Race) -> f32 {
         let tick = race.sim.world.tick;
         let standing = race.player_standing();
-        let window = BoardWindow::of(standing, race.sim.world.laps_target());
+        let Some(laps) = self.clock.laps else {
+            return self.clock.seconds(tick);
+        };
+        let window = BoardWindow::of(standing, race.sim.world.laps_target(), &laps);
         let mut tracker = self.tracker.get();
         let entry = tracker.observe(tick, window, standing.lap_start_tick);
         self.tracker.set(tracker);

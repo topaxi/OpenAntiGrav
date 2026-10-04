@@ -68,6 +68,28 @@ fn the_first_real_lap_after_an_early_crossing_still_counts() {
     assert_eq!(state.lap, 2);
 }
 
+/// The spawn-to-line crossing is reported once, on its own tick, and is not a
+/// lap; rocking back over the line and across again does not report it again.
+#[test]
+fn the_first_crossing_is_reported_once() {
+    let course = course();
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let before_line = course.len() - 3;
+    let path = (before_line..course.len())
+        .chain(0..3)
+        .chain([course.len() - 1, 0, 1]);
+    let firsts: Vec<u64> = (300..)
+        .zip(path)
+        .filter_map(|(tick, index)| {
+            let position = course.position(index).expect("in range");
+            let outcome = state.update(&course, position, tick, DT, false);
+            assert!(!outcome.lap_completed, "a lap at {tick}");
+            outcome.first_crossing.then_some(tick)
+        })
+        .collect();
+    assert_eq!(firsts, vec![303]);
+}
+
 #[test]
 fn a_ship_nudged_back_and_forth_over_the_line_cannot_ratchet_the_counter() {
     let course = course();

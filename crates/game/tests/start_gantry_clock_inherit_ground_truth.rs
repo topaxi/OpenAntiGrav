@@ -52,14 +52,11 @@ fn pulses_own_asset_gives_pulses_measured_start_through_the_rule() {
     let clock = gantry::Clock::inherited(edge).expect("before the release");
     assert_eq!(clock.start_tick, gantry::CLOCK_START_TICK);
     assert_eq!(clock.start_tick, 92);
-    // The exit the chosen loop end stops short of: Board, Text and Arrow
-    // teleport in at 350/351, and the chosen end is one frame under the
-    // derived one.
+    // The exit Pulse's own race manager keeps the clock short of before the
+    // first crossing: Board, Text and Arrow teleport in at 350/351, and the
+    // pre-lap window read from BOOT.BIN ends at frame 330.
     assert_eq!(edge.last_frame_before_exit, 350);
-    assert_eq!(
-        (gantry::GO_LOOP.1 * 60.0).round() as u32 + 1,
-        edge.last_frame_before_exit
-    );
+    assert!(gantry::PULSE_PRE_LAP_WINDOW.to * 60.0 < edge.last_frame_before_exit as f32);
 }
 
 /// How much lit white the board's animated vertices sample at `seconds`: the

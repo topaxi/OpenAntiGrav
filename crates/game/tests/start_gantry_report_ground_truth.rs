@@ -115,17 +115,17 @@ fn the_report_still_names_everything_about_the_gantry_that_is_not_drawn() {
         return;
     };
 
-    // The `FINAL LAP` and chequered states. They are in the file, they are
-    // legible, and they are parked beside the countdown panel rather than
-    // hidden - so drawing them is drawing an effect whose trigger nobody has
-    // recovered, on lap one, every race. The report says how many draws went.
+    // The `FINAL LAP` and chequered states. They are in the file, parked
+    // beside the countdown panel, and kept off it until the first line
+    // crossing; after it Pulse's own race manager picks them by lap
+    // (`0x08829778`, read from BOOT.BIN). The report says both.
     assert!(
         report.contains("parked outside the panel are not drawn"),
-        "the report does not say the unwired states are dropped: {report}"
+        "the report does not say the later states are kept off the countdown: {report}"
     );
     assert!(
-        report.contains("whose trigger is unrecovered"),
-        "the report does not say *why* they are dropped: {report}"
+        report.contains("Pulse's race manager (0x08829778) plays the Board, FINAL LAP"),
+        "the report does not say what triggers the later states: {report}"
     );
     // The other seven slots, which the placement did not touch.
     assert!(

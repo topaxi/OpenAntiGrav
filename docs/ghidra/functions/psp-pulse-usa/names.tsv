@@ -1268,3 +1268,10 @@
 0x08876914	function	Repulser_AdvanceWave	80	repulser.md
 0x0887e174	function	AiTrack_StepForward	80	repulser.md
 0x0887e2f0	function	AiTrack_StepBackward	80	repulser.md
+0x08829778	function	RaceManager_Update	82	gantry-clock.md
+0x089128ac	function	Model_GetAnimTime	85	gantry-clock.md
+0x08912890	function	Model_SetAnimTime	85	gantry-clock.md
+0x0881a3b8	function	Hud_SetCountdownWidgetTime	75	gantry-clock.md
+0x0882dc60	function	TimeTrial_Update	80	gantry-clock.md
+0x0882ddd8	function	TimeTrial_UpdateRacing	80	gantry-clock.md
+0x08b323c0	data	Billboard_Slots	80	gantry-clock.md

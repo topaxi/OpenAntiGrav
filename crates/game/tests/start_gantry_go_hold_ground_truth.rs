@@ -15,11 +15,13 @@
 //! `GO`") shows nothing of the kind: a stationary craft sees the panel hold a
 //! strobing `GO` for the 21 s of race clock captured.
 //!
-//! So [`oag_game::race::gantry::held_on_go`] never lets the clock reach frame
-//! 350. This test fails if that hold is dropped: at the raw clock the panel
-//! is 9.99 units above the aperture, at the held one it never leaves it.
+//! What holds it is Pulse's race manager (`RaceManager_Update`, `0x08829778`,
+//! read from `BOOT.BIN`, confidence 85): before the first line crossing it
+//! keeps the gantry's time in `[3.2, 5.5)`, and [`Clock::PULSE`] runs that
+//! law. This test fails if that window is dropped: at the raw clock the panel
+//! is 9.99 units above the aperture, on Pulse's clock it never leaves it.
 
-use oag_game::race::gantry::{GO_LOOP, held_on_go};
+use oag_game::race::gantry::{Clock, PULSE_PRE_LAP_WINDOW};
 use oag_render::mesh;
 use oag_vex::vex;
 
@@ -72,14 +74,14 @@ fn the_digit_panel_never_leaves_the_aperture_once_go_is_up() {
         "the authored track parks the panel above the aperture at 7 s: {raw}"
     );
 
-    // 0.05 s steps out to two minutes: the countdown, the seam of the loop and
-    // many periods past it.
-    for step in 0..2400 {
-        let raw = step as f32 * 0.05;
-        let held = held_on_go(raw);
+    // Every tick out to two minutes: the countdown, the seam of the window
+    // and many periods past it, with the craft never crossing the line.
+    for tick in 0..7200 {
+        let held = Clock::PULSE.seconds(tick);
+        let raw = tick as f32 / 60.0;
         assert!(
-            held <= GO_LOOP.1,
-            "held clock {held} runs past the loop end"
+            held < PULSE_PRE_LAP_WINDOW.to,
+            "clock {held} runs past the pre-lap window at tick {tick}"
         );
         let y = panel_height(&model, node, held);
         assert!(
