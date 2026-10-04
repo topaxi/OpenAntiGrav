@@ -18,7 +18,7 @@
 //!
 //! # What it does not do
 //!
-//! **No progress counting.** [`crate::loading::Phase::Race`]'s own
+//! **No progress counting** (stages are reported, see [`super::stages`]). [`crate::loading::Phase::Race`]'s own
 //! documentation carries the reasoning: the other two waits this screen covers
 //! are a transcode and a prefetch, neither of which any release has, and the
 //! figures are what make them bearable. A race load is the wait the original
@@ -35,6 +35,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::stages::LoadStages;
 use super::{Loaded, Options, TextureSink};
 
 /// A circuit being read, on a thread.
@@ -55,6 +56,9 @@ pub struct LoadWorker {
     /// circuit a caller *asked* for may be `None`, and only the load knows
     /// which one the title then defaulted to.
     current: Arc<Mutex<Option<String>>>,
+    /// How far the load has got, reported from its thread. See
+    /// [`super::stages`].
+    stages: LoadStages,
 }
 
 impl LoadWorker {
@@ -97,13 +101,24 @@ impl LoadWorker {
         load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
     ) -> Self {
         let current = Arc::new(Mutex::new(label));
+        let stages = LoadStages::default();
         let handle = std::thread::Builder::new()
             // Named for the same reason `boot-media` is: it should be obvious
             // in a debugger and in `top` which thread the window is waiting on.
             .name("race-load".to_string())
-            .spawn(load)
+            .spawn({
+                let stages = stages.clone();
+                move || {
+                    let _scope = stages.open();
+                    load()
+                }
+            })
             .ok();
-        Self { handle, current }
+        Self {
+            handle,
+            current,
+            stages,
+        }
     }
 
     /// Whether the load has returned.
@@ -150,13 +165,16 @@ impl LoadWorker {
     /// The screen's own progress snapshot for this wait.
     ///
     /// Deliberately uncounted - `total` stays zero, so
-    /// [`crate::loading::Screen::draw_list`] draws no bar and no figures. See
-    /// this module's own documentation for why.
+    /// [`crate::loading::Screen::draw_list`] draws no figures. The load's
+    /// stage rides in [`crate::prefetch::Progress::load_stage`] for a bar that
+    /// is stage-driven, which is Wipeout HD's. See this module's own
+    /// documentation for why nothing is counted.
     #[must_use]
     pub fn progress(&self) -> crate::prefetch::Progress {
         crate::prefetch::Progress {
             current: self.current(),
             finished: self.is_finished(),
+            load_stage: self.stages.reached(),
             ..crate::prefetch::Progress::default()
         }
     }

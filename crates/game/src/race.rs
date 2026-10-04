@@ -159,6 +159,7 @@ mod sim;
 mod spawn;
 mod speed_plan;
 mod spline;
+mod stages;
 mod start;
 mod takeoff_line;
 mod telemetry;

@@ -252,15 +252,20 @@ Three departures, each deliberate:
   `Draw::TiledSprite`, as the original is (measured, see below), and the lit
   columns are whole columns in `HD_Blue` over `HD_LightGrey` ones. The row count
   is chosen to fit this layout's flatter bar, not measured.
-- **The bar's fill is a time-based estimate, not the original's.**
-  `race::load` reports no stage, so the fill follows `1 - e^(-t / 4 s)` (chosen,
-  not measured), quantised to whole columns, never completing on its own, and
-  full the moment the race scene is ready. The original's is load-driven: a
-  target of 0.2 at construction, then the loader's milestones 0.4, 0.5, 0.75 and
-  0.95, eased at 0.1 column per frame - see
-  [loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md) and
-  [Still unread](#still-unread). See `loading::wording::estimated_fraction` and
-  [race-load-transition.md](../architecture/race-load-transition.md).
+- **The bar's fill is driven by the race load's stages**, since 2026-10-06:
+  a first target of 0.2, then 0.4, 0.5, 0.75 and 0.95 as `race::load` reaches
+  `TrackRead`, `TrackBuilt`, `WorldBuilt` and `CraftsBuilt`
+  (`oag_hd::loading::PROGRESSION`), eased at 0.1 column a frame with the rate
+  doubled by each milestone that lands while the bar is behind - the original's
+  own law, measured, see
+  [loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md).
+  **Chosen, not measured**: the inner two stages' places in this build's load
+  order, and the whole bar the moment the work is over (this build's load ends
+  long before the ease catches up). A title with no `progression` keeps the
+  time estimate (`loading::wording::estimated_fraction`). `oag-game
+  --loading-screen 0/1 --loading-step race --loading-live --track <entry>
+  --ticks N --screenshot out.png` runs a real load, paced at 60 Hz, and draws
+  the frame at tick N.
 
 **The five labels are drawn** since 2026-10-05: `WIPEOUT® HD`, `FEATURE IMAGE`,
 `FEATURE DESCRIPTION`, `PROGRESSION BAR` and `MODE ICON`, each behind a
@@ -345,10 +350,7 @@ on a modal dialog.
   `scePresents.gtf`, the twelve `presents_<language>.gtf` files and the cut demo
   still, so more than one type exists and the presents screens may be among
   them.
-- **Wiring the bar to the load.** The original's fill is driven by the loader's
-  own stage milestones (0.4, 0.5, 0.75, 0.95) through
-  `LoadingScreen_SetProgressTarget`; this build's `race::load` reports no stage,
-  so the fill is the time estimate above. The six callers are listed in
-  loading-screen.md. `0x0067a858` calls it too and its argument is unread.
+- **Whether the original holds the screen for the bar.** The done threshold
+  (`149.4` columns) is read, what waits on it is not.
 - **The Fury-content flag's writer**, whose value is read (`1`) and whose
   readers are four; see loading-screen.md for the next addresses to try.

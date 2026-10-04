@@ -312,8 +312,8 @@ the original's bar is **driven by the load's own stage milestones and eased**,
 not by a clock. What this build does is **chosen, not measured**: `race::load`
 reports no stage, so the fill is still the time estimate in
 `loading::wording::estimated_fraction`, now quantised to whole columns. Wiring
-the milestones needs stage reporting out of `race::load`; the next addresses
-are the six callers above.
+the milestones needed stage reporting out of `race::load`, which landed on
+2026-10-06 (next section).
 
 ### The five labels are the game's own - confidence 88
 
@@ -341,3 +341,64 @@ icon.
 Not a tint pass: `LoadingScreen_LoadAssets` picks `*_fury.gtf` on
 `FrontEnd_IsFuryStyle()`, and those files carry the red themselves. A capture
 with `display.front_end_style = "FURY"` draws it.
+
+## 2026-10-06: which load stage sets each milestone, and the full easing law
+
+Lane `hd-loading-fill`. Read from `EBOOT-ps3-hdfury-eu.elf`: the decompiles of
+`0x000b2af0`, `0x000b8590`, `0x0003c680` and `0x0005cb40`, the disassembly of
+`0x002b2c60` and of `LoadingScreen_Draw`'s per-frame step at `0x002b6c88`.
+
+| address | name | confidence | what |
+| --- | --- | ---: | --- |
+| `0x000b8590` | `WorldManager_Construct` | 78 | stores the literal `WorldManager.cpp` at `+0x30`, builds `Collision_Construct` and its siblings, constructs the track object, then calls the target setter with **0.5** |
+| `0x000b2af0` | `Track_Construct` | 65 | stores the literal `Track.cpp` at `+0x30`; opens its first track file, **0.4**, then `TrackStartup_Load` and the rest |
+
+`0x0003c680` and `0x0005cb40` are left as they are: the first constructs the
+`0x000b8590` object (so it is the per-mode setup, below 50 for a name) and the
+second is shared by 21 callers. `0x0067a858` is not a seventh caller: it is a
+TOC-switching thunk (`subis r2` / `addi r2` / `b 0x002b2c60`), so the "argument
+unread" of the previous page is moot. `0x000b43b0` (0.4) and `0x000b9380`
+(0.5) have no direct caller: `0x000b9380` constructs `0x000b2af0` as well, so it
+is a second world-manager kind, and `0x000b43b0` is read only by its 0.4 (a
+second track kind, unread). Their callers are vtable or data references, not
+followed.
+
+The order inside one race load, each a **call to `0x002b2c60`**:
+
+1. `0x000b2af0`, the track object: its first file is open - **0.4**.
+2. `0x000b8590`, the world manager, after the track object and its collision
+   siblings are built - **0.5**.
+3. `0x0003c680`, the mode's setup, when `0x000b8590` returns - **0.75**.
+4. `0x0005cb40`, the per-craft constructor, **only when the craft index is the
+   last** (`(grid count at +0xe4) - 1 == param_6`) - **0.95**.
+
+So 0.4 and 0.5 are about the world, 0.75 is the world finished, and 0.95 is the
+last craft built. In this build's `race::load` the crafts are read before the
+track geometry, so the two outer milestones are identities (the track file read,
+the geometry and environment staged) and the inner two are **placed by position,
+chosen, not measured**: `WorldBuilt` after the spline, collision and gantry,
+`CraftsBuilt` just before `Loaded` is assembled.
+
+### The easing law - confidence 80
+
+`0x002b2c60` disassembled: `obj+0x108 = fraction * 166.0`, then **if the new
+target is ahead of the shown count (`obj+0x104`) and the shown count is above
+the constant at TOC `+0x60d4`, `obj+0x10c` (the rate) is doubled**. Unread: the
+constant's value; it is the zero operand passed to the draw calls beside it, so
+this build takes it as 0.0. The per-frame step at `0x002b6c88`: `shown += rate`;
+if `shown > target`, `shown = target` and `rate = obj+0x110` (0.1). So the base
+rate is 0.1 column a frame, **doubled by every milestone that lands while the
+bar is behind**, which is how a slow bar catches a fast loader, and reset when
+it catches up.
+
+### Measured on this build (debug, Talon's Junction, HD Fury EU)
+
+`TrackRead` at 33 ms, `TrackBuilt` at 2.64 s, `WorldBuilt` 1 ms later,
+`CraftsBuilt` at 2.84 s, load finished at 2.85 s. At the 0.1 column rate with
+doublings the bar is at about 33 of 166 columns when the load ends - the
+original's load runs for much longer than the target's ease, and ours does not,
+so **what the screen does at the end is this build's own and chosen**: the whole
+bar, then the fade. Whether the original holds the screen until the bar crosses
+the 90 % threshold (`149.4`, TOC `+0x60cc`, read at `0x002b7a44`) was not read;
+`0x002b7a44` is the widget-clock branch, not a wait.
+

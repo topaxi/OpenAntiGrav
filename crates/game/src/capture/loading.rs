@@ -37,6 +37,10 @@ pub struct LoadingOptions {
     /// Which of the screen's two waits to draw, and what the current load is
     /// doing - `--loading-step`. Stated for the same reason `progress` is.
     pub phase: crate::loading::Phase,
+    /// A real race load to run on a worker while the ticks are paced at 60 Hz,
+    /// `--loading-live`: the bar then shows the stage the load has reached by
+    /// tick `ticks`, instead of a stated state. `None` draws a stated one.
+    pub live: Option<crate::race::Options>,
     /// Which adapter to draw with, from `[graphics] renderer`.
     pub renderer: oag_display::display::Renderer,
     /// The shape the game is drawn in, from `[display] aspect`.
@@ -81,9 +85,34 @@ pub fn loading(
     // wave draws from its own `Rng` on every one of them, so frame `n` is only
     // reachable by having drawn the `n - 1` before it.
     let mut quads = screen.quads();
+    // A live capture is one real load, paced at the window's own 60 Hz so the
+    // frame the capture stops on is a moment of that load. Detached when the
+    // capture returns, as a window's own worker is.
+    let mut worker = options
+        .live
+        .clone()
+        .map(|race| crate::race::LoadWorker::spawn(race, options.progress.current.clone(), None));
     for _ in 0..options.ticks {
-        screen.advance(options.progress.finished);
+        let finished = match &worker {
+            Some(worker) => {
+                std::thread::sleep(std::time::Duration::from_nanos(16_666_667));
+                let progress = worker.progress();
+                screen.set_load_stage(progress.load_stage);
+                progress.finished
+            }
+            None => options.progress.finished,
+        };
+        screen.advance(finished);
         quads = screen.quads();
+    }
+    // Said aloud rather than dropped: a load that failed at once would
+    // otherwise be a bar parked at its first target with nothing to explain it.
+    if let Some(worker) = worker.as_mut().filter(|worker| worker.is_finished()) {
+        match worker.join() {
+            Some(Ok(_)) => log::info!("the live race load finished"),
+            Some(Err(why)) => log::warn!("the live race load failed: {why:#}"),
+            None => {}
+        }
     }
     let vertices = oag_render::loading::vertices(&quads);
     anyhow::ensure!(

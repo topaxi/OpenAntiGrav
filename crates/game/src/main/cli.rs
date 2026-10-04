@@ -198,6 +198,13 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "STEP", requires = "loading_screen")]
     pub(crate) loading_step: Option<String>,
 
+    /// With `--loading-screen` and `--loading-step race`, run a real race load
+    /// of `--track` on a worker, paced at 60 Hz, and draw the bar at the stage
+    /// the load has reached by `--ticks`. How a capture sees a stage-driven bar
+    /// step, which no stated state can show.
+    #[arg(long, requires = "loading_screen")]
+    pub(crate) loading_live: bool,
+
     /// Write everything the mixer produced to a WAV instead of to a device.
     ///
     /// The audio counterpart of `--screenshot`, and for the same reason: this

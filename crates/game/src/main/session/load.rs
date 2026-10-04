@@ -177,6 +177,7 @@ impl Session {
                 // and letting that through would head the screen "READY" over a
                 // movie that is still decoding.
                 finished: false,
+                load_stage: 0,
             },
         )
     }

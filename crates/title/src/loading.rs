@@ -30,7 +30,7 @@
 //! `docs/ghidra/functions/psp-pulse-usa/loading-screen.md`.
 
 /// A title's loading screen, as far as its own disc states it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Loading {
     /// The procedural wave and the tips beside it, when the title authors them.
     ///
@@ -76,6 +76,44 @@ pub struct Loading {
     /// The small labels the screen names its regions with, when the title
     /// draws them. See [`Labels`].
     pub labels: Option<Labels>,
+    /// How the progression bar fills, when the title's own loader drives it.
+    /// See [`Progression`].
+    pub progression: Option<Progression>,
+}
+
+/// How a progression bar fills: a first target, the loader's milestones, and
+/// the easing the bar chases them with.
+///
+/// Wipeout HD's bar is **driven by the load's own stages**, not a clock. The
+/// screen's constructor stores a first target (`0x002b9a28`), the loader then
+/// calls `LoadingScreen_SetProgressTarget` (`0x002b2c60`) with a fraction at
+/// each stage, and every frame the shown column count moves toward the target
+/// by a rate (`0x002b6c88`). See `oag_hd::loading::PROGRESSION`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Progression {
+    /// The target the bar is built with, as a fraction of the bar.
+    pub start: f32,
+    /// The target each load stage sets, in order: the first entry is what the
+    /// first stage the loader reports sets, and so on. Targets never go back.
+    pub milestones: &'static [f32],
+    /// Columns the shown count advances each frame, and what the rate returns
+    /// to once the bar has caught its target.
+    pub rate: f32,
+    /// Columns across the bar, which scales every fraction above.
+    pub columns: f32,
+}
+
+impl Progression {
+    /// The target, in columns, once `stage` stages have been reported: the
+    /// first target at `0`, then one milestone per stage.
+    #[must_use]
+    pub fn target_after(&self, stage: usize) -> f32 {
+        let fraction = match stage {
+            0 => self.start,
+            n => self.milestones.get(n - 1).copied().unwrap_or(1.0),
+        };
+        fraction * self.columns
+    }
 }
 
 /// The five labels Wipeout HD's loading screen writes over its regions, each

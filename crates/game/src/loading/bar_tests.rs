@@ -82,3 +82,73 @@ fn the_labels_are_drawn_behind_their_bullets_and_a_missing_one_is_skipped() {
         .count();
     assert_eq!(bullets, 4, "one bullet per label drawn");
 }
+
+/// Lit columns of a race load's bar, `0` while no column is lit.
+fn lit_in_race(screen: &Screen) -> f32 {
+    let list = screen.draw_list(Phase::Race, &Progress::default(), &Atlas::build());
+    list.iter()
+        .find_map(|draw| match draw {
+            Draw::TiledSprite { rect, color, .. } if color[..3] == BAR_FILL[..3] => {
+                Some((rect[2] / (BAR_BOX.2 / bar::COLUMNS)).round())
+            }
+            _ => None,
+        })
+        .unwrap_or(0.0)
+}
+
+/// HD's bar follows the load's own stages: a first target of a fifth that it
+/// eases up to and holds, and each stage the load reports moves the target on.
+/// Dropping the stage report leaves the bar parked at 33 columns.
+#[test]
+fn a_stage_driven_bar_holds_at_its_target_until_the_load_reports_a_stage() {
+    let mut screen = feature_screen_with(None);
+    screen.fill = Some(fill::Fill::new(oag_hd::loading::PROGRESSION));
+    for _ in 0..100 {
+        screen.advance(false);
+    }
+    assert!(
+        (lit_in_race(&screen) - 10.0).abs() < f32::EPSILON,
+        "0.1 a frame"
+    );
+    for _ in 0..1000 {
+        screen.advance(false);
+    }
+    assert!(
+        (lit_in_race(&screen) - 33.0).abs() < f32::EPSILON,
+        "held at 20 %"
+    );
+
+    for stage in 1..=4 {
+        screen.set_load_stage(stage);
+        for _ in 0..2000 {
+            screen.advance(false);
+        }
+        let expected =
+            (oag_hd::loading::PROGRESSION.milestones[usize::from(stage) - 1] * 166.0).floor();
+        assert!(
+            (lit_in_race(&screen) - expected).abs() < f32::EPSILON,
+            "stage {stage}: {} lit against {expected}",
+            lit_in_race(&screen)
+        );
+    }
+
+    screen.advance(true);
+    assert!(
+        (lit_in_race(&screen) - 166.0).abs() < f32::EPSILON,
+        "full once ready"
+    );
+}
+
+/// A title that names no progression keeps the time estimate, so Pulse's and
+/// Pure's screens do not change.
+#[test]
+fn a_title_with_no_progression_keeps_the_time_estimate() {
+    let mut screen = feature_screen_with(None);
+    assert!(screen.fill.is_none());
+    screen.set_load_stage(4);
+    for _ in 0..240 {
+        screen.advance(false);
+    }
+    let expected = ((1.0 - (-1.0f32).exp()) * 166.0).floor();
+    assert!((lit_in_race(&screen) - expected).abs() <= 1.0);
+}

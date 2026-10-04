@@ -514,3 +514,5 @@
 0x00623e40	function	Scream_UpdateVoiceBend	82	xfade.md
 0x00624158	function	Scream_SetVoiceBend	80	xfade.md
 0x0062bb58	function	Scream_SetVoiceParams	76	xfade.md
+0x000b8590	function	WorldManager_Construct	78	loading-screen.md
+0x000b2af0	function	Track_Construct	65	loading-screen.md
