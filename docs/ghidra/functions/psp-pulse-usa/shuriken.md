@@ -282,6 +282,11 @@ spent even if it were decoded.
 
 ## A neighbour read on the way: the Repulser
 
+**Superseded 2026-10-04 by [repulser.md](repulser.md).** The four copies below
+are written and never read, `+0x128` is `damage` rather than `blastforce`, and the
+weapon is a pool entity whose two track-following waves do the work. The original
+note is kept as it was written.
+
 `Weapon_FireRepulser` (`0x0886ce8c`) was decompiled in the same pass and is
 recorded here rather than on a page of its own, because one function is not
 enough for one. It is **not** an instantaneous blast:
