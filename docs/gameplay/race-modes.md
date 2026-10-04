@@ -448,8 +448,9 @@ decided it should.
 
 Both also grant *"a free turbo pickup once per lap"*, and **it is implemented as
 of 2026-08-11** - on the lap edge, into an empty slot only, including lap 1's
-own edge at the start of the race (fixed 2026-08-19; the field started every
-race one turbo short until then). The manual string is
+own edge (fixed 2026-08-19; the field started every race one turbo short
+until then), which since 2026-10-04 is the first line crossing, read from
+`TimeTrial_UpdateRacing` (`0x0882ddd8`) - see [pickups.md](pickups.md). The manual string is
 no longer the only record of it: `TimeTrial_HUD.xml` authors a
 `PickupBackground` and exactly one weapon icon, `TurboIcon`, where `Zone_HUD.xml`
 authors none and `Arcade_HUD.xml` authors all thirteen. Two shipped files

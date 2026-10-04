@@ -550,16 +550,24 @@ In short:
 
 ## Open
 
-- **What the Pulse gantry does after `GO`, and what drives it (2026-09-30).** Measured on
-  PPSSPP with the craft not driven: `GO` keeps strobing on the panel for at least 21 s of
-  race clock, with no exit, no `3 2 1` replay and no `Board` dressing (start-gantry.md,
-  "What the original does after `GO`"). Ours loops the authored frames 216-349
-  (`race::gantry::GO_LOOP`, chosen, not measured). Unknown: whether the strobe is a loop, a
-  per-state write or the gated accumulator, what (if anything) later swaps the panel to the
-  `Board`/banner (lap, distance, a trigger), and whether HD's glyph shows the same stray strip
-  past 6.000 s (its +10.004 teleport says likely; its countdown was never captured). Also
-  noticed: ours draws the chevron HUD hexagon over the banner's left end on a stationary
-  craft from tick ~460; the original's stationary frames show none.
+- ~~**What the Pulse gantry does after `GO`, and what drives it (2026-09-30).**~~
+  **Answered 2026-10-04 (`pulse-start-leftovers`), read from `BOOT.BIN` at 85**:
+  `RaceManager_Update` (`0x08829778`) holds the gantry mesh's time in a window by the
+  player's crossing count - `[3.2, 5.5)` before the first crossing (`GO` strobing over
+  frames 192..330), then `[6.0, 9.0)` (`Board`), `[9.5, 12.0)` on the lap before the
+  last (`FINAL LAP`), `[12.4, 13.3)` on the last (chequered) - the same law HD runs.
+  The intro sets 0 at `ready` and the release sets 3.0, which is also what started
+  the timeline at tick 92. `GO_LOOP` is gone; the lap states play through the HD
+  lane's `PanelCull`. The chevron hexagon was our free-Turbo icon granted on the
+  release; the original grants it on the line crossing, fixed. Evidence:
+  [gantry-clock.md](../../docs/ghidra/functions/psp-pulse-usa/gantry-clock.md),
+  [start-gantry.md](../../docs/rendering/start-gantry.md#what-the-original-does-after-go-it-holds-go).
+  **Still open from it**: the lap states (`Board`, `FINAL LAP`, chequered) are the
+  asset's frames at the read windows and were not captured on PPSSPP; one live read
+  of `mesh+0x40` after the release (prediction: 3.0, then 3.2, ramping, reset every
+  138 ticks) would take the law from 85 to 90; whether HD's glyph shows the same
+  stray strip past 6.000 s is still unread; the `Cockpit321Go` overlay's clock is
+  now known (countdown-widgets.md) and not rewired.
 - ~~What places the countdown's `Cockpit321Go` widget~~ **Answered in two parts, and
   both stand.** (2026-09-06, second pass) `Hud_BindWidgets` (`0x0881fbec`) resolves
   `"HUD->ReadyGo"`/`"HUD->Cockpit321Go"` the same `"HUD->"`-lookup way `HudSight_Bind`

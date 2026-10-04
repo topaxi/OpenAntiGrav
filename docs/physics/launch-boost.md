@@ -154,9 +154,21 @@ geometry [grid-state.md](grid-state.md) already named, not these terms.
 
 ## Open
 
-- `FUN_08904fd4`, called by the grader on the perfect grade for a human craft, is in
-  the exhaust-flare family: the perfect-start effect's trigger. Not wired; recorded for
-  whoever takes the exhaust flare.
+- ~~`FUN_08904fd4`, the perfect-start effect's trigger~~ **Read and wired
+  2026-10-04**: `ExhaustFlare_OnPerfectStart` arms the engine flare's boost timer
+  to `0.8` (the pad's) and plays `TURBO` from `weapons.bnk`, on the human's grade-2
+  edge only; `race::perfect_start`, `Cue::Turbo`. No `.POB`. See
+  [perfect-start.md](../ghidra/functions/psp-pulse-usa/perfect-start.md).
+- **The AI's grade 3 is confirmed from both ends** (2026-10-04, 85, static): the
+  grader writes it with no thrust edge and `Ship_UpdateStartBoost` multiplies
+  `boostMul` by the per-slot `StartBoost[8]`, which on Venom falls from the front
+  of the grid to the back. Not ported, by the maintainer's rule. **Tried and
+  reverted the same day**: the field timing its first thrust into the perfect
+  window (earning grade 2 the player's way, chosen) put eight
+  `ai_dekonstruct_black_ground_truth` seeds one or two destroyed craft over their
+  bounds, made `stall_rescue_ground_truth`'s healthy-craft check see one stalled
+  tick (the held opponent) and moved `leach_energy_ground_truth`'s scenario. An AI
+  lane that wants the field's launch boost has to make the field survive it first.
 - The AI's grade 3 and its per-slot table have not been watched. Reading `craft+0x294`
   of the seven opponents in a Single Race through the first second would confirm the
   decompile and give the original's AI start for the AI lane to compare against.

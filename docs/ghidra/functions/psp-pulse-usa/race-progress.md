@@ -502,7 +502,9 @@ which is exactly the "spawns behind the line, crosses it seconds in" that
 the original's version of the same gate.
 
 The rest of the constructor: `AiStats_LoadAll`, `WeaponAiStats_Load`, the
-skybox object (`DAT_08b323e0`) unless Zone, the `InGame` state's
+start gantry (`DAT_08b323e0`, billboard slot 8 of `Billboard_Slots`, stored
+at `manager+0x7b4`; called the skybox object here until 2026-10-04, see
+[gantry-clock.md](gantry-clock.md)) unless Zone, the `InGame` state's
 `InGameInfoText`/`InGameMusicText`/`InGameMusicBG` widgets, the track name
 into `InGameTrackDescriptionScreen`, grid size `manager+0x1a0c =
 grid_count - 1`, eight `-1` slots at `+0x58`, and a `0x750`-byte child

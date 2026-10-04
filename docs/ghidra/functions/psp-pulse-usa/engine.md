@@ -792,7 +792,8 @@ the grade starts at 0, which is why the frame thrust first lands still reads
 and 81 frames after release): grades 1, 2, 1, 0 and unwritten, multipliers and engine
 output as the law says, sixty boosted frames each; see
 [launch-boost.md](../../../physics/launch-boost.md). Confidence **92** for the human
-path (decompile, and the five runs); **80** for grade 3 (decompile only, not watched).
+path (decompile, and the five runs); **80** for grade 3 (decompile only, not watched). *(2026-10-04: grade 3 is now read from its reader as well, `Ship_UpdateStartBoost`'s
+case 3, and stands at 85, still not watched; see [perfect-start.md](perfect-start.md).)*
 Zone's four-corner branch joins the same tail (`0x0884c918`), so the original grades a Zone launch too; not watched, left out of the port. A respawn does **not** replay the window, though the reset branch reads as if it would:
 watched, the timer holds through state 3.
 
