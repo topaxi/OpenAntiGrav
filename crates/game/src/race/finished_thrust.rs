@@ -58,8 +58,8 @@ fn rung(difficulty: oag_ai::Difficulty) -> Difficulty {
 
 /// `AI_ResolveSkillScale`'s mode term: `g_game_mode` 3 is the Single Race
 /// (read live), 9 Head to Head (decompile). Every other mode adds nothing,
-/// Tournament included: which `g_game_mode` a Tournament race runs under
-/// was not read, so it is **chosen, not measured**.
+/// Tournament (`g_game_mode` 4, `docs/ghidra/functions/psp-pulse-usa/state-machine.md`)
+/// included, which is what the decompile reads.
 fn mode_term(mode: oag_race::Mode, weapons_on: bool, full_grid: bool) -> ModeTerm {
     match mode {
         oag_race::Mode::SingleRace => ModeTerm::Race {
@@ -92,8 +92,11 @@ pub(super) struct RaceTerms<'a> {
 /// `None`, said so in `report`, when the class is not one of the four or
 /// the file is absent or does not parse - Pulse ships one per class (PSP and
 /// PS2 alike), Pure one file of another shape, HD/Fury none. With no
-/// `stats.xml` (anything but Pulse on a PSP disc) the skill scale is the
-/// original's own `2.0` default.
+/// `stats.xml` read (anything but Pulse on a PSP disc: PS2 Pulse keeps its
+/// track table where this project does not read it) the skill scale is
+/// `2.0`, the value the original substitutes only when its own table is
+/// absent - for PS2 a **chosen, not measured** stand-in, which caps the
+/// finished craft at about 64 % at every tier.
 pub(super) fn read(
     archives: &mut oag_assets::Archives,
     terms: &RaceTerms,

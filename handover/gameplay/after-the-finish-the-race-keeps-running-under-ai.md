@@ -21,8 +21,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   a 4th-place finish read `56.0` live (the prediction of `100` written before the run failed: the target sits about 250 units behind
   the craft ahead). Ours caps its driver's thrust at that figure (`race::finished_thrust`, the cap rather than a replacement **chosen**).
   [race-finish.md](../../docs/ghidra/functions/psp-pulse-usa/race-finish.md#the-finished-players-thrust-ai_computeopponentthrust-with-the-players-own-rank-2026-10-04).
-  **Still open on it**: the law's unsaturated regime (needs the opponents' `spread` wander, `FUN_08852ef4`), and which `g_game_mode`
-  a Tournament race runs under (ours adds no mode term there, chosen).
+  **Still open on it**: the law's unsaturated regime (needs the opponents' `spread` wander, `FUN_08852ef4`), (Tournament: no mode term, read, `g_game_mode` 4).
 - ~~**The `Race End Photo` state**~~ **Ported 2026-10-02 (pulse-end-photo), line finishes only.** The state is entered at `F+61` and the legend
   (`InGame_Definition.xml`'s own two `Stats` texts) fades in over 42 frames; ours holds the clean view, draws the disc's lines and leaves on
   X/Start/click; SELECT does nothing. **Still open on it**: photo mode itself (`forward="select"` goes to `InGame Photo`), why the fade is
@@ -49,6 +48,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   Candidates: the second-tier section box test (`oag_render::pvs::section_view`, ours is never narrower than the picture), a state mesh of the start structure the original
   hides by animation, or a draw flag. `scripts/psp-wreck-capture.py --ge-dump-k` on the original at that pose, and a draw list of its frame, is the next measurement.
 - **Zone and Eliminator wrecks** use the destroy camera too, which now masks by the wreck's section: **changed, not seen**.
+- **Untested call site (2026-10-04)**: `Session::tick_endrace`'s d-pad call into `Race::spectator_press` on `Race End Photo` (the Race method is tested, the session wiring is not; no harness drives the EndRace flow).
 - **Untested call site**: `scene/frame.rs`'s `race.visible_set(..)` (drop it and `visible_set` is never read; `station_camera_section` and `set_exact` are tested, the wiring is not).
 - **The wall frames of the manual wreck run** (`pulse-end-photo/sheet_manual3.png`, solid teal and olive): found and fixed. A camera on an authored station
   (the destroy camera, the director) sits hundreds of units from the craft, where our camera section lookup failed and fell to "draw everything": the shot from

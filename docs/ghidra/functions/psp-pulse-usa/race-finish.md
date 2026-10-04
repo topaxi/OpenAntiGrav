@@ -84,7 +84,7 @@ and behind includes the craft itself, so both rubber-band terms come out zero (`
 gap over `150`). Every craft indexes `A[]` and picks `ref` by **the player's** place, opponents included; that is
 the player coupling [`ai-stats.md`](ai-stats.md#the-skillscale-consumer-ai_computeopponentthrust) already records.
 
-**For the finished player `step` sits on its lower stop**: `ref.spread` reads about `5` (the gap logged at `F+2`
+**For the finished player `step` sits on its lower stop**: `ref.spread` comes out at about `5` (implied by the gap logged at `F+2`
 was `-240.5` with the craft ahead only 10 units away), so the player aims about 250 units behind the craft ahead
 and lands on `-0.3 * A[r-1]`. The finished player's thrust is then
 
@@ -181,7 +181,7 @@ Cases `1` and `4`, `+0x274` and the reachability of `0` and `8` are [below](#rac
 
 **Read and measured 2026-10-04 (lane `pulse-postfinish`).** `RaceManager_Update` (`0x08829778`, [gantry-clock.md](gantry-clock.md))
 sets `manager+0x19ed` when the front end's state name compares equal to `Race End Photo` and then, every frame while it is
-set (or under `g_game_mode 0xc`, unread), reads four buttons through `Input_IsPressed(g_input, n)`:
+set (or under `g_game_mode 0xc`, `AI Race`), reads four buttons through `Input_IsPressed(g_input, n)`:
 
 | `n` | Button (live) | What it calls |
 | --- | --- | --- |
