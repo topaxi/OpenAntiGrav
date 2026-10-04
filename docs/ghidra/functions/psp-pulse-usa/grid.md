@@ -516,6 +516,12 @@ after a reimport.
 
 ## Custom Race does not go through `Race_SpawnGrid` at all, and hardcodes `id` to 0
 
+> **Corrected 2026-10-04.** `FUN_0882e57c` below is `Tournament_Construct`
+> (mode 4), not Single Race. Single Race is `ArcadeRace_Construct`
+> (`0x0882c108`), whose loop has the same `id = 0` shape. The per-racer
+> string passed in is the **team name**, and `Craft_Construct` resolves it.
+> See "Which team flies which slot, recovered" below.
+
 2026-09-02, live-confirmed. Everything in the previous section is real, but it
 describes a code path this session's own live capture never reaches from
 **RACEBOX -> CUSTOM RACE -> SINGLE RACE** - the menu route
@@ -582,6 +588,167 @@ above are read at confidence 90 (decompiled and cross-checked live), but
 which menu route reaches which function is confirmed for exactly one route
 and hypothesised for the other, and a name should not get ahead of that.
 
+## Which team flies which slot, recovered: the AI roster draw (2026-10-04)
+
+**Answered for Single Race, live-confirmed.** Every eligible team but the
+player's is shuffled, the first seven race, and the player is the last racer.
+The draw happens on every launch, off a wall-clock seed, so the original
+gives a different grid each time. Confidence **85** for the outcome, which
+was seen live, and **80** for the parts read statically only (the swap
+below, and seven of more than eight once DLC packs are mounted).
+
+### Correction first: Single Race is not `Tournament_Construct`
+
+The previous section's spawn function, `0x0882e57c`, is `Tournament_Construct`
+(mode 4, already named on [state-machine.md](state-machine.md)). **Single
+Race is `g_game_mode` 3, `ArcadeRace_Construct` (`0x0882c108`).** Four
+pieces of evidence agree:
+
+- `g_game_mode` read **3** live on every launch below.
+- A breakpoint on `0x0882e57c` never fired across three loads (two launches
+  and a restart).
+- Its first code word still matches `BOOT.BIN` (`0x27bdffc0`), while
+  `0x0882c108`, `0x08820d78`, `0x0882c03c` and `0x08821bd4` all carry
+  PPSSPP's JIT block marker (`0x68......`), which means they ran.
+- The live race-session object's vtable is `0x08ac9820`, the one
+  `ArcadeSession_Construct` (`0x0882c03c`) installs.
+
+The `id = 0` finding survives: `ArcadeRace_Construct` has the same loop, an
+immediate `0` for `id`, `racer_index` as the slot, and the per-racer string
+as the last argument. **That string is the team name, not a display name.**
+`Craft_Construct` (`0x08840c74`) resolves it on its first use:
+`craft+0x370 = Team_FindByName(param_5)`, falling back to `"Feisar"` when the
+lookup fails. `Ship_LoadModel` (`0x08843258`) then builds every hull path
+from `craft+0x370`'s `+0x94` (the team's `location`) through `"%s\\%s.vex"`,
+`"%s\\Ship.vex"` or `"%s\\Zone.vex"`. The handover's earlier "Craft_Construct
+is ruled out" was wrong: it is where the team name becomes a team.
+
+### Where the per-racer team names come from
+
+```c
+// InGame_Update (0x08813328), substate 1, g_game_mode 3/9/12:
+ArcadeSession_Construct(obj);            // 0x0882c03c
+  -> RaceSession_Construct(obj);         // 0x08820d78: g_race_session = obj;
+                                         //   memset(obj+0x3c, 0, 0x20);
+       -> RaceSession_DrawAiRoster(obj); // 0x08821bd4
+// later, ArcadeRace_Construct (0x0882c108):
+for (i = 0; i < racers - 1; i++)
+    Race_CreateAiRacer(mgr, i, 0, i, g_race_session->team[i]);   // +0x3c + 4*i
+Race_CreatePlayer(mgr, racers - 1, 0, racers - 1, g_race_session->team[7]); // +0x58
+```
+
+`RaceSession_DrawAiRoster` (`0x08821bd4`), read at the instruction level:
+
+```c
+if (g_game_mode < 0xe) {                       // local modes only
+    for (i = 0; i < 8; i++) s->team[i] = 0;
+    srand(sceKernelGetSystemTimeWide());       // 0x08a7719c -> srand 0x089731b4
+    n_all = Team_ListRaceTeams(&all);          // 0x088893e8: Type="Race" only
+    n = 0;
+    do {                                       // repeats until 7 are taken
+        for (k = 0; k < n_all; k++)
+            if (RaceSession_IsTeamEligible(s, all[k])) {
+                pool[n++] = all[k]; all[k] = 0;
+            }
+    } while (n < 7);                           // fewer than 7 eligible: never exits
+    for (i = 0; i < n; i++) {                  // 0x08821cd0: divu v0,s4; mfhi
+        j = rand() % n;
+        swap(pool[i], pool[j]);
+    }
+    for (i = 0; i < 7; i++) s->team[i] = pool[i]->name;   // +0x74
+    if (g_player_team_definition && *g_player_team_definition->name)
+        s->team[7] = g_player_team_definition->name;      // 0x08821d68: sw s1,0x58(s0)
+}
+```
+
+`RaceSession_IsTeamEligible` (`0x08821dd4`) passes a team when **all** of:
+
+1. it is not null (a taken entry is zeroed, so a second pass skips it);
+2. its name differs from the player's, by a plain byte compare
+   (`FUN_08973424`, a `strcmp`);
+3. `Definition_IsUnlocked(team, 0)`;
+4. its name does **not contain** `"Zone"` (`0x08a7a1dc`, through the
+   case-sensitive `strstr` at `0x089737ac`);
+5. outside Demo (`g_game_mode == 2`), always; in Demo, only a team whose
+   `Values Multiplayer` attribute read `true` or `1` (`+0xa9`).
+
+`Team_ListRaceTeams` (`0x088893e8`) lists every team definition and drops
+any whose `+0xa0` is not `0`. `TeamDefinition_ParseElement` (`0x088c2a38`)
+sets `+0xa0` from the `Values` element's `Type` attribute, indexed against
+the two-entry table at `0x08ab1ad0`: `"Race"` is `0`, `"Zone"` is `1`, and
+anything else is `-1`. The attribute defaults to `"Race"`. The same parser
+reads `Location` (`+0x94`), `Multiplayer` (`+0xa9`), `SoundRegister`,
+`HelpText` and `AIOnly`, plus a `Stats` element's `Speed`/`Thrust`/
+`Handling`/`Shield`. `Team_FindByName` (`0x08889488`) is a `strcasecmp`
+walk over the same list on `+0x74`.
+
+**The shuffle is not Fisher-Yates.** Each index trades places with
+`rand() % n` over the whole range, which is biased. The port keeps that
+swap exactly (`crates/game/src/livery/draw.rs`). `rand` is the libc LCG on
+[prng.md](prng.md).
+
+### Live: seven launches, three player teams
+
+PPSSPP v1.20.4 under Xvfb, `pulse-psp-usa.chd`, RACEBOX -> CUSTOM RACE ->
+SINGLE RACE, Talon's Junction, the walk `scripts/psp-drive.py menu
+--single-race` drives. Read after each load: `g_race_session` (`0x08b34320`)
+`+0x3c..+0x58`, `g_player_team_definition` (`0x08b3104c`) `+0x74`, and each
+craft's own `+0x370 -> +0x74` through `g_race_manager` (`0x08b317b4`) `+0x78`.
+
+| Launch | Player | Racer indices 0 to 6 (AI) | 7 |
+| --- | --- | --- | --- |
+| 1 | Assegai | Goteki, EGX, Qirex, Triakis, Feisar, AG_Systems, Piranha | Assegai |
+| 2 | Assegai | Feisar, AG_Systems, Piranha, EGX, Triakis, Qirex, Goteki | Assegai |
+| 3 | Assegai | Feisar, AG_Systems, Goteki, Triakis, EGX, Piranha, Qirex | Assegai |
+| 4 | Assegai | Goteki, Triakis, AG_Systems, Piranha, EGX, Qirex, Feisar | Assegai |
+| 5 | Assegai | Triakis, AG_Systems, Qirex, Piranha, Goteki, Feisar, EGX | Assegai |
+| 6 | AG_Systems | Assegai, Feisar, Qirex, Piranha, Goteki, Triakis, EGX | AG_Systems |
+| 7 | Feisar | EGX, Triakis, Assegai, Goteki, Piranha, AG_Systems, Qirex | Feisar |
+
+Launches 4 and 5 pressed right on Ship Select, which changes the skin, not
+the team. Teams are a vertical list, which `psp-drive.py menu --ship-down N`
+now drives. On launch 1 every craft's own `+0x370` team matched the session
+array index for index, with the player's craft (`+0x368` role `0`) last and
+the seven AI (`+0x368` role `2`) first. **What the table shows:** the
+player's team is never an AI team; the other seven always all race; the
+order is different on every launch; the player is always the last racer.
+`RESTART RACE` from the pause menu does not redraw: no breakpoint fired on a
+restart.
+
+**Not explained, and recorded rather than smoothed over:** an execution
+breakpoint on `0x08821bd4`'s entry, and two inside it (`0x08821cc0`,
+`0x08821d38`), never fired, while one on `Ai_Construct` (`0x088536bc`) in
+the same session fired eight times per load. The function did run (its JIT
+markers, and a fresh draw on every launch). That gap does not block the
+names, because the live outcome matches the static read on every
+distinctive feature. It would matter for a capture that needs to stop
+inside the draw. Arming earlier (before Main Menu) or PPSSPP's IR
+interpreter are the two things not tried.
+
+### What the port does with it
+
+`oag_game::livery::teams_for_slots` reproduces the filter's name tests
+(player excluded, `Zone` excluded; `Type="Race"` is already
+`catalogue::teams`'s filter), the swap and the first-seven cut, with slot 0
+the player's. **Chosen, not measured:** the seed is the race seed through a
+salted generator of its own (`ROSTER_SALT`), because the simulation may not
+read a clock. One seed gives one grid, so `--race` without `--seed` always
+flies the same order where the original would not. The unlock test is left
+to the front end's list. A list shorter than seven cycles instead of
+hanging. Every other title inherits this law, since none has a measured
+rule of its own.
+
+**Tournament keeps its first leg's roster.** `Tournament_Construct` calls
+the draw only while `DAT_08b30fa4` is `0`. On later legs it reorders the
+racers by the previous result (`+0xd0`) and reuses each racer's cached team
+(`+0x110`), through `FUN_0882e2fc`. The port's legs share one seed, which
+gives the same roster. The grid reorder is not ported.
+
+**The DLC case is static only.** With four packs mounted, eleven teams are
+eligible for a Pulse player, and the draw picks seven of them at random.
+The earlier "the extra teams simply do not race" was this project's own
+truncation, not the original's.
+
 ## Names landed
 
 | Address | Name | Confidence |
@@ -591,13 +758,26 @@ and hypothesised for the other, and a name should not get ahead of that.
 | `0x088536bc` | `Ai_Construct` | 80 |
 | `0x08926ae8` | `StartPosition_Bind` | 82 |
 | `0x08ab0a90` | `g_grid_orders` | 82 |
+| `0x08821bd4` | `RaceSession_DrawAiRoster` | 85 |
+| `0x08821dd4` | `RaceSession_IsTeamEligible` | 80 |
+| `0x08820d78` | `RaceSession_Construct` | 75 |
+| `0x0882c03c` | `ArcadeSession_Construct` | 72 |
+| `0x088285e0` | `Race_CreateAiRacer` | 75 |
+| `0x088893e8` | `Team_ListRaceTeams` | 80 |
+| `0x08889488` | `Team_FindByName` | 85 |
+| `0x088c2a38` | `TeamDefinition_ParseElement` | 80 |
+| `0x08b34320` | `g_race_session` | 80 |
+| `0x08b3104c` | `g_player_team_definition` | 85 |
 
-`0x0882821c`, the local player's twin of `Race_SpawnAiRacer`, is **deliberately
-not named**: it was inferred from the call site's position in the `if`/`else`
-and not read at the time. Since read one level further (previous section) -
-it is also `FUN_0882e57c`'s call for the last racer, same argument shape,
-`id` hardcoded to `0` there too - but still not named, for the same reason
-its neighbours in that section are not.
+The 2026-10-04 rows are evidenced in "Which team flies which slot,
+recovered" above. `RaceSession_DrawAiRoster` and `Team_FindByName` sit at 85
+because the live grid matched their static reads on seven launches.
+`RaceSession_Construct` and `ArcadeSession_Construct` sit lower: their call
+chain is static, and the only live evidence is the session vtable and the
+JIT markers. `Race_CreateAiRacer` is `Race_SpawnAiRacer`'s twin for the
+Arcade and Tournament constructors; the seven AI crafts it built live carried
+role `2` and the team passed in. `0x0882821c` is `Race_CreatePlayer`, named
+on [race-progress.md](race-progress.md).
 
 ## What is still open
 
@@ -614,7 +794,7 @@ its neighbours in that section are not.
   Both closed: the AI landed 2026-08-11 and per-team hulls on 2026-08-15. A
   slot now flies its own team's `Data\Ships\<Team>\Ship.vex` - eight
   different models, 845 to 1,497 triangles - with its own nozzle and plume. See
-  `crates/game/src/livery.rs`. **Which team flies which slot is narrowed for
+  `crates/game/src/livery.rs`. ~~**Which team flies which slot is narrowed for
   one mode and re-opened for the one that matters.** `id` is a genuine,
   separate per-entrant field on `Race_SpawnGrid`'s struct (confidence 90 on
   the layout and accessors, see "Which team flies which slot" above) - but
@@ -631,7 +811,16 @@ its neighbours in that section are not.
   renderer/asset-loading side, rather than either entity constructor, is the
   next place to look. The ordering `livery::teams_for_slots` uses today is
   still this project's own, not the original's, and is labelled as such in
-  the load report.
+  the load report.~~ **Closed 2026-10-04**: the route above was Tournament's,
+  and `Craft_Construct` is where the team name resolves. Single Race draws
+  its roster in `RaceSession_DrawAiRoster`, and the port follows it. See
+  "Which team flies which slot, recovered".
+- **The roster seed.** The original reads the wall clock and the port reads
+  the race seed, which no real launch varies yet, so every `--race` without
+  `--seed` flies the same order. Varying it per launch is a session decision
+  (it also moves every other seeded draw), not an RE question.
+- **The entry breakpoint on `RaceSession_DrawAiRoster` never fired** although
+  the function ran. See the end of "Live: seven launches".
 - **`modesto_heights`'s reversed grid, one slot short.** See "Reversed grids"
   above - inside the track's own bounds, not chased further.
 - **The stall rescue does not catch a craft bouncing in place.** Found while
@@ -644,6 +833,9 @@ its neighbours in that section are not.
 
 ## History
 
+- 2026-10-04: which team flies which slot recovered for Single Race
+  (`RaceSession_DrawAiRoster`, 85, live on seven launches) and ported. The
+  2026-09-02 spawn route was corrected: it was Tournament's.
 - 2026-09-02: `Race_SpawnAiRacer`'s `id` traced to a genuine per-entrant field
   on the same eight-entry struct `racer_index`/`slot` also index (confidence
   90); the front-end cluster that populates it is reached only through a
