@@ -105,11 +105,13 @@ pub struct Report {
     /// archive or would not decode - the honest count of what is still
     /// missing, kept apart from a submesh that simply has no material.
     pub unresolved_draws: usize,
-    /// Submeshes painted a flat emissive colour read off their material's
-    /// own shader inputs - see [`psp2::material::Material::emissive_colour`].
-    /// Counted among [`Self::unresolved_draws`] too, since they have no
-    /// texture, but not missing anything.
-    pub emissive_colour_submeshes: usize,
+    /// Submeshes on a placeholder shader (`fc01_dummy`) not drawn - see
+    /// [`psp2::material::Material::is_placeholder`].
+    pub placeholder_submeshes: usize,
+    /// Submeshes whose albedo is their material's `Zone_ColourN` uniform - see
+    /// [`psp2::material::Material::zone_colour`]. Counted among
+    /// [`Self::unresolved_draws`] too, since they have no texture.
+    pub zone_colour_submeshes: usize,
     /// Submeshes bound to a node of the model's own table and placed by
     /// it - through the skeleton where one was given, through the model's
     /// bind matrix otherwise. See [`placement`].
@@ -151,12 +153,20 @@ impl Report {
             (None, 0) => "untextured, no material table".to_string(),
             (None, n) => format!("untextured, {n} material(s), none of whose textures resolved"),
         };
-        let emissive = if self.emissive_colour_submeshes == 0 {
+        let placeholders = if self.placeholder_submeshes == 0 {
             String::new()
         } else {
             format!(
-                "; {} submesh(es) a flat emissive colour off their material's inputs",
-                self.emissive_colour_submeshes
+                "; {} submesh(es) on the placeholder shader fc01_dummy not drawn (its output is unread)",
+                self.placeholder_submeshes
+            )
+        };
+        let zone_colours = if self.zone_colour_submeshes == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} submesh(es) take a Zone_ColourN uniform as their colour, drawn unlit (chosen, not measured)",
+                self.zone_colour_submeshes
             )
         };
         let poisoned = if self.non_finite_texcoords == 0 {
@@ -217,7 +227,7 @@ impl Report {
         let gnf = self.gnf.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{emissive}{tangents}{lightmaps}{nodes}{gnf}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{tangents}{lightmaps}{nodes}{gnf}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -388,6 +398,22 @@ fn build_planned(
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
         report.hidden += usize::from(place.hidden && !place.unplaced);
+        // `fc01_dummy`'s fragment program samples nothing and its output is
+        // GPU bytecode nobody here has decoded, so what it draws is unknown:
+        // nothing is drawn rather than a white stand-in.
+        let placeholder = submesh
+            .material
+            .and_then(|m| decoded.materials.get(m))
+            .is_some_and(|m| m.is_placeholder());
+        report.placeholder_submeshes += usize::from(placeholder && !place.hidden);
+        let place = if placeholder {
+            placement::Placement {
+                hidden: true,
+                ..place
+            }
+        } else {
+            place
+        };
         report.unplaced += usize::from(place.unplaced);
         // The second texture is this material's lightmap, where its submesh's
         // own declaration carries a `lightmapUV` - which is the same set of
@@ -397,15 +423,20 @@ fn build_planned(
         } else {
             crate::mesh::slots::SECOND_IS_LIGHTMAP
         };
-        // A flat emissive colour is the surface's whole picture: painted in
-        // the vertex colour and drawn unlit and unshaded, which is what an
-        // emissive output with no texture is.
-        let emissive = submesh
+        // A Zone material's colour is drawn as it is: its own colour, unlit.
+        // **Chosen, not measured.** Its fragment program also declares a
+        // lightmap, `liveLighting0` and a `Zone_ColourN_Emissive` scalar
+        // (`0.5` on all eight), and how the three combine is GPU bytecode
+        // nobody here has decoded. Both readings were drawn on `altima`:
+        // lit, the colour is multiplied by a sun of `2.0 1.8 1.7` and every
+        // surface blows out to white; unlit, the eight colours read as eight
+        // colours. The scalar is read and not applied.
+        let zone = submesh
             .material
             .and_then(|m| decoded.materials.get(m))
-            .and_then(|m| m.emissive_colour());
-        report.emissive_colour_submeshes += usize::from(emissive.is_some());
-        let (colour, lit, role) = match emissive {
+            .and_then(|m| m.zone_colour());
+        report.zone_colour_submeshes += usize::from(zone.is_some());
+        let (colour, lit, role) = match zone {
             Some([r, g, b]) => (
                 [r, g, b, 1.0],
                 0.0,

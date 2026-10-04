@@ -137,13 +137,24 @@ const HEADER_LEN: usize = 0x40;
 const NAME_POINTER: usize = 0x04;
 /// Offset of the technique/shading-group name pointer.
 const TECHNIQUE_POINTER: usize = 0x18;
-/// Offset of the half-float count of a material's shader inputs.
-const INPUT_COUNT: usize = 0x28;
-/// Offset of the pointer to those halves.
-const INPUT_POINTER: usize = 0x2c;
-/// The most halves a material's input array may claim. The largest measured
-/// is twelve (`fc17_effects_vscroll_wateredge_vertexcol`).
-const MAX_INPUTS: usize = 64;
+/// Offset of the parameter-entry count of a material header.
+const PARAM_COUNT: usize = 0x30;
+/// Offset of the pointer to the parameter entries.
+const PARAM_TABLE: usize = 0x34;
+/// Bytes per parameter entry.
+const PARAM_STRIDE: usize = 0x18;
+/// The `+0x04` word of a **uniform** entry; a sampler's is `0x12`.
+const PARAM_KIND_UNIFORM: u32 = 1;
+/// The `+0x14` word of a uniform whose value lives in the 32-bit float pool.
+const PARAM_POOL_F32: u32 = 0x1000;
+/// The same word for one whose value lives in the half-float pool.
+const PARAM_POOL_F16: u32 = 0x2000;
+/// Offsets of the two value pools' (count, pointer) pairs in the header: the
+/// float pool at `+0x20`/`+0x24`, the half pool at `+0x28`/`+0x2c`.
+const POOL_F32: usize = 0x20;
+const POOL_F16: usize = 0x28;
+/// The most entries a header may claim.
+const MAX_PARAMS: usize = 64;
 /// Offset of the file-level material count, from the CPU section's own start.
 const FILE_MATERIAL_COUNT: usize = 0x44;
 /// Offset of the file-level material offset table pointer.
@@ -188,15 +199,27 @@ pub struct Material {
     /// exception in either direction
     /// (`crates/rcs/tests/omega_declaration_ground_truth.rs`).
     pub lightmap: Option<String>,
-    /// The material's authored shader-input values: `n` binary16 halves,
-    /// `n` at header `+0x28` and the array at the pointer in `+0x2c`.
-    /// Empty where the count is zero, the pointer is wild, or on PS4.
-    ///
-    /// **Raw halves, so the table stays `Eq`**; [`Self::input`] widens one.
-    /// Which input is which is not in the file (the sampler-style name hash
-    /// of HD is not stored), so the meaning is per shader family - see
-    /// [`Self::emissive_colour`].
-    pub inputs: Vec<u16>,
+    /// The uniforms this material instance authors, by name hash, in table
+    /// order: a shader's tuning numbers and colours. See [`Param`] and
+    /// [`Self::param`]. Empty on PS4.
+    pub params: Vec<Param>,
+}
+
+/// One named uniform value a material instance supplies to its shader.
+///
+/// **The name is `~crc32(name)`** ([`crate::rcsmaterial::name_hash`]), the
+/// same hash Wipeout HD's records use, and the GXP programs name the same
+/// uniforms in the clear (`oag_rcs::gxp`): 100 percent of the hashes tried
+/// against those names matched, e.g. `TimeScaler` `0xfe740a78`,
+/// `Emissive_UV_Offset` `0x78256a45`, `Zone_Colour1` `0x69bde6c6`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Param {
+    /// `~crc32(name)`.
+    pub hash: u32,
+    /// The value's components as `f32` bit patterns - up to four, fewer where
+    /// the next value or the end of its pool comes first. Bits rather than
+    /// floats so a [`Material`] stays `Eq`; [`Material::param`] widens them.
+    pub bits: Vec<u32>,
 }
 
 /// An IEEE binary16 widened to `f32`, exactly.
@@ -220,26 +243,40 @@ pub fn half_to_f32(bits: u16) -> f32 {
 }
 
 impl Material {
-    /// Input `index` as an `f32`, or `None` past the array.
+    /// The components of the uniform whose name hashes to `hash`, or `None`
+    /// when this material authors none.
     #[must_use]
-    pub fn input(&self, index: usize) -> Option<f32> {
-        self.inputs.get(index).copied().map(half_to_f32)
+    pub fn param(&self, hash: u32) -> Option<Vec<f32>> {
+        let found = self.params.iter().find(|p| p.hash == hash)?;
+        Some(found.bits.iter().map(|&b| f32::from_bits(b)).collect())
     }
 
-    /// The flat colour a `zonefc06_colour_emissive_scalar_*` material draws:
-    /// its first three inputs. **Measured against the names**: `C_Red` reads
-    /// `1 0 0`, `C_Pink` `1 0 1`, and the eight numbered variants are eight
-    /// distinct colours (blue, a blue-teal, cyan, green, pink, red, yellow, a
-    /// dark blue) - `crates/render/tests/psp2_zone_ground_truth.rs`. The
-    /// remaining inputs (`0`, `0.5`, `0`) are unread. `None` for every other
-    /// family.
+    /// Whether this is `fc01_dummy`, the placeholder shader: its fragment
+    /// program has one uniform (`fogColour`) and no sampler, so its picture is
+    /// a constant the engine fogs - and what constant is in undecoded GPU
+    /// bytecode. Used by 1,716 of `altima`'s `trackZone` submeshes, which is
+    /// its road and walls.
     #[must_use]
-    pub fn emissive_colour(&self) -> Option<[f32; 3]> {
-        let file = self.name.rsplit(['/', '\\']).next()?;
-        file.to_ascii_lowercase()
-            .starts_with("zonefc06_colour_emissive_scalar")
-            .then_some(())?;
-        Some([self.input(0)?, self.input(1)?, self.input(2)?])
+    pub fn is_placeholder(&self) -> bool {
+        self.name
+            .rsplit(['/', '\\'])
+            .next()
+            .is_some_and(|f| f.eq_ignore_ascii_case("fc01_dummy.rcsmaterial"))
+    }
+
+    /// A Zone material's flat colour: the first three components of its
+    /// `Zone_Colour1` to `Zone_Colour8` uniform - each `zonefc06_colour_emissive_scalar_N`
+    /// file names its own `Zone_ColourN`. **Measured against the names**:
+    /// `C_Red` reads `1 0 0` and `C_Pink` `1 0 1`, and the eight files read
+    /// eight distinct colours. The `Zone_ColourN_Emissive` scalar beside it
+    /// (`0.5` on every one) is read and left unapplied. `None` for a material
+    /// without one.
+    #[must_use]
+    pub fn zone_colour(&self) -> Option<[f32; 3]> {
+        (1..=8).find_map(|n| {
+            let v = self.param(crate::rcsmaterial::name_hash(&format!("Zone_Colour{n}")))?;
+            Some([*v.first()?, *v.get(1)?, *v.get(2)?])
+        })
     }
 
     /// The first texture found that is not the lightmap - this reading's
@@ -258,20 +295,75 @@ impl Material {
     }
 }
 
-/// The `n` halves a material header points at, empty on a count of zero, a
-/// count past [`MAX_INPUTS`] or an array that runs off the section.
-fn inputs_at(cpu: &[u8], header_at: usize) -> Vec<u16> {
-    let n = u32_at(cpu, header_at + INPUT_COUNT).unwrap_or(0) as usize;
-    let at = u32_at(cpu, header_at + INPUT_POINTER).unwrap_or(0) as usize;
-    if n == 0 || n > MAX_INPUTS || at == 0 {
+/// The uniform entries of the material header at `header_at`.
+///
+/// Each entry is `0x18` bytes: the name hash, a kind word (`1` for a uniform,
+/// `0x12` for a sampler), the value pointer at `+0x0c`, and at `+0x14` which
+/// pool the value is in - `0x1000` the 32-bit float pool (`+0x20`/`+0x24`),
+/// `0x2000` the half pool (`+0x28`/`+0x2c`). A value runs to the next entry's
+/// value in the same pool or the pool's end, at most four components. An entry
+/// whose pointer is outside its pool is dropped.
+fn params_at(cpu: &[u8], header_at: usize) -> Vec<Param> {
+    let count = u32_at(cpu, header_at + PARAM_COUNT).unwrap_or(0) as usize;
+    let table = u32_at(cpu, header_at + PARAM_TABLE).unwrap_or(0) as usize;
+    if count == 0 || count > MAX_PARAMS || table == 0 {
         return Vec::new();
     }
-    let Some(bytes) = at.checked_add(2 * n).and_then(|end| cpu.get(at..end)) else {
-        return Vec::new();
+    let pool = |at: usize, width: usize| -> Option<(usize, usize)> {
+        let n = u32_at(cpu, header_at + at)? as usize;
+        let start = u32_at(cpu, header_at + at + 4)? as usize;
+        let end = start.checked_add(n.checked_mul(width)?)?;
+        (n > 0 && end <= cpu.len()).then_some((start, end))
     };
-    bytes
-        .chunks_exact(2)
-        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+    let pools = [(pool(POOL_F32, 4), 4usize), (pool(POOL_F16, 2), 2usize)];
+    let mut raw: Vec<(u32, usize, usize, usize)> = Vec::new();
+    for i in 0..count {
+        let at = table + i * PARAM_STRIDE;
+        let (Some(hash), Some(kind), Some(ptr), Some(tag)) = (
+            u32_at(cpu, at),
+            u32_at(cpu, at + 4),
+            u32_at(cpu, at + 0x0c),
+            u32_at(cpu, at + 0x14),
+        ) else {
+            break;
+        };
+        let which = match tag {
+            PARAM_POOL_F32 => 0,
+            PARAM_POOL_F16 => 1,
+            _ => continue,
+        };
+        if kind != PARAM_KIND_UNIFORM {
+            continue;
+        }
+        let ptr = ptr as usize;
+        if let (Some((start, end)), width) = pools[which]
+            && (start..end).contains(&ptr)
+        {
+            raw.push((hash, width, ptr, end));
+        }
+    }
+    raw.iter()
+        .map(|&(hash, width, ptr, end)| {
+            let next = raw
+                .iter()
+                .filter(|&&(_, w, p, e)| w == width && e == end && p > ptr)
+                .map(|&(_, _, p, _)| p)
+                .min()
+                .unwrap_or(end);
+            let take = ((next.min(end) - ptr) / width).min(4);
+            let bits = (0..take)
+                .map(|k| {
+                    let at = ptr + k * width;
+                    if width == 4 {
+                        u32_at(cpu, at).unwrap_or(0)
+                    } else {
+                        let h = u16::from_le_bytes([cpu[at], cpu[at + 1]]);
+                        half_to_f32(h).to_bits()
+                    }
+                })
+                .collect();
+            Param { hash, bits }
+        })
         .collect()
 }
 
@@ -402,7 +494,7 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 technique,
                 textures,
                 lightmap: None,
-                inputs: inputs_at(cpu, header_at),
+                params: params_at(cpu, header_at),
             }
         })
         .collect()
@@ -606,7 +698,7 @@ pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
             technique: None,
             textures,
             lightmap,
-            inputs: Vec::new(),
+            params: Vec::new(),
         }
     };
     match ps4_table(cpu, &sites) {
