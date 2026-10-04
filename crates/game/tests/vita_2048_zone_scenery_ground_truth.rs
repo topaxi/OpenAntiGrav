@@ -37,6 +37,7 @@ fn report(source: &Path, mode: oag_race::Mode) -> Vec<String> {
     race::load(&race::Options {
         source: source.display().to_string(),
         mode,
+        zone_model: true,
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("loading {}: {e:#}", source.display()))

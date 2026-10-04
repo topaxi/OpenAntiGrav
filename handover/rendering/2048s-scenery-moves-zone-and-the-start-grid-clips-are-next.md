@@ -1,4 +1,4 @@
-# 2048's scenery moves, a Zone race draws its Zone circuit and the glow-layer scrolls play; the Zone picture is unjudged and the start-grid clip is unwired
+# 2048's scenery moves and the glow-layer scrolls play; the Zone circuit loads behind an off-by-default option and the start-grid clip is unwired
 
 2026-09-16. Started from "nothing on 2048 is animated at all" and found the
 reason first: `track.vex` authors **no `Anim Transform`** (1,834 `Transform`s,
@@ -57,8 +57,11 @@ every submesh record reachable from exactly one mesh object.
 
 ## 2026-10-05: Zone, the scroll uniforms and the start-grid clip
 
-- **A Zone race draws `trackZone.rcsmodel`** with its own skeleton, 30 Hz clip
-  and PVS (`race::load::geometry::sibling_model`; `crates/game/tests/vita_2048_zone_scenery_ground_truth.rs`).
+- **A Zone race can draw `trackZone.rcsmodel`** with its own skeleton, 30 Hz clip
+  and PVS, **behind `race::Options::zone_model`, off by default since the merge
+  (2026-10-05, lead)**: with `fc01_dummy` undrawn a Zone race showed no road,
+  only sky and saturated colour, so Zone races the ordinary model until that
+  shader is read (`race::load::geometry::sibling_model`; `crates/game/tests/vita_2048_zone_scenery_ground_truth.rs`).
 - **The material instance table is solved** - `0x18`-byte entries, `~crc32`
   names, a float pool and a half pool - and read with coverage (15,561 of
   15,565 uniform hashes are names the material's own shader declares, 52,637

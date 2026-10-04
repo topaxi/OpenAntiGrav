@@ -393,7 +393,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             geometry::sibling_model(
                 &mut archives,
                 &track,
-                options.mode == Mode::Zone,
+                options.mode == Mode::Zone && options.zone_model,
                 &mut report,
             )
         } else {

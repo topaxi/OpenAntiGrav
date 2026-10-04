@@ -114,6 +114,13 @@ pub struct Options {
     /// module's doc comment for what fraction of `SP.xml`'s events author it
     /// and how fully.
     pub grid_teams: Vec<Option<String>>,
+    /// Whether a Wipeout 2048 Zone race draws its own `trackZone.rcsmodel`.
+    ///
+    /// Off by default: that model's road shader (`fc01_dummy`) is unread, so
+    /// a Zone race on it draws no road at all. Until the shader is read, Zone
+    /// races the ordinary circuit model; the Zone ground-truth test turns
+    /// this on to keep the loader honest.
+    pub zone_model: bool,
     /// Whether a Pulse hull's `0x2000` extra pass is built at all
     /// ([`oag_render::shine`]). `true` is the game; `false` is `--no-hull-shine`,
     /// the headless way to take the pass out of a frame and so measure what it
@@ -352,6 +359,7 @@ impl Default for Options {
             // Empty is "no override anywhere" - see the field's own doc
             // comment. Only `race::load_event` ever sets this.
             grid_teams: Vec::new(),
+            zone_model: false,
             hull_shine: true,
             hull_wreck: true,
             track_shine: true,

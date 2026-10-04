@@ -155,6 +155,8 @@ impl Pending {
             // `race::load_event`'s own 2048-campaign resolution sets this.
             // See `race::Options::grid_teams`.
             grid_teams: Vec::new(),
+            // See `race::Options::zone_model`: off until the Zone road shader is read.
+            zone_model: false,
             hull_shine: !self.cli.no_hull_shine,
             hull_wreck: !self.cli.wreck.no_hull_wreck,
             track_shine: !self.cli.no_track_shine,

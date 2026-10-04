@@ -102,7 +102,7 @@ the start line and runs the simulation. What it does **not** do, and why:
   nodes, which drew a median 1,086 units from their place before the table
   was read, are placed and moving. The load report says so:
   `165 skeleton node(s), 113 animated over 113 track(s), 166.7 s loop`.
-  **2026-10-05**: a Zone race draws `trackZone.rcsmodel` through its own
+  **2026-10-05**: a Zone race can draw `trackZone.rcsmodel` (behind `race::Options::zone_model`, off by default while its road shader `fc01_dummy` is unread) through its own
   skeleton and 30 Hz clip, its Zone colours are read off the material's
   uniforms, and the glow-layer and `speed_multipliaer` scrolls play off the
   same table ([2048-material-params.md](2048-material-params.md)). Not wired:
