@@ -55,7 +55,9 @@ checked against a capture of the original sprite by sprite.
   separate value, so the particle stream after a track load is **not**
   reproduced. Matching it would mean sharing one generator across both
   modules. That is not done, and it is recorded here as a known difference.
-- The port's arithmetic is plain `f32` in Rust. It agreed with the
-  original's records to within 1.2e-4 world units, which is VFPU rounding.
-  Any bit-exact claim stops at the record values a test compares with a
-  tolerance.
+- The port's arithmetic is plain `f32` in Rust, not the VFPU. A numpy
+  `float32` reference fed the RAM's own matrices agreed with the original's
+  records to within 1.2e-4 world units. The Rust port builds from our own
+  parse of the track, and its ground-truth test pins positions to 0.01 units,
+  the counts, cull, cells and colours exactly. Neither is a bit-exact claim
+  for positions.

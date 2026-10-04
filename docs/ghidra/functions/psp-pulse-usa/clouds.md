@@ -487,9 +487,12 @@ see its own doc comment.
 
 ## `CloudGroup_BuildDisplayList` (`0x08933ec4`) bakes one flat colour per sprite
 
-**Confidence 93**: the mechanism is read, and the ramp's input is now read
-too (2026-10-04). Every baked colour word on four boots was reproduced from
-it exactly.
+The colour bake and its ramp input: **93** (2026-10-04). The mechanism and
+the ramp's input are read, and every baked colour word on four boots was
+reproduced from them exactly. The `names.tsv` rows for
+`CloudGroup_BuildDisplayList` (85), `CloudGroup_SampleColourRamp` (80) and
+`CloudGroup_CullOverlappingSprites` (85) keep their earlier confidences;
+the reproduction would support raising them.
 
 Contrary to a first read of `hi_colour`/`mid_colour`/`lo_colour`/`midpoint` as
 a per-vertex gradient across the billboard quad, the baked vertex colour is
