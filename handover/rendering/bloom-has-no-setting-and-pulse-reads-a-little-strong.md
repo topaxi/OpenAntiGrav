@@ -54,6 +54,17 @@ is 0.88-0.90x the original racing** (zones 2, 3 and 5, two boots), 1.2x on the s
 pose adds 1.5 luma on the ordinary circuit and 13 on Zone's, and the original's
 mask is 13-18 % at >= 200. No code change.
 
+## The bloom draws over the HUD (2026-10-04, `pulse-bloom-roll`)
+
+Closed. The original's queue puts `Bloom_Draw` (`0x70`) after every HUD widget
+(`0x52`..`0x6d`). With the composite poked off, the HUD's glyphs over a glowing
+panel lose about 50 luma per channel. Ours now prepares the bloom after the
+scene and composites it after the HUD (`Scene::composite_bloom`). Evidence:
+`docs/ghidra/functions/psp-pulse-usa/bloom.md`, "The bloom draws over the HUD".
+Not reproduced: over a glow surface, the original blooms the HUD widget's own
+colour (its bright pass reads the HUD). Pulse PS2 and HD keep their old order;
+`ps2-bloom.md` already lists the PS2 HUD question as open.
+
 ## Open
 
 - Why ours is still 1.2-1.6x on a racing straight (candidates: the flare and
@@ -80,6 +91,8 @@ mask is 13-18 % at >= 200. No code change.
    the candidate). Only the 1.2x grid residual depends on it.
 
 1. Explain the residual 1.2-1.6x on a racing straight (flare and plume mask
-   size at speed) before touching any constant.
+   size at speed) before touching any constant. Re-measure it first: since
+   2026-10-04 the composite comes after motion blur and the HUD, so a number
+   taken before then mixed in the old order.
 2. PS2 bloom: a second circuit (Talon's Junction) and a racing frame at a pose read out of the emulator, for the racing-straight strength the PSP chain still carries 1.2-1.6x on.
 3. Measure HD's bloom strength at matched poses on RPCS3.

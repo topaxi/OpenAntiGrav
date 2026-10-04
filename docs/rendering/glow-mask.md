@@ -133,8 +133,12 @@ What is not reproduced:
   on Outpost 7's grid they are the whole tunnel; see "Transparent batches
   stamp" below.
 - **The HUD writes alpha into our target**, where the original's mask reads
-  `4` under it. The race draws the bloom before it composites the HUD, and a
-  crop of the countdown widget shows no halo with the bloom on.
+  `4` under it. It does not reach the bloom: our bright pass reads the scene
+  before the HUD is drawn. ~~A crop of the countdown widget shows no halo~~
+  **Corrected 2026-10-04**: the original's composite runs after the HUD, and
+  its haze lands on the HUD's glyphs. Ours now adds it after the HUD too. See
+  [bloom.md](../ghidra/functions/psp-pulse-usa/bloom.md), "The bloom draws
+  over the HUD".
 - **Resolved 2026-09-23, and then superseded 2026-10-01 (see "The hull
   overlay's mask is wiped"): the absorb overlay's mask was patchy because we
   drew both `LodGroup` tiers.** Read out of EDRAM 0.42 s into a live absorb

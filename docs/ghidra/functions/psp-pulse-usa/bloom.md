@@ -531,6 +531,50 @@ fullscreen-pass plumbing (FXAA, SMAA, FSR 1), so steps 2-4 fit its existing
 shape. **Step 1 is the real work**, and it reaches every surface that should
 glow - see the correction above, which is the first known consumer.
 
+## The bloom draws over the HUD (2026-10-04, `pulse-bloom-roll`)
+
+**Confidence 92.** `Bloom_Draw` is the last thing in the race's render queue,
+after every HUD widget, so its composite adds the haze on top of the HUD.
+
+- **The order is the queue's.** `Gfx_FlushRenderManager` sorts the queue with
+  `Gfx_CompareQueueKeys` (`0x0891ddec`, ascending on the signed key, 95;
+  [mesh-draw.md](mesh-draw.md)). A live dump of the queue (`display+0x16a0`,
+  count `+0x5520`) on de Konstruct Black, two frames, 121 and 124 entries:
+  the HUD's Image widgets (vtable `0x08acce34`, 10), two other widget classes
+  at the same key (`0x08acf474`, 12 and `0x08acf884`, 2), and the 3-D widget
+  views (`0x08acb708`) sit at keys `0x52` to `0x6d`. The bloom (`0x08ad148c`,
+  this page's method table) is alone at `0x70` and last. The script is
+  `data/scratch/pulse-bloom-roll/queue.py`, its output `queue.txt`.
+- **The pixels agree.** The composite's display list (`*(g_bloom+0x6c)`)
+  carries the source factor as the GE word `0xe0afafaf` at `+0x68`. Writing
+  `0xe0000000` there turns the composite off and nothing else. With the craft
+  at rest under a lit panel (`walls002_sb_GLOW`, mask 92), the 60 green
+  pixels of the "Lap" and "/" glyphs read a mean of `(111, 206, 168)` with
+  the composite off and `(160, 251, 235)` and `(162, 252, 236)` in the two
+  frames with it on (`bloom_ab.py`, `ab1-*.png`). The glyphs are washed pale
+  by the panel's glow.
+- **What the HUD feeds into the bright pass.** The HUD does not stamp the
+  mask ([glow-mask.md](../../../rendering/glow-mask.md); the energy bar's
+  flash is the exception). Under a widget the bright pass therefore reads the
+  HUD's colour times whatever the scene stamped there, and after per-tap
+  truncation a mask of 4 contributes nothing. Over a glow surface the
+  original blooms the widget's colour in place of the surface's. **Not
+  reproduced**: our HUD is drawn at presentation resolution after the
+  bright pass has read the scene.
+
+**Ours since 2026-10-04.** `post::bloom::Bloom::prepare` runs the bright pass
+and the two blurs after the scene pass. `Scene::composite_bloom` adds the
+result onto the presentation target (or the capture view) after the HUD, in
+`main/session/draw.rs` and `race/capture.rs`. A race parked behind the menus
+composites before the menu rows; the original's order for that case was not
+read. One consequence of our own: motion blur, which the original does not
+have, no longer smears Pulse PSP's haze, since the composite now comes after
+it. Matched against the original's rest pose on de Konstruct, ours moves
+7,232 pixels by at most 15 against the old order, all where the HUD meets a
+glow, and the rest of the frame is unchanged (mean `0.011`). The test
+`post::bloom::tests::the_composite_adds_over_a_hud_drawn_after_the_bright_pass`
+fails if the composite runs before what is drawn after the bright pass.
+
 ## Is ours stronger than the original? Yes, by the background term (2026-10-02)
 
 The maintainer, playing: "I had bloom active and it was VERY strong on Pulse."
