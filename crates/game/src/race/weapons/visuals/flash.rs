@@ -19,8 +19,8 @@
 /// - **Cannon, Quake, the rest**: none from here. The Quake flashes from its
 ///   own per-tick update ([`Race::advance_quake_visual`]).
 ///
-/// The Repulser's kind 2 has a caller (`FUN_08876300`) and no weapon to reach
-/// it: the Repulser is not built.
+/// The Repulser's kind 2 comes from `Repulser_SpawnWaves` (`0x08876300`) when
+/// its waves start, which `Race::advance_repulser_visual` raises.
 pub(in crate::race) fn flash_for(
     kind: oag_tables::weapons::Weapon,
     struck: bool,

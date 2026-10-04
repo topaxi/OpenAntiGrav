@@ -131,10 +131,10 @@ impl Race {
     ///
     /// **Not drawn: the field model** `Data\Weapons\pulse_repulsorwave.vex` that
     /// `Repulser_Construct` loads and `Repulser_UpdateFieldModel` scales and
-    /// fades around the firer. Its matrix was read at shape level only (72), so
-    /// it is left out rather than drawn on a guess. The effects' own orientation
-    /// is the stage's default, **chosen**: the wave matrix's basis is built from
-    /// the track's edges and was not ported.
+    /// fades around the firer. Deferred for time rather than confidence: its
+    /// easing and frame are read (72, `repulser.md`), and it needs a model pool
+    /// with per-instance scale and vertex alpha. Until it lands the blast phase
+    /// shows little more than this sparse ring of sparks.
     pub(in crate::race) fn advance_repulser_visual(&mut self) {
         let dt = self.sim.dt;
         for index in 0..self.sim.world.repulsers.len() {

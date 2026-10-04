@@ -275,6 +275,33 @@ Repulser_SetHitLatch(r, i, 1);                              // +0x1f0 + i
 Rocket, Missile, Cannon, Plasma, LeachBeam and Shuriken: flagged "ahead" and
 aimed (`+0x58`). No Repulser-specific rule exists.
 
+## What is built (2026-10-04)
+
+`oag_tables::weapons::RepulserStats`, `oag_race::Course::{centre, corridor_width}`,
+`oag_gameplay::projectile::repulser` (the timeline, the walk, the sweep, the hit)
+and, in `oag_game`, `Race::fire_repulser`, `advance_repulsers` (the craft sweep,
+the Mine/Bomb sweep, `REPULSOR`/`REPULSORHIT`) and `advance_repulser_visual`
+(`WO_REPULSER_BLAST`, two `WO_REPULSER`, screen flash kind 2). Chosen, not
+measured: the waves follow the primary ring (no fork), step ring points
+(four per control-point interval) from the firer's ring index, and take the
+corridor width at the craft's nearest ring point; the effects' frame comes from
+the nearest spline sample.
+
+**Not drawn: the field model.** Deferred for time, not confidence - its easing
+and frame are read above. Until it lands the 0.8 s blast phase shows almost
+nothing: `WO_REPULSER_BLAST` is fifty sub-unit sparks on a 13.6-unit ring,
+collapsing inward at 0.625 units a tick (read off the parsed `.pob`, 2026-10-04).
+Its flag `0x200000` (evenly stepped ring angles) and selector-5 record are not
+played by `oag_render::psys`.
+
+**The wave-start frame is close to a whiteout** in this port: both waves'
+5-to-17-unit sprites spawn at the firer, just ahead of the chase camera.
+Unverified against the original.
+
+**HD now hands it out on this law.** HD's `weaponstats_elimination.xml`
+(`DATA00`/`DATA02.PSARC`) authors the same block and weights it `ai=8 human=8`;
+HD's own Repulser law is unread.
+
 ## Not read
 
 - `FUN_0886d474` (remote destroy by id, under 50, not renamed) and the network

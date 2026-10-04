@@ -49,10 +49,9 @@
 //! weight no such row and [`Driver::weight`] answers `0.0` for a weapon a
 //! table does not author.
 //!
-//! **One weapon is still out, and it is out by decision rather than by
-//! ignorance**: the Repulser, which needs a field the craft *is in* rather than
-//! a projectile, and which the shipped tables give zero odds outside Eliminator
-//! - a mode this build does not have. See `HANDOVER.md`.
+//! **The Repulser joined last, on 2026-10-04**, so every weapon a shipped table
+//! weights is now drawable. The shipped tables give it zero odds outside
+//! Eliminator. See `crate::projectile::repulser`.
 //!
 //! **The Cannon left the list the same day**, and it is the odd one out among
 //! everything built here so far: it does not fire through
@@ -544,9 +543,9 @@ impl Held {
 /// over. Pass [`Held::last`].
 ///
 /// **The retry is bounded here and is not in the original**, which loops until it
-/// draws something different. Unbounded is fine when thirteen weapons are
-/// weighted and is not fine here: [`IMPLEMENTED`] is ten, so a table weighting
-/// only one of them would spin for ever, and a simulation that can hang on a
+/// draws something different. Unbounded is not fine here: a table, or an
+/// `allowed` subset, weighting only one weapon would spin for ever, and a
+/// simulation that can hang on a
 /// table is worse than one that occasionally repeats a pickup. After
 /// [`REDRAW_ATTEMPTS`] the repeat is accepted.
 ///

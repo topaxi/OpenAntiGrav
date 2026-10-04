@@ -1,4 +1,4 @@
-# The particle effects are played from the disc; 30 of the PSP's 35 play, 5 wait on a trigger
+# The particle effects are played from the disc; 32 of the PSP's 35 play, 3 wait on a trigger
 
 2026-08-12, census rewritten 2026-10-02. `oag_vex::pob` parses every emitter
 tree, `oag_render::psys::Library` loads any `Data\Psys\<name>.POB` by name, and
@@ -10,7 +10,7 @@ unaccounted for; the table below is its reading on 2026-10-02.
 
 ## Census: the PSP disc's 35 systems
 
-**Wired, trigger recovered (25):**
+**Wired, trigger recovered (27):**
 
 | Effect | Trigger | Where |
 | --- | --- | --- |
@@ -24,19 +24,19 @@ unaccounted for; the table below is its reading on 2026-10-02.
 | `WO_SHURIKEN_HEAD`, `WO_SHURIKEN_BOUNCE`, `WO_SHURIKEN_EXPIRE` | Shuriken init / bounce / teardown | weapons visuals |
 | `WO_MINE_EXPLO`, `WO_BOMB_SMOKERING`, `WO_CANNON_SPARKS` | detonations, a round's wall hit | weapons visuals |
 | `WO_QUAKE`, `WO_LEACHBEAM_ENERGY`, `WO_LEACHBEAM_CHARGING` | the Quake wave, the beam, the held pickup | weapons visuals |
+| **`WO_REPULSER_BLAST`, `WO_REPULSER`** (2026-10-04) | `Repulser_SpawnBlastEffect` at the fire / `Repulser_SpawnWaves` per wave | `race::weapons::repulser` |
 | **`WO_BLUE_WELDER`** (new) | placed by circuits 01 and 05 as `ParticleSystem` nodes, played from load | `race::scenery_fx` |
 | **`WO_MODESTO_STEAM_A`** (new) | placed by circuits 05 and 07 the same way | `race::scenery_fx` |
 
 **Embedded in a wired tree (2):** `WO_SHIP_COLL_SPARK`, `WO_SHIP_COLL_SPARK_TRAIL`.
 
-**Not wired (5), ranked by how often a player would see them:**
+**Not wired (3), ranked by how often a player would see them:**
 
 | Rank | Effect | State | Best lead |
 | ---: | --- | --- | --- |
 | 3 | `WO_SHIP_COLL_SPARK_NODAMAGE` | trigger read, not seen live | `Ship_DispatchCollisionFx` `0x0883df38`: a contact with non-positive friction (floor, magstrip) |
 | 4 | `WO_SHURIKEN_TRAIL` | trigger read, unwired | `Shuriken_Init` `0x08877280`: a second anchor rotated -pi/2 about the blade; a `Projectile` here has no roll |
-| 5 | `WO_REPULSER`, `WO_REPULSER_BLAST` | weapon not built | strings `0x08a7cd2c`, `0x08a7cd18` |
-| 6 | `WO_SHIP_COLL_SPARK_TRAIL_SMOKE` | unread | no string in the executable; a sibling of the embedded `_TRAIL`, nothing found referencing it |
+| 5 | `WO_SHIP_COLL_SPARK_TRAIL_SMOKE` | unread | no string in the executable; a sibling of the embedded `_TRAIL`, nothing found referencing it |
 
 Evidence for the new rows and the weather:
 [placed-particle-systems.md](../../docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md);

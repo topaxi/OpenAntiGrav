@@ -662,7 +662,8 @@ seen from the authoring side.
       What the per-weapon rows of [status.md](status.md) still mark partial is
       presentation and unread detail rather than mechanics: the Quake's track
       deformation, the Cannon's splash (the schema authors none), the Bomb's
-      unread `damageradius`, and the Repulser, deferred as Eliminator-only.
+      unread `damageradius`. The Repulser was built 2026-10-04
+      ([repulser.md](../ghidra/functions/psp-pulse-usa/repulser.md)).
       Autopilot is the AI's own controller taking over and belongs
       with the AI; it is weapon id 6, fire-request bit `0x1000`.
       **A rocket now has something to hit**: the AI landed the same day and
