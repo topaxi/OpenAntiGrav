@@ -36,6 +36,9 @@
 use oag_core::math::Vec3;
 use oag_vex::track::AiTrack;
 
+pub mod branch;
+pub use branch::Branch;
+
 /// A track walked into a closed ring, with cumulative distance along it.
 ///
 /// A flat `Vec` scanned in order, not a spatial index: the nearest-point
@@ -68,6 +71,8 @@ pub struct Course {
     /// ai_bound_left`, parallel to [`Self::positions`]. The lateral bound of a
     /// Repulser wave's sweep (`RepulserPool_SweepTargets`, `0x0886d5c8`).
     corridor_widths: Vec<f32>,
+    /// The alternate paths off the ring - see [`branch`].
+    branches: Vec<Branch>,
 }
 
 /// Where a position sits on the course.
@@ -157,27 +162,21 @@ impl Course {
         let mut centres = Vec::new();
         let mut corridor_widths = Vec::new();
         let mut max_half_width = 0.0f32;
+        let mut first = vec![None; ai.paths.len()];
         for &path_index in &ring {
             let path = ai.paths.get(path_index)?;
-            for segment in 0..path.points.len() {
-                for step in 0..Self::STEPS_PER_SEGMENT {
-                    let t = step as f32 / Self::STEPS_PER_SEGMENT as f32;
-                    if let Some(sample) = path.sample(segment, t) {
-                        let pos = Vec3::from_array(sample.pos);
-                        let lateral = Vec3::from_array(sample.lateral);
-                        let left = pos - lateral * sample.half_width_left;
-                        let right = pos + lateral * sample.half_width_right;
-                        positions.push(pos);
-                        centres.push((left + right) * 0.5);
-                        corridor_widths.push(sample.ai_bound_right - sample.ai_bound_left);
-                        paths.push(u16::try_from(path_index).unwrap_or(u16::MAX));
-                        max_half_width = max_half_width
-                            .max(sample.half_width_left)
-                            .max(sample.half_width_right);
-                    }
-                }
+            first[path_index] = Some(positions.len());
+            for sample in branch::sample_path(path) {
+                positions.push(sample.pos);
+                centres.push(sample.centre);
+                corridor_widths.push(sample.corridor_width);
+                paths.push(u16::try_from(path_index).unwrap_or(u16::MAX));
+                max_half_width = max_half_width
+                    .max(sample.half_widths.0)
+                    .max(sample.half_widths.1);
             }
         }
+        let branches = branch::branches(ai, &first);
         if positions.len() < 2 {
             return None;
         }
@@ -209,6 +208,7 @@ impl Course {
             max_half_width,
             centres,
             corridor_widths,
+            branches,
         };
         if let Some(start) = start_near
             && let Some((slot, _)) = course.nearest_global(start)
@@ -272,6 +272,12 @@ impl Course {
     #[must_use]
     pub fn centre(&self, index: usize) -> Option<Vec3> {
         self.centres.get(index).copied()
+    }
+
+    /// The alternate paths off the ring, in junction order - see [`Branch`].
+    #[must_use]
+    pub fn branches(&self) -> &[Branch] {
+        &self.branches
     }
 
     /// The AI corridor's width at `index` - see [`Self::corridor_widths`].

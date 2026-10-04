@@ -127,7 +127,8 @@ impl Race {
     ///   firer's node every tick.
     /// - Two [`REPULSER_EFFECT`]s start on the tick the waves start
     ///   (`Repulser_SpawnWaves`) and follow the two wave centres.
-    /// - All three are released when the slot empties (`Repulser_Reset`).
+    /// - A third [`REPULSER_EFFECT`] starts on the update a wave forks at a
+    ///   split. All four are released when the slot empties (`Repulser_Reset`).
     ///
     /// The field model `Data\Weapons\pulse_repulsorwave.vex` steps here too
     /// ([`Race::advance_repulser_fields`]), and the blast takes the field's
@@ -142,7 +143,7 @@ impl Race {
                 for playing in handles.into_iter().flatten() {
                     self.view.stage.release(playing);
                 }
-                self.view.repulser_effects[index] = [None; 3];
+                self.view.repulser_effects[index] = [None; 4];
                 continue;
             };
             let firer = self.sim.world.ships[repulser.owner as usize]
@@ -182,13 +183,28 @@ impl Race {
             if spawning && let Some(flash) = &mut self.view.screen_flash {
                 flash.start(oag_render::flash::REPULSER, firer);
             }
-            for (slot, front) in fronts.iter().enumerate() {
+            // The fork's own `WO_REPULSER` (`REP2`, `0x32504552`), started on the
+            // update it forks (`Repulser_AdvanceWave`, `0x08876914`) and anchored
+            // at `+0xe0`, its matrix.
+            let fork = repulser
+                .fork
+                .map(|fork| (fork.front, fork.front.previous == fork.front.point));
+            let waves = [
+                Some((fronts[0], spawning)),
+                Some((fronts[1], spawning)),
+                fork,
+            ];
+            for (slot, (front, starts)) in waves
+                .into_iter()
+                .enumerate()
+                .filter_map(|(slot, wave)| Some((slot, wave?)))
+            {
                 let playing = match handles[1 + slot] {
                     Some(playing) => {
                         self.view.stage.follow(playing, front.point);
                         Some(playing)
                     }
-                    None if spawning => {
+                    None if starts => {
                         let effect = self.view.effects.get(REPULSER_EFFECT).cloned();
                         let attached =
                             effect.and_then(|e| self.view.stage.attach(&e, front.point, 1.0));

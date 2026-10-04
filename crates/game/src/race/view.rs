@@ -284,11 +284,11 @@ pub struct RaceView {
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
     /// field's own doc comment for why.
     pub(super) quake_effect: Option<psys::Playing>,
-    /// Per [`oag_gameplay::World::repulsers`] slot, the three instances a live
-    /// Repulser carries: its blast, then its forward and backward wave. See
-    /// `Race::advance_repulser_visual`.
+    /// Per [`oag_gameplay::World::repulsers`] slot, the four instances a live
+    /// Repulser carries: its blast, its forward and backward wave, then its
+    /// fork wave. See `Race::advance_repulser_visual`.
     pub(super) repulser_effects:
-        [[Option<psys::Playing>; 3]; oag_gameplay::projectile::repulser::POOL_SIZE],
+        [[Option<psys::Playing>; 4]; oag_gameplay::projectile::repulser::POOL_SIZE],
     /// Per [`oag_gameplay::World::repulsers`] slot, its field model's eases -
     /// see [`repulser_field`].
     pub(super) repulser_fields:
