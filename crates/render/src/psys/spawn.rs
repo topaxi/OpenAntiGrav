@@ -187,6 +187,20 @@ impl Spawn {
         up: Vec3,
         rng: &mut Rng,
     ) -> Vec3 {
+        self.offset_at(scale, direction, (across, up), None, rng)
+    }
+
+    /// [`Self::offset`], with a ring's angle `phi` given rather than drawn - what flag
+    /// `0x200000`'s even step hands `ParticleSystem_EmitRing` (see [`super::playback`]).
+    /// Only [`Self::Ring`]'s ring modes read it; no draw is made for the angle then.
+    pub fn offset_at(
+        self,
+        scale: f32,
+        direction: Vec3,
+        (across, up): (Vec3, Vec3),
+        phi: Option<f32>,
+        rng: &mut Rng,
+    ) -> Vec3 {
         let signed = |rng: &mut Rng| rng.next_f32() * 2.0 - 1.0;
         match self {
             Self::Point => Vec3::ZERO,
@@ -230,7 +244,7 @@ impl Spawn {
                 } else {
                     e
                 };
-                let phi = rng.next_f32() * std::f32::consts::TAU;
+                let phi = phi.unwrap_or_else(|| rng.next_f32() * std::f32::consts::TAU);
                 across * (radius * phi.cos()) + z_axis * (radius * phi.sin())
             }
             Self::Sphere {
@@ -265,8 +279,8 @@ pub(super) fn place(
     spawn: Spawn,
     (direction, azimuth): (super::Direction, Option<f32>),
     scale: f32,
-    across: Vec3,
-    up: Vec3,
+    (across, up): (Vec3, Vec3),
+    phi: Option<f32>,
     rng: &mut Rng,
 ) -> (Vec3, Vec3) {
     // A caller's live azimuth (`res+0x54`) replaces the authored one on an aimed law.
@@ -292,7 +306,7 @@ pub(super) fn place(
         },
     ) = (spawn, direction)
     {
-        let offset = spawn.offset(scale, Vec3::ZERO, across, up, rng);
+        let offset = spawn.offset_at(scale, Vec3::ZERO, (across, up), phi, rng);
         let radial = offset.try_normalize().unwrap_or(across);
         let elevation = elevation + jitter * (rng.next_f32() * 2.0 - 1.0);
         let (sin_a, cos_a) = azimuth.sin_cos();
@@ -322,7 +336,7 @@ pub(super) fn place(
         (Spawn::Sphere { .. }, super::Direction::Tangent { .. }) => Spawn::Point,
         (other, _) => other,
     };
-    (aim, placement.offset(scale, aim, across, up, rng))
+    (aim, placement.offset_at(scale, aim, (across, up), phi, rng))
 }
 
 /// `across` made perpendicular to `up`, falling back to the frame's own

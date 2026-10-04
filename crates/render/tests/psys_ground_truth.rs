@@ -639,3 +639,60 @@ fn the_bombs_smoke_ring_is_born_on_a_ring_that_widens_as_it_emits() {
         }
     }
 }
+
+/// `WO_REPULSER_BLAST`'s one burst of fifty, read 2026-10-04 (`particle-system.md`, "The
+/// emitter's clock and the burst laws"): flag `0x200000` steps the ring `7.2` degrees a
+/// bead from one random start, the selector-5 record makes their life `114 * 1.5` ticks,
+/// and the emitter's rate `4` spends four of them a frame - so the ring holds for 43
+/// frames where the authored life alone, at rate 1, would hold for 114. The PSP's beaded
+/// ring is drawn at updates 10 to 40 and gone by 47
+/// (`docs/ghidra/functions/psp-pulse-usa/repulser.md`).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_repulser_blast_is_an_even_ring_that_lives_forty_three_frames() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let effect = effect(&mut archive, "WO_REPULSER_BLAST");
+    let root = &effect.emitters[0];
+    assert_eq!(root.playback.rate, 4.0);
+    assert!(root.playback.even_ring && !root.playback.subframe_spread);
+    assert!(root.playback.lifetime_animation.is_some());
+    let shockrings = self::effect(&mut archive, "WO_MISSILE_EXPLO");
+    assert!(shockrings.emitters.iter().any(|e| e.playback.even_ring));
+    let trail = self::effect(&mut archive, "WO_MISSILE_HEAD");
+    assert!(trail.emitters.iter().any(|e| e.playback.subframe_spread));
+
+    let mut rng = Rng::new(12);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    let dt = 1.0 / TICK_HZ;
+    system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
+    let (additive, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
+    let mut angles: Vec<f32> = additive
+        .chunks(6)
+        .chain(alpha_over.chunks(6))
+        .map(|quad| {
+            let centre = quad
+                .iter()
+                .fold(Vec3::ZERO, |sum, v| sum + Vec3::from(v.position))
+                / 6.0;
+            centre.z.atan2(centre.x).rem_euclid(std::f32::consts::TAU)
+        })
+        .collect();
+    assert_eq!(angles.len(), 50);
+    angles.sort_by(f32::total_cmp);
+    for pair in angles.windows(2) {
+        assert!(
+            (pair[1] - pair[0] - std::f32::consts::TAU / 50.0).abs() < 1e-3,
+            "{angles:?}"
+        );
+    }
+    let mut alive = vec![system.alive_count()];
+    for _ in 0..45 {
+        system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
+        alive.push(system.alive_count());
+    }
+    assert_eq!(alive[42], 50, "{alive:?}");
+    assert_eq!(alive[43], 0, "{alive:?}");
+}
