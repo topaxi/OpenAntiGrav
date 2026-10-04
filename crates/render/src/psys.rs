@@ -584,10 +584,7 @@ impl EmitterSpec {
             looping: record.looping(),
             interval_ticks: interval,
             per_emission,
-            lifetime_ticks: (
-                record.lifetime_ticks.0 as f32,
-                record.lifetime_ticks.1 as f32,
-            ),
+            lifetime_ticks: sample::lifetime_ticks(record),
             speed_per_tick: record.speed_per_tick,
             direction,
             drag_per_tick: Vec3::new(drag[0], drag[1], drag[2]),

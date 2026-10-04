@@ -111,12 +111,11 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
 ///
 /// Nothing in Zone: `TrackStartup_Parse` does not build the weather there.
 ///
-/// **Outpost 7's `WO_SNOW` is withheld.** The original keeps 64 flakes alive
-/// and yet three frames of it at an open section show none, while ours drew
-/// them across the sky; what makes the original's invisible there (its size
-/// channel is `Random` 12/12, its draw is unread) is not known, so nothing is
-/// drawn rather than something the original does not show (maintainer,
-/// 2026-10-03). See `docs/ghidra/functions/psp-pulse-usa/weather.md`.
+/// Outpost 7's `WO_SNOW` plays too. It was withheld until 2026-10-04 because
+/// ours drew no flakes past its first frames while the original kept 64: the
+/// emitter sets the immortal flag `0x800`, which `oag_render::psys` did not
+/// honour. With it honoured, its faint speckle matches the original's A/B at
+/// the same spot. See `docs/ghidra/functions/psp-pulse-usa/weather.md`.
 fn place_weather(
     loaded: &mut Loaded,
     track_blob: &[u8],
@@ -133,18 +132,6 @@ fn place_weather(
         loaded
             .report
             .push("weather: authored, and not built in Zone, as the original skips it".into());
-        return;
-    }
-    if config
-        .env_psys
-        .as_deref()
-        .is_some_and(|path| oag_tables::trackstartup::effect_name(path) == "WO_SNOW")
-    {
-        loaded.report.push(
-            "weather: WO_SNOW withheld - the original's flakes are not visible at an open section \
-             and why is unread"
-                .into(),
-        );
         return;
     }
     let anchors = oag_vex::weather::anchors(track_blob, nodes);

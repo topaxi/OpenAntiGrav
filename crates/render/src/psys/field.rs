@@ -132,13 +132,16 @@ impl System {
         field: &FieldSpec,
         rng: &mut Rng,
     ) {
+        // A particle born this tick has not been through the pool's own
+        // step, and the original's modifier does not run on it either. Its
+        // slot was empty before this tick's emission, which also holds for an
+        // immortal particle, whose life never visibly drops below its maximum.
+        let aged: Vec<bool> = self.particles.iter().map(|p| p.alive()).collect();
         self.advance(effect, dt, Vec3::ZERO, Vec3::Y, rng);
         let extent = field.half_extent;
         let span = 2.0 * extent;
-        for particle in &mut self.particles {
-            // A particle born this tick has not been through the pool's own
-            // step, and the original's modifier does not run on it either.
-            if !particle.alive() || particle.life >= particle.max_life {
+        for (particle, aged) in self.particles.iter_mut().zip(aged) {
+            if !particle.alive() || !aged {
                 continue;
             }
             let streak = particle.origin;
@@ -226,6 +229,22 @@ mod tests {
         system.ignite(&effect, Vec3::ZERO, 1.0);
         still(&mut system, &effect, 4, Vec3::new(0.0, -3.0, 0.0));
         // The spawn tick moves nothing; the three after it each fall three.
+        let lowest = live(&system)
+            .iter()
+            .map(|(p, _)| p.y)
+            .fold(f32::MAX, f32::min);
+        assert!((lowest - -9.0).abs() < 1e-4, "{lowest}");
+    }
+
+    /// `WO_SNOW`'s flakes are immortal (flag `0x800`): their life is
+    /// `FLT_MAX` and never visibly drops, and the wind still has to carry them.
+    #[test]
+    fn the_wind_carries_an_immortal_particle_too() {
+        let mut effect = (*effect("snow", true, 100.0)).clone();
+        effect.emitters[0].lifetime_ticks = (f32::MAX, 0.0);
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        still(&mut system, &effect, 4, Vec3::new(0.0, -3.0, 0.0));
         let lowest = live(&system)
             .iter()
             .map(|(p, _)| p.y)
