@@ -21,7 +21,7 @@
 
 use oag_rcs::rcsskeleton::{IDENTITY, Node};
 use oag_render::mesh::{
-    AnimNode, Bounds, DrawCall, GpuVertex, Model, ModelTexture, Motion, Texels, slots,
+    AnimNode, Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Motion, Texels, slots,
 };
 use oag_render::mesh_render::Anisotropy;
 use std::sync::Arc;
@@ -174,5 +174,65 @@ fn a_lit_surface_under_a_non_uniform_scale_is_shaded_as_the_baked_path_shades_it
     assert!(
         worst <= 1,
         "moving and baked shade the same quad differently: worst channel {worst}, total {total}"
+    );
+}
+
+fn flat(diffuse_alpha: u8, layered: bool) -> Model {
+    let n = [0.0, 0.0, 1.0];
+    let mut vertices: Vec<GpuVertex> = [[-0.6, -0.6, 0.0], [0.6, -0.6, 0.0], [0.0, 0.7, 0.0]]
+        .iter()
+        .map(|&c| vertex(c, n, 0))
+        .collect();
+    let mut m = model(Vec::new(), false);
+    m.textures = vec![Some(Arc::new(ModelTexture {
+        label: "diffuse".into(),
+        width: 1,
+        height: 1,
+        texels: Texels::Rgba8(vec![200, 200, 200, diffuse_alpha]),
+        mip_count: None,
+    }))];
+    if layered {
+        for v in &mut vertices {
+            v.slots |= slots::ADD_SECOND | (1 << slots::MATERIAL_SHIFT);
+        }
+        m.lightmaps = vec![Some(Arc::new(ModelTexture {
+            label: "emissive".into(),
+            width: 1,
+            height: 1,
+            texels: Texels::Rgba8(vec![255, 0, 0, 255]),
+            mip_count: None,
+        }))];
+        m.emissive = vec![Emissive {
+            tint: [1.0, 1.0, 1.0],
+            offset: 0.0,
+            scale: 1.0,
+            rate: 0.0,
+        }];
+    }
+    m.vertices = vertices;
+    m
+}
+
+/// The glow layer is gated by the diffuse alpha: a Wipeout 2048 material whose
+/// diffuse is clear adds nothing, and a model that binds an emissive texture
+/// beside a diffuse does not change how a surface without the flag draws.
+#[test]
+fn a_glow_layer_is_gated_by_the_diffuse_alpha() {
+    let (Some(plain_clear), Some(layered_clear), Some(layered_opaque), Some(plain_opaque)) = (
+        render(&flat(0, false)),
+        render(&flat(0, true)),
+        render(&flat(255, true)),
+        render(&flat(255, false)),
+    ) else {
+        println!("skipping: no GPU adapter");
+        return;
+    };
+    assert_eq!(
+        plain_clear, layered_clear,
+        "a clear diffuse still took the glow"
+    );
+    assert_ne!(
+        plain_opaque, layered_opaque,
+        "an opaque diffuse took no glow at all"
     );
 }

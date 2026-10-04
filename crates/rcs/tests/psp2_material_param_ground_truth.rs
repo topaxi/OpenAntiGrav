@@ -236,3 +236,43 @@ fn every_sampler_entry_is_a_declared_sampler_and_a_texture_the_scan_finds() {
     assert!(undeclared <= 28, "{undeclared} undeclared samplers");
     assert_eq!(unscanned, 0);
 }
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn the_placeholder_and_the_zone_colours_exist_only_in_the_zone_models() {
+    // `build` skips `fc01_dummy` and draws `Zone_ColourN` unlit for every 2048
+    // model it builds, so a model outside a Zone circuit that used either would
+    // silently change. Measured 2026-10-05 over 983 Vita models and Omega's 1,150: none
+    // does outside `trackZone` (355 layered Vita materials, all with a diffuse the scan agrees on).
+    // The same sweep found no layered material whose named diffuse sampler is
+    // not the diffuse the older address-order scan picks.
+    let mut layered = 0usize;
+    for (entry, materials) in models() {
+        let zone_model = entry.to_ascii_lowercase().contains("trackzone");
+        for material in &materials {
+            if !zone_model {
+                assert!(!material.is_placeholder(), "{entry}: {}", material.name);
+                assert!(
+                    material.zone_colour().is_none(),
+                    "{entry}: {}",
+                    material.name
+                );
+            }
+            let has = |n: &str| material.param(name_hash(n)).is_some();
+            let named = |names: &[&str]| names.iter().find_map(|n| material.sampler(name_hash(n)));
+            if has("Emissive_UV_Offset") && has("Emissive_UV_Scale") {
+                let diffuse = named(&["DiffuseTexture", "DiffuseAlphaMap", "DiffuseMap"]);
+                if diffuse.is_some() && named(&["EmissiveTexture", "EmissiveMap"]).is_some() {
+                    layered += 1;
+                    assert_eq!(
+                        material.diffuse_texture(),
+                        diffuse,
+                        "{entry}: {}",
+                        material.name
+                    );
+                }
+            }
+        }
+    }
+    assert!(layered > 300, "only {layered} layered materials");
+}

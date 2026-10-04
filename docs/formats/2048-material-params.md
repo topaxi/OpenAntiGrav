@@ -89,6 +89,13 @@ Every 2048 material also declares `zoneGrowingPaletteScene`,
 runtime term that recolours the circuit around the craft, which no file here
 authors. It is not read.
 
+**Nothing outside `trackZone` meets the placeholder or a Zone colour**: 0
+`fc01_dummy` and 0 `Zone_ColourN` submeshes over the 983 Vita models (base,
+DLC1, DLC2, ships and skies included) and Omega's 1,150, so `build`'s skip and
+colour reach no other model (`the_placeholder_and_the_zone_colours_exist_only_in_the_zone_models`).
+Likewise the 355 glow-layer materials' sampler-named diffuse is always the
+diffuse the older scan already picked, so the layer changes no texture.
+
 ## What scrolls, and what is acted on
 
 Census over every race and Zone circuit's model, in submeshes:
