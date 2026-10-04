@@ -114,7 +114,7 @@ the current lap from 1 and `lap == total - 1` is the lap before it. The `lap == 
 identified. With split screen (`gamestate+0xe4 > 1`) each player keeps its own
 float at `this+0x2dd0` instead of the shared node; not followed.
 
-**Which board state each later window shows is not settled.** On Pulse's
+**Settled 2026-10-04, see [the lap windows, played](#the-lap-windows-played-2026-10-04-hd-gantry-laps-lane): the `FINAL LAP` board shows during `lap == total - 1` and the flag during `lap == total`, which is what a player sees approaching the line at the end of each. The text below is the earlier, unsettled reading.** On Pulse's
 timeline 9.333 s is `Final_Lap`'s first key and 12.33 s the chequered state's
 ([start-gantry.md](../../../rendering/start-gantry.md)), but the `FINAL_LAP`
 cue sits in the `[12.35, 13.3)` branch, one lap after the window that lands
@@ -167,12 +167,83 @@ in the node's own update, and their order inside a frame was not read. Either
 order gives an 86-tick loop. They differ only in whether the reset frame
 shows 3.83 or 3.83 + dt.
 
+## The lap windows, played (2026-10-04, `hd-gantry-laps` lane)
+
+### The selection, instruction by instruction (confidence 85)
+
+From the disassembly of `RaceManager_Update` (`0x0005ef70`-`0x0005f178`),
+`lap = ship+0x7810` (`addi r0,r11,0x6ff0; lwz r11,0x820(r9)`),
+`total = *(0x00936fe8 + 0xc)` (the game state is a static object; TOC slot
+`-0x6ce0` holds its address):
+
+1. `lap == 0` -> `[3.83, 5.25)` (also sets the second tree through `0x00083a58`).
+2. else `total - 1 == lap` (signed `cmpw`, so never for `total == 0`) -> `[9.5, 9.9)`.
+3. else `lap == total`, or `ship+0x7814 - 2 >= total` (unsigned) -> at
+   `0x0005f064`: `total == 0` goes to `[6.017, 9.3)`, otherwise `[12.35, 13.3)`
+   and the once-per-player `FINAL_LAP` cue (`0x0005f0e0`, flag `this+0x2d32`).
+4. else -> `[6.017, 9.3)`.
+
+Every branch is the same test: `T < from || T >= to` -> `SetTime(from)`
+(`0x0005f694`, `0x0005f6ac`, `0x0005f760`). The windows ascend, so the first
+frame of a new window always resets: **each switch is an immediate jump to
+the new window's start, then a loop of its length** (197, 24 and 57 ticks).
+
+### The lap counter (confidence 75 for the mapping)
+
+- **Read live** (RPCS3, Talon's Junction, craft parked behind the line after
+  the release): `ship+0x7810 = 0`, `ship+0x7814 = 2`, `total = 3`, race
+  phase 2. The ship constructor (`0x000ddd58`) stores exactly those
+  (`param_1[0x1e04] = 0`, `param_1[0x1e05] = 2`).
+- `+0x7814` reads as a crossing count from 2 (`0x0003dd90` compares against
+  `+0x7814 - 1`; `0x0006d0d0` gates on `+0x7814 > 2`), so `+0x7814 - 2 >= total`
+  is the finish. After the finish the flag window persists.
+- **Not found: what writes `+0x7810`.** No `stw`/`std` names that offset
+  outside the two constructors, and a GDB write of 1 is overwritten within a
+  frame (the counter reads 0 again; a write to `+0x7814` sticks). So the
+  counter is recomputed every frame from somewhere else. That it becomes 1
+  on the first crossing rests on the constructor's 0, endrace's
+  "laps completed = `+0x7810 - 1`" (`endrace-loyalty.md`) and the `FINAL_LAP`
+  cue sitting on `lap == total`. Next: a `Z2` watch on `ship+0x7810` with the
+  patched RPCS3 (`just build-rpcs3-watchpoints`, interpreter decoder).
+
+This build maps it as `0` until `Standing::lap_start_tick` is set, then
+`Standing::lap`; finished is `Standing::finish_tick` (`BoardWindow::of`).
+
+### What each window shows, measured on the original (confidence 85)
+
+`scripts/rpcs3-drive.py lapboard --window FROM,TO` boots HD on a private
+RPCS3, walks the Campaign path into Talon's Junction, skips the fly-over
+without thrust, and writes a later window's bounds over the lap-0 window's
+TOC floats (`0x008a6a74`, `0x008a6a90`), so the original's own renderer plays
+that window from the grid. Shots every 0.35 s (local scratch,
+`data/scratch/hd-gantry-laps/lapboard3/`, sheets `sheet_w*.png`):
+
+| Window | The original shows |
+| --- | --- |
+| `[6.017, 9.3)` | the `FX-350` logo and "FX-350 Official A-G Racing League" animating onto the teal board: the `fx350_nomip.gtf` draws (`polySurface151`-`157`) this project had stripped as never shown |
+| `[9.5, 9.9)` | `FINAL LAP`, strobing lit, dim, dark |
+| `[12.35, 13.3)` | a chequered flag across the whole panel, scrolling |
+
+Nothing shows above or beside the board in any window: the raised `GO`
+glyph and backdrop (+10 in y from 6.000 s) and the parked states stay
+hidden. Ours draws, per frame, only what stands on the mount's panel in
+both axes (`oag_render::gantry::panel::off_panel`, `PanelCull`); the
+countdown keeps the set the loader always removed. Pinned by
+`crates/game/tests/start_gantry_hd_laps_ground_truth.rs`.
+
+**One look-difference left:** our flag's checks read grey and white where the
+original's are black and white. The flag is drawn in front of the backing
+panel (z -3.9 against -6.15), so this is the board-shading gap in
+`start-gantry.md`, not the window.
+
+**Lead's question on the start tick:** not pinned this pass; nothing here
+explains the backdrop turning green two ticks early in
+`data/scratch/hd-go-pulse/strip_a_step.png`.
+
 ## Open
 
-- The lap windows are not played. Ours keeps looping `GO` after the line
-  crossing, where the original jumps to 6.017 s. Wiring them needs HD's own
-  asset states at 6.017-13.3 s read, `ship+0x7810` reconciled with
-  `standing.lap`, and the states `clip_to_panel` removes put back.
+- ~~The lap windows are not played.~~ Played since 2026-10-04 (above). Open
+  from it: the writer of `ship+0x7810`, and a live lap crossing.
 - What calls `RaceManager_ResetGantryTime` during a countdown, and so the start
   tick in code. The capture bounds 70 from below only, and two cues point
   later: at tick 271 our backdrop is already part way to green where the

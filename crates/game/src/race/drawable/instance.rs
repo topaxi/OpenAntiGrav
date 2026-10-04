@@ -63,6 +63,7 @@ impl Drawable {
             stamp_pipeline: self.stamp_pipeline.clone(),
             prepass: self.prepass.clone(),
             shown: std::cell::RefCell::default(),
+            hidden: std::cell::RefCell::default(),
             reversed_indices: self.reversed_indices.clone(),
             vertices: self.vertices.clone(),
             texcoords: self.texcoords.clone(),

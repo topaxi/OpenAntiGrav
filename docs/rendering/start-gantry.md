@@ -313,8 +313,11 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   first lap): `[6.017, 9.3)` otherwise, `[9.5, 9.9)` on `lap == total - 1`,
   `[12.35, 13.3)` on `lap == total` (where the `FINAL_LAP` announcer cue also
   fires). Which board state each shows on HD's own timeline is not read.
-  **Not played yet**: ours keeps looping `GO` after the line crossing, and
-  `clip_to_panel` still removes the later states.
+  **Played since 2026-10-04**: the original, forced into each window on
+  RPCS3, shows the `FX-350` art between laps, a strobing `FINAL LAP` on the
+  lap before the last and a chequered flag on the last; ours plays the same
+  frames and culls per frame to the panel (`race::gantry::BoardWindow`,
+  `PanelCull`; [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-lap-windows-played-2026-10-04-hd-gantry-laps-lane)).
 - **2048 and Omega place no gantry**, so there is no clock to set. Loaded
   through `race::load`: all ten native 2048 circuits, **thirteen of the sixteen
   HD-ported 2048 circuits** (the base package's four - `Anulpha_Pass`,

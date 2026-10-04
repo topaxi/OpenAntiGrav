@@ -298,7 +298,7 @@ impl Scene {
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
             queue.write_buffer(gantry.fog(), 0, bytemuck::bytes_of(&scene));
-            let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race.sim.world.tick));
+            let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
         oag_render::perfprobe::mark("scenery-anims");
