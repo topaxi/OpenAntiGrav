@@ -81,7 +81,7 @@
 0x810540c4	function	CampaignEventCard_DrawLeaderboardPage	75	campaign-event-card.md
 0x810535fe	function	CampaignEventCard_DrawRulesPage	75	campaign-event-card.md
 0x8105dcb8	function	FrontEnd_LoadCardTextures	80	campaign-event-card.md
-0x81052fb4	function	CampaignEventCard_DrawTrophyPage	65	campaign-event-card.md
+0x81052fb4	function	CampaignEventCard_DrawTrophyPage	75	weapon-callout.md
 0x81052810	function	CampaignEventCard_DrawUnlockPage	60	campaign-event-card.md
 0x812b021a	function	GameMode_GetKindLabel	85	campaign-event-card.md
 0x8114f252	function	Time_SplitCentiseconds	85	campaign-event-card.md
@@ -89,3 +89,9 @@
 # The chase-camera rig and the craft scale it applies (2026-10-01).
 0x811bd89a	function	Ship_UpdateCameraRigs	78	camera.md
 0x8151fdd0	data	g_craft_scale	82	camera.md
+
+# The weapon callout, glyph row, forced-craft quads and trophy textures (2026-10-05).
+0x810626ce	function	CampaignEventCard_DrawWeaponCallout	75	weapon-callout.md
+0x81055006	function	CampaignEventCard_GlyphRowWidth	80	weapon-callout.md
+0x81061808	function	CampaignEventCard_DrawForcedCraft	75	weapon-callout.md
+0x8104d1d0	function	FrontEnd_LoadTrophyTextures	80	weapon-callout.md

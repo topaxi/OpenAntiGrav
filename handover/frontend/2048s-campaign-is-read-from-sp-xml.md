@@ -277,16 +277,24 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
    `CampaignEventCard_DrawPanel` and friends, the photo/emblem/glyph art found
    in `NewImages` (no XML names it), and `oag_ui::frontend::event_card` draws
    it with pointer support - see `docs/formats/2048-campaign.md`'s "The event
-   card". **Still open, in order of player impact:** (a) page kinds `1`-`4`
-   (`FUN_810540c4` and siblings; kind `1` is on every SP card and is drawn
-   blank) and the predicates that give the reference frame its third dot
-   (`CampaignEventCard_BuildPageList`); (b) the `BEAT_VALUE` objective line -
-   read the `vtable+0x6c` override of `GameModeObjective_FormatText`; (c) the
-   Zone events' photo (no authored circuit; find where a Zone run picks its
-   circuit); (d) `FUN_812b021a`, which words the kind line under the title
-   (this build's `RACE`/`ZONE` is chosen); (e) the elite row and restriction
-   glyphs; (f) verify the class ordinal order and the Change-craft glyph against
-   a live frame; (g) the slide-in/fade animation is not drawn.
+   card". **2026-10-05** (branch `v2048-campaign-card`): ~~page kind `2`~~
+   (trophy and cup art: the nine named elite trophies and three cup finals, found
+   in `FrontEnd_LoadTrophyTextures` `0x8104d1d0`), ~~the weapon callout~~
+   (`FUN_810626ce`: the law, the constructors' defaults and the icon order are
+   read; drawn on the rules page and the objective page's glyph row), ~~the elite
+   row~~ and the trophy glyph of the objective page, ~~the restriction glyphs~~
+   and forced craft on the glyph row, and ~~the forced craft's two quads~~
+   (`FUN_81061808`, disassembled) are drawn - evidence in
+   `docs/ghidra/functions/vita-2048-eu-v104/weapon-callout.md`. **Still open, in
+   order of player impact:** (a) page kind `3` (`FUN_81052810`, probably
+   unreachable) and the leaderboard's personal record row (a per-event result
+   store - `oag_game::records::Store` keeps only the medal today); (b) the
+   slide-in/fade animation; (c) the objective page's forced-craft scale (chosen
+   0.7) and the trophy heading's `320.0` fit; (d) verify the page order and the
+   callout placement against a live Vita3K frame of an event with weapons, a
+   trophy event and a passed event - no reference frame exists for any of them;
+   (e) the thin vertical line at the left edge of the callout icons in captures,
+   unchecked: texture content or sampling.
 7. **Closed 2026-09-28** - see the "Open" section's own entry above for what
    landed (`grid_craft`, `Options::grid_teams`, `apply_grid_teams`) and where
    it is measured and verified.

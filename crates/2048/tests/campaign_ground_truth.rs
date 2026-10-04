@@ -250,3 +250,81 @@ fn a_named_weapon_set_decodes_to_what_its_own_name_says() {
         ]
     );
 }
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_trophy_page_is_named_for_events_that_exist_and_every_cup_shape_has_a_year() {
+    use oag_2048::campaign::trophy;
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let doc = sp_xml_document(&mut archives);
+    let events = oag_tables::mjolnir::campaign::events(&doc);
+    for name in trophy::NAMED {
+        assert!(
+            events.iter().any(|event| event.name == name),
+            "{name} is not an SP.xml event"
+        );
+    }
+    let mut with_page = 0;
+    let mut with_art = 0;
+    for event in &events {
+        let shape = doc
+            .instance(event.instance_id)
+            .and_then(|instance| instance.field("M_BUTTONSHAPE"))
+            .and_then(oag_tables::mjolnir::Field::int);
+        if trophy::has_page(shape) {
+            with_page += 1;
+        }
+        if trophy::art_for(&event.name, shape).is_some() {
+            if matches!(shape, Some(9..=11)) {
+                eprintln!("cup: {}", event.name);
+            }
+            with_art += 1;
+            assert!(trophy::has_page(shape) || trophy::NAMED.contains(&event.name.as_str()));
+        }
+    }
+    assert_eq!(
+        (with_page, with_art),
+        (12, 12),
+        "nine named elite trophies and three cups, each with art"
+    );
+}
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_weapon_callout_census_over_every_event_is_pinned() {
+    use oag_2048::campaign::callout::{Callout, for_event};
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let doc = sp_xml_document(&mut archives);
+    let mut census = std::collections::BTreeMap::<String, usize>::new();
+    for event in oag_tables::mjolnir::campaign::events(&doc) {
+        let key = match for_event(&doc, &event) {
+            None => "no item (zone, speed lap)".to_string(),
+            Some(Callout::Weapons(bits)) => format!("weapons {bits:?}"),
+            Some(other) => format!("{other:?}"),
+        };
+        *census.entry(key).or_default() += 1;
+    }
+    let census: Vec<(&str, usize)> = census.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+    assert_eq!(
+        census,
+        vec![
+            ("DefensiveOff", 3),
+            ("Nothing", 54),
+            ("WeaponsOff", 2),
+            ("no item (zone, speed lap)", 63),
+            ("weapons [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]", 5),
+            ("weapons [0, 1, 5, 7, 8, 9]", 5),
+            ("weapons [0, 5, 7, 8, 9]", 1),
+            ("weapons [0]", 2),
+            ("weapons [1]", 3),
+            ("weapons [5, 10]", 1),
+            ("weapons [5, 8, 9]", 1),
+            ("weapons [5]", 1),
+        ],
+        "141 events: 63 have no item, 54 offer everything, 24 say something"
+    );
+}
