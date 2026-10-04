@@ -1,39 +1,25 @@
 use super::*;
 use oag_core::math::vec3;
 
-/// [`Sprite::new`] draws from the measured ranges - `clouds.md`'s
-/// `Psys_RandFloatRange(0, 2*PI)` and `(-0.002, 0.002)` - not from anywhere
-/// wider or narrower.
-#[test]
-fn a_sprite_s_phase_and_rate_stay_inside_the_measured_range() {
-    let mut rng = Rng::new(1);
-    for _ in 0..200 {
-        let sprite = Sprite::new(Vec3::ZERO, 4.0, [1.0, 1.0, 1.0, 1.0], &mut rng);
-        assert!((0.0..std::f32::consts::TAU).contains(&sprite.phase));
-        assert!((-ROTATION_RATE_MAX..=ROTATION_RATE_MAX).contains(&sprite.rate));
+/// A sprite with every field set by hand.
+fn sprite(position: Vec3, phase: f32, rate: f32) -> Sprite {
+    Sprite {
+        position,
+        half_size: 4.0,
+        colour: [1.0, 1.0, 1.0, 1.0],
+        cell: 6,
+        phase,
+        rate,
     }
-}
-
-/// Two sprites built from the same seed draw the same phase and rate - the
-/// determinism `--screenshot` needs a seeded [`Rng`] for at all.
-#[test]
-fn the_same_seed_draws_the_same_sprite() {
-    let mut a = Rng::new(42);
-    let mut b = Rng::new(42);
-    let sa = Sprite::new(Vec3::ZERO, 4.0, [1.0, 1.0, 1.0, 1.0], &mut a);
-    let sb = Sprite::new(Vec3::ZERO, 4.0, [1.0, 1.0, 1.0, 1.0], &mut b);
-    assert_eq!(sa, sb);
 }
 
 /// [`Sprite::advance`] adds the rate with no `dt` scaling, matching
 /// `CloudGroup_Draw`'s own `phase += rate` per call.
 #[test]
 fn advancing_adds_the_rate_with_no_dt() {
-    let mut rng = Rng::new(7);
-    let mut sprite = Sprite::new(Vec3::ZERO, 4.0, [1.0, 1.0, 1.0, 1.0], &mut rng);
-    let before = sprite.phase;
-    sprite.advance();
-    assert_eq!(sprite.phase, before + sprite.rate);
+    let mut s = sprite(Vec3::ZERO, 1.25, 0.0015);
+    s.advance();
+    assert_eq!(s.phase, 1.25 + 0.0015);
 }
 
 /// At phase zero the rotated basis is the identity, so the quad's corners
@@ -45,6 +31,7 @@ fn at_phase_zero_the_quad_is_axis_aligned() {
         position: vec3(1.0, 2.0, 3.0),
         half_size: 2.0,
         colour: [1.0, 0.5, 0.25, 0.8],
+        cell: 6,
         phase: 0.0,
         rate: 0.0,
     };
@@ -68,6 +55,7 @@ fn a_quarter_turn_swaps_the_quad_s_axes() {
         position: Vec3::ZERO,
         half_size: 1.0,
         colour: [1.0, 1.0, 1.0, 1.0],
+        cell: 6,
         phase: std::f32::consts::FRAC_PI_2,
         rate: 0.0,
     };
@@ -80,17 +68,16 @@ fn a_quarter_turn_swaps_the_quad_s_axes() {
 }
 
 /// [`Layer::is_empty`] and [`Layer::advance`]/[`Layer::extend_vertices`] on a
-/// hand-built layer - `Layer::from_clouds` itself is exercised against real
+/// hand-built layer - `Layer::from_groups` itself is exercised against real
 /// disc data by `oag_vex::cloud`'s own ground-truth tests and by the
 /// `--screenshot` check `clouds.md` records; this crate depends on nothing
 /// but the vertices those positions and colours produce.
 #[test]
 fn a_layer_advances_every_sprite_and_emits_six_vertices_each() {
-    let mut rng = Rng::new(3);
     let mut layer = Layer {
         sprites: vec![
-            Sprite::new(vec3(0.0, 0.0, 0.0), 4.0, [1.0, 1.0, 1.0, 1.0], &mut rng),
-            Sprite::new(vec3(10.0, 0.0, 0.0), 4.0, [1.0, 1.0, 1.0, 1.0], &mut rng),
+            sprite(vec3(0.0, 0.0, 0.0), 0.5, 0.001),
+            sprite(vec3(10.0, 0.0, 0.0), 2.0, -0.002),
         ],
     };
     assert!(!layer.is_empty());
@@ -140,6 +127,7 @@ fn a_cloud_keeps_its_world_orientation_as_the_camera_rolls() {
             position: vec3(5.0, 1.0, -20.0),
             half_size: 3.0,
             colour: [1.0; 4],
+            cell: 6,
             phase: 0.7,
             rate: 0.0,
         }],
@@ -161,4 +149,56 @@ fn a_cloud_keeps_its_world_orientation_as_the_camera_rolls() {
             }
         }
     }
+}
+
+/// `FUN_089322f8`'s atlas: a 4x2 grid of quarter-width, half-height cells, and
+/// `kind == 2` draws one of the bottom row's right two.
+#[test]
+fn atlas_cells_are_a_four_by_two_grid() {
+    assert_eq!(field::cell_uv(0), (0.0, 0.0, 0.25, 0.5));
+    assert_eq!(field::cell_uv(6), (0.5, 0.5, 0.75, 1.0));
+    assert_eq!(field::cell_uv(7), (0.75, 0.5, 1.0, 1.0));
+}
+
+/// A sprite's quad samples only its own cell, bottom-left texel on the
+/// `(-h, -h)` corner.
+#[test]
+fn a_sprite_samples_only_its_cell() {
+    let mut s = sprite(Vec3::ZERO, 0.0, 0.0);
+    s.cell = 7;
+    let verts = s.vertices(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), 0.0);
+    assert_eq!(verts[0].texcoord, [0.75, 1.0]);
+    assert_eq!(verts[4].texcoord, [1.0, 0.5]);
+}
+
+/// A cube authors one record per ten units of volume, truncated: the live
+/// `05_Track` cube, uniform scale 7.76697, authored 46.
+#[test]
+fn a_cube_authors_a_record_per_ten_units_of_volume() {
+    let s = 7.766_97;
+    let mut world = [0.0; 16];
+    (world[0], world[5], world[10], world[15]) = (s, s, s, 1.0);
+    let cube = oag_vex::cloud::GroupCube {
+        kind: 2,
+        scale: 1.0,
+        world,
+        sprite_radius: 4.0,
+        sprite_radius_var: 0.2,
+    };
+    assert_eq!(field::record_count(&cube), 46);
+}
+
+/// The cull removes a later record closer than `(ha + hb) * (1 - Overlap)` to
+/// an earlier live one, and keeps it at that distance or further.
+#[test]
+fn the_overlap_cull_removes_only_the_later_of_a_close_pair() {
+    let record = |x: f32| field::Record {
+        position: [x, 0.0, 0.0],
+        half_size: 20.0,
+        cube: Some(0),
+    };
+    // (20 + 20) * (1 - 0.65) = 14.
+    let mut records = [record(0.0), record(13.0), record(30.0)];
+    field::cull(&mut records, 0.65);
+    assert_eq!(records.map(|r| r.cube.is_some()), [true, false, true]);
 }
