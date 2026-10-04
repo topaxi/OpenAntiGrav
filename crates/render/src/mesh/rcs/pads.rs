@@ -63,7 +63,10 @@ pub(super) fn pad_chunk_hashes<'a>(
 /// under, and `speedup_material`, which `amphiseum` does.
 pub(super) fn is_pad_material(name: &str) -> bool {
     let leaf = name.rsplit('/').next().unwrap_or(name);
-    matches!(leaf, "weapon_pads.rcsmaterial" | "speedup_material.rcsmaterial")
+    matches!(
+        leaf,
+        "weapon_pads.rcsmaterial" | "speedup_material.rcsmaterial"
+    )
 }
 
 /// The track's `Speedup Pad` geometry, from the `.rcsmodel` beside the

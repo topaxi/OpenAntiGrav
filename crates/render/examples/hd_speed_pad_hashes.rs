@@ -12,15 +12,34 @@ fn main() -> anyhow::Result<()> {
     let classes = vex::classes_of(&data)?;
     let nodes = vex::nodes(&data)?;
     let order = vex::byte_order(&data);
-    for nd in nodes.iter().filter(|n| Some(n.class_id) == classes.speedup_pad) {
+    for nd in nodes
+        .iter()
+        .filter(|n| Some(n.class_id) == classes.speedup_pad)
+    {
         let p = &data[nd.payload()];
         let h = order.u32(p, 0x30);
-        println!("node {:?} {h:#010x} words {:08x?}", nd.name, (0x20..0x44).step_by(4).map(|o| order.u32(p, o)).collect::<Vec<_>>());
+        println!(
+            "node {:?} {h:#010x} words {:08x?}",
+            nd.name,
+            (0x20..0x44)
+                .step_by(4)
+                .map(|o| order.u32(p, o))
+                .collect::<Vec<_>>()
+        );
     }
     for (i, c) in model.meshes.iter().enumerate() {
         let m = &model.materials[c.material as usize];
-        if m.samplers.iter().any(|(_, p)| p.as_deref().is_some_and(|p| p.contains("speedup"))) {
-            println!("chunk #{i} {:#010x} slot {} verts {:?} bias {:?}", c.hash, c.material, c.submeshes.len(), c.bias);
+        if m.samplers
+            .iter()
+            .any(|(_, p)| p.as_deref().is_some_and(|p| p.contains("speedup")))
+        {
+            println!(
+                "chunk #{i} {:#010x} slot {} verts {:?} bias {:?}",
+                c.hash,
+                c.material,
+                c.submeshes.len(),
+                c.bias
+            );
         }
     }
     Ok(())
