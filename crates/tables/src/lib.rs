@@ -25,6 +25,7 @@
 //! naming a title, per
 //! [ADR-0022](../../../docs/architecture/adr/0022-title-packages.md).
 
+pub mod ai_race_stats;
 pub mod effectsettings;
 pub mod enginelight;
 pub mod envsettings;
