@@ -571,9 +571,17 @@ read. One consequence of our own: motion blur, which the original does not
 have, no longer smears Pulse PSP's haze, since the composite now comes after
 it. Matched against the original's rest pose on de Konstruct, ours moves
 7,232 pixels by at most 15 against the old order, all where the HUD meets a
-glow, and the rest of the frame is unchanged (mean `0.011`). The test
-`post::bloom::tests::the_composite_adds_over_a_hud_drawn_after_the_bright_pass`
-fails if the composite runs before what is drawn after the bright pass.
+glow, and the rest of the frame is unchanged (mean `0.011`). At the same pose
+at 480x272, the label glyphs of both titles sit over no glow: the original's
+on/off frames differ there by under 1.1 per channel and ours by 0. The +50 on
+the "Lap" glyphs above has no matched frame of ours yet.
+
+The test `post::bloom::tests::the_composite_adds_over_a_hud_drawn_after_the_bright_pass`
+pins `Bloom`'s contract, that the composite adds over whatever is drawn after
+`prepare`. **It does not pin the game's call order**: putting
+`Bloom::render` back in `Scene::render` passes every test. A capture-level
+test needs a frame where a HUD glyph sits over a glow surface. In the old
+order, such a glyph reads exactly its own opaque colour.
 
 ## Is ours stronger than the original? Yes, by the background term (2026-10-02)
 
