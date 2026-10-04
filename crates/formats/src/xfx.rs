@@ -30,6 +30,7 @@
 //! the layer pointer table of `layers * 4` bytes, which is the end of the file.
 
 use crate::byte_order::ByteOrder;
+use crate::coverage::Coverage;
 
 /// The first four bytes: `XFDX`.
 pub const MAGIC: [u8; 4] = *b"XFDX";
@@ -280,6 +281,30 @@ impl<'a> Xfx<'a> {
     pub fn bytes(&self) -> &'a [u8] {
         self.data
     }
+
+    /// The ranges of the file this reader reaches, each claimed under its name.
+    ///
+    /// [`Self::accounted_bytes`] adds the sizes of the pieces; this places them.
+    /// A table whose pieces overlap or leave a hole fails one of the two: the
+    /// sizes would still sum to the file length, but the placed ranges would
+    /// not tile it, so a test asserts both.
+    #[must_use]
+    pub fn coverage(&self) -> Coverage {
+        let base = self.data.as_ptr() as usize;
+        let at = |part: &[u8]| part.as_ptr() as usize - base;
+        let mut coverage = Coverage::new(self.data.len());
+        coverage.claim(0, HEADER_LEN, "header");
+        for channel in &self.channels {
+            coverage.claim(at(channel.raw), CHANNEL_LEN, "channel");
+            coverage.claim(at(channel.triggers), channel.triggers.len(), "triggers");
+        }
+        for layer in &self.layers {
+            coverage.claim(at(layer.raw), LAYER_LEN, "layer");
+        }
+        let table = ByteOrder::Big.u32(self.data, 0x18) as usize;
+        coverage.claim(table, self.layers.len() * 4, "layer pointer table");
+        coverage
+    }
 }
 
 impl<'a> Channel<'a> {
@@ -396,6 +421,18 @@ impl<'a> Layer<'a> {
     #[must_use]
     pub fn raw(&self) -> &'a [u8] {
         self.raw
+    }
+
+    /// Where the gain and pitch curves sit, as offsets from the start of this
+    /// layer's record. `(0x30, 0x430)` on every file on the disc, so the curves
+    /// are the record's own tail and not shared storage.
+    #[must_use]
+    pub fn curve_offsets(&self) -> (usize, usize) {
+        let base = self.raw.as_ptr() as usize;
+        (
+            (self.gain.as_ptr() as usize).wrapping_sub(base),
+            (self.pitch.as_ptr() as usize).wrapping_sub(base),
+        )
     }
 }
 

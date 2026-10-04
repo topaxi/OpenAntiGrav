@@ -45,8 +45,13 @@ channel and layer offsets to pointers the first time, finds a free handle in a
 passes the global system `0x00b6e308`.
 
 The system is initialised by `FUN_003141c8(sys, 8, 0x20, 4, 0x30)` from
-`XFadeShip_InitSystem`: **eight handles**, which is the eight craft of a race.
-Four controllers and `0x30` elements per handle.
+`XFadeShip_InitSystem`. Its body stores the arguments to `sys+0x14` (maximum
+handles, 8: the eight craft of a race), `sys+0xc` (`maxElementsPerHandle`,
+`0x20`), `sys+0x10` (`maxControllerPerHandle`, 4) and `sys+0x20` (maximum
+triggers, `0x30`), and sizes the handle, element and controller arrays from
+them. The loader compares `sys+0xc` against the file's element count and
+`sys+0x10` against its controller count, which is how the mapping reads off
+the error strings.
 
 ## The per-frame path
 
@@ -137,7 +142,8 @@ re-derives them:
 
 `scripts/rpcs3-hd-engine-xfade-probe.py` paused RPCS3 twelve times in a driven
 Campaign race and read the stored channels beside their inputs. Channel 0
-matches `0.5 * speed_field + 5.0 * X` to within two counts on 12 of 12 samples,
+equals `trunc(0.5 * speed_field + 5.0 * X)` on 11 of 12 samples (the twelfth,
+mid-acceleration, is 2.1 under),
 channel 3 is `511` at throttle `100` and `0` at throttle `0`, and
 `ctrl[+4]` is that throttle (`100.0` / `0.0`). The table is in
 [hd-xfx.md](../../../formats/hd-xfx.md#the-per-tick-law-confidence-85-for-channels-0-and-3).

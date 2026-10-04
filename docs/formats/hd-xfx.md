@@ -33,8 +33,10 @@ Then, in file order: `channels * 0x60` bytes of channels; the triggers of
 channel 0 (`0x40` each, the only channel that has any); `layers * 0x830` bytes of
 layers; `layers * 4` bytes of layer offsets, which end the file.
 
-**Coverage: the reader accounts for all 13 files to the byte**
-(`all_thirteen_tables_parse_and_account_for_every_byte`). Goteki is
+**Coverage: the reader's pieces tile all 13 files with no hole and no overlap**
+(`all_thirteen_tables_parse_and_account_for_every_byte`: the sizes sum to the
+file length, and `Xfx::coverage()` places every piece by its offset and leaves
+no gap). Goteki is
 `0x1c + 4*0x60 + 26*0x40 + 9*0x830 + 9*4 = 20,976`.
 **Feisar's 2,100 bytes smaller is one layer (`0x830` = 2,096) plus its 4-byte
 pointer**, and nothing else: it has one `~n7` layer where the other teams carry
@@ -53,7 +55,8 @@ two `~n` layers (`feisar_is_one_layer_smaller_...`).
 | `+0x1c` | offset of the gain curve, 512 `i16` |
 | `+0x20` | offset of the pitch curve, 512 `i16` |
 
-The curves sit at `+0x30` and `+0x430` of their own record on all 13 files.
+The curves sit at `+0x30` and `+0x430` of their own record on every layer of all
+13 files (asserted by `Layer::curve_offsets`).
 Gain runs `0..=0x400` on every layer of every file (`0x400` is unity, the value
 the layer slots are initialised to); the pitch curve runs `0..=0x400`, and the
 layer update subtracts `0x200` from it, so `0x200` is neutral.
@@ -144,9 +147,9 @@ channels and the terms together:
 | thrust-airbrake-1 | 428.9 | 4.119 | 235 | 235.1 | 511 | 100 |
 | coast | 87.8 | 3.997 | 63 | 63.9 | 0 | 0 |
 
-Channel 0 follows the formula to within two counts on 12 of 12 samples (the
-residual is the pause landing between the audio tick and the next physics step;
-the sample with the largest gap is the one mid-acceleration). Channel 3 reads
+Channel 0 equals the truncated formula on 11 of 12 samples; the twelfth
+(`thrust-1`, mid-acceleration) is 2.1 under it, which fits the pause landing
+between the audio tick and the next physics step. Channel 3 reads
 `511` exactly when the throttle reads `100` and `0` when it reads `0`:
 `ctrl[+4]` is a throttle percentage, a digital `100`/`0` of the kind
 [physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md) records. **Channels 1 and 2 read `0` on all twelve samples**, including

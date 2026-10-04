@@ -49,6 +49,16 @@ fn a_well_formed_table_accounts_for_every_byte() {
     assert_eq!(xfx.layers().len(), 1);
     assert_eq!(xfx.channels()[0].trigger_count(), 2);
     assert_eq!(xfx.accounted_bytes(), data.len());
+    assert!(xfx.coverage().gaps(1).is_empty());
+    assert_eq!(xfx.layers()[0].curve_offsets(), (0x30, 0x430));
+}
+
+#[test]
+fn a_hole_between_pieces_shows_in_the_coverage() {
+    let mut data = table(0);
+    data.extend_from_slice(&[0; 8]);
+    let xfx = Xfx::parse(&data).unwrap();
+    assert_eq!(xfx.coverage().gaps(1).len(), 1);
 }
 
 #[test]

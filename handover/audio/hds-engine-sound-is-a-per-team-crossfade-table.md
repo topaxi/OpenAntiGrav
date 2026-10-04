@@ -17,7 +17,7 @@ this file is only what is left.
 - The crossfade system's load, smooth and layer-evaluate path is named
   (`XFadeSystem_*`, ten names in `names.tsv`).
 - `Ship_UpdateEngineCrossfade` (`0x000d5968`) writes the four input channels;
-  channel 0 and 3 were checked live on RPCS3 (12 samples, within two counts).
+  channel 0 and 3 were checked live on RPCS3 (12 samples, 11 exact).
 
 ## Open
 
