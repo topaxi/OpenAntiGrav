@@ -29,9 +29,11 @@ pub struct Weather {
     pub screen_psys: Option<String>,
     /// `DriftY`: the fall, world units per tick, before the wind's 0.3 factor.
     pub drift_y: f32,
-    /// `DriftMistMult`.
+    /// `DriftMistMult`: the mist overlay's drift, `-(0.3 * wind)` times this.
     pub drift_mist_mult: f32,
-    /// `MistInside`: the mist's opacity in a covered section.
+    /// `MistInside`, an integer flag in the original (`Xml_AttributeAsInt`):
+    /// non-zero keeps the mist overlay's opacity where it is on a cover edge,
+    /// zero fades it to `0` under cover and back to `Alpha` in the open.
     pub mist_inside: f32,
     /// `WindBase`: the wind's steady strength.
     pub wind_base: f32,

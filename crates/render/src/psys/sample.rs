@@ -2,6 +2,8 @@
 
 use oag_core::Rng;
 
+use oag_vex::pob;
+
 use super::{Channel, ChannelMode};
 
 /// A channel's value at normalized age `age`, with `sample` standing in for
@@ -23,4 +25,22 @@ pub(super) fn random_range(rng: &mut Rng, range: (u32, u32)) -> f32 {
         return min as f32;
     }
     (min + rng.below(max - min + 1)) as f32
+}
+
+/// An emitter record's particle lifetime, centre and spread in ticks.
+///
+/// Under [`pob::flags::IMMORTAL`] (`0x800`) `ParticleSystem_InitParticle`
+/// (`0x088f6e6c`) stores `FLT_MAX` instead of the authored value, so the
+/// particle never expires and its normalized age stays at `0`. Read live on
+/// Outpost 7's `WO_SNOW` (flags `0x5001805`, authored `5` ticks): its 64
+/// flakes carry `FLT_MAX` at particle `+0x88`/`+0x8c` and the pool holds all
+/// 64 for the whole race. See `docs/ghidra/functions/psp-pulse-usa/weather.md`.
+pub(super) fn lifetime_ticks(record: &pob::Emitter) -> (f32, f32) {
+    if record.flags & pob::flags::IMMORTAL != 0 {
+        return (f32::MAX, 0.0);
+    }
+    (
+        record.lifetime_ticks.0 as f32,
+        record.lifetime_ticks.1 as f32,
+    )
 }

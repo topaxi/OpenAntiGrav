@@ -152,7 +152,10 @@ Confidence **85**. Runs once per new particle:
 - **Lifetime**: `Psys_RandSpread((int)res+0x5c, (int)res+0x60)` - stored as
   **integer ticks** in the file - times `instance+0x54 / 60` into seconds;
   `1/lifetime` cached for normalized age. Resource flag `0x800` means
-  immortal (`FLT_MAX`).
+  immortal (`FLT_MAX`). Read live on Outpost 7's `WO_SNOW` (2026-10-04): all
+  64 pool particles hold `FLT_MAX` at particle `+0x88`/`+0x8c`. Honoured by
+  `oag_render::psys` since then; on the Pulse discs only `WO_SNOW` and
+  `WO_LEACHBEAM_ENERGY` set it. See [weather.md](weather.md).
 - **Velocity inherit**: particle velocity `+= instance+0x150`,
   unconditionally. `+0x150` is written when a *child* system spawns off a
   parent particle (scaled by the child resource's `+0x4d0`); neither

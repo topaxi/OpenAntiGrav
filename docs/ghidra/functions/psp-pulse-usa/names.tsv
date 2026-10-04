@@ -1277,3 +1277,13 @@
 0x08b323c0	data	Billboard_Slots	80	gantry-clock.md
 0x08904fd4	function	ExhaustFlare_OnPerfectStart	85	perfect-start.md
 0x089044d8	function	ExhaustFlare_Construct	75	perfect-start.md
+0x088fa0a0	function	WeatherMist_Construct	85	weather.md
+0x088f99f8	function	WeatherMist_Update	80	weather.md
+0x088f9a88	function	WeatherMist_Enqueue	75	weather.md
+0x088f9ab4	function	WeatherMist_Draw	85	weather.md
+0x088fa38c	function	WeatherMist_UpdateLayer	85	weather.md
+0x088f959c	function	CameraMotion_Sample	65	weather.md
+0x088f9494	function	Quad_RotateScaleUv	80	weather.md
+0x0897f388	function	fmodf	90	weather.md
+0x0897eed0	function	asinf	90	weather.md
+0x0897f008	function	atan2f	90	weather.md
