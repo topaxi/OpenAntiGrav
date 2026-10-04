@@ -7,6 +7,54 @@
 
 use oag_render::mesh::{self, Model};
 
+/// The `.rcsmodel` beside a circuit's `.vex`, and the name it was found under.
+///
+/// Tried in this order: **`trackZone.rcsmodel` in a Zone race on Wipeout
+/// 2048**, then `track.rcsmodel`, then the Omega Collection's
+/// `track.final.rcsmodel` (see `mesh::rcs::sibling_name_cooked`). The Zone
+/// model is its own circuit art with its own skeleton, clip and PVS, found
+/// by the same stem rule, so everything downstream that follows
+/// `geometry_name` follows it too. A Zone model in any other container (the
+/// Omega Collection ships some) is passed over, so Omega's racing does not
+/// move and HD's and Pulse's, which name no such file, never reach it.
+pub(super) fn sibling_model(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    zone: bool,
+    report: &mut Vec<String>,
+) -> (Option<Vec<u8>>, Option<String>) {
+    if zone {
+        if let Some(name) = mesh::rcs::psp2::zone_model_name(track) {
+            if let Ok(blob) = archives.read_name(&name) {
+                if mesh::rcs::psp2::is_psp2(&blob) && !oag_rcs::rcsmodel::psp2::is_ps4(&blob) {
+                    report.push(format!(
+                        "zone: {name} is this circuit's Zone model, drawn in place of track.rcsmodel"
+                    ));
+                    return (Some(blob), Some(name));
+                }
+            }
+        }
+    }
+    let names = [
+        mesh::rcs::sibling_name(track),
+        mesh::rcs::sibling_name_cooked(track),
+    ];
+    let found = names
+        .into_iter()
+        .flatten()
+        .find_map(|name| archives.read_name(&name).ok().map(|blob| (name, blob)));
+    match found {
+        Some((name, blob)) => (Some(blob), Some(name)),
+        None => {
+            report.push(format!(
+                "{track}: a PS3 .vex with no .rcsmodel beside it - drawing the \
+                 derived ribbon instead, as --ribbon does"
+            ));
+            (None, None)
+        }
+    }
+}
+
 /// The circuit's authored geometry, or `None` when the caller should draw the
 /// derived ribbon instead.
 ///

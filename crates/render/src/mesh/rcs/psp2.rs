@@ -105,6 +105,11 @@ pub struct Report {
     /// archive or would not decode - the honest count of what is still
     /// missing, kept apart from a submesh that simply has no material.
     pub unresolved_draws: usize,
+    /// Submeshes painted a flat emissive colour read off their material's
+    /// own shader inputs - see [`psp2::material::Material::emissive_colour`].
+    /// Counted among [`Self::unresolved_draws`] too, since they have no
+    /// texture, but not missing anything.
+    pub emissive_colour_submeshes: usize,
     /// Submeshes bound to a node of the model's own table and placed by
     /// it - through the skeleton where one was given, through the model's
     /// bind matrix otherwise. See [`placement`].
@@ -145,6 +150,14 @@ impl Report {
             ),
             (None, 0) => "untextured, no material table".to_string(),
             (None, n) => format!("untextured, {n} material(s), none of whose textures resolved"),
+        };
+        let emissive = if self.emissive_colour_submeshes == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} submesh(es) a flat emissive colour off their material's inputs",
+                self.emissive_colour_submeshes
+            )
         };
         let poisoned = if self.non_finite_texcoords == 0 {
             String::new()
@@ -204,7 +217,7 @@ impl Report {
         let gnf = self.gnf.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}{lightmaps}{nodes}{gnf}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{emissive}{tangents}{lightmaps}{nodes}{gnf}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -229,6 +242,23 @@ pub fn animation_names(vex_name: &str) -> Option<(String, String)> {
 pub fn animation_names_beside(model_name: &str) -> Option<(String, String)> {
     let stem = model_name.strip_suffix(".rcsmodel")?;
     Some((format!("{stem}.rcsskeleton"), format!("{stem}.rcsanimclip")))
+}
+
+/// The Zone-mode model that sits beside a 2048 circuit's `track.vex`:
+/// `trackZone.rcsmodel`, whose `.rcsskeleton`, `.rcsanimclip` and `.pvs`
+/// carry the same stem.
+///
+/// **A model of its own, not a second skeleton for `track.rcsmodel`**: on
+/// `altima` it is 37 MB against the race model's 17, with its own PVS. The
+/// reversed circuit ships no Zone model, so both directions map to the same
+/// file. `None` for a name that is not a `.vex`.
+#[must_use]
+pub fn zone_model_name(vex_name: &str) -> Option<String> {
+    let dir_end = vex_name.rfind(['\\', '/']).map_or(0, |at| at + 1);
+    vex_name[dir_end..]
+        .to_ascii_lowercase()
+        .ends_with(".vex")
+        .then(|| format!("{}trackZone.rcsmodel", &vex_name[..dir_end]))
 }
 
 /// Whether a blob is 2048's container rather than Wipeout HD's.
@@ -367,6 +397,22 @@ fn build_planned(
         } else {
             crate::mesh::slots::SECOND_IS_LIGHTMAP
         };
+        // A flat emissive colour is the surface's whole picture: painted in
+        // the vertex colour and drawn unlit and unshaded, which is what an
+        // emissive output with no texture is.
+        let emissive = submesh
+            .material
+            .and_then(|m| decoded.materials.get(m))
+            .and_then(|m| m.emissive_colour());
+        report.emissive_colour_submeshes += usize::from(emissive.is_some());
+        let (colour, lit, role) = match emissive {
+            Some([r, g, b]) => (
+                [r, g, b, 1.0],
+                0.0,
+                role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
+            ),
+            None => ([1.0; 4], 1.0, role),
+        };
         let to_world = Mat4::from_cols_array(&place.to_world);
         let at_zero = Mat4::from_cols_array(&place.world_at_zero);
         // Normals through the bake's inverse transpose: 166 skeleton nodes
@@ -438,9 +484,9 @@ fn build_planned(
             model.vertices.push(GpuVertex {
                 position,
                 normal,
-                colour: [1.0, 1.0, 1.0, 1.0],
+                colour,
                 texcoord,
-                lit: 1.0,
+                lit,
                 lightmap_texcoord,
                 anim: 0,
                 slots: role,

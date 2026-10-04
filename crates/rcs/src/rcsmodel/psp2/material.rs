@@ -137,6 +137,13 @@ const HEADER_LEN: usize = 0x40;
 const NAME_POINTER: usize = 0x04;
 /// Offset of the technique/shading-group name pointer.
 const TECHNIQUE_POINTER: usize = 0x18;
+/// Offset of the half-float count of a material's shader inputs.
+const INPUT_COUNT: usize = 0x28;
+/// Offset of the pointer to those halves.
+const INPUT_POINTER: usize = 0x2c;
+/// The most halves a material's input array may claim. The largest measured
+/// is twelve (`fc17_effects_vscroll_wateredge_vertexcol`).
+const MAX_INPUTS: usize = 64;
 /// Offset of the file-level material count, from the CPU section's own start.
 const FILE_MATERIAL_COUNT: usize = 0x44;
 /// Offset of the file-level material offset table pointer.
@@ -181,9 +188,60 @@ pub struct Material {
     /// exception in either direction
     /// (`crates/rcs/tests/omega_declaration_ground_truth.rs`).
     pub lightmap: Option<String>,
+    /// The material's authored shader-input values: `n` binary16 halves,
+    /// `n` at header `+0x28` and the array at the pointer in `+0x2c`.
+    /// Empty where the count is zero, the pointer is wild, or on PS4.
+    ///
+    /// **Raw halves, so the table stays `Eq`**; [`Self::input`] widens one.
+    /// Which input is which is not in the file (the sampler-style name hash
+    /// of HD is not stored), so the meaning is per shader family - see
+    /// [`Self::emissive_colour`].
+    pub inputs: Vec<u16>,
+}
+
+/// An IEEE binary16 widened to `f32`, exactly.
+#[must_use]
+pub fn half_to_f32(bits: u16) -> f32 {
+    let sign = u32::from(bits >> 15) << 31;
+    let exponent = u32::from((bits >> 10) & 0x1f);
+    let mantissa = u32::from(bits & 0x3ff);
+    let magnitude = match (exponent, mantissa) {
+        (0, 0) => 0,
+        (0, m) => {
+            // A subnormal half is `m * 2^-24`, a normal float once shifted up.
+            let shift = m.leading_zeros() - 21;
+            let m = (m << shift) & 0x3ff;
+            ((127 - 14 - shift) << 23) | (m << 13)
+        }
+        (0x1f, m) => (0xff << 23) | (m << 13),
+        (e, m) => ((e + 112) << 23) | (m << 13),
+    };
+    f32::from_bits(sign | magnitude)
 }
 
 impl Material {
+    /// Input `index` as an `f32`, or `None` past the array.
+    #[must_use]
+    pub fn input(&self, index: usize) -> Option<f32> {
+        self.inputs.get(index).copied().map(half_to_f32)
+    }
+
+    /// The flat colour a `zonefc06_colour_emissive_scalar_*` material draws:
+    /// its first three inputs. **Measured against the names**: `C_Red` reads
+    /// `1 0 0`, `C_Pink` `1 0 1`, and the eight numbered variants are eight
+    /// distinct colours (blue, a blue-teal, cyan, green, pink, red, yellow, a
+    /// dark blue) - `crates/render/tests/psp2_zone_ground_truth.rs`. The
+    /// remaining inputs (`0`, `0.5`, `0`) are unread. `None` for every other
+    /// family.
+    #[must_use]
+    pub fn emissive_colour(&self) -> Option<[f32; 3]> {
+        let file = self.name.rsplit(['/', '\\']).next()?;
+        file.to_ascii_lowercase()
+            .starts_with("zonefc06_colour_emissive_scalar")
+            .then_some(())?;
+        Some([self.input(0)?, self.input(1)?, self.input(2)?])
+    }
+
     /// The first texture found that is not the lightmap - this reading's
     /// answer for "the" diffuse texture. Ordinal, not semantic; see the module
     /// doc.
@@ -198,6 +256,23 @@ impl Material {
             .map(String::as_str)
             .find(|path| Some(*path) != self.lightmap.as_deref())
     }
+}
+
+/// The `n` halves a material header points at, empty on a count of zero, a
+/// count past [`MAX_INPUTS`] or an array that runs off the section.
+fn inputs_at(cpu: &[u8], header_at: usize) -> Vec<u16> {
+    let n = u32_at(cpu, header_at + INPUT_COUNT).unwrap_or(0) as usize;
+    let at = u32_at(cpu, header_at + INPUT_POINTER).unwrap_or(0) as usize;
+    if n == 0 || n > MAX_INPUTS || at == 0 {
+        return Vec::new();
+    }
+    let Some(bytes) = at.checked_add(2 * n).and_then(|end| cpu.get(at..end)) else {
+        return Vec::new();
+    };
+    bytes
+        .chunks_exact(2)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {
@@ -327,6 +402,7 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 technique,
                 textures,
                 lightmap: None,
+                inputs: inputs_at(cpu, header_at),
             }
         })
         .collect()
@@ -530,6 +606,7 @@ pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
             technique: None,
             textures,
             lightmap,
+            inputs: Vec::new(),
         }
     };
     match ps4_table(cpu, &sites) {

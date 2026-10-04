@@ -389,24 +389,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // lookup pays a second, failing read - every other title's pays none.
     let (ps3_geometry, geometry_name) =
         if mesh::geometry_is_external(&track_blob) && !options.ribbon {
-            let names = [
-                mesh::rcs::sibling_name(&track),
-                mesh::rcs::sibling_name_cooked(&track),
-            ];
-            let found = names
-                .into_iter()
-                .flatten()
-                .find_map(|name| archives.read_name(&name).ok().map(|blob| (name, blob)));
-            match found {
-                Some((name, blob)) => (Some(blob), Some(name)),
-                None => {
-                    report.push(format!(
-                        "{track}: a PS3 .vex with no .rcsmodel beside it - drawing the \
-                     derived ribbon instead, as --ribbon does"
-                    ));
-                    (None, None)
-                }
-            }
+            geometry::sibling_model(
+                &mut archives,
+                &track,
+                options.mode == Mode::Zone,
+                &mut report,
+            )
         } else {
             (None, None)
         };
