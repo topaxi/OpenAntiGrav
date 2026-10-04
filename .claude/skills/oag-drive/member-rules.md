@@ -70,7 +70,10 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   ```
 
   Then check the exit status (`${pipestatus[1]}` in zsh, `${PIPESTATUS[0]}`
-  in bash). Never pipe `test-data` into `tail`: it masks the exit code.
+  in bash) **in the same Bash call as the pipeline**: each tool call is a
+  fresh shell, so a separate `echo` prints blank (two members on 2026-10-05
+  could not read theirs). Append `; echo "rc=${pipestatus[1]}"` to the gate
+  command itself. Never pipe `test-data` into `tail`: it masks the exit code.
   **The gate may sit for several minutes before it starts** because another
   member holds the lock. That is correct, not a hang. Wait it out and never
   fall back to a bare `just`.
