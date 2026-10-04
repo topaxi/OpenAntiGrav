@@ -33,7 +33,9 @@ renderer) on Fort Gale White and Outpost 7 White. Ported in
 | `0x088f9a88` | `WeatherMist_Enqueue` | 75 | Vtable `+0x34`: `Gfx_Enqueue(g_display, this, 0x4f000000)`. |
 | `0x088f9ab4` | `WeatherMist_Draw` | 85 | Vtable `+0x44`. Nothing when `+0x94 <= 0`. Identity projection and view, texture `+0x190` bound with repeat wrap, depth test, culling and lighting off, blend `Gu_BlendFunc(ADD, SRC_ALPHA, FIX, 0, 0xffffff)` (additive), then two `Gu_DrawArray(TRIANGLE_STRIP, 0x183, 4)` quads (float UV, float XYZ), each in the colour at `+0x170`/`+0x180`. |
 | `0x088fa38c` | `WeatherMist_UpdateLayer` | 85 | One layer's step, below. Live-checked: UV extents and colour alpha match the formula to four places. |
-| `0x088f959c` | `CameraMotion_Sample` | 65 | Copies the view matrix (`0x08b32d00`) and the camera node's (`DAT_08ab10b0`) world matrix, and against last frame's gives the position delta minus `drift * dt` in view axes (`y` negated) at `+0xf0..`, the yaw and pitch deltas (`atan2f`/`asinf` of the forward, wrapped to `+-pi`) and `DAT_08ab10a8` (the camera roll). Returns 0 on its first frame. Read, values live-plausible, the sign of each term not checked against a turn: `_q`. |
+| `0x088f959c` | `CameraMotion_Sample` | 88 | Read to the instruction and recomputed live (2026-10-04, below). `f12` is the update virtual's `dt` in seconds (`WeatherMist_Update` never writes it before the call; live `1/60`). Copies the view matrix (`0x08b32d00`) and the camera node's (`DAT_08ab10b0`) matrix `+0x40` (axes as columns, `-eye` in the fourth row). Out: the move `cur - prev` of `-eye`, minus `drift * dt`, put in view axes by `vtfm3.t C000,E100,C200` on the view rows (`y` then negated) at `+0xf0..`; the yaw and pitch steps of the back axis at `+0x110`/`+0x114`; `g_camera_roll` at `+0x118`. Returns 0 only when the view or the back axis is zero. |
+| `0x0897ed98` | `acosf` | 90 | libm wrapper; its error path names `"acosf"` (`0x08a91830`). |
+| `0x08ab10a8` | `g_camera_roll` (data) | 88 | Written by `Camera_SubmitScene` (`0x08878fe8`): `acosf` of the `y` of the camera's up with its horizontal-back part removed, negated when that vector leans against the horizontal right. Live: matches the value recomputed from the camera matrix to `0.004` rad. `clouds.md` and `oag_render::cloud` call this global the camera's heading; by this reading it is the roll. |
 | `0x088f9494` | `Quad_RotateScaleUv` | 80 | Rotates a vertex's `(u, v)` about a centre by an angle and scales it about the same centre. |
 | `0x0897f388` | `fmodf` | 90 | libm wrapper; its error path names `"fmodf"` (`0x08a91880`). |
 | `0x0897eed0` | `asinf` | 90 | Same shape, names `"asinf"`. |
@@ -128,7 +130,76 @@ check, Outpost 7 (`TexScale 3.1`, `Aspect 0.5625`, `DisplayScale 0.8`,
 `tan_half_fov 0.6249`): at `t = 0.684` the predicted `u` extent `1.060` and `v` extent
 `0.596` match the vertices read, and at `t = 0.184` `0.285`. The colour alpha matched
 `(2 - 2t) * opacity` (`0.00515` read, `0.00515` predicted). Confidence **85** for the
-layer law; the camera-motion terms' signs **65** (not checked against a turn).
+layer law; the camera-motion terms **88**, checked against a live turn below.
+
+### The camera motion, read to the instruction and checked live (2026-10-04, `pulse-mist`)
+
+`CameraMotion_Sample` (`0x088f959c`) keeps its state at `mist+0x1a0` (`S`): the camera
+node at `S+0`, the view matrix at `S+0x10`, this frame's node matrix at `S+0x50` and
+last frame's at `S+0x90`. The node matrix stores the camera's axes as **columns** and
+`-eye` as its fourth row ([camera.md](camera.md)). So `S+0xd0..d8` = `(m02, m12, m22)`
+is the camera's **back** axis in the world, and `S+0xdc..e4` is last frame's.
+
+```text
+yaw_c   = -atan2f(back.x, back.z)            S+0x104 ; prev at S+0x10c
+pitch_c = -asinf(back.y)                     S+0x100 ; prev at S+0x108
+dyaw    = -wrap(yaw_c - yaw_p)               S+0x110 ; wrap folds into (-pi, pi]
+dpitch  =  wrap(pitch_c - pitch_p)           S+0x114
+m       = (-eye_c) - (-eye_p) - drift * dt  ; drift = mist+0xa0, dt = f12, seconds
+(dx, dy', dz) = view rotation applied to m  ; vtfm3.t C000,E100,C200 at 0x088f9964
+dy      = -dy'                               S+0xf0, S+0xf4, S+0xf8
+roll    = g_camera_roll (0x08ab10a8)         S+0x118
+```
+
+The view rotation is settled by a second call site: `Camera_SubmitScene` builds the
+view matrix's translation from `-eye` with the **same** instruction on the same rows
+(`vtfm3.t C000,E100,C200` at `0x08878b50`), so `m` lands in exactly the space the eye
+does. In our terms, with `right`, `up`, `back` the camera's axes:
+`dx = m . right`, `dy = -(m . up)`, `dz = m . back`. Driving forward, `m` is
+`+back * speed`, so `dz > 0`.
+
+**Live, Fort Gale White, Assegai, Time Trial, PPSSPP software renderer, 23 pauses**
+(`data/scratch/pulse-mist/sample.py`, `check.py`, `fg-turn1.json`):
+
+- **Yaw and pitch recompute exactly** (to five places, every sample) from the back axes
+  left in `S+0xd0..e4`. Holding **left**, `dyaw` is **positive** (`+0.008` to
+  `+0.025` a frame) while `atan2(back.x, back.z)` grows; holding **right** it is
+  negative (`-0.014` to `-0.024`). A climb was not driven; `dpitch` is checked by the
+  recomputation only, on a small natural slope (`-0.001` to `+0.002`).
+- **The drift and `dt`**: at the start line, before the craft moves,
+  `(dx, dy, dz) = (-0.087, 0.302, 0.041)` against `view(drift) = (5.30, 17.81, 2.84)`:
+  `dy = (up . drift) * dt` with `dt = 0.0170`, `1/60`. `dx` has the sign
+  `-(right . drift) * dt` predicts. Fort Gale's drift is `-(0.3 * wind) * 6`, so the
+  `DriftY` fall reads `17.8` units a second in the view's up.
+- **The roll** matches `g_camera_roll` recomputed from the node matrix to `0.004` rad.
+- Confidence **88** for the sampler. Not 94: a climb or a dive was not driven, and the
+  first call's previous state (the node's initial bytes) was not read.
+
+**The first call.** The sampler compares against whatever `S+0x90..` holds, and nothing
+seeds it, so the first step is a one-off jump. It only moves the layers' phases and
+scrolls by an arbitrary amount.
+
+### Where the mist draws, and with what (2026-10-04, `pulse-mist`)
+
+- **Under the HUD.** A live dump of the render queue (`display+0x16a0`, count at
+  `+0x5520`, `g_display = *0x08abf5d4`) on Fort Gale holds the mist node
+  (vtable `0x08ad0f44`) at key `0x4f000000`. The HUD's `Image` widgets (vtable
+  `0x08acce34`, [head2head.md](head2head.md)) sit at `0x58......`, and the 3-D widget
+  views (`Mode3D_EnterView`, `0x52000001`/`0x60000001`/`0x65000001`) above that. The
+  bloom (`0x08ad148c`) is last, at `0x70......`. The queue sorts ascending
+  (`Gfx_CompareQueueKeys`), so the mist draws after every world layer
+  (`0x30`..`0x4d`), in the screen flash's own layer, and before the HUD. Read live, **88**.
+- **The glow mask is protected.** `WeatherMist_Draw` calls
+  `Bloom_SetGlowMaskWritable(g_bloom, 0)` (`0x08907828`) before drawing, as
+  `ScreenFlash_Draw` does: the mist never feeds the bloom.
+- **The texture.** `Data\Tex\ScreenFX\Mist.mip` is a `128 x 64` 8-bit paletted image
+  whose palette is white with a ramped alpha. The frame's texture function is
+  `GU_TFX_MODULATE`/`GU_TCC_RGBA` ([mesh-draw.md](mesh-draw.md)) and its filter is
+  bilinear on magnification, so a layer adds `texel alpha * vertex alpha` of white.
+  The vertex colour is the float colour truncated to bytes.
+- **The opacity's start.** `Weather_Construct` sets both `+0x450` and its target
+  `+0x454` to `Alpha`, and the ease is `n = (int)(dt / 0.016666668)` steps of
+  `+= (target - it) * 0.1`.
 
 ## Not done, and why
 
