@@ -38,8 +38,8 @@
 //!   [`streak`] for the two-point classes, which Pulse's alone builds as
 //!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
 //!   so those draw the procedural radial falloff in `psys.wgsl`.
-//! - **Shape 8's extent**, and the animated-attribute selectors `1`, `3`, `4`
-//!   and `6`, which nothing on the Pulse discs authors.
+//! - The animated-attribute selectors `1`, `3`, `4` and `6`, which nothing on
+//!   the Pulse discs authors.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;

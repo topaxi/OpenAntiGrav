@@ -3,7 +3,7 @@
 //! `ParticleSystem_SpawnBurst` switches on the emitter's shape (`+0x30`) and
 //! each emit function places the particle's spawn offset in the emitter's own
 //! frame before `ParticleSystem_InitParticle` carries it through the node
-//! matrix. Three shapes are read and implemented here; the rest stay at the
+//! matrix. The shapes below are read and implemented here; any other stays at the
 //! anchor, as every shape did before:
 //!
 //! - **Shape 3, a ring or a disc.** `FUN_088fc634`, read in full on 2026-10-01 and
@@ -26,6 +26,10 @@
 //!   Missile's `shockrings` disc, where it changes nothing), and the aimed azimuth turns
 //!   the heading from `phi` to `phi + a`: `ParticleSystem_AimedVelocity` rotates `(x, z)`
 //!   by `+a`, the sense the rectangle below already played. See [`super::playback`].
+//! - **Shape 8, a half ring.** `ParticleSystem_EmitHalfRing` (`0x088fcb10`) is shape 3
+//!   over `[0, pi]` instead of `[0, 2 pi]` (see [`arc_of`]), so its particles sit on the
+//!   frame's `+Z` half. Measured live on `WO_REPULSER`: radius `50 * +0x2c` exactly and
+//!   local `z >= 0` on all twelve particles sampled (2026-10-04).
 //! - **Shape 1, a line (or a flat rectangle).** `FUN_088fcfec`, read at
 //!   instruction level on 2026-09-24: while `+0x3c` is `0..=2` the offset is
 //!   `(U(-e, e), 0, U(-z, z))`, `e` the scaled extent global

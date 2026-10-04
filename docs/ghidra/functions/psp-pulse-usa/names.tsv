@@ -1303,3 +1303,6 @@
 0x088f41c0	function	ParticleSystem_ConstructInstance	85	particle-system.md
 0x088f4498	function	ParticleSystem_SetMatrix	92	particle-system.md
 0x088f3174	function	ParticleSystem_AllocInstance	75	particle-system.md
+0x088fcb10	function	ParticleSystem_EmitHalfRing	92	particle-system.md
+0x08917c7c	function	ParticleSystem_DrawPoolBars	90	particle-system.md
+0x08917358	function	ParticleSystem_BuildAtlasTable	88	particle-system.md

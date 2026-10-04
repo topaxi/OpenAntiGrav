@@ -69,7 +69,10 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
   the PS2 port were not checked for placed nodes.
 - **Interpreter gaps**, unchanged:
   - HD's `.gtf` sprites, sprites on streaks and the atlas frame over life.
-  - Shape 8's extent, and the animated-attribute selectors nothing on the disc authors.
+  - ~~Shape 8's extent~~ (a half ring, 2026-10-04); the animated-attribute selectors
+    nothing on the disc authors.
+  - The class-7 pool draw `FUN_08918160`: ours plays the template routine for it, as
+    it did for class 6. Unread.
   - The `instance[+0x40]` alpha scale, which nothing feeds here.
 
 - **`WO_REPULSER_BLAST` matches the original** (2026-10-04, pulse-psys-ring). It
@@ -79,18 +82,33 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
   pointer). Frames: `data/scratch/pulse-psys-ring/shots/final-cmp.png`. See
   [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
   "The emitter's clock and the burst laws". Still open from it:
-  - **The wave-start whiteout is `WO_REPULSER`.** Its `shazzam` template draws a
-    full-screen white bar at update 49, and its class-6 root emitter draws a white
-    blob at 52. The original shows a blue tint and then a thin streak. Shape 8 and
-    the class-6 draw are both unread.
+  - **The wave-start whiteout is now only the `shazzam` template** (2026-10-04,
+    pulse-psys-shape8). Shape 8 (a half ring), the class-6 pool bar and the wave's
+    width co-factor are read, measured live and played, so the root's white blob at 52
+    became the original's thin bands (`data/scratch/pulse-psys-shape8/shots/ours-seq1.png`
+    against `psp-seq1.png`). The `shazzam` still whites out ours for one frame. GE dumps
+    show the original **does** submit it there, but with corners about 8000 px off the
+    screen centre, outside the GE's 4096-wide space; a guard-band cull is the
+    hypothesis (65), not implemented. On later dumps one wave's `shazzam` is not
+    submitted at all, unexplained. See particle-system.md, "Shape 8, the class-6 bar
+    and the wave's width".
+  - **Every class-6 emitter changed draw** (23 on the PSP disc): it is a bar `2 size`
+    wide, capped by `aspect * size`, not the wedge. Before/after frames of the Missile,
+    Shuriken, LeachBeam and Fort Gale rain (`data/scratch/pulse-psys-shape8/shots/ba-*.png`)
+    show no breakage, but none caught its class-6 effect on screen except the Missile's
+    trail, and none was compared against the original.
+  - **The class-6 `+0x60` end is read, not played**: the pool bar's other end is last
+    drawn frame's view-space position for the five carriers with neither `0x1000000`
+    nor `0x2000000` (`plasma_goo`, the missile `trail`, `plasma_spikes`, the spark
+    `bits`). Ours uses the previous tick's world position.
   - **The rate changed eight emitter records in six effects, plus five templates under
     them.** Besides the blast, these play at their authored rate now: the LeachBeam
     charge (all three), the Missile explosion's root, the Shuriken bounce and expiry,
     and the absorb. The sub-frame spread also changed every wall scrape's spark trails
     and the missile trail. Only the Missile was looked at, and none of them was compared
     against the original.
-  - **`WO_REPULSER`'s extent co-factor is `|step| / 100`**, set by
-    `Repulser_AdvanceWave`. It is not played, because the root's shape 8 is unread.
+  - ~~`WO_REPULSER`'s extent co-factor is `|step| / 100`~~: wrong, it is the track's
+    width over 100 (read and measured 2026-10-04), and it is played.
   - **Flag `0x2` riding is opt-in per caller.** Only the blast opts in. 25 emitters
     carry the flag, so the other owners' `Psys_Spawn_q` `param_5` is the open question.
     Read each call site before opting it in. The collision sparks have a claim on
@@ -108,10 +126,11 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
   `oag_physics::wall::WallResponse` without touching `reacts()`.
 - Read the welder's streak law (render class `Streak`, `Capped`) against one
   live particle.
-- `WO_REPULSER`'s whiteout: on PPSSPP, fire a Repulser parked on Talon's Junction and
-  read the two `WO_REPULSER` instances at updates 48 to 52. Read their `+0xf0` matrix,
-  the `shazzam` template's position, size and aspect, and the root pool. Then read
-  `FUN_08917c7c` (class 6) and shape 8's emit function.
+- `WO_REPULSER`'s `shazzam`: take a GE dump 3 to 6 updates after the waves start
+  (`data/scratch/pulse-psys-shape8/probe5.py 45091 <dir> 1 <skip>`), when the quad is
+  15 to 40 units out and inside `+-2048` px. A drawn band there makes the guard-band
+  cull the law; then cull psys triangles by it in `upload_particles`, where `vp` is.
+- Read `FUN_08918160`, the class-7 pool draw, the way `0x08917c7c` was read.
 - Before opting another flag-`0x2` effect into `System::set_rides_frame`, read its
   owner's `Psys_Spawn_q` call for `param_5 & 1`.
 - Do not fire any effect on a guess (the do-not-invent rule in `CLAUDE.md`).
