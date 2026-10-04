@@ -25,6 +25,14 @@ fn main() -> anyhow::Result<()> {
             .filter_map(|v| model.emissive.get((slots::material_index(v.slots) as usize).checked_sub(1)?).map(|e| e.tint)).collect();
         colours.sort_by(|a, b| a.partial_cmp(b).unwrap());
         colours.dedup();
+        if let Some(first) = model.vertices.iter().find(|v| v.slots & slots::PAD_NE != 0) {
+            let near: Vec<_> = model.vertices.iter().filter(|v| v.slots & slots::PAD_NE != 0
+                && (0..3).map(|k| (v.position[k] - first.position[k]).powi(2)).sum::<f32>() < 144.0).collect();
+            let n = near.len() as f32;
+            let c: Vec<f32> = (0..3).map(|k| near.iter().map(|v| v.position[k]).sum::<f32>() / n).collect();
+            let nm: Vec<f32> = (0..3).map(|k| near.iter().map(|v| v.normal[k]).sum::<f32>() / n).collect();
+            println!("  first pad centre {:.3},{:.3},{:.3} normal {:.3},{:.3},{:.3}", c[0], c[1], c[2], nm[0], nm[1], nm[2]);
+        }
         println!("{circuit}: scene {} vertices, {flagged} PAD_NE, colours {colours:?}, bound {} unread {}", model.vertices.len(), report.pad_ne_bound, report.pad_ne_unread);
     }
     Ok(())

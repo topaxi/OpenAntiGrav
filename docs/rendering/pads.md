@@ -576,10 +576,10 @@ author none):
 | `10_sebenco_climb` | `Colour` | cyan | `W_Cycle` | cyan |
 | `12_sol_2` | `0x7611a2d8` (unnamed) | cyan | `W_Cycle` | cyan |
 | `15_anulpha_pass` | `0x7611a2d8` (unnamed) | near-white cyan | `W_Cycle` | **red** |
-| `amphiseum` | no Speedup Pad geometry | - | `W_Cycle` | cyan |
-| `modesto_heights` | no Speedup Pad geometry | - | `W_Cycle` | **red** |
-| `talons_junction` | no Speedup Pad geometry | - | `W_Cycle` | **red** |
-| `tech_de_ra` | no Speedup Pad geometry | - | `W_Cycle` | **red** |
+| `amphiseum` | chunks on a pad material, nodes unresolved | cyan (`speedup_material`) | `W_Cycle` | cyan |
+| `modesto_heights` | chunks on a pad material, nodes unresolved | cyan (`weapon_pads`) | `W_Cycle` | **red** |
+| `talons_junction` | chunks on a pad material, nodes unresolved | cyan (`weapon_pads`) | `W_Cycle` | **red** |
+| `tech_de_ra` | chunks on a pad material, nodes unresolved | cyan (`weapon_pads`) | `W_Cycle` | **red** |
 
 Every pad surface on every one of these circuits carries exactly one
 parameter (`multi_param` in the tool's own output is empty), so "the value
@@ -612,12 +612,7 @@ being "the weapon pad's own parameter" was itself an artifact of `hd_param_
 names.rs`'s scan only ever meeting that hash on files still called
 `weapon_pads.rcsmaterial`.
 
-**Also open, not resolved here:** `amphiseum`, `modesto_heights`,
-`talons_junction` and `tech_de_ra` - the four circuits `DATA00.PSARC` ships,
-Wipeout HD's own tracks rather than Fury's numbered additions - carry no
-`Speedup Pad`-classified geometry at all. Whether HD's speed pads use a
-different class, a different mechanism entirely, or genuinely have none on
-these four, is not answered by this section.
+**Answered 2026-10-05 (hd-speed-pads):** `amphiseum`, `modesto_heights`, `talons_junction` and `tech_de_ra` do author speed-pad geometry; the node class is the same, but the nodes cannot find it. Their `Speedup Pad` nodes (18, 16, 17 and 15) carry a `+0x30` hash that matches **no** `.rcsmodel` chunk, while the models carry exactly 18, 16, 17 and 15 chunks on a pad material (`talons_junction` slots 360-377 and `tech_de_ra` 356-370 and `modesto_heights` 676-692 under `weapon_pads.rcsmaterial` with `ds_speedup_cs/ne.gtf`; `amphiseum` one slot, 489, shared by 16 chunks, under `speedup_material.rcsmaterial`). So the chunks were never excluded and drew in the scene's unreferenced pass as plain geometry, with the `_ne` bars unlit (black slots on `talons_junction`). Each material's authored value is cyan `[0.0, 0.768628, 0.992157]` (`hd_pad_ne_census` reads it). Probes: `hd_speed_pad_census`, `hd_speed_pad_hashes`, `hd_speed_pad_scene`.
 
 **What this means for `oag_render`'s pad path**: nothing wires yet, and this
 section does not change that on its own - see "One picture, chosen and not
@@ -813,6 +808,9 @@ Everything in it except the normal and the `_ne.a * W` term is what `mesh.wgsl`'
 
 **Chosen, not measured:** the tangent is derived per pixel from screen-space derivatives of world position and texture coordinate rather than decoded from the stream (no new vertex attribute); the diffuse `N.L` is clamped as the generic path clamps it where the pad program does not clamp it; `talons_junction`'s program is a different compile (64 instructions, `_ne` uv from `TC3.w`/`TC4.w`) and was read only for the structure the shader needs (the alpha-gated `MAD`), not traced end to end.
 
-**Open:** the four original circuits' speed pads (`talons_junction`, `amphiseum`, `modesto_heights`, `tech_de_ra`) are not in the pad model (`Speedup Pad` nodes address no chunk) and draw through the scene as plain geometry, so they get no `_ne` glow; the runtime cooldown colour (`WeaponPad_UpdateRefreshTimer`) is still unwired.
+**Closed 2026-10-05:** the four original circuits' speed pads glow, see "Wired, 2026-10-05, the four original circuits" below. **Open:** the runtime cooldown colour (`WeaponPad_UpdateRefreshTimer`) is still unwired.
 
 Pictures (`data/scratch/hd-pad-emissive/`, 1920x1080 `oag-game --race --mode single_race`): `ta_pair.png` and `tb_pair.png` (`talons_junction`, red), `sa_pair.png` and `sb_pair.png` (`12_sol_2`, cyan); top is before, bottom after. Pulse PSP's `16_Track` pads (`pulse_pw_*.png`, `pulse_ps_*.png`) are byte-identical before and after. Guards: `tests/hd_pad_ne_lit_path.rs` (authored rig; fails if the lightmap, the normal decode or the glow is dropped) and `tests/hd_pad_ne_ground_truth.rs` (disc-backed).
+
+### Wired, 2026-10-05, the four original circuits' speed pads
+`build_scene` now calls `pad_ne` for the pad materials (`weapon_pads`, `speedup_material`) that its unreferenced-chunk pass uses, so the 18, 16, 17 and 15 speed-pad chunks of `talons_junction`, `amphiseum`, `modesto_heights` and `tech_de_ra` bind their `_ne` mask and glow cyan (7,488, 6,656, 7,072 and 6,240 scene vertices, one colour each). Routing is by material, not node, because the nodes' hash names no chunk; **which node owns which chunk is still unknown** (not needed: a speed pad has no cooldown state). The filter matters: an unfiltered call also binds `ds_rail`, `ds_sf` and `ds_sfline_trench` (`diffuse_normal_specular_emmissive`, a different program) and put 5,296 red and 26,536 mixed glow vertices on `12_sol_2` and `01_vineta_k`. The 12 other circuits bind zero in the scene. Guard: `tests/hd_original_speed_pad_ground_truth.rs`. Pictures: `data/scratch/hd-speed-pads/<circuit>_{before,after}.png`. No RPCS3 reference frame was taken. Pulse is untouched: the change is under `mesh/rcs`, the PS3 builder, and no PSP path calls it.
