@@ -230,9 +230,12 @@ sampling, not a gain): `37` at our start against the original's `30`.
 **Frames at player size** (`data/scratch/pulse-mist/`): `cmp-start.png` (original
 left, ours right) and `cmp-start-diff.png` (each one's on/off difference, times 3);
 `cmp-fg-run.png` (Fort Gale driving: open, tunnel, a left turn, original left);
-`cmp-o7-and-turn.png` (Outpost 7 in the open, and a held left turn). In both, the open
-reads as a soft white haze over the whole world and none of the HUD, and a covered
-section (Fort Gale's tunnel, Outpost 7's start) shows none.
+`cmp-o7-and-turn.png`: Outpost 7's start line, a matched stationary pose, both
+without mist (covered section 1); then the original forced open beside ours in open
+sections 7 and 11 (`--autopilot`, opacity `0.30` and `0.29`, mean add `32` and `28`);
+then a held left turn. In both games the open reads as a soft white haze over the whole
+world and none of the HUD, and a covered section (Fort Gale's tunnel, Outpost 7's start
+and sections 1 to 6) shows none.
 
 **Not matched, and why.** The frames are not a matched pose while driving: the
 original's craft hit walls and its random offsets differ, so the haze's pattern differs
