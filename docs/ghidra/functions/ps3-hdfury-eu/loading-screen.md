@@ -239,7 +239,7 @@ Raised from 55. Two pieces of evidence:
 - In `LoadingScreen_Draw` the `+0x964` (Blue) and `+0x968` (LightGrey) reads sit
   back to back (`0x002b69d4`, `0x002b6b40`), each unpacked ARGB to RGBA and
   handed to the same vertex-quad call `0x006782e8` ahead of the four bracket
-  draws, and the quads' right edge is the float `0x44db0000` = `1752.0`,
+  draws, and the quads' right edge is the float `0x44db0000` = `1752.0` (**the kind 8 variant's, see 2026-10-05; the race load's is 1496.0**),
   which is the bar's right edge in the 1920 frame (the live frame's bar ends
   at 1447 of 1600 px, `1752/1920 * 1600 = 1460`).
 
@@ -260,3 +260,84 @@ Each of three scripted boots logged two or three `LOADING SCREEN TYPE` /
 earlier ones are constructions that were not on screen when the frames were
 taken; why the constructor runs more than once per boot is **not** read (the
 twin at `0x002b48d8` is a candidate, unchecked).
+
+## 2026-10-05: the bar's dot grid, its fill law, and the five labels
+
+Lane `hd-loading-bar`. All against `EBOOT-ps3-hdfury-eu.elf`, read from
+`LoadingScreen_Draw` (`0x002b61c8`) disassembly and checked against the live
+frames the previous lane captured (`f003-InGame.png`, `load-01.png`).
+
+| address | name | confidence | what |
+| --- | --- | ---: | --- |
+| `0x002b2c60` | `LoadingScreen_SetProgressTarget` | 82 | `obj+0x108 = p * 166.0`; doubles the ease rate (`obj+0x10c`) when the target is ahead of a started bar |
+| `0x002b2be8` | `LoadingScreen_SetProgress` | 75 | writes `obj+0x104` and `+0x108` together (`p * 166.0`, or 149.4 for kind 8), never backwards unless the flag is 0 |
+| `0x002b36d0` | `LoadingScreen_DrawLabel` | 85 | a 16x16 `square.gtf` bullet at `(x, y)` and a text line at `(x + 22, y)`, both `HD_Grey` |
+
+### The bar is 166 by 30 dots, and the lit part is whole columns - confidence 85
+
+The race-load variant (`+4 == 4`) draws the bar at `0x002b70b8`..`0x002b73ec`:
+two quads over the `dot.gtf` image (`obj+0xb0`, bound by `0x006785f8` first).
+The lit quad runs from x `168.0` (`0x4328`) to `168 + 8n`, the unlit one from
+there to `0x44bb0000` = `1496.0`, y from `708.0` (`0x4431`) to `948.0`
+(`0x446d`): **(1496 - 168) / 8 = 166 columns, 240 / 8 = 30 rows**, tiles of 8
+units. `n = (int)obj+0x104`, so the fill moves a whole column at a time. The
+earlier page read `1752.0` (`0x44db0000`) as the bar's right edge: that is the
+**kind 8** variant at `0x002b6a64` (198 columns), not the race load's.
+
+Live checks: the dot pitch in the 1600 px frames is 7.5 px across and 7.6
+down, 30 rows over 223 px; and **the lit dots peak at (172, 7, 23), exactly
+`HD_Blue = 0xffac0717`** on the served Fury archive. So the red is the palette
+value read from `FEGlobals`, not a team or style colour, and the unlit dots are
+`HD_LightGrey` (`0x7f646464`) through the same tile.
+
+### The fill is load-driven, in milestones - confidence 80
+
+`obj+0x104` is the shown column count (float) and `obj+0x108` its target. Per
+frame (`0x002b6c88`): `cur += obj+0x10c`; past the target it clamps and the
+rate becomes `obj+0x110`.
+
+| constant | value | where |
+| --- | ---: | --- |
+| rate (`obj+0x10c`, `+0x110`) | 0.1 column per frame | `0x002b9a28` stores TOC `+0x61e0` into both |
+| columns | 166.0 | `DAT_008b35a8`, the multiplier in both setters |
+| first target | 33.2 (20 %) | `0x002b9a28` stores TOC `+0x6334` at `+0x108` |
+| done threshold | 149.4 (90 %) | TOC `+0x60cc`; at or past it `0x002b7a44` takes over from the widget clock |
+
+The loader reports fractions through `LoadingScreen_SetProgressTarget`, whose
+callers are `0x0003c680` (**0.75**), `0x000b8590` (**0.5**), `0x000b2af0`
+(**0.4**), `0x0005cb40` (**0.95**), `0x000b43b0` (**0.4**) and `0x000b9380`
+(**0.5**); each is the literal loaded into `f1` before the call, read from the
+function's own TOC. `0x0067a858` also calls it and its argument was not read. So
+the original's bar is **driven by the load's own stage milestones and eased**,
+not by a clock. What this build does is **chosen, not measured**: `race::load`
+reports no stage, so the fill is still the time estimate in
+`loading::wording::estimated_fraction`, now quantised to whole columns. Wiring
+the milestones needs stage reporting out of `race::load`; the next addresses
+are the six callers above.
+
+### The five labels are the game's own - confidence 88
+
+`LoadingScreen_BuildText` (`0x002b7cd0`) stores `+0x468` = the literal
+`WIPEOUT\xc2\xae HD` at `0x007a0748`, `+0x46c` = `FE_MODE_ICON`, `+0x474` and
+`+0x478` = `FE_FEATURE_IMAGE` and `FE_FEATURE_DESC` (slots `0x189d` and
+`0x189e`, one more pair for kind 8), `+0x484` = `FE_PROG_BAR` (slot `0x189b`).
+Resolved with `scripts/ps3-toc.py str` over the TOC slots from `0x008b373c`
+(slot `0x1899`): `0x008b3744 -> FE_PROG_BAR`, `0x008b3748 -> FE_ADVERT_IMAGE`
+(the kind 8 variant), `0x008b374c -> FE_FEATURE_IMAGE`,
+`0x008b3750 -> FE_FEATURE_DESC`; the first two slots are the tournament
+screen's `ER_TOUR_STAN` and `FE_TOUR_TRACKS`. The four ids are in the retail English string
+table (`FE_FEATURE_IMAGE`, `FE_FEATURE_DESC`, `FE_MODE_ICON`, `FE_PROG_BAR`),
+so an earlier reading of these as a debug overlay was wrong: `LoadingScreen_Draw`
+places them with `LoadingScreen_DrawLabel` at (160, 48), (160, 125), (960, 125),
+(160, 670) and (1510, 670) in the 1920 grid.
+
+The mode icon itself is **not** a still: the draw binds a video widget's texture
+(`obj+0x98`, `0x00174468`) into a quad right of the bar. The disc's mode icons
+are Bink clips, so this build draws the label and the panel's brackets and no
+icon.
+
+### The feature image's red is the `_fury` art
+
+Not a tint pass: `LoadingScreen_LoadAssets` picks `*_fury.gtf` on
+`FrontEnd_IsFuryStyle()`, and those files carry the red themselves. A capture
+with `display.front_end_style = "FURY"` draws it.

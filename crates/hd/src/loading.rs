@@ -107,6 +107,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     palette: Some(PALETTE),
     caption: Some(CAPTION),
     deck: Some(DECK),
+    labels: Some(LABELS),
 };
 
 /// The five features the screen draws from, **in the order the executable
@@ -340,7 +341,27 @@ pub const CHROME: &[(oag_title::loading::Chrome, &str)] = &[
         r"Data\FE\Images\corner.gtf",
     ),
     (oag_title::loading::Chrome::Dot, r"Data\FE\Images\dot.gtf"),
+    (
+        oag_title::loading::Chrome::Square,
+        r"Data\Fe\Images\square.gtf",
+    ),
 ];
+
+/// The five labels the screen writes over its regions.
+///
+/// Read out of `LoadingScreen_BuildText` (`0x002b7cd0`) and
+/// `LoadingScreen_Draw` (`0x002b61c8`), confidence 88: the brand is the literal
+/// `WIPEOUT\xc2\xae HD` at `0x007a0748` and the other four are string ids the
+/// text builder resolves (`FE_FEATURE_IMAGE`, `FE_FEATURE_DESC`, `FE_PROG_BAR`,
+/// `FE_MODE_ICON`), each drawn behind a `square.gtf` bullet. An earlier reading
+/// called them a debug overlay; the strings are in the retail string table.
+pub const LABELS: oag_title::loading::Labels = oag_title::loading::Labels {
+    brand: "WIPEOUT\u{ae} HD",
+    feature_image: "FE_FEATURE_IMAGE",
+    feature_description: "FE_FEATURE_DESC",
+    progression_bar: "FE_PROG_BAR",
+    mode_icon: "FE_MODE_ICON",
+};
 
 /// The string table id of the word this screen leads with.
 ///

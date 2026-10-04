@@ -148,6 +148,11 @@ pub struct Screen {
     subtitle_arrow: Option<[f32; 4]>,
     rule: Option<[f32; 4]>,
     corner: Option<[f32; 4]>,
+    /// The bar's dot, tiled across it, and the bullet before each label.
+    dot: Option<[f32; 4]>,
+    square: Option<[f32; 4]>,
+    /// The small labels over the screen's regions, when the title draws them.
+    labels: Option<assets::Labels>,
     /// The four colours this source tints the screen with, when it names them.
     ///
     /// `None` keeps the palette this build chose against a near-black frame,
@@ -259,6 +264,9 @@ impl Screen {
             subtitle_arrow: assets.art.as_ref().and_then(|art| art.subtitle_arrow),
             rule: assets.art.as_ref().and_then(|art| art.rule),
             corner: assets.art.as_ref().and_then(|art| art.corner),
+            dot: assets.art.as_ref().and_then(|art| art.dot),
+            square: assets.art.as_ref().and_then(|art| art.square),
+            labels: assets.labels.clone(),
             palette: assets.palette,
             feature_title: shown
                 .and_then(|at| assets.features.get(at))
@@ -492,9 +500,7 @@ impl Screen {
         // **The original's own arrangement**, where a title has the art for
         // it: a marked title over a rule, the illustration on the left and its
         // prose on the right, and the bar along the bottom. Read off a
-        // screenshot of a running Fury race - see `docs/formats/hd-loading.md`,
-        // which also says which of the labels in that shot are the game's own
-        // debug overlay and are deliberately not reproduced here.
+        // screenshot of a running Fury race - see `docs/formats/hd-loading.md`.
         //
         // A title with no art draws none of this and keeps the centred layout
         // below, which is what both PSP discs have always drawn.
@@ -560,38 +566,16 @@ impl Screen {
         }
         .draw(&mut out);
 
-        // **The progression bar, drawn flat.** The original has one and fills
-        // it with `dot.gtf` tiled; `Draw::Sprite` has no repeat mode, so an 8x8
-        // dot stretched across 320 units comes out as a blurred smear rather
-        // than a pattern - tried, and it looked like a rendering fault. A flat
-        // trough is the honest approximation: the shape and the place are the
-        // original's and the texture is not, which is the opposite way round
-        // from drawing a pattern that is not there.
-        //
-        // A race load has no number to fill it with - `race::load` reports no
-        // progress - so its fill is a time-based estimate that slows rather
-        // than stops and completes when the wait does: an empty trough read
-        // as a stuck screen. See `wording::estimated_fraction`, and
-        // `docs/formats/hd-loading.md`, which carries the real fill as an
-        // open gap.
         if self.illustration.is_some() {
-            out.push(Draw::Fill {
-                rect: [BAR_BOX.0, BAR_BOX.1, BAR_BOX.2, BAR_BOX.3],
-                color: bar_trough,
-            });
-            let filled = if counted(progress) {
-                fraction(phase, progress) * BAR_BOX.2
+            let fraction = if counted(progress) {
+                fraction(phase, progress)
             } else if matches!(phase, Phase::Race) {
-                estimated_fraction(self.frames, self.fade > 0) * BAR_BOX.2
+                estimated_fraction(self.frames, self.fade > 0)
             } else {
                 0.0
             };
-            if filled > 0.0 {
-                out.push(Draw::Fill {
-                    rect: [BAR_BOX.0, BAR_BOX.1, filled, BAR_BOX.3],
-                    color: bar_fill,
-                });
-            }
+            self.draw_bar(&mut out, fraction, bar_trough, bar_fill, rule_ink);
+            self.draw_labels(&mut out, ink(HEADING), border);
         }
 
         if let Some(tip) = self.tip() {
@@ -818,10 +802,10 @@ const AUTHORED_LINE_HEIGHT: f32 = 13.0;
 ///
 /// Measured off a screenshot of a running Fury race as *fractions* of its
 /// frame, then multiplied into this grid - so the proportions are the disc's
-/// and the pixel values are this build's. The screenshot's own widget labels
-/// (`FEATURE IMAGE`, `PROGRESSION BAR`, `MODE ICON`) are a debug overlay
-/// printing widget names and are deliberately not reproduced; the marked title,
-/// the rules, the two panels and the bar are the screen.
+/// and the pixel values are this build's. The labels in that shot
+/// (`FEATURE IMAGE`, `PROGRESSION BAR`, `MODE ICON`) are the game's own and are
+/// drawn by `bar::draw_labels`; the marked title, the rules, the two panels and
+/// the bar are the rest of the screen.
 ///
 /// **Two columns rather than the original's exact two**, because our grid is
 /// 480 wide where HD's is 1920 and prose in the right-hand half of a 480-wide
@@ -877,7 +861,7 @@ const BOXED_ROW_PITCH: f32 = 11.0;
 /// The height is the original's proportion rather than a thin rule: its bar is
 /// about a fifth of the frame tall, which is what makes it read as a gauge at a
 /// glance instead of as another horizontal line.
-const BAR_BOX: (f32, f32, f32, f32) = (PANEL_X, 168.0, 320.0, 42.0);
+const BAR_BOX: (f32, f32, f32, f32) = (PANEL_X, 172.0, 320.0, 42.0);
 
 /// The four bracket marks round a box.
 fn corners(bx: (f32, f32, f32, f32)) -> [(f32, f32); 4] {
@@ -966,12 +950,15 @@ const CURRENT: [f32; 4] = [0.5, 0.58, 0.66, 1.0];
 const CENTRED_ROW_PITCH: f32 = 16.0;
 
 mod assets;
+mod bar;
 mod feature;
 mod wording;
-pub use assets::{Art, Assets, Feature, tips};
+pub use assets::{Art, Assets, Feature, Labels, tips};
 pub use feature::executable_mode;
 use wording::{counted, counts, estimated_fraction, fraction, heading, percentage, step_line};
 
+#[cfg(test)]
+mod bar_tests;
 #[cfg(test)]
 mod deck_tests;
 #[cfg(test)]

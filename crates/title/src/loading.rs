@@ -73,6 +73,33 @@ pub struct Loading {
     /// `None` on a title that has no features, and on one whose rule is
     /// unread: the screen then draws from every feature it has. See [`Deck`].
     pub deck: Option<Deck>,
+    /// The small labels the screen names its regions with, when the title
+    /// draws them. See [`Labels`].
+    pub labels: Option<Labels>,
+}
+
+/// The five labels Wipeout HD's loading screen writes over its regions, each
+/// behind a square bullet.
+///
+/// **Drawn by the game itself, not a debug overlay** - an earlier reading took
+/// them for one. `LoadingScreen_BuildText` (`0x002b7cd0`) resolves three of
+/// them from the string table by id and the fourth, the brand, is a literal in
+/// the executable; `LoadingScreen_Draw` places all five at fixed positions with
+/// `HD_Grey` and a 16 by 16 `square.gtf` bullet. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Labels {
+    /// The brand line over the caption. A literal in the executable
+    /// (`0x007a0748`), not a string table id.
+    pub brand: &'static str,
+    /// The string table id of the label over the feature illustration.
+    pub feature_image: &'static str,
+    /// The id of the label over the feature's prose.
+    pub feature_description: &'static str,
+    /// The id of the label over the progression bar.
+    pub progression_bar: &'static str,
+    /// The id of the label over the mode icon.
+    pub mode_icon: &'static str,
 }
 
 /// Which features a loading screen may draw, by the mode about to be raced.
@@ -187,6 +214,8 @@ pub enum Chrome {
     Corner,
     /// The progression bar's fill.
     Dot,
+    /// The square bullet before a region's label.
+    Square,
 }
 
 /// One front-end style's worth of features, named as the disc names the style.

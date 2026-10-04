@@ -57,8 +57,29 @@ pub struct Assets {
     /// `None` on a title that names no caption id, or whose table does not
     /// carry the one it names - and the screen falls back to its own heading.
     pub caption: Option<String>,
+    /// The small labels the screen names its regions with, resolved. See
+    /// [`Labels`].
+    pub labels: Option<Labels>,
     /// Lines worth printing once, describing what was found or what was not.
     pub notes: Vec<String>,
+}
+
+/// The labels over the screen's regions, resolved out of the string table.
+///
+/// A label whose id the table does not carry is `None` and is not drawn: showing
+/// the id would put `FE_PROG_BAR` on screen.
+#[derive(Debug, Clone, Default)]
+pub struct Labels {
+    /// The brand line over the caption: a literal of the executable's.
+    pub brand: String,
+    /// Over the feature illustration.
+    pub feature_image: Option<String>,
+    /// Over the feature's prose.
+    pub feature_description: Option<String>,
+    /// Over the progression bar.
+    pub progression_bar: Option<String>,
+    /// Over the mode icon.
+    pub mode_icon: Option<String>,
 }
 
 /// One feature, resolved: its two strings.
@@ -127,15 +148,12 @@ pub struct Art {
     pub rule: Option<[f32; 4]>,
     /// The bracket marks round a region.
     pub corner: Option<[f32; 4]>,
-    /// The progression bar's own fill.
-    ///
-    /// **Loaded and deliberately not drawn.** The original tiles this 8x8 dot
-    /// across the bar; `Draw::Sprite` has no repeat mode, so stretching it
-    /// gives a blurred smear rather than a pattern - see
-    /// [`super::Screen::draw_list`], which draws the trough flat instead. Kept
-    /// here because the disc ships it and the day the renderer can repeat a
-    /// texture this is the entry to reach for.
+    /// The progression bar's dot: an 8x8 tile repeated 166 columns across the
+    /// bar, lit in the accent from the left and in the dim colour past it. See
+    /// `loading::bar`.
     pub dot: Option<[f32; 4]>,
+    /// The square bullet before each label.
+    pub square: Option<[f32; 4]>,
 }
 
 impl Default for Assets {
@@ -161,6 +179,7 @@ impl Default for Assets {
             features: Vec::new(),
             deck: None,
             caption: None,
+            labels: None,
             notes: Vec::new(),
         }
     }
@@ -389,6 +408,7 @@ impl Assets {
                 rule: mark(Chrome::Rule),
                 corner: mark(Chrome::Corner),
                 dot: mark(Chrome::Dot),
+                square: mark(Chrome::Square),
                 sheet,
             }
         });
@@ -432,6 +452,23 @@ impl Assets {
             text.map(str::to_string)
         });
 
+        let labels = loading.labels.map(|ids| {
+            let text = |id: &str, notes: &mut Vec<String>| {
+                let found = strings.get(id).map(str::to_string);
+                if found.is_none() {
+                    notes.push(format!("{id}: no such string; its label is not drawn"));
+                }
+                found
+            };
+            Labels {
+                brand: ids.brand.to_string(),
+                feature_image: text(ids.feature_image, &mut notes),
+                feature_description: text(ids.feature_description, &mut notes),
+                progression_bar: text(ids.progression_bar, &mut notes),
+                mode_icon: text(ids.mode_icon, &mut notes),
+            }
+        });
+
         let strip = strip.unwrap_or_else(|| {
             if loading.wave.is_some() {
                 notes.push(
@@ -451,6 +488,7 @@ impl Assets {
             features,
             deck: loading.deck,
             caption,
+            labels,
             notes,
         }
     }

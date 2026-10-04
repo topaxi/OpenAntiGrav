@@ -168,6 +168,55 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
     assert!(art.rule.is_some());
     assert!(art.corner.is_some());
     assert!(art.dot.is_some());
+    assert!(art.square.is_some(), "the label bullet is in the sheet too");
+    // The dot is the 8 by 8 tile the original's 166 by 30 grid is made of.
+    let dot = art.dot.expect("checked above");
+    assert_eq!((dot[2], dot[3]), (8.0, 8.0), "dot.gtf is an 8x8 tile");
+
+    // The five labels are the game's own: four string ids and one literal.
+    let labels = assets.labels.as_ref().expect("HD draws its labels");
+    assert_eq!(labels.brand, "WIPEOUT\u{ae} HD");
+    assert_eq!(labels.feature_image.as_deref(), Some("FEATURE IMAGE"));
+    assert_eq!(
+        labels.feature_description.as_deref(),
+        Some("FEATURE DESCRIPTION")
+    );
+    assert_eq!(labels.progression_bar.as_deref(), Some("PROGRESSION BAR"));
+    assert_eq!(labels.mode_icon.as_deref(), Some("MODE ICON"));
+
+    // And the screen draws them with the bar as a grid of those dots: 166
+    // columns in all, the lit ones being the load's fraction of them.
+    let screen = oag_game::loading::Screen::for_mode(&assets, 33.0, 0, None, Some(3));
+    let list = screen.draw_list(
+        oag_game::loading::Phase::Prefetch,
+        &oag_game::prefetch::Progress {
+            total: 2,
+            done: 1,
+            ..oag_game::prefetch::Progress::default()
+        },
+        &oag_ui::font::Atlas::build(),
+    );
+    let columns: f32 = list
+        .iter()
+        .filter_map(|draw| match draw {
+            oag_ui::frontend::Draw::TiledSprite { repeat, .. } => Some(repeat[0]),
+            _ => None,
+        })
+        .sum();
+    assert_eq!(columns, 166.0, "the bar is 166 dot columns");
+    let lit = list.iter().find_map(|draw| match draw {
+        oag_ui::frontend::Draw::TiledSprite { repeat, color, .. }
+            if color[3] >= 0.99 && (color[0] - 172.0 / 255.0).abs() < 0.01 =>
+        {
+            Some(repeat[0])
+        }
+        _ => None,
+    });
+    assert_eq!(
+        lit,
+        Some(83.0),
+        "HD_Blue dots, half of 166, lit from the left"
+    );
 
     let pilot = assets
         .features

@@ -710,8 +710,14 @@ fn a_title_with_no_wave_draws_no_quads() {
 
 /// A screen with an illustration, for the feature layout.
 fn feature_screen() -> Screen {
+    feature_screen_with(None)
+}
+
+/// The same, with the title's labels.
+pub(super) fn feature_screen_with(labels: Option<Labels>) -> Screen {
     Screen::new(
         &Assets {
+            labels,
             caption: Some("LOADING...".to_string()),
             wave: false,
             art: Some(Art {
@@ -722,6 +728,7 @@ fn feature_screen() -> Screen {
                 rule: Some([0.0, 0.0, 8.0, 8.0]),
                 corner: Some([0.0, 0.0, 8.0, 8.0]),
                 dot: Some([0.0, 0.0, 8.0, 8.0]),
+                square: None,
             }),
             features: vec![Feature {
                 slot: 2,
@@ -791,31 +798,31 @@ fn a_feature_layout_draws_one_bar_and_puts_its_counts_under_it() {
     let state = progress(1, 2);
     let list = screen.draw_list(Phase::Prefetch, &state, &atlas);
 
-    // The cleared frame is a `Fill` too, so the bar's own are what is left.
-    let fills: Vec<[f32; 4]> = list
+    // The bar is two runs of the dot tile now, the lit columns and the rest.
+    let runs: Vec<[f32; 4]> = list
         .iter()
         .filter_map(|draw| match draw {
-            Draw::Fill { rect, .. } => Some(*rect),
+            Draw::TiledSprite { rect, .. } if (rect[1] - BAR_BOX.1).abs() < f32::EPSILON => {
+                Some(*rect)
+            }
             _ => None,
         })
-        .filter(|rect| rect[1] > 0.0)
         .collect();
     assert_eq!(
-        fills.len(),
+        runs.len(),
         2,
-        "one trough and one fill, not two of each: {fills:?}"
+        "one lit run and one unlit, not two of each: {runs:?}"
     );
-    for rect in &fills {
-        assert!(
-            (rect[1] - BAR_BOX.1).abs() < f32::EPSILON,
-            "both belong to the feature layout's own bar: {rect:?}"
-        );
-    }
-    // Half of two, in the bar's own width.
+    // Half of two, in whole columns of the bar's own width.
+    let tile = BAR_BOX.2 / bar::COLUMNS;
     assert!(
-        (fills[1][2] - BAR_BOX.2 / 2.0).abs() < 1.0,
-        "the fill is the fraction wide: {:?}",
-        fills[1]
+        (runs[0][2] - BAR_BOX.2 / 2.0).abs() <= tile,
+        "the lit run is the fraction wide: {:?}",
+        runs[0]
+    );
+    assert!(
+        (runs[0][2] + runs[1][2] - BAR_BOX.2).abs() < 0.01,
+        "and the two together are the whole bar: {runs:?}"
     );
 
     // And the counts sit under that bar rather than in the centred layout's
@@ -830,19 +837,15 @@ fn a_feature_layout_draws_one_bar_and_puts_its_counts_under_it() {
     );
 }
 
-/// The bar's fill on a feature layout's race load, or `None` when only the
-/// trough is drawn.
+/// The lit run of the bar on a feature layout's race load, or `None` when only
+/// the unlit one is drawn.
 fn race_fill(screen: &Screen) -> Option<f32> {
     let atlas = Atlas::build();
     let list = screen.draw_list(Phase::Race, &Progress::default(), &atlas);
-    let fills: Vec<[f32; 4]> = list
-        .iter()
-        .filter_map(|draw| match draw {
-            Draw::Fill { rect, .. } if (rect[1] - BAR_BOX.1).abs() < f32::EPSILON => Some(*rect),
-            _ => None,
-        })
-        .collect();
-    fills.get(1).map(|rect| rect[2])
+    list.iter().find_map(|draw| match draw {
+        Draw::TiledSprite { rect, color, .. } if color[..3] == BAR_FILL[..3] => Some(rect[2]),
+        _ => None,
+    })
 }
 
 /// A race load counts nothing, and its bar still moves: a time-based
@@ -869,8 +872,14 @@ fn a_race_load_fills_its_bar_over_time_and_completes_when_ready() {
     }
     // Four seconds is `ESTIMATE_TICKS`: two thirds of the bar.
     let expected = (1.0 - (-1.0f32).exp()) * BAR_BOX.2;
-    assert!((last - expected).abs() < 1.0, "{last} against {expected}");
+    assert!(
+        (last - expected).abs() <= BAR_BOX.2 / bar::COLUMNS,
+        "{last} against {expected}"
+    );
 
     screen.advance(true);
-    assert_eq!(race_fill(&screen), Some(BAR_BOX.2), "full once ready");
+    assert!(
+        race_fill(&screen).is_some_and(|fill| (fill - BAR_BOX.2).abs() < 0.01),
+        "full once ready"
+    );
 }
