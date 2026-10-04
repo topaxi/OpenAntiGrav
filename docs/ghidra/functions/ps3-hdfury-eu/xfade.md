@@ -175,7 +175,7 @@ pitch-versus-input samples.
 
 ## 2026-10-05, lane `hd-engine-wire`: what `X` is, the pitch unit, and the wiring
 
-### `X` is the first queued probe's length (confidence 60), and it follows the mean hover clearance (measured)
+### `X` is the first queued probe's length (confidence 62), and it follows the mean hover clearance (measured)
 
 `X = body[+0x260]`. Four findings, in the order they closed it:
 

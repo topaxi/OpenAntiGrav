@@ -33,6 +33,7 @@ this file is only what is left.
   unity and the loudness.
 - **Layers with `+0x16 == 0`** (ag_systems, assegai, egx `~n..`) keep their voice
   running at zero volume in the original; the port releases it below an audible floor.
+- **Channel 3 is written in every mode.** The original skips it in the four race modes whose bit is set in `0x206040` (mode-id bits 6, 13, 14, 21); the port does not model that mask.
 - Whether an opponent's channel 3 stays unwritten in the original is the read of
   `ship+0x628c == 0`, not a live observation.
 
