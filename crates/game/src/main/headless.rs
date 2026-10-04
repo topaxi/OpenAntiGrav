@@ -151,7 +151,27 @@ pub(crate) fn run_windowless(
         if phase == loading::Phase::Race {
             progress.total = 0;
             progress.done = 0;
-            progress.current = cli.track.clone();
+            // The circuit's own name where `--track` names one the source
+            // offers, which is what the window's race load puts on this line
+            // (see `Session::launch_race`); a path the catalogue does not know
+            // is shown as given.
+            progress.current = cli.track.as_ref().map(|entry| {
+                loaded
+                    .tracks
+                    .iter()
+                    .find(|track| track.entry_name() == *entry)
+                    .map_or_else(
+                        || entry.clone(),
+                        |track| {
+                            oag_game::catalogue::label(
+                                track,
+                                &loaded.circuit_names,
+                                &loaded.strings,
+                                &loaded.tracks,
+                            )
+                        },
+                    )
+            });
         }
         let assets = loading::Assets::load(
             &options.source,

@@ -12,8 +12,8 @@ The reimplementation is `oag_hd::loading`, wired through the
 
 ## The screen, as it draws
 
-Read off a screenshot of a running Fury race, with the widget names its own
-debug overlay prints:
+Read off a screenshot of a running Fury race, with the labels the game itself
+prints over each region:
 
 ```text
 > LOADING... VINETA K
@@ -245,24 +245,28 @@ executable as the illustrations.
 
 Three departures, each deliberate:
 
-- **The widget labels are not drawn.** `FEATURE IMAGE`, `FEATURE DESCRIPTION`,
-  `PROGRESSION BAR`, `MODE ICON` and the small `WIPEOUT® HD` in the screenshot
-  are the game's own debug overlay printing widget *names*. Reproducing them
-  would be reproducing a developer tool.
-- **The bar is flat, not dotted.** The original tiles `dot.gtf`; `Draw::Sprite`
-  has no repeat mode, so an 8x8 dot stretched across the bar comes out as a
-  blurred smear - tried, and it read as a rendering fault. The shape and the
-  place are the original's and the texture is not, which is the right way round.
-  The rules *are* faithful: `line.gtf` is an 8x8 tile the original stretches
-  itself (see [hd-frontend.md](hd-frontend.md)).
+- **The mode icon is not drawn.** The original puts an animated Bink clip
+  chosen by the mode in that panel; this build draws the panel's label and
+  brackets and no icon, rather than a stand-in.
+- **The bar has 21 rows, not 30.** It is 166 columns of `dot.gtf` tiled by
+  `Draw::TiledSprite`, as the original is (measured, see below), and the lit
+  columns are whole columns in `HD_Blue` over `HD_LightGrey` ones. The row count
+  is chosen to fit this layout's flatter bar, not measured.
 - **The bar's fill is a time-based estimate, not the original's.**
-  `race::load` reports no progress, so there is no number to fill it with. The
-  trough used to be drawn empty, which read as a stuck screen; since 2026-09-25
-  it fills along `1 - e^(-t / 4 s)` (chosen, not measured), never completing on
-  its own, and fills completely the moment the race scene is ready. See
-  `loading::wording::estimated_fraction`,
-  [race-load-transition.md](../architecture/race-load-transition.md) and
-  [Still unread](#still-unread) for the real fill.
+  `race::load` reports no stage, so the fill follows `1 - e^(-t / 4 s)` (chosen,
+  not measured), quantised to whole columns, never completing on its own, and
+  full the moment the race scene is ready. The original's is load-driven: a
+  target of 0.2 at construction, then the loader's milestones 0.4, 0.5, 0.75 and
+  0.95, eased at 0.1 column per frame - see
+  [loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md) and
+  [Still unread](#still-unread). See `loading::wording::estimated_fraction` and
+  [race-load-transition.md](../architecture/race-load-transition.md).
+
+**The five labels are drawn** since 2026-10-05: `WIPEOUT® HD`, `FEATURE IMAGE`,
+`FEATURE DESCRIPTION`, `PROGRESSION BAR` and `MODE ICON`, each behind a
+`square.gtf` bullet. This page called them the game's debug overlay; they are
+not - four are string ids `LoadingScreen_BuildText` resolves and the fifth is a
+literal in the executable, all placed by `LoadingScreen_DrawLabel`.
 
 Since 2026-10-04 the feature's **name sits over the illustration and its
 heading (`INSTRUCTIONS` or `DESCRIPTION`) over the prose, in one row**, as in
@@ -341,9 +345,10 @@ on a modal dialog.
   `scePresents.gtf`, the twelve `presents_<language>.gtf` files and the cut demo
   still, so more than one type exists and the presents screens may be among
   them.
-- **The progression bar's source.** The original fills one; this build's screen
-  draws no bar for a race load because it has no honest number to fill it with —
-  `race::load` reports no progress. That is a gap this project could close on its
-  own terms rather than a recovery.
+- **Wiring the bar to the load.** The original's fill is driven by the loader's
+  own stage milestones (0.4, 0.5, 0.75, 0.95) through
+  `LoadingScreen_SetProgressTarget`; this build's `race::load` reports no stage,
+  so the fill is the time estimate above. The six callers are listed in
+  loading-screen.md. `0x0067a858` calls it too and its argument is unread.
 - **The Fury-content flag's writer**, whose value is read (`1`) and whose
   readers are four; see loading-screen.md for the next addresses to try.

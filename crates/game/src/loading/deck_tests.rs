@@ -134,6 +134,7 @@ fn the_name_is_over_the_picture_and_the_heading_over_the_prose() {
             rule: None,
             corner: None,
             dot: None,
+            square: None,
         }),
         ..five(Some(oag_hd::loading::DECK))
     };

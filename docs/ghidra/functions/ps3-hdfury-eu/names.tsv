@@ -506,3 +506,6 @@
 0x002ff628	function	XFadeShip_InitSystem	70	xfade.md
 0x002fcaa0	function	XFadeShip_CreateSound	60	xfade.md
 0x000d5968	function	Ship_UpdateEngineCrossfade	82	xfade.md
+0x002b2c60	function	LoadingScreen_SetProgressTarget	82	loading-screen.md
+0x002b2be8	function	LoadingScreen_SetProgress	75	loading-screen.md
+0x002b36d0	function	LoadingScreen_DrawLabel	85	loading-screen.md
