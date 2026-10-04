@@ -15,8 +15,9 @@ per-slot heading, landed; the write-up and every measurement are in
   effect trigger `FUN_08904fd4`~~ **wired 2026-10-04** (the pad's flare and `TURBO`,
   [perfect-start.md](../../docs/ghidra/functions/psp-pulse-usa/perfect-start.md)); the AI's grade 3,
   **confirmed from both ends 2026-10-04 (85) and not ported** - the in-rule version (the field
-  timing its first thrust into the perfect window) was tried and reverted because it put eight
-  `ai_dekonstruct_black` seeds over their destroyed-craft bounds (launch-boost.md, Open); and the
+  timing its first thrust into the perfect window) was tried and reverted: ten test-data failures,
+  eight `ai_dekonstruct_black` seeds over their destroyed-craft bounds among them, cause not
+  isolated (the boost, the hold, or the bunching; launch-boost.md, Open); and the
   PS2/other-PSP discs applied by extension.
 - ~~**The grid walk.**~~ **Landed 2026-10-02 (`pulse-grid-walk`)**: the walk is a projection onto
   the lifted B-spline, stepped `19.8` along the located record's own tangent, with the record

@@ -567,7 +567,12 @@ In short:
   of `mesh+0x40` after the release (prediction: 3.0, then 3.2, ramping, reset every
   138 ticks) would take the law from 85 to 90; whether HD's glyph shows the same
   stray strip past 6.000 s is still unread; the `Cockpit321Go` overlay's clock is
-  now known (countdown-widgets.md) and not rewired.
+  now known (countdown-widgets.md) and not rewired. **PS2 Pulse inherits the PSP
+  windows** (`ClockRule::Measured` covers every non-PS3 source, the maintainer's
+  inheritance rule): unread on `SCES_547.48`, its lap states newly drawn (the
+  between-laps `Board` looked right on `16_Track` at tick 2690, the rest unviewed),
+  and its loader line says "read from BOOT.BIN, confidence 85", which is PSP's
+  wording on a title it was not read on.
 - ~~What places the countdown's `Cockpit321Go` widget~~ **Answered in two parts, and
   both stand.** (2026-09-06, second pass) `Hud_BindWidgets` (`0x0881fbec`) resolves
   `"HUD->ReadyGo"`/`"HUD->Cockpit321Go"` the same `"HUD->"`-lookup way `HudSight_Bind`

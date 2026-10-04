@@ -472,7 +472,10 @@ the chosen 216..349 `GO_LOOP` is gone. Played (autopilot, `16_Track`): `GO`
 strobing on a stationary craft at tick 460; the teal `Board` with its arrow
 approaching the end of lap 1; `FINAL LAP` approaching the end of lap 2; the
 chequered flag on the crossing into lap 3. Only the first is compared with
-the original; the lap states were not captured on PPSSPP.
+the original; the lap states were not captured on PPSSPP. **PS2 Pulse runs
+the same clock** (every non-PS3 source takes `Clock::PULSE`), inherited from
+the PSP read and unread on its own executable; its between-laps `Board` was
+seen once at player size, matching the PSP's.
 `crates/game/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
 never leaves the aperture on Pulse's clock and does on the raw one.
 

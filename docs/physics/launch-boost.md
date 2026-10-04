@@ -167,8 +167,10 @@ geometry [grid-state.md](grid-state.md) already named, not these terms.
   window (earning grade 2 the player's way, chosen) put eight
   `ai_dekonstruct_black_ground_truth` seeds one or two destroyed craft over their
   bounds, made `stall_rescue_ground_truth`'s healthy-craft check see one stalled
-  tick (the held opponent) and moved `leach_energy_ground_truth`'s scenario. An AI
-  lane that wants the field's launch boost has to make the field survive it first.
+  tick (the held opponent) and moved `leach_energy_ground_truth`'s scenario. **The
+  cause was not isolated**: the boost itself, the hold of about six ticks after the
+  release, and the field's changed bunching off the line are all candidates. The
+  bounds were not loosened.
 - The AI's grade 3 and its per-slot table have not been watched. Reading `craft+0x294`
   of the seven opponents in a Single Race through the first second would confirm the
   decompile and give the original's AI start for the AI lane to compare against.
