@@ -661,7 +661,7 @@ impl Scene {
             .upload(queue, &vp, race.camera_position(), vertices, trail);
         self.clouds
             .borrow_mut()
-            .upload(queue, &vp, race.sim.world.tick, right, up);
+            .upload(queue, &vp, race.sim.world.tick, &race.camera_frame());
         oag_render::perfprobe::mark("exhaust-upload");
         self.upload_particles(race, queue, &vp, right, up, additive, alpha);
         self.upload_mist(race, queue, 1.0 / projection.y_axis.y);

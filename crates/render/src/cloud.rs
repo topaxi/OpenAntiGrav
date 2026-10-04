@@ -10,6 +10,20 @@
 //! is the only Pulse circuit that authors any cloud node) and for why a
 //! `cloudCube` with no `cloudGroup` ancestor is skipped rather than invented.
 //!
+//! # The roll term
+//!
+//! `CloudGroup_Draw` builds each quad in **view space**: it transforms the
+//! sprite's centre by the view matrix, adds corner offsets rotated by
+//! `g_camera_roll - phase` (`0x0893296c` subtracts `g_camera_roll`,
+//! `0x08ab10a8`, from the phase, and the corner arithmetic from `0x089329c8`
+//! rotates by the negative of that), and sets the view and model matrices to
+//! the identity at `0x08a907a0` before the batch is drawn. `g_camera_roll` is
+//! the angle a world-level line makes on screen, so the quad's spin is
+//! measured from the world's horizon, not the screen's: as the camera banks,
+//! the clouds keep their orientation in the world. [`Layer::extend_vertices`]
+//! reads the roll with [`crate::mist::camera_roll`], the same law the mist
+//! uses. Confidence and evidence are in `clouds.md`.
+//!
 //! # What the original does that this module does not reproduce, and why
 //!
 //! **The rotation rate and initial phase are random, not authored.**
@@ -21,16 +35,6 @@
 //! project's own seeded [`Rng`], which reproduces the original's
 //! *distribution* exactly and its *specific per-boot values* not at all - the
 //! same class of limitation `oag_vex::cloud`'s own doc records for `Seed`.
-//!
-//! **The camera-heading counter-rotation is not applied.** The original
-//! subtracts the camera's own current heading angle (`DAT_08ab10a8`, written
-//! per frame by `Camera_SubmitScene`) from the phase before rotating, so each
-//! sprite's slow spin holds a stable *world* orientation as the camera turns
-//! rather than appearing to spin faster or slower with it. This module rotates
-//! by the accumulated phase alone. **A documented simplification, not an
-//! invention**: the mechanism is measured (see `clouds.md`), and omitting the
-//! counter-term changes only how the spin interacts with camera yaw, not
-//! whether a spin happens at all.
 //!
 //! **Every sprite draws one flat, chosen colour - not the measured ramp.**
 //! `CloudGroup_BuildDisplayList` bakes one colour per sprite from
@@ -68,6 +72,7 @@ use oag_core::{Rng, math::Vec3};
 
 use crate::exhaust::FlareTexture;
 use crate::mesh::GpuVertex;
+use crate::psys::field::Frame;
 
 /// Bound of the per-sprite rotation rate, `Psys_RandFloatRange(-0.002, 0.002)`
 /// read directly off `CloudGroup_BuildDisplayList` (`0xbb03126f`/`0x3b03126f`).
@@ -120,16 +125,15 @@ impl Sprite {
     }
 
     /// This sprite's six vertices - two triangles - camera-facing and
-    /// rotated by its own accumulated phase.
+    /// rotated by `roll - phase` from the camera's right towards its up.
     ///
     /// `right`/`up` are the camera's own basis vectors, the same convention
-    /// `exhaust::Exhaust::vertices` uses and for the same reason: a
-    /// view-space billboard whose extents are world-sized. Rotating the
-    /// basis itself, rather than the corner offsets, is what
-    /// `CloudGroup_Draw`'s own `vtfm4_q` step does - see `clouds.md`.
+    /// `exhaust::Exhaust::vertices` uses: a view-space billboard whose
+    /// extents are world-sized. `roll` is `g_camera_roll`, see the module
+    /// doc's "roll term".
     #[must_use]
-    pub fn vertices(&self, right: Vec3, up: Vec3) -> [GpuVertex; 6] {
-        let (sin, cos) = self.phase.sin_cos();
+    pub fn vertices(&self, right: Vec3, up: Vec3, roll: f32) -> [GpuVertex; 6] {
+        let (sin, cos) = (roll - self.phase).sin_cos();
         let r = right * cos + up * sin;
         let u = up * cos - right * sin;
         quad(
@@ -223,12 +227,14 @@ impl Layer {
         }
     }
 
-    /// Appends this frame's vertices to `out`, camera-facing per
-    /// [`Sprite::vertices`].
-    pub fn extend_vertices(&self, out: &mut Vec<GpuVertex>, right: Vec3, up: Vec3) {
+    /// Appends this frame's vertices to `out`, facing `camera` and
+    /// counter-rotated by its roll per [`Sprite::vertices`]. The original
+    /// reads the roll every frame, not every tick.
+    pub fn extend_vertices(&self, out: &mut Vec<GpuVertex>, camera: &Frame) {
+        let roll = crate::mist::camera_roll(camera);
         out.reserve(self.sprites.len() * 6);
         for sprite in &self.sprites {
-            out.extend_from_slice(&sprite.vertices(right, up));
+            out.extend_from_slice(&sprite.vertices(camera.right, camera.up, roll));
         }
     }
 }
