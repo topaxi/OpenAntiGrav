@@ -523,21 +523,25 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let placed = node * vec4<f32>(in.position, 1.0);
     let world = uniforms.model * placed;
     out.clip = uniforms.view_projection * world;
-    // Uniform scale only, so the model matrix rotates normals correctly without
-    // needing an inverse transpose. **The node matrix is not uniform**: 129 of
-    // the 920 authored scale keys are per-axis, and skewing a normal by one of
-    // those is wrong. It is harmless on this data and measured rather than
-    // assumed - all 37 meshes under a non-uniformly scaled node are prelit
-    // (`lit = 0.0`), so their normals never reach the light rig at all. A title
-    // that lights one needs the inverse transpose here;
-    // `scenery_animation_ground_truth.rs` fails when that day comes. **Wipeout
-    // 2048 is that title, in a small way**: 51 moving, lit meshes across its
-    // fourteen race circuits sit under a non-uniformly scaled skeleton node
-    // (`docs/formats/2048-animation.md`, "What a race does with it"), and
-    // their normals are skewed here. The baked (static) 2048 path does the
-    // inverse transpose on the CPU; this one does not yet.
-    let turned = node * vec4<f32>(in.normal, 0.0);
-    out.normal = (uniforms.model * turned).xyz;
+    // **The normal goes through the node matrix's inverse transpose**, not the
+    // matrix itself: a per-axis scale skews a normal turned by the plain
+    // matrix. The model matrix is uniform-scale, so it needs none. The cofactor
+    // matrix (columns `c1 x c2`, `c2 x c0`, `c0 x c1`) is the inverse transpose
+    // times the determinant, so only its sign is kept - a mirroring node must
+    // not flip the normal - and the fragment stage renormalises. Identity for
+    // slot 0 (and for a rotation or a uniform scale it is the matrix's own
+    // direction), so static geometry and every uniformly-scaled node draw as
+    // they did. Wipeout 2048 is the title that needed it: 51 moving, lit
+    // meshes across its fourteen race circuits sit under a non-uniformly
+    // scaled skeleton node. `tests/moving_normal_inverse_transpose.rs` is the
+    // pixel check against the baked path.
+    let c0 = node[0].xyz;
+    let c1 = node[1].xyz;
+    let c2 = node[2].xyz;
+    let handed = select(-1.0, 1.0, dot(c0, cross(c1, c2)) >= 0.0);
+    let cofactor = mat3x3<f32>(cross(c1, c2), cross(c2, c0), cross(c0, c1));
+    let turned = (cofactor * in.normal) * handed;
+    out.normal = (uniforms.model * vec4<f32>(turned, 0.0)).xyz;
     out.colour = in.colour;
     out.lit = in.lit;
     out.glow = in.glow;

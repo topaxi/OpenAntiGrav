@@ -102,8 +102,12 @@ the start line and runs the simulation. What it does **not** do, and why:
   nodes, which drew a median 1,086 units from their place before the table
   was read, are placed and moving. The load report says so:
   `165 skeleton node(s), 113 animated over 113 track(s), 166.7 s loop`.
-  Not wired: the `trackZone` clip (Zone mode's own skeleton, 30 Hz keys)
-  and the start-grid animation.
+  **2026-10-05**: a Zone race draws `trackZone.rcsmodel` through its own
+  skeleton and 30 Hz clip, its Zone colours are read off the material's
+  uniforms, and the glow-layer and `speed_multipliaer` scrolls play off the
+  same table ([2048-material-params.md](2048-material-params.md)). Not wired:
+  the start-grid animation (a pit-bot rig 110 units ahead of the grid; what
+  triggers it is not read, [2048-animation.md](2048-animation.md)).
 - **Resolved 2026-09-20: `oag_2048::TITLE.front_end` is `Some` -
   [ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)
   widened `oag_title::FrontEnd::menu` to `Option` and added a second,
