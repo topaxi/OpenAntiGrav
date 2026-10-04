@@ -62,6 +62,7 @@ impl Effect {
                 };
                 let life = spec.lifetime_ticks.0.max(1.0);
                 spec.template = true;
+                spec.streak = spec.streak.for_template();
                 spec.rotation = Rotation::of_template(template);
                 spec.size = unroll(&spec.size, life);
                 spec.alpha = unroll(&spec.alpha, life);

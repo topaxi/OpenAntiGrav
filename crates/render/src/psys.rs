@@ -604,7 +604,7 @@ impl EmitterSpec {
                 ColourMode::OverLife
             },
             render,
-            streak: StreakDraw::of(record.draw_class()),
+            streak: StreakDraw::of(record.draw_class(), record.aspect),
             blend,
             particle_child: record.particle_child,
             death_child: record.death_child,

@@ -219,16 +219,26 @@ impl Race {
                     None => None,
                 };
                 // `Repulser_AdvanceWave` builds the wave's matrix at unit scale
-                // with `X` across the track (`normalize(right - left)`) and `Y`
-                // the point's negated `down`: the same frame, from the nearest
-                // spline sample to the wave's centre.
+                // with `Y` the point's negated `down` and `Z` `across x up`
+                // negated for direction 0, so `X` (`Y x Z`) is `-across` for the
+                // forward wave and its fork and `across` for the backward one:
+                // either way `Z` is the wave's travel, and shape 8's half ring
+                // bows ahead of it. It then sets the instance's extent co-factor
+                // (`+0x2c`) to the distance between the track's two edges over
+                // `100` (`0x08876fc0..0x08877020`), so the root's `50` is half
+                // the track's width. The same frame and width here, from the
+                // nearest spline sample to the wave's centre.
                 if let Some(playing) = playing
                     && let Some((_, sample, _)) = self.sim.spline.nearest(front.point)
                 {
-                    let across = Vec3::from_array(sample.lateral);
+                    let lateral = Vec3::from_array(sample.lateral);
+                    let backward = slot == 1;
+                    let across = if backward { lateral } else { -lateral };
                     let up = -Vec3::from_array(sample.down);
+                    let width =
+                        (lateral * (sample.half_width_left + sample.half_width_right)).length();
                     self.view.stage.orient(playing, up);
-                    self.view.stage.stretch(playing, 1.0, across);
+                    self.view.stage.stretch(playing, width / 100.0, across);
                 }
             }
         }
