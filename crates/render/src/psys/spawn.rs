@@ -21,11 +21,11 @@
 //!   [`super::EmitterSpec::extent_animation`] plays it. Until then shape 3 was a point, on
 //!   the strength of the collision sparks' extents of at most 0.1; the corpus authors `12.9`
 //!   on the Bomb's smoke and the ship explosion's root, `10` on its debris, `13.6` on the
-//!   Repulser's blast and `5.1` on the Rocket's own debris. **Not played:** flag
-//!   `0x200000`, which steps `phi` evenly (`2 pi / count`) from a random start instead of
-//!   drawing it (only `WO_REPULSER_BLAST` carries it), the sub-frame spread of a moving
-//!   emitter, the sign of the aimed azimuth (unmeasured, and the debris authors `0.925`),
-//!   and the Repulser's selector-5 record.
+//!   Repulser's blast and `5.1` on the Rocket's own debris. Flag `0x200000` steps `phi`
+//!   evenly (`2 pi / count`) from one random start (`WO_REPULSER_BLAST`, and the
+//!   Missile's `shockrings` disc, where it changes nothing), and the aimed azimuth turns
+//!   the heading from `phi` to `phi + a`: `ParticleSystem_AimedVelocity` rotates `(x, z)`
+//!   by `+a`, the sense the rectangle below already played. See [`super::playback`].
 //! - **Shape 1, a line (or a flat rectangle).** `FUN_088fcfec`, read at
 //!   instruction level on 2026-09-24: while `+0x3c` is `0..=2` the offset is
 //!   `(U(-e, e), 0, U(-z, z))`, `e` the scaled extent global
@@ -310,7 +310,7 @@ pub(super) fn place(
         let radial = offset.try_normalize().unwrap_or(across);
         let elevation = elevation + jitter * (rng.next_f32() * 2.0 - 1.0);
         let (sin_a, cos_a) = azimuth.sin_cos();
-        let heading = radial * cos_a + up.cross(radial) * sin_a;
+        let heading = radial * cos_a + radial.cross(up) * sin_a;
         return (heading * elevation.cos() + up * elevation.sin(), offset);
     }
     if let (

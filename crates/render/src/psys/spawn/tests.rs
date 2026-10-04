@@ -154,3 +154,41 @@ fn a_rect_spawns_in_the_xz_plane_and_heads_along_the_live_azimuth() {
         assert!((direction.z - 0.5f32.cos()).abs() < 1e-5);
     }
 }
+
+/// `ParticleSystem_AimedVelocity` (`0x088fc490`) turns the ring's heading `(x, z)` by
+/// `+a`: `(x cos a - z sin a, z cos a + x sin a)`, the frame's `Z` being `X x Y`. A bead
+/// born at angle `phi` flies at `phi + a` - the sense the Rect path above already plays.
+#[test]
+fn a_ring_beads_azimuth_turns_its_heading_the_originals_way() {
+    let ring = Spawn::Ring {
+        extent: 8.0,
+        spread: 0.0,
+        mode: 0,
+    };
+    let aimed = crate::psys::Direction::Aimed {
+        elevation: 0.0,
+        azimuth: 0.244_346,
+        jitter: 0.0,
+    };
+    let mut rng = Rng::new(3);
+    for phi in [0.0f32, 1.0, 2.5, 4.0] {
+        let (direction, offset) = place(
+            ring,
+            (aimed, None),
+            1.0,
+            (Vec3::X, Vec3::Y),
+            Some(phi),
+            &mut rng,
+        );
+        assert!(
+            (offset / 8.0 - Vec3::new(phi.cos(), 0.0, phi.sin())).length() < 1e-4,
+            "{offset}"
+        );
+        let turned = phi + 0.244_346;
+        let want = Vec3::new(turned.cos(), 0.0, turned.sin());
+        assert!(
+            (direction - want).length() < 1e-4,
+            "{direction} against {want}"
+        );
+    }
+}
