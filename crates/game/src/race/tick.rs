@@ -649,6 +649,7 @@ impl Race {
         // Beside them for the same reason: a Repulser's wave sweep reads every
         // craft's ring index from this tick. See `Race::advance_repulsers`.
         self.advance_repulsers();
+        self.advance_repulser_visual();
 
         // **After the standings**, so the last crossing is in the table this
         // reads, and a no-op on every tick but the one the race ends on. It

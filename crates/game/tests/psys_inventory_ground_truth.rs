@@ -93,8 +93,10 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // (`0x0886ff38`): the teardown `FUN_08870c78` spawns it at the blade on
     // both endings, a fuse running out and a craft hit. See
     // `oag_game::race::SHURIKEN_EXPIRE_EFFECT`.
-    ("WO_REPULSER", "the Repulser is not built."),
-    ("WO_REPULSER_BLAST", "the Repulser is not built."),
+    // **Not `WO_REPULSER` or `WO_REPULSER_BLAST`** - wired 2026-10-04 off
+    // `Repulser_SpawnWaves` (`0x08876300`) and `Repulser_SpawnBlastEffect`
+    // (`0x088761d8`). See `oag_game::race::REPULSER_EFFECT` and
+    // `docs/ghidra/functions/psp-pulse-usa/repulser.md`.
     // **Not `WO_BOMB_SMOKERING`** - wired 2026-09-23, off `Bomb_Detonate`
     // (`0x088640c8`) -> `BombBlast_Construct` (`0x08872078`), read in full
     // alongside the two `.vex` models the same detonation loads - see
@@ -188,6 +190,9 @@ const PSP_WIRED: &[&str] = &[
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
     "WO_SHURIKEN_EXPIRE",
+    // The Repulser's blast and its two waves - see `oag_game::race::REPULSER_EFFECT`.
+    "WO_REPULSER",
+    "WO_REPULSER_BLAST",
     "WO_WEAPON_ABSORB",
     // `Ship_Damage`'s weapon branch on a LeachBeam drain (`craft+0x138 == 7`);
     // see `oag_game::race::hit_sparks`.

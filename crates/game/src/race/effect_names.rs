@@ -303,6 +303,26 @@ pub use oag_render::exhaust::hd::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT
 /// [`Race::advance_quake_visual`].
 pub const QUAKE_EFFECT: &str = "WO_QUAKE";
 
+/// A Repulser's blast around the firer, from the fire.
+///
+/// **Recovered, confidence 84.** `Repulser_SpawnBlastEffect` (`0x088761d8`),
+/// called from `Repulser_Init`, spawns this (`0x08a7cd18`, fourcc `REP3`) at the
+/// entity's own matrix `+0x1a0`, which `Repulser_UpdateFieldModel` rebuilds from
+/// the firer's node every tick; `Repulser_Reset` releases it. See
+/// `docs/ghidra/functions/psp-pulse-usa/repulser.md` and
+/// [`Race::advance_repulser_visual`].
+pub const REPULSER_BLAST_EFFECT: &str = "WO_REPULSER_BLAST";
+
+/// One Repulser wave, riding its centre.
+///
+/// **Recovered, confidence 80.** `Repulser_SpawnWaves` (`0x08876300`) spawns
+/// this (`0x08a7cd2c`) twice, fourccs `REP0`/`REP1`, at the two waves' own
+/// matrices (`+0x60`/`+0xa0`), which `Repulser_AdvanceWave` moves every update;
+/// `Repulser_Reset` releases both. A third on a junction's branch (`REP2`) is
+/// not drawn, because the port's waves do not take branches. See
+/// [`Race::advance_repulser_visual`].
+pub const REPULSER_EFFECT: &str = "WO_REPULSER";
+
 /// What a connected LeachBeam draws on the craft it is draining.
 ///
 /// **The disc's own, with a recovered trigger** - `LeachBeam_Advance`

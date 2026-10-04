@@ -116,3 +116,88 @@ impl Race {
         }
     }
 }
+
+impl Race {
+    /// Keeps each live Repulser's three particle instances where the original
+    /// keeps them, and releases them when it retires.
+    ///
+    /// - [`REPULSER_BLAST_EFFECT`] starts on the Repulser's first tick
+    ///   (`Repulser_Init`) at the firer and follows the firer from then on,
+    ///   because the matrix it is anchored to (`+0x1a0`) is rebuilt from the
+    ///   firer's node every tick.
+    /// - Two [`REPULSER_EFFECT`]s start on the tick the waves start
+    ///   (`Repulser_SpawnWaves`) and follow the two wave centres.
+    /// - All three are released when the slot empties (`Repulser_Reset`).
+    ///
+    /// **Not drawn: the field model** `Data\Weapons\pulse_repulsorwave.vex` that
+    /// `Repulser_Construct` loads and `Repulser_UpdateFieldModel` scales and
+    /// fades around the firer. Its matrix was read at shape level only (72), so
+    /// it is left out rather than drawn on a guess. The effects' own orientation
+    /// is the stage's default, **chosen**: the wave matrix's basis is built from
+    /// the track's edges and was not ported.
+    pub(in crate::race) fn advance_repulser_visual(&mut self) {
+        let dt = self.sim.dt;
+        for index in 0..self.sim.world.repulsers.len() {
+            let handles = self.view.repulser_effects[index];
+            let Some(repulser) = self.sim.world.repulsers[index] else {
+                for playing in handles.into_iter().flatten() {
+                    self.view.stage.release(playing);
+                }
+                self.view.repulser_effects[index] = [None; 3];
+                continue;
+            };
+            let firer = self.sim.world.ships[repulser.owner as usize]
+                .physics
+                .body
+                .position;
+            // The first tick, and only the first: a refused attach is not
+            // retried later, so the blast cannot appear late.
+            if handles[0].is_none() && repulser.age <= dt * 1.5 {
+                if let Some(effect) = self.view.effects.get(REPULSER_BLAST_EFFECT).cloned() {
+                    self.view.repulser_effects[index][0] =
+                        self.view.stage.attach(&effect, firer, 1.0);
+                }
+            } else if let Some(playing) = handles[0] {
+                self.view.stage.follow(playing, firer);
+            }
+            let Some(fronts) = repulser.fronts else {
+                continue;
+            };
+            // The spawn tick is the one where the fronts have not moved. It is
+            // also when `Repulser_SpawnWaves` starts screen flash kind 2 at the
+            // firer (`FUN_088f00c0(.., 2, ..)`, `0x088765ac`).
+            let spawning = fronts[0].previous == fronts[0].point && handles[1].is_none();
+            if spawning && let Some(flash) = &mut self.view.screen_flash {
+                flash.start(oag_render::flash::REPULSER, firer);
+            }
+            for (slot, front) in fronts.iter().enumerate() {
+                let playing = match handles[1 + slot] {
+                    Some(playing) => {
+                        self.view.stage.follow(playing, front.point);
+                        Some(playing)
+                    }
+                    None if spawning => {
+                        let effect = self.view.effects.get(REPULSER_EFFECT).cloned();
+                        let attached =
+                            effect.and_then(|e| self.view.stage.attach(&e, front.point, 1.0));
+                        self.view.repulser_effects[index][1 + slot] = attached;
+                        attached
+                    }
+                    None => None,
+                };
+                // `Repulser_AdvanceWave` builds the wave's matrix at unit scale
+                // with `X` across the track (`normalize(right - left)`) and `Y`
+                // the point's negated `down`: the same frame, from the nearest
+                // spline sample to the wave's centre.
+                if let Some(playing) = playing
+                    && let Some((_, sample, _)) = self.sim.spline.nearest(front.point)
+                {
+                    let across = Vec3::from_array(sample.lateral);
+                    let up = -Vec3::from_array(sample.down);
+                    self.view.stage.orient(playing, up);
+                    self.view.stage.stretch(playing, 1.0, across);
+                }
+            }
+        }
+    }
+}
