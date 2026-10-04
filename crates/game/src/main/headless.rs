@@ -190,6 +190,8 @@ pub(crate) fn run_windowless(
                 ticks: cli.ticks,
                 progress,
                 phase,
+                live: (cli.loading_live && phase == loading::Phase::Race)
+                    .then(|| race_options.clone()),
                 renderer: settings.graphics.renderer.clone(),
                 aspect: settings.display.aspect,
             },

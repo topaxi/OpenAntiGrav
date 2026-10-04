@@ -36,6 +36,7 @@ fn progress(done: usize, total: usize) -> Progress {
         failed: 0,
         current: None,
         finished: false,
+        load_stage: 0,
     }
 }
 

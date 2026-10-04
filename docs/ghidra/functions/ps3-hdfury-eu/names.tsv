@@ -509,3 +509,5 @@
 0x002b2c60	function	LoadingScreen_SetProgressTarget	82	loading-screen.md
 0x002b2be8	function	LoadingScreen_SetProgress	75	loading-screen.md
 0x002b36d0	function	LoadingScreen_DrawLabel	85	loading-screen.md
+0x000b8590	function	WorldManager_Construct	78	loading-screen.md
+0x000b2af0	function	Track_Construct	65	loading-screen.md

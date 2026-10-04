@@ -384,6 +384,7 @@ impl Session {
                     stage.pointer(&pointer::in_grid(pointer, Space::PSP, rect));
                 }
                 Stage::Loading(stage) => {
+                    stage.screen.set_load_stage(progress.load_stage);
                     stage
                         .screen
                         .advance(progress.finished && stage.media_ready() && stage.race_ready());

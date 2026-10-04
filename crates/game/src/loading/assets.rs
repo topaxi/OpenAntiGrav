@@ -52,6 +52,9 @@ pub struct Assets {
     /// Which of the features a race of each mode may show, when the title's
     /// rule is read. See [`oag_title::loading::Deck`].
     pub deck: Option<oag_title::loading::Deck>,
+    /// How the bar fills, when the title's own loader drives it. See
+    /// [`oag_title::loading::Progression`].
+    pub progression: Option<oag_title::loading::Progression>,
     /// The word under the screen, resolved out of the disc's string table.
     ///
     /// `None` on a title that names no caption id, or whose table does not
@@ -178,6 +181,7 @@ impl Default for Assets {
             palette: None,
             features: Vec::new(),
             deck: None,
+            progression: None,
             caption: None,
             labels: None,
             notes: Vec::new(),
@@ -487,6 +491,7 @@ impl Assets {
             palette,
             features,
             deck: loading.deck,
+            progression: loading.progression,
             caption,
             labels,
             notes,

@@ -202,6 +202,9 @@ pub struct Screen {
     frames: u32,
     /// Frames since the work finished, counting to [`FADE_FRAMES`].
     fade: u32,
+    /// The bar's stage-driven fill, on a title whose loader drives it. `None`
+    /// keeps the time estimate. See [`fill::Fill`].
+    fill: Option<fill::Fill>,
     /// This project's own strings, layered over nothing: this screen runs
     /// before any disc's language plugin is read - `heading`'s "READING THE
     /// ARCHIVES" case fires while that read is still in flight - so there is
@@ -288,6 +291,7 @@ impl Screen {
             },
             frames: 0,
             fade: 0,
+            fill: assets.progression.map(fill::Fill::new),
             strings: oag_ui::strings::project_table(language),
         }
     }
@@ -305,11 +309,22 @@ impl Screen {
     /// fade starts counting.
     pub fn advance(&mut self, finished: bool) {
         self.frames = self.frames.saturating_add(1);
+        if let Some(fill) = self.fill.as_mut() {
+            fill.step();
+        }
         if finished {
             self.wave.finish();
             self.fade = self.fade.saturating_add(1);
         } else {
             self.wave.advance();
+        }
+    }
+
+    /// Tells the bar which stage the race load has reached, for a title whose
+    /// bar the loader drives. Ignored on one that has no such bar.
+    pub fn set_load_stage(&mut self, stage: u8) {
+        if let Some(fill) = self.fill.as_mut() {
+            fill.reach(stage);
         }
     }
 
@@ -569,6 +584,10 @@ impl Screen {
         if self.illustration.is_some() {
             let fraction = if counted(progress) {
                 fraction(phase, progress)
+            } else if let (Phase::Race, Some(fill)) = (phase, &self.fill) {
+                // The whole bar once the work is over is this build's own
+                // (chosen, not measured); the steps before it are the loader's.
+                if self.fade > 0 { 1.0 } else { fill.fraction() }
             } else if matches!(phase, Phase::Race) {
                 estimated_fraction(self.frames, self.fade > 0)
             } else {
@@ -961,5 +980,6 @@ use wording::{counted, counts, estimated_fraction, fraction, heading, percentage
 mod bar_tests;
 #[cfg(test)]
 mod deck_tests;
+mod fill;
 #[cfg(test)]
 mod tests;

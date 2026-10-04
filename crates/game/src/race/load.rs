@@ -150,6 +150,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // than it does on the PSP, where nothing is compressed at all: 5,861 of
     // `WADS2.WAD`'s 7,200 entries are LZSS.
     let track_blob = read(&mut archives, &track)?;
+    stages::reach(stages::Stage::TrackRead);
     // **This track file's own class numbering.** Read once, off its version word,
     // and consulted everywhere below that used to spell a `vex::CLASS_*`
     // constant - all of which are version 6's. A version-4 track (Pure's are)
@@ -662,6 +663,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         start_position.as_ref(),
         &mut report,
     );
+    stages::reach(stages::Stage::TrackBuilt);
 
     let spline = Spline::from_track(&ai);
     report.push(format!(
@@ -686,6 +688,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
+
+    stages::reach(stages::Stage::WorldBuilt);
 
     // The player's own, and reported by `livery::load` beside the hull it was
     // read off. Sparks are slot 0's today - `oag_render::sparks` triggers off
@@ -842,6 +846,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         },
         &mut report,
     );
+    stages::reach(stages::Stage::CraftsBuilt);
     let mut loaded = Loaded {
         title,
         platform: archives.layout.platform,

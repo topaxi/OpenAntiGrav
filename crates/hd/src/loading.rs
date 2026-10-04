@@ -108,6 +108,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     caption: Some(CAPTION),
     deck: Some(DECK),
     labels: Some(LABELS),
+    progression: Some(PROGRESSION),
 };
 
 /// The five features the screen draws from, **in the order the executable
@@ -257,6 +258,23 @@ pub const DECK: oag_title::loading::Deck = oag_title::loading::Deck {
     otherwise_fury: &[0, 1, 2, 3],
     otherwise_base: &[0, 1, 2],
     fury_content: true,
+};
+
+/// How the bar fills: a first target of 20 %, then the loader's four milestones,
+/// eased at 0.1 column per frame across 166 columns.
+///
+/// **Measured**, `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`
+/// (2026-10-05 and 2026-10-06): `0x002b9a28` stores the first target and the
+/// rate, `LoadingScreen_SetProgressTarget` (`0x002b2c60`) is called with `0.4`
+/// by the track constructor `0x000b2af0` once its first file is open, `0.5` at
+/// the end of the world manager's constructor `0x000b8590`, `0.75` by the mode
+/// constructor `0x0003c680` once that returns, and `0.95` by the per-craft
+/// constructor `0x0005cb40` when it has built the last craft. Confidence 80.
+pub const PROGRESSION: oag_title::loading::Progression = oag_title::loading::Progression {
+    start: 0.2,
+    milestones: &[0.4, 0.5, 0.75, 0.95],
+    rate: 0.1,
+    columns: 166.0,
 };
 
 /// The base game's style, as `OPT_FE_STYLE`'s own first entry spells it.

@@ -129,6 +129,10 @@ pub struct Progress {
     pub current: Option<String>,
     /// Nothing left to do, for any reason including having been asked to stop.
     pub finished: bool,
+    /// The stage a race load has reached, `0` before the first or when
+    /// nothing reports one. Only a race load sets it: see
+    /// `race::LoadWorker::progress`.
+    pub load_stage: u8,
 }
 
 impl Progress {
