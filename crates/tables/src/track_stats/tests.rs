@@ -144,3 +144,44 @@ fn resolve_skill_scale_is_none_for_a_solo_mode_cell() {
     let cell = cell(None, None, None);
     assert_eq!(resolve_skill_scale(&cell, Difficulty::Medium, None), None);
 }
+
+#[test]
+fn ambient_skill_scale_adds_the_mode_term_to_the_plain_value() {
+    let stats = parse(FIXTURE).expect("parses");
+    // Venom Easy 0.5; a full grid without weapons adds 0.2, a half grid 0.1.
+    let full = ModeTerm::Race {
+        weapons: false,
+        full_grid: true,
+    };
+    let half = ModeTerm::Race {
+        weapons: false,
+        full_grid: false,
+    };
+    let at = |mode| ambient_skill_scale(Some(&stats), SpeedClass::Venom, Difficulty::Easy, mode);
+    assert!((at(full) - 0.7).abs() < 1e-6);
+    assert!((at(half) - 0.6).abs() < 1e-6);
+    assert!((at(ModeTerm::HeadToHead) - 1.6).abs() < 1e-6);
+    assert_eq!(at(ModeTerm::None), 0.5);
+    assert_eq!(
+        ambient_skill_scale(
+            Some(&stats),
+            SpeedClass::Venom,
+            Difficulty::Hard,
+            ModeTerm::None
+        ),
+        3.5
+    );
+}
+
+#[test]
+fn ambient_skill_scale_without_a_table_is_two() {
+    assert_eq!(
+        ambient_skill_scale(
+            None,
+            SpeedClass::Rapier,
+            Difficulty::Easy,
+            ModeTerm::HeadToHead
+        ),
+        2.0
+    );
+}

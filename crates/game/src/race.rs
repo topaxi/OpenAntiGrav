@@ -135,6 +135,7 @@ mod eliminator;
 pub mod engine_light;
 mod field;
 pub mod finish_camera;
+mod finished_thrust;
 pub mod gantry;
 mod hash;
 mod held_buttons;

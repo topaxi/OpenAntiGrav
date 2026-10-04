@@ -84,14 +84,16 @@ pub struct TrackStats {
     /// own discriminant (`Difficulty::Easy` is `0`) - see
     /// [`TrackStats::skill_curve`].
     pub skill_scale: [[f32; 3]; 4],
-    /// `<SkillLevels><ModeModifiers>`, one row a class - carried but not
-    /// consumed by [`resolve_skill_scale`]; see the module docs for why.
+    /// `<SkillLevels><ModeModifiers>`, one row a class - not consumed by
+    /// [`resolve_skill_scale`] (see the module docs for why), read by
+    /// [`ambient_skill_scale`].
     pub mode_modifiers: [ModeModifiers; 4],
 }
 
 /// One `<ModeModifiers>` row - `AI_ResolveSkillScale`'s non-campaign terms,
-/// added to the plain `SkillScaleValue` lookup when no cell is in play. Not
-/// read by [`resolve_skill_scale`]; see the module docs.
+/// added to the plain `SkillScaleValue` lookup when no cell is in play
+/// ([`ambient_skill_scale`]). Not read by [`resolve_skill_scale`]; see the
+/// module docs.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ModeModifiers {
     /// Added when `mode == Head2Head`.
@@ -375,6 +377,72 @@ pub fn resolve_skill_scale(
     } else {
         lerp(curve[1], curve[2], t - 2.0)
     })
+}
+
+/// Which of `AI_ResolveSkillScale`'s mode terms a race with no campaign
+/// cell adds to its track's plain `SkillScaleValue`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModeTerm {
+    /// `g_game_mode == 9`: `+ HeadToHead`.
+    HeadToHead,
+    /// `g_game_mode == 3`, the Single Race (read `3` live on a Single Race,
+    /// 2026-10-04): `+` the one of the four grid/weapons fields that matches.
+    /// A full grid is eight craft.
+    Race {
+        /// `g_weapons_enabled`.
+        weapons: bool,
+        /// Eight craft on the grid.
+        full_grid: bool,
+    },
+    /// Every other mode: nothing added.
+    None,
+}
+
+/// `AI_ResolveSkillScale`'s branch for a race **with no campaign cell**
+/// (`0x08834df4`, confidence 85, `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`):
+///
+/// ```text
+/// skill = stats.SkillScaleValue[class][difficulty]      // 2.0 with no table
+/// skill += the ModeModifiers field `mode` selects
+/// ```
+///
+/// Read live on a Venom Easy Single Race on Talon's Junction, 2026-10-04:
+/// `0.9 + FullGridWithWeapons 0.0 = 0.9`
+/// (`docs/ghidra/functions/psp-pulse-usa/race-finish.md`). `stats` absent
+/// gives the original's own `2.0` default and no mode term (the original
+/// would read the terms through a null table; this does not).
+#[must_use]
+pub fn ambient_skill_scale(
+    stats: Option<&TrackStats>,
+    class: SpeedClass,
+    difficulty: Difficulty,
+    mode: ModeTerm,
+) -> f32 {
+    let Some(stats) = stats else {
+        return 2.0;
+    };
+    let base = stats.skill_curve(class)[difficulty as usize];
+    let terms = stats.mode_modifiers[class as usize];
+    base + match mode {
+        ModeTerm::HeadToHead => terms.head_to_head,
+        ModeTerm::Race {
+            weapons: true,
+            full_grid: true,
+        } => terms.full_grid_with_weapons,
+        ModeTerm::Race {
+            weapons: true,
+            full_grid: false,
+        } => terms.half_grid_with_weapons,
+        ModeTerm::Race {
+            weapons: false,
+            full_grid: true,
+        } => terms.full_grid_without_weapons,
+        ModeTerm::Race {
+            weapons: false,
+            full_grid: false,
+        } => terms.half_grid_without_weapons,
+        ModeTerm::None => 0.0,
+    }
 }
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {

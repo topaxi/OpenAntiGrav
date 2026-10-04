@@ -828,6 +828,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
     let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
+    let finished_thrust = super::finished_thrust::read(
+        craft_of(&mut craft, &mut archives),
+        &super::finished_thrust::RaceTerms {
+            class: &options.class,
+            difficulty: options.difficulty,
+            mode: options.mode,
+            weapons_on: options
+                .weapons_override
+                .unwrap_or_else(|| options.mode.weapons_enabled()),
+            full_grid: options.opponents || options.mode.has_opponents(),
+            track_stats: track_stats.as_ref(),
+        },
+        &mut report,
+    );
     let mut loaded = Loaded {
         title,
         platform: archives.layout.platform,
@@ -837,6 +851,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             laps_override: options.laps_override,
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
+            finished_thrust,
             class: options.class.clone(),
             opponents: options.opponents,
             trail_sparks: options.trail_sparks,

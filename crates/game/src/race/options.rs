@@ -396,6 +396,8 @@ pub struct Setup {
     pub weapons_override: Option<bool>,
     /// How good the opponents are. See [`Options::difficulty`].
     pub difficulty: oag_ai::Difficulty,
+    /// The finished player's thrust law, off the disc. See `race::finished_thrust`.
+    pub finished_thrust: Option<super::finished_thrust::FinishedThrust>,
     /// The speed class the race is run in, spelled the way the disc spells it.
     ///
     /// Most of what the class decides is already resolved by the time a `Setup`

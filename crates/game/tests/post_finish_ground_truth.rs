@@ -32,11 +32,18 @@ fn image() -> Option<PathBuf> {
 
 /// A lone Time Trial craft flown to the line, then handed back to nobody.
 fn finished_time_trial() -> Option<race::Race> {
+    finished_time_trial_at(oag_ai::Difficulty::default())
+}
+
+/// [`finished_time_trial`] at `difficulty`, which sets the skill scale the
+/// finished craft's thrust is read at.
+fn finished_time_trial_at(difficulty: oag_ai::Difficulty) -> Option<race::Race> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::TimeTrial,
+        difficulty,
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -234,5 +241,59 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
     println!(
         "{cuts} eye changes in 1500 frames, {} camera cuts",
         race.camera_cuts()
+    );
+}
+
+/// The finished craft flies at the original's own post-finish thrust, not at the
+/// driver's racing pace.
+///
+/// Measured 2026-10-04 (`docs/ghidra/functions/psp-pulse-usa/race-finish.md`): Venom,
+/// Easy, Talon's Junction, the original's throttle word after a first place reads `56.7`
+/// on most frames and never more, and the craft covered `3,500-3,900` units in the 35 s
+/// logged. A lone Time Trial craft is first, and Easy is `Novice` here. Falsifier:
+/// without `Race::finished_thrust_cap` in the tick the throttle reads the driver's own
+/// `100` and the first assertion on it fails. The distance is a sanity band only: at
+/// `Novice` the driver's own pace lands inside it too.
+#[test]
+#[ignore = "needs a disc image under data/images/"]
+fn the_finished_craft_flies_at_the_originals_post_finish_thrust() {
+    let Some(mut race) = finished_time_trial_at(oag_ai::Difficulty::Novice) else {
+        return;
+    };
+    let cap = race
+        .finished_thrust_cap(0)
+        .expect("Venom's AIRaceStats and 16_Track's stats.xml are on the disc");
+    assert!(
+        (cap - 0.567).abs() < 0.0005,
+        "first place at Venom Easy: the original read 56.7 %, the law gives {cap}"
+    );
+    let mut travelled = 0.0_f32;
+    let mut previous = race.sim.world.ships[0].physics.body.position;
+    let (mut highest, mut at_cap) = (0.0_f32, 0_u32);
+    let ticks = 35 * 60;
+    for _ in 0..ticks {
+        race.tick(&PlayerInputs::none());
+        let here = race.sim.world.ships[0].physics.body.position;
+        travelled += (here - previous).length();
+        previous = here;
+        let throttle = race.sim.world.ships[0].physics.thrust;
+        highest = highest.max(throttle);
+        at_cap += u32::from((throttle - 100.0 * cap).abs() < 0.01);
+    }
+    println!(
+        "after the line at the law's thrust: {travelled:.0} units in 35 s, throttle at most \
+         {highest:.1}, at the cap on {at_cap} of {ticks} ticks"
+    );
+    assert!(
+        highest <= 100.0 * cap + 0.01,
+        "the finished craft's throttle reached {highest:.1}; the original's never passed 56.7"
+    );
+    assert!(
+        at_cap * 2 > ticks,
+        "the throttle sat at the cap on only {at_cap} of {ticks} ticks; the original's did on most"
+    );
+    assert!(
+        (3_000.0..=4_200.0).contains(&travelled),
+        "the finished craft covered {travelled:.0} units in 35 s; the original 3,500-3,900"
     );
 }

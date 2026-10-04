@@ -129,7 +129,9 @@ fn a_cut_rolls_a_mode_and_the_node_modes_set_the_view_width() {
                 ViewMode::Close => assert_eq!(camera.width, 17.0),
                 ViewMode::Track => assert_eq!(camera.width, 50.0),
                 ViewMode::Rear | ViewMode::Front => {}
-                ViewMode::Death => unreachable!("a roll never lands on mode 5"),
+                ViewMode::Death | ViewMode::Nose | ViewMode::Chase => {
+                    unreachable!("a roll never lands on modes 1, 4 or 5")
+                }
             }
         }
     }
@@ -150,7 +152,9 @@ fn the_mode_rolls_follow_the_original_thresholds() {
             ViewMode::Rear => 1,
             ViewMode::Close => 2,
             ViewMode::Track => 3,
-            ViewMode::Death => unreachable!("a roll never lands on mode 5"),
+            ViewMode::Death | ViewMode::Nose | ViewMode::Chase => {
+                unreachable!("a roll never lands on modes 1, 4 or 5")
+            }
         };
         counts[index] += 1;
     }
@@ -389,3 +393,5 @@ fn the_wreck_stays_on_screen_until_a_cut_gives_the_picture_to_the_new_subject() 
     assert_ne!(camera.previous, Some(0));
     assert_eq!(camera.mode(), Some(ViewMode::Death), "and no mode roll");
 }
+
+mod photo_controls;

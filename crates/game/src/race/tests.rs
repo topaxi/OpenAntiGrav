@@ -45,6 +45,7 @@ mod scene;
 mod scene_build;
 mod shield_flash;
 mod spawn;
+mod spectator_press;
 mod spline;
 mod trail_hits;
 mod weapons;
@@ -178,6 +179,7 @@ fn setup(handling: Handling) -> Setup {
         hit_spark_anchors: Vec::new(),
         wreck_anchors: Vec::new(),
         destroy_stations: Vec::new(),
+        finished_thrust: None,
         intro_camera: None,
         slot_teams: Vec::new(),
         trail_sparks: false,
