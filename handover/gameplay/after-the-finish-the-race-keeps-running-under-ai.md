@@ -15,11 +15,14 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
 
 ## Open
 
-- **What produces the `56.7` post-finish throttle** (constant, against `100` for the pickup
-  autopilot and `75-112` for opponents), and whether it is rank-dependent. Ours flies the finished
-  craft at the AI's own pace, about 125-135 u/s against the original's 92-110. Measure a Single Race
-  the player finishes **not first** (`scripts/psp-postrace.py` finishes it on the pickup; the player
-  would have to be held back, e.g. by a `Craft_SetAutopilotBlend` write or a late start).
+- ~~**What produces the `56.7` post-finish throttle**~~ **Found and ported 2026-10-04 (pulse-postfinish), confidence 90**:
+  `AI_ComputeOpponentThrust` run on the player's own driver once the racer record's `finished` copy (`+0x82`) is set, indexed by the
+  player's finishing place, on its lower stop: `off + (0.7 * AIThrust[place] - AIThrust[1]) * mul + AIThrust[1]`. First place `56.7`,
+  a 4th-place finish read `56.0` live (the prediction of `100` written before the run failed: the target sits about 250 units behind
+  the craft ahead). Ours caps its driver's thrust at that figure (`race::finished_thrust`, the cap rather than a replacement **chosen**).
+  [race-finish.md](../../docs/ghidra/functions/psp-pulse-usa/race-finish.md#the-finished-players-thrust-ai_computeopponentthrust-with-the-players-own-rank-2026-10-04).
+  **Still open on it**: the law's unsaturated regime (needs the opponents' `spread` wander, `FUN_08852ef4`), and which `g_game_mode`
+  a Tournament race runs under (ours adds no mode term there, chosen).
 - ~~**The `Race End Photo` state**~~ **Ported 2026-10-02 (pulse-end-photo), line finishes only.** The state is entered at `F+61` and the legend
   (`InGame_Definition.xml`'s own two `Stats` texts) fades in over 42 frames; ours holds the clean view, draws the disc's lines and leaves on
   X/Start/click; SELECT does nothing. **Still open on it**: photo mode itself (`forward="select"` goes to `InGame Photo`), why the fade is
@@ -59,8 +62,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
 
 ## Next Steps
 
-1. A Single Race finished in a lower place, to read the throttle's source
-   (`AI_ComputeOpponentThrust`'s rank terms are the first suspect).
+1. ~~A Single Race finished in a lower place, to read the throttle's source.~~ Done 2026-10-04 (see Open).
 2. ~~Read `FUN_08880c04`'s cases `2` and `3`, then replace the chase stand-in.~~ Done 2026-10-02 (see Open).
 3. ~~Read `Race End Photo`'s enter and X handler~~ done for the line (measured, not read); what a wreck waits for is next, see Open.
 4. Name `FUN_088418e0` (the per-entity update; the finish rule is in it) once its other duties are read.

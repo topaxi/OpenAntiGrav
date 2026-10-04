@@ -570,6 +570,9 @@ impl Session {
                             scale,
                             &oag_ai::Tuning::default(),
                         ));
+                    // The finished player's thrust reads the same scale:
+                    // `AI_ResolveSkillScale` is its one source too.
+                    race_stage.race.set_finished_thrust_skill(scale);
                 }
             }
             if let Some(probe) = self.load_probe.as_mut() {

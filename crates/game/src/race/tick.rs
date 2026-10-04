@@ -102,6 +102,11 @@ impl Race {
         } else {
             ship_controls(snapshot, self.sim.scheme)
         };
+        // Past the line the original's own law sets the pace - see
+        // `race::finished_thrust`.
+        if let Some(cap) = self.finished_thrust_cap(player) {
+            controls.thrust = controls.thrust.min(cap);
+        }
         // A Disruptor hit filters whatever the pilot - human or driver -
         // asked for: no thrust, no airbrakes, a mirrored yaw, or an
         // autopilot's thrust scale. Before the start-line gate below, so a

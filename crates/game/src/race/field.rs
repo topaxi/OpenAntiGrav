@@ -171,9 +171,9 @@ impl Race {
     /// 2026-10-01 on PPSSPP, three runs, with no input held at all: the craft kept
     /// lapping the circuit for the 35 s logged. See
     /// `docs/gameplay/after-the-finish.md`. The same driver as the other three
-    /// routes, which is the maintainer's standing rule (the AI obeys player physics);
-    /// the original's own pace after the flag, 0.567 of full thrust, is not
-    /// reproduced.
+    /// routes, which is the maintainer's standing rule (the AI obeys player physics),
+    /// with its thrust capped at the original's own post-finish law - see
+    /// `race::finished_thrust`.
     #[must_use]
     pub fn flown_for_the_player(&self, slot: usize) -> bool {
         self.sim.autopilot

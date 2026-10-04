@@ -57,6 +57,9 @@ use super::*;
 pub struct RaceSim {
     /// The simulation state.
     pub world: World,
+    /// The finished player's thrust table and skill; `None` off the four
+    /// Pulse classes. See [`super::finished_thrust`].
+    pub(super) finished_thrust: Option<super::finished_thrust::FinishedThrust>,
     pub(super) collision: CollisionWorld,
     pub(super) spline: Spline,
     /// The authored racing line, as the opponents' drivers want it.
