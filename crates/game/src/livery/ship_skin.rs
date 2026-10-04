@@ -12,8 +12,7 @@
 //! # Which skin a race flies is chosen, not measured
 //!
 //! **This build has the player name it, and applies it to the player's craft
-//! alone. That is this project's choice and not the original's**, on the same
-//! footing [`super::teams_for_slots`] already stands on, and it carries no
+//! alone. That is this project's choice and not the original's**, and it carries no
 //! confidence score because nothing was measured to arrive at it.
 //!
 //! What the original does instead, and why it is not reproduced here:

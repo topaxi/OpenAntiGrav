@@ -118,6 +118,31 @@ fn a_zone_race_loads_the_zone_wreck_where_the_disc_has_one() {
     }
 }
 
+/// The team `oag-game --race` flies on grid slot `slot`: the title's default
+/// team for the player, the rest by `livery::teams_for_slots`'s roster draw
+/// over the disc's own definition, off the default seed - the same inputs the
+/// game's own `--race` run below resolves.
+fn team_on_slot(slot: usize) -> String {
+    let image = oag_testdata::image("data/images/pulse-psp-usa.chd").expect("the image");
+    let mut archives =
+        oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
+    let blob = archives
+        .read_name(oag_pulse::TITLE.plugin_definition)
+        .expect("the plugin definition");
+    let xml = oag_tables::fexml::text(&blob).expect("the definition is text");
+    let available: Vec<String> = oag_game::catalogue::teams(&xml)
+        .into_iter()
+        .map(|team| team.id)
+        .collect();
+    livery::teams_for_slots(
+        oag_pulse::TITLE.race.team,
+        &available,
+        oag_gameplay::MAX_SHIPS,
+        oag_game::race::SEED,
+    )
+    .swap_remove(slot)
+}
+
 /// One frame of the grid with slot 7's craft destroyed at the end of tick 40:
 /// its pixels, and the triangle count the frame's own log line reports.
 fn frame(
@@ -169,7 +194,8 @@ fn triangles(model: &oag_render::mesh::Model, nearest_only: bool) -> u64 {
         .sum()
 }
 
-/// Slot 7 (a Piranha) is destroyed at the end of tick 40. Tick 60 is inside its
+/// Slot 7 is destroyed at the end of tick 40; which team flies it is the
+/// roster draw's ([`team_on_slot`]). Tick 60 is inside its
 /// half-second explosion (state 4, which keeps the hull) and tick 100 is past
 /// the edge into state 5, where the wreck is the live model.
 ///
@@ -187,16 +213,17 @@ fn the_wreck_replaces_the_hull_from_state_5_and_not_before() {
     let Some((liveries, _)) = load(true, Mode::SingleRace) else {
         return;
     };
-    let piranha = liveries
+    let on_seven = team_on_slot(7);
+    let victim = liveries
         .iter()
-        .find(|l| l.team == "Piranha")
-        .expect("Piranha is on the grid");
-    let hull = triangles(&piranha.hull, true);
-    let pass = piranha
+        .find(|l| l.team == on_seven)
+        .unwrap_or_else(|| panic!("{on_seven} is not among the loaded teams"));
+    let hull = triangles(&victim.hull, true);
+    let pass = victim
         .shine
         .as_ref()
         .map_or(0, |model| triangles(model, false));
-    let wreck = triangles(&piranha.wreck.as_ref().expect("a wreck").model, false);
+    let wreck = triangles(&victim.wreck.as_ref().expect("a wreck").model, false);
 
     let scratch = std::env::temp_dir().join(format!("oag-wreck-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");

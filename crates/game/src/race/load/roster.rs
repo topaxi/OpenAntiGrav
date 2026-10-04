@@ -111,7 +111,7 @@ pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHI
 
 /// Overlays [`crate::race::Options::grid_teams`] onto `slot_teams` - the
 /// disc's own authored AI grid, where an event carries one, in place of
-/// [`crate::livery::teams_for_slots`]'s "chosen, not measured" placement.
+/// [`crate::livery::teams_for_slots`]'s draw.
 ///
 /// **Per-slot, not all-or-nothing.** `grid_teams[i]` is grid slot `i + 1`
 /// (slot `0` stays the player's, always); a `None` entry, or an index past
@@ -149,8 +149,8 @@ fn apply_grid_teams(
 /// Everything the grid's own slot list decides: who flies where, what each
 /// one draws, and HD's per-slot trail flag.
 pub(super) struct Grid {
-    /// Which team flies each slot, the player first. **This project's
-    /// ordering, not the original's** - see [`crate::livery`].
+    /// Which team flies each slot, the player first - Pulse's own draw, see
+    /// [`crate::livery::teams_for_slots`].
     pub slot_teams: Vec<String>,
     /// Wipeout HD's red-trail flag per slot; see [`hd_trail_red`].
     pub hd_trail_red: [f32; oag_gameplay::MAX_SHIPS],
@@ -197,7 +197,9 @@ pub(super) fn grid(
         options.mode,
         report,
     );
-    let mut slot_teams = crate::livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS);
+    let seed = options.seed.unwrap_or(crate::race::SEED);
+    let mut slot_teams =
+        crate::livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS, seed);
     apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
     let liveries = crate::livery::load(
         archives,
@@ -221,8 +223,8 @@ pub(super) fn grid(
         report,
     )?;
     report.push(format!(
-        "grid liveries: {} - which team flies which slot is this project's, not \
-         the original's (livery.rs)",
+        "grid liveries: {} - Pulse's roster draw (RaceSession_DrawAiRoster, grid.md) off the race \
+         seed {seed:#x}; the original seeds it from the wall clock",
         slot_teams.join(", ")
     ));
     Ok(Grid {
@@ -230,40 +232,6 @@ pub(super) fn grid(
         slot_teams,
         liveries,
     })
-}
-
-/// The grid's own team roster, independent of a live [`Loaded`](crate::race::Loaded) race -
-/// `grid`'s own [`available`]/[`crate::livery::teams_for_slots`]
-/// pair, for a caller reached after the `Race` this leg built is already
-/// gone. Used by a Tournament leg's `EndRace Results` standings
-/// (`crate::main::session::endrace::build_endrace`), which needs to know
-/// which team flew which grid slot to label a row - `slot_teams` itself is
-/// never stored on `Loaded`/`Race`, so this is a second, independent call
-/// rather than a threaded-through field.
-///
-/// **Deterministic in the same inputs.** `roster::available` reads the
-/// title's own plugin definition off the disc (no randomness), and
-/// `teams_for_slots` is a pure function of `(team, available, slots)` - so
-/// this reproduces the exact roster a tournament's own first-leg launch
-/// built, as long as the caller passes the same `team`/`opponent_teams`
-/// every leg, which a Tournament's own relaunch (`Session::advance_tournament_leg`)
-/// does: neither is touched between legs.
-///
-/// Here rather than in `load.rs` under the 1,000-line rule in
-/// `scripts/check-file-size.py`; a move, with no behaviour change.
-///
-/// Not a `Race Remix` path - always the single archive set a Tournament
-/// launch (campaign or Racebox) opens, never [`crate::remix::craft_of`]'s
-/// split case.
-pub fn slot_teams(
-    archives: &mut oag_assets::Archives,
-    craft_title: &'static oag_title::Title,
-    team: &str,
-    opponent_teams: &[String],
-) -> Vec<String> {
-    let mut report = Vec::new();
-    let available = available(archives, craft_title, opponent_teams, &mut report);
-    crate::livery::teams_for_slots(team, &available, oag_gameplay::MAX_SHIPS)
 }
 
 #[cfg(test)]

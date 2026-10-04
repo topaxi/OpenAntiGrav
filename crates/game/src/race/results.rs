@@ -191,6 +191,18 @@ impl Race {
         self.view.run_stats
     }
 
+    /// The team id each grid slot flew, slot 0 the player's - [`Setup::slot_teams`].
+    ///
+    /// What a finished race's tables label a row with. Read here rather than
+    /// rebuilt from the catalogue, because the roster is a seeded draw (see
+    /// `race::load::roster`) and only the race that drew it knows its seed.
+    ///
+    /// [`Setup::slot_teams`]: crate::race::Setup::slot_teams
+    #[must_use]
+    pub fn slot_teams(&self) -> &[String] {
+        &self.view.slot_teams
+    }
+
     /// The results, once there are any.
     ///
     /// `None` for the whole race and `Some` from the finishing tick on. The

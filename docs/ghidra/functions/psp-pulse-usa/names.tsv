@@ -1238,3 +1238,13 @@
 0x0885a0e4	function	Missile_ClassSpeed	80	weapon-ai.md
 0x0885d22c	function	Rocket_ClassSpeed	80	weapon-ai.md
 0x0883d3c0	function	Math_FoldSigned	85	weapon-ai.md
+0x08821bd4	function	RaceSession_DrawAiRoster	85	grid.md
+0x08821dd4	function	RaceSession_IsTeamEligible	80	grid.md
+0x08820d78	function	RaceSession_Construct	75	grid.md
+0x0882c03c	function	ArcadeSession_Construct	72	grid.md
+0x088285e0	function	Race_CreateAiRacer	75	grid.md
+0x088893e8	function	Team_ListRaceTeams	80	grid.md
+0x08889488	function	Team_FindByName	85	grid.md
+0x088c2a38	function	TeamDefinition_ParseElement	80	grid.md
+0x08b34320	data	g_race_session	80	grid.md
+0x08b3104c	data	g_player_team_definition	85	grid.md

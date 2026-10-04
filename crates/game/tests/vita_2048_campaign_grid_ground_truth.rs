@@ -1,7 +1,7 @@
 //! `M_PGRIDSHIPMODELDATA` wired into the AI grid: `"2048 - Event 6"`'s own
 //! seven authored opponents reach `race::load_event`'s output roster, in
-//! place of `oag_game::livery::teams_for_slots`'s own "chosen, not measured"
-//! placement - see `oag_2048::campaign::craft::grid_craft`'s own doc comment
+//! place of `oag_game::livery::teams_for_slots`'s own roster draw (Pulse's
+//! law, inherited) - see `oag_2048::campaign::craft::grid_craft`'s own doc comment
 //! for the census this pins one row of, and `docs/formats/2048-campaign.md`'s
 //! "Craft choice" section for the full write-up.
 //!

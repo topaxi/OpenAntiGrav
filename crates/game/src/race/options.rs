@@ -79,8 +79,7 @@ pub struct Options {
     /// `Eliminator` on a global state check rather than on a player pick, but
     /// what that state *is* is not settled - see
     /// `crate::livery::ship_skin`'s own module docs for the evidence, and for
-    /// what would replace this. Labelled chosen rather than measured, on the
-    /// same footing `crate::livery::teams_for_slots` stands on.
+    /// what would replace this. Labelled chosen rather than measured.
     ///
     /// Applied to slot 0 alone, like [`Self::hull_variant`] and for the same
     /// reason: nothing offers an opponent a paint job of their own.
@@ -95,12 +94,11 @@ pub struct Options {
     /// definition still gets.
     ///
     /// Which of them ends up in which slot is [`crate::livery::teams_for_slots`],
-    /// and is this project's rule rather than the original's.
+    /// Pulse's own roster draw off the race seed.
     pub opponent_teams: Vec<String>,
     /// A per-AI-slot team override, index `0` being grid slot `1` (slot `0`
     /// is always the player) - **what authored data replaces
-    /// [`crate::livery::teams_for_slots`]'s own "chosen, not measured"
-    /// placement with**, where a caller has one to offer.
+    /// [`crate::livery::teams_for_slots`]'s own draw with**, where a caller has one to offer.
     ///
     /// `None` at an index leaves that slot exactly what
     /// [`crate::livery::teams_for_slots`] would already give it; an index
@@ -112,7 +110,7 @@ pub struct Options {
     /// `race::load_event` (`crates/game/src/race/load/campaign.rs`) sets
     /// this from `oag_2048::campaign::craft::grid_craft`'s own reading of an
     /// event's `M_PGRIDSHIPMODELDATA` - the disc's own AI grid, when it
-    /// authors one, in place of this project's own placement rule. See that
+    /// authors one, in place of the roster draw. See that
     /// module's doc comment for what fraction of `SP.xml`'s events author it
     /// and how fully.
     pub grid_teams: Vec<Option<String>>,

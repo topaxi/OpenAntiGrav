@@ -51,7 +51,6 @@ impl Session {
         let source = race_options.source.clone();
         let dlc = race_options.dlc.clone();
         let team = race_options.team.clone();
-        let opponent_teams = race_options.opponent_teams.clone();
         let campaign = stage.campaign_cell.is_some();
         let title = stage.result_key.title.clone();
         // The actual title package, not the display name above - what
@@ -63,6 +62,10 @@ impl Session {
         // `Session::open_campaign`'s own `title_ref` already uses.
         let title_ref = shell.title;
         let board = stage.race.results().cloned();
+        // The roster this race drew, slot 0 the player's - read off the race
+        // rather than rebuilt, because the draw is seeded and only the race
+        // knows its seed (`race::load::roster`).
+        let roster = stage.race.slot_teams().to_vec();
         let observation = stage.observation();
         let standing = &stage.race.sim.world.ships[0].standing;
         let boosts = stage.race.run_stats().boosts_by_lap;
@@ -228,24 +231,17 @@ impl Session {
         // folded with this leg's own points -
         // `Session::record_finished_leg` runs before `build_endrace` in the
         // same frame, see `tournament_results`'s own doc) and this leg's
-        // grid roster, recomputed via `crate::race::slot_teams` since which
-        // team flew which slot is not carried past the `Race` that just
-        // finished. `None` (no team named at all) draws every row's own
-        // name absent rather than invented.
-        // The grid roster in slot order, for the two tables that name a team per
-        // craft. The ids are folder names; the draw resolves each to its display
+        // grid roster, as the race itself drew it. `None` (no team named at
+        // all) draws every row's own name absent rather than invented.
+        // The ids are folder names; the draw resolves each to its display
         // name through the string table, as the original's own `localise` does.
         let slot_teams = (!is_hd
             && matches!(
                 mode,
                 oag_race::Mode::Tournament | oag_race::Mode::Eliminator
-            ))
-        .then(|| {
-            team.as_deref().map(|team| {
-                crate::race::slot_teams(&mut archives, title_ref, team, &opponent_teams)
-            })
-        })
-        .flatten();
+            )
+            && team.is_some())
+        .then_some(roster);
         let pulse_tournament = (!is_hd && mode == oag_race::Mode::Tournament)
             .then_some(self.tournament.as_ref())
             .flatten()

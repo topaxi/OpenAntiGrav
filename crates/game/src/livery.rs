@@ -21,23 +21,19 @@
 //! team name - which is the naming trap `HANDOVER.md` records. Nothing here
 //! invents a path.
 //!
-//! **Which team flies which slot is this project's**, and is labelled so in the
-//! load report. `Race_SpawnGrid` passes each racer an `id` that comes from a
-//! racer list built upstream, and that list has not been read - so the original
-//! may draw teams by championship entry, by player choice, or at random, and
-//! nothing here should be taken as reproducing it. [`teams_for_slots`] fills
-//! the grid from the catalogue in file order, which is deterministic, needs no
-//! generator, and is honest about being a stand-in. Same footing as the pickup
-//! grant (`docs/gameplay/pickups.md`).
+//! **Which team flies which slot is Pulse's own draw**, recovered off
+//! `RaceSession_DrawAiRoster` and confirmed live: every team but the player's, shuffled,
+//! seven of them racing. [`teams_for_slots`] reproduces it off the race seed
+//! where the original reads the wall clock - see [`draw`] for what is measured
+//! and what is chosen.
 //!
 //! # Short lists and long ones
 //!
 //! Both happen, and neither is an error:
 //!
 //! - **Longer than the grid.** The four Pulse DLC packs each add a team, so a
-//!   player with all of them has twelve for eight slots. The extra teams simply
-//!   do not race, and *which* seven of eleven do is the unrecovered selection
-//!   above rather than a rule this module knows.
+//!   player with all of them has twelve for eight slots. Seven of the eleven
+//!   eligible race, and which seven is the draw's.
 //! - **Shorter than the grid.** Wipeout Pure declares its own, a PS2 set may
 //!   not carry every hull under the PSP's name, and one team's `Ship.vex` does
 //!   not resolve at all on either disc. The list is then cycled, so the field
@@ -58,12 +54,14 @@ use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
 mod absorb;
 mod cannon_flash;
+pub mod draw;
 pub(crate) mod engine_light;
 mod flare;
 mod shield;
 pub(crate) mod ship_skin;
 mod wreck;
 
+pub use draw::teams_for_slots;
 pub(crate) use shield::cockpit_shield;
 use shield::shell;
 pub use wreck::Wreck;
@@ -164,34 +162,6 @@ pub struct SparkAnchor {
     /// assumed, so a hull whose locator is not a pure translation is still
     /// played correctly rather than silently flattened to world up.
     pub up: Vec3,
-}
-
-/// Which team flies each grid slot, the player first.
-///
-/// **This ordering is this project's, not the original's** - see the module
-/// docs. Deterministic on purpose: no generator, no map iteration, and the same
-/// grid on every replay of the same race.
-///
-/// `available` is the catalogue's own order, which is the definition file's
-/// order, and the player's team is skipped in it rather than moved - a player
-/// racing for the last team does not reshuffle everyone else. An empty list
-/// gives every slot the player's team, which is what this engine did before
-/// liveries and is still what a source with no readable definition gets.
-#[must_use]
-pub fn teams_for_slots(player: &str, available: &[String], slots: usize) -> Vec<String> {
-    let mut out = Vec::with_capacity(slots);
-    out.push(player.to_string());
-    let others: Vec<&String> = available.iter().filter(|team| *team != player).collect();
-    if others.is_empty() {
-        out.resize(slots, player.to_string());
-        return out;
-    }
-    // Cycles when the list is shorter than the grid, which is the Pure and PS2
-    // case rather than the Pulse one - see the module docs.
-    for slot in 1..slots {
-        out.push(others[(slot - 1) % others.len()].clone());
-    }
-    out
 }
 
 /// The per-race context [`load`]/[`one`] need beyond the team list, the
@@ -859,58 +829,6 @@ fn ps2_skin(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn ids(names: &[&str]) -> Vec<String> {
-        names.iter().map(|name| (*name).to_string()).collect()
-    }
-
-    #[test]
-    fn the_player_takes_the_first_slot_and_the_rest_follow_in_order() {
-        let slots = teams_for_slots("b", &ids(&["a", "b", "c", "d"]), 4);
-        assert_eq!(slots, ids(&["b", "a", "c", "d"]));
-    }
-
-    /// A player racing for the last team must not reshuffle everyone else: the
-    /// player is *skipped* in the list, not moved to the front of it.
-    #[test]
-    fn the_players_own_team_is_skipped_rather_than_moved() {
-        let with_first = teams_for_slots("a", &ids(&["a", "b", "c"]), 3);
-        let with_last = teams_for_slots("c", &ids(&["a", "b", "c"]), 3);
-        assert_eq!(with_first, ids(&["a", "b", "c"]));
-        assert_eq!(with_last, ids(&["c", "a", "b"]));
-    }
-
-    /// The Pure and PS2 case. A repeated livery beats a whole grid in one.
-    #[test]
-    fn a_short_list_cycles() {
-        let slots = teams_for_slots("a", &ids(&["a", "b", "c"]), 6);
-        assert_eq!(slots, ids(&["a", "b", "c", "b", "c", "b"]));
-    }
-
-    /// The DLC case: four packs take Pulse to twelve teams for eight slots, so
-    /// the extra teams simply do not race. Which seven of eleven do is
-    /// unrecovered - see the module docs.
-    #[test]
-    fn a_long_list_is_truncated_to_the_grid() {
-        let available = ids(&["a", "b", "c", "d", "e", "f"]);
-        let slots = teams_for_slots("a", &available, 3);
-        assert_eq!(slots, ids(&["a", "b", "c"]));
-    }
-
-    /// What a source with no readable definition gets, and what this engine did
-    /// before liveries existed.
-    #[test]
-    fn no_other_teams_means_the_whole_grid_wears_the_players_hull() {
-        let slots = teams_for_slots("a", &[], 4);
-        assert_eq!(slots, ids(&["a", "a", "a", "a"]));
-        let only_the_player = teams_for_slots("a", &ids(&["a"]), 4);
-        assert_eq!(only_the_player, ids(&["a", "a", "a", "a"]));
-    }
-
-    #[test]
-    fn one_slot_is_just_the_player() {
-        assert_eq!(teams_for_slots("a", &ids(&["a", "b"]), 1), ids(&["a"]));
-    }
 
     /// Both separators, because a WAD entry is spelled with backslashes and a
     /// PSARC path with forward ones and this runs on either.
