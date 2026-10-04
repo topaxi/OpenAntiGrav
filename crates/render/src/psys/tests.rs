@@ -52,6 +52,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             spawn: Spawn::Point,
             emission_scale: constant(1.0),
             extent_animation: None,
+            playback: playback::Playback::default(),
             sprite: None,
             atlas: Atlas::SINGLE,
             frames: FrameAdvance::Still,

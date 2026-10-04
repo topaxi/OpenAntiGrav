@@ -38,11 +38,8 @@
 //!   [`streak`] for the two-point classes, which Pulse's alone builds as
 //!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
 //!   so those draw the procedural radial falloff in `psys.wgsl`.
-//! - **The emitter extent of shapes 2, 3, 6 and 8.** Shapes 1 (a line), 4
-//!   and 7 (a sphere) place their particles as read - see [`spawn`]; the
-//!   unread shapes still spawn at the anchor.
-//! - **The emission-scale channel** and the animated-attribute array, both
-//!   of which re-derive parameters over an emitter's life.
+//! - **Shape 8's extent**, and the animated-attribute selectors `1`, `3`, `4`
+//!   and `6`, which nothing on the Pulse discs authors.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
@@ -54,6 +51,7 @@ mod emitter_state;
 pub mod field;
 pub mod frames;
 mod library;
+pub mod playback;
 pub mod spawn;
 pub mod sprite;
 pub mod streak;
@@ -312,6 +310,8 @@ pub struct EmitterSpec {
     pub emission_scale: Channel,
     /// The selector-2 attribute record, over the emitter's run: the extent's co-factor.
     pub extent_animation: Option<Channel>,
+    /// The emitter's clock and burst laws - see [`playback`].
+    pub playback: playback::Playback,
     /// The emitter's own sprite, decoded off a PSP disc - see [`sprite`].
     pub sprite: Option<Sprite>,
     /// How [`EmitterSpec::sprite`] divides into frames.
@@ -617,6 +617,7 @@ impl EmitterSpec {
                 .iter()
                 .find(|animation| animation.selector == 2)
                 .map(|animation| animation.channel.clone()),
+            playback: playback::Playback::of(record),
             sprite,
             atlas: Atlas::of(record),
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
@@ -661,6 +662,8 @@ pub struct System {
     up: Vec3,
     /// `res+0x54` as a caller holds it for the instance - see [`System::set_azimuth`].
     azimuth: Option<f32>,
+    /// The frame local-space particles were last carried to, while they ride it.
+    ridden: Option<playback::Frame>,
     ignitions: u32,
 }
 
@@ -684,6 +687,7 @@ impl System {
             anchor: Vec3::ZERO,
             up: Vec3::Y,
             azimuth: None,
+            ridden: None,
             ignitions: 0,
         }
     }
@@ -771,7 +775,7 @@ impl System {
         self.anchor = anchor;
         self.up = up.try_normalize().unwrap_or(Vec3::Y);
         self.across = spawn::frame_x(self.across, self.up);
-
+        self.ride(effect);
         self.emit(effect, dt_ticks, moved, rng);
         self.integrate(effect, dt, dt_ticks, rng);
     }
@@ -795,6 +799,7 @@ impl System {
             // A root instance follows the caller's anchor; a child rides
             // the parent particle it was spawned off.
             let state = &mut self.emitters[index];
+            let before = state.anchor;
             if state.is_child {
                 state.anchor += state.drift * (dt_ticks / TICK_HZ);
             } else {
@@ -808,22 +813,14 @@ impl System {
                 let state = &self.emitters[index];
                 (state.spec, state.anchor, state.inherited, state.is_child)
             };
+            let pull_back = before - anchor;
             // A child instance is attached with a matrix of unit rows, so only a
             // root carries the frame's scale.
             let frame_scale = if is_child { 1.0 } else { self.frame_scale };
             let spec = &effect.emitters[usize::from(spec_index)];
-            // The emission-scale channel runs over the emitter's own life.
             let run = spec.run_ticks();
-            let emitter_age = if run.is_finite() && run > 0.0 {
-                (1.0 - self.emitters[index].ticks_left / run).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let extent = channel_sample(&spec.emission_scale, emitter_age, 0.5)
-                * spec
-                    .extent_animation
-                    .as_ref()
-                    .map_or(1.0, |channel| channel_sample(channel, emitter_age, 0.5));
+            let burst = spec.burst(self.emitters[index].ticks_left, frame_scale);
+            let dt_ticks = dt_ticks * spec.playback.rate;
             loop {
                 let state = &mut self.emitters[index];
                 // `short_run`: past the first update, the last tick of a finite run
@@ -846,15 +843,10 @@ impl System {
                 if spec.live_cap > 0 && self.live_for(spec_index) + count > spec.live_cap {
                     continue;
                 }
-                for _ in 0..count {
-                    children.extend(self.spawn(
-                        effect,
-                        spec_index,
-                        anchor,
-                        inherited,
-                        (extent, frame_scale),
-                        rng,
-                    ));
+                let (start, pull_back) = spec.playback.burst_draws(pull_back, rng);
+                for i in 0..count {
+                    let burst = burst.particle((i, count), start, pull_back);
+                    children.extend(self.spawn(effect, spec_index, anchor, inherited, burst, rng));
                 }
             }
             let state = &mut self.emitters[index];
@@ -881,6 +873,8 @@ impl System {
                 continue;
             }
             let spec = &effect.emitters[usize::from(particle.spec)];
+            // `+0xc` and `DAT_08b6207c`: every consumer runs on the emitter's own rate.
+            let (dt, dt_ticks) = (dt * spec.playback.rate, dt_ticks * spec.playback.rate);
             template::ride(spec, particle, self.anchor);
             if std::mem::take(&mut particle.fresh) {
                 if let Some(rotation) = &spec.rotation {
@@ -940,28 +934,33 @@ impl System {
         spec_index: u16,
         anchor: Vec3,
         inherited: Vec3,
-        (emission_scale, frame_scale): (f32, f32),
+        burst: playback::Burst,
         rng: &mut Rng,
     ) -> Option<(usize, Vec3, Vec3)> {
         let spec = &effect.emitters[usize::from(spec_index)];
-        let frame_scale = if spec.world_space { 1.0 } else { frame_scale };
+        let frame_scale = if spec.world_space {
+            1.0
+        } else {
+            burst.frame_scale
+        };
         let (direction, offset) = spawn::place(
             spec.spawn,
             (spec.direction, self.azimuth),
-            self.scale * self.extent_scale * emission_scale * frame_scale,
-            self.across,
-            self.up,
+            self.scale * self.extent_scale * burst.extent * frame_scale,
+            (self.across, self.up),
+            burst.phi,
             rng,
         );
-        let anchor = anchor + offset;
+        let anchor = anchor + offset + burst.shift;
         // `centre + spread * U(-1, 1)`, the original's `Psys_RandSpread`,
         // units per tick converted to per second once.
         let speed = (spec.speed_per_tick.0 + spec.speed_per_tick.1 * signed_unit(rng))
             * self.scale
             * frame_scale
             * TICK_HZ;
-        let life_ticks =
-            (spec.lifetime_ticks.0 + spec.lifetime_ticks.1 * signed_unit(rng)).max(1.0);
+        let life_ticks = (spec.lifetime_ticks.0 + spec.lifetime_ticks.1 * signed_unit(rng))
+            .max(1.0)
+            * burst.lifetime;
         let life = life_ticks / TICK_HZ;
 
         let mut particle = Particle {
