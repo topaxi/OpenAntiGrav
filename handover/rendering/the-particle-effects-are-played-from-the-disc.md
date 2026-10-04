@@ -52,9 +52,9 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
     immortal, the only other Pulse emitter with the flag. Its instance is killed on every
     re-spawn, so the pool resets, but its on-screen particle count was not re-checked
     against the original.
-  - The mist overlay is recovered and live-checked (`WeatherMist_*`, `0x088fa0a0`) but not
-    played. It needs a screen pass: two additive full-screen quads over `Mist.mip` with
-    repeat wrap.
+  - The mist overlay plays (`oag_render::mist`, 2026-10-04). Its draw law matches the
+    original's pixels (corr 0.84 and 0.92, weather.md "Played, and checked"). Open: a
+    matched pose while driving, a climb, and the rain lens over it were not compared.
   - The PS2 disc authors `<Weather>` on three circuits and plays none here.
   - Covered-section rain was not distinguishable in either side's frames.
 - **The welder against the original** (matched frames on Basilico Black):
@@ -100,8 +100,8 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
 
 ## Next Steps
 
-- Play the mist overlay off the law in weather.md's "The mist overlay" section. Check the
-  camera-motion signs (`CameraMotion_Sample_q`) against a live turn first.
+- Mist: compare one matched driving pose (feed the original's dumped UVs into ours) and a
+  climb, to score the pitch term live.
 - `NODAMAGE`: catch a live `damaged == 0` hit (`ShipCollisionFx_Trigger`
   `0x089246b4`, `a2`). A craft dropped onto magstrip or the floor at speed is the
   candidate. Then add a reporting-only floor-impact field to

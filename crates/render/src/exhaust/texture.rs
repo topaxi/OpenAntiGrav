@@ -10,7 +10,7 @@
 /// A plain struct rather than a borrow of `oag_formats`' type, so this crate
 /// keeps depending on nothing but `oag-core` and `wgpu` for the exhaust: the
 /// caller decodes the `.mip` and hands the pixels over.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FlareTexture {
     /// Width in texels.
     pub width: u32,

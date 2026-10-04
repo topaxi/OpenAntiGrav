@@ -49,6 +49,7 @@ pub mod jitter;
 pub mod loading;
 pub mod mesh;
 pub mod mesh_render;
+pub mod mist;
 pub mod perfprobe;
 pub mod post;
 pub mod psys;

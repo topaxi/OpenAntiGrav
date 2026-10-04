@@ -28,6 +28,7 @@
 //! `.vex` nodes, and it rides the same pool of view-side state.
 
 pub mod lens;
+pub mod mist;
 mod noise;
 pub mod weather;
 mod wind;

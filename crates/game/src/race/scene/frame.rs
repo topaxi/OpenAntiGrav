@@ -664,6 +664,7 @@ impl Scene {
             .upload(queue, &vp, race.sim.world.tick, right, up);
         oag_render::perfprobe::mark("exhaust-upload");
         self.upload_particles(race, queue, &vp, right, up, additive, alpha);
+        self.upload_mist(race, queue, 1.0 / projection.y_axis.y);
         self.upload_cannon_quads(queue, &vp, cannon_bolt, cannon_flash);
         self.upload_beam(race, queue, &vp);
 

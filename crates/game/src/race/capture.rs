@@ -496,6 +496,12 @@ pub fn capture(
     )?;
     scene.set_blur_resolution(options.motion_blur_resolution);
     scene.attach_ripples(ripples);
+    scene.attach_mist(
+        &device,
+        &queue,
+        format,
+        race.view.scenery_fx.weather().mist_texture(),
+    );
     scene.prepare_ghost(
         &device,
         &queue,

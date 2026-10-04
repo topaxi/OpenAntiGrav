@@ -137,11 +137,50 @@ fn place_weather(
     let anchors = oag_vex::weather::anchors(track_blob, nodes);
     loaded.report.push(format!(
         "weather: {} on {} covered section(s), the effect ridden on the camera in the open and \
-         held at the section's anchor under cover; the screen lens and the mist overlay are not \
-         played",
+         held at the section's anchor under cover",
         config.env_psys.as_deref().unwrap_or("no EnvPsys"),
         anchors.len()
     ));
-    loaded.setup.scenery_fx.weather =
-        Some(crate::race::scenery_fx::weather::Setup { config, anchors });
+    let mist_texture = mist_texture(archives, config.tex.as_deref(), &mut loaded.report);
+    loaded.setup.scenery_fx.weather = Some(crate::race::scenery_fx::weather::Setup {
+        config,
+        anchors,
+        mist_texture,
+    });
+}
+
+/// The mist overlay's `Tex`, decoded, or `None` with the reason in the report:
+/// an absent or undecodable texture draws no mist rather than a stand-in.
+fn mist_texture(
+    archives: &mut oag_assets::Archives,
+    tex: Option<&str>,
+    report: &mut Vec<String>,
+) -> Option<oag_render::exhaust::FlareTexture> {
+    let name = tex?;
+    let blob = match archives.read_name(name) {
+        Ok(blob) => blob,
+        Err(error) => {
+            report.push(format!(
+                "mist: {name}: not in the archive set ({error}), not drawn"
+            ));
+            return None;
+        }
+    };
+    match oag_texture::texture::Texture::parse(&blob) {
+        Ok(texture) => {
+            report.push(format!(
+                "mist: {name}, {}x{}, two additive screen layers under the HUD",
+                texture.width, texture.height
+            ));
+            Some(oag_render::exhaust::FlareTexture {
+                width: u32::from(texture.width),
+                height: u32::from(texture.height),
+                rgba: texture.to_rgba(),
+            })
+        }
+        Err(error) => {
+            report.push(format!("mist: {name}: {error:#}, not drawn"));
+            None
+        }
+    }
 }
