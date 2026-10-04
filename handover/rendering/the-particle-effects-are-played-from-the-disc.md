@@ -69,18 +69,30 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
   the PS2 port were not checked for placed nodes.
 - **Interpreter gaps**, unchanged:
   - HD's `.gtf` sprites, sprites on streaks and the atlas frame over life.
-  - Billboard roll, the extents of shapes 2/3/6/8 and the animated-attribute array.
+  - Shape 8's extent, and the animated-attribute selectors nothing on the disc authors.
   - The `instance[+0x40]` alpha scale, which nothing feeds here.
 
-- **`WO_REPULSER_BLAST` against the original** (2026-10-04, pulse-repulser-2,
-  Talon's Junction, craft parked): the original's blast is a compact beaded ring
-  round the craft for 0.17-0.67 s, then a white cloud; ours starts about 13.6
-  units out and collapses inward by 0.33 s. Proved to be the psys, not the
-  field model, by holding the model's alpha at zero live. Flag `0x200000`
-  (evenly stepped ring angles) and the selector-5 record are still not played;
-  they are the first thing to try. Frames:
-  `data/scratch/pulse-repulser-2/shots/psp-seq.png`, `oag-seq.png`. See
-  [repulser.md](../../docs/ghidra/functions/psp-pulse-usa/repulser.md).
+- **`WO_REPULSER_BLAST` matches the original** (2026-10-04, pulse-psys-ring). It
+  needed four interpreter laws, now played: the emitter's playback rate, selector 5 as
+  the lifetime co-factor, flag `0x200000`'s even ring and the ring's azimuth sign. It
+  also needed the beads to ride the blast's live matrix (flag `0x2`, owner matrix by
+  pointer). Frames: `data/scratch/pulse-psys-ring/shots/final-cmp.png`. See
+  [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
+  "The emitter's clock and the burst laws". Still open from it:
+  - **The wave-start whiteout is `WO_REPULSER`.** Its `shazzam` template draws a
+    full-screen white bar at update 49, and its class-6 root emitter draws a white
+    blob at 52. The original shows a blue tint and then a thin streak. Shape 8 and
+    the class-6 draw are both unread.
+  - **The rate changed seven emitters.** Besides the blast, the LeachBeam charge (all
+    three), the Missile explosion's root, the Shuriken bounce and expiry, and the absorb
+    play at their authored rate now. Only the Missile was looked at, and none was
+    compared against the original.
+  - **Flag `0x2` riding is opt-in per caller.** Only the blast opts in. 25 emitters
+    carry the flag, so the other owners' `Psys_Spawn_q` `param_5` is the open question.
+    Read each call site before opting it in. The collision sparks have a claim on
+    record against riding.
+  - **The spin's sense** (`Quat::from_axis_angle` against `Math_RotateByAxisAngle`) now
+    shows, because the beads turn with it. It is unmeasured.
 
 ## Next Steps
 
@@ -92,4 +104,10 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
   `oag_physics::wall::WallResponse` without touching `reacts()`.
 - Read the welder's streak law (render class `Streak`, `Capped`) against one
   live particle.
+- `WO_REPULSER`'s whiteout: on PPSSPP, fire a Repulser parked on Talon's Junction and
+  read the two `WO_REPULSER` instances at updates 48 to 52. Read their `+0xf0` matrix,
+  the `shazzam` template's position, size and aspect, and the root pool. Then read
+  `FUN_08917c7c` (class 6) and shape 8's emit function.
+- Before opting another flag-`0x2` effect into `System::set_rides_frame`, read its
+  owner's `Psys_Spawn_q` call for `param_5 & 1`.
 - Do not fire any effect on a guess (the do-not-invent rule in `CLAUDE.md`).

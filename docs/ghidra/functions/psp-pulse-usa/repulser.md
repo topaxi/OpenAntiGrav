@@ -498,6 +498,24 @@ hashed only while live, so every committed reference reproduced unchanged.
 playback (flag `0x200000` and the selector-5 record, `docs/formats/pob.md`) and
 the wave-start whiteout are the open picture gaps.
 
+**2026-10-04, pulse-psys-ring: the blast's ring matches.** Four interpreter laws were
+missing and are now played:
+
+- the emitter's playback rate `4`;
+- selector 5 as the newborn's lifetime co-factor `1.5`;
+- flag `0x200000`'s even step, `7.2` degrees a bead;
+- the ring's aimed azimuth sense, `+0.244`.
+
+The blast also rides `+0x1a0`: `Repulser_SpawnBlastEffect` hands `Psys_Spawn_q` the
+matrix by pointer (`param_5 = 1`), and the emitter's flag `0x2` draws the pool through
+it live. With these, the ring is wide at update 10, compact at 20 and 30, a white puff
+at 40, and gone at 47, as on the PSP. See `particle-system.md`, "The emitter's clock
+and the burst laws". **The wave-start whiteout is `WO_REPULSER`, not the flash.** Its
+`shazzam` template is a full-screen white bar at update 49, and its class-6 root emitter
+is a white blob at 52. With both withheld, the frame is the original's blue tint. The
+next step is a live read of those instances. The spin's sense is still unmeasured, and
+it shows now that the beads ride the spin.
+
 **HD now hands it out on this law.** HD's `weaponstats_elimination.xml`
 (`DATA00`/`DATA02.PSARC`) authors the same block and weights it `ai=8 human=8`;
 HD's own Repulser law is unread.

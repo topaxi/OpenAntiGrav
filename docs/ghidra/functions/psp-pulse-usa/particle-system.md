@@ -132,7 +132,10 @@ sphere covering, not a random one. `ParticleSystem_EmitPoint`
 (`0x088fc040`, **75**) draws each axis `U(-r, r)` from the same global.
 Every emit function distributes the burst's particles along the emitter's
 per-frame motion delta (`instance+0xc0`, scaled by `i/n`) when the global
-sub-frame-spread flag (`DAT_08b620a0`, resource flag `0x20`) is on.
+sub-frame-spread flag (`DAT_08b620a0`, resource flag `0x20`) is on. `+0xc0` is
+**previous minus current** translation, so the particles are pulled *back*
+along the path, not pushed forward (2026-10-04, see "The emitter's clock and
+the burst laws" below).
 
 Velocity inits: `ParticleSystem_ConeVelocity` (`0x088fc37c`, **80**) draws
 an angle `U(-a, a)` with `a = res+0x58` **in degrees** (the `π/180` is in
@@ -1338,7 +1341,8 @@ emitters, ten of them selector 2 (`WO_BOMB_SMOKERING` and its `debris`,
 `WO_SHIP_EXPLOSION` and its `FIREBALL`, `WO_ROCKET_EXPLO`'s two mushrooms and
 `WO_ROCKET_EXPLO_TRACK`'s `Fire_Emitter`, the Shuriken's bounce and expiry and the absorb).
 `oag_render::psys::spawn::Spawn::Ring`, `place` and `EmitterSpec::extent_animation` play
-all of it but the even step, the sub-frame spread, the azimuth's sign and selector 5. The
+all of it, and since 2026-10-04 (section below) the even step, the sub-frame spread, the
+azimuth's sign and selector 5 too. The
 "approximates shape 3 as the anchor" remark further down was true of the collision sparks'
 `0.1` and was never true of these.
 
@@ -1460,4 +1464,135 @@ frame `119.09` (`--hits 088407b0`), `ShipShockwave_Update` first runs at `119.16
 `121.88` (second boot of the pool probe: `120.88`/`121.88`), so the explosion's particles first draw two to three frames after the call
 while the ring is already in the node list. The mechanism (a start delay on the instance, or the queue `Psys_Spawn_q` feeds) is unread, so
 ours starts both on the same tick and the offset is **not ported**; frame phase varies by about one frame boot to boot (one boot per number).
+
+## The emitter's clock and the burst laws (2026-10-04)
+
+Read for the Repulser's blast, whose beaded ring did not match the PSP's
+(`WO_REPULSER_BLAST`: one burst of 50 on a ring of radius 13.6, speed `-0.625`,
+drag `0.955`, flags `0x0430009e`, rate `4.0`, one selector-5 record). Every law below
+is now played by `oag_render::psys` (`psys::playback`, `psys::spawn`).
+
+**The playback rate, `res+0x4cc`, reaches every clock.** Confidence **90**, read in
+four functions that agree. `ParticleSystem_DeriveScaledParams` stores
+`res+0x4cc * instance+0x3c` at `+0x70`. `FUN_088f57d4` (now
+`ParticleSystem_ResetCoFactors`) writes `1.0` to every co-factor `+0x28..+0x54`, and
+`FUN_088f41c0` (`ParticleSystem_ConstructInstance`) calls it. `ParticleSystem_Update`
+sets `+0xc = dt * 60 * global`, clamps it at `3.0`, then multiplies it by `+0x70`, and
+`DAT_08b6207c` is the same in seconds. The consumers of those two values:
+
+- the duration countdown, `+0x138 -= +0xc`;
+- `ParticleSystem_UpdateEmission`, `+0x4 -= +0xc`;
+- the drag exponent, `pow(k, +0xc)`;
+- `ParticleSystem_UpdateParticles`, for the gravity, `position += velocity * +0xc`,
+  the age, the life, the roll and the atlas frame.
+
+So an emitter of rate `r` runs `r` of its own ticks a frame. Every recursive and
+top-level call into `ParticleSystem_Update` loads `1.0` into `$f12` (listing at
+`0x088f6160`, `0x088f6180`, `0x088f61a4` and `0x08915f98`), so roots and children run
+on the same frame `dt` and the rate is per instance. Seven emitters on the PSP disc author a
+rate other than 1:
+
+| Emitter | Rate |
+| --- | ---: |
+| `WO_REPULSER_BLAST` | 4 |
+| `WO_LEACHBEAM_CHARGING`'s `RINGS` | 2 |
+| `WO_MISSILE_EXPLO`'s root | 2 |
+| `WO_LEACHBEAM_CHARGING`'s `glow` | 1.5 |
+| `WO_LEACHBEAM_CHARGING`'s root | 0.8 |
+| `WO_SHURIKEN_BOUNCE`, `WO_SHURIKEN_EXPIRE` | 0.8 |
+| `WO_WEAPON_ABSORB` | 0.8 |
+
+Ours ignored the rate until this change, so these seven play differently now.
+
+**Selector 5 is the newborn's lifetime co-factor.** Confidence **90**: two sites name
+one field. `ParticleSystem_Update` stores selector `5` at instance `+0x54`.
+`ParticleSystem_InitParticle` sets the life to
+`RandSpread(res+0x5c, res+0x60) * instance+0x54 / 60` (`param_1[0x15]`). The record is
+evaluated at the emitter's age before emission, and with `+0x138` at or below zero
+the age runs past `1`, so a keyframed channel then reads `0`. The blast's one burst is
+at age 0, where the record reads `1.5 * 1.0`. Its beads live `114 * 1.5 = 171` ticks,
+which is 43 frames at rate 4; at rate 1 with no record they would live 114 frames. On
+the PSP the ring is drawn at updates 10 to 40 and gone by 47.
+
+**Flag `0x200000` steps a ring evenly.** Confidence **92**. `ParticleSystem_EmitRing`
+draws `phi0 = Psys_RandFloatRange(0, 2 pi)` once, before its loop, and adds
+`2 pi / count` before each particle's placement, so particle `i` (from 0) sits at
+`phi0 + (i + 1) * 2 pi / count`. `ParticleSystem_UpdateEmission` hands
+`ParticleSystem_SpawnBurst` the whole `RandIntRange(+0x6c, +0x70)` in one call, so
+`count` is the burst. Two emitters on the PSP disc carry the flag:
+`WO_REPULSER_BLAST` and `WO_MISSILE_EXPLO`'s `shockrings`. The shockrings are a disc
+(`+0x3c = 2`) whose placement never reads `phi`, so the step changes nothing there.
+
+**The aimed azimuth turns the heading by `+a`.** Confidence **85**: static, and
+consistent with the shape-2 path's law. `ParticleSystem_AimedVelocity` (`0x088fc490`)
+builds `(x cos a - z sin a, z cos a + x sin a)` from its input `(x, z)`, so a bead born
+at `phi` flies at `phi + a`. Ours turned the ring's heading by `-a`; shape 2 already
+played `+a`. Fixed in `psys::spawn::place`.
+
+**Flag `0x20`: the sub-frame spread.** Confidence **88**. `ParticleSystem_CacheModeFlags`
+(`0x088f4dcc`) sets `DAT_08b620a0` from it. `ParticleSystem_Update` computes
+`vsub.q C320, C300, C310` at `0x088f60c0`, with `C300 = +0xd0` (the previous
+translation) and `C310 = +0x120` (the current one), stores it at `+0xc0`, and then
+copies `+0x120` into `+0xd0`. The emit functions add `+0xc0 * i / count` to particle
+`i`. The first particle sits at the emitter and the rest are pulled back along the
+frame's path. `ParticleSystem_InitInstance` seeds `+0xd0` from `+0x120`, so the first
+frame's spread is zero. The emitters with the flag are the missile's `trail` and the
+spark trails (`WO_SHIP_COLL_SPARK_TRAIL`, `WO_SHIP_DEATH_SPARKS`).
+
+**Flag `0x2` is local space, not world space.** Confidence **88**.
+`ParticleSystem_InitParticle` skips the instance matrix under it. Under it,
+`ParticleSystem_DrawEmitterPool` (`0x08918bf8`) draws the pool through
+`vmmul(instance+0xf0, view)`, and `ParticleSystem_UpdateParticles` re-centres the
+bounds on `+0x120`. So the particles are stored in the instance's frame and drawn
+through its **live** matrix, which the name `pob::flags::WORLD_SPACE` gets backwards.
+That matrix moves only when the owner keeps it moving:
+
+- `FUN_08916200` (`PsysNode_Start`) stores the caller's matrix **by pointer** at
+  node `+0x50` when `param_5 & 1`, and copies it to `+0x70` otherwise.
+- `PsysNode_Update` (`0x08915cdc`) re-reads node `+0x50` every frame and hands the
+  node's world matrix to `FUN_088f4498` (`ParticleSystem_SetMatrix`, 16 words into
+  `+0xf0..+0x12c`) before `ParticleSystem_Update`.
+- `Repulser_SpawnBlastEffect` (`0x088761d8`) calls
+  `Psys_Spawn_q(node, "WO_REPULSER_BLAST", 'REP3', repulser+0x1a0, 1, 0)`.
+
+So the blast's beads ride the firer, and they turn with the `+0x21c` spin that
+`Repulser_UpdateFieldModel` writes into `+0x1a0`. Ours opts in per caller
+(`System::set_rides_frame`); only the blast does so far. The spin's sense against
+`Quat::from_axis_angle` is still unmeasured.
+
+Twenty-five emitters carry the flag. Whether any other owner's matrix moves is a
+property of its own call site, and none was read. The collision sparks are the one
+with a claim on record that they do not ride: "a burst from a moving scrape strings
+out along the hull's path".
+
+**Measured against the PSP** (Talon's Junction, Assegai, parked, fire at tick 500,
+the same update offsets as `pulse-repulser-2`'s `psp-live2-*.png`): the ring is wide
+and beaded at update 10, compact at 20 and 30, a white puff at 40, and gone at 47, on
+both sides (`data/scratch/pulse-psys-ring/shots/final-cmp.png`). Before this change,
+ours started 13.6 units out and collapsed by update 20.
+
+**The wave-start whiteout is `WO_REPULSER`, not the blast and not the flash.**
+With the two wave effects withheld, update 49 shows the original's blue tint (flash
+kind 2 adds `(0, 0.2, 1) * 0.5`). Dropping one part of `WO_REPULSER` at a time shows
+two contributors:
+
+- The `shazzam` template (render class 3, white, size 20, stretch constant 5,
+  alpha 1 to 0 over 10 ticks, at the wave's anchor) is the full-screen white bar at
+  update 49.
+- The root emitter (shape 8, render class 6 `FUN_08917c7c`, aspect `0.05`, palette
+  near-white) is the white blob at update 52. The PSP shows a thin streak to the
+  right there.
+
+`ParticleSystem_DrawParticle` (`0x089186bc`) has no near fade or size clamp beyond
+`z <= -1`, so the static read does not explain the original's missing bar. Shape 8's
+placement and class 6's draw are both unread. The next step is a live read of the
+`WO_REPULSER` instances at updates 48 to 52: their `+0xf0` matrix, the template's
+position, size and aspect, and the root pool.
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x088f57d4` | `ParticleSystem_ResetCoFactors` | 92 |
+| `0x088f41c0` | `ParticleSystem_ConstructInstance` | 85 |
+| `0x088f4498` | `ParticleSystem_SetMatrix` | 92 |
+| `0x088f3174` | `ParticleSystem_AllocInstance` | 75 |
 
