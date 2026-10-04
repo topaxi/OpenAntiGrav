@@ -62,8 +62,15 @@ panel lose about 50 luma per channel. Ours now prepares the bloom after the
 scene and composites it after the HUD (`Scene::composite_bloom`). Evidence:
 `docs/ghidra/functions/psp-pulse-usa/bloom.md`, "The bloom draws over the HUD".
 Not reproduced: over a glow surface, the original blooms the HUD widget's own
-colour (its bright pass reads the HUD). Pulse PS2 and HD keep their old order;
-`ps2-bloom.md` already lists the PS2 HUD question as open.
+colour (its bright pass reads the HUD). **Pulse PS2 inherits the order
+(2026-10-04, maintainer's call, under the rule that a source with no measured
+rule takes Pulse PSP's)**: `Ps2Bloom` splits into prepare and composite the same
+way, unmeasured on the PS2 disc (`ps2-bloom.md`). **HD keeps its old order,
+pending the maintainer**: its read resolve (`downsamplescaleaddfeedback_fp`)
+adds the bloom to the exposure-scaled scene *before* the encode, so a HUD under
+the bloom is not a reorder but a choice - the HUD exposure-scaled in the linear
+target, or the bloom added after a nonlinear encode - and neither is the
+executable's.
 
 ## Open
 

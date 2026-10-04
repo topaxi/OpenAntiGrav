@@ -283,7 +283,7 @@ pub struct Scene {
     /// Pulse PS2's own bloom, in place of [`Self::bloom`] over a PS2 race's
     /// glow mask. See `oag_render::post::ps2_bloom`.
     ps2_bloom: Option<oag_render::post::ps2_bloom::Ps2Bloom>,
-    /// Whether [`Self::bloom`] was prepared this frame and still owes its
+    /// Whether [`Self::bloom`] or [`Self::ps2_bloom`] was prepared this frame and still owes its
     /// composite: [`Scene::composite_bloom`], after the HUD.
     bloom_pending: std::cell::Cell<bool>,
     /// Wipeout HD's post chain: the linear float scene target the whole race

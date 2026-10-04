@@ -941,18 +941,19 @@ impl Scene {
                 origin: (viewport.0, viewport.1),
                 viewport: (viewport.2 as u32, viewport.3 as u32),
             };
-            // Pulse PSP's composite waits for the HUD: the caller runs
-            // `Scene::composite_bloom` after drawing it, as the original's
-            // queue order does (`bloom.md`, "The bloom draws over the HUD").
+            // The composite waits for the HUD: the caller runs
+            // `Scene::composite_bloom` after drawing it, as Pulse PSP's queue
+            // order does (`bloom.md`, "The bloom draws over the HUD"). The PS2
+            // inherits that order, unmeasured on its own disc.
             if let Some(bloom) = &self.bloom {
                 bloom.prepare(device, queue, encoder, frame);
-                self.bloom_pending.set(true);
             } else if let Some(bloom) = &self.ps2_bloom {
-                bloom.render(device, queue, encoder, frame);
+                bloom.prepare(device, queue, encoder, frame);
             }
+            self.bloom_pending.set(true);
         }
-        // Motion blur, last: it smears the finished frame - glow included,
-        // except Pulse PSP's, whose composite comes after the HUD - and it
+        // Motion blur, last: it smears the finished frame - but not the
+        // Pulse glow, whose composite comes after the HUD - and it
         // runs before the caller composites the HUD over `view`, so the
         // readouts stay sharp however the world moves. `motion_blur` is the
         // strength read fresh off the settings this frame, so the row
