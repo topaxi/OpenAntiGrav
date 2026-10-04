@@ -594,9 +594,16 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   constants reproduced bit for bit at both tick counts for both scenarios.
 ///   Replaces `0x57a6_3ed9_c3d1_ede7` / `0x5706_b5b3_ef8f_3411` at 60 ticks and
 ///   `0xf313_687a_6471_7f52` / `0xf931_ba11_7aca_8358` at 600.
+///
+/// - **Moved 2026-10-04**, when `World::repulsers` (sixteen empty Repulser
+///   slots, one discriminant byte each) joined the hash. No Repulser is fired
+///   here. Isolated the documented way: with the pool's writes taken out of
+///   `write_world` and nothing else changed, the previous constants reproduced
+///   bit for bit at both tick counts for both scenarios. Replaces `0x5879_0798_3068_5567` /
+///   `0x2c97_d702_c8e1_58b1` at 60 ticks and `0xac74_cd4a_cb3b_9dd2` / `0x11eb_c0b9_fd45_0178` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x5879_0798_3068_5567, 0x2c97_d702_c8e1_58b1),
-    (600, 0xac74_cd4a_cb3b_9dd2, 0x11eb_c0b9_fd45_0178),
+    (60, 0x393b_148b_b8f2_5727, 0x7f62_1ea3_430c_a071),
+    (600, 0x5e00_c1b5_b928_c252, 0x7838_5bc9_954f_c738),
 ];
 
 #[test]
