@@ -19,9 +19,10 @@
 //!
 //! **The lens** `ScreenPsys` (`WO_RAIN_LENS`, Fort Gale) is [`super::lens`].
 //!
+//! **The mist overlay** `WeatherMist_Construct` (`0x088fa0a0`) builds from
+//! `Tex` and its sizes is [`super::mist`], drawn by `oag_render::mist`.
+//!
 //! **Not played, and said so:**
-//! - The mist overlay `FUN_088fa0a0` builds from `Tex`, `Alpha` and the
-//!   `Drift*` attributes.
 //! - The manager's clock behind the noise: its units are taken as seconds, the
 //!   race clock, and the noise table is a seeded one - see [`super::noise`].
 //! - `Weather_Update` is skipped in Zone, and here the plan is not built there.
@@ -37,6 +38,7 @@ use oag_tables::trackstartup::{Weather as Config, effect_name};
 use oag_vex::weather::{self as covered, Anchor as CoveredAnchor};
 
 use super::lens::{Edge, Lens};
+use super::mist::Mist;
 use super::wind::Wind;
 
 /// Seed for the weather's own spawn draws, wind table and phases. Any
@@ -50,6 +52,9 @@ pub struct Setup {
     pub config: Config,
     /// Its `weatherPos` anchors, one per covered section.
     pub anchors: Vec<CoveredAnchor>,
+    /// `Tex` decoded, the mist overlay's texture; `None` when the circuit
+    /// names none or it did not decode, and then the mist draws nothing.
+    pub mist_texture: Option<oag_render::exhaust::FlareTexture>,
 }
 
 /// The weather of a race: inert unless the circuit authors one.
@@ -70,6 +75,7 @@ pub struct Weather {
     previous: Option<Frame>,
     wind: Wind,
     lens: Lens,
+    mist: Option<Mist>,
     clock: f32,
     rng: Rng,
 }
@@ -95,6 +101,10 @@ impl Weather {
         let mask = setup
             .as_ref()
             .map_or(0, |s| covered::covered_mask(&s.anchors));
+        let mist = setup
+            .as_ref()
+            .filter(|s| s.mist_texture.is_some())
+            .and_then(|s| Mist::new(&s.config));
         Self {
             setup,
             mask,
@@ -107,6 +117,7 @@ impl Weather {
             previous: None,
             wind,
             lens: Lens::new(None),
+            mist,
             clock: 0.0,
             rng,
         }
@@ -140,6 +151,18 @@ impl Weather {
     #[must_use]
     pub fn lens(&self) -> &Lens {
         &self.lens
+    }
+
+    /// The mist overlay, when the circuit authors one and its texture decoded.
+    #[must_use]
+    pub fn mist(&self) -> Option<&Mist> {
+        self.mist.as_ref()
+    }
+
+    /// The mist overlay's decoded texture, for the renderer.
+    #[must_use]
+    pub fn mist_texture(&self) -> Option<&oag_render::exhaust::FlareTexture> {
+        self.setup.as_ref()?.mist_texture.as_ref()
     }
 
     /// The pool, for tests.
@@ -197,9 +220,16 @@ impl Weather {
             };
             if let Some(edge) = edge {
                 self.lens.edge(edge, self.clock);
+                if let Some(mist) = &mut self.mist {
+                    mist.edge(edge);
+                }
             }
         }
         self.wind.advance(dt, self.clock);
+        if let Some(mist) = &mut self.mist {
+            let wind = self.wind.modifier();
+            mist.advance(dt, self.previous, camera, wind);
+        }
         self.lens
             .advance(dt, self.clock, camera, self.wind.vector());
         if let Some(effect) = self.effect.clone()

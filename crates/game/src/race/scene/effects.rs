@@ -21,6 +21,11 @@ impl Scene {
         self.clouds.borrow().draw(pass);
         self.weapon_quads.pipeline.borrow().draw(pass);
         self.draw_ghost(race, eye, pass, stats);
+        // The render queue's key `0x4f000000`, which the flash shares: after
+        // every world layer, under the HUD.
+        if let Some(mist) = &*self.mist.borrow() {
+            mist.draw(pass);
+        }
         self.sparks.borrow().draw_flash(pass);
         oag_render::perfprobe::marks::mark(pass, "end");
     }

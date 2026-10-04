@@ -1282,7 +1282,7 @@
 0x088f9a88	function	WeatherMist_Enqueue	75	weather.md
 0x088f9ab4	function	WeatherMist_Draw	85	weather.md
 0x088fa38c	function	WeatherMist_UpdateLayer	85	weather.md
-0x088f959c	function	CameraMotion_Sample	65	weather.md
+0x088f959c	function	CameraMotion_Sample	88	weather.md
 0x088f9494	function	Quad_RotateScaleUv	80	weather.md
 0x0897f388	function	fmodf	90	weather.md
 0x0897eed0	function	asinf	90	weather.md
@@ -1293,4 +1293,9 @@
 0x0887d37c	function	AiTrack_PathIndex	90	repulser.md
 0x0887d4d4	function	AiTrack_LocateOnSiblingPath	65	repulser.md
 0x0887d970	function	AiTrack_PathListsNeighbour	60	repulser.md
+
+
+# 2026-10-04 pulse-mist lane: the mist overlay's camera motion, read live (weather.md)
+0x0897ed98	function	acosf	90	weather.md
+0x08ab10a8	data	g_camera_roll	88	weather.md
 
