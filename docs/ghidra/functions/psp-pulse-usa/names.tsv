@@ -1307,7 +1307,12 @@
 0x08917c7c	function	ParticleSystem_DrawPoolBars	90	particle-system.md
 0x08917358	function	ParticleSystem_BuildAtlasTable	88	particle-system.md
 0x0893280c	function	CloudGroup_Draw	92	clouds.md
-
+0x08933c1c	function	CloudGroup_BuildField	93	clouds.md
+0x08931c3c	function	CloudCube_ScatterRecords	93	clouds.md
+0x08931bec	function	CloudCube_CountRecords	93	clouds.md
+0x08931b28	function	CloudCube_Init	90	clouds.md
+0x089322f8	function	CloudGroup_BuildAtlasUvs	90	clouds.md
+0x08a72d1c	function	Vex_CollectNodesOfClass	88	clouds.md
 0x08855dc4	function	Ai_ComputeControls	75	race-finish.md
 0x088807c8	function	Camera_CycleModeForward	90	race-finish.md
 0x08880838	function	Camera_CycleModeBack	90	race-finish.md

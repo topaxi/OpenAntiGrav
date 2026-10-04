@@ -54,6 +54,7 @@ pub mod perfprobe;
 pub mod post;
 pub mod psys;
 pub mod pvs;
+pub mod ranrot;
 pub mod ripple;
 pub mod roll;
 pub mod shadow;
