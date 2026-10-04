@@ -77,6 +77,10 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   **The gate may sit for several minutes before it starts** because another
   member holds the lock. That is correct, not a hang. Wait it out and never
   fall back to a bare `just`.
+- **Run `git merge main` right before your final gate**, and again if the
+  lead tells you main moved. A gate on a stale base proves nothing about the
+  merge; on 2026-10-05 a lane gated without the engine-sound change that
+  touched the same `race::load`, and the lead had to re-gate the combination.
 - A lane that changed only docs, `handover/` or `HANDOVER.md` runs
   `just check-docs` (plus `check-names`, `check-handover` or `check-status`
   when those files moved) instead of the full gate.
