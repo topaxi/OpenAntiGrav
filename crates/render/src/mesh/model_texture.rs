@@ -494,6 +494,7 @@ impl super::Model {
         };
         release(&mut self.textures);
         release(&mut self.lightmaps);
+        release(&mut self.pad_masks);
     }
 }
 

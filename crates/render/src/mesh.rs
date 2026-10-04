@@ -145,6 +145,8 @@ pub struct Model {
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
     /// its materials.
     pub lightmaps: TextureSlots,
+    /// Each HD pad material's `_ne` mask, bound third (`mesh::rcs::pad_ne`); empty elsewhere.
+    pub pad_masks: TextureSlots,
     /// What each material slot's own microcode says its two texture units are
     /// for, packed as [`slots`], in the same order as [`Self::textures`].
     ///
@@ -315,6 +317,7 @@ impl Model {
             transparent_draws: Vec::new(),
             textures: Vec::new(),
             lightmaps: Vec::new(),
+            pad_masks: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
@@ -951,6 +954,7 @@ fn build_class(
         shine_draws,
         textures,
         lightmaps: Vec::new(),
+        pad_masks: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),

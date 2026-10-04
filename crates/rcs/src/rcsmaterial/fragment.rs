@@ -21,6 +21,7 @@
 
 use super::Declared;
 
+mod alpha_gate;
 mod opcode;
 
 /// One fragment-program dword, whose 16-bit halves are stored swapped.
@@ -169,6 +170,15 @@ pub struct Instruction {
     /// can tell a real file-authored literal from one the engine overwrites
     /// at draw time.
     pub const_slot: Option<u16>,
+    /// Whether each source is negated before use - bit 17 of its own word.
+    /// `scripts/ps3-microcode.py` printed this from the start; this decoder
+    /// dropped it, which reads `EX2(-(d*k)^2)` (the fog curve) as
+    /// `EX2(+(d*k)^2)`, a saturate that is always 1.
+    pub negate: [bool; 3],
+    /// The instruction's 11-bit condition field, word 1 bits 18-28. `0x727`
+    /// (`TR` on every lane) is the unconditional default - see
+    /// `scripts/ps3-microcode.py`'s `fp_cond`, confidence 80 there.
+    pub cond: u16,
     /// Whether this instruction ends the program.
     pub end: bool,
 }
@@ -289,6 +299,12 @@ impl Program {
                 swizzles,
                 constant,
                 const_slot,
+                negate: [
+                    bits[0] & (1 << 17) != 0,
+                    bits[1] & (1 << 17) != 0,
+                    bits[2] & (1 << 17) != 0,
+                ],
+                cond: ((bits[0] >> 18) & 0x7ff) as u16,
                 end: d0 & 1 != 0,
             };
             let done = insn.end;

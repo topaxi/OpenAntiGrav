@@ -132,6 +132,7 @@ fn model(lit: f32) -> Model {
             "glow",
             [GLOW_TEXEL, GLOW_TEXEL, GLOW_TEXEL, 255],
         ))],
+        pad_masks: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),

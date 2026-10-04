@@ -116,6 +116,8 @@ fn the_report_names_both_kinds_of_absence() {
         specular_exponent_unresolved: 12,
         emissive_surface_map_excluded: 0,
         emissive_role_unresolved: 0,
+        pad_ne_bound: 0,
+        pad_ne_unread: 0,
         isolated: 0,
     };
     let line = report.describe();

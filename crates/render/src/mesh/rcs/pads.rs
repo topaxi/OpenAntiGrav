@@ -33,7 +33,7 @@ use oag_vex::vex;
 
 use super::{
     Geometry, MaterialSetup, Model, Report, Textures, anim_node, authored, bounding_sphere,
-    declares_no_texcoord, emit, face_normals, material_setup, node_geometry, surface,
+    declares_no_texcoord, emit, face_normals, material_setup, node_geometry, pad_ne, surface,
 };
 
 /// Every chunk hash a node of `class_id` names at its mesh payload's own
@@ -150,9 +150,18 @@ pub(super) fn build_pad_class(
     out.textures = skins;
     out.lightmaps = seconds;
     out.material_slots = material_slots;
+    out.emissive = emissive;
+    // The `_ne` mask, third beside the lightmap - see `pad_ne`.
+    out.pad_masks = pad_ne::pad_ne(
+        &model,
+        &material_variants,
+        textures,
+        &mut out.material_slots,
+        &mut out.emissive,
+        &mut report,
+    );
     out.material_specular_exponent = material_specular_exponent;
     out.material_variants = material_variants;
-    out.emissive = emissive;
     out.alpha_test_ref = alpha_test_ref;
     out.material_anim = material_anim;
     out.anim_tracks = anim_tracks;

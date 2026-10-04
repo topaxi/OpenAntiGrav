@@ -155,12 +155,16 @@ fn main() -> anyhow::Result<()> {
                     rcsmaterial::fragment::Source::Register { index, half } => {
                         format!("{}{index}", if *half { "H" } else { "R" })
                     }
-                    rcsmaterial::fragment::Source::Input => "IN".to_string(),
+                    rcsmaterial::fragment::Source::Input => format!("IN{}", insn.input),
                     rcsmaterial::fragment::Source::Constant => "C".to_string(),
                     rcsmaterial::fragment::Source::Unknown => "?".to_string(),
                 };
                 let swiz: String = insn.swizzles[slot].iter().map(|&l| lane(l)).collect();
-                line.push_str(&format!("{tag}.{swiz} "));
+                let neg = if insn.negate[slot] { "-" } else { "" };
+                line.push_str(&format!("{neg}{tag}.{swiz} "));
+            }
+            if insn.cond != 0x727 {
+                line.push_str(&format!("[cond {:#05x}] ", insn.cond));
             }
             line.push_str(&format!(
                 "-> .{}",
