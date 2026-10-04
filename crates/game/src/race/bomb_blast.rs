@@ -190,6 +190,12 @@ pub struct BombBlastModels {
     pub hemisphere: Option<Model>,
     /// `Data\Weapons\Bomb_Shockwave.vex`.
     pub shockwave: Option<Model>,
+    /// The Repulser's field model, `Data\Weapons\pulse_repulsorwave.vex` - not
+    /// the Bomb's, but the same kind of thing (an eased, faded, view-side ring),
+    /// and it rides this container rather than a seventh element of every
+    /// weapon tuple from `load.rs` to `Scene::new`, all of which sit at their
+    /// line ceilings. Played by [`super::repulser_field`].
+    pub repulser_field: Option<Model>,
 }
 
 /// The drawable pools [`Scene`] builds from a [`BombBlastModels`].
@@ -197,6 +203,8 @@ pub struct BombBlastModels {
 pub(in crate::race) struct BombBlastDrawables {
     pub(in crate::race) hemisphere: Vec<Drawable>,
     pub(in crate::race) shockwave: Vec<Drawable>,
+    /// One per pool slot - see [`BombBlastModels::repulser_field`].
+    pub(in crate::race) repulser_field: Vec<Drawable>,
 }
 
 impl BombBlastDrawables {
@@ -210,6 +218,7 @@ impl BombBlastDrawables {
         Ok(Self {
             hemisphere: build_one(models.hemisphere)?,
             shockwave: build_one(models.shockwave)?,
+            repulser_field: build_one(models.repulser_field)?,
         })
     }
 }

@@ -27,12 +27,11 @@
 //! - **Points per tick, not per frame.** The original steps once per update
 //!   call. This port runs at a fixed 60 Hz, the rate the original is authored for
 //!   (`docs/psp/frame-pacing.md`), so one update is one tick.
-//! - **The ring, not the junction graph.** The original's waves walk the AI
-//!   track's paths and, at a fork, spawn a third wave down the alternate path
-//!   (`Repulser_ForkAtJunction`, `0x08876634`). [`oag_race::Course`] is the
-//!   primary chain only, so the waves follow it and no third wave exists. The one
-//!   shipped Pulse circuit with a genuine split is `05_Track`, where the two
-//!   branches share both ends.
+//! - **The ring, then a branch.** The two waves walk [`oag_race::Course`]'s
+//!   primary chain. At a split the first wave to cross it starts the third,
+//!   which walks the alternate path ([`fork`], read at 88). Not built: the
+//!   init-tick variant (`Repulser_ForkAtJunction`, `0x08876634`, 72) for a firer
+//!   already on a branch.
 //! - **Ring points, not control points.** [`oag_race::Course`] samples
 //!   [`oag_race::Course::STEPS_PER_SEGMENT`] points per control-point interval,
 //!   so a step of five control points is twenty ring points. The firer's own
@@ -42,6 +41,9 @@
 //!   interpolates a fresh AI-track sample at the craft.
 
 use crate::world::{MAX_SHIPS, Ship};
+pub use fork::Fork;
+
+pub mod fork;
 use oag_core::math::Vec3;
 use oag_tables::weapons::RepulserStats;
 
@@ -105,6 +107,9 @@ pub struct Repulser {
     pub fronts: Option<[Front; 2]>,
     /// Which craft this Repulser has already hit (`+0x1f0`, eight bytes).
     pub hit: [bool; MAX_SHIPS],
+    /// The third wave, once a wave has crossed a split (`+0x25c` latches it:
+    /// one fork per Repulser). See [`fork`].
+    pub fork: Option<Fork>,
 }
 
 impl Repulser {
@@ -121,6 +126,7 @@ impl Repulser {
             wave_time: stats.wave_time,
             fronts: None,
             hit: [false; MAX_SHIPS],
+            fork: None,
         }
     }
 
@@ -157,6 +163,16 @@ impl Repulser {
                 let forward = (FORWARD_POINTS_PER_TICK * per_point) % count;
                 let backward = (BACKWARD_POINTS_PER_TICK * per_point) % count;
                 let steps = [forward, count - backward];
+                // The fork rides inside its parent's `Repulser_AdvanceWave`, after
+                // the parent's own walk: an existing one first takes the parent's
+                // full step, then a new one is spawned at most once.
+                if let Some(fork) = self.fork.as_mut() {
+                    fork.advance(course, forward);
+                }
+                // Only the forward wave forks - see [`fork`]'s doc comment.
+                if self.fork.is_none() {
+                    self.fork = Fork::crossing(course, fronts[0].index as usize, forward);
+                }
                 for (front, step) in fronts.iter_mut().zip(steps) {
                     let index = (front.index as usize + step) % count;
                     front.previous = front.point;
@@ -182,6 +198,18 @@ impl Repulser {
         self.fronts?
             .into_iter()
             .find(|front| sweeps(front.point, front.previous, point, width))
+    }
+
+    /// [`Self::swept_by`] with the fork wave tried last, for craft:
+    /// `RepulserPool_SweepTargets` tests it only when waves 0 and 1 missed, and
+    /// never against Mines or Bombs.
+    #[must_use]
+    pub fn swept_by_any(&self, point: Vec3, width: f32) -> Option<Front> {
+        self.swept_by(point, width).or_else(|| {
+            self.fork
+                .map(|fork| fork.front)
+                .filter(|front| sweeps(front.point, front.previous, point, width))
+        })
     }
 
     /// `RepulserPool_SweepTargets`'s craft half: every other active craft a
@@ -216,7 +244,7 @@ impl Repulser {
                 continue;
             };
             let position = ship.physics.body.position;
-            let Some(front) = self.swept_by(position, width) else {
+            let Some(front) = self.swept_by_any(position, width) else {
                 continue;
             };
             // `vsub.q` craft minus wave at `0x0886d2a0`, then `neg.s` on

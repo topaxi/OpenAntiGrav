@@ -72,6 +72,16 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
   - Billboard roll, the extents of shapes 2/3/6/8 and the animated-attribute array.
   - The `instance[+0x40]` alpha scale, which nothing feeds here.
 
+- **`WO_REPULSER_BLAST` against the original** (2026-10-04, pulse-repulser-2,
+  Talon's Junction, craft parked): the original's blast is a compact beaded ring
+  round the craft for 0.17-0.67 s, then a white cloud; ours starts about 13.6
+  units out and collapses inward by 0.33 s. Proved to be the psys, not the
+  field model, by holding the model's alpha at zero live. Flag `0x200000`
+  (evenly stepped ring angles) and the selector-5 record are still not played;
+  they are the first thing to try. Frames:
+  `data/scratch/pulse-repulser-2/shots/psp-seq.png`, `oag-seq.png`. See
+  [repulser.md](../../docs/ghidra/functions/psp-pulse-usa/repulser.md).
+
 ## Next Steps
 
 - Play the mist overlay off the law in weather.md's "The mist overlay" section. Check the

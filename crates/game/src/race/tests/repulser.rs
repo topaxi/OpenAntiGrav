@@ -122,3 +122,19 @@ fn a_wave_sets_off_a_laid_mine_it_sweeps() {
     let (swept, _) = run(200.0, 60, true, Some(30.0));
     assert_eq!(mines_left(&swept), 0, "the wave set the mine off");
 }
+
+/// The field model draws from the first tick to the slot's retirement, at the
+/// firer, fading in from `0.2`. Dropping the field leaves no draw at all.
+#[test]
+fn the_field_model_draws_at_the_firer_for_the_repulsers_whole_life() {
+    let (race, _) = fire_at(200.0, 4);
+    let draws: Vec<_> = race.repulser_field_draws().into_iter().flatten().collect();
+    assert_eq!(draws.len(), 1, "one live field");
+    let (matrix, alpha) = draws[0];
+    let firer = race.sim.world.ships[0].physics.body.position;
+    assert!((matrix.w_axis.truncate() - firer).length() < 1e-4);
+    // Fired on tick 1, stepped on ticks 1-3: 1 - 0.8^3.
+    assert!((alpha - 0.488).abs() < 1e-4, "{alpha}");
+    let (gone, _) = fire_at(200.0, 120);
+    assert!(gone.repulser_field_draws().iter().all(Option::is_none));
+}

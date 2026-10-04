@@ -97,6 +97,12 @@ pub struct WeaponModels {
     /// see `oag_game::race::bomb_blast`. `None` on every other title: HD's
     /// own Bomb detonation is unread and Pure's Bomb authors no fuse at all.
     pub bomb_blast_pulse: Option<PulseBombBlast>,
+    /// The Repulser's field model: a flat ring around the firer that shrinks,
+    /// then widens and fades - `Repulser_Construct` (`0x08875008`) loads it and
+    /// `Repulser_UpdateFieldModel` (`0x088758cc`) eases it. See
+    /// `oag_game::race::repulser_field`. `None` on every title without a
+    /// Repulser law of its own.
+    pub repulser_field: Option<&'static str>,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
@@ -130,6 +136,7 @@ impl WeaponModels {
         plasma_blast_pulse: None,
         plasma_blast_hd: None,
         bomb_blast_pulse: None,
+        repulser_field: None,
         leachbeam_ball: None,
         cannon_look: None,
     };

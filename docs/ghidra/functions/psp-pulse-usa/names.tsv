@@ -1256,17 +1256,17 @@
 0x0886d254	function	Repulser_HitCraft	84	repulser.md
 0x0886d4f4	function	Repulser_SpawnRemote	60	repulser.md
 0x08875008	function	Repulser_Construct	82	repulser.md
-0x08875210	function	Repulser_Init	84	repulser.md
-0x08875400	function	Repulser_Update	84	repulser.md
+0x08875210	function	Repulser_Init	90	repulser.md
+0x08875400	function	Repulser_Update	90	repulser.md
 0x08875658	function	Repulser_Reset	80	repulser.md
 0x08875864	function	Repulser_GetWavePoints	80	repulser.md
 0x088758b0	function	Repulser_SetHitLatch	80	repulser.md
 0x088758c0	function	Repulser_HitLatch	80	repulser.md
-0x088758cc	function	Repulser_UpdateFieldModel	72	repulser.md
+0x088758cc	function	Repulser_UpdateFieldModel	88	repulser.md
 0x088761d8	function	Repulser_SpawnBlastEffect	84	repulser.md
-0x08876634	function	Repulser_ForkAtJunction	60	repulser.md
-0x08876914	function	Repulser_AdvanceWave	80	repulser.md
-0x0887e174	function	AiTrack_StepForward	80	repulser.md
+0x08876634	function	Repulser_ForkAtJunction	72	repulser.md
+0x08876914	function	Repulser_AdvanceWave	88	repulser.md
+0x0887e174	function	AiTrack_StepForward	85	repulser.md
 0x0887e2f0	function	AiTrack_StepBackward	80	repulser.md
 0x08829778	function	RaceManager_Update	82	gantry-clock.md
 0x089128ac	function	Model_GetAnimTime	85	gantry-clock.md
@@ -1287,3 +1287,10 @@
 0x0897f388	function	fmodf	90	weather.md
 0x0897eed0	function	asinf	90	weather.md
 0x0897f008	function	atan2f	90	weather.md
+
+# 2026-10-04 pulse-repulser-2 lane: the fork wave's helpers (repulser.md)
+0x088765e4	function	Repulser_CursorPastHalfPath	80	repulser.md
+0x0887d37c	function	AiTrack_PathIndex	90	repulser.md
+0x0887d4d4	function	AiTrack_LocateOnSiblingPath	65	repulser.md
+0x0887d970	function	AiTrack_PathListsNeighbour	60	repulser.md
+

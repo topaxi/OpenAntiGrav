@@ -65,6 +65,34 @@ fn cannonexplship_is_a_child_reference_to_cannonexplwall() {
     assert_eq!(tree.len(), 9, "CANNONEXPLWALL's own waveform count moved");
 }
 
+/// `~REPULSORTRAVEL` (cue 34) is why the Repulser's travel loop is not wired:
+/// on both Pulse PSP pressings its whole run is one command, opcode `0x14` with
+/// a zero operand - no key-on and no child grain - so there is nothing to play.
+/// `Repulser_Init` does start it, on an emitter at the world origin (read live,
+/// `docs/ghidra/functions/psp-pulse-usa/repulser.md`). A disc whose cue gains
+/// a sound fails here, and the cue should then be wired.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn repulsortravel_binds_no_sound_on_pulse_psp() {
+    for disc in ["pulse-psp-usa.chd", "pulse-psp-eu.chd"] {
+        let Some(path) = image(disc) else {
+            continue;
+        };
+        let opened =
+            oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+                .expect("opening the source");
+        let mut archives = opened.archives;
+        let blob = archives
+            .read_name(r"Data\Sound\weapons.bnk")
+            .expect("weapons.bnk");
+        let bank = oag_formats::sblk::Bank::parse(&blob).expect("parse bank");
+        let cue = bank.cue_named("~REPULSORTRAVEL").expect("~REPULSORTRAVEL");
+        assert!(bank.cue_sounds(&cue).is_empty(), "{disc}");
+        assert!(bank.cue_children(&cue).is_empty(), "{disc}");
+        assert!(bank.cue_tree_sounds(&cue).is_empty(), "{disc}");
+    }
+}
+
 /// The four held cues nothing else here drives: `~ROCKETTVL`, `~MISSILETVL`,
 /// `~SHURIKENTRAVEL` and `~LEACHATTACH` are all in `BY_LEVEL` in
 /// `race::tests::cues::every_cue_has_something_that_raises_it`, exactly

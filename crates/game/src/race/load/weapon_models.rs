@@ -328,15 +328,18 @@ pub(super) fn load_bodies(
     let ball = one(models.plasma_ball, "a plasma bolt", true);
     // Pulse-only, `None` on every other title's own table - see
     // `WeaponModels::bomb_blast_pulse`'s own doc comment.
-    let bomb_blast =
+    let mut bomb_blast =
         models
             .bomb_blast_pulse
             .map_or(bomb_blast::BombBlastModels::default(), |pulse| {
                 bomb_blast::BombBlastModels {
                     hemisphere: one(Some(pulse.hemisphere), "a bomb blast hemisphere", false),
                     shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
+                    repulser_field: None,
                 }
             });
+    // Rides the Bomb blast's container - see `BombBlastModels::repulser_field`.
+    bomb_blast.repulser_field = one(models.repulser_field, "a repulser field", false);
     // The LeachBall rides no pool of its own - `Scene::new` builds one
     // drawable, not `MAX_PROJECTILES` of them, since only one beam is ever
     // live - but its model loads on the same terms as every other weapon

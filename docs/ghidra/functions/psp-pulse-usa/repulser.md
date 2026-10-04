@@ -3,8 +3,10 @@
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 
 **Status:** **read 2026-10-04** (pulse-repulser lane), decompile plus
-instruction-level checks of every load-bearing constant. Not yet runtime-verified,
-so every score here is capped at 84.
+instruction-level checks of every load-bearing constant. **Partly runtime-verified
+the same day** (pulse-repulser-2): one live Repulser on PPSSPP, sampled at every
+`Repulser_Update` call - see [the live read](#2026-10-04-live-on-ppsspp---the-timeline-the-field-model-and-the-travel-emitter).
+Rows the capture confirmed are lifted to 88-90; the rest stay at or under 84.
 
 **It is not "a field the craft is in".** The earlier note on
 [shuriken.md](shuriken.md#a-neighbour-read-on-the-way-the-repulser) read
@@ -27,18 +29,22 @@ sweep over exactly once and setting off any laid Mine or Bomb in their path.
 | `0x0886d254` | `Repulser_HitCraft` | 84 |
 | `0x0886d4f4` | `Repulser_SpawnRemote` | 60 |
 | `0x08875008` | `Repulser_Construct` | 82 |
-| `0x08875210` | `Repulser_Init` | 84 |
-| `0x08875400` | `Repulser_Update` | 84 |
+| `0x08875210` | `Repulser_Init` | 90 |
+| `0x08875400` | `Repulser_Update` | 90 |
 | `0x08875658` | `Repulser_Reset` | 80 |
 | `0x08875864` | `Repulser_GetWavePoints` | 80 |
 | `0x088758b0` | `Repulser_SetHitLatch` | 80 |
 | `0x088758c0` | `Repulser_HitLatch` | 80 |
-| `0x088758cc` | `Repulser_UpdateFieldModel` | 72 |
+| `0x088758cc` | `Repulser_UpdateFieldModel` | 88 |
 | `0x088761d8` | `Repulser_SpawnBlastEffect` | 84 |
 | `0x08876300` | `Repulser_SpawnWaves` | 80 |
-| `0x08876634` | `Repulser_ForkAtJunction` | 60 |
-| `0x08876914` | `Repulser_AdvanceWave` | 80 |
-| `0x0887e174` | `AiTrack_StepForward` | 80 |
+| `0x08876634` | `Repulser_ForkAtJunction` | 72 |
+| `0x08876914` | `Repulser_AdvanceWave` | 88 |
+| `0x0887e174` | `AiTrack_StepForward` | 85 |
+| `0x088765e4` | `Repulser_CursorPastHalfPath` | 80 |
+| `0x0887d37c` | `AiTrack_PathIndex` | 90 |
+| `0x0887d4d4` | `AiTrack_LocateOnSiblingPath` | 65 |
+| `0x0887d970` | `AiTrack_PathListsNeighbour` | 60 |
 | `0x0887e2f0` | `AiTrack_StepBackward` | 80 |
 
 `Repulser_SpawnWaves` was `Repulser_SpawnWaves_q` at 62 on
@@ -144,10 +150,52 @@ Confidence 84.
 `Repulser_Construct` (`0x08875008`) loads `Data\Weapons\pulse_repulsorwave.vex`
 (format string `0x08a7ccdc`, the entry exists in `Data.wad`) into `+0x1e4` - the
 field model the easing above scales and fades - and looks up `"AI track data"`
-into `+0x228`. `Repulser_UpdateFieldModel` (`0x088758cc`) builds that model's
-matrix from the firer's node each tick: uniform scale `+0x204` while it is above
-`0.61`, `+0x1f8` after, vertex alpha `+0x210 * 255`, and the `+0x21c` spin.
-Confidence 72: the matrix arithmetic was read at shape level only.
+into `+0x228`. The model is a flat ring, radius `10.17` at scale 1, one mesh of
+262 triangles on `noise2_ADD_GLOW` (`oag-view --mesh --draws`; material flags
+`0x0292`, pass mask `0x12b2`, the Bomb shockwave's `0x0212`/`0x1232` plus bit
+`0x80`, the per-batch alpha-test selector).
+
+### The field model's matrix, to the instruction (2026-10-04, pulse-repulser-2)
+
+`Repulser_UpdateFieldModel` (`0x088758cc`, listing in the lane's scratch), with
+`P` the AI-track point under the **firer's own cursor** (`craft+0xad8..+0xae4`,
+`point_ptr` at `+0xae4`) and `T` the firer node's world translation (`+0x30` of
+its matrix):
+
+```c
+left   = P.pos - P.lateral * P.half_left;          // +0x00, +0x30, +0x44
+right  = P.pos + P.lateral * P.half_right;         // +0x48
+across = normalize(right - left);
+up     = -P.row2;                                  // vneg.q of +0x20
+fwd    = normalize(across x up);                   // vcrsp.t
+up'    = normalize(up - fwd * dot(fwd, up));
+side   = up' x fwd;
+s      = (+0x204 > 0.61) ? ease(+0x204) : ease(+0x1f8);   // pre-step test
+Node_SetLocalMatrix(model, [side*s, up'*s, fwd*s, T], 0);  // 0x08875f78, a1 = sp+0x60
+Image_SetVertexColours(model, (int)(+0x210 * 255) << 24 | 0xffffff); // 0x088760f4
+if (age > 0.4) ease(+0x21c);                                 // 0x088760fc
+Math_RotateByAxisAngle(+0x21c, &[side, up', fwd, T], axis = &up');   // 0x08876168, a0 = sp+0x130, a1 = sp+0x140
+entity+0x1a0..+0x1dc = that rotated, unscaled matrix;         // 0x08876170-0x0887619c
+```
+
+**The model does not spin.** `Node_SetLocalMatrix` with `0` puts the node in
+mode `0x1000000`, which `Vex_UpdateNodeWorldMatrix` (`0x08944544`) composes with
+the parent's world matrix (`vmmul.q`); the parent is the Repulser entity
+(`Repulser_Construct`'s `Node_AttachChild`), a bare `Object_ConstructBase`
+object whose `+0x2c` is `0x3006` - mode `0`, inherit the parent's - all the way
+up. So the model's world matrix is the scaled basis. The spin turns only the
+copy stored at `+0x1a0`, which is the matrix `WO_REPULSER_BLAST` is anchored to
+(`Repulser_SpawnBlastEffect`). The spin's sense against glam's
+`Quat::from_axis_angle` is not settled: the blast's ring angles are random as
+played here, so it does not show. **The model is visible for the whole
+lifetime**: `Repulser_Update` raises its bits `4|2` every call, and nothing
+clears them before the slot dies. The alpha reaches the GE the way the Bomb
+shockwave's does (`bomb_blast.rs`), white with that alpha. Confidence 88 (the
+live read below confirms every ease value).
+
+Whether it draws over the blast effect is not separately settled. Both are
+additive (`_ADD_GLOW`, the psys's own blend), so the order does not change the
+picture.
 
 ## `Repulser_Update` (`0x08875400`): two phases and a lifetime
 
@@ -269,6 +317,155 @@ Repulser_SetHitLatch(r, i, 1);                              // +0x1f0 + i
 - Shields are not tested here; the pending-damage drain does that, as for every
   weapon ([shield-pickup.md](shield-pickup.md)).
 
+## 2026-10-04: live on PPSSPP - the timeline, the field model and the travel emitter
+
+pulse-repulser-2. PPSSPP v1.20.4 software renderer, Pulse `UCUS98712`, Time
+Trial on Talon's Junction, craft parked on the line. The Repulser was fired by
+setting bit `0x10000` in world record 0's `+0x1b8` inside a
+`Weapons_DispatchFire` (`0x08861814`) break. `Weapon_FireRepulser` (`0x0886ce8c`)
+then broke with `a0` = pool `0x09b75ac0`, `live` 0, entity `0x09b75b90`.
+`Repulser_Update` (`0x08875400`) was broken on every call until the entity
+retired: **96 calls**. Three runs agree. The probe is `probe.py`, and
+`live1.jsonl`..`live3.jsonl` are in the lane's scratch.
+
+| Call | `dt` (`f12`) | age `+0x1ec` | state `+0x50` | `+0x204` | `+0x1f8` | `+0x210` | `+0x21c` | cursor 0 point | cursor 1 point |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 0.016683 | 0 | 0 | 1.0 | 0.7 | 0 | 0 | - | - |
+| 1 | 0.016968 | 0.016683 | 0 | 0.96 | 0.7 | 0.2 | 0 | - | - |
+| 2 | 0.016471 | 0.033651 | 0 | 0.924 | 0.7 | 0.36 | 0 | - | - |
+| 3 | 0.016677 | 0.050122 | 0 | 0.924 | 0.7 | 0.36 | 0 | - | - |
+| 4 | 0.016831 | 0.066799 | 0 | 0.8916 | 0.7 | 0.488 | 0 | - | - |
+| 44 | 0.016550 | 0.734266 | 0 | 0.609011 | 0.7 | 0.99968 | -1.8264 | - | - |
+| 47 | 0.016607 | 0.784210 | 0 | 0.609011 | 0.865 | 0.99974 | -1.9155 | - | - |
+| 48 | 0.016690 | 0.800817 | **1** | 0.609011 | 0.865 | **1.0** | -1.9155 | 416 (path 1) | 416 |
+| 49 | 0.016723 | 0.817507 | 1 | 0.609011 | 1.02175 | 0.9 | -2.0029 | 421 | 414 |
+| 50 | 0.016683 | 0.834230 | 1 | 0.609011 | 1.17066 | 0.81 | -2.0885 | 2 (path 0) | 412 |
+| 95 | 0.016682 | 1.584987 | 1 | 0.609011 | 3.53009 | 0.02028 | -4.2149 | 227 | 322 |
+
+Each row is read at the entry of that call, so it shows the state the previous
+call left behind.
+
+- **The waves step once per call, and the update runs once per 60 Hz frame**
+  (`dt` = 1/60 to within 2 %). Cursor 0 moves `+5` points a call and wraps from
+  path 1 to path 0 (416, 421, then 2 = 421 + 5 - 424). Cursor 1 moves `-2`.
+  `Repulser_Update` and `Repulser_AdvanceWave`'s step counts rise to 90 and 88.
+  This is one stationary Time Trial on PPSSPP. It confirms the steps-per-call
+  law, not the frame pacing of real hardware.
+- **The eases step `(int)(dt / (1/60))` times, so a call with `dt` under 1/60
+  steps them zero times** (calls 3, 45 and 46). That is about a third of the
+  calls on PPSSPP, the same artefact `ship-shockwave.md` measured. It is why the
+  original is still shrinking at call 40 while a once-a-tick port has switched.
+  Align frames by ease state, not by call count. Every stepped value matches the
+  constants `Repulser_Init` writes: shrink `x 0.9 + 0.06`, the switch below
+  `0.61` (0.610013 to 0.609011), grow `0.7 -> 0.865 -> 1.02175`, alpha
+  `0.2, 0.36, 0.488` then `1.0, 0.9, 0.81` once the waves start. The wave start
+  is at age 0.8008, just past `blast_time` 0.8.
+- **`~REPULSORTRAVEL` is placed at the world origin.** The emitter's `+0x50`
+  reads `0x09b75ce0` = entity `+0x150` (`Repulser_Init`, `0x088753a0`).
+  `SoundEmitter_Update` (`0x08939720`) copies that pointer's `+0x30`, i.e.
+  entity `+0x180`. That stayed `(0, 0, 0)` for all 96 calls, and so did the
+  emitter's own position. Nothing in any Repulser function writes
+  `+0x150..+0x18f`, and the pool allocates entities zeroed
+  (`RepulserPool_Construct`: `Mem_Alloc(0x270)`, then a zero fill). Radius
+  `600.0` confirmed (`+0x38`). Confidence 90.
+- **And the cue binds no sound anyway.** `~REPULSORTRAVEL` (`weapons.bnk` cue
+  34) is one command on both PSP pressings: opcode `0x14`, operand `0`, with no
+  key-on and no child grain (`sblk_cue_audit`, pinned by
+  `sfx_weapon_ground_truth::repulsortravel_binds_no_sound_on_pulse_psp`). The
+  port plays nothing for it. PS2 was not checked; the audit example does not
+  open the PS2 disc.
+
+### Which ring is which, in the original's frames
+
+The original's compact, beaded ring around the craft (calls 10-30) is **the
+blast psys, not the field model**. The probe held `+0x210` and `+0x218` at 0 on
+every call, which holds the field model's alpha at zero, and the bead ring
+stayed (`shots/psp-zero-alpha.png`). The field model itself is a faint smooth
+glow, which is also what this port draws (`shots/nbk.png`, blast skipped).
+
+**Open, seen once:**
+
+- The blast's bead ring differs. In this port it starts wide (about 13.6
+  units) and collapses inward by call 20. In the original it is compact around
+  the craft from call 10 to call 40, then whitens into a cloud. That is
+  `WO_REPULSER_BLAST`'s own playback (`docs/formats/pob.md`), not the field
+  model.
+- At wave start the original shows a blue screen tint (flash kind 2) with the
+  waves streaming off. This port whites out the whole frame
+  (`shots/oag-still-047.png` against `psp-live2-049.png`). Still unexplained.
+
+## The fork wave, read (2026-10-04, pulse-repulser-2)
+
+`AiTrack_StepForward` (`0x0887e174`), read whole, with `mode` as its third
+argument. A path record is `0x20` bytes: `+0x00` point count, `+0x08` points
+(`0x70` stride), `+0x10` exit junction. A junction's four slots are
+predecessors then successors (`oag_vex::track`): `+0x04` is `prev[1]`, so a set
+one means the walk has **arrived at a merge**; `+0x08` is `next[0]` and `+0x0c`
+is `next[1]`, the alternate.
+
+```c
+while (steps > 0) {
+    room = path->count - point - 1;
+    if (steps <= room) { point += steps; steps = 0; return 0; }
+    point += room; steps -= room;                       // now on the path's last point
+    if (exit->prev[1] && mode != 1) return 2;           // a merge: caller retries with mode 1
+    if (exit->alternate && mode != 2 && mode != 3) return 1;   // a fork: steps left in *steps
+    steps -= 1; point = 0;
+    path = (mode == 3) ? exit->alternate : exit->next;  // 3 takes the branch, 2 the primary
+    mode = 0;
+}
+```
+
+`Repulser_AdvanceWave` (`0x08876914`), non-init call. It loops the stepper
+until the steps are spent.
+
+- **Return 1 with `+0x25c` clear:** spawn a third `WO_REPULSER` (`REP2`,
+  `0x32504552`) anchored at `+0xe0`, keep its handle in `+0x5c`, reset the
+  `+0xe0` matrix to identity, and copy **this wave's cursor** to `+0x24c`. Then
+  `+0x260` = this wave's direction and `+0x25c` = 1. This wave carries on with
+  mode 2, the primary.
+- **Return 2:** retry with mode 1, which passes the merge.
+- **After the loop:** if a fork wave is live, runs in this wave's direction,
+  and is not the wave being advanced, advance it recursively:
+  `AdvanceWave(r, +0x24c, +0xe0, +0x5c, +0x260, mode, steps, 0)`. On the call
+  that spawned it, mode is 3 (take the alternate) and steps is what was left at
+  the fork. After that it is the parent's mode and full step count. **On the
+  spawn call the fork's previous point is set to its current one**
+  (`+0x140 = +0x110`), so it sweeps nothing across the jump.
+- **One fork per Repulser**, latched by `+0x25c` until `Repulser_Reset`.
+- **The sweep tests it against craft only.** `RepulserPool_SweepTargets` tests
+  Mines and Bombs against waves 0 and 1.
+
+Confidence 88 for this in-run path, off the **forward** wave.
+
+**`AiTrack_StepBackward` (`0x0887e2f0`) does not mirror it at an entry
+junction.** Its listing reads the same `path+0x10` junction
+(`0x0887e334 lw t1,0x10(t3)`) and the same slots (`+0x04`, `+0x0c`, `+0x08`).
+On reaching point 0 it moves to that junction's `next[0]` (or `next[1]` under
+mode 3) and lands on that path's **last** point (`count - 1`). What that means
+for a backward wave at a path's start is not established: either the runtime
+path record differs from the disc's, or the walk does something odd. So no fork
+is built off the backward wave, and `AiTrack_StepBackward` stays at 80.
+
+`Repulser_ForkAtJunction` (`0x08876634`) is the **init-tick** variant, called
+from `AdvanceWave`'s `init != 0` branch when the slot is free. It runs once,
+from the firer's own cursor:
+
+1. `AiTrack_LocateOnSiblingPath` (`0x0887d4d4`) picks a sibling path. That is
+   the other successor of this path's exit junction, else one of its entry
+   junction's two predecessors. If one exists, it relocates the cursor with
+   `AiTrack_UpdateCursor(500.0, .., excluded = this path)`.
+2. If the relocated point is within **10 units** of the firer's (`dist^2 <
+   100.0`), and `AiTrack_PathListsNeighbour` (`0x0887d970`) finds the new path
+   in the old path's list (count at `track+0x0c+4i`, entries at
+   `track+0x4c+0x10i`), the third wave spawns there.
+3. Its direction is `Repulser_CursorPastHalfPath` (`0x088765e4`), i.e.
+   `point > count / 2`. That sends it backward from the far half of the branch
+   and forward from the near half.
+
+Confidence 72. The list's meaning is inferred from this one use; hence the
+`_q`s on the two helpers.
+
 ## AI
 
 [weapon-ai.md](weapon-ai.md)'s switch puts weapon id 11 (Repulser) with the
@@ -287,16 +484,19 @@ measured: the waves follow the primary ring (no fork), step ring points
 corridor width at the craft's nearest ring point; the effects' frame comes from
 the nearest spline sample.
 
-**Not drawn: the field model.** Deferred for time, not confidence - its easing
-and frame are read above. Until it lands the 0.8 s blast phase shows almost
-nothing: `WO_REPULSER_BLAST` is fifty sub-unit sparks on a 13.6-unit ring,
-collapsing inward at 0.625 units a tick (read off the parsed `.pob`, 2026-10-04).
-Its flag `0x200000` (evenly stepped ring angles) and selector-5 record are not
-played by `oag_render::psys`.
-
-**The wave-start frame is close to a whiteout** in this port: both waves'
-5-to-17-unit sprites spawn at the firer, just ahead of the chase camera.
-Unverified against the original.
+**2026-10-04, pulse-repulser-2:** the field model draws (`race::repulser_field`,
+riding `bomb_blast::BombBlastModels`). Each `Repulser_Update` steps its eases
+once, which is a chosen rate. Its basis comes from the nearest spline sample to
+the firer, where the original reads the AI-track point under the firer's
+cursor. `WO_REPULSER_BLAST` takes the field's basis turned by the `+0x21c` spin,
+through `Stage::orient`/`stretch`. The third wave forks at a split
+(`oag_gameplay::projectile::repulser::fork` on `oag_race::Course::branches`;
+05, 07, 14 and 23 carry a branch, `repulser_fork_ground_truth`), off the
+forward wave only. The fork is
+hashed only while live, so every committed reference reproduced unchanged.
+`~REPULSORTRAVEL` stays unwired (see the live section). The blast's own
+playback (flag `0x200000` and the selector-5 record, `docs/formats/pob.md`) and
+the wave-start whiteout are the open picture gaps.
 
 **HD now hands it out on this law.** HD's `weaponstats_elimination.xml`
 (`DATA00`/`DATA02.PSARC`) authors the same block and weights it `ai=8 human=8`;
@@ -306,9 +506,12 @@ HD's own Repulser law is unread.
 
 - `FUN_0886d474` (remote destroy by id, under 50, not renamed) and the network
   broadcast payloads.
-- `FUN_088765e4`: "is the cursor past half its path", used by the fork tick;
-  under 50, not renamed.
-- The field model's exact matrix and whether it draws over the blast effect.
-- Nothing here is runtime-verified. A PPSSPP watchpoint on a live Repulser's
-  `+0x1ec` age and `+0x50` state, and a write breakpoint on a target's `+0x110`,
-  would lift the timeline and the hit law to the 85-94 band.
+- What `AiTrack_StepBackward` meets at a path's start (see the fork section).
+  It reads the exit junction's successors.
+- Whether the branches on 07, 14 and 23 are real second routes or coincident
+  duplicates of their primary path. Their sample counts match exactly; 05's do
+  not.
+- The hit law is still static: a write breakpoint on a victim's `+0x110`
+  during a live Eliminator Repulser would lift `Repulser_HitCraft`.
+- The spin's sense against `Quat::from_axis_angle`. It does not show while the
+  blast's ring angles are random.

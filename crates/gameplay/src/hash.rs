@@ -523,6 +523,7 @@ fn write_repulser(hasher: &mut StateHasher, repulser: &Option<Repulser>) {
         wave_time,
         fronts,
         hit,
+        fork,
     } = repulser;
     hasher.write_u8(*owner);
     for value in [
@@ -551,6 +552,20 @@ fn write_repulser(hasher: &mut StateHasher, repulser: &Option<Repulser>) {
     }
     for latch in hit {
         hasher.write_u8(u8::from(*latch));
+    }
+    // **Only a live fork writes anything**, not a `None` byte: a Repulser that
+    // never crosses a split hashes exactly as it did before the fork existed,
+    // so every circuit without one keeps its committed reference.
+    if let Some(fork) = fork {
+        hasher.write_u8(1);
+        hasher.write_u32(u32::from(fork.branch.unwrap_or(u16::MAX)));
+        hasher.write_u32(fork.offset);
+        hasher.write_u32(fork.front.index);
+        for v in [fork.front.point, fork.front.previous] {
+            hasher.write_f32(v.x);
+            hasher.write_f32(v.y);
+            hasher.write_f32(v.z);
+        }
     }
 }
 

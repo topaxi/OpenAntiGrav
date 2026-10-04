@@ -535,6 +535,8 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     bomb_blast_pulse: None,
     // Named, not wired - see `oag_game::race::load::weapon_models`'s own doc
     // comment for what placing this would need and where reading it stopped.
+    // HD hands the Repulser out, but its own field-model law is unread.
+    repulser_field: None,
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
     cannon_look: Some(CANNON_LOOK),
 };
