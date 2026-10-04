@@ -554,6 +554,12 @@ def menu(args):
         # (`18_Track`, `02_Track` reversed).
         tap(dbg, "down", args.track_down, wait=0.6)
     tap(dbg, "cross", 1, wait=3.0)  # the track, whichever is selected
+    if args.ship_down:
+        # Ship Select is a vertical list (left/right is the skin) the profile
+        # persists; moving down it changes the player's team, which is how the
+        # AI roster's exclusion of the player's own team was checked
+        # (docs/ghidra/functions/psp-pulse-usa/grid.md).
+        tap(dbg, "down", args.ship_down, wait=0.8)
     tap(dbg, "cross", 1, wait=3.0)  # the ship
     expect(dbg, IN_GAME, "confirming the ship", timeout=30.0)
     print("loading the race", file=sys.stderr)
@@ -898,6 +904,14 @@ def main():
         help="press down N times on Track Select before confirming, to reach "
         "Moa Therma (1) or Metropia (2) from Talon's Junction. Implies --any-track's "
         "warning-only check.",
+    )
+    p.add_argument(
+        "--ship-down",
+        type=int,
+        default=0,
+        metavar="N",
+        help="press down N times on Ship Select before confirming, to fly a "
+        "different team from the one the profile holds.",
     )
     p.set_defaults(run=menu)
 
