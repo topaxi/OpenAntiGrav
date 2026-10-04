@@ -584,7 +584,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [A parser cannot fail on a field it does not know about, so coverage is now measured](handover/tooling/a-parser-cannot-fail-on-a-field-it.md)
 - [A chunk header is 0x20 bytes and then a *surface* record, and the byte after the layout says which space it is in](handover/tooling/a-chunk-header-is-0x20-bytes-and-then.md)
 - [HD ships a per-chunk PVS, and drawing every chunk was the whole "meshes that should not be there"](handover/rendering/hd-ships-a-per-chunk-pvs-and-drawing.md)
-- [HD's loading screen is recovered from its own constructor; three threads left](handover/frontend/hds-loading-screen-is-recovered-from-its-own.md)
+- [HD's loading screen is recovered; the seven unnamed mode ids and one flag writer are left](handover/frontend/hds-loading-screen-is-recovered-from-its-own.md)
 - [The race mix saturates; the per-voice SAS volume would settle whether it should](handover/audio/the-race-mix-saturates-the-per-voice-sas.md)
 - [The Autopilot pickup is built off its own two handlers; three of its parts are still ours](handover/gameplay/the-autopilot-pickup-is-built-off-its-own.md)
 - [Positional audio is recovered whole, and the pan is a table the disc computes from `cos` and `sin`](handover/audio/positional-audio-is-recovered-whole-and-the-pan.md)

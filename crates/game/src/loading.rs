@@ -155,6 +155,8 @@ pub struct Screen {
     palette: Option<assets::Palette>,
     /// The feature's own name, when its id was recovered.
     feature_title: Option<String>,
+    /// The heading over the paragraph, drawn in the row the name shares.
+    feature_heading: Option<String>,
     /// The paragraph under it, which takes the tip line's place on a title that
     /// has features rather than tips.
     feature_text: Option<String>,
@@ -221,21 +223,25 @@ impl Screen {
     /// English, [`oag_ui::strings::project_table`]'s own fallback.
     #[must_use]
     pub fn new(assets: &Assets, line_height: f32, draw: u64, language: Option<&str>) -> Self {
-        // **One feature, drawn.** The original picks a feature every time this
-        // screen goes up - `LoadingScreen_Construct` reduces a counter modulo a
-        // range its race mode selects, five for Eliminator and three or four
-        // otherwise. So this draws too, from `draw`, which the caller varies
-        // per screen and which is a seed rather than a clock read: a capture of
-        // this screen has to be reproducible.
-        //
-        // **From all of them, not from the mode's own deck.** Mapping this
-        // project's race modes onto the twenty-two ids HD's `g_GameState`
-        // carries is a separate inference, and eleven of those ids are named
-        // while the rest are not. Drawing from everything the title ships is
-        // the honest approximation of a deck whose size this build cannot pick.
-        // See `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
-        let shown = (!assets.features.is_empty())
-            .then(|| oag_core::rng::Rng::new(draw).next_u32() as usize % assets.features.len());
+        Self::for_mode(assets, line_height, draw, language, None)
+    }
+
+    /// The same, covering a race in `mode` - the source executable's own mode
+    /// id - which narrows the feature draw to that mode's deck.
+    ///
+    /// **One feature, drawn per screen from the mode's own deck**, as the
+    /// original's `LoadingScreen_Construct` does; see [`feature::pick`] and
+    /// `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`. `draw` is a seed
+    /// the caller varies per screen, not a clock read.
+    #[must_use]
+    pub fn for_mode(
+        assets: &Assets,
+        line_height: f32,
+        draw: u64,
+        language: Option<&str>,
+        mode: Option<u32>,
+    ) -> Self {
+        let shown = feature::pick(assets, mode, draw);
         Self {
             wave: Wave::new(),
             has_wave: assets.wave,
@@ -257,6 +263,9 @@ impl Screen {
             feature_title: shown
                 .and_then(|at| assets.features.get(at))
                 .and_then(|feature| feature.title.clone()),
+            feature_heading: shown
+                .and_then(|at| assets.features.get(at))
+                .and_then(|feature| feature.heading.clone()),
             feature_text: shown
                 .and_then(|at| assets.features.get(at))
                 .map(|feature| feature.description.clone()),
@@ -342,9 +351,8 @@ impl Screen {
     /// **A title's feature description where it has one, its rotating tips
     /// otherwise**, and never both: they are the same slot on the screen and no
     /// title in hand ships both. Pulse rotates its 26 on
-    /// [`TIP_FRAMES`]; a feature does not rotate, because what selects one is
-    /// the original's own `Feature type` and that is unread - see
-    /// [`pick_feature`].
+    /// [`TIP_FRAMES`]; a feature does not rotate: one is drawn per screen from
+    /// the mode's deck - see [`feature::pick`].
     #[must_use]
     pub fn tip(&self) -> Option<&str> {
         if let Some(text) = self.feature_text.as_deref() {
@@ -441,11 +449,10 @@ impl Screen {
             None => dim(colour),
         };
         let rule_ink = tint.map_or(dim(RULE_INK), |palette| dim(palette.ink));
-        // The trough is the one translucent colour, which is a **hypothesis**:
-        // `HD_LightGrey` is read once per variant and is a half-alpha dark grey
-        // on the served palette, which is the shape a trough has. Confidence
-        // 55, and the alternative is that it belongs to something this build
-        // does not draw at all.
+        // `HD_LightGrey` is the unfilled dots of the progression bar: a live
+        // frame of the original's fade-in shows the whole bar as dark
+        // translucent dots with `HD_Blue` dots filling from the left. Confidence
+        // 88; see `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
         let bar_trough = tint.map_or(dim(BAR_DOTS), |palette| dim(palette.dim));
         let bar_fill = tint.map_or(dim(BAR_FILL), |palette| dim(palette.accent));
 
@@ -528,12 +535,12 @@ impl Screen {
             // **Fitted, not stretched.** The aspect is kept because an
             // illustration squashed to a layout is a picture nobody authored.
             let (w, h) = (uv[2].max(1.0), uv[3].max(1.0));
-            let scale = (IMAGE_BOX.2 / w).min(IMAGE_BOX.3 / h);
+            let scale = (IMAGE_FIT.2 / w).min(IMAGE_FIT.3 / h);
             let (drawn_w, drawn_h) = (w * scale, h * scale);
             out.push(Draw::Sprite {
                 rect: [
-                    IMAGE_BOX.0 + (IMAGE_BOX.2 - drawn_w) / 2.0,
-                    IMAGE_BOX.1 + (IMAGE_BOX.3 - drawn_h) / 2.0,
+                    IMAGE_FIT.0 + (IMAGE_FIT.2 - drawn_w) / 2.0,
+                    IMAGE_FIT.1 + (IMAGE_FIT.3 - drawn_h) / 2.0,
                     drawn_w,
                     drawn_h,
                 ],
@@ -542,30 +549,16 @@ impl Screen {
             });
         }
 
-        if let Some(title) = self.feature_title() {
-            if let Some(uv) = self.subtitle_arrow {
-                out.push(Draw::Sprite {
-                    rect: [
-                        PROSE_BOX.0,
-                        FEATURE_TITLE_Y + 1.0,
-                        MARKER_SIZE * 0.75,
-                        MARKER_SIZE * 0.75,
-                    ],
-                    uv,
-                    color: dim(ON_BACKDROP),
-                });
-            }
-            out.push(Draw::Text {
-                x: PROSE_BOX.0 + MARKER_SIZE,
-                y: FEATURE_TITLE_Y,
-                scale: self.text(FEATURE_TITLE_SCALE),
-                color: ink(HEADING),
-                border,
-                align: Align::Left,
-                text: title.to_string(),
-                wrap_width: None,
-            });
+        feature::Rows {
+            arrow: self.subtitle_arrow,
+            arrow_color: dim(ON_BACKDROP),
+            color: ink(HEADING),
+            border,
+            scale: self.text(feature::TITLE_SCALE),
+            title: self.feature_title(),
+            heading: self.feature_heading.as_deref(),
         }
+        .draw(&mut out);
 
         // **The progression bar, drawn flat.** The original has one and fills
         // it with `dot.gtf` tiled; `Draw::Sprite` has no repeat mode, so an 8x8
@@ -863,7 +856,11 @@ const CORNER_SIZE: f32 = 5.0;
 /// Where the illustration goes: `x, y, width, height`.
 const IMAGE_BOX: (f32, f32, f32, f32) = (PANEL_X, 60.0, 150.0, 84.0);
 
-/// Where the feature's name and prose go, right of the picture.
+/// Where the picture is fitted, inside [`IMAGE_BOX`] and under the row its name
+/// shares with the prose's heading.
+const IMAGE_FIT: (f32, f32, f32, f32) = (PANEL_X, 80.0, 150.0, 62.0);
+
+/// Where the feature's heading and prose go, right of the picture.
 const PROSE_BOX: (f32, f32, f32, f32) = (206.0, 60.0, PANEL_RIGHT - 206.0, 84.0);
 
 /// How far apart the counted rows sit under a feature layout's bar.
@@ -891,12 +888,6 @@ fn corners(bx: (f32, f32, f32, f32)) -> [(f32, f32); 4] {
         (bx.0 + bx.2 - CORNER_SIZE, bx.1 + bx.3 - CORNER_SIZE),
     ]
 }
-
-/// Where a feature's own name goes, above its prose.
-const FEATURE_TITLE_Y: f32 = 63.0;
-
-/// And how big. Between the heading and the prose, because it is a subheading.
-const FEATURE_TITLE_SCALE: f32 = 1.1;
 
 /// The outline drawn behind this screen's text when a backdrop is under it.
 ///
@@ -975,9 +966,13 @@ const CURRENT: [f32; 4] = [0.5, 0.58, 0.66, 1.0];
 const CENTRED_ROW_PITCH: f32 = 16.0;
 
 mod assets;
+mod feature;
 mod wording;
 pub use assets::{Art, Assets, Feature, tips};
+pub use feature::executable_mode;
 use wording::{counted, counts, estimated_fraction, fraction, heading, percentage, step_line};
 
+#[cfg(test)]
+mod deck_tests;
 #[cfg(test)]
 mod tests;

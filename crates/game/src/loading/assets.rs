@@ -47,11 +47,11 @@ pub struct Assets {
     /// [`super::Screen::new`]'s to decide, because the original decides it per
     /// screen rather than per disc.
     ///
-    /// One of the set, chosen at load: HD rotates through five and this build
-    /// picks one for the run rather than cycling, because which one the
-    /// original picks is `Feature type == %i` and what drives that is unread.
-    /// See [`Feature`].
+    /// See [`Feature`]; which one is up is [`Self::deck`]'s and the screen's.
     pub features: Vec<Feature>,
+    /// Which of the features a race of each mode may show, when the title's
+    /// rule is read. See [`oag_title::loading::Deck`].
+    pub deck: Option<oag_title::loading::Deck>,
     /// The word under the screen, resolved out of the disc's string table.
     ///
     /// `None` on a title that names no caption id, or whose table does not
@@ -68,8 +68,16 @@ pub struct Assets {
 /// `Draw::Sprite` on the screen indexes it.
 #[derive(Debug)]
 pub struct Feature {
+    /// Its place in the title's own table, which is the index the original's
+    /// `Feature type` reports and the one a [`oag_title::loading::Deck`] names.
+    ///
+    /// Kept because a feature whose picture or prose does not resolve is left
+    /// out of [`Assets::features`], which would shift every position after it.
+    pub slot: u8,
     /// Its name, where the title carries an id for one.
     pub title: Option<String>,
+    /// The heading over its paragraph.
+    pub heading: Option<String>,
     /// The paragraph under it.
     pub description: String,
 }
@@ -87,7 +95,7 @@ pub struct Palette {
     pub ink: [f32; 4],
     /// The accent.
     pub accent: [f32; 4],
-    /// The one translucent colour, drawn as the bar's trough on a hypothesis.
+    /// The one translucent colour: the unfilled dots of the progression bar.
     pub dim: [f32; 4],
 }
 
@@ -151,6 +159,7 @@ impl Default for Assets {
             art: None,
             palette: None,
             features: Vec::new(),
+            deck: None,
             caption: None,
             notes: Vec::new(),
         }
@@ -254,11 +263,6 @@ impl Assets {
             notes.push(format!("{}: {} loading tip(s)", wave.tips, tips.len()));
         }
 
-        // **One of the set, picked for the whole run rather than cycled.** The
-        // original rotates - its `Feature type == %i` says which is up - and
-        // what drives that number is unread, so cycling here would be inventing
-        // a rhythm. `pick_feature` says how the one is chosen and why it is not
-        // arbitrary.
         // **One sheet for the whole screen, and every feature in it.** The
         // illustrations and the marks the original frames this screen with go
         // into the same atlas, because a renderer is built with one and every
@@ -317,7 +321,12 @@ impl Assets {
         // so a draw cannot land on a half-loaded one.
         let mut features = Vec::new();
         let mut illustrated: Vec<&str> = Vec::new();
-        for feature in chosen.map(|style| style.features).unwrap_or_default() {
+        for (slot, feature) in chosen
+            .map(|style| style.features)
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+        {
             let Some(description) = prose.get(feature.description) else {
                 notes.push(format!("{}: no such string", feature.description));
                 continue;
@@ -327,11 +336,19 @@ impl Assets {
             }
             illustrated.push(feature.image);
             features.push(Feature {
+                slot: slot as u8,
+                // The same lookup as the title, with the served table behind
+                // it: the heading ids are not in the copy that carries the
+                // two Fury descriptions.
+                heading: feature
+                    .heading
+                    .and_then(|id| prose.get(id).or_else(|| strings.get(id)))
+                    .map(str::to_string),
                 // `get` rather than `get_or_id`: a missing title draws no title,
                 // where showing the id would put `FE_PILOT_ASSIST` on screen.
                 title: feature
                     .title
-                    .and_then(|id| prose.get(id))
+                    .and_then(|id| prose.get(id).or_else(|| strings.get(id)))
                     .map(str::to_string),
                 description: description.to_string(),
             });
@@ -432,6 +449,7 @@ impl Assets {
             art,
             palette,
             features,
+            deck: loading.deck,
             caption,
             notes,
         }

@@ -115,6 +115,15 @@ subclass and no `ModeManager` of their own: [race-manager.md](race-manager.md)
 counts fifteen concrete race modes against this file's ten, and Zone, Zone
 Battle and Detonator are the obvious candidates. Not established.
 
+**What the loading screen says about three of the seven**, 2026-10-04
+(`LoadingScreen_Construct`, [loading-screen.md](loading-screen.md)): id `6`
+draws its feature from `{0, 1}`, id `0xd` from `{0, 1, 3}` (the deck
+`MPArcade`'s `0x15` shares), and id `0xe` always shows feature `1`. That they
+carry decks of their own is what keeps them from being the default row, so
+they are real modes. Which game mode each is stays open; `0xe` is also the id
+`Environment_LoadStageTextures` branches Zone against Detonator on, which
+fits Zone or Detonator but does not choose between them.
+
 **Why several ids share a class.** `SPArcade` at 3, 9 and 12, `MPArcade` at 16,
 18 and 21 - a single race, and presumably its variants (one-off, campaign cell,
 custom) reaching the same manager. Which is which is unread.

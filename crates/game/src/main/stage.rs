@@ -164,6 +164,9 @@ impl Stage {
         sprites: &oag_game::sprite::Sheet,
         assets: &loading::Assets,
         draw: u64,
+        // The source executable's mode id for the race being loaded, which
+        // picks the loading screen's feature deck. See `loading::Screen::for_mode`.
+        mode: Option<u32>,
         trace: bool,
         // See `Stage::loading`'s own parameter of the same name.
         language: Option<&str>,
@@ -190,7 +193,7 @@ impl Stage {
             atlas: font.clone(),
             renderer,
             wave,
-            screen: loading::Screen::new(assets, font.line_height, draw, language),
+            screen: loading::Screen::for_mode(assets, font.line_height, draw, language, mode),
             shell: None,
             media: None,
             race: Some(worker),

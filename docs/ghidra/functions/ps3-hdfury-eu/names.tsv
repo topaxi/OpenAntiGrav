@@ -491,3 +491,8 @@
 0x0005e948	function	RaceManager_Update	72	gantry-clock.md
 0x00055488	function	RaceManager_ResetGantryTime	78	gantry-clock.md
 0x00056368	function	RaceManager_SetPhase	75	gantry-clock.md
+0x002b61c8	function	LoadingScreen_Draw	80	loading-screen.md
+0x002b7cd0	function	LoadingScreen_BuildText	85	loading-screen.md
+0x002b86a0	function	LoadingScreen_LoadAssets	78	loading-screen.md
+0x006762f8	function	Libc_Rand	88	loading-screen.md
+0x00b979fc	data	g_FuryContentFlags	78	loading-screen.md
