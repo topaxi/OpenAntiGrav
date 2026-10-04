@@ -369,6 +369,8 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         hemisphere: r"Data\Weapons\explosion_hemisphere.vex",
         shockwave: r"Data\Weapons\Bomb_Shockwave.vex",
     }),
+    // `Repulser_Construct` (`0x08875008`), format string `0x08a7ccdc`.
+    repulser_field: Some(r"Data\Weapons\pulse_repulsorwave.vex"),
     leachbeam_ball: None,
     // `None` is this title's own reading - see the field's doc comment.
     cannon_look: None,

@@ -99,6 +99,7 @@ pub const TITLE: &Title = &Title {
         // Pure's Bomb authors no `timetodie` at all and never detonates -
         // see `oag_tables::weapons::BombStats::timetodie`.
         bomb_blast_pulse: None,
+        repulser_field: None,
         leachbeam_ball: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
         cannon_look: None,

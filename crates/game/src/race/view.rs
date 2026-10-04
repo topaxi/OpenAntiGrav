@@ -289,6 +289,10 @@ pub struct RaceView {
     /// `Race::advance_repulser_visual`.
     pub(super) repulser_effects:
         [[Option<psys::Playing>; 3]; oag_gameplay::projectile::repulser::POOL_SIZE],
+    /// Per [`oag_gameplay::World::repulsers`] slot, its field model's eases -
+    /// see [`repulser_field`].
+    pub(super) repulser_fields:
+        [Option<repulser_field::Field>; oag_gameplay::projectile::repulser::POOL_SIZE],
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,

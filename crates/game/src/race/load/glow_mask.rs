@@ -45,6 +45,8 @@ pub(super) fn stamp_models(loaded: &mut Loaded, by_texel: bool) {
     for model in [
         &mut loaded.bomb_blast_models.hemisphere,
         &mut loaded.bomb_blast_models.shockwave,
+        // `noise2_ADD_GLOW`, the same glow-named transparent batch as the dome.
+        &mut loaded.bomb_blast_models.repulser_field,
     ]
     .into_iter()
     .flatten()

@@ -148,6 +148,7 @@ mod pads;
 mod perfect_start;
 mod reconcile;
 mod replay;
+mod repulser_field;
 mod respawn;
 mod results;
 mod scene;

@@ -13,6 +13,7 @@
 
 use super::super::*;
 use super::motion::Snapshot;
+use oag_gameplay::projectile::repulser::POOL_SIZE;
 
 /// One kind's own drawables, one per pool slot - the Rocket's, the Mine's or
 /// the Bomb's, built identically.
@@ -332,10 +333,7 @@ impl super::Scene {
         race: &Race,
         queue: &wgpu::Queue,
         view_projection: Mat4,
-    ) -> (
-        [bool; bomb_blast::BOMB_BLAST_SLOTS],
-        [bool; bomb_blast::BOMB_BLAST_SLOTS],
-    ) {
+    ) -> BlastsActive {
         let draws = race.bomb_blast_draws();
         let mut hemisphere_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
         let mut shockwave_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
@@ -365,19 +363,46 @@ impl super::Scene {
                 shockwave_active[slot] = true;
             }
         }
-        (hemisphere_active, shockwave_active)
+        let mut repulser_active = [false; POOL_SIZE];
+        for (slot, draw) in race.repulser_field_draws().iter().enumerate() {
+            let (Some((matrix, alpha)), Some(drawable)) =
+                (draw, self.bomb_blast.repulser_field.get(slot))
+            else {
+                continue;
+            };
+            drawable.write(queue, view_projection, *matrix, view_projection * *matrix);
+            // `Image_SetVertexColours(model, alpha << 24 | 0xffffff)`, the
+            // shockwave's own mechanism above.
+            drawable.tint(queue, [1.0, 1.0, 1.0, *alpha], &mut Vec::new());
+            repulser_active[slot] = true;
+        }
+        BlastsActive {
+            hemisphere: hemisphere_active,
+            shockwave: shockwave_active,
+            repulser_field: repulser_active,
+        }
     }
 
     /// Draws every live Bomb blast's two models - the two arrays are
     /// [`Self::write_bomb_blasts`]'s own return.
     pub(super) fn draw_bomb_blasts(
         &self,
-        hemisphere_active: &[bool; bomb_blast::BOMB_BLAST_SLOTS],
-        shockwave_active: &[bool; bomb_blast::BOMB_BLAST_SLOTS],
+        active: &BlastsActive,
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
-        for (slot, _) in hemisphere_active
+        for (slot, _) in active
+            .repulser_field
+            .iter()
+            .enumerate()
+            .filter(|(_, live)| **live)
+        {
+            if let Some(drawable) = self.bomb_blast.repulser_field.get(slot) {
+                stats.add(drawable.draw(pass, None, None, None, None));
+            }
+        }
+        for (slot, _) in active
+            .hemisphere
             .iter()
             .enumerate()
             .filter(|(_, live)| **live)
@@ -386,7 +411,8 @@ impl super::Scene {
                 stats.add(drawable.draw(pass, None, None, None, None));
             }
         }
-        for (slot, _) in shockwave_active
+        for (slot, _) in active
+            .shockwave
             .iter()
             .enumerate()
             .filter(|(_, live)| **live)
@@ -396,6 +422,15 @@ impl super::Scene {
             }
         }
     }
+}
+
+/// [`super::Scene::write_bomb_blasts`]'s return: which slots of each eased
+/// view-side model are live and visible this frame.
+pub(super) struct BlastsActive {
+    hemisphere: [bool; bomb_blast::BOMB_BLAST_SLOTS],
+    shockwave: [bool; bomb_blast::BOMB_BLAST_SLOTS],
+    /// Per Repulser pool slot - see `repulser_field`.
+    repulser_field: [bool; POOL_SIZE],
 }
 
 /// One kind's own write loop - the shared body of

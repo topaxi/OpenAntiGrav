@@ -129,14 +129,13 @@ impl Race {
     ///   (`Repulser_SpawnWaves`) and follow the two wave centres.
     /// - All three are released when the slot empties (`Repulser_Reset`).
     ///
-    /// **Not drawn: the field model** `Data\Weapons\pulse_repulsorwave.vex` that
-    /// `Repulser_Construct` loads and `Repulser_UpdateFieldModel` scales and
-    /// fades around the firer. Deferred for time rather than confidence: its
-    /// easing and frame are read (72, `repulser.md`), and it needs a model pool
-    /// with per-instance scale and vertex alpha. Until it lands the blast phase
-    /// shows little more than this sparse ring of sparks.
+    /// The field model `Data\Weapons\pulse_repulsorwave.vex` steps here too
+    /// ([`Race::advance_repulser_fields`]), and the blast takes the field's
+    /// unscaled basis turned by its spin, the matrix `+0x1a0` it is anchored
+    /// to (`Repulser_UpdateFieldModel`, `0x08876168`).
     pub(in crate::race) fn advance_repulser_visual(&mut self) {
         let dt = self.sim.dt;
+        self.advance_repulser_fields();
         for index in 0..self.sim.world.repulsers.len() {
             let handles = self.view.repulser_effects[index];
             let Some(repulser) = self.sim.world.repulsers[index] else {
@@ -159,6 +158,19 @@ impl Race {
                 }
             } else if let Some(playing) = handles[0] {
                 self.view.stage.follow(playing, firer);
+            }
+            if let (Some(playing), Some(field), Some((_, sample, _))) = (
+                self.view.repulser_effects[index][0],
+                self.view.repulser_fields[index],
+                self.sim.spline.nearest(firer),
+            ) {
+                let (side, up, _) = crate::race::repulser_field::field_basis(
+                    Vec3::from_array(sample.lateral),
+                    Vec3::from_array(sample.down),
+                );
+                self.view.stage.orient(playing, up);
+                let spun = oag_core::math::Quat::from_axis_angle(up, field.spin) * side;
+                self.view.stage.stretch(playing, 1.0, spun);
             }
             let Some(fronts) = repulser.fronts else {
                 continue;
