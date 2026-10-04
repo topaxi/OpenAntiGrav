@@ -42,7 +42,10 @@ fn loaded_eliminator_seeded(kill_target: Option<u32>, seed: Option<u64>) -> Opti
 /// Prints the finish in seconds beside the original's 85 s on `16_Track` with
 /// the player parked. This build: 17 to 154 s over seeds 1 to 240, median 75 s (2026-10-03,
 /// opponents firing on the original's own law, `oag_ai::weapon_ai`; 108 s on this project's
-/// older rule) - see `docs/gameplay/race-modes.md`.
+/// older rule) - see `docs/gameplay/race-modes.md`. **Those figures predate the
+/// Repulser (2026-10-04)**, which opponents now fire too; the four seeds here went
+/// from 71.4/105.8/64.3/53.2 s to 15.7/65.6/70.5/73.1 s, the 240-seed sweep was not
+/// re-run.
 fn a_parked_player_eliminator_finishes_at_five(seed: u64) {
     let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());
     let Some(mut race) = loaded_eliminator_seeded(Some(5), Some(seed)) else {

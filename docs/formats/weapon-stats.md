@@ -103,7 +103,7 @@ a union:
 | `Bomb` | `0x0880cef0` | `absorb blastforce blastradius damage damageradius slowdown_time trigger_radius timetodie` |
 | `Mine` | `0x0880d124` | the bomb's, less `damageradius` |
 | **`LeachBeam`** | `0x0880d328` | `repair absorb damage lock_max_dist lock_min_dist slowShipFactor range active_time energy_multiplier` - **all nine decoded** as `oag_tables::weapons::LeachBeamStats` (2026-09-08), and all nine spent as of 2026-09-16: the transfer, the lifetime, the range and, last, `slowShipFactor` - the one-shot thrust scale at `craft+0x31c`, see [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md). The window is the second pair `Ship_AcquireLock` reads (`stats+0x114`/`+0x118`, against the Missile's `+0x50`/`+0x54`) and its consumer is the reticle; see [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md). **This block authors no `slowdown_time`** - the only one of the seven that does not |
-| `Repulser` | `0x0880d58c` | `blastforce blastradius absorb damage slowdown_time blast_time wave_time` |
+| **`Repulser`** | **`0x0880d58c`** | `damage` `+0x128`, `blastRadius` `+0x12c` (spent nowhere), `blastForce` `+0x130`, `slowdown_time` `+0x134`, `absorb` `+0x138`, `blast_time` `+0x13c`, `wave_time` `+0x140` - read off the parser 2026-10-04, see [repulser.md](../ghidra/functions/psp-pulse-usa/repulser.md) |
 | **`Shuriken`** | **`0x0880d790`** | `absorb rhicochetForce blastForce blastradius rhicochetdamage blastdamage slowdown_time <class>speed launchSpeed fuse` - **decoded** but for the ricochet pair and `slowdown_time`, offsets and all, on [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md) |
 
 **Bold rows are decoded by `oag_tables::weapons`**; the rest are named here and

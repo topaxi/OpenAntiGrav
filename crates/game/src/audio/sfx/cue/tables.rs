@@ -16,7 +16,7 @@ impl Cue {
     pub const COUNTDOWN: [Self; 3] = [Self::Ready, Self::Go, Self::ContElim];
 
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 38] = [
+    pub const ALL: [Self; 40] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -55,6 +55,8 @@ impl Cue {
         Self::ShurikenLaunch,
         Self::ShurikenHit,
         Self::ShurikenTravel,
+        Self::Repulsor,
+        Self::RepulsorHit,
     ];
 
     /// The bank the cue is looked up in.
@@ -91,7 +93,9 @@ impl Cue {
             | Self::LeachEnergy
             | Self::ShurikenLaunch
             | Self::ShurikenHit
-            | Self::ShurikenTravel => BankName::Weapons,
+            | Self::ShurikenTravel
+            | Self::Repulsor
+            | Self::RepulsorHit => BankName::Weapons,
             Self::ShieldActive
             | Self::Engaging
             | Self::Disengaging
@@ -191,6 +195,8 @@ impl Cue {
             Self::ShurikenLaunch => "SHURIKEN",
             Self::ShurikenHit => "SHURIKENHIT",
             Self::ShurikenTravel => "~SHURIKENTRAVEL",
+            Self::Repulsor => "REPULSOR",
+            Self::RepulsorHit => "REPULSORHIT",
         }
     }
 
@@ -280,6 +286,9 @@ impl Cue {
             // Measured: `Shuriken_Init` and `Shuriken_Bounce` each write
             // `0x43960000` to the blade's own emitter's `+0x38`.
             Self::ShurikenTravel | Self::ShurikenHit => 300.0,
+            // `Repulser_HitCraft` writes `0x43960000` to the Repulser's own
+            // emitter's `+0x38` before it plays.
+            Self::RepulsorHit => 300.0,
             // Measured, not reused from `LeachAttach`'s `600.0` -
             // `LeachBeam_Advance`'s pulse block writes its own emitter at a
             // `300.0` falloff, half the beam body's own; see
@@ -405,6 +414,10 @@ impl Cue {
             // allocates for itself; see each variant's own doc comment.
             Self::ShurikenLaunch => Placement::Craft,
             Self::ShurikenHit | Self::ShurikenTravel => Placement::Point,
+            // `Repulser_Init` plays `REPULSOR` on the firer's emitter, and
+            // `Repulser_HitCraft` points the Repulser's own at the struck
+            // craft's node - so both sit on a craft, the firer and the victim.
+            Self::Repulsor | Self::RepulsorHit => Placement::Craft,
         }
     }
 }

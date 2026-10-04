@@ -28,36 +28,39 @@ fn table(odds: &[(Weapon, f32, f32)]) -> PickupTable {
     }
 }
 
-/// The stand-in for "weighted, and not implemented". **It has to be a weapon
-/// that stays out of [`IMPLEMENTED`]**, or the tests below invert silently
-/// the day it lands - which has now happened to three picks in a row: the
-/// `Rocket`, then the `Quake`, then the `LeachBeam`, each a reasonable choice
-/// when made and each built out from under this constant within weeks.
+/// The stand-in for "weighted, and not drawable".
 ///
-/// **The Repulser is the fourth and should be the last, because it is the one
-/// pick whose reason is a decision rather than a gap.** Every other weapon is
-/// now implemented, so there is nothing else to choose; and the Repulser is
-/// not merely unread but *deferred* - the shipped tables give it zero odds
-/// outside Eliminator, and this build has no Eliminator, so nobody has a
-/// reason to build it. See `HANDOVER.md`. If it ever does land, the honest
-/// replacement is not another weapon but a synthetic one, because at that
-/// point the premise "some weighted weapon is unimplemented" stops being true
-/// of the shipped table at all.
-const UNIMPLEMENTED: Weapon = Weapon::Repulser;
+/// **Every weapon is implemented since the Repulser landed (2026-10-04)**, so
+/// the premise "some weighted weapon cannot be handed out" is no longer true of
+/// [`IMPLEMENTED`] at all - the end this constant's earlier comment predicted.
+/// The restriction these tests guard is reached through `allowed` instead: the
+/// Repulser stays weighted and is left out of the subset passed, which is the
+/// same walk-over-a-subset the `IMPLEMENTED` filter runs.
+const EXCLUDED: Weapon = Weapon::Repulser;
+
+/// What every test here passes as `allowed`: everything but [`EXCLUDED`].
+fn drawable() -> Vec<Weapon> {
+    IMPLEMENTED
+        .iter()
+        .copied()
+        .filter(|&w| w != EXCLUDED)
+        .collect()
+}
 
 #[test]
 fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
     // A Repulser is weighted and a Repulser cannot be handed out, so this
     // is the real shape of the restriction rather than an empty table.
-    let repulsers_only = table(&[(UNIMPLEMENTED, 1.0, 1.0)]);
+    let repulsers_only = table(&[(EXCLUDED, 1.0, 1.0)]);
     let mut rng = Rng::new(1);
+    let allowed = drawable();
     assert_eq!(
         draw(
             &mut rng,
             &repulsers_only,
             Driver::HUMAN_UNPLACED,
             None,
-            None
+            Some(&allowed)
         ),
         None
     );
@@ -108,12 +111,19 @@ fn the_walk_visits_a_weight_in_proportion_to_it() {
     let weighted = table(&[
         (Weapon::Turbo, 3.0, 3.0),
         (Weapon::Shield, 1.0, 1.0),
-        (UNIMPLEMENTED, 96.0, 96.0),
+        (EXCLUDED, 96.0, 96.0),
     ]);
     let mut rng = Rng::new(99);
+    let allowed = drawable();
     let (mut turbos, mut shields) = (0, 0);
     for _ in 0..10_000 {
-        match draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None, None) {
+        match draw(
+            &mut rng,
+            &weighted,
+            Driver::HUMAN_UNPLACED,
+            None,
+            Some(&allowed),
+        ) {
             Some(Weapon::Turbo) => turbos += 1,
             Some(Weapon::Shield) => shields += 1,
             other => panic!("drew {other:?}, which is not implemented"),

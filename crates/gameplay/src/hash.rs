@@ -39,6 +39,7 @@ use oag_tables::weapons::{DisruptorEffectKind, Weapon};
 use crate::pickup::Held;
 use crate::projectile::leach_beam::{Beam, Kind as BeamKind};
 use crate::projectile::quake::Wave;
+use crate::projectile::repulser::Repulser;
 use crate::projectile::{Projectile, Projectiles};
 use crate::world::{Controller, Ship, World};
 
@@ -69,6 +70,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         projectiles,
         quake,
         leach_beam,
+        repulsers,
     } = world;
 
     hasher.write_u64(*tick);
@@ -107,6 +109,9 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
     write_projectiles(hasher, projectiles);
     write_quake(hasher, quake);
     write_leach_beam(hasher, leach_beam);
+    for repulser in repulsers {
+        write_repulser(hasher, repulser);
+    }
 }
 
 fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
@@ -498,6 +503,54 @@ fn write_quake(hasher: &mut StateHasher, quake: &Option<Wave>) {
                 hasher.write_u8(u8::from(*latch));
             }
         }
+    }
+}
+
+/// [`write_quake`]'s shape: a discriminant byte, then every field.
+fn write_repulser(hasher: &mut StateHasher, repulser: &Option<Repulser>) {
+    let Some(repulser) = repulser else {
+        hasher.write_u8(0);
+        return;
+    };
+    hasher.write_u8(1);
+    let Repulser {
+        owner,
+        age,
+        damage,
+        force,
+        slowdown_time,
+        blast_time,
+        wave_time,
+        fronts,
+        hit,
+    } = repulser;
+    hasher.write_u8(*owner);
+    for value in [
+        *age,
+        *damage,
+        *force,
+        *slowdown_time,
+        *blast_time,
+        *wave_time,
+    ] {
+        hasher.write_f32(value);
+    }
+    match fronts {
+        None => hasher.write_u8(0),
+        Some(fronts) => {
+            hasher.write_u8(1);
+            for front in fronts {
+                hasher.write_u32(front.index);
+                for v in [front.point, front.previous] {
+                    hasher.write_f32(v.x);
+                    hasher.write_f32(v.y);
+                    hasher.write_f32(v.z);
+                }
+            }
+        }
+    }
+    for latch in hit {
+        hasher.write_u8(u8::from(*latch));
     }
 }
 

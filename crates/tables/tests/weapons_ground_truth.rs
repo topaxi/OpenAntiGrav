@@ -636,3 +636,37 @@ fn every_decoded_weapon_slows_a_victim_within_the_global_limit() {
         }
     }
 }
+
+/// The Repulser's block decodes on both shipped tables, with the values the
+/// parser at `0x0880d58c` stores - read off both files with `oag-wad cat
+/// --expand` on 2026-10-04. A Repulser is in `IMPLEMENTED`, so a block that
+/// failed to decode would leave a pad handing out a weapon that never fires.
+/// See `docs/ghidra/functions/psp-pulse-usa/repulser.md`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_repulser_decodes_on_both_tables() {
+    let Some(tables) = tables() else { return };
+    for (name, blob) in &tables {
+        let stats = weapons::from_blob(blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let repulser = stats
+            .repulser()
+            .unwrap_or_else(|| panic!("{name}: no Repulser decoded"));
+        let (damage, absorb) = if *name == weapons::ELIMINATION_ENTRY {
+            (30.0, 15.0)
+        } else {
+            (20.0, 20.0)
+        };
+        assert_eq!(
+            repulser,
+            weapons::RepulserStats {
+                absorb,
+                damage,
+                blastforce: 40.0,
+                slowdown_time: 0.8,
+                blast_time: 0.8,
+                wave_time: 0.8,
+            },
+            "{name}"
+        );
+    }
+}

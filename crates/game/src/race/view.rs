@@ -284,6 +284,11 @@ pub struct RaceView {
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
     /// field's own doc comment for why.
     pub(super) quake_effect: Option<psys::Playing>,
+    /// Per [`oag_gameplay::World::repulsers`] slot, the three instances a live
+    /// Repulser carries: its blast, then its forward and backward wave. See
+    /// `Race::advance_repulser_visual`.
+    pub(super) repulser_effects:
+        [[Option<psys::Playing>; 3]; oag_gameplay::projectile::repulser::POOL_SIZE],
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,

@@ -560,10 +560,10 @@ weapons the *pool* would hand out and the authored *odds* never do.
   latency at each end is the recovered ordering (the drain runs after the
   step). See
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
-  The **Repulser** stays the one true "field the
-  craft *is in* rather than a projectile" - its handler copies four of its
-  own `<Stats>` onto the firing craft before it spawns anything - and is
-  still deferred as Eliminator-only, per `HANDOVER.md`.
+  The **Repulser** was read whole and built on 2026-10-04: it is not a
+  field the craft is in (the four copies its handler makes onto the firing
+  craft are never read) but a blast followed by two shockwaves that walk the
+  track - see [repulser.md](../ghidra/functions/psp-pulse-usa/repulser.md).
 
 - **Autopilot** is the AI's own controller taking over: `Ai_Construct`
   (`0x088536bc`) names the local player's input source the literal
@@ -623,11 +623,11 @@ back to `race` (with a report line) for a title that ships no second table -
 see [race-modes.md](race-modes.md#eliminator). A `SingleRace` weapon pad
 still cannot hand out a Shuriken - `RACE_ENTRY`'s odds are still zero there,
 unchanged - but an Eliminator one now can, through the table this section
-already measured. `Repulser` is still unreachable, for its own, independent
-reason: it is absent from `IMPLEMENTED` itself (see the list above), because
-no craft-state field a weapon can attach to yet exists for the "field the
-craft is in" mechanic its handler needs. Landing `Repulser` is a
-`crates/gameplay` question now, not a mode-existence one.
+already measured. `Repulser` became reachable the same way on 2026-10-04,
+when it joined `IMPLEMENTED`: an Eliminator pad hands it out at `ai="4"
+human="8"` (PSP), and a `SingleRace` pad still cannot. The reason it was
+held back - "a field the craft is in" with nothing to attach it to - was a
+misreading; see [repulser.md](../ghidra/functions/psp-pulse-usa/repulser.md).
 
 `crates/game/tests/shuriken_ground_truth.rs`'s own ground-truth test moved
 onto `Mode::Eliminator` the same day, for the reason above - it is the mode

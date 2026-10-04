@@ -10,7 +10,7 @@ plus the respawn-keeps-its-place test).
 - **Time to five is 0.9 times the original's** (2026-10-03, `pulse-eliminator-fire`): with
   opponents firing on the original's own law (`oag_ai::weapon_ai`, below), seeds 1 to 240,
   median **75 s**, mean 76 s, 17 to 154 s, 13.6 kills a minute. Not tuned toward 85 s, whose
-  provenance is a single number. Before it: median **108 s**, mean 108 s, 17 to 232 s, the field
+  provenance is a single number. Since 2026-10-04 opponents also fire the Repulser, and the 240-seed figures predate it; re-measured on the four gated seeds only: 13/16/5/9 went from 71.4/105.8/64.3/53.2 s to 15.7/65.6/70.5/73.1 s (seed 13: one Repulser finished five craft already at 8-15 of 95 shield). The 240-seed sweep was not re-run. Before it: median **108 s**, mean 108 s, 17 to 232 s, the field
   scoring 9.1 kills a minute, with empty-slot opponents steering for weapon pads. Before that (main at `64521c88`): median 117 s, 13 to
   225 s, 8.1 kills a minute; seeds 1 to 24 median 135 s. The original: 85 s.
 - **Pad steering shipped** (2026-10-03, `pulse-eliminator-pads`, chosen, not measured): an

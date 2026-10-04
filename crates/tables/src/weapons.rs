@@ -258,7 +258,7 @@ pub use disruptor::{
 pub use error::Error;
 pub use stats::{
     BombStats, CannonStats, LeachBeamStats, MineStats, MissileStats, PlasmaStats, QuakeStats,
-    RocketStats, ShurikenStats, Simple,
+    RepulserStats, RocketStats, ShurikenStats, Simple,
 };
 
 /// How likely a pad is to hand out one weapon, from one `<Pickupodds>` block.
@@ -359,6 +359,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::quake`].
     quake: Option<QuakeStats>,
+    /// The Repulser's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::repulser`].
+    repulser: Option<RepulserStats>,
     /// The LeachBeam's own block, or `None` for a file that omits it.
     ///
     /// Read it through [`Self::leach_beam`].
@@ -465,6 +469,14 @@ impl WeaponStats {
         self.quake
     }
 
+    /// The Repulser's `<Stats>`, or `None` when the file authors no Repulser.
+    ///
+    /// `None` on Pure, which authors no Repulser block.
+    #[must_use]
+    pub fn repulser(&self) -> Option<RepulserStats> {
+        self.repulser
+    }
+
     /// The LeachBeam's `<Stats>`, or `None` when the file authors no LeachBeam.
     ///
     /// `None` is a real state rather than a failure, exactly as [`Self::rocket`]'s
@@ -550,6 +562,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut bomb = None;
     let mut cannon = None;
     let mut quake = None;
+    let mut repulser = None;
     let mut leach_beam = None;
     let mut disruptor = None;
     let mut absorb = Vec::new();
@@ -764,6 +777,22 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
             })?;
             continue;
         }
+        if weapon_kind == Weapon::Repulser {
+            // Optional for the Bomb's reason. The parser's own spellings are
+            // `blastForce`/`blastRadius`, matched case-insensitively by the
+            // original's `strcasecmp`; the file says `blastforce`.
+            repulser = optional_block(&mut skipped, weapon_kind, || {
+                Ok(RepulserStats {
+                    absorb: number(block, "Stats", "absorb")?,
+                    damage: number(block, "Stats", "damage")?,
+                    blastforce: number(block, "Stats", "blastforce")?,
+                    slowdown_time: number(block, "Stats", "slowdown_time")?,
+                    blast_time: number(block, "Stats", "blast_time")?,
+                    wave_time: number(block, "Stats", "wave_time")?,
+                })
+            })?;
+            continue;
+        }
         if weapon_kind == Weapon::Quake {
             // Optional for the Bomb's reason: a title that tunes the Quake on
             // attributes this build does not read loses the Quake and keeps
@@ -834,6 +863,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         bomb,
         cannon,
         quake,
+        repulser,
         leach_beam,
         disruptor,
         absorb,

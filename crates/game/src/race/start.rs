@@ -535,6 +535,7 @@ impl Race {
                 projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
                 projectile_flare_orbit: [None; oag_gameplay::projectile::MAX_PROJECTILES],
                 quake_effect: None,
+                repulser_effects: [[None; 3]; oag_gameplay::projectile::repulser::POOL_SIZE],
                 quake_point: None,
                 leach_beam_effect: None,
                 leach_charge_effect: [None; MAX_SHIPS],

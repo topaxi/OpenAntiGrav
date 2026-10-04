@@ -59,6 +59,15 @@ pub struct Course {
     start_index: usize,
     /// The widest half-width anywhere on the ring.
     max_half_width: f32,
+    /// The midpoint of the track's two edges at each ring point, parallel to
+    /// [`Self::positions`]: `pos - lateral * half_width_left` and
+    /// `pos + lateral * half_width_right`, averaged. Where the original puts a
+    /// Repulser wave (`Repulser_AdvanceWave`, `0x08876914`).
+    centres: Vec<Vec3>,
+    /// The AI corridor's width at each ring point, `ai_bound_right -
+    /// ai_bound_left`, parallel to [`Self::positions`]. The lateral bound of a
+    /// Repulser wave's sweep (`RepulserPool_SweepTargets`, `0x0886d5c8`).
+    corridor_widths: Vec<f32>,
 }
 
 /// Where a position sits on the course.
@@ -145,6 +154,8 @@ impl Course {
 
         let mut positions = Vec::new();
         let mut paths = Vec::new();
+        let mut centres = Vec::new();
+        let mut corridor_widths = Vec::new();
         let mut max_half_width = 0.0f32;
         for &path_index in &ring {
             let path = ai.paths.get(path_index)?;
@@ -152,7 +163,13 @@ impl Course {
                 for step in 0..Self::STEPS_PER_SEGMENT {
                     let t = step as f32 / Self::STEPS_PER_SEGMENT as f32;
                     if let Some(sample) = path.sample(segment, t) {
-                        positions.push(Vec3::from_array(sample.pos));
+                        let pos = Vec3::from_array(sample.pos);
+                        let lateral = Vec3::from_array(sample.lateral);
+                        let left = pos - lateral * sample.half_width_left;
+                        let right = pos + lateral * sample.half_width_right;
+                        positions.push(pos);
+                        centres.push((left + right) * 0.5);
+                        corridor_widths.push(sample.ai_bound_right - sample.ai_bound_left);
                         paths.push(u16::try_from(path_index).unwrap_or(u16::MAX));
                         max_half_width = max_half_width
                             .max(sample.half_width_left)
@@ -190,6 +207,8 @@ impl Course {
             length,
             start_index: 0,
             max_half_width,
+            centres,
+            corridor_widths,
         };
         if let Some(start) = start_near
             && let Some((slot, _)) = course.nearest_global(start)
@@ -247,6 +266,18 @@ impl Course {
     #[must_use]
     pub fn position(&self, index: usize) -> Option<Vec3> {
         self.positions.get(index).copied()
+    }
+
+    /// The midpoint of the track's two edges at `index` - see [`Self::centres`].
+    #[must_use]
+    pub fn centre(&self, index: usize) -> Option<Vec3> {
+        self.centres.get(index).copied()
+    }
+
+    /// The AI corridor's width at `index` - see [`Self::corridor_widths`].
+    #[must_use]
+    pub fn corridor_width(&self, index: usize) -> Option<f32> {
+        self.corridor_widths.get(index).copied()
     }
 
     /// The ring's own direction of travel at `index`: the normalised step to

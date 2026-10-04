@@ -653,12 +653,12 @@
 0x08a7c098	data	g_plasma_charge_seconds	90	plasma.md
 0x0880c60c	function	WeaponStats_ParseQuake	88	plasma.md
 0x0880d328	function	WeaponStats_ParseLeachBeam	88	plasma.md
-0x0880d58c	function	WeaponStats_ParseRepulser	88	plasma.md
+0x0880d58c	function	WeaponStats_ParseRepulser	90	repulser.md
 0x0880d790	function	WeaponStats_ParseShuriken	92	shuriken.md
 0x0880dab0	function	WeaponStats_ParseGlobal	88	plasma.md
 0x0886c600	function	Weapon_FireQuake	88	cannon-quake-leachbeam.md
 0x08866658	function	Weapon_FireLeachBeam	88	cannon-quake-leachbeam.md
-0x0886ce8c	function	Weapon_FireRepulser	82	plasma.md
+0x0886ce8c	function	Weapon_FireRepulser	88	repulser.md
 0x08870240	function	Weapon_FireShuriken	88	shuriken.md
 0x08877280	function	Shuriken_Init	88	shuriken.md
 0x088577ac	function	Weapon_FireCannon	85	cannon-quake-leachbeam.md
@@ -1155,7 +1155,7 @@
 0x08870c78	function	Shuriken_SpawnExpiry	85	screen-flash-callers.md
 0x0883e064	function	Ship_SpawnExplosionSmall	80	screen-flash-callers.md
 0x088407b0	function	Ship_SpawnExplosionBig	80	screen-flash-callers.md
-0x08876300	function	Repulser_SpawnWaves	62	screen-flash-callers.md
+0x08876300	function	Repulser_SpawnWaves	80	repulser.md
 0x088f58a4	function	ParticleSystem_InitInstance	80	particle-system.md
 0x088f24d0	function	Psys_LookupHandle	85	particle-system.md
 0x088f3298	function	Psys_ReleaseHandle	82	particle-system.md
@@ -1248,3 +1248,23 @@
 0x088c2a38	function	TeamDefinition_ParseElement	80	grid.md
 0x08b34320	data	g_race_session	80	grid.md
 0x08b3104c	data	g_player_team_definition	85	grid.md
+# 2026-10-04 pulse-repulser lane: the Repulser's pool, waves and hit (repulser.md)
+0x0886c888	function	RepulserPool_Construct	80	repulser.md
+0x0886cc70	function	RepulserPool_Update	82	repulser.md
+0x0886d5c8	function	RepulserPool_SweepTargets	82	repulser.md
+0x0886cfc8	function	Repulser_WaveSweepsPoint	80	repulser.md
+0x0886d254	function	Repulser_HitCraft	84	repulser.md
+0x0886d4f4	function	Repulser_SpawnRemote	60	repulser.md
+0x08875008	function	Repulser_Construct	82	repulser.md
+0x08875210	function	Repulser_Init	84	repulser.md
+0x08875400	function	Repulser_Update	84	repulser.md
+0x08875658	function	Repulser_Reset	80	repulser.md
+0x08875864	function	Repulser_GetWavePoints	80	repulser.md
+0x088758b0	function	Repulser_SetHitLatch	80	repulser.md
+0x088758c0	function	Repulser_HitLatch	80	repulser.md
+0x088758cc	function	Repulser_UpdateFieldModel	72	repulser.md
+0x088761d8	function	Repulser_SpawnBlastEffect	84	repulser.md
+0x08876634	function	Repulser_ForkAtJunction	60	repulser.md
+0x08876914	function	Repulser_AdvanceWave	80	repulser.md
+0x0887e174	function	AiTrack_StepForward	80	repulser.md
+0x0887e2f0	function	AiTrack_StepBackward	80	repulser.md

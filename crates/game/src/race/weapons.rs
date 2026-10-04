@@ -12,6 +12,7 @@
 use super::*;
 
 mod disruptor;
+mod repulser;
 mod reticle;
 mod single_instance;
 mod visuals;
@@ -522,6 +523,13 @@ impl Race {
                         &stats,
                     ));
                 }
+                oag_tables::weapons::Weapon::Repulser => {
+                    // `Weapon_FireRepulser` - see `Race::fire_repulser` for
+                    // why a full pool still spends the pickup.
+                    if !self.fire_repulser(0) {
+                        return;
+                    }
+                }
                 oag_tables::weapons::Weapon::Cannon => {
                     // **Recovered as a non-event *on this path*, not an
                     // oversight.** `Weapon_RequestFire`'s bit `0x2000` - the
@@ -541,19 +549,6 @@ impl Race {
                     // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
                     return;
                 }
-                // The other eight have no effect to run. Deliberately *not* spent:
-                // a pickup that vanishes when fired and does nothing is worse
-                // than one the player can still absorb.
-                //
-                // **This arm is a runtime no-op, not a compile error** - an
-                // earlier version of this comment claimed adding to
-                // `pickup::IMPLEMENTED` was "a compile-visible choice", and it is
-                // not: a weapon added to that list with no arm here compiles
-                // clean and hands the player a pickup that does nothing when
-                // fired. What actually guards it is
-                // `every_implemented_weapon_has_an_arm_here` in
-                // `crate::race::tests::weapons`.
-                _ => return,
             }
         } else {
             // **Eliminator pays no energy for an absorb** (`MSC_EVENT_ELIM`:

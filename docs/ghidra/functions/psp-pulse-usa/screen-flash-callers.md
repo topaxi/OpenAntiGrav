@@ -26,7 +26,7 @@ the call site, and the kind is a literal in the delay slot.
 | `Ship_SpawnExplosionSmall` (`0x0883e064`) | `0x0883e114` | 0 | `Ship_SetState` state 5, every craft | yes, the player excluded (see "Measured live") |
 | `Ship_SpawnExplosionBig` (`0x088407b0`) | `0x088408a0`, `0x0884090c` | 7 when `craft+0x368 == 0`, else 0 | `Ship_UpdateDestroyed`, and state 7 in modes 0, 0xe-0x12 | yes |
 | `PlasmaBlast_Construct` (`0x0885fd90`) | `0x0885fe68` | 1 | every Plasma ending | yes |
-| `Repulser_SpawnWaves_q` (`0x08876300`) | `0x088765ac` | 2 | the Repulser's field beginning | no: the Repulser is not built |
+| `Repulser_SpawnWaves` (`0x08876300`) | `0x088765ac` | 2 | the Repulser's waves starting, `blast_time` after the fire ([repulser.md](repulser.md)) | yes, since 2026-10-04 |
 | `BombBlast_Construct` (`0x08872078`) | `0x0887219c` | 3 | every Bomb detonation | yes |
 | `Quake_Update` (`0x0891d268`) | `0x0891dc7c` | 4 | every frame the wave runs | yes (earlier) |
 | `Ship_SetState` (`0x08844100`) case 3 | `0x088441fc` | 6 | entering state 3 from another state, `craft+0x368 == 0` | yes |
@@ -192,11 +192,11 @@ detonations were out of range).
 | `0x08870c78` | `Shuriken_SpawnExpiry` | 85 |
 | `0x0883e064` | `Ship_SpawnExplosionSmall` | 80 |
 | `0x088407b0` | `Ship_SpawnExplosionBig` | 80 |
-| `0x08876300` | `Repulser_SpawnWaves_q` | 62 |
+| `0x08876300` | `Repulser_SpawnWaves` | 80, moved to [repulser.md](repulser.md) |
 
-`Repulser_SpawnWaves_q` stays below 70: it spawns two `WO_REPULSER` instances at
-the entity's own two positions and resets its node pair, but the weapon around it
-(`FUN_08875400`) is not read. That function is left unnamed.
+`Repulser_SpawnWaves` was held at 62 here because its caller was unread. The
+caller is `Repulser_Update` (`0x08875400`), read 2026-10-04 on
+[repulser.md](repulser.md), which owns the row now.
 
 ## Not read
 

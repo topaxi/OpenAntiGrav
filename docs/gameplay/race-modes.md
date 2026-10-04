@@ -819,7 +819,7 @@ Still open:
 
 - ~~**Time to five is about 1.4 times the original's.**~~ **Now 0.9 times it (2026-10-03)**:
   with opponents firing on the original's own law ([below](#firing-on-the-originals-law-2026-10-03)),
-  seeds 1 to 240, **median 75 s**, 17 to 154 s, 13.6 kills a minute. History: re-measured 2026-10-03 on main at
+  seeds 1 to 240, **median 75 s**, 17 to 154 s, 13.6 kills a minute. Since 2026-10-04 opponents also fire the Repulser, and the 240-seed figures predate it; re-measured on the four gated seeds only: 13/16/5/9 went from 71.4/105.8/64.3/53.2 s to 15.7/65.6/70.5/73.1 s (seed 13: one Repulser finished five craft already at 8-15 of 95 shield). History: re-measured 2026-10-03 on main at
   `64521c88` (later than the 147 s median of 2026-10-02): parked player, `16_Track`, six
   game-minutes, seeds 1 to 24: 24 of 24 finish, **median 135 s**, 33 to 196 s; seeds 1 to 240:
   240 of 240, **median 117 s**, mean 122 s, 13 to 225 s, the field scoring **8.1 kills a minute**.

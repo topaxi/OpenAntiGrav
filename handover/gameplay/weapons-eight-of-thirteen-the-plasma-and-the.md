@@ -1,4 +1,4 @@
-# Weapons: thirteen of thirteen less the deferred Repulser, and the dispatch table read whole
+# Weapons: thirteen of thirteen, the Repulser last (2026-10-04), and the dispatch table read whole
 
 **Retitled 2026-09-10 (thread audit note): the title and every index line
 citing it said "nine of thirteen" through the Cannon (ten, 2026-09-07), the
@@ -373,6 +373,50 @@ which is the whole point of the weapon.
 
 ## Open
 
+### 2026-10-04: the Repulser built (pulse-repulser lane)
+
+Read whole on [repulser.md](../../docs/ghidra/functions/psp-pulse-usa/repulser.md)
+(twenty functions, 60-90) and built: `oag_gameplay::projectile::repulser`,
+`Race::fire_repulser`/`advance_repulsers`/`advance_repulser_visual`. What is
+still open, most player-visible first:
+
+- **The field model is not drawn, so the 0.8 s blast phase shows almost
+  nothing.** `Repulser_Construct` loads `Data\Weapons\pulse_repulsorwave.vex`;
+  `Repulser_UpdateFieldModel` (`0x088758cc`, 72) draws it centred on the firer,
+  framed by the firer's own track point (`X` across the edges, the point's up),
+  uniformly scaled, vertex alpha `+0x210 * 255`. The easing, per 1/60 step, all
+  `Repulser_Init` immediates: scale `+0x204` `1.0 -> 0.6` at `0.1` while above
+  `0.61`, then `+0x1f8` `0.7 -> 4.0` at `0.05`; alpha `0 -> 1.0` at `0.2`, then on
+  the wave tick reset to `1.0` and eased to `0` at `0.1`; spin `+0x21c`
+  `0 -> -2 pi` at `0.02`, only once the entity is `0.4` s old. Deferred for time,
+  not for confidence: the shape of the matrix is read. `race::bomb_blast`'s
+  model pool is the nearest existing path; it needs per-instance scale and
+  vertex alpha.
+- **Not runtime-verified.** The cheapest lift: a PPSSPP write breakpoint on a
+  victim's `+0x110` during a live Eliminator Repulser, and a watch on the
+  entity's `+0x1ec`/`+0x50`/`+0x22c`. The step count is per *update call*; if the
+  original's race loop runs at 30 Hz on hardware the reach halves.
+- **The wave-start frame is near a whiteout** in this port (both waves' 5-17-unit
+  sprites spawn at the firer, just ahead of the chase camera). Unverified
+  against the original; a PPSSPP pair at that frame would settle it.
+- `WO_REPULSER_BLAST`'s flag `0x200000` (evenly stepped ring angles) and its
+  selector-5 record are not played by `oag_render::psys`.
+- The junction fork's third wave (`REP2`, `Repulser_ForkAtJunction`) is not
+  built: the waves follow `oag_race::Course`'s primary ring.
+- **HD plays Pulse's law now.** HD's Eliminator tables weight the Repulser
+  (`ai=8 human=8`), and nothing gates it by title. HD's `Repulser_Construct` is
+  read but its law is not.
+- **Time-to-five moved** (`eliminator_finish_ground_truth`, parked player,
+  `16_Track`), because opponents now fire it: seeds 13/16/5/9 went from
+  71.4/105.8/64.3/53.2 s to 15.7/65.6/70.5/73.1 s. Seed 13's 15.7 s is one
+  Repulser finishing five craft that were already at 8-15 of 95 shield - the
+  wave reaches about 1,400 units ahead.
+- **`~REPULSORTRAVEL` is not wired.** `Repulser_Init` plays it held on the
+  Repulser's own emitter (radius 600) whose position pointer is entity
+  `+0x150`, a matrix this pass did not trace to a writer.
+- Screenshots were taken with `--race --mode single_race --give Repulser` and an
+  `--input-script` that presses fire once: `--mode` has no Eliminator.
+
 - **The Quake's road ripple is drawn (2026-09-24); five things around it are
   not.** See the section at the bottom of this file and
   [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)'s
@@ -552,8 +596,8 @@ which is the whole point of the weapon.
   `0x088537ac`, an arithmetic slip corrected the same day), confirmed the
   Cannon's own burst spawn.
 - ~~Two weapons are still unbuilt outright~~. **The Cannon landed
-  2026-09-07** - see the entry below. **One weapon is still unbuilt
-  outright** (Repulser, deferred as Eliminator-only), **and two more are
+  2026-09-07** - see the entry below. ~~**One weapon is still unbuilt
+  outright** (Repulser, deferred as Eliminator-only)~~ (built 2026-10-04), **and two more are
   buildable in part**: the Quake for its hit/slowdown half but not its own
   per-frame travel along the track, and the LeachBeam for target selection
   and its connect/disconnect gate but not its actual drain amount. None of
@@ -574,13 +618,11 @@ which is the whole point of the weapon.
   anchor whose basis the constructor rotates by -pi/2 and the update rebuilds
   every tick; a `Projectile` here carries a position and a velocity and no roll,
   so there is nowhere to put it.
-- **The Repulser's handler is read and it is not an instantaneous blast.**
-  `Weapon_FireRepulser` (`0x0886ce8c`) **copies four of its own `<Stats>` onto
-  the firing craft** at `+0x170`/`+0x178`/`+0x17c` and *then* spawns a pool
-  entity - a shape no other weapon has, and it reads as "the field is a state
-  the craft is in" rather than a one-off push. Recorded in `shuriken.md`'s last
-  section rather than a page of its own, because one function is not enough for
-  one.
+- ~~**The Repulser's handler is read and it is not an instantaneous blast.**
+  ... "the field is a state the craft is in".~~ **Wrong, and closed
+  2026-10-04**: the four copies are never read; the weapon is a blast, then two
+  track-following waves. Built - see the 2026-10-04 section under Open and
+  [repulser.md](../../docs/ghidra/functions/psp-pulse-usa/repulser.md).
 - **The Bomb's `damageradius` is authored and spent nowhere.** It is the only
   second radius any weapon has, and the one blast path read at instruction level
   spends `blastradius` for both damage and impulse. Left undecoded rather than

@@ -283,6 +283,7 @@ fn every_cue_has_something_that_raises_it() {
     raised.extend(super::cue_endings::missile_outlives_its_fuse());
     raised.extend(super::cue_endings::leach_fires_unlocked());
     raised.extend(super::cue_endings::shuriken_is_thrown());
+    raised.extend(super::repulser::repulser_hits_a_craft());
 
     for cue in Cue::ALL {
         assert!(

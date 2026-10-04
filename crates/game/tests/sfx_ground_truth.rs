@@ -98,12 +98,12 @@ fn render(sound: std::sync::Arc<oag_audio::Sound>) -> (f32, f32) {
 /// more.
 ///
 /// Cues Pure's own `weapons.bnk` does not carry at all, because Pure ships
-/// none of the three weapons that name them (the Cannon, the LeachBeam and
-/// the Shuriken). `pure-psp-usa.chd` and `pure-psp-eu.chd`'s own weapon bank
+/// none of the four weapons that name them (the Cannon, the LeachBeam, the
+/// Shuriken and the Repulser). `pure-psp-usa.chd` and `pure-psp-eu.chd`'s own weapon bank
 /// was read with `oag-wad sounds` and carries no `CANNON*`, `LEACH*` or
-/// `SHURIKEN*` entry of any kind; Pure's own weapon in their place is the
-/// Disruptor.
-const NOT_ON_PURE: [Cue; 11] = [
+/// `SHURIKEN*` entry of any kind, and no `REPULSOR*` either; Pure's own weapon
+/// in their place is the Disruptor.
+const NOT_ON_PURE: [Cue; 13] = [
     Cue::MissileExpire,
     Cue::Cannon,
     Cue::CannonHitWall,
@@ -115,6 +115,8 @@ const NOT_ON_PURE: [Cue; 11] = [
     Cue::ShurikenLaunch,
     Cue::ShurikenHit,
     Cue::ShurikenTravel,
+    Cue::Repulsor,
+    Cue::RepulsorHit,
 ];
 
 #[test]
@@ -289,6 +291,9 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
     // (`MISSILEEXPSHIP`, `SHURIKENEXPL`, `~QUAKETRAVEL`, `LEACHFAIL`,
     // `SHURIKEN`): each is already in HD's own `weapons.bnk`.
     //
+    // **Two more on 2026-10-04**, `REPULSOR` and `REPULSORHIT`, wired with the
+    // Repulser; HD's own `weapons.bnk` carries both.
+    //
     // **This test is `#[ignore]`d, so `just` stayed green while it was stale.**
     // `disengaging` was added a commit earlier and this list was not updated
     // with it; the failure surfaced only on the next `--run-ignored all`. The
@@ -334,6 +339,8 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
             "SHURIKEN",
             "SHURIKENHIT",
             "~SHURIKENTRAVEL",
+            "REPULSOR",
+            "REPULSORHIT",
         ],
         "HD's loadable cue set changed"
     );

@@ -83,7 +83,7 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
   Shuriken, Plasma, Bomb, Mine detonations; craft explosions; the player's
   reset), checked live on PPSSPP for the kind, the `ra` and the timing. Plasma's
   wash matches the original within 5 counts a channel over 38 frames. Still
-  unwired: kind 2 (the Repulser is not built), kinds 9 and 10 (the intro
+  unwired: kinds 9 and 10 (the intro
   fly-through this port lacks), kinds 5 and 11 (no caller anywhere).
 - **The Shuriken's end plays `WO_SHURIKEN_EXPIRE`** (`ShurikenPool_Update`
   `0x0886ff38`, teardown `0x08870c78`), fuse or craft hit, with the kind-0 wash.

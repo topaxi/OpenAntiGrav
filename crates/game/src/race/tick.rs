@@ -646,6 +646,11 @@ impl Race {
         self.advance_leach_beam_visual();
         self.advance_leach_beam_ribbon();
 
+        // Beside them for the same reason: a Repulser's wave sweep reads every
+        // craft's ring index from this tick. See `Race::advance_repulsers`.
+        self.advance_repulsers();
+        self.advance_repulser_visual();
+
         // **After the standings**, so the last crossing is in the table this
         // reads, and a no-op on every tick but the one the race ends on. It
         // takes a snapshot and touches no simulation state, which is what lets
