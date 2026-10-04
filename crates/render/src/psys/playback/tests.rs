@@ -97,6 +97,7 @@ fn an_even_ring_steps_its_angles_by_a_whole_turn_over_the_burst() {
         extent: 10.0,
         spread: 0.0,
         mode: 0,
+        arc: std::f32::consts::TAU,
     };
     spec.playback.even_ring = true;
     let effect = std::sync::Arc::new(built);
@@ -111,6 +112,38 @@ fn an_even_ring_steps_its_angles_by_a_whole_turn_over_the_burst() {
     assert_eq!(angles.len(), 50);
     angles.sort_by(f32::total_cmp);
     let step = TAU / 50.0;
+    for pair in angles.windows(2) {
+        assert!((pair[1] - pair[0] - step).abs() < 1e-3, "{angles:?}");
+    }
+}
+
+/// Shape 8 under flag `0x200000` steps by `pi / count` from a start in `U(0, pi)`
+/// (`0x088fcb88`): ten beads, `18` degrees apart, all on the `+Z` half.
+#[test]
+fn an_even_half_ring_steps_by_half_a_turn_over_the_burst() {
+    let mut built = (*effect("half", false, 1.0)).clone();
+    let spec = &mut built.emitters[0];
+    spec.per_emission = (10, 10);
+    spec.spawn = Spawn::Ring {
+        extent: 10.0,
+        spread: 0.0,
+        mode: 0,
+        arc: std::f32::consts::PI,
+    };
+    spec.playback.even_ring = true;
+    spec.playback.arc = std::f32::consts::PI;
+    let effect = std::sync::Arc::new(built);
+    let mut rng = Rng::new(4);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    system.advance(&effect, DT, Vec3::ZERO, Vec3::Y, &mut rng);
+    let mut angles: Vec<f32> = live(&system)
+        .iter()
+        .map(|p| p.position.z.atan2(p.position.x).rem_euclid(TAU))
+        .collect();
+    assert_eq!(angles.len(), 10);
+    angles.sort_by(f32::total_cmp);
+    let step = std::f32::consts::PI / 10.0;
     for pair in angles.windows(2) {
         assert!((pair[1] - pair[0] - step).abs() < 1e-3, "{angles:?}");
     }
@@ -153,6 +186,7 @@ fn a_local_space_particle_rides_a_moving_frame_only_when_asked() {
         extent: 5.0,
         spread: 0.0,
         mode: 0,
+        arc: std::f32::consts::TAU,
     };
     spec.playback.even_ring = true;
     let effect = std::sync::Arc::new(built);

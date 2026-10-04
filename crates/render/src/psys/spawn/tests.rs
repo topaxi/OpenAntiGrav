@@ -56,6 +56,7 @@ fn an_exact_ring_sits_on_its_radius_in_the_frame_xz_plane() {
         extent: 12.94,
         spread: 0.0,
         mode: 0,
+        arc: std::f32::consts::TAU,
     };
     let mut rng = Rng::new(5);
     let mut seen_x = [false; 2];
@@ -74,6 +75,7 @@ fn a_disc_fills_its_circle_and_stays_inside_it() {
         extent: 5.12,
         spread: 0.0,
         mode: 2,
+        arc: std::f32::consts::TAU,
     };
     let mut rng = Rng::new(9);
     let mut inner = 0;
@@ -93,6 +95,7 @@ fn a_ring_under_an_aimed_velocity_flies_outward_along_its_own_heading() {
         extent: 8.0,
         spread: 0.0,
         mode: 0,
+        arc: std::f32::consts::TAU,
     };
     let aimed = crate::psys::Direction::Aimed {
         elevation: 0.0,
@@ -164,6 +167,7 @@ fn a_ring_beads_azimuth_turns_its_heading_the_originals_way() {
         extent: 8.0,
         spread: 0.0,
         mode: 0,
+        arc: std::f32::consts::TAU,
     };
     let aimed = crate::psys::Direction::Aimed {
         elevation: 0.0,
@@ -191,4 +195,34 @@ fn a_ring_beads_azimuth_turns_its_heading_the_originals_way() {
             "{direction} against {want}"
         );
     }
+}
+
+/// Shape 8 is shape 3 drawn over `pi`: every particle on the frame's `+Z` side, both
+/// ends of the diameter reached. Shape 3 crosses to `-Z`.
+#[test]
+fn shape_eight_is_the_half_of_the_ring_on_the_frames_plus_z_side() {
+    let half = Spawn::Ring {
+        extent: 10.0,
+        spread: 0.0,
+        mode: 0,
+        arc: super::arc_of(8),
+    };
+    let full = Spawn::Ring {
+        extent: 10.0,
+        spread: 0.0,
+        mode: 0,
+        arc: super::arc_of(3),
+    };
+    let mut rng = Rng::new(8);
+    let mut seen_x = [false; 2];
+    let mut full_below = false;
+    for _ in 0..400 {
+        let offset = half.offset(1.0, Vec3::Y, Vec3::X, Vec3::Y, &mut rng);
+        assert!(offset.z >= -1e-4, "{offset}");
+        assert!((offset.length() - 10.0).abs() < 1e-3, "{offset}");
+        seen_x[usize::from(offset.x > 0.0)] = true;
+        full_below |= full.offset(1.0, Vec3::Y, Vec3::X, Vec3::Y, &mut rng).z < -1.0;
+    }
+    assert_eq!(seen_x, [true, true], "the whole half, both quarters");
+    assert!(full_below, "shape 3 is the whole ring");
 }

@@ -57,6 +57,10 @@ pub struct Playback {
     pub lifetime_animation: Option<Channel>,
     /// Flag `0x200000`: a ring's angles step evenly from a random start.
     pub even_ring: bool,
+    /// The ring's arc: `2 pi`, or `pi` for shape 8's half ring
+    /// ([`super::spawn::arc_of`]). The even step is `arc / count` from a start drawn
+    /// `U(0, arc)`.
+    pub arc: f32,
     /// Flag `0x20`: a burst is spread back along the emitter's motion this frame.
     pub subframe_spread: bool,
 }
@@ -78,6 +82,7 @@ impl Playback {
                 .find(|animation| animation.selector == 5)
                 .map(|animation| animation.channel.clone()),
             even_ring: record.flags & pob::flags::UNIFORM_SPHERE != 0,
+            arc: super::spawn::arc_of(record.shape),
             subframe_spread: record.flags & pob::flags::SUBFRAME_SPREAD != 0,
         }
     }
@@ -86,10 +91,11 @@ impl Playback {
 impl Playback {
     /// What a burst draws once: the even ring's start angle (`ParticleSystem_EmitRing`
     /// draws it before its loop), and the frame's pull-back, zero without the flag.
-    pub(super) fn burst_draws(&self, pull_back: Vec3, rng: &mut Rng) -> (Option<f32>, Vec3) {
+    /// The start comes back with the arc it steps over.
+    pub(super) fn burst_draws(&self, pull_back: Vec3, rng: &mut Rng) -> (Option<(f32, f32)>, Vec3) {
         let start = self
             .even_ring
-            .then(|| rng.next_f32() * std::f32::consts::TAU);
+            .then(|| (rng.next_f32() * self.arc, self.arc));
         let pull_back = if self.subframe_spread {
             pull_back
         } else {
@@ -107,6 +113,7 @@ impl Default for Playback {
             rate: 1.0,
             lifetime_animation: None,
             even_ring: false,
+            arc: std::f32::consts::TAU,
             subframe_spread: false,
         }
     }
@@ -128,17 +135,17 @@ pub(super) struct Burst {
 }
 
 impl Burst {
-    /// Particle `index` of `count`: its even ring angle off `start`, and its share
+    /// Particle `index` of `count`: its even ring angle off `start` (the start angle and
+    /// the arc it steps over), and its share
     /// of `pull_back` (the previous translation minus the current one).
     pub(super) fn particle(
         self,
         (index, count): (usize, usize),
-        start: Option<f32>,
+        start: Option<(f32, f32)>,
         pull_back: Vec3,
     ) -> Self {
-        let step = std::f32::consts::TAU / count.max(1) as f32;
         Self {
-            phi: start.map(|start| start + step * (index + 1) as f32),
+            phi: start.map(|(start, arc)| start + arc / count.max(1) as f32 * (index + 1) as f32),
             shift: pull_back * (index as f32 / count.max(1) as f32),
             ..self
         }

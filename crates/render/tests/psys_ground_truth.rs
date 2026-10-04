@@ -36,6 +36,8 @@ use std::path::{Path, PathBuf};
 use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_render::psys::spawn::Spawn;
+use oag_render::psys::streak::StreakDraw;
 use oag_render::psys::{
     Blend, ColourMode, ColourScale, Direction, Effect, Render, System, TICK_HZ,
 };
@@ -704,4 +706,37 @@ fn the_repulser_blast_is_an_even_ring_that_lives_forty_three_frames() {
     }
     assert_eq!(alive[42], 50, "{alive:?}");
     assert_eq!(alive[43], 0, "{alive:?}");
+}
+
+/// `WO_REPULSER`'s root, read and measured 2026-10-04 (`particle-system.md`, "Shape 8, the
+/// class-6 bar and the wave's width"): shape 8 is the ring over `[0, pi]`, and its class 6
+/// draws as the pool bar capped by its aspect `0.05`, not the template wedge.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_repulser_wave_is_a_half_ring_of_bars() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let effect = effect(&mut archive, "WO_REPULSER");
+    let root = &effect.emitters[0];
+    assert_eq!(root.streak, StreakDraw::Bar { aspect: 0.05 });
+    assert!(matches!(root.spawn, Spawn::Ring { arc, .. } if arc == std::f32::consts::PI));
+    let mut rng = Rng::new(3);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 1.0);
+    for _ in 0..30 {
+        system.advance(&effect, 1.0 / TICK_HZ, Vec3::ZERO, Vec3::Y, &mut rng);
+    }
+    let (additive, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
+    let bars: Vec<_> = additive.chunks(6).chain(alpha_over.chunks(6)).collect();
+    assert!(bars.len() >= 4, "{}", bars.len());
+    // The frame's `+Z` (`X x Y`) half: every bar's centre at `z >= 0`, and the
+    // template sprites at the anchor do not count against it.
+    for quad in bars {
+        let centre = quad
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from(v.position))
+            / 6.0;
+        assert!(centre.z > -1.0, "{centre}");
+    }
 }

@@ -533,3 +533,26 @@ HD's own Repulser law is unread.
   during a live Eliminator Repulser would lift `Repulser_HitCraft`.
 - The spin's sense against `Quat::from_axis_angle`. It does not show while the
   blast's ring angles are random.
+
+## The wave's extent and frame, measured (2026-10-04, pulse-psys-shape8)
+
+`Repulser_AdvanceWave`'s co-factor write (`0x08876fc0..0x08877020`) sets the
+`WO_REPULSER` instance's `+0x2c` to **the distance between the track's two edges over
+100**, not the wave's step: `sp+0x50` is `pos - lateral * point+0x44`, `sp+0x60` is
+`pos + lateral * point+0x48`, and neither is rewritten before the `vsub.q`. The root's
+extent `50` is therefore half the track's width. Live on Talon's Junction both waves
+read `0.395..0.401` while the forward wave stepped about 30 units an update.
+Confidence 92. Earlier text on this thread that said `|step| / 100` was wrong.
+
+The wave matrix's `Z` is `-(across x up)` for direction 0 and `across x up` for
+direction 1, then `X = Y x Z`. Under [track.md](../../../formats/track.md)'s handedness
+(`left x up = forward`, so `across x up` points **backward**) both waves' `Z` is their
+travel, which the live matrices confirm. Shape 8 spawns on the `+Z` half ring, so the
+spray bows ahead of each wave. `crate::race::repulser_field::field_basis` names
+`across x up` "forward"; the label is wrong, the matrix it builds is the original's.
+
+Played since this change: `race::weapons::repulser` hands every wave
+`stretch(width / 100, -across)` (forward and fork) or `stretch(width / 100, across)`
+(backward). Shape 8 and the class-6 bar are in
+[particle-system.md](particle-system.md), "Shape 8, the class-6 bar and the wave's
+width", with the GE evidence for the wave-start `shazzam` bar that ours still draws.

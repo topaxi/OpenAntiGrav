@@ -600,8 +600,9 @@ pub struct Emitter {
     pub flags: u32,
     /// `+0x24`, ticks - or bursts under [`flags::REPEAT_COUNT`].
     pub duration_ticks: f32,
-    /// `+0x30`: 0 point, 3 cone, 4 sphere, 6 box, 7 hemisphere. Shapes 1, 2
-    /// and 8 exist in the dispatch and are unread.
+    /// `+0x30`: 0 point, 1 line, 2 rectangle, 3 ring or disc, 4 sphere, 6 box,
+    /// 7 hemisphere, 8 half ring (shape 3 over `[0, pi]`). See
+    /// `docs/ghidra/functions/psp-pulse-usa/particle-system.md`.
     pub shape: u32,
     /// `+0x34`, the emitter's spawn radius, world units, severity-scaled.
     ///
