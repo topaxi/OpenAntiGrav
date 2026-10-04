@@ -104,19 +104,19 @@
 //! warm one above; both are shipped and this module reads whichever a given
 //! node authors rather than assuming the warm set.
 //!
-//! # What the executable draws with it, and what this module does not attempt
+//! # What the executable builds from it
 //!
 //! `cloudGroup`'s own method table (`0x08ad2a24`) overrides `draw` at `+0x44`
 //! (`0x0893280c`); `cloudCube`'s (`0x08ad299c`) does not - that slot is still
-//! the inherited `Transform` default. So **`cloudGroup` is what draws**, and it
-//! draws a rotating camera-facing billboard per instance in its own list
-//! (`vsin_s`/`vcos_s` on a running phase, `vtfm4_q` through the camera's own
-//! view-matrix stack), not a static quad. This module's renderer
-//! (`oag_render::cloud`) draws a **static**, camera-independent billboard
-//! instead - the rotation is recovered structurally but its exact phase and
-//! speed constant are not, so animating it would be a guess dressed as a
-//! measurement. See the doc page's Open section.
-
+//! the inherited `Transform` default. So **`cloudGroup` is what draws**. A
+//! cube is a box the group scatters sprite records through: its world
+//! matrix's row lengths are its size and its volume sets the record count.
+//! [`cloud_groups`] is the loader for that: every group with the cubes it
+//! collects (its whole subtree, so a nested group's cubes belong to the outer
+//! group too), each with its matrix, `kind`, `scale` and its nearest group's
+//! size attributes. The build itself is `oag_render::cloud::field`; the
+//! reading and the live check are on the doc page.
+//!
 use crate::vex::{self, IDENTITY, Node, byte_order, multiply, node_attributes, transform};
 
 /// Class ID of a `cloudCube` node.
@@ -165,7 +165,7 @@ pub struct CloudAttributes {
     pub overlap: f32,
     /// `Seed`. `0.0` when unset, which is what every shipped instance is; the
     /// original re-rolls a random seed at construction time in that case
-    /// rather than using `0` itself. Not reproduced here - see the doc page.
+    /// rather than using `0` itself. `oag_render::cloud` uses a chosen seed in that case - see its doc.
     pub seed: f32,
     /// `SpriteRadius`.
     pub sprite_radius: f32,
@@ -279,6 +279,108 @@ pub fn clouds(data: &[u8], nodes: &[Node]) -> Vec<(CloudCube, CloudAttributes)> 
         ));
     }
     out
+}
+
+/// How many `cloudCube` nodes one `cloudGroup` collects at most: the `0x20`
+/// capacity `CloudGroup_Init` (`0x08933048`) passes `FUN_08a72d1c`.
+pub const MAX_CUBES_PER_GROUP: usize = 0x20;
+
+/// One `cloudCube` as a `cloudGroup` collects it, with what its build reads.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GroupCube {
+    /// The payload's `+0x00` word, the sprite-variant branch
+    /// `CloudGroup_BuildDisplayList` switches on (`2` on every shipped cube).
+    pub kind: u32,
+    /// The payload's `+0x04` float, multiplied by `10` into every half-size.
+    pub scale: f32,
+    /// The cube's composed world matrix, row-major, translation in row 3. The
+    /// cube carries no matrix of its own, so this is its parent chain's.
+    pub world: [f32; 16],
+    /// `SpriteRadius` and `SpriteRadiusVar` of the cube's **nearest**
+    /// `cloudGroup` ancestor (the cube's `+0x74`), which may not be the group
+    /// building it: a nested group's cubes are collected by every group above
+    /// them too, and the half-size reads the nearest one's attributes.
+    pub sprite_radius: f32,
+    /// See [`GroupCube::sprite_radius`].
+    pub sprite_radius_var: f32,
+}
+
+/// One `cloudGroup` and every `cloudCube` it builds a field from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CloudGroup {
+    /// Index of the group's node in the `nodes` slice it was read from.
+    pub node: usize,
+    /// The group's own attributes: overlap, seed and colour ramp.
+    pub attributes: CloudAttributes,
+    /// The cubes it collects, in the order the original visits them.
+    pub cubes: Vec<GroupCube>,
+}
+
+/// Every `cloudGroup` in `nodes`, in file order, each with the cubes it builds
+/// from.
+///
+/// `CloudGroup_Init` collects cubes with `FUN_08a72d1c`, a preorder walk of
+/// the group's **whole** subtree (the node, its first child `+0x10`, then each
+/// sibling `+0xc`) that keeps every node of `cloudCube`'s class, up to
+/// [`MAX_CUBES_PER_GROUP`]. A nested group's cubes are therefore built by the
+/// outer group as well: live on `05_Track` both the outer group and the group
+/// inside it held the same one cube, each building its own 46 records from its
+/// own seed and colouring them from its own ramp. A group that collects no
+/// cube is destroyed by the original and is skipped here. Evidence and
+/// confidence are on `docs/ghidra/functions/psp-pulse-usa/clouds.md`.
+#[must_use]
+pub fn cloud_groups(data: &[u8], nodes: &[Node]) -> Vec<CloudGroup> {
+    let order = byte_order(data);
+    let world = cloud_world_transforms(data, nodes);
+    let mut out = Vec::new();
+    for (index, group) in nodes.iter().enumerate() {
+        if group.class_id != CLASS_CLOUD_GROUP {
+            continue;
+        }
+        // `vex::nodes` is a preorder list, so the subtree is every later node
+        // with `index` on its ancestor chain, already in the walk's order.
+        let cubes: Vec<GroupCube> = nodes
+            .iter()
+            .enumerate()
+            .skip(index + 1)
+            .take_while(|(_, node)| is_descendant(nodes, node.parent, index))
+            .filter(|(_, node)| node.class_id == CLASS_CLOUD_CUBE)
+            .filter_map(|(at, node)| {
+                let (kind, scale) = cloud_cube(data.get(node.payload())?, order)?;
+                let nearest = nearest_cloud_group(nodes, node.parent)?;
+                let size = CloudAttributes::from_node(data, &nodes[nearest]);
+                Some(GroupCube {
+                    kind,
+                    scale,
+                    world: world[at],
+                    sprite_radius: size.sprite_radius,
+                    sprite_radius_var: size.sprite_radius_var,
+                })
+            })
+            .take(MAX_CUBES_PER_GROUP)
+            .collect();
+        if cubes.is_empty() {
+            continue;
+        }
+        out.push(CloudGroup {
+            node: index,
+            attributes: CloudAttributes::from_node(data, group),
+            cubes,
+        });
+    }
+    out
+}
+
+/// Whether `ancestor` is on the chain starting at `start`.
+fn is_descendant(nodes: &[Node], start: Option<usize>, ancestor: usize) -> bool {
+    let mut at = start;
+    while let Some(index) = at {
+        if index == ancestor {
+            return true;
+        }
+        at = nodes[index].parent;
+    }
+    false
 }
 
 /// Walks `start` and its ancestors for the nearest [`CLASS_CLOUD_GROUP`] node.

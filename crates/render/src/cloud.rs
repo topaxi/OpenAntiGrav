@@ -1,65 +1,56 @@
-//! `05_Track`'s cloud puffs: `oag_vex::cloud`'s `cloudCube`/`cloudGroup` decode,
-//! drawn.
+//! `05_Track`'s clouds: every `cloudGroup`'s field of sprites, built the way
+//! the original builds it, and drawn.
 //!
-//! Recovered at instruction level from `CloudGroup_Draw` (`0x0893280c`) and
-//! its siblings. The evidence, the addresses and a confidence score per claim
-//! are in `docs/ghidra/functions/psp-pulse-usa/clouds.md`; this module
-//! implements what that page describes and cites it rather than restating it.
-//! `oag_vex::cloud::clouds` is the parser this module's positions and colour
-//! attributes come from - see that module's own doc for the census (`05_Track`
-//! is the only Pulse circuit that authors any cloud node) and for why a
-//! `cloudCube` with no `cloudGroup` ancestor is skipped rather than invented.
+//! Recovered at instruction level from `CloudGroup_Init` (`0x08933048`), its
+//! build `FUN_08933c1c`, `CloudGroup_Draw` (`0x0893280c`) and their siblings.
+//! The evidence, the addresses and a confidence score per claim are in
+//! `docs/ghidra/functions/psp-pulse-usa/clouds.md`; this module implements what
+//! that page describes and cites it rather than restating it.
+//! `oag_vex::cloud::cloud_groups` is the loader the groups come from.
+//!
+//! # The field
+//!
+//! A `cloudCube` is not a sprite. It is a box: its world matrix's row lengths
+//! are its size, its volume times `0.1` is how many sprite records it authors,
+//! and each record lands at a random point of the box, `+/- 5` units along
+//! each of the cube's own axes before its scale, with half-size
+//! `(SpriteRadius +/- SpriteRadius * SpriteRadiusVar) * 10 * scale`. Each
+//! `cloudGroup` builds a field from every cube in its subtree (a nested
+//! group's cubes too), culls it with `Overlap`, colours each survivor from a
+//! ramp over the field's height and draws it from one cell of the cloud
+//! atlas. [`field`] is that build, step for step. On `05_Track` it gives three
+//! fields: 46 records culled to 14, twice over one cube, and 277 culled to 74
+//! over four cubes, half-sizes 32 to 48.
+//!
+//! # The seed: chosen, not measured
+//!
+//! The build draws everything from the particle generator, reseeded from the
+//! group's `Seed` ([`crate::ranrot`]). Every shipped group leaves `Seed`
+//! unset, and the original then rolls one from the clock-seeded libc `rand()`
+//! at load, so each boot of the original draws a different field. With the
+//! seed it kept, the port lands on the original's field exactly: checked
+//! against all 369 records of one boot's three groups in a RAM dump
+//! (`clouds.md`). Where a group's `Seed` is unset this module uses
+//! [`CHOSEN_SEEDS`], **chosen, not measured**: they are that boot's three
+//! draws, kept so a capture of ours is one field the original really drew.
+//! An authored non-zero `Seed` is used as authored.
 //!
 //! # The roll term
 //!
 //! `CloudGroup_Draw` builds each quad in **view space**: it transforms the
 //! sprite's centre by the view matrix, adds corner offsets rotated by
-//! `g_camera_roll - phase` (`0x0893296c` subtracts `g_camera_roll`,
-//! `0x08ab10a8`, from the phase, and the corner arithmetic from `0x089329c8`
-//! rotates by the negative of that), and sets the view and model matrices to
-//! the identity at `0x08a907a0` before the batch is drawn. `g_camera_roll` is
-//! the angle a world-level line makes on screen, so the quad's spin is
-//! measured from the world's horizon, not the screen's: as the camera banks,
-//! the clouds keep their orientation in the world. [`Layer::extend_vertices`]
-//! reads the roll with [`crate::mist::camera_roll`], the same law the mist
-//! uses. Confidence and evidence are in `clouds.md`.
+//! `g_camera_roll - phase`, and draws with identity view and model matrices.
+//! `g_camera_roll` is the angle a world-level line makes on screen, so the
+//! quad's spin is measured from the world's horizon, not the screen's: as the
+//! camera banks, the clouds keep their orientation in the world.
+//! [`Layer::extend_vertices`] reads the roll with [`crate::mist::camera_roll`],
+//! the same law the mist uses.
 //!
-//! # What the original does that this module does not reproduce, and why
+//! # What this module does not reproduce
 //!
-//! **The rotation rate and initial phase are random, not authored.**
-//! `CloudGroup_BuildDisplayList` (`0x08933ec4`) draws each sprite's phase from
-//! `Psys_RandFloatRange(0, 2*PI)` and its rate from
-//! `Psys_RandFloatRange(-0.002, 0.002)` **once, at display-list build time** -
-//! there is no fixed constant to read off the disc, only the range the draw
-//! comes from. [`Sprite::new`] draws from the identical range through this
-//! project's own seeded [`Rng`], which reproduces the original's
-//! *distribution* exactly and its *specific per-boot values* not at all - the
-//! same class of limitation `oag_vex::cloud`'s own doc records for `Seed`.
-//!
-//! **Every sprite draws one flat, chosen colour - not the measured ramp.**
-//! `CloudGroup_BuildDisplayList` bakes one colour per sprite from
-//! `CloudGroup_SampleColourRamp`, a three-point `Lo`/`Mid`/`Hi` lookup sampled
-//! at the sprite's own world position and averaged. What that lookup is
-//! evaluated *against* (`clouds.md`'s `+0x104`/`+0x114` bounds) was not traced
-//! to its writer, so this module does not evaluate the ramp at all - guessing
-//! the axis is exactly the "plausible stand-in" `CLAUDE.md`'s "never invent"
-//! section warns about. [`Sprite::new`] instead takes the ramp's own `Mid`
-//! point directly: `mid_colour` and `(hi_alpha + lo_alpha) * 0.5`, the latter
-//! being the original's own formula for the value at that breakpoint, not a
-//! fabrication. **Chosen, not measured** - no confidence score, because no
-//! reading says every sprite sits at exactly its ramp's midpoint; it is the
-//! most defensible fixed point on a real, measured curve, not the curve
-//! itself.
-//!
-//! **One small sprite per `cloudCube`, where the original draws a field of
-//! large ones.** Live, each of the original's `cloudGroup` instances near
-//! de Konstruct's clouds holds 46 sprite records scattered through a box about
-//! 175 units across, with half-sizes of 32 to 47. `Overlap` culls them to 14.
-//! This module draws one sprite at each cube's centre at the authored
-//! `SpriteRadius` (4). Where the original's records come from is not read yet.
-//! `clouds.md`'s Open section has the measurements and the next address. Until
-//! that lands, `CloudGroup_CullOverlappingSprites` has nothing to cull here, and
-//! is not applied.
+//! The original skips a group's draw when the camera is far from it (live: the
+//! phases froze at the start line). The test is not read, so every group draws
+//! every frame here, and every phase advances every tick.
 //!
 //! # Two halves, deliberately
 //!
@@ -69,7 +60,9 @@
 //! [`Pipeline`] is the GPU side, in `psys::Pipeline`'s shape (one texture, one
 //! blend class) rather than `exhaust::Pipeline`'s (no ribbon, no HD variant).
 
-use oag_core::{Rng, math::Vec3};
+pub mod field;
+
+use oag_core::math::Vec3;
 
 use crate::exhaust::FlareTexture;
 use crate::mesh::GpuVertex;
@@ -83,39 +76,39 @@ use crate::psys::field::Frame;
 /// per simulation tick, so [`Sprite::advance`] reproduces that literally.
 pub const ROTATION_RATE_MAX: f32 = 0.002;
 
-/// One baked cloud billboard: a position and size read off the disc, a
-/// colour chosen per the module doc, and a phase/rate pair drawn once from
-/// the same range the original draws from.
+/// The seeds a group with no authored `Seed` builds from, by group order on
+/// the track, wrapping. **Chosen, not measured** - see the module doc: one
+/// boot's runtime draws (2079, 6378, 9169), read out of the original's RAM.
+pub const CHOSEN_SEEDS: [u32; 3] = [2079, 6378, 9169];
+
+/// One baked cloud billboard.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sprite {
-    /// World position - the composed `Transform`/`cloudGroup` translation
-    /// `oag_vex::cloud::clouds` already resolves.
+    /// World position.
     pub position: Vec3,
-    /// Half-extent of the billboard quad, in world units - `SpriteRadius`.
-    /// `SpriteRadiusVar` is read by `oag_vex::cloud` but not applied here: the
-    /// original's per-instance variance draw was not traced to its site in
-    /// this pass, so this module draws every sprite of a group at exactly its
-    /// authored `SpriteRadius` rather than guess a variance mechanism.
+    /// Half-extent of the billboard quad, in world units.
     pub half_size: f32,
-    /// The flat, chosen colour - see the module doc's "one flat, chosen
-    /// colour" section.
+    /// The baked colour, each channel a byte over 255, as the GE reads the
+    /// packed vertex colour.
     pub colour: [f32; 4],
+    /// The atlas cell it draws, see [`field::cell_uv`].
+    pub cell: u8,
     phase: f32,
     rate: f32,
 }
 
 impl Sprite {
-    /// Builds one sprite, drawing its phase and rate from the measured
-    /// ranges through `rng` - see the module doc for why this reproduces the
-    /// original's *distribution*, not its specific per-boot draw.
+    /// The sprite [`field::build`] baked.
     #[must_use]
-    pub fn new(position: Vec3, half_size: f32, colour: [f32; 4], rng: &mut Rng) -> Self {
+    pub fn from_baked(baked: &field::Baked) -> Self {
+        let byte = |shift: u32| f32::from(((baked.colour >> shift) & 0xff) as u8) / 255.0;
         Self {
-            position,
-            half_size,
-            colour,
-            phase: range(rng, (0.0, std::f32::consts::TAU)),
-            rate: range(rng, (-ROTATION_RATE_MAX, ROTATION_RATE_MAX)),
+            position: Vec3::from(baked.position),
+            half_size: baked.half_size,
+            colour: [byte(0), byte(8), byte(16), byte(24)],
+            cell: baked.cell,
+            phase: baked.phase,
+            rate: baked.rate,
         }
     }
 
@@ -142,19 +135,24 @@ impl Sprite {
             r * self.half_size,
             u * self.half_size,
             self.colour,
+            field::cell_uv(self.cell),
         )
     }
 }
 
-/// A value in `lo..hi`, from the seeded generator - the same helper
-/// `exhaust::range` is, duplicated rather than shared because that one is
-/// private to its own module.
-fn range(rng: &mut Rng, (lo, hi): (f32, f32)) -> f32 {
-    lo + (hi - lo) * rng.next_f32()
-}
-
-/// Six vertices for one camera-facing quad, coloured flat.
-fn quad(centre: Vec3, right: Vec3, up: Vec3, colour: [f32; 4]) -> [GpuVertex; 6] {
+/// Six vertices for one camera-facing quad, coloured flat, textured with one
+/// atlas cell.
+///
+/// The live vertex buffer pairs the cell's bottom-left texel `(u0, v1)` with
+/// the `(-h, -h)` corner, its top-left `(u0, v0)` with `(-h, h)`, and so on
+/// round (`clouds.md`).
+fn quad(
+    centre: Vec3,
+    right: Vec3,
+    up: Vec3,
+    colour: [f32; 4],
+    (u0, v0, u1, v1): (f32, f32, f32, f32),
+) -> [GpuVertex; 6] {
     let corner = |sx: f32, sy: f32, u: f32, v: f32| GpuVertex {
         position: (centre + right * sx + up * sy).to_array(),
         normal: [0.0, 0.0, 1.0],
@@ -166,10 +164,10 @@ fn quad(centre: Vec3, right: Vec3, up: Vec3, colour: [f32; 4]) -> [GpuVertex; 6]
         lit: 0.0,
         ..bytemuck::Zeroable::zeroed()
     };
-    let bl = corner(-1.0, -1.0, 0.0, 1.0);
-    let br = corner(1.0, -1.0, 1.0, 1.0);
-    let tl = corner(-1.0, 1.0, 0.0, 0.0);
-    let tr = corner(1.0, 1.0, 1.0, 0.0);
+    let bl = corner(-1.0, -1.0, u0, v1);
+    let br = corner(1.0, -1.0, u1, v1);
+    let tl = corner(-1.0, 1.0, u0, v0);
+    let tr = corner(1.0, 1.0, u1, v0);
     [bl, br, tl, br, tr, tl]
 }
 
@@ -180,30 +178,24 @@ pub struct Layer {
 }
 
 impl Layer {
-    /// Builds a layer from `oag_vex::cloud::clouds`' own output.
+    /// Builds every `cloudGroup`'s field on a track, in the order the original
+    /// constructs and draws them.
     ///
-    /// `rng` should be a seeded generator the caller owns - drawing the
-    /// per-sprite phase/rate here rather than inside [`Sprite::new`]'s own
-    /// state keeps this deterministic across a run for the same seed, which
-    /// matters for `--screenshot`.
+    /// Group `k` with no authored `Seed` builds from `seeds[k % seeds.len()]`;
+    /// pass [`CHOSEN_SEEDS`] unless matching a particular boot of the
+    /// original.
     #[must_use]
-    pub fn from_clouds(data: &[u8], nodes: &[oag_vex::vex::Node], rng: &mut Rng) -> Self {
-        let sprites = oag_vex::cloud::clouds(data, nodes)
-            .into_iter()
-            .map(|(cube, attrs)| {
-                let colour = [
-                    attrs.mid_colour[0],
-                    attrs.mid_colour[1],
-                    attrs.mid_colour[2],
-                    (attrs.hi_alpha + attrs.lo_alpha) * 0.5,
-                ];
-                Sprite::new(
-                    Vec3::from(cube.world_position),
-                    attrs.sprite_radius.max(0.0),
-                    colour,
-                    rng,
-                )
+    pub fn from_groups(data: &[u8], nodes: &[oag_vex::vex::Node], seeds: &[u32]) -> Self {
+        let sprites = oag_vex::cloud::cloud_groups(data, nodes)
+            .iter()
+            .enumerate()
+            .flat_map(|(k, group)| {
+                let seed = authored_seed(group.attributes.seed)
+                    .or_else(|| seeds.get(k % seeds.len().max(1)).copied())
+                    .unwrap_or(CHOSEN_SEEDS[k % CHOSEN_SEEDS.len()]);
+                field::build(group, seed)
             })
+            .map(|baked| Sprite::from_baked(&baked))
             .collect();
         Self { sprites }
     }
@@ -219,6 +211,12 @@ impl Layer {
     #[must_use]
     pub fn len(&self) -> usize {
         self.sprites.len()
+    }
+
+    /// The sprites, in draw order.
+    #[must_use]
+    pub fn sprites(&self) -> &[Sprite] {
+        &self.sprites
     }
 
     /// Advances every sprite's rotation by one tick.
@@ -240,11 +238,19 @@ impl Layer {
     }
 }
 
+/// `CloudGroup_Init` reads `Seed` as a float truncated to an integer, and
+/// takes `0` as unset.
+fn authored_seed(seed: f32) -> Option<u32> {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let s = seed as i32 as u32;
+    (s != 0).then_some(s)
+}
+
 /// How many sprites [`Pipeline`]'s buffer holds.
 ///
-/// `05_Track` authors five `cloudCube` leaves per layout - `oag_vex::cloud`'s
-/// own doc has the census - so this is generous headroom rather than a fit.
-pub const MAX_SPRITES: usize = 32;
+/// `05_Track` draws 102 (14 + 14 + 74 per `clouds.md`); the original's own
+/// list holds at most 32 groups, so this is headroom rather than a fit.
+pub const MAX_SPRITES: usize = 1024;
 
 /// The maximum vertices [`Pipeline`]'s buffer holds, six per [`MAX_SPRITES`].
 pub const MAX_VERTICES: usize = MAX_SPRITES * 6;
