@@ -472,6 +472,14 @@ impl RaceState {
                 // the race update starts stepping - so this is a documented
                 // divergence, chosen because our spawn is further back than
                 // its own (`docs/gameplay/lap-counting.md`).
+                //
+                // The edge is reported once: the original sets its
+                // crossed-this-tick byte (`craft+0x911`) on the first
+                // crossing only while `craft+0x910` is still clear, and a
+                // re-crossing after rocking back over the line rejoins the
+                // count without setting it. A first crossing is never on
+                // tick 0, so a clock still at 0 is one that never started.
+                outcome.first_crossing = self.lap_start_tick == 0;
                 self.lap_start_tick = tick;
             }
             self.lap_gate = LapGate::NeedsNearHalf;
@@ -572,6 +580,11 @@ impl LapGate {
 pub struct Outcome {
     /// The ship crossed the line forwards this tick.
     pub lap_completed: bool,
+    /// The ship crossed the line for the first time this tick: the
+    /// spawn-to-line crossing that starts lap 1 and completes no lap. With
+    /// [`Self::lap_completed`] it is every tick the original's
+    /// crossed-this-tick byte (`craft+0x911`) is set on.
+    pub first_crossing: bool,
     /// How long that lap took, in ticks.
     pub lap_ticks: Option<u32>,
     /// The race reached its finish condition this tick.

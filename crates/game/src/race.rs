@@ -145,6 +145,7 @@ mod load;
 mod models;
 mod options;
 mod pads;
+mod perfect_start;
 mod reconcile;
 mod replay;
 mod respawn;

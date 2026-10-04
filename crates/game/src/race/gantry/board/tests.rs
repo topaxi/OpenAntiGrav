@@ -1,5 +1,5 @@
 use super::*;
-use crate::race::gantry::{Clock, GoEdge, HD_PRE_LAP_WINDOW};
+use crate::race::gantry::{Clock, GoEdge, HD_PRE_LAP_WINDOW, PULSE_PRE_LAP_WINDOW};
 
 use oag_race::COUNTDOWN_TICKS;
 
@@ -53,18 +53,30 @@ fn short_and_endless_races_follow_the_eboots_compares() {
 fn the_counter_is_zero_until_the_first_crossing() {
     let mut standing = Standing::default();
     assert_eq!(standing.lap, 1);
-    assert_eq!(BoardWindow::of(&standing, Some(3)), BoardWindow::PreLap);
+    assert_eq!(
+        BoardWindow::of(&standing, Some(3), &HD_LAP_WINDOWS),
+        BoardWindow::PreLap
+    );
     standing.lap_start_tick = Some(900);
     assert_eq!(
-        BoardWindow::of(&standing, Some(3)),
+        BoardWindow::of(&standing, Some(3), &HD_LAP_WINDOWS),
         BoardWindow::BetweenLaps
     );
     standing.lap = 3;
-    assert_eq!(BoardWindow::of(&standing, Some(3)), BoardWindow::Chequered);
+    assert_eq!(
+        BoardWindow::of(&standing, Some(3), &HD_LAP_WINDOWS),
+        BoardWindow::Chequered
+    );
     standing.lap = 4;
     standing.finish_tick = Some(5000);
-    assert_eq!(BoardWindow::of(&standing, Some(3)), BoardWindow::Chequered);
-    assert_eq!(BoardWindow::of(&standing, None), BoardWindow::BetweenLaps);
+    assert_eq!(
+        BoardWindow::of(&standing, Some(3), &HD_LAP_WINDOWS),
+        BoardWindow::Chequered
+    );
+    assert_eq!(
+        BoardWindow::of(&standing, None, &HD_LAP_WINDOWS),
+        BoardWindow::BetweenLaps
+    );
 }
 
 /// The window is entered on the crossing tick; a second lap in the same
@@ -106,13 +118,15 @@ fn each_transition_jumps_to_the_new_windows_start() {
     ] {
         let since = 4321;
         let entry = Some(WindowEntry { window, since });
-        let (from, to) = window.bounds().expect("a later window");
+        let (from, to) = window.bounds(&HD_LAP_WINDOWS).expect("a later window");
         // The tick before the crossing is still the pre-lap loop.
         let before = clock.seconds_in(since - 1, entry);
         assert!((HD_PRE_LAP_WINDOW.from..HD_PRE_LAP_WINDOW.to).contains(&before));
         assert_eq!(clock.seconds_in(since, entry), from, "{window:?}");
         assert_eq!(
-            entry.and_then(|e| e.release_window()).map(|w| w.period()),
+            entry
+                .and_then(|e| e.release_window(&HD_LAP_WINDOWS))
+                .map(|w| w.period()),
             Some(period),
             "{window:?}"
         );
@@ -127,24 +141,96 @@ fn each_transition_jumps_to_the_new_windows_start() {
     }
 }
 
-/// Before the first crossing the window entry changes nothing, and Pulse's
-/// clock ignores one altogether.
+/// Before the first crossing the window entry changes nothing.
 #[test]
-fn no_entry_is_the_pre_lap_clock_and_pulse_ignores_entries() {
-    let clock = hd();
-    let release = COUNTDOWN_TICKS + 1;
-    for tick in [0, 100, release, release + 500] {
-        assert_eq!(clock.seconds_in(tick, None), clock.seconds(tick));
+fn no_entry_is_the_pre_lap_clock() {
+    for clock in [hd(), Clock::PULSE] {
+        let release = COUNTDOWN_TICKS + 1;
+        for tick in [0, 100, release, release + 500] {
+            assert_eq!(clock.seconds_in(tick, None), clock.seconds(tick));
+        }
     }
+}
+
+/// An inherited clock has no later windows and ignores an entry.
+#[test]
+fn an_inherited_clock_ignores_entries() {
+    let clock = Clock::inherited(GoEdge {
+        frame: 181,
+        settled_frame: 216,
+        last_frame_before_exit: 349,
+    })
+    .expect("before the release");
+    let release = COUNTDOWN_TICKS + 1;
     let entry = Some(WindowEntry {
         window: BoardWindow::Chequered,
         since: release + 10,
     });
     for tick in [release, release + 10, release + 900] {
-        assert_eq!(
-            Clock::PULSE.seconds_in(tick, entry),
-            Clock::PULSE.seconds(tick)
-        );
+        assert_eq!(clock.seconds_in(tick, entry), clock.seconds(tick));
+    }
+}
+
+/// Pulse's bounds are `BOOT.BIN`'s floats at `0x08a7a49c`..`0x08a7a4b8`, bit
+/// for bit.
+#[test]
+fn pulses_bounds_are_the_boot_bin_floats() {
+    assert_eq!(PULSE_PRE_LAP_WINDOW.from, 3.2);
+    assert_eq!(PULSE_PRE_LAP_WINDOW.to, 5.5);
+    assert_eq!(PULSE_LAP_WINDOWS.between_laps, (6.0, 9.0));
+    assert_eq!(PULSE_LAP_WINDOWS.final_lap_ahead, (9.5, 12.0));
+    assert_eq!(PULSE_LAP_WINDOWS.chequered, (12.4, 13.3));
+    const { assert!(!PULSE_LAP_WINDOWS.finish_is_chequered) };
+}
+
+/// Pulse's selection has no finish clause: past the line on the last lap the
+/// crossing count is `laps + 1` and the board is back between laps, where HD
+/// shows the flag.
+#[test]
+fn a_finished_pulse_craft_is_back_between_laps() {
+    let mut standing = Standing {
+        lap: 4,
+        lap_start_tick: Some(9000),
+        finish_tick: Some(9000),
+        ..Standing::default()
+    };
+    assert_eq!(
+        BoardWindow::of(&standing, Some(3), &PULSE_LAP_WINDOWS),
+        BoardWindow::BetweenLaps
+    );
+    assert_eq!(
+        BoardWindow::of(&standing, Some(3), &HD_LAP_WINDOWS),
+        BoardWindow::Chequered
+    );
+    standing.lap = 3;
+    standing.finish_tick = None;
+    assert_eq!(
+        BoardWindow::of(&standing, Some(3), &PULSE_LAP_WINDOWS),
+        BoardWindow::Chequered
+    );
+}
+
+/// Each of Pulse's transitions lands on its own window's start and loops its
+/// own length.
+#[test]
+fn pulses_transitions_jump_to_its_own_windows() {
+    let clock = Clock::PULSE;
+    for window in [
+        BoardWindow::BetweenLaps,
+        BoardWindow::FinalLapAhead,
+        BoardWindow::Chequered,
+    ] {
+        let since = 4321;
+        let entry = Some(WindowEntry { window, since });
+        let (from, to) = window.bounds(&PULSE_LAP_WINDOWS).expect("a later window");
+        assert_eq!(clock.seconds_in(since, entry), from, "{window:?}");
+        for k in 0..600 {
+            let seconds = clock.seconds_in(since + k, entry);
+            assert!(
+                from <= seconds && seconds < to,
+                "{window:?} +{k}: {seconds}"
+            );
+        }
     }
 }
 
@@ -154,6 +240,7 @@ fn no_entry_is_the_pre_lap_clock_and_pulse_ignores_entries() {
 fn the_cull_switches_tables_at_the_between_laps_start() {
     let cull = PanelCull {
         countdown: vec![7],
+        from: HD_BETWEEN_LAPS_WINDOW.0,
         first_frame: 361,
         frames: vec![vec![1], vec![2], vec![3]],
     };

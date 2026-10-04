@@ -260,3 +260,15 @@ No Cockpit321Go sibling appears in this fragment at all, matching
 `docs/ui/hud.md`'s existing note. Confidence 90 - the tag rename is read
 directly off the extracted XML, the same mechanism already confirmed
 elsewhere on this disc.
+
+## 2026-10-04: the `Cockpit321Go` clock rides the gantry's writes
+
+`Hud_SetCountdownWidgetTime` (`0x0881a3b8`, 75) sets the animation time of
+`*(hud+0x250)+0x94`, this page's `Cockpit321Go` widget, and is called with the
+gantry's own set-time each time: 0 at `ready` (`RaceMode_UpdateIntro_q`), 3.0 on
+the release (`RaceMode_UpdateCountdown`) and 3.2 whenever the race manager resets
+the gantry's pre-lap window (`RaceManager_Update`, `n == 0` branch only). So
+`Cockpit_321GO.vex`'s clock is the gantry's until the first line crossing and runs
+free after it. Recorded, not rewired: the overlay draws only where a circuit has no
+gantry, and it still runs off `world.tick / 60`. Evidence:
+[gantry-clock.md](gantry-clock.md#5-the-cockpit-countdown-widget-rides-the-same-writes).

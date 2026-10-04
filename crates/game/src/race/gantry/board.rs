@@ -1,7 +1,12 @@
-//! HD's gantry after the first line crossing: which race-manager window the
+//! The gantry after the first line crossing: which race-manager window the
 //! board is in, when it entered it, and which draws stand on the panel there.
 //!
-//! **Read from `EBOOT.BIN`** (`RaceManager_Update`, `0x0005e948`,
+//! **Both titles that were read run the same law with their own numbers**
+//! ([`LapWindows`]): HD's from its EBOOT, Pulse's from its `BOOT.BIN`
+//! (`RaceManager_Update`, `0x08829778`,
+//! `docs/ghidra/functions/psp-pulse-usa/gantry-clock.md`, confidence 85).
+//!
+//! **HD, read from `EBOOT.BIN`** (`RaceManager_Update`, `0x0005e948`,
 //! `docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`). Every frame the
 //! race manager picks a window by the player's lap counter `ship+0x7810` and
 //! the race's lap count, and resets the gantry's time to the window's start
@@ -37,16 +42,58 @@ pub const HD_FINAL_LAP_AHEAD_WINDOW: (f32, f32) =
 pub const HD_CHEQUERED_WINDOW: (f32, f32) =
     (f32::from_bits(0x4145_999a), f32::from_bits(0x4154_cccd));
 
+/// A title's race-manager windows after the first line crossing, and whether
+/// a finished craft selects the last one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LapWindows {
+    /// Any lap but the last two.
+    pub between_laps: (f32, f32),
+    /// The lap before the last.
+    pub final_lap_ahead: (f32, f32),
+    /// The last lap.
+    pub chequered: (f32, f32),
+    /// HD's selection also takes the finish (`ship+0x7814 - 2 >= total`) to
+    /// the chequered window; Pulse's does not, so a Pulse craft past the
+    /// line on its last lap is back between laps.
+    pub finish_is_chequered: bool,
+}
+
+/// HD's: [`HD_BETWEEN_LAPS_WINDOW`], [`HD_FINAL_LAP_AHEAD_WINDOW`],
+/// [`HD_CHEQUERED_WINDOW`], with the finish taken to the last.
+pub const HD_LAP_WINDOWS: LapWindows = LapWindows {
+    between_laps: HD_BETWEEN_LAPS_WINDOW,
+    final_lap_ahead: HD_FINAL_LAP_AHEAD_WINDOW,
+    chequered: HD_CHEQUERED_WINDOW,
+    finish_is_chequered: true,
+};
+
+/// Pulse's, **read from `BOOT.BIN`, confidence 85**: `RaceManager_Update`
+/// (`0x08829778`) compares the gantry mesh's time against the floats at
+/// `0x08a7a4a4`..`0x08a7a4b8` by the player craft's crossing count
+/// (`craft+0xac8`): `[6.0, 9.0)` on any lap but the last two, `[9.5, 12.0)`
+/// on `crossings == laps - 1`, `[12.4, 13.3)` on `crossings == laps` (where it
+/// also plays `FINAL_LAP` once). Its own asset's beats agree: the `Board`
+/// arrives at 5.85-6.0 s, `Final_Lap` at 9.333 s, the chequered state at
+/// 12.333 s. Nothing selects on the finish: past it the count is `laps + 1`
+/// and the else-branch, between laps, holds the board.
+pub const PULSE_LAP_WINDOWS: LapWindows = LapWindows {
+    between_laps: (f32::from_bits(0x40c0_0000), f32::from_bits(0x4110_0000)),
+    final_lap_ahead: (f32::from_bits(0x4118_0000), f32::from_bits(0x4140_0000)),
+    chequered: (f32::from_bits(0x4146_6666), f32::from_bits(0x4154_cccd)),
+    finish_is_chequered: false,
+};
+
 /// Which of the race manager's windows holds the gantry's time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardWindow {
-    /// Before the first line crossing: `GO`, [`super::HD_PRE_LAP_WINDOW`].
+    /// Before the first line crossing: `GO`, [`super::Clock::window`].
     PreLap,
-    /// Any lap but the last two: [`HD_BETWEEN_LAPS_WINDOW`].
+    /// Any lap but the last two: [`LapWindows::between_laps`].
     BetweenLaps,
-    /// The lap before the last: [`HD_FINAL_LAP_AHEAD_WINDOW`].
+    /// The lap before the last: [`LapWindows::final_lap_ahead`].
     FinalLapAhead,
-    /// The last lap, and the race once finished: [`HD_CHEQUERED_WINDOW`].
+    /// The last lap, and on HD the race once finished:
+    /// [`LapWindows::chequered`].
     Chequered,
 }
 
@@ -73,7 +120,8 @@ impl BoardWindow {
         }
     }
 
-    /// The window for the player's `standing` in a race of `laps_target`.
+    /// The window for the player's `standing` in a race of `laps_target`,
+    /// under `windows`' selection.
     ///
     /// HD's counter is 0 on the grid and 1 from the first line crossing:
     /// **read live** on RPCS3 (2026-10-04: `ship+0x7810 = 0`, `+0x7814 = 2`
@@ -81,9 +129,13 @@ impl BoardWindow {
     /// ship constructor (`0x000ddd58` stores both). This build's
     /// [`Standing::lap`] is already 1 there, and the first crossing is the one
     /// that starts its lap clock, so the counter is `lap` once
-    /// [`Standing::lap_start_tick`] is set and 0 before.
+    /// [`Standing::lap_start_tick`] is set and 0 before. Pulse's crossing count
+    /// `craft+0xac8` is the same number: `wraps + past_line`, 0 on the grid
+    /// whichever side of the line the craft sits (`race-progress.md`'s seed),
+    /// 1 from the first crossing, and still rising past the finish, as
+    /// [`Standing::lap`] does.
     #[must_use]
-    pub fn of(standing: &Standing, laps_target: Option<u32>) -> Self {
+    pub fn of(standing: &Standing, laps_target: Option<u32>, windows: &LapWindows) -> Self {
         let lap = if standing.lap_start_tick.is_some() {
             standing.lap
         } else {
@@ -92,19 +144,19 @@ impl BoardWindow {
         Self::select(
             lap,
             laps_target.unwrap_or(0),
-            standing.finish_tick.is_some(),
+            windows.finish_is_chequered && standing.finish_tick.is_some(),
         )
     }
 
-    /// The window's `[from, to)` in seconds, or `None` for [`Self::PreLap`],
-    /// which [`super::Clock::window`] carries.
+    /// The window's `[from, to)` in seconds out of `windows`, or `None` for
+    /// [`Self::PreLap`], which [`super::Clock::window`] carries.
     #[must_use]
-    pub fn bounds(self) -> Option<(f32, f32)> {
+    pub fn bounds(self, windows: &LapWindows) -> Option<(f32, f32)> {
         match self {
             Self::PreLap => None,
-            Self::BetweenLaps => Some(HD_BETWEEN_LAPS_WINDOW),
-            Self::FinalLapAhead => Some(HD_FINAL_LAP_AHEAD_WINDOW),
-            Self::Chequered => Some(HD_CHEQUERED_WINDOW),
+            Self::BetweenLaps => Some(windows.between_laps),
+            Self::FinalLapAhead => Some(windows.final_lap_ahead),
+            Self::Chequered => Some(windows.chequered),
         }
     }
 }
@@ -119,11 +171,11 @@ pub struct WindowEntry {
 }
 
 impl WindowEntry {
-    /// The window as a [`ReleaseWindow`] from `since`, or `None` before the
-    /// first crossing.
+    /// The window as a [`ReleaseWindow`] from `since` out of `windows`, or
+    /// `None` before the first crossing.
     #[must_use]
-    pub fn release_window(self) -> Option<ReleaseWindow> {
-        let (from, to) = self.window.bounds()?;
+    pub fn release_window(self, windows: &LapWindows) -> Option<ReleaseWindow> {
+        let (from, to) = self.window.bounds(windows)?;
         Some(ReleaseWindow {
             from,
             to,
@@ -177,10 +229,13 @@ impl BoardTracker {
 /// The draws to leave out at each frame of the board's timeline.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PanelCull {
-    /// Hidden before [`HD_BETWEEN_LAPS_WINDOW`]'s start: the countdown and
-    /// the pre-lap window, the set the loader always removed there (draws
-    /// beside the panel at 0 s, and the `FX-350` art).
+    /// Hidden before [`Self::from`]: the countdown and the pre-lap window,
+    /// the set the loader always removed there (draws beside the panel at
+    /// 0 s, and on HD the `FX-350` art).
     pub countdown: Vec<u32>,
+    /// The time the per-frame table takes over: the title's
+    /// [`LapWindows::between_laps`] start.
+    pub from: f32,
     /// The first frame [`Self::frames`] covers.
     pub first_frame: u32,
     /// Hidden at each frame from [`Self::first_frame`]: the draws whose
@@ -189,17 +244,24 @@ pub struct PanelCull {
 }
 
 impl PanelCull {
-    /// Builds the table over the later windows' span of `model`'s timeline,
-    /// for a panel `2 half_width` wide and `2 half_height` high.
+    /// Builds the table over `windows`' span of `model`'s timeline, for a
+    /// panel `2 half_width` wide and `2 half_height` high.
     #[must_use]
-    pub fn build(model: &Model, countdown: Vec<u32>, half_width: f32, half_height: f32) -> Self {
-        let first_frame = (HD_BETWEEN_LAPS_WINDOW.0 * 60.0).floor() as u32;
-        let last_frame = (HD_CHEQUERED_WINDOW.1 * 60.0).ceil() as u32;
+    pub fn build(
+        model: &Model,
+        countdown: Vec<u32>,
+        windows: &LapWindows,
+        half_width: f32,
+        half_height: f32,
+    ) -> Self {
+        let first_frame = (windows.between_laps.0 * 60.0).floor() as u32;
+        let last_frame = (windows.chequered.1 * 60.0).ceil() as u32;
         let frames = (first_frame..=last_frame)
             .map(|frame| panel::off_panel(model, half_width, half_height, frame as f32 / 60.0))
             .collect();
         Self {
             countdown,
+            from: windows.between_laps.0,
             first_frame,
             frames,
         }
@@ -208,7 +270,7 @@ impl PanelCull {
     /// The draws to leave out with the board's clock at `seconds`.
     #[must_use]
     pub fn hidden(&self, seconds: f32) -> &[u32] {
-        if seconds < HD_BETWEEN_LAPS_WINDOW.0 || self.frames.is_empty() {
+        if seconds < self.from || self.frames.is_empty() {
             return &self.countdown;
         }
         let frame = (seconds * 60.0).round() as u32;

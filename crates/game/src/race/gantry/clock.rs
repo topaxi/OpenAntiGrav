@@ -6,6 +6,19 @@
 //! ([`oag_race::COUNTDOWN_TICKS`]), and keeps showing it. The timeline's `GO`
 //! edge is asset frame 181 there, so frame 0 is tick 92 ([`Clock::PULSE`]).
 //!
+//! # What Pulse does after the release: [`PULSE_PRE_LAP_WINDOW`]
+//!
+//! **Read from `BOOT.BIN`, confidence 85**
+//! (`docs/ghidra/functions/psp-pulse-usa/gantry-clock.md`). The same law HD
+//! runs, with Pulse's own numbers: the intro's last substate sets the gantry
+//! mesh's time to 0 as it enters the countdown (`0x08829e6c`, beside `ready`),
+//! `RaceMode_UpdateCountdown` sets it to 3.0 on the release (`0x088274b4`),
+//! and from then `RaceManager_Update` (`0x08829778`) keeps it in `[3.2, 5.5)`
+//! until the player's first line crossing. So the board turns green one tick
+//! after the release (frame 192 is past the 181 step) and `GO` strobes over
+//! frames 192..330 for as long as the craft has not crossed, which is what the
+//! 21 s stationary capture showed. It replaces the chosen 216..349 loop.
+//!
 //! The maintainer's rule (2026-10-03) is that a title with no measured rule of
 //! its own runs Pulse's, labelled **inherited from Pulse, unmeasured on
 //! <title>**. Inheriting means the *rule*, not the literal 92: the title's own
@@ -45,7 +58,7 @@ use oag_render::mesh_render::TexAnims;
 
 use oag_race::COUNTDOWN_TICKS;
 
-use super::{CLOCK_START_TICK, GO_LOOP};
+use super::{CLOCK_START_TICK, HD_LAP_WINDOWS, LapWindows, PULSE_LAP_WINDOWS};
 
 /// How far into the asset's timeline [`go_edge`] looks, in frames: the 6.000 s
 /// at which both Pulse's and HD's countdown panels leave and their texture
@@ -66,9 +79,12 @@ pub struct Clock {
     /// the authored timeline straight on.
     pub hold: Option<(f32, f32)>,
     /// A window the title's own race code forces the clock into from a tick
-    /// on, taking over from `hold`: HD's, [`HD_PRE_LAP_WINDOW`]. `None` on
-    /// Pulse and on every inherited clock.
+    /// on, taking over from `hold`: Pulse's [`PULSE_PRE_LAP_WINDOW`], HD's
+    /// [`HD_PRE_LAP_WINDOW`]. `None` on every inherited clock.
     pub window: Option<ReleaseWindow>,
+    /// The windows the race manager picks by lap after the first crossing.
+    /// `None` on every inherited clock.
+    pub laps: Option<LapWindows>,
 }
 
 /// A race-phase window the original's race manager keeps the gantry's time
@@ -106,6 +122,26 @@ pub struct ReleaseWindow {
 pub const HD_PRE_LAP_WINDOW: ReleaseWindow = ReleaseWindow {
     from: f32::from_bits(0x4075_1eb8),
     to: f32::from_bits(0x40a8_0000),
+    from_tick: COUNTDOWN_TICKS + 1,
+};
+
+/// Pulse's window before the first line crossing: `[3.2, 5.5)` s, from the
+/// release on.
+///
+/// **Read from `BOOT.BIN`, confidence 85.** `RaceManager_Update`
+/// (`0x08829778`), in race states 2 and later (`manager+0x7c8`), reads the
+/// gantry mesh's time (`0x089128ac`, `mesh+0x40` of the `Mesh` under
+/// `billboards[8]+0x3c`) and, while the player craft's crossing count
+/// (`craft+0xac8`) is 0, compares it against the floats at `0x08a7a49c`
+/// (`0x404ccccd`, 3.2) and `0x08a7a4a0` (`0x40b00000`, 5.5), calling
+/// `SetTime(3.2)` (`0x08912890`) when it is outside. The release sets it to
+/// 3.0 first (`RaceMode_UpdateCountdown`, `0x08a7a498`), which is outside, so
+/// the tick after the release reads 3.2. Which of the race manager's check
+/// and the mesh's own advance runs first in a frame was not read: one tick of
+/// phase uncertainty, as on HD.
+pub const PULSE_PRE_LAP_WINDOW: ReleaseWindow = ReleaseWindow {
+    from: f32::from_bits(0x404c_cccd),
+    to: f32::from_bits(0x40b0_0000),
     from_tick: COUNTDOWN_TICKS + 1,
 };
 
@@ -156,14 +192,17 @@ impl Clock {
         start_tick: 0,
         hold: None,
         window: None,
+        laps: None,
     };
 
-    /// Pulse's, **measured** (confidence 85): frame 0 on tick 92 and `GO`
-    /// held over [`GO_LOOP`].
+    /// Pulse's: frame 0 on tick 92, **measured** (confidence 85), then from
+    /// the release the race manager's windows, **read** (confidence 85):
+    /// [`PULSE_PRE_LAP_WINDOW`] and [`PULSE_LAP_WINDOWS`].
     pub const PULSE: Self = Self {
         start_tick: CLOCK_START_TICK,
-        hold: Some(GO_LOOP),
-        window: None,
+        hold: None,
+        window: Some(PULSE_PRE_LAP_WINDOW),
+        laps: Some(PULSE_LAP_WINDOWS),
     };
 
     /// Pulse's rule on a title's own asset: `edge`'s `GO` frame lands on the
@@ -183,6 +222,7 @@ impl Clock {
                 edge.last_frame_before_exit as f32 / 60.0,
             )),
             window: None,
+            laps: None,
         })
     }
 
@@ -197,6 +237,7 @@ impl Clock {
         Some(Self {
             hold: None,
             window: Some(HD_PRE_LAP_WINDOW),
+            laps: Some(HD_LAP_WINDOWS),
             ..Self::inherited(edge)?
         })
     }
@@ -207,14 +248,15 @@ impl Clock {
     /// The time on entry is what [`Self::seconds`] gives there, and is never
     /// inside a later window (the pre-lap clock stays below 5.25 s and the
     /// windows ascend), so every entry resets to the window's start, as
-    /// `0x0005f110` does. `entry` is ignored on a clock with no
-    /// [`Self::window`] - Pulse's - and before its own tick.
+    /// `0x0005f110` (HD) and `0x08829a44` (Pulse) do. `entry` is ignored on
+    /// a clock with no [`Self::laps`] - every inherited one - and before its
+    /// own tick.
     #[must_use]
     pub fn seconds_in(&self, tick: u64, entry: Option<super::WindowEntry>) -> f32 {
-        if self.window.is_some()
+        if let Some(laps) = &self.laps
             && let Some(entry) = entry
             && tick >= entry.since
-            && let Some(window) = entry.release_window()
+            && let Some(window) = entry.release_window(laps)
         {
             return window.seconds(self.seconds(entry.since), tick - entry.since);
         }

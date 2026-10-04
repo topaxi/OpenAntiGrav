@@ -28,6 +28,17 @@ pub enum Cue {
     /// branch. `docs/ghidra/functions/psp-pure-usa/dry-play-cues.md`,
     /// confidence 78.
     SpeedupPad,
+    /// The perfect start: a human craft's first thrust landing inside the
+    /// launch boost's perfect window.
+    ///
+    /// `Race_UpdateLaunchGrade` (`0x0882773c`) writes grade 2 and calls
+    /// `ExhaustFlare_OnPerfectStart` (`0x08904fd4`), which arms the engine
+    /// flare's boost timer to its constructor's `0.8` and plays `"TURBO"` out
+    /// of `weapons.bnk` (`DAT_08ac1df8`) through the same two branches
+    /// [`Self::SpeedupPad`]'s `ExhaustFlare_OnSpeedupPad` takes.
+    /// `docs/ghidra/functions/psp-pulse-usa/perfect-start.md`, confidence 85,
+    /// not watched.
+    Turbo,
     /// Hull against wall or track.
     ///
     /// `ShipCollisionFx_Trigger` (`0x089246b4`) fires it "once per surviving

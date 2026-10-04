@@ -48,6 +48,9 @@ impl Race {
         // impact frame already one tick in. Measured 2026-09-30, see
         // `oag_render::camera::shake`.
         self.view.shake.advance(self.sim.dt);
+        // Before anything steps, so the perfect start's edge is a change
+        // across this tick - see `race::perfect_start`.
+        let launch_grades = self.launch_grades();
         // Every craft is in the original's grid state until the green light:
         // `Race_PlaceGrid` puts the field in state 0 and `Race_StartRacing`
         // moves it to state 1. Derived from the one countdown clock rather than
@@ -113,16 +116,6 @@ impl Race {
         // the engine's own gate, not a distinction between input sources.
         if RaceState::thrust_gated(self.sim.world.tick) {
             controls.thrust = 0.0;
-        }
-
-        // The free Time Trial/Speed Lap Turbo is granted at the release edge,
-        // not held through the countdown - the original never has anything
-        // in the pickup slot until the craft is actually released. This is
-        // the tick `RaceState::thrust_gated` first reads `false` for; see
-        // `Race::grant_free_turbo` for the mode, full-slot and missing-table
-        // gates that make this safe to call unconditionally here.
-        if self.sim.world.tick == oag_race::state::COUNTDOWN_TICKS {
-            self.grant_free_turbo(player);
         }
 
         // **Before every craft is stepped, and over the whole field at once.**
@@ -618,8 +611,15 @@ impl Race {
                 }
             }
 
-            if outcome.lap_completed {
+            // The free Time Trial/Speed Lap Turbo, on every tick the player
+            // crosses the line forwards - the first crossing included - as the
+            // original's state-2 handlers do (`0x0882ddd8`, `0x0882d578`,
+            // `0x08823270`: `craft+0x911` set -> held = 4). Never at the
+            // release: a craft that has not reached the line holds nothing.
+            if outcome.lap_completed || outcome.first_crossing {
                 self.grant_free_turbo(player);
+            }
+            if outcome.lap_completed {
                 // Eliminator's own per-lap mechanic, a no-op on every other
                 // mode - see `Race::eliminator_lap_health_refill`.
                 self.eliminator_lap_health_refill(player);
@@ -675,6 +675,9 @@ impl Race {
         // what makes the headless `capture` path - which calls only `tick` -
         // produce the same flare at the same tick count as the window does, and
         // it is the same reason the chase camera is advanced from here.
+        // The perfect start arms the flare the way a pad does, so before the
+        // exhausts take this tick's step, as the pad's arming is.
+        self.fire_perfect_starts(&launch_grades);
         self.advance_exhausts();
         // After the trails have taken this tick's sample, so a craft is tested
         // against the ribbon as it stands now rather than one tick stale.

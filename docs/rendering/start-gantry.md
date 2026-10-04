@@ -451,24 +451,39 @@ at the emulator's roughly half speed. Two runs agree:
   file brings in at 5.85 s) never appears. The authored teleport at frame 360
   is therefore not played in the original, at least on a stationary craft.
 
-**Fix** (`race::gantry::held_on_go`, `GO_LOOP`): Pulse's gantry clock runs to
-frame 349 and then loops frames 216 to 349, the span in which `GO`'s column
-strobes and before the `Board` teleports in at 350/351. **The loop is chosen,
-not measured, and carries no confidence score.** Measured is only the
-behaviour it stands in for: `GO` strobing indefinitely. How the original keeps
-the strobe going (a loop on the offset track, a per-state write, the gated
-accumulator at `0x0890cf34` above) is unrecovered. The strobe's period in the
-capture is visibly of the same order as the authored one (about 0.7 s) but
-was not measured against it. HD's glyph teleports +10.004 at the same 6.000 s
-(`start_gantry_hd_ground_truth.rs`); HD's clock is kept on `GO` by its own race
-manager's window, read from its EBOOT (above), which never reaches that exit
-before the first line crossing.
-`crates/game/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
-never leaves the aperture on the held clock and does on the raw one.
+**What holds it, read from `BOOT.BIN` (2026-10-04, confidence 85;
+[gantry-clock.md](../ghidra/functions/psp-pulse-usa/gantry-clock.md)).** The
+same law HD's race manager runs, with Pulse's own numbers. The intro sets the
+gantry mesh's time to 0 beside `ready`, the release sets it to 3.0, and
+`RaceManager_Update` (`0x08829778`) then keeps it in a window picked by the
+player's crossing count, resetting it to the window's start whenever it reads
+outside: `[3.2, 5.5)` before the first crossing, `[6.0, 9.0)` between laps,
+`[9.5, 12.0)` on the lap before the last, `[12.4, 13.3)` on the last. A craft
+that never crosses loops frames 192..330 every 138 ticks: `GO` green one tick
+after the release, strobing, and never the `Board` teleport at 350. That is
+both measurements above, and the 2026-09-30 contact sheet happens to contain
+the loop's seam: one frame at 2.3 s of race clock (exactly one period) shows
+the dim `3 2 1` ghost that frame 192 carries.
 
-**Also seen, not touched:** ours draws the green chevron HUD hexagon over the
-banner's left end from tick ~460 on a stationary craft (it clips the `G`),
-where the original's stationary frames show none.
+**Ours since 2026-10-04**: `race::gantry::Clock::PULSE` carries
+`PULSE_PRE_LAP_WINDOW` and `PULSE_LAP_WINDOWS`, the HD lane's per-frame
+`PanelCull` plays the `Board`, `FINAL LAP` and chequered states by lap, and
+the chosen 216..349 `GO_LOOP` is gone. Played (autopilot, `16_Track`): `GO`
+strobing on a stationary craft at tick 460; the teal `Board` with its arrow
+approaching the end of lap 1; `FINAL LAP` approaching the end of lap 2; the
+chequered flag on the crossing into lap 3. Only the first is compared with
+the original; the lap states were not captured on PPSSPP. **PS2 Pulse runs
+the same clock** (every non-PS3 source takes `Clock::PULSE`), inherited from
+the PSP read and unread on its own executable; its between-laps `Board` was
+seen once at player size, matching the PSP's.
+`crates/game/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
+never leaves the aperture on Pulse's clock and does on the raw one.
+
+**The hexagon is answered, and it was not the gantry.** The green chevron
+hexagon over the banner's left end was this project's Time Trial `TurboIcon`,
+granted on the release. The original grants the free Turbo on the line
+crossing ([pickups.md](../gameplay/pickups.md)), so a stationary craft holds
+none; fixed the same day.
 
 ### What this retires: the two do not share a zero, and ours drew `GO` 1.5 s early
 

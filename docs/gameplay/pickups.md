@@ -32,8 +32,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **The weighted draw**: `rand() % total` then a cumulative walk over `<Pickupodds>` | **recovered 2026-08-17** | 92 |
 | **The inventory's shape** - one slot holding a weapon id, `-1` for empty (`craft+0x1bc`) | **recovered 2026-08-17** | 88 |
 | **Granting only into an empty slot** | **ours** | - |
-| **Lap 1's free Turbo arrives at the countdown's release edge, not the start line** | **recovered 2026-09-07**, from a maintainer play-test on `pulse-psp-eu` | 85 |
-| **The moment within a lap for laps 2..N** (crossing the finish line, or the start line a tick later) | unrecovered | - |
+| **The free Turbo arrives on every forward line crossing: the first one, which starts lap 1, and each completed lap** (`TimeTrial_UpdateRacing`, `0x0882ddd8`, sets `held = 4` when `craft+0x911` is set; not at the release, which the 2026-09-07 row had) | **recovered 2026-10-04**, read, [gantry-clock.md](../ghidra/functions/psp-pulse-usa/gantry-clock.md#the-free-turbo-granted-on-the-line-crossing-not-on-the-release) | 85 |
 | `<Rocket>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class | **recovered** | 92 |
 | `Ship_Damage`'s `source == 2` being a weapon hit | **recovered** | 75 |
 | `entity+0x1b8` is the fire-request word, one bit per weapon | **recovered** | 80 |
@@ -218,6 +217,21 @@ not recovered is the moment within a lap for laps 2..N**: "once per lap"
 constrains the count, not whether the original grants it crossing the finish
 line or at the start line a tick later (the same edge, either description) -
 nothing read pins which.
+
+**Superseded 2026-10-04 (`pulse-start-leftovers`): the grant is on the line
+crossing, read from `BOOT.BIN`.** The Time Trial racing-state handler
+(`TimeTrial_UpdateRacing`, `0x0882ddd8`) and two siblings set the player's
+held weapon to the Turbo on every tick the crossed-this-tick byte
+(`craft+0x911`) is set, which `Craft_UpdateLapProgress` sets on the first
+forward crossing and on each completed lap. Both observations stand under it:
+nothing is held through the countdown (the craft sits behind the line), and a
+craft driven off the line gets its Turbo moments after the release, which is
+what the 2026-09-07 play-test saw. What the release-edge reading got wrong
+shows on a stationary craft: the 2026-09-30 capture holds no pickup in 21 s,
+and ours drew the `TurboIcon` hexagon over the gantry's banner from the
+release on. Now `oag_race::Outcome::first_crossing` and `lap_completed` both
+call `grant_free_turbo`. See
+[gantry-clock.md](../ghidra/functions/psp-pulse-usa/gantry-clock.md#the-free-turbo-granted-on-the-line-crossing-not-on-the-release).
 
 ## The icon is found by name, not by an id
 

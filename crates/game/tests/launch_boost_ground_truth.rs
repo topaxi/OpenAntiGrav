@@ -228,3 +228,42 @@ fn only_pulse_psp_gets_the_launch_boost() {
         );
     }
 }
+
+/// The perfect start's own effect (`ExhaustFlare_OnPerfectStart`, `0x08904fd4`,
+/// read, confidence 85): on the edge tick of a perfect-window launch the
+/// player's flare is armed like a pad's and `TURBO` is queued, once; a
+/// held-through (stall) or a late (normal) launch fires neither. Fails if the
+/// trigger is dropped or fires on the wrong grade.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn only_a_perfect_start_fires_the_flare_and_turbo() {
+    for (edge, perfect) in [(12, true), (1, false), (32, false)] {
+        let Some(mut race) = start(TRACK) else { return };
+        for _ in 0..COUNTDOWN_TICKS - 1 {
+            race.tick(&PlayerInputs::single(held(false)));
+        }
+        race.drain_cues();
+        let mut turbos = Vec::new();
+        let mut armed_on_edge = false;
+        for frame in 0..60 {
+            race.tick(&PlayerInputs::single(held(frame >= edge)));
+            let turbo = race
+                .drain_cues()
+                .iter()
+                .any(|event| event.cue == oag_game::audio::sfx::Cue::Turbo);
+            if turbo {
+                turbos.push(frame);
+            }
+            if frame == edge {
+                armed_on_edge = race.exhaust().boost_timer() > 0.7;
+            }
+        }
+        if perfect {
+            assert_eq!(turbos, vec![edge], "TURBO on the perfect edge only");
+            assert!(armed_on_edge, "the flare is armed on the perfect edge");
+        } else {
+            assert!(turbos.is_empty(), "edge {edge}: TURBO on {turbos:?}");
+            assert!(!armed_on_edge, "edge {edge}: the flare was armed");
+        }
+    }
+}
