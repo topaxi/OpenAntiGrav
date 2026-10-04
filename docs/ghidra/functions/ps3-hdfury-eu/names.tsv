@@ -509,3 +509,8 @@
 0x002b2c60	function	LoadingScreen_SetProgressTarget	82	loading-screen.md
 0x002b2be8	function	LoadingScreen_SetProgress	75	loading-screen.md
 0x002b36d0	function	LoadingScreen_DrawLabel	85	loading-screen.md
+0x000f56d0	function	Physics_QueueRayProbe	62	xfade.md
+0x000f5780	function	Physics_QueueSegmentProbe	62	xfade.md
+0x00623e40	function	Scream_UpdateVoiceBend	82	xfade.md
+0x00624158	function	Scream_SetVoiceBend	80	xfade.md
+0x0062bb58	function	Scream_SetVoiceParams	76	xfade.md

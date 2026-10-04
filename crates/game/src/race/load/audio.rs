@@ -12,6 +12,7 @@ pub(super) fn banks_and_announcers(
     archives: &mut oag_assets::Archives,
     race: &'static oag_title::RaceDefaults,
     mode: Mode,
+    slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
     crate::audio::sfx::Banks,
@@ -37,6 +38,14 @@ pub(super) fn banks_and_announcers(
         };
         sounds.load_countdown(archives, entry, tick);
     }
+    // HD's engine is a per-team crossfade table, not a cue: loaded only where
+    // the ship bank has no `~ENGINE`. See `crate::audio::sfx::XfadeTeam`.
+    let ship_bank = if mode == Mode::Zone {
+        race.sounds.ship_zone
+    } else {
+        race.sounds.ship
+    };
+    sounds.load_xfade(archives, ship_bank, slot_teams, report);
     report.extend(sounds.report.iter().cloned());
 
     // Loaded regardless of mode, on the same terms `sounds` is: an announcer

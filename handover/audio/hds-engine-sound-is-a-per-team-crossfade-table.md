@@ -1,49 +1,47 @@
-# HD/Fury's engine sound: the table is read and the drive law is nearly recovered; two things stop it playing
+# HD/Fury's engine sound: the crossfade plays; the hover term and the loudness are unchecked
 
-2026-10-04 (rewritten; first written 2026-09-23). An HD race still plays music and
-SFX with no engine note: `shiphd.bnk` has no `~ENGINE` cue, so the held voice
-`crates/game/src/audio/sfx/engine.rs` opens on Pulse never opens on HD. What the
-`hd-engine-xfade` lane established is in
-[`docs/formats/hd-xfx.md`](../../docs/formats/hd-xfx.md) and
-[`docs/ghidra/functions/ps3-hdfury-eu/xfade.md`](../../docs/ghidra/functions/ps3-hdfury-eu/xfade.md);
+2026-10-05 (rewritten; first written 2026-09-23). An HD race now plays each craft's
+own `xfship_<team>.xfx` layers (`crates/game/src/audio/sfx/xfade.rs`, wired in
+`audio/sfx.rs`'s craft loop, tables loaded by `Banks::load_xfade`). The evidence is
+[`docs/formats/hd-xfx.md`](../../docs/formats/hd-xfx.md) and the 2026-10-05 section
+of [`docs/ghidra/functions/ps3-hdfury-eu/xfade.md`](../../docs/ghidra/functions/ps3-hdfury-eu/xfade.md);
 this file is only what is left.
 
 ## Done
 
-- `oag_formats::xfx` reads all **13** `xfship_<team>.xfx` (the old note said
-  12) and accounts for every byte; feisar's 2,100 bytes is one layer plus its
-  pointer. Every layer name (`~jet03 03`, `~ABResLoL`, `~afterburner`, ...) is a
-  cue in `shiphd.bnk`. Channel 0's 26 triggers name no sound.
-- The crossfade system's load, smooth and layer-evaluate path is named
-  (`XFadeSystem_*`, ten names in `names.tsv`).
-- `Ship_UpdateEngineCrossfade` (`0x000d5968`) writes the four input channels;
-  channel 0 and 3 were checked live on RPCS3 (12 samples, 11 exact).
+- The pitch unit: a layer's pitch word is a SCREAM bend, linear in semitones over the
+  cue descriptor's bend range (`Scream_SetVoiceBend`, `Scream_UpdateVoiceBend`), the
+  law `audio/sfx/layers.rs` already plays on Pulse.
+- `X` (`body[+0x260]`): the first queued hover probe's length, pushed by
+  `Physics_QueueRayProbe_q`/`Physics_QueueSegmentProbe_q`, equal to the mean probe
+  clearance `body[+0x354]` plus about 1.12 live.
+- Wired for every grid slot whose team has a table, Pulse and Pure untouched (their
+  `~ENGINE` cue gates the load; a Pulse and a Pure race render byte-identical WAVs with
+  and without the HD path).
 
 ## Open
 
-- **`X`**, the second term of channel 0 (`5.0 * X`, `X = body_entry+0x260`).
-  Live it is about 2.2 on the grid and 2.9-4.5 driving, and tracks
-  `entry+0x354/0x364/0x368/0x36c/0x370` plus a constant 1.12, which looks like
-  a ride height but is untested. Without it channel 0, which carries the main jet
-  note, is `0.5 * speed_field` plus a constant-ish 11 to 22 at best.
-- **The pitch unit.** A layer's pitch curve minus `0x200`, times `0x7fff`,
-  shifted right 9, is clamped to `+-0x8000` and handed to
-  `FUN_0031c948` -> `FUN_006796b8`. Not decoded, so no playback ratio is known and
-  a played note would be a guess.
-- Channels 1 and 2 (`speed_field * 0.01 * ctrl[+8]` / `[+0xc]`) stayed `0` on
-  all 12 samples; what drives `ctrl[+8]`/`[+0xc]` is unmeasured (airbrake?
-  `L1` did not move them).
+- **`X` is held at 2.164** (the grid value). This simulation keeps `HoverProbe::height`
+  and the probe reach only as per-step locals, so reading them needs a physics change.
+  Channel 0 is off by up to about 12 of 511 while the craft rides high.
+- **Channels 1 and 2 are held at zero**: they were zero in all twelve live samples and
+  nothing that drives `ctrl[+8]`/`[+0xc]` was found.
+- **Gain unity.** `0x400` is taken as 1.0 against the cue's own volume; the volume
+  word's scale in `0x0062b9e8` was not followed. With it the eight-craft grid roughly
+  doubles a goteki race's RMS and touches full scale (a Pulse-style 0.85 opponent scale
+  is unmeasured on HD). An RPCS3 audio capture of the same team would settle both the
+  unity and the loudness.
+- **Layers with `+0x16 == 0`** (ag_systems, assegai, egx `~n..`) keep their voice
+  running at zero volume in the original; the port releases it below an audible floor.
+- **Channel 3 is written in every mode.** The original skips it in the four race modes whose bit is set in `0x206040` (mode-id bits 6, 13, 14, 21); the port does not model that mask.
+- Whether an opponent's channel 3 stays unwritten in the original is the read of
+  `ship+0x628c == 0`, not a live observation.
 
 ## Next Steps
 
-1. Name `X`: either set the RPCS3 write watchpoint
-   (`just build-rpcs3-watchpoints`) on `body_entry+0x260` and read the writing
-   `PC`, or read the entry's vtable slots (`0x00682b68`..., vtable `0x008745b8`).
-   `scripts/rpcs3-hd-engine-xfade-probe.py` already finds the player entry and
-   dumps the body, which is the start of either.
-2. Decode the pitch unit below `FUN_006796b8`, or measure two samples of
-   (channel value, played pitch) from the emulator.
-3. Only then wire it in `crates/game/src/audio/`: a sim-side `speed_field`
-   and `X`, `oag_formats::xfx` for the layers, the smoother's band edges and
-   rates for channel 0, and a headless WAV over a race segment as proof. A
-   Pulse-shaped `~ENGINE` stand-in on HD stays forbidden.
+1. Record one team's engine on RPCS3 (muted emulator, so a loopback or the emulator's own
+   audio dump) over a standing start and a climb, and compare the layer balance and the
+   note against `data/scratch/hd-engine-wire/xfade-goteki-ramp.wav`.
+2. If `X` matters by ear, keep the mean probe clearance on `ShipState` (a physics change)
+   and feed `0.5 * speed_field + 5 * (clearance + 1.12)`.
+3. Follow `0x0062b9e8`'s per-engine dispatch to the volume scale to settle the unity.

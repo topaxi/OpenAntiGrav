@@ -1,6 +1,6 @@
 # HD's `.xfx`: the per-team engine crossfade table
 
-**Container confidence: 92. Per-tick drive law: channels 0 and 3 measured live (85); channels 1 and 2 stayed 0 in every sample (60); channel 0's `X` term is read but not identified. Not wired into the game, on purpose.**
+**Container confidence: 92. Per-tick drive law: channels 0 and 3 measured live (85); channels 1 and 2 stayed 0 in every sample (60); channel 0's `X` term is the first queued hover probe's length, followed live to the mean probe clearance plus about 1.12 (62). Pitch unit: a SCREAM bend (82). Wired into the game 2026-10-05 with `X` held at its grid value, see [`xfade.md`](../ghidra/functions/ps3-hdfury-eu/xfade.md#2026-10-05-lane-hd-engine-wire-what-x-is-the-pitch-unit-and-the-wiring).**
 
 Wipeout HD / Fury drives a craft's engine sound from `data/sound/xfship_<team>.xfx`,
 one file per team: **13 files** (`DATA01.PSARC` holds twelve, `DATA00.PSARC` holds
@@ -157,31 +157,39 @@ while steering left and holding `L1`, and `ctrl[+8]`/`ctrl[+0xc]` read `0`
 throughout; what they are is not measured (whether `L1` was the airbrake in this
 config was not checked).
 
-**`X` is read, not identified.** It sits at about 2.2 on the grid and 2.9-4.5
-while driving, and the update arms a flag on `4.0 < X < 4.5`. It equals
-`entry[+0x354..+0x370] + 1.12` to within noise (correlation above 0.994 over the
-twelve samples against five neighbouring floats, which are probably the four
-hull-point clearances `Collision_MarchSegment` queries) - so it behaves like a
-ride height. That is a resemblance and not a finding: the six fields are
-unnamed, and nothing here tests that X is a height rather than something that
-merely moves with it. Channel 0 carries the main jet note, so a port needs an
-honest source for `X` before the law is complete.
+**`X` is the first queued probe's length (62).** `body[+0x260]` is the float
+slot of the first entry in the body's eight-slot probe queue, pushed by
+`Physics_QueueRayProbe_q` / `Physics_QueueSegmentProbe_q`. Live it sat at about
+2.2 on the grid and 2.9-4.5 while driving, and it equals the mean of the four
+probe clearances `body[+0x354]` plus 1.1246 on the first three samples and plus
+1.12-1.26 after (it moves with the craft's up vector). The update arms a flag on
+`4.0 < X < 4.5`. The writer, the slot layout and why the first search missed it
+are in [`xfade.md`](../ghidra/functions/ps3-hdfury-eu/xfade.md). **This
+simulation does not keep its probe clearances on the ship state**, so the port
+holds `X` at 2.164 (chosen, not measured); it moves channel 0 by at most about 12
+of 511.
 
 **What the layer update does with the smoothed value** (`FUN_00314b00`,
 `0x00314b00`, one call per instance per frame after the smoother):
 `x = clamp((state + jitter) >> 16, 0, 511)`; `gain = A[x]`, `pitch = B[x]`;
 voice volume `= A[x] * slot_gain_1 * slot_gain_2 >> 20` (slot gains default
 `0x400`), voice pitch `= (B[x] - 0x200) * 0x7fff >> 9` plus two slot offsets,
-clamped to `+-0x8000`. **The pitch unit is not measured** and so no playback
-ratio is claimed here.
+clamped to `+-0x8000`. **That word is a SCREAM bend** (82, traced to
+`Scream_SetVoiceBend` and `Scream_UpdateVoiceBend` in
+[`xfade.md`](../ghidra/functions/ps3-hdfury-eu/xfade.md)): linear in semitones
+over the cue descriptor's own bend range, `range * bend / 32768` below zero and
+`/ 32767` above, so `0x200` is no bend. Which bend range each layer's cue carries
+is read from `shiphd.bnk` at play time.
 
 ## What is not claimed
 
-- The unit of the pitch value, and therefore whether the crossfade is audibly
-  right when played.
-- `X`, the fourth term of channel 0.
+- That the crossfade sounds like the original: no audio capture of the emulator
+  was compared, and the gain unity (`0x400` against the cue's own volume) is
+  inferred.
+- `X` as a live term in the port: it is held at its grid value.
 - Whether `ctrl[+4..+0xc]` are what their numbers suggest: `ctrl[+4]` is a
   0..100 quantity the code scales by 5.12 into 0..511, which is all that is read.
 
-Wiring is blocked on the first and the second; see
-[`xfade.md`](../ghidra/functions/ps3-hdfury-eu/xfade.md).
+The wiring and what it chooses are in
+[`xfade.md`](../ghidra/functions/ps3-hdfury-eu/xfade.md); the code is
+`crates/game/src/audio/sfx/xfade.rs`.
