@@ -1489,8 +1489,12 @@ sets `+0xc = dt * 60 * global`, clamps it at `3.0`, then multiplies it by `+0x70
 So an emitter of rate `r` runs `r` of its own ticks a frame. Every recursive and
 top-level call into `ParticleSystem_Update` loads `1.0` into `$f12` (listing at
 `0x088f6160`, `0x088f6180`, `0x088f61a4` and `0x08915f98`), so roots and children run
-on the same frame `dt` and the rate is per instance. Seven emitters on the PSP disc author a
-rate other than 1:
+on the same frame `dt` and the rate is per instance. The template list at `+0x1b0` is
+aged by `ParticleSystem_UpdateParticleFields(+0xc, ...)` inside the same call, so a
+template ages at its **owner's** rate. Five templates author `1.0` under an owner that
+does not: the Missile explosion's `glow` and `booga`, the Shuriken bounce's and expiry's
+`glow`, and the absorb's `glow`. Ours makes them inherit. Eight emitter records in six
+effects author a rate other than 1:
 
 | Emitter | Rate |
 | --- | ---: |
@@ -1502,7 +1506,8 @@ rate other than 1:
 | `WO_SHURIKEN_BOUNCE`, `WO_SHURIKEN_EXPIRE` | 0.8 |
 | `WO_WEAPON_ABSORB` | 0.8 |
 
-Ours ignored the rate until this change, so these seven play differently now.
+Ours ignored the rate until this change, so these eight emitters, and the five templates
+under them, play differently now.
 
 **Selector 5 is the newborn's lifetime co-factor.** Confidence **90**: two sites name
 one field. `ParticleSystem_Update` stores selector `5` at instance `+0x54`.
@@ -1570,6 +1575,15 @@ the same update offsets as `pulse-repulser-2`'s `psp-live2-*.png`): the ring is 
 and beaded at update 10, compact at 20 and 30, a white puff at 40, and gone at 47, on
 both sides (`data/scratch/pulse-psys-ring/shots/final-cmp.png`). Before this change,
 ours started 13.6 units out and collapsed by update 20.
+
+**`Repulser_AdvanceWave` rescales its wave's extent.** Confidence **85**, read in the
+listing at `0x08877000..0x0887702c`. It reads the `WO_REPULSER` instance's co-factor
+block (`FUN_088f443c`), sets slot 1 (`+0x2c`, the extent co-factor) to
+`|current - previous| / 100` (the wave's step length, `0x42c8` being `100.0`), and
+writes the block back (`FUN_088f44d8`, which re-derives and recurses into the
+children). This is the Quake's mechanism with a different input. It is not played: the
+root's shape 8 is unread, so ours spawns it at the anchor. No other slot is written
+there; in particular the alpha scale `+0x40` is untouched.
 
 **The wave-start whiteout is `WO_REPULSER`, not the blast and not the flash.**
 With the two wave effects withheld, update 49 shows the original's blue tint (flash

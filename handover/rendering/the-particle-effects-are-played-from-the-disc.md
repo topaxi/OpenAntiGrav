@@ -83,10 +83,14 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
     full-screen white bar at update 49, and its class-6 root emitter draws a white
     blob at 52. The original shows a blue tint and then a thin streak. Shape 8 and
     the class-6 draw are both unread.
-  - **The rate changed seven emitters.** Besides the blast, the LeachBeam charge (all
-    three), the Missile explosion's root, the Shuriken bounce and expiry, and the absorb
-    play at their authored rate now. Only the Missile was looked at, and none was
-    compared against the original.
+  - **The rate changed eight emitter records in six effects, plus five templates under
+    them.** Besides the blast, these play at their authored rate now: the LeachBeam
+    charge (all three), the Missile explosion's root, the Shuriken bounce and expiry,
+    and the absorb. The sub-frame spread also changed every wall scrape's spark trails
+    and the missile trail. Only the Missile was looked at, and none of them was compared
+    against the original.
+  - **`WO_REPULSER`'s extent co-factor is `|step| / 100`**, set by
+    `Repulser_AdvanceWave`. It is not played, because the root's shape 8 is unread.
   - **Flag `0x2` riding is opt-in per caller.** Only the blast opts in. 25 emitters
     carry the flag, so the other owners' `Psys_Spawn_q` `param_5` is the open question.
     Read each call site before opting it in. The collision sparks have a claim on

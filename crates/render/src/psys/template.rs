@@ -66,6 +66,9 @@ impl Effect {
                 spec.size = unroll(&spec.size, life);
                 spec.alpha = unroll(&spec.alpha, life);
                 spec.atlas = super::Atlas::SINGLE;
+                // `ParticleSystem_Update` hands the template list its own instance's
+                // rate-scaled `+0xc`: a template ages at its parent's rate, not its own.
+                spec.playback.rate = self.emitters[parent].playback.rate;
                 self.roots.push(self.emitters.len());
                 self.emitters.push(spec);
             }

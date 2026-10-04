@@ -662,6 +662,15 @@ fn the_repulser_blast_is_an_even_ring_that_lives_forty_three_frames() {
     assert!(shockrings.emitters.iter().any(|e| e.playback.even_ring));
     let trail = self::effect(&mut archive, "WO_MISSILE_HEAD");
     assert!(trail.emitters.iter().any(|e| e.playback.subframe_spread));
+    // The absorb's `glow` template authors rate 1 under a root of 0.8, and ages at 0.8.
+    let absorb = self::effect(&mut archive, "WO_WEAPON_ABSORB");
+    let glow = absorb
+        .emitters
+        .iter()
+        .find(|e| e.template)
+        .expect("a template");
+    assert_eq!(glow.playback.rate, absorb.emitters[0].playback.rate);
+    assert_eq!(glow.playback.rate, 0.8);
 
     let mut rng = Rng::new(12);
     let mut system = System::new();

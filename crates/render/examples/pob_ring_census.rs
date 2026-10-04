@@ -25,6 +25,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         for e in system.emitters(&blob)? {
+            for t in &e.initial_particles {
+                if t.playback_rate != e.playback_rate || e.playback_rate != 1.0 {
+                    println!(
+                        "TEMPLATE {} {:?} rate {} under {:?} rate {}",
+                        system.name, t.name, t.playback_rate, e.name, e.playback_rate
+                    );
+                }
+            }
             let interesting = e.flags & 2 != 0
                 || e.playback_rate != 1.0
                 || e.flags & 0x0020_0000 != 0
