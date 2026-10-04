@@ -250,3 +250,43 @@ fn a_named_weapon_set_decodes_to_what_its_own_name_says() {
         ]
     );
 }
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_trophy_page_is_named_for_events_that_exist_and_every_cup_shape_has_a_year() {
+    use oag_2048::campaign::trophy;
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let doc = sp_xml_document(&mut archives);
+    let events = oag_tables::mjolnir::campaign::events(&doc);
+    for name in trophy::NAMED {
+        assert!(
+            events.iter().any(|event| event.name == name),
+            "{name} is not an SP.xml event"
+        );
+    }
+    let mut with_page = 0;
+    let mut with_art = 0;
+    for event in &events {
+        let shape = doc
+            .instance(event.instance_id)
+            .and_then(|instance| instance.field("M_BUTTONSHAPE"))
+            .and_then(oag_tables::mjolnir::Field::int);
+        if trophy::has_page(shape) {
+            with_page += 1;
+        }
+        if trophy::art_for(&event.name, shape).is_some() {
+            if matches!(shape, Some(9..=11)) {
+                eprintln!("cup: {}", event.name);
+            }
+            with_art += 1;
+            assert!(trophy::has_page(shape) || trophy::NAMED.contains(&event.name.as_str()));
+        }
+    }
+    assert_eq!(
+        (with_page, with_art),
+        (12, 12),
+        "nine named elite trophies and three cups, each with art"
+    );
+}

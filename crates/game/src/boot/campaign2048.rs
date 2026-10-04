@@ -389,7 +389,16 @@ fn event_card(
         _ => Vec::new(),
     };
     let word = |id: &str| strings.get(id).map(str::to_string).unwrap_or_default();
+    let trophy = oag_2048::campaign::trophy::art_for(&event.name, shape).map(|art| {
+        oag_ui::frontend::CardTrophy {
+            texture: art.texture,
+            header: word(&art.header_id),
+            callout: word(&art.callout_id),
+        }
+    });
     EventCard {
+        has_trophy_page: oag_2048::campaign::trophy::has_page(shape),
+        trophy,
         class_label,
         lap_label,
         forced_craft,
@@ -424,9 +433,16 @@ pub(super) fn card_textures(events: &[MapEvent]) -> Vec<&str> {
         let craft = card.forced_craft.as_ref();
         let logo = craft.map(|c| &c.logo).unwrap_or(&None);
         let icon = craft.map(|c| &c.type_icon).unwrap_or(&None);
-        for name in [&card.photo, &card.emblem, logo, icon]
-            .into_iter()
-            .flatten()
+        let art = card.trophy.as_ref().map(|t| &t.texture);
+        for name in [
+            card.photo.as_ref(),
+            card.emblem.as_ref(),
+            logo.as_ref(),
+            icon.as_ref(),
+            art,
+        ]
+        .into_iter()
+        .flatten()
         {
             if !names.contains(&name.as_str()) {
                 names.push(name);

@@ -49,6 +49,10 @@
 //! (`FUN_81055150`'s `param_3[0xb6]`); the personal record row of the
 //! leaderboard (this build keeps no per-event result beyond the medal).
 
+mod trophy;
+
+pub use trophy::CardTrophy;
+
 use crate::pointer::{Pointer, contains};
 
 use super::campaign_map::ProgressState;
@@ -93,6 +97,11 @@ pub struct EventCard {
     pub allowed_classes: Vec<CardRestriction>,
     /// The leaderboard page's own words.
     pub tabs: CardTabs,
+    /// The event's button shape gives it a trophy page (kind `2`). The page
+    /// exists whether or not [`Self::trophy`] names art for it.
+    pub has_trophy_page: bool,
+    /// The trophy or cup the page draws, `None` when the original names none.
+    pub trophy: Option<CardTrophy>,
 }
 
 /// A forced craft on the rules page.
@@ -139,6 +148,8 @@ enum Page {
     Objective,
     /// Kind `1`: the leaderboard tabs (`FUN_810540c4`).
     Leaderboard,
+    /// Kind `2`: the trophy or cup (`FUN_81052fb4`).
+    Trophy,
     /// Kind `4`: the event's rules (`FUN_810535fe`).
     Rules,
 }
@@ -244,6 +255,9 @@ impl Frontend {
             pages.push(Page::Objective);
         }
         pages.push(Page::Leaderboard);
+        if event.card.has_trophy_page {
+            pages.push(Page::Trophy);
+        }
         if Self::rules_items(&event.card) > 0 {
             pages.push(Page::Rules);
         }
@@ -495,6 +509,7 @@ impl Frontend {
         match pages.get(card_state.page) {
             Some(Page::Objective) => self.draw_objective_page(event, out),
             Some(Page::Leaderboard) => self.draw_leaderboard_page(event, out),
+            Some(Page::Trophy) => self.draw_trophy_page(event, out),
             Some(Page::Rules) => self.draw_rules_page(event, out),
             None => {}
         }

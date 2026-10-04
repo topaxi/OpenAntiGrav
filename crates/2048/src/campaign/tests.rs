@@ -463,3 +463,30 @@ fn a_guest_team_id_is_never_refused() {
         );
     }
 }
+
+#[test]
+fn the_nine_named_events_get_their_years_elite_trophy_in_order() {
+    use super::trophy::{NAMED, art_for};
+    let art = art_for("2049 - Event 5-3", Some(1)).expect("named");
+    assert_eq!(art.header_id, "TROPHY_2049_2_1");
+    assert_eq!(art.callout_id, "TROPHY_2049_2_2");
+    assert!(art.texture.ends_with(r"trophy\2049_elite_02.gtf"));
+    for (i, name) in NAMED.iter().enumerate() {
+        let art = art_for(name, None).expect("a named event needs no shape");
+        assert!(
+            art.texture
+                .ends_with(&format!("{}_elite_{:02}.gtf", 2048 + i / 3, i % 3 + 1))
+        );
+    }
+}
+
+#[test]
+fn a_cup_shape_draws_that_years_cup_and_other_shapes_draw_nothing() {
+    use super::trophy::{art_for, has_page};
+    let cup = art_for("2050 - Event 9", Some(11)).expect("shape 11 is the 2050 cup");
+    assert_eq!(cup.header_id, "Cup_Name_2050");
+    assert_eq!(cup.callout_id, "Cup_Callout_2050");
+    assert!(cup.texture.ends_with(r"trophy\Cup2050.gtf"));
+    assert_eq!(art_for("2048 - Event 1", Some(2)), None);
+    assert!(has_page(Some(2)) && has_page(Some(9)) && !has_page(Some(5)) && !has_page(None));
+}

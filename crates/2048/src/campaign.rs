@@ -449,6 +449,73 @@ pub fn engine_mode(event: &Event) -> Option<&'static str> {
     }
 }
 
+/// The art and words of the event card's trophy page (page kind `2`,
+/// `CampaignEventCard_DrawTrophyPage_q`, `0x81052fb4`), chosen the way the
+/// original chooses them: by event name, then by `M_BUTTONSHAPE`.
+///
+/// The nine elite-trophy events are matched by name, in this order, and the
+/// year's ordinal is the position within its year (`FUN_8104d1d0` loads
+/// `trophy/{2048+i/3}_elite_{i%3+1:02}`). Any other event whose button shape
+/// is `9`, `10` or `11` is that year's cup final.
+pub mod trophy {
+    /// The nine events that award an elite trophy, in the original's order.
+    pub const NAMED: [&str; 9] = [
+        "2048 - Event 2-2",
+        "2048 - Event 3-2",
+        "2048 - Event 5-2",
+        "2049 - Event 2-3",
+        "2049 - Event 5-3",
+        "2049 - Event 6-3",
+        "2050 - Event 2-4",
+        "2050 - Event 5-4",
+        "2050 - Event 6-4",
+    ];
+
+    /// Button shapes that give an event a trophy page at all
+    /// (`CampaignEventCard_BuildPageList`): `1` and `2` plus the three cups.
+    #[must_use]
+    pub fn has_page(button_shape: Option<i64>) -> bool {
+        matches!(button_shape, Some(1 | 2 | 9 | 10 | 11))
+    }
+
+    /// What the page draws.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Art {
+        /// The image, spelled the way every card texture is.
+        pub texture: String,
+        /// The heading's string id (`TROPHY_2048_1_1`, `Cup_Name_2048`).
+        pub header_id: String,
+        /// The callout's string id (`TROPHY_2048_1_2`, `Cup_Callout_2048`).
+        pub callout_id: String,
+    }
+
+    /// The trophy page's art for the event called `name` with `button_shape`.
+    /// `None` is the original drawing nothing: a shape-`1`/`2` event that is
+    /// not one of the nine still has the (blank) page.
+    #[must_use]
+    pub fn art_for(name: &str, button_shape: Option<i64>) -> Option<Art> {
+        if let Some(i) = NAMED.iter().position(|named| *named == name) {
+            let (year, n) = (2048 + i / 3, i % 3 + 1);
+            return Some(Art {
+                texture: format!(r"Data\FE\NewImages\trophy\{year}_elite_{n:02}.gtf"),
+                header_id: format!("TROPHY_{year}_{n}_1"),
+                callout_id: format!("TROPHY_{year}_{n}_2"),
+            });
+        }
+        let year = match button_shape? {
+            9 => 2048,
+            10 => 2049,
+            11 => 2050,
+            _ => return None,
+        };
+        Some(Art {
+            texture: format!(r"Data\FE\NewImages\trophy\Cup{year}.gtf"),
+            header_id: format!("Cup_Name_{year}"),
+            callout_id: format!("Cup_Callout_{year}"),
+        })
+    }
+}
+
 /// `M_OBJECTIVETYPE`'s own `ObjectiveValue` ordinals, given a meaning here
 /// rather than in [`oag_tables::mjolnir::campaign`] - see [`Objective`]'s own
 /// doc comment for why the split falls there.

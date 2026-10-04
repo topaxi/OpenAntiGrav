@@ -340,3 +340,46 @@ fn the_rules_layout_is_the_executables_table() {
         .collect();
     assert_eq!(captions, vec![(602.0, 315.0), (762.0, 315.0)]);
 }
+
+fn with_trophy() -> Vec<MapEvent> {
+    let mut events = with_pages();
+    events[0].card.has_trophy_page = true;
+    events[0].card.trophy = Some(crate::frontend::CardTrophy {
+        texture: r"Data\FE\NewImages\trophy\2048_elite_01.gtf".to_string(),
+        header: "2048 ELITE 1 TROPHY".to_string(),
+        callout: "Get an ELITE PASS on this C Class Time Trial".to_string(),
+    });
+    events
+}
+
+#[test]
+fn the_trophy_page_sits_between_the_leaderboard_and_the_rules() {
+    let (mut frontend, mut input) = on_the_card(with_trophy());
+    press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Right);
+    let trophy = texts(&frontend);
+    assert!(
+        trophy.contains(&"2048 ELITE 1 TROPHY".to_string()),
+        "{trophy:?}"
+    );
+    assert!(!trophy.contains(&"PERSONAL".to_string()));
+    assert!(!trophy.contains(&"C CLASS".to_string()));
+    press(&mut frontend, &mut input, Button::Right);
+    assert!(texts(&frontend).contains(&"C CLASS".to_string()));
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(frontend.event_card_page(), Some(0), "four pages, a wrap");
+}
+
+#[test]
+fn a_trophy_shape_with_no_art_is_a_blank_page_as_in_the_original() {
+    let mut events = with_trophy();
+    events[0].card.trophy = None;
+    let (mut frontend, mut input) = on_the_card(events);
+    press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(frontend.event_card_page(), Some(2));
+    let body = texts(&frontend);
+    for word in ["PASS", "PERSONAL", "C CLASS"] {
+        assert!(!body.contains(&word.to_string()), "{body:?}");
+    }
+}
