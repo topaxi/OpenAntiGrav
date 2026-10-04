@@ -500,4 +500,4 @@
 0x002ff250	function	XFadeShip_GetTeamTable	78	xfade.md
 0x002ff628	function	XFadeShip_InitSystem	70	xfade.md
 0x002fcaa0	function	XFadeShip_CreateSound	60	xfade.md
-0x000d5968	function	Ship_UpdateEngineCrossfade	65	xfade.md
+0x000d5968	function	Ship_UpdateEngineCrossfade	82	xfade.md

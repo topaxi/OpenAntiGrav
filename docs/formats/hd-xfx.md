@@ -1,6 +1,6 @@
 # HD's `.xfx`: the per-team engine crossfade table
 
-**Container confidence: 92. Per-tick drive law: 60-70 for three of four channels, below 40 for the fourth term. Not wired into the game, on purpose.**
+**Container confidence: 92. Per-tick drive law: channels 0 and 3 measured live (85); channels 1 and 2 stayed 0 in every sample (60); channel 0's `X` term is read but not identified. Not wired into the game, on purpose.**
 
 Wipeout HD / Fury drives a craft's engine sound from `data/sound/xfship_<team>.xfx`,
 one file per team: **13 files** (`DATA01.PSARC` holds twelve, `DATA00.PSARC` holds
@@ -102,7 +102,7 @@ amplitude at `+0x40`/`+0x48`) is off on every shipped channel.
 it starts no voice), confidence 80
 (`no_channel_zero_trigger_names_a_sound`).
 
-## The per-tick law, partly recovered (confidence 60-70)
+## The per-tick law (confidence 85 for channels 0 and 3)
 
 `FUN_000d5968` (`0x000d5968`) is the ship's per-tick audio update, called twice
 from `FUN_000eadb8`. It writes one number per channel through `FUN_00314618`,
@@ -113,24 +113,56 @@ from that table, not from the decompile.
 `speed_field = 3.6 * (*(ship + 0x6944))->[+0x4c4]`. The same product
 `EngineFlare_Update` reads; [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md)
 measured it as proportional to world speed (about 5.3 x), so it is speed-like and
-not a raw thrust force. `ctrl = *(*(ship + 0x5fac) + 0x84)`.
+not a raw thrust force. `ctrl = *(*(ship + 0x5fac) + 0x84)`. `*(ship + 0x5fac)` is
+the `0x3a0`-byte body entry whose first word is `g_CraftVtable` (`0x008636e0`).
 
 | Channel | Stored at ship | Value |
 | --- | --- | --- |
-| 0 | `+0x5f20` | `0.5 * speed_field + 5.0 * X`, with `X = *(ship + 0x5fac)->[+0x260]` |
+| 0 | `+0x5f20` | `0.5 * speed_field + 5.0 * X`, with `X = (*(ship + 0x5fac))->[+0x260]` |
 | 1 | `+0x5f2c` | `speed_field * 0.01 * ctrl[+8]`, only when `ctrl` is set; every role |
-| 2 | `+0x5f30` | `speed_field * 0.01 * ctrl[+0xc]`, only when `ctrl` is set |
+| 2 | `+0x5f30` | `speed_field * 0.01 * ctrl[+0xc]`, only when `ctrl` is set; every role |
 | 3 | `+0x5f24` | `5.12 * ctrl[+4]`, for the local player only (`ship+0x628c == 0`), skipped in four race modes |
 
-**`X` is not identified.** The only float stores at `+0x260` on a non-stack base
-belong to an XML tuning loader (a different class); `X` sits at a resting value
-around 4 (the update arms a flag on `4.0 < X < 4.5` and fires channel-0 triggers
-on bands at `2.5, 3.0, 3.5, 4.8, 5.5, 7.0, 10.0`), which resembles
-`craft+0x344 = 4.12` that
-[physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md) records, but that is a
-resemblance and not a finding. Channel 0 carries the main jet note, so the law is
-not complete without it. See the handover thread for the measurement that would
-close it.
+**Measured live, 2026-10-04**, RPCS3 under its GDB stub on the EU disc
+(`scripts/rpcs3-hd-engine-xfade-probe.py`): a Campaign race, the player's craft
+(the one with `craft+0x7a60 == 0`), thrust held from a standing start, then
+steering and an `L1` hold, then coasting. Twelve pauses, each reading the stored
+channels and the terms together:
+
+| Stage | speed field | X | channel 0 stored | `0.5*sf + 5*X` | channel 3 stored | throttle (`ctrl[+4]`) |
+| --- | --- | --- | --- | --- | --- | --- |
+| grid | 0.2 | 2.173 | 10 | 11.0 | 0 | 0 |
+| thrust-0 | 0.5 | 2.167 | 11 | 11.1 | 0 | 0 |
+| thrust-1 | 263.1 | 2.911 | 144 | 146.1 | 511 | 100 |
+| thrust-2 | 447.4 | 4.189 | 244 | 244.6 | 511 | 100 |
+| thrust-3 | 360.2 | 3.660 | 198 | 198.4 | 511 | 100 |
+| thrust-4 | 434.2 | 4.195 | 238 | 238.1 | 511 | 100 |
+| thrust-5 | 581.5 | 2.908 | 305 | 305.3 | 511 | 100 |
+| thrust-left-0 | 423.4 | 4.494 | 234 | 234.2 | 511 | 100 |
+| thrust-left-1 | 431.8 | 4.099 | 236 | 236.4 | 511 | 100 |
+| thrust-airbrake-0 | 351.1 | 3.554 | 193 | 193.3 | 511 | 100 |
+| thrust-airbrake-1 | 428.9 | 4.119 | 235 | 235.1 | 511 | 100 |
+| coast | 87.8 | 3.997 | 63 | 63.9 | 0 | 0 |
+
+Channel 0 follows the formula to within two counts on 12 of 12 samples (the
+residual is the pause landing between the audio tick and the next physics step;
+the sample with the largest gap is the one mid-acceleration). Channel 3 reads
+`511` exactly when the throttle reads `100` and `0` when it reads `0`:
+`ctrl[+4]` is a throttle percentage, a digital `100`/`0` of the kind
+[physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md) records. **Channels 1 and 2 read `0` on all twelve samples**, including
+while steering left and holding `L1`, and `ctrl[+8]`/`ctrl[+0xc]` read `0`
+throughout; what they are is not measured (whether `L1` was the airbrake in this
+config was not checked).
+
+**`X` is read, not identified.** It sits at about 2.2 on the grid and 2.9-4.5
+while driving, and the update arms a flag on `4.0 < X < 4.5`. It equals
+`entry[+0x354..+0x370] + 1.12` to within noise (correlation above 0.994 over the
+twelve samples against five neighbouring floats, which are probably the four
+hull-point clearances `Collision_MarchSegment` queries) - so it behaves like a
+ride height. That is a resemblance and not a finding: the six fields are
+unnamed, and nothing here tests that X is a height rather than something that
+merely moves with it. Channel 0 carries the main jet note, so a port needs an
+honest source for `X` before the law is complete.
 
 **What the layer update does with the smoothed value** (`FUN_00314b00`,
 `0x00314b00`, one call per instance per frame after the smoother):

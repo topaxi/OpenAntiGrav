@@ -22,7 +22,7 @@ decompile.
 | `0x002ff250` | `XFadeShip_GetTeamTable` | 78 |
 | `0x002ff628` | `XFadeShip_InitSystem` | 70 |
 | `0x002fcaa0` | `XFadeShip_CreateSound` | 60 |
-| `0x000d5968` | `Ship_UpdateEngineCrossfade` | 65 |
+| `0x000d5968` | `Ship_UpdateEngineCrossfade` | 82 |
 
 Scores stop at 90 and mostly sit near 72 because none of this has run under an
 emulator: it is static reading, corroborated by the file format
@@ -133,25 +133,35 @@ re-derives them:
   is not audio; the shape (a pad id, a strength) reads as controller rumble.
   Not investigated.
 
-### Why 65 and not 70
+### Live check (2026-10-04) and why 82, not higher
 
-The instruction stream is unambiguous and every constant is read. Three things
-keep it below 70: no live capture of `ship+0x5f20..0x5f30` exists, so the
-unit of `speed_field` against the 0..511 range is unchecked; the label
-"speed_field" is borrowed from [engine-trail.md](engine-trail.md), whose
-measurement is of the same product, not of this call; and `X` is unidentified.
+`scripts/rpcs3-hd-engine-xfade-probe.py` paused RPCS3 twelve times in a driven
+Campaign race and read the stored channels beside their inputs. Channel 0
+matches `0.5 * speed_field + 5.0 * X` to within two counts on 12 of 12 samples,
+channel 3 is `511` at throttle `100` and `0` at throttle `0`, and
+`ctrl[+4]` is that throttle (`100.0` / `0.0`). The table is in
+[hd-xfx.md](../../../formats/hd-xfx.md#the-per-tick-law-confidence-85-for-channels-0-and-3).
+What keeps it from 90: channels 1 and 2 never left `0` in the capture, so their
+two terms are read but unobserved; and `X` is a measured number with no
+identified source.
+
+`*(ship + 0x5fac)` is the body entry itself (first word `g_CraftVtable`
+`0x008636e0`, vtable at `+8` is `0x008745b8`), so `X` is `entry+0x260`.
 
 ## What closes the lane
 
-**`X` (`+0x260` of the object at ship `+0x5fac`).** `search_instructions` for
+**`X` (`+0x260` of the body entry at ship `+0x5fac`).** `search_instructions` for
 `stfs`/`lfs` at `0x260(` finds one writer on a non-stack base
 (`FUN_000be530`, an XML tuning loader for a different, `0x1c8..0x26c`-field
 class) and readers at `FUN_000d5968`, `FUN_000e7760`, `FUN_00109350`,
-`FUN_0002fab0`. The object is `0x3a0` bytes, built in `FUN_000dfd90` by
-`FUN_006762b8(0x3a0)` and `FUN_000f00e8`; its constructor and per-tick writer
-are the next address to read. Alternatively one RPCS3 read of `ship+0x5f20`,
-`+0x5f24`, `+0x5f2c`, `+0x5f30` and `*(*(ship+0x5fac)+0x260)` while idling,
-thrusting, airbraking and boosting would name it in one session.
+`FUN_0002fab0`. The entry is `0x3a0` bytes, built in `FUN_000dfd90` by
+`FUN_006762b8(0x3a0)` and `FUN_000f00e8`. Live, `X` tracks `entry[+0x354]`,
+`[+0x364]`, `[+0x368]`, `[+0x36c]`, `[+0x370]` plus a constant 1.12 (r above
+0.994, twelve samples). The writer is not an `stfs` at `0x260(rN)`, so it is a
+vector store or a copy; the RPCS3 write watchpoint patch
+(`just build-rpcs3-watchpoints`) on `entry+0x260` would name the writing
+instruction in one session. The vtable's slots (`0x00682b68`...) are the other
+route and were not read.
 
 **The pitch unit** needs the voice function chain below
 `FUN_0031c948` (`FUN_006796b8` takes the pitch) or one pair of measured
