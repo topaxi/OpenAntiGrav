@@ -398,15 +398,17 @@ glow, which is also what this port draws (`shots/nbk.png`, blast skipped).
 
 `AiTrack_StepForward` (`0x0887e174`), read whole, with `mode` as its third
 argument. A path record is `0x20` bytes: `+0x00` point count, `+0x08` points
-(`0x70` stride), `+0x10` exit junction. A junction holds `+0x04` (a stop flag),
-`+0x08` (next) and `+0x0c` (next alternate).
+(`0x70` stride), `+0x10` exit junction. A junction's four slots are
+predecessors then successors (`oag_vex::track`): `+0x04` is `prev[1]`, so a set
+one means the walk has **arrived at a merge**; `+0x08` is `next[0]` and `+0x0c`
+is `next[1]`, the alternate.
 
 ```c
 while (steps > 0) {
     room = path->count - point - 1;
     if (steps <= room) { point += steps; steps = 0; return 0; }
     point += room; steps -= room;                       // now on the path's last point
-    if (exit->stop && mode != 1) return 2;              // caller retries with mode 1
+    if (exit->prev[1] && mode != 1) return 2;           // a merge: caller retries with mode 1
     if (exit->alternate && mode != 2 && mode != 3) return 1;   // a fork: steps left in *steps
     steps -= 1; point = 0;
     path = (mode == 3) ? exit->alternate : exit->next;  // 3 takes the branch, 2 the primary
@@ -422,7 +424,7 @@ until the steps are spent.
   `+0xe0` matrix to identity, and copy **this wave's cursor** to `+0x24c`. Then
   `+0x260` = this wave's direction and `+0x25c` = 1. This wave carries on with
   mode 2, the primary.
-- **Return 2:** retry with mode 1, which passes the stop.
+- **Return 2:** retry with mode 1, which passes the merge.
 - **After the loop:** if a fork wave is live, runs in this wave's direction,
   and is not the wave being advanced, advance it recursively:
   `AdvanceWave(r, +0x24c, +0xe0, +0x5c, +0x260, mode, steps, 0)`. On the call
@@ -434,7 +436,16 @@ until the steps are spent.
 - **The sweep tests it against craft only.** `RepulserPool_SweepTargets` tests
   Mines and Bombs against waves 0 and 1.
 
-Confidence 88 for this in-run path.
+Confidence 88 for this in-run path, off the **forward** wave.
+
+**`AiTrack_StepBackward` (`0x0887e2f0`) does not mirror it at an entry
+junction.** Its listing reads the same `path+0x10` junction
+(`0x0887e334 lw t1,0x10(t3)`) and the same slots (`+0x04`, `+0x0c`, `+0x08`).
+On reaching point 0 it moves to that junction's `next[0]` (or `next[1]` under
+mode 3) and lands on that path's **last** point (`count - 1`). What that means
+for a backward wave at a path's start is not established: either the runtime
+path record differs from the disc's, or the walk does something odd. So no fork
+is built off the backward wave, and `AiTrack_StepBackward` stays at 80.
 
 `Repulser_ForkAtJunction` (`0x08876634`) is the **init-tick** variant, called
 from `AdvanceWave`'s `init != 0` branch when the slot is free. It runs once,
@@ -480,7 +491,8 @@ the firer, where the original reads the AI-track point under the firer's
 cursor. `WO_REPULSER_BLAST` takes the field's basis turned by the `+0x21c` spin,
 through `Stage::orient`/`stretch`. The third wave forks at a split
 (`oag_gameplay::projectile::repulser::fork` on `oag_race::Course::branches`;
-05, 07, 14 and 23 carry a branch, `repulser_fork_ground_truth`). The fork is
+05, 07, 14 and 23 carry a branch, `repulser_fork_ground_truth`), off the
+forward wave only. The fork is
 hashed only while live, so every committed reference reproduced unchanged.
 `~REPULSORTRAVEL` stays unwired (see the live section). The blast's own
 playback (flag `0x200000` and the selector-5 record, `docs/formats/pob.md`) and
@@ -494,8 +506,11 @@ HD's own Repulser law is unread.
 
 - `FUN_0886d474` (remote destroy by id, under 50, not renamed) and the network
   broadcast payloads.
-- `AiTrack_StepBackward`'s mode semantics are assumed to mirror
-  `AiTrack_StepForward`'s. Only the forward stepper was read whole.
+- What `AiTrack_StepBackward` meets at a path's start (see the fork section).
+  It reads the exit junction's successors.
+- Whether the branches on 07, 14 and 23 are real second routes or coincident
+  duplicates of their primary path. Their sample counts match exactly; 05's do
+  not.
 - The hit law is still static: a write breakpoint on a victim's `+0x110`
   during a live Eliminator Repulser would lift `Repulser_HitCraft`.
 - The spin's sense against `Quat::from_axis_angle`. It does not show while the

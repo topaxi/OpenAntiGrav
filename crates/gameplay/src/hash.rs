@@ -560,7 +560,6 @@ fn write_repulser(hasher: &mut StateHasher, repulser: &Option<Repulser>) {
         hasher.write_u8(1);
         hasher.write_u32(u32::from(fork.branch.unwrap_or(u16::MAX)));
         hasher.write_u32(fork.offset);
-        hasher.write_u8(u8::from(fork.backward));
         hasher.write_u32(fork.front.index);
         for v in [fork.front.point, fork.front.previous] {
             hasher.write_f32(v.x);

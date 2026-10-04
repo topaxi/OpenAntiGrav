@@ -92,31 +92,18 @@ fn the_alternate_path_is_a_branch_between_the_split_and_the_merge() {
 #[test]
 fn a_forward_step_across_the_split_forks_with_the_steps_left() {
     let course = course();
-    let fork = Fork::crossing(&course, 30, 20, false).expect("crosses at 40");
+    let fork = Fork::crossing(&course, 30, 20).expect("crosses at 40");
     assert_eq!(fork.offset, 10);
     assert!((fork.front.point - course.branches()[0].centres[10]).length() < 1e-6);
     assert_eq!(fork.front.previous, fork.front.point);
     assert!(!fork.moved());
-    assert!(
-        Fork::crossing(&course, 10, 20, false).is_none(),
-        "short of it"
-    );
-}
-
-#[test]
-fn a_backward_step_across_the_merge_forks_onto_the_branchs_end() {
-    let course = course();
-    // From 85 back 8: reaches the merge's first sample (80) after 5, crosses
-    // with 3 left, the first of which lands on the branch's last sample.
-    let fork = Fork::crossing(&course, 85, 8, true).expect("crosses at 80");
-    assert_eq!(fork.offset, 37);
-    assert!(fork.backward);
+    assert!(Fork::crossing(&course, 10, 20).is_none(), "short of it");
 }
 
 #[test]
 fn the_fork_walks_the_branch_then_rejoins_the_ring_after_the_merge() {
     let course = course();
-    let mut fork = Fork::crossing(&course, 30, 20, false).unwrap();
+    let mut fork = Fork::crossing(&course, 30, 20).unwrap();
     fork.advance(&course, 20);
     assert_eq!((fork.branch, fork.offset), (Some(0), 30));
     assert!(fork.moved());

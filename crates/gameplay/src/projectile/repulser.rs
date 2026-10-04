@@ -167,18 +167,13 @@ impl Repulser {
                 // the parent's own walk: an existing one first takes the parent's
                 // full step, then a new one is spawned at most once.
                 if let Some(fork) = self.fork.as_mut() {
-                    let step = if fork.backward { backward } else { forward };
-                    fork.advance(course, step);
+                    fork.advance(course, forward);
                 }
-                for (wave, (front, step)) in fronts.iter_mut().zip(steps).enumerate() {
-                    if self.fork.is_none() {
-                        let (walk, back) = if wave == 0 {
-                            (forward, false)
-                        } else {
-                            (backward, true)
-                        };
-                        self.fork = Fork::crossing(course, front.index as usize, walk, back);
-                    }
+                // Only the forward wave forks - see [`fork`]'s doc comment.
+                if self.fork.is_none() {
+                    self.fork = Fork::crossing(course, fronts[0].index as usize, forward);
+                }
+                for (front, step) in fronts.iter_mut().zip(steps) {
                     let index = (front.index as usize + step) % count;
                     front.previous = front.point;
                     if let Some(point) = course.centre(index) {

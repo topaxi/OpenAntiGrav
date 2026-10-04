@@ -403,9 +403,11 @@ still open, most player-visible first:
   at the firer.
 - ~~The junction fork's third wave is not built~~ **built 2026-10-04**: the
   in-run fork (`Repulser_AdvanceWave`, 88) on `oag_race::Course::branches`
-  (05, 07, 14, 23 carry one). Not built: the init-tick variant
-  (`Repulser_ForkAtJunction`, 72) for a firer already on a branch. Not yet seen
-  in-game: no capture fired one across a split.
+  (05, 07, 14, 23 carry one), off the forward wave. Not built: the init-tick
+  variant (`Repulser_ForkAtJunction`, 72) for a firer already on a branch, and
+  a backward-wave fork (`AiTrack_StepBackward` reads the exit junction's
+  successors, unexplained). Open: whether 07/14/23's branches are real routes
+  or duplicates. Not yet seen in-game: no capture fired one across a split.
 - **HD plays Pulse's law now.** HD's Eliminator tables weight the Repulser
   (`ai=8 human=8`), and nothing gates it by title. HD's `Repulser_Construct` is
   read but its law is not.

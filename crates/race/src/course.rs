@@ -27,11 +27,14 @@
 //!     next = path->exit->next_alternate;   // branch selection
 //! ```
 //!
-//! [`Course`] therefore walks the **primary** chain and nothing else. Alternate
-//! paths are shortcuts and are deliberately off the ring: on `05_Track`, the one
-//! shipped track with a genuine split, the two branches "share both endpoints, so
-//! they are two lines over the same stretch rather than a geographic detour", so
-//! a ship on the shortcut still projects onto the ring at a sensible distance.
+//! [`Course`] therefore walks the **primary** chain. Alternate paths are
+//! deliberately off the ring: on `05_Track` the two branches "share both
+//! endpoints, so they are two lines over the same stretch rather than a
+//! geographic detour", so a ship on the shortcut still projects onto the ring at
+//! a sensible distance. They are kept beside it as [`Branch`]es, for the one
+//! thing that walks them, a Repulser's fork wave. `05_Track`, `07_Track`,
+//! `14_Track` and `23_Track` carry one; whether the last three are second
+//! routes or duplicates of their primary path is not settled.
 
 use oag_core::math::Vec3;
 use oag_vex::track::AiTrack;
