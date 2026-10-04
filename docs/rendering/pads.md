@@ -786,3 +786,33 @@ unchanged (deliberately - see `renderer.md`'s own note on why relaxing
 `skin::picks`, `Pick`, `material_bind_group_layout` and `mesh.wgsl` are all
 untouched. Item 2 (the tangent frame) and item 3 (the bind-group change) are
 exactly as before.
+
+### Wired, 2026-10-05: the pad light bars glow, and the "specular scalar" was fog
+
+**Correction first.** The "wiring attempted and stopped" section above reads the multiplier `R0.x`/`R0.z` on the pad programs' final `MAD` as a specular scalar. It is **EXP2 fog**. `fragment.rs` dropped every source's negate bit (bit 17 of its own word) until this change; with it decoded, instruction 19 (Speedup) / 15 (Weapon) is `MUL R.w, -R1.w, R1.w` - the negated square of `TC3.w * fogColour.w` (`TC3.w` is clip-space w, the view depth) - then `MUL log2(e)` and `EX2_SAT`: `f = exp(-(k d)^2)`. The tail `MAD R1.xyz, -K, f, K` is `K (1 - f)` with `K = fogColour.rgb` (parameter `0x3dc31258`, which also patches the `.w` coefficient), and the final `MAD H0, f, colour, R1` is `f * colour + (1 - f) * fog`. Confidence 85 (a straight-line program, the same shape `scripts/ps3-microcode.py` documents for every fogged variant). So the `_ne` term is **not** multiplied by anything but fog, and `mesh.wgsl`'s `fogged()` already does that part.
+
+The whole Speedup program, read with the negates (`hd_pad_ne_tint_probe`, now printing `IN<n>` and `-`):
+
+```text
+N      = nx*TC3 + ny*TC0 + nz*TC2          ; _ne.xyz*2-1; TC3 tangent, TC0 bitangent, TC2 normal
+lit    = pow(lightmap.rgb, C(0x002c73e8)) * C(0x8670f0be) + lightmap.a * (N.L) * C(0x2dba643d)
+spec   = (sat(N.Hhat))^32 * sat(N.L) * lightmap.a      ; H = normalize(TC1) + L, TC1 the eye vector
+colour = diffuse * lit + _ne.a * W + diffuse.a * spec_colour * spec
+out    = f * colour + (1 - f) * fogColour.rgb
+```
+
+Everything in it except the normal and the `_ne.a * W` term is what `mesh.wgsl`'s authored path already computed for every HD circuit chunk.
+
+**What is built** (the disc's formula, not the generic `second.rgb * tint * first.a` shape):
+
+- `_ne` bound as a **third** texture, `Model::pad_masks`, bind group 1 binding 3. The lightmap keeps binding 2. `slots::PAD_NE` (bit 14) is set by `mesh::rcs::pad_ne`, called from `mesh::rcs::pads` only.
+- The `_ne` texel is decoded `x * 2 - 1` into the normal for `N.L` and `N.H`: `N = nx*T + nz*N0`.
+- `_ne.a * W` is added after the light, ungated by the diffuse alpha. `W` is the parameter the program's inline constant is patched by, found by `Program::alpha_gated_parameter` (the `MAD dst, T.wwww, C, acc` after the `_ne` fetch), read per material instance: red on `talons_junction`'s `Weapon Pad`, cyan on `12_sol_2`'s both (`hd_pad_ne_census`). It rides in the material's `Model::emissive` tint.
+
+**Measured, from the vertex program** (`vertex block #7` of `weapon_pads.rcsmaterial`, `ps3-microcode.py vp-file`): attribute `0xdbe5f417` (4 x ubyte, offset 10) is read `v[2].xyz*2-1` into `o[TC3]` (the tangent) and `v[2].w` multiplies `cross(N, T)` into `o[TC0]`. That `w` byte is `0` on 232 of 232 vertices of `12_sol_2`'s `Weapon Pad` chunks, 839 and 836 of 840 on `talons_junction`'s, 209 to 213 of 216 on `12_sol_2`'s `Speedup Pad`: **the bitangent is the zero vector and `ny` never reaches `N`**. The authored tangent points along `dP/du` (mean dot 0.94 to 0.99, `hd_pad_tangent_probe`). The earlier note that `+10` is an 11-11-10 tangent on stride 22 is not what the pad vertex program reads; the pad program reads it as ubytes.
+
+**Chosen, not measured:** the tangent is derived per pixel from screen-space derivatives of world position and texture coordinate rather than decoded from the stream (no new vertex attribute); the diffuse `N.L` is clamped as the generic path clamps it where the pad program does not clamp it; `talons_junction`'s program is a different compile (64 instructions, `_ne` uv from `TC3.w`/`TC4.w`) and was read only for the structure the shader needs (the alpha-gated `MAD`), not traced end to end.
+
+**Open:** the four original circuits' speed pads (`talons_junction`, `amphiseum`, `modesto_heights`, `tech_de_ra`) are not in the pad model (`Speedup Pad` nodes address no chunk) and draw through the scene as plain geometry, so they get no `_ne` glow; the runtime cooldown colour (`WeaponPad_UpdateRefreshTimer`) is still unwired.
+
+Pictures (`data/scratch/hd-pad-emissive/`, 1920x1080 `oag-game --race --mode single_race`): `ta_pair.png` and `tb_pair.png` (`talons_junction`, red), `sa_pair.png` and `sb_pair.png` (`12_sol_2`, cyan); top is before, bottom after. Pulse PSP's `16_Track` pads (`pulse_pw_*.png`, `pulse_ps_*.png`) are byte-identical before and after. Guards: `tests/hd_pad_ne_lit_path.rs` (authored rig; fails if the lightmap, the normal decode or the glow is dropped) and `tests/hd_pad_ne_ground_truth.rs` (disc-backed).
