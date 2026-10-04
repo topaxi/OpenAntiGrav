@@ -15,11 +15,12 @@ categories: [rendering, gameplay]
 - **The roster seed is the race seed**, which no real launch varies, so every `--race` without `--seed` flies the same order. The original reseeds from the wall clock every launch. Varying the seed per launch moves every other seeded draw too, so it is a session decision.
 - **The DLC case is static only**: with four packs mounted, seven of eleven eligible teams race, picked by the draw. No live run with packs mounted.
 - **An execution breakpoint on `RaceSession_DrawAiRoster`'s entry never fired** under PPSSPP although the function ran (JIT markers, a fresh draw per launch). Matters only for a capture that must stop inside the draw.
-- **Tournament's later-leg grid reorder is not ported**: `Tournament_Construct` reorders racers by the previous result (`+0xd0`) and keeps each racer's team (`+0x110`, via `FUN_0882e2fc`). The port keeps the roster (one seed) but not the reorder.
+- **Tournament's later-leg grid reorder is not ported**: `Tournament_Construct`'s non-first branch reorders racers by `+0xd0` and reuses a per-racer team cache at `+0x110`; `FUN_0882e2fc` (a resume path, unread) rebuilds both from a stored record. The port keeps the roster (one seed) but not the reorder.
 - Sparks use slot 0's (the player's) anchors alone, not the full grid.
 
 ## Next Steps
 
-- To capture inside the draw, arm the breakpoint before Main Menu, or try PPSSPP's IR interpreter. `data/scratch/pulse-team-slots/` in the main checkout has the sampler (`sample.py`) that reads `g_race_session` `+0x3c` and each craft's `+0x370` after a load.
+- To capture inside the draw, arm the breakpoint before Main Menu, or try PPSSPP's IR interpreter. `scripts/psp-team-roster.py` reads `g_race_session` `+0x3c` and each craft's `+0x370` after a load, memory reads only.
+- Whether `RESTART RACE` redraws the roster is not determined: run `psp-team-roster.py` before and after a restart.
 - A DLC-mounted live run would lift the seven-of-eleven claim off static.
-- The unlock filter (`Definition_IsUnlocked`) is left to the front end's list. Check that the front end only offers unlocked teams before relying on that.
+- The unlock filter (`Definition_IsUnlocked`) is not applied; it is assumed, not checked, that the caller's list holds only teams the player could race against. Check what `boot_shell.teams` filters before relying on that.

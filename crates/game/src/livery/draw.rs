@@ -1,7 +1,7 @@
 //! Which team flies each grid slot: Pulse's own AI roster draw.
 //!
-//! **Recovered off Pulse PSP, `FUN_08821bd4` (`0x08821bd4`)**, the function
-//! the race-session constructor `FUN_08820d78` calls on every launch, and
+//! **Recovered off Pulse PSP, `RaceSession_DrawAiRoster` (`0x08821bd4`)**, which
+//! the race-session constructor `RaceSession_Construct` calls on every launch, and
 //! confirmed live on seven Single Race launches with three different player
 //! teams - see `docs/ghidra/functions/psp-pulse-usa/grid.md`, "Which team
 //! flies which slot, recovered". Confidence 85 for what was seen live (the
@@ -29,10 +29,11 @@
 //!   read a clock (`docs/architecture/determinism.md`), so the draw takes the
 //!   race seed through a generator of its own, salted by [`ROSTER_SALT`]
 //!   (chosen, not measured). One seed, one grid: a replay rebuilds it and a
-//!   Tournament's legs share it, which the original also does - its later
-//!   legs keep the first leg's roster rather than drawing again.
-//! - **The unlock filter is not applied.** The caller's list is what the front
-//!   end offers, which is already what is unlocked.
+//!   Tournament's legs share it. The original's later legs appear to keep the
+//!   first leg's roster too (`Tournament_Construct` reuses a per-racer cache
+//!   on its non-first branch), but that path is not fully read.
+//! - **The unlock filter is not applied.** It is assumed, not checked, that
+//!   the caller's list holds only teams the player could race against.
 //! - **A list shorter than the grid cycles.** The original loops forever
 //!   collecting seven teams that do not exist; Pure and the PS2 set can be
 //!   shorter than the grid, and a repeated livery beats a hang. Chosen, not
@@ -73,15 +74,21 @@ pub fn teams_for_slots(player: &str, available: &[String], slots: usize, seed: u
     out
 }
 
-/// The original's swap: each index in turn trades places with `rand() % n`.
+/// The original's shuffle off the roster's own generator.
 fn shuffle<T>(items: &mut [T], seed: u64) {
     let mut rng = oag_core::rng::Rng::new(seed ^ ROSTER_SALT);
+    swap_each(items, || rng.next_u32());
+}
+
+/// The original's swap: each index in turn trades places with `draw() % n`,
+/// the remainder of an unsigned divide (`divu`/`mfhi` at `0x08821cd8`).
+fn swap_each<T>(items: &mut [T], mut draw: impl FnMut() -> u32) {
     let n = items.len();
     let Ok(n32) = u32::try_from(n) else {
         return;
     };
     for i in 0..n {
-        let j = (rng.next_u32() % n32) as usize;
+        let j = (draw() % n32) as usize;
         items.swap(i, j);
     }
 }
@@ -138,6 +145,23 @@ mod tests {
         assert_eq!(seen.len(), 7, "{seen:?}");
     }
 
+    /// The swap itself, off scripted draws, so the salt and the generator stay
+    /// out of it. Forward Fisher-Yates gives `a, b, c` for `[0, 0, 0]` and
+    /// Durstenfeld `b, c, a`; the original's swap gives `c, a, b`. A draw past
+    /// `n` pins the remainder against a multiply-shift reduction, which maps
+    /// `4` to `0` where `4 % 3` is `1`.
+    #[test]
+    fn the_swap_is_the_originals_not_fisher_yates() {
+        let scripted = |draws: &[u32]| {
+            let mut items = ['a', 'b', 'c'];
+            let mut draws = draws.iter().copied();
+            swap_each(&mut items, || draws.next().expect("a draw per index"));
+            items
+        };
+        assert_eq!(scripted(&[0, 0, 0]), ['c', 'a', 'b']);
+        assert_eq!(scripted(&[4, 0, 0]), ['c', 'b', 'a']);
+    }
+
     #[test]
     fn one_seed_is_one_grid() {
         for seed in [0, 1, 7, u64::MAX] {
@@ -175,7 +199,8 @@ mod tests {
         }
     }
 
-    /// `FUN_08821dd4` drops any name containing `Zone`, case-sensitively.
+    /// `RaceSession_IsTeamEligible` drops any name containing `Zone`,
+    /// case-sensitively.
     #[test]
     fn a_zone_named_team_never_races() {
         let mut with_zone = pulse();

@@ -601,17 +601,18 @@ below, and seven of more than eight once DLC packs are mounted).
 
 The previous section's spawn function, `0x0882e57c`, is `Tournament_Construct`
 (mode 4, already named on [state-machine.md](state-machine.md)). **Single
-Race is `g_game_mode` 3, `ArcadeRace_Construct` (`0x0882c108`).** Four
-pieces of evidence agree:
+Race is `g_game_mode` 3, `ArcadeRace_Construct` (`0x0882c108`).** Three
+pieces of evidence agree, plus one weak one:
 
 - `g_game_mode` read **3** live on every launch below.
-- A breakpoint on `0x0882e57c` never fired across three loads (two launches
-  and a restart).
 - Its first code word still matches `BOOT.BIN` (`0x27bdffc0`), while
   `0x0882c108`, `0x08820d78`, `0x0882c03c` and `0x08821bd4` all carry
   PPSSPP's JIT block marker (`0x68......`), which means they ran.
 - The live race-session object's vtable is `0x08ac9820`, the one
   `ArcadeSession_Construct` (`0x0882c03c`) installs.
+- Weak: a breakpoint on `0x0882e57c` never fired. Breakpoints in this code
+  did not fire even where it ran (see the end of "Live"), so this carries no
+  weight by itself.
 
 The `id = 0` finding survives: `ArcadeRace_Construct` has the same loop, an
 immediate `0` for `id`, `racer_index` as the slot, and the per-racer string
@@ -691,7 +692,7 @@ swap exactly (`crates/game/src/livery/draw.rs`). `rand` is the libc LCG on
 
 PPSSPP v1.20.4 under Xvfb, `pulse-psp-usa.chd`, RACEBOX -> CUSTOM RACE ->
 SINGLE RACE, Talon's Junction, the walk `scripts/psp-drive.py menu
---single-race` drives. Read after each load: `g_race_session` (`0x08b34320`)
+--single-race` drives. Read after each load by `scripts/psp-team-roster.py`: `g_race_session` (`0x08b34320`)
 `+0x3c..+0x58`, `g_player_team_definition` (`0x08b3104c`) `+0x74`, and each
 craft's own `+0x370 -> +0x74` through `g_race_manager` (`0x08b317b4`) `+0x78`.
 
@@ -707,13 +708,14 @@ craft's own `+0x370 -> +0x74` through `g_race_manager` (`0x08b317b4`) `+0x78`.
 
 Launches 4 and 5 pressed right on Ship Select, which changes the skin, not
 the team. Teams are a vertical list, which `psp-drive.py menu --ship-down N`
-now drives. On launch 1 every craft's own `+0x370` team matched the session
-array index for index, with the player's craft (`+0x368` role `0`) last and
+now drives. On all seven launches every craft's own `+0x370` team matched
+the session array index for index, with the player's craft (`+0x368` role `0`) last and
 the seven AI (`+0x368` role `2`) first. **What the table shows:** the
 player's team is never an AI team; the other seven always all race; the
 order is different on every launch; the player is always the last racer.
-`RESTART RACE` from the pause menu does not redraw: no breakpoint fired on a
-restart.
+Whether `RESTART RACE` redraws is **not determined**: the only check was a
+breakpoint, and breakpoints in this code did not fire (below). Sampling the
+array before and after a restart would settle it.
 
 **Not explained, and recorded rather than smoothed over:** an execution
 breakpoint on `0x08821bd4`'s entry, and two inside it (`0x08821cc0`,
@@ -738,11 +740,15 @@ to the front end's list. A list shorter than seven cycles instead of
 hanging. Every other title inherits this law, since none has a measured
 rule of its own.
 
-**Tournament keeps its first leg's roster.** `Tournament_Construct` calls
-the draw only while `DAT_08b30fa4` is `0`. On later legs it reorders the
-racers by the previous result (`+0xd0`) and reuses each racer's cached team
-(`+0x110`), through `FUN_0882e2fc`. The port's legs share one seed, which
-gives the same roster. The grid reorder is not ported.
+**Tournament appears to keep its first leg's roster.** `Tournament_Construct`
+calls the draw only while `DAT_08b30fa4` is `0`, and on that branch it fills
+a per-racer team cache at `+0x110` itself. On the other branch it reorders
+the racers by a per-racer field at `+0xd0` and reuses `+0x110`.
+`FUN_0882e2fc` runs there only when `DAT_08b30fab == 1`: it rebuilds `+0x110`
+and `+0xd0` from a stored record (`DAT_08b31774`, keyed by `DAT_08b30fb4`),
+with a `rand` fallback, then draws anyway. It reads like a resume path and is
+unread. The port's legs share one seed, which gives the same roster. The
+reorder is not ported.
 
 **The DLC case is static only.** With four packs mounted, eleven teams are
 eligible for a Pulse player, and the draw picks seven of them at random.

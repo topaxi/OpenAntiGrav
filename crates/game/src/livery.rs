@@ -22,7 +22,7 @@
 //! invents a path.
 //!
 //! **Which team flies which slot is Pulse's own draw**, recovered off
-//! `FUN_08821bd4` and confirmed live: every team but the player's, shuffled,
+//! `RaceSession_DrawAiRoster` and confirmed live: every team but the player's, shuffled,
 //! seven of them racing. [`teams_for_slots`] reproduces it off the race seed
 //! where the original reads the wall clock - see [`draw`] for what is measured
 //! and what is chosen.

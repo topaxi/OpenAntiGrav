@@ -223,7 +223,7 @@ pub(super) fn grid(
         report,
     )?;
     report.push(format!(
-        "grid liveries: {} - Pulse's roster draw (FUN_08821bd4, grid.md) off the race \
+        "grid liveries: {} - Pulse's roster draw (RaceSession_DrawAiRoster, grid.md) off the race \
          seed {seed:#x}; the original seeds it from the wall clock",
         slot_teams.join(", ")
     ));
