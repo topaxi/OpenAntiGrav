@@ -264,30 +264,7 @@ pub fn build_scene(
         placed.extend(pads::pad_chunk_hashes(data, &nodes, order, class));
     }
 
-    // **The speed pads of the four original circuits are routed by material.**
-    // Their `Speedup Pad` nodes name a hash no chunk carries (18, 16, 17 and 15
-    // nodes against 18, 16, 17 and 15 chunks on a pad material), so the chunks
-    // fall into the loop below as plain geometry. Binding the `_ne` mask to the
-    // pad materials those unreferenced chunks use gives them the glow they
-    // author. A chunk an addressed pad node owns is excluded above, so the 12
-    // circuits whose nodes resolve bind nothing here.
-    let mut pad_slots = vec![false; model.materials.len()];
-    for chunk in model.meshes.iter().filter(|c| !placed.contains(&c.hash)) {
-        for surface in chunk.surfaces() {
-            if let Some(flag) = pad_slots.get_mut(surface.material as usize) {
-                *flag = pads::is_pad_material(&model.materials[surface.material as usize].name);
-            }
-        }
-    }
-    out.pad_masks = pad_ne::pad_ne(
-        &model,
-        &out.material_variants,
-        textures,
-        &mut out.material_slots,
-        &mut out.emissive,
-        Some(&pad_slots),
-        &mut report,
-    );
+    pads::bind_scene_pad_masks(&model, &placed, &mut out, textures, &mut report);
 
     for (chunk_index, chunk) in model.meshes.iter().enumerate() {
         if placed.contains(&chunk.hash) {
