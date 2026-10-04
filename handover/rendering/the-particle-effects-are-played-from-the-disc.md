@@ -44,12 +44,17 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
 
 ## Open
 
-- **The weather is wired** (Fort Gale rain and lens; Outpost 7's snow withheld), see
+- **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see
   [weather.md](../../docs/ghidra/functions/psp-pulse-usa/weather.md). Open:
-  - Outpost 7's open-air snow draws visible flakes in ours and none in three
-    original frames; `WO_SNOW`'s `Random` 12/12 size and its draw are unread. Withheld
-    (maintainer, 2026-10-03): `race::load::pulse_psp::place_weather` skips it until this is read.
-  - The mist overlay (`FUN_088fa0a0`) is not played.
+  - ~~Outpost 7's snow withheld~~: closed 2026-10-04. `WO_SNOW` sets the immortal flag
+    `0x800`, which ours ignored, so its flakes died five ticks in. The flag is now honoured
+    in `oag_render::psys`, and the withhold is lifted. This also makes `WO_LEACHBEAM_ENERGY`
+    immortal, the only other Pulse emitter with the flag. Its instance is killed on every
+    re-spawn, so the pool resets, but its on-screen particle count was not re-checked
+    against the original.
+  - The mist overlay is recovered and live-checked (`WeatherMist_*`, `0x088fa0a0`) but not
+    played. It needs a screen pass: two additive full-screen quads over `Mist.mip` with
+    repeat wrap.
   - The PS2 disc authors `<Weather>` on three circuits and plays none here.
   - Covered-section rain was not distinguishable in either side's frames.
 - **The welder against the original** (matched frames on Basilico Black):
@@ -69,9 +74,8 @@ for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/
 
 ## Next Steps
 
-- Read `WO_SNOW`'s draw (size channel `Random` 12/12) and why the original shows
-  no flakes where ours does, then lift the withhold in `place_weather`; then read the mist
-  overlay.
+- Play the mist overlay off the law in weather.md's "The mist overlay" section. Check the
+  camera-motion signs (`CameraMotion_Sample_q`) against a live turn first.
 - `NODAMAGE`: catch a live `damaged == 0` hit (`ShipCollisionFx_Trigger`
   `0x089246b4`, `a2`). A craft dropped onto magstrip or the floor at speed is the
   candidate. Then add a reporting-only floor-impact field to
