@@ -1306,6 +1306,123 @@ def cmd_countdown(args):
 
 SCREEN_SETTLE_BEFORE_RECORD = 2.0
 
+#: `RaceManager_GetInstance` (`0x00054628`) is `lwz r9,-0x6cc4(r2); lwz r3,0(r9)`
+#: under TOC `0x008ad4d8`: the instance pointer lives at this address.
+RACE_MANAGER_SLOT = 0x0095AE78
+
+#: The game state `RaceManager_Update` reads through TOC-0x6ce0 - a static
+#: object, not a pointer; `+0xc` is the race's lap count.
+GAME_STATE = 0x00936FE8
+
+#: The TOC floats holding the lap-0 window, `[3.83, 5.25)`.
+PRE_LAP_FROM = 0x008A6A74
+PRE_LAP_TO = 0x008A6A90
+
+
+def _word(gdb, address):
+    return int.from_bytes(gdb.read(address, 4), "big")
+
+
+def _board_state(gdb):
+    """`(manager, ship, lap, crossings, total, phase, gantry_time)` right now."""
+    import struct
+    manager = _word(gdb, RACE_MANAGER_SLOT)
+    ship = _word(gdb, manager + 0x13E8)
+    total = _word(gdb, GAME_STATE + 0xC)
+    phase = _word(gdb, manager + 0x1970)
+    lap = _word(gdb, ship + 0x7810)
+    crossings = _word(gdb, ship + 0x7814)
+    # The gantry billboard's `.vex` node, `+0x40` of the slot the manager
+    # keeps at `+0x1950`; its own `+0xc0` is the time when it is the
+    # MeshImporter itself (`AnimNode_GetTime`, 0x002c0d78).
+    node = _word(gdb, _word(gdb, manager + 0x1950) + 0x40)
+    time_bits = gdb.read(node + 0xC0, 4)
+    return (manager, ship, lap, crossings, total, phase,
+            struct.unpack(">f", time_bits)[0])
+
+
+def cmd_lapboard(args):
+    """Park on the grid, force the player's lap counter, photograph the gantry.
+
+    The gantry's lap windows (`RaceManager_Update`, 0x0005e948) key on
+    `ship+0x7810`. Driving laps to reach them is slow and the board is only in
+    view from the grid, so this releases the start without thrust, then writes
+    each lap value through the GDB stub and screenshots the board it selects.
+    """
+    import struct
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from rpcs3_debugger import Debugger
+
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    port = int(GDB_SERVER.rpartition(":")[2]) if GDB_SERVER else 2345
+    log = open(out / "lapboard.txt", "w")
+
+    def note(text):
+        print(text, flush=True)
+        log.write(text + "\n")
+        log.flush()
+
+    with open_session(args) as session:
+        note("rpcs3 pid %d" % session.proc.pid)
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
+            note("never reached the Main Menu")
+            return 1
+        time.sleep(args.settle)
+        for index in range(1, 16):
+            if current_screen() in RACE_ARRIVED:
+                break
+            was, now = session.press_once("cross")
+            note("  press %2d  %-22s -> %s" % (index, was, now))
+        time.sleep(args.load)
+        session.pad.press("cross", 0.15)
+        note("intro skipped; no thrust; waiting %g s past the release" % args.wait)
+        time.sleep(args.wait)
+        screenshot(out / "00-pre.png", trim=True)
+        with Debugger(port=port) as gdb:
+            gdb.pause()
+            state = _board_state(gdb)
+            note("manager %#x ship %#x lap %d crossings %d total %d phase %d "
+                 "gantry %.3f s" % state)
+            ship, total = state[1], state[4]
+            gdb.resume()
+            for spec in args.window:
+                # The lap-0 window's bounds are TOC floats `RaceManager_Update`
+                # loads every frame (`lfs f31,-0x6a64(r2)`, `lfs f0,-0x6a48(r2)`);
+                # writing another window's bounds there makes the original play
+                # that window on the grid, whatever the lap counter says.
+                low, high = (float(v) for v in spec.split(","))
+                gdb.pause()
+                gdb.write(PRE_LAP_FROM, struct.pack(">f", low))
+                gdb.write(PRE_LAP_TO, struct.pack(">f", high))
+                note("window [%g, %g)" % (low, high))
+                gdb.resume()
+                for shot in range(args.shots):
+                    time.sleep(args.interval)
+                    path = out / ("w%g-%02d.png" % (low, shot))
+                    screenshot(path, trim=True)
+            for lap in [int(v) for v in args.laps.split(",") if v]:
+                lap = {-1: total - 1, -2: total}.get(lap, lap)
+                gdb.pause()
+                gdb.write(ship + 0x7810, lap.to_bytes(4, "big"))
+                if args.crossings:
+                    # The lap is rewritten every frame from elsewhere; the
+                    # crossing count at `+0x7814` starts at 2 on the grid.
+                    gdb.write(ship + 0x7814, (lap + 2).to_bytes(4, "big"))
+                note("wrote lap %d%s" % (lap, " and crossings %d" % (lap + 2)
+                                          if args.crossings else ""))
+                gdb.resume()
+                for shot in range(args.shots):
+                    time.sleep(args.interval)
+                    path = out / ("lap%d-%02d.png" % (lap, shot))
+                    screenshot(path, trim=True)
+                    gdb.pause()
+                    note("  %s: lap %d crossings %d total %d phase %d gantry %.3f s"
+                         % ((path.name,) + _board_state(gdb)[2:]))
+                    gdb.resume()
+    return 0
+
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -1479,6 +1596,27 @@ def main(argv=None):
                     help="seconds between the intro-skipping tap and holding "
                          "thrust")
     cd.set_defaults(run=cmd_countdown)
+
+    lb = sub.add_parser("lapboard",
+                        help="park on the grid, force the lap counter, "
+                             "photograph the gantry's lap windows")
+    lb.add_argument("--timeout", type=float, default=180.0)
+    lb.add_argument("--settle", type=float, default=12.0)
+    lb.add_argument("--load", type=float, default=25.0)
+    lb.add_argument("--wait", type=float, default=15.0,
+                    help="seconds after the intro skip before the first write")
+    lb.add_argument("--laps", default="1,-1,-2",
+                    help="lap values to write in order; -1 is total-1, -2 total")
+    lb.add_argument("--shots", type=int, default=8)
+    lb.add_argument("--interval", type=float, default=0.6)
+    lb.add_argument("--out", default="data/reference/hd-lapboard")
+    lb.add_argument("--window", action="append", default=[],
+                    metavar="FROM,TO",
+                    help="write these bounds over the lap-0 window and "
+                         "photograph; repeatable, run before --laps")
+    lb.add_argument("--crossings", action="store_true",
+                    help="also write the crossing count at +0x7814 as lap + 2")
+    lb.set_defaults(run=cmd_lapboard)
 
     args = parser.parse_args(argv)
     if args.stock_config:

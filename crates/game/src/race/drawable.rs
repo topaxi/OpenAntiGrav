@@ -95,6 +95,10 @@ pub(super) struct Drawable {
     /// The road spans a Quake ripples through this model - see
     /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
     ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
+    /// Draws left out this frame, by [`oag_render::gantry::panel::key`]:
+    /// the start gantry's states off its panel ([`Self::set_hidden`]).
+    /// Empty on everything else.
+    hidden: std::cell::RefCell<Vec<u32>>,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -288,6 +292,7 @@ impl Drawable {
             stamp_pipeline,
             prepass,
             shown: std::cell::RefCell::default(),
+            hidden: std::cell::RefCell::default(),
             reversed_indices,
             vertices,
             texcoords,
@@ -691,9 +696,20 @@ impl Drawable {
         &self.model.draws
     }
 
-    /// Whether `draw` is in the `LodGroup` child this frame enables.
+    /// Whether `draw` is in the `LodGroup` child this frame enables, and not
+    /// left out by [`Self::set_hidden`].
     fn lod_shows(&self, draw: &DrawCall) -> bool {
-        self.lod.shows(&self.model.lod_groups, draw)
+        self.lod.shows(&self.model.lod_groups, draw) && {
+            let hidden = self.hidden.borrow();
+            hidden.is_empty() || !hidden.contains(&oag_render::gantry::panel::key(draw))
+        }
+    }
+
+    /// Leaves the draws keyed in `keys` out of every list until the next call.
+    pub(super) fn set_hidden(&self, keys: &[u32]) {
+        let mut hidden = self.hidden.borrow_mut();
+        hidden.clear();
+        hidden.extend_from_slice(keys);
     }
 
     /// This hull's geometry and materials, for the ghost ship's pipeline to

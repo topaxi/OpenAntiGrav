@@ -43,6 +43,8 @@ use oag_core::math::{Mat3, Mat4, Quat, Vec3};
 
 use crate::mesh::Model;
 
+pub mod panel;
+
 /// The countdown board's backing panel, in the track's own texture set.
 ///
 /// Present on every Pulse circuit checked, and **not** one of

@@ -68,8 +68,13 @@
 //! the whole strip there - the maintainer's report - so on Pulse the clock
 //! loops [`GO_LOOP`] instead, see [`held_on_go`].
 
+mod board;
 mod clock;
 
+pub use board::{
+    BoardTracker, BoardWindow, HD_BETWEEN_LAPS_WINDOW, HD_CHEQUERED_WINDOW,
+    HD_FINAL_LAP_AHEAD_WINDOW, PanelCull, WindowEntry,
+};
 pub use clock::{Clock, GoEdge, HD_PRE_LAP_WINDOW, ReleaseWindow, SEARCH_FRAMES, go_edge};
 
 use super::*;
@@ -158,6 +163,10 @@ pub struct Placed {
     /// on Pulse, HD's race-manager window on the PS3 titles ([`Clock::hd`]),
     /// or the timeline off the race start where no edge could be found.
     pub(super) clock: Clock,
+    /// What to leave out at each moment of the timeline, on a title whose
+    /// clock reaches the later board states (HD); `None` where the loader
+    /// removed the parked states outright (Pulse, PS2).
+    pub(super) cull: Option<PanelCull>,
 }
 
 impl Placed {
@@ -171,6 +180,12 @@ impl Placed {
     #[must_use]
     pub fn clock(&self) -> Clock {
         self.clock
+    }
+
+    /// The per-moment cull, where the model keeps its later states.
+    #[must_use]
+    pub fn cull(&self) -> Option<&PanelCull> {
+        self.cull.as_ref()
     }
 }
 
@@ -226,9 +241,12 @@ pub(super) fn place(
         }
     };
     let mut model = model;
+    let matrix = matrix(&mount, Vec3::from(start.forward));
+    if clock == ClockRule::HdRaceManager {
+        return Some(place_hd(model, matrix, &mount, name, report));
+    }
     let fx350 = oag_render::gantry::strip_fx350_art(&mut model);
     let parked = oag_render::gantry::clip_to_panel(&mut model, mount.width / 2.0, 0.0);
-    let matrix = matrix(&mount, Vec3::from(start.forward));
     place_bounds(&mut model, matrix);
     report.push(format!(
         "start gantry {name} on node {:?}: centre {:?}, on a {:.1} x {:.1} surface \
@@ -246,15 +264,85 @@ pub(super) fn place(
         mount.vertices,
         (mount.centre - Vec3::from(start.position)).length(),
     ));
-    let clock = match clock {
-        ClockRule::Measured => Clock::PULSE,
-        ClockRule::HdRaceManager => hd_clock(&model, name, report),
-    };
     Some(Placed {
         model,
         matrix,
-        clock,
+        clock: Clock::PULSE,
+        cull: None,
     })
+}
+
+/// HD's gantry, which keeps every state it authors: the countdown's own
+/// leave-outs are named rather than removed, and the later windows cull per
+/// frame ([`PanelCull`]).
+fn place_hd(
+    mut model: Model,
+    matrix: Mat4,
+    mount: &Mount,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Placed {
+    let half_width = mount.width / 2.0;
+    let mut countdown = oag_render::gantry::panel::fx350_draws(&model);
+    let fx350 = countdown.len();
+    // Measured on a copy, so the count and the guard against clipping
+    // everything stay `clip_to_panel`'s own.
+    let mut probe = model.clone();
+    let keep: Vec<u32> = {
+        oag_render::gantry::clip_to_panel(&mut probe, half_width, 0.0);
+        let lists = [
+            &probe.draws,
+            &probe.alpha_tested_draws,
+            &probe.transparent_draws,
+        ];
+        lists
+            .into_iter()
+            .flatten()
+            .map(oag_render::gantry::panel::key)
+            .collect()
+    };
+    let parked: Vec<u32> = [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ]
+    .into_iter()
+    .flatten()
+    .map(oag_render::gantry::panel::key)
+    .filter(|key| !keep.contains(key))
+    .collect();
+    for key in &parked {
+        if !countdown.contains(key) {
+            countdown.push(*key);
+        }
+    }
+    let cull = PanelCull::build(&model, countdown, half_width, mount.height / 2.0);
+    place_bounds(&mut model, matrix);
+    report.push(format!(
+        "start gantry {name} on node {:?}: centre {:?}, on a {:.1} x {:.1} surface \
+         ({:.1} thick over {} vertices) - measured off this circuit's own geometry \
+         (docs/rendering/start-gantry.md). Before the first line crossing {} draw(s) parked \
+         outside the panel and {fx350} bound to slot 7's own fx350_nomip.gtf art are not \
+         drawn; after it, HD's race manager plays the FX-350 board, FINAL LAP and the \
+         chequered flag, and each frame draws only what stands on the {:.1} x {:.1} panel \
+         (measured on RPCS3, 2026-10-04)",
+        mount.node,
+        mount.centre.to_array().map(|v| (v * 10.0).round() / 10.0),
+        mount.width,
+        mount.height,
+        mount.thickness,
+        mount.vertices,
+        parked.len(),
+        mount.width,
+        mount.height,
+    ));
+    let clock = hd_clock(&model, name, report);
+    Placed {
+        model,
+        matrix,
+        clock,
+        cull: Some(cull),
+    }
 }
 
 /// How [`place`] sets the timeline's clock.
@@ -283,8 +371,9 @@ fn hd_clock(model: &Model, name: &str, report: &mut Vec<String>) -> Clock {
                  before the first line crossing - so GO is lit on the release and then loops \
                  every {} ticks (read from the EBOOT, confidence 85; the green step on the release \
                  is measured on RPCS3, 2026-10-04, confidence 75, and bounds the start tick from \
-                 below). The later laps' windows are not played: see \
-                 docs/rendering/start-gantry.md",
+                 below). After the first crossing the race manager's later windows take over \
+                 by lap: [6.02, 9.30) between laps, [9.50, 9.90) on the lap before the last, \
+                 [12.35, 13.30) on the last (read from the EBOOT, confidence 85)",
                 edge.frame,
                 clock.start_tick,
                 oag_race::COUNTDOWN_TICKS + 1,
@@ -548,6 +637,8 @@ pub(super) struct Gantry {
     drawable: Drawable,
     matrix: Mat4,
     clock: Clock,
+    cull: Option<PanelCull>,
+    tracker: std::cell::Cell<BoardTracker>,
 }
 
 impl Gantry {
@@ -586,12 +677,22 @@ impl Gantry {
             drawable,
             matrix: placed.matrix,
             clock: placed.clock,
+            cull: placed.cull,
+            tracker: std::cell::Cell::default(),
         })
     }
 
-    /// This gantry's timeline clock at race tick `tick`; see [`clock_seconds`].
-    pub(super) fn clock_seconds(&self, tick: u64) -> f32 {
-        self.clock.seconds(tick)
+    /// This gantry's timeline clock now: [`Clock::seconds`] before the
+    /// player's first line crossing, then the race-manager window its lap
+    /// picks ([`BoardWindow::of`]), entered on the crossing that picked it.
+    pub(super) fn clock_seconds(&self, race: &Race) -> f32 {
+        let tick = race.sim.world.tick;
+        let standing = race.player_standing();
+        let window = BoardWindow::of(standing, race.sim.world.laps_target());
+        let mut tracker = self.tracker.get();
+        let entry = tracker.observe(tick, window, standing.lap_start_tick);
+        self.tracker.set(tracker);
+        self.clock.seconds_in(tick, entry)
     }
 
     /// The fog block this frame, shared with the rest of the scenery.
@@ -603,7 +704,9 @@ impl Gantry {
     ///
     /// `seconds` is the gantry's own clock ([`clock_seconds`]), and it is clamped
     /// at [`CLOCK_LIMIT`] here rather than by the caller so there is one place
-    /// the decision lives.
+    /// the decision lives - on a clock with no race-manager window. HD's
+    /// reaches its later states on purpose, and draws only what stands on the
+    /// panel at `seconds` ([`PanelCull`]).
     pub(super) fn write(
         &self,
         queue: &wgpu::Queue,
@@ -619,7 +722,13 @@ impl Gantry {
         );
         // The gantry is static, so its previous model matrix is this one: the
         // velocity buffer sees only the camera's own motion across it.
-        let seconds = seconds.min(CLOCK_LIMIT);
+        let seconds = match &self.cull {
+            Some(cull) if self.clock.window.is_some() => {
+                self.drawable.set_hidden(cull.hidden(seconds));
+                seconds
+            }
+            _ => seconds.min(CLOCK_LIMIT),
+        };
         self.drawable.write_anims(queue, seconds);
         self.drawable.write_node_anims(queue, seconds);
     }

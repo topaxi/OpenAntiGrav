@@ -7,10 +7,11 @@
 //!
 //! # What this pins
 //!
-//! The maintainer's rule (2026-10-03): a title with no measured rule of its
-//! own runs Pulse's, labelled **inherited from Pulse, unmeasured on <title>**.
-//! Pulse's measured rule is that the board's `GO` edge lands on the tick after
-//! the thrust gate opens (tick 273) and `GO` is held from there.
+//! Pulse's measured rule is that the board's `GO` edge lands on the tick
+//! after the thrust gate opens (tick 273) and `GO` is held from there. HD
+//! inherits only the start tick from that rule (its edge on the release);
+//! from the release on it runs its own race manager's windows, read from the
+//! EBOOT, not Pulse's hold.
 //!
 //! - **Pulse**: the rule, run on Pulse's own asset, finds frame 181 and so
 //!   tick 92 - the number measured against the original. That is the check the
@@ -64,7 +65,9 @@ fn pulses_own_asset_gives_pulses_measured_start_through_the_rule() {
 /// How much lit white the board's animated vertices sample at `seconds`: the
 /// sum of the alpha of every white texel a drawn, texture-animated vertex
 /// lands on. `GO`'s bright and dark phases are this rising and falling.
-fn lit_white(model: &mesh::Model, seconds: f32) -> u32 {
+/// `hidden` names the draws the gantry leaves out at `seconds`
+/// (`gantry::PanelCull::hidden`): HD's model keeps its later states.
+fn lit_white(model: &mesh::Model, hidden: &[u32], seconds: f32) -> u32 {
     let table = oag_render::mesh_render::TexAnims::sample(model, seconds);
     let mut total = 0;
     let lists: [&[mesh::DrawCall]; 3] = [
@@ -73,6 +76,9 @@ fn lit_white(model: &mesh::Model, seconds: f32) -> u32 {
         &model.transparent_draws,
     ];
     for draw in lists.into_iter().flatten() {
+        if hidden.contains(&oag_render::gantry::panel::key(draw)) {
+            continue;
+        }
         let Some(texture) = draw.texture.and_then(|t| model.textures.get(t)?.as_ref()) else {
             continue;
         };
@@ -129,7 +135,11 @@ fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
     let (model, clock) = (placed.model(), placed.clock());
     assert_eq!(clock.window, Some(gantry::HD_PRE_LAP_WINDOW));
     let release = oag_race::COUNTDOWN_TICKS + 1;
-    let lit = |tick: u64| lit_white(model, clock.seconds(tick));
+    let cull = placed.cull().expect("HD keeps its later states");
+    let lit = |tick: u64| {
+        let seconds = clock.seconds(tick);
+        lit_white(model, cull.hidden(seconds), seconds)
+    };
     let full = (release..release + 200).map(lit).max().expect("ticks");
     assert!(full > 0, "GO never lights");
 
