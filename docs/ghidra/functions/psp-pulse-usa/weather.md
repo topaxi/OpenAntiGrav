@@ -139,3 +139,13 @@ layer law; the camera-motion terms' signs **65** (not checked against a turn).
   PSP's 30 fps the fall is half as fast in time. Ours is 60 Hz.
 - **Other titles.** The PS2 disc authors `<Weather>` on `07`, `11` (not on the PSP disc) and
   `14`; none is played. Wipeout HD carries neither effect.
+- **The PS2 executable has the same law** (2026-10-04, static, confidence **75**). In
+  `SCES_547.48` the `TrackStartup` parser `FUN_00146668` reads the same attribute list
+  (`MistInside` at `0x002a46f8`, referenced at `0x00146870`). Under the same gate
+  (`DAT_002dabd0 < 0xe || DAT_002dab08 < 5`, and not mode `6`), it builds a `0x890`-byte
+  node through `FUN_001c4b58`. That node has the PSP `Weather_Construct`'s shape: a
+  `0x2c0`-byte mist node (`FUN_001ccb28`), the `EnvPsys` spawned as `FXW1` and the
+  `ScreenPsys` as `FXW2` in mode `2`. PS2 `WO_SNOW` sets `0x800` as well (flags
+  `0x5041805`). Nothing PS2-specific was run live. PS2 is corroboration only, so if the
+  PS2 weather is wired, it plays the PSP law. Not wired: the PS2 port's circuits
+  load no weather here.
