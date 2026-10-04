@@ -229,6 +229,48 @@ pub const KNOWN_PARAMETER_NAMES: &[&str] = &[
     "SmokeScale1",
 ];
 
+/// The uniform names Wipeout 2048's Vita material records author, recovered by
+/// `~crc32` preimage against the names its own GXP programs declare in the
+/// clear (`docs/formats/2048-material-params.md`). A separate table from
+/// [`KNOWN_PARAMETER_NAMES`], whose scope and sweep are HD's, and which
+/// `rcsmaterial_ground_truth.rs` holds to HD's corpus: only the names below
+/// that HD also uses (`time`) would pass that check.
+pub const KNOWN_PSP2_PARAMETER_NAMES: &[&str] = &[
+    "Zone_Colour1",
+    "Zone_Colour2",
+    "Zone_Colour3",
+    "Zone_Colour4",
+    "Zone_Colour5",
+    "Zone_Colour6",
+    "Zone_Colour7",
+    "Zone_Colour8",
+    "Zone_Colour1_Emissive",
+    "Zone_Colour2_Emissive",
+    "Zone_Colour3_Emissive",
+    "Zone_Colour4_Emissive",
+    "Zone_Colour5_Emissive",
+    "Zone_Colour6_Emissive",
+    "Zone_Colour7_Emissive",
+    "Zone_Colour8_Emissive",
+    "TimeScaler",
+    "Emissive_UV_Offset",
+    "Emissive_UV_Scale",
+    "GlowTint",
+    "speed_multipliaer",
+    "time",
+    "frameRate",
+];
+
+/// A Vita uniform-name hash's preimage, if [`KNOWN_PSP2_PARAMETER_NAMES`]
+/// carries one.
+#[must_use]
+pub fn psp2_parameter_name(hash: u32) -> Option<&'static str> {
+    KNOWN_PSP2_PARAMETER_NAMES
+        .iter()
+        .copied()
+        .find(|n| name_hash(n) == hash)
+}
+
 /// A sampler-name hash's preimage, if [`KNOWN_SAMPLER_NAMES`] carries one.
 #[must_use]
 pub fn sampler_name(hash: u32) -> Option<&'static str> {

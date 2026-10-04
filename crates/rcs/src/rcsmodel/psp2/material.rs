@@ -21,32 +21,41 @@
 //!   +0x18  u32   offset of the technique/shading-group name, NUL-terminated
 //! ```
 //!
-//! # Why textures are found by scanning, not by a sampler struct
+//! # The shader-input table, solved 2026-10-05
 //!
-//! A material's shader input table (what HD calls samplers -
-//! `crates/formats/src/rcsmodel/material.rs`) **does** sit right after the
-//! 64-byte header, and on every material with exactly two entries it reads
-//! as a clean 24-byte-stride array (name hash at `+0x04`, `.gxt` pointer at
-//! `+0x14` - `0x37b5db58`, HD's own `~crc32("lightmap")`, was seen verbatim
-//! in one, corroborating that the hash function transferred along with the
-//! string pool it hashes). **It does not hold at four, six or eight
-//! entries**: reading past the second entry at the same stride lands on
-//! values with none of a hash's entropy (`0x1000`-scale numbers, not the
-//! ~random 32-bit words the two-entry case shows), so the struct's shape
-//! changes with entry count in a way this reading has not solved.
+//! **An earlier pass read two entries and stopped**, finding that "the struct's
+//! shape changes with entry count". It does not: the table is `+0x30` entries
+//! at the offset in `+0x34`, **`0x18` bytes each at every count**, and what
+//! changes is that an entry is one of two kinds, which the earlier pass read
+//! as one:
 //!
-//! Rather than ship an unverified guess for the general case, this reading
-//! sidesteps the struct entirely: **every material's own byte extent -
-//! from its header to the next material header found in the section, sorted
-//! by address rather than table order - is scanned word-aligned for any
-//! pointer that resolves to `.gxt` text**, the same discovery method that
-//! found the table itself. This finds every texture a material references
-//! regardless of the input table's internal shape, at the cost of not
-//! knowing which shader unit (diffuse, normal, emissive, ...) each one binds
-//! to - [`Material::diffuse_texture`] answers "the first one", ordinal
-//! rather than semantic, the same rule HD's own reading falls back to when
-//! its sampler-hash lookup does not resolve a unit
-//! (`crates/render/src/mesh/rcs/skin.rs`).
+//! ```text
+//!   +0x00  u32   name hash, `~crc32(name)` (`crate::rcsmaterial::name_hash`)
+//!   +0x04  u32   kind: 0x12 a sampler, 1 a uniform
+//!   sampler:  +0x10 u32 offset of the `.gxt` path
+//!   uniform:  +0x0c u32 offset of the value
+//!             +0x14 u32 which pool the value is in: 0x1000 the 32-bit float
+//!                       pool (`+0x20` count, `+0x24` offset), 0x2000 the half
+//!                       float pool (`+0x28` count, `+0x2c` offset)
+//! ```
+//!
+//! **Why the two-entry case looked like a clean array**: two samplers (a
+//! diffuse and a lightmap) are adjacent entries of one kind, so the stride was
+//! right and the hash and the `.gxt` pointer sat where the earlier pass put
+//! them; a third entry of the other kind put a uniform's fields where a sampler's
+//! were, and reading past it landed on `0x1000`-scale numbers - the `+0x14` pool
+//! tag. Verified over all three EU packages
+//! (`crates/rcs/tests/psp2_material_param_ground_truth.rs`): **52,637 sampler
+//! entries, every one of them a `.gxt` the address-order scan below also finds**
+//! (the 52,637 the corpus counted by string before this table was read), and
+//! **15,561 of 15,565 uniform hashes are names the material's own GXP programs
+//! declare in the clear**. [`Material::params`] and [`Material::samplers`] carry
+//! them; see `docs/formats/2048-material-params.md`.
+//!
+//! The scan stays: [`Material::textures`] is the address-order list every caller
+//! already uses, and [`Material::diffuse_texture`] still answers "the first
+//! one" - ordinal rather than semantic - for every material the sampler names
+//! do not decide.
 //!
 //! # Which submesh uses which material: a plain index, 0x18 bytes before the
 //! record
@@ -137,6 +146,26 @@ const HEADER_LEN: usize = 0x40;
 const NAME_POINTER: usize = 0x04;
 /// Offset of the technique/shading-group name pointer.
 const TECHNIQUE_POINTER: usize = 0x18;
+/// Offset of the parameter-entry count of a material header.
+const PARAM_COUNT: usize = 0x30;
+/// Offset of the pointer to the parameter entries.
+const PARAM_TABLE: usize = 0x34;
+/// Bytes per parameter entry.
+const PARAM_STRIDE: usize = 0x18;
+/// The `+0x04` word of a **uniform** entry; a sampler's is `0x12`.
+const PARAM_KIND_UNIFORM: u32 = 1;
+/// The `+0x04` word of a **sampler** entry.
+const PARAM_KIND_SAMPLER: u32 = 0x12;
+/// The `+0x14` word of a uniform whose value lives in the 32-bit float pool.
+const PARAM_POOL_F32: u32 = 0x1000;
+/// The same word for one whose value lives in the half-float pool.
+const PARAM_POOL_F16: u32 = 0x2000;
+/// Offsets of the two value pools' (count, pointer) pairs in the header: the
+/// float pool at `+0x20`/`+0x24`, the half pool at `+0x28`/`+0x2c`.
+const POOL_F32: usize = 0x20;
+const POOL_F16: usize = 0x28;
+/// The most entries a header may claim.
+const MAX_PARAMS: usize = 64;
 /// Offset of the file-level material count, from the CPU section's own start.
 const FILE_MATERIAL_COUNT: usize = 0x44;
 /// Offset of the file-level material offset table pointer.
@@ -181,9 +210,100 @@ pub struct Material {
     /// exception in either direction
     /// (`crates/rcs/tests/omega_declaration_ground_truth.rs`).
     pub lightmap: Option<String>,
+    /// The uniforms this material instance authors, by name hash, in table
+    /// order: a shader's tuning numbers and colours. See [`Param`] and
+    /// [`Self::param`]. Empty on PS4.
+    pub params: Vec<Param>,
+    /// The samplers this material instance binds, by name hash, with the
+    /// `.gxt` path each is given - the entries `0x12` of the same table
+    /// [`Self::params`] reads (`+0x10` the path pointer). Table order. Empty
+    /// on PS4. See [`Self::sampler`].
+    pub samplers: Vec<(u32, String)>,
+}
+
+/// One named uniform value a material instance supplies to its shader.
+///
+/// **The name is `~crc32(name)`** ([`crate::rcsmaterial::name_hash`]), the
+/// same hash Wipeout HD's records use, and the GXP programs name the same
+/// uniforms in the clear (`oag_rcs::gxp`): 100 percent of the hashes tried
+/// against those names matched, e.g. `TimeScaler` `0xfe740a78`,
+/// `Emissive_UV_Offset` `0x78256a45`, `Zone_Colour1` `0x69bde6c6`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Param {
+    /// `~crc32(name)`.
+    pub hash: u32,
+    /// The value's components as `f32` bit patterns - up to four, fewer where
+    /// the next value or the end of its pool comes first. Bits rather than
+    /// floats so a [`Material`] stays `Eq`; [`Material::param`] widens them.
+    pub bits: Vec<u32>,
+}
+
+/// An IEEE binary16 widened to `f32`, exactly.
+#[must_use]
+pub fn half_to_f32(bits: u16) -> f32 {
+    let sign = u32::from(bits >> 15) << 31;
+    let exponent = u32::from((bits >> 10) & 0x1f);
+    let mantissa = u32::from(bits & 0x3ff);
+    let magnitude = match (exponent, mantissa) {
+        (0, 0) => 0,
+        (0, m) => {
+            // A subnormal half is `m * 2^-24`, a normal float once shifted up.
+            let shift = m.leading_zeros() - 21;
+            let m = (m << shift) & 0x3ff;
+            ((127 - 14 - shift) << 23) | (m << 13)
+        }
+        (0x1f, m) => (0xff << 23) | (m << 13),
+        (e, m) => ((e + 112) << 23) | (m << 13),
+    };
+    f32::from_bits(sign | magnitude)
 }
 
 impl Material {
+    /// The components of the uniform whose name hashes to `hash`, or `None`
+    /// when this material authors none.
+    #[must_use]
+    pub fn param(&self, hash: u32) -> Option<Vec<f32>> {
+        let found = self.params.iter().find(|p| p.hash == hash)?;
+        Some(found.bits.iter().map(|&b| f32::from_bits(b)).collect())
+    }
+
+    /// Whether this is `fc01_dummy`, the placeholder shader: its fragment
+    /// program has one uniform (`fogColour`) and no sampler, so its picture is
+    /// a constant the engine fogs - and what constant is in undecoded GPU
+    /// bytecode. Used by 1,716 of `altima`'s `trackZone` submeshes, which is
+    /// its road and walls.
+    #[must_use]
+    pub fn is_placeholder(&self) -> bool {
+        self.name
+            .rsplit(['/', '\\'])
+            .next()
+            .is_some_and(|f| f.eq_ignore_ascii_case("fc01_dummy.rcsmaterial"))
+    }
+
+    /// The `.gxt` path bound to the sampler whose name hashes to `hash`.
+    #[must_use]
+    pub fn sampler(&self, hash: u32) -> Option<&str> {
+        self.samplers
+            .iter()
+            .find(|(h, _)| *h == hash)
+            .map(|(_, p)| p.as_str())
+    }
+
+    /// A Zone material's flat colour: the first three components of its
+    /// `Zone_Colour1` to `Zone_Colour8` uniform - each `zonefc06_colour_emissive_scalar_N`
+    /// file names its own `Zone_ColourN`. **Measured against the names**:
+    /// `C_Red` reads `1 0 0` and `C_Pink` `1 0 1`, and the eight files read
+    /// eight distinct colours. The `Zone_ColourN_Emissive` scalar beside it
+    /// (`0.5` on every one) is read and left unapplied. `None` for a material
+    /// without one.
+    #[must_use]
+    pub fn zone_colour(&self) -> Option<[f32; 3]> {
+        (1..=8).find_map(|n| {
+            let v = self.param(crate::rcsmaterial::name_hash(&format!("Zone_Colour{n}")))?;
+            Some([*v.first()?, *v.get(1)?, *v.get(2)?])
+        })
+    }
+
     /// The first texture found that is not the lightmap - this reading's
     /// answer for "the" diffuse texture. Ordinal, not semantic; see the module
     /// doc.
@@ -198,6 +318,98 @@ impl Material {
             .map(String::as_str)
             .find(|path| Some(*path) != self.lightmap.as_deref())
     }
+}
+
+/// The sampler entries (`kind == 0x12`) of the material header at
+/// `header_at`: name hash and the `.gxt` path at `+0x10`.
+fn samplers_at(cpu: &[u8], header_at: usize) -> Vec<(u32, String)> {
+    let count = u32_at(cpu, header_at + PARAM_COUNT).unwrap_or(0) as usize;
+    let table = u32_at(cpu, header_at + PARAM_TABLE).unwrap_or(0) as usize;
+    if count == 0 || count > MAX_PARAMS || table == 0 {
+        return Vec::new();
+    }
+    (0..count)
+        .filter_map(|i| {
+            let at = table + i * PARAM_STRIDE;
+            if u32_at(cpu, at + 4)? != PARAM_KIND_SAMPLER {
+                return None;
+            }
+            let path = cstr_at(cpu, u32_at(cpu, at + 0x10)? as usize)?;
+            ends_with_ci(&path, ".gxt").then_some((u32_at(cpu, at)?, path))
+        })
+        .collect()
+}
+
+/// The uniform entries of the material header at `header_at`.
+///
+/// Each entry is `0x18` bytes: the name hash, a kind word (`1` for a uniform,
+/// `0x12` for a sampler), the value pointer at `+0x0c`, and at `+0x14` which
+/// pool the value is in - `0x1000` the 32-bit float pool (`+0x20`/`+0x24`),
+/// `0x2000` the half pool (`+0x28`/`+0x2c`). A value runs to the next entry's
+/// value in the same pool or the pool's end, at most four components. An entry
+/// whose pointer is outside its pool is dropped.
+fn params_at(cpu: &[u8], header_at: usize) -> Vec<Param> {
+    let count = u32_at(cpu, header_at + PARAM_COUNT).unwrap_or(0) as usize;
+    let table = u32_at(cpu, header_at + PARAM_TABLE).unwrap_or(0) as usize;
+    if count == 0 || count > MAX_PARAMS || table == 0 {
+        return Vec::new();
+    }
+    let pool = |at: usize, width: usize| -> Option<(usize, usize)> {
+        let n = u32_at(cpu, header_at + at)? as usize;
+        let start = u32_at(cpu, header_at + at + 4)? as usize;
+        let end = start.checked_add(n.checked_mul(width)?)?;
+        (n > 0 && end <= cpu.len()).then_some((start, end))
+    };
+    let pools = [(pool(POOL_F32, 4), 4usize), (pool(POOL_F16, 2), 2usize)];
+    let mut raw: Vec<(u32, usize, usize, usize)> = Vec::new();
+    for i in 0..count {
+        let at = table + i * PARAM_STRIDE;
+        let (Some(hash), Some(kind), Some(ptr), Some(tag)) = (
+            u32_at(cpu, at),
+            u32_at(cpu, at + 4),
+            u32_at(cpu, at + 0x0c),
+            u32_at(cpu, at + 0x14),
+        ) else {
+            break;
+        };
+        let which = match tag {
+            PARAM_POOL_F32 => 0,
+            PARAM_POOL_F16 => 1,
+            _ => continue,
+        };
+        if kind != PARAM_KIND_UNIFORM {
+            continue;
+        }
+        let ptr = ptr as usize;
+        if let (Some((start, end)), width) = pools[which]
+            && (start..end).contains(&ptr)
+        {
+            raw.push((hash, width, ptr, end));
+        }
+    }
+    raw.iter()
+        .map(|&(hash, width, ptr, end)| {
+            let next = raw
+                .iter()
+                .filter(|&&(_, w, p, e)| w == width && e == end && p > ptr)
+                .map(|&(_, _, p, _)| p)
+                .min()
+                .unwrap_or(end);
+            let take = ((next.min(end) - ptr) / width).min(4);
+            let bits = (0..take)
+                .map(|k| {
+                    let at = ptr + k * width;
+                    if width == 4 {
+                        u32_at(cpu, at).unwrap_or(0)
+                    } else {
+                        let h = u16::from_le_bytes([cpu[at], cpu[at + 1]]);
+                        half_to_f32(h).to_bits()
+                    }
+                })
+                .collect();
+            Param { hash, bits }
+        })
+        .collect()
 }
 
 fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {
@@ -327,6 +539,8 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 technique,
                 textures,
                 lightmap: None,
+                params: params_at(cpu, header_at),
+                samplers: samplers_at(cpu, header_at),
             }
         })
         .collect()
@@ -530,6 +744,8 @@ pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
             technique: None,
             textures,
             lightmap,
+            params: Vec::new(),
+            samplers: Vec::new(),
         }
     };
     match ps4_table(cpu, &sites) {

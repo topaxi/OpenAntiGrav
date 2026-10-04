@@ -358,13 +358,17 @@ loop` and `224 node-bound submesh(es), 224 moving on 165 animated node(s)`
 on `altima`. A node the clip moves, or that hangs under one it moves, keeps
 its vertices in node space and takes a slot of the shader's node table; a
 static node bakes through its world matrix once, normals through the inverse
-transpose. **A moving node's normals go through the shader's node matrix
-with no inverse transpose**, `mesh.wgsl`'s own standing caveat - harmless on
-Pulse, whose nodes under a non-uniform scale are all prelit, and a real if
-small gap here: 166 skeleton nodes across the corpus scale non-uniformly,
-and **51 of them, over the fourteen race circuits, carry a mesh and move**
-(none on Anulpha Pass, Chenghou Project, Moa Therma, Park or Sol; ten each
-on Bridge and Subway), so those 51 meshes are lit off a skewed normal. Past
+transpose. **A moving node's normals go through the node matrix's inverse
+transpose too** (`mesh.wgsl`, the cofactor of its upper 3 by 3, since
+2026-10-05): 166 skeleton nodes across the corpus scale non-uniformly, and
+**51 of them, over the fourteen race circuits, carry a mesh and move** (none on
+Anulpha Pass, Chenghou Project, Moa Therma, Park or Sol; ten each on Bridge and
+Subway), and those 51 meshes used to be lit off a skewed normal.
+`crates/render/tests/moving_normal_inverse_transpose.rs` shades one oblique
+quad both ways - moved by the node table under `scale (0.5, 1, 1)`, and baked
+with the CPU inverse transpose - and the two differed by up to 8 in a channel
+(7,968 summed over the frame) before and by 0 after. Uniform scales and
+rotations are unchanged by it. Past
 the table's
 383 slots a node freezes at time zero rather than misplacing - the same
 direction `mesh::anim_node::placement` takes, and none of the fourteen race
@@ -380,6 +384,52 @@ grid view shows none of its 130 moving meshes - the nearest, a cat balloon,
 is 190 units off and 37 degrees above the camera's frame - so the fix there
 is only measurable, not visible, from the grid.
 
+## A Zone race (2026-10-05)
+
+**A 2048 Zone race loads `trackZone.rcsmodel` and its own `.rcsskeleton`,
+`.rcsanimclip` and `.pvs` beside it** (`race::load::geometry::sibling_model`),
+where it used to race the ordinary model and say so. They are not the race
+model's skeleton under another name: `altima`'s is 966 nodes and 6,349
+submeshes against the race model's 165 and 2,817, its clip 7 tracks at 30 Hz
+over 6.7 s, and 2,302 of its 2,406 node-bound submeshes are hidden at bind and
+never shown by the clip. The load report says `zone: ...trackZone.rcsmodel is
+this circuit's Zone model`. The Omega Collection's Zone models are passed over
+(their racing is out of scope), and so is a title with no such file.
+
+**What the picture is** is in [2048-material-params.md](2048-material-params.md):
+the colours its materials author are drawn unlit and the road, a placeholder
+shader whose output is unread, is not drawn. No capture of the original
+exists here to compare it with, and the picture has not been judged against
+one.
+
+## The start-grid clip (2026-10-05)
+
+`trackpart_startgridanims.rcsanimclip` and its `_sp` twin are **not a camera**.
+Beside each is a model, `.rcsskeleton` and `.vex` of the same stem:
+
+| | `trackpart_startgridanims` | `_sp` |
+| --- | --- | --- |
+| model | 116 submeshes, 113 mesh objects, 120 nodes | 45 submeshes, 44 mesh objects, 45 nodes |
+| material | `startanim_fc07_lambert_emmisive` on every submesh, texture `pitbot_col.gxt` | the same |
+| clip | 70 tracks (69 on a mesh-bearing node), 38.3 s, 191 keys each | 36 tracks (35), 16.6 s, 83 keys |
+| channels | translation 70, rotation 55, **slot 7 on one track** | translation 36, rotation 31, slot 7 on one |
+
+It is a **hierarchy of articulated pieces under one root scaled 100 times**,
+the root `cf4e3c8b` at `(366, 21, 143)` on `altima` and **110 units ahead of the
+Start Position** `(346, 6, 253)` along the grid's `-z`: the texture name says
+pit bots, and nothing about it is a view. **Slot 7 is a scalar on that root**
+(`0.66` falling to `0.03` over the loop on the full clip, `0.2` to `0.35` on the
+`_sp` one) whose meaning is not read.
+
+**Not wired.** The model builds through `oag_render::mesh::rcs::psp2::build`
+with its skeleton and clip (116 moving submeshes on 120 animated nodes), but
+**nothing says when it plays or where it is drawn**: the circuit's own model
+already contains a start grid, so drawing it unconditionally would double the
+furniture, and an animation fired on a guess is exactly what this project
+refuses. A capture from the original's start, or the race-intro code, settles it.
+An attempt to look at it in this renderer from the camera of a posed capture
+showed sky only, so its picture has not been seen either.
+
 ## What is not read
 
 - **The node id hash.** `~crc32` of the full path, the short name, the
@@ -393,12 +443,8 @@ is only measurable, not visible, from the grid.
   12,310 node-bound meshes carry `0x0101` and 6,393 `0x0201`.
 - **Property slots 6 to 8 and the high half of the tag word**, the clip
   header's `+0x0c`, and the skeleton's `+0x18` matrix for a child.
-- **The `trackZone.rcsanimclip` and `trackpart_startgridanims(_sp)` pairs.**
-  Parsed by the same readers (they are the 30 Hz and the slot 7/8 files),
-  wired to nothing: a 2048 Zone race in this engine races the ordinary
-  `track.vex` and its model (`zone: racing ...altima/track.vex as named`),
-  so `trackZone.rcsmodel` and its pair are not loaded at all, and the
-  start-grid animation has no caller.
+- **`trackpart_startgridanims(_sp)`** is **not a camera and is not wired**:
+  see "The start-grid clip" below. What triggers it, and when, is not read.
 - **The loader.** No function in `vita-2048-eu-v104` was named this pass;
   every claim above is measured against files and against Wipeout HD, which
   is why the layout confidences stop at 92 and the visibility reading at 75.

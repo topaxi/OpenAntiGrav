@@ -39,6 +39,7 @@ use oag_texture::gxt;
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
 
+mod glow;
 pub mod placement;
 
 pub use placement::Animation;
@@ -105,6 +106,18 @@ pub struct Report {
     /// archive or would not decode - the honest count of what is still
     /// missing, kept apart from a submesh that simply has no material.
     pub unresolved_draws: usize,
+    /// Materials that draw an additive glow layer off their own
+    /// `Emissive_UV_Offset`/`Scale` - see `glow`'s module doc.
+    pub glow_layers: usize,
+    /// Materials that scroll their one texture off `speed_multipliaer`.
+    pub scrolling_materials: usize,
+    /// Submeshes on a placeholder shader (`fc01_dummy`) not drawn - see
+    /// [`psp2::material::Material::is_placeholder`].
+    pub placeholder_submeshes: usize,
+    /// Submeshes whose albedo is their material's `Zone_ColourN` uniform - see
+    /// [`psp2::material::Material::zone_colour`]. Counted among
+    /// [`Self::unresolved_draws`] too, since they have no texture.
+    pub zone_colour_submeshes: usize,
     /// Submeshes bound to a node of the model's own table and placed by
     /// it - through the skeleton where one was given, through the model's
     /// bind matrix otherwise. See [`placement`].
@@ -145,6 +158,31 @@ impl Report {
             ),
             (None, 0) => "untextured, no material table".to_string(),
             (None, n) => format!("untextured, {n} material(s), none of whose textures resolved"),
+        };
+        let placeholders = if self.placeholder_submeshes == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} submesh(es) on the placeholder shader fc01_dummy not drawn (its output is unread)",
+                self.placeholder_submeshes
+            )
+        };
+        let scrolls = if self.glow_layers + self.scrolling_materials == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} glow layer(s) and {} plain scroll(s) off the materials' own uniforms \
+                 (rates chosen, not measured)",
+                self.glow_layers, self.scrolling_materials
+            )
+        };
+        let zone_colours = if self.zone_colour_submeshes == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} submesh(es) take a Zone_ColourN uniform as their colour, drawn unlit (chosen, not measured)",
+                self.zone_colour_submeshes
+            )
         };
         let poisoned = if self.non_finite_texcoords == 0 {
             String::new()
@@ -204,7 +242,7 @@ impl Report {
         let gnf = self.gnf.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}{lightmaps}{nodes}{gnf}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{tangents}{lightmaps}{nodes}{gnf}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -229,6 +267,23 @@ pub fn animation_names(vex_name: &str) -> Option<(String, String)> {
 pub fn animation_names_beside(model_name: &str) -> Option<(String, String)> {
     let stem = model_name.strip_suffix(".rcsmodel")?;
     Some((format!("{stem}.rcsskeleton"), format!("{stem}.rcsanimclip")))
+}
+
+/// The Zone-mode model that sits beside a 2048 circuit's `track.vex`:
+/// `trackZone.rcsmodel`, whose `.rcsskeleton`, `.rcsanimclip` and `.pvs`
+/// carry the same stem.
+///
+/// **A model of its own, not a second skeleton for `track.rcsmodel`**: on
+/// `altima` it is 37 MB against the race model's 17, with its own PVS. The
+/// reversed circuit ships no Zone model, so both directions map to the same
+/// file. `None` for a name that is not a `.vex`.
+#[must_use]
+pub fn zone_model_name(vex_name: &str) -> Option<String> {
+    let dir_end = vex_name.rfind(['\\', '/']).map_or(0, |at| at + 1);
+    vex_name[dir_end..]
+        .to_ascii_lowercase()
+        .ends_with(".vex")
+        .then(|| format!("{}trackZone.rcsmodel", &vex_name[..dir_end]))
 }
 
 /// Whether a blob is 2048's container rather than Wipeout HD's.
@@ -347,6 +402,12 @@ fn build_planned(
         ..Report::default()
     };
     model.anim_nodes = plan.anim_nodes;
+    // Each material's own scroll, resolved before any vertex is written; the
+    // glow layer's emissive texture is decoded here too, so a layer exists
+    // only where its picture does.
+    let glow = glow::plan(&decoded.materials, &mut *textures, &mut report);
+    model.emissive = glow.emissive.clone();
+    model.anim_tracks = glow.tracks.clone();
     // Every draw is pushed in submesh order below, and `bind_textures`
     // zips on that; a hidden submesh still gets its draw, empty, so the
     // zip stays a binding.
@@ -358,6 +419,22 @@ fn build_planned(
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
         report.hidden += usize::from(place.hidden && !place.unplaced);
+        // `fc01_dummy`'s fragment program samples nothing and its output is
+        // GPU bytecode nobody here has decoded, so what it draws is unknown:
+        // nothing is drawn rather than a white stand-in.
+        let placeholder = submesh
+            .material
+            .and_then(|m| decoded.materials.get(m))
+            .is_some_and(|m| m.is_placeholder());
+        report.placeholder_submeshes += usize::from(placeholder && !place.hidden);
+        let place = if placeholder {
+            placement::Placement {
+                hidden: true,
+                ..place
+            }
+        } else {
+            place
+        };
         report.unplaced += usize::from(place.unplaced);
         // The second texture is this material's lightmap, where its submesh's
         // own declaration carries a `lightmapUV` - which is the same set of
@@ -366,6 +443,27 @@ fn build_planned(
             0
         } else {
             crate::mesh::slots::SECOND_IS_LIGHTMAP
+        };
+        // A Zone material's colour is drawn as it is: its own colour, unlit.
+        // **Chosen, not measured.** Its fragment program also declares a
+        // lightmap, `liveLighting0` and a `Zone_ColourN_Emissive` scalar
+        // (`0.5` on all eight), and how the three combine is GPU bytecode
+        // nobody here has decoded. Both readings were drawn on `altima`:
+        // lit, the colour is multiplied by a sun of `2.0 1.8 1.7` and every
+        // surface blows out to white; unlit, the eight colours read as eight
+        // colours. The scalar is read and not applied.
+        let zone = submesh
+            .material
+            .and_then(|m| decoded.materials.get(m))
+            .and_then(|m| m.zone_colour());
+        report.zone_colour_submeshes += usize::from(zone.is_some());
+        let (colour, lit, role) = match zone {
+            Some([r, g, b]) => (
+                [r, g, b, 1.0],
+                0.0,
+                role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
+            ),
+            None => ([1.0; 4], 1.0, role),
         };
         let to_world = Mat4::from_cols_array(&place.to_world);
         let at_zero = Mat4::from_cols_array(&place.world_at_zero);
@@ -438,12 +536,16 @@ fn build_planned(
             model.vertices.push(GpuVertex {
                 position,
                 normal,
-                colour: [1.0, 1.0, 1.0, 1.0],
+                colour,
                 texcoord,
-                lit: 1.0,
+                lit,
                 lightmap_texcoord,
-                anim: 0,
-                slots: role,
+                anim: glow.anim(submesh.material),
+                slots: if submesh.lightmap_texcoords.is_empty() {
+                    role | glow.role(submesh.material)
+                } else {
+                    role
+                },
                 xform: place.xform,
                 sun_mask: 1.0,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
@@ -500,7 +602,7 @@ fn build_planned(
     super::face_normals(&mut model);
     finish_bounds(&mut model);
 
-    bind_textures(&decoded, &mut model, &mut report, textures);
+    bind_textures(&decoded, &glow, &mut model, &mut report, textures);
     Ok((model, report))
 }
 
@@ -514,6 +616,7 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
+    glow: &glow::Plan,
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
@@ -536,7 +639,11 @@ fn bind_textures(
             continue;
         };
         let resolved = *slot.get_or_insert_with(|| {
-            let path = decoded.materials[index].diffuse_texture()?;
+            let layer = glow.layers.get(index).and_then(Option::as_ref);
+            let path = match layer {
+                Some(layer) => layer.diffuse.as_str(),
+                None => decoded.materials[index].diffuse_texture()?,
+            };
             let blob = textures(path)?;
             let texture = decode_material_texture(path, &blob, report)?;
             let at = model.textures.len();
@@ -544,22 +651,24 @@ fn bind_textures(
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
-            if decoded.materials.iter().any(|m| m.lightmap.is_some()) {
+            if glow.has_layers() || decoded.materials.iter().any(|m| m.lightmap.is_some()) {
                 debug_assert_eq!(model.lightmaps.len(), at);
-                let atlas = decoded.materials[index]
-                    .lightmap
-                    .as_deref()
-                    .and_then(|lmap| {
-                        let entry = atlases.entry(lmap).or_insert_with(|| {
-                            let atlas = textures(lmap)
-                                .and_then(|blob| decode_material_texture(lmap, &blob, report))
-                                .map(std::sync::Arc::new);
-                            report.lightmaps += usize::from(atlas.is_some());
-                            report.lightmap_misses += usize::from(atlas.is_none());
-                            atlas
-                        });
-                        entry.clone()
-                    });
+                let atlas = layer.map(|l| l.texture.clone()).or_else(|| {
+                    decoded.materials[index]
+                        .lightmap
+                        .as_deref()
+                        .and_then(|lmap| {
+                            let entry = atlases.entry(lmap).or_insert_with(|| {
+                                let atlas = textures(lmap)
+                                    .and_then(|blob| decode_material_texture(lmap, &blob, report))
+                                    .map(std::sync::Arc::new);
+                                report.lightmaps += usize::from(atlas.is_some());
+                                report.lightmap_misses += usize::from(atlas.is_none());
+                                atlas
+                            });
+                            entry.clone()
+                        })
+                });
                 model.lightmaps.push(atlas);
             }
             if report.diffuse_texture.is_none() {

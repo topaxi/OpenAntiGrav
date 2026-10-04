@@ -1,4 +1,4 @@
-# 2048's scenery moves; the Zone and start-grid clips, the UV-animated materials and the node loader are next
+# 2048's scenery moves, a Zone race draws its Zone circuit and the glow-layer scrolls play; the Zone picture is unjudged and the start-grid clip is unwired
 
 2026-09-16. Started from "nothing on 2048 is animated at all" and found the
 reason first: `track.vex` authors **no `Anim Transform`** (1,834 `Transform`s,
@@ -55,53 +55,72 @@ which read as "collapse to the origin" until the count was found.
 key count its duration over its spacing, every clip id a skeleton node,
 every submesh record reachable from exactly one mesh object.
 
+## 2026-10-05: Zone, the scroll uniforms and the start-grid clip
+
+- **A Zone race draws `trackZone.rcsmodel`** with its own skeleton, 30 Hz clip
+  and PVS (`race::load::geometry::sibling_model`; `crates/game/tests/vita_2048_zone_scenery_ground_truth.rs`).
+- **The material instance table is solved** - `0x18`-byte entries, `~crc32`
+  names, a float pool and a half pool - and read with coverage (15,561 of
+  15,565 uniform hashes are names the material's own shader declares, 52,637
+  sampler entries match the `.gxt` strings). See
+  [2048-material-params.md](../../docs/formats/2048-material-params.md).
+  It reads a Zone circuit's eight colours (`Zone_Colour1..8`) and the scroll
+  uniforms: HD's glow layer plays for `Emissive_UV_Offset`/`Scale` materials
+  and a plain V scroll for `speed_multipliaer` ones.
+- **The start-grid clip is a pit-bot rig, not a camera**, and is **not wired**.
+- **The 51 moving lit meshes under a non-uniform scale** are now shaded off the
+  inverse transpose (`mesh.wgsl`; a pixel test against the baked path, 8 in a
+  channel before, 0 after).
+
 ## Open
 
-- **`trackZone.rcsanimclip`/`.rcsskeleton`/`.rcsmodel` are parsed and used
-  by nothing.** A 2048 Zone race here races the ordinary `track.vex` and
-  its model, so the Zone trio is never loaded; the Zone skeleton hides 944
-  of `altima`'s 960 mesh-bearing nodes at bind (visibility, slot 3), which
-  is presumably what a Zone circuit looks like on the Vita and not what
-  this engine draws for one. Its keys run at 30 Hz.
-- **`trackpart_startgridanims(_sp).rcsanimclip`** - the start-grid animation,
-  70-odd tracks per circuit, the only files with property slots 7 and 8
-  (scalars, unread). No caller; what it animates (a camera? the grid
-  furniture?) is unread.
-- **The `uv_anim_*`/`cf_uvanim_*` materials 2048 ships** (188 entries name
-  them) are HD's `time`-driven shader scroll, wired on HD through
-  `mesh::slots::ADD_SECOND` and a per-material table. 2048's material table
-  reads names and texture paths but not the shader input floats the scroll
-  needs (`rcsmodel/psp2/material.rs`'s module doc says why), so nothing
-  scrolls on 2048 yet. Separate from the node rig, deliberately left out of
-  this pass.
-- **Visibility is at 75**, read off which nodes a clip later shows and which
-  a Zone skeleton hides, not off the executable.
-- **51 moving meshes across the fourteen race circuits sit under a
-  non-uniform scale** and light off a normal the shader's node matrix skews
-  (no inverse transpose in `mesh.wgsl`, its own standing caveat); the baked
-  path does the inverse transpose, the moving path does not.
+- **The Zone circuit's picture has not been judged against the original.** No
+  Vita3K capture of a Zone race exists in this tree and none was taken. What is
+  drawn: the eight `Zone_ColourN` colours unlit (**chosen, not measured**: lit
+  blows every surface out to white), `fc01_dummy` - the road and walls, 1,716 of
+  6,349 submeshes - **not drawn** because its output is unread bytecode, and
+  2,302 `zonefc07_cube_animation_1` nodes hidden. The race has no visible road
+  in Zone mode here. A capture of 2048's Zone mode from the original settles
+  every one of those choices at once; so would decoding `fc01_dummy`'s
+  3-instruction fragment program.
+- **2048's Zone look has a runtime term nothing authors**: every material
+  declares `zoneGrowingPaletteScene`/`Track`, `zoneGrowingTexture` samplers and
+  `zoneGrowingTextureFactors`/`zoneShipPos` uniforms. Not read.
+- **Scroll rates are chosen, not measured.** `TimeScaler` (else the authored
+  `time`, else 1.0) is the glow layer's rate, and the plain scroll runs `+v`;
+  no bytecode was read for either, and the sign is a guess. Materials that name
+  `time` and nothing else (about 60, `mageffect08`, `fc08_effects_crowd`,
+  `scanlinebillboard`...), `TimeScaler` alone (`fc02_effects_uscroll_*`) and the
+  `frameRate` flipbook are drawn still.
+- **`trackpart_startgridanims(_sp)`**: 116 and 45 submeshes of
+  `startanim_fc07_lambert_emmisive` (`pitbot_col.gxt`) under a root scaled 100
+  times, 110 units ahead of altima's Start Position, 38.3 s and 16.6 s clips,
+  slot 7 a scalar on the root. What triggers it is not read and drawing it
+  unconditionally would double the grid furniture. Its picture has not been seen.
+- **Visibility is at 75**, read off which nodes a clip later shows and which a
+  Zone skeleton hides, not off the executable.
 - **The node id hash function** is unidentified (ten functions tried); the
-  mesh object's `+0x04` word and `+0x0a` flags, property slots 6 to 8 and
-  the tag word's high half, the clip header's `+0x0c`, and the skeleton's
-  `+0x18` matrix for a non-root are unread.
+  mesh object's `+0x04` word and `+0x0a` flags, property slots 6 and 8 and the
+  tag word's high half, the clip header's `+0x0c`, and the skeleton's `+0x18`
+  matrix for a non-root are unread.
 - **No function in `vita-2048-eu-v104` was named this pass**; the skeleton's
-  and clip's loaders have not been looked for, which is why the layouts stop
-  at 92 rather than crossing into the runtime-verified band.
+  and clip's loaders have not been looked for.
 - **HD's `02_track` is Metropia and `03_track` is Moa Therma** (35 shared
   node names with Metropia and none with Moa Therma for `02_track`, 67 and
   none the other way); `oag_hd::ENVIRONMENTS` lists them by directory only.
 
 ## Next Steps
 
-- Load `trackZone.rcsskeleton`/`.rcsanimclip` in `race::load::environment`
-  the way `race::load::geometry::psp2_animation` does for the race model,
-  then look at what Zone hides - that is a half-day, the readers are done.
-- Find the skeleton and clip loaders in Ghidra off the `"PSP2/Psp2.Rcs*Loader.cpp"`
-  allocator-tag strings `RcsModel_Load` was named from; a runtime read of
-  slot 3 and of the pivot composition would move 75 and 88 to the 90s.
-- The UV scroll needs the material's shader-input floats, which is the
-  `material.rs` struct-shape problem, not an animation one.
+- A muted Vita3K capture of an `altima` Zone race (see
+  `docs/reverse-engineering/vita3k-capture.md`) to judge the Zone circuit;
+  then decide the road and the lit-or-unlit colours from it.
+- Decode the 3-instruction `fc01_dummy` fragment program and one
+  `fc01_Effects_VScroll_Emissive` vertex program: the road and the scroll sign.
+- Find the start-grid animation's trigger in the race-intro code in Ghidra
+  (`/vita-2048-eu-v104`), starting from the `trackpart_startgridanims` string.
+- Find the skeleton and clip loaders off the `"PSP2/Psp2.Rcs*Loader.cpp"`
+  allocator-tag strings `RcsModel_Load` was named from.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2048's `track.vex` authors no `Anim Transform`; what moves its scenery is a node table in `track.rcsmodel` plus the `.rcsskeleton`/`.rcsanimclip` beside it, all three read 2026-09-16 and played through the same node-matrix table the other titles use (`mesh::Motion`). Checked node by node against Wipeout HD's own `Anim Transform`s on the twelve circuits both titles ship - the pivot composition is the finding `altima` alone would not have given - and reading the table put 130 of `altima`'s meshes (median 1,086 units off) and every craft's airbrakes where the original draws them. Open: the Zone and start-grid clips are parsed and unwired, 2048's `uv_anim` materials still do not scroll (a material-struct problem), visibility is at 75, no loader named. See [2048-animation.md](../../docs/formats/2048-animation.md)
+2048's `track.vex` authors no `Anim Transform`; what moves its scenery is a node table in `track.rcsmodel` plus the `.rcsskeleton`/`.rcsanimclip` beside it, played through the same node-matrix table the other titles use (`mesh::Motion`) and checked node by node against Wipeout HD on the twelve shared circuits. 2026-10-05: a Zone race draws `trackZone.rcsmodel`, the material uniform table is solved (names, colours, scroll rates) and the glow-layer and `speed_multipliaer` scrolls play, moving lit meshes under a non-uniform scale shade off the inverse transpose. Open: the Zone picture is unjudged (no capture; the road shader `fc01_dummy` is not drawn), scroll rates and the plain scroll's sign are chosen, the start-grid clip is a pit-bot rig with no trigger. See [2048-animation.md](../../docs/formats/2048-animation.md)
