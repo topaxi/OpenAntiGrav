@@ -27,12 +27,11 @@
 //! - **Points per tick, not per frame.** The original steps once per update
 //!   call. This port runs at a fixed 60 Hz, the rate the original is authored for
 //!   (`docs/psp/frame-pacing.md`), so one update is one tick.
-//! - **The ring, not the junction graph.** The original's waves walk the AI
-//!   track's paths and, at a fork, spawn a third wave down the alternate path
-//!   (`Repulser_ForkAtJunction`, `0x08876634`). [`oag_race::Course`] is the
-//!   primary chain only, so the waves follow it and no third wave exists. The one
-//!   shipped Pulse circuit with a genuine split is `05_Track`, where the two
-//!   branches share both ends.
+//! - **The ring, then a branch.** The two waves walk [`oag_race::Course`]'s
+//!   primary chain. At a split the first wave to cross it starts the third,
+//!   which walks the alternate path ([`fork`], read at 88). Not built: the
+//!   init-tick variant (`Repulser_ForkAtJunction`, `0x08876634`, 72) for a firer
+//!   already on a branch.
 //! - **Ring points, not control points.** [`oag_race::Course`] samples
 //!   [`oag_race::Course::STEPS_PER_SEGMENT`] points per control-point interval,
 //!   so a step of five control points is twenty ring points. The firer's own

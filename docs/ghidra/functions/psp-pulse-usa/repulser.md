@@ -473,16 +473,18 @@ measured: the waves follow the primary ring (no fork), step ring points
 corridor width at the craft's nearest ring point; the effects' frame comes from
 the nearest spline sample.
 
-**Not drawn: the field model.** Deferred for time, not confidence - its easing
-and frame are read above. Until it lands the 0.8 s blast phase shows almost
-nothing: `WO_REPULSER_BLAST` is fifty sub-unit sparks on a 13.6-unit ring,
-collapsing inward at 0.625 units a tick (read off the parsed `.pob`, 2026-10-04).
-Its flag `0x200000` (evenly stepped ring angles) and selector-5 record are not
-played by `oag_render::psys`.
-
-**The wave-start frame is close to a whiteout** in this port: both waves'
-5-to-17-unit sprites spawn at the firer, just ahead of the chase camera.
-Unverified against the original.
+**2026-10-04, pulse-repulser-2:** the field model draws (`race::repulser_field`,
+riding `bomb_blast::BombBlastModels`). Each `Repulser_Update` steps its eases
+once, which is a chosen rate. Its basis comes from the nearest spline sample to
+the firer, where the original reads the AI-track point under the firer's
+cursor. `WO_REPULSER_BLAST` takes the field's basis turned by the `+0x21c` spin,
+through `Stage::orient`/`stretch`. The third wave forks at a split
+(`oag_gameplay::projectile::repulser::fork` on `oag_race::Course::branches`;
+05, 07, 14 and 23 carry a branch, `repulser_fork_ground_truth`). The fork is
+hashed only while live, so every committed reference reproduced unchanged.
+`~REPULSORTRAVEL` stays unwired (see the live section). The blast's own
+playback (flag `0x200000` and the selector-5 record, `docs/formats/pob.md`) and
+the wave-start whiteout are the open picture gaps.
 
 **HD now hands it out on this law.** HD's `weaponstats_elimination.xml`
 (`DATA00`/`DATA02.PSARC`) authors the same block and weights it `ai=8 human=8`;
@@ -492,9 +494,9 @@ HD's own Repulser law is unread.
 
 - `FUN_0886d474` (remote destroy by id, under 50, not renamed) and the network
   broadcast payloads.
-- `FUN_088765e4`: "is the cursor past half its path", used by the fork tick;
-  under 50, not renamed.
-- The field model's exact matrix and whether it draws over the blast effect.
-- Nothing here is runtime-verified. A PPSSPP watchpoint on a live Repulser's
-  `+0x1ec` age and `+0x50` state, and a write breakpoint on a target's `+0x110`,
-  would lift the timeline and the hit law to the 85-94 band.
+- `AiTrack_StepBackward`'s mode semantics are assumed to mirror
+  `AiTrack_StepForward`'s. Only the forward stepper was read whole.
+- The hit law is still static: a write breakpoint on a victim's `+0x110`
+  during a live Eliminator Repulser would lift `Repulser_HitCraft`.
+- The spin's sense against `Quat::from_axis_angle`. It does not show while the
+  blast's ring angles are random.

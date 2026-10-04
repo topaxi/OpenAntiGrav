@@ -380,29 +380,32 @@ Read whole on [repulser.md](../../docs/ghidra/functions/psp-pulse-usa/repulser.m
 `Race::fire_repulser`/`advance_repulsers`/`advance_repulser_visual`. What is
 still open, most player-visible first:
 
-- **The field model is not drawn, so the 0.8 s blast phase shows almost
-  nothing.** `Repulser_Construct` loads `Data\Weapons\pulse_repulsorwave.vex`;
-  `Repulser_UpdateFieldModel` (`0x088758cc`, 72) draws it centred on the firer,
-  framed by the firer's own track point (`X` across the edges, the point's up),
-  uniformly scaled, vertex alpha `+0x210 * 255`. The easing, per 1/60 step, all
-  `Repulser_Init` immediates: scale `+0x204` `1.0 -> 0.6` at `0.1` while above
-  `0.61`, then `+0x1f8` `0.7 -> 4.0` at `0.05`; alpha `0 -> 1.0` at `0.2`, then on
-  the wave tick reset to `1.0` and eased to `0` at `0.1`; spin `+0x21c`
-  `0 -> -2 pi` at `0.02`, only once the entity is `0.4` s old. Deferred for time,
-  not for confidence: the shape of the matrix is read. `race::bomb_blast`'s
-  model pool is the nearest existing path; it needs per-instance scale and
-  vertex alpha.
-- **Not runtime-verified.** The cheapest lift: a PPSSPP write breakpoint on a
-  victim's `+0x110` during a live Eliminator Repulser, and a watch on the
-  entity's `+0x1ec`/`+0x50`/`+0x22c`. The step count is per *update call*; if the
-  original's race loop runs at 30 Hz on hardware the reach halves.
-- **The wave-start frame is near a whiteout** in this port (both waves' 5-17-unit
-  sprites spawn at the firer, just ahead of the chase camera). Unverified
-  against the original; a PPSSPP pair at that frame would settle it.
-- `WO_REPULSER_BLAST`'s flag `0x200000` (evenly stepped ring angles) and its
-  selector-5 record are not played by `oag_render::psys`.
-- The junction fork's third wave (`REP2`, `Repulser_ForkAtJunction`) is not
-  built: the waves follow `oag_race::Course`'s primary ring.
+- ~~The field model is not drawn~~ **drawn 2026-10-04 (pulse-repulser-2)**:
+  `race::repulser_field`, matrix read to the instruction and every ease
+  confirmed live (88). It is a faint smooth ring; the original's bright
+  **beaded** ring round the craft is the *blast psys*, not this model (proved
+  live by holding the field alpha at zero, see repulser.md).
+- ~~Not runtime-verified~~ **read live on PPSSPP 2026-10-04**: one update per
+  60 Hz frame, cursors `+5`/`-2` a call, wave start at age 0.8008. One
+  stationary Time Trial, so it lifts the steps-per-call law, not hardware
+  pacing. The hit law (`+0x110` write) is still not watched live.
+- **Open: the blast's bead ring.** Ours starts wide (about 13.6 units) and
+  collapses by call 20; the original's stays compact round the craft from call
+  10 to 40, then whitens. That is `WO_REPULSER_BLAST`'s own playback, and the
+  next lever is its flag `0x200000` (evenly stepped ring angles) and its
+  selector-5 record, still not played by `oag_render::psys`
+  ([pob.md](../../docs/formats/pob.md)). Frames:
+  `data/scratch/pulse-repulser-2/shots/psp-seq.png` against `oag-seq.png`.
+- **Open: the wave-start whiteout is confirmed as ours.** The original's
+  wave-start frame is a blue tint with the waves streaming off; ours is a full
+  white frame (`oag-still-047.png` against `psp-live2-049.png`). Not diagnosed:
+  try the flash kind 2 colour/alpha first, then the two `WO_REPULSER` spawning
+  at the firer.
+- ~~The junction fork's third wave is not built~~ **built 2026-10-04**: the
+  in-run fork (`Repulser_AdvanceWave`, 88) on `oag_race::Course::branches`
+  (05, 07, 14, 23 carry one). Not built: the init-tick variant
+  (`Repulser_ForkAtJunction`, 72) for a firer already on a branch. Not yet seen
+  in-game: no capture fired one across a split.
 - **HD plays Pulse's law now.** HD's Eliminator tables weight the Repulser
   (`ai=8 human=8`), and nothing gates it by title. HD's `Repulser_Construct` is
   read but its law is not.
@@ -411,9 +414,11 @@ still open, most player-visible first:
   71.4/105.8/64.3/53.2 s to 15.7/65.6/70.5/73.1 s. Seed 13's 15.7 s is one
   Repulser finishing five craft that were already at 8-15 of 95 shield - the
   wave reaches about 1,400 units ahead.
-- **`~REPULSORTRAVEL` is not wired.** `Repulser_Init` plays it held on the
-  Repulser's own emitter (radius 600) whose position pointer is entity
-  `+0x150`, a matrix this pass did not trace to a writer.
+- **`~REPULSORTRAVEL` stays unwired, and that is measured** (2026-10-04): the
+  cue is one opcode `0x14` grain with no sound on both PSP discs
+  (`sfx_weapon_ground_truth::repulsortravel_binds_no_sound_on_pulse_psp`), and
+  its emitter sits at the world origin (entity `+0x180`, never written, read
+  live). PS2's bank was not checked.
 - Screenshots were taken with `--race --mode single_race --give Repulser` and an
   `--input-script` that presses fire once: `--mode` has no Eliminator.
 
