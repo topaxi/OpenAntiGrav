@@ -891,8 +891,8 @@ pub fn capture(
             Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
         },
     }
-    // Pulse PSP's bloom over the HUD, as the window adds it: see
-    // `Scene::composite_bloom`.
+    // Pulse's bloom (PSP, and the PS2 by inheritance) over the HUD, as the
+    // window adds it: see `Scene::composite_bloom`.
     let hud_rect = (
         hud_viewport.0,
         hud_viewport.1,

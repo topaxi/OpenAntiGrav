@@ -280,10 +280,31 @@ impl Ps2Bloom {
     }
 
     /// Runs the three passes over the scene, reading its alpha as the mask and
-    /// adding the result back onto it. `frame` is [`super::bloom::Frame`]'s,
-    /// with the same meaning: the scene view is sampled by the first pass and
-    /// written by the last, which is legal because they are separate passes.
+    /// adding the result back onto it: [`Ps2Bloom::prepare`] then
+    /// [`Ps2Bloom::composite`] into the same view. `frame` is
+    /// [`super::bloom::Frame`]'s, with the same meaning: the scene view is
+    /// sampled by the first pass and written by the last, which is legal
+    /// because they are separate passes.
     pub fn render(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: Frame<'_>,
+    ) {
+        self.prepare(device, queue, encoder, frame);
+        self.composite(encoder, frame.scene, frame.origin, frame.viewport);
+    }
+
+    /// The downsample and the two blurs: reads the scene and its glow mask,
+    /// leaves the blurred glow in buffer A for [`Ps2Bloom::composite`].
+    ///
+    /// Split from the composite so a caller can draw its HUD between the two,
+    /// which is the order Pulse PSP's own queue draws in
+    /// ([`super::bloom::Bloom::prepare`]). **Inherited, not measured on the
+    /// PS2**: whether the PS2's HUD groups take the composite is read from
+    /// registers only (`docs/rendering/ps2-bloom.md`, "Still needed").
+    pub fn prepare(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -293,8 +314,8 @@ impl Ps2Bloom {
         let Frame {
             scene,
             size,
-            origin,
             viewport,
+            ..
         } = frame;
         let (uv_scale, uv_max) = super::sub_rectangle(viewport, size);
         let wanted = Constants {
@@ -392,15 +413,46 @@ impl Ps2Bloom {
             (0.0, 0.0),
             buffer,
         );
-        pass(
-            "ps2 bloom composite",
-            &self.composite,
-            &self.composite_group,
-            scene,
-            wgpu::LoadOp::Load,
-            origin,
-            viewport,
+    }
+
+    /// Adds the glow [`Ps2Bloom::prepare`] left in buffer A onto `target`,
+    /// stretched over the rectangle at `origin` of size `viewport`. `target`
+    /// need not be the scene: it is wherever the HUD went, at whatever size,
+    /// since the stretch is from the fixed bloom buffer.
+    pub fn composite(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        origin: (f32, f32),
+        viewport: (u32, u32),
+    ) {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("ps2 bloom composite"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&self.composite);
+        pass.set_viewport(
+            origin.0,
+            origin.1,
+            viewport.0.max(1) as f32,
+            viewport.1.max(1) as f32,
+            0.0,
+            1.0,
         );
+        pass.set_bind_group(0, &self.composite_group, &[]);
+        pass.draw(0..3, 0..1);
     }
 }
 

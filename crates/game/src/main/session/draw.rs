@@ -570,8 +570,9 @@ impl Session {
                 rect,
                 self.framebuffer.output_size(),
             );
-            // Pulse PSP's bloom over the HUD, as the original's queue order
-            // draws it: see `oag_game::race::Scene::composite_bloom`.
+            // Pulse's bloom over the HUD (PSP measured, PS2 inherited), as
+            // the queue order draws it: see
+            // `oag_game::race::Scene::composite_bloom`.
             stage
                 .scene
                 .composite_bloom(&mut encoder, self.framebuffer.output(), rect);

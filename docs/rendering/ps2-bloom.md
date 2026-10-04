@@ -208,5 +208,10 @@ routine needs Ghidra on the PS2 ELF, starting from the GIF packet it builds
 - A racing frame at a recoverable pose, for the racing-straight strength.
 - What the `ATST` `NOTEQUAL` 6 alpha test discards (the register is read, no texel
   alpha 6 was looked for), and whether the HUD groups before the downsample
-  (race groups 262-289) take the composite - ours blooms before the HUD.
+  (race groups 262-289) take the composite. **Ours now composites over the
+  HUD (2026-10-04), inherited from Pulse PSP's measured queue order
+  (`docs/ghidra/functions/psp-pulse-usa/bloom.md`, "The bloom draws over the
+  HUD"), not measured on the PS2.** The register reading above, with the HUD
+  groups before the downsample, points the same way; a GS-dump check of
+  groups 262-289 against the composite is what would measure it.
 - The routine in the ELF, and whether any mode (menus, replay) skips it.
