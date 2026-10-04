@@ -40,7 +40,11 @@ const EXCLUDED: Weapon = Weapon::Repulser;
 
 /// What every test here passes as `allowed`: everything but [`EXCLUDED`].
 fn drawable() -> Vec<Weapon> {
-    IMPLEMENTED.iter().copied().filter(|&w| w != EXCLUDED).collect()
+    IMPLEMENTED
+        .iter()
+        .copied()
+        .filter(|&w| w != EXCLUDED)
+        .collect()
 }
 
 #[test]
@@ -113,7 +117,13 @@ fn the_walk_visits_a_weight_in_proportion_to_it() {
     let allowed = drawable();
     let (mut turbos, mut shields) = (0, 0);
     for _ in 0..10_000 {
-        match draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None, Some(&allowed)) {
+        match draw(
+            &mut rng,
+            &weighted,
+            Driver::HUMAN_UNPLACED,
+            None,
+            Some(&allowed),
+        ) {
             Some(Weapon::Turbo) => turbos += 1,
             Some(Weapon::Shield) => shields += 1,
             other => panic!("drew {other:?}, which is not implemented"),
