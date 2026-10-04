@@ -23,17 +23,16 @@ pub(super) fn sibling_model(
     zone: bool,
     report: &mut Vec<String>,
 ) -> (Option<Vec<u8>>, Option<String>) {
-    if zone {
-        if let Some(name) = mesh::rcs::psp2::zone_model_name(track) {
-            if let Ok(blob) = archives.read_name(&name) {
-                if mesh::rcs::psp2::is_psp2(&blob) && !oag_rcs::rcsmodel::psp2::is_ps4(&blob) {
-                    report.push(format!(
-                        "zone: {name} is this circuit's Zone model, drawn in place of track.rcsmodel"
-                    ));
-                    return (Some(blob), Some(name));
-                }
-            }
-        }
+    if zone
+        && let Some(name) = mesh::rcs::psp2::zone_model_name(track)
+        && let Ok(blob) = archives.read_name(&name)
+        && mesh::rcs::psp2::is_psp2(&blob)
+        && !oag_rcs::rcsmodel::psp2::is_ps4(&blob)
+    {
+        report.push(format!(
+            "zone: {name} is this circuit's Zone model, drawn in place of track.rcsmodel"
+        ));
+        return (Some(blob), Some(name));
     }
     let names = [
         mesh::rcs::sibling_name(track),

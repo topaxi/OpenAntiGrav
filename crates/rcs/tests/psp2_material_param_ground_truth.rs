@@ -203,3 +203,36 @@ fn every_known_psp2_parameter_name_is_declared_by_a_shader() {
         .collect();
     assert!(missing.is_empty(), "no shader declares {missing:?}");
 }
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn every_sampler_entry_is_a_declared_sampler_and_a_texture_the_scan_finds() {
+    let declared = declared();
+    if declared.is_empty() {
+        return;
+    }
+    let (mut checked, mut undeclared, mut unscanned) = (0usize, 0usize, 0usize);
+    for (_, materials) in models() {
+        for material in &materials {
+            let names = declared.get(&material.name.to_ascii_lowercase());
+            for (hash, path) in &material.samplers {
+                checked += 1;
+                undeclared += usize::from(!names.is_some_and(|n| n.contains(hash)));
+                unscanned += usize::from(!material.textures.contains(path));
+            }
+        }
+    }
+    println!("{checked} sampler entries, {undeclared} undeclared, {unscanned} not in the scan");
+    assert!(
+        checked > 20_000,
+        "the sweep reached only {checked} samplers"
+    );
+    // **28 of 52,637 are the exception, and all of them are ported HD
+    // materials** - `and_waterfall`'s `a2d555b9` is HD's `Texture2`, the
+    // customr windows' `8365b1f3` an HD hash too - whose Vita shader names the
+    // sampler differently. Every entry is also one of the `.gxt` strings the
+    // scan finds, which is the 52,637 `docs/formats/2048-rcsmodel.md` counted
+    // by string before this table was read.
+    assert!(undeclared <= 28, "{undeclared} undeclared samplers");
+    assert_eq!(unscanned, 0);
+}

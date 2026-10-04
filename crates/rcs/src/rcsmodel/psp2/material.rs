@@ -145,6 +145,8 @@ const PARAM_TABLE: usize = 0x34;
 const PARAM_STRIDE: usize = 0x18;
 /// The `+0x04` word of a **uniform** entry; a sampler's is `0x12`.
 const PARAM_KIND_UNIFORM: u32 = 1;
+/// The `+0x04` word of a **sampler** entry.
+const PARAM_KIND_SAMPLER: u32 = 0x12;
 /// The `+0x14` word of a uniform whose value lives in the 32-bit float pool.
 const PARAM_POOL_F32: u32 = 0x1000;
 /// The same word for one whose value lives in the half-float pool.
@@ -203,6 +205,11 @@ pub struct Material {
     /// order: a shader's tuning numbers and colours. See [`Param`] and
     /// [`Self::param`]. Empty on PS4.
     pub params: Vec<Param>,
+    /// The samplers this material instance binds, by name hash, with the
+    /// `.gxt` path each is given - the entries `0x12` of the same table
+    /// [`Self::params`] reads (`+0x10` the path pointer). Table order. Empty
+    /// on PS4. See [`Self::sampler`].
+    pub samplers: Vec<(u32, String)>,
 }
 
 /// One named uniform value a material instance supplies to its shader.
@@ -264,6 +271,15 @@ impl Material {
             .is_some_and(|f| f.eq_ignore_ascii_case("fc01_dummy.rcsmaterial"))
     }
 
+    /// The `.gxt` path bound to the sampler whose name hashes to `hash`.
+    #[must_use]
+    pub fn sampler(&self, hash: u32) -> Option<&str> {
+        self.samplers
+            .iter()
+            .find(|(h, _)| *h == hash)
+            .map(|(_, p)| p.as_str())
+    }
+
     /// A Zone material's flat colour: the first three components of its
     /// `Zone_Colour1` to `Zone_Colour8` uniform - each `zonefc06_colour_emissive_scalar_N`
     /// file names its own `Zone_ColourN`. **Measured against the names**:
@@ -293,6 +309,26 @@ impl Material {
             .map(String::as_str)
             .find(|path| Some(*path) != self.lightmap.as_deref())
     }
+}
+
+/// The sampler entries (`kind == 0x12`) of the material header at
+/// `header_at`: name hash and the `.gxt` path at `+0x10`.
+fn samplers_at(cpu: &[u8], header_at: usize) -> Vec<(u32, String)> {
+    let count = u32_at(cpu, header_at + PARAM_COUNT).unwrap_or(0) as usize;
+    let table = u32_at(cpu, header_at + PARAM_TABLE).unwrap_or(0) as usize;
+    if count == 0 || count > MAX_PARAMS || table == 0 {
+        return Vec::new();
+    }
+    (0..count)
+        .filter_map(|i| {
+            let at = table + i * PARAM_STRIDE;
+            if u32_at(cpu, at + 4)? != PARAM_KIND_SAMPLER {
+                return None;
+            }
+            let path = cstr_at(cpu, u32_at(cpu, at + 0x10)? as usize)?;
+            ends_with_ci(&path, ".gxt").then_some((u32_at(cpu, at)?, path))
+        })
+        .collect()
 }
 
 /// The uniform entries of the material header at `header_at`.
@@ -495,6 +531,7 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 textures,
                 lightmap: None,
                 params: params_at(cpu, header_at),
+                samplers: samplers_at(cpu, header_at),
             }
         })
         .collect()
@@ -699,6 +736,7 @@ pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
             textures,
             lightmap,
             params: Vec::new(),
+            samplers: Vec::new(),
         }
     };
     match ps4_table(cpu, &sites) {

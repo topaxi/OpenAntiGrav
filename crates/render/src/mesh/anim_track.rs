@@ -25,6 +25,10 @@ pub enum AnimTrack {
     /// A Wipeout HD material's own animated curve, plus whatever of its
     /// static `uvOffset`/`uvScale` the curve does not drive.
     Rcs(rcs::curve_track::UvCurveTrack),
+    /// A Wipeout 2048 material's plain texture scroll: `(u, v)` texture units
+    /// per second, wrapping at one - see [`rcs::psp2`]'s `glow` module for
+    /// which materials get one and what is chosen about it.
+    Scroll([f32; 2]),
 }
 
 impl AnimTrack {
@@ -36,6 +40,13 @@ impl AnimTrack {
         match self {
             Self::Psp(track) => track.sample(seconds),
             Self::Rcs(track) => track.sample(seconds),
+            Self::Scroll(rate) => (
+                [1.0, 1.0],
+                [
+                    (rate[0] * seconds).rem_euclid(1.0),
+                    (rate[1] * seconds).rem_euclid(1.0),
+                ],
+            ),
         }
     }
 }
