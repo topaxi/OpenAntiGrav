@@ -490,3 +490,40 @@ fn a_cup_shape_draws_that_years_cup_and_other_shapes_draw_nothing() {
     assert_eq!(art_for("2048 - Event 1", Some(2)), None);
     assert!(has_page(Some(2)) && has_page(Some(9)) && !has_page(Some(5)) && !has_page(None));
 }
+
+#[test]
+fn the_weapon_callout_follows_the_executables_decision_tree() {
+    use super::callout::{Callout, DEFAULT_BITS, DEFAULT_PADS, law};
+    // Every weapon on offer, both pad kinds: nothing to say.
+    assert_eq!(
+        law(DEFAULT_BITS, DEFAULT_PADS, false, false),
+        Callout::Nothing
+    );
+    // `EliminatorWeapons` (1959) is all-offensive and has the elimination's
+    // three defensive bits.
+    assert_eq!(law(1959, 12, true, false), Callout::Nothing);
+    // No pads, or the disable flag: weapons off.
+    assert_eq!(law(DEFAULT_BITS, 0, false, false), Callout::WeaponsOff);
+    assert_eq!(law(DEFAULT_BITS, 3, false, true), Callout::WeaponsOff);
+    // One pad kind and every offensive weapon: the defensive icon.
+    assert_eq!(law(DEFAULT_BITS, 1, false, false), Callout::DefensiveOff);
+    // The other pad kind with every defensive weapon: the offensive icon.
+    assert_eq!(law(DEFAULT_BITS, 2, false, false), Callout::OffensiveOff);
+    // A partial set is listed, in bit order.
+    assert_eq!(law(34, 3, false, false), Callout::Weapons(vec![1, 5]));
+    assert_eq!(
+        law(931, 12, true, false),
+        Callout::Weapons(vec![0, 1, 5, 7, 8, 9])
+    );
+    // A set that names none of the eleven falls back to weapons off.
+    assert_eq!(law(0, 3, false, false), Callout::WeaponsOff);
+}
+
+#[test]
+fn the_callout_icons_and_names_run_in_weapon_type_bit_order() {
+    use super::callout::{ICONS, NAME_IDS};
+    assert_eq!(ICONS.len(), NAME_IDS.len());
+    assert_eq!((ICONS[3], NAME_IDS[3]), ("speedup", "FE_TURBO"));
+    assert_eq!((ICONS[8], NAME_IDS[8]), ("bomb", "FE_BOMB"));
+    assert_eq!((ICONS[9], NAME_IDS[9]), ("mine", "FE_MINES"));
+}

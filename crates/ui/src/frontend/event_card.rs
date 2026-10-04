@@ -28,29 +28,33 @@
 //! earned tier draws, which key the pad uses for the change-craft button, the
 //! orange a refused craft turns Change craft (the original pulses
 //! orange/blue), where the objective text starts (see
-//! [`Frontend::draw_objective_page`]), and where a forced craft's team logo
-//! and class icon sit relative to their item's centre. The panels are
+//! [`Frontend::draw_objective_page`]), the scale of the forced craft on the
+//! objective page's glyph row, and the trophy heading's fit and the callout's
+//! wrapped height on the trophy page. The panels are
 //! `Transparent2048` and the glyphs `White2048`, both authored.
 //!
 //! # Pages
 //!
 //! The card has the pages `CampaignEventCard_BuildPageList` (`0x8105114a`)
-//! builds, of which this build draws three: kind `0`, the pass objective
+//! builds, of which this build draws four: kind `0`, the pass objective
 //! (`FUN_81055150`); kind `1`, the leaderboard (`FUN_810540c4`), as it draws
 //! with no network - Personal tab selected, Friends and Global greyed; kind
 //! `4`, the rules (`FUN_810535fe`): class, laps, a forced craft and the craft
 //! classes the event allows, at the positions of the executable's own table.
 //! The card opens on the rules page when the player's craft is refused.
 //!
-//! **Not drawn, by name**: page kind `2` (trophy and cup art,
-//! `FUN_81052fb4`, image handles not located) and `3` (`FUN_81052810`, a
-//! runtime field, probably unreachable); the weapon callout of the rules page
-//! (`FUN_810626ce`); the elite-pass row of the objective page
-//! (`FUN_81055150`'s `param_3[0xb6]`); the personal record row of the
-//! leaderboard (this build keeps no per-event result beyond the medal).
+//! Page kind `2` (`FUN_81052fb4`) is the trophy and cup art - see the `trophy`
+//! module - and the weapon callout, the elite row, the trophy glyph and the
+//! forced craft's quads are drawn on pages `0` and `4`. **Not drawn, by name**:
+//! kind `3` (`FUN_81052810`, a runtime field, probably unreachable) and the
+//! personal record row of the leaderboard (this build keeps no per-event result
+//! beyond the medal).
 
+mod callout;
+mod objective;
 mod trophy;
 
+pub use callout::CardWeapons;
 pub use trophy::CardTrophy;
 
 use crate::pointer::{Pointer, contains};
@@ -102,6 +106,14 @@ pub struct EventCard {
     pub has_trophy_page: bool,
     /// The trophy or cup the page draws, `None` when the original names none.
     pub trophy: Option<CardTrophy>,
+    /// The weapon callout (`FUN_810626ce`): `None` when the event has no
+    /// callout item at all, a Zone or Speed Lap event or one that offers every
+    /// weapon.
+    pub weapons: Option<CardWeapons>,
+    /// `FE_ELITE_PASS`, the label of the elite row of the objective page.
+    pub elite_label: Option<String>,
+    /// The elite objective's worded line (`M_ELITEOBJECTIVE`).
+    pub elite_objective: Option<String>,
 }
 
 /// A forced craft on the rules page.
@@ -173,6 +185,7 @@ pub const CARD_TEXTURES: &[&str] = &[
     r"Data\FE\NewImages\Team_Logos\Icon_Ship_Combat_1col.gtf",
     r"Data\FE\NewImages\Team_Logos\Icon_Ship_Agility_1col.gtf",
     r"Data\FE\NewImages\Team_Logos\Icon_Ship_Racer_1col.gtf",
+    r"Data\FE\NewImages\callout\trophy.gtf",
 ];
 
 const PLAY: &str = CARD_TEXTURES[0];
@@ -184,6 +197,7 @@ const SHIP: &str = CARD_TEXTURES[5];
 const MEDAL_NONE: &str = CARD_TEXTURES[6];
 const MEDAL_PASS: &str = CARD_TEXTURES[7];
 const MEDAL_ELITE: &str = CARD_TEXTURES[8];
+const TROPHY_GLYPH: &str = CARD_TEXTURES[17];
 
 /// The photo body: `FUN_81060744` draws `x..x+404`, and the body is 334
 /// tall in the frame (texture pixels `0..404` by `0..334` of a 512x512).
@@ -553,50 +567,6 @@ impl Frontend {
         self.card_sprite(icon, icon_rect, white, out);
     }
 
-    fn draw_objective_page(&self, event: &MapEvent, out: &mut Vec<Draw>) {
-        let blue = self.global_colour("Blue2048");
-        let white = [1.0, 1.0, 1.0, 1.0];
-        let card = &event.card;
-        let medal = match self.campaign.state_of(self.campaign.selected) {
-            ProgressState::Passed => MEDAL_PASS,
-            ProgressState::Elite => MEDAL_ELITE,
-            ProgressState::Locked | ProgressState::Open => MEDAL_NONE,
-        };
-        self.card_sprite(medal, [488.0, 235.0, 52.0, 52.0], white, out);
-        // Both lines start at `x=552` in frame 14 (bounding boxes 552 and
-        // 553). The original centres a block of the text's own width plus the
-        // medal on `x=682`; the frontend has no glyph metrics, so this
-        // left-aligns at the frame's own edge and a wider or narrower wording
-        // sits off by half the difference (open).
-        if let Some(label) = &card.pass_label {
-            out.push(Self::left_text(label, 552.0, 229.0, 0.66, blue, 345.0));
-        }
-        if let Some(text) = &card.objective {
-            out.push(Self::left_text(text, 552.0, 256.0, 0.8, blue, 345.0));
-        }
-        out.push(Draw::Fill {
-            rect: [482.0, 329.0, 400.0, 1.0],
-            color: blue,
-        });
-        let icons = usize::from(card.class_icon.is_some()) + usize::from(card.laps.is_some());
-        let mut x = CENTRE_X + 28.0 - icons as f32 * 56.0 * 0.5;
-        if let Some(class) = card.class_icon.as_deref() {
-            self.card_sprite(class, [x - 22.4, 347.6, 44.8, 44.8], blue, out);
-            x += 56.0;
-        }
-        if let Some(laps) = card.laps {
-            self.card_sprite(NUM_LAPS, [x - 22.4, 347.6, 44.8, 44.8], blue, out);
-            out.push(Self::card_text(
-                &laps.to_string(),
-                x,
-                358.0,
-                0.6,
-                blue,
-                None,
-            ));
-        }
-    }
-
     fn draw_page_furniture(
         &self,
         page: usize,
@@ -695,6 +665,7 @@ impl Frontend {
         usize::from(card.class_icon.is_some())
             + usize::from(card.lap_label.is_some())
             + usize::from(card.forced_craft.is_some())
+            + usize::from(card.weapons.is_some())
             + card.allowed_classes.len()
     }
 
@@ -755,7 +726,18 @@ impl Frontend {
         let blue = self.global_colour("Blue2048");
         let card = &event.card;
         let n = Self::rules_items(card).clamp(1, 6);
-        let row = RULES_LAYOUT[n - 1];
+        let mut row = RULES_LAYOUT[n - 1];
+        // `FUN_810535fe`: with exactly two items, one of them a callout wider
+        // than 140 at the 44 unit measure, the pair stacks on the centre line.
+        if n == 2
+            && card
+                .weapons
+                .as_ref()
+                .is_some_and(|w| callout::row_width(w.icons.len(), 44.0) > callout::STACK_ABOVE)
+        {
+            row[0] = (682.0, 234.0);
+            row[1] = (682.0, 340.0);
+        }
         let mut slot = 0;
         let mut place = || {
             let at = row[slot.min(5)];
@@ -792,20 +774,25 @@ impl Frontend {
             ));
             caption(label, at, out);
         }
+        if let Some(weapons) = &card.weapons {
+            let at = place();
+            self.draw_callout_item(weapons, at, out);
+        }
         if let Some(craft) = &card.forced_craft {
             let at = place();
-            // `FUN_81061808` draws the team logo and the class icon as two 64
-            // unit quads in white (`0xffffffff`). **Chosen, not measured**:
-            // side by side around the item's centre - the quad offsets are
-            // in vector-register arithmetic that was not decoded.
+            // `FUN_81061808(x, y - 32, ...)` draws two 64 unit quads, both
+            // white: the team logo from `x`, and the class icon from `x - 40`
+            // on top of its left edge (disassembled, 0x81061808). The caption
+            // is centred 16 right of the item and reads `"%s %s"`: team, then
+            // class label.
             let white = [1.0, 1.0, 1.0, 1.0];
             if let Some(logo) = craft.logo.as_deref() {
-                self.card_sprite(logo, [at.0 - 64.0, at.1 - 32.0, 64.0, 64.0], white, out);
+                self.card_sprite(logo, [at.0, at.1 - 32.0, 64.0, 64.0], white, out);
             }
             if let Some(icon) = craft.type_icon.as_deref() {
-                self.card_sprite(icon, [at.0, at.1 - 32.0, 64.0, 64.0], white, out);
+                self.card_sprite(icon, [at.0 - 40.0, at.1 - 32.0, 64.0, 64.0], white, out);
             }
-            caption(&craft.caption, at, out);
+            caption(&craft.caption, (at.0 + 16.0, at.1), out);
         }
         for allowed in &card.allowed_classes {
             let at = place();

@@ -106,7 +106,8 @@ pub use campaign_map::{
     ProgressState,
 };
 pub use event_card::{
-    CARD_TEXTURES, CardCraft, CardRestriction, CardState, CardTabs, CardTrophy, EventCard,
+    CARD_TEXTURES, CardCraft, CardRestriction, CardState, CardTabs, CardTrophy, CardWeapons,
+    EventCard,
 };
 pub(crate) use faces::{font_line_height, lighten};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.

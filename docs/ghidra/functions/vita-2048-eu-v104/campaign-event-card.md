@@ -167,8 +167,8 @@ objective's own wording at `y=256`, both centred on `x=702` and wrapped at
 `callout/num_laps` with the count; then the three restriction glyphs
 (`FUN_81061db6`, `"combat"`/`"agility"`/`"speed"`) when the event restricts
 craft. For event modes `3`/`4` (`param_3[0xb6]`) it adds an `FE_ELITE_PASS`
-row. Not drawn by this build, by name: the elite row and the restriction
-glyphs.
+row. The elite row, the trophy glyph, the weapon callout and the restriction glyphs
+are drawn 2026-10-05; see [weapon-callout.md](weapon-callout.md).
 
 ### `GameModeObjective_FormatText` - `0x812b671a`
 
@@ -229,9 +229,8 @@ row list (`x=511..893`, rows 21 apart, up to eight) - not drawn: no network.
 authored): class glyph (`FUN_81061274`, 64 unit quad, caption
 `Speed_Class_{C,C,B,A,A_Plus}_0` for ordinals `0`-`4` by `FUN_812b26cc`),
 laps (`FUN_81061102`, `Callout_Lap`/`Callout_Laps`), the weapon callout
-(`FUN_810626ce`, weapon icons composed from `m_weaponSet` and
-`m_activeWeaponPads`: **not drawn by this build**, so an event with weapons
-gets the rest of its icons in a different row), the forced craft
+(`CampaignEventCard_DrawWeaponCallout`, `0x810626ce`: icons composed from
+`m_weaponSet` and `m_activeWeaponPads`, see [weapon-callout.md](weapon-callout.md)), the forced craft
 (`FUN_81061808`: team logo and class icon, caption `"%s %s"` of team and
 livery labels), then a glyph and `FE_SHIP_COMBAT_ONLY`/`_AGILITY_ONLY`/
 `_SPEED_ONLY` for each class still allowed when any prevent flag is set
@@ -241,9 +240,10 @@ livery labels), then a glyph and `FE_SHIP_COMBAT_ONLY`/`_AGILITY_ONLY`/
 `speedclass/{d,c,b,a,ap}_class` (`FUN_81061274`, confirming the ordinal order),
 the team logos `Team_Logos/Icon_Team_{Feisar,AG-SYS,Qirex,Auricom,Pirhana}`
 and the class icons `Icon_Ship_{Combat,Agility,Racer}` with `_proto` variants
-(`FUN_81061808`). **Chosen, not measured**: where `FUN_81061808`'s two quads
-sit relative to the item centre (vector-register arithmetic, not decoded);
-this build places the logo left and the class icon right of it.
+(`FUN_81061808`). 2026-10-05: `FUN_81061808`'s two quads are disassembled (see
+[weapon-callout.md](weapon-callout.md)): the logo from the item's `x`, the class
+icon 40 to its left and over it, both 64 square from `y - 32`, the caption 16
+right of the item.
 
 ### `FrontEnd_LoadCardTextures` - `0x8105dcb8`
 
@@ -255,17 +255,12 @@ in that order; the four mode icons at `0x816c87e0..ec` are `combat_mode`,
 logos, `0x816c8784/88/8c` the `_1col` class glyphs and `0x816c8790/94/98` the
 coloured class icons.
 
-### `CampaignEventCard_DrawTrophyPage_q` - `0x81052fb4`
+### `CampaignEventCard_DrawTrophyPage` - `0x81052fb4`
 
-**Confidence: 65.** Page kind `2`. For the ten events named
-`"2048 - Event 2-2"`, `"2048 - Event 3-2"`, `"2048 - Event 5-2"`,
-`"2049 - Event 2-3"`, `"2049 - Event 5-3"`, `"2049 - Event 6-3"`,
-`"2050 - Event 2-4"`, `"2050 - Event 5-4"`, `"2050 - Event 6-4"` it draws
-`TROPHY_<year>_<n>_1` (header) and `TROPHY_<year>_<n>_2` (callout) with a
-trophy image handle (`DAT_816c76fc..`), and for button shapes `9`/`10`/`11`
-`Cup_Name_<year>`/`Cup_Callout_<year>`. For every other event it draws
-nothing. **Not drawn by this build**: the trophy image handles are not
-located, and the page is left out of the page list.
+**Confidence: 75** (raised 2026-10-05 from 65, when `_q` came off). Page kind `2`:
+the nine named events' elite trophy and the three cup events' cup, with a
+heading and a callout. The image handles, the strings, the events and the layout
+are in [weapon-callout.md](weapon-callout.md); it is drawn.
 
 ### `CampaignEventCard_DrawUnlockPage_q` - `0x81052810`
 

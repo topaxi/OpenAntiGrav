@@ -311,8 +311,12 @@ fn event_card(
     let objective = event
         .pass_objective
         .and_then(|reference| oag_2048::campaign::objective_for(doc, reference));
+    // `FUN_810535fe` and `FUN_81055150` draw the class glyph only when the
+    // mode ordinal `+0x190` is not `0`: a Zone event has none.
+    let has_class = kind != EventIcon::Zone;
     let class_icon = event
         .speed_class
+        .filter(|_| has_class)
         .and_then(|class| usize::try_from(class).ok())
         .and_then(|class| {
             oag_ui::frontend::CARD_TEXTURES
@@ -338,7 +342,7 @@ fn event_card(
         EventIcon::Elimination => "FE_GAMEMODE_ELIM",
     };
     let instance = doc.instance(event.instance_id);
-    let class_label = event.speed_class.and_then(|class| {
+    let class_label = event.speed_class.filter(|_| has_class).and_then(|class| {
         // `FUN_812b26cc`: ordinals `0` and `1` both read `Speed_Class_C_0`.
         let id = match class {
             0 | 1 => "Speed_Class_C_0",
@@ -365,7 +369,7 @@ fn event_card(
             oag_ui::frontend::CardCraft {
                 logo: team_logo(&team).map(str::to_string),
                 type_icon: ship_class_icon(&team, variant).map(str::to_string),
-                caption: strings.get(&team).map(str::to_string).unwrap_or(team),
+                caption: craft_caption(strings, &team, variant),
             }
         });
     // `FUN_810535fe` draws a glyph for each class `GameModeBase_IsShipTypeAllowed`
@@ -396,7 +400,22 @@ fn event_card(
             callout: word(&art.callout_id),
         }
     });
+    let weapons = oag_2048::campaign::callout::for_event(doc, event)
+        .and_then(|callout| card_weapons(strings, callout));
+    let elite = event
+        .elite_objective
+        .and_then(|reference| oag_2048::campaign::objective_for(doc, reference));
     EventCard {
+        weapons,
+        elite_label: strings.get("FE_ELITE_PASS").map(str::to_string),
+        elite_objective: elite.and_then(|objective| {
+            objective_text(
+                strings,
+                event.typedef_id,
+                objective.objective_type?,
+                objective.target.unwrap_or(0),
+            )
+        }),
         has_trophy_page: oag_2048::campaign::trophy::has_page(shape),
         trophy,
         class_label,
@@ -426,6 +445,52 @@ fn event_card(
     }
 }
 
+/// `FUN_81061808`'s caption: `"%s %s"` of the team's label and the craft
+/// class's (`WOShipModelData_LiveryLabelId`: variants `1`-`3` are combat,
+/// agility and speed, `4` the prototype).
+fn craft_caption(strings: &StringTable, team: &str, variant: &str) -> String {
+    let team_label = strings
+        .get(team)
+        .map_or_else(|| team.to_string(), str::to_string);
+    let class_id = match variant {
+        "1" => "FE_SHIP_COMBAT",
+        "2" => "FE_SHIP_AGILITY",
+        "3" => "FE_SHIP_SPEED",
+        "4" => "FE_SHIP_PROTO",
+        _ => return team_label,
+    };
+    match strings.get(class_id) {
+        Some(class) => format!("{team_label} {class}"),
+        None => team_label,
+    }
+}
+
+/// What the weapon callout draws for `callout`, `None` when it draws nothing.
+fn card_weapons(
+    strings: &StringTable,
+    callout: oag_2048::campaign::callout::Callout,
+) -> Option<oag_ui::frontend::CardWeapons> {
+    use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
+    let single = |stem: &str, id: &str| oag_ui::frontend::CardWeapons {
+        icons: vec![texture(stem)],
+        caption: strings.get(id).map(str::to_string).unwrap_or_default(),
+    };
+    Some(match callout {
+        Callout::Nothing => return None,
+        Callout::WeaponsOff => single("weapons_off", "Event_Variable_Weapons_Off_0"),
+        Callout::OffensiveOff => single("offensive_off", "Event_Variable_Offensive_1"),
+        Callout::DefensiveOff => single("defensive_off", "Event_Variable_Defensive_1"),
+        Callout::Weapons(bits) => oag_ui::frontend::CardWeapons {
+            icons: bits.iter().map(|&bit| texture(ICONS[bit])).collect(),
+            caption: bits
+                .iter()
+                .filter_map(|&bit| strings.get(NAME_IDS[bit]))
+                .collect::<Vec<_>>()
+                .join(SEPARATOR),
+        },
+    })
+}
+
 /// Every texture the cards of `events` ask for beyond the fixed set.
 pub(super) fn card_textures(events: &[MapEvent]) -> Vec<&str> {
     let mut names: Vec<&str> = oag_ui::frontend::CARD_TEXTURES.to_vec();
@@ -434,6 +499,12 @@ pub(super) fn card_textures(events: &[MapEvent]) -> Vec<&str> {
         let logo = craft.map(|c| &c.logo).unwrap_or(&None);
         let icon = craft.map(|c| &c.type_icon).unwrap_or(&None);
         let art = card.trophy.as_ref().map(|t| &t.texture);
+        let weapon_icons = card.weapons.iter().flat_map(|w| w.icons.iter());
+        for name in weapon_icons {
+            if !names.contains(&name.as_str()) {
+                names.push(name);
+            }
+        }
         for name in [
             card.photo.as_ref(),
             card.emblem.as_ref(),

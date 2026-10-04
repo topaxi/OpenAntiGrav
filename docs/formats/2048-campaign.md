@@ -613,15 +613,34 @@ resolve to a base circuit), so the earlier "Zone events author no circuit"
 claim was wrong. The card opens on the rules page when the current craft is
 refused.
 
-**Not drawn, on purpose, with where to pick it up:** page kind `2` (trophy
-and cup art: the image handles behind `FUN_81052fb4` are not located; button
-shapes `1`, `2`, `9`-`11` and ten named events) and kind `3` (`FUN_81052810`,
-`FE_PASS_TO_UNLOCK`; its `event+0x7c` is a runtime field, probably
-unreachable); the weapon callout on the rules page (`FUN_810626ce`, so an
-event with weapons has its icons laid out a row short); the elite-pass row
-(`FUN_81055150`, event modes `3`/`4`) and the personal record row of kind `1`
-(no per-event result is kept beyond the medal). The `<` / `>` arrows are page
-arrows, not lap arrows.
+**Drawn 2026-10-05** (evidence: [weapon-callout.md](../ghidra/functions/vita-2048-eu-v104/weapon-callout.md)):
+
+- **Page kind `2`, trophy and cup art.** Twelve events: the nine elite-trophy
+  events by name (`trophy/{2048,2049,2050}_elite_{01,02,03}`) and the cup finals
+  `2048 - Event 7`, `2049 - Event 8`, `2050 - Event 9` (`trophy/Cup{year}`), with
+  `TROPHY_*`/`Cup_*` strings off the language table. The page sits between the
+  leaderboard and the rules, as `BuildPageList` puts it.
+- **The weapon callout** (`FUN_810626ce`) on the rules page and the objective
+  page's glyph row: the weapons the event offers, or one of three "off" icons,
+  decided from `m_weaponSet` and `m_activeWeaponPads` with the constructors'
+  defaults (`0x7ff`, `3`) for what an event does not author. A Zone or Speed Lap
+  event has none; an event that offers everything draws none.
+- **The elite row** of the objective page, once the event is passed, with its
+  own medal; **the trophy glyph** on the glyph row of the twelve trophy events;
+  the row is centred by its own width and carries the callout, the forced craft
+  and the allowed craft classes (`FUN_81055006`). A Zone event no longer draws a
+  class glyph (`+0x190 == 0`).
+- **The forced craft's two quads** (`FUN_81061808`): logo from the item's `x`,
+  class icon 40 to the left and over it, caption `"%s %s"` 16 right.
+
+**Still not drawn:** page kind `3` (`FUN_81052810`, `FE_PASS_TO_UNLOCK`; its
+`event+0x7c` is a runtime field, probably unreachable) and the personal record row
+of kind `1` (this build keeps no per-event result beyond the medal). No reference
+frame exists for page kinds `2`, the callout or the elite row: frame 14 is the
+only live capture of the card, so these are decompile-measured, not
+frame-measured. The callout's draw loop and the objective page's forced-craft
+scale are vector-register arithmetic; those two placements are confidence 65 and
+**chosen** respectively.
 
 **Panel opacity and the PASS medal need no change.** Frame 14's body panel
 over the map's green blur reads `(219, 246, 212)` at `x=436`: the panels are

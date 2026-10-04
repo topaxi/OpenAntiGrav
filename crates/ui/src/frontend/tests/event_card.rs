@@ -383,3 +383,77 @@ fn a_trophy_shape_with_no_art_is_a_blank_page_as_in_the_original() {
         assert!(!body.contains(&word.to_string()), "{body:?}");
     }
 }
+
+fn with_weapons(icons: usize) -> Vec<MapEvent> {
+    let mut events = with_pages();
+    events[0].card.weapons = Some(crate::frontend::CardWeapons {
+        icons: (0..icons)
+            .map(|i| format!(r"Data\FE\NewImages\weapons\w{i}.gtf"))
+            .collect(),
+        caption: "CANNON + LEECH BEAM".to_string(),
+    });
+    events
+}
+
+#[test]
+fn the_weapon_callout_is_a_rules_item_and_a_weapons_only_event_has_a_rules_page() {
+    let mut events = card_event();
+    events[0].card.weapons = with_weapons(1)[0].card.weapons.clone();
+    let (mut frontend, mut input) = on_the_card(events);
+    press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.event_card_page(),
+        Some(2),
+        "objective, leaderboard and a rules page that holds only the callout"
+    );
+    assert!(texts(&frontend).contains(&"CANNON + LEECH BEAM".to_string()));
+}
+
+#[test]
+fn a_wide_callout_beside_one_other_item_stacks_the_pair_on_the_centre_line() {
+    let positions = |icons: usize| {
+        let mut events = with_weapons(icons);
+        events[0].card.class_icon = None;
+        events[0].card.class_label = None;
+        let (mut frontend, mut input) = on_the_card(events);
+        press(&mut frontend, &mut input, Button::Right);
+        press(&mut frontend, &mut input, Button::Right);
+        frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, x, y, .. }
+                    if text.ends_with("LAPS") || text.starts_with("CANNON") =>
+                {
+                    Some((*x, *y))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    // Two icons measure 100 at 44 units: the side-by-side row of two items.
+    assert_eq!(positions(2), vec![(602.0, 315.0), (762.0, 315.0)]);
+    // Three measure 156, over the 140 the executable tests, so they stack.
+    assert_eq!(positions(3), vec![(682.0, 272.0), (682.0, 378.0)]);
+}
+
+#[test]
+fn a_passed_event_adds_the_elite_row_and_an_unplayed_one_does_not() {
+    let mut events = with_pages();
+    events[0].card.elite_label = Some("ELITE PASS".to_string());
+    events[0].card.elite_objective = Some("FINISH 1ST".to_string());
+    let (frontend, _) = on_the_card(events.clone());
+    assert!(!texts(&frontend).contains(&"ELITE PASS".to_string()));
+
+    let mut frontend = boot(0);
+    frontend.set_campaign(events);
+    frontend.refresh_campaign_progress(|_| Some(crate::frontend::EarnedTier::Pass));
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    let words = texts(&frontend);
+    for wanted in ["PASS", "FINISH AT LEAST 5TH", "ELITE PASS", "FINISH 1ST"] {
+        assert!(words.contains(&wanted.to_string()), "{words:?}");
+    }
+}
