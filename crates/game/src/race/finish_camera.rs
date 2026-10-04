@@ -16,6 +16,8 @@
 //! | a cut when the subject is [`NODE_RADIUS`] or more from the node's aim point: a random node within [`NODE_RADIUS`] of the subject, then a mode roll of `3` 26 %, `2` 25 %, `6` 25 %, `7` 24 % | read from the decompile; the cut instants are random and cannot be matched frame for frame |
 //! | modes `6` and `7` (and `5`): eye at the node, aimed at a smoothed subject, the fov easing to `2 atan(width / 2 / distance)` | read from the decompile |
 //! | mode `2`, a rigid rear view 6 behind and 2.5 above the craft, and mode `3`, a rigid front view 12 ahead and 3 above, looking back; both at a fixed 65 degrees | read from the decompile and **measured** on PPSSPP, 407 frames to `6e-5` ([`oag_render::camera::craft_view`]) |
+//! | on `Race End Photo` the d-pad drives it: up and down step the mode through `1 -> 4 -> 3 -> 2 -> 7 -> 1` (the width kept), left and right watch the previous and next grid slot | read from the decompile and **measured** (the button mapping, live); see [`FinishCamera::cycle`] |
+//! | modes `1` (5 ahead of the nose) and `4` (12 behind, 3 above), both looking the way the craft flies, 65 degrees | read and **measured**, 379 frames to `5.4e-5` |
 //! | the craft the view shows is the *previous* subject (`cam+0x1e4`), which takes the subject's place only when the director cuts to a new node | read from the decompile and seen in the capture (the 600 frame re-pick lands on a cut) |
 //!
 //! # What is chosen, not measured
@@ -72,10 +74,16 @@ const MODE_ROLLS: [(u32, ViewMode); 4] = [
 /// The cameras the spectator director can be in, by the original's own numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewMode {
+    /// `1`: bolted to the craft, 5 units ahead of its nose at its own height, looking the way it
+    /// flies. Only the player's d-pad on `Race End Photo` reaches it ([`FinishCamera::cycle`]).
+    Nose,
     /// `2`: bolted to the craft, 6 units behind it and 2.5 above, looking the way it flies.
     Rear,
     /// `3`: bolted to the craft, 12 units ahead of it and 3 above, looking back at it.
     Front,
+    /// `4`: bolted to the craft, 12 units behind it and 3 above, looking the way it flies.
+    /// Reached like [`Self::Nose`].
+    Chase,
     /// `5`: the death camera, a node camera of view width `35`. Only a player's wreck puts the
     /// camera here (`Ship_SetState` case 4 also clears the mode-roll flag, `cam+0x26c`, so the
     /// director never leaves it).
@@ -94,7 +102,7 @@ impl ViewMode {
             Self::Death => Some(destroy::FRAME_SIZE),
             Self::Close => Some(17.0),
             Self::Track => Some(50.0),
-            Self::Rear | Self::Front => None,
+            Self::Nose | Self::Rear | Self::Front | Self::Chase => None,
         }
     }
 
@@ -437,6 +445,12 @@ impl FinishCamera {
             ViewMode::Front => {
                 craft_view_override(craft_view::front(watched.position, watched.orientation))
             }
+            ViewMode::Nose => {
+                craft_view_override(craft_view::nose(watched.position, watched.orientation))
+            }
+            ViewMode::Chase => {
+                craft_view_override(craft_view::chase(watched.position, watched.orientation))
+            }
             ViewMode::Death | ViewMode::Close | ViewMode::Track => {
                 let node = self.node.map_or(Vec3::ZERO, |node| self.nodes[node].eye);
                 let subject = watched.position;
@@ -490,6 +504,48 @@ fn position_of(live: &[Subject], slot: usize) -> Vec3 {
 }
 
 impl Race {
+    /// Every craft still in the race, as the director sees it.
+    fn spectator_subjects(&self) -> Vec<Subject> {
+        (0..usize::from(self.sim.world.ship_count))
+            .filter(|&slot| {
+                let ship = &self.sim.world.ships[slot];
+                ship.active && ship.physics.craft_state != oag_physics::CraftState::Eliminated
+            })
+            .map(|slot| Subject {
+                slot,
+                position: self.sim.world.ships[slot].physics.body.position,
+                orientation: self.sim.world.ships[slot].physics.body.orientation,
+            })
+            .collect()
+    }
+
+    /// A d-pad press on `Race End Photo`: up and down step the spectator camera's mode, left
+    /// and right the craft it watches (see [`FinishCamera::cycle`]). Only after a line finish,
+    /// the one way the original reaches that screen (a wreck never does), and only once the
+    /// director runs. `true` when the camera changed.
+    pub fn spectator_press(&mut self, button: oag_gameplay::input::Button) -> bool {
+        use oag_gameplay::input::Button;
+        if self.sim.world.ships[self.player_slot()]
+            .standing
+            .finish_tick
+            .is_none()
+        {
+            return false;
+        }
+        let slots = usize::from(self.sim.world.ship_count);
+        let live = self.spectator_subjects();
+        let Some(director) = self.view.finish_camera.as_mut() else {
+            return false;
+        };
+        match button {
+            Button::Up => director.cycle(true),
+            Button::Down => director.cycle(false),
+            Button::Left => director.watch_step(false, slots, &live),
+            Button::Right => director.watch_step(true, slots, &live),
+            _ => false,
+        }
+    }
+
     /// The mode the post-race camera is in, `None` before it starts or where there is none.
     #[must_use]
     pub fn spectator_mode(&self) -> Option<ViewMode> {
@@ -530,17 +586,7 @@ impl Race {
                     fov: destroyed.fov,
                 }
             });
-        let live: Vec<Subject> = (0..usize::from(self.sim.world.ship_count))
-            .filter(|&slot| {
-                let ship = &self.sim.world.ships[slot];
-                ship.active && ship.physics.craft_state != oag_physics::CraftState::Eliminated
-            })
-            .map(|slot| Subject {
-                slot,
-                position: self.sim.world.ships[slot].physics.body.position,
-                orientation: self.sim.world.ships[slot].physics.body.orientation,
-            })
-            .collect();
+        let live = self.spectator_subjects();
         let since = self
             .sim
             .world
@@ -559,5 +605,6 @@ impl Race {
     }
 }
 
+mod photo_controls;
 #[cfg(test)]
 mod tests;

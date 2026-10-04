@@ -175,12 +175,63 @@ fov rate `0.06` (`0x3d75c28f`). Mode `5` is the death camera (`Ship_SetState` st
 
 Modes `2` and `3` are read and measured: a rigid rear view and a rigid front view, see
 [camera.md](camera.md#the-spectator-views-craft-relative-modes-and-the-directors-hand-off-rules-2026-10-02).
-**Not read**: cases `0`, `1`, `4` and `8` of the view, what drives `+0x274`, and the trigger that makes `Race End Photo` call `FUN_08880788` on frame `F+61`.
+Cases `1` and `4`, `+0x274` and the reachability of `0` and `8` are [below](#race-end-photos-d-pad-modes-1-and-4-and-the-unreachable-cases-2026-10-04). **Not read**: the trigger that makes `Race End Photo` call `FUN_08880788` on frame `F+61`.
+
+## `Race End Photo`'s d-pad, modes 1 and 4, and the unreachable cases (2026-10-04)
+
+**Read and measured 2026-10-04 (lane `pulse-postfinish`).** `RaceManager_Update` (`0x08829778`, [gantry-clock.md](gantry-clock.md))
+sets `manager+0x19ed` when the front end's state name compares equal to `Race End Photo` and then, every frame while it is
+set (or under `g_game_mode 0xc`, unread), reads four buttons through `Input_IsPressed(g_input, n)`:
+
+| `n` | Button (live) | What it calls |
+| --- | --- | --- |
+| `0` | up | `Camera_CycleModeForward` (`0x088807c8`): `1 -> 4`, `4 -> 3`, `3 -> 2`, `2 -> 7`, `6`/`7 -> 1` |
+| `1` | down | `Camera_CycleModeBack` (`0x08880838`): `1 -> 7`, `7`/`6 -> 2`, `2 -> 3`, `3 -> 4`, `4 -> 1` |
+| `2` | left | the craft one slot before the subject (`entity+0xbd4` is its 1-based slot, wrapping over `DAT_08b30f90`): `Camera_SetSubject(cam, craft, 1)`, `cam+0x1e4 = cam+0x1e0`, then `Camera_SetMode(cam, the mode it had)` |
+| `3` | right | the craft one slot after |
+
+The two cycle functions store `cam+0x1dc` directly, **not** through `Camera_SetMode`, so the view width a node mode set
+(`+0x268`) is kept; mode `5` (and `0`, `8`) has no case and is left alone. `Camera_SetSubject` with no craft-attached node
+(`entity+0xc3c == 0`, every craft seen) runs `Camera_PickStation` on the new craft: the nearest node, mode written `7`
+(or `2` with no node), the zoom restarted. The chosen mode lasts until the director's next cut on its subject rolls
+another (`Camera_UpdateSpectator`, unchanged).
+
+**Live** (PPSSPP, `Race End Photo` after the `sr-back` finish): up took `+0x1dc` `4 -> 3 -> 2`, down `2 -> 3`; right moved
+the subject one slot on twice, left one back (`manager+0x1a0c` `7 -> 4 -> 5 -> 4`). One aside, not ported: after a
+left/right press the subject and the drawn craft can stay different for minutes (the 10 s re-pick takes the player back,
+the drawn craft stays the chosen one, the node follows the drawn craft through the second, roll-free repick), and the
+mode held `1` then `4` for over 100 s with the node changing every 4 s.
+
+**Cases 1 and 4 of `Camera_UpdateSpectatorView`**, read and measured. Case 1 copies the drawn craft's matrix, turns it 180
+degrees about its up (`vcst_s(5) * pi`: `2/pi * pi` is two quarter turns of the VFPU's `vsin`/`vcos`), then moves the
+position back 5 along the turned forward: **an eye 5 units ahead of the nose at the craft's own height, looking the way it
+flies**. Case 4 is case 3 with the same 180-degree turn first, so case 3's `(0, 3, 12)` offsets (`0x08ab10c8/cc/d0`) land
+**12 behind and 3 above, looking the way it flies**. Both set `65` degrees. Measured with the mode word forced to 1 and 4
+(`scripts/psp-spectator-capture.py --attach --force 1:20:180,4:220:380`, breakpoint on the view's exit): 200 and 179
+frames, rotation exact, eye to `5.4e-5` (`data/scratch/pulse-postfinish/cam14/`, `v0100.png` mode 1, `v0300.png` mode 4).
+Confidence **92**.
+
+**Not reachable after a single-player finish** (clean negatives):
+
+- **`cam+0x274` and mode `8`.** The only writer of `+0x274` besides the constructor's zero is `Camera_SetSubjectLock`
+  (`0x08880718`, a one-byte store), called from `FUN_088df590` (`GriefReport_Skin`, clears it) and `FUN_088dfb90`, which
+  sets it to `1` together with `Camera_SetMode(cam, 8)` and `cam+0x26c = 0` after `FUN_0882461c`, the multiplayer path
+  whose `Race_FinishAllCrafts` never ran in Single Race or Time Trial. With `+0x274` set the 10 s timer no longer clears the
+  subject and `Camera_PickSubject` takes the global `DAT_08ab0df8`. Mode 8 is that path's view; not read further.
+- **Mode `0`.** No store of `0` reaches the camera's `+0x1dc`: the constructor writes `7`, `Camera_SetMode`'s callers pass
+  `1`-`8` (photo mode `FUN_08814014`: `4, 3, 2, 1, 7`), `Camera_PickStation` `7` or `2`, `Camera_SetSubject` `7`, the
+  cycle functions `1, 2, 3, 4, 7`; the other `sw ..., 0x1dc(..)` in the binary are other objects (`FUN_08844ec4` counts
+  into the profile at `0x08b31774`, `FUN_08891908` is a constructor). Read only: case 0 sits at the node eye
+  (`node+0x90`), aims at the drawn craft and takes the node's own field of view (`node+0x50`), with no smoothing or zoom.
+  Confidence **80** for the negative (a computed store would escape the operand search).
 
 ## Names
 
-`Craft_SetAutopilotBlend`, `Camera_PickSubject` and `Camera_PickRandomMode` are in
-[`names.tsv`](names.tsv). Confidence: the setter is a one-store function whose effect was watched live (a write
+`Craft_SetAutopilotBlend`, `Camera_PickSubject`, `Camera_PickRandomMode`, `Ai_ComputeControls`,
+`Camera_CycleModeForward` (90), `Camera_CycleModeBack` (90) and `Camera_SetSubjectLock` (75) are in
+[`names.tsv`](names.tsv). The two cycle functions are complete five-case tables whose effect was watched live on the
+buttons that call them; the lock setter is a one-byte store whose readers (`Camera_UpdateSpectator`,
+`Camera_PickSubject`) are read, with no live leg. Confidence: the setter is a one-store function whose effect was watched live (a write
 watchpoint on `craft+0x1d4` caught it from the two call sites above); the two camera names rest on the decompile and
 on the timing the captures reproduce (the `10.0` s re-pick to the frame, the `F+61` start, the mode set), not on a
 breakpoint inside them.

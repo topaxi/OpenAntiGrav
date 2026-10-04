@@ -204,9 +204,12 @@ the live structure, whose 27 floats reproduce one team's document in order.
 `camera+0x1dc` is an integer camera mode set by `Camera_SetMode` (`0x08880724`),
 with values named
 by the photo-mode code in `FUN_08814014`: `1` internal, `2` above, `3` front,
-`4` close, `7` track. `FUN_088807c8` cycles it `1 -> 4 -> 3 -> 2 -> 7 -> 1` and
-`FUN_08880838` is its inverse; both are reached from the **race-end and photo**
-paths (`FUN_08829778`), bound to up/down, not to SELECT.
+`4` close, `7` track. `Camera_CycleModeForward` (`0x088807c8`) cycles it `1 -> 4 -> 3 -> 2 -> 7 -> 1` and
+`Camera_CycleModeBack` (`0x08880838`) is its inverse; both are reached from `RaceManager_Update`
+(`0x08829778`) while the front end is on `Race End Photo` (or under `g_game_mode 0xc`), bound to up/down,
+not to SELECT; left/right on the same screen switch the watched craft. **Correction 2026-10-04**: by
+geometry `1` is a nose view (5 ahead, looking forward) and `4` a far chase view (12 behind, 3 above),
+measured; see [race-finish.md](race-finish.md#race-end-photos-d-pad-modes-1-and-4-and-the-unreachable-cases-2026-10-04).
 
 **Do not confuse the two.** Read live off the running game, the global camera
 object at `0x08b32c64` held mode `7` and did not change across ten SELECT

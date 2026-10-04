@@ -1,4 +1,7 @@
-//! The spectator director's two craft-relative views: a camera bolted to the craft it watches.
+//! The spectator director's craft-relative views: a camera bolted to the craft it watches.
+//!
+//! Modes 1 and 4 (the nose view and the far chase view, [`nose`] and [`chase`]) are reached only
+//! by the player's d-pad on `Race End Photo`; their measurement is at the end of this page.
 //!
 //! The post-finish director (`Camera_UpdateSpectator`, `0x0887fd3c`) cuts between node cameras
 //! (modes 5, 6, 7, [`super::destroy`]) and two views that ride on a craft: **mode 2**, a rigid
@@ -40,6 +43,14 @@
 //! function wrote against the matrix it read, same instant, breakpoint on its exit. The rotation
 //! matched exactly and the eye to `6e-5` on every frame, in both modes. The tests below carry
 //! the two most banked frames.
+//!
+//! Modes 1 and 4, 2026-10-04 (lane `pulse-postfinish`), the same capture with the mode word
+//! forced to 1 and 4 on `Race End Photo`: 200 and 179 frames, rotation exact, eye to `5.4e-5`.
+//!
+//! ```text
+//! mode 1 (nose):   orientation = the craft's,  eye = position + 5.0 * forward
+//! mode 4 (chase):  orientation = the craft's,  eye = position + 12.0 * back + 3.0 * up
+//! ```
 
 use oag_core::math::{Quat, Vec3};
 
@@ -96,6 +107,39 @@ pub fn front(position: Vec3, orientation: Quat) -> Pose {
     Pose {
         eye: position + forward * FRONT_AHEAD + up * FRONT_UP,
         orientation: orientation * Quat::from_rotation_y(std::f32::consts::PI),
+    }
+}
+
+/// How far ahead of the craft the nose view sits.
+pub const NOSE_AHEAD: f32 = 5.0;
+
+/// How far behind the craft the far chase view sits.
+pub const CHASE_BEHIND: f32 = 12.0;
+/// How far above it the far chase view sits.
+pub const CHASE_UP: f32 = 3.0;
+
+/// Mode 1, the nose view: [`NOSE_AHEAD`] ahead of the craft at its own height, looking the way
+/// it flies. Case 1 turns the craft's matrix 180 degrees about its up (`vcst 2/pi * pi`, two
+/// quarter turns of the VFPU's sine) and steps back 5 along the turned forward, which is 5 ahead.
+#[must_use]
+pub fn nose(position: Vec3, orientation: Quat) -> Pose {
+    let forward = orientation * Vec3::NEG_Z;
+    Pose {
+        eye: position + forward * NOSE_AHEAD,
+        orientation,
+    }
+}
+
+/// Mode 4, the far chase view: [`CHASE_BEHIND`] behind the craft and [`CHASE_UP`] above it,
+/// looking the way it flies. Case 4 is case 3 with the same 180-degree turn first, so the
+/// `(0, 3, 12)` offsets of the front view land behind the craft instead of ahead of it.
+#[must_use]
+pub fn chase(position: Vec3, orientation: Quat) -> Pose {
+    let up = orientation * Vec3::Y;
+    let back = orientation * Vec3::Z;
+    Pose {
+        eye: position + back * CHASE_BEHIND + up * CHASE_UP,
+        orientation,
     }
 }
 

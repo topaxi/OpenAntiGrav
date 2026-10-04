@@ -1309,3 +1309,6 @@
 0x0893280c	function	CloudGroup_Draw	92	clouds.md
 
 0x08855dc4	function	Ai_ComputeControls	75	race-finish.md
+0x088807c8	function	Camera_CycleModeForward	90	race-finish.md
+0x08880838	function	Camera_CycleModeBack	90	race-finish.md
+0x08880718	function	Camera_SetSubjectLock	75	race-finish.md

@@ -45,6 +45,7 @@ mod scene;
 mod scene_build;
 mod shield_flash;
 mod spawn;
+mod spectator_press;
 mod spline;
 mod trail_hits;
 mod weapons;

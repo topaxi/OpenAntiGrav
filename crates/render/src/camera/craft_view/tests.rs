@@ -155,3 +155,90 @@ fn a_level_craft_is_watched_from_behind_and_from_ahead() {
         "the front view looks back at the craft"
     );
 }
+
+/// Frame 220 of the 2026-10-04 capture (`cam14`), mode 1, the most banked of that mode.
+const NOSE_CRAFT: [f32; 16] = [
+    -0.90018934,
+    0.14786698,
+    -0.40962708,
+    0.0,
+    0.15490475,
+    0.98779714,
+    0.016158503,
+    0.0,
+    0.40701777,
+    -0.04890747,
+    -0.91210973,
+    0.0,
+    -582.4747,
+    -31.972591,
+    -548.54584,
+    1.0,
+];
+const NOSE_WRITTEN: [f32; 16] = [
+    0.90018934,
+    0.15490475,
+    -0.40701777,
+    0.0,
+    -0.14786698,
+    0.98779714,
+    0.04890747,
+    0.0,
+    0.40962708,
+    0.016158503,
+    0.91210973,
+    0.0,
+    580.4396,
+    32.21713,
+    553.1064,
+    1.0,
+];
+/// Frame 245 of the same capture, mode 4, the most banked of that mode.
+const CHASE_CRAFT: [f32; 16] = [
+    -0.6365232,
+    0.17056307,
+    -0.75216126,
+    0.0,
+    0.19011116,
+    0.97984636,
+    0.061310574,
+    0.0,
+    0.7474598,
+    -0.10396865,
+    -0.6561209,
+    0.0,
+    -557.63007,
+    -34.835636,
+    -589.15,
+    1.0,
+];
+const CHASE_WRITTEN: [f32; 16] = [
+    0.6365232,
+    0.19011116,
+    -0.7474598,
+    0.0,
+    -0.17056307,
+    0.97984636,
+    0.10396865,
+    0.0,
+    0.75216126,
+    0.061310574,
+    0.6561209,
+    0.0,
+    566.0293,
+    30.648474,
+    581.0926,
+    1.0,
+];
+
+#[test]
+fn the_nose_view_reproduces_the_matrix_the_original_wrote() {
+    let pose = nose(position_of(&NOSE_CRAFT), orientation_of(&NOSE_CRAFT));
+    check(pose, &NOSE_WRITTEN);
+}
+
+#[test]
+fn the_chase_view_reproduces_the_matrix_the_original_wrote() {
+    let pose = chase(position_of(&CHASE_CRAFT), orientation_of(&CHASE_CRAFT));
+    check(pose, &CHASE_WRITTEN);
+}

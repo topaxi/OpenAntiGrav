@@ -37,8 +37,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   (`k+279`, `k+290` seen); ours now does the same from 240 ticks after the wreck call (210 after the race ended, pinned by a test), not the old single-sample 259. Open: what the original's wreck race
   waits for, a wreck drained rather than injected, the pause menu from that state, Zone and Eliminator.
 - ~~**Modes `2` and `3` of the spectator camera**~~ **Ported 2026-10-02**: mode 2 is a rigid rear view (6 behind, 2.5 above), mode 3 a rigid front view
-  (12 ahead, 3 above, looking back), 65 degrees, measured on PPSSPP (407 frames, rotation exact, eye to `6e-5`). Still unread: what sets `cam+0x274`, cases
-  `0`, `1`, `4` and `8` of `Camera_UpdateSpectatorView`, and whether a barrel roll is inside the craft matrix the two views ride on.
+  (12 ahead, 3 above, looking back), 65 degrees, measured on PPSSPP (407 frames, rotation exact, eye to `6e-5`). **2026-10-04 (pulse-postfinish):** modes `1` (nose) and `4` (far chase) are measured and ported with `Race End Photo`'s d-pad (up/down cycle the mode, left/right the craft); `cam+0x274` and mode `8` are the multiplayer GriefReport path and mode `0` has no writer, none reachable after a single-player finish. Open: whether a barrel roll is inside the craft matrix the views ride on; the original's subject/drawn-craft drift after a left/right press (not ported).
 - **A station camera still draws a wall the original sees past** (2026-10-02, **open, localised**): after the mask fix below, Talon's Junction's station 0 on a wreck at
   `(-104.2, -49.7, -180.3)` shows a paneled dark wall and lid across the frame in ours, where the original shows the stand and the `AG-SYS` banner beyond the two silver
   pillars (`data/scratch/pulse-spectator-cam/cmpw2.png`, original on the left; the original's own frames `wreckB/k*.png`). **Not** the section mask (the original reads

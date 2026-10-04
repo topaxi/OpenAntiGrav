@@ -375,6 +375,16 @@ impl Session {
                 if confirmed && endrace.takes_confirm() {
                     endrace.advance();
                 }
+                // `RaceManager_Update`'s d-pad on `Race End Photo`, once it is entered: the
+                // spectator camera's mode and the craft it watches.
+                if endrace.is_photo() && endrace.takes_confirm() {
+                    use oag_gameplay::input::Button;
+                    for button in [Button::Up, Button::Down, Button::Left, Button::Right] {
+                        if self.controls.buttons_mut().take(button) {
+                            stage.race.spectator_press(button);
+                        }
+                    }
+                }
             }
         }
         if let Some(option) = confirmed_option {
