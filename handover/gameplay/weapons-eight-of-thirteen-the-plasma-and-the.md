@@ -411,6 +411,9 @@ still open, most player-visible first:
   71.4/105.8/64.3/53.2 s to 15.7/65.6/70.5/73.1 s. Seed 13's 15.7 s is one
   Repulser finishing five craft that were already at 8-15 of 95 shield - the
   wave reaches about 1,400 units ahead.
+- **`~REPULSORTRAVEL` is not wired.** `Repulser_Init` plays it held on the
+  Repulser's own emitter (radius 600) whose position pointer is entity
+  `+0x150`, a matrix this pass did not trace to a writer.
 - Screenshots were taken with `--race --mode single_race --give Repulser` and an
   `--input-script` that presses fire once: `--mode` has no Eliminator.
 

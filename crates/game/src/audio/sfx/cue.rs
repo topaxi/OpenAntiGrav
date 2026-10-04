@@ -651,10 +651,9 @@ pub enum Cue {
     ///
     /// `Repulser_HitCraft` (`0x0886d254`, confidence 84) points the Repulser's
     /// own emitter at the struck craft's node, sets its radius to `300.0`
-    /// (`0x43960000`) and plays this. **The cue authors no waveform** on either
-    /// PSP disc (`oag-wad sounds` lists commands `87..88` and zero waveforms,
-    /// the same as `CANNONEXPLSHIP`), so it is raised and plays silence - wired
-    /// for the day a disc that authors one is loaded, not invented over.
+    /// (`0x43960000`) and plays this: one waveform, 1.14 s, on both PSP discs
+    /// (`sfx_ground_truth`). `oag-wad sounds` lists it with zero waveforms in its
+    /// own command range, which is that listing's limit, not the bank's.
     RepulsorHit,
     /// The start-of-race voice: `"ready"`, a timeline of several waveforms.
     ///
