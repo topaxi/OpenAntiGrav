@@ -13,6 +13,7 @@
 //! WAD entry carries and [`pure_dlc`] the encryption a Pure PSN pack does.
 //! [`sblk`] and [`ps2_music`] are archives too - of sound rather than of files,
 //! and [`wwise`] is the same for the PS4 Omega Collection's Audiokinetic banks.
+//! [`xfx`] is the table HD drives a ship's engine note with: channels and layers.
 //!
 //! [`byte_order`] and [`swizzle`] are the layer under all of them: which end of
 //! a word comes first, and where in memory a texel actually sits. Both are byte
@@ -46,6 +47,7 @@ pub mod signature;
 pub mod swizzle;
 pub mod wad;
 pub mod wwise;
+pub mod xfx;
 
 pub use byte_order::ByteOrder;
 pub use signature::{Signature, identify};
