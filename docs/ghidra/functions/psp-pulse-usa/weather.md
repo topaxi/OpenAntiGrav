@@ -104,7 +104,9 @@ zoom never visibly restarts.
 target at `+0x454`. `Weather_UpdateWind` eases it `+= (target - it) * 0.1` once per
 whole `1/60` s in the frame. On the edge into the open the target becomes `Alpha` and
 on the edge into cover `0`, both only while `MistInside` (an int, `Xml_AttributeAsInt`)
-is `0`. A non-zero `MistInside` leaves the target alone on both edges. Each frame
+is `0`. A non-zero `MistInside` leaves the target alone on both edges. Being an int,
+Outpost 7's authored `MistInside="0.2"` reads `0`: live on its start line (section 1,
+covered, mask `0x400c79f47f`) the target is `0` and the opacity `4e-8`. Each frame
 `Weather_Update` writes `+0x450` into the overlay's `+0x94` and
 `-(0.3 * wind) * DriftMistMult` into its drift `+0xa0`. Live on Outpost 7: `+0x450`
 climbs to `0.30` in open section 18 and falls toward `0` in covered sections 2 and 16.
@@ -201,9 +203,45 @@ scrolls by an arbitrary amount.
   `+0x454` to `Alpha`, and the ease is `n = (int)(dt / 0.016666668)` steps of
   `+= (target - it) * 0.1`.
 
+### Played, and checked against the original (2026-10-04, `pulse-mist`)
+
+`oag_render::mist` (the law and the pipeline) and `oag_game::race::scenery_fx::mist`
+(the opacity, the drift and the edges). Off the disc's own `Mist.mip` and `<Weather>`
+values; a circuit whose `Tex` does not decode draws no mist and says so in the load report.
+
+**The draw law against the original's pixels.** At a stationary pose, the original's
+opacity was poked to `0` and back (`data/scratch/pulse-mist/ab.py`), and its
+added light was predicted from the quad UVs and colours dumped in the same pause, the
+unswizzled `Mist.mip` alpha, bilinear repeat sampling and the byte-truncated alpha
+(`predict.py`). Masked to pixels the rest of the scene left alone:
+
+| Pose | Predicted mean | Measured mean | Median residual | Correlation |
+| --- | ---: | ---: | ---: | ---: |
+| Fort Gale White start line | 29.7 | 30.2 | 3.0 | 0.84 |
+| Outpost 7 White, section 2 forced open | 27.8 | 25.4 | 1.0 | 0.92 |
+| Ours, Fort Gale start, from our own dumped UVs | 39.5 | 37.2 | 0.4 | 0.96 |
+
+The same check with the quad mirrored in `u`, `v` or both gives correlations of
+`-0.36`, `0.03` and `-0.28`, so the corner mapping is measured rather than assumed.
+The original's residual includes the drift between the dump and the frame grab.
+Ours draws a different random offset and phase, so its mean differs per frame (texel
+sampling, not a gain): `37` at our start against the original's `30`.
+
+**Frames at player size** (`data/scratch/pulse-mist/`): `cmp-start.png` (original
+left, ours right) and `cmp-start-diff.png` (each one's on/off difference, times 3);
+`cmp-fg-run.png` (Fort Gale driving: open, tunnel, a left turn, original left);
+`cmp-o7-and-turn.png` (Outpost 7 in the open, and a held left turn). In both, the open
+reads as a soft white haze over the whole world and none of the HUD, and a covered
+section (Fort Gale's tunnel, Outpost 7's start) shows none.
+
+**Not matched, and why.** The frames are not a matched pose while driving: the
+original's craft hit walls and its random offsets differ, so the haze's pattern differs
+frame to frame. The first sampler step and the layers' starting `t` are chosen (see
+`oag_render::mist`). Not compared: a climb or a dive, and Fort Gale's rain lens over
+the mist.
+
 ## Not done, and why
 
-- **The mist overlay is recovered, not played.** Ours has no screen pass for it yet.
 - **The noise clock** is the manager's `0x08ab224c` (seconds, measured: it ran `0.57` per
   wall second under a slow emulator); ours is the race clock and a seeded table.
 - **The original updates at its frame rate**: the wind step is not scaled by `dt`, so on the
