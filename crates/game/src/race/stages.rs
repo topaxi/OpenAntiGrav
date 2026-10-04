@@ -79,7 +79,10 @@ pub(super) fn reach(stage: Stage) {
     ACTIVE.with(|active| {
         if let Some((reached, since)) = active.borrow().as_ref() {
             reached.fetch_max(stage as u8, Ordering::Relaxed);
-            log::info!("race load reached {stage:?} after {:.0} ms", since.elapsed().as_secs_f32() * 1000.0);
+            log::info!(
+                "race load reached {stage:?} after {:.0} ms",
+                since.elapsed().as_secs_f32() * 1000.0
+            );
         }
     });
 }
