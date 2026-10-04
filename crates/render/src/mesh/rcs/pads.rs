@@ -58,6 +58,14 @@ pub(super) fn pad_chunk_hashes<'a>(
         .filter_map(move |node| node_geometry(&data[node.payload()], order).map(|(hash, ..)| hash))
 }
 
+/// Whether a material file is one of the two pad programs: `weapon_pads`,
+/// which `talons_junction` and `02_track` also author their speed pads
+/// under, and `speedup_material`, which `amphiseum` does.
+pub(super) fn is_pad_material(name: &str) -> bool {
+    let leaf = name.rsplit('/').next().unwrap_or(name);
+    matches!(leaf, "weapon_pads.rcsmaterial" | "speedup_material.rcsmaterial")
+}
+
 /// The track's `Speedup Pad` geometry, from the `.rcsmodel` beside the
 /// `.vex` - the PS3 counterpart of [`super::super::build_pads`].
 ///
@@ -158,6 +166,7 @@ pub(super) fn build_pad_class(
         textures,
         &mut out.material_slots,
         &mut out.emissive,
+        None,
         &mut report,
     );
     out.material_specular_exponent = material_specular_exponent;
