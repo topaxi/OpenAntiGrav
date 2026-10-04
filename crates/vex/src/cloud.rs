@@ -104,19 +104,19 @@
 //! warm one above; both are shipped and this module reads whichever a given
 //! node authors rather than assuming the warm set.
 //!
-//! # What the executable draws with it, and what this module does not attempt
+//! # What the executable builds from it
 //!
 //! `cloudGroup`'s own method table (`0x08ad2a24`) overrides `draw` at `+0x44`
 //! (`0x0893280c`); `cloudCube`'s (`0x08ad299c`) does not - that slot is still
-//! the inherited `Transform` default. So **`cloudGroup` is what draws**, and it
-//! draws a rotating camera-facing billboard per instance in its own list
-//! (`vsin_s`/`vcos_s` on a running phase, `vtfm4_q` through the camera's own
-//! view-matrix stack), not a static quad. This module's renderer
-//! (`oag_render::cloud`) draws a **static**, camera-independent billboard
-//! instead - the rotation is recovered structurally but its exact phase and
-//! speed constant are not, so animating it would be a guess dressed as a
-//! measurement. See the doc page's Open section.
-
+//! the inherited `Transform` default. So **`cloudGroup` is what draws**. A
+//! cube is a box the group scatters sprite records through: its world
+//! matrix's row lengths are its size and its volume sets the record count.
+//! [`cloud_groups`] is the loader for that: every group with the cubes it
+//! collects (its whole subtree, so a nested group's cubes belong to the outer
+//! group too), each with its matrix, `kind`, `scale` and its nearest group's
+//! size attributes. The build itself is `oag_render::cloud::field`; the
+//! reading and the live check are on the doc page.
+//!
 use crate::vex::{self, IDENTITY, Node, byte_order, multiply, node_attributes, transform};
 
 /// Class ID of a `cloudCube` node.
@@ -165,7 +165,7 @@ pub struct CloudAttributes {
     pub overlap: f32,
     /// `Seed`. `0.0` when unset, which is what every shipped instance is; the
     /// original re-rolls a random seed at construction time in that case
-    /// rather than using `0` itself. Not reproduced here - see the doc page.
+    /// rather than using `0` itself. `oag_render::cloud` uses a chosen seed in that case - see its doc.
     pub seed: f32,
     /// `SpriteRadius`.
     pub sprite_radius: f32,

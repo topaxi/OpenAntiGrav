@@ -122,3 +122,24 @@ fn de_konstruct_s_cloud_fields_match_the_original_s_ram_for_its_seeds() {
         }
     }
 }
+
+/// `05_Track`'s reversed layout (de Konstruct White) authors the same three
+/// groups over the same cubes: live on a boot of that layout, 46, 46 and 277
+/// records, the same counts as forward.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_reversed_layout_builds_the_same_three_fields() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+    let blob = archives
+        .read_name(r"Data\Environments\05_Track\track_reversed.vex")
+        .expect("track_reversed.vex");
+    let nodes = vex::nodes(&blob).expect("nodes");
+    let counts: Vec<usize> = cloud::cloud_groups(&blob, &nodes)
+        .iter()
+        .map(|group| group.cubes.iter().map(field::record_count).sum())
+        .collect();
+    assert_eq!(counts, [46, 46, 277]);
+}

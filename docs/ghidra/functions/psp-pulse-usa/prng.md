@@ -252,3 +252,12 @@ loop finds the two seed fills.
   `BOOT.BIN`. No runtime leg, which caps the particle generator at 92: the
   algorithm is read instruction by instruction, but no buffer dump from a
   running game has been compared against a port of it.
+- 2026-10-04 (`pulse-clouds`): the runtime leg for the particle generator. A
+  numpy port of `PsysRng_Reseed`/`PsysRng_Next` and the two range helpers,
+  fed each `cloudGroup`'s seed out of a running original's RAM, reproduced
+  every record those groups drew (369 per boot, four boots; see
+  [clouds.md](clouds.md)). The port this page's Consequences section
+  anticipated now exists as `oag_render::ranrot`, under
+  [ADR-0056](../../../architecture/adr/0056-a-render-side-port-of-the-particle-generator.md).
+  The rows above keep their confidences; the runtime match would support
+  raising them.

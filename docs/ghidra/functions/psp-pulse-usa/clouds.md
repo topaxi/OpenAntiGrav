@@ -25,7 +25,10 @@ first read of its `+4` slot suggests.
 | `cloudGroup`'s draw is a rotating, camera-facing billboard per instance, its corners turned by `g_camera_roll - phase` in view space | **92** - read to the instruction and matched live on 28 sprites; see below |
 | Each sprite's rotation rate is a per-instance random draw, not a shared constant | **88** - `Psys_RandFloatRange` call read directly |
 | The GE state for the draw (blend, depth, fog, lighting, cull) | **90** - read off `CloudGroup_ApplyDrawState`'s literal `Gu_*` calls |
-| Each sprite gets one flat baked colour, not a per-vertex gradient | **82** - the bake and the average are read; the ramp's *input* is not (see [Open](#open)) |
+| Each sprite gets one flat baked colour from a ramp over the field's height, sampled at its bottom and top edge and averaged | **93** - read, and every baked colour word reproduced on four boots |
+| A cube is a box: `volume * 0.1` records scattered `+/- 5` units along its own axes, half-size `(R +/- R*var) * 10 * scale` | **93** - read to the instruction, every record reproduced from the seed on four boots; see [the field](#the-field-cloudgroup_buildfield-0x08933c1c-and-the-cubes-records) |
+| A group builds from every cube in its subtree, so a nested group's cube draws two fields | **88** - the walk is read and two live groups shared one cube |
+| Each sprite draws one cell of a 4x2 atlas over the texture; shipped cubes use cells 6 and 7 | **90** - tables read, UVs read live |
 
 ## `CloudCube_RegisterClass` (`0x08932138`) and `CloudGroup_RegisterClass` (`0x0893471c`)
 
@@ -178,6 +181,139 @@ The constructed instance is appended to a global list
 `CloudGroup_Draw` below iterates - so multiple `cloudGroup` instances draw
 through one shared pass rather than each drawing itself independently.
 
+## The field: `CloudGroup_BuildField` (`0x08933c1c`) and the cube's records
+
+**Confidence 93** for every step below (read to the instruction 2026-10-04,
+`pulse-clouds`, and reproduced exactly from live RAM on four boots; see
+[Live check](#live-check-four-boots-every-record)). Not 95: one binary.
+
+A `cloudCube` is not a sprite. It is a box the group scatters sprite records
+through, and a `cloudGroup` builds one field from every cube it collects.
+
+### Collection: `Vex_CollectNodesOfClass` (`0x08a72d1c`), 88
+
+`CloudGroup_Init` calls `FUN_08a72d1c(group, group+0x78, 0x20, &count, probe)`
+with `probe`'s class tag set to `cloudCube`'s (`FUN_08a72d04`). The function
+appends the node when its `+4` tag matches and there is room, then recurses
+into its first child (`+0x10`) and each sibling (`+0xc`). It is a preorder
+walk of the group's **whole subtree**, up to 32 cubes, and the count lands in
+`group+0x74`. A group that collects no cube is queued for destruction.
+
+**A nested group's cubes are collected by every group above them.** On
+`05_Track` the outer group (`0x09790220` in one boot) and the group inside it
+(`0x097903e0`) both held the same single cube, and each built its own 46
+records from its own seed and coloured them from its own ramp. That cube
+draws two fields. The cube's own `+0x74` points to its nearest group (the
+inner one), and that pointer is where the half-size's `SpriteRadius` and
+`SpriteRadiusVar` come from.
+
+The name's confidence is 88 rather than 93: the walk is read and the two
+groups were seen sharing the cube, but nothing else calls it with a different
+class.
+
+### `CloudCube_Init` (`0x08931b28`) and `CloudCube_CountRecords` (`0x08931bec`)
+
+`CloudCube_Init` measures the length of each of the first three rows of the
+parent's matrix (`FUN_089451dc(parent)`, `vdot_t` then `vsqrt_s`) into
+`+0x7c/+0x80/+0x84`, and stores their product, the cube's volume, at `+0x78`.
+`CloudCube_CountRecords` stores `(int)(volume * 0.1)` (`DAT_08a88a90` reads
+`0x3dcccccd`) at `+0x88`. Live: `05_Track`'s first cube has row lengths
+`7.76697` on all three axes, volume `468.55`, and authors 46 records.
+
+### `CloudCube_ScatterRecords` (`0x08931c3c`)
+
+Read off the disassembly, with `f12 = 10.0` from `DAT_08a88a94` (`0x41200000`)
+and `f24 = 0.5`. For each of the cube's records:
+
+```text
+u = Psys_RandFloatRange(-sx, sx) / sx * 10 * 0.5     ; one draw per axis, x then y then z
+position = row0 * ux + row1 * uy + row2 * uz + row3  ; the cube's world matrix (+0x30)
+half     = (R + Psys_RandFloatRange(-R*var, R*var)) * (payload.scale * 10)
+record.+0x14 = the cube's index in the group           ; -1 once culled
+```
+
+`R` and `var` are `SpriteRadius` and `SpriteRadiusVar` of the cube's `+0x74`
+group. So a record lands anywhere in a box `+/- 5` units along each of the
+cube's own axes before its scale: the editor's cube is 10 units on a side.
+On `05_Track`, `R = 4`, `var = 0.2` and `scale = 1` give half-sizes in
+`[32, 48]`. That is the "about 9.4" factor this page's earlier Open item
+measured: it is 10 times the authored radius, give or take the variance.
+
+The routine also stores a `(2, 2, 2)` vector (`5 * 0.4`) on the stack and
+never reads it.
+
+### `CloudGroup_BuildField` (`0x08933c1c`), in order
+
+1. Sum the cubes' record counts into `+0x184` and allocate the records.
+2. `PsysRng_Reseed(group.Seed)`.
+3. `CloudCube_ScatterRecords` per cube, in collection order.
+4. `CloudGroup_CullOverlappingSprites` (below).
+5. Measure the field's bounds into `+0x100` (min) and `+0x110` (max): each
+   record's position `+/- half`. **The live-record test here reads record 0's
+   flag on every pass** (`0x08933d74`: `lw a0,0x14(a0)` off the array base,
+   with no index). Record 0 is never culled, so culled records widen the
+   bounds too. The live bounds matched that and not the survivors'. Their
+   centre goes to `+0x120`.
+6. `CloudGroup_BuildDisplayList` (below), which continues the same stream.
+
+### The atlas: `CloudGroup_BuildAtlasUvs` (`0x089322f8`), 90
+
+Called once from `CloudGroup_Init`, it fills `0x08af28a8` with eight cells of
+four packed UVs each: cell `i` covers `u` from `(i % 4) * 0.25` to `+0.25`, and
+`v` from `(i / 4) * 0.5` to `+0.5`. That is a 4x2 grid over the 128x64 cloud
+texture. The corners are listed as `(u0, v1), (u0, v0), (u1, v1), (u1, v0)`.
+Each UV is packed by `FUN_0893226c` as `u * 32767` in the low half and
+`v * 32767` in the high half (GE 16-bit texture coordinates).
+
+`CloudGroup_BuildDisplayList` picks a cell per sprite by the cube's payload
+`kind` (`**(cube+0x64)`), from four small tables read with `read_memory`:
+
+| `kind` | Draws, in order | Cells |
+| --- | --- | --- |
+| 0 | `Psys_RandIntRange(0, 3)`, phase `(0, 2*PI)`, rate `(-0.002, 0.002)` | `0x08ac01bc` = 0, 1, 2, 3 |
+| 1 | `Psys_RandIntRange(0, 1)`, phase `(0, 2*PI)`, rate 0 | `0x08ac01cc` = 4, 5 |
+| 2 | `Psys_RandIntRange(0, 1)`, phase `(0, 2*PI)`, rate `(-0.002, 0.002)` | `0x08ac01d4` = 6, 7 |
+| 3 | `Psys_RandIntRange(0, 0)`, phase `(-PI/16, PI/16)`, rate 0 | `0x08ac01dc` = 0 |
+| other | no draw | whatever the record holds |
+
+Every shipped cube is `kind == 2`, so every shipped cloud draws the right half
+of the texture's bottom row. The live vertex buffer confirms both: variant 6
+sprites carry `u` 0.5 to 0.75 and `v` 0.5 to 1.0, and variant 7 sprites
+carry `u` 0.75 to 1.0. Among the positions read live at `bank1`
+(`roll2.json`), the cell's bottom-left texel `(u0, v1)` sits on the corner at
+`(-h, -h)` before the rotation, `(u0, v0)` on `(-h, h)`, `(u1, v1)` on
+`(h, -h)` and `(u1, v0)` on `(h, h)`.
+
+### Live check: four boots, every record
+
+`data/scratch/pulse-clouds/reproduce.py` ports `PsysRng` and the steps above
+in numpy `float32`, takes each group's seed and its cubes' matrices out of a
+RAM dump, and compares against what the original built:
+
+| Dump | Layout | Seeds | Authored | Kept | Result |
+| --- | --- | --- | --- | --- | --- |
+| `pulse-bloom-roll/ram0.bin` | `05_Track` forward | 2079, 6378, 9169 | 46, 46, 277 | 14, 14, 74 | all equal |
+| `ram1.bin` | forward | 1513, 9888, 8684 | 46, 46, 277 | 12, 13, 78 | all equal |
+| `ram2.bin` | reversed | 6730, 1161, 4862 | 46, 46, 277 | 10, 14, 84 | all equal |
+| `ram3.bin` | forward | 9259, 3322, 5961 | 46, 46, 277 | 13, 13, 75 | all equal |
+
+"All equal" means: every authored position and half-size to within
+`1.2e-4` units, the culled set exactly, and every kept sprite's cell, rate and
+initial phase. Every baked colour word is equal too, so the ramp below is
+evaluated exactly. The phases had not advanced in these dumps. Each dump was
+taken with the camera away from the clouds, so the draw that advances them
+had not run (see [`CloudGroup_Draw`](#cloudgroup_draw-0x0893280c)).
+
+**The four cubes near x = -1000 to -1120 are the third group**, and the
+original builds and keeps them (`0x097a9b50` in the first boot: 277 authored,
+74 kept). The earlier lane's scan missed it because its filter required at
+most 64 authored records.
+
+The Rust port (`oag_render::cloud::field`) builds from our own parse of the
+track rather than the RAM's matrices.
+`crates/render/tests/cloud_field_ground_truth.rs` pins it against the first
+boot's values: counts, first and last records, cull, cells, rates and colours.
+
 ## `CloudGroup_Draw` (`0x0893280c`)
 
 **Confidence 92** (read to the instruction 2026-10-04, `pulse-bloom-roll`, and
@@ -301,7 +437,7 @@ is the display list `CloudGroup_Draw` calls. Per record:
 | `+0x10` | half-size | copied from the authored record (`SpriteRadius` +/- variance) |
 | `+0x14` | phase | `Psys_RandFloatRange(0, 2*PI)` - `0x40c90fdb` read back as **6.283185** |
 | `+0x18` | phase rate | `Psys_RandFloatRange(-0.002, 0.002)` - `0xbb03126f`/`0x3b03126f` read back as **+/-0.0020000001** |
-| `+0x1c` | texture-variant index | `Psys_RandIntRange` into a small UV sub-region table, keyed by `cloudCube.kind` (always the `kind==2` branch on every shipped instance) |
+| `+0x1c` | atlas cell | `Psys_RandIntRange` into a per-`kind` table of cells; see [the atlas](#the-atlas-cloudgroup_buildatlasuvs-0x089322f8-90). Drawn **before** the phase and rate |
 
 All three random draws happen **once, at display-list build time** (i.e. once
 per boot, like the `Seed` re-roll `CloudGroup_Init` already documents), not
@@ -351,8 +487,9 @@ see its own doc comment.
 
 ## `CloudGroup_BuildDisplayList` (`0x08933ec4`) bakes one flat colour per sprite
 
-**Confidence 82** for the mechanism, **not asserted** for what the ramp's
-input actually measures - see [Open](#open).
+**Confidence 93**: the mechanism is read, and the ramp's input is now read
+too (2026-10-04). Every baked colour word on four boots was reproduced from
+it exactly.
 
 Contrary to a first read of `hi_colour`/`mid_colour`/`lo_colour`/`midpoint` as
 a per-vertex gradient across the billboard quad, the baked vertex colour is
@@ -374,54 +511,46 @@ as an interpolation table with precomputed reciprocals) is structurally
 identical to this project's own `Fog` interpolation - not a coincidence, given
 `Fog_Disable`/`Fog_FindVolume` bracket the same draw.
 
+**The input is height within the field.** `+0x104` and `+0x114` are the `y`
+of the field's bounds that `CloudGroup_BuildField` writes (step 5 above):
+the lowest `y - half` and the highest `y + half` over every authored record,
+culled ones included. So `t = (y - min_y) / (max_y - min_y)`, clamped, and
+`+0x17c` (a repeat period) is `0` on every shipped group, which skips the
+wrap. Each channel of the average is multiplied by 255 and truncated, then
+packed with red in the low byte (`A << 24 | B << 16 | G << 8 | R`), the GE's
+8888 vertex colour.
+
 ## Open
 
-- **The original draws many more and much larger sprites than `oag_render::cloud`
-  does (live, 2026-10-04).** The two `cloudGroup` instances near de Konstruct's
-  section 34 each hold **46 authored records**, culled by `Overlap` to **14
-  drawn**. Their positions are scattered through a box about 175 units across.
-  The group's `+0x100`/`+0x110` read `(-330, -99, 284)` to `(-155, 62, 460)`, and
-  its `+0x120` reads `(-242, -18, 372)`. Their half-sizes are **32 to 47**.
-  `oag_render::cloud` draws one sprite per `cloudCube`, at the cube's centre,
-  with half-size `SpriteRadius` = **4**. The authored `4` times about `9.4`,
-  plus or minus `SpriteRadiusVar` `0.2`, fits the range, but the factor's
-  source is not read. Where the 46 records and their positions come from is the
-  next thing to read: `CloudGroup_Init` (`0x08933048`) or the slots it calls,
-  before `CloudGroup_CullOverlappingSprites`. Until that lands, our clouds are
-  4-unit specks, and the roll term above is correct but has nothing visible
-  to turn.
-- **The colour ramp's input variable is not resolved.** `CloudGroup_SampleColourRamp`
-  clamps some fraction derived from `(sample - +0x104) / (+0x114 - +0x104)` to
-  `[0, 1]`, and the two sample points passed to it differ only in world `y`
-  by `+/- half_size` - consistent with an altitude-like or distance-like input,
-  but the writer of `+0x104`/`+0x114` on the cloud instance was not traced in
-  this pass. **This module does not guess the axis** - see
-  `crates/render/src/cloud.rs`'s doc comment for what the renderer does
-  instead (one representative colour, not the ramp).
+- **The far-camera draw skip is not read.** Live, with the camera far from
+  the clouds (the start line, section 29), the phases did not advance and the
+  vertex buffer held uninitialised words. The test that skips the draw was not
+  traced. The next address is whatever calls a `cloudGroup` node's `draw`
+  slot (`0x08ad2a68`). `oag_render::cloud` draws and advances every group
+  every frame.
+- **No live A/B picture.** The field's values are reproduced from RAM. A
+  matched frame against PPSSPP's software renderer was not captured: placing
+  the craft near the clouds (track index about 3000) with
+  `psp-drive.py place` either was undone by the game's own reset or threw the
+  craft off the track, on two boots. The colour word at vertex `+4` of
+  `*(group+0x194)` can be zeroed in a paused emulator to hide the original's
+  clouds, which gives an A/B mask once a stable pose is found. Ours, from a
+  free camera at `(-158, -4, 239)` looking at the field, draws a steam bank
+  behind the wall.
 - **`FUN_0891e988`'s two integer arguments are not identified.** Forwarded
   unchanged to `FUN_088111cc`; plausibly a `Gu_TexFunc`-shaped call given its
-  position in the state list, not confirmed.
-- **The texture-variant sub-tables (`DAT_08ac01bc`/`DAT_08ac01cc`/`DAT_08ac01d4`/
-  `DAT_08ac01dc`) are not decoded.** Each holds UV sub-regions of the shared
-  `128x64` cloud texture, selected per sprite by `cloudCube.kind`; only the
-  `kind==2` branch (`DAT_08ac01d4`, a 2-entry table) is ever exercised by
-  shipped data. Not blocking a renderer that draws the whole texture per
-  sprite rather than a sub-region.
+  position in the state list, not confirmed. It decides how the vertex colour
+  combines with the texel, which only a picture can check.
 - **The eight `FUN_`-named slots beyond update/submit/draw/init on both
   tables** (`+0x54`, `+0x6c`, `+0x74`, `+0x84`) - not decompiled at all.
-- **`cloudCube`'s `kind` (always `2`) and `scale` (always `1.0`).** Ten
-  shipped instances give no variation to test a hypothesis against; whether
-  `kind` selects a sprite variant or `CloudGroup_Draw`'s per-record count is
-  something else entirely is open.
-- **`Seed`'s random draw is not reproduced.** Every shipped instance is
-  unset, so the original assigns a fresh `Psys_RandIntRange(1, 9999)` per
-  boot; this project's parser reports the authored `0.0` rather than
-  simulating that draw, which is the right default for a deterministic
-  reimplementation. A shipped cloud's *exact* jitter is therefore not
-  reproducible - but a cloud with a *known* seed now is: the generator is
-  read on [prng.md](prng.md), and the build reseeds it from `Seed`
-  immediately before the phase/rate/variant draws, so a port of
-  `PsysRng_Next` fed the same seed lands the same sprites.
+- **`Seed` is rolled per boot.** Every shipped group leaves it unset, so the
+  original takes `Psys_RandIntRange(1, 9999)` after reseeding from the
+  clock-seeded `rand()`. No boot's field can be predicted, only reproduced
+  once its seed is read. `oag_render::cloud::CHOSEN_SEEDS` are one boot's
+  three draws, chosen, not measured.
+- **The shared particle stream is not reproduced.** Building a group reseeds
+  the generator every emitter draws from. Ours gives each group its own
+  generator ([ADR-0056](../../../architecture/adr/0056-a-render-side-port-of-the-particle-generator.md)).
 - **Pure and PS2 parity not checked.** Pure's class-ID table is renumbered
   (`vex.md`), so `0x3d8`/`0x3d9` there would look for the wrong class
   entirely; a real check needs Pure's own table read first.
