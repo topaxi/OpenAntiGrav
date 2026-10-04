@@ -570,6 +570,18 @@ impl Session {
                 rect,
                 self.framebuffer.output_size(),
             );
+            // Pulse PSP's bloom over the HUD, as the original's queue order
+            // draws it: see `oag_game::race::Scene::composite_bloom`.
+            stage
+                .scene
+                .composite_bloom(&mut encoder, self.framebuffer.output(), rect);
+        }
+        // A race parked behind the menus has no HUD; its glow still lands,
+        // before the menu rows go on.
+        if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_ref()) {
+            parked
+                .scene
+                .composite_bloom(&mut encoder, self.framebuffer.output(), rect);
         }
 
         // **The menus draw here, after the resolve, rather than in the match

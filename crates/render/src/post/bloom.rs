@@ -376,18 +376,38 @@ impl Bloom {
     }
 
     /// Runs all four steps against the scene, reading its alpha as the glow
-    /// mask and adding the result back onto it.
+    /// mask and adding the result back onto it: [`Bloom::prepare`] then
+    /// [`Bloom::composite`] into the same view.
     ///
     /// The scene view is both sampled and written, which is legal because the
     /// two happen in different passes: the bright pass reads it, the composite
     /// writes it, and the blurs touch only the scratch buffers in between.
+    pub fn render(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: Frame<'_>,
+    ) {
+        self.prepare(device, queue, encoder, frame);
+        self.composite(encoder, frame.scene, frame.origin, frame.viewport);
+    }
+
+    /// The bright pass and the two blurs: reads the scene and its glow mask,
+    /// leaves the blurred glow in the scratch buffer for [`Bloom::composite`].
+    ///
+    /// Split from the composite because the original draws its HUD **between**
+    /// the two: its render queue is sorted ascending
+    /// (`Gfx_CompareQueueKeys`), the HUD's widgets sit at keys `0x52`..`0x6d`
+    /// and `Bloom_Draw` at `0x70`, so the haze is added over the HUD. A caller
+    /// that draws its HUD at a different resolution prepares here, draws the
+    /// HUD, then composites. See `bloom.md`, "The bloom draws over the HUD".
     ///
     /// **The scratch buffers stay a fixed 240x136 whatever the frame is drawn
     /// at** - see the module docs for why - so a short render extent changes
-    /// only where the bright pass reads and where the composite writes. The
-    /// blur radius therefore stays five texels of 240, about 2 % of the drawn
-    /// frame, at every render scale.
-    pub fn render(
+    /// only where the bright pass reads. The blur radius therefore stays five
+    /// texels of 240, about 2 % of the drawn frame, at every render scale.
+    pub fn prepare(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -397,8 +417,8 @@ impl Bloom {
         let Frame {
             scene,
             size,
-            origin,
             viewport,
+            ..
         } = frame;
 
         let (uv_scale, uv_max) = super::sub_rectangle(viewport, size);
@@ -504,19 +524,50 @@ impl Bloom {
             (0.0, 0.0),
             (BLOOM_WIDTH, BLOOM_HEIGHT),
         );
-        // The only pass that keeps what is already there - it is adding to it -
-        // and the only one that writes at the scene's resolution, into `scene`
-        // itself rather than a scratch buffer, so the only one whose corner
-        // has to track where the scene was actually drawn.
-        pass(
-            "bloom composite",
-            &self.composite,
-            &self.composite_group,
-            scene,
-            wgpu::LoadOp::Load,
-            origin,
-            viewport,
+    }
+
+    /// Adds the glow [`Bloom::prepare`] left in the scratch buffer onto
+    /// `target`, stretched over the rectangle at `origin` of size `viewport`.
+    ///
+    /// The only pass that keeps what is already there - it is adding to it -
+    /// and the only one that writes at the target's resolution, so the only
+    /// one whose corner has to track where the picture was actually drawn.
+    /// `target` need not be the scene: it is wherever the HUD went, at
+    /// whatever size, since the stretch is from the fixed 240x136 buffer.
+    pub fn composite(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        origin: (f32, f32),
+        viewport: (u32, u32),
+    ) {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("bloom composite"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&self.composite);
+        pass.set_viewport(
+            origin.0,
+            origin.1,
+            viewport.0.max(1) as f32,
+            viewport.1.max(1) as f32,
+            0.0,
+            1.0,
         );
+        pass.set_bind_group(0, &self.composite_group, &[]);
+        pass.draw(0..3, 0..1);
     }
 }
 
@@ -575,8 +626,10 @@ mod tests {
         assert_eq!((BLOOM_WIDTH * 2, BLOOM_HEIGHT * 2), (480, 272));
     }
     /// Runs the chain over a flat `rgb` / `alpha` scene and returns the
-    /// composite's mean red delta, or `None` with no adapter to run on.
-    fn mean_delta(rgb: u8, alpha: u8) -> Option<f32> {
+    /// composite's mean red delta, or `None` with no adapter to run on. With
+    /// `hud`, the target is overwritten with that flat grey (mask 4) between
+    /// [`Bloom::prepare`] and [`Bloom::composite`], and the delta is over it.
+    fn mean_delta(rgb: u8, alpha: u8, hud: Option<u8>) -> Option<f32> {
         const SIZE: (u32, u32) = (512, 272);
         let instance = wgpu::Instance::default();
         let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
@@ -602,37 +655,42 @@ mod tests {
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        let texels: Vec<u8> = (0..SIZE.0 * SIZE.1)
-            .flat_map(|_| [rgb, rgb, rgb, alpha])
-            .collect();
-        queue.write_texture(
-            scene.as_image_copy(),
-            &texels,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(SIZE.0 * 4),
-                rows_per_image: Some(SIZE.1),
-            },
-            wgpu::Extent3d {
-                width: SIZE.0,
-                height: SIZE.1,
-                depth_or_array_layers: 1,
-            },
-        );
+        let fill = |rgb: u8, alpha: u8| {
+            let texels: Vec<u8> = (0..SIZE.0 * SIZE.1)
+                .flat_map(|_| [rgb, rgb, rgb, alpha])
+                .collect();
+            queue.write_texture(
+                scene.as_image_copy(),
+                &texels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(SIZE.0 * 4),
+                    rows_per_image: Some(SIZE.1),
+                },
+                wgpu::Extent3d {
+                    width: SIZE.0,
+                    height: SIZE.1,
+                    depth_or_array_layers: 1,
+                },
+            );
+        };
+        fill(rgb, alpha);
         let bloom = Bloom::new(&device, format).expect("the pipelines build");
         let view = scene.create_view(&wgpu::TextureViewDescriptor::default());
+        let frame = Frame {
+            scene: &view,
+            size: SIZE,
+            origin: (0.0, 0.0),
+            viewport: SIZE,
+        };
         let mut encoder = device.create_command_encoder(&Default::default());
-        bloom.render(
-            &device,
-            &queue,
-            &mut encoder,
-            Frame {
-                scene: &view,
-                size: SIZE,
-                origin: (0.0, 0.0),
-                viewport: SIZE,
-            },
-        );
+        bloom.prepare(&device, &queue, &mut encoder, frame);
+        if let Some(hud) = hud {
+            queue.submit([encoder.finish()]);
+            fill(hud, 4);
+            encoder = device.create_command_encoder(&Default::default());
+        }
+        bloom.composite(&mut encoder, &view, (0.0, 0.0), SIZE);
         let readback = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("bloom test readback"),
             size: u64::from(SIZE.0 * SIZE.1 * 4),
@@ -670,7 +728,7 @@ mod tests {
             .map(|p| u64::from(p[0]))
             .sum();
         let mean = sum as f32 / (SIZE.0 * SIZE.1) as f32;
-        Some(mean - f32::from(rgb))
+        Some(mean - f32::from(hud.unwrap_or(rgb)))
     }
 
     /// **The mask stamp of `4` brightens nothing.** The original truncates
@@ -680,14 +738,29 @@ mod tests {
     /// on the same colour must still brighten the frame.
     #[test]
     fn the_opaque_stamp_adds_no_glow_and_a_glow_byte_does() {
-        let Some(stamped) = mean_delta(150, 4) else {
+        let Some(stamped) = mean_delta(150, 4, None) else {
             eprintln!("no GPU adapter: skipping");
             return;
         };
         assert!(stamped.abs() < 0.01, "a stamp of 4 added {stamped}");
-        let white = mean_delta(255, 4).expect("the same adapter");
+        let white = mean_delta(255, 4, None).expect("the same adapter");
         assert!(white.abs() < 0.01, "a stamp of 4 on white added {white}");
-        let glowing = mean_delta(150, 0xaf).expect("the same adapter");
+        let glowing = mean_delta(150, 0xaf, None).expect("the same adapter");
         assert!(glowing > 20.0, "a glow byte added only {glowing}");
+    }
+
+    /// **The haze lands on what was drawn after the bright pass read.** The
+    /// original's HUD sits between `Bloom_Draw`'s reads and its composite in
+    /// queue order (keys `0x52`..`0x6d` before `0x70`), and live, with the
+    /// composite poked off, the same HUD glyphs read `(111, 206, 168)` against
+    /// `(160, 251, 235)` with it on. A HUD drawn over a glowing scene after
+    /// [`Bloom::prepare`] must come out brighter than its own colour.
+    #[test]
+    fn the_composite_adds_over_a_hud_drawn_after_the_bright_pass() {
+        let Some(over_hud) = mean_delta(150, 0xaf, Some(60)) else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        assert!(over_hud > 20.0, "the HUD took only {over_hud} of glow");
     }
 }

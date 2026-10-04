@@ -11,6 +11,7 @@ use log::{debug, warn};
 mod absorb_overlay;
 mod absorb_shell;
 mod beam;
+mod bloom;
 mod boost_flare;
 mod clouds;
 mod effects;
@@ -282,6 +283,9 @@ pub struct Scene {
     /// Pulse PS2's own bloom, in place of [`Self::bloom`] over a PS2 race's
     /// glow mask. See `oag_render::post::ps2_bloom`.
     ps2_bloom: Option<oag_render::post::ps2_bloom::Ps2Bloom>,
+    /// Whether [`Self::bloom`] was prepared this frame and still owes its
+    /// composite: [`Scene::composite_bloom`], after the HUD.
+    bloom_pending: std::cell::Cell<bool>,
     /// Wipeout HD's post chain: the linear float scene target the whole race
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
     /// into the caller's own view. `None` for every other title, where the
@@ -872,6 +876,7 @@ impl Scene {
             build_cache,
             bloom,
             ps2_bloom,
+            bloom_pending: std::cell::Cell::new(false),
             hd,
             motion_blur,
             blur_half: std::cell::Cell::new(false),
