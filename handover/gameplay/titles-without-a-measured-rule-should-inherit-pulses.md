@@ -30,11 +30,17 @@ the survey is below; none was trivial enough to fix in that lane.
   holds the gantry's time in `[3.83, 5.25)` s from the release, so `GO` is lit on the step and
   loops 86 ticks, matching the capture's dark centres to two ticks
   (`docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`). **Still open from that read:**
-  - **HD's lap windows are not played**: by `ship+0x7810` (1 on the first lap), `[6.017, 9.3)`
-    otherwise, `[9.5, 9.9)` on `lap == total - 1`, `[12.35, 13.3)` on `lap == total` (the
-    branch that cues `FINAL_LAP`). Ours keeps looping `GO` after the line crossing. Needs HD's
-    asset states at those times read, `ship+0x7810` reconciled with `standing.lap`, and
-    `clip_to_panel`'s later-state draws put back. RE first, not ready to wire.
+  - ~~**HD's lap windows are not played**~~ closed 2026-10-04 (`hd-gantry-laps`): played by
+    `BoardWindow::of` (`race/gantry/board.rs`), lap 0 until the first crossing (read live on
+    RPCS3), board states measured on RPCS3 (FX-350 art, `FINAL LAP` strobe, chequered flag).
+    **Left from it:** (a) the `ship+0x7810` increment site is not found (no direct `stw`; the
+    value is rewritten every frame, so a GDB write does not stick; a `Z2` watch needs the patched
+    RPCS3, `just build-rpcs3-watchpoints`); the `0 -> 1` at the first crossing is inferred
+    (constructor `0x000ddd58` zeroes it, endrace reads `-1`), about 70. (b) Our chequered flag
+    reads grey where the original's is black and white: the board-shading gap in
+    `start-gantry.md` ("board's background is black"), not the clock. (c) A lap crossing was not
+    captured live; the windows were forced through the TOC floats instead
+    (`scripts/rpcs3-drive.py lapboard --window`).
   - **The start tick in code**: what runs `RaceManager_ResetGantryTime` (`0x00055488`) during
     a countdown. The capture bounds tick 70 from below only, and two cues point later: our
     backdrop is part way to green at tick 271 where the original is red, and the capture's
