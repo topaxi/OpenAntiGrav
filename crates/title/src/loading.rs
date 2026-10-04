@@ -68,6 +68,51 @@ pub struct Loading {
     /// this repository. `None` falls back to this build's own heading, which is
     /// what Pulse's screen has always drawn.
     pub caption: Option<&'static str>,
+    /// Which of [`Self::features`] a race may show, by the race's mode.
+    ///
+    /// `None` on a title that has no features, and on one whose rule is
+    /// unread: the screen then draws from every feature it has. See [`Deck`].
+    pub deck: Option<Deck>,
+}
+
+/// Which features a loading screen may draw, by the mode about to be raced.
+///
+/// **A law read out of Wipeout HD's loading-screen constructor**, not a
+/// rotation: the constructor reduces a `rand()` result modulo a range the mode
+/// selects, and the range is not always the same set - one mode skips an
+/// index. So the law is stored as the *set* of feature indices each mode may
+/// draw, indexing [`FeatureStyle::features`], and the screen draws uniformly
+/// from the set. See `oag_hd::loading::DECK`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Deck {
+    /// Modes with a deck of their own: `(mode id, feature indices)`.
+    ///
+    /// The mode ids are the source executable's own, not any crate's enum.
+    pub modes: &'static [(u32, &'static [u8])],
+    /// Every other mode's deck when the source carries the Fury content.
+    pub otherwise_fury: &'static [u8],
+    /// Every other mode's deck when it does not.
+    pub otherwise_base: &'static [u8],
+    /// Whether this source carries the Fury content, which picks between the
+    /// two decks above.
+    pub fury_content: bool,
+}
+
+impl Deck {
+    /// The feature indices a race in `mode` may show.
+    ///
+    /// `None` mode - a screen not covering a race - gets every index either
+    /// default deck names, so the boot screen is not narrower than a race's.
+    #[must_use]
+    pub fn indices(&self, mode: Option<u32>) -> &'static [u8] {
+        let otherwise = if self.fury_content {
+            self.otherwise_fury
+        } else {
+            self.otherwise_base
+        };
+        mode.and_then(|id| self.modes.iter().find(|(own, _)| *own == id))
+            .map_or(otherwise, |(_, deck)| deck)
+    }
 }
 
 /// The two entries the procedural wave needs.
@@ -116,11 +161,12 @@ pub struct Palette {
     pub ink: &'static str,
     /// The accent - Fury's red, the base game's pale blue. One element.
     pub accent: &'static str,
-    /// The one translucent colour, read once and **not identified**.
+    /// The one translucent colour: the **unfilled dots of the progression
+    /// bar**, with the accent filling them from the left.
     ///
-    /// On the served archive it is a half-alpha dark grey, which is the shape a
-    /// bar trough has and is why this build draws it as one - a hypothesis at
-    /// confidence 55, recorded as such. See
+    /// On the served archive it is a half-alpha dark grey. Identified on
+    /// 2026-10-04 from a live frame of the original's fade-in, confidence 88;
+    /// it was a hypothesis at 55 before. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
     pub dim: &'static str,
 }
@@ -170,15 +216,17 @@ pub struct FeatureStyle {
 pub struct Feature {
     /// The archive entry holding the illustration.
     pub image: &'static str,
-    /// The string table id of the feature's name, or `None` where the id has
-    /// not been recovered.
+    /// The string table id of the feature's name, or `None` where a title
+    /// has no name for one.
     ///
-    /// `None` is a real state rather than a gap waiting to be filled: two of
-    /// HD's five have an unambiguous `FE_*` id and three do not, and guessing
-    /// between the candidates would be putting a name on screen this project
-    /// cannot vouch for. A feature with no title id draws its description
-    /// alone.
+    /// Every one of Wipeout HD's five is named since 2026-10-04, when the
+    /// text builder's own slots were read; three of them reuse ids from other
+    /// namespaces (`MAN_2_BR`, `MAN_2_SS`, `IG_HUD_ABSORB`).
     pub title: Option<&'static str>,
     /// The string table id of the paragraph under it.
     pub description: &'static str,
+    /// The string table id of the heading over the paragraph, which is not the
+    /// same word on every feature: the original draws `FE_INSTRUCTIONS` over
+    /// four and `ONL_CON_DESC` over Pilot Assist.
+    pub heading: Option<&'static str>,
 }

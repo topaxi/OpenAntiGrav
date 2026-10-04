@@ -69,58 +69,66 @@ languages carries the id.
 
 ### Five features, in two stylings, all ten on the disc
 
-| feature | image (base / Fury) | title id | description id |
-| --- | --- | --- | --- |
-| Barrel Roll | `Barrel_Roll[_fury].gtf` | *unrecovered* | `FE_BR_INST` |
-| Side Shift | `Side_Shift_Tap[_fury].gtf` | *unrecovered* | `FE_SS_INST` |
-| Pilot Assist | `Pilot_Assist[_fury].gtf` | `FE_PILOT_ASSIST` | `FE_PA_INST` |
-| Absorb | `Absorb[_fury].gtf` | *unrecovered* | `FE_ABSORB_INST` |
-| Flip | `Flip[_fury].gtf` | `FE_FLIP` | `FE_FLIP_INST` |
+| index | feature | image (base / Fury) | title id | heading id | description id |
+| ---: | --- | --- | --- | --- | --- |
+| 0 | Barrel Roll | `Barrel_Roll[_fury].gtf` | `MAN_2_BR` | `FE_INSTRUCTIONS` | `FE_BR_INST` |
+| 1 | Side Shift | `Side_Shift_Tap[_fury].gtf` | `MAN_2_SS` | `FE_INSTRUCTIONS` | `FE_SS_INST` |
+| 2 | Pilot Assist | `Pilot_Assist[_fury].gtf` | `FE_PILOT_ASSIST` | `ONL_CON_DESC` | `FE_PA_INST` |
+| 3 | Absorb | `Absorb[_fury].gtf` | `IG_HUD_ABSORB` | `FE_INSTRUCTIONS` | `FE_ABSORB_INST` |
+| 4 | Flip | `Flip[_fury].gtf` | `FE_FLIP` | `FE_INSTRUCTIONS` | `FE_FLIP_INST` |
 
-The order is the executable's, not this project's arrangement. `FE_PA_INST` is
-**verbatim** the paragraph in the screenshot, which is what fixes the whole
-column: the other four are its immediate namesakes in the same table.
+**Every cell is read off the executable** (confidence 92), no longer inferred
+from namesakes: the illustration loader and the text builder each index their
+own TOC slots by the one `Feature type` field, and
+[loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md) lists
+the slots. The three title ids this page used to leave unrecovered were never
+`FE_`-namespaced - the screen reuses `MAN_2_BR`, `MAN_2_SS` and `IG_HUD_ABSORB`.
+`ONL_CON_DESC` is the heading over Pilot Assist's paragraph, which is why that
+frame reads `DESCRIPTION` and the others `INSTRUCTIONS`.
 
-**Three title ids are left unrecovered rather than guessed.**
-`FE_PILOT_ASSIST` and `FE_FLIP` are unambiguous — right namespace, exact words.
-There is no `FE_BR`, `FE_SS` or `FE_ABSORB`; the strings holding the right words
-are `MAN_2_BR`, `MAN_2_SS`/`OPT_CTRL_SS` and `IG_HUD_ABSORB`/`MSC_ABSORB`, and
-choosing among them would put a name on screen this project cannot vouch for. A
-feature with no title id draws its description alone.
+Two live RPCS3 frames pin the index from outside: `Feature type == 1` over a
+Side Shift screen and `== 2` over Pilot Assist, each against its own boot's
+screenshot.
 
 **The `_fury` half is a styling, not different content.** `OPT_FE_STYLE` offers
-exactly `HD` and `FURY`, and the disc ships every illustration twice —
-white-and-blue and black-and-red — with the same two strings behind both. That
-is the axis `settings.display.front_end_style` offers, defaulting to the base
+exactly `HD` and `FURY`, and the disc ships every illustration twice -
+white-and-blue and black-and-red - with the same strings behind both. That is
+the axis `settings.display.front_end_style` offers, defaulting to the base
 game's. Asserted in
 `every_feature_illustration_is_on_the_disc_in_both_stylings`, which checks all
 ten resolve and that the Fury name is the base name plus a suffix.
 
 ### The feature is a random draw, and the deck is the race mode's
 
-Read out of the screen's own constructor —
-[loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md), which
-is also where the four colours below come from. `Feature type == %i` reports
-`object+0x444`, and that field is a counter reduced modulo a range the race mode
-picks: `% 5` on the two Eliminator modes, `% 3` on two more, a fixed `1` on one,
-`% 2` on another, and `% 3` or `% 4` otherwise.
+Read out of the screen's own constructor -
+[loading-screen.md](../ghidra/functions/ps3-hdfury-eu/loading-screen.md).
+`Feature type == %i` reports `object+0x444`, set from `rand()` reduced modulo a
+range the mode picks, and the range is a **set of indices**, not always a
+prefix:
 
-So it is neither a rotation nor a fixed choice, and this section's earlier claim
-that "what drives that number has not been read" is superseded. The mode is
-`g_GameState`'s, and eleven of its twenty-two ids are now named too - see
-[mode-manager.md](../ghidra/functions/ps3-hdfury-eu/mode-manager.md#the-mode-enum-22-ids-eleven-of-them-named),
-which this screen's question is what prompted.
+| mode id | what it is | indices |
+| ---: | --- | --- |
+| `8`, `0x14` | `SPElimination`, `MPElimination` | `0 1 2 3 4` |
+| `0xd`, `0x15` | unnamed, `MPArcade` | `0 1 3` |
+| `0xe` | unnamed | `1` |
+| `6` | unnamed | `0 1` |
+| otherwise (`3` `SPArcade`, `5` `SPTimeTrial`, `4` `SPTournament`) | | `0 1 2 3`, or `0 1 2` without the Fury content |
 
-**This build draws too.** `Screen::new` picks one per screen from a seeded
-`Rng`, varied by how many races the run has launched - a counter rather than a
-clock, so a run is reproducible and a capture of this screen is stable. All five
-illustrations are loaded into the one sheet the screen draws from, because the
-original picks per screen and the disc is read once per boot.
+The last row's width is a byte at `0x00b979fd`, the **Fury-content flag**
+(`00 01 00 00` at `0x00b979fc` read live on the EU Fury disc, so four).
+`FUN_006762f8` is `rand()`.
 
-**From all five rather than the mode's own deck.** Mapping this project's race
-modes onto the twenty-two ids `g_GameState` carries is a separate inference, and
-only eleven of those ids are named. Drawing from everything the title ships is
-the honest approximation of a deck whose size this build cannot pick.
+**This build draws from the same deck.** `oag_hd::loading::DECK` carries the
+law, and `Screen::for_mode` draws uniformly from the mode's set with a seed
+the run's race count varies - a counter rather than a clock, so a run is
+reproducible. Tests in `loading/deck_tests.rs` fail if the draw ignores the
+mode: a single race never shows Flip, Eliminator shows all five, `0xd` skips
+Pilot Assist.
+
+**Chosen, not measured:** Speed Lap and Zone have no named executable id (they
+are among the seven unnamed ones), so they draw from the default deck. The
+source's Fury flag is `true` for every HD source this build opens, which is
+the value measured on the one disc in hand.
 
 ### The four colours are the disc's, and their roles are usage counts
 
@@ -147,9 +155,10 @@ screen variant: `HD_BG` **once**, `HD_Grey` about **ten** times, `HD_Blue`
 **once**, `HD_LightGrey` **once**. One ground, one workhorse and two
 single-element colours — and `HD_Grey` is the only one of the four that is a
 legible ink against both grounds. So everything written and every mark drawn is
-`HD_Grey`, the accent is `HD_Blue`, and `HD_LightGrey` is drawn as the bar's
-trough on a **hypothesis** (it is the one translucent colour, and a trough is
-the one element that shape fits) at confidence 55.
+`HD_Grey`, the accent is `HD_Blue`, and `HD_LightGrey` is the **unfilled dots of
+the progression bar** (confidence 88, raised from 55 on 2026-10-04): a live
+frame caught during the fade-in shows the whole bar as dark translucent dots
+and the filled part as `HD_Blue` dots on the same grid.
 
 Confidence **80** on the rest of the roles, up from 60 when they were a reading
 of a screenshot alone. See
@@ -255,6 +264,11 @@ Three departures, each deliberate:
   [race-load-transition.md](../architecture/race-load-transition.md) and
   [Still unread](#still-unread) for the real fill.
 
+Since 2026-10-04 the feature's **name sits over the illustration and its
+heading (`INSTRUCTIONS` or `DESCRIPTION`) over the prose, in one row**, as in
+the original; before that the name was drawn alone over the prose and no
+heading was drawn, because its id was unread.
+
 And the panels are two columns of this build's proportions rather than the
 original's exact halves: our grid is 480 wide where HD's is 1920, and prose in
 the right-hand half of a 480-wide screen wraps to a column three words across.
@@ -323,12 +337,6 @@ on a modal dialog.
 - **Seven of the twenty-two mode ids** - `0`, `6`, `7`, `11`, `13`, `14`, `15`,
   the ones with no `ModeManager` of their own. Three of them pick a feature
   range, so they are real modes rather than gaps.
-- **What `HD_LightGrey` colours.** One element per variant, translucent, drawn
-  here as the bar trough on a confidence-55 hypothesis.
-- **Whether `FUN_006762f8` is a random source or a frame counter**, and the byte
-  at `*0x00b979fc + 1` that decides whether a non-Eliminator deck is three or
-  four - the arithmetic is `((byte - 1) >> 31) + 4`, so four when it is at least
-  one.
 - **`LOADING SCREEN TYPE type == %i`**, observed only at 0. It sits with
   `scePresents.gtf`, the twelve `presents_<language>.gtf` files and the cut demo
   still, so more than one type exists and the presents screens may be among
@@ -337,4 +345,5 @@ on a modal dialog.
   draws no bar for a race load because it has no honest number to fill it with —
   `race::load` reports no progress. That is a gap this project could close on its
   own terms rather than a recovery.
-- **Three of the five feature title ids**, above.
+- **The Fury-content flag's writer**, whose value is read (`1`) and whose
+  readers are four; see loading-screen.md for the next addresses to try.

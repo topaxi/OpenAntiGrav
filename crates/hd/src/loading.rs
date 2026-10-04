@@ -106,75 +106,157 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     chrome: CHROME,
     palette: Some(PALETTE),
     caption: Some(CAPTION),
+    deck: Some(DECK),
 };
 
-/// The five features the screen rotates through, **in the order the executable
+/// The five features the screen draws from, **in the order the executable
 /// names them**.
 ///
-/// That order is not this crate's arrangement: the ten entries sit in one run
-/// in `EBOOT.elf`, `_fury` and plain alternating, and `Feature type == 2` on
-/// the `TTY.log` picks out `Pilot_Assist` - which is what both a screenshot of
-/// a running Fury race and this project's own RPCS3 capture show on screen.
-/// So the index is the position in this list, corroborated twice.
+/// The index is the one `Feature type == %i` reports. All three of its
+/// consumers agree on it, which is what makes it a measurement rather than a
+/// reading: `LoadingScreen_Construct` stores it at `object+0x444`, the
+/// illustration loader `0x002b86a0` indexes the ten `.gtf` slots by it, and the
+/// text builder `0x002b7cd0` indexes the title, heading and paragraph ids by it.
+/// Two live frames pin it from the other side: an RPCS3 boot logged
+/// `Feature type == 1` over a Side Shift screen, another `== 2` over Pilot
+/// Assist.
 ///
 /// **The plain entries rather than the `_fury` ones.** Each feature ships
 /// twice, the same axis `OPT_FE_STYLE` selects everywhere else on this title -
-/// black-and-red for Fury against the base game's white-and-blue. This build
-/// has no row for that setting yet, so it takes the base game's, the same way
-/// [`BACKDROP`] and [`crate::names::FRONT_END_MUSIC`] take theirs, and
-/// [`FEATURES_FURY`] records the other five rather than losing them.
+/// black-and-red for Fury against the base game's white-and-blue. The loader
+/// picks by `FrontEnd_IsFuryStyle()`, and so does this build, by
+/// `settings.display.front_end_style`.
 ///
-/// **Three of the five title ids are `None`, and that is a refusal rather than
-/// a gap.** `FE_PILOT_ASSIST` and `FE_FLIP` are unambiguous - the `FE_`
-/// namespace, the exact words on screen. There is no `FE_BR`, `FE_SS` or
-/// `FE_ABSORB`, so the other three titles come from somewhere else: the
-/// candidates that hold the right words are `MAN_2_BR`, `MAN_2_SS` /
-/// `OPT_CTRL_SS` and `IG_HUD_ABSORB` / `MSC_ABSORB`, and picking between them
-/// would be putting a name on screen this project cannot vouch for. See
-/// `docs/formats/hd-loading.md`.
+/// **All five title ids are read.** Three were left unguessed until 2026-10-04,
+/// when the text builder's own TOC slots were resolved: the names are
+/// `MAN_2_BR`, `MAN_2_SS` and `IG_HUD_ABSORB`, existing strings the screen
+/// reuses rather than `FE_`-namespaced ones of its own. The heading over the
+/// paragraph is `FE_INSTRUCTIONS` for four features and `ONL_CON_DESC` for
+/// Pilot Assist, which is why the same screen reads `INSTRUCTIONS` in one frame
+/// and `DESCRIPTION` in the next.
 ///
-/// Confidence **88** on the set and the order, **80** on the two named title
-/// ids, **95** on the five descriptions: `FE_PA_INST` is verbatim the paragraph
-/// in a screenshot of the running game, and the other four are its immediate
-/// namesakes.
+/// Confidence **92** on the set, the order and every id: slot-by-slot out of
+/// two functions' own TOCs, and two live frames agree on indices 1 and 2.
+/// Indices 0, 3 and 4 are read, not seen.
 pub const FEATURES: &[oag_title::loading::FeatureStyle] = &[
     oag_title::loading::FeatureStyle {
         name: STYLE_HD,
         features: &[
-            feature(r"Data\FE\Images\Barrel_Roll.gtf", None, "FE_BR_INST"),
-            feature(r"Data\FE\Images\Side_Shift_Tap.gtf", None, "FE_SS_INST"),
+            feature(
+                r"Data\FE\Images\Barrel_Roll.gtf",
+                "MAN_2_BR",
+                "FE_INSTRUCTIONS",
+                "FE_BR_INST",
+            ),
+            feature(
+                r"Data\FE\Images\Side_Shift_Tap.gtf",
+                "MAN_2_SS",
+                "FE_INSTRUCTIONS",
+                "FE_SS_INST",
+            ),
             feature(
                 r"Data\FE\Images\Pilot_Assist.gtf",
-                Some("FE_PILOT_ASSIST"),
+                "FE_PILOT_ASSIST",
+                "ONL_CON_DESC",
                 "FE_PA_INST",
             ),
-            feature(r"Data\FE\Images\Absorb.gtf", None, "FE_ABSORB_INST"),
-            feature(r"Data\FE\Images\Flip.gtf", Some("FE_FLIP"), "FE_FLIP_INST"),
+            feature(
+                r"Data\FE\Images\Absorb.gtf",
+                "IG_HUD_ABSORB",
+                "FE_INSTRUCTIONS",
+                "FE_ABSORB_INST",
+            ),
+            feature(
+                r"Data\FE\Images\Flip.gtf",
+                "FE_FLIP",
+                "FE_INSTRUCTIONS",
+                "FE_FLIP_INST",
+            ),
         ],
     },
     oag_title::loading::FeatureStyle {
         name: STYLE_FURY,
         features: &[
-            feature(r"Data\FE\Images\Barrel_Roll_fury.gtf", None, "FE_BR_INST"),
+            feature(
+                r"Data\FE\Images\Barrel_Roll_fury.gtf",
+                "MAN_2_BR",
+                "FE_INSTRUCTIONS",
+                "FE_BR_INST",
+            ),
             feature(
                 r"Data\FE\Images\Side_Shift_Tap_fury.gtf",
-                None,
+                "MAN_2_SS",
+                "FE_INSTRUCTIONS",
                 "FE_SS_INST",
             ),
             feature(
                 r"Data\FE\Images\Pilot_Assist_fury.gtf",
-                Some("FE_PILOT_ASSIST"),
+                "FE_PILOT_ASSIST",
+                "ONL_CON_DESC",
                 "FE_PA_INST",
             ),
-            feature(r"Data\FE\Images\Absorb_fury.gtf", None, "FE_ABSORB_INST"),
+            feature(
+                r"Data\FE\Images\Absorb_fury.gtf",
+                "IG_HUD_ABSORB",
+                "FE_INSTRUCTIONS",
+                "FE_ABSORB_INST",
+            ),
             feature(
                 r"Data\FE\Images\Flip_fury.gtf",
-                Some("FE_FLIP"),
+                "FE_FLIP",
+                "FE_INSTRUCTIONS",
                 "FE_FLIP_INST",
             ),
         ],
     },
 ];
+
+/// Which of the five a race may show, by the executable's own mode id.
+///
+/// Read out of `LoadingScreen_Construct` (`0x002b3bb0`), where
+/// `FUN_006762f8` - which is libc `rand()`, unseeded here and so a random
+/// source rather than a frame counter - is reduced modulo a range the mode
+/// picks. Read as **sets of indices**, because one deck is not a prefix:
+///
+/// | mode id | what it is | feature indices |
+/// | ---: | --- | --- |
+/// | `8`, `0x14` | `SPElimination`, `MPElimination` | `0 1 2 3 4` |
+/// | `0xd`, `0x15` | unnamed, `MPArcade` | `0 1 3` (skips Pilot Assist) |
+/// | `0xe` | unnamed | `1` always |
+/// | `6` | unnamed | `0 1` |
+/// | anything else | `3` = `SPArcade`, `5` = `SPTimeTrial`, ... | `0 1 2 3`, or `0 1 2` without the Fury content |
+///
+/// The last row's size is `((b - 1) >> 31) + 4` for the byte `b` at
+/// `0x00b979fd`: four when it is at least one. **That byte is the Fury-content
+/// flag**: three readers agree - `0x00029948` forces `FE_Style` to `HD` and
+/// skips `PlayedFuryBefore` while it is clear, `0x00183b38` skips
+/// `BackgroundAnimFury_Load` while it is clear, and `0x001a8f50` swaps a
+/// `0x8000000`-flagged menu row for `FE_FURY_REQUIRED` while it is clear. Its
+/// writer is unread (no store reaches it through its own TOC slot; it is passed
+/// by address to about twenty functions), but its **value was read live**:
+/// `00 01 00 00` at `0x00b979fc` on an RPCS3 boot of the EU Fury disc, so
+/// [`oag_title::loading::Deck::fury_content`] is `true`, and a base-game-only
+/// source would be `false`.
+///
+/// Setting the byte at `0x009384e1` sends every mode to the last row. Its
+/// reader is `LoadingScreen_Construct` alone, so it is not modelled.
+///
+/// Confidence **88**: the moduli and branch targets are in the decompile and
+/// the last row's size is corroborated live (`Feature type == 3` was logged
+/// in a `GetMode()==3` race, which a modulus of three could not produce).
+pub const DECK: oag_title::loading::Deck = oag_title::loading::Deck {
+    modes: &[
+        (8, &[0, 1, 2, 3, 4]),
+        (0x14, &[0, 1, 2, 3, 4]),
+        (0xd, &[0, 1, 3]),
+        (0x15, &[0, 1, 3]),
+        (0xe, &[1]),
+        (6, &[0, 1]),
+    ],
+    otherwise_fury: &[0, 1, 2, 3],
+    otherwise_base: &[0, 1, 2],
+    fury_content: true,
+};
 
 /// The base game's style, as `OPT_FE_STYLE`'s own first entry spells it.
 ///
@@ -192,13 +274,15 @@ pub const STYLE_FURY: &str = "FURY";
 /// One row of [`FEATURES`], so the table above reads as a table.
 const fn feature(
     image: &'static str,
-    title: Option<&'static str>,
+    title: &'static str,
+    heading: &'static str,
     description: &'static str,
 ) -> oag_title::loading::Feature {
     oag_title::loading::Feature {
         image,
-        title,
+        title: Some(title),
         description,
+        heading: Some(heading),
     }
 }
 

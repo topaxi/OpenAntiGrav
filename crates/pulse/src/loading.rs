@@ -41,6 +41,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     chrome: &[],
     palette: None,
     caption: None,
+    deck: None,
 };
 
 /// The disc entry holding the **26** `<PI_LoadingScreen>` tips.

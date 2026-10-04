@@ -416,6 +416,7 @@ impl Session {
             .race_options
             .clone()
             .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
+        let options_mode = options.mode;
         // **Refreshed here, not trusted from whenever `race_options` was last
         // built or mutated** (boot, RACE REMIX, a campaign cell launch): the
         // OPTIONS page's LANGUAGE row writes `self.settings.language` without
@@ -490,6 +491,7 @@ impl Session {
             &shell.sprites,
             &self.loading_assets,
             self.races_launched,
+            crate::loading::executable_mode(options_mode),
             self.trace,
             self.settings.language.as_deref(),
         )?;

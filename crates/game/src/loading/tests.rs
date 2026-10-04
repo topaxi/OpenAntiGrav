@@ -724,6 +724,8 @@ fn feature_screen() -> Screen {
                 dot: Some([0.0, 0.0, 8.0, 8.0]),
             }),
             features: vec![Feature {
+                slot: 2,
+                heading: Some("DESCRIPTION".to_string()),
                 title: Some("PILOT ASSIST".to_string()),
                 description: "Pilot Assist can aid your navigation.".to_string(),
             }],
@@ -761,6 +763,10 @@ fn the_feature_layout_draws_its_heading_its_title_and_its_prose() {
     assert!(
         drawn.iter().any(|line| line == "PILOT ASSIST"),
         "the feature's name: {drawn:?}"
+    );
+    assert!(
+        drawn.iter().any(|line| line == "DESCRIPTION"),
+        "and the heading over its prose: {drawn:?}"
     );
     assert!(
         drawn
