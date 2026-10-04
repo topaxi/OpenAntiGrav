@@ -44,6 +44,8 @@ fn insn(opcode: u8) -> Instruction {
         swizzles: [[0, 1, 2, 3]; 3],
         constant: None,
         const_slot: None,
+        negate: [false; 3],
+        cond: 0x727,
         end: false,
     }
 }
