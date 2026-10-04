@@ -51,14 +51,15 @@
 //! most defensible fixed point on a real, measured curve, not the curve
 //! itself.
 //!
-//! **`Overlap`-based culling is not applied.** `CloudGroup_CullOverlappingSprites`
-//! removes an authored sprite whose centre is closer than
-//! `(sizeA + sizeB) * (1 - Overlap)` to one already kept - a pure function of
-//! the authored data, unlike the two draws above, and the one omission here
-//! that is not forced by an unresolved reading. `05_Track`'s own five
-//! `cloudCube` leaves are few enough, and spread out enough, that this has no
-//! visible effect there; a track authoring a denser cloud field would need it
-//! implemented for real.
+//! **One small sprite per `cloudCube`, where the original draws a field of
+//! large ones.** Live, each of the original's `cloudGroup` instances near
+//! de Konstruct's clouds holds 46 sprite records scattered through a box about
+//! 175 units across, with half-sizes of 32 to 47. `Overlap` culls them to 14.
+//! This module draws one sprite at each cube's centre at the authored
+//! `SpriteRadius` (4). Where the original's records come from is not read yet.
+//! `clouds.md`'s Open section has the measurements and the next address. Until
+//! that lands, `CloudGroup_CullOverlappingSprites` has nothing to cull here, and
+//! is not applied.
 //!
 //! # Two halves, deliberately
 //!

@@ -1298,4 +1298,4 @@
 # 2026-10-04 pulse-mist lane: the mist overlay's camera motion, read live (weather.md)
 0x0897ed98	function	acosf	90	weather.md
 0x08ab10a8	data	g_camera_roll	88	weather.md
-
+0x0893280c	function	CloudGroup_Draw	92	clouds.md

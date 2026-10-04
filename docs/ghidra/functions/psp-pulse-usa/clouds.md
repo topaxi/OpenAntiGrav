@@ -22,7 +22,7 @@ first read of its `+4` slot suggests.
 | `cloudGroup`'s method table overrides `draw`; `cloudCube`'s does not | **90** |
 | `CloudGroup_Init` reads its colour ramp, sprite size, overlap and seed from the node's own named-attribute list, by name | **90** |
 | The shared cloud texture is `Data\Tex\Cloud\Wipeout_Clouds_D_128x64x4.mip` | **92** |
-| `cloudGroup`'s draw is a rotating, camera-facing billboard per instance | **85** - the shape and the rate's *source* are both read; see below |
+| `cloudGroup`'s draw is a rotating, camera-facing billboard per instance, its corners turned by `g_camera_roll - phase` in view space | **92** - read to the instruction and matched live on 28 sprites; see below |
 | Each sprite's rotation rate is a per-instance random draw, not a shared constant | **88** - `Psys_RandFloatRange` call read directly |
 | The GE state for the draw (blend, depth, fog, lighting, cull) | **90** - read off `CloudGroup_ApplyDrawState`'s literal `Gu_*` calls |
 | Each sprite gets one flat baked colour, not a per-vertex gradient | **82** - the bake and the average are read; the ramp's *input* is not (see [Open](#open)) |
@@ -178,45 +178,67 @@ The constructed instance is appended to a global list
 `CloudGroup_Draw` below iterates - so multiple `cloudGroup` instances draw
 through one shared pass rather than each drawing itself independently.
 
-## `CloudGroup_Draw` (`0x0893280c`) - left unnamed
+## `CloudGroup_Draw` (`0x0893280c`)
 
-**Confidence 65 - below this project's naming floor for the verb in a name,
-not for the finding itself.** Left as `FUN_0893280c`, per
-[ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md)'s "below 70,
-`_q`" rule read together with the project's stated preference to not dress a
-structural read as a verified one when the exact math is still open; the
-*shape* below is read directly off the disassembly, not guessed.
+**Confidence 92** (read to the instruction 2026-10-04, `pulse-bloom-roll`, and
+checked live the same day; below). Earlier passes left this `FUN_0893280c` at
+65 because the corner arithmetic had not been decoded. It is now.
 
-What is legible:
+```text
+0x08932830  f20 = g_camera_roll (0x08ab10a8), read once per call
+0x08932844  push: copy the current view matrix (param_2 + *(param_2+0x1694)*0x40 + 0x1410)
+0x089328cc  load 0x08a907a0 (the identity, read: 1,0,0,0 / 0,1,0,0 / 0,0,1,0 / 0,0,0,1)
+0x08932900  Gu_SetMatrix(1, identity)   ; view
+0x0893290c  Gu_SetMatrix(2, identity)   ; model
+0x08932914  s2 = *(inst+0x194)          ; the vertex buffer the display list draws
+0x0893291c  Gfx_BindTexture(DAT_08ac01b8)
+for each of *(inst+0x188) records r (stride 0x20, at *(inst+0x190)):
+  0x08932964  r.phase += r.rate          ; stored back, no dt
+  0x0893296c  a = r.phase - g_camera_roll
+  0x08932998  s, c = sin a, cos a        ; vmul by vcst 2/PI, then vsin/vcos
+  0x089329b4  centre = view * r.position ; vtfm4.q with the saved view matrix
+  0x089329c8  corners, h = r.half_size:
+              (-h,-h) -> (-(s+c), s-c) * h      (h,-h) -> (c-s, -(s+c)) * h
+              (-h, h) -> (s-c, s+c) * h         (h, h) -> (s+c, c-s) * h
+  0x08932a34  six vertices, 0x20 apart (first and last repeated), 0xc0 a sprite
+0x08932a70  Gu_CallList(*(inst+0x1a8)); pop the view matrix, Gu_SetMatrix(1, ...)
+```
 
-- Copies the camera's current view-matrix stack entry
-  (`param_2 + *(param_2+0x1694)*0x40 + 0x1410`) onto a small internal stack,
-  the same push/pop-a-matrix-stack idiom `exhaust.md` documents for
-  `ExhaustFlare_Draw`.
-- For each of `*(param_1+0x188)` sprite records (stride `0x20`, source array
-  at `*(param_1+400)`): advances a per-sprite phase accumulator
-  (`fVar25 = record.phase + record.rate`), computes `vsin_s`/`vcos_s` of
-  `(fVar25 - DAT_08ab10a8) * vcst_s(5)`, and uses the sin/cos pair to rotate a
-  quad's corner offsets before transforming them through the copied view
-  matrix (`vtfm4_q`) - a **rotating**, camera-facing billboard, not a static
-  one.
-- Binds the shared texture (`Gfx_BindTexture(DAT_08ac01b8)`) once for the
-  whole batch.
-- Writes output vertices at stride `0xc0` (192 bytes) per sprite - four
-  times a plausible 48-byte vertex, though the exact per-vertex field layout
-  (texcoord, colour, which of the two rotated basis vectors goes where) is
-  not traced field-by-field.
-- Restores the view-matrix stack (`Gu_SetMatrix(1, ...)`) afterwards.
+Each corner `(x, y)` lands at `(x cos t - y sin t, x sin t + y cos t)` with
+`t = g_camera_roll - phase`: the corners are rotated by **`roll - phase`** from
+the view's right towards its up, and they are added to the centre **after** the
+view transform. The quad is built in view space and drawn with identity view
+and model matrices. The view matrix moves the centre only, which is why the
+quad always faces the camera.
 
-This is why a future `oag_render` cloud module (not written yet) cannot
-simply reuse `exhaust::sprite`'s static camera-facing quad and call the
-recovery done: the
-original's billboard *rotates*, on a per-instance phase and a rate this page
-does not pin down (`DAT_08ab10a8` and `vcst_s(5)`'s exact values were read as
-addresses, not as the seconds-per-radian constant a renderer needs). A static
-substitute would be a real simplification, not a faithful reproduction, and
-this page says so rather than letting a renderer's own doc comment be the
-only place that is recorded.
+`g_camera_roll` is `Camera_SubmitScene`'s roll ([weather.md](weather.md), 88):
+the angle a level line in the world makes on the screen. Adding it puts the
+spin's zero on the world's horizon rather than on the screen's, so a cloud
+holds its orientation in the world while the camera banks, and spins only by
+its own `rate`. Earlier versions of this page called the global the camera's
+heading (yaw). By the mist lane's reading, and by the check below, it is the roll.
+
+**Live, de Konstruct Black (`05_Track` forward), PPSSPP software renderer,
+2026-10-04** (`data/scratch/pulse-bloom-roll/roll_check.py`). The two
+`cloudGroup` instances were found in RAM by their `+0x184/+0x188/+0x190/+0x194`
+shape (`0x09790220`, `0x097903e0`; 46 authored records, 14 drawn, each). At
+19 pauses near the clouds (section 34), steering both ways, the angle read off
+every drawn quad's vertices (`atan2` of its first edge) equals
+`phase - g_camera_roll` for all 28 sprites:
+
+- at a steady roll (`0.61`, `0.82`, `-1.03` rad) to `0.0000`-`0.0003` rad;
+- while the roll swings, to at most `0.046` rad, about one frame's change
+  in the roll. The pause can land between `Camera_SubmitScene` writing the
+  next roll and this draw reading it.
+
+The half-size read off the vertices equals the record's `+0x10` to two decimals.
+Not 95: one binary.
+
+**Where the camera is far from the clouds, the draw does not run.** At the
+start line (section 16) and section 29, the phases did not move across 20
+pauses and the vertex buffer held uninitialised words. This was never traced
+to a visibility test; the next address to read is whatever calls the `draw`
+slot (`0x08ad2a68`) for a `cloudGroup` node.
 
 ## `CloudGroup_ApplyDrawState` (`0x08932ab4`) and `CloudGroup_RestoreDrawState` (`0x08932b78`)
 
@@ -297,15 +319,10 @@ and it is a static literal read directly off the instructions
 `2/PI`, the VFPU's own radians -> quarter-turn conversion `vsin_s`/`vcos_s`
 require, not a speed; see `docs/psp/allegrex-vfpu.md`).
 
-`DAT_08ab10a8` (subtracted from phase before the trig) is not a second rate
-either: `Camera_SubmitScene` (`0x08878fe8`/`0x0887905c`/`08879064`) writes it
-once per frame as the camera's own current heading angle, derived from the
-camera basis via an `atan2`-shaped call (`FUN_0897ed98`) over its
-Gram-Schmidt-orthogonalised right vector. Subtracting it counter-rotates the
-billboard against the camera's own turning, so each cloud's slow spin holds a
-stable *world* orientation rather than appearing to spin faster or slower as
-the camera yaws - confidence **80**, one live-read global, one binary, no
-second corroboration attempted.
+`g_camera_roll` (`0x08ab10a8`, subtracted from the phase before the trig) is
+not a second rate either: it is the camera's roll, written once per frame by
+`Camera_SubmitScene` (`0x08878fe8`). See [`CloudGroup_Draw`](#cloudgroup_draw-0x0893280c)
+above for what it does to the quad (92, live).
 
 ## `CloudGroup_CullOverlappingSprites` (`0x08932eac`) and `CloudGroup_SpritesOverlap` (`0x08932f98`)
 
@@ -359,6 +376,20 @@ identical to this project's own `Fog` interpolation - not a coincidence, given
 
 ## Open
 
+- **The original draws many more and much larger sprites than `oag_render::cloud`
+  does (live, 2026-10-04).** The two `cloudGroup` instances near de Konstruct's
+  section 34 each hold **46 authored records**, culled by `Overlap` to **14
+  drawn**. Their positions are scattered through a box about 175 units across.
+  The group's `+0x100`/`+0x110` read `(-330, -99, 284)` to `(-155, 62, 460)`, and
+  its `+0x120` reads `(-242, -18, 372)`. Their half-sizes are **32 to 47**.
+  `oag_render::cloud` draws one sprite per `cloudCube`, at the cube's centre,
+  with half-size `SpriteRadius` = **4**. The authored `4` times about `9.4`,
+  plus or minus `SpriteRadiusVar` `0.2`, fits the range, but the factor's
+  source is not read. Where the 46 records and their positions come from is the
+  next thing to read: `CloudGroup_Init` (`0x08933048`) or the slots it calls,
+  before `CloudGroup_CullOverlappingSprites`. Until that lands, our clouds are
+  4-unit specks, and the roll term above is correct but has nothing visible
+  to turn.
 - **The colour ramp's input variable is not resolved.** `CloudGroup_SampleColourRamp`
   clamps some fraction derived from `(sample - +0x104) / (+0x114 - +0x104)` to
   `[0, 1]`, and the two sample points passed to it differ only in world `y`
