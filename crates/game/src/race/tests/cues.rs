@@ -284,6 +284,7 @@ fn every_cue_has_something_that_raises_it() {
     raised.extend(super::cue_endings::leach_fires_unlocked());
     raised.extend(super::cue_endings::shuriken_is_thrown());
     raised.extend(super::repulser::repulser_hits_a_craft());
+    raised.extend(super::perfect_start::perfect_start());
 
     for cue in Cue::ALL {
         assert!(
@@ -296,6 +297,7 @@ fn every_cue_has_something_that_raises_it() {
     // cannot make the loop above vacuous.
     for cue in [
         Cue::SpeedupPad,
+        Cue::Turbo,
         Cue::Collision,
         Cue::Absorb,
         Cue::ShieldActive,

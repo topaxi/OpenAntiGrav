@@ -294,6 +294,11 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
     // **Two more on 2026-10-04**, `REPULSOR` and `REPULSORHIT`, wired with the
     // Repulser; HD's own `weapons.bnk` carries both.
     //
+    // **`TURBO` on 2026-10-04**, the perfect start's cue
+    // (`ExhaustFlare_OnPerfectStart`, Pulse `0x08904fd4`): HD's `weapons.bnk`
+    // names it with 15 waveforms. Nothing raises it on HD, which applies no
+    // launch boost.
+    //
     // **This test is `#[ignore]`d, so `just` stayed green while it was stale.**
     // `disengaging` was added a commit earlier and this list was not updated
     // with it; the failure surfaced only on the next `--run-ignored all`. The
@@ -303,6 +308,7 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
         loaded,
         vec![
             "SPEEDUPPAD",
+            "TURBO",
             ".COLLISIONS",
             "ABSORB",
             "~SHIELD",

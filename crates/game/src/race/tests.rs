@@ -36,6 +36,7 @@ mod load;
 mod mode_override;
 mod models;
 mod pads;
+mod perfect_start;
 mod reconcile;
 mod repulser;
 mod respawn;

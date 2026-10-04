@@ -16,8 +16,9 @@ impl Cue {
     pub const COUNTDOWN: [Self; 3] = [Self::Ready, Self::Go, Self::ContElim];
 
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 40] = [
+    pub const ALL: [Self; 41] = [
         Self::SpeedupPad,
+        Self::Turbo,
         Self::Collision,
         Self::Absorb,
         Self::Engine,
@@ -95,7 +96,8 @@ impl Cue {
             | Self::ShurikenHit
             | Self::ShurikenTravel
             | Self::Repulsor
-            | Self::RepulsorHit => BankName::Weapons,
+            | Self::RepulsorHit
+            | Self::Turbo => BankName::Weapons,
             Self::ShieldActive
             | Self::Engaging
             | Self::Disengaging
@@ -155,6 +157,7 @@ impl Cue {
     pub fn name(self) -> &'static str {
         match self {
             Self::SpeedupPad => "SPEEDUPPAD",
+            Self::Turbo => "TURBO",
             Self::Collision => ".COLLISIONS",
             Self::Absorb => "ABSORB",
             Self::Engine => "~ENGINE",
@@ -325,6 +328,9 @@ impl Cue {
             // `craft+0x50` on one side and dry at volume `0x400` through
             // `FUN_0883e9b0` on the other. See [`Placement::CraftUnlessPlayer`].
             Self::SpeedupPad => Placement::CraftUnlessPlayer,
+            // `ExhaustFlare_OnPerfectStart` (`0x08904fd4`) is the same
+            // two-branch dispatcher on `racer+0x368`, with `"TURBO"`.
+            Self::Turbo => Placement::CraftUnlessPlayer,
             // `ExhaustFlare_Init` gives the note its own emitter at a quarter
             // of the craft radius, and [`Engine`] holds the voice, so this
             // never reaches the one-shot path.

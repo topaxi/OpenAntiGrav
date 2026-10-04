@@ -48,6 +48,9 @@ impl Race {
         // impact frame already one tick in. Measured 2026-09-30, see
         // `oag_render::camera::shake`.
         self.view.shake.advance(self.sim.dt);
+        // Before anything steps, so the perfect start's edge is a change
+        // across this tick - see `race::perfect_start`.
+        let launch_grades = self.launch_grades();
         // Every craft is in the original's grid state until the green light:
         // `Race_PlaceGrid` puts the field in state 0 and `Race_StartRacing`
         // moves it to state 1. Derived from the one countdown clock rather than
@@ -672,6 +675,9 @@ impl Race {
         // what makes the headless `capture` path - which calls only `tick` -
         // produce the same flare at the same tick count as the window does, and
         // it is the same reason the chase camera is advanced from here.
+        // The perfect start arms the flare the way a pad does, so before the
+        // exhausts take this tick's step, as the pad's arming is.
+        self.fire_perfect_starts(&launch_grades);
         self.advance_exhausts();
         // After the trails have taken this tick's sample, so a craft is tested
         // against the ribbon as it stands now rather than one tick stale.

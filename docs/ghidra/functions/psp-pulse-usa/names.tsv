@@ -1275,3 +1275,5 @@
 0x0882dc60	function	TimeTrial_Update	80	gantry-clock.md
 0x0882ddd8	function	TimeTrial_UpdateRacing	80	gantry-clock.md
 0x08b323c0	data	Billboard_Slots	80	gantry-clock.md
+0x08904fd4	function	ExhaustFlare_OnPerfectStart	85	perfect-start.md
+0x089044d8	function	ExhaustFlare_Construct	75	perfect-start.md
