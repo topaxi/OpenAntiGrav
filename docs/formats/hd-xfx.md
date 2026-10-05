@@ -226,8 +226,9 @@ units.
 * distance_factor)^2` where `ENGINE_BUS_RATIO = 0.2945 / 0.6377 = 0.462` is the
 engine's `K` over the nearest non-engine voice's, because this port's other cues
 sit on the PSP-derived scale and the engine must sit right against them
-(`audio/sfx/xfade.rs`). The remainder of the gap to the original is **not the
-engine's** (next section). The mixer's pool grows to 128 when a race has an engine
+(`audio/sfx/xfade.rs`). **Superseded 2026-10-05**: on a title with an authored mix the engine plays
+on group 7 with ratio `1.0` and the group's own law carries the level; the ratio stays for a title
+without one. The remainder of the gap to the original was **not the engine's** (section below). The mixer's pool grows to 128 when a race has an engine
 (`Mixer::grow_pool`, `HD_VOICES`): the original keeps every layer resident (62
 hardware voices of 128 in one scan) and a full grid at speed wants 33. Pulse and
 Pure never call it and render byte-identical WAVs.
@@ -243,18 +244,94 @@ separable because music and ambience cannot be turned off there.
 | one goteki craft, 2 s rest then 10 s climb, RMS | not capturable alone | 0.243 (peak 1.0, clipped) | 0.072 (peak 0.33) |
 | full-throttle climb, RMS | 0.18-0.19 (peak 0.7-0.9, wall hits 1.3-1.5) | 0.30-0.48 | 0.12-0.29 (peak 1.0 from wall hits) |
 
-**A global gap that is not the engine's, for the lead** (confidence 60: the HD music
-and SFX slider values of the profile the original ran on are unknown, so a default
-different from this port's 100 % would explain all of it):
+**The global gap, resolved 2026-10-05** (lane `hd-mix-level`): it was the authored mix, not a
+slider default. See "The authored mix" below. The engine's `0.462` above is exactly
+`0.68^2 = 0.4624`, the player's `user7` group squared against an ordinary voice at group `1.0`.
 
-- the front end's `frontend1_stereo.mp3` plays at RMS 0.07 in the original and 0.19
-  here, 2.7x;
-- the non-engine voices at `K` near 0.64 against this port's 2.0, 3.1x;
-- the circuit ambience alone is louder here (0.093) than the original's whole grid
-  mix (0.05-0.07), at least 1.5x.
+## The authored mix, measured live 2026-10-05
 
-All three point at a common factor of about 3 on every HD cue, so the engine was
-matched to the other cues and the factor left for a decision about HD's buses.
+**Where it comes from.** `Data\sound\GlobalAudioConfig.xml` (`DATA00.PSARC`, and a second copy in
+`DATA01.PSARC`; the emulator held the `DATA00` one) carries `ParameterMaps`: a `GroupVolumes` row
+(`music`, `user1` to `user12`) per game state and per channel layout, loaded by `AudioConfig_Load` into
+`g_sound_system + 0x6a0 + 0xb8 * state`. The layout byte read `2` on RPCS3, the Stereo branch. A
+live array (`+0x308`, thirteen floats) chases the active state's row. Code and addresses:
+[`audio-mix.md`](../ghidra/functions/ps3-hdfury-eu/audio-mix.md). Rows (Stereo):
+
+| State | music | user1 | user2 | user3 | user4 | user5 | user6 | user7 | user8 | user9 | user10 | user11 | user12 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| FrontEnd | 0.30 | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | 0.5 | 0.3 | 0.5 | 0.5 | 0.5 | 0.5 |
+| PreRace | 0 | 1.2 | 1.0 | 0.8 | 0.6 | 0.6 | 0.5 | 0.4 | 1.0 | 1.0 | 0.8 | 1.0 | 1.0 |
+| Countdown | 0 | 1.2 | 1.0 | 0.8 | 0.6 | 0.6 | 0.5 | 0.5 | **0** | 1.0 | 0 | 1.0 | 1.0 |
+| RaceNormal | 0.65 | 1.1 | 0.9 | 1.15 | 0.9 | 0.8 | 0.8 | 0.68 | 0.8 | 0.5 | 0 | 0.8 | 0.5 |
+
+(The other six states are in the file; the loader reads all eight the port models.) The authored
+`USER1..12` comment lists the intent: 1 front end and speech, 2 HUD, 3 weapons, 4 pads and turbo, 5
+explosions, 6 collisions, 7 ship sounds (engine, airbrake), 8 environment, 9 reserved, 10 pre-race and
+radio chat and ship idle, 11 a voice, 12 unlabelled. It is a comment in the `DATA00` copy only.
+
+**The sliders.** The options screen's own XML (`data/plugins/frontend/gui/additional_definition.xml`
+and `ingame_definition.xml`) declares `Slider "Music Volume" ... default="80%"`, `Slider "SFX Volume"
+... default="80%"` and `List "Auto Volume" ... default="FE_ON"`. The apply step reads each as `0..100`,
+multiplies by `0.01`. Live, the profile read `0.8` for both (`cfg + 0x1c`, the SFX object's `+0xe0`),
+so **the earlier capture ran on the defaults** and 80 % alone is `x0.8`, not the factor of 3.
+
+**The law, each half isolated by writing the target rows over GDB** (all ten rows set to one
+non-zero group, the live array read back each window, the audio dump read in the window; null sink,
+verified):
+
+| Test | Result | Reading |
+| --- | --- | --- |
+| every group `0` | RMS `0.0000` | everything is group-gated |
+| music group `x1, x0.5, x1, x0.25` | stereo RMS `0.119, 0.057, 0.129, 0.033` | music is **linear** in the group |
+| music slider `0.8 -> 0.4`, group full | `0.065` against `0.12-0.14` | music is **linear** in the slider |
+| user7 group `x1, x0.5, x1, x0.25` (live `0.68, 0.34, 0.68, 0.17`) | player's per-voice `K = 0.295, 0.074, 0.295, 0.018`; RMS `0.043, 0.0105, 0.050, 0.0082` | effects are **squared** in the group: `K = (slider * group)^2`, `(0.8 * 0.68)^2 = 0.296` |
+| user8 group `x1, x0.5, x1` | RMS `0.052, 0.017, 0.072` | the same, noisier |
+
+So **music** is `slider * group` and an **effects voice** is `(slider * group)^2 * level *
+(v86/1024)^2`, per hardware voice, with `level/32766 = (a/127)^2 (t/127)^2` exactly. The ordinary voices
+read earlier (`K` 0.64, 0.41, 0.31, 0.79) are `(0.8 * g)^2` for `g = 1.0, 0.8, 0.7, 1.1`: groups the
+rows above carry. **Not additive in RMS** (the music-only window exceeds the all-groups one: the master
+compressor and the ducking templates are in the chain and are not modelled).
+
+**Windows that must not be used.** A first set of isolation windows ran minutes after the start, with the
+player being lapped and the race ending; they read the engine at `0.124` and then `0.043`, and ambience
+at `0.05` then `0.00` (no source left). The numbers above are from a fresh race, 10 to 100 s after the
+start, with the other craft's `slot+4` words read at each window.
+
+**What the port does** (`crates/game/src/audio/hd_mix.rs`, `Bus::Group(n)` in `oag_audio`): the Stereo
+rows are parsed (no hand-copied table), a live array chases the grid (`Countdown`) or race
+(`RaceNormal`) row at `0.025` per 256-sample frame (**chosen**: one reading), the music bus is
+`0.8 * slider * group0` and group bus `n` is `(0.8 * slider * group_n)^2 / 2`. The division by two is the
+port's own unity: its `pan_volume_gain` is `2 a^2 t^2`, HD's hardware gain `K a^2 t^2`. The port's own
+`100 %` setting is the original's `80 %` default (**chosen**). The engine plays on group 7 and the
+circuit's emitters on group 8; **every other cue plays on the effects bus at group `1.0`** (**chosen,
+not measured**, the cue-to-group assignment is not traced). Pulse and Pure never read the file and keep
+their three buses: their `--race --hold cross --ticks 900` dumps are byte-identical (sha256
+`3b1f9698...` and `71c9bd51...`).
+
+**Per bus, the original against ours, Talons Junction, Feisar, the player alone, mono mean of the two
+channels (stereo RMS in brackets)**:
+
+| Bus | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| front-end music (`frontend1_stereo.mp3`), 20 s of main menu | 0.070 (0.072) | 0.19 stereo | 0.070 (0.13) |
+| race music, group `0.65`, slider `0.8` | 0.066-0.108 (0.119-0.138), a track the port does not know | not separable | 0.098 (0.110), a different track |
+| engine, user7 at `0.68` | 0.037-0.044 (0.043-0.050) | not separable | 0.021 (0.021) |
+| circuit ambience, user8 at `0.8` | 0.042-0.051 (0.052-0.072) | not separable | 0.022 (0.023) |
+| the grid, user8 at `0` | silent | `0.093` ambience | `0` |
+
+Reading: **music matches** where the track is the same (mono mean `0.070` against `0.070`). The
+engine and ambience read **half** of the original (0.47 to 0.57), which the second hardware voice
+of each pair predicts: two voices of the same waveform at azimuth `+-30` sum in phase to `1.37 K` on the mono
+mean against one centred voice's `0.71 K`, a ratio of `1.93`, and the observed ratios are 1.8-2.3. The
+port plays one voice per layer and was left so; "the factor of 3" is closed, and a remaining factor
+of 2 on those two buses is that pair, not a bus gain. The front end's stereo RMS is `0.13` in ours and
+`0.072` in the original at the same mono level: the original's output has almost no side energy and
+ours has a lot. Not investigated.
+
+**Not modelled**: the `MasterCompressor` (ratio 0.2, threshold -6 dB), `MasterEQ`, the ducking
+templates, `Auto Volume` (default on; its flag's readers are persistence accessors, not traced), the
+`PreRace`, critical-energy and player-dead rows, and the transition speeds the XML carries.
 
 ## What is not claimed
 

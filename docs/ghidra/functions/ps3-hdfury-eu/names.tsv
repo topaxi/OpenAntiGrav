@@ -519,3 +519,7 @@
 0x0062d948	function	Scream_GetVoice	88	xfade.md
 0x006249a8	function	Scream_SetVoiceVolume	76	xfade.md
 0x00630820	function	Scream_ComputeHwLevel	90	xfade.md
+0x0030d0b0	function	AudioConfig_Load	85	audio-mix.md
+0x000242a0	function	FrontEnd_ApplyAudioOptions	78	audio-mix.md
+0x00307850	function	SoundSystem_SetMusicSlider	80	audio-mix.md
+0x003084c0	function	SoundSystem_UpdateOutputGains	58	audio-mix.md

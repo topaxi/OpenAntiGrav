@@ -78,9 +78,13 @@ pub const X_REST: f32 = 2.164;
 /// boot's scan (four voices of two cues) are `0.6377 * level * (v86 / 1024)^2`,
 /// where `level` is the cue/waveform volume product this port already folds
 /// into [`Sound`]. Ordinary voices read `0.31`, `0.41` and `0.79` elsewhere, so
-/// the denominator is the nearest reading and not a platform constant; the
-/// ratio only places the engine against this port's other cues, whose own scale
-/// is about 3x the original's (see the doc page).
+/// the denominator is the nearest reading and not a platform constant.
+///
+/// **It is `0.68^2`**: the player's `user7` group (`0.68` in the racing state)
+/// squared against an ordinary voice at group `1.0` (`GlobalAudioConfig.xml`,
+/// `hd-xfx.md` "The authored mix"). A title with that mix plays the engine on
+/// its own group bus and the group's law replaces this ratio; it stays for a
+/// title without one.
 pub const ENGINE_BUS_RATIO: f32 = 0.2945 / 0.6377;
 
 /// The per-craft distance factor, `slot+4 / 1024` of the layer slots.
