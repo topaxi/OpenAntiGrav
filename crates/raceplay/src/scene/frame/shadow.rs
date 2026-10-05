@@ -92,6 +92,7 @@ impl super::super::Scene {
                 let Some(Some(hull)) = self.shadow_hulls.get(placement.silhouette) else {
                     continue;
                 };
+                let first = hull_vertices.len();
                 oag_render::shadow::hull_triangles(
                     &oag_render::shadow::Cast {
                         hull,
@@ -103,6 +104,9 @@ impl super::super::Scene {
                     },
                     &mut hull_vertices,
                 );
+                oag_render::shadow::conform_to_floor(&mut hull_vertices, first, |at, normal| {
+                    race.floor_above(at, normal)
+                });
             }
         }
         // At `original` the quads are not drawn at all: the two tiers are
